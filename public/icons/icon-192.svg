@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0ea5e9"/>
+      <stop offset="100%" style="stop-color:#0284c7"/>
+    </linearGradient>
+  </defs>
+  <rect width="192" height="192" rx="32" fill="url(#bgGrad)"/>
+  <g transform="translate(96, 96)">
+    <!-- Water droplet -->
+    <path d="M0,-48 C24,-24 32,8 32,24 C32,48 16,56 0,56 C-16,56 -32,48 -32,24 C-32,8 -24,-24 0,-48 Z" 
+          fill="white" opacity="0.95"/>
+    <!-- Inner shine -->
+    <ellipse cx="-8" cy="16" rx="8" ry="12" fill="white" opacity="0.4"/>
+  </g>
+</svg>
