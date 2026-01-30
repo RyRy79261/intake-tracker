@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import {
   Sheet,
@@ -24,10 +24,69 @@ import {
   RotateCcw,
   LogIn,
   CheckCircle2,
+  Plus,
+  Minus,
 } from "lucide-react";
 import { useSettings, usePerplexityKey } from "@/hooks/use-settings";
 import { exportAllData, importData, clearAllData } from "@/lib/intake-service";
 import { useToast } from "@/hooks/use-toast";
+
+// Helper component for numeric input with increment/decrement buttons
+function NumericInput({
+  id,
+  value,
+  onChange,
+  onBlur,
+  min,
+  max,
+  step,
+  onIncrement,
+  onDecrement,
+}: {
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+  onBlur: () => void;
+  min: number;
+  max: number;
+  step: number;
+  onIncrement: () => void;
+  onDecrement: () => void;
+}) {
+  return (
+    <div className="flex gap-1">
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        className="h-10 w-10 shrink-0"
+        onClick={onDecrement}
+      >
+        <Minus className="w-4 h-4" />
+      </Button>
+      <Input
+        id={id}
+        type="number"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={onBlur}
+        className="text-center"
+      />
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        className="h-10 w-10 shrink-0"
+        onClick={onIncrement}
+      >
+        <Plus className="w-4 h-4" />
+      </Button>
+    </div>
+  );
+}
 
 export function SettingsSheet() {
   const settings = useSettings();
@@ -39,6 +98,66 @@ export function SettingsSheet() {
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
+
+  // Local state for numeric inputs - allows free typing, validates on blur
+  const [waterIncrementInput, setWaterIncrementInput] = useState(settings.waterIncrement.toString());
+  const [waterLimitInput, setWaterLimitInput] = useState(settings.waterLimit.toString());
+  const [saltIncrementInput, setSaltIncrementInput] = useState(settings.saltIncrement.toString());
+  const [saltLimitInput, setSaltLimitInput] = useState(settings.saltLimit.toString());
+
+  // Sync local state when sheet opens or settings change externally
+  useEffect(() => {
+    if (isOpen) {
+      setWaterIncrementInput(settings.waterIncrement.toString());
+      setWaterLimitInput(settings.waterLimit.toString());
+      setSaltIncrementInput(settings.saltIncrement.toString());
+      setSaltLimitInput(settings.saltLimit.toString());
+    }
+  }, [isOpen, settings.waterIncrement, settings.waterLimit, settings.saltIncrement, settings.saltLimit]);
+
+  // Validation helpers
+  const validateAndSave = (
+    inputValue: string,
+    min: number,
+    max: number,
+    defaultValue: number,
+    setter: (value: number) => void,
+    inputSetter: (value: string) => void
+  ) => {
+    const parsed = parseInt(inputValue, 10);
+    if (!isNaN(parsed) && parsed >= min && parsed <= max) {
+      setter(parsed);
+      inputSetter(parsed.toString());
+    } else {
+      // Reset to current valid value
+      inputSetter(defaultValue.toString());
+    }
+  };
+
+  const handleIncrement = (
+    currentValue: number,
+    step: number,
+    max: number,
+    setter: (value: number) => void,
+    inputSetter: (value: string) => void
+  ) => {
+    const newValue = Math.min(currentValue + step, max);
+    setter(newValue);
+    inputSetter(newValue.toString());
+  };
+
+  const handleDecrement = (
+    currentValue: number,
+    step: number,
+    min: number,
+    setter: (value: number) => void,
+    inputSetter: (value: string) => void
+  ) => {
+    const newValue = Math.max(currentValue - step, min);
+    setter(newValue);
+    inputSetter(newValue.toString());
+  };
 
   const handleExport = async () => {
     setIsExporting(true);
@@ -116,7 +235,7 @@ export function SettingsSheet() {
   };
 
   return (
-    <Sheet>
+    <Sheet open={isOpen} onOpenChange={setIsOpen}>
       <SheetTrigger asChild>
         <Button variant="ghost" size="icon" className="shrink-0">
           <Settings className="w-5 h-5" />
@@ -141,34 +260,74 @@ export function SettingsSheet() {
             <div className="space-y-3 pl-6">
               <div className="space-y-2">
                 <Label htmlFor="water-increment">Increment (ml)</Label>
-                <Input
+                <NumericInput
                   id="water-increment"
-                  type="number"
-                  min="10"
-                  step="10"
-                  value={settings.waterIncrement}
-                  onChange={(e) =>
-                    settings.setWaterIncrement(parseInt(e.target.value, 10) || 250)
-                  }
+                  value={waterIncrementInput}
+                  onChange={setWaterIncrementInput}
+                  onBlur={() => validateAndSave(
+                    waterIncrementInput,
+                    10,
+                    1000,
+                    settings.waterIncrement,
+                    settings.setWaterIncrement,
+                    setWaterIncrementInput
+                  )}
+                  min={10}
+                  max={1000}
+                  step={10}
+                  onIncrement={() => handleIncrement(
+                    settings.waterIncrement,
+                    10,
+                    1000,
+                    settings.setWaterIncrement,
+                    setWaterIncrementInput
+                  )}
+                  onDecrement={() => handleDecrement(
+                    settings.waterIncrement,
+                    10,
+                    10,
+                    settings.setWaterIncrement,
+                    setWaterIncrementInput
+                  )}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Amount added with each +/- tap
+                  Amount added with each +/- tap (10-1000)
                 </p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="water-limit">Daily Limit (ml)</Label>
-                <Input
+                <NumericInput
                   id="water-limit"
-                  type="number"
-                  min="100"
-                  step="100"
-                  value={settings.waterLimit}
-                  onChange={(e) =>
-                    settings.setWaterLimit(parseInt(e.target.value, 10) || 1000)
-                  }
+                  value={waterLimitInput}
+                  onChange={setWaterLimitInput}
+                  onBlur={() => validateAndSave(
+                    waterLimitInput,
+                    100,
+                    10000,
+                    settings.waterLimit,
+                    settings.setWaterLimit,
+                    setWaterLimitInput
+                  )}
+                  min={100}
+                  max={10000}
+                  step={100}
+                  onIncrement={() => handleIncrement(
+                    settings.waterLimit,
+                    100,
+                    10000,
+                    settings.setWaterLimit,
+                    setWaterLimitInput
+                  )}
+                  onDecrement={() => handleDecrement(
+                    settings.waterLimit,
+                    100,
+                    100,
+                    settings.setWaterLimit,
+                    setWaterLimitInput
+                  )}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Your 24-hour water intake target
+                  Your 24-hour water intake target (100-10000)
                 </p>
               </div>
             </div>
@@ -183,34 +342,74 @@ export function SettingsSheet() {
             <div className="space-y-3 pl-6">
               <div className="space-y-2">
                 <Label htmlFor="salt-increment">Increment (mg)</Label>
-                <Input
+                <NumericInput
                   id="salt-increment"
-                  type="number"
-                  min="10"
-                  step="10"
-                  value={settings.saltIncrement}
-                  onChange={(e) =>
-                    settings.setSaltIncrement(parseInt(e.target.value, 10) || 250)
-                  }
+                  value={saltIncrementInput}
+                  onChange={setSaltIncrementInput}
+                  onBlur={() => validateAndSave(
+                    saltIncrementInput,
+                    10,
+                    1000,
+                    settings.saltIncrement,
+                    settings.setSaltIncrement,
+                    setSaltIncrementInput
+                  )}
+                  min={10}
+                  max={1000}
+                  step={10}
+                  onIncrement={() => handleIncrement(
+                    settings.saltIncrement,
+                    10,
+                    1000,
+                    settings.setSaltIncrement,
+                    setSaltIncrementInput
+                  )}
+                  onDecrement={() => handleDecrement(
+                    settings.saltIncrement,
+                    10,
+                    10,
+                    settings.setSaltIncrement,
+                    setSaltIncrementInput
+                  )}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Amount added with each +/- tap
+                  Amount added with each +/- tap (10-1000)
                 </p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="salt-limit">Daily Limit (mg)</Label>
-                <Input
+                <NumericInput
                   id="salt-limit"
-                  type="number"
-                  min="100"
-                  step="100"
-                  value={settings.saltLimit}
-                  onChange={(e) =>
-                    settings.setSaltLimit(parseInt(e.target.value, 10) || 1500)
-                  }
+                  value={saltLimitInput}
+                  onChange={setSaltLimitInput}
+                  onBlur={() => validateAndSave(
+                    saltLimitInput,
+                    100,
+                    10000,
+                    settings.saltLimit,
+                    settings.setSaltLimit,
+                    setSaltLimitInput
+                  )}
+                  min={100}
+                  max={10000}
+                  step={100}
+                  onIncrement={() => handleIncrement(
+                    settings.saltLimit,
+                    100,
+                    10000,
+                    settings.setSaltLimit,
+                    setSaltLimitInput
+                  )}
+                  onDecrement={() => handleDecrement(
+                    settings.saltLimit,
+                    100,
+                    100,
+                    settings.setSaltLimit,
+                    setSaltLimitInput
+                  )}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Your 24-hour salt intake limit
+                  Your 24-hour salt intake limit (100-10000)
                 </p>
               </div>
             </div>
@@ -371,6 +570,11 @@ export function SettingsSheet() {
               className="w-full justify-start gap-2 text-muted-foreground"
               onClick={() => {
                 settings.resetToDefaults();
+                // Sync local inputs with reset values
+                setWaterIncrementInput("250");
+                setWaterLimitInput("1000");
+                setSaltIncrementInput("250");
+                setSaltLimitInput("1500");
                 toast({
                   title: "Settings reset",
                   description: "All settings have been restored to defaults",

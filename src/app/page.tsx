@@ -5,6 +5,7 @@ import { IntakeCard } from "@/components/intake-card";
 import { FoodCalculator } from "@/components/food-calculator";
 import { VoiceInput } from "@/components/voice-input";
 import { SettingsSheet } from "@/components/settings-sheet";
+import { HistorySheet } from "@/components/history-sheet";
 import { AuthButton } from "@/components/auth-button";
 import { AuthGuard } from "@/components/auth-guard";
 import { useIntake } from "@/hooks/use-intake";
@@ -23,15 +24,15 @@ function HomeContent() {
   }, []);
 
   const handleAddWater = useCallback(
-    async (amount: number, source: string = "manual") => {
-      await waterIntake.addRecord(amount, source);
+    async (amount: number, source: string = "manual", timestamp?: number) => {
+      await waterIntake.addRecord(amount, source, timestamp);
     },
     [waterIntake]
   );
 
   const handleAddSalt = useCallback(
-    async (amount: number, source: string = "manual") => {
-      await saltIntake.addRecord(amount, source);
+    async (amount: number, source: string = "manual", timestamp?: number) => {
+      await saltIntake.addRecord(amount, source, timestamp);
     },
     [saltIntake]
   );
@@ -59,6 +60,7 @@ function HomeContent() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <HistorySheet />
           <AuthButton />
           <SettingsSheet />
         </div>
@@ -71,7 +73,7 @@ function HomeContent() {
             currentTotal={waterIntake.total}
             limit={settings.waterLimit}
             increment={settings.waterIncrement}
-            onConfirm={(amount) => handleAddWater(amount, "manual")}
+            onConfirm={(amount, timestamp) => handleAddWater(amount, "manual", timestamp)}
             isLoading={waterIntake.isLoading}
           />
 
@@ -80,7 +82,7 @@ function HomeContent() {
             currentTotal={saltIntake.total}
             limit={settings.saltLimit}
             increment={settings.saltIncrement}
-            onConfirm={(amount) => handleAddSalt(amount, "manual")}
+            onConfirm={(amount, timestamp) => handleAddSalt(amount, "manual", timestamp)}
             isLoading={saltIntake.isLoading}
           />
         </div>

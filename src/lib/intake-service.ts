@@ -6,13 +6,14 @@ const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 export async function addIntakeRecord(
   type: "water" | "salt",
   amount: number,
-  source: string = "manual"
+  source: string = "manual",
+  timestamp?: number
 ): Promise<IntakeRecord> {
   const record: IntakeRecord = {
     id: generateId(),
     type,
     amount,
-    timestamp: Date.now(),
+    timestamp: timestamp ?? Date.now(),
     source,
   };
 

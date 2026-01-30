@@ -35,8 +35,8 @@ export function useIntake(type: "water" | "salt") {
   }, [records]);
 
   const addRecord = useCallback(
-    async (amount: number, source: string = "manual") => {
-      return addIntakeRecord(type, amount, source);
+    async (amount: number, source: string = "manual", timestamp?: number) => {
+      return addIntakeRecord(type, amount, source, timestamp);
     },
     [type]
   );

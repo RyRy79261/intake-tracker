@@ -14,7 +14,7 @@ interface IntakeCardProps {
   currentTotal: number;
   limit: number;
   increment: number;
-  onConfirm: (amount: number) => Promise<void>;
+  onConfirm: (amount: number, timestamp?: number) => Promise<void>;
   isLoading?: boolean;
 }
 
@@ -72,13 +72,15 @@ export function IntakeCard({
   }, [pendingAmount, increment, onConfirm, toast, unit, isWater]);
 
   const handleManualSubmit = useCallback(
-    async (amount: number) => {
+    async (amount: number, timestamp?: number) => {
       setIsSubmitting(true);
       try {
-        await onConfirm(amount);
+        await onConfirm(amount, timestamp);
         toast({
           title: `Added ${formatAmount(amount, unit)}`,
-          description: `${isWater ? "Water" : "Salt"} intake recorded`,
+          description: timestamp 
+            ? `${isWater ? "Water" : "Salt"} intake recorded for earlier time`
+            : `${isWater ? "Water" : "Salt"} intake recorded`,
           variant: "success",
         });
         setShowManualInput(false);

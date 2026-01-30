@@ -13,13 +13,27 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { Clock, ChevronDown, ChevronUp } from "lucide-react";
+
+// Helper to get current datetime in local format for input
+function getCurrentDateTimeLocal(): string {
+  const now = new Date();
+  const offset = now.getTimezoneOffset();
+  const local = new Date(now.getTime() - offset * 60 * 1000);
+  return local.toISOString().slice(0, 16);
+}
+
+// Helper to convert datetime-local value to timestamp
+function dateTimeLocalToTimestamp(value: string): number {
+  return new Date(value).getTime();
+}
 
 interface ManualInputDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   type: "water" | "salt";
   currentValue: number;
-  onSubmit: (amount: number) => Promise<void>;
+  onSubmit: (amount: number, timestamp?: number) => Promise<void>;
   isSubmitting?: boolean;
 }
 
@@ -32,6 +46,8 @@ export function ManualInputDialog({
   isSubmitting = false,
 }: ManualInputDialogProps) {
   const [value, setValue] = useState(currentValue.toString());
+  const [showTimeInput, setShowTimeInput] = useState(false);
+  const [customTime, setCustomTime] = useState(getCurrentDateTimeLocal());
 
   const isWater = type === "water";
   const unit = isWater ? "ml" : "mg";
@@ -40,6 +56,8 @@ export function ManualInputDialog({
   useEffect(() => {
     if (open) {
       setValue(currentValue.toString());
+      setShowTimeInput(false);
+      setCustomTime(getCurrentDateTimeLocal());
     }
   }, [open, currentValue]);
 
@@ -47,7 +65,10 @@ export function ManualInputDialog({
     e.preventDefault();
     const amount = parseInt(value, 10);
     if (isNaN(amount) || amount <= 0) return;
-    await onSubmit(amount);
+    
+    // Pass custom timestamp if time input is shown, otherwise use current time
+    const timestamp = showTimeInput ? dateTimeLocalToTimestamp(customTime) : undefined;
+    await onSubmit(amount, timestamp);
   };
 
   const quickValues = isWater
@@ -106,6 +127,46 @@ export function ManualInputDialog({
                 </Button>
               ))}
             </div>
+          </div>
+
+          {/* Custom time section */}
+          <div className="space-y-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="w-full justify-between text-muted-foreground hover:text-foreground"
+              onClick={() => setShowTimeInput(!showTimeInput)}
+            >
+              <span className="flex items-center gap-2">
+                <Clock className="w-4 h-4" />
+                {showTimeInput ? "Using custom time" : "Set different time"}
+              </span>
+              {showTimeInput ? (
+                <ChevronUp className="w-4 h-4" />
+              ) : (
+                <ChevronDown className="w-4 h-4" />
+              )}
+            </Button>
+            
+            {showTimeInput && (
+              <div className="space-y-2 p-3 rounded-lg bg-muted/50 border">
+                <Label htmlFor="custom-time" className="text-sm">
+                  When did this happen?
+                </Label>
+                <Input
+                  id="custom-time"
+                  type="datetime-local"
+                  value={customTime}
+                  onChange={(e) => setCustomTime(e.target.value)}
+                  max={getCurrentDateTimeLocal()}
+                  className="text-sm"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Use this to log intake that happened earlier
+                </p>
+              </div>
+            )}
           </div>
 
           <DialogFooter>
