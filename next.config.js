@@ -15,7 +15,8 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline'", // Required for Tailwind
       "img-src 'self' data: blob:",
       "font-src 'self' data:",
-      "connect-src 'self' https://api.perplexity.ai", // Perplexity API
+      "connect-src 'self' https://api.perplexity.ai https://auth.privy.io https://*.walletconnect.com https://*.walletconnect.org wss://*.walletconnect.org", // Perplexity API + Privy Auth
+      "frame-src 'self' https://auth.privy.io", // Privy login modal
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",
