@@ -9,29 +9,11 @@
  * Logs are stored in IndexedDB and can be exported.
  */
 
-import { db } from "./db";
+import { db, type AuditAction, type AuditLog } from "./db";
 
-export type AuditAction = 
-  | "ai_parse_request"
-  | "ai_parse_success"
-  | "ai_parse_error"
-  | "data_export"
-  | "data_import"
-  | "data_clear"
-  | "settings_change"
-  | "api_key_set"
-  | "api_key_clear"
-  | "pin_set"
-  | "pin_verify_success"
-  | "pin_verify_failure";
-
-export interface AuditEntry {
-  id: string;
-  timestamp: number;
-  action: AuditAction;
-  details?: string;
-  // Never log sensitive data like actual values, API keys, or PINs
-}
+// Re-export the types
+export type { AuditAction };
+export type AuditEntry = AuditLog;
 
 // In-memory buffer for batching writes
 const auditBuffer: AuditEntry[] = [];
@@ -69,7 +51,7 @@ async function flushAuditBuffer(): Promise<void> {
   
   try {
     // Bulk add to audit logs table
-    await db.table("auditLogs").bulkAdd(entries);
+    await db.auditLogs.bulkAdd(entries);
   } catch (error) {
     // Don't let audit failures break the app
     console.error("Failed to write audit log:", error);
@@ -84,13 +66,14 @@ export async function getAuditLogs(
   endTime?: number
 ): Promise<AuditEntry[]> {
   try {
-    const all = await db.table("auditLogs").toArray();
+    const all = await db.auditLogs.toArray();
     return all.filter((entry: AuditEntry) => {
       if (startTime && entry.timestamp < startTime) return false;
       if (endTime && entry.timestamp > endTime) return false;
       return true;
     }).sort((a: AuditEntry, b: AuditEntry) => b.timestamp - a.timestamp);
-  } catch {
+  } catch (error) {
+    console.error("Failed to get audit logs:", error);
     return [];
   }
 }
@@ -113,15 +96,16 @@ export async function purgeOldAuditLogs(olderThanDays: number = 90): Promise<num
   const cutoff = Date.now() - (olderThanDays * 24 * 60 * 60 * 1000);
   
   try {
-    const toDelete = await db.table("auditLogs")
+    const toDelete = await db.auditLogs
       .filter((entry: AuditEntry) => entry.timestamp < cutoff)
       .toArray();
     
     const ids = toDelete.map((e: AuditEntry) => e.id);
-    await db.table("auditLogs").bulkDelete(ids);
+    await db.auditLogs.bulkDelete(ids);
     
     return ids.length;
-  } catch {
+  } catch (error) {
+    console.error("Failed to purge old audit logs:", error);
     return 0;
   }
 }

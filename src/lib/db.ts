@@ -9,10 +9,24 @@ export interface IntakeRecord {
   note?: string; // Optional note for the entry
 }
 
+export type AuditAction = 
+  | "ai_parse_request"
+  | "ai_parse_success"
+  | "ai_parse_error"
+  | "data_export"
+  | "data_import"
+  | "data_clear"
+  | "settings_change"
+  | "api_key_set"
+  | "api_key_clear"
+  | "pin_set"
+  | "pin_verify_success"
+  | "pin_verify_failure";
+
 export interface AuditLog {
   id: string;
   timestamp: number;
-  action: string;
+  action: AuditAction;
   details?: string;
 }
 
@@ -44,7 +58,7 @@ const db = new Dexie("IntakeTrackerDB") as Dexie & {
 // Version 1: Initial schema
 // Version 2: Added audit logs
 // Version 3: Added weight and blood pressure records
-// Version 4: Added note field to IntakeRecord (optional, no index needed)
+// Version 4: Added optional note field to IntakeRecord (no index needed)
 db.version(4).stores({
   intakeRecords: "id, type, timestamp, source",
   auditLogs: "id, timestamp, action",

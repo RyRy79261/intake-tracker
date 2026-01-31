@@ -82,7 +82,12 @@ export async function getTotalInLast24Hours(type: "water" | "salt"): Promise<num
 }
 
 export async function getAllRecords(): Promise<IntakeRecord[]> {
-  return db.intakeRecords.orderBy("timestamp").reverse().toArray();
+  try {
+    return await db.intakeRecords.orderBy("timestamp").reverse().toArray();
+  } catch (error) {
+    console.error("Failed to get all records:", error);
+    return [];
+  }
 }
 
 export interface PaginatedResult<T> {

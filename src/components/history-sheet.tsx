@@ -369,18 +369,35 @@ export function HistorySheet() {
     try {
       const pageSize = 30;
       
-      // Fetch all record types
-      const [intakeResult, weightRecords, bpRecords] = await Promise.all([
-        getRecordsByCursor(undefined, 100), // Get more intake records for better merging
-        getWeightRecords(100),
-        getBloodPressureRecords(100),
-      ]);
+      // Fetch all record types - each with its own error handling
+      let intakeRecords: IntakeRecord[] = [];
+      let weightRecordsData: WeightRecord[] = [];
+      let bpRecordsData: BloodPressureRecord[] = [];
+
+      try {
+        const result = await getRecordsByCursor(undefined, 100);
+        intakeRecords = result.records;
+      } catch (e) {
+        console.error("Failed to load intake records:", e);
+      }
+
+      try {
+        weightRecordsData = await getWeightRecords(100);
+      } catch (e) {
+        console.error("Failed to load weight records:", e);
+      }
+
+      try {
+        bpRecordsData = await getBloodPressureRecords(100);
+      } catch (e) {
+        console.error("Failed to load BP records:", e);
+      }
 
       // Convert to unified records
       const unified: UnifiedRecord[] = [
-        ...intakeResult.records.map((r) => ({ type: "intake" as const, record: r })),
-        ...weightRecords.map((r) => ({ type: "weight" as const, record: r })),
-        ...bpRecords.map((r) => ({ type: "bp" as const, record: r })),
+        ...intakeRecords.map((r) => ({ type: "intake" as const, record: r })),
+        ...weightRecordsData.map((r) => ({ type: "weight" as const, record: r })),
+        ...bpRecordsData.map((r) => ({ type: "bp" as const, record: r })),
       ];
 
       // Sort by timestamp descending
@@ -395,6 +412,7 @@ export function HistorySheet() {
       setHasMore(end < unified.length);
       setPage(pageNum);
     } catch (error) {
+      console.error("Failed to load history:", error);
       toast({
         title: "Error",
         description: "Could not load history",

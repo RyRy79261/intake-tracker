@@ -38,13 +38,16 @@ export function IntakeCard({
 
   // Fetch recent records for this type
   const recentRecords = useLiveQuery(
-    () =>
-      db.intakeRecords
+    async () => {
+      const records = await db.intakeRecords
         .where("type")
         .equals(type)
-        .reverse()
-        .sortBy("timestamp")
-        .then((records) => records.slice(0, 3)),
+        .toArray();
+      // Sort by timestamp descending and take first 3
+      return records
+        .sort((a, b) => b.timestamp - a.timestamp)
+        .slice(0, 3);
+    },
     [type]
   );
 
