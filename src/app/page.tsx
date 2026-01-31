@@ -8,6 +8,8 @@ import { SettingsSheet } from "@/components/settings-sheet";
 import { HistorySheet } from "@/components/history-sheet";
 import { AuthButton } from "@/components/auth-button";
 import { AuthGuard } from "@/components/auth-guard";
+import { WeightCard } from "@/components/weight-card";
+import { BloodPressureCard } from "@/components/blood-pressure-card";
 import { useIntake } from "@/hooks/use-intake";
 import { useSettings } from "@/hooks/use-settings";
 import { Droplets } from "lucide-react";
@@ -88,9 +90,15 @@ function HomeContent() {
         </div>
 
         {/* Additional Input Methods */}
-        <div className="flex gap-3">
+        <div className="flex gap-3 mb-6">
           <FoodCalculator onAddWater={handleAddWater} />
           <VoiceInput onAddWater={handleAddWater} onAddSalt={handleAddSalt} />
+        </div>
+
+        {/* Health Measurements */}
+        <div className="space-y-4 mb-6">
+          <WeightCard />
+          <BloodPressureCard />
         </div>
 
       {/* Footer */}

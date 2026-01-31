@@ -3,6 +3,7 @@ import { Outfit } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { Providers } from "./providers";
+import { UpdateNotification } from "@/components/update-notification";
 
 const outfit = Outfit({ 
   subsets: ["latin"],
@@ -46,6 +47,7 @@ export default function RootLayout({
         <Providers>
           {children}
         </Providers>
+        <UpdateNotification />
         <Toaster />
       </body>
     </html>

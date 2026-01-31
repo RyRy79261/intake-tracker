@@ -189,7 +189,7 @@ export function HistorySheet() {
             </div>
           ) : (
             <div className="space-y-6">
-              {dateGroups.map(([date, dayRecords]) => (
+              {dateGroups.map(([date, dayRecords]: [string, IntakeRecord[]]) => (
                 <div key={date}>
                   <div className="flex items-center gap-2 mb-3 text-sm font-medium text-muted-foreground">
                     <Calendar className="w-4 h-4" />

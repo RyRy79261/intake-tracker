@@ -15,16 +15,39 @@ export interface AuditLog {
   details?: string;
 }
 
+export interface WeightRecord {
+  id: string;
+  weight: number; // in kg
+  timestamp: number;
+  note?: string;
+}
+
+export interface BloodPressureRecord {
+  id: string;
+  systolic: number; // top number (mmHg)
+  diastolic: number; // bottom number (mmHg)
+  heartRate?: number; // BPM (optional)
+  position: "standing" | "sitting";
+  arm: "left" | "right";
+  timestamp: number;
+  note?: string;
+}
+
 const db = new Dexie("IntakeTrackerDB") as Dexie & {
   intakeRecords: EntityTable<IntakeRecord, "id">;
   auditLogs: EntityTable<AuditLog, "id">;
+  weightRecords: EntityTable<WeightRecord, "id">;
+  bloodPressureRecords: EntityTable<BloodPressureRecord, "id">;
 };
 
 // Version 1: Initial schema
 // Version 2: Added audit logs
-db.version(2).stores({
+// Version 3: Added weight and blood pressure records
+db.version(3).stores({
   intakeRecords: "id, type, timestamp, source",
   auditLogs: "id, timestamp, action",
+  weightRecords: "id, timestamp",
+  bloodPressureRecords: "id, timestamp, position, arm",
 });
 
 export { db };
