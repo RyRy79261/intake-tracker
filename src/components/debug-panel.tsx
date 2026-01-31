@@ -26,7 +26,20 @@ import { useSettings, usePerplexityKey } from "@/hooks/use-settings";
 import { usePinGate } from "@/hooks/use-pin-gate";
 import { getAuditLogs, type AuditEntry } from "@/lib/audit";
 import { parseIntakeWithPerplexity } from "@/lib/perplexity";
+import { db } from "@/lib/db";
 import { cn } from "@/lib/utils";
+
+interface DbDiagnostics {
+  version: number;
+  stores: string[];
+  intakeCount: number;
+  weightCount: number;
+  bpCount: number;
+  auditCount: number;
+  intakeRecords: unknown[];
+  weightRecords: unknown[];
+  bpRecords: unknown[];
+}
 
 interface AIStatusResponse {
   timestamp: string;
@@ -57,6 +70,8 @@ export function DebugPanel() {
   const [aiTestResult, setAiTestResult] = useState<AITestResult | null>(null);
   const [aiTestLoading, setAiTestLoading] = useState(false);
   const [logFilter, setLogFilter] = useState<string>("all");
+  const [dbDiagnostics, setDbDiagnostics] = useState<DbDiagnostics | null>(null);
+  const [dbLoading, setDbLoading] = useState(false);
 
   const settings = useSettings();
   const { hasKey, getApiKey } = usePerplexityKey();
@@ -89,6 +104,35 @@ export function DebugPanel() {
       console.error("Failed to fetch audit logs:", error);
     } finally {
       setAuditLogsLoading(false);
+    }
+  }, []);
+
+  // Fetch database diagnostics
+  const fetchDbDiagnostics = useCallback(async () => {
+    setDbLoading(true);
+    try {
+      const [intakeRecords, weightRecords, bpRecords, auditRecords] = await Promise.all([
+        db.intakeRecords.toArray().catch(() => []),
+        db.weightRecords.toArray().catch(() => []),
+        db.bloodPressureRecords.toArray().catch(() => []),
+        db.auditLogs.toArray().catch(() => []),
+      ]);
+
+      setDbDiagnostics({
+        version: db.verno,
+        stores: Array.from(db.tables.map(t => t.name)),
+        intakeCount: intakeRecords.length,
+        weightCount: weightRecords.length,
+        bpCount: bpRecords.length,
+        auditCount: auditRecords.length,
+        intakeRecords,
+        weightRecords,
+        bpRecords,
+      });
+    } catch (error) {
+      console.error("Failed to fetch DB diagnostics:", error);
+    } finally {
+      setDbLoading(false);
     }
   }, []);
 
@@ -132,8 +176,9 @@ export function DebugPanel() {
     if (open) {
       fetchAIStatus();
       fetchAuditLogs();
+      fetchDbDiagnostics();
     }
-  }, [open, fetchAIStatus, fetchAuditLogs]);
+  }, [open, fetchAIStatus, fetchAuditLogs, fetchDbDiagnostics]);
 
   // Filter audit logs
   const filteredLogs = auditLogs.filter((log) => {
@@ -189,12 +234,94 @@ export function DebugPanel() {
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="state" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+        <Tabs defaultValue="db" className="w-full">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="db">Database</TabsTrigger>
             <TabsTrigger value="state">State</TabsTrigger>
             <TabsTrigger value="logs">Logs</TabsTrigger>
             <TabsTrigger value="test">AI Test</TabsTrigger>
           </TabsList>
+
+          {/* Database Tab */}
+          <TabsContent value="db" className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h4 className="font-medium text-sm">IndexedDB Status</h4>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={fetchDbDiagnostics}
+                disabled={dbLoading}
+              >
+                {dbLoading ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-3 h-3" />
+                )}
+              </Button>
+            </div>
+
+            {dbDiagnostics ? (
+              <ScrollArea className="h-[400px]">
+                <div className="space-y-4">
+                  {/* Database Info */}
+                  <div className="bg-muted/50 rounded-lg p-3 text-xs font-mono space-y-1">
+                    <div>DB Version: {dbDiagnostics.version}</div>
+                    <div>Tables: {dbDiagnostics.stores.join(", ")}</div>
+                  </div>
+
+                  {/* Record Counts */}
+                  <div className="space-y-2">
+                    <h5 className="font-medium text-sm">Record Counts</h5>
+                    <div className={cn(
+                      "rounded-lg p-3 text-sm font-mono",
+                      dbDiagnostics.intakeCount === 0 ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300" : "bg-muted/50"
+                    )}>
+                      <div>Intake Records: <strong>{dbDiagnostics.intakeCount}</strong></div>
+                      <div>Weight Records: {dbDiagnostics.weightCount}</div>
+                      <div>BP Records: {dbDiagnostics.bpCount}</div>
+                      <div>Audit Logs: {dbDiagnostics.auditCount}</div>
+                    </div>
+                  </div>
+
+                  {/* Raw Data Dump */}
+                  {dbDiagnostics.intakeCount === 0 && (
+                    <div className="bg-red-100 dark:bg-red-900/30 rounded-lg p-3 text-red-700 dark:text-red-300">
+                      <strong>WARNING:</strong> No intake records found in database.
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <h5 className="font-medium text-sm">Intake Records (Raw)</h5>
+                    <pre className="bg-muted/50 rounded-lg p-3 text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-[200px] overflow-y-auto">
+                      {JSON.stringify(dbDiagnostics.intakeRecords, null, 2)}
+                    </pre>
+                  </div>
+
+                  <div className="space-y-2">
+                    <h5 className="font-medium text-sm">Weight Records (Raw)</h5>
+                    <pre className="bg-muted/50 rounded-lg p-3 text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-[150px] overflow-y-auto">
+                      {JSON.stringify(dbDiagnostics.weightRecords, null, 2)}
+                    </pre>
+                  </div>
+
+                  <div className="space-y-2">
+                    <h5 className="font-medium text-sm">BP Records (Raw)</h5>
+                    <pre className="bg-muted/50 rounded-lg p-3 text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-[150px] overflow-y-auto">
+                      {JSON.stringify(dbDiagnostics.bpRecords, null, 2)}
+                    </pre>
+                  </div>
+                </div>
+              </ScrollArea>
+            ) : (
+              <div className="flex items-center justify-center py-8">
+                {dbLoading ? (
+                  <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                ) : (
+                  <p className="text-muted-foreground">Click refresh to load database info</p>
+                )}
+              </div>
+            )}
+          </TabsContent>
 
           {/* State Tab */}
           <TabsContent value="state" className="space-y-4">
