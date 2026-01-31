@@ -52,6 +52,19 @@ export interface VerificationResult {
 }
 
 /**
+ * Check if dev fallback is allowed
+ * Only allows dev fallback if:
+ * 1. Not in production, OR
+ * 2. ALLOW_DEV_FALLBACK env var is explicitly set to "true"
+ */
+function isDevFallbackAllowed(): boolean {
+  const isProduction = process.env.NODE_ENV === "production";
+  const explicitlyAllowed = process.env.ALLOW_DEV_FALLBACK === "true";
+  
+  return !isProduction || explicitlyAllowed;
+}
+
+/**
  * Verify a Privy auth token and check against whitelist.
  * Returns user info if authorized, error if not.
  */
@@ -64,10 +77,25 @@ export async function verifyAndCheckWhitelist(
 
   const client = getPrivyClient();
   if (!client) {
-    // Privy not configured - fall back to allowing (for dev)
-    // In production, you should always have Privy configured
-    console.warn("Privy not configured - skipping auth check");
-    return { success: true, userId: "dev-user" };
+    // Privy not configured
+    if (isDevFallbackAllowed()) {
+      // Allow in development or when explicitly permitted
+      console.warn(
+        "Privy not configured - allowing dev fallback. " +
+        "Set ALLOW_DEV_FALLBACK=true in production if this is intentional."
+      );
+      return { success: true, userId: "dev-user" };
+    } else {
+      // Fail closed in production when not explicitly allowed
+      console.error(
+        "Privy not configured in production. " +
+        "Either configure Privy or set ALLOW_DEV_FALLBACK=true."
+      );
+      return { 
+        success: false, 
+        error: "Authentication service not configured" 
+      };
+    }
   }
 
   try {

@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { useLiveQuery } from "dexie-react-hooks";
+import { useState, useCallback, useEffect } from "react";
 import {
   Sheet,
   SheetContent,
@@ -19,11 +18,16 @@ import {
   Calendar,
   Clock,
   Loader2,
+  Lock,
+  ChevronDown,
 } from "lucide-react";
-import { db, type IntakeRecord } from "@/lib/db";
-import { deleteIntakeRecord } from "@/lib/intake-service";
+import { type IntakeRecord } from "@/lib/db";
+import { deleteIntakeRecord, getRecordsByCursor } from "@/lib/intake-service";
 import { useToast } from "@/hooks/use-toast";
+import { usePinProtected } from "@/hooks/use-pin-gate";
 import { cn } from "@/lib/utils";
+
+const PAGE_SIZE = 30;
 
 // Group records by date
 function groupRecordsByDate(records: IntakeRecord[]): Map<string, IntakeRecord[]> {
@@ -130,17 +134,62 @@ function RecordItem({ record, onDelete, isDeleting }: RecordItemProps) {
 export function HistorySheet() {
   const { toast } = useToast();
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const { requirePin, showLockedUI } = usePinProtected();
   
-  // Live query for all records, sorted by timestamp descending
-  const records = useLiveQuery(
-    () => db.intakeRecords.orderBy("timestamp").reverse().toArray(),
-    []
-  );
+  // Pagination state
+  const [records, setRecords] = useState<IntakeRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<number | null>(null);
+  const [hasMore, setHasMore] = useState(true);
+
+  // Load initial records when sheet opens
+  const loadInitialRecords = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const result = await getRecordsByCursor(undefined, PAGE_SIZE);
+      setRecords(result.records);
+      setNextCursor(result.nextCursor);
+      setHasMore(result.nextCursor !== null);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Could not load history",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [toast]);
+
+  // Load more records
+  const loadMoreRecords = useCallback(async () => {
+    if (!hasMore || isLoadingMore || nextCursor === null) return;
+    
+    setIsLoadingMore(true);
+    try {
+      const result = await getRecordsByCursor(nextCursor, PAGE_SIZE);
+      setRecords(prev => [...prev, ...result.records]);
+      setNextCursor(result.nextCursor);
+      setHasMore(result.nextCursor !== null);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Could not load more records",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [hasMore, isLoadingMore, nextCursor, toast]);
   
   const handleDelete = useCallback(async (id: string) => {
     setDeletingId(id);
     try {
       await deleteIntakeRecord(id);
+      // Remove from local state
+      setRecords(prev => prev.filter(r => r.id !== id));
       toast({
         title: "Entry deleted",
         description: "The intake record has been removed",
@@ -155,16 +204,36 @@ export function HistorySheet() {
       setDeletingId(null);
     }
   }, [toast]);
+
+  // Handle sheet open with PIN check
+  const handleOpenChange = useCallback(async (open: boolean) => {
+    if (open) {
+      // Request PIN before opening
+      const unlocked = await requirePin();
+      if (unlocked) {
+        setIsOpen(true);
+        // Reset and load initial records
+        setRecords([]);
+        setNextCursor(null);
+        setHasMore(true);
+        loadInitialRecords();
+      }
+    } else {
+      setIsOpen(false);
+    }
+  }, [requirePin, loadInitialRecords]);
   
-  const isLoading = records === undefined;
-  const groupedRecords = records ? groupRecordsByDate(records) : new Map();
+  const groupedRecords = groupRecordsByDate(records);
   const dateGroups = Array.from(groupedRecords.entries());
   
   return (
-    <Sheet>
+    <Sheet open={isOpen} onOpenChange={handleOpenChange}>
       <SheetTrigger asChild>
-        <Button variant="ghost" size="icon" className="shrink-0">
+        <Button variant="ghost" size="icon" className="shrink-0 relative">
           <History className="w-5 h-5" />
+          {showLockedUI && (
+            <Lock className="w-3 h-3 absolute -top-0.5 -right-0.5 text-amber-500" />
+          )}
           <span className="sr-only">History</span>
         </Button>
       </SheetTrigger>
@@ -210,6 +279,30 @@ export function HistorySheet() {
                   </div>
                 </div>
               ))}
+              
+              {/* Load more button */}
+              {hasMore && (
+                <div className="flex justify-center pt-4">
+                  <Button
+                    variant="outline"
+                    onClick={loadMoreRecords}
+                    disabled={isLoadingMore}
+                    className="gap-2"
+                  >
+                    {isLoadingMore ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Loading...
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="w-4 h-4" />
+                        Load More
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -82,3 +82,59 @@ export async function getLatestBloodPressureRecord(): Promise<BloodPressureRecor
 export async function deleteBloodPressureRecord(id: string): Promise<void> {
   await db.bloodPressureRecords.delete(id);
 }
+
+// Pagination helpers
+
+export interface PaginatedResult<T> {
+  records: T[];
+  hasMore: boolean;
+  total: number;
+}
+
+/**
+ * Get paginated weight records
+ */
+export async function getWeightRecordsPaginated(
+  page: number = 1,
+  limit: number = 20
+): Promise<PaginatedResult<WeightRecord>> {
+  const offset = (page - 1) * limit;
+  const total = await db.weightRecords.count();
+  
+  const records = await db.weightRecords
+    .orderBy("timestamp")
+    .reverse()
+    .offset(offset)
+    .limit(limit)
+    .toArray();
+  
+  return {
+    records,
+    hasMore: offset + records.length < total,
+    total,
+  };
+}
+
+/**
+ * Get paginated blood pressure records
+ */
+export async function getBloodPressureRecordsPaginated(
+  page: number = 1,
+  limit: number = 20
+): Promise<PaginatedResult<BloodPressureRecord>> {
+  const offset = (page - 1) * limit;
+  const total = await db.bloodPressureRecords.count();
+  
+  const records = await db.bloodPressureRecords
+    .orderBy("timestamp")
+    .reverse()
+    .offset(offset)
+    .limit(limit)
+    .toArray();
+  
+  return {
+    records,
+    hasMore: offset + records.length < total,
+    total,
+  };
+}

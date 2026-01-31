@@ -1,7 +1,28 @@
+import { z } from "zod";
 import { db, type IntakeRecord } from "./db";
 import { generateId } from "./utils";
 
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+
+// Zod schemas for validation
+const IntakeRecordSchema = z.object({
+  id: z.string().min(1),
+  type: z.enum(["water", "salt"]),
+  amount: z.number().positive().max(100000), // Reasonable max
+  timestamp: z.number().positive(),
+  source: z.string().optional(),
+});
+
+const ImportDataSchema = z.object({
+  version: z.number().optional(),
+  exportedAt: z.string().optional(),
+  records: z.array(IntakeRecordSchema),
+});
+
+export type ImportValidationError = {
+  index: number;
+  errors: string[];
+};
 
 export async function addIntakeRecord(
   type: "water" | "salt",
@@ -50,6 +71,72 @@ export async function getAllRecords(): Promise<IntakeRecord[]> {
   return db.intakeRecords.orderBy("timestamp").reverse().toArray();
 }
 
+export interface PaginatedResult<T> {
+  records: T[];
+  hasMore: boolean;
+  total: number;
+}
+
+/**
+ * Get paginated intake records
+ * @param page Page number (1-based)
+ * @param limit Number of records per page
+ * @returns Paginated records with metadata
+ */
+export async function getRecordsPaginated(
+  page: number = 1,
+  limit: number = 20
+): Promise<PaginatedResult<IntakeRecord>> {
+  const offset = (page - 1) * limit;
+  const total = await db.intakeRecords.count();
+  
+  const records = await db.intakeRecords
+    .orderBy("timestamp")
+    .reverse()
+    .offset(offset)
+    .limit(limit)
+    .toArray();
+  
+  return {
+    records,
+    hasMore: offset + records.length < total,
+    total,
+  };
+}
+
+/**
+ * Get intake records using cursor-based pagination (more efficient for large datasets)
+ * @param beforeTimestamp Get records before this timestamp (exclusive)
+ * @param limit Number of records to fetch
+ * @returns Records and the cursor for the next page
+ */
+export async function getRecordsByCursor(
+  beforeTimestamp?: number,
+  limit: number = 20
+): Promise<{ records: IntakeRecord[]; nextCursor: number | null }> {
+  let query = db.intakeRecords.orderBy("timestamp").reverse();
+  
+  if (beforeTimestamp !== undefined) {
+    query = db.intakeRecords
+      .where("timestamp")
+      .below(beforeTimestamp)
+      .reverse();
+  }
+  
+  const records = await query.limit(limit + 1).toArray();
+  
+  const hasMore = records.length > limit;
+  if (hasMore) {
+    records.pop(); // Remove the extra record used for hasMore check
+  }
+  
+  const nextCursor = hasMore && records.length > 0 
+    ? records[records.length - 1].timestamp 
+    : null;
+  
+  return { records, nextCursor };
+}
+
 export async function getRecordsByDateRange(
   startTime: number,
   endTime: number,
@@ -80,31 +167,84 @@ export async function exportAllData(): Promise<string> {
   );
 }
 
+export interface ImportResult {
+  imported: number;
+  skipped: number;
+  errors: ImportValidationError[];
+}
+
+/**
+ * Validate import data without importing
+ * Useful for showing preview/errors before actual import
+ */
+export function validateImportData(jsonData: string): { 
+  valid: boolean; 
+  errors: ImportValidationError[];
+  recordCount?: number;
+} {
+  let data: unknown;
+  
+  try {
+    data = JSON.parse(jsonData);
+  } catch {
+    return { 
+      valid: false, 
+      errors: [{ index: -1, errors: ["Invalid JSON format"] }] 
+    };
+  }
+
+  const result = ImportDataSchema.safeParse(data);
+  
+  if (!result.success) {
+    const errors: ImportValidationError[] = result.error.issues.map((issue) => ({
+      index: typeof issue.path[1] === "number" ? issue.path[1] : -1,
+      errors: [issue.message],
+    }));
+    return { valid: false, errors };
+  }
+
+  return { valid: true, errors: [], recordCount: result.data.records.length };
+}
+
 export async function importData(
   jsonData: string,
   mode: "merge" | "replace" = "merge"
-): Promise<{ imported: number; skipped: number }> {
-  const data = JSON.parse(jsonData);
-
-  if (!data.records || !Array.isArray(data.records)) {
-    throw new Error("Invalid data format");
+): Promise<ImportResult> {
+  let data: unknown;
+  
+  try {
+    data = JSON.parse(jsonData);
+  } catch {
+    throw new Error("Invalid JSON format");
   }
+
+  // Validate with Zod
+  const parseResult = ImportDataSchema.safeParse(data);
+  
+  if (!parseResult.success) {
+    // Collect all validation errors
+    const errorMessages = parseResult.error.issues
+      .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
+      .join("; ");
+    throw new Error(`Invalid data format: ${errorMessages}`);
+  }
+
+  const validatedData = parseResult.data;
 
   let imported = 0;
   let skipped = 0;
+  const errors: ImportValidationError[] = [];
 
   if (mode === "replace") {
     await db.intakeRecords.clear();
   }
 
-  for (const record of data.records) {
-    // Validate record structure
-    if (
-      !record.id ||
-      !record.type ||
-      typeof record.amount !== "number" ||
-      typeof record.timestamp !== "number"
-    ) {
+  for (let i = 0; i < validatedData.records.length; i++) {
+    const record = validatedData.records[i];
+    
+    // Additional business logic validation
+    if (record.type !== "water" && record.type !== "salt") {
+      errors.push({ index: i, errors: [`Invalid type: ${record.type}`] });
       skipped++;
       continue;
     }
@@ -117,17 +257,25 @@ export async function importData(
       }
     }
 
-    await db.intakeRecords.add({
-      id: record.id,
-      type: record.type,
-      amount: record.amount,
-      timestamp: record.timestamp,
-      source: record.source,
-    });
-    imported++;
+    try {
+      await db.intakeRecords.add({
+        id: record.id,
+        type: record.type,
+        amount: record.amount,
+        timestamp: record.timestamp,
+        source: record.source,
+      });
+      imported++;
+    } catch (error) {
+      errors.push({ 
+        index: i, 
+        errors: [error instanceof Error ? error.message : "Unknown error"] 
+      });
+      skipped++;
+    }
   }
 
-  return { imported, skipped };
+  return { imported, skipped, errors };
 }
 
 export async function clearAllData(): Promise<void> {
