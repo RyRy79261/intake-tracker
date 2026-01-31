@@ -212,12 +212,27 @@ export function usePermissions() {
     }
   }, []);
 
+  // Reset microphone permission (clear stored state so user can re-request)
+  const resetMicrophonePermission = useCallback(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.removeItem(MIC_PERMISSION_KEY);
+    } catch {
+      // Ignore storage errors
+    }
+    setPermissions((prev) => ({
+      ...prev,
+      microphone: "prompt",
+    }));
+  }, []);
+
   return {
     permissions,
     isLoading,
     requestNotifications,
     requestMicrophone,
     refreshPermissions,
+    resetMicrophonePermission,
   };
 }
 

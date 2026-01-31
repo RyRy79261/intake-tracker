@@ -427,7 +427,6 @@ export function DebugPanel() {
       await registration.showNotification(title, {
         body,
         icon: "/icons/icon-192.svg",
-        badge: "/icons/icon-192.svg",
         tag: "debug-test-sw",
       });
       
@@ -938,8 +937,8 @@ export function DebugPanel() {
               </Button>
             </div>
 
-            <ScrollArea className="h-[380px]">
-              <div className="space-y-4 pr-4">
+            <ScrollArea className="h-[380px] w-full">
+              <div className="space-y-4">
                 {/* Status Overview */}
                 {notifDiagnostics && (
                   <div className="space-y-3">
@@ -1130,7 +1129,8 @@ export function DebugPanel() {
                       size="sm"
                       onClick={() => testNotificationDirect(customNotifTitle, customNotifBody)}
                       disabled={notifTestLoading}
-                      className="text-xs"
+                      className="text-xs opacity-50"
+                      title="Not available on mobile PWA"
                     >
                       <Send className="w-3 h-3 mr-1" />
                       Direct
@@ -1138,7 +1138,7 @@ export function DebugPanel() {
                   </div>
 
                   <p className="text-[10px] text-muted-foreground">
-                    App = showNotification() | SW = ServiceWorker | Direct = new Notification()
+                    App = recommended | SW = ServiceWorker | Direct = desktop only (fails on mobile PWA)
                   </p>
 
                   {notifTestLoading && (

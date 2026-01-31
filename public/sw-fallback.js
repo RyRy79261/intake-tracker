@@ -38,6 +38,7 @@ self.addEventListener('message', (event) => {
 });
 
 // Push notification handler
+// Note: badge is omitted because Android requires monochrome PNG and SVG renders as white circle
 self.addEventListener('push', (event) => {
   console.log('[SW Fallback] Push received');
   
@@ -45,7 +46,6 @@ self.addEventListener('push', (event) => {
     title: 'Intake Tracker',
     body: 'You have a notification',
     icon: '/icons/icon-192.svg',
-    badge: '/icons/icon-192.svg',
   };
   
   // Try to parse push data if available
@@ -66,7 +66,6 @@ self.addEventListener('push', (event) => {
     self.registration.showNotification(data.title, {
       body: data.body,
       icon: data.icon,
-      badge: data.badge,
       tag: data.tag || 'intake-tracker-notification',
       requireInteraction: data.requireInteraction || false,
       data: data.data || {},

@@ -65,9 +65,11 @@ import { sendTestNotification, getNotificationSettings, saveNotificationSettings
 function PermissionBadge({
   state,
   onRequest,
+  onReset,
 }: {
   state: PermissionState;
   onRequest: () => void;
+  onReset?: () => void;
 }) {
   if (state === "granted") {
     return (
@@ -80,10 +82,17 @@ function PermissionBadge({
 
   if (state === "denied") {
     return (
-      <span className="flex items-center gap-1 text-xs text-red-600 dark:text-red-400">
-        <X className="w-3.5 h-3.5" />
-        Blocked
-      </span>
+      <div className="flex items-center gap-2">
+        <span className="flex items-center gap-1 text-xs text-red-600 dark:text-red-400">
+          <X className="w-3.5 h-3.5" />
+          Blocked
+        </span>
+        {onReset && (
+          <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={onReset}>
+            Reset
+          </Button>
+        )}
+      </div>
     );
   }
 
@@ -185,7 +194,7 @@ export function SettingsSheet() {
   } = usePinGate();
   
   // Permissions
-  const { permissions, requestNotifications, requestMicrophone } = usePermissions();
+  const { permissions, requestNotifications, requestMicrophone, resetMicrophonePermission } = usePermissions();
   const [expiryNotificationsEnabled, setExpiryNotificationsEnabled] = useState(() => {
     if (typeof window === "undefined") return false;
     return getNotificationSettings().enabled;
@@ -835,6 +844,10 @@ export function SettingsSheet() {
                     if (granted) {
                       toast({ title: "Microphone enabled", variant: "success" });
                     }
+                  }}
+                  onReset={() => {
+                    resetMicrophonePermission();
+                    toast({ title: "Permission reset", description: "Tap Enable to request microphone access again" });
                   }}
                 />
               </div>

@@ -41,6 +41,9 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
 
 /**
  * Show a local notification using Service Worker (for PWA) or fallback to Notification API
+ * 
+ * Note: SVG icons don't work well on mobile. For best results, use PNG icons.
+ * The badge (small status bar icon) is omitted as it requires a specific monochrome PNG format.
  */
 export async function showNotification(
   title: string,
@@ -50,9 +53,10 @@ export async function showNotification(
     return false;
   }
 
+  // Note: badge is intentionally omitted - Android requires a specific monochrome PNG
+  // and SVG badges often render as white circles. The system will use app icon instead.
   const notificationOptions: NotificationOptions = {
     icon: "/icons/icon-192.svg",
-    badge: "/icons/icon-192.svg",
     ...options,
   };
 
