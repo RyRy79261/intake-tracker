@@ -21,13 +21,23 @@ import {
   XCircle,
   AlertCircle,
   Zap,
+  Bell,
+  Send,
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { useSettings, usePerplexityKey } from "@/hooks/use-settings";
 import { usePinGate } from "@/hooks/use-pin-gate";
 import { getAuditLogs, type AuditEntry } from "@/lib/audit";
 import { parseIntakeWithPerplexity } from "@/lib/perplexity";
 import { db } from "@/lib/db";
 import { cn } from "@/lib/utils";
+import {
+  isNotificationSupported,
+  getNotificationPermission,
+  showNotification,
+  getNotificationSettings,
+} from "@/lib/push-notification-service";
+import { usePermissions } from "@/hooks/use-permissions";
 
 interface DbDiagnostics {
   version: number;
@@ -62,6 +72,25 @@ interface AITestResult {
   duration?: number;
 }
 
+interface NotificationDiagnostics {
+  supported: boolean;
+  permission: string;
+  serviceWorkerReady: boolean;
+  serviceWorkerState: string;
+  storedSettings: {
+    enabled: boolean;
+    lastCheck: number | null;
+    checkIntervalHours: number;
+  };
+  storedMicPermission: string | null;
+}
+
+interface NotificationTestResult {
+  method: "serviceWorker" | "direct";
+  success: boolean;
+  error?: string;
+}
+
 export function DebugPanel() {
   const [open, setOpen] = useState(false);
   const [aiStatus, setAiStatus] = useState<AIStatusResponse | null>(null);
@@ -74,8 +103,17 @@ export function DebugPanel() {
   const [dbDiagnostics, setDbDiagnostics] = useState<DbDiagnostics | null>(null);
   const [dbLoading, setDbLoading] = useState(false);
   const [nativeDbInfo, setNativeDbInfo] = useState<string>("");
+  
+  // Notification debugging state
+  const [notifDiagnostics, setNotifDiagnostics] = useState<NotificationDiagnostics | null>(null);
+  const [notifLoading, setNotifLoading] = useState(false);
+  const [notifTestResult, setNotifTestResult] = useState<NotificationTestResult | null>(null);
+  const [notifTestLoading, setNotifTestLoading] = useState(false);
+  const [customNotifTitle, setCustomNotifTitle] = useState("Debug Test");
+  const [customNotifBody, setCustomNotifBody] = useState("Testing notifications from debug panel");
 
   const settings = useSettings();
+  const { permissions, refreshPermissions } = usePermissions();
   const { hasKey, getApiKey } = usePerplexityKey();
   const { authenticated, user, getAccessToken } = usePrivy();
   const { hasPinEnabled } = usePinGate();
@@ -249,6 +287,154 @@ export function DebugPanel() {
     setNativeDbInfo(nativeInfo);
   }, [checkNativeIndexedDB]);
 
+  // Fetch notification diagnostics
+  const fetchNotifDiagnostics = useCallback(async () => {
+    setNotifLoading(true);
+    try {
+      const supported = isNotificationSupported();
+      const permission = supported ? getNotificationPermission() : "unsupported";
+      const storedSettings = getNotificationSettings();
+      
+      // Check localStorage for mic permission
+      let storedMicPermission: string | null = null;
+      try {
+        storedMicPermission = localStorage.getItem("intake-tracker-mic-permission");
+      } catch {
+        // Ignore
+      }
+      
+      // Check service worker status
+      let serviceWorkerReady = false;
+      let serviceWorkerState = "unavailable";
+      
+      if ("serviceWorker" in navigator) {
+        try {
+          const registration = await Promise.race([
+            navigator.serviceWorker.ready,
+            new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000))
+          ]);
+          
+          if (registration) {
+            serviceWorkerReady = true;
+            serviceWorkerState = registration.active?.state || "no active worker";
+          } else {
+            serviceWorkerState = "timeout waiting for ready";
+          }
+        } catch (e) {
+          serviceWorkerState = `error: ${e instanceof Error ? e.message : "unknown"}`;
+        }
+      }
+      
+      setNotifDiagnostics({
+        supported,
+        permission,
+        serviceWorkerReady,
+        serviceWorkerState,
+        storedSettings,
+        storedMicPermission,
+      });
+    } catch (error) {
+      console.error("Failed to fetch notification diagnostics:", error);
+    } finally {
+      setNotifLoading(false);
+    }
+  }, []);
+
+  // Test notification via Service Worker
+  const testNotificationSW = useCallback(async (title: string, body: string) => {
+    setNotifTestLoading(true);
+    setNotifTestResult(null);
+    
+    try {
+      if (!("serviceWorker" in navigator)) {
+        throw new Error("Service Worker not supported");
+      }
+      
+      const registration = await navigator.serviceWorker.ready;
+      await registration.showNotification(title, {
+        body,
+        icon: "/icons/icon-192.svg",
+        badge: "/icons/icon-192.svg",
+        tag: "debug-test-sw",
+      });
+      
+      setNotifTestResult({
+        method: "serviceWorker",
+        success: true,
+      });
+    } catch (error) {
+      setNotifTestResult({
+        method: "serviceWorker",
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    } finally {
+      setNotifTestLoading(false);
+    }
+  }, []);
+
+  // Test notification via direct Notification API
+  const testNotificationDirect = useCallback(async (title: string, body: string) => {
+    setNotifTestLoading(true);
+    setNotifTestResult(null);
+    
+    try {
+      if (!isNotificationSupported()) {
+        throw new Error("Notification API not supported");
+      }
+      
+      if (Notification.permission !== "granted") {
+        throw new Error(`Permission not granted: ${Notification.permission}`);
+      }
+      
+      new Notification(title, {
+        body,
+        icon: "/icons/icon-192.svg",
+        tag: "debug-test-direct",
+      });
+      
+      setNotifTestResult({
+        method: "direct",
+        success: true,
+      });
+    } catch (error) {
+      setNotifTestResult({
+        method: "direct",
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    } finally {
+      setNotifTestLoading(false);
+    }
+  }, []);
+
+  // Test using the app's showNotification function
+  const testNotificationApp = useCallback(async (title: string, body: string) => {
+    setNotifTestLoading(true);
+    setNotifTestResult(null);
+    
+    try {
+      const success = await showNotification(title, {
+        body,
+        tag: "debug-test-app",
+      });
+      
+      setNotifTestResult({
+        method: "serviceWorker",
+        success,
+        error: success ? undefined : "showNotification returned false",
+      });
+    } catch (error) {
+      setNotifTestResult({
+        method: "serviceWorker",
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    } finally {
+      setNotifTestLoading(false);
+    }
+  }, []);
+
   // Test AI service
   const testAIService = useCallback(async () => {
     setAiTestLoading(true);
@@ -290,8 +476,9 @@ export function DebugPanel() {
       fetchAIStatus();
       fetchAuditLogs();
       fetchDbDiagnostics();
+      fetchNotifDiagnostics();
     }
-  }, [open, fetchAIStatus, fetchAuditLogs, fetchDbDiagnostics]);
+  }, [open, fetchAIStatus, fetchAuditLogs, fetchDbDiagnostics, fetchNotifDiagnostics]);
 
   // Filter audit logs
   const filteredLogs = auditLogs.filter((log) => {
@@ -348,11 +535,12 @@ export function DebugPanel() {
         </DialogHeader>
 
         <Tabs defaultValue="db" className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="db">Database</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-5">
+            <TabsTrigger value="db">DB</TabsTrigger>
             <TabsTrigger value="state">State</TabsTrigger>
             <TabsTrigger value="logs">Logs</TabsTrigger>
-            <TabsTrigger value="test">AI Test</TabsTrigger>
+            <TabsTrigger value="notif">Notif</TabsTrigger>
+            <TabsTrigger value="test">AI</TabsTrigger>
           </TabsList>
 
           {/* Database Tab */}
@@ -590,6 +778,177 @@ export function DebugPanel() {
                   ))}
                 </div>
               )}
+            </ScrollArea>
+          </TabsContent>
+
+          {/* Notifications Tab */}
+          <TabsContent value="notif" className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h4 className="font-medium text-sm">Notification Diagnostics</h4>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={fetchNotifDiagnostics}
+                disabled={notifLoading}
+              >
+                {notifLoading ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-3 h-3" />
+                )}
+              </Button>
+            </div>
+
+            <ScrollArea className="h-[380px]">
+              <div className="space-y-4 pr-4">
+                {/* Status Overview */}
+                {notifDiagnostics && (
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap gap-2">
+                      <StatusBadge 
+                        ok={notifDiagnostics.supported} 
+                        label={notifDiagnostics.supported ? "API Supported" : "API Not Supported"} 
+                      />
+                      <StatusBadge 
+                        ok={notifDiagnostics.permission === "granted"} 
+                        label={`Permission: ${notifDiagnostics.permission}`} 
+                      />
+                      <StatusBadge 
+                        ok={notifDiagnostics.serviceWorkerReady} 
+                        label={notifDiagnostics.serviceWorkerReady ? "SW Ready" : "SW Not Ready"} 
+                      />
+                    </div>
+
+                    <div className="bg-muted/50 rounded-lg p-3 text-xs font-mono space-y-1">
+                      <div>Browser Permission: {notifDiagnostics.permission}</div>
+                      <div>React State: {permissions.notifications}</div>
+                      <div>SW State: {notifDiagnostics.serviceWorkerState}</div>
+                      <div>Stored Mic Permission: {notifDiagnostics.storedMicPermission || "not set"}</div>
+                    </div>
+
+                    <div className="bg-muted/50 rounded-lg p-3 text-xs font-mono space-y-1">
+                      <div className="font-medium text-foreground mb-1">Notification Settings:</div>
+                      <div>Enabled: {notifDiagnostics.storedSettings.enabled ? "Yes" : "No"}</div>
+                      <div>Last Check: {notifDiagnostics.storedSettings.lastCheck 
+                        ? new Date(notifDiagnostics.storedSettings.lastCheck).toLocaleString()
+                        : "Never"}</div>
+                      <div>Check Interval: {notifDiagnostics.storedSettings.checkIntervalHours}h</div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Custom Notification Test */}
+                <div className="space-y-3 pt-2 border-t">
+                  <h5 className="font-medium text-sm flex items-center gap-2">
+                    <Bell className="w-4 h-4" />
+                    Test Notifications
+                  </h5>
+                  
+                  <div className="space-y-2">
+                    <Input
+                      placeholder="Title"
+                      value={customNotifTitle}
+                      onChange={(e) => setCustomNotifTitle(e.target.value)}
+                      className="text-sm"
+                    />
+                    <Input
+                      placeholder="Body"
+                      value={customNotifBody}
+                      onChange={(e) => setCustomNotifBody(e.target.value)}
+                      className="text-sm"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => testNotificationApp(customNotifTitle, customNotifBody)}
+                      disabled={notifTestLoading}
+                      className="text-xs"
+                    >
+                      <Send className="w-3 h-3 mr-1" />
+                      App
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => testNotificationSW(customNotifTitle, customNotifBody)}
+                      disabled={notifTestLoading}
+                      className="text-xs"
+                    >
+                      <Send className="w-3 h-3 mr-1" />
+                      SW
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => testNotificationDirect(customNotifTitle, customNotifBody)}
+                      disabled={notifTestLoading}
+                      className="text-xs"
+                    >
+                      <Send className="w-3 h-3 mr-1" />
+                      Direct
+                    </Button>
+                  </div>
+
+                  <p className="text-[10px] text-muted-foreground">
+                    App = showNotification() | SW = ServiceWorker | Direct = new Notification()
+                  </p>
+
+                  {notifTestLoading && (
+                    <div className="flex items-center justify-center py-2">
+                      <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                    </div>
+                  )}
+
+                  {notifTestResult && (
+                    <div
+                      className={cn(
+                        "rounded-lg p-3 text-sm",
+                        notifTestResult.success
+                          ? "bg-green-50 border border-green-200 dark:bg-green-900/20 dark:border-green-800"
+                          : "bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800"
+                      )}
+                    >
+                      <div className="flex items-center gap-2">
+                        {notifTestResult.success ? (
+                          <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400" />
+                        ) : (
+                          <XCircle className="w-4 h-4 text-red-600 dark:text-red-400" />
+                        )}
+                        <span className="font-medium text-xs">
+                          {notifTestResult.method === "serviceWorker" ? "Service Worker" : "Direct API"}
+                          {" - "}
+                          {notifTestResult.success ? "Success" : "Failed"}
+                        </span>
+                      </div>
+                      {notifTestResult.error && (
+                        <p className="text-xs text-red-600 dark:text-red-400 mt-1 font-mono">
+                          {notifTestResult.error}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Request Permission Button */}
+                {notifDiagnostics?.permission !== "granted" && (
+                  <div className="pt-2 border-t">
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={async () => {
+                        const result = await Notification.requestPermission();
+                        await fetchNotifDiagnostics();
+                        await refreshPermissions();
+                      }}
+                    >
+                      Request Permission (Current: {notifDiagnostics?.permission})
+                    </Button>
+                  </div>
+                )}
+              </div>
             </ScrollArea>
           </TabsContent>
 

@@ -15,6 +15,39 @@ export interface PermissionsState {
   microphone: PermissionState;
 }
 
+// Storage key for microphone permission state (navigator.permissions.query is unreliable on mobile)
+const MIC_PERMISSION_KEY = "intake-tracker-mic-permission";
+
+/**
+ * Get stored microphone permission from localStorage
+ */
+function getStoredMicPermission(): PermissionState | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const stored = localStorage.getItem(MIC_PERMISSION_KEY);
+    if (stored === "granted" || stored === "denied") {
+      return stored;
+    }
+  } catch {
+    // Ignore storage errors
+  }
+  return null;
+}
+
+/**
+ * Store microphone permission in localStorage
+ */
+function storeMicPermission(state: PermissionState): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (state === "granted" || state === "denied") {
+      localStorage.setItem(MIC_PERMISSION_KEY, state);
+    }
+  } catch {
+    // Ignore storage errors
+  }
+}
+
 /**
  * Hook to manage and query app permissions
  */
@@ -38,25 +71,34 @@ export function usePermissions() {
       }
 
       // Check microphone permission
-      let microphoneState: PermissionState = "unavailable";
-      if (typeof navigator !== "undefined" && navigator.permissions) {
+      // First check localStorage (more reliable on mobile PWAs)
+      let microphoneState: PermissionState = getStoredMicPermission() || "prompt";
+      
+      // If not stored, try to query the permission API
+      if (!getStoredMicPermission() && typeof navigator !== "undefined" && navigator.permissions) {
         try {
           const micPermission = await navigator.permissions.query({
             name: "microphone" as PermissionName,
           });
-          microphoneState = micPermission.state === "prompt" ? "prompt" : micPermission.state;
+          
+          // Only trust the query if it's not "prompt" (which is the default/unknown state)
+          if (micPermission.state !== "prompt") {
+            microphoneState = micPermission.state;
+            storeMicPermission(microphoneState);
+          }
           
           // Listen for permission changes
           micPermission.addEventListener("change", () => {
+            const newState = micPermission.state === "prompt" ? "prompt" : micPermission.state;
+            storeMicPermission(newState);
             setPermissions((prev) => ({
               ...prev,
-              microphone: micPermission.state === "prompt" ? "prompt" : micPermission.state,
+              microphone: newState,
             }));
           });
         } catch {
           // Microphone permission query not supported (e.g., Firefox)
-          // In this case, we'll show "prompt" as we don't know the state
-          microphoneState = "prompt";
+          // Keep using stored or "prompt" state
         }
       }
 
@@ -100,6 +142,9 @@ export function usePermissions() {
       // Stop all tracks after getting permission
       stream.getTracks().forEach((track) => track.stop());
 
+      // Store the granted state in localStorage for reliability
+      storeMicPermission("granted");
+      
       setPermissions((prev) => ({
         ...prev,
         microphone: "granted",
@@ -109,10 +154,16 @@ export function usePermissions() {
     } catch (error) {
       // Permission denied or error
       const isDenied = error instanceof DOMException && error.name === "NotAllowedError";
+      const newState: PermissionState = isDenied ? "denied" : "prompt";
+      
+      // Store denied state in localStorage
+      if (isDenied) {
+        storeMicPermission("denied");
+      }
       
       setPermissions((prev) => ({
         ...prev,
-        microphone: isDenied ? "denied" : "prompt",
+        microphone: newState,
       }));
 
       return false;
@@ -130,15 +181,30 @@ export function usePermissions() {
       }));
     }
 
-    // Re-check microphone permission if possible
+    // Re-check microphone permission
+    // First check localStorage (most reliable)
+    const storedMicPermission = getStoredMicPermission();
+    if (storedMicPermission) {
+      setPermissions((prev) => ({
+        ...prev,
+        microphone: storedMicPermission,
+      }));
+      return;
+    }
+    
+    // Fall back to permissions API if no stored value
     if (typeof navigator !== "undefined" && navigator.permissions) {
       try {
         const micPermission = await navigator.permissions.query({
           name: "microphone" as PermissionName,
         });
+        const newState = micPermission.state === "prompt" ? "prompt" : micPermission.state;
+        if (newState !== "prompt") {
+          storeMicPermission(newState);
+        }
         setPermissions((prev) => ({
           ...prev,
-          microphone: micPermission.state === "prompt" ? "prompt" : micPermission.state,
+          microphone: newState,
         }));
       } catch {
         // Ignore errors

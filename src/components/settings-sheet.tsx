@@ -868,8 +868,8 @@ export function SettingsSheet() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => {
-                          const sent = sendTestNotification();
+                        onClick={async () => {
+                          const sent = await sendTestNotification();
                           if (sent) {
                             toast({ title: "Test notification sent", variant: "success" });
                           } else {

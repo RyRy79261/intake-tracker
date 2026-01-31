@@ -40,25 +40,41 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
 }
 
 /**
- * Show a local notification
+ * Show a local notification using Service Worker (for PWA) or fallback to Notification API
  */
-export function showNotification(
+export async function showNotification(
   title: string,
   options?: NotificationOptions
-): Notification | null {
+): Promise<boolean> {
   if (!isNotificationSupported() || Notification.permission !== "granted") {
-    return null;
+    return false;
   }
 
+  const notificationOptions: NotificationOptions = {
+    icon: "/icons/icon-192.svg",
+    badge: "/icons/icon-192.svg",
+    ...options,
+  };
+
+  // Try Service Worker notification first (required for PWAs on mobile)
+  if ("serviceWorker" in navigator) {
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      await registration.showNotification(title, notificationOptions);
+      return true;
+    } catch (swError) {
+      console.warn("Service Worker notification failed, falling back:", swError);
+      // Fall through to try direct Notification API
+    }
+  }
+
+  // Fallback to direct Notification API (works on desktop browsers)
   try {
-    return new Notification(title, {
-      icon: "/icons/icon-192.svg",
-      badge: "/icons/icon-192.svg",
-      ...options,
-    });
+    new Notification(title, notificationOptions);
+    return true;
   } catch (error) {
     console.error("Failed to show notification:", error);
-    return null;
+    return false;
   }
 }
 
@@ -124,25 +140,23 @@ export async function notifyExpiringRecords(
     ? Math.ceil((info.oldestExpiringDate.getTime() + retentionDays * 24 * 60 * 60 * 1000 - Date.now()) / (24 * 60 * 60 * 1000))
     : warningDays;
 
-  showNotification("Records Expiring Soon", {
+  const sent = await showNotification("Records Expiring Soon", {
     body: `${info.totalExpiring} records will be deleted in ${daysUntilExpiry} days. Export your data to save them.`,
     tag: "expiry-reminder",
     requireInteraction: false,
   });
 
-  return true;
+  return sent;
 }
 
 /**
  * Send a test notification
  */
-export function sendTestNotification(): boolean {
-  const notification = showNotification("Test Notification", {
+export async function sendTestNotification(): Promise<boolean> {
+  return showNotification("Test Notification", {
     body: "Notifications are working correctly!",
     tag: "test-notification",
   });
-
-  return notification !== null;
 }
 
 // Storage key for notification settings
