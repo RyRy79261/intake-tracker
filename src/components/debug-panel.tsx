@@ -38,6 +38,7 @@ import {
   getNotificationSettings,
 } from "@/lib/push-notification-service";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useServiceWorker } from "@/hooks/use-service-worker";
 
 interface DbDiagnostics {
   version: number;
@@ -72,11 +73,23 @@ interface AITestResult {
   duration?: number;
 }
 
+interface ServiceWorkerDetails {
+  hasRegistration: boolean;
+  scriptURL: string | null;
+  scope: string | null;
+  installingState: string | null;
+  waitingState: string | null;
+  activeState: string | null;
+  controllerURL: string | null;
+  updateViaCache: string | null;
+}
+
 interface NotificationDiagnostics {
   supported: boolean;
   permission: string;
   serviceWorkerReady: boolean;
   serviceWorkerState: string;
+  serviceWorkerDetails: ServiceWorkerDetails;
   storedSettings: {
     enabled: boolean;
     lastCheck: number | null;
@@ -111,12 +124,23 @@ export function DebugPanel() {
   const [notifTestLoading, setNotifTestLoading] = useState(false);
   const [customNotifTitle, setCustomNotifTitle] = useState("Debug Test");
   const [customNotifBody, setCustomNotifBody] = useState("Testing notifications from debug panel");
+  
+  // SW control state
+  const [swActionLoading, setSwActionLoading] = useState(false);
+  const [swActionResult, setSwActionResult] = useState<{ success: boolean; message: string } | null>(null);
 
   const settings = useSettings();
   const { permissions, refreshPermissions } = usePermissions();
   const { hasKey, getApiKey } = usePerplexityKey();
   const { authenticated, user, getAccessToken } = usePrivy();
   const { hasPinEnabled } = usePinGate();
+  const { 
+    isRegistered: swIsRegistered,
+    registrationError: swRegistrationError,
+    registerServiceWorker,
+    unregisterServiceWorker,
+    forceSkipWaiting,
+  } = useServiceWorker();
 
   // Fetch AI status from server
   const fetchAIStatus = useCallback(async () => {
@@ -303,22 +327,70 @@ export function DebugPanel() {
         // Ignore
       }
       
-      // Check service worker status
+      // Check service worker status - detailed info
       let serviceWorkerReady = false;
       let serviceWorkerState = "unavailable";
+      const serviceWorkerDetails: ServiceWorkerDetails = {
+        hasRegistration: false,
+        scriptURL: null,
+        scope: null,
+        installingState: null,
+        waitingState: null,
+        activeState: null,
+        controllerURL: null,
+        updateViaCache: null,
+      };
       
       if ("serviceWorker" in navigator) {
         try {
-          const registration = await Promise.race([
+          // Get controller info (currently controlling SW)
+          if (navigator.serviceWorker.controller) {
+            serviceWorkerDetails.controllerURL = navigator.serviceWorker.controller.scriptURL;
+          }
+          
+          // Get registration info (doesn't wait for ready)
+          const registration = await navigator.serviceWorker.getRegistration();
+          
+          if (registration) {
+            serviceWorkerDetails.hasRegistration = true;
+            serviceWorkerDetails.scope = registration.scope;
+            serviceWorkerDetails.updateViaCache = registration.updateViaCache;
+            
+            // Get state of each worker type
+            if (registration.installing) {
+              serviceWorkerDetails.installingState = registration.installing.state;
+              serviceWorkerDetails.scriptURL = registration.installing.scriptURL;
+            }
+            if (registration.waiting) {
+              serviceWorkerDetails.waitingState = registration.waiting.state;
+              serviceWorkerDetails.scriptURL = serviceWorkerDetails.scriptURL || registration.waiting.scriptURL;
+            }
+            if (registration.active) {
+              serviceWorkerDetails.activeState = registration.active.state;
+              serviceWorkerDetails.scriptURL = serviceWorkerDetails.scriptURL || registration.active.scriptURL;
+            }
+          }
+          
+          // Now try to wait for ready with timeout
+          const readyRegistration = await Promise.race([
             navigator.serviceWorker.ready,
             new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000))
           ]);
           
-          if (registration) {
+          if (readyRegistration) {
             serviceWorkerReady = true;
-            serviceWorkerState = registration.active?.state || "no active worker";
+            serviceWorkerState = readyRegistration.active?.state || "no active worker";
           } else {
-            serviceWorkerState = "timeout waiting for ready";
+            // Determine more specific state message
+            if (!serviceWorkerDetails.hasRegistration) {
+              serviceWorkerState = "no registration found";
+            } else if (serviceWorkerDetails.installingState) {
+              serviceWorkerState = `installing (${serviceWorkerDetails.installingState})`;
+            } else if (serviceWorkerDetails.waitingState) {
+              serviceWorkerState = `waiting (${serviceWorkerDetails.waitingState})`;
+            } else {
+              serviceWorkerState = "timeout waiting for ready";
+            }
           }
         } catch (e) {
           serviceWorkerState = `error: ${e instanceof Error ? e.message : "unknown"}`;
@@ -330,6 +402,7 @@ export function DebugPanel() {
         permission,
         serviceWorkerReady,
         serviceWorkerState,
+        serviceWorkerDetails,
         storedSettings,
         storedMicPermission,
       });
@@ -434,6 +507,72 @@ export function DebugPanel() {
       setNotifTestLoading(false);
     }
   }, []);
+
+  // SW control handlers
+  const handleRegisterSW = useCallback(async () => {
+    setSwActionLoading(true);
+    setSwActionResult(null);
+    try {
+      const result = await registerServiceWorker();
+      setSwActionResult({
+        success: result.success,
+        message: result.success 
+          ? `Registered: ${result.registration?.active?.scriptURL || "unknown"}` 
+          : result.error || "Failed to register",
+      });
+      // Refresh diagnostics after action
+      await fetchNotifDiagnostics();
+    } catch (error) {
+      setSwActionResult({
+        success: false,
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    } finally {
+      setSwActionLoading(false);
+    }
+  }, [registerServiceWorker, fetchNotifDiagnostics]);
+
+  const handleUnregisterSW = useCallback(async () => {
+    setSwActionLoading(true);
+    setSwActionResult(null);
+    try {
+      const success = await unregisterServiceWorker();
+      setSwActionResult({
+        success,
+        message: success ? "All service workers unregistered" : "Failed to unregister",
+      });
+      // Refresh diagnostics after action
+      await fetchNotifDiagnostics();
+    } catch (error) {
+      setSwActionResult({
+        success: false,
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    } finally {
+      setSwActionLoading(false);
+    }
+  }, [unregisterServiceWorker, fetchNotifDiagnostics]);
+
+  const handleForceSkipWaiting = useCallback(async () => {
+    setSwActionLoading(true);
+    setSwActionResult(null);
+    try {
+      const success = await forceSkipWaiting();
+      setSwActionResult({
+        success,
+        message: success ? "Skip waiting message sent - page may reload" : "No waiting worker found",
+      });
+      // Refresh diagnostics after action
+      await fetchNotifDiagnostics();
+    } catch (error) {
+      setSwActionResult({
+        success: false,
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    } finally {
+      setSwActionLoading(false);
+    }
+  }, [forceSkipWaiting, fetchNotifDiagnostics]);
 
   // Test AI service
   const testAIService = useCallback(async () => {
@@ -826,6 +965,20 @@ export function DebugPanel() {
                       <div>Stored Mic Permission: {notifDiagnostics.storedMicPermission || "not set"}</div>
                     </div>
 
+                    {/* Detailed Service Worker Info */}
+                    <div className="bg-muted/50 rounded-lg p-3 text-xs font-mono space-y-1">
+                      <div className="font-medium text-foreground mb-1">Service Worker Details:</div>
+                      <div>Has Registration: {notifDiagnostics.serviceWorkerDetails.hasRegistration ? "Yes" : "No"}</div>
+                      <div className="truncate">Script URL: {notifDiagnostics.serviceWorkerDetails.scriptURL || "none"}</div>
+                      <div className="truncate">Scope: {notifDiagnostics.serviceWorkerDetails.scope || "none"}</div>
+                      <div className="truncate">Controller: {notifDiagnostics.serviceWorkerDetails.controllerURL || "none"}</div>
+                      <div className="mt-1 pt-1 border-t border-muted">
+                        <div>Installing: {notifDiagnostics.serviceWorkerDetails.installingState || "none"}</div>
+                        <div>Waiting: {notifDiagnostics.serviceWorkerDetails.waitingState || "none"}</div>
+                        <div>Active: {notifDiagnostics.serviceWorkerDetails.activeState || "none"}</div>
+                      </div>
+                    </div>
+
                     <div className="bg-muted/50 rounded-lg p-3 text-xs font-mono space-y-1">
                       <div className="font-medium text-foreground mb-1">Notification Settings:</div>
                       <div>Enabled: {notifDiagnostics.storedSettings.enabled ? "Yes" : "No"}</div>
@@ -836,6 +989,98 @@ export function DebugPanel() {
                     </div>
                   </div>
                 )}
+
+                {/* Service Worker Controls */}
+                <div className="space-y-3 pt-2 border-t">
+                  <h5 className="font-medium text-sm flex items-center gap-2">
+                    <RefreshCw className="w-4 h-4" />
+                    Service Worker Controls
+                  </h5>
+                  
+                  <div className="flex flex-wrap gap-2">
+                    <StatusBadge 
+                      ok={swIsRegistered} 
+                      label={swIsRegistered ? "Hook: Registered" : "Hook: Not Registered"} 
+                    />
+                  </div>
+                  
+                  {swRegistrationError && (
+                    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-2 text-xs text-red-600 dark:text-red-400">
+                      {swRegistrationError}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleRegisterSW}
+                      disabled={swActionLoading}
+                      className="text-xs"
+                    >
+                      {swActionLoading ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        "Register"
+                      )}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleForceSkipWaiting}
+                      disabled={swActionLoading}
+                      className="text-xs"
+                    >
+                      {swActionLoading ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        "Skip Wait"
+                      )}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleUnregisterSW}
+                      disabled={swActionLoading}
+                      className="text-xs text-red-600 dark:text-red-400 hover:text-red-700"
+                    >
+                      {swActionLoading ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        "Unregister"
+                      )}
+                    </Button>
+                  </div>
+
+                  <p className="text-[10px] text-muted-foreground">
+                    Register = register sw.js or fallback | Skip Wait = activate waiting SW | Unregister = remove all SWs
+                  </p>
+
+                  {swActionResult && (
+                    <div
+                      className={cn(
+                        "rounded-lg p-3 text-xs",
+                        swActionResult.success
+                          ? "bg-green-50 border border-green-200 dark:bg-green-900/20 dark:border-green-800"
+                          : "bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800"
+                      )}
+                    >
+                      <div className="flex items-center gap-2">
+                        {swActionResult.success ? (
+                          <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400" />
+                        ) : (
+                          <XCircle className="w-4 h-4 text-red-600 dark:text-red-400" />
+                        )}
+                        <span className={cn(
+                          "font-medium",
+                          swActionResult.success ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"
+                        )}>
+                          {swActionResult.message}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
 
                 {/* Custom Notification Test */}
                 <div className="space-y-3 pt-2 border-t">
