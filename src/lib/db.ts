@@ -6,6 +6,7 @@ export interface IntakeRecord {
   amount: number; // ml for water, mg for salt
   timestamp: number; // Unix timestamp in milliseconds
   source?: string; // "manual", "food:apple", "voice", etc.
+  note?: string; // Optional note for the entry
 }
 
 export interface AuditLog {
@@ -43,7 +44,8 @@ const db = new Dexie("IntakeTrackerDB") as Dexie & {
 // Version 1: Initial schema
 // Version 2: Added audit logs
 // Version 3: Added weight and blood pressure records
-db.version(3).stores({
+// Version 4: Added note field to IntakeRecord (optional, no index needed)
+db.version(4).stores({
   intakeRecords: "id, type, timestamp, source",
   auditLogs: "id, timestamp, action",
   weightRecords: "id, timestamp",

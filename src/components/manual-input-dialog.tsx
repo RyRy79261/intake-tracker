@@ -13,7 +13,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { Clock, ChevronDown, ChevronUp } from "lucide-react";
+import { Clock, ChevronDown, ChevronUp, StickyNote } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 
 // Helper to get current datetime in local format for input
 function getCurrentDateTimeLocal(): string {
@@ -33,7 +34,7 @@ interface ManualInputDialogProps {
   onOpenChange: (open: boolean) => void;
   type: "water" | "salt";
   currentValue: number;
-  onSubmit: (amount: number, timestamp?: number) => Promise<void>;
+  onSubmit: (amount: number, timestamp?: number, note?: string) => Promise<void>;
   isSubmitting?: boolean;
 }
 
@@ -48,6 +49,8 @@ export function ManualInputDialog({
   const [value, setValue] = useState(currentValue.toString());
   const [showTimeInput, setShowTimeInput] = useState(false);
   const [customTime, setCustomTime] = useState(getCurrentDateTimeLocal());
+  const [showNoteInput, setShowNoteInput] = useState(false);
+  const [note, setNote] = useState("");
 
   const isWater = type === "water";
   const unit = isWater ? "ml" : "mg";
@@ -58,6 +61,8 @@ export function ManualInputDialog({
       setValue(currentValue.toString());
       setShowTimeInput(false);
       setCustomTime(getCurrentDateTimeLocal());
+      setShowNoteInput(false);
+      setNote("");
     }
   }, [open, currentValue]);
 
@@ -68,7 +73,9 @@ export function ManualInputDialog({
     
     // Pass custom timestamp if time input is shown, otherwise use current time
     const timestamp = showTimeInput ? dateTimeLocalToTimestamp(customTime) : undefined;
-    await onSubmit(amount, timestamp);
+    // Pass note if provided
+    const trimmedNote = note.trim() || undefined;
+    await onSubmit(amount, timestamp, trimmedNote);
   };
 
   const quickValues = isWater
@@ -164,6 +171,46 @@ export function ManualInputDialog({
                 />
                 <p className="text-xs text-muted-foreground">
                   Use this to log intake that happened earlier
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Note section */}
+          <div className="space-y-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="w-full justify-between text-muted-foreground hover:text-foreground"
+              onClick={() => setShowNoteInput(!showNoteInput)}
+            >
+              <span className="flex items-center gap-2">
+                <StickyNote className="w-4 h-4" />
+                {showNoteInput ? "Adding note" : "Add a note"}
+              </span>
+              {showNoteInput ? (
+                <ChevronUp className="w-4 h-4" />
+              ) : (
+                <ChevronDown className="w-4 h-4" />
+              )}
+            </Button>
+            
+            {showNoteInput && (
+              <div className="space-y-2 p-3 rounded-lg bg-muted/50 border">
+                <Label htmlFor="note" className="text-sm">
+                  Note (optional)
+                </Label>
+                <Textarea
+                  id="note"
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder="Add any notes about this entry..."
+                  className="text-sm min-h-[60px]"
+                  maxLength={200}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {note.length}/200 characters
                 </p>
               </div>
             )}

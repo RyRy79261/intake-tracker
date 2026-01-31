@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useSettings, usePerplexityKey } from "@/hooks/use-settings";
+import { DebugPanel } from "./debug-panel";
 import {
   Select,
   SelectContent,
@@ -802,8 +803,9 @@ export function SettingsSheet() {
             </div>
           </div>
 
-          {/* Reset Settings */}
-          <div className="pt-4 border-t">
+          {/* Debug & Reset */}
+          <div className="pt-4 border-t space-y-2">
+            <DebugPanel />
             <Button
               variant="ghost"
               className="w-full justify-start gap-2 text-muted-foreground"

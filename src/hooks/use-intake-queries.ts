@@ -96,12 +96,14 @@ export function useAddIntake() {
       amount,
       source = "manual",
       timestamp,
+      note,
     }: {
       type: "water" | "salt";
       amount: number;
       source?: string;
       timestamp?: number;
-    }) => addIntakeRecord(type, amount, source, timestamp),
+      note?: string;
+    }) => addIntakeRecord(type, amount, source, timestamp, note),
     onSuccess: (_, variables) => {
       // Only invalidate the affected type's total
       queryClient.invalidateQueries({ queryKey: intakeKeys.total(variables.type) });
@@ -123,7 +125,7 @@ export function useUpdateIntake() {
       updates,
     }: {
       id: string;
-      updates: { amount?: number; timestamp?: number };
+      updates: { amount?: number; timestamp?: number; note?: string };
     }) => updateIntakeRecord(id, updates),
     onSuccess: () => {
       // Invalidate all totals since we don't know which type was affected
@@ -161,8 +163,8 @@ export function useIntake(type: "water" | "salt") {
   const deleteMutation = useDeleteIntake();
   const queryClient = useQueryClient();
 
-  const addRecord = async (amount: number, source: string = "manual", timestamp?: number) => {
-    return addMutation.mutateAsync({ type, amount, source, timestamp });
+  const addRecord = async (amount: number, source: string = "manual", timestamp?: number, note?: string) => {
+    return addMutation.mutateAsync({ type, amount, source, timestamp, note });
   };
 
   const removeRecord = async (id: string) => {

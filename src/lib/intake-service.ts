@@ -11,6 +11,7 @@ const IntakeRecordSchema = z.object({
   amount: z.number().positive().max(100000), // Reasonable max
   timestamp: z.number().positive(),
   source: z.string().optional(),
+  note: z.string().max(200).optional(),
 });
 
 const ImportDataSchema = z.object({
@@ -28,7 +29,8 @@ export async function addIntakeRecord(
   type: "water" | "salt",
   amount: number,
   source: string = "manual",
-  timestamp?: number
+  timestamp?: number,
+  note?: string
 ): Promise<IntakeRecord> {
   const record: IntakeRecord = {
     id: generateId(),
@@ -36,6 +38,7 @@ export async function addIntakeRecord(
     amount,
     timestamp: timestamp ?? Date.now(),
     source,
+    note: note?.trim() || undefined,
   };
 
   await db.intakeRecords.add(record);
@@ -48,7 +51,7 @@ export async function deleteIntakeRecord(id: string): Promise<void> {
 
 export async function updateIntakeRecord(
   id: string,
-  updates: { amount?: number; timestamp?: number }
+  updates: { amount?: number; timestamp?: number; note?: string }
 ): Promise<void> {
   const existing = await db.intakeRecords.get(id);
   if (!existing) {
@@ -275,6 +278,7 @@ export async function importData(
         amount: record.amount,
         timestamp: record.timestamp,
         source: record.source,
+        note: record.note,
       });
       imported++;
     } catch (error) {

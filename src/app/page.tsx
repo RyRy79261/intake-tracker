@@ -26,15 +26,15 @@ function HomeContent() {
   }, []);
 
   const handleAddWater = useCallback(
-    async (amount: number, source: string = "manual", timestamp?: number) => {
-      await waterIntake.addRecord(amount, source, timestamp);
+    async (amount: number, source: string = "manual", timestamp?: number, note?: string) => {
+      await waterIntake.addRecord(amount, source, timestamp, note);
     },
     [waterIntake]
   );
 
   const handleAddSalt = useCallback(
-    async (amount: number, source: string = "manual", timestamp?: number) => {
-      await saltIntake.addRecord(amount, source, timestamp);
+    async (amount: number, source: string = "manual", timestamp?: number, note?: string) => {
+      await saltIntake.addRecord(amount, source, timestamp, note);
     },
     [saltIntake]
   );
@@ -75,7 +75,7 @@ function HomeContent() {
             currentTotal={waterIntake.total}
             limit={settings.waterLimit}
             increment={settings.waterIncrement}
-            onConfirm={(amount, timestamp) => handleAddWater(amount, "manual", timestamp)}
+            onConfirm={(amount, timestamp, note) => handleAddWater(amount, "manual", timestamp, note)}
             isLoading={waterIntake.isLoading}
           />
 
@@ -84,7 +84,7 @@ function HomeContent() {
             currentTotal={saltIntake.total}
             limit={settings.saltLimit}
             increment={settings.saltIncrement}
-            onConfirm={(amount, timestamp) => handleAddSalt(amount, "manual", timestamp)}
+            onConfirm={(amount, timestamp, note) => handleAddSalt(amount, "manual", timestamp, note)}
             isLoading={saltIntake.isLoading}
           />
         </div>

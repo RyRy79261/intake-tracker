@@ -1,20 +1,23 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { useLiveQuery } from "dexie-react-hooks";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Minus, Plus, Check, Droplets, Sparkles } from "lucide-react";
+import { Minus, Plus, Check, Droplets, Sparkles, Trash2, Loader2 } from "lucide-react";
 import { cn, formatAmount } from "@/lib/utils";
 import { ManualInputDialog } from "./manual-input-dialog";
 import { useToast } from "@/hooks/use-toast";
+import { useDeleteIntake } from "@/hooks/use-intake-queries";
+import { db } from "@/lib/db";
 
 interface IntakeCardProps {
   type: "water" | "salt";
   currentTotal: number;
   limit: number;
   increment: number;
-  onConfirm: (amount: number, timestamp?: number) => Promise<void>;
+  onConfirm: (amount: number, timestamp?: number, note?: string) => Promise<void>;
   isLoading?: boolean;
 }
 
@@ -29,7 +32,21 @@ export function IntakeCard({
   const [pendingAmount, setPendingAmount] = useState(increment);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showManualInput, setShowManualInput] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const { toast } = useToast();
+  const deleteMutation = useDeleteIntake();
+
+  // Fetch recent records for this type
+  const recentRecords = useLiveQuery(
+    () =>
+      db.intakeRecords
+        .where("type")
+        .equals(type)
+        .reverse()
+        .sortBy("timestamp")
+        .then((records) => records.slice(0, 3)),
+    [type]
+  );
 
   const isWater = type === "water";
   const unit = isWater ? "ml" : "mg";
@@ -72,10 +89,10 @@ export function IntakeCard({
   }, [pendingAmount, increment, onConfirm, toast, unit, isWater]);
 
   const handleManualSubmit = useCallback(
-    async (amount: number, timestamp?: number) => {
+    async (amount: number, timestamp?: number, note?: string) => {
       setIsSubmitting(true);
       try {
-        await onConfirm(amount, timestamp);
+        await onConfirm(amount, timestamp, note);
         toast({
           title: `Added ${formatAmount(amount, unit)}`,
           description: timestamp 
@@ -96,6 +113,37 @@ export function IntakeCard({
     },
     [onConfirm, toast, unit, isWater]
   );
+
+  const handleDelete = useCallback(
+    async (id: string) => {
+      setDeletingId(id);
+      try {
+        await deleteMutation.mutateAsync(id);
+        toast({
+          title: "Entry deleted",
+          description: `${isWater ? "Water" : "Salt"} entry removed`,
+        });
+      } catch {
+        toast({
+          title: "Error",
+          description: "Could not delete the entry",
+          variant: "destructive",
+        });
+      } finally {
+        setDeletingId(null);
+      }
+    },
+    [deleteMutation, toast, isWater]
+  );
+
+  // Format time from timestamp
+  const formatTime = (timestamp: number): string => {
+    return new Date(timestamp).toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+  };
 
   return (
     <>
@@ -239,6 +287,46 @@ export function IntakeCard({
             <Check className="w-5 h-5 mr-2" />
             {isSubmitting ? "Recording..." : "Confirm Entry"}
           </Button>
+
+          {/* Recent Entries */}
+          {recentRecords && recentRecords.length > 0 && (
+            <div
+              className={cn(
+                "mt-4 pt-4 border-t",
+                isWater ? "border-sky-200 dark:border-sky-800" : "border-amber-200 dark:border-amber-800"
+              )}
+            >
+              <p className="text-xs font-medium text-muted-foreground mb-2">Recent</p>
+              <div className="space-y-1">
+                {recentRecords.map((record) => (
+                  <div
+                    key={record.id}
+                    className="flex items-center justify-between text-sm py-1"
+                  >
+                    <span className="text-muted-foreground">{formatTime(record.timestamp)}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">
+                        {formatAmount(record.amount, unit)}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 text-muted-foreground hover:text-red-600"
+                        onClick={() => handleDelete(record.id)}
+                        disabled={deletingId === record.id}
+                      >
+                        {deletingId === record.id ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-3 h-3" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

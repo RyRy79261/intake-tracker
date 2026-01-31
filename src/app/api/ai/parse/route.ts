@@ -143,14 +143,23 @@ export async function POST(request: NextRequest) {
     return await processWithKey(input, clientApiKey);
   } catch (error) {
     console.error("AI parse error:", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { error: "Failed to process request" },
+      { error: `Failed to process request: ${errorMessage}` },
       { status: 500 }
     );
   }
 }
 
 async function processWithKey(input: string, apiKey: string) {
+  // Validate API key format
+  if (!apiKey || !apiKey.startsWith("pplx-")) {
+    return NextResponse.json(
+      { error: "Invalid API key format. Perplexity keys start with 'pplx-'" },
+      { status: 400 }
+    );
+  }
+
   const sanitizedInput = sanitizeInput(input);
   
   if (!sanitizedInput) {
@@ -185,9 +194,30 @@ async function processWithKey(input: string, apiKey: string) {
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error("Perplexity API error:", errorText);
+    console.error(`Perplexity API error [${response.status}]:`, errorText);
+    
+    // Parse error details if possible
+    let errorDetail = "AI service unavailable";
+    try {
+      const errorJson = JSON.parse(errorText);
+      if (errorJson.error?.message) {
+        errorDetail = `Perplexity API: ${errorJson.error.message}`;
+      } else if (errorJson.detail) {
+        errorDetail = `Perplexity API: ${errorJson.detail}`;
+      }
+    } catch {
+      // Use status-based messages if we can't parse the error
+      if (response.status === 401) {
+        errorDetail = "Invalid API key";
+      } else if (response.status === 429) {
+        errorDetail = "Perplexity rate limit exceeded";
+      } else if (response.status === 400) {
+        errorDetail = "Invalid request to Perplexity API";
+      }
+    }
+    
     return NextResponse.json(
-      { error: "AI service unavailable" },
+      { error: errorDetail, status: response.status },
       { status: 502 }
     );
   }
