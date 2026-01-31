@@ -10,7 +10,7 @@ import { AuthButton } from "@/components/auth-button";
 import { AuthGuard } from "@/components/auth-guard";
 import { WeightCard } from "@/components/weight-card";
 import { BloodPressureCard } from "@/components/blood-pressure-card";
-import { useIntake } from "@/hooks/use-intake";
+import { useIntake } from "@/hooks/use-intake-queries";
 import { useSettings } from "@/hooks/use-settings";
 import { Droplets } from "lucide-react";
 

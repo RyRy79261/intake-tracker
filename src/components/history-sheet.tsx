@@ -33,7 +33,8 @@ import {
   Pencil,
 } from "lucide-react";
 import { type IntakeRecord } from "@/lib/db";
-import { deleteIntakeRecord, getRecordsByCursor, updateIntakeRecord } from "@/lib/intake-service";
+import { getRecordsByCursor } from "@/lib/intake-service";
+import { useUpdateIntake, useDeleteIntake } from "@/hooks/use-intake-queries";
 import { useToast } from "@/hooks/use-toast";
 import { usePinProtected } from "@/hooks/use-pin-gate";
 import { cn } from "@/lib/utils";
@@ -172,6 +173,10 @@ export function HistorySheet() {
   const [isOpen, setIsOpen] = useState(false);
   const { requirePin, showLockedUI } = usePinProtected();
   
+  // Mutations
+  const updateMutation = useUpdateIntake();
+  const deleteMutation = useDeleteIntake();
+  
   // Pagination state
   const [records, setRecords] = useState<IntakeRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -183,7 +188,6 @@ export function HistorySheet() {
   const [editingRecord, setEditingRecord] = useState<IntakeRecord | null>(null);
   const [editAmount, setEditAmount] = useState("");
   const [editTimestamp, setEditTimestamp] = useState("");
-  const [isEditing, setIsEditing] = useState(false);
 
   // Load initial records when sheet opens
   const loadInitialRecords = useCallback(async () => {
@@ -228,7 +232,7 @@ export function HistorySheet() {
   const handleDelete = useCallback(async (id: string) => {
     setDeletingId(id);
     try {
-      await deleteIntakeRecord(id);
+      await deleteMutation.mutateAsync(id);
       // Remove from local state
       setRecords(prev => prev.filter(r => r.id !== id));
       toast({
@@ -244,7 +248,7 @@ export function HistorySheet() {
     } finally {
       setDeletingId(null);
     }
-  }, [toast]);
+  }, [toast, deleteMutation]);
 
   // Open edit dialog for a record
   const handleEdit = useCallback((record: IntakeRecord) => {
@@ -270,35 +274,39 @@ export function HistorySheet() {
       return;
     }
     
-    setIsEditing(true);
+    // Close dialog immediately (optimistic)
+    const recordToUpdate = editingRecord;
+    setEditingRecord(null);
+    
     try {
-      await updateIntakeRecord(editingRecord.id, {
-        amount: newAmount,
-        timestamp: newTimestamp,
+      await updateMutation.mutateAsync({
+        id: recordToUpdate.id,
+        updates: { amount: newAmount, timestamp: newTimestamp },
       });
       
-      // Update local state
-      setRecords(prev => prev.map(r => 
-        r.id === editingRecord.id 
-          ? { ...r, amount: newAmount, timestamp: newTimestamp }
-          : r
-      ));
+      // Update local state and re-sort by timestamp (descending)
+      setRecords(prev => {
+        const updated = prev.map(r => 
+          r.id === recordToUpdate.id 
+            ? { ...r, amount: newAmount, timestamp: newTimestamp }
+            : r
+        );
+        // Re-sort by timestamp descending to maintain correct order
+        return updated.sort((a, b) => b.timestamp - a.timestamp);
+      });
       
       toast({
         title: "Entry updated",
         description: "The intake record has been updated",
       });
-      setEditingRecord(null);
     } catch (error) {
       toast({
         title: "Error",
         description: "Could not update the entry",
         variant: "destructive",
       });
-    } finally {
-      setIsEditing(false);
     }
-  }, [editingRecord, editAmount, editTimestamp, toast]);
+  }, [editingRecord, editAmount, editTimestamp, toast, updateMutation]);
 
   // Handle sheet open with PIN check
   const handleOpenChange = useCallback(async (open: boolean) => {
@@ -452,20 +460,20 @@ export function HistorySheet() {
               type="button"
               variant="outline"
               onClick={() => setEditingRecord(null)}
-              disabled={isEditing}
+              disabled={updateMutation.isPending}
             >
               Cancel
             </Button>
             <Button
               type="submit"
-              disabled={isEditing || !editAmount || parseInt(editAmount, 10) <= 0}
+              disabled={updateMutation.isPending || !editAmount || parseInt(editAmount, 10) <= 0}
               className={cn(
                 editingRecord?.type === "water"
                   ? "bg-sky-600 hover:bg-sky-700"
                   : "bg-amber-600 hover:bg-amber-700"
               )}
             >
-              {isEditing ? "Saving..." : "Save Changes"}
+              {updateMutation.isPending ? "Saving..." : "Save Changes"}
             </Button>
           </DialogFooter>
         </form>
