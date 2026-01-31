@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import {
   Sheet,
   SheetContent,
@@ -9,7 +9,17 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   History,
   Droplets,
@@ -20,12 +30,26 @@ import {
   Loader2,
   Lock,
   ChevronDown,
+  Pencil,
 } from "lucide-react";
 import { type IntakeRecord } from "@/lib/db";
-import { deleteIntakeRecord, getRecordsByCursor } from "@/lib/intake-service";
+import { deleteIntakeRecord, getRecordsByCursor, updateIntakeRecord } from "@/lib/intake-service";
 import { useToast } from "@/hooks/use-toast";
 import { usePinProtected } from "@/hooks/use-pin-gate";
 import { cn } from "@/lib/utils";
+
+// Helper to convert timestamp to datetime-local format
+function timestampToDateTimeLocal(timestamp: number): string {
+  const date = new Date(timestamp);
+  const offset = date.getTimezoneOffset();
+  const local = new Date(date.getTime() - offset * 60 * 1000);
+  return local.toISOString().slice(0, 16);
+}
+
+// Helper to convert datetime-local value to timestamp
+function dateTimeLocalToTimestamp(value: string): number {
+  return new Date(value).getTime();
+}
 
 const PAGE_SIZE = 30;
 
@@ -75,10 +99,11 @@ function formatSource(source?: string): string {
 interface RecordItemProps {
   record: IntakeRecord;
   onDelete: (id: string) => Promise<void>;
+  onEdit: (record: IntakeRecord) => void;
   isDeleting: boolean;
 }
 
-function RecordItem({ record, onDelete, isDeleting }: RecordItemProps) {
+function RecordItem({ record, onDelete, onEdit, isDeleting }: RecordItemProps) {
   const isWater = record.type === "water";
   const unit = isWater ? "ml" : "mg";
   
@@ -114,19 +139,29 @@ function RecordItem({ record, onDelete, isDeleting }: RecordItemProps) {
           </div>
         </div>
       </div>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-8 w-8 text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
-        onClick={() => onDelete(record.id)}
-        disabled={isDeleting}
-      >
-        {isDeleting ? (
-          <Loader2 className="w-4 h-4 animate-spin" />
-        ) : (
-          <Trash2 className="w-4 h-4" />
-        )}
-      </Button>
+      <div className="flex items-center gap-1">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-muted-foreground hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30"
+          onClick={() => onEdit(record)}
+        >
+          <Pencil className="w-4 h-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
+          onClick={() => onDelete(record.id)}
+          disabled={isDeleting}
+        >
+          {isDeleting ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Trash2 className="w-4 h-4" />
+          )}
+        </Button>
+      </div>
     </div>
   );
 }
@@ -143,6 +178,12 @@ export function HistorySheet() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<number | null>(null);
   const [hasMore, setHasMore] = useState(true);
+  
+  // Edit dialog state
+  const [editingRecord, setEditingRecord] = useState<IntakeRecord | null>(null);
+  const [editAmount, setEditAmount] = useState("");
+  const [editTimestamp, setEditTimestamp] = useState("");
+  const [isEditing, setIsEditing] = useState(false);
 
   // Load initial records when sheet opens
   const loadInitialRecords = useCallback(async () => {
@@ -204,6 +245,60 @@ export function HistorySheet() {
       setDeletingId(null);
     }
   }, [toast]);
+
+  // Open edit dialog for a record
+  const handleEdit = useCallback((record: IntakeRecord) => {
+    setEditingRecord(record);
+    setEditAmount(record.amount.toString());
+    setEditTimestamp(timestampToDateTimeLocal(record.timestamp));
+  }, []);
+
+  // Submit edit changes
+  const handleEditSubmit = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingRecord) return;
+    
+    const newAmount = parseInt(editAmount, 10);
+    const newTimestamp = dateTimeLocalToTimestamp(editTimestamp);
+    
+    if (isNaN(newAmount) || newAmount <= 0) {
+      toast({
+        title: "Invalid amount",
+        description: "Please enter a valid positive number",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setIsEditing(true);
+    try {
+      await updateIntakeRecord(editingRecord.id, {
+        amount: newAmount,
+        timestamp: newTimestamp,
+      });
+      
+      // Update local state
+      setRecords(prev => prev.map(r => 
+        r.id === editingRecord.id 
+          ? { ...r, amount: newAmount, timestamp: newTimestamp }
+          : r
+      ));
+      
+      toast({
+        title: "Entry updated",
+        description: "The intake record has been updated",
+      });
+      setEditingRecord(null);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Could not update the entry",
+        variant: "destructive",
+      });
+    } finally {
+      setIsEditing(false);
+    }
+  }, [editingRecord, editAmount, editTimestamp, toast]);
 
   // Handle sheet open with PIN check
   const handleOpenChange = useCallback(async (open: boolean) => {
@@ -273,6 +368,7 @@ export function HistorySheet() {
                         key={record.id}
                         record={record}
                         onDelete={handleDelete}
+                        onEdit={handleEdit}
                         isDeleting={deletingId === record.id}
                       />
                     ))}
@@ -308,5 +404,71 @@ export function HistorySheet() {
         </div>
       </SheetContent>
     </Sheet>
+
+    {/* Edit Record Dialog */}
+    <Dialog open={editingRecord !== null} onOpenChange={(open) => !open && setEditingRecord(null)}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>
+            Edit {editingRecord?.type === "water" ? "Water" : "Salt"} Entry
+          </DialogTitle>
+          <DialogDescription>
+            Update the amount or time for this entry
+          </DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={handleEditSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="edit-amount">
+              Amount ({editingRecord?.type === "water" ? "ml" : "mg"})
+            </Label>
+            <Input
+              id="edit-amount"
+              type="number"
+              min="1"
+              step="1"
+              value={editAmount}
+              onChange={(e) => setEditAmount(e.target.value)}
+              placeholder="Enter amount"
+              className="text-lg h-12"
+              autoFocus
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="edit-timestamp">Time</Label>
+            <Input
+              id="edit-timestamp"
+              type="datetime-local"
+              value={editTimestamp}
+              onChange={(e) => setEditTimestamp(e.target.value)}
+              className="text-sm"
+            />
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setEditingRecord(null)}
+              disabled={isEditing}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={isEditing || !editAmount || parseInt(editAmount, 10) <= 0}
+              className={cn(
+                editingRecord?.type === "water"
+                  ? "bg-sky-600 hover:bg-sky-700"
+                  : "bg-amber-600 hover:bg-amber-700"
+              )}
+            >
+              {isEditing ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

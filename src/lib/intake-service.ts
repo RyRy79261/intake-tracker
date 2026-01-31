@@ -46,12 +46,23 @@ export async function deleteIntakeRecord(id: string): Promise<void> {
   await db.intakeRecords.delete(id);
 }
 
+export async function updateIntakeRecord(
+  id: string,
+  updates: { amount?: number; timestamp?: number }
+): Promise<void> {
+  const existing = await db.intakeRecords.get(id);
+  if (!existing) {
+    throw new Error("Record not found");
+  }
+  await db.intakeRecords.update(id, updates);
+}
+
 export async function getRecordsInLast24Hours(
   type?: "water" | "salt"
 ): Promise<IntakeRecord[]> {
   const cutoffTime = Date.now() - TWENTY_FOUR_HOURS_MS;
 
-  let query = db.intakeRecords.where("timestamp").above(cutoffTime);
+  let query = db.intakeRecords.where("timestamp").aboveOrEqual(cutoffTime);
 
   const records = await query.toArray();
 
