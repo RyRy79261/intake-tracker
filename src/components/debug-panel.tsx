@@ -39,6 +39,7 @@ interface DbDiagnostics {
   intakeRecords: unknown[];
   weightRecords: unknown[];
   bpRecords: unknown[];
+  error?: string;
 }
 
 interface AIStatusResponse {
@@ -72,6 +73,7 @@ export function DebugPanel() {
   const [logFilter, setLogFilter] = useState<string>("all");
   const [dbDiagnostics, setDbDiagnostics] = useState<DbDiagnostics | null>(null);
   const [dbLoading, setDbLoading] = useState(false);
+  const [nativeDbInfo, setNativeDbInfo] = useState<string>("");
 
   const settings = useSettings();
   const { hasKey, getApiKey } = usePerplexityKey();
@@ -107,20 +109,114 @@ export function DebugPanel() {
     }
   }, []);
 
-  // Fetch database diagnostics
+  // Check native IndexedDB (bypasses Dexie)
+  const checkNativeIndexedDB = useCallback(async () => {
+    try {
+      const databases = await indexedDB.databases();
+      let info = `Found ${databases.length} database(s):\n`;
+      
+      for (const dbInfo of databases) {
+        info += `- ${dbInfo.name} (v${dbInfo.version})\n`;
+      }
+      
+      // Try to open IntakeTrackerDB directly
+      return new Promise<string>((resolve) => {
+        const request = indexedDB.open("IntakeTrackerDB");
+        
+        request.onerror = () => {
+          resolve(info + `\nError opening IntakeTrackerDB: ${request.error?.message}`);
+        };
+        
+        request.onsuccess = () => {
+          const idb = request.result;
+          info += `\nIntakeTrackerDB opened successfully:\n`;
+          info += `- Version: ${idb.version}\n`;
+          info += `- Object stores: ${Array.from(idb.objectStoreNames).join(", ")}\n`;
+          
+          // Try to count intake records
+          try {
+            const tx = idb.transaction("intakeRecords", "readonly");
+            const store = tx.objectStore("intakeRecords");
+            const countReq = store.count();
+            
+            countReq.onsuccess = () => {
+              info += `- Intake records count: ${countReq.result}\n`;
+              idb.close();
+              resolve(info);
+            };
+            
+            countReq.onerror = () => {
+              info += `- Error counting: ${countReq.error?.message}\n`;
+              idb.close();
+              resolve(info);
+            };
+          } catch (e) {
+            info += `- Error accessing store: ${e}\n`;
+            idb.close();
+            resolve(info);
+          }
+        };
+        
+        // Timeout after 5 seconds
+        setTimeout(() => resolve(info + "\nTimeout waiting for DB"), 5000);
+      });
+    } catch (e) {
+      return `Error: ${e}`;
+    }
+  }, []);
+
+  // Fetch database diagnostics with timeout
   const fetchDbDiagnostics = useCallback(async () => {
     setDbLoading(true);
-    try {
-      const [intakeRecords, weightRecords, bpRecords, auditRecords] = await Promise.all([
-        db.intakeRecords.toArray().catch(() => []),
-        db.weightRecords.toArray().catch(() => []),
-        db.bloodPressureRecords.toArray().catch(() => []),
-        db.auditLogs.toArray().catch(() => []),
+    
+    const timeout = <T,>(promise: Promise<T>, ms: number, fallback: T): Promise<T> => {
+      return Promise.race([
+        promise,
+        new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms))
       ]);
+    };
+
+    try {
+      // Try to get basic DB info first (doesn't require open DB)
+      let version = -1;
+      let stores: string[] = [];
+      let error = "";
+      
+      try {
+        version = db.verno;
+        stores = db.tables.map(t => t.name);
+      } catch (e) {
+        error = e instanceof Error ? e.message : "Unknown error";
+      }
+
+      // Try each table with 3 second timeout
+      const intakeRecords = await timeout(
+        db.intakeRecords.toArray().catch((e) => { error = `Intake: ${e.message}`; return []; }),
+        3000,
+        []
+      );
+      
+      const weightRecords = await timeout(
+        db.weightRecords.toArray().catch((e) => { error = `Weight: ${e.message}`; return []; }),
+        3000,
+        []
+      );
+      
+      const bpRecords = await timeout(
+        db.bloodPressureRecords.toArray().catch((e) => { error = `BP: ${e.message}`; return []; }),
+        3000,
+        []
+      );
+      
+      const auditRecords = await timeout(
+        db.auditLogs.toArray().catch((e) => { error = `Audit: ${e.message}`; return []; }),
+        3000,
+        []
+      );
 
       setDbDiagnostics({
-        version: db.verno,
-        stores: Array.from(db.tables.map(t => t.name)),
+        version,
+        stores,
         intakeCount: intakeRecords.length,
         weightCount: weightRecords.length,
         bpCount: bpRecords.length,
@@ -128,13 +224,30 @@ export function DebugPanel() {
         intakeRecords,
         weightRecords,
         bpRecords,
-      });
+        error: error || undefined,
+      } as DbDiagnostics);
     } catch (error) {
       console.error("Failed to fetch DB diagnostics:", error);
+      setDbDiagnostics({
+        version: -1,
+        stores: [],
+        intakeCount: 0,
+        weightCount: 0,
+        bpCount: 0,
+        auditCount: 0,
+        intakeRecords: [],
+        weightRecords: [],
+        bpRecords: [],
+        error: error instanceof Error ? error.message : "Database error",
+      } as DbDiagnostics);
     } finally {
       setDbLoading(false);
     }
-  }, []);
+    
+    // Also check native IndexedDB
+    const nativeInfo = await checkNativeIndexedDB();
+    setNativeDbInfo(nativeInfo);
+  }, [checkNativeIndexedDB]);
 
   // Test AI service
   const testAIService = useCallback(async () => {
@@ -263,10 +376,23 @@ export function DebugPanel() {
             {dbDiagnostics ? (
               <ScrollArea className="h-[400px]">
                 <div className="space-y-4">
-                  {/* Database Info */}
+                  {/* Native IndexedDB Check */}
+                  <div className="space-y-2">
+                    <h5 className="font-medium text-sm">Native IndexedDB Check</h5>
+                    <pre className="bg-slate-100 dark:bg-slate-800 rounded-lg p-3 text-xs font-mono whitespace-pre-wrap">
+                      {nativeDbInfo || "Loading..."}
+                    </pre>
+                  </div>
+
+                  {/* Dexie Database Info */}
                   <div className="bg-muted/50 rounded-lg p-3 text-xs font-mono space-y-1">
-                    <div>DB Version: {dbDiagnostics.version}</div>
-                    <div>Tables: {dbDiagnostics.stores.join(", ")}</div>
+                    <div>Dexie DB Version: {dbDiagnostics.version}</div>
+                    <div>Dexie Tables: {dbDiagnostics.stores.join(", ") || "None found"}</div>
+                    {dbDiagnostics.error && (
+                      <div className="text-red-600 dark:text-red-400 mt-2">
+                        Dexie Error: {dbDiagnostics.error}
+                      </div>
+                    )}
                   </div>
 
                   {/* Record Counts */}
