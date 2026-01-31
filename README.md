@@ -248,4 +248,7 @@ This is less secure but works for personal use on a trusted device.
 
 ## License
 
-MIT
+This work is licensed under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/).
+
+You are free to share and adapt this work for non-commercial purposes with attribution.
+For commercial use, please contact the author for permission.

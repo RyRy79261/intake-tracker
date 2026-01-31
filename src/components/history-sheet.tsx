@@ -322,6 +322,7 @@ export function HistorySheet() {
   const dateGroups = Array.from(groupedRecords.entries());
   
   return (
+    <>
     <Sheet open={isOpen} onOpenChange={handleOpenChange}>
       <SheetTrigger asChild>
         <Button variant="ghost" size="icon" className="shrink-0 relative">
@@ -470,5 +471,6 @@ export function HistorySheet() {
         </form>
       </DialogContent>
     </Dialog>
+    </>
   );
 }
