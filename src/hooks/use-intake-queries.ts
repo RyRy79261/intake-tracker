@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db, type IntakeRecord } from "@/lib/db";
 import {
@@ -18,6 +18,7 @@ export const intakeKeys = {
   totals: () => [...intakeKeys.all, "totals"] as const,
   total: (type: "water" | "salt") => [...intakeKeys.totals(), type] as const,
   records: (type: "water" | "salt") => [...intakeKeys.all, "records", type] as const,
+  recent: (type: "water" | "salt") => [...intakeKeys.all, "recent", type] as const,
 };
 
 // Fetch total for a type in the last 24 hours
@@ -40,6 +41,15 @@ async function fetchRecords(type: "water" | "salt"): Promise<IntakeRecord[]> {
     .filter((r) => r.type === type)
     .toArray();
   return records;
+}
+
+// Fetch recent records for a type (last 3, sorted by timestamp desc)
+async function fetchRecentRecords(type: "water" | "salt"): Promise<IntakeRecord[]> {
+  const records = await db.intakeRecords
+    .where("type")
+    .equals(type)
+    .toArray();
+  return records.sort((a, b) => b.timestamp - a.timestamp).slice(0, 3);
 }
 
 /**
@@ -84,6 +94,16 @@ export function useIntakeRecords(type: "water" | "salt") {
 }
 
 /**
+ * Hook to get recent records for a type (last 3 entries).
+ */
+export function useRecentIntakeRecords(type: "water" | "salt") {
+  return useQuery({
+    queryKey: intakeKeys.recent(type),
+    queryFn: () => fetchRecentRecords(type),
+  });
+}
+
+/**
  * Hook to add an intake record.
  * Automatically invalidates the relevant total query.
  */
@@ -105,9 +125,10 @@ export function useAddIntake() {
       note?: string;
     }) => addIntakeRecord(type, amount, source, timestamp, note),
     onSuccess: (_, variables) => {
-      // Only invalidate the affected type's total
+      // Invalidate all affected queries for this type
       queryClient.invalidateQueries({ queryKey: intakeKeys.total(variables.type) });
       queryClient.invalidateQueries({ queryKey: intakeKeys.records(variables.type) });
+      queryClient.invalidateQueries({ queryKey: intakeKeys.recent(variables.type) });
     },
   });
 }
@@ -138,7 +159,7 @@ export function useUpdateIntake() {
 
 /**
  * Hook to delete an intake record.
- * Invalidates all totals.
+ * Invalidates all queries since we don't know the type.
  */
 export function useDeleteIntake() {
   const queryClient = useQueryClient();
@@ -146,8 +167,7 @@ export function useDeleteIntake() {
   return useMutation({
     mutationFn: (id: string) => deleteIntakeRecord(id),
     onSuccess: () => {
-      // Invalidate all since we don't know which type was affected
-      queryClient.invalidateQueries({ queryKey: intakeKeys.totals() });
+      // Invalidate all intake queries since we don't know which type was affected
       queryClient.invalidateQueries({ queryKey: intakeKeys.all });
     },
   });
@@ -163,17 +183,23 @@ export function useIntake(type: "water" | "salt") {
   const deleteMutation = useDeleteIntake();
   const queryClient = useQueryClient();
 
-  const addRecord = async (amount: number, source: string = "manual", timestamp?: number, note?: string) => {
-    return addMutation.mutateAsync({ type, amount, source, timestamp, note });
-  };
+  const addRecord = useCallback(
+    async (amount: number, source: string = "manual", timestamp?: number, note?: string) => {
+      return addMutation.mutateAsync({ type, amount, source, timestamp, note });
+    },
+    [addMutation, type]
+  );
 
-  const removeRecord = async (id: string) => {
-    return deleteMutation.mutateAsync(id);
-  };
+  const removeRecord = useCallback(
+    async (id: string) => {
+      return deleteMutation.mutateAsync(id);
+    },
+    [deleteMutation]
+  );
 
-  const refresh = () => {
+  const refresh = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: intakeKeys.total(type) });
-  };
+  }, [queryClient, type]);
 
   return {
     total: totalQuery.data ?? 0,

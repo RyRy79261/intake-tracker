@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { useLiveQuery } from "dexie-react-hooks";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -9,8 +8,7 @@ import { Minus, Plus, Check, Droplets, Sparkles, Trash2, Loader2 } from "lucide-
 import { cn, formatAmount } from "@/lib/utils";
 import { ManualInputDialog } from "./manual-input-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { useDeleteIntake } from "@/hooks/use-intake-queries";
-import { db } from "@/lib/db";
+import { useDeleteIntake, useRecentIntakeRecords } from "@/hooks/use-intake-queries";
 
 interface IntakeCardProps {
   type: "water" | "salt";
@@ -35,21 +33,9 @@ export function IntakeCard({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const { toast } = useToast();
   const deleteMutation = useDeleteIntake();
-
-  // Fetch recent records for this type
-  const recentRecords = useLiveQuery(
-    async () => {
-      const records = await db.intakeRecords
-        .where("type")
-        .equals(type)
-        .toArray();
-      // Sort by timestamp descending and take first 3
-      return records
-        .sort((a, b) => b.timestamp - a.timestamp)
-        .slice(0, 3);
-    },
-    [type]
-  );
+  
+  // Fetch recent records using TanStack Query (replaces useLiveQuery to avoid transaction conflicts)
+  const { data: recentRecords } = useRecentIntakeRecords(type);
 
   const isWater = type === "water";
   const unit = isWater ? "ml" : "mg";
