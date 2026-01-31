@@ -1,12 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { motion, useScroll, useMotionValueEvent } from "motion/react";
 import { IntakeCard } from "@/components/intake-card";
 import { FoodCalculator } from "@/components/food-calculator";
 import { VoiceInput } from "@/components/voice-input";
 import { SettingsSheet } from "@/components/settings-sheet";
 import { HistorySheet } from "@/components/history-sheet";
-import { AuthButton } from "@/components/auth-button";
 import { AuthGuard } from "@/components/auth-guard";
 import { WeightCard } from "@/components/weight-card";
 import { BloodPressureCard } from "@/components/blood-pressure-card";
@@ -16,9 +16,18 @@ import { Droplets } from "lucide-react";
 
 function HomeContent() {
   const [mounted, setMounted] = useState(false);
+  const [headerHidden, setHeaderHidden] = useState(false);
   const waterIntake = useIntake("water");
   const saltIntake = useIntake("salt");
   const settings = useSettings();
+
+  // Scroll detection for hiding/showing header
+  const { scrollY } = useScroll();
+  useMotionValueEvent(scrollY, "change", (current) => {
+    const previous = scrollY.getPrevious() ?? 0;
+    // Hide when scrolling down and not at top
+    setHeaderHidden(current > previous && current > 50);
+  });
 
   // Handle hydration mismatch for localStorage
   useEffect(() => {
@@ -53,8 +62,12 @@ function HomeContent() {
 
   return (
     <>
-      {/* Header */}
-      <header className="flex items-center justify-between mb-6">
+      {/* Header - hides on scroll down, shows on scroll up */}
+      <motion.header
+        className="sticky top-0 z-40 -mx-4 px-4 py-4 mb-2 bg-gradient-to-b from-slate-50 to-slate-50/95 dark:from-slate-950 dark:to-slate-950/95 backdrop-blur-sm flex items-center justify-between"
+        animate={{ y: headerHidden ? "-100%" : 0 }}
+        transition={{ duration: 0.2, ease: "easeInOut" }}
+      >
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Intake Tracker</h1>
           <p className="text-sm text-muted-foreground">
@@ -63,10 +76,9 @@ function HomeContent() {
         </div>
         <div className="flex items-center gap-2">
           <HistorySheet />
-          <AuthButton />
           <SettingsSheet />
         </div>
-      </header>
+      </motion.header>
 
         {/* Intake Cards */}
         <div className="space-y-4 mb-6">

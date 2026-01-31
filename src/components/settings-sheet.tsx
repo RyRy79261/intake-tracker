@@ -23,6 +23,7 @@ import {
   Sparkles,
   RotateCcw,
   LogIn,
+  LogOut,
   CheckCircle2,
   Plus,
   Minus,
@@ -35,6 +36,12 @@ import {
   Sun,
   Moon,
   Monitor,
+  User,
+  Bell,
+  Mic,
+  ShieldCheck,
+  X,
+  ExternalLink,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useSettings, usePerplexityKey } from "@/hooks/use-settings";
@@ -46,10 +53,54 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { exportAllData, importData, clearAllData } from "@/lib/intake-service";
+import { clearAllData } from "@/lib/intake-service";
+import { downloadBackup, importBackup } from "@/lib/backup-service";
 import { useToast } from "@/hooks/use-toast";
 import { useServiceWorker } from "@/hooks/use-service-worker";
 import { usePinGate, usePinProtected } from "@/hooks/use-pin-gate";
+import { usePermissions, getPermissionLabel, canRequestPermission, type PermissionState } from "@/hooks/use-permissions";
+import { sendTestNotification, getNotificationSettings, saveNotificationSettings } from "@/lib/push-notification-service";
+
+// Helper component for permission status badge
+function PermissionBadge({
+  state,
+  onRequest,
+}: {
+  state: PermissionState;
+  onRequest: () => void;
+}) {
+  if (state === "granted") {
+    return (
+      <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400 font-medium">
+        <CheckCircle2 className="w-3.5 h-3.5" />
+        Enabled
+      </span>
+    );
+  }
+
+  if (state === "denied") {
+    return (
+      <span className="flex items-center gap-1 text-xs text-red-600 dark:text-red-400">
+        <X className="w-3.5 h-3.5" />
+        Blocked
+      </span>
+    );
+  }
+
+  if (state === "unavailable") {
+    return (
+      <span className="text-xs text-muted-foreground">
+        Not available
+      </span>
+    );
+  }
+
+  return (
+    <Button variant="outline" size="sm" onClick={onRequest}>
+      Enable
+    </Button>
+  );
+}
 
 // Helper component for numeric input with increment/decrement buttons
 function NumericInput({
@@ -111,7 +162,7 @@ function NumericInput({
 export function SettingsSheet() {
   const settings = useSettings();
   const { hasKey, setApiKey } = usePerplexityKey();
-  const { authenticated, login, user } = usePrivy();
+  const { authenticated, login, logout, user } = usePrivy();
   const { theme, setTheme } = useTheme();
   const [apiKeyInput, setApiKeyInput] = useState("");
   const { toast } = useToast();
@@ -132,6 +183,13 @@ export function SettingsSheet() {
     openRemoveDialog,
     lockNow,
   } = usePinGate();
+  
+  // Permissions
+  const { permissions, requestNotifications, requestMicrophone } = usePermissions();
+  const [expiryNotificationsEnabled, setExpiryNotificationsEnabled] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return getNotificationSettings().enabled;
+  });
 
   // Handle sheet open with PIN check
   const handleOpenChange = useCallback(async (open: boolean) => {
@@ -208,16 +266,7 @@ export function SettingsSheet() {
   const handleExport = async () => {
     setIsExporting(true);
     try {
-      const data = await exportAllData();
-      const blob = new Blob([data], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `intake-tracker-export-${new Date().toISOString().split("T")[0]}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      await downloadBackup();
       toast({
         title: "Export successful",
         description: "Your data has been downloaded",
@@ -240,13 +289,17 @@ export function SettingsSheet() {
 
     setIsImporting(true);
     try {
-      const text = await file.text();
-      const result = await importData(text, "merge");
-      toast({
-        title: "Import successful",
-        description: `Imported ${result.imported} records (${result.skipped} skipped)`,
-        variant: "success",
-      });
+      const result = await importBackup(file, "merge");
+      if (result.success) {
+        const total = result.intakeImported + result.weightImported + result.bpImported;
+        toast({
+          title: "Import successful",
+          description: `Imported ${total} records (${result.skipped} skipped)`,
+          variant: "success",
+        });
+      } else {
+        throw new Error(result.errors.join(", ") || "Import failed");
+      }
     } catch (error) {
       toast({
         title: "Import failed",
@@ -300,6 +353,30 @@ export function SettingsSheet() {
         </SheetHeader>
 
         <div className="space-y-6 py-6">
+          {/* Account Section - shows when authenticated */}
+          {authenticated && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                <User className="w-4 h-4" />
+                <h3 className="font-semibold">Account</h3>
+              </div>
+              <div className="space-y-3">
+                <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-900 border">
+                  <p className="text-sm font-medium">{user?.email?.address || "Authenticated user"}</p>
+                  <p className="text-xs text-muted-foreground">Signed in</p>
+                </div>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start gap-2 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30"
+                  onClick={logout}
+                >
+                  <LogOut className="w-4 h-4" />
+                  Sign Out
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* Water Settings */}
           <div className="space-y-4">
             <div className="flex items-center gap-2 text-sky-600 dark:text-sky-400">
@@ -711,6 +788,100 @@ export function SettingsSheet() {
                     You&apos;ll only need to enter it once per day.
                   </p>
                 </>
+              )}
+            </div>
+          </div>
+
+          {/* Permissions */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-purple-600 dark:text-purple-400">
+              <ShieldCheck className="w-4 h-4" />
+              <h3 className="font-semibold">Permissions</h3>
+            </div>
+            <div className="space-y-3">
+              {/* Notifications Permission */}
+              <div className="flex items-center justify-between p-3 rounded-lg border">
+                <div className="flex items-center gap-3">
+                  <Bell className="w-4 h-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm font-medium">Notifications</p>
+                    <p className="text-xs text-muted-foreground">For expiry reminders</p>
+                  </div>
+                </div>
+                <PermissionBadge
+                  state={permissions.notifications}
+                  onRequest={async () => {
+                    const granted = await requestNotifications();
+                    if (granted) {
+                      toast({ title: "Notifications enabled", variant: "success" });
+                    }
+                  }}
+                />
+              </div>
+
+              {/* Microphone Permission */}
+              <div className="flex items-center justify-between p-3 rounded-lg border">
+                <div className="flex items-center gap-3">
+                  <Mic className="w-4 h-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm font-medium">Microphone</p>
+                    <p className="text-xs text-muted-foreground">For voice input</p>
+                  </div>
+                </div>
+                <PermissionBadge
+                  state={permissions.microphone}
+                  onRequest={async () => {
+                    const granted = await requestMicrophone();
+                    if (granted) {
+                      toast({ title: "Microphone enabled", variant: "success" });
+                    }
+                  }}
+                />
+              </div>
+
+              {/* Expiry Notifications Toggle - only show if notifications are granted */}
+              {permissions.notifications === "granted" && (
+                <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
+                  <div>
+                    <p className="text-sm font-medium">Expiry Reminders</p>
+                    <p className="text-xs text-muted-foreground">
+                      Get notified when records are about to expire
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant={expiryNotificationsEnabled ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => {
+                        const newValue = !expiryNotificationsEnabled;
+                        setExpiryNotificationsEnabled(newValue);
+                        saveNotificationSettings({ enabled: newValue });
+                        toast({
+                          title: newValue ? "Reminders enabled" : "Reminders disabled",
+                          variant: "success",
+                        });
+                      }}
+                    >
+                      {expiryNotificationsEnabled ? "On" : "Off"}
+                    </Button>
+                    {expiryNotificationsEnabled && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          const sent = sendTestNotification();
+                          if (sent) {
+                            toast({ title: "Test notification sent", variant: "success" });
+                          } else {
+                            toast({ title: "Failed to send notification", variant: "destructive" });
+                          }
+                        }}
+                      >
+                        Test
+                      </Button>
+                    )}
+                  </div>
+                </div>
               )}
             </div>
           </div>

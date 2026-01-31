@@ -33,7 +33,6 @@ import {
   Sparkles,
   Trash2,
   Calendar,
-  Clock,
   Loader2,
   Lock,
   ChevronDown,
@@ -111,196 +110,49 @@ function formatTime(timestamp: number): string {
   });
 }
 
-// Format source for display
-function formatSource(source?: string): string {
-  if (!source) return "Manual";
-  if (source === "manual") return "Manual";
-  if (source === "voice") return "Voice";
-  if (source.startsWith("food:")) {
-    const food = source.replace("food:", "");
-    return `Food: ${food}`;
+// Simplified Record Row - shows only icon, measurement, timestamp, and action buttons
+function RecordRow({
+  unified,
+  onDelete,
+  onEdit,
+  isDeleting,
+}: {
+  unified: UnifiedRecord;
+  onDelete: () => void;
+  onEdit: () => void;
+  isDeleting: boolean;
+}) {
+  // Determine icon, color, and measurement based on record type
+  let icon: React.ReactNode;
+  let measurement: string;
+  let iconColor: string;
+
+  if (unified.type === "intake") {
+    const record = unified.record;
+    const isWater = record.type === "water";
+    icon = isWater ? <Droplets className="w-4 h-4" /> : <Sparkles className="w-4 h-4" />;
+    iconColor = isWater ? "text-sky-600 dark:text-sky-400" : "text-amber-600 dark:text-amber-400";
+    measurement = `${record.amount} ${isWater ? "ml" : "mg"}`;
+  } else if (unified.type === "weight") {
+    const record = unified.record;
+    icon = <Scale className="w-4 h-4" />;
+    iconColor = "text-emerald-600 dark:text-emerald-400";
+    measurement = `${record.weight} kg`;
+  } else {
+    const record = unified.record;
+    icon = <Heart className="w-4 h-4" />;
+    iconColor = "text-rose-600 dark:text-rose-400";
+    measurement = `${record.systolic}/${record.diastolic} mmHg`;
   }
-  return source;
-}
-
-// BP category helper
-function getBPCategory(systolic: number, diastolic: number) {
-  if (systolic < 120 && diastolic < 80) return { label: "Normal", color: "text-green-600 dark:text-green-400" };
-  if (systolic < 130 && diastolic < 80) return { label: "Elevated", color: "text-yellow-600 dark:text-yellow-400" };
-  if (systolic < 140 || diastolic < 90) return { label: "High Stage 1", color: "text-orange-600 dark:text-orange-400" };
-  if (systolic >= 140 || diastolic >= 90) return { label: "High Stage 2", color: "text-red-600 dark:text-red-400" };
-  return { label: "Unknown", color: "text-muted-foreground" };
-}
-
-// Intake Record Item
-function IntakeRecordItem({
-  record,
-  onDelete,
-  onEdit,
-  isDeleting,
-}: {
-  record: IntakeRecord;
-  onDelete: () => void;
-  onEdit: () => void;
-  isDeleting: boolean;
-}) {
-  const isWater = record.type === "water";
-  const unit = isWater ? "ml" : "mg";
 
   return (
-    <div
-      className={cn(
-        "flex items-center justify-between p-3 rounded-lg border",
-        isWater
-          ? "bg-sky-50/50 border-sky-200 dark:bg-sky-950/20 dark:border-sky-800"
-          : "bg-amber-50/50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-800"
-      )}
-    >
-      <div className="flex items-center gap-3">
-        <div
-          className={cn(
-            "p-2 rounded-full",
-            isWater ? "bg-sky-100 dark:bg-sky-900/50" : "bg-amber-100 dark:bg-amber-900/50"
-          )}
-        >
-          {isWater ? (
-            <Droplets className="w-4 h-4 text-sky-600 dark:text-sky-400" />
-          ) : (
-            <Sparkles className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-          )}
-        </div>
-        <div>
-          <div className="font-medium">
-            {record.amount} {unit}
-          </div>
-          <div className="text-xs text-muted-foreground flex items-center gap-2">
-            <Clock className="w-3 h-3" />
-            {formatTime(record.timestamp)}
-            <span className="text-muted-foreground/50">•</span>
-            {formatSource(record.source)}
-            {record.note && (
-              <>
-                <span className="text-muted-foreground/50">•</span>
-                <span className="truncate max-w-[100px]">{record.note}</span>
-              </>
-            )}
-          </div>
-        </div>
+    <div className="flex items-center justify-between py-2 px-3 border-b border-border/50 hover:bg-muted/30 transition-colors">
+      <div className="flex items-center gap-3 min-w-0">
+        <span className={iconColor}>{icon}</span>
+        <span className="font-medium">{measurement}</span>
+        <span className="text-sm text-muted-foreground">{formatTime(unified.record.timestamp)}</span>
       </div>
-      <div className="flex items-center gap-1">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 text-muted-foreground hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30"
-          onClick={onEdit}
-        >
-          <Pencil className="w-4 h-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
-          onClick={onDelete}
-          disabled={isDeleting}
-        >
-          {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-// Weight Record Item
-function WeightRecordItem({
-  record,
-  onDelete,
-  onEdit,
-  isDeleting,
-}: {
-  record: WeightRecord;
-  onDelete: () => void;
-  onEdit: () => void;
-  isDeleting: boolean;
-}) {
-  return (
-    <div className="flex items-center justify-between p-3 rounded-lg border bg-emerald-50/50 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-800">
-      <div className="flex items-center gap-3">
-        <div className="p-2 rounded-full bg-emerald-100 dark:bg-emerald-900/50">
-          <Scale className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-        </div>
-        <div>
-          <div className="font-medium">{record.weight} kg</div>
-          <div className="text-xs text-muted-foreground flex items-center gap-2">
-            <Clock className="w-3 h-3" />
-            {formatTime(record.timestamp)}
-            {record.note && (
-              <>
-                <span className="text-muted-foreground/50">•</span>
-                <span className="truncate max-w-[100px]">{record.note}</span>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-      <div className="flex items-center gap-1">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 text-muted-foreground hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30"
-          onClick={onEdit}
-        >
-          <Pencil className="w-4 h-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
-          onClick={onDelete}
-          disabled={isDeleting}
-        >
-          {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-// Blood Pressure Record Item
-function BPRecordItem({
-  record,
-  onDelete,
-  onEdit,
-  isDeleting,
-}: {
-  record: BloodPressureRecord;
-  onDelete: () => void;
-  onEdit: () => void;
-  isDeleting: boolean;
-}) {
-  const category = getBPCategory(record.systolic, record.diastolic);
-
-  return (
-    <div className="flex items-center justify-between p-3 rounded-lg border bg-rose-50/50 border-rose-200 dark:bg-rose-950/20 dark:border-rose-800">
-      <div className="flex items-center gap-3">
-        <div className="p-2 rounded-full bg-rose-100 dark:bg-rose-900/50">
-          <Heart className="w-4 h-4 text-rose-600 dark:text-rose-400" />
-        </div>
-        <div>
-          <div className="font-medium">
-            {record.systolic}/{record.diastolic} mmHg
-            {record.heartRate && <span className="text-sm text-muted-foreground ml-2">{record.heartRate} BPM</span>}
-          </div>
-          <div className="text-xs text-muted-foreground flex items-center gap-2">
-            <Clock className="w-3 h-3" />
-            {formatTime(record.timestamp)}
-            <span className="text-muted-foreground/50">•</span>
-            <span className={category.color}>{category.label}</span>
-            <span className="text-muted-foreground/50">•</span>
-            {record.position}, {record.arm} arm
-          </div>
-        </div>
-      </div>
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 shrink-0">
         <Button
           variant="ghost"
           size="icon"
@@ -686,7 +538,7 @@ export function HistorySheet() {
             <span className="sr-only">History</span>
           </Button>
         </SheetTrigger>
-        <SheetContent className="overflow-y-auto">
+        <SheetContent side="full" className="overflow-y-auto">
           <SheetHeader>
             <SheetTitle>Health History</SheetTitle>
             <SheetDescription>View and manage all your logged entries</SheetDescription>
@@ -739,42 +591,29 @@ export function HistorySheet() {
                         {dayRecords.length} {dayRecords.length === 1 ? "entry" : "entries"}
                       </span>
                     </div>
-                    <div className="space-y-2">
+                    <div className="border-t border-border/50">
                       {dayRecords.map((unified) => {
-                        if (unified.type === "intake") {
-                          return (
-                            <IntakeRecordItem
-                              key={unified.record.id}
-                              record={unified.record}
-                              onDelete={() => handleDeleteIntake(unified.record.id)}
-                              onEdit={() => openEditIntake(unified.record)}
-                              isDeleting={deletingId === unified.record.id}
-                            />
-                          );
-                        }
-                        if (unified.type === "weight") {
-                          return (
-                            <WeightRecordItem
-                              key={unified.record.id}
-                              record={unified.record}
-                              onDelete={() => handleDeleteWeight(unified.record.id)}
-                              onEdit={() => openEditWeight(unified.record)}
-                              isDeleting={deletingId === unified.record.id}
-                            />
-                          );
-                        }
-                        if (unified.type === "bp") {
-                          return (
-                            <BPRecordItem
-                              key={unified.record.id}
-                              record={unified.record}
-                              onDelete={() => handleDeleteBP(unified.record.id)}
-                              onEdit={() => openEditBP(unified.record)}
-                              isDeleting={deletingId === unified.record.id}
-                            />
-                          );
-                        }
-                        return null;
+                        const onDelete = unified.type === "intake"
+                          ? () => handleDeleteIntake(unified.record.id)
+                          : unified.type === "weight"
+                          ? () => handleDeleteWeight(unified.record.id)
+                          : () => handleDeleteBP(unified.record.id);
+                        
+                        const onEdit = unified.type === "intake"
+                          ? () => openEditIntake(unified.record as IntakeRecord)
+                          : unified.type === "weight"
+                          ? () => openEditWeight(unified.record as WeightRecord)
+                          : () => openEditBP(unified.record as BloodPressureRecord);
+
+                        return (
+                          <RecordRow
+                            key={unified.record.id}
+                            unified={unified}
+                            onDelete={onDelete}
+                            onEdit={onEdit}
+                            isDeleting={deletingId === unified.record.id}
+                          />
+                        );
                       })}
                     </div>
                   </div>

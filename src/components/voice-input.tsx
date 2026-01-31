@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import {
   Dialog,
@@ -14,11 +14,41 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Mic, Loader2, Sparkles } from "lucide-react";
+import { Mic, MicOff, Loader2, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { usePerplexityKey } from "@/hooks/use-settings";
 import { parseIntakeWithPerplexity, type ParsedIntake } from "@/lib/perplexity";
 import { formatAmount } from "@/lib/utils";
+
+// Type declarations for Web Speech API
+interface SpeechRecognitionEvent extends Event {
+  resultIndex: number;
+  results: SpeechRecognitionResultList;
+}
+
+interface SpeechRecognitionErrorEvent extends Event {
+  error: string;
+  message: string;
+}
+
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+}
+
+declare global {
+  interface Window {
+    SpeechRecognition: new () => SpeechRecognition;
+    webkitSpeechRecognition: new () => SpeechRecognition;
+  }
+}
 
 interface VoiceInputProps {
   onAddWater: (amount: number, source: string) => Promise<void>;
@@ -30,12 +60,98 @@ export function VoiceInput({ onAddWater, onAddSalt }: VoiceInputProps) {
   const [input, setInput] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [parsedResult, setParsedResult] = useState<ParsedIntake | null>(null);
+  const [isListening, setIsListening] = useState(false);
+  const [interimTranscript, setInterimTranscript] = useState("");
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
   const { toast } = useToast();
   const { getApiKey, hasKey } = usePerplexityKey();
   const { authenticated, getAccessToken } = usePrivy();
   
   // AI is available if user is authenticated (uses server key) OR has their own API key
   const aiAvailable = authenticated || hasKey;
+  
+  // Check if speech recognition is available
+  const isSpeechSupported = typeof window !== "undefined" && 
+    (window.SpeechRecognition || window.webkitSpeechRecognition);
+
+  // Start listening to microphone
+  const startListening = useCallback(() => {
+    if (!isSpeechSupported) {
+      toast({
+        title: "Not supported",
+        description: "Speech recognition is not available in this browser",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+    
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = "en-US";
+
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
+      let finalTranscript = "";
+      let interim = "";
+
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript;
+        } else {
+          interim += transcript;
+        }
+      }
+
+      if (finalTranscript) {
+        setInput((prev) => prev + finalTranscript);
+        setInterimTranscript("");
+      } else {
+        setInterimTranscript(interim);
+      }
+    };
+
+    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      console.error("Speech recognition error:", event.error);
+      setIsListening(false);
+      setInterimTranscript("");
+      
+      if (event.error === "not-allowed") {
+        toast({
+          title: "Microphone access denied",
+          description: "Please enable microphone access in your browser settings",
+          variant: "destructive",
+        });
+      } else if (event.error !== "aborted") {
+        toast({
+          title: "Speech recognition error",
+          description: event.error,
+          variant: "destructive",
+        });
+      }
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+      setInterimTranscript("");
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+    setIsListening(true);
+  }, [isSpeechSupported, toast]);
+
+  // Stop listening
+  const stopListening = useCallback(() => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
+    }
+    setIsListening(false);
+    setInterimTranscript("");
+  }, []);
 
   const handleParse = async () => {
     if (!input.trim()) return;
@@ -110,6 +226,7 @@ export function VoiceInput({ onAddWater, onAddSalt }: VoiceInputProps) {
     if (!isOpen) {
       setInput("");
       setParsedResult(null);
+      stopListening();
     }
   };
 
@@ -153,23 +270,53 @@ export function VoiceInput({ onAddWater, onAddSalt }: VoiceInputProps) {
         <div className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="natural-input">Describe your intake</Label>
-            <Input
-              id="natural-input"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="e.g., I ate 200g of grapes and drank a glass of water"
-              className="h-12"
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleParse();
-                }
-              }}
-            />
-            <p className="text-xs text-muted-foreground">
-              Examples: &quot;a cup of coffee&quot;, &quot;300g watermelon&quot;,
-              &quot;a bag of chips&quot;
-            </p>
+            <div className="flex gap-2">
+              <Input
+                id="natural-input"
+                value={isListening ? input + interimTranscript : input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder={isListening ? "Listening..." : "Type or tap mic to speak..."}
+                className="h-12 flex-1"
+                disabled={isListening}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleParse();
+                  }
+                }}
+              />
+              {isSpeechSupported && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className={`h-12 w-12 shrink-0 ${
+                    isListening 
+                      ? "bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-800" 
+                      : ""
+                  }`}
+                  onClick={isListening ? stopListening : startListening}
+                  disabled={isProcessing}
+                >
+                  {isListening ? (
+                    <MicOff className="w-5 h-5 text-red-500 animate-pulse" />
+                  ) : (
+                    <Mic className="w-5 h-5" />
+                  )}
+                </Button>
+              )}
+            </div>
+            {isListening && (
+              <p className="text-xs text-violet-600 dark:text-violet-400 animate-pulse">
+                Listening... speak now
+              </p>
+            )}
+            {!isListening && (
+              <p className="text-xs text-muted-foreground">
+                Examples: &quot;a cup of coffee&quot;, &quot;300g watermelon&quot;,
+                &quot;a bag of chips&quot;
+              </p>
+            )}
           </div>
 
           {!parsedResult && (
