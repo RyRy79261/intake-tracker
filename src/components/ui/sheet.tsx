@@ -96,6 +96,7 @@ const SheetContent = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,
   SheetContentProps
 >(({ side = "right", className, children, open, ...props }, ref) => {
+  const isControlled = open !== undefined;
   const variants = slideAnimationVariants[side || "right"];
   const isFull = side === "full";
   
@@ -103,8 +104,8 @@ const SheetContent = React.forwardRef<
     <AnimatePresence>
       {open !== false && (
         <SheetPortal forceMount>
-          <SheetOverlay />
-          <SheetPrimitive.Content asChild ref={ref} {...props}>
+          <SheetOverlay {...(isControlled && { forceMount: true })} />
+          <SheetPrimitive.Content asChild ref={ref} {...(isControlled && { forceMount: true })} {...props}>
             <motion.div
               className={cn(sheetVariants({ side }), className)}
               variants={variants}

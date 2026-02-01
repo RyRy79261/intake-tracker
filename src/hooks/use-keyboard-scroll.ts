@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, type FocusEvent } from "react";
 
 /**
  * Hook that provides keyboard-aware scroll behavior for input fields.
@@ -10,7 +10,7 @@ import { useCallback, useEffect, useRef } from "react";
 export function useKeyboardAwareScroll() {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const scrollToInput = useCallback((e: React.FocusEvent<HTMLInputElement>) => {
+  const scrollToInput = useCallback((e: FocusEvent<HTMLInputElement>) => {
     const target = e.target;
     
     // Clear any existing timeout
@@ -85,7 +85,7 @@ export function useVisualViewportScroll() {
     };
   }, []);
 
-  const handleFocus = useCallback((e: React.FocusEvent<HTMLInputElement>) => {
+  const handleFocus = useCallback((e: FocusEvent<HTMLInputElement>) => {
     activeInputRef.current = e.target;
     
     // Clear previous focus timeout
