@@ -1,17 +1,13 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { usePrivy } from "@privy-io/react-auth";
 import { type WeightRecord, type BloodPressureRecord } from "@/lib/db";
-import {
-  addWeightRecord,
-  getWeightRecords,
-  updateWeightRecord,
-  deleteWeightRecord,
-  addBloodPressureRecord,
-  getBloodPressureRecords,
-  updateBloodPressureRecord,
-  deleteBloodPressureRecord,
-} from "@/lib/health-service";
+import { useSettingsStore } from "@/stores/settings-store";
+import * as storageAdapter from "@/lib/storage-adapter";
+import * as localHealthService from "@/lib/health-service";
+
+type AuthHeaders = { Authorization: string };
 
 // ============================================================================
 // Mutation Parameter Types
@@ -56,16 +52,18 @@ export type UpdateBloodPressureParams = {
 };
 
 // ============================================================================
-// Query keys factory
+// Query keys factory (includes storageMode for proper cache separation)
 // ============================================================================
 export const healthKeys = {
   all: ["health"] as const,
-  weight: () => [...healthKeys.all, "weight"] as const,
-  weightRecords: (limit?: number) => [...healthKeys.weight(), "records", limit] as const,
-  weightLatest: () => [...healthKeys.weight(), "latest"] as const,
-  bloodPressure: () => [...healthKeys.all, "bloodPressure"] as const,
-  bpRecords: (limit?: number) => [...healthKeys.bloodPressure(), "records", limit] as const,
-  bpLatest: () => [...healthKeys.bloodPressure(), "latest"] as const,
+  weight: (storageMode: string) => [...healthKeys.all, "weight", storageMode] as const,
+  weightRecords: (limit: number | undefined, storageMode: string) => 
+    [...healthKeys.weight(storageMode), "records", limit] as const,
+  weightLatest: (storageMode: string) => [...healthKeys.weight(storageMode), "latest"] as const,
+  bloodPressure: (storageMode: string) => [...healthKeys.all, "bloodPressure", storageMode] as const,
+  bpRecords: (limit: number | undefined, storageMode: string) => 
+    [...healthKeys.bloodPressure(storageMode), "records", limit] as const,
+  bpLatest: (storageMode: string) => [...healthKeys.bloodPressure(storageMode), "latest"] as const,
 };
 
 // ============================================================================
@@ -74,11 +72,24 @@ export const healthKeys = {
 
 /**
  * Hook to get recent weight records.
+ * Supports both local and server storage modes.
  */
 export function useWeightRecords(limit: number = 5) {
+  const { authenticated, getAccessToken } = usePrivy();
+  const storageMode = useSettingsStore((state) => state.storageMode);
+
   return useQuery({
-    queryKey: healthKeys.weightRecords(limit),
-    queryFn: () => getWeightRecords(limit),
+    queryKey: healthKeys.weightRecords(limit, storageMode),
+    queryFn: async () => {
+      if (storageMode === "server" && authenticated) {
+        const token = await getAccessToken();
+        if (token) {
+          return storageAdapter.getWeightRecords(limit, { Authorization: `Bearer ${token}` });
+        }
+      }
+      return localHealthService.getWeightRecords(limit);
+    },
+    enabled: storageMode === "local" || authenticated,
   });
 }
 
@@ -86,36 +97,58 @@ export function useWeightRecords(limit: number = 5) {
  * Hook to get the latest weight record.
  */
 export function useLatestWeight() {
+  const { authenticated, getAccessToken } = usePrivy();
+  const storageMode = useSettingsStore((state) => state.storageMode);
+
   return useQuery({
-    queryKey: healthKeys.weightLatest(),
+    queryKey: healthKeys.weightLatest(storageMode),
     queryFn: async () => {
-      const records = await getWeightRecords(1);
-      return records[0] ?? null;
+      if (storageMode === "server" && authenticated) {
+        const token = await getAccessToken();
+        if (token) {
+          return storageAdapter.getLatestWeightRecord({ Authorization: `Bearer ${token}` });
+        }
+      }
+      return localHealthService.getLatestWeightRecord();
     },
+    enabled: storageMode === "local" || authenticated,
   });
 }
 
 /**
  * Hook to add a weight record with optimistic updates.
+ * Routes to local or server based on storage mode.
  */
 export function useAddWeight() {
   const queryClient = useQueryClient();
+  const { authenticated, getAccessToken } = usePrivy();
+  const storageMode = useSettingsStore((state) => state.storageMode);
 
   return useMutation({
-    mutationFn: (params: AddWeightParams) =>
-      addWeightRecord(params.weight, params.timestamp, params.note),
+    mutationFn: async (params: AddWeightParams) => {
+      if (storageMode === "server" && authenticated) {
+        const token = await getAccessToken();
+        if (token) {
+          return storageAdapter.addWeightRecord(
+            params.weight, params.timestamp, params.note,
+            { Authorization: `Bearer ${token}` }
+          );
+        }
+      }
+      return storageAdapter.addWeightRecord(params.weight, params.timestamp, params.note);
+    },
     onMutate: async (newWeight) => {
       // Cancel any outgoing refetches
-      await queryClient.cancelQueries({ queryKey: healthKeys.weight() });
+      await queryClient.cancelQueries({ queryKey: healthKeys.weight(storageMode) });
 
       // Snapshot the previous value
       const previous = queryClient.getQueryData<WeightRecord[]>(
-        healthKeys.weightRecords(5)
+        healthKeys.weightRecords(5, storageMode)
       );
 
       // Optimistically update to the new value
       queryClient.setQueryData<WeightRecord[]>(
-        healthKeys.weightRecords(5),
+        healthKeys.weightRecords(5, storageMode),
         (old = []) => [
           {
             id: `temp-${Date.now()}`,
@@ -133,12 +166,12 @@ export function useAddWeight() {
     onError: (_err, _newWeight, context) => {
       // Rollback to the previous value on error
       if (context?.previous) {
-        queryClient.setQueryData(healthKeys.weightRecords(5), context.previous);
+        queryClient.setQueryData(healthKeys.weightRecords(5, storageMode), context.previous);
       }
     },
     onSettled: () => {
       // Refetch after error or success to ensure we have the correct data
-      queryClient.invalidateQueries({ queryKey: healthKeys.weight() });
+      queryClient.invalidateQueries({ queryKey: healthKeys.weight(storageMode) });
     },
   });
 }
@@ -148,12 +181,24 @@ export function useAddWeight() {
  */
 export function useUpdateWeight() {
   const queryClient = useQueryClient();
+  const { authenticated, getAccessToken } = usePrivy();
+  const storageMode = useSettingsStore((state) => state.storageMode);
 
   return useMutation({
-    mutationFn: (params: UpdateWeightParams) =>
-      updateWeightRecord(params.id, params.updates),
+    mutationFn: async (params: UpdateWeightParams) => {
+      if (storageMode === "server" && authenticated) {
+        const token = await getAccessToken();
+        if (token) {
+          return storageAdapter.updateWeightRecord(
+            params.id, params.updates,
+            { Authorization: `Bearer ${token}` }
+          );
+        }
+      }
+      return storageAdapter.updateWeightRecord(params.id, params.updates);
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: healthKeys.weight() });
+      queryClient.invalidateQueries({ queryKey: healthKeys.weight(storageMode) });
     },
   });
 }
@@ -163,11 +208,21 @@ export function useUpdateWeight() {
  */
 export function useDeleteWeight() {
   const queryClient = useQueryClient();
+  const { authenticated, getAccessToken } = usePrivy();
+  const storageMode = useSettingsStore((state) => state.storageMode);
 
   return useMutation({
-    mutationFn: (id: string) => deleteWeightRecord(id),
+    mutationFn: async (id: string) => {
+      if (storageMode === "server" && authenticated) {
+        const token = await getAccessToken();
+        if (token) {
+          return storageAdapter.deleteWeightRecord(id, { Authorization: `Bearer ${token}` });
+        }
+      }
+      return storageAdapter.deleteWeightRecord(id);
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: healthKeys.weight() });
+      queryClient.invalidateQueries({ queryKey: healthKeys.weight(storageMode) });
     },
   });
 }
@@ -178,11 +233,24 @@ export function useDeleteWeight() {
 
 /**
  * Hook to get recent blood pressure records.
+ * Supports both local and server storage modes.
  */
 export function useBloodPressureRecords(limit: number = 5) {
+  const { authenticated, getAccessToken } = usePrivy();
+  const storageMode = useSettingsStore((state) => state.storageMode);
+
   return useQuery({
-    queryKey: healthKeys.bpRecords(limit),
-    queryFn: () => getBloodPressureRecords(limit),
+    queryKey: healthKeys.bpRecords(limit, storageMode),
+    queryFn: async () => {
+      if (storageMode === "server" && authenticated) {
+        const token = await getAccessToken();
+        if (token) {
+          return storageAdapter.getBloodPressureRecords(limit, { Authorization: `Bearer ${token}` });
+        }
+      }
+      return localHealthService.getBloodPressureRecords(limit);
+    },
+    enabled: storageMode === "local" || authenticated,
   });
 }
 
@@ -190,24 +258,51 @@ export function useBloodPressureRecords(limit: number = 5) {
  * Hook to get the latest blood pressure record.
  */
 export function useLatestBloodPressure() {
+  const { authenticated, getAccessToken } = usePrivy();
+  const storageMode = useSettingsStore((state) => state.storageMode);
+
   return useQuery({
-    queryKey: healthKeys.bpLatest(),
+    queryKey: healthKeys.bpLatest(storageMode),
     queryFn: async () => {
-      const records = await getBloodPressureRecords(1);
-      return records[0] ?? null;
+      if (storageMode === "server" && authenticated) {
+        const token = await getAccessToken();
+        if (token) {
+          return storageAdapter.getLatestBloodPressureRecord({ Authorization: `Bearer ${token}` });
+        }
+      }
+      return localHealthService.getLatestBloodPressureRecord();
     },
+    enabled: storageMode === "local" || authenticated,
   });
 }
 
 /**
  * Hook to add a blood pressure record with optimistic updates.
+ * Routes to local or server based on storage mode.
  */
 export function useAddBloodPressure() {
   const queryClient = useQueryClient();
+  const { authenticated, getAccessToken } = usePrivy();
+  const storageMode = useSettingsStore((state) => state.storageMode);
 
   return useMutation({
-    mutationFn: (params: AddBloodPressureParams) =>
-      addBloodPressureRecord(
+    mutationFn: async (params: AddBloodPressureParams) => {
+      if (storageMode === "server" && authenticated) {
+        const token = await getAccessToken();
+        if (token) {
+          return storageAdapter.addBloodPressureRecord(
+            params.systolic,
+            params.diastolic,
+            params.position,
+            params.arm,
+            params.heartRate,
+            params.timestamp,
+            params.note,
+            { Authorization: `Bearer ${token}` }
+          );
+        }
+      }
+      return storageAdapter.addBloodPressureRecord(
         params.systolic,
         params.diastolic,
         params.position,
@@ -215,19 +310,20 @@ export function useAddBloodPressure() {
         params.heartRate,
         params.timestamp,
         params.note
-      ),
+      );
+    },
     onMutate: async (newBP) => {
       // Cancel any outgoing refetches
-      await queryClient.cancelQueries({ queryKey: healthKeys.bloodPressure() });
+      await queryClient.cancelQueries({ queryKey: healthKeys.bloodPressure(storageMode) });
 
       // Snapshot the previous value
       const previous = queryClient.getQueryData<BloodPressureRecord[]>(
-        healthKeys.bpRecords(5)
+        healthKeys.bpRecords(5, storageMode)
       );
 
       // Optimistically update to the new value
       queryClient.setQueryData<BloodPressureRecord[]>(
-        healthKeys.bpRecords(5),
+        healthKeys.bpRecords(5, storageMode),
         (old = []) => [
           {
             id: `temp-${Date.now()}`,
@@ -249,12 +345,12 @@ export function useAddBloodPressure() {
     onError: (_err, _newBP, context) => {
       // Rollback to the previous value on error
       if (context?.previous) {
-        queryClient.setQueryData(healthKeys.bpRecords(5), context.previous);
+        queryClient.setQueryData(healthKeys.bpRecords(5, storageMode), context.previous);
       }
     },
     onSettled: () => {
       // Refetch after error or success to ensure we have the correct data
-      queryClient.invalidateQueries({ queryKey: healthKeys.bloodPressure() });
+      queryClient.invalidateQueries({ queryKey: healthKeys.bloodPressure(storageMode) });
     },
   });
 }
@@ -264,12 +360,24 @@ export function useAddBloodPressure() {
  */
 export function useUpdateBloodPressure() {
   const queryClient = useQueryClient();
+  const { authenticated, getAccessToken } = usePrivy();
+  const storageMode = useSettingsStore((state) => state.storageMode);
 
   return useMutation({
-    mutationFn: (params: UpdateBloodPressureParams) =>
-      updateBloodPressureRecord(params.id, params.updates),
+    mutationFn: async (params: UpdateBloodPressureParams) => {
+      if (storageMode === "server" && authenticated) {
+        const token = await getAccessToken();
+        if (token) {
+          return storageAdapter.updateBloodPressureRecord(
+            params.id, params.updates,
+            { Authorization: `Bearer ${token}` }
+          );
+        }
+      }
+      return storageAdapter.updateBloodPressureRecord(params.id, params.updates);
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: healthKeys.bloodPressure() });
+      queryClient.invalidateQueries({ queryKey: healthKeys.bloodPressure(storageMode) });
     },
   });
 }
@@ -279,11 +387,21 @@ export function useUpdateBloodPressure() {
  */
 export function useDeleteBloodPressure() {
   const queryClient = useQueryClient();
+  const { authenticated, getAccessToken } = usePrivy();
+  const storageMode = useSettingsStore((state) => state.storageMode);
 
   return useMutation({
-    mutationFn: (id: string) => deleteBloodPressureRecord(id),
+    mutationFn: async (id: string) => {
+      if (storageMode === "server" && authenticated) {
+        const token = await getAccessToken();
+        if (token) {
+          return storageAdapter.deleteBloodPressureRecord(id, { Authorization: `Bearer ${token}` });
+        }
+      }
+      return storageAdapter.deleteBloodPressureRecord(id);
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: healthKeys.bloodPressure() });
+      queryClient.invalidateQueries({ queryKey: healthKeys.bloodPressure(storageMode) });
     },
   });
 }

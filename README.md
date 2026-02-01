@@ -44,7 +44,9 @@ pnpm start
 - **Framework**: Next.js 14 (App Router)
 - **UI Components**: shadcn/ui + Radix UI
 - **Styling**: Tailwind CSS
-- **Database**: IndexedDB via Dexie.js
+- **Local Database**: IndexedDB via Dexie.js
+- **Server Database**: Neon Postgres via Drizzle ORM
+- **Data Fetching**: TanStack Query (React Query)
 - **State**: Zustand
 - **Auth**: Privy (email, social, wallet)
 - **PWA**: next-pwa
@@ -64,12 +66,27 @@ PRIVY_APP_SECRET=your-privy-app-secret
 # Perplexity AI (for natural language parsing)
 PERPLEXITY_API_KEY=pplx-your-api-key-here
 
+# Neon Postgres (for server storage mode)
+DATABASE_URL=postgresql://user:pass@host.neon.tech/dbname?sslmode=require
+
 # Whitelist - comma-separated emails allowed to use the app
 ALLOWED_EMAILS=you@example.com,friend@example.com
 
 # Or whitelist by wallet address
 # ALLOWED_WALLETS=0x123...,0x456...
 ```
+
+### Database Setup (Server Storage)
+
+If you want to use server storage mode:
+
+1. Create a Neon database at [neon.tech](https://neon.tech) or via Vercel Marketplace
+2. Add `DATABASE_URL` to your `.env.local`
+3. Push the schema to your database:
+   ```bash
+   pnpm db:push
+   ```
+4. Enable server storage in Settings > Storage
 
 ### Privy Setup
 
@@ -173,12 +190,82 @@ Access settings via the gear icon to configure:
 
 ### Data Storage
 
-| Data Type | Storage | Protection |
-|-----------|---------|------------|
-| Intake records | IndexedDB | Device-level |
-| Settings | localStorage | Device-level |
-| Auth session | Privy (managed) | Cryptographic tokens |
-| API keys | Server env | Never reaches browser |
+The app supports two storage modes:
+
+#### Local Mode (Default)
+- Data stored in browser's IndexedDB via Dexie.js
+- Works offline as a PWA
+- Data stays on your device
+- No server required
+
+#### Server Mode
+- Data stored in Neon Postgres
+- Access from any device
+- Requires authentication
+- Requires internet connection
+
+| Data Type | Local Mode | Server Mode |
+|-----------|------------|-------------|
+| Intake records | IndexedDB | Neon Postgres |
+| Weight records | IndexedDB | Neon Postgres |
+| Blood pressure | IndexedDB | Neon Postgres |
+| Settings | localStorage | localStorage |
+| Auth session | Privy (managed) | Privy (managed) |
+| API keys | Server env | Server env |
+
+#### Storage Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      Client (Browser)                        │
+├─────────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐    ┌─────────────────────────────────┐ │
+│  │ TanStack Query  │───▶│      Storage Adapter            │ │
+│  │ (Cache + State) │    │  (Routes based on storageMode)  │ │
+│  └─────────────────┘    └─────────────────────────────────┘ │
+│                                    │                         │
+│                    ┌───────────────┴───────────────┐        │
+│                    │                               │         │
+│                    ▼                               ▼         │
+│         ┌─────────────────┐           ┌─────────────────┐   │
+│         │  Local Service  │           │  Server Storage │   │
+│         │  (Dexie.js)     │           │  (API Client)   │   │
+│         └─────────────────┘           └─────────────────┘   │
+│                    │                               │         │
+│                    ▼                               │         │
+│         ┌─────────────────┐                        │         │
+│         │   IndexedDB     │                        │         │
+│         └─────────────────┘                        │         │
+└────────────────────────────────────────────────────│─────────┘
+                                                     │
+                                                     │ HTTPS
+                                                     ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    Server (Next.js API)                      │
+├─────────────────────────────────────────────────────────────┤
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │  /api/storage/*  - CRUD endpoints with Privy auth       ││
+│  │  - /api/storage/intake                                  ││
+│  │  - /api/storage/weight                                  ││
+│  │  - /api/storage/blood-pressure                          ││
+│  │  - /api/storage/export (bulk import/export)             ││
+│  └─────────────────────────────────────────────────────────┘│
+│                            │                                 │
+│                            ▼                                 │
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │  Drizzle ORM + Neon Postgres                            ││
+│  └─────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### Data Migration
+
+You can migrate data between local and server storage:
+
+1. **Export Local to Server**: Push all local records to the server (merge mode)
+2. **Import Server to Local**: Pull all server records to local storage (merge mode)
+
+Migration is available in Settings > Storage when signed in.
 
 ### Security Features
 

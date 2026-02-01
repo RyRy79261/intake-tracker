@@ -41,6 +41,10 @@ import {
   ShieldCheck,
   X,
   Clock,
+  Cloud,
+  HardDrive,
+  CloudUpload,
+  CloudDownload,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useSettings, usePerplexityKey } from "@/hooks/use-settings";
@@ -54,6 +58,7 @@ import {
 } from "@/components/ui/select";
 import { clearAllData } from "@/lib/intake-service";
 import { downloadBackup, importBackup } from "@/lib/backup-service";
+import { exportToServer, importFromServer, getStorageCounts } from "@/lib/storage-migration";
 import { useToast } from "@/hooks/use-toast";
 import { useServiceWorker } from "@/hooks/use-service-worker";
 import { usePinGate, usePinProtected } from "@/hooks/use-pin-gate";
@@ -183,7 +188,7 @@ interface SettingsDrawerProps {
 export function SettingsDrawer({ open, onOpenChange }: SettingsDrawerProps) {
   const settings = useSettings();
   const { hasKey, setApiKey } = usePerplexityKey();
-  const { authenticated, login, logout, user } = usePrivy();
+  const { authenticated, login, logout, user, getAccessToken } = usePrivy();
   const { theme, setTheme } = useTheme();
   const [apiKeyInput, setApiKeyInput] = useState("");
   const { toast } = useToast();
@@ -193,6 +198,14 @@ export function SettingsDrawer({ open, onOpenChange }: SettingsDrawerProps) {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
   const { isUpdateAvailable, applyUpdate, checkForUpdates, isUpdating } = useServiceWorker();
+  
+  // Storage mode
+  const [isExportingToServer, setIsExportingToServer] = useState(false);
+  const [isImportingFromServer, setIsImportingFromServer] = useState(false);
+  const [storageCounts, setStorageCounts] = useState<{
+    local: { intake: number; weight: number; bloodPressure: number };
+    server: { intake: number; weight: number; bloodPressure: number } | null;
+  } | null>(null);
   
   // PIN protection
   const { requirePin } = usePinProtected();
@@ -722,6 +735,218 @@ export function SettingsDrawer({ open, onOpenChange }: SettingsDrawerProps) {
               </div>
             </div>
 
+            {/* Storage Mode */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-cyan-600 dark:text-cyan-400">
+                <Cloud className="w-4 h-4" />
+                <h3 className="font-semibold">Storage</h3>
+              </div>
+              <div className="space-y-3">
+                {/* Storage Mode Toggle */}
+                <div className="space-y-2">
+                  <Label>Storage Location</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      variant={settings.storageMode === "local" ? "default" : "outline"}
+                      className="justify-start gap-2"
+                      onClick={() => settings.setStorageMode("local")}
+                    >
+                      <HardDrive className="w-4 h-4" />
+                      Local
+                    </Button>
+                    <Button
+                      variant={settings.storageMode === "server" ? "default" : "outline"}
+                      className="justify-start gap-2"
+                      onClick={() => {
+                        if (!authenticated) {
+                          toast({
+                            title: "Authentication required",
+                            description: "Please sign in to use server storage",
+                            variant: "destructive",
+                          });
+                          return;
+                        }
+                        settings.setStorageMode("server");
+                      }}
+                      disabled={!authenticated}
+                    >
+                      <Cloud className="w-4 h-4" />
+                      Server
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {settings.storageMode === "local" 
+                      ? "Data stored on this device only. Works offline."
+                      : "Data stored on server. Access from any device."}
+                  </p>
+                </div>
+
+                {/* Data Migration */}
+                {authenticated && (
+                  <div className="space-y-2 pt-2 border-t">
+                    <Label>Data Migration</Label>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start gap-2"
+                      onClick={async () => {
+                        const token = await getAccessToken();
+                        if (!token) {
+                          toast({
+                            title: "Not authenticated",
+                            description: "Please sign in to view storage counts",
+                            variant: "destructive",
+                          });
+                          return;
+                        }
+                        try {
+                          const counts = await getStorageCounts({ Authorization: `Bearer ${token}` });
+                          setStorageCounts(counts);
+                          const localTotal = counts.local.intake + counts.local.weight + counts.local.bloodPressure;
+                          const serverTotal = counts.server 
+                            ? counts.server.intake + counts.server.weight + counts.server.bloodPressure 
+                            : 0;
+                          toast({
+                            title: "Storage counts",
+                            description: `Local: ${localTotal} records • Server: ${serverTotal} records`,
+                          });
+                        } catch (error) {
+                          toast({
+                            title: "Failed to get counts",
+                            description: error instanceof Error ? error.message : "Unknown error",
+                            variant: "destructive",
+                          });
+                        }
+                      }}
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      Check Storage Counts
+                    </Button>
+                    
+                    {storageCounts && (
+                      <div className="p-3 rounded-lg bg-muted/50 text-xs space-y-1">
+                        <div className="flex justify-between">
+                          <span>Local records:</span>
+                          <span className="font-medium">
+                            {storageCounts.local.intake + storageCounts.local.weight + storageCounts.local.bloodPressure}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Server records:</span>
+                          <span className="font-medium">
+                            {storageCounts.server 
+                              ? storageCounts.server.intake + storageCounts.server.weight + storageCounts.server.bloodPressure
+                              : "—"}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start gap-2"
+                      onClick={async () => {
+                        const token = await getAccessToken();
+                        if (!token) {
+                          toast({
+                            title: "Not authenticated",
+                            description: "Please sign in to export data",
+                            variant: "destructive",
+                          });
+                          return;
+                        }
+                        setIsExportingToServer(true);
+                        try {
+                          const result = await exportToServer({ Authorization: `Bearer ${token}` });
+                          if (result.success) {
+                            toast({
+                              title: "Export successful",
+                              description: `Exported ${result.imported} records to server (${result.skipped} skipped)`,
+                              variant: "success",
+                            });
+                          } else {
+                            throw new Error(result.error);
+                          }
+                        } catch (error) {
+                          toast({
+                            title: "Export failed",
+                            description: error instanceof Error ? error.message : "Unknown error",
+                            variant: "destructive",
+                          });
+                        } finally {
+                          setIsExportingToServer(false);
+                        }
+                      }}
+                      disabled={isExportingToServer}
+                    >
+                      {isExportingToServer ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <CloudUpload className="w-4 h-4" />
+                      )}
+                      {isExportingToServer ? "Exporting..." : "Export Local to Server"}
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start gap-2"
+                      onClick={async () => {
+                        const token = await getAccessToken();
+                        if (!token) {
+                          toast({
+                            title: "Not authenticated",
+                            description: "Please sign in to import data",
+                            variant: "destructive",
+                          });
+                          return;
+                        }
+                        setIsImportingFromServer(true);
+                        try {
+                          const result = await importFromServer({ Authorization: `Bearer ${token}` }, "merge");
+                          if (result.success) {
+                            toast({
+                              title: "Import successful",
+                              description: `Imported ${result.imported} records from server (${result.skipped} skipped)`,
+                              variant: "success",
+                            });
+                          } else {
+                            throw new Error(result.error);
+                          }
+                        } catch (error) {
+                          toast({
+                            title: "Import failed",
+                            description: error instanceof Error ? error.message : "Unknown error",
+                            variant: "destructive",
+                          });
+                        } finally {
+                          setIsImportingFromServer(false);
+                        }
+                      }}
+                      disabled={isImportingFromServer}
+                    >
+                      {isImportingFromServer ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <CloudDownload className="w-4 h-4" />
+                      )}
+                      {isImportingFromServer ? "Importing..." : "Import Server to Local"}
+                    </Button>
+
+                    <p className="text-xs text-muted-foreground">
+                      Migrate data between local device and server. Uses merge mode (won&apos;t overwrite existing records).
+                    </p>
+                  </div>
+                )}
+
+                {!authenticated && (
+                  <div className="p-3 rounded-lg bg-muted/50">
+                    <p className="text-xs text-muted-foreground">
+                      Sign in to enable server storage and data migration.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* Data Management */}
             <div className="space-y-4">
               <h3 className="font-semibold">Data Management</h3>
@@ -733,7 +958,7 @@ export function SettingsDrawer({ open, onOpenChange }: SettingsDrawerProps) {
                   disabled={isExporting}
                 >
                   <Download className="w-4 h-4" />
-                  {isExporting ? "Exporting..." : "Export Data"}
+                  {isExporting ? "Exporting..." : "Export to File"}
                 </Button>
 
                 <input
@@ -750,7 +975,7 @@ export function SettingsDrawer({ open, onOpenChange }: SettingsDrawerProps) {
                   disabled={isImporting}
                 >
                   <Upload className="w-4 h-4" />
-                  {isImporting ? "Importing..." : "Import Data"}
+                  {isImporting ? "Importing..." : "Import from File"}
                 </Button>
 
                 {!showClearConfirm ? (

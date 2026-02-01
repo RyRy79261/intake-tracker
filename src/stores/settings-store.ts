@@ -32,6 +32,9 @@ export interface Settings {
   // Day start hour for budget tracking (0-23, default 2 = 2am)
   // Records after this hour count toward "today's" budget
   dayStartHour: number;
+  
+  // Storage mode: "local" uses IndexedDB, "server" uses Neon Postgres
+  storageMode: "local" | "server";
 }
 
 interface SettingsActions {
@@ -46,6 +49,7 @@ interface SettingsActions {
   setTheme: (theme: "light" | "dark" | "system") => void;
   setDataRetentionDays: (days: number) => void;
   setDayStartHour: (hour: number) => void;
+  setStorageMode: (mode: "local" | "server") => void;
   resetToDefaults: () => void;
 }
 
@@ -59,6 +63,7 @@ const defaultSettings: Settings = {
   theme: "system",
   dataRetentionDays: 90, // Default: keep 90 days of data
   dayStartHour: 2, // Default: 2am - day starts at 2am for budget tracking
+  storageMode: "local", // Default: use local IndexedDB storage
 };
 
 export const useSettingsStore = create<Settings & SettingsActions>()(
@@ -96,6 +101,8 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
       
       setDayStartHour: (hour) =>
         set({ dayStartHour: sanitizeNumericInput(hour, 0, 23) }),
+      
+      setStorageMode: (mode) => set({ storageMode: mode }),
 
       resetToDefaults: () => set(defaultSettings),
     }),
