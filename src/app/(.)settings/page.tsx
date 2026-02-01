@@ -41,7 +41,7 @@ export default function SettingsInterceptPage() {
   }
 
   return (
-    <Drawer open={isOpen} onOpenChange={handleOpenChange} direction="right">
+    <Drawer open={isOpen} onOpenChange={handleOpenChange} direction="right" dismissible={false}>
       <DrawerContent direction="right" className="overflow-y-auto p-6">
         <SettingsContent />
       </DrawerContent>
