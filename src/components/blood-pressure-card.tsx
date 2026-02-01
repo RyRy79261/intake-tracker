@@ -1,40 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { useLiveQuery } from "dexie-react-hooks";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Heart, Check, Clock, ChevronDown, ChevronUp, Loader2, Trash2 } from "lucide-react";
+import { Heart, Check, Clock, ChevronDown, ChevronUp, Loader2, Trash2, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import { db, type BloodPressureRecord } from "@/lib/db";
-import { addBloodPressureRecord, deleteBloodPressureRecord } from "@/lib/health-service";
-
-// Helper to get current datetime in local format for input
-function getCurrentDateTimeLocal(): string {
-  const now = new Date();
-  const offset = now.getTimezoneOffset();
-  const local = new Date(now.getTime() - offset * 60 * 1000);
-  return local.toISOString().slice(0, 16);
-}
-
-// Helper to convert datetime-local value to timestamp
-function dateTimeLocalToTimestamp(value: string): number {
-  return new Date(value).getTime();
-}
-
-// Format time for display
-function formatTime(timestamp: number): string {
-  return new Date(timestamp).toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
-}
+import { type BloodPressureRecord } from "@/lib/db";
+import { useBloodPressureRecords, useAddBloodPressure, useDeleteBloodPressure } from "@/hooks/use-health-queries";
+import {
+  getCurrentDateTimeLocal,
+  dateTimeLocalToTimestamp,
+  formatDateTime,
+} from "@/lib/date-utils";
 
 // Format BP reading
 function formatBPReading(record: BloodPressureRecord): string {
@@ -63,14 +43,12 @@ export function BloodPressureCard() {
   const [arm, setArm] = useState<"left" | "right">("left");
   const [showTimeInput, setShowTimeInput] = useState(false);
   const [customTime, setCustomTime] = useState(getCurrentDateTimeLocal());
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  // Get recent BP records
-  const recentRecords = useLiveQuery(
-    () => db.bloodPressureRecords.orderBy("timestamp").reverse().limit(5).toArray(),
-    []
-  );
+  // Get recent BP records via TanStack Query
+  const { data: recentRecords, isLoading, error } = useBloodPressureRecords(5);
+  const addMutation = useAddBloodPressure();
+  const deleteMutation = useDeleteBloodPressure();
 
   const latestReading = recentRecords?.[0];
   const bpCategory = latestReading 
@@ -100,10 +78,9 @@ export function BloodPressureCard() {
       return;
     }
 
-    setIsSubmitting(true);
     try {
       const timestamp = showTimeInput ? dateTimeLocalToTimestamp(customTime) : undefined;
-      await addBloodPressureRecord(systolic, diastolic, position, arm, heartRate, timestamp);
+      await addMutation.mutateAsync({ systolic, diastolic, position, arm, heartRate, timestamp });
       toast({
         title: "Blood pressure recorded",
         description: `${systolic}/${diastolic} mmHg logged successfully`,
@@ -115,28 +92,28 @@ export function BloodPressureCard() {
       setShowTimeInput(false);
       setCustomTime(getCurrentDateTimeLocal());
     } catch (error) {
+      console.error("Failed to record blood pressure:", error);
       toast({
         title: "Error",
-        description: "Failed to record blood pressure",
+        description: error instanceof Error ? error.message : "Failed to record blood pressure",
         variant: "destructive",
       });
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
   const handleDelete = async (id: string) => {
     setDeletingId(id);
     try {
-      await deleteBloodPressureRecord(id);
+      await deleteMutation.mutateAsync(id);
       toast({
         title: "Entry deleted",
         description: "Blood pressure record removed",
       });
     } catch (error) {
+      console.error("Failed to delete blood pressure record:", error);
       toast({
         title: "Error",
-        description: "Could not delete entry",
+        description: error instanceof Error ? error.message : "Could not delete entry",
         variant: "destructive",
       });
     } finally {
@@ -155,7 +132,17 @@ export function BloodPressureCard() {
             </div>
             <span className="font-semibold text-lg uppercase tracking-wide">Blood Pressure</span>
           </div>
-          {latestReading && (
+          {isLoading ? (
+            <div className="animate-pulse text-right">
+              <div className="h-6 w-20 bg-rose-200 dark:bg-rose-800 rounded ml-auto" />
+              <div className="h-4 w-16 bg-muted rounded mt-1 ml-auto" />
+            </div>
+          ) : error ? (
+            <div className="text-sm text-red-500 flex items-center gap-1">
+              <AlertCircle className="w-4 h-4" />
+              <span>Failed to load</span>
+            </div>
+          ) : latestReading ? (
             <div className="text-right">
               <p className="text-lg font-bold text-rose-700 dark:text-rose-300">
                 {formatBPReading(latestReading)} <span className="text-sm font-normal">mmHg</span>
@@ -166,7 +153,7 @@ export function BloodPressureCard() {
                 </p>
               )}
             </div>
-          )}
+          ) : null}
         </div>
 
         {/* Input Section */}
@@ -320,10 +307,10 @@ export function BloodPressureCard() {
 
           <Button
             onClick={handleSubmit}
-            disabled={isSubmitting || !systolicInput || !diastolicInput}
+            disabled={addMutation.isPending || !systolicInput || !diastolicInput}
             className="w-full h-11 bg-rose-600 hover:bg-rose-700"
           >
-            {isSubmitting ? (
+            {addMutation.isPending ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                 Recording...
@@ -350,7 +337,7 @@ export function BloodPressureCard() {
                     className="flex items-center justify-between text-sm py-1"
                   >
                     <div className="flex flex-col">
-                      <span className="text-muted-foreground text-xs">{formatTime(record.timestamp)}</span>
+                      <span className="text-muted-foreground text-xs">{formatDateTime(record.timestamp)}</span>
                       <span className="text-xs text-muted-foreground/70">
                         {record.position} • {record.arm} arm
                         {record.heartRate && ` • ${record.heartRate} BPM`}

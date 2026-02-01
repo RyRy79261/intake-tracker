@@ -12,7 +12,8 @@ import { useDeleteIntake, useRecentIntakeRecords } from "@/hooks/use-intake-quer
 
 interface IntakeCardProps {
   type: "water" | "salt";
-  currentTotal: number;
+  dailyTotal: number;    // Primary - since day start (for budget tracking)
+  rollingTotal: number;  // Secondary - rolling 24h (for safety/pacing)
   limit: number;
   increment: number;
   onConfirm: (amount: number, timestamp?: number, note?: string) => Promise<void>;
@@ -21,7 +22,8 @@ interface IntakeCardProps {
 
 export function IntakeCard({
   type,
-  currentTotal,
+  dailyTotal,
+  rollingTotal,
   limit,
   increment,
   onConfirm,
@@ -42,9 +44,11 @@ export function IntakeCard({
   const icon = isWater ? Droplets : Sparkles;
   const Icon = icon;
 
-  const progressPercent = Math.min((currentTotal / limit) * 100, 100);
-  const isOverLimit = currentTotal > limit;
-  const wouldExceedLimit = currentTotal + pendingAmount > limit;
+  // Use daily total for budget tracking (primary metric)
+  // Guard against zero/negative limit to prevent division errors
+  const progressPercent = limit > 0 ? Math.min((dailyTotal / limit) * 100, 100) : 0;
+  const isOverLimit = limit > 0 && dailyTotal > limit;
+  const wouldExceedLimit = limit > 0 && dailyTotal + pendingAmount > limit;
 
   const handleIncrement = useCallback(() => {
     setPendingAmount((prev) => prev + increment);
@@ -175,12 +179,15 @@ export function IntakeCard({
                   "text-sm font-medium",
                   isOverLimit
                     ? "text-red-600 dark:text-red-400"
-                    : "text-muted-foreground"
+                    : "text-foreground"
                 )}
               >
-                {formatAmount(currentTotal, unit)} / {formatAmount(limit, unit)}
+                {formatAmount(dailyTotal, unit)} / {formatAmount(limit, unit)}
               </p>
-              <p className="text-xs text-muted-foreground">rolling 24h</p>
+              <p className="text-xs text-muted-foreground">today</p>
+              <p className="text-xs text-muted-foreground/70">
+                24h: {formatAmount(rollingTotal, unit)}
+              </p>
             </div>
           </div>
 

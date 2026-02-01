@@ -15,19 +15,10 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { Clock, ChevronDown, ChevronUp, StickyNote } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
-
-// Helper to get current datetime in local format for input
-function getCurrentDateTimeLocal(): string {
-  const now = new Date();
-  const offset = now.getTimezoneOffset();
-  const local = new Date(now.getTime() - offset * 60 * 1000);
-  return local.toISOString().slice(0, 16);
-}
-
-// Helper to convert datetime-local value to timestamp
-function dateTimeLocalToTimestamp(value: string): number {
-  return new Date(value).getTime();
-}
+import {
+  getCurrentDateTimeLocal,
+  dateTimeLocalToTimestamp,
+} from "@/lib/date-utils";
 
 interface ManualInputDialogProps {
   open: boolean;

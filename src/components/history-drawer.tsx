@@ -1,32 +1,17 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { EditIntakeDialog } from "@/components/edit-intake-dialog";
+import { EditWeightDialog } from "@/components/edit-weight-dialog";
+import { EditBloodPressureDialog } from "@/components/edit-blood-pressure-dialog";
 import {
   History,
   Droplets,
@@ -34,17 +19,18 @@ import {
   Trash2,
   Calendar,
   Loader2,
-  Lock,
   ChevronDown,
   Pencil,
   Scale,
   Heart,
 } from "lucide-react";
-import { type IntakeRecord, type WeightRecord, type BloodPressureRecord, db } from "@/lib/db";
+import { type IntakeRecord, type WeightRecord, type BloodPressureRecord } from "@/lib/db";
 import { getRecordsByCursor } from "@/lib/intake-service";
 import { getWeightRecords, deleteWeightRecord, getBloodPressureRecords, deleteBloodPressureRecord } from "@/lib/health-service";
 import { useUpdateIntake, useDeleteIntake } from "@/hooks/use-intake-queries";
+import { useUpdateWeight, useUpdateBloodPressure } from "@/hooks/use-health-queries";
 import { useToast } from "@/hooks/use-toast";
+import { useKeyboardAwareScroll } from "@/hooks/use-keyboard-scroll";
 import { usePinProtected } from "@/hooks/use-pin-gate";
 import { cn } from "@/lib/utils";
 
@@ -54,20 +40,13 @@ type UnifiedRecord =
   | { type: "weight"; record: WeightRecord }
   | { type: "bp"; record: BloodPressureRecord };
 
+import {
+  timestampToDateTimeLocal,
+  dateTimeLocalToTimestamp,
+  formatTimeOnly,
+} from "@/lib/date-utils";
+
 type FilterType = "all" | "water" | "salt" | "weight" | "bp";
-
-// Helper to convert timestamp to datetime-local format
-function timestampToDateTimeLocal(timestamp: number): string {
-  const date = new Date(timestamp);
-  const offset = date.getTimezoneOffset();
-  const local = new Date(date.getTime() - offset * 60 * 1000);
-  return local.toISOString().slice(0, 16);
-}
-
-// Helper to convert datetime-local value to timestamp
-function dateTimeLocalToTimestamp(value: string): number {
-  return new Date(value).getTime();
-}
 
 // Get timestamp from unified record
 function getRecordTimestamp(unified: UnifiedRecord): number {
@@ -101,16 +80,7 @@ function groupRecordsByDate(records: UnifiedRecord[]): Map<string, UnifiedRecord
   return groups;
 }
 
-// Format time from timestamp
-function formatTime(timestamp: number): string {
-  return new Date(timestamp).toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
-}
-
-// Simplified Record Row - shows only icon, measurement, timestamp, and action buttons
+// Record Row - clickable to edit, with action buttons
 function RecordRow({
   unified,
   onDelete,
@@ -122,7 +92,6 @@ function RecordRow({
   onEdit: () => void;
   isDeleting: boolean;
 }) {
-  // Determine icon, color, and measurement based on record type
   let icon: React.ReactNode;
   let measurement: string;
   let iconColor: string;
@@ -146,18 +115,34 @@ function RecordRow({
   }
 
   return (
-    <div className="flex items-center justify-between py-2 px-3 border-b border-border/50 hover:bg-muted/30 transition-colors">
+    <div 
+      className="flex items-center justify-between py-2 px-3 border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer"
+      onClick={onEdit}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onEdit();
+        }
+      }}
+    >
       <div className="flex items-center gap-3 min-w-0">
         <span className={iconColor}>{icon}</span>
         <span className="font-medium">{measurement}</span>
-        <span className="text-sm text-muted-foreground">{formatTime(unified.record.timestamp)}</span>
+        <span className="text-sm text-muted-foreground">{formatTimeOnly(unified.record.timestamp)}</span>
       </div>
-      <div className="flex items-center gap-1 shrink-0">
+      <div 
+        className="flex items-center gap-1 shrink-0"
+        onClick={(e) => e.stopPropagation()}
+      >
         <Button
           variant="ghost"
           size="icon"
           className="h-8 w-8 text-muted-foreground hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30"
           onClick={onEdit}
+          aria-label="Edit entry"
+          title="Edit entry"
         >
           <Pencil className="w-4 h-4" />
         </Button>
@@ -167,6 +152,8 @@ function RecordRow({
           className="h-8 w-8 text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
           onClick={onDelete}
           disabled={isDeleting}
+          aria-label="Delete entry"
+          title="Delete entry"
         >
           {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
         </Button>
@@ -175,20 +162,27 @@ function RecordRow({
   );
 }
 
-export function HistorySheet() {
+interface HistoryDrawerProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
   const { toast } = useToast();
+  const { onFocus: scrollOnFocus } = useKeyboardAwareScroll();
+  const { requirePin } = usePinProtected();
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [isOpen, setIsOpen] = useState(false);
-  const { requirePin, showLockedUI } = usePinProtected();
   const [filter, setFilter] = useState<FilterType>("all");
 
   // Mutations
   const updateMutation = useUpdateIntake();
   const deleteMutation = useDeleteIntake();
+  const updateWeightMutation = useUpdateWeight();
+  const updateBPMutation = useUpdateBloodPressure();
 
   // Unified records state
   const [records, setRecords] = useState<UnifiedRecord[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(1);
@@ -221,7 +215,6 @@ export function HistorySheet() {
     try {
       const pageSize = 30;
       
-      // Fetch all record types - each with its own error handling
       let intakeRecords: IntakeRecord[] = [];
       let weightRecordsData: WeightRecord[] = [];
       let bpRecordsData: BloodPressureRecord[] = [];
@@ -245,22 +238,23 @@ export function HistorySheet() {
         console.error("Failed to load BP records:", e);
       }
 
-      // Convert to unified records
       const unified: UnifiedRecord[] = [
         ...intakeRecords.map((r) => ({ type: "intake" as const, record: r })),
         ...weightRecordsData.map((r) => ({ type: "weight" as const, record: r })),
         ...bpRecordsData.map((r) => ({ type: "bp" as const, record: r })),
       ];
 
-      // Sort by timestamp descending
       unified.sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a));
 
-      // Paginate
       const start = (pageNum - 1) * pageSize;
       const end = start + pageSize;
-      const paginatedRecords = unified.slice(0, end);
 
-      setRecords(paginatedRecords);
+      if (isInitial) {
+        setRecords(unified.slice(0, pageSize));
+      } else {
+        const newPageRecords = unified.slice(start, end);
+        setRecords(prev => [...prev, ...newPageRecords]);
+      }
       setHasMore(end < unified.length);
       setPage(pageNum);
     } catch (error) {
@@ -275,6 +269,25 @@ export function HistorySheet() {
       setIsLoadingMore(false);
     }
   }, [toast]);
+
+  // Load records when drawer opens
+  useEffect(() => {
+    if (open) {
+      loadAllRecords(1);
+    }
+  }, [open, loadAllRecords]);
+
+  // Handle open change with PIN protection
+  const handleOpenChange = useCallback(async (newOpen: boolean) => {
+    if (newOpen) {
+      const unlocked = await requirePin();
+      if (unlocked) {
+        onOpenChange(true);
+      }
+    } else {
+      onOpenChange(false);
+    }
+  }, [requirePin, onOpenChange]);
 
   // Load more records
   const loadMoreRecords = useCallback(() => {
@@ -372,14 +385,21 @@ export function HistorySheet() {
         return;
       }
 
+      if (isNaN(newTimestamp)) {
+        toast({ title: "Invalid date/time", description: "Please enter a valid date and time", variant: "destructive" });
+        return;
+      }
+
       const recordToUpdate = editingIntake;
-      setEditingIntake(null);
 
       try {
         await updateMutation.mutateAsync({
           id: recordToUpdate.id,
           updates: { amount: newAmount, timestamp: newTimestamp, note: newNote },
         });
+
+        // Only clear state after successful mutation
+        setEditingIntake(null);
 
         setRecords((prev) => {
           const updated = prev.map((r) =>
@@ -391,11 +411,13 @@ export function HistorySheet() {
         });
 
         toast({ title: "Entry updated", description: "The intake record has been updated" });
-      } catch {
-        toast({ title: "Error", description: "Could not update the entry", variant: "destructive" });
+      } catch (error) {
+        console.error("Failed to update intake record:", error);
+        toast({ title: "Error", description: "Could not update the entry. Please try again.", variant: "destructive" });
+        // Dialog stays open so user can retry
       }
     },
-    [editingIntake, editAmount, editTimestamp, toast, updateMutation]
+    [editingIntake, editAmount, editTimestamp, editNote, toast, updateMutation]
   );
 
   const handleEditWeightSubmit = useCallback(
@@ -411,15 +433,25 @@ export function HistorySheet() {
         return;
       }
 
+      if (isNaN(newTimestamp)) {
+        toast({ title: "Invalid date/time", description: "Please enter a valid date and time", variant: "destructive" });
+        return;
+      }
+
       const recordToUpdate = editingWeight;
-      setEditingWeight(null);
 
       try {
-        await db.weightRecords.update(recordToUpdate.id, {
-          weight: newWeight,
-          timestamp: newTimestamp,
-          note: editNote || undefined,
+        await updateWeightMutation.mutateAsync({
+          id: recordToUpdate.id,
+          updates: {
+            weight: newWeight,
+            timestamp: newTimestamp,
+            note: editNote || undefined,
+          },
         });
+
+        // Only clear state after successful mutation
+        setEditingWeight(null);
 
         setRecords((prev) => {
           const updated = prev.map((r) =>
@@ -431,11 +463,13 @@ export function HistorySheet() {
         });
 
         toast({ title: "Entry updated", description: "The weight record has been updated" });
-      } catch {
-        toast({ title: "Error", description: "Could not update the entry", variant: "destructive" });
+      } catch (error) {
+        console.error("Failed to update weight record:", error);
+        toast({ title: "Error", description: "Could not update the entry. Please try again.", variant: "destructive" });
+        // Dialog stays open so user can retry
       }
     },
-    [editingWeight, editWeight, editTimestamp, editNote, toast]
+    [editingWeight, editWeight, editTimestamp, editNote, toast, updateWeightMutation]
   );
 
   const handleEditBPSubmit = useCallback(
@@ -453,19 +487,29 @@ export function HistorySheet() {
         return;
       }
 
+      if (isNaN(newTimestamp)) {
+        toast({ title: "Invalid date/time", description: "Please enter a valid date and time", variant: "destructive" });
+        return;
+      }
+
       const recordToUpdate = editingBP;
-      setEditingBP(null);
 
       try {
-        await db.bloodPressureRecords.update(recordToUpdate.id, {
-          systolic: newSystolic,
-          diastolic: newDiastolic,
-          heartRate: newHeartRate,
-          position: editPosition,
-          arm: editArm,
-          timestamp: newTimestamp,
-          note: editNote || undefined,
+        await updateBPMutation.mutateAsync({
+          id: recordToUpdate.id,
+          updates: {
+            systolic: newSystolic,
+            diastolic: newDiastolic,
+            heartRate: newHeartRate,
+            position: editPosition,
+            arm: editArm,
+            timestamp: newTimestamp,
+            note: editNote || undefined,
+          },
         });
+
+        // Only clear state after successful mutation
+        setEditingBP(null);
 
         setRecords((prev) => {
           const updated = prev.map((r) =>
@@ -489,30 +533,13 @@ export function HistorySheet() {
         });
 
         toast({ title: "Entry updated", description: "The blood pressure record has been updated" });
-      } catch {
-        toast({ title: "Error", description: "Could not update the entry", variant: "destructive" });
+      } catch (error) {
+        console.error("Failed to update blood pressure record:", error);
+        toast({ title: "Error", description: "Could not update the entry. Please try again.", variant: "destructive" });
+        // Dialog stays open so user can retry
       }
     },
-    [editingBP, editSystolic, editDiastolic, editHeartRate, editPosition, editArm, editTimestamp, editNote, toast]
-  );
-
-  // Handle sheet open with PIN check
-  const handleOpenChange = useCallback(
-    async (open: boolean) => {
-      if (open) {
-        const unlocked = await requirePin();
-        if (unlocked) {
-          setIsOpen(true);
-          setRecords([]);
-          setPage(1);
-          setHasMore(true);
-          loadAllRecords(1);
-        }
-      } else {
-        setIsOpen(false);
-      }
-    },
-    [requirePin, loadAllRecords]
+    [editingBP, editSystolic, editDiastolic, editHeartRate, editPosition, editArm, editTimestamp, editNote, toast, updateBPMutation]
   );
 
   // Filter records
@@ -530,46 +557,41 @@ export function HistorySheet() {
 
   return (
     <>
-      <Sheet open={isOpen} onOpenChange={handleOpenChange}>
-        <SheetTrigger asChild>
-          <Button variant="ghost" size="icon" className="shrink-0 relative">
-            <History className="w-5 h-5" />
-            {showLockedUI && <Lock className="w-3 h-3 absolute -top-0.5 -right-0.5 text-amber-500" />}
-            <span className="sr-only">History</span>
-          </Button>
-        </SheetTrigger>
-        <SheetContent side="full" className="overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>Health History</SheetTitle>
-            <SheetDescription>View and manage all your logged entries</SheetDescription>
-          </SheetHeader>
+      <Drawer open={open} onOpenChange={handleOpenChange} direction="bottom">
+        <DrawerContent direction="bottom" className="h-[96vh] flex flex-col">
+          {/* Fixed Header */}
+          <DrawerHeader className="border-b shrink-0">
+            <DrawerTitle>Health History</DrawerTitle>
+            <DrawerDescription>View and manage all your logged entries</DrawerDescription>
+            
+            {/* Filter Tabs */}
+            <div className="flex gap-1 pt-2 overflow-x-auto">
+              {(["all", "water", "salt", "weight", "bp"] as FilterType[]).map((f) => (
+                <Button
+                  key={f}
+                  variant={filter === f ? "default" : "outline"}
+                  size="sm"
+                  className={cn(
+                    "text-xs shrink-0",
+                    filter === f && f === "water" && "bg-sky-600 hover:bg-sky-700",
+                    filter === f && f === "salt" && "bg-amber-600 hover:bg-amber-700",
+                    filter === f && f === "weight" && "bg-emerald-600 hover:bg-emerald-700",
+                    filter === f && f === "bp" && "bg-rose-600 hover:bg-rose-700"
+                  )}
+                  onClick={() => setFilter(f)}
+                >
+                  {f === "all" && "All"}
+                  {f === "water" && "Water"}
+                  {f === "salt" && "Salt"}
+                  {f === "weight" && "Weight"}
+                  {f === "bp" && "BP"}
+                </Button>
+              ))}
+            </div>
+          </DrawerHeader>
 
-          {/* Filter Tabs */}
-          <div className="flex gap-1 py-4 overflow-x-auto">
-            {(["all", "water", "salt", "weight", "bp"] as FilterType[]).map((f) => (
-              <Button
-                key={f}
-                variant={filter === f ? "default" : "outline"}
-                size="sm"
-                className={cn(
-                  "text-xs shrink-0",
-                  filter === f && f === "water" && "bg-sky-600 hover:bg-sky-700",
-                  filter === f && f === "salt" && "bg-amber-600 hover:bg-amber-700",
-                  filter === f && f === "weight" && "bg-emerald-600 hover:bg-emerald-700",
-                  filter === f && f === "bp" && "bg-rose-600 hover:bg-rose-700"
-                )}
-                onClick={() => setFilter(f)}
-              >
-                {f === "all" && "All"}
-                {f === "water" && "Water"}
-                {f === "salt" && "Salt"}
-                {f === "weight" && "Weight"}
-                {f === "bp" && "BP"}
-              </Button>
-            ))}
-          </div>
-
-          <div className="pb-6">
+          {/* Scrollable Content */}
+          <div className="flex-1 overflow-y-auto p-6">
             {isLoading ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -640,217 +662,56 @@ export function HistorySheet() {
               </div>
             )}
           </div>
-        </SheetContent>
-      </Sheet>
+        </DrawerContent>
+      </Drawer>
 
-      {/* Edit Intake Dialog */}
-      <Dialog open={editingIntake !== null} onOpenChange={(open) => !open && setEditingIntake(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Edit {editingIntake?.type === "water" ? "Water" : "Salt"} Entry</DialogTitle>
-            <DialogDescription>Update the amount, time, or note for this entry</DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleEditIntakeSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="edit-amount">Amount ({editingIntake?.type === "water" ? "ml" : "mg"})</Label>
-              <Input
-                id="edit-amount"
-                type="number"
-                min="1"
-                step="1"
-                value={editAmount}
-                onChange={(e) => setEditAmount(e.target.value)}
-                className="text-lg h-12"
-                autoFocus
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-timestamp">Time</Label>
-              <Input
-                id="edit-timestamp"
-                type="datetime-local"
-                value={editTimestamp}
-                onChange={(e) => setEditTimestamp(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-intake-note">Note (optional)</Label>
-              <Input
-                id="edit-intake-note"
-                value={editNote}
-                onChange={(e) => setEditNote(e.target.value)}
-                placeholder="Add a note..."
-                maxLength={200}
-              />
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setEditingIntake(null)}>
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                className={cn(
-                  editingIntake?.type === "water" ? "bg-sky-600 hover:bg-sky-700" : "bg-amber-600 hover:bg-amber-700"
-                )}
-              >
-                Save Changes
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {/* Edit Dialogs */}
+      <EditIntakeDialog
+        record={editingIntake}
+        onClose={() => setEditingIntake(null)}
+        onSubmit={handleEditIntakeSubmit}
+        amount={editAmount}
+        onAmountChange={setEditAmount}
+        timestamp={editTimestamp}
+        onTimestampChange={setEditTimestamp}
+        note={editNote}
+        onNoteChange={setEditNote}
+        onFocus={scrollOnFocus}
+      />
 
-      {/* Edit Weight Dialog */}
-      <Dialog open={editingWeight !== null} onOpenChange={(open) => !open && setEditingWeight(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Edit Weight Entry</DialogTitle>
-            <DialogDescription>Update the weight, time, or note</DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleEditWeightSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="edit-weight">Weight (kg)</Label>
-              <Input
-                id="edit-weight"
-                type="number"
-                min="0.1"
-                step="0.1"
-                value={editWeight}
-                onChange={(e) => setEditWeight(e.target.value)}
-                className="text-lg h-12"
-                autoFocus
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-weight-timestamp">Time</Label>
-              <Input
-                id="edit-weight-timestamp"
-                type="datetime-local"
-                value={editTimestamp}
-                onChange={(e) => setEditTimestamp(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-weight-note">Note (optional)</Label>
-              <Input
-                id="edit-weight-note"
-                value={editNote}
-                onChange={(e) => setEditNote(e.target.value)}
-                placeholder="Add a note..."
-              />
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setEditingWeight(null)}>
-                Cancel
-              </Button>
-              <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700">
-                Save Changes
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <EditWeightDialog
+        record={editingWeight}
+        onClose={() => setEditingWeight(null)}
+        onSubmit={handleEditWeightSubmit}
+        weight={editWeight}
+        onWeightChange={setEditWeight}
+        timestamp={editTimestamp}
+        onTimestampChange={setEditTimestamp}
+        note={editNote}
+        onNoteChange={setEditNote}
+        onFocus={scrollOnFocus}
+      />
 
-      {/* Edit BP Dialog */}
-      <Dialog open={editingBP !== null} onOpenChange={(open) => !open && setEditingBP(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Edit Blood Pressure Entry</DialogTitle>
-            <DialogDescription>Update the blood pressure readings</DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleEditBPSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="edit-systolic">Systolic</Label>
-                <Input
-                  id="edit-systolic"
-                  type="number"
-                  min="60"
-                  max="300"
-                  value={editSystolic}
-                  onChange={(e) => setEditSystolic(e.target.value)}
-                  autoFocus
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-diastolic">Diastolic</Label>
-                <Input
-                  id="edit-diastolic"
-                  type="number"
-                  min="40"
-                  max="200"
-                  value={editDiastolic}
-                  onChange={(e) => setEditDiastolic(e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-heartrate">Heart Rate (optional)</Label>
-              <Input
-                id="edit-heartrate"
-                type="number"
-                min="30"
-                max="250"
-                value={editHeartRate}
-                onChange={(e) => setEditHeartRate(e.target.value)}
-                placeholder="BPM"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Position</Label>
-                <Select value={editPosition} onValueChange={(v) => setEditPosition(v as "sitting" | "standing")}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="sitting">Sitting</SelectItem>
-                    <SelectItem value="standing">Standing</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Arm</Label>
-                <Select value={editArm} onValueChange={(v) => setEditArm(v as "left" | "right")}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="left">Left</SelectItem>
-                    <SelectItem value="right">Right</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-bp-timestamp">Time</Label>
-              <Input
-                id="edit-bp-timestamp"
-                type="datetime-local"
-                value={editTimestamp}
-                onChange={(e) => setEditTimestamp(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-bp-note">Note (optional)</Label>
-              <Input
-                id="edit-bp-note"
-                value={editNote}
-                onChange={(e) => setEditNote(e.target.value)}
-                placeholder="Add a note..."
-              />
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setEditingBP(null)}>
-                Cancel
-              </Button>
-              <Button type="submit" className="bg-rose-600 hover:bg-rose-700">
-                Save Changes
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <EditBloodPressureDialog
+        record={editingBP}
+        onClose={() => setEditingBP(null)}
+        onSubmit={handleEditBPSubmit}
+        systolic={editSystolic}
+        onSystolicChange={setEditSystolic}
+        diastolic={editDiastolic}
+        onDiastolicChange={setEditDiastolic}
+        heartRate={editHeartRate}
+        onHeartRateChange={setEditHeartRate}
+        position={editPosition}
+        onPositionChange={setEditPosition}
+        arm={editArm}
+        onArmChange={setEditArm}
+        timestamp={editTimestamp}
+        onTimestampChange={setEditTimestamp}
+        note={editNote}
+        onNoteChange={setEditNote}
+        onFocus={scrollOnFocus}
+      />
     </>
   );
 }

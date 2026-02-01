@@ -33,10 +33,12 @@ function getQueryClient() {
 
 // Wrapper component that uses theme context to configure Privy
 function PrivyProviderWithTheme({ 
-  appId, 
+  appId,
+  clientId,
   children 
 }: { 
-  appId: string; 
+  appId: string;
+  clientId?: string;
   children: React.ReactNode 
 }) {
   const { resolvedTheme } = useTheme();
@@ -44,6 +46,7 @@ function PrivyProviderWithTheme({
   return (
     <PrivyProvider
       appId={appId}
+      clientId={clientId}
       config={{
         // Login methods to show in the modal
         loginMethods: ["email", "google"],
@@ -70,6 +73,7 @@ function PrivyProviderWithTheme({
 export function Providers({ children }: { children: React.ReactNode }) {
   const queryClient = getQueryClient();
   const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
+  const clientId = process.env.NEXT_PUBLIC_PRIVY_CLIENT_ID;
 
   if (!appId) {
     // If Privy is not configured, render children without auth
@@ -89,7 +93,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <PrivyProviderWithTheme appId={appId}>
+          <PrivyProviderWithTheme appId={appId} clientId={clientId}>
             {children}
           </PrivyProviderWithTheme>
         </ThemeProvider>

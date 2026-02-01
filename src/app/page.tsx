@@ -1,25 +1,30 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { motion, useScroll, useMotionValueEvent } from "motion/react";
+import { useScroll, useMotionValueEvent } from "motion/react";
 import { IntakeCard } from "@/components/intake-card";
 import { FoodCalculator } from "@/components/food-calculator";
 import { VoiceInput } from "@/components/voice-input";
-import { SettingsSheet } from "@/components/settings-sheet";
-import { HistorySheet } from "@/components/history-sheet";
 import { AuthGuard } from "@/components/auth-guard";
 import { WeightCard } from "@/components/weight-card";
 import { BloodPressureCard } from "@/components/blood-pressure-card";
+import { AppHeader } from "@/components/app-header";
+import { SettingsDrawer } from "@/components/settings-drawer";
+import { HistoryDrawer } from "@/components/history-drawer";
 import { useIntake } from "@/hooks/use-intake-queries";
 import { useSettings } from "@/hooks/use-settings";
+import { usePinProtected } from "@/hooks/use-pin-gate";
 import { Droplets } from "lucide-react";
 
 function HomeContent() {
   const [mounted, setMounted] = useState(false);
   const [headerHidden, setHeaderHidden] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const waterIntake = useIntake("water");
   const saltIntake = useIntake("salt");
   const settings = useSettings();
+  const { showLockedUI } = usePinProtected();
 
   // Scroll detection for hiding/showing header
   const { scrollY } = useScroll();
@@ -63,28 +68,25 @@ function HomeContent() {
   return (
     <>
       {/* Header - hides on scroll down, shows on scroll up */}
-      <motion.header
-        className="sticky top-0 z-40 -mx-4 px-4 py-4 mb-2 bg-gradient-to-b from-slate-50 to-slate-50/95 dark:from-slate-950 dark:to-slate-950/95 backdrop-blur-sm flex items-center justify-between"
-        animate={{ y: headerHidden ? "-100%" : 0 }}
-        transition={{ duration: 0.2, ease: "easeInOut" }}
-      >
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Intake Tracker</h1>
-          <p className="text-sm text-muted-foreground">
-            Rolling 24-hour monitoring
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <HistorySheet />
-          <SettingsSheet />
-        </div>
-      </motion.header>
+      <AppHeader
+        headerHidden={headerHidden}
+        showLockedUI={showLockedUI}
+        onHistoryClick={() => setHistoryOpen(true)}
+        onSettingsClick={() => setSettingsOpen(true)}
+      />
+
+      {/* Settings Drawer */}
+      <SettingsDrawer open={settingsOpen} onOpenChange={setSettingsOpen} />
+
+      {/* History Drawer */}
+      <HistoryDrawer open={historyOpen} onOpenChange={setHistoryOpen} />
 
         {/* Intake Cards */}
         <div className="space-y-4 mb-6">
           <IntakeCard
             type="water"
-            currentTotal={waterIntake.total}
+            dailyTotal={waterIntake.dailyTotal}
+            rollingTotal={waterIntake.rollingTotal}
             limit={settings.waterLimit}
             increment={settings.waterIncrement}
             onConfirm={(amount, timestamp, note) => handleAddWater(amount, "manual", timestamp, note)}
@@ -93,7 +95,8 @@ function HomeContent() {
 
           <IntakeCard
             type="salt"
-            currentTotal={saltIntake.total}
+            dailyTotal={saltIntake.dailyTotal}
+            rollingTotal={saltIntake.rollingTotal}
             limit={settings.saltLimit}
             increment={settings.saltIncrement}
             onConfirm={(amount, timestamp, note) => handleAddSalt(amount, "manual", timestamp, note)}
