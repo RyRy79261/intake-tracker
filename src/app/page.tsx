@@ -2,17 +2,18 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { motion, useScroll, useMotionValueEvent } from "motion/react";
+import Link from "next/link";
 import { IntakeCard } from "@/components/intake-card";
 import { FoodCalculator } from "@/components/food-calculator";
 import { VoiceInput } from "@/components/voice-input";
-import { SettingsSheet } from "@/components/settings-sheet";
-import { HistorySheet } from "@/components/history-sheet";
 import { AuthGuard } from "@/components/auth-guard";
 import { WeightCard } from "@/components/weight-card";
 import { BloodPressureCard } from "@/components/blood-pressure-card";
+import { Button } from "@/components/ui/button";
 import { useIntake } from "@/hooks/use-intake-queries";
 import { useSettings } from "@/hooks/use-settings";
-import { Droplets } from "lucide-react";
+import { usePinProtected } from "@/hooks/use-pin-gate";
+import { Droplets, History, Settings, Lock } from "lucide-react";
 
 function HomeContent() {
   const [mounted, setMounted] = useState(false);
@@ -20,6 +21,7 @@ function HomeContent() {
   const waterIntake = useIntake("water");
   const saltIntake = useIntake("salt");
   const settings = useSettings();
+  const { showLockedUI } = usePinProtected();
 
   // Scroll detection for hiding/showing header
   const { scrollY } = useScroll();
@@ -71,12 +73,24 @@ function HomeContent() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Intake Tracker</h1>
           <p className="text-sm text-muted-foreground">
-            Rolling 24-hour monitoring
+            Daily budget tracking
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <HistorySheet />
-          <SettingsSheet />
+          <Link href="/history">
+            <Button variant="ghost" size="icon" className="shrink-0 relative">
+              <History className="w-5 h-5" />
+              {showLockedUI && <Lock className="w-3 h-3 absolute -top-0.5 -right-0.5 text-amber-500" />}
+              <span className="sr-only">History</span>
+            </Button>
+          </Link>
+          <Link href="/settings">
+            <Button variant="ghost" size="icon" className="shrink-0 relative">
+              <Settings className="w-5 h-5" />
+              {showLockedUI && <Lock className="w-3 h-3 absolute -top-0.5 -right-0.5 text-amber-500" />}
+              <span className="sr-only">Settings</span>
+            </Button>
+          </Link>
         </div>
       </motion.header>
 
@@ -84,7 +98,8 @@ function HomeContent() {
         <div className="space-y-4 mb-6">
           <IntakeCard
             type="water"
-            currentTotal={waterIntake.total}
+            dailyTotal={waterIntake.dailyTotal}
+            rollingTotal={waterIntake.rollingTotal}
             limit={settings.waterLimit}
             increment={settings.waterIncrement}
             onConfirm={(amount, timestamp, note) => handleAddWater(amount, "manual", timestamp, note)}
@@ -93,7 +108,8 @@ function HomeContent() {
 
           <IntakeCard
             type="salt"
-            currentTotal={saltIntake.total}
+            dailyTotal={saltIntake.dailyTotal}
+            rollingTotal={saltIntake.rollingTotal}
             limit={settings.saltLimit}
             increment={settings.saltIncrement}
             onConfirm={(amount, timestamp, note) => handleAddSalt(amount, "manual", timestamp, note)}

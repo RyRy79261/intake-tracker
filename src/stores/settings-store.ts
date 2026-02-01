@@ -28,6 +28,10 @@ export interface Settings {
   
   // Data retention (days, 0 = keep forever)
   dataRetentionDays: number;
+  
+  // Day start hour for budget tracking (0-23, default 2 = 2am)
+  // Records after this hour count toward "today's" budget
+  dayStartHour: number;
 }
 
 interface SettingsActions {
@@ -41,6 +45,7 @@ interface SettingsActions {
   getDeobfuscatedAuthSecret: () => string;
   setTheme: (theme: "light" | "dark" | "system") => void;
   setDataRetentionDays: (days: number) => void;
+  setDayStartHour: (hour: number) => void;
   resetToDefaults: () => void;
 }
 
@@ -53,6 +58,7 @@ const defaultSettings: Settings = {
   aiAuthSecret: "",
   theme: "system",
   dataRetentionDays: 90, // Default: keep 90 days of data
+  dayStartHour: 2, // Default: 2am - day starts at 2am for budget tracking
 };
 
 export const useSettingsStore = create<Settings & SettingsActions>()(
@@ -87,6 +93,9 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
       
       setDataRetentionDays: (days) => 
         set({ dataRetentionDays: sanitizeNumericInput(days, 0, 365) }),
+      
+      setDayStartHour: (hour) =>
+        set({ dayStartHour: sanitizeNumericInput(hour, 0, 23) }),
 
       resetToDefaults: () => set(defaultSettings),
     }),

@@ -34,8 +34,10 @@ export const viewport: Viewport = {
 
 export default function RootLayout({
   children,
+  sheet,
 }: Readonly<{
   children: React.ReactNode;
+  sheet: React.ReactNode;
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
@@ -46,6 +48,7 @@ export default function RootLayout({
       <body className={`${outfit.variable} font-sans antialiased`}>
         <Providers>
           {children}
+          {sheet}
         </Providers>
         <UpdateNotification />
         <Toaster />
