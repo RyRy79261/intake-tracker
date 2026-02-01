@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Drawer, DrawerContent } from "@/components/ui/drawer";
 import { HistoryContent } from "@/components/history-content";
 import { usePinProtected } from "@/hooks/use-pin-gate";
 
@@ -30,12 +30,9 @@ export default function HistoryInterceptPage() {
   const handleOpenChange = (open: boolean) => {
     if (!open) {
       setIsOpen(false);
-      // Don't call router.back() here - let animation complete first
+      // Vaul handles animations internally, navigate after state change
+      router.back();
     }
-  };
-
-  const handleExitComplete = () => {
-    router.back();
   };
 
   // Don't render anything while checking PIN
@@ -44,10 +41,10 @@ export default function HistoryInterceptPage() {
   }
 
   return (
-    <Sheet open={isOpen} onOpenChange={handleOpenChange}>
-      <SheetContent side="full" open={isOpen} onExitComplete={handleExitComplete} className="overflow-y-auto">
+    <Drawer open={isOpen} onOpenChange={handleOpenChange} direction="bottom">
+      <DrawerContent direction="bottom" className="h-[96vh] overflow-y-auto p-6">
         <HistoryContent />
-      </SheetContent>
-    </Sheet>
+      </DrawerContent>
+    </Drawer>
   );
 }

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { motion, useScroll, useMotionValueEvent } from "motion/react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { IntakeCard } from "@/components/intake-card";
 import { FoodCalculator } from "@/components/food-calculator";
 import { VoiceInput } from "@/components/voice-input";
@@ -16,6 +17,7 @@ import { usePinProtected } from "@/hooks/use-pin-gate";
 import { Droplets, History, Settings, Lock } from "lucide-react";
 
 function HomeContent() {
+  const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [headerHidden, setHeaderHidden] = useState(false);
   const waterIntake = useIntake("water");
@@ -35,6 +37,12 @@ function HomeContent() {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Prefetch routes for faster navigation
+  useEffect(() => {
+    router.prefetch("/settings");
+    router.prefetch("/history");
+  }, [router]);
 
   const handleAddWater = useCallback(
     async (amount: number, source: string = "manual", timestamp?: number, note?: string) => {

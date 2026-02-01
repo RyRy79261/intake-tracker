@@ -16,26 +16,27 @@ const SheetClose = SheetPrimitive.Close;
 const SheetPortal = SheetPrimitive.Portal;
 
 // Animation variants for different sheet sides
+// Exit animations include opacity fade so UI becomes visible immediately
 const slideAnimationVariants = {
   right: {
-    initial: { x: "100%" },
-    animate: { x: 0 },
-    exit: { x: "100%" },
+    initial: { x: "100%", opacity: 1 },
+    animate: { x: 0, opacity: 1 },
+    exit: { x: "100%", opacity: 0 },
   },
   left: {
-    initial: { x: "-100%" },
-    animate: { x: 0 },
-    exit: { x: "-100%" },
+    initial: { x: "-100%", opacity: 1 },
+    animate: { x: 0, opacity: 1 },
+    exit: { x: "-100%", opacity: 0 },
   },
   top: {
-    initial: { y: "-100%" },
-    animate: { y: 0 },
-    exit: { y: "-100%" },
+    initial: { y: "-100%", opacity: 1 },
+    animate: { y: 0, opacity: 1 },
+    exit: { y: "-100%", opacity: 0 },
   },
   bottom: {
-    initial: { y: "100%" },
-    animate: { y: 0 },
-    exit: { y: "100%" },
+    initial: { y: "100%", opacity: 1 },
+    animate: { y: 0, opacity: 1 },
+    exit: { y: "100%", opacity: 0 },
   },
   full: {
     initial: { opacity: 0 },
@@ -118,8 +119,8 @@ const SheetContent = React.forwardRef<
                   animate="animate"
                   exit="exit"
                   transition={{
-                    duration: isFull ? 0.25 : 0.35,
-                    ease: "easeOut",
+                    duration: 0.15,
+                    ease: [0.4, 0, 1, 1],
                   }}
                 />
               </SheetPrimitive.Overlay>
@@ -132,8 +133,10 @@ const SheetContent = React.forwardRef<
                   animate="animate"
                   exit="exit"
                   transition={{
-                    duration: isFull ? 0.25 : 0.35,
-                    ease: [0.32, 0.72, 0, 1],
+                    // Slide takes longer, opacity fades fast so UI shows through immediately
+                    x: { duration: isFull ? 0.2 : 0.25, ease: [0.4, 0, 1, 1] },
+                    y: { duration: isFull ? 0.2 : 0.25, ease: [0.4, 0, 1, 1] },
+                    opacity: { duration: 0.1, ease: "easeOut" },
                   }}
                 >
                   {children}
