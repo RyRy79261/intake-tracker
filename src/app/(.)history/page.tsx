@@ -41,7 +41,7 @@ export default function HistoryInterceptPage() {
 
   return (
     <Sheet open={isOpen} onOpenChange={handleOpenChange}>
-      <SheetContent side="full" className="overflow-y-auto">
+      <SheetContent side="full" open={isOpen} className="overflow-y-auto">
         <HistoryContent />
       </SheetContent>
     </Sheet>

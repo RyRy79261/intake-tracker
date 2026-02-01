@@ -41,6 +41,7 @@ import { getRecordsByCursor } from "@/lib/intake-service";
 import { getWeightRecords, deleteWeightRecord, getBloodPressureRecords, deleteBloodPressureRecord } from "@/lib/health-service";
 import { useUpdateIntake, useDeleteIntake } from "@/hooks/use-intake-queries";
 import { useToast } from "@/hooks/use-toast";
+import { useKeyboardAwareScroll } from "@/hooks/use-keyboard-scroll";
 import { cn } from "@/lib/utils";
 
 // Unified record type for display
@@ -186,6 +187,7 @@ function RecordRow({
 
 export function HistoryContent() {
   const { toast } = useToast();
+  const { onFocus: scrollOnFocus } = useKeyboardAwareScroll();
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterType>("all");
 
@@ -642,6 +644,7 @@ export function HistoryContent() {
                 step="1"
                 value={editAmount}
                 onChange={(e) => setEditAmount(e.target.value)}
+                onFocus={scrollOnFocus}
                 className="text-lg h-12"
                 autoFocus
               />
@@ -653,6 +656,7 @@ export function HistoryContent() {
                 type="datetime-local"
                 value={editTimestamp}
                 onChange={(e) => setEditTimestamp(e.target.value)}
+                onFocus={scrollOnFocus}
               />
             </div>
             <div className="space-y-2">
@@ -661,6 +665,7 @@ export function HistoryContent() {
                 id="edit-intake-note"
                 value={editNote}
                 onChange={(e) => setEditNote(e.target.value)}
+                onFocus={scrollOnFocus}
                 placeholder="Add a note..."
                 maxLength={200}
               />
@@ -699,6 +704,7 @@ export function HistoryContent() {
                 step="0.1"
                 value={editWeight}
                 onChange={(e) => setEditWeight(e.target.value)}
+                onFocus={scrollOnFocus}
                 className="text-lg h-12"
                 autoFocus
               />
@@ -710,6 +716,7 @@ export function HistoryContent() {
                 type="datetime-local"
                 value={editTimestamp}
                 onChange={(e) => setEditTimestamp(e.target.value)}
+                onFocus={scrollOnFocus}
               />
             </div>
             <div className="space-y-2">
@@ -718,6 +725,7 @@ export function HistoryContent() {
                 id="edit-weight-note"
                 value={editNote}
                 onChange={(e) => setEditNote(e.target.value)}
+                onFocus={scrollOnFocus}
                 placeholder="Add a note..."
               />
             </div>
@@ -751,6 +759,7 @@ export function HistoryContent() {
                   max="300"
                   value={editSystolic}
                   onChange={(e) => setEditSystolic(e.target.value)}
+                  onFocus={scrollOnFocus}
                   autoFocus
                 />
               </div>
@@ -763,6 +772,7 @@ export function HistoryContent() {
                   max="200"
                   value={editDiastolic}
                   onChange={(e) => setEditDiastolic(e.target.value)}
+                  onFocus={scrollOnFocus}
                 />
               </div>
             </div>
@@ -775,6 +785,7 @@ export function HistoryContent() {
                 max="250"
                 value={editHeartRate}
                 onChange={(e) => setEditHeartRate(e.target.value)}
+                onFocus={scrollOnFocus}
                 placeholder="BPM"
               />
             </div>
@@ -811,6 +822,7 @@ export function HistoryContent() {
                 type="datetime-local"
                 value={editTimestamp}
                 onChange={(e) => setEditTimestamp(e.target.value)}
+                onFocus={scrollOnFocus}
               />
             </div>
             <div className="space-y-2">
@@ -819,6 +831,7 @@ export function HistoryContent() {
                 id="edit-bp-note"
                 value={editNote}
                 onChange={(e) => setEditNote(e.target.value)}
+                onFocus={scrollOnFocus}
                 placeholder="Add a note..."
               />
             </div>

@@ -41,7 +41,7 @@ export default function SettingsInterceptPage() {
 
   return (
     <Sheet open={isOpen} onOpenChange={handleOpenChange}>
-      <SheetContent className="overflow-y-auto">
+      <SheetContent open={isOpen} className="overflow-y-auto">
         <SettingsContent />
       </SheetContent>
     </Sheet>
