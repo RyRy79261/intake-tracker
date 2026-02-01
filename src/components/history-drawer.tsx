@@ -1,14 +1,13 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import {
   Dialog,
   DialogContent,
@@ -34,7 +33,6 @@ import {
   Trash2,
   Calendar,
   Loader2,
-  Lock,
   ChevronDown,
   Pencil,
   Scale,
@@ -45,6 +43,7 @@ import { getRecordsByCursor } from "@/lib/intake-service";
 import { getWeightRecords, deleteWeightRecord, getBloodPressureRecords, deleteBloodPressureRecord } from "@/lib/health-service";
 import { useUpdateIntake, useDeleteIntake } from "@/hooks/use-intake-queries";
 import { useToast } from "@/hooks/use-toast";
+import { useKeyboardAwareScroll } from "@/hooks/use-keyboard-scroll";
 import { usePinProtected } from "@/hooks/use-pin-gate";
 import { cn } from "@/lib/utils";
 
@@ -110,7 +109,7 @@ function formatTime(timestamp: number): string {
   });
 }
 
-// Simplified Record Row - shows only icon, measurement, timestamp, and action buttons
+// Record Row - clickable to edit, with action buttons
 function RecordRow({
   unified,
   onDelete,
@@ -122,7 +121,6 @@ function RecordRow({
   onEdit: () => void;
   isDeleting: boolean;
 }) {
-  // Determine icon, color, and measurement based on record type
   let icon: React.ReactNode;
   let measurement: string;
   let iconColor: string;
@@ -146,18 +144,34 @@ function RecordRow({
   }
 
   return (
-    <div className="flex items-center justify-between py-2 px-3 border-b border-border/50 hover:bg-muted/30 transition-colors">
+    <div 
+      className="flex items-center justify-between py-2 px-3 border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer"
+      onClick={onEdit}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onEdit();
+        }
+      }}
+    >
       <div className="flex items-center gap-3 min-w-0">
         <span className={iconColor}>{icon}</span>
         <span className="font-medium">{measurement}</span>
         <span className="text-sm text-muted-foreground">{formatTime(unified.record.timestamp)}</span>
       </div>
-      <div className="flex items-center gap-1 shrink-0">
+      <div 
+        className="flex items-center gap-1 shrink-0"
+        onClick={(e) => e.stopPropagation()}
+      >
         <Button
           variant="ghost"
           size="icon"
           className="h-8 w-8 text-muted-foreground hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30"
           onClick={onEdit}
+          aria-label="Edit entry"
+          title="Edit entry"
         >
           <Pencil className="w-4 h-4" />
         </Button>
@@ -167,6 +181,8 @@ function RecordRow({
           className="h-8 w-8 text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
           onClick={onDelete}
           disabled={isDeleting}
+          aria-label="Delete entry"
+          title="Delete entry"
         >
           {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
         </Button>
@@ -175,11 +191,16 @@ function RecordRow({
   );
 }
 
-export function HistorySheet() {
+interface HistoryDrawerProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
   const { toast } = useToast();
+  const { onFocus: scrollOnFocus } = useKeyboardAwareScroll();
+  const { requirePin } = usePinProtected();
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [isOpen, setIsOpen] = useState(false);
-  const { requirePin, showLockedUI } = usePinProtected();
   const [filter, setFilter] = useState<FilterType>("all");
 
   // Mutations
@@ -188,7 +209,7 @@ export function HistorySheet() {
 
   // Unified records state
   const [records, setRecords] = useState<UnifiedRecord[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(1);
@@ -221,7 +242,6 @@ export function HistorySheet() {
     try {
       const pageSize = 30;
       
-      // Fetch all record types - each with its own error handling
       let intakeRecords: IntakeRecord[] = [];
       let weightRecordsData: WeightRecord[] = [];
       let bpRecordsData: BloodPressureRecord[] = [];
@@ -245,22 +265,23 @@ export function HistorySheet() {
         console.error("Failed to load BP records:", e);
       }
 
-      // Convert to unified records
       const unified: UnifiedRecord[] = [
         ...intakeRecords.map((r) => ({ type: "intake" as const, record: r })),
         ...weightRecordsData.map((r) => ({ type: "weight" as const, record: r })),
         ...bpRecordsData.map((r) => ({ type: "bp" as const, record: r })),
       ];
 
-      // Sort by timestamp descending
       unified.sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a));
 
-      // Paginate
       const start = (pageNum - 1) * pageSize;
       const end = start + pageSize;
-      const paginatedRecords = unified.slice(0, end);
 
-      setRecords(paginatedRecords);
+      if (isInitial) {
+        setRecords(unified.slice(0, pageSize));
+      } else {
+        const newPageRecords = unified.slice(start, end);
+        setRecords(prev => [...prev, ...newPageRecords]);
+      }
       setHasMore(end < unified.length);
       setPage(pageNum);
     } catch (error) {
@@ -275,6 +296,25 @@ export function HistorySheet() {
       setIsLoadingMore(false);
     }
   }, [toast]);
+
+  // Load records when drawer opens
+  useEffect(() => {
+    if (open) {
+      loadAllRecords(1);
+    }
+  }, [open, loadAllRecords]);
+
+  // Handle open change with PIN protection
+  const handleOpenChange = useCallback(async (newOpen: boolean) => {
+    if (newOpen) {
+      const unlocked = await requirePin();
+      if (unlocked) {
+        onOpenChange(true);
+      }
+    } else {
+      onOpenChange(false);
+    }
+  }, [requirePin, onOpenChange]);
 
   // Load more records
   const loadMoreRecords = useCallback(() => {
@@ -372,6 +412,11 @@ export function HistorySheet() {
         return;
       }
 
+      if (isNaN(newTimestamp)) {
+        toast({ title: "Invalid date/time", description: "Please enter a valid date and time", variant: "destructive" });
+        return;
+      }
+
       const recordToUpdate = editingIntake;
       setEditingIntake(null);
 
@@ -395,7 +440,7 @@ export function HistorySheet() {
         toast({ title: "Error", description: "Could not update the entry", variant: "destructive" });
       }
     },
-    [editingIntake, editAmount, editTimestamp, toast, updateMutation]
+    [editingIntake, editAmount, editTimestamp, editNote, toast, updateMutation]
   );
 
   const handleEditWeightSubmit = useCallback(
@@ -408,6 +453,11 @@ export function HistorySheet() {
 
       if (isNaN(newWeight) || newWeight <= 0) {
         toast({ title: "Invalid weight", description: "Please enter a valid positive number", variant: "destructive" });
+        return;
+      }
+
+      if (isNaN(newTimestamp)) {
+        toast({ title: "Invalid date/time", description: "Please enter a valid date and time", variant: "destructive" });
         return;
       }
 
@@ -450,6 +500,11 @@ export function HistorySheet() {
 
       if (isNaN(newSystolic) || isNaN(newDiastolic) || newSystolic <= 0 || newDiastolic <= 0) {
         toast({ title: "Invalid values", description: "Please enter valid blood pressure readings", variant: "destructive" });
+        return;
+      }
+
+      if (isNaN(newTimestamp)) {
+        toast({ title: "Invalid date/time", description: "Please enter a valid date and time", variant: "destructive" });
         return;
       }
 
@@ -496,25 +551,6 @@ export function HistorySheet() {
     [editingBP, editSystolic, editDiastolic, editHeartRate, editPosition, editArm, editTimestamp, editNote, toast]
   );
 
-  // Handle sheet open with PIN check
-  const handleOpenChange = useCallback(
-    async (open: boolean) => {
-      if (open) {
-        const unlocked = await requirePin();
-        if (unlocked) {
-          setIsOpen(true);
-          setRecords([]);
-          setPage(1);
-          setHasMore(true);
-          loadAllRecords(1);
-        }
-      } else {
-        setIsOpen(false);
-      }
-    },
-    [requirePin, loadAllRecords]
-  );
-
   // Filter records
   const filteredRecords = records.filter((r) => {
     if (filter === "all") return true;
@@ -530,46 +566,41 @@ export function HistorySheet() {
 
   return (
     <>
-      <Sheet open={isOpen} onOpenChange={handleOpenChange}>
-        <SheetTrigger asChild>
-          <Button variant="ghost" size="icon" className="shrink-0 relative">
-            <History className="w-5 h-5" />
-            {showLockedUI && <Lock className="w-3 h-3 absolute -top-0.5 -right-0.5 text-amber-500" />}
-            <span className="sr-only">History</span>
-          </Button>
-        </SheetTrigger>
-        <SheetContent side="full" className="overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>Health History</SheetTitle>
-            <SheetDescription>View and manage all your logged entries</SheetDescription>
-          </SheetHeader>
+      <Drawer open={open} onOpenChange={handleOpenChange} direction="bottom">
+        <DrawerContent direction="bottom" className="h-[96vh] flex flex-col">
+          {/* Fixed Header */}
+          <DrawerHeader className="border-b shrink-0">
+            <DrawerTitle>Health History</DrawerTitle>
+            <DrawerDescription>View and manage all your logged entries</DrawerDescription>
+            
+            {/* Filter Tabs */}
+            <div className="flex gap-1 pt-2 overflow-x-auto">
+              {(["all", "water", "salt", "weight", "bp"] as FilterType[]).map((f) => (
+                <Button
+                  key={f}
+                  variant={filter === f ? "default" : "outline"}
+                  size="sm"
+                  className={cn(
+                    "text-xs shrink-0",
+                    filter === f && f === "water" && "bg-sky-600 hover:bg-sky-700",
+                    filter === f && f === "salt" && "bg-amber-600 hover:bg-amber-700",
+                    filter === f && f === "weight" && "bg-emerald-600 hover:bg-emerald-700",
+                    filter === f && f === "bp" && "bg-rose-600 hover:bg-rose-700"
+                  )}
+                  onClick={() => setFilter(f)}
+                >
+                  {f === "all" && "All"}
+                  {f === "water" && "Water"}
+                  {f === "salt" && "Salt"}
+                  {f === "weight" && "Weight"}
+                  {f === "bp" && "BP"}
+                </Button>
+              ))}
+            </div>
+          </DrawerHeader>
 
-          {/* Filter Tabs */}
-          <div className="flex gap-1 py-4 overflow-x-auto">
-            {(["all", "water", "salt", "weight", "bp"] as FilterType[]).map((f) => (
-              <Button
-                key={f}
-                variant={filter === f ? "default" : "outline"}
-                size="sm"
-                className={cn(
-                  "text-xs shrink-0",
-                  filter === f && f === "water" && "bg-sky-600 hover:bg-sky-700",
-                  filter === f && f === "salt" && "bg-amber-600 hover:bg-amber-700",
-                  filter === f && f === "weight" && "bg-emerald-600 hover:bg-emerald-700",
-                  filter === f && f === "bp" && "bg-rose-600 hover:bg-rose-700"
-                )}
-                onClick={() => setFilter(f)}
-              >
-                {f === "all" && "All"}
-                {f === "water" && "Water"}
-                {f === "salt" && "Salt"}
-                {f === "weight" && "Weight"}
-                {f === "bp" && "BP"}
-              </Button>
-            ))}
-          </div>
-
-          <div className="pb-6">
+          {/* Scrollable Content */}
+          <div className="flex-1 overflow-y-auto p-6">
             {isLoading ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -640,11 +671,11 @@ export function HistorySheet() {
               </div>
             )}
           </div>
-        </SheetContent>
-      </Sheet>
+        </DrawerContent>
+      </Drawer>
 
       {/* Edit Intake Dialog */}
-      <Dialog open={editingIntake !== null} onOpenChange={(open) => !open && setEditingIntake(null)}>
+      <Dialog open={editingIntake !== null} onOpenChange={(dialogOpen) => !dialogOpen && setEditingIntake(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Edit {editingIntake?.type === "water" ? "Water" : "Salt"} Entry</DialogTitle>
@@ -660,6 +691,7 @@ export function HistorySheet() {
                 step="1"
                 value={editAmount}
                 onChange={(e) => setEditAmount(e.target.value)}
+                onFocus={scrollOnFocus}
                 className="text-lg h-12"
                 autoFocus
               />
@@ -671,6 +703,7 @@ export function HistorySheet() {
                 type="datetime-local"
                 value={editTimestamp}
                 onChange={(e) => setEditTimestamp(e.target.value)}
+                onFocus={scrollOnFocus}
               />
             </div>
             <div className="space-y-2">
@@ -679,6 +712,7 @@ export function HistorySheet() {
                 id="edit-intake-note"
                 value={editNote}
                 onChange={(e) => setEditNote(e.target.value)}
+                onFocus={scrollOnFocus}
                 placeholder="Add a note..."
                 maxLength={200}
               />
@@ -701,7 +735,7 @@ export function HistorySheet() {
       </Dialog>
 
       {/* Edit Weight Dialog */}
-      <Dialog open={editingWeight !== null} onOpenChange={(open) => !open && setEditingWeight(null)}>
+      <Dialog open={editingWeight !== null} onOpenChange={(dialogOpen) => !dialogOpen && setEditingWeight(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Edit Weight Entry</DialogTitle>
@@ -717,6 +751,7 @@ export function HistorySheet() {
                 step="0.1"
                 value={editWeight}
                 onChange={(e) => setEditWeight(e.target.value)}
+                onFocus={scrollOnFocus}
                 className="text-lg h-12"
                 autoFocus
               />
@@ -728,6 +763,7 @@ export function HistorySheet() {
                 type="datetime-local"
                 value={editTimestamp}
                 onChange={(e) => setEditTimestamp(e.target.value)}
+                onFocus={scrollOnFocus}
               />
             </div>
             <div className="space-y-2">
@@ -736,6 +772,7 @@ export function HistorySheet() {
                 id="edit-weight-note"
                 value={editNote}
                 onChange={(e) => setEditNote(e.target.value)}
+                onFocus={scrollOnFocus}
                 placeholder="Add a note..."
               />
             </div>
@@ -752,7 +789,7 @@ export function HistorySheet() {
       </Dialog>
 
       {/* Edit BP Dialog */}
-      <Dialog open={editingBP !== null} onOpenChange={(open) => !open && setEditingBP(null)}>
+      <Dialog open={editingBP !== null} onOpenChange={(dialogOpen) => !dialogOpen && setEditingBP(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Edit Blood Pressure Entry</DialogTitle>
@@ -769,6 +806,7 @@ export function HistorySheet() {
                   max="300"
                   value={editSystolic}
                   onChange={(e) => setEditSystolic(e.target.value)}
+                  onFocus={scrollOnFocus}
                   autoFocus
                 />
               </div>
@@ -781,6 +819,7 @@ export function HistorySheet() {
                   max="200"
                   value={editDiastolic}
                   onChange={(e) => setEditDiastolic(e.target.value)}
+                  onFocus={scrollOnFocus}
                 />
               </div>
             </div>
@@ -793,6 +832,7 @@ export function HistorySheet() {
                 max="250"
                 value={editHeartRate}
                 onChange={(e) => setEditHeartRate(e.target.value)}
+                onFocus={scrollOnFocus}
                 placeholder="BPM"
               />
             </div>
@@ -829,6 +869,7 @@ export function HistorySheet() {
                 type="datetime-local"
                 value={editTimestamp}
                 onChange={(e) => setEditTimestamp(e.target.value)}
+                onFocus={scrollOnFocus}
               />
             </div>
             <div className="space-y-2">
@@ -837,6 +878,7 @@ export function HistorySheet() {
                 id="edit-bp-note"
                 value={editNote}
                 onChange={(e) => setEditNote(e.target.value)}
+                onFocus={scrollOnFocus}
                 placeholder="Add a note..."
               />
             </div>
