@@ -45,9 +45,10 @@ export function IntakeCard({
   const Icon = icon;
 
   // Use daily total for budget tracking (primary metric)
-  const progressPercent = Math.min((dailyTotal / limit) * 100, 100);
-  const isOverLimit = dailyTotal > limit;
-  const wouldExceedLimit = dailyTotal + pendingAmount > limit;
+  // Guard against zero/negative limit to prevent division errors
+  const progressPercent = limit > 0 ? Math.min((dailyTotal / limit) * 100, 100) : 0;
+  const isOverLimit = limit > 0 && dailyTotal > limit;
+  const wouldExceedLimit = limit > 0 && dailyTotal + pendingAmount > limit;
 
   const handleIncrement = useCallback(() => {
     setPendingAmount((prev) => prev + increment);

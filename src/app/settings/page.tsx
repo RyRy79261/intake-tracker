@@ -18,17 +18,32 @@ export default function SettingsPage() {
 
   // Check PIN on mount
   useEffect(() => {
+    let cancelled = false;
+
     const checkPin = async () => {
-      const unlocked = await requirePin();
-      if (unlocked) {
-        setIsUnlocked(true);
-      } else {
-        // PIN check failed, redirect to home
-        router.push("/");
+      try {
+        const unlocked = await requirePin();
+        if (cancelled) return;
+
+        if (unlocked) {
+          setIsUnlocked(true);
+        } else {
+          router.push("/");
+        }
+      } catch (error) {
+        console.error("PIN check failed:", error);
+        if (!cancelled) {
+          router.push("/");
+        }
+      } finally {
+        if (!cancelled) {
+          setIsChecking(false);
+        }
       }
-      setIsChecking(false);
     };
+
     checkPin();
+    return () => { cancelled = true; };
   }, [requirePin, router]);
 
   if (isChecking) {

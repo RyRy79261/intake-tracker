@@ -267,9 +267,13 @@ export function HistoryContent() {
       // Paginate
       const start = (pageNum - 1) * pageSize;
       const end = start + pageSize;
-      const paginatedRecords = unified.slice(0, end);
 
-      setRecords(paginatedRecords);
+      if (isInitial) {
+        setRecords(unified.slice(0, pageSize));
+      } else {
+        const newPageRecords = unified.slice(start, end);
+        setRecords(prev => [...prev, ...newPageRecords]);
+      }
       setHasMore(end < unified.length);
       setPage(pageNum);
     } catch (error) {
@@ -386,6 +390,11 @@ export function HistoryContent() {
         return;
       }
 
+      if (isNaN(newTimestamp)) {
+        toast({ title: "Invalid date/time", description: "Please enter a valid date and time", variant: "destructive" });
+        return;
+      }
+
       const recordToUpdate = editingIntake;
       setEditingIntake(null);
 
@@ -422,6 +431,11 @@ export function HistoryContent() {
 
       if (isNaN(newWeight) || newWeight <= 0) {
         toast({ title: "Invalid weight", description: "Please enter a valid positive number", variant: "destructive" });
+        return;
+      }
+
+      if (isNaN(newTimestamp)) {
+        toast({ title: "Invalid date/time", description: "Please enter a valid date and time", variant: "destructive" });
         return;
       }
 
@@ -464,6 +478,11 @@ export function HistoryContent() {
 
       if (isNaN(newSystolic) || isNaN(newDiastolic) || newSystolic <= 0 || newDiastolic <= 0) {
         toast({ title: "Invalid values", description: "Please enter valid blood pressure readings", variant: "destructive" });
+        return;
+      }
+
+      if (isNaN(newTimestamp)) {
+        toast({ title: "Invalid date/time", description: "Please enter a valid date and time", variant: "destructive" });
         return;
       }
 

@@ -77,20 +77,20 @@ function HomeContent() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Link href="/history">
-            <Button variant="ghost" size="icon" className="shrink-0 relative">
+          <Button variant="ghost" size="icon" className="shrink-0 relative" asChild>
+            <Link href="/history">
               <History className="w-5 h-5" />
               {showLockedUI && <Lock className="w-3 h-3 absolute -top-0.5 -right-0.5 text-amber-500" />}
               <span className="sr-only">History</span>
-            </Button>
-          </Link>
-          <Link href="/settings">
-            <Button variant="ghost" size="icon" className="shrink-0 relative">
+            </Link>
+          </Button>
+          <Button variant="ghost" size="icon" className="shrink-0 relative" asChild>
+            <Link href="/settings">
               <Settings className="w-5 h-5" />
               {showLockedUI && <Lock className="w-3 h-3 absolute -top-0.5 -right-0.5 text-amber-500" />}
               <span className="sr-only">Settings</span>
-            </Button>
-          </Link>
+            </Link>
+          </Button>
         </div>
       </motion.header>
 
