@@ -391,13 +391,15 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
       }
 
       const recordToUpdate = editingIntake;
-      setEditingIntake(null);
 
       try {
         await updateMutation.mutateAsync({
           id: recordToUpdate.id,
           updates: { amount: newAmount, timestamp: newTimestamp, note: newNote },
         });
+
+        // Only clear state after successful mutation
+        setEditingIntake(null);
 
         setRecords((prev) => {
           const updated = prev.map((r) =>
@@ -409,8 +411,10 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
         });
 
         toast({ title: "Entry updated", description: "The intake record has been updated" });
-      } catch {
-        toast({ title: "Error", description: "Could not update the entry", variant: "destructive" });
+      } catch (error) {
+        console.error("Failed to update intake record:", error);
+        toast({ title: "Error", description: "Could not update the entry. Please try again.", variant: "destructive" });
+        // Dialog stays open so user can retry
       }
     },
     [editingIntake, editAmount, editTimestamp, editNote, toast, updateMutation]
