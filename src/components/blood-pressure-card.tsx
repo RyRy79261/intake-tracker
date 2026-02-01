@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Heart, Check, Clock, ChevronDown, ChevronUp, Loader2, Trash2 } from "lucide-react";
+import { Heart, Check, Clock, ChevronDown, ChevronUp, Loader2, Trash2, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { type BloodPressureRecord } from "@/lib/db";
@@ -46,7 +46,7 @@ export function BloodPressureCard() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Get recent BP records via TanStack Query
-  const { data: recentRecords } = useBloodPressureRecords(5);
+  const { data: recentRecords, isLoading, error } = useBloodPressureRecords(5);
   const addMutation = useAddBloodPressure();
   const deleteMutation = useDeleteBloodPressure();
 
@@ -91,10 +91,11 @@ export function BloodPressureCard() {
       setHeartRateInput("");
       setShowTimeInput(false);
       setCustomTime(getCurrentDateTimeLocal());
-    } catch {
+    } catch (error) {
+      console.error("Failed to record blood pressure:", error);
       toast({
         title: "Error",
-        description: "Failed to record blood pressure",
+        description: error instanceof Error ? error.message : "Failed to record blood pressure",
         variant: "destructive",
       });
     }
@@ -108,10 +109,11 @@ export function BloodPressureCard() {
         title: "Entry deleted",
         description: "Blood pressure record removed",
       });
-    } catch {
+    } catch (error) {
+      console.error("Failed to delete blood pressure record:", error);
       toast({
         title: "Error",
-        description: "Could not delete entry",
+        description: error instanceof Error ? error.message : "Could not delete entry",
         variant: "destructive",
       });
     } finally {
@@ -130,7 +132,17 @@ export function BloodPressureCard() {
             </div>
             <span className="font-semibold text-lg uppercase tracking-wide">Blood Pressure</span>
           </div>
-          {latestReading && (
+          {isLoading ? (
+            <div className="animate-pulse text-right">
+              <div className="h-6 w-20 bg-rose-200 dark:bg-rose-800 rounded ml-auto" />
+              <div className="h-4 w-16 bg-muted rounded mt-1 ml-auto" />
+            </div>
+          ) : error ? (
+            <div className="text-sm text-red-500 flex items-center gap-1">
+              <AlertCircle className="w-4 h-4" />
+              <span>Failed to load</span>
+            </div>
+          ) : latestReading ? (
             <div className="text-right">
               <p className="text-lg font-bold text-rose-700 dark:text-rose-300">
                 {formatBPReading(latestReading)} <span className="text-sm font-normal">mmHg</span>
@@ -141,7 +153,7 @@ export function BloodPressureCard() {
                 </p>
               )}
             </div>
-          )}
+          ) : null}
         </div>
 
         {/* Input Section */}

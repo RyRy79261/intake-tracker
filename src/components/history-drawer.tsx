@@ -435,7 +435,6 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
       }
 
       const recordToUpdate = editingWeight;
-      setEditingWeight(null);
 
       try {
         await updateWeightMutation.mutateAsync({
@@ -447,6 +446,9 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
           },
         });
 
+        // Only clear state after successful mutation
+        setEditingWeight(null);
+
         setRecords((prev) => {
           const updated = prev.map((r) =>
             r.type === "weight" && r.record.id === recordToUpdate.id
@@ -457,8 +459,10 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
         });
 
         toast({ title: "Entry updated", description: "The weight record has been updated" });
-      } catch {
-        toast({ title: "Error", description: "Could not update the entry", variant: "destructive" });
+      } catch (error) {
+        console.error("Failed to update weight record:", error);
+        toast({ title: "Error", description: "Could not update the entry. Please try again.", variant: "destructive" });
+        // Dialog stays open so user can retry
       }
     },
     [editingWeight, editWeight, editTimestamp, editNote, toast, updateWeightMutation]
@@ -485,7 +489,6 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
       }
 
       const recordToUpdate = editingBP;
-      setEditingBP(null);
 
       try {
         await updateBPMutation.mutateAsync({
@@ -500,6 +503,9 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
             note: editNote || undefined,
           },
         });
+
+        // Only clear state after successful mutation
+        setEditingBP(null);
 
         setRecords((prev) => {
           const updated = prev.map((r) =>
@@ -523,8 +529,10 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
         });
 
         toast({ title: "Entry updated", description: "The blood pressure record has been updated" });
-      } catch {
-        toast({ title: "Error", description: "Could not update the entry", variant: "destructive" });
+      } catch (error) {
+        console.error("Failed to update blood pressure record:", error);
+        toast({ title: "Error", description: "Could not update the entry. Please try again.", variant: "destructive" });
+        // Dialog stays open so user can retry
       }
     },
     [editingBP, editSystolic, editDiastolic, editHeartRate, editPosition, editArm, editTimestamp, editNote, toast, updateBPMutation]

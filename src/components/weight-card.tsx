@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Scale, Check, Clock, ChevronDown, ChevronUp, Loader2, Trash2 } from "lucide-react";
+import { Scale, Check, Clock, ChevronDown, ChevronUp, Loader2, Trash2, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useWeightRecords, useAddWeight, useDeleteWeight } from "@/hooks/use-health-queries";
 import {
@@ -22,7 +22,7 @@ export function WeightCard() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Get recent weight records via TanStack Query
-  const { data: recentRecords } = useWeightRecords(5);
+  const { data: recentRecords, isLoading, error } = useWeightRecords(5);
   const addMutation = useAddWeight();
   const deleteMutation = useDeleteWeight();
 
@@ -50,10 +50,11 @@ export function WeightCard() {
       setWeightInput("");
       setShowTimeInput(false);
       setCustomTime(getCurrentDateTimeLocal());
-    } catch {
+    } catch (error) {
+      console.error("Failed to record weight:", error);
       toast({
         title: "Error",
-        description: "Failed to record weight",
+        description: error instanceof Error ? error.message : "Failed to record weight",
         variant: "destructive",
       });
     }
@@ -67,10 +68,11 @@ export function WeightCard() {
         title: "Entry deleted",
         description: "Weight record removed",
       });
-    } catch {
+    } catch (error) {
+      console.error("Failed to delete weight record:", error);
       toast({
         title: "Error",
-        description: "Could not delete entry",
+        description: error instanceof Error ? error.message : "Could not delete entry",
         variant: "destructive",
       });
     } finally {
@@ -89,7 +91,17 @@ export function WeightCard() {
             </div>
             <span className="font-semibold text-lg uppercase tracking-wide">Weight</span>
           </div>
-          {latestWeight && (
+          {isLoading ? (
+            <div className="animate-pulse text-right">
+              <div className="h-6 w-16 bg-emerald-200 dark:bg-emerald-800 rounded ml-auto" />
+              <div className="h-4 w-24 bg-muted rounded mt-1 ml-auto" />
+            </div>
+          ) : error ? (
+            <div className="text-sm text-red-500 flex items-center gap-1">
+              <AlertCircle className="w-4 h-4" />
+              <span>Failed to load</span>
+            </div>
+          ) : latestWeight ? (
             <div className="text-right">
               <p className="text-lg font-bold text-emerald-700 dark:text-emerald-300">
                 {latestWeight.weight} kg
@@ -98,7 +110,7 @@ export function WeightCard() {
                 {formatDateTime(latestWeight.timestamp)}
               </p>
             </div>
-          )}
+          ) : null}
         </div>
 
         {/* Input Section */}

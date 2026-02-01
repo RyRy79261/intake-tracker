@@ -26,9 +26,16 @@ export function timestampToDateTimeLocal(timestamp: number): string {
 
 /**
  * Convert a datetime-local input value to a Unix timestamp.
+ * @param value - A string in "YYYY-MM-DDTHH:mm" format (from HTML datetime-local input)
+ * @returns Unix timestamp in milliseconds
+ * @throws Error if the value cannot be parsed as a valid date
  */
 export function dateTimeLocalToTimestamp(value: string): number {
-  return new Date(value).getTime();
+  const timestamp = new Date(value).getTime();
+  if (isNaN(timestamp)) {
+    throw new Error(`Invalid date value: "${value}"`);
+  }
+  return timestamp;
 }
 
 /**

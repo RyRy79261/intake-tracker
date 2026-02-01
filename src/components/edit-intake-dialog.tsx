@@ -60,7 +60,12 @@ export function EditIntakeDialog({
               onFocus={onFocus}
               className="text-lg h-12"
               autoFocus
+              aria-required="true"
+              aria-describedby="edit-amount-desc"
             />
+            <p id="edit-amount-desc" className="sr-only">
+              Enter the {record?.type === "water" ? "water amount in milliliters" : "salt amount in milligrams"}
+            </p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="edit-timestamp">Time</Label>
@@ -70,7 +75,12 @@ export function EditIntakeDialog({
               value={timestamp}
               onChange={(e) => onTimestampChange(e.target.value)}
               onFocus={onFocus}
+              aria-required="true"
+              aria-describedby="edit-timestamp-desc"
             />
+            <p id="edit-timestamp-desc" className="sr-only">
+              Select the date and time when this was recorded
+            </p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="edit-intake-note">Note (optional)</Label>
@@ -81,7 +91,11 @@ export function EditIntakeDialog({
               onFocus={onFocus}
               placeholder="Add a note..."
               maxLength={200}
+              aria-describedby="edit-note-desc"
             />
+            <p id="edit-note-desc" className="sr-only">
+              Optional note, maximum 200 characters
+            </p>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>

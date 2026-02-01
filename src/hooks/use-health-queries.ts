@@ -13,7 +13,51 @@ import {
   deleteBloodPressureRecord,
 } from "@/lib/health-service";
 
+// ============================================================================
+// Mutation Parameter Types
+// ============================================================================
+
+export type AddWeightParams = {
+  weight: number;
+  timestamp?: number;
+  note?: string;
+};
+
+export type UpdateWeightParams = {
+  id: string;
+  updates: {
+    weight?: number;
+    timestamp?: number;
+    note?: string;
+  };
+};
+
+export type AddBloodPressureParams = {
+  systolic: number;
+  diastolic: number;
+  position: "sitting" | "standing";
+  arm: "left" | "right";
+  heartRate?: number;
+  timestamp?: number;
+  note?: string;
+};
+
+export type UpdateBloodPressureParams = {
+  id: string;
+  updates: {
+    systolic?: number;
+    diastolic?: number;
+    heartRate?: number;
+    position?: "sitting" | "standing";
+    arm?: "left" | "right";
+    timestamp?: number;
+    note?: string;
+  };
+};
+
+// ============================================================================
 // Query keys factory
+// ============================================================================
 export const healthKeys = {
   all: ["health"] as const,
   weight: () => [...healthKeys.all, "weight"] as const,
@@ -52,22 +96,48 @@ export function useLatestWeight() {
 }
 
 /**
- * Hook to add a weight record.
+ * Hook to add a weight record with optimistic updates.
  */
 export function useAddWeight() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({
-      weight,
-      timestamp,
-      note,
-    }: {
-      weight: number;
-      timestamp?: number;
-      note?: string;
-    }) => addWeightRecord(weight, timestamp, note),
-    onSuccess: () => {
+    mutationFn: (params: AddWeightParams) =>
+      addWeightRecord(params.weight, params.timestamp, params.note),
+    onMutate: async (newWeight) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: healthKeys.weight() });
+
+      // Snapshot the previous value
+      const previous = queryClient.getQueryData<WeightRecord[]>(
+        healthKeys.weightRecords(5)
+      );
+
+      // Optimistically update to the new value
+      queryClient.setQueryData<WeightRecord[]>(
+        healthKeys.weightRecords(5),
+        (old = []) => [
+          {
+            id: `temp-${Date.now()}`,
+            weight: newWeight.weight,
+            timestamp: newWeight.timestamp ?? Date.now(),
+            note: newWeight.note,
+          },
+          ...old.slice(0, 4),
+        ]
+      );
+
+      // Return context with the previous value
+      return { previous };
+    },
+    onError: (_err, _newWeight, context) => {
+      // Rollback to the previous value on error
+      if (context?.previous) {
+        queryClient.setQueryData(healthKeys.weightRecords(5), context.previous);
+      }
+    },
+    onSettled: () => {
+      // Refetch after error or success to ensure we have the correct data
       queryClient.invalidateQueries({ queryKey: healthKeys.weight() });
     },
   });
@@ -80,13 +150,8 @@ export function useUpdateWeight() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({
-      id,
-      updates,
-    }: {
-      id: string;
-      updates: { weight?: number; timestamp?: number; note?: string };
-    }) => updateWeightRecord(id, updates),
+    mutationFn: (params: UpdateWeightParams) =>
+      updateWeightRecord(params.id, params.updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: healthKeys.weight() });
     },
@@ -135,30 +200,60 @@ export function useLatestBloodPressure() {
 }
 
 /**
- * Hook to add a blood pressure record.
+ * Hook to add a blood pressure record with optimistic updates.
  */
 export function useAddBloodPressure() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({
-      systolic,
-      diastolic,
-      position,
-      arm,
-      heartRate,
-      timestamp,
-      note,
-    }: {
-      systolic: number;
-      diastolic: number;
-      position: "sitting" | "standing";
-      arm: "left" | "right";
-      heartRate?: number;
-      timestamp?: number;
-      note?: string;
-    }) => addBloodPressureRecord(systolic, diastolic, position, arm, heartRate, timestamp, note),
-    onSuccess: () => {
+    mutationFn: (params: AddBloodPressureParams) =>
+      addBloodPressureRecord(
+        params.systolic,
+        params.diastolic,
+        params.position,
+        params.arm,
+        params.heartRate,
+        params.timestamp,
+        params.note
+      ),
+    onMutate: async (newBP) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: healthKeys.bloodPressure() });
+
+      // Snapshot the previous value
+      const previous = queryClient.getQueryData<BloodPressureRecord[]>(
+        healthKeys.bpRecords(5)
+      );
+
+      // Optimistically update to the new value
+      queryClient.setQueryData<BloodPressureRecord[]>(
+        healthKeys.bpRecords(5),
+        (old = []) => [
+          {
+            id: `temp-${Date.now()}`,
+            systolic: newBP.systolic,
+            diastolic: newBP.diastolic,
+            position: newBP.position,
+            arm: newBP.arm,
+            heartRate: newBP.heartRate,
+            timestamp: newBP.timestamp ?? Date.now(),
+            note: newBP.note,
+          },
+          ...old.slice(0, 4),
+        ]
+      );
+
+      // Return context with the previous value
+      return { previous };
+    },
+    onError: (_err, _newBP, context) => {
+      // Rollback to the previous value on error
+      if (context?.previous) {
+        queryClient.setQueryData(healthKeys.bpRecords(5), context.previous);
+      }
+    },
+    onSettled: () => {
+      // Refetch after error or success to ensure we have the correct data
       queryClient.invalidateQueries({ queryKey: healthKeys.bloodPressure() });
     },
   });
@@ -171,21 +266,8 @@ export function useUpdateBloodPressure() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({
-      id,
-      updates,
-    }: {
-      id: string;
-      updates: {
-        systolic?: number;
-        diastolic?: number;
-        heartRate?: number;
-        position?: "sitting" | "standing";
-        arm?: "left" | "right";
-        timestamp?: number;
-        note?: string;
-      };
-    }) => updateBloodPressureRecord(id, updates),
+    mutationFn: (params: UpdateBloodPressureParams) =>
+      updateBloodPressureRecord(params.id, params.updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: healthKeys.bloodPressure() });
     },

@@ -59,7 +59,12 @@ export function EditWeightDialog({
               onFocus={onFocus}
               className="text-lg h-12"
               autoFocus
+              aria-required="true"
+              aria-describedby="edit-weight-desc"
             />
+            <p id="edit-weight-desc" className="sr-only">
+              Enter weight in kilograms, e.g. 75.5
+            </p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="edit-weight-timestamp">Time</Label>
@@ -69,7 +74,12 @@ export function EditWeightDialog({
               value={timestamp}
               onChange={(e) => onTimestampChange(e.target.value)}
               onFocus={onFocus}
+              aria-required="true"
+              aria-describedby="edit-weight-timestamp-desc"
             />
+            <p id="edit-weight-timestamp-desc" className="sr-only">
+              Select the date and time when the weight was measured
+            </p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="edit-weight-note">Note (optional)</Label>
@@ -79,7 +89,11 @@ export function EditWeightDialog({
               onChange={(e) => onNoteChange(e.target.value)}
               onFocus={onFocus}
               placeholder="Add a note..."
+              aria-describedby="edit-weight-note-desc"
             />
+            <p id="edit-weight-note-desc" className="sr-only">
+              Optional note for additional context
+            </p>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>
