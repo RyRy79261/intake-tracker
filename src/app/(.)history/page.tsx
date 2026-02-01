@@ -30,7 +30,12 @@ export default function HistoryInterceptPage() {
   const handleOpenChange = (open: boolean) => {
     if (!open) {
       setIsOpen(false);
-      // Vaul handles animations internally, navigate after state change
+      // Navigation happens in onAnimationEnd to wait for exit animation
+    }
+  };
+
+  const handleAnimationEnd = (open: boolean) => {
+    if (!open) {
       router.back();
     }
   };
@@ -41,9 +46,17 @@ export default function HistoryInterceptPage() {
   }
 
   return (
-    <Drawer open={isOpen} onOpenChange={handleOpenChange} direction="bottom">
+    <Drawer
+      open={isOpen}
+      onOpenChange={handleOpenChange}
+      onAnimationEnd={handleAnimationEnd}
+      direction="bottom"
+      handleOnly={true}
+    >
       <DrawerContent direction="bottom" className="h-[96vh] overflow-y-auto p-6">
-        <HistoryContent />
+        <div data-vaul-no-drag className="h-full overflow-y-auto">
+          <HistoryContent />
+        </div>
       </DrawerContent>
     </Drawer>
   );

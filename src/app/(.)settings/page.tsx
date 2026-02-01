@@ -30,7 +30,12 @@ export default function SettingsInterceptPage() {
   const handleOpenChange = (open: boolean) => {
     if (!open) {
       setIsOpen(false);
-      // Vaul handles animations internally, navigate after state change
+      // Navigation happens in onAnimationEnd to wait for exit animation
+    }
+  };
+
+  const handleAnimationEnd = (open: boolean) => {
+    if (!open) {
       router.back();
     }
   };
@@ -41,9 +46,17 @@ export default function SettingsInterceptPage() {
   }
 
   return (
-    <Drawer open={isOpen} onOpenChange={handleOpenChange} direction="right" dismissible={false}>
+    <Drawer
+      open={isOpen}
+      onOpenChange={handleOpenChange}
+      onAnimationEnd={handleAnimationEnd}
+      direction="right"
+      handleOnly={true}
+    >
       <DrawerContent direction="right" className="overflow-y-auto p-6">
-        <SettingsContent />
+        <div data-vaul-no-drag className="h-full overflow-y-auto">
+          <SettingsContent />
+        </div>
       </DrawerContent>
     </Drawer>
   );
