@@ -100,33 +100,67 @@ const SheetContent = React.forwardRef<
   const variants = slideAnimationVariants[side || "right"];
   const isFull = side === "full";
   
+  // For controlled sheets, we render the portal always and let AnimatePresence handle exit
+  if (isControlled) {
+    return (
+      <SheetPortal forceMount>
+        <AnimatePresence>
+          {open && (
+            <>
+              <SheetPrimitive.Overlay asChild forceMount>
+                <motion.div
+                  key="sheet-overlay"
+                  className="fixed inset-0 z-50 bg-black/80"
+                  variants={overlayVariants}
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                  transition={{ duration: 0.3 }}
+                />
+              </SheetPrimitive.Overlay>
+              <SheetPrimitive.Content asChild ref={ref} forceMount {...props}>
+                <motion.div
+                  key="sheet-content"
+                  className={cn(sheetVariants({ side }), className)}
+                  variants={variants}
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                  transition={{
+                    duration: isFull ? 0.3 : 0.45,
+                    ease: [0.32, 0.72, 0, 1],
+                  }}
+                >
+                  {children}
+                  <SheetPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary">
+                    <X className="h-4 w-4" />
+                    <span className="sr-only">Close</span>
+                  </SheetPrimitive.Close>
+                </motion.div>
+              </SheetPrimitive.Content>
+            </>
+          )}
+        </AnimatePresence>
+      </SheetPortal>
+    );
+  }
+  
+  // For uncontrolled sheets, use Radix's built-in state management with CSS animations
   return (
-    <AnimatePresence>
-      {open !== false && (
-        <SheetPortal forceMount>
-          <SheetOverlay {...(isControlled && { forceMount: true })} />
-          <SheetPrimitive.Content asChild ref={ref} {...(isControlled && { forceMount: true })} {...props}>
-            <motion.div
-              className={cn(sheetVariants({ side }), className)}
-              variants={variants}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              transition={{
-                duration: isFull ? 0.3 : 0.45,
-                ease: [0.32, 0.72, 0, 1], // Custom easing for smooth slide
-              }}
-            >
-              {children}
-              <SheetPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary">
-                <X className="h-4 w-4" />
-                <span className="sr-only">Close</span>
-              </SheetPrimitive.Close>
-            </motion.div>
-          </SheetPrimitive.Content>
-        </SheetPortal>
-      )}
-    </AnimatePresence>
+    <SheetPortal>
+      <SheetOverlay />
+      <SheetPrimitive.Content
+        ref={ref}
+        className={cn(sheetVariants({ side }), className)}
+        {...props}
+      >
+        {children}
+        <SheetPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary">
+          <X className="h-4 w-4" />
+          <span className="sr-only">Close</span>
+        </SheetPrimitive.Close>
+      </SheetPrimitive.Content>
+    </SheetPortal>
   );
 });
 SheetContent.displayName = SheetPrimitive.Content.displayName;
