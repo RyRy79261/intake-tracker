@@ -38,6 +38,13 @@ export async function deleteWeightRecord(id: string): Promise<void> {
   await db.weightRecords.delete(id);
 }
 
+export async function updateWeightRecord(
+  id: string,
+  updates: { weight?: number; timestamp?: number; note?: string }
+): Promise<void> {
+  await db.weightRecords.update(id, updates);
+}
+
 // Blood Pressure Records
 
 export async function addBloodPressureRecord(
@@ -81,6 +88,21 @@ export async function getLatestBloodPressureRecord(): Promise<BloodPressureRecor
 
 export async function deleteBloodPressureRecord(id: string): Promise<void> {
   await db.bloodPressureRecords.delete(id);
+}
+
+export async function updateBloodPressureRecord(
+  id: string,
+  updates: {
+    systolic?: number;
+    diastolic?: number;
+    heartRate?: number;
+    position?: "sitting" | "standing";
+    arm?: "left" | "right";
+    timestamp?: number;
+    note?: string;
+  }
+): Promise<void> {
+  await db.bloodPressureRecords.update(id, updates);
 }
 
 // Pagination helpers

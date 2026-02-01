@@ -8,24 +8,10 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "@/components/ui/drawer";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { EditIntakeDialog } from "@/components/edit-intake-dialog";
+import { EditWeightDialog } from "@/components/edit-weight-dialog";
+import { EditBloodPressureDialog } from "@/components/edit-blood-pressure-dialog";
 import {
   History,
   Droplets,
@@ -38,10 +24,11 @@ import {
   Scale,
   Heart,
 } from "lucide-react";
-import { type IntakeRecord, type WeightRecord, type BloodPressureRecord, db } from "@/lib/db";
+import { type IntakeRecord, type WeightRecord, type BloodPressureRecord } from "@/lib/db";
 import { getRecordsByCursor } from "@/lib/intake-service";
 import { getWeightRecords, deleteWeightRecord, getBloodPressureRecords, deleteBloodPressureRecord } from "@/lib/health-service";
 import { useUpdateIntake, useDeleteIntake } from "@/hooks/use-intake-queries";
+import { useUpdateWeight, useUpdateBloodPressure } from "@/hooks/use-health-queries";
 import { useToast } from "@/hooks/use-toast";
 import { useKeyboardAwareScroll } from "@/hooks/use-keyboard-scroll";
 import { usePinProtected } from "@/hooks/use-pin-gate";
@@ -53,20 +40,13 @@ type UnifiedRecord =
   | { type: "weight"; record: WeightRecord }
   | { type: "bp"; record: BloodPressureRecord };
 
+import {
+  timestampToDateTimeLocal,
+  dateTimeLocalToTimestamp,
+  formatTimeOnly,
+} from "@/lib/date-utils";
+
 type FilterType = "all" | "water" | "salt" | "weight" | "bp";
-
-// Helper to convert timestamp to datetime-local format
-function timestampToDateTimeLocal(timestamp: number): string {
-  const date = new Date(timestamp);
-  const offset = date.getTimezoneOffset();
-  const local = new Date(date.getTime() - offset * 60 * 1000);
-  return local.toISOString().slice(0, 16);
-}
-
-// Helper to convert datetime-local value to timestamp
-function dateTimeLocalToTimestamp(value: string): number {
-  return new Date(value).getTime();
-}
 
 // Get timestamp from unified record
 function getRecordTimestamp(unified: UnifiedRecord): number {
@@ -98,15 +78,6 @@ function groupRecordsByDate(records: UnifiedRecord[]): Map<string, UnifiedRecord
   }
 
   return groups;
-}
-
-// Format time from timestamp
-function formatTime(timestamp: number): string {
-  return new Date(timestamp).toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
 }
 
 // Record Row - clickable to edit, with action buttons
@@ -159,7 +130,7 @@ function RecordRow({
       <div className="flex items-center gap-3 min-w-0">
         <span className={iconColor}>{icon}</span>
         <span className="font-medium">{measurement}</span>
-        <span className="text-sm text-muted-foreground">{formatTime(unified.record.timestamp)}</span>
+        <span className="text-sm text-muted-foreground">{formatTimeOnly(unified.record.timestamp)}</span>
       </div>
       <div 
         className="flex items-center gap-1 shrink-0"
@@ -206,6 +177,8 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
   // Mutations
   const updateMutation = useUpdateIntake();
   const deleteMutation = useDeleteIntake();
+  const updateWeightMutation = useUpdateWeight();
+  const updateBPMutation = useUpdateBloodPressure();
 
   // Unified records state
   const [records, setRecords] = useState<UnifiedRecord[]>([]);
@@ -465,10 +438,13 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
       setEditingWeight(null);
 
       try {
-        await db.weightRecords.update(recordToUpdate.id, {
-          weight: newWeight,
-          timestamp: newTimestamp,
-          note: editNote || undefined,
+        await updateWeightMutation.mutateAsync({
+          id: recordToUpdate.id,
+          updates: {
+            weight: newWeight,
+            timestamp: newTimestamp,
+            note: editNote || undefined,
+          },
         });
 
         setRecords((prev) => {
@@ -485,7 +461,7 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
         toast({ title: "Error", description: "Could not update the entry", variant: "destructive" });
       }
     },
-    [editingWeight, editWeight, editTimestamp, editNote, toast]
+    [editingWeight, editWeight, editTimestamp, editNote, toast, updateWeightMutation]
   );
 
   const handleEditBPSubmit = useCallback(
@@ -512,14 +488,17 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
       setEditingBP(null);
 
       try {
-        await db.bloodPressureRecords.update(recordToUpdate.id, {
-          systolic: newSystolic,
-          diastolic: newDiastolic,
-          heartRate: newHeartRate,
-          position: editPosition,
-          arm: editArm,
-          timestamp: newTimestamp,
-          note: editNote || undefined,
+        await updateBPMutation.mutateAsync({
+          id: recordToUpdate.id,
+          updates: {
+            systolic: newSystolic,
+            diastolic: newDiastolic,
+            heartRate: newHeartRate,
+            position: editPosition,
+            arm: editArm,
+            timestamp: newTimestamp,
+            note: editNote || undefined,
+          },
         });
 
         setRecords((prev) => {
@@ -548,7 +527,7 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
         toast({ title: "Error", description: "Could not update the entry", variant: "destructive" });
       }
     },
-    [editingBP, editSystolic, editDiastolic, editHeartRate, editPosition, editArm, editTimestamp, editNote, toast]
+    [editingBP, editSystolic, editDiastolic, editHeartRate, editPosition, editArm, editTimestamp, editNote, toast, updateBPMutation]
   );
 
   // Filter records
@@ -674,225 +653,53 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
         </DrawerContent>
       </Drawer>
 
-      {/* Edit Intake Dialog */}
-      <Dialog open={editingIntake !== null} onOpenChange={(dialogOpen) => !dialogOpen && setEditingIntake(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Edit {editingIntake?.type === "water" ? "Water" : "Salt"} Entry</DialogTitle>
-            <DialogDescription>Update the amount, time, or note for this entry</DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleEditIntakeSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="edit-amount">Amount ({editingIntake?.type === "water" ? "ml" : "mg"})</Label>
-              <Input
-                id="edit-amount"
-                type="number"
-                min="1"
-                step="1"
-                value={editAmount}
-                onChange={(e) => setEditAmount(e.target.value)}
-                onFocus={scrollOnFocus}
-                className="text-lg h-12"
-                autoFocus
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-timestamp">Time</Label>
-              <Input
-                id="edit-timestamp"
-                type="datetime-local"
-                value={editTimestamp}
-                onChange={(e) => setEditTimestamp(e.target.value)}
-                onFocus={scrollOnFocus}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-intake-note">Note (optional)</Label>
-              <Input
-                id="edit-intake-note"
-                value={editNote}
-                onChange={(e) => setEditNote(e.target.value)}
-                onFocus={scrollOnFocus}
-                placeholder="Add a note..."
-                maxLength={200}
-              />
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setEditingIntake(null)}>
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                className={cn(
-                  editingIntake?.type === "water" ? "bg-sky-600 hover:bg-sky-700" : "bg-amber-600 hover:bg-amber-700"
-                )}
-              >
-                Save Changes
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {/* Edit Dialogs */}
+      <EditIntakeDialog
+        record={editingIntake}
+        onClose={() => setEditingIntake(null)}
+        onSubmit={handleEditIntakeSubmit}
+        amount={editAmount}
+        onAmountChange={setEditAmount}
+        timestamp={editTimestamp}
+        onTimestampChange={setEditTimestamp}
+        note={editNote}
+        onNoteChange={setEditNote}
+        onFocus={scrollOnFocus}
+      />
 
-      {/* Edit Weight Dialog */}
-      <Dialog open={editingWeight !== null} onOpenChange={(dialogOpen) => !dialogOpen && setEditingWeight(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Edit Weight Entry</DialogTitle>
-            <DialogDescription>Update the weight, time, or note</DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleEditWeightSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="edit-weight">Weight (kg)</Label>
-              <Input
-                id="edit-weight"
-                type="number"
-                min="0.1"
-                step="0.1"
-                value={editWeight}
-                onChange={(e) => setEditWeight(e.target.value)}
-                onFocus={scrollOnFocus}
-                className="text-lg h-12"
-                autoFocus
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-weight-timestamp">Time</Label>
-              <Input
-                id="edit-weight-timestamp"
-                type="datetime-local"
-                value={editTimestamp}
-                onChange={(e) => setEditTimestamp(e.target.value)}
-                onFocus={scrollOnFocus}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-weight-note">Note (optional)</Label>
-              <Input
-                id="edit-weight-note"
-                value={editNote}
-                onChange={(e) => setEditNote(e.target.value)}
-                onFocus={scrollOnFocus}
-                placeholder="Add a note..."
-              />
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setEditingWeight(null)}>
-                Cancel
-              </Button>
-              <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700">
-                Save Changes
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <EditWeightDialog
+        record={editingWeight}
+        onClose={() => setEditingWeight(null)}
+        onSubmit={handleEditWeightSubmit}
+        weight={editWeight}
+        onWeightChange={setEditWeight}
+        timestamp={editTimestamp}
+        onTimestampChange={setEditTimestamp}
+        note={editNote}
+        onNoteChange={setEditNote}
+        onFocus={scrollOnFocus}
+      />
 
-      {/* Edit BP Dialog */}
-      <Dialog open={editingBP !== null} onOpenChange={(dialogOpen) => !dialogOpen && setEditingBP(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Edit Blood Pressure Entry</DialogTitle>
-            <DialogDescription>Update the blood pressure readings</DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleEditBPSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="edit-systolic">Systolic</Label>
-                <Input
-                  id="edit-systolic"
-                  type="number"
-                  min="60"
-                  max="300"
-                  value={editSystolic}
-                  onChange={(e) => setEditSystolic(e.target.value)}
-                  onFocus={scrollOnFocus}
-                  autoFocus
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-diastolic">Diastolic</Label>
-                <Input
-                  id="edit-diastolic"
-                  type="number"
-                  min="40"
-                  max="200"
-                  value={editDiastolic}
-                  onChange={(e) => setEditDiastolic(e.target.value)}
-                  onFocus={scrollOnFocus}
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-heartrate">Heart Rate (optional)</Label>
-              <Input
-                id="edit-heartrate"
-                type="number"
-                min="30"
-                max="250"
-                value={editHeartRate}
-                onChange={(e) => setEditHeartRate(e.target.value)}
-                onFocus={scrollOnFocus}
-                placeholder="BPM"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Position</Label>
-                <Select value={editPosition} onValueChange={(v) => setEditPosition(v as "sitting" | "standing")}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="sitting">Sitting</SelectItem>
-                    <SelectItem value="standing">Standing</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Arm</Label>
-                <Select value={editArm} onValueChange={(v) => setEditArm(v as "left" | "right")}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="left">Left</SelectItem>
-                    <SelectItem value="right">Right</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-bp-timestamp">Time</Label>
-              <Input
-                id="edit-bp-timestamp"
-                type="datetime-local"
-                value={editTimestamp}
-                onChange={(e) => setEditTimestamp(e.target.value)}
-                onFocus={scrollOnFocus}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-bp-note">Note (optional)</Label>
-              <Input
-                id="edit-bp-note"
-                value={editNote}
-                onChange={(e) => setEditNote(e.target.value)}
-                onFocus={scrollOnFocus}
-                placeholder="Add a note..."
-              />
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setEditingBP(null)}>
-                Cancel
-              </Button>
-              <Button type="submit" className="bg-rose-600 hover:bg-rose-700">
-                Save Changes
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <EditBloodPressureDialog
+        record={editingBP}
+        onClose={() => setEditingBP(null)}
+        onSubmit={handleEditBPSubmit}
+        systolic={editSystolic}
+        onSystolicChange={setEditSystolic}
+        diastolic={editDiastolic}
+        onDiastolicChange={setEditDiastolic}
+        heartRate={editHeartRate}
+        onHeartRateChange={setEditHeartRate}
+        position={editPosition}
+        onPositionChange={setEditPosition}
+        arm={editArm}
+        onArmChange={setEditArm}
+        timestamp={editTimestamp}
+        onTimestampChange={setEditTimestamp}
+        note={editNote}
+        onNoteChange={setEditNote}
+        onFocus={scrollOnFocus}
+      />
     </>
   );
 }

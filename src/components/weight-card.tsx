@@ -1,54 +1,30 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useLiveQuery } from "dexie-react-hooks";
+import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Scale, Check, Clock, ChevronDown, ChevronUp, Loader2, Trash2 } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import { db, type WeightRecord } from "@/lib/db";
-import { addWeightRecord, deleteWeightRecord } from "@/lib/health-service";
-
-// Helper to get current datetime in local format for input
-function getCurrentDateTimeLocal(): string {
-  const now = new Date();
-  const offset = now.getTimezoneOffset();
-  const local = new Date(now.getTime() - offset * 60 * 1000);
-  return local.toISOString().slice(0, 16);
-}
-
-// Helper to convert datetime-local value to timestamp
-function dateTimeLocalToTimestamp(value: string): number {
-  return new Date(value).getTime();
-}
-
-// Format time for display
-function formatTime(timestamp: number): string {
-  return new Date(timestamp).toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
-}
+import { useWeightRecords, useAddWeight, useDeleteWeight } from "@/hooks/use-health-queries";
+import {
+  getCurrentDateTimeLocal,
+  dateTimeLocalToTimestamp,
+  formatDateTime,
+} from "@/lib/date-utils";
 
 export function WeightCard() {
   const { toast } = useToast();
   const [weightInput, setWeightInput] = useState("");
   const [showTimeInput, setShowTimeInput] = useState(false);
   const [customTime, setCustomTime] = useState(getCurrentDateTimeLocal());
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  // Get recent weight records
-  const recentRecords = useLiveQuery(
-    () => db.weightRecords.orderBy("timestamp").reverse().limit(5).toArray(),
-    []
-  );
+  // Get recent weight records via TanStack Query
+  const { data: recentRecords } = useWeightRecords(5);
+  const addMutation = useAddWeight();
+  const deleteMutation = useDeleteWeight();
 
   const latestWeight = recentRecords?.[0];
 
@@ -63,10 +39,9 @@ export function WeightCard() {
       return;
     }
 
-    setIsSubmitting(true);
     try {
       const timestamp = showTimeInput ? dateTimeLocalToTimestamp(customTime) : undefined;
-      await addWeightRecord(weight, timestamp);
+      await addMutation.mutateAsync({ weight, timestamp });
       toast({
         title: "Weight recorded",
         description: `${weight} kg logged successfully`,
@@ -75,26 +50,24 @@ export function WeightCard() {
       setWeightInput("");
       setShowTimeInput(false);
       setCustomTime(getCurrentDateTimeLocal());
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "Failed to record weight",
         variant: "destructive",
       });
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
   const handleDelete = async (id: string) => {
     setDeletingId(id);
     try {
-      await deleteWeightRecord(id);
+      await deleteMutation.mutateAsync(id);
       toast({
         title: "Entry deleted",
         description: "Weight record removed",
       });
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "Could not delete entry",
@@ -122,7 +95,7 @@ export function WeightCard() {
                 {latestWeight.weight} kg
               </p>
               <p className="text-xs text-muted-foreground">
-                {formatTime(latestWeight.timestamp)}
+                {formatDateTime(latestWeight.timestamp)}
               </p>
             </div>
           )}
@@ -184,10 +157,10 @@ export function WeightCard() {
 
           <Button
             onClick={handleSubmit}
-            disabled={isSubmitting || !weightInput}
+            disabled={addMutation.isPending || !weightInput}
             className="w-full h-11 bg-emerald-600 hover:bg-emerald-700"
           >
-            {isSubmitting ? (
+            {addMutation.isPending ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                 Recording...
@@ -211,7 +184,7 @@ export function WeightCard() {
                   key={record.id}
                   className="flex items-center justify-between text-sm py-1"
                 >
-                  <span className="text-muted-foreground">{formatTime(record.timestamp)}</span>
+                  <span className="text-muted-foreground">{formatDateTime(record.timestamp)}</span>
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{record.weight} kg</span>
                     <Button
