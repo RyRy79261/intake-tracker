@@ -168,6 +168,8 @@ function RecordRow({
           size="icon"
           className="h-8 w-8 text-muted-foreground hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30"
           onClick={onEdit}
+          aria-label="Edit entry"
+          title="Edit entry"
         >
           <Pencil className="w-4 h-4" />
         </Button>
@@ -177,6 +179,8 @@ function RecordRow({
           className="h-8 w-8 text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
           onClick={onDelete}
           disabled={isDeleting}
+          aria-label="Delete entry"
+          title="Delete entry"
         >
           {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
         </Button>

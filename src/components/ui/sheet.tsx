@@ -101,7 +101,7 @@ const SheetContent = React.forwardRef<
   
   return (
     <AnimatePresence>
-      {open && (
+      {open !== false && (
         <SheetPortal forceMount>
           <SheetOverlay />
           <SheetPrimitive.Content asChild ref={ref} {...props}>
