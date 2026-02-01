@@ -117,7 +117,10 @@ const SheetContent = React.forwardRef<
                   initial="initial"
                   animate="animate"
                   exit="exit"
-                  transition={{ duration: 0.3 }}
+                  transition={{
+                    duration: isFull ? 0.25 : 0.35,
+                    ease: "easeOut",
+                  }}
                 />
               </SheetPrimitive.Overlay>
               <SheetPrimitive.Content asChild ref={ref} forceMount {...props}>
@@ -129,7 +132,7 @@ const SheetContent = React.forwardRef<
                   animate="animate"
                   exit="exit"
                   transition={{
-                    duration: isFull ? 0.3 : 0.45,
+                    duration: isFull ? 0.25 : 0.35,
                     ease: [0.32, 0.72, 0, 1],
                   }}
                 >
