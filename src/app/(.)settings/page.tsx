@@ -30,8 +30,12 @@ export default function SettingsInterceptPage() {
   const handleOpenChange = (open: boolean) => {
     if (!open) {
       setIsOpen(false);
-      router.back();
+      // Don't call router.back() here - let animation complete first
     }
+  };
+
+  const handleExitComplete = () => {
+    router.back();
   };
 
   // Don't render anything while checking PIN
@@ -41,7 +45,7 @@ export default function SettingsInterceptPage() {
 
   return (
     <Sheet open={isOpen} onOpenChange={handleOpenChange}>
-      <SheetContent open={isOpen} className="overflow-y-auto">
+      <SheetContent open={isOpen} onExitComplete={handleExitComplete} className="overflow-y-auto">
         <SettingsContent />
       </SheetContent>
     </Sheet>

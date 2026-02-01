@@ -90,12 +90,14 @@ interface SheetContentProps
     VariantProps<typeof sheetVariants> {
   /** Pass the open state for AnimatePresence exit animations */
   open?: boolean;
+  /** Callback fired when exit animation completes (useful for delayed navigation) */
+  onExitComplete?: () => void;
 }
 
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,
   SheetContentProps
->(({ side = "right", className, children, open, ...props }, ref) => {
+>(({ side = "right", className, children, open, onExitComplete, ...props }, ref) => {
   const isControlled = open !== undefined;
   const variants = slideAnimationVariants[side || "right"];
   const isFull = side === "full";
@@ -104,7 +106,7 @@ const SheetContent = React.forwardRef<
   if (isControlled) {
     return (
       <SheetPortal forceMount>
-        <AnimatePresence>
+        <AnimatePresence onExitComplete={onExitComplete}>
           {open && (
             <>
               <SheetPrimitive.Overlay asChild forceMount>

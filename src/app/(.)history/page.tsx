@@ -30,8 +30,12 @@ export default function HistoryInterceptPage() {
   const handleOpenChange = (open: boolean) => {
     if (!open) {
       setIsOpen(false);
-      router.back();
+      // Don't call router.back() here - let animation complete first
     }
+  };
+
+  const handleExitComplete = () => {
+    router.back();
   };
 
   // Don't render anything while checking PIN
@@ -41,7 +45,7 @@ export default function HistoryInterceptPage() {
 
   return (
     <Sheet open={isOpen} onOpenChange={handleOpenChange}>
-      <SheetContent side="full" open={isOpen} className="overflow-y-auto">
+      <SheetContent side="full" open={isOpen} onExitComplete={handleExitComplete} className="overflow-y-auto">
         <HistoryContent />
       </SheetContent>
     </Sheet>
