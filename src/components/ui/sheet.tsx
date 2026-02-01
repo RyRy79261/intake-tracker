@@ -113,7 +113,7 @@ const SheetContent = React.forwardRef<
               animate="animate"
               exit="exit"
               transition={{
-                duration: isFull ? 0.2 : 0.3,
+                duration: isFull ? 0.3 : 0.45,
                 ease: [0.32, 0.72, 0, 1], // Custom easing for smooth slide
               }}
             >
