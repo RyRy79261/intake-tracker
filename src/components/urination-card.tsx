@@ -168,6 +168,7 @@ export function UrinationCard() {
                     <Button
                       variant="ghost"
                       size="icon"
+                      aria-label="Delete entry"
                       className="h-6 w-6 text-muted-foreground hover:text-red-600 shrink-0"
                       onClick={async () => {
                         setDeletingId(record.id);
