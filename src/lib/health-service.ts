@@ -21,12 +21,22 @@ export async function addWeightRecord(
 
 export async function getWeightRecords(limit?: number): Promise<WeightRecord[]> {
   let query = db.weightRecords.orderBy("timestamp").reverse();
-  
+
   if (limit) {
     return query.limit(limit).toArray();
   }
-  
+
   return query.toArray();
+}
+
+export async function getWeightRecordsByDateRange(
+  startTime: number,
+  endTime: number
+): Promise<WeightRecord[]> {
+  return db.weightRecords
+    .where("timestamp")
+    .between(startTime, endTime)
+    .toArray();
 }
 
 export async function getLatestWeightRecord(): Promise<WeightRecord | undefined> {
@@ -73,12 +83,22 @@ export async function addBloodPressureRecord(
 
 export async function getBloodPressureRecords(limit?: number): Promise<BloodPressureRecord[]> {
   let query = db.bloodPressureRecords.orderBy("timestamp").reverse();
-  
+
   if (limit) {
     return query.limit(limit).toArray();
   }
-  
+
   return query.toArray();
+}
+
+export async function getBloodPressureRecordsByDateRange(
+  startTime: number,
+  endTime: number
+): Promise<BloodPressureRecord[]> {
+  return db.bloodPressureRecords
+    .where("timestamp")
+    .between(startTime, endTime)
+    .toArray();
 }
 
 export async function getLatestBloodPressureRecord(): Promise<BloodPressureRecord | undefined> {
