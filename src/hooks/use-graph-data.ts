@@ -53,6 +53,9 @@ export interface GraphMetrics {
 export interface GraphData {
   startTime: number;
   endTime: number;
+  /** The visible display start (same as startTime). Intake records may include
+   *  24h of lookback data before this point for rolling-total calculations. */
+  displayStartTime: number;
   scope: GraphScope;
   waterRecords: IntakeRecord[];
   saltRecords: IntakeRecord[];
@@ -103,10 +106,14 @@ function computeMetrics(
 async function fetchGraphData(scope: GraphScope): Promise<GraphData> {
   const { startTime, endTime } = getRange(scope);
 
+  // Fetch water/salt with 24h lookback so rolling-24h totals are accurate
+  // at the start of the visible range.
+  const intakeLookbackStart = startTime - MS_PER_DAY;
+
   const [waterRecords, saltRecords, weightRecords, bloodPressureRecords, eatingRecords, urinationRecords] =
     await Promise.all([
-      getRecordsByDateRange(startTime, endTime, "water"),
-      getRecordsByDateRange(startTime, endTime, "salt"),
+      getRecordsByDateRange(intakeLookbackStart, endTime, "water"),
+      getRecordsByDateRange(intakeLookbackStart, endTime, "salt"),
       getWeightRecordsByDateRange(startTime, endTime),
       getBloodPressureRecordsByDateRange(startTime, endTime),
       getEatingRecordsByDateRange(startTime, endTime),
@@ -118,6 +125,7 @@ async function fetchGraphData(scope: GraphScope): Promise<GraphData> {
   return {
     startTime,
     endTime,
+    displayStartTime: startTime,
     scope,
     waterRecords,
     saltRecords,

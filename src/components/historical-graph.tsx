@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -66,6 +66,9 @@ const TOOLTIP_STYLE = {
   fontSize: 12,
 };
 
+/** Shared left/right/top/bottom margins for all charts */
+const CHART_MARGIN = { top: 10, right: 10, left: 0, bottom: 0 };
+
 function formatTimeLabel(ts: number, scope: GraphScope): string {
   const d = new Date(ts);
   if (scope === "24h") {
@@ -90,15 +93,19 @@ function buildIntakeChartData(
   waterLimit: number,
   saltLimit: number
 ): IntakePoint[] {
-  const { waterRecords, saltRecords, scope } = data;
+  const { waterRecords, saltRecords, scope, displayStartTime } = data;
 
-  // Merge all intake records, tagged by type
-  const events: (IntakeRecord & { _kind: "water" | "salt" })[] = [
+  // Merge all intake records, tagged by type — but only plot events in the
+  // visible range. The full records (including lookback) are used for rolling totals.
+  const allEvents: (IntakeRecord & { _kind: "water" | "salt" })[] = [
     ...waterRecords.map((r) => ({ ...r, _kind: "water" as const })),
     ...saltRecords.map((r) => ({ ...r, _kind: "salt" as const })),
   ].sort((a, b) => a.timestamp - b.timestamp);
 
-  if (events.length === 0) return [];
+  // Only plot events within the visible display range
+  const visibleEvents = allEvents.filter((e) => e.timestamp >= displayStartTime);
+
+  if (visibleEvents.length === 0) return [];
 
   // Helper: rolling 24h total at a given moment for a type
   function rolling24h(records: IntakeRecord[], atTime: number): number {
@@ -110,7 +117,7 @@ function buildIntakeChartData(
 
   const points: IntakePoint[] = [];
 
-  for (const event of events) {
+  for (const event of visibleEvents) {
     const ts = event.timestamp;
     const label = formatTimeLabel(ts, scope);
 
@@ -179,7 +186,7 @@ function IntakeChart({
 
   return (
     <ResponsiveContainer width="100%" height={280}>
-      <LineChart data={points} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+      <LineChart data={points} margin={CHART_MARGIN}>
         <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
         <XAxis
           dataKey="timeLabel"
@@ -235,11 +242,11 @@ function IntakeChart({
 
 // ============================================================================
 // 2. Weight Chart — weight line + eating/urination vertical lines
+//    Uses numeric X-axis so ReferenceLines can be drawn at arbitrary timestamps
 // ============================================================================
 
 type WeightPoint = {
   time: number;
-  timeLabel: string;
   weight: number;
 };
 
@@ -252,10 +259,9 @@ function WeightChart({ data }: { data: GraphData }) {
         .sort((a, b) => a.timestamp - b.timestamp)
         .map((r) => ({
           time: r.timestamp,
-          timeLabel: formatTimeLabel(r.timestamp, scope),
           weight: r.weight,
         })),
-    [weightRecords, scope]
+    [weightRecords]
   );
 
   if (points.length === 0) {
@@ -274,17 +280,28 @@ function WeightChart({ data }: { data: GraphData }) {
     Math.ceil(maxW + 1),
   ];
 
+  // Compute X domain from all timestamps (weight, eating, urination)
+  const allTimestamps = [
+    ...points.map((p) => p.time),
+    ...eatingRecords.map((r) => r.timestamp),
+    ...urinationRecords.map((r) => r.timestamp),
+  ];
+  const xMin = Math.min(...allTimestamps);
+  const xMax = Math.max(...allTimestamps);
+
   return (
     <div>
       <ResponsiveContainer width="100%" height={280}>
-        <ComposedChart data={points} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+        <ComposedChart data={points} margin={CHART_MARGIN}>
           <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
           <XAxis
-            dataKey="timeLabel"
+            dataKey="time"
+            type="number"
+            domain={[xMin, xMax]}
             tick={{ fontSize: 10 }}
             tickLine={false}
             axisLine={false}
-            interval="preserveStartEnd"
+            tickFormatter={(ts) => formatTimeLabel(ts, scope)}
           />
           <YAxis
             domain={yDomain}
@@ -295,13 +312,14 @@ function WeightChart({ data }: { data: GraphData }) {
           />
           <Tooltip
             contentStyle={TOOLTIP_STYLE}
+            labelFormatter={(ts) => formatTimeLabel(ts as number, scope)}
             formatter={(value: number) => [`${value} kg`, "Weight"]}
           />
           {/* Eating event vertical lines */}
           {eatingRecords.map((r) => (
             <ReferenceLine
               key={`eat-${r.id}`}
-              x={formatTimeLabel(r.timestamp, scope)}
+              x={r.timestamp}
               stroke={COLORS.eating}
               strokeWidth={1.5}
               strokeDasharray="4 2"
@@ -311,7 +329,7 @@ function WeightChart({ data }: { data: GraphData }) {
           {urinationRecords.map((r) => (
             <ReferenceLine
               key={`urine-${r.id}`}
-              x={formatTimeLabel(r.timestamp, scope)}
+              x={r.timestamp}
               stroke={COLORS.urination}
               strokeWidth={1.5}
               strokeDasharray="4 2"
@@ -364,6 +382,28 @@ const BP_DEFAULTS: Record<BPToggleKey, boolean> = {
   "right-standing-diastolic": false,
   "right-standing-heartRate": false,
 };
+
+const BP_STORAGE_KEY = "intake-tracker-bp-toggles";
+
+function loadBPToggles(): Record<BPToggleKey, boolean> {
+  try {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem(BP_STORAGE_KEY);
+      if (stored) return { ...BP_DEFAULTS, ...JSON.parse(stored) };
+    }
+  } catch {
+    // ignore parse errors
+  }
+  return { ...BP_DEFAULTS };
+}
+
+function saveBPToggles(toggles: Record<BPToggleKey, boolean>) {
+  try {
+    localStorage.setItem(BP_STORAGE_KEY, JSON.stringify(toggles));
+  } catch {
+    // ignore storage errors
+  }
+}
 
 function getBPLineColor(metric: "systolic" | "diastolic" | "heartRate", position: "sitting" | "standing"): string {
   if (position === "sitting") {
@@ -458,12 +498,6 @@ function BPFilterPanel({
     return <HeartPulse className="w-3 h-3" />;
   }
 
-  function metricColor(m: "systolic" | "diastolic" | "heartRate"): string {
-    if (m === "systolic") return "bg-rose-500 text-white";
-    if (m === "diastolic") return "bg-pink-400 text-white";
-    return "bg-orange-500 text-white";
-  }
-
   return (
     <div className="grid grid-cols-2 gap-3 mt-3">
       {arms.map((arm) => (
@@ -480,6 +514,7 @@ function BPFilterPanel({
                 {metrics.map((m) => {
                   const k = `${arm}-${pos}-${m}` as BPToggleKey;
                   const active = toggles[k];
+                  const lineColor = getBPLineColor(m, pos);
                   return (
                     <button
                       key={k}
@@ -487,9 +522,10 @@ function BPFilterPanel({
                       className={cn(
                         "w-7 h-7 rounded flex items-center justify-center transition-all border",
                         active
-                          ? metricColor(m)
+                          ? "text-white border-transparent"
                           : "bg-muted/50 text-muted-foreground border-border hover:bg-muted"
                       )}
+                      style={active ? { backgroundColor: lineColor } : undefined}
                       title={`${arm} ${pos} ${m}`}
                     >
                       {metricIcon(m)}
@@ -506,16 +542,31 @@ function BPFilterPanel({
 }
 
 function BPChart({ data }: { data: GraphData }) {
-  const [toggles, setToggles] = useState<Record<BPToggleKey, boolean>>({ ...BP_DEFAULTS });
+  const [toggles, setToggles] = useState<Record<BPToggleKey, boolean>>(() => loadBPToggles());
 
-  const handleToggle = (key: BPToggleKey) => {
-    setToggles((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
+  const handleToggle = useCallback((key: BPToggleKey) => {
+    setToggles((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      saveBPToggles(next);
+      return next;
+    });
+  }, []);
 
   const { points, activeKeys } = useMemo(
     () => buildBPChartData(data.bloodPressureRecords, toggles, data.scope),
     [data.bloodPressureRecords, toggles, data.scope]
   );
+
+  // Compute Y-axis domain: minimum 40-120, expanding if data exceeds bounds
+  const yDomain = useMemo<[number, number]>(() => {
+    const allValues = points.flatMap((p) =>
+      activeKeys.map((k) => p[k.key]).filter((v): v is number => typeof v === "number")
+    );
+    if (allValues.length === 0) return [40, 120];
+    const dataMin = Math.min(...allValues);
+    const dataMax = Math.max(...allValues);
+    return [Math.min(40, dataMin - 5), Math.max(120, dataMax + 5)];
+  }, [points, activeKeys]);
 
   const hasActiveToggles = activeKeys.length > 0;
   const hasData = data.bloodPressureRecords.length > 0;
@@ -532,7 +583,7 @@ function BPChart({ data }: { data: GraphData }) {
         </div>
       ) : (
         <ResponsiveContainer width="100%" height={280}>
-          <LineChart data={points} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+          <LineChart data={points} margin={CHART_MARGIN}>
             <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
             <XAxis
               dataKey="timeLabel"
@@ -545,7 +596,7 @@ function BPChart({ data }: { data: GraphData }) {
               tick={{ fontSize: 10 }}
               tickLine={false}
               axisLine={false}
-              domain={["auto", "auto"]}
+              domain={yDomain}
             />
             <Tooltip contentStyle={TOOLTIP_STYLE} />
             <Legend wrapperStyle={{ fontSize: 10 }} />
@@ -572,7 +623,7 @@ function BPChart({ data }: { data: GraphData }) {
 }
 
 // ============================================================================
-// Metrics Section (unchanged concept, just cleaner)
+// Metrics Section
 // ============================================================================
 
 function MetricsSection({ data }: { data: GraphData }) {
@@ -638,6 +689,12 @@ function MetricsSection({ data }: { data: GraphData }) {
 // Main HistoricalGraph component
 // ============================================================================
 
+const VIEW_ACTIVE_COLORS: Record<ViewType, string> = {
+  intake: "bg-green-600 hover:bg-green-700 text-white",
+  weight: "bg-emerald-600 hover:bg-emerald-700 text-white",
+  bp: "bg-rose-600 hover:bg-rose-700 text-white",
+};
+
 const VIEW_OPTIONS: { value: ViewType; label: string; icon: React.ReactNode }[] = [
   { value: "intake", label: "Intake", icon: <Droplets className="w-3.5 h-3.5" /> },
   { value: "weight", label: "Weight", icon: <Scale className="w-3.5 h-3.5" /> },
@@ -652,7 +709,7 @@ export function HistoricalGraph() {
 
   return (
     <Card className="overflow-hidden bg-white/80 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800">
-      <CardHeader className="pb-2 px-3">
+      <CardHeader className="pt-3 pb-2 px-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800">
@@ -660,16 +717,18 @@ export function HistoricalGraph() {
             </div>
             <CardTitle className="text-base">History</CardTitle>
           </div>
-          {/* View selector */}
+          {/* View selector with per-view colors */}
           <div className="flex gap-1">
             {VIEW_OPTIONS.map((opt) => (
               <Button
                 key={opt.value}
-                variant={view === opt.value ? "default" : "ghost"}
+                variant="ghost"
                 size="sm"
                 className={cn(
                   "h-7 px-2 text-xs gap-1",
-                  view === opt.value && "shadow-sm"
+                  view === opt.value
+                    ? cn(VIEW_ACTIVE_COLORS[opt.value], "shadow-sm")
+                    : "text-muted-foreground"
                 )}
                 onClick={() => setView(opt.value)}
               >
@@ -682,7 +741,7 @@ export function HistoricalGraph() {
       </CardHeader>
       <CardContent className="space-y-2 px-3 pb-3">
         <Tabs value={scope} onValueChange={(v) => setScope(v as GraphScope)}>
-          <TabsList className="grid w-full grid-cols-3 h-8">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="24h" className="text-xs">24 hours</TabsTrigger>
             <TabsTrigger value="7d" className="text-xs">Week</TabsTrigger>
             <TabsTrigger value="30d" className="text-xs">Month</TabsTrigger>
