@@ -48,6 +48,7 @@ export interface GraphMetrics {
   avgWeight: number | null;
   avgBPSitting: { systolic: number; diastolic: number } | null;
   avgBPStanding: { systolic: number; diastolic: number } | null;
+  avgHeartRate: number | null;
 }
 
 export interface GraphData {
@@ -100,7 +101,13 @@ function computeMetrics(
         }
       : null;
 
-  return { avgWeight, avgBPSitting, avgBPStanding };
+  const hrRecords = bloodPressureRecords.filter((r) => r.heartRate != null);
+  const avgHeartRate =
+    hrRecords.length > 0
+      ? hrRecords.reduce((s, r) => s + (r.heartRate ?? 0), 0) / hrRecords.length
+      : null;
+
+  return { avgWeight, avgBPSitting, avgBPStanding, avgHeartRate };
 }
 
 async function fetchGraphData(scope: GraphScope): Promise<GraphData> {

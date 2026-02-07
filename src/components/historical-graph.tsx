@@ -78,12 +78,11 @@ function formatTimeLabel(ts: number, scope: GraphScope): string {
 }
 
 // ============================================================================
-// 1. Intake Chart — buzz-saw, normalized 0-100%
+// 1. Intake Chart — buzz-saw, normalized 0-100% with toggles
 // ============================================================================
 
 type IntakePoint = {
   time: number;
-  timeLabel: string;
   waterPct: number | null;
   saltPct: number | null;
 };
@@ -93,7 +92,7 @@ function buildIntakeChartData(
   waterLimit: number,
   saltLimit: number
 ): IntakePoint[] {
-  const { waterRecords, saltRecords, scope, displayStartTime } = data;
+  const { waterRecords, saltRecords, displayStartTime } = data;
 
   // Merge all intake records, tagged by type — but only plot events in the
   // visible range. The full records (including lookback) are used for rolling totals.
@@ -119,7 +118,6 @@ function buildIntakeChartData(
 
   for (const event of visibleEvents) {
     const ts = event.timestamp;
-    const label = formatTimeLabel(ts, scope);
 
     // Point BEFORE this event (rolling total excluding this record)
     const waterBefore = rolling24h(
@@ -138,7 +136,6 @@ function buildIntakeChartData(
     // "Before" point
     points.push({
       time: ts - 1,
-      timeLabel: label,
       waterPct: waterLimit > 0 ? (waterBefore / waterLimit) * 100 : 0,
       saltPct: saltLimit > 0 ? (saltBefore / saltLimit) * 100 : 0,
     });
@@ -146,7 +143,6 @@ function buildIntakeChartData(
     // "After" point (the step up)
     points.push({
       time: ts,
-      timeLabel: label,
       waterPct: waterLimit > 0 ? (waterAfter / waterLimit) * 100 : 0,
       saltPct: saltLimit > 0 ? (saltAfter / saltLimit) * 100 : 0,
     });
@@ -154,6 +150,15 @@ function buildIntakeChartData(
 
   return points;
 }
+
+const INTAKE_TOGGLE_OPTIONS = [
+  { key: "water", label: "Water", color: COLORS.water },
+  { key: "salt", label: "Salt", color: COLORS.salt },
+  { key: "eating", label: "Eating", color: COLORS.eating },
+  { key: "urination", label: "Urination", color: COLORS.urination },
+] as const;
+
+type IntakeToggleKey = (typeof INTAKE_TOGGLE_OPTIONS)[number]["key"];
 
 function IntakeChart({
   data,
@@ -164,10 +169,19 @@ function IntakeChart({
   waterLimit: number;
   saltLimit: number;
 }) {
+  const [toggles, setToggles] = useState<Record<IntakeToggleKey, boolean>>({
+    water: true,
+    salt: true,
+    eating: true,
+    urination: true,
+  });
+
   const points = useMemo(
     () => buildIntakeChartData(data, waterLimit, saltLimit),
     [data, waterLimit, saltLimit]
   );
+
+  const { eatingRecords, urinationRecords, scope } = data;
 
   if (points.length === 0) {
     return (
@@ -184,59 +198,114 @@ function IntakeChart({
   );
   const yMax = maxPct > 100 ? Math.ceil(maxPct / 10) * 10 + 10 : 100;
 
+  // Compute X domain from intake points + event timestamps
+  const allTimestamps = [
+    ...points.map((p) => p.time),
+    ...(toggles.eating ? eatingRecords.map((r) => r.timestamp) : []),
+    ...(toggles.urination ? urinationRecords.map((r) => r.timestamp) : []),
+  ];
+  const xMin = Math.min(...allTimestamps);
+  const xMax = Math.max(...allTimestamps);
+
   return (
-    <ResponsiveContainer width="100%" height={280}>
-      <LineChart data={points} margin={CHART_MARGIN}>
-        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-        <XAxis
-          dataKey="timeLabel"
-          tick={{ fontSize: 10 }}
-          tickLine={false}
-          axisLine={false}
-          interval="preserveStartEnd"
-        />
-        <YAxis
-          domain={[0, yMax]}
-          tick={{ fontSize: 10 }}
-          tickLine={false}
-          axisLine={false}
-          tickFormatter={(v) => `${v}%`}
-          ticks={yMax <= 100 ? [0, 25, 50, 75, 100] : undefined}
-        />
-        <Tooltip
-          contentStyle={TOOLTIP_STYLE}
-          formatter={(value: number, name: string) => [`${value.toFixed(0)}%`, name]}
-        />
-        <Legend wrapperStyle={{ fontSize: 11 }} />
-        <ReferenceLine
-          y={100}
-          stroke="hsl(var(--muted-foreground))"
-          strokeDasharray="6 3"
-          strokeWidth={1.5}
-          label={{ value: "Target", position: "right", fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
-        />
-        <Line
-          type="stepAfter"
-          dataKey="waterPct"
-          name="Water"
-          stroke={COLORS.water}
-          strokeWidth={2}
-          dot={{ r: 3, fill: COLORS.water }}
-          connectNulls
-          isAnimationActive={false}
-        />
-        <Line
-          type="stepAfter"
-          dataKey="saltPct"
-          name="Salt"
-          stroke={COLORS.salt}
-          strokeWidth={2}
-          dot={{ r: 3, fill: COLORS.salt }}
-          connectNulls
-          isAnimationActive={false}
-        />
-      </LineChart>
-    </ResponsiveContainer>
+    <div>
+      <ResponsiveContainer width="100%" height={280}>
+        <ComposedChart data={points} margin={CHART_MARGIN}>
+          <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+          <XAxis
+            dataKey="time"
+            type="number"
+            domain={[xMin, xMax]}
+            tick={{ fontSize: 10 }}
+            tickLine={false}
+            axisLine={false}
+            tickFormatter={(ts) => formatTimeLabel(ts, scope)}
+          />
+          <YAxis
+            domain={[0, yMax]}
+            tick={{ fontSize: 10 }}
+            tickLine={false}
+            axisLine={false}
+            tickFormatter={(v) => `${v}%`}
+            ticks={yMax <= 100 ? [0, 25, 50, 75, 100] : undefined}
+          />
+          <Tooltip
+            contentStyle={TOOLTIP_STYLE}
+            labelFormatter={(ts) => formatTimeLabel(ts as number, scope)}
+            formatter={(value: number, name: string) => [`${value.toFixed(0)}%`, name]}
+          />
+          <ReferenceLine
+            y={100}
+            stroke="hsl(var(--muted-foreground))"
+            strokeDasharray="6 3"
+            strokeWidth={1.5}
+            label={{ value: "Target", position: "right", fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+          />
+          {/* Eating event vertical lines */}
+          {toggles.eating && eatingRecords.map((r) => (
+            <ReferenceLine
+              key={`eat-${r.id}`}
+              x={r.timestamp}
+              stroke={COLORS.eating}
+              strokeWidth={1.5}
+              strokeDasharray="4 2"
+            />
+          ))}
+          {/* Urination event vertical lines */}
+          {toggles.urination && urinationRecords.map((r) => (
+            <ReferenceLine
+              key={`urine-${r.id}`}
+              x={r.timestamp}
+              stroke={COLORS.urination}
+              strokeWidth={1.5}
+              strokeDasharray="4 2"
+            />
+          ))}
+          {toggles.water && (
+            <Line
+              type="stepAfter"
+              dataKey="waterPct"
+              name="Water"
+              stroke={COLORS.water}
+              strokeWidth={2}
+              dot={{ r: 3, fill: COLORS.water }}
+              connectNulls
+              isAnimationActive={false}
+            />
+          )}
+          {toggles.salt && (
+            <Line
+              type="stepAfter"
+              dataKey="saltPct"
+              name="Salt"
+              stroke={COLORS.salt}
+              strokeWidth={2}
+              dot={{ r: 3, fill: COLORS.salt }}
+              connectNulls
+              isAnimationActive={false}
+            />
+          )}
+        </ComposedChart>
+      </ResponsiveContainer>
+      {/* Toggle panel */}
+      <div className="flex items-center justify-center gap-2 mt-2">
+        {INTAKE_TOGGLE_OPTIONS.map((opt) => (
+          <button
+            key={opt.key}
+            onClick={() => setToggles((prev) => ({ ...prev, [opt.key]: !prev[opt.key] }))}
+            className={cn(
+              "h-6 px-2 rounded text-[10px] font-medium transition-all border",
+              toggles[opt.key]
+                ? "text-white border-transparent"
+                : "bg-muted/50 text-muted-foreground border-border hover:bg-muted"
+            )}
+            style={toggles[opt.key] ? { backgroundColor: opt.color } : undefined}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -542,7 +611,12 @@ function BPFilterPanel({
 }
 
 function BPChart({ data }: { data: GraphData }) {
-  const [toggles, setToggles] = useState<Record<BPToggleKey, boolean>>(() => loadBPToggles());
+  const [toggles, setToggles] = useState<Record<BPToggleKey, boolean>>({ ...BP_DEFAULTS });
+
+  // Hydrate from localStorage after mount to avoid SSR hydration mismatch
+  useEffect(() => {
+    setToggles(loadBPToggles());
+  }, []);
 
   const handleToggle = useCallback((key: BPToggleKey) => {
     setToggles((prev) => {
@@ -631,7 +705,8 @@ function MetricsSection({ data }: { data: GraphData }) {
   const hasAny =
     metrics.avgWeight != null ||
     metrics.avgBPSitting != null ||
-    metrics.avgBPStanding != null;
+    metrics.avgBPStanding != null ||
+    metrics.avgHeartRate != null;
 
   return (
     <Collapsible>
@@ -675,6 +750,14 @@ function MetricsSection({ data }: { data: GraphData }) {
                 <span className="font-medium text-rose-600 dark:text-rose-400">
                   {metrics.avgBPStanding.systolic.toFixed(0)}/
                   {metrics.avgBPStanding.diastolic.toFixed(0)} mmHg
+                </span>
+              </li>
+            )}
+            {metrics.avgHeartRate != null && (
+              <li className="flex justify-between">
+                <span className="text-muted-foreground">Avg. heart rate</span>
+                <span className="font-medium text-red-600 dark:text-red-400">
+                  {metrics.avgHeartRate.toFixed(0)} bpm
                 </span>
               </li>
             )}
