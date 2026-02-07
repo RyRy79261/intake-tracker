@@ -87,7 +87,7 @@ export function UrinationCard() {
 
         <div className="space-y-3">
           <Button
-            onClick={() => handleSubmit(false)}
+            onClick={() => handleSubmit(expanded)}
             disabled={addMutation.isPending}
             className="w-full h-11 bg-violet-600 hover:bg-violet-700"
           >
