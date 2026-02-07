@@ -67,7 +67,7 @@ const TOOLTIP_STYLE = {
 };
 
 /** Shared left/right/top/bottom margins for all charts */
-const CHART_MARGIN = { top: 10, right: 10, left: 0, bottom: 0 };
+const CHART_MARGIN = { top: 10, right: 10, left: -20, bottom: 0 };
 
 function formatTimeLabel(ts: number, scope: GraphScope): string {
   const d = new Date(ts);
@@ -227,7 +227,14 @@ function IntakeChart({
             tickLine={false}
             axisLine={false}
             tickFormatter={(v) => `${v}%`}
-            ticks={yMax <= 100 ? [0, 25, 50, 75, 100] : undefined}
+            ticks={
+              yMax <= 100
+                ? [0, 25, 50, 75, 100]
+                : [0, 25, 50, 75, 100, ...Array.from(
+                    { length: Math.floor((yMax - 100) / 25) },
+                    (_, i) => 125 + i * 25
+                  )]
+            }
           />
           <Tooltip
             contentStyle={TOOLTIP_STYLE}
