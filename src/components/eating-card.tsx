@@ -13,9 +13,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Utensils, Loader2, Check, PlusCircle } from "lucide-react";
+import { Utensils, Loader2, Check, PlusCircle, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useEatingRecords, useAddEating } from "@/hooks/use-eating-queries";
+import { useEatingRecords, useAddEating, useDeleteEating } from "@/hooks/use-eating-queries";
 import {
   getCurrentDateTimeLocal,
   dateTimeLocalToTimestamp,
@@ -27,9 +27,11 @@ export function EatingCard() {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [detailNote, setDetailNote] = useState("");
   const [detailTime, setDetailTime] = useState(getCurrentDateTimeLocal());
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const { data: recentRecords, isLoading } = useEatingRecords(5);
   const addMutation = useAddEating();
+  const deleteMutation = useDeleteEating();
 
   const latestRecord = recentRecords?.[0];
 
@@ -122,6 +124,53 @@ export function EatingCard() {
               Add details (what I ate)
             </Button>
           </div>
+
+          {/* Recent History */}
+          {recentRecords && recentRecords.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-orange-200 dark:border-orange-800">
+              <p className="text-xs font-medium text-muted-foreground mb-2">Recent</p>
+              <div className="space-y-1">
+                {recentRecords.slice(0, 3).map((record) => (
+                  <div
+                    key={record.id}
+                    className="flex items-center justify-between text-sm py-1"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-muted-foreground shrink-0">{formatDateTime(record.timestamp)}</span>
+                      {record.note && (
+                        <span className="text-xs text-muted-foreground/70 truncate">
+                          {record.note}
+                        </span>
+                      )}
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 text-muted-foreground hover:text-red-600 shrink-0"
+                      onClick={async () => {
+                        setDeletingId(record.id);
+                        try {
+                          await deleteMutation.mutateAsync(record.id);
+                          toast({ title: "Entry deleted", description: "Eating record removed" });
+                        } catch {
+                          toast({ title: "Error", description: "Could not delete", variant: "destructive" });
+                        } finally {
+                          setDeletingId(null);
+                        }
+                      }}
+                      disabled={deletingId === record.id}
+                    >
+                      {deletingId === record.id ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-3 h-3" />
+                      )}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

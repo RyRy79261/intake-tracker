@@ -17,9 +17,9 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { Droplet, Loader2, Check, ChevronDown, ChevronUp } from "lucide-react";
+import { Droplet, Loader2, Check, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useUrinationRecords, useAddUrination } from "@/hooks/use-urination-queries";
+import { useUrinationRecords, useAddUrination, useDeleteUrination } from "@/hooks/use-urination-queries";
 import { formatDateTime } from "@/lib/date-utils";
 
 const AMOUNT_OPTIONS = [
@@ -33,9 +33,11 @@ export function UrinationCard() {
   const [expanded, setExpanded] = useState(false);
   const [amount, setAmount] = useState<string>("");
   const [note, setNote] = useState("");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const { data: recentRecords, isLoading } = useUrinationRecords(5);
   const addMutation = useAddUrination();
+  const deleteMutation = useDeleteUrination();
 
   const latestRecord = recentRecords?.[0];
 
@@ -160,6 +162,56 @@ export function UrinationCard() {
             </CollapsibleContent>
           </Collapsible>
         </div>
+
+        {/* Recent History */}
+        {recentRecords && recentRecords.length > 0 && (
+          <div className="mt-4 pt-4 border-t border-violet-200 dark:border-violet-800">
+            <p className="text-xs font-medium text-muted-foreground mb-2">Recent</p>
+            <div className="space-y-1">
+              {recentRecords.slice(0, 3).map((record) => (
+                <div
+                  key={record.id}
+                  className="flex items-center justify-between text-sm py-1"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-muted-foreground shrink-0">{formatDateTime(record.timestamp)}</span>
+                    {record.amountEstimate && (
+                      <span className="text-xs font-medium capitalize">{record.amountEstimate}</span>
+                    )}
+                    {record.note && (
+                      <span className="text-xs text-muted-foreground/70 truncate">
+                        {record.note}
+                      </span>
+                    )}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-muted-foreground hover:text-red-600 shrink-0"
+                    onClick={async () => {
+                      setDeletingId(record.id);
+                      try {
+                        await deleteMutation.mutateAsync(record.id);
+                        toast({ title: "Entry deleted", description: "Urination record removed" });
+                      } catch {
+                        toast({ title: "Error", description: "Could not delete", variant: "destructive" });
+                      } finally {
+                        setDeletingId(null);
+                      }
+                    }}
+                    disabled={deletingId === record.id}
+                  >
+                    {deletingId === record.id ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-3 h-3" />
+                    )}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

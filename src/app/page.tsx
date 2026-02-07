@@ -84,8 +84,8 @@ function HomeContent() {
       {/* History Drawer */}
       <HistoryDrawer open={historyOpen} onOpenChange={setHistoryOpen} />
 
-      {/* Historical Graph - top of content */}
-      <div className="mb-6">
+      {/* Historical Graph - almost full width */}
+      <div className="-mx-3 mb-6 px-1">
         <HistoricalGraph />
       </div>
 
