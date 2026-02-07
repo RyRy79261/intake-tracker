@@ -5,6 +5,9 @@ import {
   deobfuscateApiKey, 
   sanitizeNumericInput 
 } from "@/lib/security";
+import * as serverStorage from "@/lib/server-storage";
+
+type AuthHeaders = { Authorization: string };
 
 export interface Settings {
   // Increment values for +/- buttons
@@ -32,6 +35,9 @@ export interface Settings {
   // Day start hour for budget tracking (0-23, default 2 = 2am)
   // Records after this hour count toward "today's" budget
   dayStartHour: number;
+  
+  // Storage mode: "local" uses IndexedDB, "server" uses Neon Postgres
+  storageMode: "local" | "server";
 }
 
 interface SettingsActions {
@@ -46,7 +52,21 @@ interface SettingsActions {
   setTheme: (theme: "light" | "dark" | "system") => void;
   setDataRetentionDays: (days: number) => void;
   setDayStartHour: (hour: number) => void;
+  setStorageMode: (mode: "local" | "server") => void;
   resetToDefaults: () => void;
+  /** Load syncable settings from server (when storage mode is server). */
+  loadSyncableFromServer: (authHeaders: AuthHeaders) => Promise<void>;
+  /** Persist current syncable settings to server (when storage mode is server). */
+  saveSyncableToServer: (authHeaders: AuthHeaders) => Promise<void>;
+  /** Apply syncable settings (e.g. after importing from server, to apply server settings locally). */
+  setSyncableFromServer: (data: {
+    waterLimit: number;
+    saltLimit: number;
+    waterIncrement: number;
+    saltIncrement: number;
+    dayStartHour: number;
+    dataRetentionDays: number;
+  }) => void;
 }
 
 const defaultSettings: Settings = {
@@ -59,6 +79,7 @@ const defaultSettings: Settings = {
   theme: "system",
   dataRetentionDays: 90, // Default: keep 90 days of data
   dayStartHour: 2, // Default: 2am - day starts at 2am for budget tracking
+  storageMode: "local", // Default: use local IndexedDB storage
 };
 
 export const useSettingsStore = create<Settings & SettingsActions>()(
@@ -96,8 +117,53 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
       
       setDayStartHour: (hour) =>
         set({ dayStartHour: sanitizeNumericInput(hour, 0, 23) }),
+      
+      setStorageMode: (mode) => set({ storageMode: mode }),
 
       resetToDefaults: () => set(defaultSettings),
+
+      loadSyncableFromServer: async (authHeaders) => {
+        try {
+          const data = await serverStorage.getSettings(authHeaders);
+          if (data) {
+            set({
+              waterLimit: data.waterLimit,
+              saltLimit: data.saltLimit,
+              waterIncrement: data.waterIncrement,
+              saltIncrement: data.saltIncrement,
+              dayStartHour: data.dayStartHour,
+              dataRetentionDays: data.dataRetentionDays,
+            });
+          }
+        } catch (error) {
+          console.error("Failed to load settings from server:", error);
+        }
+      },
+
+      saveSyncableToServer: async (authHeaders) => {
+        const s = get();
+        await serverStorage.putSettings(
+          {
+            waterLimit: s.waterLimit,
+            saltLimit: s.saltLimit,
+            waterIncrement: s.waterIncrement,
+            saltIncrement: s.saltIncrement,
+            dayStartHour: s.dayStartHour,
+            dataRetentionDays: s.dataRetentionDays,
+          },
+          authHeaders
+        );
+      },
+
+      setSyncableFromServer: (data) =>
+        set({
+          waterLimit: data.waterLimit,
+          saltLimit: data.saltLimit,
+          waterIncrement: data.waterIncrement,
+          saltIncrement: data.saltIncrement,
+          dayStartHour: data.dayStartHour,
+          dataRetentionDays: data.dataRetentionDays,
+        }),
     }),
     {
       name: "intake-tracker-settings",

@@ -12,9 +12,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.0.2",
     "@privy-io/react-auth": "^3.12.0",
     "@privy-io/server-auth": "^1.32.5",
     "@radix-ui/react-dialog": "^1.1.15",
@@ -30,6 +33,7 @@
     "clsx": "^2.1.1",
     "dexie": "^4.0.8",
     "dexie-react-hooks": "^1.1.7",
+    "drizzle-orm": "^0.45.1",
     "lucide-react": "^0.454.0",
     "motion": "^12.29.2",
     "next": "14.2.15",
@@ -50,6 +54,8 @@
     "@types/react-dom": "^18.3.1",
     "autoprefixer": "^10.4.20",
     "babel-loader": "^10.0.0",
+    "dotenv": "^17.2.3",
+    "drizzle-kit": "^0.31.8",
     "eslint": "^8.57.1",
     "eslint-config-next": "14.2.15",
     "postcss": "^8.4.47",
