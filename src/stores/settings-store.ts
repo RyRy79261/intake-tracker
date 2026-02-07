@@ -5,6 +5,9 @@ import {
   deobfuscateApiKey, 
   sanitizeNumericInput 
 } from "@/lib/security";
+import * as serverStorage from "@/lib/server-storage";
+
+type AuthHeaders = { Authorization: string };
 
 export interface Settings {
   // Increment values for +/- buttons
@@ -51,6 +54,19 @@ interface SettingsActions {
   setDayStartHour: (hour: number) => void;
   setStorageMode: (mode: "local" | "server") => void;
   resetToDefaults: () => void;
+  /** Load syncable settings from server (when storage mode is server). */
+  loadSyncableFromServer: (authHeaders: AuthHeaders) => Promise<void>;
+  /** Persist current syncable settings to server (when storage mode is server). */
+  saveSyncableToServer: (authHeaders: AuthHeaders) => Promise<void>;
+  /** Apply syncable settings (e.g. after importing from server, to apply server settings locally). */
+  setSyncableFromServer: (data: {
+    waterLimit: number;
+    saltLimit: number;
+    waterIncrement: number;
+    saltIncrement: number;
+    dayStartHour: number;
+    dataRetentionDays: number;
+  }) => void;
 }
 
 const defaultSettings: Settings = {
@@ -105,6 +121,49 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
       setStorageMode: (mode) => set({ storageMode: mode }),
 
       resetToDefaults: () => set(defaultSettings),
+
+      loadSyncableFromServer: async (authHeaders) => {
+        try {
+          const data = await serverStorage.getSettings(authHeaders);
+          if (data) {
+            set({
+              waterLimit: data.waterLimit,
+              saltLimit: data.saltLimit,
+              waterIncrement: data.waterIncrement,
+              saltIncrement: data.saltIncrement,
+              dayStartHour: data.dayStartHour,
+              dataRetentionDays: data.dataRetentionDays,
+            });
+          }
+        } catch (error) {
+          console.error("Failed to load settings from server:", error);
+        }
+      },
+
+      saveSyncableToServer: async (authHeaders) => {
+        const s = get();
+        await serverStorage.putSettings(
+          {
+            waterLimit: s.waterLimit,
+            saltLimit: s.saltLimit,
+            waterIncrement: s.waterIncrement,
+            saltIncrement: s.saltIncrement,
+            dayStartHour: s.dayStartHour,
+            dataRetentionDays: s.dataRetentionDays,
+          },
+          authHeaders
+        );
+      },
+
+      setSyncableFromServer: (data) =>
+        set({
+          waterLimit: data.waterLimit,
+          saltLimit: data.saltLimit,
+          waterIncrement: data.waterIncrement,
+          saltIncrement: data.saltIncrement,
+          dayStartHour: data.dayStartHour,
+          dataRetentionDays: data.dataRetentionDays,
+        }),
     }),
     {
       name: "intake-tracker-settings",

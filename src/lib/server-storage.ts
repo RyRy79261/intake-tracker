@@ -327,3 +327,52 @@ export async function importAllData(
     body: JSON.stringify({ data, mode }),
   });
 }
+
+// ==================== Settings ====================
+
+export interface ServerSettings {
+  waterLimit: number;
+  saltLimit: number;
+  waterIncrement: number;
+  saltIncrement: number;
+  dayStartHour: number;
+  dataRetentionDays: number;
+  updatedAt: number;
+}
+
+export async function getSettings(
+  authHeaders?: AuthHeaders
+): Promise<ServerSettings | null> {
+  if (!authHeaders) throw new Error("Authentication required");
+
+  return apiFetch<ServerSettings | null>("/settings", {
+    method: "GET",
+    headers: authHeaders,
+  });
+}
+
+export async function putSettings(
+  settings: Partial<ServerSettings>,
+  authHeaders?: AuthHeaders
+): Promise<ServerSettings> {
+  if (!authHeaders) throw new Error("Authentication required");
+
+  return apiFetch<ServerSettings>("/settings", {
+    method: "PUT",
+    headers: authHeaders,
+    body: JSON.stringify(settings),
+  });
+}
+
+// ==================== Clear All Data ====================
+
+export async function clearAllData(
+  authHeaders?: AuthHeaders
+): Promise<void> {
+  if (!authHeaders) throw new Error("Authentication required");
+
+  await apiFetch<{ success: boolean }>("/clear", {
+    method: "DELETE",
+    headers: authHeaders,
+  });
+}

@@ -17,6 +17,7 @@ export interface MigrationResult {
 /**
  * Export all local data to the server.
  * Used when switching from local to server storage mode.
+ * Clears local records after successful export so data is not left in both places.
  */
 export async function exportToServer(
   authHeaders: AuthHeaders
@@ -40,6 +41,15 @@ export async function exportToServer(
     // Send to server (merge mode - don't overwrite existing)
     const result = await serverStorage.importAllData(exportData, "merge", authHeaders);
 
+    if (result !== undefined) {
+      // Clear local storage after successful export
+      await Promise.all([
+        db.intakeRecords.clear(),
+        db.weightRecords.clear(),
+        db.bloodPressureRecords.clear(),
+      ]);
+    }
+
     return {
       success: true,
       imported: result.imported,
@@ -59,6 +69,7 @@ export async function exportToServer(
 /**
  * Import all server data to local storage.
  * Used when switching from server to local storage mode.
+ * Clears server data after successful import so data is not left in both places.
  */
 export async function importFromServer(
   authHeaders: AuthHeaders,
@@ -133,6 +144,9 @@ export async function importFromServer(
         skipped++;
       }
     }
+
+    // Clear server storage after successful import so data is not in both places
+    await serverStorage.clearAllData(authHeaders);
 
     return {
       success: true,

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { usePrivy } from "@privy-io/react-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,6 +60,7 @@ import {
 import { clearAllData } from "@/lib/intake-service";
 import { downloadBackup, importBackup } from "@/lib/backup-service";
 import { exportToServer, importFromServer, getStorageCounts } from "@/lib/storage-migration";
+import * as serverStorage from "@/lib/server-storage";
 import { useToast } from "@/hooks/use-toast";
 import { useServiceWorker } from "@/hooks/use-service-worker";
 import { usePinGate, usePinProtected } from "@/hooks/use-pin-gate";
@@ -186,6 +188,7 @@ interface SettingsDrawerProps {
 }
 
 export function SettingsDrawer({ open, onOpenChange }: SettingsDrawerProps) {
+  const queryClient = useQueryClient();
   const settings = useSettings();
   const { hasKey, setApiKey } = usePerplexityKey();
   const { authenticated, login, logout, user, getAccessToken } = usePrivy();
@@ -237,6 +240,40 @@ export function SettingsDrawer({ open, onOpenChange }: SettingsDrawerProps) {
     setSaltIncrementInput(settings.saltIncrement.toString());
     setSaltLimitInput(settings.saltLimit.toString());
   }, [settings.waterIncrement, settings.waterLimit, settings.saltIncrement, settings.saltLimit]);
+
+  // Load syncable settings from server when drawer opens in server mode
+  useEffect(() => {
+    if (!open || settings.storageMode !== "server" || !authenticated) return;
+    getAccessToken().then((token) => {
+      if (token) {
+        settings.loadSyncableFromServer({ Authorization: `Bearer ${token}` });
+      }
+    });
+  }, [open, settings.storageMode, authenticated]);
+
+  // Persist syncable settings to server when they change in server mode
+  useEffect(() => {
+    if (settings.storageMode !== "server" || !authenticated) return;
+    const timeout = setTimeout(() => {
+      getAccessToken().then((token) => {
+        if (token) {
+          settings.saveSyncableToServer({ Authorization: `Bearer ${token}` }).catch((err) => {
+            console.error("Failed to save settings to server:", err);
+          });
+        }
+      });
+    }, 500);
+    return () => clearTimeout(timeout);
+  }, [
+    settings.storageMode,
+    authenticated,
+    settings.waterLimit,
+    settings.saltLimit,
+    settings.waterIncrement,
+    settings.saltIncrement,
+    settings.dayStartHour,
+    settings.dataRetentionDays,
+  ]);
 
   // Handle open change with PIN protection
   const handleOpenChange = useCallback(async (newOpen: boolean) => {
@@ -320,6 +357,8 @@ export function SettingsDrawer({ open, onOpenChange }: SettingsDrawerProps) {
     try {
       const result = await importBackup(file, "merge");
       if (result.success) {
+        queryClient.invalidateQueries({ queryKey: ["intake"] });
+        queryClient.invalidateQueries({ queryKey: ["health"] });
         const total = result.intakeImported + result.weightImported + result.bpImported;
         toast({
           title: "Import successful",
@@ -347,6 +386,9 @@ export function SettingsDrawer({ open, onOpenChange }: SettingsDrawerProps) {
   const handleClearData = async () => {
     try {
       await clearAllData();
+      // Invalidate queries to refresh UI with cleared data
+      queryClient.invalidateQueries({ queryKey: ["intake"] });
+      queryClient.invalidateQueries({ queryKey: ["health"] });
       toast({
         title: "Data cleared",
         description: "All intake records have been deleted",
@@ -856,8 +898,13 @@ export function SettingsDrawer({ open, onOpenChange }: SettingsDrawerProps) {
                         }
                         setIsExportingToServer(true);
                         try {
-                          const result = await exportToServer({ Authorization: `Bearer ${token}` });
+                          const authHeaders = { Authorization: `Bearer ${token}` };
+                          const result = await exportToServer(authHeaders);
                           if (result.success) {
+                            await settings.saveSyncableToServer(authHeaders);
+                            // Invalidate queries since local storage was cleared
+                            queryClient.invalidateQueries({ queryKey: ["intake"] });
+                            queryClient.invalidateQueries({ queryKey: ["health"] });
                             toast({
                               title: "Export successful",
                               description: `Exported ${result.imported} records to server (${result.skipped} skipped)`,
@@ -901,8 +948,15 @@ export function SettingsDrawer({ open, onOpenChange }: SettingsDrawerProps) {
                         }
                         setIsImportingFromServer(true);
                         try {
-                          const result = await importFromServer({ Authorization: `Bearer ${token}` }, "merge");
+                          const authHeaders = { Authorization: `Bearer ${token}` };
+                          const serverSettings = await serverStorage.getSettings(authHeaders);
+                          const result = await importFromServer(authHeaders, "merge");
                           if (result.success) {
+                            if (serverSettings) {
+                              settings.setSyncableFromServer(serverSettings);
+                            }
+                            queryClient.invalidateQueries({ queryKey: ["intake"] });
+                            queryClient.invalidateQueries({ queryKey: ["health"] });
                             toast({
                               title: "Import successful",
                               description: `Imported ${result.imported} records from server (${result.skipped} skipped)`,
@@ -932,7 +986,7 @@ export function SettingsDrawer({ open, onOpenChange }: SettingsDrawerProps) {
                     </Button>
 
                     <p className="text-xs text-muted-foreground">
-                      Migrate data between local device and server. Uses merge mode (won&apos;t overwrite existing records).
+                      Migrate data between local device and server. Source storage is cleared after successful migration.
                     </p>
                   </div>
                 )}

@@ -60,6 +60,18 @@ export const bloodPressureRecords = pgTable(
   ]
 );
 
+// User settings (syncable: limits, increments, day start, retention)
+export const userSettings = pgTable("user_settings", {
+  userId: text("user_id").primaryKey(),
+  waterLimit: integer("water_limit").notNull().default(1000),
+  saltLimit: integer("salt_limit").notNull().default(1500),
+  waterIncrement: integer("water_increment").notNull().default(250),
+  saltIncrement: integer("salt_increment").notNull().default(250),
+  dayStartHour: integer("day_start_hour").notNull().default(2),
+  dataRetentionDays: integer("data_retention_days").notNull().default(90),
+  updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
+});
+
 // Type exports for use in services
 export type IntakeRecord = typeof intakeRecords.$inferSelect;
 export type NewIntakeRecord = typeof intakeRecords.$inferInsert;
@@ -69,3 +81,6 @@ export type NewWeightRecord = typeof weightRecords.$inferInsert;
 
 export type BloodPressureRecord = typeof bloodPressureRecords.$inferSelect;
 export type NewBloodPressureRecord = typeof bloodPressureRecords.$inferInsert;
+
+export type UserSettingsRecord = typeof userSettings.$inferSelect;
+export type NewUserSettingsRecord = typeof userSettings.$inferInsert;
