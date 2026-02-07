@@ -307,7 +307,12 @@ export function SettingsDrawer({ open, onOpenChange }: SettingsDrawerProps) {
     try {
       const result = await importBackup(file, "merge");
       if (result.success) {
-        const total = result.intakeImported + result.weightImported + result.bpImported;
+        const total =
+          result.intakeImported +
+          result.weightImported +
+          result.bpImported +
+          result.eatingImported +
+          result.urinationImported;
         toast({
           title: "Import successful",
           description: `Imported ${total} records (${result.skipped} skipped)`,

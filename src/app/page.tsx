@@ -11,6 +11,9 @@ import { BloodPressureCard } from "@/components/blood-pressure-card";
 import { AppHeader } from "@/components/app-header";
 import { SettingsDrawer } from "@/components/settings-drawer";
 import { HistoryDrawer } from "@/components/history-drawer";
+import { HistoricalGraph } from "@/components/historical-graph";
+import { EatingCard } from "@/components/eating-card";
+import { UrinationCard } from "@/components/urination-card";
 import { useIntake } from "@/hooks/use-intake-queries";
 import { useSettings } from "@/hooks/use-settings";
 import { usePinProtected } from "@/hooks/use-pin-gate";
@@ -81,6 +84,11 @@ function HomeContent() {
       {/* History Drawer */}
       <HistoryDrawer open={historyOpen} onOpenChange={setHistoryOpen} />
 
+      {/* Historical Graph - top of content */}
+      <div className="mb-6">
+        <HistoricalGraph />
+      </div>
+
         {/* Intake Cards */}
         <div className="space-y-4 mb-6">
           <IntakeCard
@@ -114,6 +122,12 @@ function HomeContent() {
         <div className="space-y-4 mb-6">
           <WeightCard />
           <BloodPressureCard />
+        </div>
+
+        {/* Eating & Urination - bottom of main content */}
+        <div className="space-y-4 mb-6">
+          <EatingCard />
+          <UrinationCard />
         </div>
 
       {/* Footer */}

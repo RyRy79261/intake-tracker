@@ -12,6 +12,8 @@ import { Button } from "@/components/ui/button";
 import { EditIntakeDialog } from "@/components/edit-intake-dialog";
 import { EditWeightDialog } from "@/components/edit-weight-dialog";
 import { EditBloodPressureDialog } from "@/components/edit-blood-pressure-dialog";
+import { EditEatingDialog } from "@/components/edit-eating-dialog";
+import { EditUrinationDialog } from "@/components/edit-urination-dialog";
 import {
   History,
   Droplets,
@@ -23,12 +25,18 @@ import {
   Pencil,
   Scale,
   Heart,
+  Utensils,
+  Droplet,
 } from "lucide-react";
-import { type IntakeRecord, type WeightRecord, type BloodPressureRecord } from "@/lib/db";
+import { type IntakeRecord, type WeightRecord, type BloodPressureRecord, type EatingRecord, type UrinationRecord } from "@/lib/db";
 import { getRecordsByCursor } from "@/lib/intake-service";
 import { getWeightRecords, deleteWeightRecord, getBloodPressureRecords, deleteBloodPressureRecord } from "@/lib/health-service";
+import { getEatingRecords } from "@/lib/eating-service";
+import { getUrinationRecords } from "@/lib/urination-service";
 import { useUpdateIntake, useDeleteIntake } from "@/hooks/use-intake-queries";
 import { useUpdateWeight, useUpdateBloodPressure } from "@/hooks/use-health-queries";
+import { useUpdateEating, useDeleteEating } from "@/hooks/use-eating-queries";
+import { useUpdateUrination, useDeleteUrination } from "@/hooks/use-urination-queries";
 import { useToast } from "@/hooks/use-toast";
 import { useKeyboardAwareScroll } from "@/hooks/use-keyboard-scroll";
 import { usePinProtected } from "@/hooks/use-pin-gate";
@@ -38,7 +46,9 @@ import { cn } from "@/lib/utils";
 type UnifiedRecord =
   | { type: "intake"; record: IntakeRecord }
   | { type: "weight"; record: WeightRecord }
-  | { type: "bp"; record: BloodPressureRecord };
+  | { type: "bp"; record: BloodPressureRecord }
+  | { type: "eating"; record: EatingRecord }
+  | { type: "urination"; record: UrinationRecord };
 
 import {
   timestampToDateTimeLocal,
@@ -46,7 +56,7 @@ import {
   formatTimeOnly,
 } from "@/lib/date-utils";
 
-type FilterType = "all" | "water" | "salt" | "weight" | "bp";
+type FilterType = "all" | "water" | "salt" | "weight" | "bp" | "eating" | "urination";
 
 // Get timestamp from unified record
 function getRecordTimestamp(unified: UnifiedRecord): number {
@@ -107,6 +117,17 @@ function RecordRow({
     icon = <Scale className="w-4 h-4" />;
     iconColor = "text-emerald-600 dark:text-emerald-400";
     measurement = `${record.weight} kg`;
+  } else if (unified.type === "eating") {
+    const record = unified.record;
+    icon = <Utensils className="w-4 h-4" />;
+    iconColor = "text-orange-600 dark:text-orange-400";
+    measurement = record.note ? record.note : "—";
+  } else if (unified.type === "urination") {
+    const record = unified.record;
+    icon = <Droplet className="w-4 h-4" />;
+    iconColor = "text-violet-600 dark:text-violet-400";
+    const parts = [record.amountEstimate, record.note].filter(Boolean);
+    measurement = parts.length > 0 ? parts.join(" · ") : "—";
   } else {
     const record = unified.record;
     icon = <Heart className="w-4 h-4" />;
@@ -179,6 +200,10 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
   const deleteMutation = useDeleteIntake();
   const updateWeightMutation = useUpdateWeight();
   const updateBPMutation = useUpdateBloodPressure();
+  const updateEatingMutation = useUpdateEating();
+  const deleteEatingMutation = useDeleteEating();
+  const updateUrinationMutation = useUpdateUrination();
+  const deleteUrinationMutation = useDeleteUrination();
 
   // Unified records state
   const [records, setRecords] = useState<UnifiedRecord[]>([]);
@@ -191,6 +216,8 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
   const [editingIntake, setEditingIntake] = useState<IntakeRecord | null>(null);
   const [editingWeight, setEditingWeight] = useState<WeightRecord | null>(null);
   const [editingBP, setEditingBP] = useState<BloodPressureRecord | null>(null);
+  const [editingEating, setEditingEating] = useState<EatingRecord | null>(null);
+  const [editingUrination, setEditingUrination] = useState<UrinationRecord | null>(null);
 
   // Edit form states
   const [editAmount, setEditAmount] = useState("");
@@ -202,6 +229,7 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
   const [editHeartRate, setEditHeartRate] = useState("");
   const [editPosition, setEditPosition] = useState<"sitting" | "standing">("sitting");
   const [editArm, setEditArm] = useState<"left" | "right">("left");
+  const [editAmountUrination, setEditAmountUrination] = useState("");
 
   // Load all records
   const loadAllRecords = useCallback(async (pageNum: number = 1) => {
@@ -218,6 +246,8 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
       let intakeRecords: IntakeRecord[] = [];
       let weightRecordsData: WeightRecord[] = [];
       let bpRecordsData: BloodPressureRecord[] = [];
+      let eatingRecordsData: EatingRecord[] = [];
+      let urinationRecordsData: UrinationRecord[] = [];
 
       try {
         const result = await getRecordsByCursor(undefined, 100);
@@ -238,10 +268,24 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
         console.error("Failed to load BP records:", e);
       }
 
+      try {
+        eatingRecordsData = await getEatingRecords(100);
+      } catch (e) {
+        console.error("Failed to load eating records:", e);
+      }
+
+      try {
+        urinationRecordsData = await getUrinationRecords(100);
+      } catch (e) {
+        console.error("Failed to load urination records:", e);
+      }
+
       const unified: UnifiedRecord[] = [
         ...intakeRecords.map((r) => ({ type: "intake" as const, record: r })),
         ...weightRecordsData.map((r) => ({ type: "weight" as const, record: r })),
         ...bpRecordsData.map((r) => ({ type: "bp" as const, record: r })),
+        ...eatingRecordsData.map((r) => ({ type: "eating" as const, record: r })),
+        ...urinationRecordsData.map((r) => ({ type: "urination" as const, record: r })),
       ];
 
       unified.sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a));
@@ -344,6 +388,38 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
     [toast]
   );
 
+  const handleDeleteEating = useCallback(
+    async (id: string) => {
+      setDeletingId(id);
+      try {
+        await deleteEatingMutation.mutateAsync(id);
+        setRecords((prev) => prev.filter((r) => getRecordId(r) !== id));
+        toast({ title: "Entry deleted", description: "Eating record removed" });
+      } catch {
+        toast({ title: "Error", description: "Could not delete the entry", variant: "destructive" });
+      } finally {
+        setDeletingId(null);
+      }
+    },
+    [toast, deleteEatingMutation]
+  );
+
+  const handleDeleteUrination = useCallback(
+    async (id: string) => {
+      setDeletingId(id);
+      try {
+        await deleteUrinationMutation.mutateAsync(id);
+        setRecords((prev) => prev.filter((r) => getRecordId(r) !== id));
+        toast({ title: "Entry deleted", description: "Urination record removed" });
+      } catch {
+        toast({ title: "Error", description: "Could not delete the entry", variant: "destructive" });
+      } finally {
+        setDeletingId(null);
+      }
+    },
+    [toast, deleteUrinationMutation]
+  );
+
   // Edit handlers
   const openEditIntake = useCallback((record: IntakeRecord) => {
     setEditingIntake(record);
@@ -367,6 +443,19 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
     setEditPosition(record.position);
     setEditArm(record.arm);
     setEditTimestamp(timestampToDateTimeLocal(record.timestamp));
+    setEditNote(record.note || "");
+  }, []);
+
+  const openEditEating = useCallback((record: EatingRecord) => {
+    setEditingEating(record);
+    setEditTimestamp(timestampToDateTimeLocal(record.timestamp));
+    setEditNote(record.note || "");
+  }, []);
+
+  const openEditUrination = useCallback((record: UrinationRecord) => {
+    setEditingUrination(record);
+    setEditTimestamp(timestampToDateTimeLocal(record.timestamp));
+    setEditAmountUrination(record.amountEstimate || "");
     setEditNote(record.note || "");
   }, []);
 
@@ -542,6 +631,84 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
     [editingBP, editSystolic, editDiastolic, editHeartRate, editPosition, editArm, editTimestamp, editNote, toast, updateBPMutation]
   );
 
+  const handleEditEatingSubmit = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!editingEating) return;
+      const newTimestamp = dateTimeLocalToTimestamp(editTimestamp);
+      if (isNaN(newTimestamp)) {
+        toast({ title: "Invalid date/time", variant: "destructive" });
+        return;
+      }
+      const recordToUpdate = editingEating;
+      try {
+        await updateEatingMutation.mutateAsync({
+          id: recordToUpdate.id,
+          updates: { timestamp: newTimestamp, note: editNote.trim() || undefined },
+        });
+        setEditingEating(null);
+        setRecords((prev) =>
+          prev
+            .map((r) =>
+              r.type === "eating" && r.record.id === recordToUpdate.id
+                ? { ...r, record: { ...r.record, timestamp: newTimestamp, note: editNote.trim() || undefined } }
+                : r
+            )
+            .sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a))
+        );
+        toast({ title: "Entry updated", description: "Eating record updated" });
+      } catch {
+        toast({ title: "Error", description: "Could not update", variant: "destructive" });
+      }
+    },
+    [editingEating, editTimestamp, editNote, toast, updateEatingMutation]
+  );
+
+  const handleEditUrinationSubmit = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!editingUrination) return;
+      const newTimestamp = dateTimeLocalToTimestamp(editTimestamp);
+      if (isNaN(newTimestamp)) {
+        toast({ title: "Invalid date/time", variant: "destructive" });
+        return;
+      }
+      const recordToUpdate = editingUrination;
+      try {
+        await updateUrinationMutation.mutateAsync({
+          id: recordToUpdate.id,
+          updates: {
+            timestamp: newTimestamp,
+            amountEstimate: editAmountUrination || undefined,
+            note: editNote.trim() || undefined,
+          },
+        });
+        setEditingUrination(null);
+        setRecords((prev) =>
+          prev
+            .map((r) =>
+              r.type === "urination" && r.record.id === recordToUpdate.id
+                ? {
+                    ...r,
+                    record: {
+                      ...r.record,
+                      timestamp: newTimestamp,
+                      amountEstimate: editAmountUrination || undefined,
+                      note: editNote.trim() || undefined,
+                    },
+                  }
+                : r
+            )
+            .sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a))
+        );
+        toast({ title: "Entry updated", description: "Urination record updated" });
+      } catch {
+        toast({ title: "Error", description: "Could not update", variant: "destructive" });
+      }
+    },
+    [editingUrination, editTimestamp, editAmountUrination, editNote, toast, updateUrinationMutation]
+  );
+
   // Filter records
   const filteredRecords = records.filter((r) => {
     if (filter === "all") return true;
@@ -549,6 +716,8 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
     if (filter === "salt") return r.type === "intake" && r.record.type === "salt";
     if (filter === "weight") return r.type === "weight";
     if (filter === "bp") return r.type === "bp";
+    if (filter === "eating") return r.type === "eating";
+    if (filter === "urination") return r.type === "urination";
     return true;
   });
 
@@ -566,7 +735,7 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
             
             {/* Filter Tabs */}
             <div className="flex gap-1 pt-2 overflow-x-auto">
-              {(["all", "water", "salt", "weight", "bp"] as FilterType[]).map((f) => (
+              {(["all", "water", "salt", "weight", "bp", "eating", "urination"] as FilterType[]).map((f) => (
                 <Button
                   key={f}
                   variant={filter === f ? "default" : "outline"}
@@ -576,7 +745,9 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
                     filter === f && f === "water" && "bg-sky-600 hover:bg-sky-700",
                     filter === f && f === "salt" && "bg-amber-600 hover:bg-amber-700",
                     filter === f && f === "weight" && "bg-emerald-600 hover:bg-emerald-700",
-                    filter === f && f === "bp" && "bg-rose-600 hover:bg-rose-700"
+                    filter === f && f === "bp" && "bg-rose-600 hover:bg-rose-700",
+                    filter === f && f === "eating" && "bg-orange-600 hover:bg-orange-700",
+                    filter === f && f === "urination" && "bg-violet-600 hover:bg-violet-700"
                   )}
                   onClick={() => setFilter(f)}
                 >
@@ -585,6 +756,8 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
                   {f === "salt" && "Salt"}
                   {f === "weight" && "Weight"}
                   {f === "bp" && "BP"}
+                  {f === "eating" && "Eating"}
+                  {f === "urination" && "Urination"}
                 </Button>
               ))}
             </div>
@@ -615,17 +788,27 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
                     </div>
                     <div className="border-t border-border/50">
                       {dayRecords.map((unified) => {
-                        const onDelete = unified.type === "intake"
-                          ? () => handleDeleteIntake(unified.record.id)
-                          : unified.type === "weight"
-                          ? () => handleDeleteWeight(unified.record.id)
-                          : () => handleDeleteBP(unified.record.id);
-                        
-                        const onEdit = unified.type === "intake"
-                          ? () => openEditIntake(unified.record as IntakeRecord)
-                          : unified.type === "weight"
-                          ? () => openEditWeight(unified.record as WeightRecord)
-                          : () => openEditBP(unified.record as BloodPressureRecord);
+                        const onDelete =
+                          unified.type === "intake"
+                            ? () => handleDeleteIntake(unified.record.id)
+                            : unified.type === "weight"
+                              ? () => handleDeleteWeight(unified.record.id)
+                              : unified.type === "bp"
+                                ? () => handleDeleteBP(unified.record.id)
+                                : unified.type === "eating"
+                                  ? () => handleDeleteEating(unified.record.id)
+                                  : () => handleDeleteUrination(unified.record.id);
+
+                        const onEdit =
+                          unified.type === "intake"
+                            ? () => openEditIntake(unified.record as IntakeRecord)
+                            : unified.type === "weight"
+                              ? () => openEditWeight(unified.record as WeightRecord)
+                              : unified.type === "bp"
+                                ? () => openEditBP(unified.record as BloodPressureRecord)
+                                : unified.type === "eating"
+                                  ? () => openEditEating(unified.record as EatingRecord)
+                                  : () => openEditUrination(unified.record as UrinationRecord);
 
                         return (
                           <RecordRow
@@ -708,6 +891,30 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
         onArmChange={setEditArm}
         timestamp={editTimestamp}
         onTimestampChange={setEditTimestamp}
+        note={editNote}
+        onNoteChange={setEditNote}
+        onFocus={scrollOnFocus}
+      />
+
+      <EditEatingDialog
+        record={editingEating}
+        onClose={() => setEditingEating(null)}
+        onSubmit={handleEditEatingSubmit}
+        timestamp={editTimestamp}
+        onTimestampChange={setEditTimestamp}
+        note={editNote}
+        onNoteChange={setEditNote}
+        onFocus={scrollOnFocus}
+      />
+
+      <EditUrinationDialog
+        record={editingUrination}
+        onClose={() => setEditingUrination(null)}
+        onSubmit={handleEditUrinationSubmit}
+        timestamp={editTimestamp}
+        onTimestampChange={setEditTimestamp}
+        amount={editAmountUrination}
+        onAmountChange={setEditAmountUrination}
         note={editNote}
         onNoteChange={setEditNote}
         onFocus={scrollOnFocus}

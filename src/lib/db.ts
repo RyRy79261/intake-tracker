@@ -48,11 +48,26 @@ export interface BloodPressureRecord {
   note?: string;
 }
 
+export interface EatingRecord {
+  id: string;
+  timestamp: number;
+  note?: string;
+}
+
+export interface UrinationRecord {
+  id: string;
+  timestamp: number;
+  amountEstimate?: string;
+  note?: string;
+}
+
 const db = new Dexie("IntakeTrackerDB") as Dexie & {
   intakeRecords: EntityTable<IntakeRecord, "id">;
   auditLogs: EntityTable<AuditLog, "id">;
   weightRecords: EntityTable<WeightRecord, "id">;
   bloodPressureRecords: EntityTable<BloodPressureRecord, "id">;
+  eatingRecords: EntityTable<EatingRecord, "id">;
+  urinationRecords: EntityTable<UrinationRecord, "id">;
 };
 
 // Version 1: Initial schema
@@ -64,6 +79,15 @@ db.version(4).stores({
   auditLogs: "id, timestamp, action",
   weightRecords: "id, timestamp",
   bloodPressureRecords: "id, timestamp, position, arm",
+});
+// Version 5: Added eating and urination records (additive only; existing stores unchanged)
+db.version(5).stores({
+  intakeRecords: "id, type, timestamp, source",
+  auditLogs: "id, timestamp, action",
+  weightRecords: "id, timestamp",
+  bloodPressureRecords: "id, timestamp, position, arm",
+  eatingRecords: "id, timestamp",
+  urinationRecords: "id, timestamp",
 });
 
 export { db };
