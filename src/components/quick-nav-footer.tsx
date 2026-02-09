@@ -113,7 +113,7 @@ export function QuickNavFooter({
             <button
               onClick={() => onScrollTo(item.id)}
               className={cn(
-                "flex flex-col items-center gap-1 px-2.5 py-1.5 rounded-xl transition-colors",
+                "flex flex-col items-center gap-1 w-14 px-1 py-1.5 rounded-xl transition-colors",
                 "hover:bg-muted/80 active:scale-95 active:bg-muted",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               )}

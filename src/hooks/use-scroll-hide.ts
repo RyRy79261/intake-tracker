@@ -7,6 +7,8 @@ import { smoothScrollTo } from "@/lib/smooth-scroll";
 interface UseScrollHideOptions {
   scrollDurationMs: number;
   autoHideDelayMs: number;
+  /** Whether the bottom of the page is currently in view (drives show-at-bottom). */
+  isAtBottom?: boolean;
 }
 
 interface UseScrollHideReturn {
@@ -17,11 +19,13 @@ interface UseScrollHideReturn {
 /**
  * Manages scroll-based hide/show behavior for header + footer bars.
  * Hides on scroll down, shows on scroll up.
+ * Shows bars when isAtBottom is true (bottom sentinel in view).
  * After a quick-nav scroll, force-hides after a configurable delay.
  */
 export function useScrollHide({
   scrollDurationMs,
   autoHideDelayMs,
+  isAtBottom = false,
 }: UseScrollHideOptions): UseScrollHideReturn {
   const [headerHidden, setHeaderHidden] = useState(false);
   const [forceHidden, setForceHidden] = useState(false);
@@ -29,21 +33,22 @@ export function useScrollHide({
   const forceHiddenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const navSeqRef = useRef(0);
 
+  // Keep a ref so the scroll-event callback always reads the latest value
+  const isAtBottomRef = useRef(false);
+  useEffect(() => {
+    isAtBottomRef.current = isAtBottom;
+  }, [isAtBottom]);
+
   // Scroll detection for hiding/showing header + footer
   const { scrollY } = useScroll();
   useMotionValueEvent(scrollY, "change", (current) => {
     const previous = scrollY.getPrevious() ?? 0;
     const isScrollingDown = current > previous && current > 50;
 
-    // Show footer when user has scrolled to the bottom of the page
-    const atBottom =
-      typeof window !== "undefined" &&
-      current + window.innerHeight >= document.documentElement.scrollHeight - 30;
-
-    setHeaderHidden(isScrollingDown && !atBottom);
+    setHeaderHidden(isScrollingDown && !isAtBottomRef.current);
 
     // Clear force-hide on user scroll-up or reaching bottom
-    if ((!isScrollingDown || atBottom) && forceHiddenRef.current) {
+    if ((!isScrollingDown || isAtBottomRef.current) && forceHiddenRef.current) {
       if (forceHiddenTimerRef.current) {
         clearTimeout(forceHiddenTimerRef.current);
         forceHiddenTimerRef.current = null;
@@ -52,6 +57,22 @@ export function useScrollHide({
       setForceHidden(false);
     }
   });
+
+  // When the sentinel enters/leaves view, update header visibility immediately
+  // (covers the case where scroll events stop firing at the very bottom)
+  useEffect(() => {
+    if (isAtBottom) {
+      setHeaderHidden(false);
+      if (forceHiddenRef.current) {
+        if (forceHiddenTimerRef.current) {
+          clearTimeout(forceHiddenTimerRef.current);
+          forceHiddenTimerRef.current = null;
+        }
+        forceHiddenRef.current = false;
+        setForceHidden(false);
+      }
+    }
+  }, [isAtBottom]);
 
   // Clear auto-hide timer on unmount
   useEffect(() => {
