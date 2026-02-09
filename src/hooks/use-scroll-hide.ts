@@ -1,0 +1,85 @@
+"use client";
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useScroll, useMotionValueEvent } from "motion/react";
+import { smoothScrollTo } from "@/lib/smooth-scroll";
+
+interface UseScrollHideOptions {
+  scrollDurationMs: number;
+  autoHideDelayMs: number;
+}
+
+interface UseScrollHideReturn {
+  isHidden: boolean;
+  handleQuickNav: (sectionId: string) => void;
+}
+
+/**
+ * Manages scroll-based hide/show behavior for header + footer bars.
+ * Hides on scroll down, shows on scroll up.
+ * After a quick-nav scroll, force-hides after a configurable delay.
+ */
+export function useScrollHide({
+  scrollDurationMs,
+  autoHideDelayMs,
+}: UseScrollHideOptions): UseScrollHideReturn {
+  const [headerHidden, setHeaderHidden] = useState(false);
+  const [forceHidden, setForceHidden] = useState(false);
+  const forceHiddenRef = useRef(false);
+  const forceHiddenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Scroll detection for hiding/showing header + footer
+  const { scrollY } = useScroll();
+  useMotionValueEvent(scrollY, "change", (current) => {
+    const previous = scrollY.getPrevious() ?? 0;
+    const isScrollingDown = current > previous && current > 50;
+    setHeaderHidden(isScrollingDown);
+
+    // Clear force-hide on user scroll-up
+    if (!isScrollingDown && forceHiddenRef.current) {
+      if (forceHiddenTimerRef.current) {
+        clearTimeout(forceHiddenTimerRef.current);
+        forceHiddenTimerRef.current = null;
+      }
+      forceHiddenRef.current = false;
+      setForceHidden(false);
+    }
+  });
+
+  // Clear auto-hide timer on unmount
+  useEffect(() => {
+    return () => {
+      if (forceHiddenTimerRef.current) {
+        clearTimeout(forceHiddenTimerRef.current);
+      }
+    };
+  }, []);
+
+  // Quick nav: scroll to section, then auto-hide after delay
+  const handleQuickNav = useCallback(
+    (sectionId: string) => {
+      const el = document.getElementById(sectionId);
+      if (!el) return;
+
+      // Clear any existing auto-hide timer before starting a new one
+      if (forceHiddenTimerRef.current) {
+        clearTimeout(forceHiddenTimerRef.current);
+        forceHiddenTimerRef.current = null;
+      }
+
+      smoothScrollTo(el, scrollDurationMs).then(() => {
+        forceHiddenTimerRef.current = setTimeout(() => {
+          forceHiddenTimerRef.current = null;
+          forceHiddenRef.current = true;
+          setForceHidden(true);
+        }, autoHideDelayMs);
+      });
+    },
+    [scrollDurationMs, autoHideDelayMs]
+  );
+
+  return {
+    isHidden: headerHidden || forceHidden,
+    handleQuickNav,
+  };
+}

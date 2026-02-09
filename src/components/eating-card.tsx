@@ -13,7 +13,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Utensils, Loader2, Check, PlusCircle, Trash2 } from "lucide-react";
+import { Loader2, Check, PlusCircle } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { CARD_THEMES } from "@/lib/card-themes";
+import { RecentEntriesList } from "@/components/recent-entries-list";
+import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
 import { useToast } from "@/hooks/use-toast";
 import { useEatingRecords, useAddEating, useDeleteEating } from "@/hooks/use-eating-queries";
 import {
@@ -22,16 +26,18 @@ import {
   formatDateTime,
 } from "@/lib/date-utils";
 
+const theme = CARD_THEMES.eating;
+const Icon = theme.icon;
+
 export function EatingCard() {
   const { toast } = useToast();
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [detailNote, setDetailNote] = useState("");
   const [detailTime, setDetailTime] = useState(getCurrentDateTimeLocal());
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-
   const { data: recentRecords, isLoading } = useEatingRecords(5);
   const addMutation = useAddEating();
   const deleteMutation = useDeleteEating();
+  const { deletingId, handleDelete } = useDeleteWithToast(deleteMutation, "Eating record removed");
 
   const latestRecord = recentRecords?.[0];
 
@@ -79,19 +85,19 @@ export function EatingCard() {
 
   return (
     <>
-      <Card className="relative overflow-hidden transition-all duration-300 bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950/40 dark:to-amber-950/40 border-orange-200 dark:border-orange-800">
+      <Card className={cn("relative overflow-hidden transition-all duration-300 bg-gradient-to-br", theme.gradient, theme.border)}>
         <CardContent className="p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <div className="p-2 rounded-lg bg-orange-100 dark:bg-orange-900/50">
-                <Utensils className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+              <div className={cn("p-2 rounded-lg", theme.iconBg)}>
+                <Icon className={cn("w-5 h-5", theme.iconColor)} />
               </div>
               <span className="font-semibold text-lg uppercase tracking-wide">
-                Eating
+                {theme.label}
               </span>
             </div>
             {isLoading ? (
-              <div className="h-6 w-20 bg-orange-200 dark:bg-orange-800 rounded animate-pulse" />
+              <div className={cn("h-6 w-20 rounded animate-pulse", theme.loadingBg)} />
             ) : latestRecord ? (
               <p className="text-xs text-muted-foreground">
                 {formatDateTime(latestRecord.timestamp)}
@@ -103,7 +109,7 @@ export function EatingCard() {
             <Button
               onClick={handleLogNow}
               disabled={addMutation.isPending}
-              className="w-full h-11 bg-orange-600 hover:bg-orange-700"
+              className={cn("w-full h-11", theme.buttonBg)}
             >
               {addMutation.isPending ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -117,7 +123,7 @@ export function EatingCard() {
             <Button
               variant="outline"
               size="sm"
-              className="w-full border-orange-200 dark:border-orange-800 text-orange-700 dark:text-orange-300"
+              className={cn("w-full", theme.outlineBorder, theme.outlineText)}
               onClick={handleOpenDetails}
             >
               <PlusCircle className="w-4 h-4 mr-2" />
@@ -126,52 +132,22 @@ export function EatingCard() {
           </div>
 
           {/* Recent History */}
-          {recentRecords && recentRecords.length > 0 && (
-            <div className="mt-4 pt-4 border-t border-orange-200 dark:border-orange-800">
-              <p className="text-xs font-medium text-muted-foreground mb-2">Recent</p>
-              <div className="space-y-1">
-                {recentRecords.slice(0, 3).map((record) => (
-                  <div
-                    key={record.id}
-                    className="flex items-center justify-between text-sm py-1"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-muted-foreground shrink-0">{formatDateTime(record.timestamp)}</span>
-                      {record.note && (
-                        <span className="text-xs text-muted-foreground/70 truncate">
-                          {record.note}
-                        </span>
-                      )}
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label="Delete entry"
-                      className="h-6 w-6 text-muted-foreground hover:text-red-600 shrink-0"
-                      onClick={async () => {
-                        setDeletingId(record.id);
-                        try {
-                          await deleteMutation.mutateAsync(record.id);
-                          toast({ title: "Entry deleted", description: "Eating record removed" });
-                        } catch {
-                          toast({ title: "Error", description: "Could not delete", variant: "destructive" });
-                        } finally {
-                          setDeletingId(null);
-                        }
-                      }}
-                      disabled={deletingId === record.id}
-                    >
-                      {deletingId === record.id ? (
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                      ) : (
-                        <Trash2 className="w-3 h-3" />
-                      )}
-                    </Button>
-                  </div>
-                ))}
+          <RecentEntriesList
+            records={recentRecords}
+            deletingId={deletingId}
+            onDelete={handleDelete}
+            borderColor={theme.border}
+            renderEntry={(record) => (
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-muted-foreground shrink-0">{formatDateTime(record.timestamp)}</span>
+                {record.note && (
+                  <span className="text-xs text-muted-foreground/70 truncate">
+                    {record.note}
+                  </span>
+                )}
               </div>
-            </div>
-          )}
+            )}
+          />
         </CardContent>
       </Card>
 
@@ -207,7 +183,7 @@ export function EatingCard() {
             <Button
               onClick={handleSubmitDetails}
               disabled={addMutation.isPending}
-              className="w-full bg-orange-600 hover:bg-orange-700"
+              className={cn("w-full", theme.buttonBg)}
             >
               {addMutation.isPending ? (
                 <Loader2 className="w-4 h-4 animate-spin" />

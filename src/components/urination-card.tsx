@@ -20,7 +20,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Droplet, Loader2, Check, PlusCircle, Trash2 } from "lucide-react";
+import { Loader2, Check, PlusCircle } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { CARD_THEMES } from "@/lib/card-themes";
+import { RecentEntriesList } from "@/components/recent-entries-list";
+import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
 import { useToast } from "@/hooks/use-toast";
 import { useUrinationRecords, useAddUrination, useDeleteUrination } from "@/hooks/use-urination-queries";
 import {
@@ -28,12 +32,12 @@ import {
   dateTimeLocalToTimestamp,
   formatDateTime,
 } from "@/lib/date-utils";
+import { URINATION_AMOUNT_OPTIONS } from "@/lib/constants";
 
-const AMOUNT_OPTIONS = [
-  { value: "small", label: "Small" },
-  { value: "medium", label: "Medium" },
-  { value: "large", label: "Large" },
-] as const;
+const AMOUNT_OPTIONS = URINATION_AMOUNT_OPTIONS;
+
+const theme = CARD_THEMES.urination;
+const Icon = theme.icon;
 
 export function UrinationCard() {
   const { toast } = useToast();
@@ -41,11 +45,10 @@ export function UrinationCard() {
   const [amount, setAmount] = useState<string>("");
   const [note, setNote] = useState("");
   const [detailTime, setDetailTime] = useState(getCurrentDateTimeLocal());
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-
   const { data: recentRecords, isLoading } = useUrinationRecords(5);
   const addMutation = useAddUrination();
   const deleteMutation = useDeleteUrination();
+  const { deletingId, handleDelete } = useDeleteWithToast(deleteMutation, "Urination record removed");
 
   const latestRecord = recentRecords?.[0];
 
@@ -98,19 +101,19 @@ export function UrinationCard() {
 
   return (
     <>
-      <Card className="relative overflow-hidden transition-all duration-300 bg-gradient-to-br from-violet-50 to-purple-50 dark:from-violet-950/40 dark:to-purple-950/40 border-violet-200 dark:border-violet-800">
+      <Card className={cn("relative overflow-hidden transition-all duration-300 bg-gradient-to-br", theme.gradient, theme.border)}>
         <CardContent className="p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <div className="p-2 rounded-lg bg-violet-100 dark:bg-violet-900/50">
-                <Droplet className="w-5 h-5 text-violet-600 dark:text-violet-400" />
+              <div className={cn("p-2 rounded-lg", theme.iconBg)}>
+                <Icon className={cn("w-5 h-5", theme.iconColor)} />
               </div>
               <span className="font-semibold text-lg uppercase tracking-wide">
-                Urination
+                {theme.label}
               </span>
             </div>
             {isLoading ? (
-              <div className="h-6 w-20 bg-violet-200 dark:bg-violet-800 rounded animate-pulse" />
+              <div className={cn("h-6 w-20 rounded animate-pulse", theme.loadingBg)} />
             ) : latestRecord ? (
               <p className="text-xs text-muted-foreground">
                 {formatDateTime(latestRecord.timestamp)}
@@ -122,7 +125,7 @@ export function UrinationCard() {
             <Button
               onClick={handleLogNow}
               disabled={addMutation.isPending}
-              className="w-full h-11 bg-violet-600 hover:bg-violet-700"
+              className={cn("w-full h-11", theme.buttonBg)}
             >
               {addMutation.isPending ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -136,7 +139,7 @@ export function UrinationCard() {
             <Button
               variant="outline"
               size="sm"
-              className="w-full border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-300"
+              className={cn("w-full", theme.outlineBorder, theme.outlineText)}
               onClick={handleOpenDetails}
             >
               <PlusCircle className="w-4 h-4 mr-2" />
@@ -145,55 +148,25 @@ export function UrinationCard() {
           </div>
 
           {/* Recent History */}
-          {recentRecords && recentRecords.length > 0 && (
-            <div className="mt-4 pt-4 border-t border-violet-200 dark:border-violet-800">
-              <p className="text-xs font-medium text-muted-foreground mb-2">Recent</p>
-              <div className="space-y-1">
-                {recentRecords.slice(0, 3).map((record) => (
-                  <div
-                    key={record.id}
-                    className="flex items-center justify-between text-sm py-1"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-muted-foreground shrink-0">{formatDateTime(record.timestamp)}</span>
-                      {record.amountEstimate && (
-                        <span className="text-xs font-medium capitalize">{record.amountEstimate}</span>
-                      )}
-                      {record.note && (
-                        <span className="text-xs text-muted-foreground/70 truncate">
-                          {record.note}
-                        </span>
-                      )}
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label="Delete entry"
-                      className="h-6 w-6 text-muted-foreground hover:text-red-600 shrink-0"
-                      onClick={async () => {
-                        setDeletingId(record.id);
-                        try {
-                          await deleteMutation.mutateAsync(record.id);
-                          toast({ title: "Entry deleted", description: "Urination record removed" });
-                        } catch {
-                          toast({ title: "Error", description: "Could not delete", variant: "destructive" });
-                        } finally {
-                          setDeletingId(null);
-                        }
-                      }}
-                      disabled={deletingId === record.id}
-                    >
-                      {deletingId === record.id ? (
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                      ) : (
-                        <Trash2 className="w-3 h-3" />
-                      )}
-                    </Button>
-                  </div>
-                ))}
+          <RecentEntriesList
+            records={recentRecords}
+            deletingId={deletingId}
+            onDelete={handleDelete}
+            borderColor={theme.border}
+            renderEntry={(record) => (
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-muted-foreground shrink-0">{formatDateTime(record.timestamp)}</span>
+                {record.amountEstimate && (
+                  <span className="text-xs font-medium capitalize">{record.amountEstimate}</span>
+                )}
+                {record.note && (
+                  <span className="text-xs text-muted-foreground/70 truncate">
+                    {record.note}
+                  </span>
+                )}
               </div>
-            </div>
-          )}
+            )}
+          />
         </CardContent>
       </Card>
 
@@ -244,7 +217,7 @@ export function UrinationCard() {
             <Button
               onClick={handleSubmitDetails}
               disabled={addMutation.isPending}
-              className="w-full bg-violet-600 hover:bg-violet-700"
+              className={cn("w-full", theme.buttonBg)}
             >
               {addMutation.isPending ? (
                 <Loader2 className="w-4 h-4 animate-spin" />

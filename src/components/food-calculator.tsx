@@ -23,37 +23,13 @@ import {
 import { Apple, Calculator } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatAmount } from "@/lib/utils";
+import { FOOD_PRESETS } from "@/lib/constants";
 
 interface FoodCalculatorProps {
   onAddWater: (amount: number, source: string) => Promise<void>;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }
-
-// Common foods with their water content percentages
-const FOOD_PRESETS = [
-  { name: "Apple", waterPercent: 86 },
-  { name: "Banana", waterPercent: 75 },
-  { name: "Orange", waterPercent: 87 },
-  { name: "Watermelon", waterPercent: 92 },
-  { name: "Grapes", waterPercent: 81 },
-  { name: "Strawberries", waterPercent: 91 },
-  { name: "Cucumber", waterPercent: 96 },
-  { name: "Tomato", waterPercent: 94 },
-  { name: "Lettuce", waterPercent: 96 },
-  { name: "Celery", waterPercent: 95 },
-  { name: "Carrot", waterPercent: 88 },
-  { name: "Broccoli", waterPercent: 89 },
-  { name: "Spinach", waterPercent: 91 },
-  { name: "Peach", waterPercent: 89 },
-  { name: "Pineapple", waterPercent: 86 },
-  { name: "Milk", waterPercent: 87 },
-  { name: "Yogurt", waterPercent: 85 },
-  { name: "Soup (broth)", waterPercent: 92 },
-  { name: "Rice (cooked)", waterPercent: 70 },
-  { name: "Pasta (cooked)", waterPercent: 62 },
-  { name: "Custom", waterPercent: 80 },
-];
 
 export function FoodCalculator({ onAddWater, open: controlledOpen, onOpenChange }: FoodCalculatorProps) {
   const [internalOpen, setInternalOpen] = useState(false);

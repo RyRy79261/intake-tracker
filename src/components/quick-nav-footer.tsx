@@ -2,17 +2,8 @@
 
 import { useRef, useEffect } from "react";
 import { motion } from "motion/react";
-import {
-  Droplets,
-  Sparkles,
-  Scale,
-  Heart,
-  Utensils,
-  Droplet,
-  Apple,
-  Sparkles as SparklesAlt,
-} from "lucide-react";
 import { cn } from "@/lib/utils";
+import { CARD_THEMES, UTILITY_THEMES, type CardThemeKey, type UtilityThemeKey } from "@/lib/card-themes";
 
 interface NavItem {
   id: string;
@@ -23,72 +14,35 @@ interface NavItem {
   type: "section" | "utility";
 }
 
-const NAV_ITEMS: NavItem[] = [
-  {
-    id: "section-water",
-    icon: Droplets,
-    label: "Water",
-    iconColor: "text-sky-600 dark:text-sky-400",
-    bgColor: "bg-sky-100 dark:bg-sky-900/50",
-    type: "section",
-  },
-  {
-    id: "section-salt",
-    icon: Sparkles,
-    label: "Salt",
-    iconColor: "text-amber-600 dark:text-amber-400",
-    bgColor: "bg-amber-100 dark:bg-amber-900/50",
-    type: "section",
-  },
-  {
-    id: "section-weight",
-    icon: Scale,
-    label: "Weight",
-    iconColor: "text-emerald-600 dark:text-emerald-400",
-    bgColor: "bg-emerald-100 dark:bg-emerald-900/50",
-    type: "section",
-  },
-  {
-    id: "section-bp",
-    icon: Heart,
-    label: "BP",
-    iconColor: "text-rose-600 dark:text-rose-400",
-    bgColor: "bg-rose-100 dark:bg-rose-900/50",
-    type: "section",
-  },
-  {
-    id: "section-eating",
-    icon: Utensils,
-    label: "Eating",
-    iconColor: "text-orange-600 dark:text-orange-400",
-    bgColor: "bg-orange-100 dark:bg-orange-900/50",
-    type: "section",
-  },
-  {
-    id: "section-urination",
-    icon: Droplet,
-    label: "Urination",
-    iconColor: "text-violet-600 dark:text-violet-400",
-    bgColor: "bg-violet-100 dark:bg-violet-900/50",
-    type: "section",
-  },
-  {
-    id: "utility-food",
-    icon: Apple,
-    label: "Food",
-    iconColor: "text-green-600 dark:text-green-400",
-    bgColor: "bg-green-100 dark:bg-green-900/50",
-    type: "utility",
-  },
-  {
-    id: "utility-ai",
-    icon: SparklesAlt,
-    label: "AI",
-    iconColor: "text-violet-600 dark:text-violet-400",
-    bgColor: "bg-violet-100 dark:bg-violet-900/50",
-    type: "utility",
-  },
-];
+function buildNavItems(): NavItem[] {
+  const sectionItems: NavItem[] = (Object.keys(CARD_THEMES) as CardThemeKey[]).map((key) => {
+    const theme = CARD_THEMES[key];
+    return {
+      id: theme.sectionId,
+      icon: theme.icon,
+      label: theme.label,
+      iconColor: theme.iconColor,
+      bgColor: theme.iconBg,
+      type: "section" as const,
+    };
+  });
+
+  const utilityItems: NavItem[] = (Object.keys(UTILITY_THEMES) as UtilityThemeKey[]).map((key) => {
+    const theme = UTILITY_THEMES[key];
+    return {
+      id: `utility-${key}`,
+      icon: theme.icon,
+      label: theme.label,
+      iconColor: theme.iconColor,
+      bgColor: theme.iconBg,
+      type: "utility" as const,
+    };
+  });
+
+  return [...sectionItems, ...utilityItems];
+}
+
+const NAV_ITEMS = buildNavItems();
 
 interface QuickNavFooterProps {
   hidden: boolean;

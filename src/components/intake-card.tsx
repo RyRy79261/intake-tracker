@@ -4,10 +4,13 @@ import { useState, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Minus, Plus, Check, Droplets, Sparkles, Trash2, Loader2 } from "lucide-react";
+import { Minus, Plus, Check } from "lucide-react";
 import { cn, formatAmount } from "@/lib/utils";
+import { CARD_THEMES } from "@/lib/card-themes";
+import { RecentEntriesList } from "@/components/recent-entries-list";
 import { ManualInputDialog } from "./manual-input-dialog";
 import { useToast } from "@/hooks/use-toast";
+import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
 import { useDeleteIntake, useRecentIntakeRecords } from "@/hooks/use-intake-queries";
 
 interface IntakeCardProps {
@@ -32,17 +35,17 @@ export function IntakeCard({
   const [pendingAmount, setPendingAmount] = useState(increment);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showManualInput, setShowManualInput] = useState(false);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
   const { toast } = useToast();
   const deleteMutation = useDeleteIntake();
-  
+  const { deletingId, handleDelete } = useDeleteWithToast(deleteMutation, `${CARD_THEMES[type].label} entry removed`);
+
   // Fetch recent records using TanStack Query (replaces useLiveQuery to avoid transaction conflicts)
   const { data: recentRecords } = useRecentIntakeRecords(type);
 
+  const theme = CARD_THEMES[type];
+  const Icon = theme.icon;
+  const unit = type === "water" ? "ml" : "mg";
   const isWater = type === "water";
-  const unit = isWater ? "ml" : "mg";
-  const icon = isWater ? Droplets : Sparkles;
-  const Icon = icon;
 
   // Use daily total for budget tracking (primary metric)
   // Guard against zero/negative limit to prevent division errors
@@ -66,7 +69,7 @@ export function IntakeCard({
       await onConfirm(pendingAmount);
       toast({
         title: `Added ${formatAmount(pendingAmount, unit)}`,
-        description: `${isWater ? "Water" : "Salt"} intake recorded`,
+        description: `${theme.label} intake recorded`,
         variant: "success",
       });
       setPendingAmount(increment);
@@ -79,7 +82,7 @@ export function IntakeCard({
     } finally {
       setIsSubmitting(false);
     }
-  }, [pendingAmount, increment, onConfirm, toast, unit, isWater]);
+  }, [pendingAmount, increment, onConfirm, toast, unit, theme.label]);
 
   const handleManualSubmit = useCallback(
     async (amount: number, timestamp?: number, note?: string) => {
@@ -88,9 +91,9 @@ export function IntakeCard({
         await onConfirm(amount, timestamp, note);
         toast({
           title: `Added ${formatAmount(amount, unit)}`,
-          description: timestamp 
-            ? `${isWater ? "Water" : "Salt"} intake recorded for earlier time`
-            : `${isWater ? "Water" : "Salt"} intake recorded`,
+          description: timestamp
+            ? `${theme.label} intake recorded for earlier time`
+            : `${theme.label} intake recorded`,
           variant: "success",
         });
         setShowManualInput(false);
@@ -104,29 +107,7 @@ export function IntakeCard({
         setIsSubmitting(false);
       }
     },
-    [onConfirm, toast, unit, isWater]
-  );
-
-  const handleDelete = useCallback(
-    async (id: string) => {
-      setDeletingId(id);
-      try {
-        await deleteMutation.mutateAsync(id);
-        toast({
-          title: "Entry deleted",
-          description: `${isWater ? "Water" : "Salt"} entry removed`,
-        });
-      } catch {
-        toast({
-          title: "Error",
-          description: "Could not delete the entry",
-          variant: "destructive",
-        });
-      } finally {
-        setDeletingId(null);
-      }
-    },
-    [deleteMutation, toast, isWater]
+    [onConfirm, toast, unit, theme.label]
   );
 
   // Format time from timestamp
@@ -143,34 +124,18 @@ export function IntakeCard({
       <Card
         className={cn(
           "relative overflow-hidden transition-all duration-300",
-          isWater
-            ? "bg-gradient-to-br from-sky-50 to-cyan-50 dark:from-sky-950/40 dark:to-cyan-950/40 border-sky-200 dark:border-sky-800"
-            : "bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/40 dark:to-orange-950/40 border-amber-200 dark:border-amber-800"
+          `bg-gradient-to-br ${theme.gradient} ${theme.border}`
         )}
       >
         <CardContent className="p-6">
           {/* Header */}
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <div
-                className={cn(
-                  "p-2 rounded-lg",
-                  isWater
-                    ? "bg-sky-100 dark:bg-sky-900/50"
-                    : "bg-amber-100 dark:bg-amber-900/50"
-                )}
-              >
-                <Icon
-                  className={cn(
-                    "w-5 h-5",
-                    isWater
-                      ? "text-sky-600 dark:text-sky-400"
-                      : "text-amber-600 dark:text-amber-400"
-                  )}
-                />
+              <div className={cn("p-2 rounded-lg", theme.iconBg)}>
+                <Icon className={cn("w-5 h-5", theme.iconColor)} />
               </div>
               <span className="font-semibold text-lg uppercase tracking-wide">
-                {isWater ? "Water" : "Salt"}
+                {theme.label}
               </span>
             </div>
             <div className="text-right">
@@ -197,11 +162,7 @@ export function IntakeCard({
               value={progressPercent}
               className="h-3"
               indicatorClassName={cn(
-                isOverLimit
-                  ? "bg-red-500"
-                  : isWater
-                  ? "bg-gradient-to-r from-sky-400 to-cyan-500"
-                  : "bg-gradient-to-r from-amber-400 to-orange-500"
+                isOverLimit ? "bg-red-500" : theme.progressGradient
               )}
             />
           </div>
@@ -214,12 +175,7 @@ export function IntakeCard({
               size="icon-lg"
               onClick={handleDecrement}
               disabled={pendingAmount <= increment || isSubmitting}
-              className={cn(
-                "shrink-0 rounded-full transition-all",
-                isWater
-                  ? "hover:bg-sky-100 hover:border-sky-300 dark:hover:bg-sky-900/50"
-                  : "hover:bg-amber-100 hover:border-amber-300 dark:hover:bg-amber-900/50"
-              )}
+              className={cn("shrink-0 rounded-full transition-all", theme.hoverBg)}
             >
               <Minus className="w-6 h-6" />
             </Button>
@@ -232,9 +188,7 @@ export function IntakeCard({
                 "flex-1 py-4 px-6 rounded-xl transition-all",
                 "flex flex-col items-center justify-center gap-1",
                 "hover:scale-105 active:scale-95",
-                isWater
-                  ? "bg-sky-100/80 hover:bg-sky-200/80 dark:bg-sky-900/50 dark:hover:bg-sky-800/50"
-                  : "bg-amber-100/80 hover:bg-amber-200/80 dark:bg-amber-900/50 dark:hover:bg-amber-800/50"
+                theme.inputBg
               )}
             >
               <span
@@ -242,9 +196,7 @@ export function IntakeCard({
                   "text-3xl font-bold tabular-nums",
                   wouldExceedLimit && !isOverLimit
                     ? "text-orange-600 dark:text-orange-400"
-                    : isWater
-                    ? "text-sky-700 dark:text-sky-300"
-                    : "text-amber-700 dark:text-amber-300"
+                    : theme.inputText
                 )}
               >
                 +{formatAmount(pendingAmount, unit)}
@@ -260,12 +212,7 @@ export function IntakeCard({
               size="icon-lg"
               onClick={handleIncrement}
               disabled={isSubmitting}
-              className={cn(
-                "shrink-0 rounded-full transition-all",
-                isWater
-                  ? "hover:bg-sky-100 hover:border-sky-300 dark:hover:bg-sky-900/50"
-                  : "hover:bg-amber-100 hover:border-amber-300 dark:hover:bg-amber-900/50"
-              )}
+              className={cn("shrink-0 rounded-full transition-all", theme.hoverBg)}
             >
               <Plus className="w-6 h-6" />
             </Button>
@@ -275,54 +222,29 @@ export function IntakeCard({
           <Button
             onClick={handleConfirm}
             disabled={isSubmitting || isLoading}
-            className={cn(
-              "w-full mt-4 h-12 text-base font-semibold",
-              isWater ? "bg-sky-600 hover:bg-sky-700" : "bg-amber-600 hover:bg-amber-700"
-            )}
+            className={cn("w-full mt-4 h-12 text-base font-semibold", theme.buttonBg)}
           >
             <Check className="w-5 h-5 mr-2" />
             {isSubmitting ? "Recording..." : "Confirm Entry"}
           </Button>
 
           {/* Recent Entries */}
-          {recentRecords && recentRecords.length > 0 && (
-            <div
-              className={cn(
-                "mt-4 pt-4 border-t",
-                isWater ? "border-sky-200 dark:border-sky-800" : "border-amber-200 dark:border-amber-800"
-              )}
-            >
-              <p className="text-xs font-medium text-muted-foreground mb-2">Recent</p>
-              <div className="space-y-1">
-                {recentRecords.map((record) => (
-                  <div
-                    key={record.id}
-                    className="flex items-center justify-between text-sm py-1"
-                  >
-                    <span className="text-muted-foreground">{formatTime(record.timestamp)}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">
-                        {formatAmount(record.amount, unit)}
-                      </span>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 text-muted-foreground hover:text-red-600"
-                        onClick={() => handleDelete(record.id)}
-                        disabled={deletingId === record.id}
-                      >
-                        {deletingId === record.id ? (
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                        ) : (
-                          <Trash2 className="w-3 h-3" />
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          <RecentEntriesList
+            records={recentRecords}
+            deletingId={deletingId}
+            onDelete={handleDelete}
+            borderColor={theme.border}
+            renderEntry={(record) => (
+              <>
+                <span className="text-muted-foreground">{formatTime(record.timestamp)}</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">
+                    {formatAmount(record.amount, unit)}
+                  </span>
+                </div>
+              </>
+            )}
+          />
         </CardContent>
       </Card>
 
