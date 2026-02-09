@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect } from "react";
+import { useMemo } from "react";
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { CARD_THEMES, UTILITY_THEMES, type CardThemeKey } from "@/lib/card-themes";
@@ -67,22 +67,11 @@ export function QuickNavFooter({
   onOpenFoodCalculator,
   onOpenVoiceInput,
 }: QuickNavFooterProps) {
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-
   // Order section items based on LTR/RTL preference
-  const orderedSections = order === "rtl" ? [...SECTION_ITEMS].reverse() : SECTION_ITEMS;
-
-  // Auto-scroll to the right end on mount for RTL so most-used icons are visible
-  useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-
-    if (order === "rtl") {
-      container.scrollLeft = container.scrollWidth;
-    } else {
-      container.scrollLeft = 0;
-    }
-  }, [order]);
+  const orderedSections = useMemo(
+    () => (order === "rtl" ? [...SECTION_ITEMS].reverse() : SECTION_ITEMS),
+    [order]
+  );
 
   // Build utility row: two buttons ordered by utilityOrder setting
   const utilityLeft = utilityOrder === "ai-right" ? FOOD_ITEM : AI_ITEM;
@@ -97,19 +86,10 @@ export function QuickNavFooter({
       animate={{ y: hidden ? "100%" : 0 }}
       transition={{ duration: transitionDuration, ease: "easeInOut" }}
     >
-      {/* Row 1: Scrollable section gallery */}
-      <div
-        ref={scrollContainerRef}
-        className="flex items-center gap-1 px-3 py-1.5 overflow-x-auto scrollbar-hide"
-        style={{
-          scrollSnapType: "x mandatory",
-          WebkitOverflowScrolling: "touch",
-          scrollbarWidth: "none",
-          msOverflowStyle: "none",
-        }}
-      >
+      {/* Row 1: Section gallery — evenly distributed */}
+      <div className="flex items-center px-2 py-1.5">
         {orderedSections.map((item) => (
-          <div key={item.id} className="shrink-0" style={{ scrollSnapAlign: "center" }}>
+          <div key={item.id} className="flex-1 flex justify-evenly">
             <button
               onClick={() => onScrollTo(item.id)}
               className={cn(

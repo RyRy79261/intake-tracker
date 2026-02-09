@@ -163,7 +163,7 @@ function HomeContent() {
         <p className="mt-1">
           Water: max 1L/day · Salt: max 1500mg/day
         </p>
-        <div ref={bottomSentinelRef} />
+        <div ref={bottomSentinelRef} className="h-px" />
       </footer>
 
       {/* Quick Nav Footer */}
