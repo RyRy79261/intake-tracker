@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { IntakeCard } from "@/components/intake-card";
 import { FoodCalculator } from "@/components/food-calculator";
 import { VoiceInput } from "@/components/voice-input";
@@ -18,7 +18,6 @@ import { useIntake } from "@/hooks/use-intake-queries";
 import { useSettings } from "@/hooks/use-settings";
 import { usePinProtected } from "@/hooks/use-pin-gate";
 import { useScrollHide } from "@/hooks/use-scroll-hide";
-import { useInView } from "motion/react";
 import { cn } from "@/lib/utils";
 import { Droplets } from "lucide-react";
 
@@ -34,12 +33,9 @@ function HomeContent() {
   const { showLockedUI } = usePinProtected();
 
   const barTransitionSec = settings.barTransitionDurationMs / 1000;
-  const bottomSentinelRef = useRef<HTMLDivElement>(null);
-  const isAtBottom = useInView(bottomSentinelRef);
   const { isHidden, handleQuickNav } = useScrollHide({
     scrollDurationMs: settings.scrollDurationMs,
     autoHideDelayMs: settings.autoHideDelayMs,
-    isAtBottom,
   });
 
   // Handle hydration mismatch for localStorage
@@ -163,7 +159,6 @@ function HomeContent() {
         <p className="mt-1">
           Water: max 1L/day · Salt: max 1500mg/day
         </p>
-        <div ref={bottomSentinelRef} className="h-px" />
       </footer>
 
       {/* Quick Nav Footer */}
