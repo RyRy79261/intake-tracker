@@ -177,7 +177,7 @@ function BPFilterPanel({
 
 // ── BPChart ──────────────────────────────────────────────────
 
-export function BPChart({ data }: { data: GraphData }) {
+export function BPChart({ data, now }: { data: GraphData; now: number }) {
   const [toggles, setToggles] = useState<Record<BPToggleKey, boolean>>({ ...BP_DEFAULTS });
 
   useEffect(() => {
@@ -207,6 +207,10 @@ export function BPChart({ data }: { data: GraphData }) {
     return [Math.min(40, dataMin - 5), Math.max(120, dataMax + 5)];
   }, [points, activeKeys]);
 
+  // Full-scope X-axis: left edge = scope start, right edge = live "now"
+  const xMin = data.startTime;
+  const xMax = now;
+
   const hasActiveToggles = activeKeys.length > 0;
   const hasData = data.bloodPressureRecords.length > 0;
 
@@ -224,9 +228,20 @@ export function BPChart({ data }: { data: GraphData }) {
         <ResponsiveContainer width="100%" height={280}>
           <LineChart data={points} margin={CHART_MARGIN}>
             <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-            <XAxis dataKey="timeLabel" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+            <XAxis
+              dataKey="time"
+              type="number"
+              domain={[xMin, xMax]}
+              tick={{ fontSize: 10 }}
+              tickLine={false}
+              axisLine={false}
+              tickFormatter={(ts) => formatTimeLabel(ts, data.scope)}
+            />
             <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} domain={yDomain} />
-            <Tooltip contentStyle={TOOLTIP_STYLE} />
+            <Tooltip
+              contentStyle={TOOLTIP_STYLE}
+              labelFormatter={(ts) => formatTimeLabel(ts as number, data.scope)}
+            />
             <Legend wrapperStyle={{ fontSize: 10 }} />
             {activeKeys.map(({ key, color, dash, label }) => (
               <Line key={key} type="monotone" dataKey={key} name={label} stroke={color} strokeWidth={2} strokeDasharray={dash} dot={{ r: 3, fill: color }} connectNulls isAnimationActive={false} />

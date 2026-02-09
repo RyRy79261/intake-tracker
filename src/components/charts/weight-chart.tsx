@@ -19,7 +19,7 @@ type WeightPoint = {
   weight: number;
 };
 
-export function WeightChart({ data }: { data: GraphData }) {
+export function WeightChart({ data, now }: { data: GraphData; now: number }) {
   const { weightRecords, eatingRecords, urinationRecords, scope } = data;
 
   const points: WeightPoint[] = useMemo(
@@ -29,6 +29,10 @@ export function WeightChart({ data }: { data: GraphData }) {
         .map((r) => ({ time: r.timestamp, weight: r.weight })),
     [weightRecords]
   );
+
+  // Full-scope X-axis: left edge = scope start, right edge = live "now"
+  const xMin = data.startTime;
+  const xMax = now;
 
   if (points.length === 0) {
     return (
@@ -41,15 +45,9 @@ export function WeightChart({ data }: { data: GraphData }) {
   const weights = points.map((p) => p.weight);
   const minW = Math.min(...weights);
   const maxW = Math.max(...weights);
-  const yDomain: [number, number] = [Math.floor(minW - 1), Math.ceil(maxW + 1)];
-
-  const allTimestamps = [
-    ...points.map((p) => p.time),
-    ...eatingRecords.map((r) => r.timestamp),
-    ...urinationRecords.map((r) => r.timestamp),
-  ];
-  const xMin = Math.min(...allTimestamps);
-  const xMax = Math.max(...allTimestamps);
+  const yMin = Math.floor(minW) - 1;
+  const yMax = Math.ceil(maxW) + 1;
+  const yTicks = Array.from({ length: yMax - yMin + 1 }, (_, i) => yMin + i);
 
   return (
     <div>
@@ -66,7 +64,8 @@ export function WeightChart({ data }: { data: GraphData }) {
             tickFormatter={(ts) => formatTimeLabel(ts, scope)}
           />
           <YAxis
-            domain={yDomain}
+            domain={[yMin, yMax]}
+            ticks={yTicks}
             tick={{ fontSize: 10 }}
             tickLine={false}
             axisLine={false}

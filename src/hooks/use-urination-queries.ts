@@ -9,6 +9,7 @@ import {
   updateUrinationRecord,
   deleteUrinationRecord,
 } from "@/lib/urination-service";
+import { graphKeys } from "@/hooks/use-graph-data";
 
 export type AddUrinationParams = {
   timestamp?: number;
@@ -62,6 +63,7 @@ export function useAddUrination() {
       ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: urinationKeys.all });
+      queryClient.invalidateQueries({ queryKey: graphKeys.all });
     },
   });
 }
@@ -74,6 +76,7 @@ export function useUpdateUrination() {
       updateUrinationRecord(params.id, params.updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: urinationKeys.all });
+      queryClient.invalidateQueries({ queryKey: graphKeys.all });
     },
   });
 }
@@ -85,6 +88,7 @@ export function useDeleteUrination() {
     mutationFn: (id: string) => deleteUrinationRecord(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: urinationKeys.all });
+      queryClient.invalidateQueries({ queryKey: graphKeys.all });
     },
   });
 }

@@ -12,6 +12,7 @@ import {
   updateBloodPressureRecord,
   deleteBloodPressureRecord,
 } from "@/lib/health-service";
+import { graphKeys } from "@/hooks/use-graph-data";
 
 // ============================================================================
 // Mutation Parameter Types
@@ -139,6 +140,7 @@ export function useAddWeight() {
     onSettled: () => {
       // Refetch after error or success to ensure we have the correct data
       queryClient.invalidateQueries({ queryKey: healthKeys.weight() });
+      queryClient.invalidateQueries({ queryKey: graphKeys.all });
     },
   });
 }
@@ -154,6 +156,7 @@ export function useUpdateWeight() {
       updateWeightRecord(params.id, params.updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: healthKeys.weight() });
+      queryClient.invalidateQueries({ queryKey: graphKeys.all });
     },
   });
 }
@@ -168,6 +171,7 @@ export function useDeleteWeight() {
     mutationFn: (id: string) => deleteWeightRecord(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: healthKeys.weight() });
+      queryClient.invalidateQueries({ queryKey: graphKeys.all });
     },
   });
 }
@@ -255,6 +259,7 @@ export function useAddBloodPressure() {
     onSettled: () => {
       // Refetch after error or success to ensure we have the correct data
       queryClient.invalidateQueries({ queryKey: healthKeys.bloodPressure() });
+      queryClient.invalidateQueries({ queryKey: graphKeys.all });
     },
   });
 }
@@ -270,6 +275,7 @@ export function useUpdateBloodPressure() {
       updateBloodPressureRecord(params.id, params.updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: healthKeys.bloodPressure() });
+      queryClient.invalidateQueries({ queryKey: graphKeys.all });
     },
   });
 }
@@ -284,6 +290,7 @@ export function useDeleteBloodPressure() {
     mutationFn: (id: string) => deleteBloodPressureRecord(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: healthKeys.bloodPressure() });
+      queryClient.invalidateQueries({ queryKey: graphKeys.all });
     },
   });
 }

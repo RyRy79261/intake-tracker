@@ -81,10 +81,12 @@ export function IntakeChart({
   data,
   waterLimit,
   saltLimit,
+  now,
 }: {
   data: GraphData;
   waterLimit: number;
   saltLimit: number;
+  now: number;
 }) {
   const [toggles, setToggles] = useState<Record<IntakeToggleKey, boolean>>({
     water: true,
@@ -100,6 +102,10 @@ export function IntakeChart({
 
   const { eatingRecords, urinationRecords, scope } = data;
 
+  // Full-scope X-axis: left edge = scope start, right edge = live "now"
+  const xMin = data.startTime;
+  const xMax = now;
+
   if (points.length === 0) {
     return (
       <div className="flex items-center justify-center h-[280px] text-sm text-muted-foreground">
@@ -114,14 +120,6 @@ export function IntakeChart({
     ...points.map((p) => p.saltPct ?? 0)
   );
   const yMax = maxPct > 100 ? Math.ceil(maxPct / 10) * 10 + 10 : 100;
-
-  const allTimestamps = [
-    ...points.map((p) => p.time),
-    ...(toggles.eating ? eatingRecords.map((r) => r.timestamp) : []),
-    ...(toggles.urination ? urinationRecords.map((r) => r.timestamp) : []),
-  ];
-  const xMin = Math.min(...allTimestamps);
-  const xMax = Math.max(...allTimestamps);
 
   return (
     <div>

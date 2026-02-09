@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2, BarChart3, Droplets, Scale, Heart } from "lucide-react";
 import { useGraphData, type GraphScope } from "@/hooks/use-graph-data";
 import { useSettings } from "@/hooks/use-settings";
+import { useNow } from "@/hooks/use-now";
 import { cn } from "@/lib/utils";
 import { IntakeChart } from "./charts/intake-chart";
 import { WeightChart } from "./charts/weight-chart";
@@ -32,6 +33,7 @@ export function HistoricalGraph() {
   const [scope, setScope] = useState<GraphScope>("24h");
   const { data, isLoading, error } = useGraphData(scope);
   const settings = useSettings();
+  const now = useNow(60_000);
 
   return (
     <Card className="overflow-hidden bg-white/80 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800">
@@ -83,13 +85,13 @@ export function HistoricalGraph() {
               </div>
             )}
             {data && !isLoading && view === "intake" && (
-              <IntakeChart data={data} waterLimit={settings.waterLimit} saltLimit={settings.saltLimit} />
+              <IntakeChart data={data} waterLimit={settings.waterLimit} saltLimit={settings.saltLimit} now={now} />
             )}
             {data && !isLoading && view === "weight" && (
-              <WeightChart data={data} />
+              <WeightChart data={data} now={now} />
             )}
             {data && !isLoading && view === "bp" && (
-              <BPChart data={data} />
+              <BPChart data={data} now={now} />
             )}
           </TabsContent>
         </Tabs>
