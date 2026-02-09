@@ -18,6 +18,7 @@ import { useIntake } from "@/hooks/use-intake-queries";
 import { useSettings } from "@/hooks/use-settings";
 import { usePinProtected } from "@/hooks/use-pin-gate";
 import { useScrollHide } from "@/hooks/use-scroll-hide";
+import { cn } from "@/lib/utils";
 import { Droplets } from "lucide-react";
 
 function HomeContent() {
@@ -153,7 +154,7 @@ function HomeContent() {
       </div>
 
       {/* Footer info */}
-      <footer className="mt-8 pb-20 text-center text-xs text-muted-foreground">
+      <footer className={cn("mt-8 text-center text-xs text-muted-foreground", settings.showQuickNav ? "pb-28" : "pb-6")}>
         <p>Track your intake to maintain heart health</p>
         <p className="mt-1">
           Water: max 1L/day · Salt: max 1500mg/day
