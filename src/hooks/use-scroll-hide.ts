@@ -34,10 +34,16 @@ export function useScrollHide({
   useMotionValueEvent(scrollY, "change", (current) => {
     const previous = scrollY.getPrevious() ?? 0;
     const isScrollingDown = current > previous && current > 50;
-    setHeaderHidden(isScrollingDown);
 
-    // Clear force-hide on user scroll-up
-    if (!isScrollingDown && forceHiddenRef.current) {
+    // Show footer when user has scrolled to the bottom of the page
+    const atBottom =
+      typeof window !== "undefined" &&
+      current + window.innerHeight >= document.documentElement.scrollHeight - 30;
+
+    setHeaderHidden(isScrollingDown && !atBottom);
+
+    // Clear force-hide on user scroll-up or reaching bottom
+    if ((!isScrollingDown || atBottom) && forceHiddenRef.current) {
       if (forceHiddenTimerRef.current) {
         clearTimeout(forceHiddenTimerRef.current);
         forceHiddenTimerRef.current = null;
