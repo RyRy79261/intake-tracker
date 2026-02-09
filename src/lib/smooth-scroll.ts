@@ -12,6 +12,11 @@ export function smoothScrollTo(
   durationMs: number,
   offset: number = 0
 ): Promise<void> {
+  // Guard against non-browser environments (SSR / tests)
+  if (typeof window === "undefined" || typeof window.scrollTo !== "function") {
+    return Promise.resolve();
+  }
+
   return new Promise((resolve) => {
     const startY = window.scrollY;
     const elementTop = element.getBoundingClientRect().top + startY;
@@ -19,6 +24,13 @@ export function smoothScrollTo(
     const distance = targetY - startY;
 
     if (Math.abs(distance) < 1) {
+      resolve();
+      return;
+    }
+
+    // For non-positive durations, jump immediately
+    if (durationMs <= 0) {
+      window.scrollTo(0, targetY);
       resolve();
       return;
     }

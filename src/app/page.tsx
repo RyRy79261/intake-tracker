@@ -30,6 +30,7 @@ function HomeContent() {
   const [foodCalcOpen, setFoodCalcOpen] = useState(false);
   const [voiceInputOpen, setVoiceInputOpen] = useState(false);
   const forceHiddenRef = useRef(false);
+  const forceHiddenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const waterIntake = useIntake("water");
   const saltIntake = useIntake("salt");
   const settings = useSettings();
@@ -47,10 +48,23 @@ function HomeContent() {
 
     // Clear force-hide on user scroll-up
     if (!isScrollingDown && forceHiddenRef.current) {
+      if (forceHiddenTimerRef.current) {
+        clearTimeout(forceHiddenTimerRef.current);
+        forceHiddenTimerRef.current = null;
+      }
       forceHiddenRef.current = false;
       setForceHidden(false);
     }
   });
+
+  // Clear auto-hide timer on unmount
+  useEffect(() => {
+    return () => {
+      if (forceHiddenTimerRef.current) {
+        clearTimeout(forceHiddenTimerRef.current);
+      }
+    };
+  }, []);
 
   // Handle hydration mismatch for localStorage
   useEffect(() => {
@@ -77,8 +91,15 @@ function HomeContent() {
       const el = document.getElementById(sectionId);
       if (!el) return;
 
+      // Clear any existing auto-hide timer before starting a new one
+      if (forceHiddenTimerRef.current) {
+        clearTimeout(forceHiddenTimerRef.current);
+        forceHiddenTimerRef.current = null;
+      }
+
       smoothScrollTo(el, settings.scrollDurationMs).then(() => {
-        setTimeout(() => {
+        forceHiddenTimerRef.current = setTimeout(() => {
+          forceHiddenTimerRef.current = null;
           forceHiddenRef.current = true;
           setForceHidden(true);
         }, settings.autoHideDelayMs);

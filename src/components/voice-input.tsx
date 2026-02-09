@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import {
   Dialog,
@@ -60,13 +60,38 @@ interface VoiceInputProps {
 export function VoiceInput({ onAddWater, onAddSalt, open: controlledOpen, onOpenChange }: VoiceInputProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const open = controlledOpen ?? internalOpen;
-  const setOpen = onOpenChange ?? setInternalOpen;
+  const setOpen = onOpenChange ? onOpenChange : setInternalOpen;
   const [input, setInput] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [parsedResult, setParsedResult] = useState<ParsedIntake | null>(null);
   const [isListening, setIsListening] = useState(false);
   const [interimTranscript, setInterimTranscript] = useState("");
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+
+  // Warn when controlled without an onOpenChange handler
+  useEffect(() => {
+    if (controlledOpen !== undefined && !onOpenChange) {
+      console.warn(
+        "VoiceInput: `open` prop was provided without an `onOpenChange` handler. " +
+        "The parent must supply `onOpenChange` to fully control VoiceInput."
+      );
+    }
+  }, [controlledOpen, onOpenChange]);
+
+  // Clean up when the parent programmatically closes the dialog
+  useEffect(() => {
+    if (controlledOpen === false) {
+      // Stop the microphone and clear voice-related state
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+        recognitionRef.current = null;
+      }
+      setIsListening(false);
+      setInterimTranscript("");
+      setInput("");
+      setParsedResult(null);
+    }
+  }, [controlledOpen]);
   const { toast } = useToast();
   const { getApiKey, hasKey } = usePerplexityKey();
   const { authenticated, getAccessToken } = usePrivy();
