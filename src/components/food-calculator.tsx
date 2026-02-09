@@ -26,6 +26,8 @@ import { formatAmount } from "@/lib/utils";
 
 interface FoodCalculatorProps {
   onAddWater: (amount: number, source: string) => Promise<void>;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 // Common foods with their water content percentages
@@ -53,8 +55,10 @@ const FOOD_PRESETS = [
   { name: "Custom", waterPercent: 80 },
 ];
 
-export function FoodCalculator({ onAddWater }: FoodCalculatorProps) {
-  const [open, setOpen] = useState(false);
+export function FoodCalculator({ onAddWater, open: controlledOpen, onOpenChange }: FoodCalculatorProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = onOpenChange ?? setInternalOpen;
   const [selectedFood, setSelectedFood] = useState<string>("");
   const [weightGrams, setWeightGrams] = useState<string>("");
   const [customPercent, setCustomPercent] = useState<string>("80");

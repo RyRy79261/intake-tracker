@@ -13,6 +13,8 @@ interface AppHeaderProps {
   onHistoryClick: () => void;
   /** Callback when settings button is clicked */
   onSettingsClick: () => void;
+  /** Transition duration in seconds for slide animation */
+  transitionDuration?: number;
 }
 
 export function AppHeader({
@@ -20,12 +22,13 @@ export function AppHeader({
   showLockedUI,
   onHistoryClick,
   onSettingsClick,
+  transitionDuration = 0.2,
 }: AppHeaderProps) {
   return (
     <motion.header
       className="sticky top-0 z-40 -mx-4 px-4 py-4 mb-2 bg-gradient-to-b from-slate-50 to-slate-50/95 dark:from-slate-950 dark:to-slate-950/95 backdrop-blur-sm flex items-center justify-between"
       animate={{ y: headerHidden ? "-100%" : 0 }}
-      transition={{ duration: 0.2, ease: "easeInOut" }}
+      transition={{ duration: transitionDuration, ease: "easeInOut" }}
     >
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Intake Tracker</h1>

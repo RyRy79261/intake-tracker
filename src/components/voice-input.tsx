@@ -53,10 +53,14 @@ declare global {
 interface VoiceInputProps {
   onAddWater: (amount: number, source: string) => Promise<void>;
   onAddSalt: (amount: number, source: string) => Promise<void>;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function VoiceInput({ onAddWater, onAddSalt }: VoiceInputProps) {
-  const [open, setOpen] = useState(false);
+export function VoiceInput({ onAddWater, onAddSalt, open: controlledOpen, onOpenChange }: VoiceInputProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = onOpenChange ?? setInternalOpen;
   const [input, setInput] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [parsedResult, setParsedResult] = useState<ParsedIntake | null>(null);
