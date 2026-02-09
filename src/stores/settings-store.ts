@@ -36,6 +36,7 @@ export interface Settings {
   // Quick Nav footer
   showQuickNav: boolean;
   quickNavOrder: "ltr" | "rtl";
+  utilityOrder: "ai-right" | "food-right";
 
   // Animation timing settings (ms)
   scrollDurationMs: number;        // how fast page scrolls to section (100-1000)
@@ -57,6 +58,7 @@ interface SettingsActions {
   setDayStartHour: (hour: number) => void;
   setShowQuickNav: (value: boolean) => void;
   setQuickNavOrder: (order: "ltr" | "rtl") => void;
+  setUtilityOrder: (order: "ai-right" | "food-right") => void;
   setScrollDurationMs: (value: number) => void;
   setAutoHideDelayMs: (value: number) => void;
   setBarTransitionDurationMs: (value: number) => void;
@@ -75,6 +77,7 @@ const defaultSettings: Settings = {
   dayStartHour: 2, // Default: 2am - day starts at 2am for budget tracking
   showQuickNav: true,
   quickNavOrder: "rtl" as const,
+  utilityOrder: "ai-right" as const,
   scrollDurationMs: 300,
   autoHideDelayMs: 500,
   barTransitionDurationMs: 200,
@@ -118,6 +121,7 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
 
       setShowQuickNav: (value) => set({ showQuickNav: value }),
       setQuickNavOrder: (order) => set({ quickNavOrder: order }),
+      setUtilityOrder: (order) => set({ utilityOrder: order }),
       setScrollDurationMs: (value) =>
         set({ scrollDurationMs: sanitizeNumericInput(value, 100, 1000) }),
       setAutoHideDelayMs: (value) =>

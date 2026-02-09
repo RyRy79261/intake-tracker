@@ -3,19 +3,20 @@
 import { useRef, useEffect } from "react";
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
-import { CARD_THEMES, UTILITY_THEMES, type CardThemeKey, type UtilityThemeKey } from "@/lib/card-themes";
+import { CARD_THEMES, UTILITY_THEMES, type CardThemeKey } from "@/lib/card-themes";
 
-interface NavItem {
+// ── Section nav items (scrollable gallery) ──────────────────
+
+interface SectionNavItem {
   id: string;
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   iconColor: string;
   bgColor: string;
-  type: "section" | "utility";
 }
 
-function buildNavItems(): NavItem[] {
-  const sectionItems: NavItem[] = (Object.keys(CARD_THEMES) as CardThemeKey[]).map((key) => {
+function buildSectionItems(): SectionNavItem[] {
+  return (Object.keys(CARD_THEMES) as CardThemeKey[]).map((key) => {
     const theme = CARD_THEMES[key];
     return {
       id: theme.sectionId,
@@ -23,30 +24,34 @@ function buildNavItems(): NavItem[] {
       label: theme.label,
       iconColor: theme.iconColor,
       bgColor: theme.iconBg,
-      type: "section" as const,
     };
   });
-
-  const utilityItems: NavItem[] = (Object.keys(UTILITY_THEMES) as UtilityThemeKey[]).map((key) => {
-    const theme = UTILITY_THEMES[key];
-    return {
-      id: `utility-${key}`,
-      icon: theme.icon,
-      label: theme.label,
-      iconColor: theme.iconColor,
-      bgColor: theme.iconBg,
-      type: "utility" as const,
-    };
-  });
-
-  return [...sectionItems, ...utilityItems];
 }
 
-const NAV_ITEMS = buildNavItems();
+const SECTION_ITEMS = buildSectionItems();
+
+// ── Utility items (fixed row) ───────────────────────────────
+
+const FOOD_ITEM = {
+  icon: UTILITY_THEMES.food.icon,
+  label: UTILITY_THEMES.food.label,
+  iconColor: UTILITY_THEMES.food.iconColor,
+  bgColor: UTILITY_THEMES.food.iconBg,
+};
+
+const AI_ITEM = {
+  icon: UTILITY_THEMES.ai.icon,
+  label: UTILITY_THEMES.ai.label,
+  iconColor: UTILITY_THEMES.ai.iconColor,
+  bgColor: UTILITY_THEMES.ai.iconBg,
+};
+
+// ── Component ───────────────────────────────────────────────
 
 interface QuickNavFooterProps {
   hidden: boolean;
   order: "ltr" | "rtl";
+  utilityOrder: "ai-right" | "food-right";
   transitionDuration?: number;
   onScrollTo: (sectionId: string) => void;
   onOpenFoodCalculator: () => void;
@@ -56,6 +61,7 @@ interface QuickNavFooterProps {
 export function QuickNavFooter({
   hidden,
   order,
+  utilityOrder,
   transitionDuration = 0.2,
   onScrollTo,
   onOpenFoodCalculator,
@@ -63,18 +69,8 @@ export function QuickNavFooter({
 }: QuickNavFooterProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  // Order items: RTL reverses section icons, and puts utility icons before sections
-  const orderedItems = (() => {
-    const sections = NAV_ITEMS.filter((item) => item.type === "section");
-    const utilities = NAV_ITEMS.filter((item) => item.type === "utility");
-
-    if (order === "rtl") {
-      // RTL: utilities on left, sections reversed (so top-of-page = rightmost)
-      return [...utilities.reverse(), ...sections.reverse()];
-    }
-    // LTR: sections in page order, utilities at end
-    return [...sections, ...utilities];
-  })();
+  // Order section items based on LTR/RTL preference
+  const orderedSections = order === "rtl" ? [...SECTION_ITEMS].reverse() : SECTION_ITEMS;
 
   // Auto-scroll to the right end on mount for RTL so most-used icons are visible
   useEffect(() => {
@@ -88,21 +84,11 @@ export function QuickNavFooter({
     }
   }, [order]);
 
-  const handleItemClick = (item: NavItem) => {
-    if (item.id === "utility-food") {
-      onOpenFoodCalculator();
-    } else if (item.id === "utility-ai") {
-      onOpenVoiceInput();
-    } else {
-      onScrollTo(item.id);
-    }
-  };
-
-  // Find divider position: between utilities and sections
-  const dividerIndex = orderedItems.findIndex((item, i) => {
-    if (i === 0) return false;
-    return orderedItems[i - 1].type !== item.type;
-  });
+  // Build utility row: two buttons ordered by utilityOrder setting
+  const utilityLeft = utilityOrder === "ai-right" ? FOOD_ITEM : AI_ITEM;
+  const utilityRight = utilityOrder === "ai-right" ? AI_ITEM : FOOD_ITEM;
+  const onClickLeft = utilityOrder === "ai-right" ? onOpenFoodCalculator : onOpenVoiceInput;
+  const onClickRight = utilityOrder === "ai-right" ? onOpenVoiceInput : onOpenFoodCalculator;
 
   return (
     <motion.footer
@@ -111,9 +97,10 @@ export function QuickNavFooter({
       animate={{ y: hidden ? "100%" : 0 }}
       transition={{ duration: transitionDuration, ease: "easeInOut" }}
     >
+      {/* Row 1: Scrollable section gallery */}
       <div
         ref={scrollContainerRef}
-        className="flex items-center gap-1 px-3 py-2 overflow-x-auto scrollbar-hide"
+        className="flex items-center gap-1 px-3 py-1.5 overflow-x-auto scrollbar-hide"
         style={{
           scrollSnapType: "x mandatory",
           WebkitOverflowScrolling: "touch",
@@ -121,14 +108,10 @@ export function QuickNavFooter({
           msOverflowStyle: "none",
         }}
       >
-        {orderedItems.map((item, index) => (
-          <div key={item.id} className="flex items-center shrink-0" style={{ scrollSnapAlign: "center" }}>
-            {/* Divider between section and utility groups */}
-            {index === dividerIndex && (
-              <div className="w-px h-8 bg-border mx-1 shrink-0" />
-            )}
+        {orderedSections.map((item) => (
+          <div key={item.id} className="shrink-0" style={{ scrollSnapAlign: "center" }}>
             <button
-              onClick={() => handleItemClick(item)}
+              onClick={() => onScrollTo(item.id)}
               className={cn(
                 "flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-xl transition-colors",
                 "hover:bg-muted/80 active:scale-95 active:bg-muted",
@@ -146,6 +129,41 @@ export function QuickNavFooter({
           </div>
         ))}
       </div>
+
+      {/* Row 2: Utility buttons (Food Calculator & AI) */}
+      <div className="flex items-center gap-2 px-3 pb-2 pt-0.5">
+        <UtilityButton item={utilityLeft} onClick={onClickLeft} />
+        <UtilityButton item={utilityRight} onClick={onClickRight} />
+      </div>
     </motion.footer>
+  );
+}
+
+// ── Utility button ──────────────────────────────────────────
+
+function UtilityButton({
+  item,
+  onClick,
+}: {
+  item: { icon: React.ComponentType<{ className?: string }>; label: string; iconColor: string; bgColor: string };
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "flex-1 flex items-center justify-center gap-2 py-1.5 rounded-xl transition-colors",
+        "hover:bg-muted/80 active:scale-[0.98] active:bg-muted",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      )}
+      title={item.label}
+    >
+      <div className={cn("p-1 rounded-lg", item.bgColor)}>
+        <item.icon className={cn("w-3.5 h-3.5", item.iconColor)} />
+      </div>
+      <span className="text-xs font-medium text-muted-foreground">
+        {item.label}
+      </span>
+    </button>
   );
 }
