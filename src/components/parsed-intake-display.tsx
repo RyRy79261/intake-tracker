@@ -27,18 +27,18 @@ export function ParsedIntakeDisplay({
         <div className="grid grid-cols-2 gap-4">
           <div className="text-center p-3 rounded-lg bg-sky-50 dark:bg-sky-950/30">
             <p className="text-2xl font-bold text-sky-600 dark:text-sky-400">
-              {result.water ? formatAmount(result.water, "ml") : "0ml"}
+              {result.water != null ? formatAmount(result.water, "ml") : "0ml"}
             </p>
             <p className="text-xs text-muted-foreground">Water</p>
           </div>
           <div className="text-center p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30">
             <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
-              {result.salt ? formatAmount(result.salt, "mg") : "0mg"}
+              {result.salt != null ? formatAmount(result.salt, "mg") : "0mg"}
             </p>
             <p className="text-xs text-muted-foreground">Salt</p>
           </div>
         </div>
-        {result.reasoning && (
+        {result.reasoning != null && (
           <p className="text-xs text-muted-foreground mt-3 italic">
             {result.reasoning}
           </p>
@@ -51,7 +51,7 @@ export function ParsedIntakeDisplay({
         </Button>
         <Button
           onClick={onConfirm}
-          disabled={isProcessing || (!result.water && !result.salt)}
+          disabled={isProcessing || (result.water == null && result.salt == null)}
           className="flex-1 bg-violet-600 hover:bg-violet-700"
         >
           {isProcessing ? "Adding..." : "Confirm & Add"}

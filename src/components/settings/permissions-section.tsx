@@ -35,9 +35,17 @@ export function PermissionsSection() {
           <PermissionBadge
             state={permissions.notifications}
             onRequest={async () => {
-              const granted = await requestNotifications();
-              if (granted) {
-                toast({ title: "Notifications enabled", variant: "success" });
+              try {
+                const granted = await requestNotifications();
+                if (granted) {
+                  toast({ title: "Notifications enabled", variant: "success" });
+                }
+              } catch (err) {
+                toast({
+                  title: "Notification request failed",
+                  description: err instanceof Error ? err.message : "Could not request notifications",
+                  variant: "destructive",
+                });
               }
             }}
           />
@@ -55,14 +63,30 @@ export function PermissionsSection() {
           <PermissionBadge
             state={permissions.microphone}
             onRequest={async () => {
-              const granted = await requestMicrophone();
-              if (granted) {
-                toast({ title: "Microphone enabled", variant: "success" });
+              try {
+                const granted = await requestMicrophone();
+                if (granted) {
+                  toast({ title: "Microphone enabled", variant: "success" });
+                }
+              } catch (err) {
+                toast({
+                  title: "Microphone request failed",
+                  description: err instanceof Error ? err.message : "Could not request microphone",
+                  variant: "destructive",
+                });
               }
             }}
             onReset={() => {
-              resetMicrophonePermission();
-              toast({ title: "Permission reset", description: "Tap Enable to request microphone access again" });
+              try {
+                resetMicrophonePermission();
+                toast({ title: "Permission reset", description: "Tap Enable to request microphone access again" });
+              } catch (err) {
+                toast({
+                  title: "Reset failed",
+                  description: err instanceof Error ? err.message : "Could not reset microphone permission",
+                  variant: "destructive",
+                });
+              }
             }}
           />
         </div>
@@ -83,11 +107,20 @@ export function PermissionsSection() {
                 onClick={() => {
                   const newValue = !expiryNotificationsEnabled;
                   setExpiryNotificationsEnabled(newValue);
-                  saveNotificationSettings({ enabled: newValue });
-                  toast({
-                    title: newValue ? "Reminders enabled" : "Reminders disabled",
-                    variant: "success",
-                  });
+                  try {
+                    saveNotificationSettings({ enabled: newValue });
+                    toast({
+                      title: newValue ? "Reminders enabled" : "Reminders disabled",
+                      variant: "success",
+                    });
+                  } catch (err) {
+                    setExpiryNotificationsEnabled(!newValue);
+                    toast({
+                      title: "Failed to save setting",
+                      description: err instanceof Error ? err.message : "Could not update notification settings",
+                      variant: "destructive",
+                    });
+                  }
                 }}
               >
                 {expiryNotificationsEnabled ? "On" : "Off"}
@@ -97,11 +130,19 @@ export function PermissionsSection() {
                   variant="ghost"
                   size="sm"
                   onClick={async () => {
-                    const sent = await sendTestNotification();
-                    if (sent) {
-                      toast({ title: "Test notification sent", variant: "success" });
-                    } else {
-                      toast({ title: "Failed to send notification", variant: "destructive" });
+                    try {
+                      const sent = await sendTestNotification();
+                      if (sent) {
+                        toast({ title: "Test notification sent", variant: "success" });
+                      } else {
+                        toast({ title: "Failed to send notification", variant: "destructive" });
+                      }
+                    } catch (err) {
+                      toast({
+                        title: "Test notification failed",
+                        description: err instanceof Error ? err.message : "Could not send test notification",
+                        variant: "destructive",
+                      });
                     }
                   }}
                 >

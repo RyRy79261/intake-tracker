@@ -27,6 +27,7 @@ export function useScrollHide({
   const [forceHidden, setForceHidden] = useState(false);
   const forceHiddenRef = useRef(false);
   const forceHiddenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const navSeqRef = useRef(0);
 
   // Scroll detection for hiding/showing header + footer
   const { scrollY } = useScroll();
@@ -61,6 +62,8 @@ export function useScrollHide({
       const el = document.getElementById(sectionId);
       if (!el) return;
 
+      const seq = ++navSeqRef.current;
+
       // Clear any existing auto-hide timer before starting a new one
       if (forceHiddenTimerRef.current) {
         clearTimeout(forceHiddenTimerRef.current);
@@ -68,6 +71,7 @@ export function useScrollHide({
       }
 
       smoothScrollTo(el, scrollDurationMs).then(() => {
+        if (seq !== navSeqRef.current) return;
         forceHiddenTimerRef.current = setTimeout(() => {
           forceHiddenTimerRef.current = null;
           forceHiddenRef.current = true;

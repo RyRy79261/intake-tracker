@@ -16,6 +16,7 @@ export function validateAndSave(
     setter(parsed);
     inputSetter(parsed.toString());
   } else {
+    setter(defaultValue);
     inputSetter(defaultValue.toString());
   }
 }

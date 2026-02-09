@@ -32,7 +32,17 @@ export function AppUpdatesSection() {
               <Button
                 size="sm"
                 className="bg-sky-600 hover:bg-sky-700"
-                onClick={applyUpdate}
+                onClick={async () => {
+                  try {
+                    await applyUpdate();
+                  } catch (err) {
+                    toast({
+                      title: "Update failed",
+                      description: err instanceof Error ? err.message : "Could not apply update",
+                      variant: "destructive",
+                    });
+                  }
+                }}
                 disabled={isUpdating}
               >
                 {isUpdating ? (

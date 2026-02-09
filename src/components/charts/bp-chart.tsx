@@ -42,7 +42,16 @@ function loadBPToggles(): Record<BPToggleKey, boolean> {
   try {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem(BP_STORAGE_KEY);
-      if (stored) return { ...BP_DEFAULTS, ...JSON.parse(stored) };
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        const result = { ...BP_DEFAULTS };
+        for (const key of Object.keys(BP_DEFAULTS) as BPToggleKey[]) {
+          if (key in parsed && typeof parsed[key] === "boolean") {
+            result[key] = parsed[key];
+          }
+        }
+        return result;
+      }
     }
   } catch { /* ignore */ }
   return { ...BP_DEFAULTS };

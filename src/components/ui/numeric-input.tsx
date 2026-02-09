@@ -39,8 +39,9 @@ export function NumericInput({
         size="icon"
         className="h-10 w-10 shrink-0"
         onClick={onDecrement}
+        aria-label="Decrease value"
       >
-        <Minus className="w-4 h-4" />
+        <Minus className="w-4 h-4" aria-hidden="true" />
       </Button>
       <Input
         id={id}
@@ -59,8 +60,9 @@ export function NumericInput({
         size="icon"
         className="h-10 w-10 shrink-0"
         onClick={onIncrement}
+        aria-label="Increase value"
       >
-        <Plus className="w-4 h-4" />
+        <Plus className="w-4 h-4" aria-hidden="true" />
       </Button>
     </div>
   );

@@ -74,10 +74,17 @@ export function BloodPressureCard() {
     buildUpdates: (timestamp, note) => {
       const newSystolic = parseInt(editSystolic, 10);
       const newDiastolic = parseInt(editDiastolic, 10);
-      const newHeartRate = editHeartRate ? parseInt(editHeartRate, 10) : undefined;
       if (isNaN(newSystolic) || isNaN(newDiastolic) || newSystolic <= 0 || newDiastolic <= 0) {
         toast({ title: "Invalid values", variant: "destructive" });
         return null;
+      }
+      let newHeartRate: number | undefined;
+      if (editHeartRate) {
+        newHeartRate = parseInt(editHeartRate, 10);
+        if (isNaN(newHeartRate) || newHeartRate <= 0) {
+          toast({ title: "Invalid values", variant: "destructive" });
+          return null;
+        }
       }
       return {
         systolic: newSystolic,

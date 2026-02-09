@@ -50,7 +50,7 @@ export function getBPCategory(systolic: number, diastolic: number): BPCategory {
     return { label: "Normal", color: "text-green-600 dark:text-green-400" };
   } else if (systolic < 130 && diastolic < 80) {
     return { label: "Elevated", color: "text-yellow-600 dark:text-yellow-400" };
-  } else if (systolic < 140 || diastolic < 90) {
+  } else if (systolic < 140 && diastolic < 90) {
     return { label: "High Stage 1", color: "text-orange-600 dark:text-orange-400" };
   } else {
     return { label: "High Stage 2", color: "text-red-600 dark:text-red-400" };
