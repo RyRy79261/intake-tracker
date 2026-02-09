@@ -1,7 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useScroll, useMotionValueEvent } from "motion/react";
+import { useCallback, useEffect, useState } from "react";
 import { IntakeCard } from "@/components/intake-card";
 import { FoodCalculator } from "@/components/food-calculator";
 import { VoiceInput } from "@/components/voice-input";
@@ -18,53 +17,25 @@ import { UrinationCard } from "@/components/urination-card";
 import { useIntake } from "@/hooks/use-intake-queries";
 import { useSettings } from "@/hooks/use-settings";
 import { usePinProtected } from "@/hooks/use-pin-gate";
-import { smoothScrollTo } from "@/lib/smooth-scroll";
+import { useScrollHide } from "@/hooks/use-scroll-hide";
 import { Droplets } from "lucide-react";
 
 function HomeContent() {
   const [mounted, setMounted] = useState(false);
-  const [headerHidden, setHeaderHidden] = useState(false);
-  const [forceHidden, setForceHidden] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [foodCalcOpen, setFoodCalcOpen] = useState(false);
   const [voiceInputOpen, setVoiceInputOpen] = useState(false);
-  const forceHiddenRef = useRef(false);
-  const forceHiddenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const waterIntake = useIntake("water");
   const saltIntake = useIntake("salt");
   const settings = useSettings();
   const { showLockedUI } = usePinProtected();
 
   const barTransitionSec = settings.barTransitionDurationMs / 1000;
-  const isHidden = headerHidden || forceHidden;
-
-  // Scroll detection for hiding/showing header + footer
-  const { scrollY } = useScroll();
-  useMotionValueEvent(scrollY, "change", (current) => {
-    const previous = scrollY.getPrevious() ?? 0;
-    const isScrollingDown = current > previous && current > 50;
-    setHeaderHidden(isScrollingDown);
-
-    // Clear force-hide on user scroll-up
-    if (!isScrollingDown && forceHiddenRef.current) {
-      if (forceHiddenTimerRef.current) {
-        clearTimeout(forceHiddenTimerRef.current);
-        forceHiddenTimerRef.current = null;
-      }
-      forceHiddenRef.current = false;
-      setForceHidden(false);
-    }
+  const { isHidden, handleQuickNav } = useScrollHide({
+    scrollDurationMs: settings.scrollDurationMs,
+    autoHideDelayMs: settings.autoHideDelayMs,
   });
-
-  // Clear auto-hide timer on unmount
-  useEffect(() => {
-    return () => {
-      if (forceHiddenTimerRef.current) {
-        clearTimeout(forceHiddenTimerRef.current);
-      }
-    };
-  }, []);
 
   // Handle hydration mismatch for localStorage
   useEffect(() => {
@@ -83,29 +54,6 @@ function HomeContent() {
       await saltIntake.addRecord(amount, source, timestamp, note);
     },
     [saltIntake]
-  );
-
-  // Quick nav: scroll to section, then auto-hide after delay
-  const handleQuickNav = useCallback(
-    (sectionId: string) => {
-      const el = document.getElementById(sectionId);
-      if (!el) return;
-
-      // Clear any existing auto-hide timer before starting a new one
-      if (forceHiddenTimerRef.current) {
-        clearTimeout(forceHiddenTimerRef.current);
-        forceHiddenTimerRef.current = null;
-      }
-
-      smoothScrollTo(el, settings.scrollDurationMs).then(() => {
-        forceHiddenTimerRef.current = setTimeout(() => {
-          forceHiddenTimerRef.current = null;
-          forceHiddenRef.current = true;
-          setForceHidden(true);
-        }, settings.autoHideDelayMs);
-      });
-    },
-    [settings.scrollDurationMs, settings.autoHideDelayMs]
   );
 
   // Show loading state during hydration
@@ -142,73 +90,73 @@ function HomeContent() {
         <HistoricalGraph />
       </div>
 
-        {/* Intake Cards */}
-        <div className="space-y-4 mb-6">
-          <div id="section-water">
-            <IntakeCard
-              type="water"
-              dailyTotal={waterIntake.dailyTotal}
-              rollingTotal={waterIntake.rollingTotal}
-              limit={settings.waterLimit}
-              increment={settings.waterIncrement}
-              onConfirm={(amount, timestamp, note) => handleAddWater(amount, "manual", timestamp, note)}
-              isLoading={waterIntake.isLoading}
-            />
-          </div>
-
-          <div id="section-salt">
-            <IntakeCard
-              type="salt"
-              dailyTotal={saltIntake.dailyTotal}
-              rollingTotal={saltIntake.rollingTotal}
-              limit={settings.saltLimit}
-              increment={settings.saltIncrement}
-              onConfirm={(amount, timestamp, note) => handleAddSalt(amount, "manual", timestamp, note)}
-              isLoading={saltIntake.isLoading}
-            />
-          </div>
-        </div>
-
-        {/* Additional Input Methods */}
-        <div className="flex gap-3 mb-6">
-          <FoodCalculator
-            onAddWater={handleAddWater}
-            open={foodCalcOpen}
-            onOpenChange={setFoodCalcOpen}
-          />
-          <VoiceInput
-            onAddWater={handleAddWater}
-            onAddSalt={handleAddSalt}
-            open={voiceInputOpen}
-            onOpenChange={setVoiceInputOpen}
+      {/* Intake Cards */}
+      <div className="space-y-4 mb-6">
+        <div id="section-water">
+          <IntakeCard
+            type="water"
+            dailyTotal={waterIntake.dailyTotal}
+            rollingTotal={waterIntake.rollingTotal}
+            limit={settings.waterLimit}
+            increment={settings.waterIncrement}
+            onConfirm={(amount, timestamp, note) => handleAddWater(amount, "manual", timestamp, note)}
+            isLoading={waterIntake.isLoading}
           />
         </div>
 
-        {/* Health Measurements */}
-        <div className="space-y-4 mb-6">
-          <div id="section-weight">
-            <WeightCard />
-          </div>
-          <div id="section-bp">
-            <BloodPressureCard />
-          </div>
+        <div id="section-salt">
+          <IntakeCard
+            type="salt"
+            dailyTotal={saltIntake.dailyTotal}
+            rollingTotal={saltIntake.rollingTotal}
+            limit={settings.saltLimit}
+            increment={settings.saltIncrement}
+            onConfirm={(amount, timestamp, note) => handleAddSalt(amount, "manual", timestamp, note)}
+            isLoading={saltIntake.isLoading}
+          />
         </div>
+      </div>
 
-        {/* Eating & Urination - bottom of main content */}
-        <div className="space-y-4 mb-6">
-          <div id="section-eating">
-            <EatingCard />
-          </div>
-          <div id="section-urination">
-            <UrinationCard />
-          </div>
+      {/* Additional Input Methods */}
+      <div className="flex gap-3 mb-6">
+        <FoodCalculator
+          onAddWater={handleAddWater}
+          open={foodCalcOpen}
+          onOpenChange={setFoodCalcOpen}
+        />
+        <VoiceInput
+          onAddWater={handleAddWater}
+          onAddSalt={handleAddSalt}
+          open={voiceInputOpen}
+          onOpenChange={setVoiceInputOpen}
+        />
+      </div>
+
+      {/* Health Measurements */}
+      <div className="space-y-4 mb-6">
+        <div id="section-weight">
+          <WeightCard />
         </div>
+        <div id="section-bp">
+          <BloodPressureCard />
+        </div>
+      </div>
+
+      {/* Eating & Urination - bottom of main content */}
+      <div className="space-y-4 mb-6">
+        <div id="section-eating">
+          <EatingCard />
+        </div>
+        <div id="section-urination">
+          <UrinationCard />
+        </div>
+      </div>
 
       {/* Footer info */}
       <footer className="mt-8 pb-20 text-center text-xs text-muted-foreground">
         <p>Track your intake to maintain heart health</p>
         <p className="mt-1">
-          Water: max 1L/day • Salt: max 1500mg/day
+          Water: max 1L/day · Salt: max 1500mg/day
         </p>
       </footer>
 
@@ -217,6 +165,7 @@ function HomeContent() {
         <QuickNavFooter
           hidden={isHidden}
           order={settings.quickNavOrder}
+          utilityOrder={settings.utilityOrder}
           transitionDuration={barTransitionSec}
           onScrollTo={handleQuickNav}
           onOpenFoodCalculator={() => setFoodCalcOpen(true)}
@@ -229,12 +178,8 @@ function HomeContent() {
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
-      <div className="container mx-auto px-4 py-6 max-w-lg">
-        <AuthGuard>
-          <HomeContent />
-        </AuthGuard>
-      </div>
-    </main>
+    <AuthGuard>
+      <HomeContent />
+    </AuthGuard>
   );
 }
