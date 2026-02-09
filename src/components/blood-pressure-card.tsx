@@ -10,10 +10,12 @@ import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { CollapsibleTimeInputControlled } from "@/components/collapsible-time-input";
 import { RecentEntriesList } from "@/components/recent-entries-list";
+import { EditBloodPressureDialog } from "@/components/edit-blood-pressure-dialog";
 import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
+import { useEditRecord } from "@/hooks/use-edit-record";
 import { useToast } from "@/hooks/use-toast";
 import { type BloodPressureRecord } from "@/lib/db";
-import { useBloodPressureRecords, useAddBloodPressure, useDeleteBloodPressure } from "@/hooks/use-health-queries";
+import { useBloodPressureRecords, useAddBloodPressure, useDeleteBloodPressure, useUpdateBloodPressure } from "@/hooks/use-health-queries";
 import {
   getCurrentDateTimeLocal,
   dateTimeLocalToTimestamp,
@@ -42,7 +44,53 @@ export function BloodPressureCard() {
   const { data: recentRecords, isLoading, error } = useBloodPressureRecords(5);
   const addMutation = useAddBloodPressure();
   const deleteMutation = useDeleteBloodPressure();
+  const updateMutation = useUpdateBloodPressure();
   const { deletingId, handleDelete } = useDeleteWithToast(deleteMutation, "Blood pressure record removed");
+
+  // Extra edit fields (BP-specific)
+  const [editSystolic, setEditSystolic] = useState("");
+  const [editDiastolic, setEditDiastolic] = useState("");
+  const [editHeartRate, setEditHeartRate] = useState("");
+  const [editPosition, setEditPosition] = useState<"sitting" | "standing">("sitting");
+  const [editArm, setEditArm] = useState<"left" | "right">("left");
+
+  const {
+    editingRecord,
+    editTimestamp,
+    editNote,
+    setEditTimestamp,
+    setEditNote,
+    openEdit,
+    closeEdit,
+    handleEditSubmit,
+  } = useEditRecord<BloodPressureRecord>({
+    onOpen: (record) => {
+      setEditSystolic(record.systolic.toString());
+      setEditDiastolic(record.diastolic.toString());
+      setEditHeartRate(record.heartRate?.toString() || "");
+      setEditPosition(record.position);
+      setEditArm(record.arm);
+    },
+    buildUpdates: (timestamp, note) => {
+      const newSystolic = parseInt(editSystolic, 10);
+      const newDiastolic = parseInt(editDiastolic, 10);
+      const newHeartRate = editHeartRate ? parseInt(editHeartRate, 10) : undefined;
+      if (isNaN(newSystolic) || isNaN(newDiastolic) || newSystolic <= 0 || newDiastolic <= 0) {
+        toast({ title: "Invalid values", variant: "destructive" });
+        return null;
+      }
+      return {
+        systolic: newSystolic,
+        diastolic: newDiastolic,
+        heartRate: newHeartRate,
+        position: editPosition,
+        arm: editArm,
+        timestamp,
+        note,
+      };
+    },
+    mutateAsync: updateMutation.mutateAsync,
+  });
 
   const latestReading = recentRecords?.[0];
   const bpCategory = latestReading 
@@ -96,6 +144,7 @@ export function BloodPressureCard() {
   };
 
   return (
+    <>
     <Card className={cn("relative overflow-hidden transition-all duration-300 bg-gradient-to-br", theme.gradient, theme.border)}>
       <CardContent className="p-6">
         {/* Header */}
@@ -276,6 +325,7 @@ export function BloodPressureCard() {
           records={recentRecords}
           deletingId={deletingId}
           onDelete={handleDelete}
+          onEdit={openEdit}
           borderColor={theme.border}
           renderEntry={(record) => {
             const category = getBPCategory(record.systolic, record.diastolic);
@@ -302,5 +352,26 @@ export function BloodPressureCard() {
         />
       </CardContent>
     </Card>
+
+    <EditBloodPressureDialog
+      record={editingRecord}
+      onClose={closeEdit}
+      onSubmit={handleEditSubmit}
+      systolic={editSystolic}
+      onSystolicChange={setEditSystolic}
+      diastolic={editDiastolic}
+      onDiastolicChange={setEditDiastolic}
+      heartRate={editHeartRate}
+      onHeartRateChange={setEditHeartRate}
+      position={editPosition}
+      onPositionChange={setEditPosition}
+      arm={editArm}
+      onArmChange={setEditArm}
+      timestamp={editTimestamp}
+      onTimestampChange={setEditTimestamp}
+      note={editNote}
+      onNoteChange={setEditNote}
+    />
+    </>
   );
 }

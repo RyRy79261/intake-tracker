@@ -24,9 +24,12 @@ import { Loader2, Check, PlusCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { RecentEntriesList } from "@/components/recent-entries-list";
+import { EditUrinationDialog } from "@/components/edit-urination-dialog";
 import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
+import { useEditRecord } from "@/hooks/use-edit-record";
 import { useToast } from "@/hooks/use-toast";
-import { useUrinationRecords, useAddUrination, useDeleteUrination } from "@/hooks/use-urination-queries";
+import { type UrinationRecord } from "@/lib/db";
+import { useUrinationRecords, useAddUrination, useDeleteUrination, useUpdateUrination } from "@/hooks/use-urination-queries";
 import {
   getCurrentDateTimeLocal,
   dateTimeLocalToTimestamp,
@@ -48,7 +51,30 @@ export function UrinationCard() {
   const { data: recentRecords, isLoading } = useUrinationRecords(5);
   const addMutation = useAddUrination();
   const deleteMutation = useDeleteUrination();
+  const updateMutation = useUpdateUrination();
   const { deletingId, handleDelete } = useDeleteWithToast(deleteMutation, "Urination record removed");
+
+  // Extra edit field (amountEstimate is record-specific)
+  const [editAmountEstimate, setEditAmountEstimate] = useState("");
+
+  const {
+    editingRecord,
+    editTimestamp,
+    editNote,
+    setEditTimestamp,
+    setEditNote,
+    openEdit,
+    closeEdit,
+    handleEditSubmit,
+  } = useEditRecord<UrinationRecord>({
+    onOpen: (record) => setEditAmountEstimate(record.amountEstimate || ""),
+    buildUpdates: (timestamp, note) => ({
+      timestamp,
+      amountEstimate: editAmountEstimate || undefined,
+      note,
+    }),
+    mutateAsync: updateMutation.mutateAsync,
+  });
 
   const latestRecord = recentRecords?.[0];
 
@@ -152,6 +178,7 @@ export function UrinationCard() {
             records={recentRecords}
             deletingId={deletingId}
             onDelete={handleDelete}
+            onEdit={openEdit}
             borderColor={theme.border}
             renderEntry={(record) => (
               <div className="flex items-center gap-2 min-w-0">
@@ -169,6 +196,18 @@ export function UrinationCard() {
           />
         </CardContent>
       </Card>
+
+      <EditUrinationDialog
+        record={editingRecord}
+        onClose={closeEdit}
+        onSubmit={handleEditSubmit}
+        timestamp={editTimestamp}
+        onTimestampChange={setEditTimestamp}
+        amount={editAmountEstimate}
+        onAmountChange={setEditAmountEstimate}
+        note={editNote}
+        onNoteChange={setEditNote}
+      />
 
       <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
         <DialogContent className="sm:max-w-md">

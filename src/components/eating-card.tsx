@@ -17,9 +17,12 @@ import { Loader2, Check, PlusCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { RecentEntriesList } from "@/components/recent-entries-list";
+import { EditEatingDialog } from "@/components/edit-eating-dialog";
 import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
+import { useEditRecord } from "@/hooks/use-edit-record";
 import { useToast } from "@/hooks/use-toast";
-import { useEatingRecords, useAddEating, useDeleteEating } from "@/hooks/use-eating-queries";
+import { type EatingRecord } from "@/lib/db";
+import { useEatingRecords, useAddEating, useDeleteEating, useUpdateEating } from "@/hooks/use-eating-queries";
 import {
   getCurrentDateTimeLocal,
   dateTimeLocalToTimestamp,
@@ -37,7 +40,23 @@ export function EatingCard() {
   const { data: recentRecords, isLoading } = useEatingRecords(5);
   const addMutation = useAddEating();
   const deleteMutation = useDeleteEating();
+  const updateMutation = useUpdateEating();
   const { deletingId, handleDelete } = useDeleteWithToast(deleteMutation, "Eating record removed");
+
+  // No extra edit fields — eating only has timestamp + note, both handled by the hook
+  const {
+    editingRecord,
+    editTimestamp,
+    editNote,
+    setEditTimestamp,
+    setEditNote,
+    openEdit,
+    closeEdit,
+    handleEditSubmit,
+  } = useEditRecord<EatingRecord>({
+    buildUpdates: (timestamp, note) => ({ timestamp, note }),
+    mutateAsync: updateMutation.mutateAsync,
+  });
 
   const latestRecord = recentRecords?.[0];
 
@@ -136,6 +155,7 @@ export function EatingCard() {
             records={recentRecords}
             deletingId={deletingId}
             onDelete={handleDelete}
+            onEdit={openEdit}
             borderColor={theme.border}
             renderEntry={(record) => (
               <div className="flex items-center gap-2 min-w-0">
@@ -150,6 +170,16 @@ export function EatingCard() {
           />
         </CardContent>
       </Card>
+
+      <EditEatingDialog
+        record={editingRecord}
+        onClose={closeEdit}
+        onSubmit={handleEditSubmit}
+        timestamp={editTimestamp}
+        onTimestampChange={setEditTimestamp}
+        note={editNote}
+        onNoteChange={setEditNote}
+      />
 
       <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
         <DialogContent className="sm:max-w-md">

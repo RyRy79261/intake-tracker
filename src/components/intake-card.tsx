@@ -8,10 +8,13 @@ import { Minus, Plus, Check } from "lucide-react";
 import { cn, formatAmount } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { RecentEntriesList } from "@/components/recent-entries-list";
+import { EditIntakeDialog } from "@/components/edit-intake-dialog";
 import { ManualInputDialog } from "./manual-input-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
-import { useDeleteIntake, useRecentIntakeRecords } from "@/hooks/use-intake-queries";
+import { useEditRecord } from "@/hooks/use-edit-record";
+import { useDeleteIntake, useRecentIntakeRecords, useUpdateIntake } from "@/hooks/use-intake-queries";
+import { type IntakeRecord } from "@/lib/db";
 
 interface IntakeCardProps {
   type: "water" | "salt";
@@ -37,18 +40,42 @@ export function IntakeCard({
   const [showManualInput, setShowManualInput] = useState(false);
   const { toast } = useToast();
   const deleteMutation = useDeleteIntake();
+  const updateMutation = useUpdateIntake();
   const { deletingId, handleDelete } = useDeleteWithToast(deleteMutation, `${CARD_THEMES[type].label} entry removed`);
 
-  // Fetch recent records using TanStack Query (replaces useLiveQuery to avoid transaction conflicts)
+  // Extra edit field (amount is record-specific)
+  const [editAmount, setEditAmount] = useState("");
+
+  const {
+    editingRecord,
+    editTimestamp,
+    editNote,
+    setEditTimestamp,
+    setEditNote,
+    openEdit,
+    closeEdit,
+    handleEditSubmit,
+  } = useEditRecord<IntakeRecord>({
+    onOpen: (record) => setEditAmount(record.amount.toString()),
+    buildUpdates: (timestamp, note) => {
+      const newAmount = parseInt(editAmount, 10);
+      if (isNaN(newAmount) || newAmount <= 0) {
+        toast({ title: "Invalid amount", variant: "destructive" });
+        return null;
+      }
+      return { amount: newAmount, timestamp, note };
+    },
+    mutateAsync: updateMutation.mutateAsync,
+  });
+
+  // Fetch recent records using TanStack Query
   const { data: recentRecords } = useRecentIntakeRecords(type);
 
   const theme = CARD_THEMES[type];
   const Icon = theme.icon;
   const unit = type === "water" ? "ml" : "mg";
-  const isWater = type === "water";
 
   // Use daily total for budget tracking (primary metric)
-  // Guard against zero/negative limit to prevent division errors
   const progressPercent = limit > 0 ? Math.min((dailyTotal / limit) * 100, 100) : 0;
   const isOverLimit = limit > 0 && dailyTotal > limit;
   const wouldExceedLimit = limit > 0 && dailyTotal + pendingAmount > limit;
@@ -233,6 +260,7 @@ export function IntakeCard({
             records={recentRecords}
             deletingId={deletingId}
             onDelete={handleDelete}
+            onEdit={openEdit}
             borderColor={theme.border}
             renderEntry={(record) => (
               <>
@@ -255,6 +283,18 @@ export function IntakeCard({
         currentValue={pendingAmount}
         onSubmit={handleManualSubmit}
         isSubmitting={isSubmitting}
+      />
+
+      <EditIntakeDialog
+        record={editingRecord}
+        onClose={closeEdit}
+        onSubmit={handleEditSubmit}
+        amount={editAmount}
+        onAmountChange={setEditAmount}
+        timestamp={editTimestamp}
+        onTimestampChange={setEditTimestamp}
+        note={editNote}
+        onNoteChange={setEditNote}
       />
     </>
   );

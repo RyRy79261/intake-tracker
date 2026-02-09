@@ -9,9 +9,12 @@ import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { CollapsibleTimeInputControlled } from "@/components/collapsible-time-input";
 import { RecentEntriesList } from "@/components/recent-entries-list";
+import { EditWeightDialog } from "@/components/edit-weight-dialog";
 import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
+import { useEditRecord } from "@/hooks/use-edit-record";
 import { useToast } from "@/hooks/use-toast";
-import { useWeightRecords, useAddWeight, useDeleteWeight } from "@/hooks/use-health-queries";
+import { type WeightRecord } from "@/lib/db";
+import { useWeightRecords, useAddWeight, useDeleteWeight, useUpdateWeight } from "@/hooks/use-health-queries";
 import {
   getCurrentDateTimeLocal,
   dateTimeLocalToTimestamp,
@@ -30,7 +33,33 @@ export function WeightCard() {
   const { data: recentRecords, isLoading, error } = useWeightRecords(5);
   const addMutation = useAddWeight();
   const deleteMutation = useDeleteWeight();
+  const updateMutation = useUpdateWeight();
   const { deletingId, handleDelete } = useDeleteWithToast(deleteMutation, "Weight record removed");
+
+  // Extra edit field
+  const [editWeight, setEditWeight] = useState("");
+
+  const {
+    editingRecord,
+    editTimestamp,
+    editNote,
+    setEditTimestamp,
+    setEditNote,
+    openEdit,
+    closeEdit,
+    handleEditSubmit,
+  } = useEditRecord<WeightRecord>({
+    onOpen: (record) => setEditWeight(record.weight.toString()),
+    buildUpdates: (timestamp, note) => {
+      const newWeight = parseFloat(editWeight);
+      if (isNaN(newWeight) || newWeight <= 0) {
+        toast({ title: "Invalid weight", variant: "destructive" });
+        return null;
+      }
+      return { weight: newWeight, timestamp, note };
+    },
+    mutateAsync: updateMutation.mutateAsync,
+  });
 
   const latestWeight = recentRecords?.[0];
 
@@ -67,6 +96,7 @@ export function WeightCard() {
   };
 
   return (
+    <>
     <Card className={cn("relative overflow-hidden transition-all duration-300 bg-gradient-to-br", theme.gradient, theme.border)}>
       <CardContent className="p-6">
         {/* Header */}
@@ -150,6 +180,7 @@ export function WeightCard() {
           records={recentRecords}
           deletingId={deletingId}
           onDelete={handleDelete}
+          onEdit={openEdit}
           borderColor={theme.border}
           renderEntry={(record) => (
             <>
@@ -162,5 +193,18 @@ export function WeightCard() {
         />
       </CardContent>
     </Card>
+
+    <EditWeightDialog
+      record={editingRecord}
+      onClose={closeEdit}
+      onSubmit={handleEditSubmit}
+      weight={editWeight}
+      onWeightChange={setEditWeight}
+      timestamp={editTimestamp}
+      onTimestampChange={setEditTimestamp}
+      note={editNote}
+      onNoteChange={setEditNote}
+    />
+    </>
   );
 }
