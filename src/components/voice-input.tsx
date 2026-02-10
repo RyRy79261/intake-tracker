@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import {
   Dialog,
@@ -17,141 +17,62 @@ import { Label } from "@/components/ui/label";
 import { Mic, MicOff, Loader2, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { usePerplexityKey } from "@/hooks/use-settings";
+import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
+import { ParsedIntakeDisplay } from "@/components/parsed-intake-display";
 import { parseIntakeWithPerplexity, type ParsedIntake } from "@/lib/perplexity";
 import { formatAmount } from "@/lib/utils";
-
-// Type declarations for Web Speech API
-interface SpeechRecognitionEvent extends Event {
-  resultIndex: number;
-  results: SpeechRecognitionResultList;
-}
-
-interface SpeechRecognitionErrorEvent extends Event {
-  error: string;
-  message: string;
-}
-
-interface SpeechRecognition extends EventTarget {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  onresult: ((event: SpeechRecognitionEvent) => void) | null;
-  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
-  onend: (() => void) | null;
-  start: () => void;
-  stop: () => void;
-  abort: () => void;
-}
-
-declare global {
-  interface Window {
-    SpeechRecognition: new () => SpeechRecognition;
-    webkitSpeechRecognition: new () => SpeechRecognition;
-  }
-}
 
 interface VoiceInputProps {
   onAddWater: (amount: number, source: string) => Promise<void>;
   onAddSalt: (amount: number, source: string) => Promise<void>;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function VoiceInput({ onAddWater, onAddSalt }: VoiceInputProps) {
-  const [open, setOpen] = useState(false);
+export function VoiceInput({ onAddWater, onAddSalt, open: controlledOpen, onOpenChange }: VoiceInputProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = onOpenChange ? onOpenChange : setInternalOpen;
   const [input, setInput] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [parsedResult, setParsedResult] = useState<ParsedIntake | null>(null);
-  const [isListening, setIsListening] = useState(false);
-  const [interimTranscript, setInterimTranscript] = useState("");
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
   const { toast } = useToast();
   const { getApiKey, hasKey } = usePerplexityKey();
   const { authenticated, getAccessToken } = usePrivy();
-  
-  // AI is available if user is authenticated (uses server key) OR has their own API key
-  const aiAvailable = authenticated || hasKey;
-  
-  // Check if speech recognition is available
-  const isSpeechSupported = typeof window !== "undefined" && 
-    (window.SpeechRecognition || window.webkitSpeechRecognition);
 
-  // Start listening to microphone
-  const startListening = useCallback(() => {
-    if (!isSpeechSupported) {
-      toast({
-        title: "Not supported",
-        description: "Speech recognition is not available in this browser",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const recognition = new SpeechRecognition();
-    
-    recognition.continuous = false;
-    recognition.interimResults = true;
-    recognition.lang = "en-US";
-
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
-      let finalTranscript = "";
-      let interim = "";
-
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          finalTranscript += transcript;
-        } else {
-          interim += transcript;
-        }
-      }
-
-      if (finalTranscript) {
-        setInput((prev) => prev + finalTranscript);
-        setInterimTranscript("");
-      } else {
-        setInterimTranscript(interim);
-      }
-    };
-
-    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      console.error("Speech recognition error:", event.error);
-      setIsListening(false);
-      setInterimTranscript("");
-      
-      if (event.error === "not-allowed") {
-        toast({
-          title: "Microphone access denied",
-          description: "Please enable microphone access in your browser settings",
-          variant: "destructive",
-        });
-      } else if (event.error !== "aborted") {
-        toast({
-          title: "Speech recognition error",
-          description: event.error,
-          variant: "destructive",
-        });
-      }
-    };
-
-    recognition.onend = () => {
-      setIsListening(false);
-      setInterimTranscript("");
-    };
-
-    recognitionRef.current = recognition;
-    recognition.start();
-    setIsListening(true);
-  }, [isSpeechSupported, toast]);
-
-  // Stop listening
-  const stopListening = useCallback(() => {
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-      recognitionRef.current = null;
-    }
-    setIsListening(false);
-    setInterimTranscript("");
+  const handleFinalTranscript = useCallback((transcript: string) => {
+    setInput((prev) => prev + transcript);
   }, []);
+
+  const {
+    isListening,
+    interimTranscript,
+    isSpeechSupported,
+    startListening,
+    stopListening,
+    cleanup,
+  } = useSpeechRecognition(handleFinalTranscript);
+
+  const aiAvailable = authenticated || hasKey;
+
+  // Warn when controlled without an onOpenChange handler
+  useEffect(() => {
+    if (controlledOpen !== undefined && !onOpenChange) {
+      console.warn(
+        "VoiceInput: `open` prop was provided without an `onOpenChange` handler. " +
+        "The parent must supply `onOpenChange` to fully control VoiceInput."
+      );
+    }
+  }, [controlledOpen, onOpenChange]);
+
+  // Clean up when the parent programmatically closes the dialog
+  useEffect(() => {
+    if (controlledOpen === false) {
+      cleanup();
+      setInput("");
+      setParsedResult(null);
+    }
+  }, [controlledOpen, cleanup]);
 
   const handleParse = async () => {
     if (!input.trim()) return;
@@ -160,7 +81,6 @@ export function VoiceInput({ onAddWater, onAddSalt }: VoiceInputProps) {
     setParsedResult(null);
 
     try {
-      // Get Privy access token if authenticated
       let authToken: string | undefined;
       if (authenticated) {
         authToken = await getAccessToken() || undefined;
@@ -210,7 +130,7 @@ export function VoiceInput({ onAddWater, onAddSalt }: VoiceInputProps) {
       setOpen(false);
       setInput("");
       setParsedResult(null);
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "Failed to record intake",
@@ -291,8 +211,8 @@ export function VoiceInput({ onAddWater, onAddSalt }: VoiceInputProps) {
                   variant="outline"
                   size="icon"
                   className={`h-12 w-12 shrink-0 ${
-                    isListening 
-                      ? "bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-800" 
+                    isListening
+                      ? "bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-800"
                       : ""
                   }`}
                   onClick={isListening ? stopListening : startListening}
@@ -341,56 +261,12 @@ export function VoiceInput({ onAddWater, onAddSalt }: VoiceInputProps) {
 
           {/* Parsed Result Preview */}
           {parsedResult && (
-            <div className="space-y-3">
-              <div className="p-4 rounded-lg bg-muted/50 border">
-                <p className="text-sm text-muted-foreground mb-3">
-                  Parsed result:
-                </p>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="text-center p-3 rounded-lg bg-sky-50 dark:bg-sky-950/30">
-                    <p className="text-2xl font-bold text-sky-600 dark:text-sky-400">
-                      {parsedResult.water
-                        ? formatAmount(parsedResult.water, "ml")
-                        : "0ml"}
-                    </p>
-                    <p className="text-xs text-muted-foreground">Water</p>
-                  </div>
-                  <div className="text-center p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30">
-                    <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
-                      {parsedResult.salt
-                        ? formatAmount(parsedResult.salt, "mg")
-                        : "0mg"}
-                    </p>
-                    <p className="text-xs text-muted-foreground">Salt</p>
-                  </div>
-                </div>
-                {parsedResult.reasoning && (
-                  <p className="text-xs text-muted-foreground mt-3 italic">
-                    {parsedResult.reasoning}
-                  </p>
-                )}
-              </div>
-
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => setParsedResult(null)}
-                  className="flex-1"
-                >
-                  Try Again
-                </Button>
-                <Button
-                  onClick={handleConfirm}
-                  disabled={
-                    isProcessing ||
-                    (!parsedResult.water && !parsedResult.salt)
-                  }
-                  className="flex-1 bg-violet-600 hover:bg-violet-700"
-                >
-                  {isProcessing ? "Adding..." : "Confirm & Add"}
-                </Button>
-              </div>
-            </div>
+            <ParsedIntakeDisplay
+              result={parsedResult}
+              onTryAgain={() => setParsedResult(null)}
+              onConfirm={handleConfirm}
+              isProcessing={isProcessing}
+            />
           )}
         </div>
 

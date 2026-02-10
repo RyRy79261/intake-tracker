@@ -5,34 +5,31 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Heart, Check, Clock, ChevronDown, ChevronUp, Loader2, Trash2, AlertCircle } from "lucide-react";
+import { Check, Loader2, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { CARD_THEMES } from "@/lib/card-themes";
+import { CollapsibleTimeInputControlled } from "@/components/collapsible-time-input";
+import { RecentEntriesList } from "@/components/recent-entries-list";
+import { EditBloodPressureDialog } from "@/components/edit-blood-pressure-dialog";
+import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
+import { useEditRecord } from "@/hooks/use-edit-record";
 import { useToast } from "@/hooks/use-toast";
 import { type BloodPressureRecord } from "@/lib/db";
-import { useBloodPressureRecords, useAddBloodPressure, useDeleteBloodPressure } from "@/hooks/use-health-queries";
+import { useBloodPressureRecords, useAddBloodPressure, useDeleteBloodPressure, useUpdateBloodPressure } from "@/hooks/use-health-queries";
 import {
   getCurrentDateTimeLocal,
   dateTimeLocalToTimestamp,
   formatDateTime,
 } from "@/lib/date-utils";
+import { getBPCategory } from "@/lib/constants";
 
 // Format BP reading
 function formatBPReading(record: BloodPressureRecord): string {
   return `${record.systolic}/${record.diastolic}`;
 }
 
-// Get BP category color
-function getBPCategory(systolic: number, diastolic: number): { label: string; color: string } {
-  if (systolic < 120 && diastolic < 80) {
-    return { label: "Normal", color: "text-green-600 dark:text-green-400" };
-  } else if (systolic < 130 && diastolic < 80) {
-    return { label: "Elevated", color: "text-yellow-600 dark:text-yellow-400" };
-  } else if (systolic < 140 || diastolic < 90) {
-    return { label: "High Stage 1", color: "text-orange-600 dark:text-orange-400" };
-  } else {
-    return { label: "High Stage 2", color: "text-red-600 dark:text-red-400" };
-  }
-}
+const theme = CARD_THEMES.bp;
+const Icon = theme.icon;
 
 export function BloodPressureCard() {
   const { toast } = useToast();
@@ -43,12 +40,64 @@ export function BloodPressureCard() {
   const [arm, setArm] = useState<"left" | "right">("left");
   const [showTimeInput, setShowTimeInput] = useState(false);
   const [customTime, setCustomTime] = useState(getCurrentDateTimeLocal());
-  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  // Get recent BP records via TanStack Query
   const { data: recentRecords, isLoading, error } = useBloodPressureRecords(5);
   const addMutation = useAddBloodPressure();
   const deleteMutation = useDeleteBloodPressure();
+  const updateMutation = useUpdateBloodPressure();
+  const { deletingId, handleDelete } = useDeleteWithToast(deleteMutation, "Blood pressure record removed");
+
+  // Extra edit fields (BP-specific)
+  const [editSystolic, setEditSystolic] = useState("");
+  const [editDiastolic, setEditDiastolic] = useState("");
+  const [editHeartRate, setEditHeartRate] = useState("");
+  const [editPosition, setEditPosition] = useState<"sitting" | "standing">("sitting");
+  const [editArm, setEditArm] = useState<"left" | "right">("left");
+
+  const {
+    editingRecord,
+    editTimestamp,
+    editNote,
+    setEditTimestamp,
+    setEditNote,
+    openEdit,
+    closeEdit,
+    handleEditSubmit,
+  } = useEditRecord<BloodPressureRecord>({
+    onOpen: (record) => {
+      setEditSystolic(record.systolic.toString());
+      setEditDiastolic(record.diastolic.toString());
+      setEditHeartRate(record.heartRate?.toString() || "");
+      setEditPosition(record.position);
+      setEditArm(record.arm);
+    },
+    buildUpdates: (timestamp, note) => {
+      const newSystolic = parseInt(editSystolic, 10);
+      const newDiastolic = parseInt(editDiastolic, 10);
+      if (isNaN(newSystolic) || isNaN(newDiastolic) || newSystolic <= 0 || newDiastolic <= 0) {
+        toast({ title: "Invalid values", variant: "destructive" });
+        return null;
+      }
+      let newHeartRate: number | undefined;
+      if (editHeartRate) {
+        newHeartRate = parseInt(editHeartRate, 10);
+        if (isNaN(newHeartRate) || newHeartRate <= 0) {
+          toast({ title: "Invalid values", variant: "destructive" });
+          return null;
+        }
+      }
+      return {
+        systolic: newSystolic,
+        diastolic: newDiastolic,
+        heartRate: newHeartRate,
+        position: editPosition,
+        arm: editArm,
+        timestamp,
+        note,
+      };
+    },
+    mutateAsync: updateMutation.mutateAsync,
+  });
 
   const latestReading = recentRecords?.[0];
   const bpCategory = latestReading 
@@ -101,40 +150,21 @@ export function BloodPressureCard() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    setDeletingId(id);
-    try {
-      await deleteMutation.mutateAsync(id);
-      toast({
-        title: "Entry deleted",
-        description: "Blood pressure record removed",
-      });
-    } catch (error) {
-      console.error("Failed to delete blood pressure record:", error);
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Could not delete entry",
-        variant: "destructive",
-      });
-    } finally {
-      setDeletingId(null);
-    }
-  };
-
   return (
-    <Card className="relative overflow-hidden transition-all duration-300 bg-gradient-to-br from-rose-50 to-pink-50 dark:from-rose-950/40 dark:to-pink-950/40 border-rose-200 dark:border-rose-800">
+    <>
+    <Card className={cn("relative overflow-hidden transition-all duration-300 bg-gradient-to-br", theme.gradient, theme.border)}>
       <CardContent className="p-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-rose-100 dark:bg-rose-900/50">
-              <Heart className="w-5 h-5 text-rose-600 dark:text-rose-400" />
+            <div className={cn("p-2 rounded-lg", theme.iconBg)}>
+              <Icon className={cn("w-5 h-5", theme.iconColor)} />
             </div>
-            <span className="font-semibold text-lg uppercase tracking-wide">Blood Pressure</span>
+            <span className="font-semibold text-lg uppercase tracking-wide">{theme.label}</span>
           </div>
           {isLoading ? (
             <div className="animate-pulse text-right">
-              <div className="h-6 w-20 bg-rose-200 dark:bg-rose-800 rounded ml-auto" />
+              <div className={cn("h-6 w-20 rounded ml-auto", theme.loadingBg)} />
               <div className="h-4 w-16 bg-muted rounded mt-1 ml-auto" />
             </div>
           ) : error ? (
@@ -144,7 +174,7 @@ export function BloodPressureCard() {
             </div>
           ) : latestReading ? (
             <div className="text-right">
-              <p className="text-lg font-bold text-rose-700 dark:text-rose-300">
+              <p className={cn("text-lg font-bold", theme.latestValueColor)}>
                 {formatBPReading(latestReading)} <span className="text-sm font-normal">mmHg</span>
               </p>
               {bpCategory && (
@@ -218,7 +248,7 @@ export function BloodPressureCard() {
                 size="sm"
                 className={cn(
                   "flex-1 transition-all",
-                  position === "sitting" && "bg-rose-100 border-rose-300 dark:bg-rose-900/50 dark:border-rose-700"
+                  position === "sitting" && theme.activeToggle
                 )}
                 onClick={() => setPosition("sitting")}
               >
@@ -230,7 +260,7 @@ export function BloodPressureCard() {
                 size="sm"
                 className={cn(
                   "flex-1 transition-all",
-                  position === "standing" && "bg-rose-100 border-rose-300 dark:bg-rose-900/50 dark:border-rose-700"
+                  position === "standing" && theme.activeToggle
                 )}
                 onClick={() => setPosition("standing")}
               >
@@ -249,7 +279,7 @@ export function BloodPressureCard() {
                 size="sm"
                 className={cn(
                   "flex-1 transition-all",
-                  arm === "left" && "bg-rose-100 border-rose-300 dark:bg-rose-900/50 dark:border-rose-700"
+                  arm === "left" && theme.activeToggle
                 )}
                 onClick={() => setArm("left")}
               >
@@ -261,7 +291,7 @@ export function BloodPressureCard() {
                 size="sm"
                 className={cn(
                   "flex-1 transition-all",
-                  arm === "right" && "bg-rose-100 border-rose-300 dark:bg-rose-900/50 dark:border-rose-700"
+                  arm === "right" && theme.activeToggle
                 )}
                 onClick={() => setArm("right")}
               >
@@ -270,45 +300,18 @@ export function BloodPressureCard() {
             </div>
           </div>
 
-          {/* Custom time section */}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="w-full justify-between text-muted-foreground hover:text-foreground"
-            onClick={() => setShowTimeInput(!showTimeInput)}
-          >
-            <span className="flex items-center gap-2">
-              <Clock className="w-4 h-4" />
-              {showTimeInput ? "Using custom time" : "Set different time"}
-            </span>
-            {showTimeInput ? (
-              <ChevronUp className="w-4 h-4" />
-            ) : (
-              <ChevronDown className="w-4 h-4" />
-            )}
-          </Button>
-
-          {showTimeInput && (
-            <div className="p-3 rounded-lg bg-muted/50 border">
-              <Label htmlFor="bp-time" className="text-sm">
-                When was this measured?
-              </Label>
-              <Input
-                id="bp-time"
-                type="datetime-local"
-                value={customTime}
-                onChange={(e) => setCustomTime(e.target.value)}
-                max={getCurrentDateTimeLocal()}
-                className="mt-2 text-sm"
-              />
-            </div>
-          )}
+          <CollapsibleTimeInputControlled
+            value={customTime}
+            onChange={setCustomTime}
+            expanded={showTimeInput}
+            onToggle={() => setShowTimeInput(!showTimeInput)}
+            id="bp-time"
+          />
 
           <Button
             onClick={handleSubmit}
             disabled={addMutation.isPending || !systolicInput || !diastolicInput}
-            className="w-full h-11 bg-rose-600 hover:bg-rose-700"
+            className={cn("w-full h-11", theme.buttonBg)}
           >
             {addMutation.isPending ? (
               <>
@@ -325,52 +328,57 @@ export function BloodPressureCard() {
         </div>
 
         {/* Recent History */}
-        {recentRecords && recentRecords.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-rose-200 dark:border-rose-800">
-            <p className="text-xs font-medium text-muted-foreground mb-2">Recent</p>
-            <div className="space-y-2">
-              {recentRecords.slice(0, 3).map((record) => {
-                const category = getBPCategory(record.systolic, record.diastolic);
-                return (
-                  <div
-                    key={record.id}
-                    className="flex items-center justify-between text-sm py-1"
-                  >
-                    <div className="flex flex-col">
-                      <span className="text-muted-foreground text-xs">{formatDateTime(record.timestamp)}</span>
-                      <span className="text-xs text-muted-foreground/70">
-                        {record.position} • {record.arm} arm
-                        {record.heartRate && ` • ${record.heartRate} BPM`}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="text-right">
-                        <span className="font-medium">{formatBPReading(record)}</span>
-                        <span className={cn("text-xs ml-1", category.color)}>
-                          ({category.label})
-                        </span>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 text-muted-foreground hover:text-red-600"
-                        onClick={() => handleDelete(record.id)}
-                        disabled={deletingId === record.id}
-                      >
-                        {deletingId === record.id ? (
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                        ) : (
-                          <Trash2 className="w-3 h-3" />
-                        )}
-                      </Button>
-                    </div>
+        <RecentEntriesList
+          records={recentRecords}
+          deletingId={deletingId}
+          onDelete={handleDelete}
+          onEdit={openEdit}
+          borderColor={theme.border}
+          renderEntry={(record) => {
+            const category = getBPCategory(record.systolic, record.diastolic);
+            return (
+              <>
+                <div className="flex flex-col">
+                  <span className="text-muted-foreground text-xs">{formatDateTime(record.timestamp)}</span>
+                  <span className="text-xs text-muted-foreground/70">
+                    {record.position} · {record.arm} arm
+                    {record.heartRate && ` · ${record.heartRate} BPM`}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="text-right">
+                    <span className="font-medium">{formatBPReading(record)}</span>
+                    <span className={cn("text-xs ml-1", category.color)}>
+                      ({category.label})
+                    </span>
                   </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
+                </div>
+              </>
+            );
+          }}
+        />
       </CardContent>
     </Card>
+
+    <EditBloodPressureDialog
+      record={editingRecord}
+      onClose={closeEdit}
+      onSubmit={handleEditSubmit}
+      systolic={editSystolic}
+      onSystolicChange={setEditSystolic}
+      diastolic={editDiastolic}
+      onDiastolicChange={setEditDiastolic}
+      heartRate={editHeartRate}
+      onHeartRateChange={setEditHeartRate}
+      position={editPosition}
+      onPositionChange={setEditPosition}
+      arm={editArm}
+      onArmChange={setEditArm}
+      timestamp={editTimestamp}
+      onTimestampChange={setEditTimestamp}
+      note={editNote}
+      onNoteChange={setEditNote}
+    />
+    </>
   );
 }

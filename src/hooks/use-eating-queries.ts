@@ -9,6 +9,7 @@ import {
   updateEatingRecord,
   deleteEatingRecord,
 } from "@/lib/eating-service";
+import { graphKeys } from "@/hooks/use-graph-data";
 
 export type AddEatingParams = {
   timestamp?: number;
@@ -53,6 +54,7 @@ export function useAddEating() {
       addEatingRecord(params.timestamp, params.note),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: eatingKeys.all });
+      queryClient.invalidateQueries({ queryKey: graphKeys.all });
     },
   });
 }
@@ -65,6 +67,7 @@ export function useUpdateEating() {
       updateEatingRecord(params.id, params.updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: eatingKeys.all });
+      queryClient.invalidateQueries({ queryKey: graphKeys.all });
     },
   });
 }
@@ -76,6 +79,7 @@ export function useDeleteEating() {
     mutationFn: (id: string) => deleteEatingRecord(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: eatingKeys.all });
+      queryClient.invalidateQueries({ queryKey: graphKeys.all });
     },
   });
 }

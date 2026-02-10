@@ -4,27 +4,62 @@ import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Scale, Check, Clock, ChevronDown, ChevronUp, Loader2, Trash2, AlertCircle } from "lucide-react";
+import { Check, Loader2, AlertCircle } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { CARD_THEMES } from "@/lib/card-themes";
+import { CollapsibleTimeInputControlled } from "@/components/collapsible-time-input";
+import { RecentEntriesList } from "@/components/recent-entries-list";
+import { EditWeightDialog } from "@/components/edit-weight-dialog";
+import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
+import { useEditRecord } from "@/hooks/use-edit-record";
 import { useToast } from "@/hooks/use-toast";
-import { useWeightRecords, useAddWeight, useDeleteWeight } from "@/hooks/use-health-queries";
+import { type WeightRecord } from "@/lib/db";
+import { useWeightRecords, useAddWeight, useDeleteWeight, useUpdateWeight } from "@/hooks/use-health-queries";
 import {
   getCurrentDateTimeLocal,
   dateTimeLocalToTimestamp,
   formatDateTime,
 } from "@/lib/date-utils";
 
+const theme = CARD_THEMES.weight;
+const Icon = theme.icon;
+
 export function WeightCard() {
   const { toast } = useToast();
   const [weightInput, setWeightInput] = useState("");
   const [showTimeInput, setShowTimeInput] = useState(false);
   const [customTime, setCustomTime] = useState(getCurrentDateTimeLocal());
-  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  // Get recent weight records via TanStack Query
   const { data: recentRecords, isLoading, error } = useWeightRecords(5);
   const addMutation = useAddWeight();
   const deleteMutation = useDeleteWeight();
+  const updateMutation = useUpdateWeight();
+  const { deletingId, handleDelete } = useDeleteWithToast(deleteMutation, "Weight record removed");
+
+  // Extra edit field
+  const [editWeight, setEditWeight] = useState("");
+
+  const {
+    editingRecord,
+    editTimestamp,
+    editNote,
+    setEditTimestamp,
+    setEditNote,
+    openEdit,
+    closeEdit,
+    handleEditSubmit,
+  } = useEditRecord<WeightRecord>({
+    onOpen: (record) => setEditWeight(record.weight.toString()),
+    buildUpdates: (timestamp, note) => {
+      const newWeight = parseFloat(editWeight);
+      if (isNaN(newWeight) || newWeight <= 0) {
+        toast({ title: "Invalid weight", variant: "destructive" });
+        return null;
+      }
+      return { weight: newWeight, timestamp, note };
+    },
+    mutateAsync: updateMutation.mutateAsync,
+  });
 
   const latestWeight = recentRecords?.[0];
 
@@ -60,40 +95,21 @@ export function WeightCard() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    setDeletingId(id);
-    try {
-      await deleteMutation.mutateAsync(id);
-      toast({
-        title: "Entry deleted",
-        description: "Weight record removed",
-      });
-    } catch (error) {
-      console.error("Failed to delete weight record:", error);
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Could not delete entry",
-        variant: "destructive",
-      });
-    } finally {
-      setDeletingId(null);
-    }
-  };
-
   return (
-    <Card className="relative overflow-hidden transition-all duration-300 bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/40 dark:to-teal-950/40 border-emerald-200 dark:border-emerald-800">
+    <>
+    <Card className={cn("relative overflow-hidden transition-all duration-300 bg-gradient-to-br", theme.gradient, theme.border)}>
       <CardContent className="p-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/50">
-              <Scale className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+            <div className={cn("p-2 rounded-lg", theme.iconBg)}>
+              <Icon className={cn("w-5 h-5", theme.iconColor)} />
             </div>
-            <span className="font-semibold text-lg uppercase tracking-wide">Weight</span>
+            <span className="font-semibold text-lg uppercase tracking-wide">{theme.label}</span>
           </div>
           {isLoading ? (
             <div className="animate-pulse text-right">
-              <div className="h-6 w-16 bg-emerald-200 dark:bg-emerald-800 rounded ml-auto" />
+              <div className={cn("h-6 w-16 rounded ml-auto", theme.loadingBg)} />
               <div className="h-4 w-24 bg-muted rounded mt-1 ml-auto" />
             </div>
           ) : error ? (
@@ -103,7 +119,7 @@ export function WeightCard() {
             </div>
           ) : latestWeight ? (
             <div className="text-right">
-              <p className="text-lg font-bold text-emerald-700 dark:text-emerald-300">
+              <p className={cn("text-lg font-bold", theme.latestValueColor)}>
                 {latestWeight.weight} kg
               </p>
               <p className="text-xs text-muted-foreground">
@@ -132,45 +148,18 @@ export function WeightCard() {
             </div>
           </div>
 
-          {/* Custom time section */}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="w-full justify-between text-muted-foreground hover:text-foreground"
-            onClick={() => setShowTimeInput(!showTimeInput)}
-          >
-            <span className="flex items-center gap-2">
-              <Clock className="w-4 h-4" />
-              {showTimeInput ? "Using custom time" : "Set different time"}
-            </span>
-            {showTimeInput ? (
-              <ChevronUp className="w-4 h-4" />
-            ) : (
-              <ChevronDown className="w-4 h-4" />
-            )}
-          </Button>
-
-          {showTimeInput && (
-            <div className="p-3 rounded-lg bg-muted/50 border">
-              <Label htmlFor="weight-time" className="text-sm">
-                When was this measured?
-              </Label>
-              <Input
-                id="weight-time"
-                type="datetime-local"
-                value={customTime}
-                onChange={(e) => setCustomTime(e.target.value)}
-                max={getCurrentDateTimeLocal()}
-                className="mt-2 text-sm"
-              />
-            </div>
-          )}
+          <CollapsibleTimeInputControlled
+            value={customTime}
+            onChange={setCustomTime}
+            expanded={showTimeInput}
+            onToggle={() => setShowTimeInput(!showTimeInput)}
+            id="weight-time"
+          />
 
           <Button
             onClick={handleSubmit}
             disabled={addMutation.isPending || !weightInput}
-            className="w-full h-11 bg-emerald-600 hover:bg-emerald-700"
+            className={cn("w-full h-11", theme.buttonBg)}
           >
             {addMutation.isPending ? (
               <>
@@ -187,38 +176,35 @@ export function WeightCard() {
         </div>
 
         {/* Recent History */}
-        {recentRecords && recentRecords.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-emerald-200 dark:border-emerald-800">
-            <p className="text-xs font-medium text-muted-foreground mb-2">Recent</p>
-            <div className="space-y-1">
-              {recentRecords.slice(0, 3).map((record) => (
-                <div
-                  key={record.id}
-                  className="flex items-center justify-between text-sm py-1"
-                >
-                  <span className="text-muted-foreground">{formatDateTime(record.timestamp)}</span>
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">{record.weight} kg</span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6 text-muted-foreground hover:text-red-600"
-                      onClick={() => handleDelete(record.id)}
-                      disabled={deletingId === record.id}
-                    >
-                      {deletingId === record.id ? (
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                      ) : (
-                        <Trash2 className="w-3 h-3" />
-                      )}
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        <RecentEntriesList
+          records={recentRecords}
+          deletingId={deletingId}
+          onDelete={handleDelete}
+          onEdit={openEdit}
+          borderColor={theme.border}
+          renderEntry={(record) => (
+            <>
+              <span className="text-muted-foreground">{formatDateTime(record.timestamp)}</span>
+              <div className="flex items-center gap-2">
+                <span className="font-medium">{record.weight} kg</span>
+              </div>
+            </>
+          )}
+        />
       </CardContent>
     </Card>
+
+    <EditWeightDialog
+      record={editingRecord}
+      onClose={closeEdit}
+      onSubmit={handleEditSubmit}
+      weight={editWeight}
+      onWeightChange={setEditWeight}
+      timestamp={editTimestamp}
+      onTimestampChange={setEditTimestamp}
+      note={editNote}
+      onNoteChange={setEditNote}
+    />
+    </>
   );
 }

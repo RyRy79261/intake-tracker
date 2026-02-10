@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useScroll, useMotionValueEvent } from "motion/react";
 import { IntakeCard } from "@/components/intake-card";
 import { FoodCalculator } from "@/components/food-calculator";
 import { VoiceInput } from "@/components/voice-input";
@@ -9,6 +8,7 @@ import { AuthGuard } from "@/components/auth-guard";
 import { WeightCard } from "@/components/weight-card";
 import { BloodPressureCard } from "@/components/blood-pressure-card";
 import { AppHeader } from "@/components/app-header";
+import { QuickNavFooter } from "@/components/quick-nav-footer";
 import { SettingsDrawer } from "@/components/settings-drawer";
 import { HistoryDrawer } from "@/components/history-drawer";
 import { HistoricalGraph } from "@/components/historical-graph";
@@ -17,24 +17,25 @@ import { UrinationCard } from "@/components/urination-card";
 import { useIntake } from "@/hooks/use-intake-queries";
 import { useSettings } from "@/hooks/use-settings";
 import { usePinProtected } from "@/hooks/use-pin-gate";
+import { useScrollHide } from "@/hooks/use-scroll-hide";
+import { cn } from "@/lib/utils";
 import { Droplets } from "lucide-react";
 
 function HomeContent() {
   const [mounted, setMounted] = useState(false);
-  const [headerHidden, setHeaderHidden] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [foodCalcOpen, setFoodCalcOpen] = useState(false);
+  const [voiceInputOpen, setVoiceInputOpen] = useState(false);
   const waterIntake = useIntake("water");
   const saltIntake = useIntake("salt");
   const settings = useSettings();
   const { showLockedUI } = usePinProtected();
 
-  // Scroll detection for hiding/showing header
-  const { scrollY } = useScroll();
-  useMotionValueEvent(scrollY, "change", (current) => {
-    const previous = scrollY.getPrevious() ?? 0;
-    // Hide when scrolling down and not at top
-    setHeaderHidden(current > previous && current > 50);
+  const barTransitionSec = settings.barTransitionDurationMs / 1000;
+  const { isHidden, handleQuickNav } = useScrollHide({
+    scrollDurationMs: settings.scrollDurationMs,
+    autoHideDelayMs: settings.autoHideDelayMs,
   });
 
   // Handle hydration mismatch for localStorage
@@ -72,10 +73,11 @@ function HomeContent() {
     <>
       {/* Header - hides on scroll down, shows on scroll up */}
       <AppHeader
-        headerHidden={headerHidden}
+        headerHidden={isHidden}
         showLockedUI={showLockedUI}
         onHistoryClick={() => setHistoryOpen(true)}
         onSettingsClick={() => setSettingsOpen(true)}
+        transitionDuration={barTransitionSec}
       />
 
       {/* Settings Drawer */}
@@ -89,8 +91,9 @@ function HomeContent() {
         <HistoricalGraph />
       </div>
 
-        {/* Intake Cards */}
-        <div className="space-y-4 mb-6">
+      {/* Intake Cards */}
+      <div className="space-y-4 mb-6">
+        <div id="section-water">
           <IntakeCard
             type="water"
             dailyTotal={waterIntake.dailyTotal}
@@ -100,7 +103,9 @@ function HomeContent() {
             onConfirm={(amount, timestamp, note) => handleAddWater(amount, "manual", timestamp, note)}
             isLoading={waterIntake.isLoading}
           />
+        </div>
 
+        <div id="section-salt">
           <IntakeCard
             type="salt"
             dailyTotal={saltIntake.dailyTotal}
@@ -111,44 +116,71 @@ function HomeContent() {
             isLoading={saltIntake.isLoading}
           />
         </div>
+      </div>
 
-        {/* Additional Input Methods */}
-        <div className="flex gap-3 mb-6">
-          <FoodCalculator onAddWater={handleAddWater} />
-          <VoiceInput onAddWater={handleAddWater} onAddSalt={handleAddSalt} />
-        </div>
+      {/* Additional Input Methods */}
+      <div className="flex gap-3 mb-6">
+        <FoodCalculator
+          onAddWater={handleAddWater}
+          open={foodCalcOpen}
+          onOpenChange={setFoodCalcOpen}
+        />
+        <VoiceInput
+          onAddWater={handleAddWater}
+          onAddSalt={handleAddSalt}
+          open={voiceInputOpen}
+          onOpenChange={setVoiceInputOpen}
+        />
+      </div>
 
-        {/* Health Measurements */}
-        <div className="space-y-4 mb-6">
+      {/* Health Measurements */}
+      <div className="space-y-4 mb-6">
+        <div id="section-weight">
           <WeightCard />
+        </div>
+        <div id="section-bp">
           <BloodPressureCard />
         </div>
+      </div>
 
-        {/* Eating & Urination - bottom of main content */}
-        <div className="space-y-4 mb-6">
+      {/* Eating & Urination - bottom of main content */}
+      <div className="space-y-4 mb-6">
+        <div id="section-eating">
           <EatingCard />
+        </div>
+        <div id="section-urination">
           <UrinationCard />
         </div>
+      </div>
 
-      {/* Footer */}
-      <footer className="mt-8 text-center text-xs text-muted-foreground">
+      {/* Footer info */}
+      <footer className={cn("mt-8 text-center text-xs text-muted-foreground", settings.showQuickNav ? "pb-28" : "pb-6")}>
         <p>Track your intake to maintain heart health</p>
         <p className="mt-1">
-          Water: max 1L/day • Salt: max 1500mg/day
+          Water: max 1L/day · Salt: max 1500mg/day
         </p>
       </footer>
+
+      {/* Quick Nav Footer */}
+      {settings.showQuickNav && (
+        <QuickNavFooter
+          hidden={isHidden}
+          order={settings.quickNavOrder}
+          utilityOrder={settings.utilityOrder}
+          transitionDuration={barTransitionSec}
+          onScrollTo={handleQuickNav}
+          onOpenFoodCalculator={() => setFoodCalcOpen(true)}
+          onOpenVoiceInput={() => setVoiceInputOpen(true)}
+        />
+      )}
     </>
   );
 }
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
-      <div className="container mx-auto px-4 py-6 max-w-lg">
-        <AuthGuard>
-          <HomeContent />
-        </AuthGuard>
-      </div>
-    </main>
+    <AuthGuard>
+      <HomeContent />
+    </AuthGuard>
   );
 }

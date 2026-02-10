@@ -9,6 +9,7 @@ import {
   deleteIntakeRecord,
 } from "@/lib/intake-service";
 import { useSettingsStore } from "@/stores/settings-store";
+import { graphKeys } from "@/hooks/use-graph-data";
 
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 const REFRESH_INTERVAL_MS = 60 * 1000; // 1 minute
@@ -186,6 +187,7 @@ export function useAddIntake() {
       queryClient.invalidateQueries({ queryKey: intakeKeys.dailyTotals() });
       queryClient.invalidateQueries({ queryKey: intakeKeys.records(variables.type) });
       queryClient.invalidateQueries({ queryKey: intakeKeys.recent(variables.type) });
+      queryClient.invalidateQueries({ queryKey: graphKeys.all });
     },
   });
 }
@@ -211,6 +213,7 @@ export function useUpdateIntake() {
       queryClient.invalidateQueries({ queryKey: intakeKeys.totals() });
       queryClient.invalidateQueries({ queryKey: intakeKeys.dailyTotals() });
       queryClient.invalidateQueries({ queryKey: intakeKeys.all });
+      queryClient.invalidateQueries({ queryKey: graphKeys.all });
     },
   });
 }
@@ -227,6 +230,7 @@ export function useDeleteIntake() {
     onSuccess: () => {
       // Invalidate all intake queries since we don't know which type was affected
       queryClient.invalidateQueries({ queryKey: intakeKeys.all });
+      queryClient.invalidateQueries({ queryKey: graphKeys.all });
     },
   });
 }
