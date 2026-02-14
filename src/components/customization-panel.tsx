@@ -188,6 +188,8 @@ function GraphToggle({
 }) {
   return (
     <button
+      type="button"
+      aria-pressed={checked}
       onClick={() => onChange(!checked)}
       className={cn(
         "w-full flex items-center justify-between p-3 rounded-lg border transition-all text-left",

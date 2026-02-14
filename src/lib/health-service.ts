@@ -72,7 +72,7 @@ export async function addBloodPressureRecord(
     systolic,
     diastolic,
     heartRate,
-    irregularHeartbeat: irregularHeartbeat || undefined,
+    irregularHeartbeat: irregularHeartbeat ?? undefined,
     position,
     arm,
     timestamp: timestamp ?? Date.now(),

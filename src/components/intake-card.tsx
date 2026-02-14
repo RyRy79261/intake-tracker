@@ -140,6 +140,7 @@ export function IntakeCard({
           description: `Coffee intake recorded`,
           variant: "success",
         });
+        setPendingAmount(increment);
         setShowCoffeeDialog(false);
       } catch (error) {
         toast({
@@ -151,7 +152,7 @@ export function IntakeCard({
         setIsSubmitting(false);
       }
     },
-    [onConfirmWithSource, toast]
+    [onConfirmWithSource, toast, increment]
   );
 
   const handleManualSubmit = useCallback(

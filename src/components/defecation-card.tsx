@@ -98,7 +98,7 @@ export function DefecationCard() {
   };
 
   const handleOpenDetails = () => {
-    setAmount(settings.defecationDefaultAmount);
+    setAmount(settings.defecationDefaultAmount || "");
     setNote("");
     setDetailTime(getCurrentDateTimeLocal());
     setDetailsOpen(true);
