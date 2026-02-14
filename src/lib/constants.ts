@@ -92,3 +92,12 @@ export const COFFEE_PRESETS: readonly CoffeePreset[] = [
   { value: "moka", label: "Moka", waterMl: 50 },
   { value: "other", label: "Other", waterMl: 0 },
 ] as const;
+
+// ─── Liquid Type Options ────────────────────────────────────────────
+
+export const LIQUID_TYPE_OPTIONS = [
+  { value: "water", label: "Water" },
+  { value: "juice", label: "Juice" },
+  { value: "coffee", label: "Coffee" },
+  { value: "food", label: "Food" },
+] as const;

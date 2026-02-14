@@ -5,6 +5,7 @@ import { Trash2, Loader2, Pencil } from "lucide-react";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { type UnifiedRecord } from "@/lib/history-types";
 import { formatTimeOnly } from "@/lib/date-utils";
+import { getLiquidTypeLabel } from "@/lib/utils";
 
 interface RecordRowProps {
   unified: UnifiedRecord;
@@ -26,7 +27,9 @@ export function RecordRow({ unified, onDelete, onEdit, isDeleting }: RecordRowPr
     const Icon = theme.icon;
     icon = <Icon className="w-4 h-4" />;
     iconColor = theme.iconColor;
-    measurement = `${record.amount} ${record.type === "water" ? "ml" : "mg"}`;
+    const amountStr = `${record.amount} ${record.type === "water" ? "ml" : "mg"}`;
+    const sourceLabel = record.type === "water" ? getLiquidTypeLabel(record.source) : null;
+    measurement = sourceLabel ? `${amountStr} · ${sourceLabel}` : amountStr;
   } else if (unified.type === "weight") {
     const theme = CARD_THEMES.weight;
     const Icon = theme.icon;

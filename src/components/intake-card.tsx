@@ -4,8 +4,9 @@ import { useState, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Minus, Plus, Check, Coffee } from "lucide-react";
-import { cn, formatAmount } from "@/lib/utils";
+import { Minus, Plus, Check } from "lucide-react";
+import { cn, formatAmount, getLiquidTypeLabel } from "@/lib/utils";
+import { LIQUID_TYPE_OPTIONS } from "@/lib/constants";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { RecentEntriesList } from "@/components/recent-entries-list";
 import { EditIntakeDialog } from "@/components/edit-intake-dialog";
@@ -42,6 +43,7 @@ export function IntakeCard({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showManualInput, setShowManualInput] = useState(false);
   const [showCoffeeDialog, setShowCoffeeDialog] = useState(false);
+  const [liquidType, setLiquidType] = useState<"water" | "juice" | "coffee" | "food">("water");
   const { toast } = useToast();
   const deleteMutation = useDeleteIntake();
   const updateMutation = useUpdateIntake();
@@ -95,12 +97,24 @@ export function IntakeCard({
   const handleConfirm = useCallback(async () => {
     if (pendingAmount <= 0 || isSubmitting) return;
 
+    // Coffee has its own dialog for type selection
+    if (type === "water" && liquidType === "coffee") {
+      setShowCoffeeDialog(true);
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      await onConfirm(pendingAmount);
+      // Juice and food use onConfirmWithSource to tag the source
+      if (type === "water" && liquidType !== "water" && onConfirmWithSource) {
+        await onConfirmWithSource(pendingAmount, liquidType);
+      } else {
+        await onConfirm(pendingAmount);
+      }
+      const typeLabel = liquidType === "water" ? theme.label : liquidType.charAt(0).toUpperCase() + liquidType.slice(1);
       toast({
         title: `Added ${formatAmount(pendingAmount, unit)}`,
-        description: `${theme.label} intake recorded`,
+        description: `${typeLabel} intake recorded`,
         variant: "success",
       });
       setPendingAmount(increment);
@@ -113,7 +127,7 @@ export function IntakeCard({
     } finally {
       setIsSubmitting(false);
     }
-  }, [pendingAmount, increment, onConfirm, toast, unit, theme.label]);
+  }, [pendingAmount, increment, onConfirm, onConfirmWithSource, toast, unit, theme.label, type, liquidType]);
 
   const handleCoffeeConfirm = useCallback(
     async (amount: number, source: string, timestamp?: number, note?: string) => {
@@ -144,12 +158,18 @@ export function IntakeCard({
     async (amount: number, timestamp?: number, note?: string) => {
       setIsSubmitting(true);
       try {
-        await onConfirm(amount, timestamp, note);
+        // Juice and food use onConfirmWithSource to tag the source
+        if (type === "water" && liquidType !== "water" && onConfirmWithSource) {
+          await onConfirmWithSource(amount, liquidType, timestamp, note);
+        } else {
+          await onConfirm(amount, timestamp, note);
+        }
+        const typeLabel = liquidType === "water" ? theme.label : liquidType.charAt(0).toUpperCase() + liquidType.slice(1);
         toast({
           title: `Added ${formatAmount(amount, unit)}`,
           description: timestamp
-            ? `${theme.label} intake recorded for earlier time`
-            : `${theme.label} intake recorded`,
+            ? `${typeLabel} intake recorded for earlier time`
+            : `${typeLabel} intake recorded`,
           variant: "success",
         });
         setShowManualInput(false);
@@ -163,7 +183,7 @@ export function IntakeCard({
         setIsSubmitting(false);
       }
     },
-    [onConfirm, toast, unit, theme.label]
+    [onConfirm, onConfirmWithSource, toast, unit, theme.label, type, liquidType]
   );
 
   // Format time from timestamp
@@ -213,7 +233,7 @@ export function IntakeCard({
           </div>
 
           {/* Progress Bar */}
-          <div className="mb-6">
+          <div className="mb-4">
             <Progress
               value={progressPercent}
               className="h-3"
@@ -222,6 +242,27 @@ export function IntakeCard({
               )}
             />
           </div>
+
+          {/* Liquid Type Selector (water card only) */}
+          {type === "water" && (
+            <div className="flex gap-1 mb-4 p-1 rounded-lg bg-muted/50">
+              {LIQUID_TYPE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setLiquidType(opt.value)}
+                  className={cn(
+                    "flex-1 py-1.5 text-xs font-medium rounded-md transition-all",
+                    liquidType === opt.value
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Input Controls */}
           <div className="flex items-center justify-between gap-3">
@@ -236,9 +277,13 @@ export function IntakeCard({
               <Minus className="w-6 h-6" />
             </Button>
 
-            {/* Center Value - Clickable for manual input */}
+            {/* Center Value - Clickable for manual input (or coffee dialog) */}
             <button
-              onClick={() => setShowManualInput(true)}
+              onClick={() =>
+                type === "water" && liquidType === "coffee"
+                  ? setShowCoffeeDialog(true)
+                  : setShowManualInput(true)
+              }
               disabled={isSubmitting}
               className={cn(
                 "flex-1 py-4 px-6 rounded-xl transition-all",
@@ -284,19 +329,6 @@ export function IntakeCard({
             {isSubmitting ? "Recording..." : "Confirm Entry"}
           </Button>
 
-          {/* Coffee Button (water card only) */}
-          {type === "water" && onConfirmWithSource && (
-            <Button
-              variant="outline"
-              onClick={() => setShowCoffeeDialog(true)}
-              disabled={isSubmitting || isLoading}
-              className={cn("w-full mt-2 h-10", theme.outlineBorder, theme.outlineText)}
-            >
-              <Coffee className="w-4 h-4 mr-2" />
-              Coffee
-            </Button>
-          )}
-
           {/* Recent Entries */}
           <RecentEntriesList
             records={recentRecords}
@@ -304,16 +336,24 @@ export function IntakeCard({
             onDelete={handleDelete}
             onEdit={openEdit}
             borderColor={theme.border}
-            renderEntry={(record) => (
-              <>
-                <span className="text-muted-foreground">{formatTime(record.timestamp)}</span>
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">
-                    {formatAmount(record.amount, unit)}
-                  </span>
-                </div>
-              </>
-            )}
+            renderEntry={(record) => {
+              const sourceLabel = type === "water" ? getLiquidTypeLabel(record.source) : null;
+              return (
+                <>
+                  <span className="text-muted-foreground">{formatTime(record.timestamp)}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">
+                      {formatAmount(record.amount, unit)}
+                    </span>
+                    {sourceLabel && (
+                      <span className="text-xs text-muted-foreground/80 bg-muted/60 px-1.5 py-0.5 rounded">
+                        {sourceLabel}
+                      </span>
+                    )}
+                  </div>
+                </>
+              );
+            }}
           />
         </CardContent>
       </Card>
