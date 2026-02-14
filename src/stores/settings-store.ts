@@ -42,6 +42,17 @@ export interface Settings {
   scrollDurationMs: number;        // how fast page scrolls to section (100-1000)
   autoHideDelayMs: number;         // delay after scroll before header+footer hide (0-2000)
   barTransitionDurationMs: number; // header/footer slide in/out speed (50-500)
+
+  // Tracking defaults
+  urinationDefaultAmount: "small" | "medium" | "large";
+  defecationDefaultAmount: "small" | "medium" | "large";
+  coffeeDefaultType: string;
+
+  // Weight graph defaults
+  weightGraphShowEating: boolean;
+  weightGraphShowUrination: boolean;
+  weightGraphShowDefecation: boolean;
+  weightGraphShowDrinking: boolean;
 }
 
 interface SettingsActions {
@@ -62,6 +73,13 @@ interface SettingsActions {
   setScrollDurationMs: (value: number) => void;
   setAutoHideDelayMs: (value: number) => void;
   setBarTransitionDurationMs: (value: number) => void;
+  setUrinationDefaultAmount: (value: "small" | "medium" | "large") => void;
+  setDefecationDefaultAmount: (value: "small" | "medium" | "large") => void;
+  setCoffeeDefaultType: (value: string) => void;
+  setWeightGraphShowEating: (value: boolean) => void;
+  setWeightGraphShowUrination: (value: boolean) => void;
+  setWeightGraphShowDefecation: (value: boolean) => void;
+  setWeightGraphShowDrinking: (value: boolean) => void;
   resetToDefaults: () => void;
 }
 
@@ -81,6 +99,13 @@ const defaultSettings: Settings = {
   scrollDurationMs: 300,
   autoHideDelayMs: 500,
   barTransitionDurationMs: 200,
+  urinationDefaultAmount: "small" as const,
+  defecationDefaultAmount: "medium" as const,
+  coffeeDefaultType: "double-espresso",
+  weightGraphShowEating: true,
+  weightGraphShowUrination: true,
+  weightGraphShowDefecation: true,
+  weightGraphShowDrinking: true,
 };
 
 export const useSettingsStore = create<Settings & SettingsActions>()(
@@ -128,6 +153,14 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
         set({ autoHideDelayMs: sanitizeNumericInput(value, 0, 2000) }),
       setBarTransitionDurationMs: (value) =>
         set({ barTransitionDurationMs: sanitizeNumericInput(value, 50, 500) }),
+
+      setUrinationDefaultAmount: (value) => set({ urinationDefaultAmount: value }),
+      setDefecationDefaultAmount: (value) => set({ defecationDefaultAmount: value }),
+      setCoffeeDefaultType: (value) => set({ coffeeDefaultType: value }),
+      setWeightGraphShowEating: (value) => set({ weightGraphShowEating: value }),
+      setWeightGraphShowUrination: (value) => set({ weightGraphShowUrination: value }),
+      setWeightGraphShowDefecation: (value) => set({ weightGraphShowDefecation: value }),
+      setWeightGraphShowDrinking: (value) => set({ weightGraphShowDrinking: value }),
 
       resetToDefaults: () => set(defaultSettings),
     }),

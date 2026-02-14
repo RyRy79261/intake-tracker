@@ -4,12 +4,13 @@ import { useState, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Minus, Plus, Check } from "lucide-react";
+import { Minus, Plus, Check, Coffee } from "lucide-react";
 import { cn, formatAmount } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { RecentEntriesList } from "@/components/recent-entries-list";
 import { EditIntakeDialog } from "@/components/edit-intake-dialog";
 import { ManualInputDialog } from "./manual-input-dialog";
+import { CoffeeDialog } from "./coffee-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
 import { useEditRecord } from "@/hooks/use-edit-record";
@@ -23,6 +24,7 @@ interface IntakeCardProps {
   limit: number;
   increment: number;
   onConfirm: (amount: number, timestamp?: number, note?: string) => Promise<void>;
+  onConfirmWithSource?: (amount: number, source: string, timestamp?: number, note?: string) => Promise<void>;
   isLoading?: boolean;
 }
 
@@ -33,11 +35,13 @@ export function IntakeCard({
   limit,
   increment,
   onConfirm,
+  onConfirmWithSource,
   isLoading = false,
 }: IntakeCardProps) {
   const [pendingAmount, setPendingAmount] = useState(increment);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showManualInput, setShowManualInput] = useState(false);
+  const [showCoffeeDialog, setShowCoffeeDialog] = useState(false);
   const { toast } = useToast();
   const deleteMutation = useDeleteIntake();
   const updateMutation = useUpdateIntake();
@@ -110,6 +114,31 @@ export function IntakeCard({
       setIsSubmitting(false);
     }
   }, [pendingAmount, increment, onConfirm, toast, unit, theme.label]);
+
+  const handleCoffeeConfirm = useCallback(
+    async (amount: number, source: string, timestamp?: number, note?: string) => {
+      if (!onConfirmWithSource) return;
+      setIsSubmitting(true);
+      try {
+        await onConfirmWithSource(amount, source, timestamp, note);
+        toast({
+          title: `Added ${formatAmount(amount, "ml")}`,
+          description: `Coffee intake recorded`,
+          variant: "success",
+        });
+        setShowCoffeeDialog(false);
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "Failed to record coffee intake",
+          variant: "destructive",
+        });
+      } finally {
+        setIsSubmitting(false);
+      }
+    },
+    [onConfirmWithSource, toast]
+  );
 
   const handleManualSubmit = useCallback(
     async (amount: number, timestamp?: number, note?: string) => {
@@ -255,6 +284,19 @@ export function IntakeCard({
             {isSubmitting ? "Recording..." : "Confirm Entry"}
           </Button>
 
+          {/* Coffee Button (water card only) */}
+          {type === "water" && onConfirmWithSource && (
+            <Button
+              variant="outline"
+              onClick={() => setShowCoffeeDialog(true)}
+              disabled={isSubmitting || isLoading}
+              className={cn("w-full mt-2 h-10", theme.outlineBorder, theme.outlineText)}
+            >
+              <Coffee className="w-4 h-4 mr-2" />
+              Coffee
+            </Button>
+          )}
+
           {/* Recent Entries */}
           <RecentEntriesList
             records={recentRecords}
@@ -296,6 +338,15 @@ export function IntakeCard({
         note={editNote}
         onNoteChange={setEditNote}
       />
+
+      {type === "water" && onConfirmWithSource && (
+        <CoffeeDialog
+          open={showCoffeeDialog}
+          onOpenChange={setShowCoffeeDialog}
+          onConfirm={handleCoffeeConfirm}
+          isSubmitting={isSubmitting}
+        />
+      )}
     </>
   );
 }

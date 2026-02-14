@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Check, Loader2, AlertCircle } from "lucide-react";
+import { Check, Loader2, AlertCircle, ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { CollapsibleTimeInputControlled } from "@/components/collapsible-time-input";
@@ -38,6 +38,8 @@ export function BloodPressureCard() {
   const [heartRateInput, setHeartRateInput] = useState("");
   const [position, setPosition] = useState<"sitting" | "standing">("sitting");
   const [arm, setArm] = useState<"left" | "right">("left");
+  const [irregularHeartbeat, setIrregularHeartbeat] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [showTimeInput, setShowTimeInput] = useState(false);
   const [customTime, setCustomTime] = useState(getCurrentDateTimeLocal());
 
@@ -53,6 +55,7 @@ export function BloodPressureCard() {
   const [editHeartRate, setEditHeartRate] = useState("");
   const [editPosition, setEditPosition] = useState<"sitting" | "standing">("sitting");
   const [editArm, setEditArm] = useState<"left" | "right">("left");
+  const [editIrregularHeartbeat, setEditIrregularHeartbeat] = useState(false);
 
   const {
     editingRecord,
@@ -70,6 +73,7 @@ export function BloodPressureCard() {
       setEditHeartRate(record.heartRate?.toString() || "");
       setEditPosition(record.position);
       setEditArm(record.arm);
+      setEditIrregularHeartbeat(record.irregularHeartbeat || false);
     },
     buildUpdates: (timestamp, note) => {
       const newSystolic = parseInt(editSystolic, 10);
@@ -90,6 +94,7 @@ export function BloodPressureCard() {
         systolic: newSystolic,
         diastolic: newDiastolic,
         heartRate: newHeartRate,
+        irregularHeartbeat: editIrregularHeartbeat || undefined,
         position: editPosition,
         arm: editArm,
         timestamp,
@@ -129,7 +134,7 @@ export function BloodPressureCard() {
 
     try {
       const timestamp = showTimeInput ? dateTimeLocalToTimestamp(customTime) : undefined;
-      await addMutation.mutateAsync({ systolic, diastolic, position, arm, heartRate, timestamp });
+      await addMutation.mutateAsync({ systolic, diastolic, position, arm, heartRate, irregularHeartbeat: irregularHeartbeat || undefined, timestamp });
       toast({
         title: "Blood pressure recorded",
         description: `${systolic}/${diastolic} mmHg logged successfully`,
@@ -138,6 +143,8 @@ export function BloodPressureCard() {
       setSystolicInput("");
       setDiastolicInput("");
       setHeartRateInput("");
+      setIrregularHeartbeat(false);
+      setShowAdvanced(false);
       setShowTimeInput(false);
       setCustomTime(getCurrentDateTimeLocal());
     } catch (error) {
@@ -300,6 +307,58 @@ export function BloodPressureCard() {
             </div>
           </div>
 
+          {/* Advanced Section */}
+          <div className="space-y-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="w-full justify-between text-muted-foreground hover:text-foreground"
+              onClick={() => setShowAdvanced(!showAdvanced)}
+            >
+              <span className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4" />
+                Advanced
+              </span>
+              {showAdvanced ? (
+                <ChevronUp className="w-4 h-4" />
+              ) : (
+                <ChevronDown className="w-4 h-4" />
+              )}
+            </Button>
+            {showAdvanced && (
+              <div className="p-3 rounded-lg bg-muted/50 border space-y-2">
+                <Label className="text-xs">Irregular Heartbeat</Label>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className={cn(
+                      "flex-1 transition-all",
+                      !irregularHeartbeat && theme.activeToggle
+                    )}
+                    onClick={() => setIrregularHeartbeat(false)}
+                  >
+                    No
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className={cn(
+                      "flex-1 transition-all",
+                      irregularHeartbeat && "bg-red-100 border-red-300 dark:bg-red-900/50 dark:border-red-700"
+                    )}
+                    onClick={() => setIrregularHeartbeat(true)}
+                  >
+                    Yes
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+
           <CollapsibleTimeInputControlled
             value={customTime}
             onChange={setCustomTime}
@@ -343,6 +402,7 @@ export function BloodPressureCard() {
                   <span className="text-xs text-muted-foreground/70">
                     {record.position} · {record.arm} arm
                     {record.heartRate && ` · ${record.heartRate} BPM`}
+                    {record.irregularHeartbeat && " · irregular"}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -374,6 +434,8 @@ export function BloodPressureCard() {
       onPositionChange={setEditPosition}
       arm={editArm}
       onArmChange={setEditArm}
+      irregularHeartbeat={editIrregularHeartbeat}
+      onIrregularHeartbeatChange={setEditIrregularHeartbeat}
       timestamp={editTimestamp}
       onTimestampChange={setEditTimestamp}
       note={editNote}

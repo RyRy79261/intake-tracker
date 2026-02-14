@@ -69,3 +69,26 @@ export const URINATION_AMOUNT_OPTIONS: readonly AmountOption[] = [
   { value: "medium", label: "Medium" },
   { value: "large", label: "Large" },
 ] as const;
+
+// ─── Defecation Amount Options ──────────────────────────────────────
+
+export const DEFECATION_AMOUNT_OPTIONS: readonly AmountOption[] = [
+  { value: "small", label: "Small" },
+  { value: "medium", label: "Medium" },
+  { value: "large", label: "Large" },
+] as const;
+
+// ─── Coffee Presets ─────────────────────────────────────────────────
+
+export interface CoffeePreset {
+  value: string;
+  label: string;
+  waterMl: number;
+}
+
+export const COFFEE_PRESETS: readonly CoffeePreset[] = [
+  { value: "espresso", label: "Espresso", waterMl: 30 },
+  { value: "double-espresso", label: "Double espresso", waterMl: 60 },
+  { value: "moka", label: "Moka", waterMl: 50 },
+  { value: "other", label: "Other", waterMl: 0 },
+] as const;

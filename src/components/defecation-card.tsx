@@ -24,37 +24,37 @@ import { Loader2, Check, PlusCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { RecentEntriesList } from "@/components/recent-entries-list";
-import { EditUrinationDialog } from "@/components/edit-urination-dialog";
+import { EditDefecationDialog } from "@/components/edit-defecation-dialog";
 import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
 import { useEditRecord } from "@/hooks/use-edit-record";
 import { useToast } from "@/hooks/use-toast";
-import { type UrinationRecord } from "@/lib/db";
-import { useUrinationRecords, useAddUrination, useDeleteUrination, useUpdateUrination } from "@/hooks/use-urination-queries";
+import { type DefecationRecord } from "@/lib/db";
+import { useDefecationRecords, useAddDefecation, useDeleteDefecation, useUpdateDefecation } from "@/hooks/use-defecation-queries";
 import {
   getCurrentDateTimeLocal,
   dateTimeLocalToTimestamp,
   formatDateTime,
 } from "@/lib/date-utils";
-import { URINATION_AMOUNT_OPTIONS } from "@/lib/constants";
+import { DEFECATION_AMOUNT_OPTIONS } from "@/lib/constants";
 import { useSettings } from "@/hooks/use-settings";
 
-const AMOUNT_OPTIONS = URINATION_AMOUNT_OPTIONS;
+const AMOUNT_OPTIONS = DEFECATION_AMOUNT_OPTIONS;
 
-const theme = CARD_THEMES.urination;
+const theme = CARD_THEMES.defecation;
 const Icon = theme.icon;
 
-export function UrinationCard() {
+export function DefecationCard() {
   const { toast } = useToast();
   const settings = useSettings();
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [amount, setAmount] = useState<string>(settings.urinationDefaultAmount);
+  const [amount, setAmount] = useState<string>(settings.defecationDefaultAmount);
   const [note, setNote] = useState("");
   const [detailTime, setDetailTime] = useState(getCurrentDateTimeLocal());
-  const { data: recentRecords, isLoading } = useUrinationRecords(5);
-  const addMutation = useAddUrination();
-  const deleteMutation = useDeleteUrination();
-  const updateMutation = useUpdateUrination();
-  const { deletingId, handleDelete } = useDeleteWithToast(deleteMutation, "Urination record removed");
+  const { data: recentRecords, isLoading } = useDefecationRecords(5);
+  const addMutation = useAddDefecation();
+  const deleteMutation = useDeleteDefecation();
+  const updateMutation = useUpdateDefecation();
+  const { deletingId, handleDelete } = useDeleteWithToast(deleteMutation, "Defecation record removed");
 
   // Extra edit field (amountEstimate is record-specific)
   const [editAmountEstimate, setEditAmountEstimate] = useState("");
@@ -68,7 +68,7 @@ export function UrinationCard() {
     openEdit,
     closeEdit,
     handleEditSubmit,
-  } = useEditRecord<UrinationRecord>({
+  } = useEditRecord<DefecationRecord>({
     onOpen: (record) => setEditAmountEstimate(record.amountEstimate || ""),
     buildUpdates: (timestamp, note) => ({
       timestamp,
@@ -85,7 +85,7 @@ export function UrinationCard() {
       await addMutation.mutateAsync({});
       toast({
         title: "Logged",
-        description: "Urination recorded",
+        description: "Defecation recorded",
         variant: "success",
       });
     } catch (error) {
@@ -98,7 +98,7 @@ export function UrinationCard() {
   };
 
   const handleOpenDetails = () => {
-    setAmount(settings.urinationDefaultAmount);
+    setAmount(settings.defecationDefaultAmount);
     setNote("");
     setDetailTime(getCurrentDateTimeLocal());
     setDetailsOpen(true);
@@ -114,7 +114,7 @@ export function UrinationCard() {
       });
       toast({
         title: "Logged",
-        description: "Urination recorded",
+        description: "Defecation recorded",
         variant: "success",
       });
       setDetailsOpen(false);
@@ -160,7 +160,7 @@ export function UrinationCard() {
               ) : (
                 <>
                   <Check className="w-4 h-4 mr-2" />
-                  I urinated
+                  I defecated
                 </>
               )}
             </Button>
@@ -199,7 +199,7 @@ export function UrinationCard() {
         </CardContent>
       </Card>
 
-      <EditUrinationDialog
+      <EditDefecationDialog
         record={editingRecord}
         onClose={closeEdit}
         onSubmit={handleEditSubmit}
@@ -236,19 +236,19 @@ export function UrinationCard() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="urination-note">Note (optional)</Label>
+              <Label htmlFor="defecation-note">Note (optional)</Label>
               <Textarea
-                id="urination-note"
-                placeholder="e.g. colour, urgency"
+                id="defecation-note"
+                placeholder="e.g. consistency, urgency"
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 className="min-h-[60px]"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="urination-time">When</Label>
+              <Label htmlFor="defecation-time">When</Label>
               <Input
-                id="urination-time"
+                id="defecation-time"
                 type="datetime-local"
                 value={detailTime}
                 onChange={(e) => setDetailTime(e.target.value)}

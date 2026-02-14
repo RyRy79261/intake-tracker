@@ -15,6 +15,7 @@ import { useSettings } from "@/hooks/use-settings";
 import { usePinProtected } from "@/hooks/use-pin-gate";
 import { useToast } from "@/hooks/use-toast";
 import { DebugPanel } from "./debug-panel";
+import { CustomizationPanel } from "./customization-panel";
 
 // Section components
 import { AccountSection } from "./settings/account-section";
@@ -84,6 +85,11 @@ export function SettingsDrawer({ open, onOpenChange }: SettingsDrawerProps) {
             <PrivacySecuritySection />
             <PermissionsSection />
             <AppUpdatesSection />
+
+            {/* Customization Panel */}
+            <div className="pt-4 border-t">
+              <CustomizationPanel />
+            </div>
 
             {/* Debug Panel */}
             <div className="pt-4 border-t">

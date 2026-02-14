@@ -3,11 +3,13 @@ import { generateId } from "./utils";
 
 export async function addEatingRecord(
   timestamp?: number,
-  note?: string
+  note?: string,
+  grams?: number
 ): Promise<EatingRecord> {
   const record: EatingRecord = {
     id: generateId(),
     timestamp: timestamp ?? Date.now(),
+    grams: grams && grams > 0 ? grams : undefined,
     note: note?.trim() || undefined,
   };
 
@@ -41,7 +43,7 @@ export async function deleteEatingRecord(id: string): Promise<void> {
 
 export async function updateEatingRecord(
   id: string,
-  updates: { timestamp?: number; note?: string }
+  updates: { timestamp?: number; note?: string; grams?: number }
 ): Promise<void> {
   await db.eatingRecords.update(id, updates);
 }

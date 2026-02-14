@@ -3,7 +3,7 @@
  * Supports export/import of intake records, weight records, and blood pressure records.
  */
 
-import { db, type IntakeRecord, type WeightRecord, type BloodPressureRecord, type EatingRecord, type UrinationRecord } from "./db";
+import { db, type IntakeRecord, type WeightRecord, type BloodPressureRecord, type EatingRecord, type UrinationRecord, type DefecationRecord } from "./db";
 import { logAudit } from "./audit";
 
 export interface BackupData {
@@ -15,6 +15,7 @@ export interface BackupData {
   bloodPressureRecords: BloodPressureRecord[];
   eatingRecords?: EatingRecord[];
   urinationRecords?: UrinationRecord[];
+  defecationRecords?: DefecationRecord[];
   settings?: Record<string, unknown>;
 }
 
@@ -25,6 +26,7 @@ export interface ImportResult {
   bpImported: number;
   eatingImported: number;
   urinationImported: number;
+  defecationImported: number;
   skipped: number;
   errors: string[];
 }
@@ -35,12 +37,13 @@ const CURRENT_BACKUP_VERSION = 3;
  * Export all health data to a JSON blob
  */
 export async function exportBackup(): Promise<Blob> {
-  const [intakeRecords, weightRecords, bloodPressureRecords, eatingRecords, urinationRecords] = await Promise.all([
+  const [intakeRecords, weightRecords, bloodPressureRecords, eatingRecords, urinationRecords, defecationRecords] = await Promise.all([
     db.intakeRecords.toArray(),
     db.weightRecords.toArray(),
     db.bloodPressureRecords.toArray(),
     db.eatingRecords.toArray(),
     db.urinationRecords.toArray(),
+    db.defecationRecords.toArray(),
   ]);
 
   // Get settings from localStorage (excluding sensitive data)
@@ -69,10 +72,11 @@ export async function exportBackup(): Promise<Blob> {
     bloodPressureRecords,
     eatingRecords,
     urinationRecords,
+    defecationRecords,
     settings,
   };
 
-  logAudit("data_export", `Exported ${intakeRecords.length} intake, ${weightRecords.length} weight, ${bloodPressureRecords.length} BP, ${eatingRecords.length} eating, ${urinationRecords.length} urination records`);
+  logAudit("data_export", `Exported ${intakeRecords.length} intake, ${weightRecords.length} weight, ${bloodPressureRecords.length} BP, ${eatingRecords.length} eating, ${urinationRecords.length} urination, ${defecationRecords.length} defecation records`);
 
   const json = JSON.stringify(backupData, null, 2);
   return new Blob([json], { type: "application/json" });
@@ -119,6 +123,7 @@ function validateBackupData(data: unknown): data is BackupData {
   if (backup.bloodPressureRecords !== undefined && !Array.isArray(backup.bloodPressureRecords)) return false;
   if (backup.eatingRecords !== undefined && !Array.isArray(backup.eatingRecords)) return false;
   if (backup.urinationRecords !== undefined && !Array.isArray(backup.urinationRecords)) return false;
+  if (backup.defecationRecords !== undefined && !Array.isArray(backup.defecationRecords)) return false;
 
   return true;
 }
@@ -185,6 +190,15 @@ function isValidUrinationRecord(record: unknown): record is UrinationRecord {
 }
 
 /**
+ * Validate a defecation record
+ */
+function isValidDefecationRecord(record: unknown): record is DefecationRecord {
+  if (!record || typeof record !== "object") return false;
+  const r = record as Record<string, unknown>;
+  return typeof r.id === "string" && typeof r.timestamp === "number";
+}
+
+/**
  * Import backup data from a file
  */
 export async function importBackup(
@@ -198,6 +212,7 @@ export async function importBackup(
     bpImported: 0,
     eatingImported: 0,
     urinationImported: 0,
+    defecationImported: 0,
     skipped: 0,
     errors: [],
   };
@@ -238,6 +253,7 @@ export async function importBackup(
         db.bloodPressureRecords.clear(),
         db.eatingRecords.clear(),
         db.urinationRecords.clear(),
+        db.defecationRecords.clear(),
       ]);
     }
 
@@ -247,20 +263,23 @@ export async function importBackup(
     let existingBPIds = new Set<string>();
     let existingEatingIds = new Set<string>();
     let existingUrinationIds = new Set<string>();
+    let existingDefecationIds = new Set<string>();
 
     if (mode === "merge") {
-      const [intakeIds, weightIds, bpIds, eatingIds, urinationIds] = await Promise.all([
+      const [intakeIds, weightIds, bpIds, eatingIds, urinationIds, defecationIds] = await Promise.all([
         db.intakeRecords.toCollection().primaryKeys(),
         db.weightRecords.toCollection().primaryKeys(),
         db.bloodPressureRecords.toCollection().primaryKeys(),
         db.eatingRecords.toCollection().primaryKeys(),
         db.urinationRecords.toCollection().primaryKeys(),
+        db.defecationRecords.toCollection().primaryKeys(),
       ]);
       existingIntakeIds = new Set(intakeIds);
       existingWeightIds = new Set(weightIds);
       existingBPIds = new Set(bpIds);
       existingEatingIds = new Set(eatingIds);
       existingUrinationIds = new Set(urinationIds);
+      existingDefecationIds = new Set(defecationIds);
     }
 
     // Import intake records
@@ -353,6 +372,24 @@ export async function importBackup(
       result.urinationImported = urinationToImport.length;
     }
 
+    // Import defecation records (optional in backup file)
+    const defecationToImport: DefecationRecord[] = [];
+    for (const record of data.defecationRecords || []) {
+      if (!isValidDefecationRecord(record)) {
+        result.skipped++;
+        continue;
+      }
+      if (mode === "merge" && existingDefecationIds.has(record.id)) {
+        result.skipped++;
+        continue;
+      }
+      defecationToImport.push(record);
+    }
+    if (defecationToImport.length > 0) {
+      await db.defecationRecords.bulkPut(defecationToImport);
+      result.defecationImported = defecationToImport.length;
+    }
+
     result.success = true;
 
     const totalImported =
@@ -360,7 +397,8 @@ export async function importBackup(
       result.weightImported +
       result.bpImported +
       result.eatingImported +
-      result.urinationImported;
+      result.urinationImported +
+      result.defecationImported;
     logAudit("data_import", `Imported ${totalImported} records (${result.skipped} skipped)`);
 
   } catch (error) {
@@ -379,16 +417,18 @@ export async function getBackupStats(): Promise<{
   bpCount: number;
   eatingCount: number;
   urinationCount: number;
+  defecationCount: number;
   totalCount: number;
   oldestRecord: Date | null;
   newestRecord: Date | null;
 }> {
-  const [intakeRecords, weightRecords, bpRecords, eatingRecords, urinationRecords] = await Promise.all([
+  const [intakeRecords, weightRecords, bpRecords, eatingRecords, urinationRecords, defecationRecords] = await Promise.all([
     db.intakeRecords.toArray(),
     db.weightRecords.toArray(),
     db.bloodPressureRecords.toArray(),
     db.eatingRecords.toArray(),
     db.urinationRecords.toArray(),
+    db.defecationRecords.toArray(),
   ]);
 
   const allTimestamps = [
@@ -397,6 +437,7 @@ export async function getBackupStats(): Promise<{
     ...bpRecords.map((r) => r.timestamp),
     ...eatingRecords.map((r) => r.timestamp),
     ...urinationRecords.map((r) => r.timestamp),
+    ...defecationRecords.map((r) => r.timestamp),
   ];
 
   return {
@@ -405,6 +446,7 @@ export async function getBackupStats(): Promise<{
     bpCount: bpRecords.length,
     eatingCount: eatingRecords.length,
     urinationCount: urinationRecords.length,
+    defecationCount: defecationRecords.length,
     totalCount: allTimestamps.length,
     oldestRecord: allTimestamps.length > 0 ? new Date(Math.min(...allTimestamps)) : null,
     newestRecord: allTimestamps.length > 0 ? new Date(Math.max(...allTimestamps)) : null,

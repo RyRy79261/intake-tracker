@@ -64,13 +64,15 @@ export async function addBloodPressureRecord(
   arm: "left" | "right",
   heartRate?: number,
   timestamp?: number,
-  note?: string
+  note?: string,
+  irregularHeartbeat?: boolean
 ): Promise<BloodPressureRecord> {
   const record: BloodPressureRecord = {
     id: generateId(),
     systolic,
     diastolic,
     heartRate,
+    irregularHeartbeat: irregularHeartbeat || undefined,
     position,
     arm,
     timestamp: timestamp ?? Date.now(),
@@ -116,6 +118,7 @@ export async function updateBloodPressureRecord(
     systolic?: number;
     diastolic?: number;
     heartRate?: number;
+    irregularHeartbeat?: boolean;
     position?: "sitting" | "standing";
     arm?: "left" | "right";
     timestamp?: number;

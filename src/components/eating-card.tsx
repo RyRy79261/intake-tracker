@@ -36,6 +36,7 @@ export function EatingCard() {
   const { toast } = useToast();
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [detailNote, setDetailNote] = useState("");
+  const [detailGrams, setDetailGrams] = useState("");
   const [detailTime, setDetailTime] = useState(getCurrentDateTimeLocal());
   const { data: recentRecords, isLoading } = useEatingRecords(5);
   const addMutation = useAddEating();
@@ -43,7 +44,9 @@ export function EatingCard() {
   const updateMutation = useUpdateEating();
   const { deletingId, handleDelete } = useDeleteWithToast(deleteMutation, "Eating record removed");
 
-  // No extra edit fields — eating only has timestamp + note, both handled by the hook
+  // Extra edit field for grams
+  const [editGrams, setEditGrams] = useState("");
+
   const {
     editingRecord,
     editTimestamp,
@@ -54,7 +57,11 @@ export function EatingCard() {
     closeEdit,
     handleEditSubmit,
   } = useEditRecord<EatingRecord>({
-    buildUpdates: (timestamp, note) => ({ timestamp, note }),
+    onOpen: (record) => setEditGrams(record.grams?.toString() || ""),
+    buildUpdates: (timestamp, note) => {
+      const g = editGrams ? parseInt(editGrams, 10) : undefined;
+      return { timestamp, note, grams: g && g > 0 ? g : undefined };
+    },
     mutateAsync: updateMutation.mutateAsync,
   });
 
@@ -79,6 +86,7 @@ export function EatingCard() {
 
   const handleOpenDetails = () => {
     setDetailNote("");
+    setDetailGrams("");
     setDetailTime(getCurrentDateTimeLocal());
     setDetailsOpen(true);
   };
@@ -86,7 +94,8 @@ export function EatingCard() {
   const handleSubmitDetails = async () => {
     try {
       const timestamp = dateTimeLocalToTimestamp(detailTime);
-      await addMutation.mutateAsync({ timestamp, note: detailNote || undefined });
+      const grams = detailGrams ? parseInt(detailGrams, 10) : undefined;
+      await addMutation.mutateAsync({ timestamp, note: detailNote || undefined, grams: grams && grams > 0 ? grams : undefined });
       toast({
         title: "Logged",
         description: detailNote ? "Meal with details recorded" : "Eating event recorded",
@@ -160,6 +169,9 @@ export function EatingCard() {
             renderEntry={(record) => (
               <div className="flex items-center gap-2 min-w-0">
                 <span className="text-muted-foreground shrink-0">{formatDateTime(record.timestamp)}</span>
+                {record.grams && (
+                  <span className="text-xs font-medium">{record.grams}g</span>
+                )}
                 {record.note && (
                   <span className="text-xs text-muted-foreground/70 truncate">
                     {record.note}
@@ -179,6 +191,8 @@ export function EatingCard() {
         onTimestampChange={setEditTimestamp}
         note={editNote}
         onNoteChange={setEditNote}
+        grams={editGrams}
+        onGramsChange={setEditGrams}
       />
 
       <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
@@ -198,6 +212,18 @@ export function EatingCard() {
                 value={detailNote}
                 onChange={(e) => setDetailNote(e.target.value)}
                 className="min-h-[80px]"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="eating-grams">Weight in grams (optional)</Label>
+              <Input
+                id="eating-grams"
+                type="number"
+                min="1"
+                max="10000"
+                placeholder="e.g. 250"
+                value={detailGrams}
+                onChange={(e) => setDetailGrams(e.target.value)}
               />
             </div>
             <div className="space-y-2">

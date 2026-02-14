@@ -39,6 +39,7 @@ export type AddBloodPressureParams = {
   position: "sitting" | "standing";
   arm: "left" | "right";
   heartRate?: number;
+  irregularHeartbeat?: boolean;
   timestamp?: number;
   note?: string;
 };
@@ -49,6 +50,7 @@ export type UpdateBloodPressureParams = {
     systolic?: number;
     diastolic?: number;
     heartRate?: number;
+    irregularHeartbeat?: boolean;
     position?: "sitting" | "standing";
     arm?: "left" | "right";
     timestamp?: number;
@@ -218,7 +220,8 @@ export function useAddBloodPressure() {
         params.arm,
         params.heartRate,
         params.timestamp,
-        params.note
+        params.note,
+        params.irregularHeartbeat
       ),
     onMutate: async (newBP) => {
       // Cancel any outgoing refetches

@@ -35,6 +35,8 @@ interface EditBloodPressureDialogProps {
   onPositionChange: (value: "sitting" | "standing") => void;
   arm: "left" | "right";
   onArmChange: (value: "left" | "right") => void;
+  irregularHeartbeat?: boolean;
+  onIrregularHeartbeatChange?: (value: boolean) => void;
   timestamp: string;
   onTimestampChange: (value: string) => void;
   note: string;
@@ -56,6 +58,8 @@ export function EditBloodPressureDialog({
   onPositionChange,
   arm,
   onArmChange,
+  irregularHeartbeat,
+  onIrregularHeartbeatChange,
   timestamp,
   onTimestampChange,
   note,
@@ -156,6 +160,24 @@ export function EditBloodPressureDialog({
               </p>
             </div>
           </div>
+          {onIrregularHeartbeatChange && (
+            <div className="space-y-2">
+              <Label id="edit-irregular-label">Irregular Heartbeat</Label>
+              <Select
+                value={irregularHeartbeat ? "yes" : "no"}
+                onValueChange={(v) => onIrregularHeartbeatChange(v === "yes")}
+                aria-labelledby="edit-irregular-label"
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="no">No</SelectItem>
+                  <SelectItem value="yes">Yes</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor="edit-bp-timestamp">Time</Label>
             <Input

@@ -42,6 +42,7 @@ export interface BloodPressureRecord {
   systolic: number; // top number (mmHg)
   diastolic: number; // bottom number (mmHg)
   heartRate?: number; // BPM (optional)
+  irregularHeartbeat?: boolean; // optional flag for irregular heartbeat
   position: "standing" | "sitting";
   arm: "left" | "right";
   timestamp: number;
@@ -51,6 +52,7 @@ export interface BloodPressureRecord {
 export interface EatingRecord {
   id: string;
   timestamp: number;
+  grams?: number; // optional weight in grams
   note?: string;
 }
 
@@ -61,6 +63,13 @@ export interface UrinationRecord {
   note?: string;
 }
 
+export interface DefecationRecord {
+  id: string;
+  timestamp: number;
+  amountEstimate?: string; // "small" | "medium" | "large"
+  note?: string;
+}
+
 const db = new Dexie("IntakeTrackerDB") as Dexie & {
   intakeRecords: EntityTable<IntakeRecord, "id">;
   auditLogs: EntityTable<AuditLog, "id">;
@@ -68,6 +77,7 @@ const db = new Dexie("IntakeTrackerDB") as Dexie & {
   bloodPressureRecords: EntityTable<BloodPressureRecord, "id">;
   eatingRecords: EntityTable<EatingRecord, "id">;
   urinationRecords: EntityTable<UrinationRecord, "id">;
+  defecationRecords: EntityTable<DefecationRecord, "id">;
 };
 
 // Version 1: Initial schema
@@ -88,6 +98,16 @@ db.version(5).stores({
   bloodPressureRecords: "id, timestamp, position, arm",
   eatingRecords: "id, timestamp",
   urinationRecords: "id, timestamp",
+});
+// Version 6: Added defecation records
+db.version(6).stores({
+  intakeRecords: "id, type, timestamp, source",
+  auditLogs: "id, timestamp, action",
+  weightRecords: "id, timestamp",
+  bloodPressureRecords: "id, timestamp, position, arm",
+  eatingRecords: "id, timestamp",
+  urinationRecords: "id, timestamp",
+  defecationRecords: "id, timestamp",
 });
 
 export { db };

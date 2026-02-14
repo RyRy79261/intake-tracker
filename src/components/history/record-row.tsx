@@ -46,6 +46,13 @@ export function RecordRow({ unified, onDelete, onEdit, isDeleting }: RecordRowPr
     iconColor = theme.iconColor;
     const parts = [unified.record.amountEstimate, unified.record.note].filter(Boolean);
     measurement = parts.length > 0 ? parts.join(" · ") : "—";
+  } else if (unified.type === "defecation") {
+    const theme = CARD_THEMES.defecation;
+    const Icon = theme.icon;
+    icon = <Icon className="w-4 h-4" />;
+    iconColor = theme.iconColor;
+    const parts = [unified.record.amountEstimate, unified.record.note].filter(Boolean);
+    measurement = parts.length > 0 ? parts.join(" · ") : "—";
   } else {
     const theme = CARD_THEMES.bp;
     const Icon = theme.icon;

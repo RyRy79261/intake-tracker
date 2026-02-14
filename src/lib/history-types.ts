@@ -1,4 +1,4 @@
-import { type IntakeRecord, type WeightRecord, type BloodPressureRecord, type EatingRecord, type UrinationRecord } from "@/lib/db";
+import { type IntakeRecord, type WeightRecord, type BloodPressureRecord, type EatingRecord, type UrinationRecord, type DefecationRecord } from "@/lib/db";
 
 /** Unified record type for display in history */
 export type UnifiedRecord =
@@ -6,9 +6,10 @@ export type UnifiedRecord =
   | { type: "weight"; record: WeightRecord }
   | { type: "bp"; record: BloodPressureRecord }
   | { type: "eating"; record: EatingRecord }
-  | { type: "urination"; record: UrinationRecord };
+  | { type: "urination"; record: UrinationRecord }
+  | { type: "defecation"; record: DefecationRecord };
 
-export type FilterType = "all" | "water" | "salt" | "weight" | "bp" | "eating" | "urination";
+export type FilterType = "all" | "water" | "salt" | "weight" | "bp" | "eating" | "urination" | "defecation";
 
 /** Get timestamp from unified record */
 export function getRecordTimestamp(unified: UnifiedRecord): number {
