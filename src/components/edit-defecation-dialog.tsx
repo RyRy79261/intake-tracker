@@ -69,11 +69,12 @@ export function EditDefecationDialog({
           </div>
           <div className="space-y-2">
             <Label>Amount (optional)</Label>
-            <Select value={amount} onValueChange={onAmountChange}>
+            <Select value={amount || "__none__"} onValueChange={(v) => onAmountChange(v === "__none__" ? "" : v)}>
               <SelectTrigger>
                 <SelectValue placeholder="Select estimate" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="__none__">No estimate</SelectItem>
                 {DEFECATION_AMOUNT_OPTIONS.map((opt) => (
                   <SelectItem key={opt.value} value={opt.value}>
                     {opt.label}

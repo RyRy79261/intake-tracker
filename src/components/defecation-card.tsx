@@ -47,7 +47,7 @@ export function DefecationCard() {
   const { toast } = useToast();
   const settings = useSettings();
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [amount, setAmount] = useState<string>(settings.defecationDefaultAmount);
+  const [amount, setAmount] = useState<string>(settings.defecationDefaultAmount || "");
   const [note, setNote] = useState("");
   const [detailTime, setDetailTime] = useState(getCurrentDateTimeLocal());
   const { data: recentRecords, isLoading } = useDefecationRecords(5);
@@ -72,7 +72,7 @@ export function DefecationCard() {
     onOpen: (record) => setEditAmountEstimate(record.amountEstimate || ""),
     buildUpdates: (timestamp, note) => ({
       timestamp,
-      amountEstimate: editAmountEstimate || undefined,
+      amountEstimate: editAmountEstimate && editAmountEstimate !== "__none__" ? editAmountEstimate : undefined,
       note,
     }),
     mutateAsync: updateMutation.mutateAsync,
@@ -107,9 +107,10 @@ export function DefecationCard() {
   const handleSubmitDetails = async () => {
     try {
       const timestamp = dateTimeLocalToTimestamp(detailTime);
+      const effectiveAmount = amount && amount !== "__none__" ? amount : undefined;
       await addMutation.mutateAsync({
         timestamp,
-        amountEstimate: amount || undefined,
+        amountEstimate: effectiveAmount,
         note: note || undefined,
       });
       toast({
@@ -227,6 +228,7 @@ export function DefecationCard() {
                   <SelectValue placeholder="Select estimate" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="__none__">No estimate</SelectItem>
                   {AMOUNT_OPTIONS.map((opt) => (
                     <SelectItem key={opt.value} value={opt.value}>
                       {opt.label}

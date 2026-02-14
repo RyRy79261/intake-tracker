@@ -47,5 +47,7 @@ export async function updateDefecationRecord(
   id: string,
   updates: { timestamp?: number; amountEstimate?: string; note?: string }
 ): Promise<void> {
+  const existing = await db.defecationRecords.get(id);
+  if (!existing) throw new Error("Record not found");
   await db.defecationRecords.update(id, updates);
 }
