@@ -1,7 +1,7 @@
 const withPWA = require('next-pwa')({
   dest: 'public',
   register: true,
-  skipWaiting: false,  // Allow manual control via SKIP_WAITING message
+  skipWaiting: true,  // Auto-activate new service workers immediately
   customWorkerDir: 'worker',  // Custom service worker extensions
   disable: process.env.NODE_ENV === 'development'
 });
