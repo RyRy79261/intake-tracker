@@ -6,7 +6,6 @@ import {
   Drawer,
   DrawerContent,
   DrawerDescription,
-  DrawerFooter,
   DrawerHeader,
   DrawerTitle,
 } from "@/components/ui/drawer";
@@ -96,21 +95,21 @@ export function SettingsDrawer({ open, onOpenChange }: SettingsDrawerProps) {
             <div className="pt-4 border-t">
               <DebugPanel />
             </div>
+
+            {/* Reset & About */}
+            <div className="pt-4 border-t space-y-2">
+              <Button
+                variant="ghost"
+                className="w-full justify-start gap-2 text-muted-foreground"
+                onClick={handleResetToDefaults}
+              >
+                <RotateCcw className="w-4 h-4" />
+                Reset to Defaults
+              </Button>
+              <AboutDialog />
+            </div>
           </div>
         </div>
-
-        {/* Fixed Footer */}
-        <DrawerFooter className="border-t shrink-0">
-          <Button
-            variant="ghost"
-            className="w-full justify-start gap-2 text-muted-foreground"
-            onClick={handleResetToDefaults}
-          >
-            <RotateCcw className="w-4 h-4" />
-            Reset to Defaults
-          </Button>
-          <AboutDialog />
-        </DrawerFooter>
       </DrawerContent>
     </Drawer>
   );

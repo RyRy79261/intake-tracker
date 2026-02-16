@@ -27,7 +27,14 @@ export function getLiquidTypeLabel(source?: string): string | null {
     return sub ? sub.charAt(0).toUpperCase() + sub.slice(1) : "Coffee";
   }
   if (source === "juice") return "Juice";
+  if (source.startsWith("juice:")) {
+    const name = source.slice(6);
+    return name ? name.charAt(0).toUpperCase() + name.slice(1) : "Juice";
+  }
   if (source === "food") return "Food";
-  if (source.startsWith("food:")) return "Food";
+  if (source.startsWith("food:")) {
+    const note = source.slice(5);
+    return note ? `Food (${note})` : "Food";
+  }
   return source;
 }
