@@ -16,6 +16,7 @@ import { usePinProtected } from "@/hooks/use-pin-gate";
 import { useToast } from "@/hooks/use-toast";
 import { DebugPanel } from "./debug-panel";
 import { CustomizationPanel } from "./customization-panel";
+import { AboutDialog } from "./about-dialog";
 
 // Section components
 import { AccountSection } from "./settings/account-section";
@@ -108,6 +109,7 @@ export function SettingsDrawer({ open, onOpenChange }: SettingsDrawerProps) {
             <RotateCcw className="w-4 h-4" />
             Reset to Defaults
           </Button>
+          <AboutDialog />
         </DrawerFooter>
       </DrawerContent>
     </Drawer>
