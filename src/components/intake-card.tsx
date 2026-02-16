@@ -244,6 +244,9 @@ export function IntakeCard({
             />
           </div>
 
+          {/* DEBUG: remove after verifying deployment */}
+          <p className="text-red-600 font-bold text-center py-2 border-2 border-red-500 rounded mb-2">BUILD MARKER v2</p>
+
           {/* Liquid Type Selector (water card only) */}
           {type === "water" && (
             <div className="flex gap-1 mb-4 p-1 rounded-lg bg-muted/50">
