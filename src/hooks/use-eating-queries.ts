@@ -14,11 +14,12 @@ import { graphKeys } from "@/hooks/use-graph-data";
 export type AddEatingParams = {
   timestamp?: number;
   note?: string;
+  grams?: number;
 };
 
 export type UpdateEatingParams = {
   id: string;
-  updates: { timestamp?: number; note?: string };
+  updates: { timestamp?: number; note?: string; grams?: number };
 };
 
 export const eatingKeys = {
@@ -51,7 +52,7 @@ export function useAddEating() {
 
   return useMutation({
     mutationFn: (params: AddEatingParams) =>
-      addEatingRecord(params.timestamp, params.note),
+      addEatingRecord(params.timestamp, params.note, params.grams),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: eatingKeys.all });
       queryClient.invalidateQueries({ queryKey: graphKeys.all });

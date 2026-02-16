@@ -1,12 +1,12 @@
 "use client";
 
-import { useServiceWorker } from "@/hooks/use-service-worker";
+import { useVersionCheck } from "@/hooks/use-version-check";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, X, Loader2 } from "lucide-react";
+import { RefreshCw, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function UpdateNotification() {
-  const { isUpdateAvailable, isUpdating, applyUpdate, dismissUpdate } = useServiceWorker();
+  const { isUpdateAvailable, serverVersion, applyUpdate, dismissUpdate } = useVersionCheck();
 
   if (!isUpdateAvailable) {
     return null;
@@ -31,7 +31,7 @@ export function UpdateNotification() {
           <div className="min-w-0">
             <p className="font-medium text-sm">Update available</p>
             <p className="text-xs text-sky-100 truncate">
-              Tap to get the latest version
+              v{serverVersion} is available — tap to refresh
             </p>
           </div>
         </div>
@@ -42,23 +42,14 @@ export function UpdateNotification() {
             size="sm"
             className="h-8 px-3 text-white hover:bg-white/20 hover:text-white"
             onClick={applyUpdate}
-            disabled={isUpdating}
           >
-            {isUpdating ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                Updating...
-              </>
-            ) : (
-              "Update"
-            )}
+            Update
           </Button>
           <Button
             variant="ghost"
             size="icon"
             className="h-8 w-8 text-white/70 hover:bg-white/20 hover:text-white"
             onClick={dismissUpdate}
-            disabled={isUpdating}
           >
             <X className="w-4 h-4" />
             <span className="sr-only">Dismiss</span>

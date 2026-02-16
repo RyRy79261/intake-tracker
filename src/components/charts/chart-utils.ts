@@ -8,6 +8,8 @@ export const COLORS = {
   weight: "hsl(160 84% 39%)",
   eating: "hsl(25 95% 53%)",
   urination: "hsl(263 70% 50%)",
+  defecation: "hsl(30 40% 45%)",
+  drinking: "hsl(199 89% 48%)",
   // BP color matrix
   systolic: "hsl(346 77% 50%)",
   diastolicColor: "hsl(330 65% 55%)",

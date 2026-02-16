@@ -14,6 +14,7 @@ import { HistoryDrawer } from "@/components/history-drawer";
 import { HistoricalGraph } from "@/components/historical-graph";
 import { EatingCard } from "@/components/eating-card";
 import { UrinationCard } from "@/components/urination-card";
+import { DefecationCard } from "@/components/defecation-card";
 import { useIntake } from "@/hooks/use-intake-queries";
 import { useSettings } from "@/hooks/use-settings";
 import { usePinProtected } from "@/hooks/use-pin-gate";
@@ -101,6 +102,7 @@ function HomeContent() {
             limit={settings.waterLimit}
             increment={settings.waterIncrement}
             onConfirm={(amount, timestamp, note) => handleAddWater(amount, "manual", timestamp, note)}
+            onConfirmWithSource={(amount, source, timestamp, note) => handleAddWater(amount, source, timestamp, note)}
             isLoading={waterIntake.isLoading}
           />
         </div>
@@ -150,6 +152,9 @@ function HomeContent() {
         </div>
         <div id="section-urination">
           <UrinationCard />
+        </div>
+        <div id="section-defecation">
+          <DefecationCard />
         </div>
       </div>
 

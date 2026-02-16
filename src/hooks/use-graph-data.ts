@@ -12,12 +12,16 @@ import {
 import {
   getUrinationRecordsByDateRange,
 } from "@/lib/urination-service";
+import {
+  getDefecationRecordsByDateRange,
+} from "@/lib/defecation-service";
 import type {
   IntakeRecord,
   WeightRecord,
   BloodPressureRecord,
   EatingRecord,
   UrinationRecord,
+  DefecationRecord,
 } from "@/lib/db";
 
 export type GraphScope = "24h" | "7d" | "30d";
@@ -64,6 +68,7 @@ export interface GraphData {
   bloodPressureRecords: BloodPressureRecord[];
   eatingRecords: EatingRecord[];
   urinationRecords: UrinationRecord[];
+  defecationRecords: DefecationRecord[];
   metrics: GraphMetrics;
 }
 
@@ -117,7 +122,7 @@ async function fetchGraphData(scope: GraphScope): Promise<GraphData> {
   // at the start of the visible range.
   const intakeLookbackStart = startTime - MS_PER_DAY;
 
-  const [waterRecords, saltRecords, weightRecords, bloodPressureRecords, eatingRecords, urinationRecords] =
+  const [waterRecords, saltRecords, weightRecords, bloodPressureRecords, eatingRecords, urinationRecords, defecationRecords] =
     await Promise.all([
       getRecordsByDateRange(intakeLookbackStart, endTime, "water"),
       getRecordsByDateRange(intakeLookbackStart, endTime, "salt"),
@@ -125,6 +130,7 @@ async function fetchGraphData(scope: GraphScope): Promise<GraphData> {
       getBloodPressureRecordsByDateRange(startTime, endTime),
       getEatingRecordsByDateRange(startTime, endTime),
       getUrinationRecordsByDateRange(startTime, endTime),
+      getDefecationRecordsByDateRange(startTime, endTime),
     ]);
 
   const metrics = computeMetrics(weightRecords, bloodPressureRecords);
@@ -140,6 +146,7 @@ async function fetchGraphData(scope: GraphScope): Promise<GraphData> {
     bloodPressureRecords,
     eatingRecords,
     urinationRecords,
+    defecationRecords,
     metrics,
   };
 }

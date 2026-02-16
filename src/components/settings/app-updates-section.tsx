@@ -1,15 +1,20 @@
 "use client";
 
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Smartphone, RefreshCw, Loader2 } from "lucide-react";
-import { useServiceWorker } from "@/hooks/use-service-worker";
+import { useVersionCheck } from "@/hooks/use-version-check";
 import { useToast } from "@/hooks/use-toast";
 
 export function AppUpdatesSection() {
   const { toast } = useToast();
-  const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
-  const { isUpdateAvailable, applyUpdate, checkForUpdates, isUpdating } = useServiceWorker();
+  const {
+    isUpdateAvailable,
+    isChecking,
+    serverVersion,
+    clientVersion,
+    checkForUpdates,
+    applyUpdate,
+  } = useVersionCheck();
 
   return (
     <div className="space-y-4">
@@ -26,36 +31,16 @@ export function AppUpdatesSection() {
                   Update available
                 </p>
                 <p className="text-xs text-sky-600 dark:text-sky-500 mt-0.5">
-                  A new version is ready to install
+                  v{serverVersion} available (you have v{clientVersion})
                 </p>
               </div>
               <Button
                 size="sm"
                 className="bg-sky-600 hover:bg-sky-700"
-                onClick={async () => {
-                  try {
-                    await applyUpdate();
-                  } catch (err) {
-                    toast({
-                      title: "Update failed",
-                      description: err instanceof Error ? err.message : "Could not apply update",
-                      variant: "destructive",
-                    });
-                  }
-                }}
-                disabled={isUpdating}
+                onClick={applyUpdate}
               >
-                {isUpdating ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                    Updating...
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="w-4 h-4 mr-1" />
-                    Update
-                  </>
-                )}
+                <RefreshCw className="w-4 h-4 mr-1" />
+                Update
               </Button>
             </div>
           </div>
@@ -64,7 +49,6 @@ export function AppUpdatesSection() {
             variant="outline"
             className="w-full justify-start gap-2"
             onClick={async () => {
-              setIsCheckingUpdates(true);
               try {
                 const hasUpdate = await checkForUpdates();
                 if (hasUpdate) {
@@ -75,7 +59,7 @@ export function AppUpdatesSection() {
                 } else {
                   toast({
                     title: "You're up to date",
-                    description: "You have the latest version",
+                    description: `Running v${clientVersion}`,
                   });
                 }
               } catch {
@@ -84,13 +68,11 @@ export function AppUpdatesSection() {
                   description: "Could not check for updates",
                   variant: "destructive",
                 });
-              } finally {
-                setIsCheckingUpdates(false);
               }
             }}
-            disabled={isCheckingUpdates}
+            disabled={isChecking}
           >
-            {isCheckingUpdates ? (
+            {isChecking ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
                 Checking...
@@ -104,7 +86,7 @@ export function AppUpdatesSection() {
           </Button>
         )}
         <p className="text-xs text-muted-foreground">
-          Installed as PWA · Updates are checked automatically
+          Running v{clientVersion} · Checks automatically every 5 min
         </p>
       </div>
     </div>

@@ -6,6 +6,7 @@ import {
   Utensils,
   Droplet,
   Apple,
+  CircleDot,
   type LucideIcon,
 } from "lucide-react";
 
@@ -143,6 +144,25 @@ export const CARD_THEMES = {
     latestValueColor: "text-violet-700 dark:text-violet-300",
     activeToggle: "bg-violet-100 border-violet-300 dark:bg-violet-900/50 dark:border-violet-700",
     sectionId: "section-urination",
+  },
+  defecation: {
+    label: "Defecation",
+    icon: CircleDot,
+    gradient: "from-stone-50 to-amber-50 dark:from-stone-950/40 dark:to-amber-950/40",
+    border: "border-stone-200 dark:border-stone-800",
+    iconBg: "bg-stone-100 dark:bg-stone-900/50",
+    iconColor: "text-stone-600 dark:text-stone-400",
+    buttonBg: "bg-stone-600 hover:bg-stone-700",
+    outlineBorder: "border-stone-200 dark:border-stone-800",
+    outlineText: "text-stone-700 dark:text-stone-300",
+    progressGradient: "",
+    hoverBg: "hover:bg-stone-100 hover:border-stone-300 dark:hover:bg-stone-900/50",
+    inputBg: "",
+    inputText: "",
+    loadingBg: "bg-stone-200 dark:bg-stone-800",
+    latestValueColor: "text-stone-700 dark:text-stone-300",
+    activeToggle: "bg-stone-100 border-stone-300 dark:bg-stone-900/50 dark:border-stone-700",
+    sectionId: "section-defecation",
   },
 } as const;
 
