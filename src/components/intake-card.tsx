@@ -304,22 +304,29 @@ export function IntakeCard({
 
           {/* Liquid Type Selector (water card only) */}
           {type === "water" && (
-            <div className="flex gap-1 mb-4 p-1 rounded-lg bg-muted/50">
-              {LIQUID_TYPE_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => setLiquidType(opt.value)}
-                  className={cn(
-                    "flex-1 py-1.5 text-xs font-medium rounded-md transition-all",
-                    liquidType === opt.value
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  {opt.label}
-                </button>
-              ))}
+            <div className="flex gap-1 mb-4 p-1 rounded-lg bg-muted/50" role="group" aria-label="Liquid type">
+              {LIQUID_TYPE_OPTIONS.map((opt) => {
+                const needsSource = opt.value !== "water";
+                const disabled = needsSource && !onConfirmWithSource;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    aria-pressed={liquidType === opt.value}
+                    onClick={() => setLiquidType(opt.value)}
+                    disabled={disabled}
+                    className={cn(
+                      "flex-1 py-1.5 text-xs font-medium rounded-md transition-all",
+                      liquidType === opt.value
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground",
+                      disabled && "opacity-40 cursor-not-allowed"
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
             </div>
           )}
 
