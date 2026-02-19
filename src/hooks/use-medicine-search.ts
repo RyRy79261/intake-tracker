@@ -11,6 +11,8 @@ export interface MedicineSearchResult {
   commonIndications: string[];
   foodInstruction: "before" | "after" | "none";
   foodNote?: string;
+  pillColor: string;
+  pillShape: string;
   pillDescription: string;
   drugClass: string;
 }

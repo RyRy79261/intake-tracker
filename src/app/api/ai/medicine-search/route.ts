@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAndCheckWhitelist, isPrivyConfigured } from "@/lib/privy-server";
 
-const SYSTEM_PROMPT = `You are a pharmaceutical information assistant. When given a medication name or active ingredient, respond with a JSON object containing information about the medication.
+const SYSTEM_PROMPT = `You are a pharmaceutical information assistant. When given a medication name or active ingredient, respond with a JSON object containing information about the medication. Pay special attention to looking up the physical appearance of the pill (its color and shape).
 
 Return ONLY valid JSON with these fields:
 {
@@ -11,11 +11,14 @@ Return ONLY valid JSON with these fields:
   "commonIndications": ["what the medication is typically prescribed for"],
   "foodInstruction": "before" | "after" | "none",
   "foodNote": "optional detail about food interaction",
-  "pillDescription": "typical physical appearance (shape, color)",
+  "pillColor": "most common color of the pill as a simple color name (e.g. 'pink', 'white', 'yellow', 'orange', 'blue', 'green', 'red', 'purple', 'brown', 'gray', 'black', 'beige')",
+  "pillShape": "physical shape of the most common form (must be one of: 'round', 'oval', 'capsule', 'diamond', 'tablet')",
+  "pillDescription": "brief description of the pill's physical appearance including color, shape, markings, and coating",
   "drugClass": "pharmacological class"
 }
 
 Be precise with medical information. If you're uncertain about food instructions, default to "none".
+For pill appearance, research the most common commercially available form of the medication.
 Always respond with valid JSON only.`;
 
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
@@ -151,6 +154,8 @@ async function searchWithKey(query: string, apiKey: string) {
       commonIndications: Array.isArray(parsed.commonIndications) ? parsed.commonIndications : [],
       foodInstruction: ["before", "after", "none"].includes(parsed.foodInstruction) ? parsed.foodInstruction : "none",
       foodNote: typeof parsed.foodNote === "string" ? parsed.foodNote : undefined,
+      pillColor: typeof parsed.pillColor === "string" ? parsed.pillColor : "",
+      pillShape: typeof parsed.pillShape === "string" ? parsed.pillShape : "",
       pillDescription: typeof parsed.pillDescription === "string" ? parsed.pillDescription : "",
       drugClass: typeof parsed.drugClass === "string" ? parsed.drugClass : "",
     });

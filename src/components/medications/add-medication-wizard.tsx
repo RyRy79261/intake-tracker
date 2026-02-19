@@ -43,6 +43,30 @@ const PRESET_COLORS = [
   "#FF5722", "#795548", "#607D8B", "#FFFFFF", "#212121",
 ];
 
+const COLOR_NAME_MAP: Record<string, string> = {
+  pink: "#E91E63",
+  magenta: "#E91E63",
+  purple: "#9C27B0",
+  violet: "#673AB7",
+  indigo: "#3F51B5",
+  blue: "#2196F3",
+  cyan: "#00BCD4",
+  teal: "#00BCD4",
+  green: "#4CAF50",
+  lime: "#CDDC39",
+  yellow: "#FFC107",
+  amber: "#FF9800",
+  orange: "#FF9800",
+  red: "#FF5722",
+  brown: "#795548",
+  beige: "#795548",
+  tan: "#795548",
+  gray: "#607D8B",
+  grey: "#607D8B",
+  white: "#FFFFFF",
+  black: "#212121",
+};
+
 const DOSE_AMOUNTS = [0.25, 0.5, 0.75, 1, 1.5, 2];
 
 const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
@@ -117,6 +141,9 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
     try {
       const result = await searchMutation.mutateAsync(searchQuery.trim());
       setSearchResult(result);
@@ -126,6 +153,14 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
       if (result.commonIndications.length > 0) setIndication(result.commonIndications.join(", "));
       if (result.foodInstruction) setFoodInstruction(result.foodInstruction);
       if (result.foodNote) setFoodNote(result.foodNote);
+      if (result.pillColor) {
+        const hex = COLOR_NAME_MAP[result.pillColor.toLowerCase()];
+        if (hex) setPillColor(hex);
+      }
+      if (result.pillShape) {
+        const shape = result.pillShape.toLowerCase() as PillShape;
+        if (PILL_SHAPES.some((s) => s.value === shape)) setPillShape(shape);
+      }
     } catch {
       // error is in searchMutation.error
     }
@@ -331,7 +366,12 @@ function SearchStep({
             placeholder="e.g. Aviolix, Clopidogrel..."
             value={query}
             onChange={(e) => onQueryChange(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && onSearch()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                (e.target as HTMLElement).blur();
+                onSearch();
+              }
+            }}
           />
           <Button
             onClick={onSearch}
@@ -352,6 +392,11 @@ function SearchStep({
           {result.dosageStrengths.length > 0 && (
             <p className="text-xs text-muted-foreground">
               Strengths: {result.dosageStrengths.join(", ")}
+            </p>
+          )}
+          {result.pillDescription && (
+            <p className="text-xs text-muted-foreground">
+              Appearance: {result.pillDescription}
             </p>
           )}
         </div>
@@ -428,7 +473,7 @@ function AppearanceStep({
 
       <div>
         <Label className="text-sm font-medium mb-2 block">Color</Label>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2 flex-wrap px-0.5 py-0.5">
           {PRESET_COLORS.map((c) => (
             <button
               key={c}
