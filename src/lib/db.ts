@@ -70,6 +70,52 @@ export interface DefecationRecord {
   note?: string;
 }
 
+export type PillShape = "round" | "oval" | "capsule" | "diamond" | "tablet";
+export type FoodInstruction = "before" | "after" | "none";
+export type DoseStatus = "taken" | "skipped" | "rescheduled" | "pending";
+
+export interface Medication {
+  id: string;
+  brandName: string;
+  genericName: string;
+  dosageStrength: string;
+  dosageAmount: number;
+  pillShape: PillShape;
+  pillColor: string;
+  indication: string;
+  foodInstruction: FoodInstruction;
+  foodNote?: string;
+  currentStock: number;
+  refillAlertDays?: number;
+  refillAlertPills?: number;
+  isActive: boolean;
+  notes?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface MedicationSchedule {
+  id: string;
+  medicationId: string;
+  time: string;
+  daysOfWeek: number[];
+  enabled: boolean;
+  createdAt: number;
+}
+
+export interface DoseLog {
+  id: string;
+  medicationId: string;
+  scheduleId: string;
+  scheduledDate: string;
+  scheduledTime: string;
+  status: DoseStatus;
+  actionTimestamp?: number;
+  rescheduledTo?: string;
+  skipReason?: string;
+  note?: string;
+}
+
 const db = new Dexie("IntakeTrackerDB") as Dexie & {
   intakeRecords: EntityTable<IntakeRecord, "id">;
   auditLogs: EntityTable<AuditLog, "id">;
@@ -78,6 +124,9 @@ const db = new Dexie("IntakeTrackerDB") as Dexie & {
   eatingRecords: EntityTable<EatingRecord, "id">;
   urinationRecords: EntityTable<UrinationRecord, "id">;
   defecationRecords: EntityTable<DefecationRecord, "id">;
+  medications: EntityTable<Medication, "id">;
+  medicationSchedules: EntityTable<MedicationSchedule, "id">;
+  doseLogs: EntityTable<DoseLog, "id">;
 };
 
 // Version 1: Initial schema
@@ -108,6 +157,19 @@ db.version(6).stores({
   eatingRecords: "id, timestamp",
   urinationRecords: "id, timestamp",
   defecationRecords: "id, timestamp",
+});
+// Version 7: Added medication tracking tables
+db.version(7).stores({
+  intakeRecords: "id, type, timestamp, source",
+  auditLogs: "id, timestamp, action",
+  weightRecords: "id, timestamp",
+  bloodPressureRecords: "id, timestamp, position, arm",
+  eatingRecords: "id, timestamp",
+  urinationRecords: "id, timestamp",
+  defecationRecords: "id, timestamp",
+  medications: "id, isActive, createdAt",
+  medicationSchedules: "id, medicationId, time, enabled",
+  doseLogs: "id, medicationId, scheduleId, scheduledDate, scheduledTime, status",
 });
 
 export { db };

@@ -7,6 +7,7 @@ import {
   Droplet,
   Apple,
   CircleDot,
+  Pill,
   type LucideIcon,
 } from "lucide-react";
 
@@ -163,6 +164,25 @@ export const CARD_THEMES = {
     latestValueColor: "text-stone-700 dark:text-stone-300",
     activeToggle: "bg-stone-100 border-stone-300 dark:bg-stone-900/50 dark:border-stone-700",
     sectionId: "section-defecation",
+  },
+  medications: {
+    label: "Medications",
+    icon: Pill,
+    gradient: "from-teal-50 to-cyan-50 dark:from-teal-950/40 dark:to-cyan-950/40",
+    border: "border-teal-200 dark:border-teal-800",
+    iconBg: "bg-teal-100 dark:bg-teal-900/50",
+    iconColor: "text-teal-600 dark:text-teal-400",
+    buttonBg: "bg-teal-600 hover:bg-teal-700",
+    outlineBorder: "border-teal-200 dark:border-teal-800",
+    outlineText: "text-teal-700 dark:text-teal-300",
+    progressGradient: "bg-gradient-to-r from-teal-400 to-cyan-500",
+    hoverBg: "hover:bg-teal-100 hover:border-teal-300 dark:hover:bg-teal-900/50",
+    inputBg: "bg-teal-100/80 hover:bg-teal-200/80 dark:bg-teal-900/50 dark:hover:bg-teal-800/50",
+    inputText: "text-teal-700 dark:text-teal-300",
+    loadingBg: "bg-teal-200 dark:bg-teal-800",
+    latestValueColor: "text-teal-700 dark:text-teal-300",
+    activeToggle: "bg-teal-100 border-teal-300 dark:bg-teal-900/50 dark:border-teal-700",
+    sectionId: "section-medications",
   },
 } as const;
 
