@@ -18,9 +18,7 @@ export function AuthGuard({ children, fallback }: AuthGuardProps) {
   const { ready, authenticated, login } = usePrivy();
 
   // Local agent mode bypass
-  fetch('http://127.0.0.1:7833/ingest/2bb6de61-bfbc-495b-be8d-2fb9031b1ea6',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2987de'},body:JSON.stringify({sessionId:'2987de',location:'auth-guard.tsx:21',message:'Checking auth bypass',data:{envValue: process.env.NEXT_PUBLIC_LOCAL_AGENT_MODE},timestamp:Date.now(),hypothesisId:'2,3'})}).catch(()=>{});
   if (process.env.NEXT_PUBLIC_LOCAL_AGENT_MODE === "true") {
-    fetch('http://127.0.0.1:7833/ingest/2bb6de61-bfbc-495b-be8d-2fb9031b1ea6',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2987de'},body:JSON.stringify({sessionId:'2987de',location:'auth-guard.tsx:23',message:'Bypassing auth',data:{},timestamp:Date.now(),hypothesisId:'1,2,3'})}).catch(()=>{});
     return <>{children}</>;
   }
 

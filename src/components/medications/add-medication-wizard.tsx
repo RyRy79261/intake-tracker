@@ -181,22 +181,26 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
   const handleSave = async () => {
     const finalDosage = customDosage ? parseFloat(customDosage) : dosageAmount;
 
-    await addPrescriptionMutation.mutateAsync({
-      brandName: brandName || searchQuery,
-      genericName: genericName || brandName,
-      dosageStrength: dosageStrength || "unknown",
-      dosageAmount: finalDosage || 1,
-      pillShape,
-      pillColor,
-      indication,
-      foodInstruction,
-      foodNote: foodNote || undefined,
-      currentStock: parseInt(currentStock) || 0,
-      refillAlertDays: parseInt(refillAlertDays) || undefined,
-      refillAlertPills: parseInt(refillAlertPills) || undefined,
-      notes: notes || undefined,
-      schedules: schedules.filter(s => s.time && s.daysOfWeek.length > 0)
-    });
+    try {
+      await addPrescriptionMutation.mutateAsync({
+        brandName: brandName || searchQuery,
+        genericName: genericName || brandName,
+        dosageStrength: dosageStrength || "unknown",
+        dosageAmount: finalDosage || 1,
+        pillShape,
+        pillColor,
+        indication,
+        foodInstruction,
+        foodNote: foodNote || undefined,
+        currentStock: parseInt(currentStock) || 0,
+        refillAlertDays: parseInt(refillAlertDays) || undefined,
+        refillAlertPills: parseInt(refillAlertPills) || undefined,
+        notes: notes || undefined,
+        schedules: schedules.filter(s => s.time && s.daysOfWeek.length > 0)
+      });
+    } catch (err: any) {
+      console.error(err);
+    }
 
     handleClose();
   };

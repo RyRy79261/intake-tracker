@@ -7,6 +7,6 @@ test.describe('Auth Bypass', () => {
 
     // Verify we are not redirected to a login page and the dashboard loads
     await expect(page.locator('text=Intake Tracker')).toBeVisible();
-    await expect(page.locator('text=Water')).toBeVisible();
+    await expect(page.locator('#section-water')).toBeVisible();
   });
 });

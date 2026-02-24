@@ -34,10 +34,7 @@ test.describe('Medication Wizard', () => {
     // Type in the search query
     await page.fill('input[placeholder="e.g. Aviolix, Clopidogrel..."]', 'Aviolix 75mg');
 
-    // Click search
-    await page.locator('button').filter({ has: page.locator('svg') }).nth(1).click();
-    
-    // Alternatively, just press Enter to trigger search
+    // Press Enter to trigger search
     await page.keyboard.press('Enter');
 
     // Wait for the mock response to populate
@@ -85,7 +82,10 @@ test.describe('Medication Wizard', () => {
     // Save Medication
     await page.click('button:has-text("Save Medication")');
 
+    // Go to the Medications tab to view the active meds list
+    await page.click('button:has-text("Medications")');
+
     // Verify it appears in the active meds list
-    await expect(page.locator('text=Aviolix')).first().toBeVisible();
+    await expect(page.locator('text=Aviolix').first()).toBeVisible();
   });
 });

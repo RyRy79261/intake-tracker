@@ -9,8 +9,7 @@ test.describe('Intake Logs', () => {
     await expect(page.locator('text=Intake Tracker')).toBeVisible();
 
     // Click "Confirm Entry" in the Water card
-    // The Water card has the text "WATER" inside it
-    const waterCard = page.locator('div.rounded-xl', { hasText: 'WATER' }).first();
+    const waterCard = page.locator('#section-water');
     await expect(waterCard).toBeVisible();
     await waterCard.locator('button', { hasText: 'Confirm Entry' }).click();
 
@@ -18,7 +17,7 @@ test.describe('Intake Logs', () => {
     await expect(page.locator('text=Water intake recorded')).toBeVisible();
 
     // Click "Confirm Entry" in the Salt card
-    const saltCard = page.locator('div.rounded-xl', { hasText: 'SALT' }).first();
+    const saltCard = page.locator('#section-salt');
     await expect(saltCard).toBeVisible();
     await saltCard.locator('button', { hasText: 'Confirm Entry' }).click();
 
