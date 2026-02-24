@@ -29,20 +29,8 @@ export function StatusView() {
     return { taken, skipped, rescheduled, total, pct };
   }, [doseLogs]);
 
-  const lowStockMeds = useMemo(() => {
-    return inventoryItems.filter((m) => {
-      // NOTE: dosageAmount should ideally come from the phase, but we'll approximate with 1 if unknown.
-      // Or we can just use the alert thresholds directly
-      if (m.refillAlertPills && m.currentStock <= m.refillAlertPills) return true;
-      if (m.refillAlertDays) {
-        // Assume 1 pill per day if we don't look up the exact phase schedule
-        const dailyUsage = 1; 
-        const daysLeft = dailyUsage > 0 ? m.currentStock / dailyUsage : Infinity;
-        if (daysLeft <= m.refillAlertDays) return true;
-      }
-      return false;
-    });
-  }, [inventoryItems]);
+  // TODO: Update lowStockMeds to use inventory
+  const lowStockMeds: any[] = [];
 
   if (isLoading) {
     return (
@@ -96,7 +84,7 @@ export function StatusView() {
           </h3>
           <div className="space-y-2">
             {lowStockMeds.map((med) => (
-              <RefillAlertCard key={med.id} inventory={med} />
+              <RefillAlertCard key={med.id} medication={med} />
             ))}
           </div>
         </div>
@@ -140,8 +128,8 @@ export function StatusView() {
   );
 }
 
-function RefillAlertCard({ inventory: med }: { inventory: any }) {
-  const dailyUsage = 1; // Approximated
+function RefillAlertCard({ medication: med }: { medication: any }) {
+  const dailyUsage = med.dosageAmount;
   const daysLeft = dailyUsage > 0 ? Math.floor(med.currentStock / dailyUsage) : 0;
 
   return (
@@ -149,7 +137,7 @@ function RefillAlertCard({ inventory: med }: { inventory: any }) {
       <PillIcon shape={med.pillShape} color={med.pillColor} size={28} />
       <div className="flex-1 min-w-0">
         <p className="font-medium text-sm truncate">
-          {med.brandName}
+          {med.brandName} {med.dosageStrength}
         </p>
         <p className="text-xs text-amber-700 dark:text-amber-400">
           {med.currentStock} pills left (~{daysLeft} days)
