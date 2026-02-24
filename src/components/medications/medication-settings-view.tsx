@@ -12,8 +12,8 @@ import {
 import { Globe } from "lucide-react";
 
 export function MedicationSettingsView() {
-  const country = useSettingsStore((s) => s.medicationCountry);
-  const setCountry = useSettingsStore((s) => s.setMedicationCountry);
+  const country = useSettingsStore((s) => s.userCountry);
+  const setCountry = useSettingsStore((s) => s.setUserCountry);
 
   const COUNTRIES = [
     { value: "", label: "Not Specified (Global Search)" },

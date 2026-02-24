@@ -235,28 +235,28 @@ function TitrationTab({ prescription }: { prescription: Prescription }) {
         {phases.map((phase) => (
           <div 
             key={phase.id} 
-            className={\`p-4 rounded-xl border relative overflow-hidden \${
+            className={`p-4 rounded-xl border relative overflow-hidden ${
               phase.status === "active" 
                 ? "bg-card border-teal-500/50 shadow-sm" 
                 : "bg-muted/30 border-dashed opacity-70"
-            }\`}
+            }`}
           >
             {phase.status === "active" && (
               <div className="absolute top-0 right-0 w-1.5 h-full bg-teal-500" />
             )}
             
             <div className="flex items-center justify-between mb-2">
-              <span className={\`text-xs font-semibold px-2 py-0.5 rounded-full \${
+              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
                 phase.type === "titration" 
                   ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300" 
                   : "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
-              }\`}>
+              }`}>
                 {phase.type === "titration" ? "Titration" : "Maintenance"}
               </span>
               
               <span className="text-xs text-muted-foreground">
                 {format(phase.startDate, "MMM d, yyyy")}
-                {phase.endDate ? \` - \${format(phase.endDate, "MMM d, yyyy")}\` : " - Present"}
+                {phase.endDate ? ` - ${format(phase.endDate, "MMM d, yyyy")}` : " - Present"}
               </span>
             </div>
             

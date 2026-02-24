@@ -111,13 +111,13 @@ async function searchWithKey(query: string, apiKey: string, country?: string) {
   const sanitized = query.slice(0, 200);
 
   const prompt = country 
-    ? \`Look up this medication and provide detailed pharmaceutical information, focusing specifically on brands and availability in \${country}: "\${sanitized}"\`
-    : \`Look up this medication and provide detailed pharmaceutical information: "\${sanitized}"\`;
+    ? `Look up this medication and provide detailed pharmaceutical information, focusing specifically on brands and availability in ${country}: "${sanitized}"`
+    : `Look up this medication and provide detailed pharmaceutical information: "${sanitized}"`;
 
   const response = await fetch("https://api.perplexity.ai/chat/completions", {
     method: "POST",
     headers: {
-      Authorization: \`Bearer \${apiKey}\`,
+      Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
