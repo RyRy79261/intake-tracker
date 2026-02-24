@@ -5,6 +5,8 @@ export interface CreatePrescriptionInput {
   genericName: string;
   indication: string;
   notes?: string;
+  contraindications?: string[];
+  warnings?: string[];
   
   // Phase level (initial maintenance phase)
   dosageAmount: number;
@@ -38,6 +40,8 @@ export async function addPrescription(input: CreatePrescriptionInput): Promise<{
     genericName: input.genericName,
     indication: input.indication,
     notes: input.notes,
+    contraindications: input.contraindications,
+    warnings: input.warnings,
     isActive: true,
     createdAt: now,
     updatedAt: now,

@@ -26,6 +26,7 @@ import { AppearanceSection } from "./settings/appearance-section";
 import { QuickNavSection } from "./settings/quick-nav-section";
 import { AiIntegrationSection } from "./settings/ai-integration-section";
 import { DataManagementSection } from "./settings/data-management-section";
+import { MedicationSettingsSection } from "./settings/medication-settings-section";
 import { PrivacySecuritySection } from "./settings/privacy-security-section";
 import { PermissionsSection } from "./settings/permissions-section";
 import { AppUpdatesSection } from "./settings/app-updates-section";
@@ -82,6 +83,7 @@ export function SettingsDrawer({ open, onOpenChange }: SettingsDrawerProps) {
             <QuickNavSection />
             <AiIntegrationSection />
             <DataManagementSection />
+            <MedicationSettingsSection />
             <PrivacySecuritySection />
             <PermissionsSection />
             <AppUpdatesSection />

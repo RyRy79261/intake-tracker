@@ -79,6 +79,8 @@ export interface Prescription {
   genericName: string;
   indication: string;
   notes?: string;
+  contraindications?: string[];
+  warnings?: string[];
   isActive: boolean;
   createdAt: number;
   updatedAt: number;
@@ -236,6 +238,8 @@ db.version(8).stores({
       genericName: oldMed.genericName || oldMed.brandName || "Unknown",
       indication: oldMed.indication || "",
       notes: oldMed.notes,
+      contraindications: oldMed.contraindications,
+      warnings: oldMed.warnings,
       isActive: oldMed.isActive,
       createdAt: oldMed.createdAt,
       updatedAt: oldMed.updatedAt || oldMed.createdAt,

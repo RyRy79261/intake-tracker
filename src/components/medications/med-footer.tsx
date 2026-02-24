@@ -1,15 +1,16 @@
 "use client";
 
 import { motion } from "motion/react";
-import { CalendarDays, ClipboardList, Pill } from "lucide-react";
+import { CalendarDays, ClipboardList, Pill, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type MedTab = "schedule" | "status" | "medications";
+export type MedTab = "schedule" | "status" | "medications" | "settings";
 
 const TABS: { id: MedTab; icon: React.ComponentType<{ className?: string }>; label: string }[] = [
   { id: "schedule", icon: CalendarDays, label: "Schedule" },
   { id: "status", icon: ClipboardList, label: "Status" },
   { id: "medications", icon: Pill, label: "Medications" },
+  { id: "settings", icon: Settings, label: "Settings" },
 ];
 
 interface MedFooterProps {

@@ -8,9 +8,11 @@ import { MedFooter, type MedTab } from "@/components/medications/med-footer";
 import { ScheduleView } from "@/components/medications/schedule-view";
 import { StatusView } from "@/components/medications/status-view";
 import { MedicationsList } from "@/components/medications/medications-list";
+import { MedicationSettingsView } from "@/components/medications/medication-settings-view";
 import { DoseDetailDialog } from "@/components/medications/dose-detail-dialog";
 import { MarkAllModal } from "@/components/medications/mark-all-modal";
 import { AddMedicationWizard } from "@/components/medications/add-medication-wizard";
+import { EditMedicationDrawer } from "@/components/medications/edit-medication-drawer";
 import { useScrollHide } from "@/hooks/use-scroll-hide";
 import { useSettings } from "@/hooks/use-settings";
 import type { DoseLog, Prescription } from "@/lib/db";
@@ -25,6 +27,9 @@ function MedicationsContent() {
   const [doseDetailOpen, setDoseDetailOpen] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<ScheduleWithDetails | null>(null);
   const [selectedDoseLog, setSelectedDoseLog] = useState<DoseLog | undefined>(undefined);
+
+  const [editMedOpen, setEditMedOpen] = useState(false);
+  const [selectedPrescription, setSelectedPrescription] = useState<Prescription | null>(null);
 
   const [markAllOpen, setMarkAllOpen] = useState(false);
   const [markAllTime, setMarkAllTime] = useState("");
@@ -60,8 +65,9 @@ function MedicationsContent() {
     setWizardOpen(true);
   }, []);
 
-  const handleEditMed = useCallback((_prescription: Prescription) => {
-    // TODO: open edit flow
+  const handleEditMed = useCallback((prescription: Prescription) => {
+    setSelectedPrescription(prescription);
+    setEditMedOpen(true);
   }, []);
 
   return (
@@ -89,6 +95,8 @@ function MedicationsContent() {
         <MedicationsList onAddMed={handleAddMed} onEditMed={handleEditMed} />
       )}
 
+      {activeTab === "settings" && <MedicationSettingsView />}
+
       <MedFooter
         activeTab={activeTab}
         onTabChange={setActiveTab}
@@ -115,6 +123,12 @@ function MedicationsContent() {
       <AddMedicationWizard
         open={wizardOpen}
         onOpenChange={setWizardOpen}
+      />
+
+      <EditMedicationDrawer
+        open={editMedOpen}
+        onOpenChange={setEditMedOpen}
+        prescription={selectedPrescription}
       />
     </>
   );

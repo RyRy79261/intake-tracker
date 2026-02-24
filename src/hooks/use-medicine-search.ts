@@ -3,9 +3,11 @@
 import { useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/components/auth-guard";
 import { usePerplexityKey } from "@/hooks/use-settings";
+import { useSettingsStore } from "@/stores/settings-store";
 
 export interface MedicineSearchResult {
   brandNames: string[];
+  localAlternatives: string[];
   genericName: string;
   dosageStrengths: string[];
   commonIndications: string[];
@@ -15,6 +17,10 @@ export interface MedicineSearchResult {
   pillShape: string;
   pillDescription: string;
   drugClass: string;
+  visualIdentification?: string;
+  contraindications: string[];
+  warnings: string[];
+  isGenericFallback: boolean;
 }
 
 export function useMedicineSearch() {
@@ -23,6 +29,7 @@ export function useMedicineSearch() {
 
   return useMutation({
     mutationFn: async (query: string): Promise<MedicineSearchResult> => {
+      const country = useSettingsStore.getState().userCountry;
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
       };
@@ -40,6 +47,7 @@ export function useMedicineSearch() {
         body: JSON.stringify({
           query,
           clientApiKey: clientApiKey || undefined,
+          country: country && country !== "none" ? country : undefined,
         }),
       });
 

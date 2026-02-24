@@ -18,6 +18,7 @@ import {
   deleteSchedule,
   getSchedulesForPhase,
 } from "@/lib/medication-schedule-service";
+import { startNewPhase, type CreatePhaseInput } from "@/lib/medication-service";
 import {
   getDoseLogsForDate,
   takeDose,
@@ -139,6 +140,14 @@ export function useDeleteSchedule() {
   const invalidate = useInvalidateMeds();
   return useMutation({
     mutationFn: (id: string) => deleteSchedule(id),
+    onSuccess: invalidate,
+  });
+}
+
+export function useStartNewPhase() {
+  const invalidate = useInvalidateMeds();
+  return useMutation({
+    mutationFn: (input: CreatePhaseInput) => startNewPhase(input),
     onSuccess: invalidate,
   });
 }

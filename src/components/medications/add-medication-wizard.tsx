@@ -81,6 +81,11 @@ interface AddMedicationWizardProps {
   onOpenChange: (open: boolean) => void;
 }
 
+function capitalizeWords(str: string) {
+  if (!str) return "";
+  return str.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+}
+
 export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardProps) {
   const [step, setStep] = useState<WizardStep>("search");
   const searchMutation = useMedicineSearch();
@@ -95,8 +100,11 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
 
   const [pillShape, setPillShape] = useState<PillShape>("round");
   const [pillColor, setPillColor] = useState("#E91E63");
+  const [visualIdentification, setVisualIdentification] = useState("");
 
   const [indication, setIndication] = useState("");
+  const [contraindications, setContraindications] = useState<string[]>([]);
+  const [warnings, setWarnings] = useState<string[]>([]);
   const [foodInstruction, setFoodInstruction] = useState<FoodInstruction>("none");
   const [foodNote, setFoodNote] = useState("");
   const [notes, setNotes] = useState("");
@@ -121,7 +129,10 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
     setDosageStrength("");
     setPillShape("round");
     setPillColor("#E91E63");
+    setVisualIdentification("");
     setIndication("");
+    setContraindications([]);
+    setWarnings([]);
     setFoodInstruction("none");
     setFoodNote("");
     setNotes("");
@@ -143,13 +154,21 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
     }
+    window.scrollTo(0, 0);
     try {
       const result = await searchMutation.mutateAsync(searchQuery.trim());
       setSearchResult(result);
-      if (result.brandNames.length > 0) setBrandName(result.brandNames[0]);
-      if (result.genericName) setGenericName(result.genericName);
+      
+      if (!brandName) {
+        setBrandName(capitalizeWords(searchQuery.trim()));
+      }
+      
+      if (result.genericName) setGenericName(capitalizeWords(result.genericName));
       if (result.dosageStrengths.length > 0) setDosageStrength(result.dosageStrengths[0]);
       if (result.commonIndications.length > 0) setIndication(result.commonIndications.join(", "));
+      if (result.contraindications) setContraindications(result.contraindications);
+      if (result.warnings) setWarnings(result.warnings);
+      if (result.visualIdentification) setVisualIdentification(result.visualIdentification);
       if (result.foodInstruction) setFoodInstruction(result.foodInstruction);
       if (result.foodNote) setFoodNote(result.foodNote);
       if (result.pillColor) {
@@ -183,13 +202,16 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
 
     try {
       await addPrescriptionMutation.mutateAsync({
-        brandName: brandName || searchQuery,
+        brandName: brandName || capitalizeWords(searchQuery),
         genericName: genericName || brandName,
         dosageStrength: dosageStrength || "unknown",
         dosageAmount: finalDosage || 1,
         pillShape,
         pillColor,
+        visualIdentification: visualIdentification || undefined,
         indication,
+        contraindications: contraindications.length > 0 ? contraindications : undefined,
+        warnings: warnings.length > 0 ? warnings : undefined,
         foodInstruction,
         foodNote: foodNote || undefined,
         currentStock: parseInt(currentStock) || 0,
@@ -235,7 +257,7 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
             ))}
           </div>
 
-          <div className="min-h-[300px] max-h-[60dvh] overflow-y-auto px-1 -mx-1">
+          <div className="min-h-[300px] max-h-[60dvh] overflow-y-auto px-2 pb-2">
             {step === "search" && (
               <SearchStep
                 query={searchQuery}
@@ -245,9 +267,9 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
                 result={searchResult}
                 error={searchMutation.error?.message}
                 brandName={brandName}
-                onBrandNameChange={setBrandName}
+                onBrandNameChange={(v) => setBrandName(capitalizeWords(v))}
                 genericName={genericName}
-                onGenericNameChange={setGenericName}
+                onGenericNameChange={(v) => setGenericName(capitalizeWords(v))}
                 dosageStrength={dosageStrength}
                 onDosageStrengthChange={setDosageStrength}
               />
@@ -259,6 +281,8 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
                 onShapeChange={setPillShape}
                 color={pillColor}
                 onColorChange={setPillColor}
+                visualIdentification={visualIdentification}
+                onVisualIdentificationChange={setVisualIdentification}
               />
             )}
 
@@ -266,6 +290,8 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
               <IndicationStep
                 indication={indication}
                 onIndicationChange={setIndication}
+                contraindications={contraindications}
+                warnings={warnings}
                 foodInstruction={foodInstruction}
                 onFoodInstructionChange={setFoodInstruction}
                 foodNote={foodNote}
@@ -382,7 +408,17 @@ function SearchStep({
       {result && (
         <div className="rounded-lg bg-teal-50 dark:bg-teal-950/30 p-3 text-sm space-y-1">
           <p className="font-medium text-teal-700 dark:text-teal-300">Found: {result.genericName}</p>
+          {result.isGenericFallback && (
+            <div className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 px-2 py-1 rounded text-xs mt-1 mb-2 border border-amber-200 dark:border-amber-800">
+              Could not find physical details for that specific brand. Showing appearance for the generic equivalent.
+            </div>
+          )}
           {result.drugClass && <p className="text-xs text-muted-foreground">Class: {result.drugClass}</p>}
+          {result.localAlternatives && result.localAlternatives.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              Local: {result.localAlternatives.join(", ")}
+            </p>
+          )}
           {result.dosageStrengths.length > 0 && (
             <p className="text-xs text-muted-foreground">
               Strengths: {result.dosageStrengths.join(", ")}
@@ -434,9 +470,11 @@ function SearchStep({
 
 function AppearanceStep({
   shape, onShapeChange, color, onColorChange,
+  visualIdentification, onVisualIdentificationChange,
 }: {
   shape: PillShape; onShapeChange: (v: PillShape) => void;
   color: string; onColorChange: (v: string) => void;
+  visualIdentification: string; onVisualIdentificationChange: (v: string) => void;
 }) {
   return (
     <div className="space-y-6">
@@ -492,17 +530,30 @@ function AppearanceStep({
           <span className="text-xs text-muted-foreground">{color}</span>
         </div>
       </div>
+
+      <div>
+        <Label className="text-sm font-medium mb-1.5 block">Visual Identification Details</Label>
+        <Textarea
+          value={visualIdentification}
+          onChange={(e) => onVisualIdentificationChange(e.target.value)}
+          placeholder="e.g. Scored on one side, '10' imprinted on the other"
+          rows={2}
+        />
+        <p className="text-xs text-muted-foreground mt-1">Optional. Markings, imprints, or coating details.</p>
+      </div>
     </div>
   );
 }
 
 function IndicationStep({
   indication, onIndicationChange,
+  contraindications, warnings,
   foodInstruction, onFoodInstructionChange,
   foodNote, onFoodNoteChange,
   notes, onNotesChange,
 }: {
   indication: string; onIndicationChange: (v: string) => void;
+  contraindications: string[]; warnings: string[];
   foodInstruction: FoodInstruction; onFoodInstructionChange: (v: FoodInstruction) => void;
   foodNote: string; onFoodNoteChange: (v: string) => void;
   notes: string; onNotesChange: (v: string) => void;
@@ -524,6 +575,31 @@ function IndicationStep({
           rows={2}
         />
       </div>
+
+      {(contraindications.length > 0 || warnings.length > 0) && (
+        <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 rounded-lg p-3 space-y-3">
+          {contraindications.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-red-800 dark:text-red-400 uppercase tracking-wider mb-1">
+                Contraindications
+              </p>
+              <ul className="list-disc list-inside text-xs text-red-700 dark:text-red-300 ml-4 space-y-0.5">
+                {contraindications.map((c, i) => <li key={i}>{c}</li>)}
+              </ul>
+            </div>
+          )}
+          {warnings.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-amber-800 dark:text-amber-500 uppercase tracking-wider mb-1">
+                Warnings
+              </p>
+              <ul className="list-disc list-inside text-xs text-amber-700 dark:text-amber-400 ml-4 space-y-0.5">
+                {warnings.map((w, i) => <li key={i}>{w}</li>)}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
 
       <div>
         <Label className="text-sm font-medium mb-2 block">Food instruction</Label>
