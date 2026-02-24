@@ -1,66 +1,75 @@
-import { db, type MedicationSchedule, type Medication } from "./db";
+import { db, type PhaseSchedule, type Prescription, type MedicationPhase, type InventoryItem } from "./db";
 
-export interface CreateScheduleInput {
-  medicationId: string;
-  time: string;
-  daysOfWeek: number[];
+export interface ScheduleWithDetails {
+  schedule: PhaseSchedule;
+  phase: MedicationPhase;
+  prescription: Prescription;
+  inventory?: InventoryItem;
 }
 
-export async function addSchedule(input: CreateScheduleInput): Promise<MedicationSchedule> {
-  const schedule: MedicationSchedule = {
-    id: crypto.randomUUID(),
+export async function getDailySchedule(dayOfWeek: number): Promise<Map<string, ScheduleWithDetails[]>> {
+  // 1. Get all active prescriptions
+  const activePrescriptions = await db.prescriptions.where("isActive").equals(1).toArray();
+  const prescriptionMap = new Map(activePrescriptions.map(p => [p.id, p]));
+  
+  // 2. Get active phases for these prescriptions
+  const prescriptionIds = activePrescriptions.map(p => p.id);
+  const phases = await db.medicationPhases.where("status").equals("active").toArray();
+  const activePhases = phases.filter(p => prescriptionIds.includes(p.prescriptionId));
+  const phaseMap = new Map(activePhases.map(p => [p.id, p]));
+  
+  // 3. Get active inventory for these prescriptions
+  const inventoryItems = await db.inventoryItems.where("isActive").equals(1).toArray();
+  const inventoryMap = new Map(inventoryItems.map(i => [i.prescriptionId, i]));
+
+  // 4. Get enabled schedules for these active phases
+  const phaseIds = activePhases.map(p => p.id);
+  const allSchedules = await db.phaseSchedules.where("enabled").equals(1).toArray();
+  const activeSchedules = allSchedules.filter(s => phaseIds.includes(s.phaseId) && s.daysOfWeek.includes(dayOfWeek));
+
+  const grouped = new Map<string, ScheduleWithDetails[]>();
+
+  for (const schedule of activeSchedules) {
+    const phase = phaseMap.get(schedule.phaseId);
+    if (!phase) continue;
+    const prescription = prescriptionMap.get(phase.prescriptionId);
+    if (!prescription) continue;
+    const inventory = inventoryMap.get(prescription.id);
+
+    const existing = grouped.get(schedule.time) ?? [];
+    existing.push({ schedule, phase, prescription, inventory });
+    grouped.set(schedule.time, existing);
+  }
+
+  const sorted = new Map<string, ScheduleWithDetails[]>(
+    Array.from(grouped.entries()).sort(([a], [b]) => a.localeCompare(b))
+  );
+
+  return sorted;
+}
+
+export async function getSchedulesForPhase(phaseId: string): Promise<PhaseSchedule[]> {
+  return db.phaseSchedules.where("phaseId").equals(phaseId).toArray();
+}
+
+export async function addSchedule(input: Omit<PhaseSchedule, "id" | "createdAt" | "enabled">): Promise<PhaseSchedule> {
+  const schedule: PhaseSchedule = {
     ...input,
+    id: crypto.randomUUID(),
     enabled: true,
     createdAt: Date.now(),
   };
-  await db.medicationSchedules.add(schedule);
+  await db.phaseSchedules.add(schedule);
   return schedule;
 }
 
 export async function updateSchedule(
   id: string,
-  updates: Partial<Omit<MedicationSchedule, "id" | "createdAt">>
+  updates: Partial<Omit<PhaseSchedule, "id" | "createdAt" | "phaseId">>
 ): Promise<void> {
-  await db.medicationSchedules.update(id, updates);
+  await db.phaseSchedules.update(id, updates);
 }
 
 export async function deleteSchedule(id: string): Promise<void> {
-  await db.medicationSchedules.delete(id);
-}
-
-export async function getSchedulesForMedication(medicationId: string): Promise<MedicationSchedule[]> {
-  return db.medicationSchedules.where("medicationId").equals(medicationId).toArray();
-}
-
-export async function getAllEnabledSchedules(): Promise<MedicationSchedule[]> {
-  return db.medicationSchedules.where("enabled").equals(1).toArray();
-}
-
-export interface ScheduleWithMedication {
-  schedule: MedicationSchedule;
-  medication: Medication;
-}
-
-export async function getDailySchedule(dayOfWeek: number): Promise<Map<string, ScheduleWithMedication[]>> {
-  const schedules = await getAllEnabledSchedules();
-  const medications = await db.medications.toArray();
-  const medMap = new Map(medications.map((m) => [m.id, m]));
-
-  const grouped = new Map<string, ScheduleWithMedication[]>();
-
-  for (const schedule of schedules) {
-    if (!schedule.daysOfWeek.includes(dayOfWeek)) continue;
-    const medication = medMap.get(schedule.medicationId);
-    if (!medication) continue;
-
-    const existing = grouped.get(schedule.time) ?? [];
-    existing.push({ schedule, medication });
-    grouped.set(schedule.time, existing);
-  }
-
-  const sorted = new Map<string, ScheduleWithMedication[]>(
-    Array.from(grouped.entries()).sort(([a], [b]) => a.localeCompare(b))
-  );
-
-  return sorted;
+  await db.phaseSchedules.delete(id);
 }

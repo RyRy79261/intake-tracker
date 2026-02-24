@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { PillIconWithBadge } from "./pill-icon";
 import { useDailySchedule, useDoseLogsForDate } from "@/hooks/use-medication-queries";
 import type { DoseLog, DoseStatus } from "@/lib/db";
-import type { ScheduleWithMedication } from "@/lib/medication-schedule-service";
+import type { ScheduleWithDetails } from "@/lib/medication-schedule-service";
 import { Loader2, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -39,14 +39,16 @@ function isTimeOverdue(time24: string): boolean {
 }
 
 function getDoseStatus(
-  medicationId: string,
+  prescriptionId: string,
+  phaseId: string,
   scheduleId: string,
   time: string,
   doseLogs: DoseLog[]
 ): DoseLog | undefined {
   return doseLogs.find(
     (l) =>
-      l.medicationId === medicationId &&
+      l.prescriptionId === prescriptionId &&
+      l.phaseId === phaseId &&
       l.scheduleId === scheduleId &&
       l.scheduledTime === time
   );
@@ -54,8 +56,8 @@ function getDoseStatus(
 
 interface ScheduleViewProps {
   selectedDate: Date;
-  onDoseClick: (entry: ScheduleWithMedication, log: DoseLog | undefined) => void;
-  onMarkAll: (time: string, entries: ScheduleWithMedication[]) => void;
+  onDoseClick: (entry: ScheduleWithDetails, log: DoseLog | undefined) => void;
+  onMarkAll: (time: string, entries: ScheduleWithDetails[]) => void;
   onAddMed: () => void;
 }
 
@@ -101,7 +103,7 @@ export function ScheduleView({ selectedDate, onDoseClick, onMarkAll, onAddMed }:
     <div className="space-y-6 pb-24">
       {timeGroups.map(({ time, entries }) => {
         const allDone = entries.every((e) => {
-          const log = getDoseStatus(e.medication.id, e.schedule.id, time, doseLogs);
+          const log = getDoseStatus(e.prescription.id, e.phase.id, e.schedule.id, time, doseLogs);
           return log?.status === "taken" || log?.status === "skipped";
         });
         const overdue = isToday && isTimeOverdue(time) && !allDone;
@@ -129,9 +131,11 @@ export function ScheduleView({ selectedDate, onDoseClick, onMarkAll, onAddMed }:
 
             <div className="space-y-2">
               {entries.map((entry) => {
-                const log = getDoseStatus(entry.medication.id, entry.schedule.id, time, doseLogs);
+                const log = getDoseStatus(entry.prescription.id, entry.phase.id, entry.schedule.id, time, doseLogs);
                 const status: DoseStatus = log?.status ?? "pending";
-                const med = entry.medication;
+                const med = entry.prescription;
+                const phase = entry.phase;
+                const inventory = entry.inventory;
 
                 return (
                   <button
@@ -147,21 +151,21 @@ export function ScheduleView({ selectedDate, onDoseClick, onMarkAll, onAddMed }:
                   >
                     <div className="flex items-start gap-3">
                       <PillIconWithBadge
-                        shape={med.pillShape}
-                        color={med.pillColor}
+                        shape={inventory?.pillShape || "round"}
+                        color={inventory?.pillColor || "#ccc"}
                         size={36}
                         status={status}
                       />
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-sm leading-tight">
-                          {med.brandName} {med.dosageStrength} ({med.genericName})
+                          {inventory?.brandName || med.genericName} {phase.dosageStrength} ({med.genericName})
                         </p>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          {med.dosageStrength}, Take {med.dosageAmount} Pill(s)
-                          {med.foodInstruction !== "none" && ` ${med.foodInstruction} eating`}
+                          {phase.dosageStrength}, Take {phase.dosageAmount} Pill(s)
+                          {phase.foodInstruction !== "none" && ` ${phase.foodInstruction} eating`}
                         </p>
-                        {med.notes && (
-                          <p className="text-xs text-muted-foreground mt-0.5">{med.notes}</p>
+                        {phase.notes && (
+                          <p className="text-xs text-muted-foreground mt-0.5">{phase.notes}</p>
                         )}
                         {log?.actionTimestamp && status === "taken" && (
                           <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">

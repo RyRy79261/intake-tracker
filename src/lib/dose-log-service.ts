@@ -1,42 +1,40 @@
 import { db, type DoseLog, type DoseStatus } from "./db";
-import { adjustStock } from "./medication-service";
+import { adjustStock, getActiveInventoryForPrescription } from "./medication-service";
 
 export async function getDoseLogsForDate(date: string): Promise<DoseLog[]> {
   return db.doseLogs.where("scheduledDate").equals(date).toArray();
 }
 
 export async function getDoseLog(
-  medicationId: string,
+  prescriptionId: string,
+  phaseId: string,
   scheduleId: string,
   date: string,
   time: string
 ): Promise<DoseLog | undefined> {
   return db.doseLogs
-    .where("[medicationId+scheduleId+scheduledDate+scheduledTime]")
-    .equals([medicationId, scheduleId, date, time])
-    .first()
-    .catch(() =>
-      db.doseLogs
-        .filter(
-          (l) =>
-            l.medicationId === medicationId &&
-            l.scheduleId === scheduleId &&
-            l.scheduledDate === date &&
-            l.scheduledTime === time
-        )
-        .first()
-    );
+    .where("scheduleId")
+    .equals(scheduleId)
+    .filter(
+      (l) =>
+        l.prescriptionId === prescriptionId &&
+        l.phaseId === phaseId &&
+        l.scheduledDate === date &&
+        l.scheduledTime === time
+    )
+    .first();
 }
 
 async function upsertDoseLog(
-  medicationId: string,
+  prescriptionId: string,
+  phaseId: string,
   scheduleId: string,
   date: string,
   time: string,
   status: DoseStatus,
-  extra?: Partial<Pick<DoseLog, "rescheduledTo" | "skipReason" | "note">>
+  extra?: Partial<Pick<DoseLog, "rescheduledTo" | "skipReason" | "note" | "inventoryItemId">>
 ): Promise<DoseLog> {
-  const existing = await getDoseLog(medicationId, scheduleId, date, time);
+  const existing = await getDoseLog(prescriptionId, phaseId, scheduleId, date, time);
   const now = Date.now();
 
   if (existing) {
@@ -51,7 +49,8 @@ async function upsertDoseLog(
 
   const log: DoseLog = {
     id: crypto.randomUUID(),
-    medicationId,
+    prescriptionId,
+    phaseId,
     scheduleId,
     scheduledDate: date,
     scheduledTime: time,
@@ -64,89 +63,101 @@ async function upsertDoseLog(
 }
 
 export async function takeDose(
-  medicationId: string,
+  prescriptionId: string,
+  phaseId: string,
   scheduleId: string,
   date: string,
   time: string,
   dosageAmount: number
 ): Promise<DoseLog> {
-  const prev = await getDoseLog(medicationId, scheduleId, date, time);
+  const prev = await getDoseLog(prescriptionId, phaseId, scheduleId, date, time);
   const wasTaken = prev?.status === "taken";
-  const log = await upsertDoseLog(medicationId, scheduleId, date, time, "taken");
+  
+  let inventoryItemId = prev?.inventoryItemId;
+  
   if (!wasTaken) {
-    await adjustStock(medicationId, -dosageAmount);
+    const activeInventory = await getActiveInventoryForPrescription(prescriptionId);
+    if (activeInventory) {
+      inventoryItemId = activeInventory.id;
+      await adjustStock(inventoryItemId, -dosageAmount);
+    }
   }
-  return log;
+
+  return upsertDoseLog(prescriptionId, phaseId, scheduleId, date, time, "taken", { inventoryItemId });
 }
 
 export async function untakeDose(
-  medicationId: string,
+  prescriptionId: string,
+  phaseId: string,
   scheduleId: string,
   date: string,
   time: string,
   dosageAmount: number
 ): Promise<DoseLog> {
-  const prev = await getDoseLog(medicationId, scheduleId, date, time);
+  const prev = await getDoseLog(prescriptionId, phaseId, scheduleId, date, time);
   const wasTaken = prev?.status === "taken";
-  const log = await upsertDoseLog(medicationId, scheduleId, date, time, "pending");
-  if (wasTaken) {
-    await adjustStock(medicationId, dosageAmount);
+  
+  if (wasTaken && prev?.inventoryItemId) {
+    await adjustStock(prev.inventoryItemId, dosageAmount);
   }
-  return log;
+  
+  return upsertDoseLog(prescriptionId, phaseId, scheduleId, date, time, "pending");
 }
 
 export async function skipDose(
-  medicationId: string,
+  prescriptionId: string,
+  phaseId: string,
   scheduleId: string,
   date: string,
   time: string,
+  dosageAmount: number,
   reason?: string
 ): Promise<DoseLog> {
-  const prev = await getDoseLog(medicationId, scheduleId, date, time);
-  if (prev?.status === "taken") {
-    const med = await db.medications.get(medicationId);
-    if (med) await adjustStock(medicationId, med.dosageAmount);
+  const prev = await getDoseLog(prescriptionId, phaseId, scheduleId, date, time);
+  if (prev?.status === "taken" && prev?.inventoryItemId) {
+    await adjustStock(prev.inventoryItemId, dosageAmount);
   }
-  return upsertDoseLog(medicationId, scheduleId, date, time, "skipped", {
+  return upsertDoseLog(prescriptionId, phaseId, scheduleId, date, time, "skipped", {
     skipReason: reason,
   });
 }
 
 export async function rescheduleDose(
-  medicationId: string,
+  prescriptionId: string,
+  phaseId: string,
   scheduleId: string,
   date: string,
   time: string,
-  newTime: string
+  newTime: string,
+  dosageAmount: number
 ): Promise<DoseLog> {
-  const prev = await getDoseLog(medicationId, scheduleId, date, time);
-  if (prev?.status === "taken") {
-    const med = await db.medications.get(medicationId);
-    if (med) await adjustStock(medicationId, med.dosageAmount);
+  const prev = await getDoseLog(prescriptionId, phaseId, scheduleId, date, time);
+  if (prev?.status === "taken" && prev?.inventoryItemId) {
+    await adjustStock(prev.inventoryItemId, dosageAmount);
   }
-  await upsertDoseLog(medicationId, scheduleId, date, time, "rescheduled", {
+  await upsertDoseLog(prescriptionId, phaseId, scheduleId, date, time, "rescheduled", {
     rescheduledTo: newTime,
   });
-  return upsertDoseLog(medicationId, scheduleId, date, newTime, "pending");
+  return upsertDoseLog(prescriptionId, phaseId, scheduleId, date, newTime, "pending");
 }
 
 export async function takeAllDoses(
-  entries: { medicationId: string; scheduleId: string; dosageAmount: number }[],
+  entries: { prescriptionId: string; phaseId: string; scheduleId: string; dosageAmount: number }[],
   date: string,
   time: string
 ): Promise<void> {
   for (const entry of entries) {
-    await takeDose(entry.medicationId, entry.scheduleId, date, time, entry.dosageAmount);
+    await takeDose(entry.prescriptionId, entry.phaseId, entry.scheduleId, date, time, entry.dosageAmount);
   }
 }
 
 export async function skipAllDoses(
-  entries: { medicationId: string; scheduleId: string }[],
+  entries: { prescriptionId: string; phaseId: string; scheduleId: string; dosageAmount: number }[],
   date: string,
   time: string,
   reason?: string
 ): Promise<void> {
   for (const entry of entries) {
-    await skipDose(entry.medicationId, entry.scheduleId, date, time, reason);
+    await skipDose(entry.prescriptionId, entry.phaseId, entry.scheduleId, date, time, entry.dosageAmount, reason);
   }
 }

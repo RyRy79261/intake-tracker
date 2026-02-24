@@ -1,11 +1,11 @@
 "use client";
 
 import { useMemo } from "react";
-import { useMedications, useDoseLogsForDate } from "@/hooks/use-medication-queries";
+import { usePrescriptions, useDoseLogsForDate, useAllActiveInventoryItems } from "@/hooks/use-medication-queries";
 import { PillIcon } from "./pill-icon";
 import { Loader2, CheckCircle2, XCircle, Clock, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { Medication } from "@/lib/db";
+import type { Prescription } from "@/lib/db";
 
 function todayStr(): string {
   const d = new Date();
@@ -14,10 +14,11 @@ function todayStr(): string {
 
 export function StatusView() {
   const dateStr = useMemo(() => todayStr(), []);
-  const { data: medications = [], isLoading: medsLoading } = useMedications();
+  const { data: prescriptions = [], isLoading: medsLoading } = usePrescriptions();
   const { data: doseLogs = [], isLoading: logsLoading } = useDoseLogsForDate(dateStr);
+  const { data: inventoryItems = [], isLoading: invLoading } = useAllActiveInventoryItems();
 
-  const isLoading = medsLoading || logsLoading;
+  const isLoading = medsLoading || logsLoading || invLoading;
 
   const stats = useMemo(() => {
     const taken = doseLogs.filter((l) => l.status === "taken").length;
@@ -29,17 +30,19 @@ export function StatusView() {
   }, [doseLogs]);
 
   const lowStockMeds = useMemo(() => {
-    return medications.filter((m) => {
-      if (!m.isActive) return false;
+    return inventoryItems.filter((m) => {
+      // NOTE: dosageAmount should ideally come from the phase, but we'll approximate with 1 if unknown.
+      // Or we can just use the alert thresholds directly
       if (m.refillAlertPills && m.currentStock <= m.refillAlertPills) return true;
       if (m.refillAlertDays) {
-        const dailyUsage = m.dosageAmount;
+        // Assume 1 pill per day if we don't look up the exact phase schedule
+        const dailyUsage = 1; 
         const daysLeft = dailyUsage > 0 ? m.currentStock / dailyUsage : Infinity;
         if (daysLeft <= m.refillAlertDays) return true;
       }
       return false;
     });
-  }, [medications]);
+  }, [inventoryItems]);
 
   if (isLoading) {
     return (
@@ -93,7 +96,7 @@ export function StatusView() {
           </h3>
           <div className="space-y-2">
             {lowStockMeds.map((med) => (
-              <RefillAlertCard key={med.id} medication={med} />
+              <RefillAlertCard key={med.id} inventory={med} />
             ))}
           </div>
         </div>
@@ -108,16 +111,16 @@ export function StatusView() {
               .sort((a, b) => (b.actionTimestamp ?? 0) - (a.actionTimestamp ?? 0))
               .slice(0, 10)
               .map((log) => {
-                const med = medications.find((m) => m.id === log.medicationId);
+                const med = prescriptions.find((m) => m.id === log.prescriptionId);
                 if (!med) return null;
                 const time = log.actionTimestamp
                   ? new Date(log.actionTimestamp).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
                   : "";
                 return (
                   <div key={log.id} className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm">
-                    <PillIcon shape={med.pillShape} color={med.pillColor} size={20} />
+                    <PillIcon shape="round" color="#ccc" size={20} />
                     <span className="flex-1 truncate">
-                      {med.brandName} {med.dosageStrength}
+                      {med.genericName}
                     </span>
                     <span className={cn(
                       "text-xs font-medium",
@@ -137,8 +140,8 @@ export function StatusView() {
   );
 }
 
-function RefillAlertCard({ medication: med }: { medication: Medication }) {
-  const dailyUsage = med.dosageAmount;
+function RefillAlertCard({ inventory: med }: { inventory: any }) {
+  const dailyUsage = 1; // Approximated
   const daysLeft = dailyUsage > 0 ? Math.floor(med.currentStock / dailyUsage) : 0;
 
   return (
@@ -146,7 +149,7 @@ function RefillAlertCard({ medication: med }: { medication: Medication }) {
       <PillIcon shape={med.pillShape} color={med.pillColor} size={28} />
       <div className="flex-1 min-w-0">
         <p className="font-medium text-sm truncate">
-          {med.brandName} {med.dosageStrength}
+          {med.brandName}
         </p>
         <p className="text-xs text-amber-700 dark:text-amber-400">
           {med.currentStock} pills left (~{daysLeft} days)

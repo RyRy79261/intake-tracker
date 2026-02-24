@@ -11,8 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { PillIcon } from "./pill-icon";
 import { useMedicineSearch, type MedicineSearchResult } from "@/hooks/use-medicine-search";
-import { useAddMedication } from "@/hooks/use-medication-queries";
-import { addSchedule } from "@/lib/medication-schedule-service";
+import { useAddPrescription } from "@/hooks/use-medication-queries";
 import type { PillShape, FoodInstruction } from "@/lib/db";
 import { ArrowLeft, ArrowRight, Search, Loader2, Check, Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -85,7 +84,7 @@ interface AddMedicationWizardProps {
 export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardProps) {
   const [step, setStep] = useState<WizardStep>("search");
   const searchMutation = useMedicineSearch();
-  const addMedMutation = useAddMedication();
+  const addPrescriptionMutation = useAddPrescription();
 
   // Form state
   const [searchQuery, setSearchQuery] = useState("");
@@ -182,7 +181,7 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
   const handleSave = async () => {
     const finalDosage = customDosage ? parseFloat(customDosage) : dosageAmount;
 
-    const med = await addMedMutation.mutateAsync({
+    await addPrescriptionMutation.mutateAsync({
       brandName: brandName || searchQuery,
       genericName: genericName || brandName,
       dosageStrength: dosageStrength || "unknown",
@@ -196,17 +195,8 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
       refillAlertDays: parseInt(refillAlertDays) || undefined,
       refillAlertPills: parseInt(refillAlertPills) || undefined,
       notes: notes || undefined,
+      schedules: schedules.filter(s => s.time && s.daysOfWeek.length > 0)
     });
-
-    for (const sched of schedules) {
-      if (sched.time && sched.daysOfWeek.length > 0) {
-        await addSchedule({
-          medicationId: med.id,
-          time: sched.time,
-          daysOfWeek: sched.daysOfWeek,
-        });
-      }
-    }
 
     handleClose();
   };
@@ -214,7 +204,7 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
   return (
     <Drawer open={open} onOpenChange={(o) => { if (!o) handleClose(); }}>
       <DrawerContent className="max-h-[90vh]">
-        <div className="p-4">
+        <div className="p-4 px-5">
           {/* Progress */}
           <div className="flex items-center justify-between mb-4">
             <Button variant="ghost" size="icon" onClick={canGoBack ? goBack : handleClose}>
@@ -320,10 +310,10 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
             {isLastStep ? (
               <Button
                 onClick={handleSave}
-                disabled={addMedMutation.isPending}
+                disabled={addPrescriptionMutation.isPending}
                 className="flex-1 gap-2 bg-teal-600 hover:bg-teal-700"
               >
-                {addMedMutation.isPending ? (
+                {addPrescriptionMutation.isPending ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
                   <Check className="w-4 h-4" />

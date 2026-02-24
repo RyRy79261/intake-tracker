@@ -7,7 +7,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { PillIcon } from "./pill-icon";
 import { useTakeAllDoses, useSkipAllDoses, useDoseLogsForDate } from "@/hooks/use-medication-queries";
-import type { ScheduleWithMedication } from "@/lib/medication-schedule-service";
+import type { ScheduleWithDetails } from "@/lib/medication-schedule-service";
 import type { DoseLog, DoseStatus } from "@/lib/db";
 import { X, Check, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -16,7 +16,7 @@ interface MarkAllModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   time: string;
-  entries: ScheduleWithMedication[];
+  entries: ScheduleWithDetails[];
   date: string;
 }
 
@@ -25,22 +25,23 @@ export function MarkAllModal({ open, onOpenChange, time, entries, date }: MarkAl
   const takeAllMut = useTakeAllDoses();
   const skipAllMut = useSkipAllDoses();
 
-  const getDoseStatus = (medId: string, schedId: string): DoseLog | undefined => {
+  const getDoseStatus = (prescriptionId: string, phaseId: string, schedId: string): DoseLog | undefined => {
     return doseLogs.find(
-      (l) => l.medicationId === medId && l.scheduleId === schedId && l.scheduledTime === time
+      (l) => l.prescriptionId === prescriptionId && l.phaseId === phaseId && l.scheduleId === schedId && l.scheduledTime === time
     );
   };
 
   const handleTakeAll = async () => {
     const pending = entries.filter((e) => {
-      const log = getDoseStatus(e.medication.id, e.schedule.id);
+      const log = getDoseStatus(e.prescription.id, e.phase.id, e.schedule.id);
       return !log || log.status === "pending";
     });
     await takeAllMut.mutateAsync({
       entries: pending.map((e) => ({
-        medicationId: e.medication.id,
+        prescriptionId: e.prescription.id,
+        phaseId: e.phase.id,
         scheduleId: e.schedule.id,
-        dosageAmount: e.medication.dosageAmount,
+        dosageAmount: e.phase.dosageAmount,
       })),
       date,
       time,
@@ -50,13 +51,15 @@ export function MarkAllModal({ open, onOpenChange, time, entries, date }: MarkAl
 
   const handleSkipAll = async () => {
     const pending = entries.filter((e) => {
-      const log = getDoseStatus(e.medication.id, e.schedule.id);
+      const log = getDoseStatus(e.prescription.id, e.phase.id, e.schedule.id);
       return !log || log.status === "pending";
     });
     await skipAllMut.mutateAsync({
       entries: pending.map((e) => ({
-        medicationId: e.medication.id,
+        prescriptionId: e.prescription.id,
+        phaseId: e.phase.id,
         scheduleId: e.schedule.id,
+        dosageAmount: e.phase.dosageAmount,
       })),
       date,
       time,
@@ -77,9 +80,12 @@ export function MarkAllModal({ open, onOpenChange, time, entries, date }: MarkAl
 
           <div className="space-y-2 max-h-[50vh] overflow-y-auto mb-6">
             {entries.map((entry) => {
-              const log = getDoseStatus(entry.medication.id, entry.schedule.id);
+              const log = getDoseStatus(entry.prescription.id, entry.phase.id, entry.schedule.id);
               const status: DoseStatus = log?.status ?? "pending";
-              const med = entry.medication;
+              const med = entry.prescription;
+              const phase = entry.phase;
+              const inventory = entry.inventory;
+              
               const actionTime = log?.actionTimestamp
                 ? new Date(log.actionTimestamp).toLocaleString("en-US", {
                     hour: "2-digit",
@@ -94,17 +100,17 @@ export function MarkAllModal({ open, onOpenChange, time, entries, date }: MarkAl
                   key={entry.schedule.id}
                   className="flex items-start gap-3 px-3 py-3 rounded-lg"
                 >
-                  <PillIcon shape={med.pillShape} color={med.pillColor} size={32} />
+                  <PillIcon shape={inventory?.pillShape || "round"} color={inventory?.pillColor || "#ccc"} size={32} />
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-sm">
-                      {med.brandName} {med.dosageStrength} ({med.genericName})
+                      {inventory?.brandName || med.genericName} {phase.dosageStrength} ({med.genericName})
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {med.dosageStrength}, Take {med.dosageAmount} Pill(s)
-                      {med.foodInstruction !== "none" && ` ${med.foodInstruction} eating`}
+                      {phase.dosageStrength}, Take {phase.dosageAmount} Pill(s)
+                      {phase.foodInstruction !== "none" && ` ${phase.foodInstruction} eating`}
                     </p>
-                    {med.notes && (
-                      <p className="text-xs text-muted-foreground">{med.notes}</p>
+                    {phase.notes && (
+                      <p className="text-xs text-muted-foreground">{phase.notes}</p>
                     )}
                     {actionTime && (
                       <p className={cn(

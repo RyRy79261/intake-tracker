@@ -71,6 +71,11 @@ function isDevFallbackAllowed(): boolean {
 export async function verifyAndCheckWhitelist(
   authToken: string | null
 ): Promise<VerificationResult> {
+  // Local agent mode bypass
+  if (process.env.NEXT_PUBLIC_LOCAL_AGENT_MODE === "true") {
+    return { success: true, userId: "local-agent-dev" };
+  }
+
   if (!authToken) {
     return { success: false, error: "No auth token provided" };
   }

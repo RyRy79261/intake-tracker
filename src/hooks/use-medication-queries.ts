@@ -2,19 +2,21 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  getMedications,
-  addMedication,
-  updateMedication,
-  deleteMedication,
-  type CreateMedicationInput,
+  getPrescriptions,
+  addPrescription,
+  updatePrescription,
+  deletePrescription,
+  getPhasesForPrescription,
+  getInventoryForPrescription,
+  getAllActiveInventoryItems,
+  type CreatePrescriptionInput,
 } from "@/lib/medication-service";
 import {
   getDailySchedule,
   addSchedule,
   updateSchedule,
   deleteSchedule,
-  getSchedulesForMedication,
-  type CreateScheduleInput,
+  getSchedulesForPhase,
 } from "@/lib/medication-schedule-service";
 import {
   getDoseLogsForDate,
@@ -25,12 +27,12 @@ import {
   takeAllDoses,
   skipAllDoses,
 } from "@/lib/dose-log-service";
-import type { Medication, MedicationSchedule } from "@/lib/db";
+import type { Prescription, PhaseSchedule } from "@/lib/db";
 
-export function useMedications() {
+export function usePrescriptions() {
   return useQuery({
-    queryKey: ["medications"],
-    queryFn: getMedications,
+    queryKey: ["prescriptions"],
+    queryFn: getPrescriptions,
   });
 }
 
@@ -48,45 +50,70 @@ export function useDoseLogsForDate(date: string) {
   });
 }
 
-export function useMedicationSchedules(medicationId: string | undefined) {
+export function usePhasesForPrescription(prescriptionId: string | undefined) {
   return useQuery({
-    queryKey: ["medicationSchedules", medicationId],
-    queryFn: () => getSchedulesForMedication(medicationId!),
-    enabled: !!medicationId,
+    queryKey: ["medicationPhases", prescriptionId],
+    queryFn: () => getPhasesForPrescription(prescriptionId!),
+    enabled: !!prescriptionId,
+  });
+}
+
+export function useInventoryForPrescription(prescriptionId: string | undefined) {
+  return useQuery({
+    queryKey: ["inventoryItems", prescriptionId],
+    queryFn: () => getInventoryForPrescription(prescriptionId!),
+    enabled: !!prescriptionId,
+  });
+}
+
+export function useAllActiveInventoryItems() {
+  return useQuery({
+    queryKey: ["inventoryItems"],
+    queryFn: getAllActiveInventoryItems,
+  });
+}
+
+export function useSchedulesForPhase(phaseId: string | undefined) {
+  return useQuery({
+    queryKey: ["phaseSchedules", phaseId],
+    queryFn: () => getSchedulesForPhase(phaseId!),
+    enabled: !!phaseId,
   });
 }
 
 function useInvalidateMeds() {
   const qc = useQueryClient();
   return () => {
-    qc.invalidateQueries({ queryKey: ["medications"] });
+    qc.invalidateQueries({ queryKey: ["prescriptions"] });
     qc.invalidateQueries({ queryKey: ["dailySchedule"] });
     qc.invalidateQueries({ queryKey: ["doseLogs"] });
-    qc.invalidateQueries({ queryKey: ["medicationSchedules"] });
+    qc.invalidateQueries({ queryKey: ["medicationPhases"] });
+    qc.invalidateQueries({ queryKey: ["inventoryItems"] });
+    qc.invalidateQueries({ queryKey: ["phaseSchedules"] });
   };
 }
 
-export function useAddMedication() {
+export function useAddPrescription() {
   const invalidate = useInvalidateMeds();
   return useMutation({
-    mutationFn: (input: CreateMedicationInput) => addMedication(input),
+    mutationFn: (input: CreatePrescriptionInput) => addPrescription(input),
     onSuccess: invalidate,
   });
 }
 
-export function useUpdateMedication() {
+export function useUpdatePrescription() {
   const invalidate = useInvalidateMeds();
   return useMutation({
-    mutationFn: ({ id, updates }: { id: string; updates: Partial<Omit<Medication, "id" | "createdAt">> }) =>
-      updateMedication(id, updates),
+    mutationFn: ({ id, updates }: { id: string; updates: Partial<Omit<Prescription, "id" | "createdAt">> }) =>
+      updatePrescription(id, updates),
     onSuccess: invalidate,
   });
 }
 
-export function useDeleteMedication() {
+export function useDeletePrescription() {
   const invalidate = useInvalidateMeds();
   return useMutation({
-    mutationFn: (id: string) => deleteMedication(id),
+    mutationFn: (id: string) => deletePrescription(id),
     onSuccess: invalidate,
   });
 }
@@ -94,7 +121,7 @@ export function useDeleteMedication() {
 export function useAddSchedule() {
   const invalidate = useInvalidateMeds();
   return useMutation({
-    mutationFn: (input: CreateScheduleInput) => addSchedule(input),
+    mutationFn: (input: Omit<PhaseSchedule, "id" | "createdAt" | "enabled">) => addSchedule(input),
     onSuccess: invalidate,
   });
 }
@@ -102,7 +129,7 @@ export function useAddSchedule() {
 export function useUpdateSchedule() {
   const invalidate = useInvalidateMeds();
   return useMutation({
-    mutationFn: ({ id, updates }: { id: string; updates: Partial<Omit<MedicationSchedule, "id" | "createdAt">> }) =>
+    mutationFn: ({ id, updates }: { id: string; updates: Partial<Omit<PhaseSchedule, "id" | "createdAt" | "phaseId">> }) =>
       updateSchedule(id, updates),
     onSuccess: invalidate,
   });
@@ -119,8 +146,8 @@ export function useDeleteSchedule() {
 export function useTakeDose() {
   const invalidate = useInvalidateMeds();
   return useMutation({
-    mutationFn: (args: { medicationId: string; scheduleId: string; date: string; time: string; dosageAmount: number }) =>
-      takeDose(args.medicationId, args.scheduleId, args.date, args.time, args.dosageAmount),
+    mutationFn: (args: { prescriptionId: string; phaseId: string; scheduleId: string; date: string; time: string; dosageAmount: number }) =>
+      takeDose(args.prescriptionId, args.phaseId, args.scheduleId, args.date, args.time, args.dosageAmount),
     onSuccess: invalidate,
   });
 }
@@ -128,8 +155,8 @@ export function useTakeDose() {
 export function useUntakeDose() {
   const invalidate = useInvalidateMeds();
   return useMutation({
-    mutationFn: (args: { medicationId: string; scheduleId: string; date: string; time: string; dosageAmount: number }) =>
-      untakeDose(args.medicationId, args.scheduleId, args.date, args.time, args.dosageAmount),
+    mutationFn: (args: { prescriptionId: string; phaseId: string; scheduleId: string; date: string; time: string; dosageAmount: number }) =>
+      untakeDose(args.prescriptionId, args.phaseId, args.scheduleId, args.date, args.time, args.dosageAmount),
     onSuccess: invalidate,
   });
 }
@@ -137,8 +164,8 @@ export function useUntakeDose() {
 export function useSkipDose() {
   const invalidate = useInvalidateMeds();
   return useMutation({
-    mutationFn: (args: { medicationId: string; scheduleId: string; date: string; time: string; reason?: string }) =>
-      skipDose(args.medicationId, args.scheduleId, args.date, args.time, args.reason),
+    mutationFn: (args: { prescriptionId: string; phaseId: string; scheduleId: string; date: string; time: string; dosageAmount: number; reason?: string }) =>
+      skipDose(args.prescriptionId, args.phaseId, args.scheduleId, args.date, args.time, args.dosageAmount, args.reason),
     onSuccess: invalidate,
   });
 }
@@ -146,8 +173,8 @@ export function useSkipDose() {
 export function useRescheduleDose() {
   const invalidate = useInvalidateMeds();
   return useMutation({
-    mutationFn: (args: { medicationId: string; scheduleId: string; date: string; time: string; newTime: string }) =>
-      rescheduleDose(args.medicationId, args.scheduleId, args.date, args.time, args.newTime),
+    mutationFn: (args: { prescriptionId: string; phaseId: string; scheduleId: string; date: string; time: string; newTime: string; dosageAmount: number }) =>
+      rescheduleDose(args.prescriptionId, args.phaseId, args.scheduleId, args.date, args.time, args.newTime, args.dosageAmount),
     onSuccess: invalidate,
   });
 }
@@ -155,7 +182,7 @@ export function useRescheduleDose() {
 export function useTakeAllDoses() {
   const invalidate = useInvalidateMeds();
   return useMutation({
-    mutationFn: (args: { entries: { medicationId: string; scheduleId: string; dosageAmount: number }[]; date: string; time: string }) =>
+    mutationFn: (args: { entries: { prescriptionId: string; phaseId: string; scheduleId: string; dosageAmount: number }[]; date: string; time: string }) =>
       takeAllDoses(args.entries, args.date, args.time),
     onSuccess: invalidate,
   });
@@ -164,7 +191,7 @@ export function useTakeAllDoses() {
 export function useSkipAllDoses() {
   const invalidate = useInvalidateMeds();
   return useMutation({
-    mutationFn: (args: { entries: { medicationId: string; scheduleId: string }[]; date: string; time: string; reason?: string }) =>
+    mutationFn: (args: { entries: { prescriptionId: string; phaseId: string; scheduleId: string; dosageAmount: number }[]; date: string; time: string; reason?: string }) =>
       skipAllDoses(args.entries, args.date, args.time, args.reason),
     onSuccess: invalidate,
   });

@@ -1,6 +1,6 @@
-import { db, type Medication } from "./db";
+import { db, type Prescription, type MedicationPhase, type InventoryItem } from "./db";
 import { showNotification, getNotificationPermission } from "./push-notification-service";
-import { getAllEnabledSchedules, type ScheduleWithMedication } from "./medication-schedule-service";
+import { getSchedulesForPhase } from "./medication-schedule-service";
 
 const MED_NOTIFICATION_KEY = "intake-tracker-med-notifications";
 
@@ -45,12 +45,12 @@ export async function showDoseReminder(
   });
 }
 
-export async function showRefillAlert(medication: Medication, daysLeft: number): Promise<boolean> {
+export async function showRefillAlert(brandName: string, dosageStrength: string, id: string, currentStock: number, daysLeft: number): Promise<boolean> {
   if (getNotificationPermission() !== "granted") return false;
 
-  return showNotification(`Refill needed: ${medication.brandName}`, {
-    body: `${medication.currentStock} pills left (~${daysLeft} days). Time to refill ${medication.brandName} ${medication.dosageStrength}.`,
-    tag: `refill-${medication.id}`,
+  return showNotification(`Refill needed: ${brandName}`, {
+    body: `${currentStock} pills left (~${daysLeft} days). Time to refill ${brandName} ${dosageStrength}.`,
+    tag: `refill-${id}`,
   });
 }
 
@@ -62,17 +62,25 @@ export async function checkDoseReminders(): Promise<void> {
   const currentTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   const todayKey = now.toISOString().split("T")[0];
 
-  const schedules = await getAllEnabledSchedules();
-  const medications = await db.medications.where("isActive").equals(1).toArray();
-  const medMap = new Map(medications.map((m) => [m.id, m]));
+  const activePrescriptions = await db.prescriptions.where("isActive").equals(1).toArray();
+  const prescriptionMap = new Map(activePrescriptions.map(p => [p.id, p]));
+  
+  const phases = await db.medicationPhases.where("status").equals("active").toArray();
+  const phaseMap = new Map(phases.map(p => [p.id, p]));
+
+  const allSchedules = await db.phaseSchedules.where("enabled").equals(1).toArray();
 
   const dayOfWeek = now.getDay();
   const dueNow: { name: string; time: string }[] = [];
 
-  for (const schedule of schedules) {
+  for (const schedule of allSchedules) {
     if (!schedule.daysOfWeek.includes(dayOfWeek)) continue;
-    const med = medMap.get(schedule.medicationId);
-    if (!med) continue;
+    
+    const phase = phaseMap.get(schedule.phaseId);
+    if (!phase) continue;
+    
+    const prescription = prescriptionMap.get(phase.prescriptionId);
+    if (!prescription) continue;
 
     const [schedH, schedM] = schedule.time.split(":").map(Number);
     const [nowH, nowM] = currentTime.split(":").map(Number);
@@ -81,10 +89,15 @@ export async function checkDoseReminders(): Promise<void> {
 
     const diff = nowMinutes - schedMinutes;
     if (diff >= 0 && diff <= 5) {
-      const doseKey = `${todayKey}-${schedule.time}-${med.id}`;
+      const doseKey = `${todayKey}-${schedule.time}-${prescription.id}`;
       if (!state.notifiedDoses.includes(doseKey)) {
+        // Find inventory name if available, else generic
+        const activeInv = await db.inventoryItems.where("prescriptionId").equals(prescription.id).toArray();
+        const inv = activeInv.find(i => i.isActive) || activeInv[0];
+        const name = inv?.brandName || prescription.genericName;
+
         dueNow.push({
-          name: `${med.brandName} ${med.dosageStrength}`,
+          name: `${name} ${phase.dosageStrength}`,
           time: schedule.time,
         });
         state.notifiedDoses.push(doseKey);
@@ -110,29 +123,42 @@ export async function checkRefillAlerts(): Promise<void> {
     return;
   }
 
-  const medications = await db.medications.where("isActive").equals(1).toArray();
-  const schedules = await getAllEnabledSchedules();
-
-  const dosesPerDay = new Map<string, number>();
-  for (const sched of schedules) {
-    const current = dosesPerDay.get(sched.medicationId) ?? 0;
-    dosesPerDay.set(sched.medicationId, current + sched.daysOfWeek.length / 7);
-  }
-
+  const activePrescriptions = await db.prescriptions.where("isActive").equals(1).toArray();
   const newRefillNotifications: string[] = [];
 
-  for (const med of medications) {
-    const dailyDoses = dosesPerDay.get(med.id) ?? 1;
-    const dailyPills = med.dosageAmount * dailyDoses;
-    const daysLeft = dailyPills > 0 ? Math.floor(med.currentStock / dailyPills) : Infinity;
+  for (const prescription of activePrescriptions) {
+    const activePhase = await db.medicationPhases
+      .where("prescriptionId")
+      .equals(prescription.id)
+      .toArray()
+      .then(phases => phases.find(p => p.status === "active"));
+      
+    if (!activePhase) continue;
+    
+    const schedules = await getSchedulesForPhase(activePhase.id);
+    const dailyDoses = schedules.reduce((acc, sched) => acc + (sched.daysOfWeek.length / 7), 0) || 1;
+    const dailyPills = activePhase.dosageAmount * dailyDoses;
+
+    const inventories = await db.inventoryItems.where("prescriptionId").equals(prescription.id).toArray();
+    const activeInventory = inventories.find(i => i.isActive);
+    
+    if (!activeInventory) continue;
+
+    const daysLeft = dailyPills > 0 ? Math.floor(activeInventory.currentStock / dailyPills) : Infinity;
 
     let shouldAlert = false;
-    if (med.refillAlertDays && daysLeft <= med.refillAlertDays) shouldAlert = true;
-    if (med.refillAlertPills && med.currentStock <= med.refillAlertPills) shouldAlert = true;
+    if (activeInventory.refillAlertDays && daysLeft <= activeInventory.refillAlertDays) shouldAlert = true;
+    if (activeInventory.refillAlertPills && activeInventory.currentStock <= activeInventory.refillAlertPills) shouldAlert = true;
 
-    if (shouldAlert && !state.notifiedRefills.includes(med.id)) {
-      await showRefillAlert(med, daysLeft);
-      newRefillNotifications.push(med.id);
+    if (shouldAlert && !state.notifiedRefills.includes(prescription.id)) {
+      await showRefillAlert(
+        activeInventory.brandName || prescription.genericName, 
+        activePhase.dosageStrength, 
+        prescription.id, 
+        activeInventory.currentStock, 
+        daysLeft
+      );
+      newRefillNotifications.push(prescription.id);
     }
   }
 

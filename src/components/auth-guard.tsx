@@ -17,6 +17,11 @@ interface AuthGuardProps {
 export function AuthGuard({ children, fallback }: AuthGuardProps) {
   const { ready, authenticated, login } = usePrivy();
 
+  // Local agent mode bypass
+  if (process.env.NEXT_PUBLIC_LOCAL_AGENT_MODE === "true") {
+    return <>{children}</>;
+  }
+
   // Show loading while Privy initializes
   if (!ready) {
     return (

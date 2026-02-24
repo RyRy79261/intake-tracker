@@ -8,15 +8,15 @@ import {
 import { Button } from "@/components/ui/button";
 import { PillIcon } from "./pill-icon";
 import { useTakeDose, useUntakeDose, useSkipDose, useRescheduleDose } from "@/hooks/use-medication-queries";
-import type { DoseLog, Medication, MedicationSchedule } from "@/lib/db";
+import type { DoseLog, Prescription, PhaseSchedule, MedicationPhase, InventoryItem } from "@/lib/db";
 import { Info, Trash2, Pencil, X, RotateCcw, Clock, Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { ScheduleWithDetails } from "@/lib/medication-schedule-service";
 
 interface DoseDetailDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  medication: Medication | null;
-  schedule: MedicationSchedule | null;
+  entry: ScheduleWithDetails | null;
   doseLog: DoseLog | undefined;
   date: string;
   onDelete?: () => void;
@@ -26,8 +26,7 @@ interface DoseDetailDialogProps {
 export function DoseDetailDialog({
   open,
   onOpenChange,
-  medication,
-  schedule,
+  entry,
   doseLog,
   date,
   onDelete,
@@ -42,39 +41,45 @@ export function DoseDetailDialog({
   const skipMut = useSkipDose();
   const rescheduleMut = useRescheduleDose();
 
-  if (!medication || !schedule) return null;
+  if (!entry) return null;
+
+  const { prescription, phase, schedule, inventory } = entry;
 
   const status = doseLog?.status ?? "pending";
   const time = schedule.time;
 
   const handleTake = async () => {
     await takeMut.mutateAsync({
-      medicationId: medication.id,
+      prescriptionId: prescription.id,
+      phaseId: phase.id,
       scheduleId: schedule.id,
       date,
       time,
-      dosageAmount: medication.dosageAmount,
+      dosageAmount: phase.dosageAmount,
     });
     onOpenChange(false);
   };
 
   const handleUntake = async () => {
     await untakeMut.mutateAsync({
-      medicationId: medication.id,
+      prescriptionId: prescription.id,
+      phaseId: phase.id,
       scheduleId: schedule.id,
       date,
       time,
-      dosageAmount: medication.dosageAmount,
+      dosageAmount: phase.dosageAmount,
     });
     onOpenChange(false);
   };
 
   const handleSkip = async () => {
     await skipMut.mutateAsync({
-      medicationId: medication.id,
+      prescriptionId: prescription.id,
+      phaseId: phase.id,
       scheduleId: schedule.id,
       date,
       time,
+      dosageAmount: phase.dosageAmount,
     });
     onOpenChange(false);
   };
@@ -82,11 +87,13 @@ export function DoseDetailDialog({
   const handleReschedule = async () => {
     if (!rescheduleTime) return;
     await rescheduleMut.mutateAsync({
-      medicationId: medication.id,
+      prescriptionId: prescription.id,
+      phaseId: phase.id,
       scheduleId: schedule.id,
       date,
       time,
       newTime: rescheduleTime,
+      dosageAmount: phase.dosageAmount,
     });
     setShowReschedule(false);
     onOpenChange(false);
@@ -129,9 +136,9 @@ export function DoseDetailDialog({
           </div>
 
           <div className="flex flex-col items-center text-center mb-6">
-            <PillIcon shape={medication.pillShape} color={medication.pillColor} size={48} />
+            <PillIcon shape={inventory?.pillShape || "round"} color={inventory?.pillColor || "#ccc"} size={48} />
             <h2 className="text-lg font-bold mt-3">
-              {medication.brandName} {medication.dosageStrength} ({medication.genericName})
+              {inventory?.brandName || prescription.genericName} {phase.dosageStrength} ({prescription.genericName})
             </h2>
             {actionTime && (
               <p className={cn(
@@ -152,9 +159,9 @@ export function DoseDetailDialog({
             <div className="flex items-center gap-2">
               <Info className="w-4 h-4" />
               <span>
-                {medication.dosageStrength}, take {medication.dosageAmount} Pill(s)
-                {medication.foodInstruction !== "none" && ` ${medication.foodInstruction} eating`}
-                {medication.foodNote && ` ${medication.foodNote}`}
+                {phase.dosageStrength}, take {phase.dosageAmount} Pill(s)
+                {phase.foodInstruction !== "none" && ` ${phase.foodInstruction} eating`}
+                {phase.foodNote && ` ${phase.foodNote}`}
               </span>
             </div>
           </div>
@@ -227,7 +234,7 @@ export function DoseDetailDialog({
           {showEditOptions && onEditSchedule && (
             <div className="mt-4 pt-4 border-t space-y-1">
               <p className="text-xs text-muted-foreground mb-2">
-                Edit {medication.brandName} {medication.dosageStrength} ({medication.genericName})
+                Edit {inventory?.brandName || prescription.genericName} {phase.dosageStrength} ({prescription.genericName})
               </p>
               <Button
                 variant="ghost"

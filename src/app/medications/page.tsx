@@ -13,8 +13,8 @@ import { MarkAllModal } from "@/components/medications/mark-all-modal";
 import { AddMedicationWizard } from "@/components/medications/add-medication-wizard";
 import { useScrollHide } from "@/hooks/use-scroll-hide";
 import { useSettings } from "@/hooks/use-settings";
-import type { DoseLog, Medication } from "@/lib/db";
-import type { ScheduleWithMedication } from "@/lib/medication-schedule-service";
+import type { DoseLog, Prescription } from "@/lib/db";
+import type { ScheduleWithDetails } from "@/lib/medication-schedule-service";
 import { startMedicationNotifications, stopMedicationNotifications } from "@/lib/medication-notification-service";
 
 function MedicationsContent() {
@@ -23,12 +23,12 @@ function MedicationsContent() {
   const [wizardOpen, setWizardOpen] = useState(false);
 
   const [doseDetailOpen, setDoseDetailOpen] = useState(false);
-  const [selectedEntry, setSelectedEntry] = useState<ScheduleWithMedication | null>(null);
+  const [selectedEntry, setSelectedEntry] = useState<ScheduleWithDetails | null>(null);
   const [selectedDoseLog, setSelectedDoseLog] = useState<DoseLog | undefined>(undefined);
 
   const [markAllOpen, setMarkAllOpen] = useState(false);
   const [markAllTime, setMarkAllTime] = useState("");
-  const [markAllEntries, setMarkAllEntries] = useState<ScheduleWithMedication[]>([]);
+  const [markAllEntries, setMarkAllEntries] = useState<ScheduleWithDetails[]>([]);
 
   useEffect(() => {
     startMedicationNotifications();
@@ -44,13 +44,13 @@ function MedicationsContent() {
 
   const dateStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`;
 
-  const handleDoseClick = useCallback((entry: ScheduleWithMedication, log: DoseLog | undefined) => {
+  const handleDoseClick = useCallback((entry: ScheduleWithDetails, log: DoseLog | undefined) => {
     setSelectedEntry(entry);
     setSelectedDoseLog(log);
     setDoseDetailOpen(true);
   }, []);
 
-  const handleMarkAll = useCallback((time: string, entries: ScheduleWithMedication[]) => {
+  const handleMarkAll = useCallback((time: string, entries: ScheduleWithDetails[]) => {
     setMarkAllTime(time);
     setMarkAllEntries(entries);
     setMarkAllOpen(true);
@@ -60,7 +60,7 @@ function MedicationsContent() {
     setWizardOpen(true);
   }, []);
 
-  const handleEditMed = useCallback((_medication: Medication) => {
+  const handleEditMed = useCallback((_prescription: Prescription) => {
     // TODO: open edit flow
   }, []);
 
@@ -99,8 +99,7 @@ function MedicationsContent() {
       <DoseDetailDialog
         open={doseDetailOpen}
         onOpenChange={setDoseDetailOpen}
-        medication={selectedEntry?.medication ?? null}
-        schedule={selectedEntry?.schedule ?? null}
+        entry={selectedEntry}
         doseLog={selectedDoseLog}
         date={dateStr}
       />
