@@ -206,8 +206,8 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
   };
 
   return (
-    <Drawer open={open} onOpenChange={(o) => { if (!o) handleClose(); }}>
-      <DrawerContent className="max-h-[90vh]">
+    <Drawer open={open} onOpenChange={(o) => { if (!o) handleClose(); }} repositionInputs={false}>
+      <DrawerContent className="w-full max-w-[100vw] overflow-hidden max-h-[90dvh]">
         <div className="p-4 px-5">
           {/* Progress */}
           <div className="flex items-center justify-between mb-4">
@@ -235,7 +235,7 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
             ))}
           </div>
 
-          <div className="min-h-[300px] max-h-[55vh] overflow-y-auto">
+          <div className="min-h-[300px] max-h-[60dvh] overflow-y-auto px-1 -mx-1">
             {step === "search" && (
               <SearchStep
                 query={searchQuery}
