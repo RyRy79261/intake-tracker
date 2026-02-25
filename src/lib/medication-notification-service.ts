@@ -93,11 +93,11 @@ export async function checkDoseReminders(): Promise<void> {
       if (!state.notifiedDoses.includes(doseKey)) {
         // Find inventory name if available, else generic
         const activeInv = await db.inventoryItems.where("prescriptionId").equals(prescription.id).toArray();
-        const inv = activeInv.find(i => i.isActive) || activeInv[0];
+        const inv = activeInv.find(i => i.isActive && !i.isArchived) || activeInv[0];
         const name = inv?.brandName || prescription.genericName;
 
         dueNow.push({
-          name: `${name} ${phase.dosageStrength}`,
+          name: `${name} ${schedule.dosage}${phase.unit}`,
           time: schedule.time,
         });
         state.notifiedDoses.push(doseKey);
@@ -136,13 +136,13 @@ export async function checkRefillAlerts(): Promise<void> {
     if (!activePhase) continue;
     
     const schedules = await getSchedulesForPhase(activePhase.id);
-    const dailyDoses = schedules.reduce((acc, sched) => acc + (sched.daysOfWeek.length / 7), 0) || 1;
-    const dailyPills = activePhase.dosageAmount * dailyDoses;
-
     const inventories = await db.inventoryItems.where("prescriptionId").equals(prescription.id).toArray();
-    const activeInventory = inventories.find(i => i.isActive);
+    const activeInventory = inventories.find(i => i.isActive && !i.isArchived);
     
     if (!activeInventory) continue;
+
+    const dailyDosage = schedules.reduce((acc, sched) => acc + (sched.dosage * (sched.daysOfWeek.length / 7)), 0);
+    const dailyPills = activeInventory.strength > 0 ? dailyDosage / activeInventory.strength : 0;
 
     const daysLeft = dailyPills > 0 ? Math.floor(activeInventory.currentStock / dailyPills) : Infinity;
 
@@ -153,7 +153,7 @@ export async function checkRefillAlerts(): Promise<void> {
     if (shouldAlert && !state.notifiedRefills.includes(prescription.id)) {
       await showRefillAlert(
         activeInventory.brandName || prescription.genericName, 
-        activePhase.dosageStrength, 
+        `${activeInventory.strength}${activeInventory.unit}`, 
         prescription.id, 
         activeInventory.currentStock, 
         daysLeft

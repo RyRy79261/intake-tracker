@@ -21,7 +21,7 @@ export async function getDailySchedule(dayOfWeek: number): Promise<Map<string, S
   
   // 3. Get active inventory for these prescriptions
   const allInventoryItems = await db.inventoryItems.toArray();
-  const inventoryItems = allInventoryItems.filter(i => i.isActive);
+  const inventoryItems = allInventoryItems.filter(i => i.isActive && !i.isArchived);
   const inventoryMap = new Map(inventoryItems.map(i => [i.prescriptionId, i]));
 
   // 4. Get enabled schedules for these active phases

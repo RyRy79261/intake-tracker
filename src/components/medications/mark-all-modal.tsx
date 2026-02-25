@@ -6,9 +6,9 @@ import {
 } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
 import { PillIcon } from "./pill-icon";
-import { useTakeAllDoses, useSkipAllDoses, useDoseLogsForDate } from "@/hooks/use-medication-queries";
-import type { ScheduleWithDetails } from "@/lib/medication-schedule-service";
-import type { DoseLog, DoseStatus } from "@/lib/db";
+import { useTakeAllDoses, useSkipAllDoses } from "@/hooks/use-medication-queries";
+import type { DoseLogWithDetails } from "@/lib/dose-log-service";
+import type { DoseStatus } from "@/lib/db";
 import { X, Check, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -16,33 +16,26 @@ interface MarkAllModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   time: string;
-  entries: ScheduleWithDetails[];
+  entries: DoseLogWithDetails[];
   date: string;
 }
 
 export function MarkAllModal({ open, onOpenChange, time, entries, date }: MarkAllModalProps) {
-  const { data: doseLogs = [] } = useDoseLogsForDate(date);
   const takeAllMut = useTakeAllDoses();
   const skipAllMut = useSkipAllDoses();
 
-  const getDoseStatus = (prescriptionId: string, phaseId: string, schedId: string): DoseLog | undefined => {
-    return doseLogs.find(
-      (l) => l.prescriptionId === prescriptionId && l.phaseId === phaseId && l.scheduleId === schedId && l.scheduledTime === time
-    );
-  };
-
   const handleTakeAll = async () => {
-    const pending = entries.filter((e) => {
-      const log = getDoseStatus(e.prescription.id, e.phase.id, e.schedule.id);
-      return !log || log.status === "pending";
-    });
+    const pending = entries.filter((e) => e.log.status === "pending" || e.log.status === "rescheduled");
     await takeAllMut.mutateAsync({
-      entries: pending.map((e) => ({
-        prescriptionId: e.prescription.id,
-        phaseId: e.phase.id,
-        scheduleId: e.schedule.id,
-        dosageAmount: e.phase.dosageAmount,
-      })),
+      entries: pending.map((e) => {
+        const pillsToTake = e.inventory?.strength ? e.schedule.dosage / e.inventory.strength : 1;
+        return {
+          prescriptionId: e.prescription.id,
+          phaseId: e.phase.id,
+          scheduleId: e.schedule.id,
+          dosageAmount: pillsToTake,
+        };
+      }),
       date,
       time,
     });
@@ -50,17 +43,17 @@ export function MarkAllModal({ open, onOpenChange, time, entries, date }: MarkAl
   };
 
   const handleSkipAll = async () => {
-    const pending = entries.filter((e) => {
-      const log = getDoseStatus(e.prescription.id, e.phase.id, e.schedule.id);
-      return !log || log.status === "pending";
-    });
+    const pending = entries.filter((e) => e.log.status === "pending" || e.log.status === "rescheduled");
     await skipAllMut.mutateAsync({
-      entries: pending.map((e) => ({
-        prescriptionId: e.prescription.id,
-        phaseId: e.phase.id,
-        scheduleId: e.schedule.id,
-        dosageAmount: e.phase.dosageAmount,
-      })),
+      entries: pending.map((e) => {
+        const pillsToTake = e.inventory?.strength ? e.schedule.dosage / e.inventory.strength : 1;
+        return {
+          prescriptionId: e.prescription.id,
+          phaseId: e.phase.id,
+          scheduleId: e.schedule.id,
+          dosageAmount: pillsToTake,
+        };
+      }),
       date,
       time,
     });
@@ -80,13 +73,11 @@ export function MarkAllModal({ open, onOpenChange, time, entries, date }: MarkAl
 
           <div className="space-y-2 max-h-[50vh] overflow-y-auto mb-6">
             {entries.map((entry) => {
-              const log = getDoseStatus(entry.prescription.id, entry.phase.id, entry.schedule.id);
-              const status: DoseStatus = log?.status ?? "pending";
-              const med = entry.prescription;
-              const phase = entry.phase;
-              const inventory = entry.inventory;
+              const { log, prescription: med, phase, schedule, inventory } = entry;
+              const status: DoseStatus = log.status;
+              const pillsToTake = inventory?.strength ? schedule.dosage / inventory.strength : 1;
               
-              const actionTime = log?.actionTimestamp
+              const actionTime = log.actionTimestamp
                 ? new Date(log.actionTimestamp).toLocaleString("en-US", {
                     hour: "2-digit",
                     minute: "2-digit",
@@ -97,16 +88,16 @@ export function MarkAllModal({ open, onOpenChange, time, entries, date }: MarkAl
 
               return (
                 <div
-                  key={entry.schedule.id}
+                  key={log.id}
                   className="flex items-start gap-3 px-3 py-3 rounded-lg"
                 >
                   <PillIcon shape={inventory?.pillShape || "round"} color={inventory?.pillColor || "#ccc"} size={32} />
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-sm">
-                      {inventory?.brandName || med.genericName} {phase.dosageStrength} ({med.genericName})
+                      {inventory?.brandName || med.genericName} {schedule.dosage}{phase.unit} ({med.genericName})
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {phase.dosageStrength}, Take {phase.dosageAmount} Pill(s)
+                      {schedule.dosage}{phase.unit}, Take {pillsToTake} Pill(s)
                       {phase.foodInstruction !== "none" && ` ${phase.foodInstruction} eating`}
                     </p>
                     {phase.notes && (
@@ -141,7 +132,7 @@ export function MarkAllModal({ open, onOpenChange, time, entries, date }: MarkAl
               <span className="text-xs font-medium text-teal-600 dark:text-teal-400">TAKE ALL</span>
             </button>
 
-            <button className="flex flex-col items-center gap-1.5 opacity-50">
+            <button className="flex flex-col items-center gap-1.5 opacity-50 cursor-not-allowed">
               <div className="w-14 h-14 rounded-full border-2 border-gray-400 flex items-center justify-center">
                 <Clock className="w-6 h-6 text-gray-400" />
               </div>

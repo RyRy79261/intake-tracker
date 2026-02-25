@@ -1,11 +1,11 @@
 "use client";
 
 import { useMemo } from "react";
-import { useDailySchedule, usePrescriptions, useDoseLogsForDate, useAllActiveInventoryItems } from "@/hooks/use-medication-queries";
+import { useDoseLogsWithDetailsForDate, useAllActiveInventoryItems } from "@/hooks/use-medication-queries";
 import { PillIcon } from "./pill-icon";
 import { Loader2, CheckCircle2, XCircle, Clock, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { Prescription } from "@/lib/db";
+import type { DoseLogWithDetails } from "@/lib/dose-log-service";
 
 function todayStr(): string {
   const d = new Date();
@@ -14,35 +14,34 @@ function todayStr(): string {
 
 export function StatusView() {
   const dateStr = useMemo(() => todayStr(), []);
-  const { data: prescriptions = [], isLoading: medsLoading } = usePrescriptions();
-  const { data: doseLogs = [], isLoading: logsLoading } = useDoseLogsForDate(dateStr);
+  const { data: logsWithDetails = [], isLoading: logsLoading } = useDoseLogsWithDetailsForDate(dateStr);
   const { data: inventoryItems = [], isLoading: invLoading } = useAllActiveInventoryItems();
 
-  const { data: scheduleMap, isLoading: schedLoading } = useDailySchedule(new Date().getDay());
-
-  const isLoading = medsLoading || logsLoading || invLoading || schedLoading;
+  const isLoading = logsLoading || invLoading;
 
   const stats = useMemo(() => {
-    const taken = doseLogs.filter((l) => l.status === "taken").length;
-    const skipped = doseLogs.filter((l) => l.status === "skipped").length;
-    const rescheduled = doseLogs.filter((l) => l.status === "rescheduled").length;
+    // Only count active (not rescheduled) logs for the total expected
+    const activeLogs = logsWithDetails.filter(d => d.log.status !== "rescheduled");
+    const taken = activeLogs.filter(d => d.log.status === "taken").length;
+    const skipped = activeLogs.filter(d => d.log.status === "skipped").length;
+    const total = activeLogs.length;
     
-    // Calculate expected total from base schedule
-    let baseExpectedTotal = 0;
-    if (scheduleMap) {
-      for (const entries of Array.from(scheduleMap.values())) {
-        baseExpectedTotal += entries.length;
-      }
-    }
+    // Total rescheduled logs overall
+    const rescheduled = logsWithDetails.filter((d) => d.log.status === "rescheduled").length;
     
-    // Fallback to doseLogs length if it's somehow higher (shouldn't happen but safe)
-    const total = Math.max(baseExpectedTotal, doseLogs.length);
     const pct = total > 0 ? Math.round((taken / total) * 100) : 0;
     return { taken, skipped, rescheduled, total, pct };
-  }, [doseLogs, scheduleMap]);
+  }, [logsWithDetails]);
 
-  // TODO: Update lowStockMeds to use inventory
-  const lowStockMeds: any[] = [];
+  // Refill alerts based on inventoryItems
+  const lowStockMeds = useMemo(() => {
+    return inventoryItems.filter(item => {
+      // Find matching phase logic could go here, but for simplicity we just check alert bounds
+      if (item.refillAlertPills && item.currentStock <= item.refillAlertPills) return true;
+      if (item.refillAlertDays && item.currentStock <= (item.refillAlertDays * 2)) return true; // simplified estimate
+      return false;
+    });
+  }, [inventoryItems]);
 
   if (isLoading) {
     return (
@@ -96,31 +95,30 @@ export function StatusView() {
           </h3>
           <div className="space-y-2">
             {lowStockMeds.map((med) => (
-              <RefillAlertCard key={med.id} medication={med} />
+              <RefillAlertCard key={med.id} item={med} />
             ))}
           </div>
         </div>
       )}
 
-      {doseLogs.length > 0 && (
+      {logsWithDetails.length > 0 && (
         <div>
           <h3 className="text-sm font-medium text-muted-foreground mb-3">Recent Activity</h3>
           <div className="space-y-1">
-            {doseLogs
-              .filter((l) => l.actionTimestamp)
-              .sort((a, b) => (b.actionTimestamp ?? 0) - (a.actionTimestamp ?? 0))
+            {logsWithDetails
+              .filter((d) => d.log.actionTimestamp)
+              .sort((a, b) => (b.log.actionTimestamp ?? 0) - (a.log.actionTimestamp ?? 0))
               .slice(0, 10)
-              .map((log) => {
-                const med = prescriptions.find((m) => m.id === log.prescriptionId);
-                if (!med) return null;
+              .map((d: DoseLogWithDetails) => {
+                const log = d.log;
                 const time = log.actionTimestamp
                   ? new Date(log.actionTimestamp).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
                   : "";
                 return (
                   <div key={log.id} className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm">
-                    <PillIcon shape="round" color="#ccc" size={20} />
+                    <PillIcon shape={d.inventory?.pillShape || "round"} color={d.inventory?.pillColor || "#ccc"} size={20} />
                     <span className="flex-1 truncate">
-                      {med.genericName}
+                      {d.inventory?.brandName || d.prescription.genericName}
                     </span>
                     <span className={cn(
                       "text-xs font-medium",
@@ -140,19 +138,16 @@ export function StatusView() {
   );
 }
 
-function RefillAlertCard({ medication: med }: { medication: any }) {
-  const dailyUsage = med.dosageAmount;
-  const daysLeft = dailyUsage > 0 ? Math.floor(med.currentStock / dailyUsage) : 0;
-
+function RefillAlertCard({ item }: { item: any }) {
   return (
     <div className="flex items-center gap-3 px-3 py-3 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20">
-      <PillIcon shape={med.pillShape} color={med.pillColor} size={28} />
+      <PillIcon shape={item.pillShape} color={item.pillColor} size={28} />
       <div className="flex-1 min-w-0">
         <p className="font-medium text-sm truncate">
-          {med.brandName} {med.dosageStrength}
+          {item.brandName} {item.strength}{item.unit}
         </p>
         <p className="text-xs text-amber-700 dark:text-amber-400">
-          {med.currentStock} pills left (~{daysLeft} days)
+          {item.currentStock} pills left
         </p>
       </div>
     </div>

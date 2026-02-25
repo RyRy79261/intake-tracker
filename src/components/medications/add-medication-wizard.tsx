@@ -73,6 +73,7 @@ const DAY_LABELS_SHORT = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
 interface ScheduleEntry {
   time: string;
+  dosage: number;
   daysOfWeek: number[];
 }
 
@@ -113,7 +114,7 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
   const [customDosage, setCustomDosage] = useState("");
 
   const [schedules, setSchedules] = useState<ScheduleEntry[]>([
-    { time: "08:30", daysOfWeek: [...ALL_DAYS] },
+    { time: "08:30", daysOfWeek: [...ALL_DAYS], dosage: 1 },
   ]);
 
   const [currentStock, setCurrentStock] = useState("");
@@ -138,7 +139,7 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
     setNotes("");
     setDosageAmount(1);
     setCustomDosage("");
-    setSchedules([{ time: "08:30", daysOfWeek: [...ALL_DAYS] }]);
+    setSchedules([{ time: "08:30", daysOfWeek: [...ALL_DAYS], dosage: 1 }]);
     setCurrentStock("");
     setRefillAlertDays("");
     setRefillAlertPills("");
@@ -198,14 +199,27 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
   };
 
   const handleSave = async () => {
+    const parseStrength = (str: string): { strength: number; unit: string } => {
+      if (!str) return { strength: 1, unit: "mg" };
+      const match = str.match(/(\d+(?:\.\d+)?)\s*([a-zA-Z]+)/);
+      if (match) {
+        return { strength: parseFloat(match[1]), unit: match[2].toLowerCase() };
+      }
+      const num = parseFloat(str);
+      if (!isNaN(num)) return { strength: num, unit: "mg" };
+      return { strength: 1, unit: "mg" };
+    };
+
+    const { strength, unit } = parseStrength(dosageStrength);
     const finalDosage = customDosage ? parseFloat(customDosage) : dosageAmount;
+    const scheduleDosage = (finalDosage || 1) * strength;
 
     try {
       await addPrescriptionMutation.mutateAsync({
         brandName: brandName || capitalizeWords(searchQuery),
         genericName: genericName || brandName,
-        dosageStrength: dosageStrength || "unknown",
-        dosageAmount: finalDosage || 1,
+        strength,
+        unit,
         pillShape,
         pillColor,
         visualIdentification: visualIdentification || undefined,
@@ -218,7 +232,7 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
         refillAlertDays: parseInt(refillAlertDays) || undefined,
         refillAlertPills: parseInt(refillAlertPills) || undefined,
         notes: notes || undefined,
-        schedules: schedules.filter(s => s.time && s.daysOfWeek.length > 0)
+        schedules: schedules.filter(s => s.time && s.daysOfWeek.length > 0).map(s => ({ ...s, dosage: scheduleDosage }))
       });
     } catch (err: any) {
       console.error(err);
@@ -709,7 +723,7 @@ function ScheduleStep({
   };
 
   const addScheduleEntry = () => {
-    onSchedulesChange([...schedules, { time: "20:30", daysOfWeek: [...ALL_DAYS] }]);
+    onSchedulesChange([...schedules, { time: "20:30", daysOfWeek: [...ALL_DAYS], dosage: 1 }]);
   };
 
   const removeSchedule = (index: number) => {

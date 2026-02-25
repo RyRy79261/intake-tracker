@@ -19,7 +19,7 @@ Return ONLY valid JSON with these fields:
   "pillDescription": "brief description of the pill's physical appearance including color, shape, markings, and coating",
   "drugClass": "pharmacological class",
   "visualIdentification": "detailed notes on physical markings or imprints on the pill",
-  "contraindications": ["array of notable contraindications or dangerous interactions"],
+  "contraindications": ["array of notable contraindications, dangerous interactions, and specifically what other medications the user should avoid"],
   "warnings": ["array of warning signs or side effects to look out for"],
   "isGenericFallback": true or false
 }

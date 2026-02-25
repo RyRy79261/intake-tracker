@@ -92,8 +92,7 @@ export interface MedicationPhase {
   id: string;
   prescriptionId: string;
   type: PhaseType;
-  dosageAmount: number;
-  dosageStrength: string;
+  unit: string;
   startDate: number;
   endDate?: number;
   foodInstruction: FoodInstruction;
@@ -107,6 +106,7 @@ export interface PhaseSchedule {
   id: string;
   phaseId: string;
   time: string;
+  dosage: number;
   daysOfWeek: number[];
   enabled: boolean;
   createdAt: number;
@@ -117,6 +117,8 @@ export interface InventoryItem {
   prescriptionId: string;
   brandName: string;
   currentStock: number;
+  strength: number;
+  unit: string;
   pillShape: PillShape;
   pillColor: string;
   visualIdentification?: string;
@@ -126,6 +128,15 @@ export interface InventoryItem {
   isArchived?: boolean;
   createdAt: number;
   updatedAt: number;
+}
+
+export interface InventoryTransaction {
+  id: string;
+  inventoryItemId: string;
+  timestamp: number;
+  amount: number;
+  note?: string;
+  type: "refill" | "consumed" | "adjusted";
 }
 
 export interface DailyNote {
@@ -171,6 +182,7 @@ const db = new Dexie("IntakeTrackerDB") as Dexie & {
   medicationPhases: EntityTable<MedicationPhase, "id">;
   phaseSchedules: EntityTable<PhaseSchedule, "id">;
   inventoryItems: EntityTable<InventoryItem, "id">;
+  inventoryTransactions: EntityTable<InventoryTransaction, "id">;
   dailyNotes: EntityTable<DailyNote, "id">;
   doseLogs: EntityTable<DoseLog, "id">;
 };
@@ -249,7 +261,7 @@ db.version(8).stores({
     
     // Create initial MedicationPhase
     const phaseId = crypto.randomUUID();
-    const phase: MedicationPhase = {
+    const phase: any = {
       id: phaseId,
       prescriptionId: prescription.id,
       type: "maintenance",
@@ -265,7 +277,7 @@ db.version(8).stores({
     
     // Create InventoryItem
     const inventoryItemId = crypto.randomUUID();
-    const inventory: InventoryItem = {
+    const inventory: any = {
       id: inventoryItemId,
       prescriptionId: prescription.id,
       brandName: oldMed.brandName || oldMed.genericName || "Unknown",
@@ -281,9 +293,9 @@ db.version(8).stores({
     await trans.table("inventoryItems").add(inventory);
     
     // Migrate schedules to phaseSchedules
-    const schedulesForMed = oldSchedules.filter(s => s.medicationId === oldMed.id);
+    const schedulesForMed = oldSchedules.filter((s: any) => s.medicationId === oldMed.id);
     for (const oldSched of schedulesForMed) {
-      const phaseSchedule: PhaseSchedule = {
+      const phaseSchedule: any = {
         id: oldSched.id, // Keep same ID so doseLogs still link (sort of)
         phaseId: phase.id,
         time: oldSched.time,
@@ -309,11 +321,80 @@ db.version(8).stores({
     }
   }
   
-  // We can't actually delete tables in Dexie upgrade without losing data entirely if we downgrade,
-  // but since we moved data to new tables, we can clear the old ones if we want, or just leave them.
-  // We'll leave them empty to avoid issues.
   await trans.table("medications").clear();
   await trans.table("medicationSchedules").clear();
+});
+
+// Version 9: Decouple dosage and strength
+db.version(9).stores({
+  prescriptions: "id, isActive, createdAt",
+  medicationPhases: "id, prescriptionId, status, type",
+  phaseSchedules: "id, phaseId, time, enabled",
+  inventoryItems: "id, prescriptionId, isActive",
+  inventoryTransactions: "id, inventoryItemId, timestamp",
+  dailyNotes: "id, date, prescriptionId, doseLogId",
+  doseLogs: "id, prescriptionId, phaseId, scheduleId, scheduledDate, scheduledTime, status",
+}).upgrade(async (trans) => {
+  const phases = await trans.table("medicationPhases").toArray();
+  const schedules = await trans.table("phaseSchedules").toArray();
+  const inventories = await trans.table("inventoryItems").toArray();
+
+  const parseStrength = (str: string): { strength: number; unit: string } => {
+    if (!str) return { strength: 1, unit: "mg" };
+    const match = str.match(/(\d+(?:\.\d+)?)\s*([a-zA-Z]+)/);
+    if (match) {
+      return { strength: parseFloat(match[1]), unit: match[2].toLowerCase() };
+    }
+    const num = parseFloat(str);
+    if (!isNaN(num)) return { strength: num, unit: "mg" };
+    return { strength: 1, unit: "mg" };
+  };
+
+  const phaseMap = new Map();
+
+  for (const p of phases) {
+    const { strength, unit } = parseStrength(p.dosageStrength);
+    
+    // Save mapping to update schedules and inventory
+    phaseMap.set(p.id, {
+      pills: p.dosageAmount || 1,
+      strength,
+      unit,
+      prescriptionId: p.prescriptionId
+    });
+
+    // Update phase to remove old fields and add unit
+    delete p.dosageAmount;
+    delete p.dosageStrength;
+    p.unit = unit;
+    await trans.table("medicationPhases").put(p);
+  }
+
+  for (const s of schedules) {
+    const pInfo = phaseMap.get(s.phaseId);
+    if (pInfo) {
+      s.dosage = pInfo.pills * pInfo.strength;
+    } else {
+      s.dosage = 1;
+    }
+    await trans.table("phaseSchedules").put(s);
+  }
+
+  for (const inv of inventories) {
+    // Attempt to find a phase for this prescription to get the strength
+    let strength = 1;
+    let unit = "mg";
+    for (const pInfo of Array.from(phaseMap.values())) {
+      if (pInfo.prescriptionId === inv.prescriptionId) {
+        strength = pInfo.strength;
+        unit = pInfo.unit;
+        break;
+      }
+    }
+    inv.strength = strength;
+    inv.unit = unit;
+    await trans.table("inventoryItems").put(inv);
+  }
 });
 
 export { db };

@@ -2,7 +2,8 @@
 
 import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { usePrescriptions } from "@/hooks/use-medication-queries";
+import { usePrescriptions, usePhasesForPrescription, useInventoryForPrescription, useSchedulesForPhase } from "@/hooks/use-medication-queries";
+import { PillIcon } from "./pill-icon";
 import type { Prescription } from "@/lib/db";
 import { Loader2, Plus, FlaskConical } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -87,13 +88,27 @@ export function PrescriptionsList({ onAddCompound, onEditCompound }: Prescriptio
 }
 
 function PrescriptionRow({ prescription: med, onClick }: { prescription: Prescription; onClick: () => void }) {
+  const { data: phases = [] } = usePhasesForPrescription(med.id);
+  const activePhase = phases.find(p => p.status === "active");
+  const { data: schedules = [] } = useSchedulesForPhase(activePhase?.id);
+  const { data: inventory = [] } = useInventoryForPrescription(med.id);
+  const activeInventory = inventory.find(i => i.isActive && !i.isArchived) || inventory[0];
+
+  const totalDaily = schedules.reduce((acc, s) => acc + s.dosage, 0);
+
   return (
     <button
       onClick={onClick}
       className="w-full text-left flex items-center gap-3 px-3 py-3 rounded-lg border border-border hover:bg-muted/50 transition-colors active:scale-[0.99]"
     >
-      <div className="flex items-center justify-center w-10 h-10 rounded-full bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400">
-        <FlaskConical className="w-5 h-5" />
+      <div className="flex items-center justify-center shrink-0">
+        {activeInventory ? (
+          <PillIcon shape={activeInventory.pillShape} color={activeInventory.pillColor} size={40} />
+        ) : (
+          <div className="flex items-center justify-center w-10 h-10 rounded-full bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400">
+            <FlaskConical className="w-5 h-5" />
+          </div>
+        )}
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline gap-2">
@@ -101,9 +116,15 @@ function PrescriptionRow({ prescription: med, onClick }: { prescription: Prescri
             {med.genericName}
           </p>
         </div>
-        <p className="text-xs text-muted-foreground mt-0.5 truncate">
-          {med.indication || "No indication"}
-        </p>
+        {activePhase ? (
+          <p className="text-xs text-muted-foreground mt-0.5 truncate">
+            {totalDaily} {activePhase.unit}/day ({schedules.length}x daily)
+          </p>
+        ) : (
+          <p className="text-xs text-muted-foreground mt-0.5 truncate">
+            No active phase
+          </p>
+        )}
       </div>
     </button>
   );

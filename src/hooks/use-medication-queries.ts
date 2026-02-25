@@ -10,6 +10,7 @@ import {
   getInventoryForPrescription,
   getAllActiveInventoryItems,
   getAllInventoryItems,
+  getInventoryTransactions,
   type CreatePrescriptionInput,
 } from "@/lib/medication-service";
 import {
@@ -22,6 +23,7 @@ import {
 import { startNewPhase, type CreatePhaseInput } from "@/lib/medication-service";
 import {
   getDoseLogsForDate,
+  getDoseLogsWithDetailsForDate,
   takeDose,
   untakeDose,
   skipDose,
@@ -52,6 +54,13 @@ export function useDoseLogsForDate(date: string) {
   });
 }
 
+export function useDoseLogsWithDetailsForDate(date: string) {
+  return useQuery({
+    queryKey: ["doseLogsWithDetails", date],
+    queryFn: () => getDoseLogsWithDetailsForDate(date),
+  });
+}
+
 export function usePhasesForPrescription(prescriptionId: string | undefined) {
   return useQuery({
     queryKey: ["medicationPhases", prescriptionId],
@@ -65,6 +74,14 @@ export function useInventoryForPrescription(prescriptionId: string | undefined) 
     queryKey: ["inventoryItems", prescriptionId],
     queryFn: () => getInventoryForPrescription(prescriptionId!),
     enabled: !!prescriptionId,
+  });
+}
+
+export function useInventoryTransactions(inventoryItemId: string | undefined) {
+  return useQuery({
+    queryKey: ["inventoryTransactions", inventoryItemId],
+    queryFn: () => getInventoryTransactions(inventoryItemId!),
+    enabled: !!inventoryItemId,
   });
 }
 

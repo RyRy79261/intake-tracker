@@ -12,11 +12,15 @@ import {
   usePhasesForPrescription, 
   useInventoryForPrescription, 
   useStartNewPhase,
-  useUpdatePrescription
+  useUpdatePrescription,
+  useDeletePrescription,
+  useSchedulesForPhase,
+  usePrescriptions
 } from "@/hooks/use-medication-queries";
 import type { Prescription } from "@/lib/db";
 import { Loader2, Plus, Clock, Pill, Edit2, Check, X } from "lucide-react";
 import { format } from "date-fns";
+import { useMedicineSearch } from "@/hooks/use-medicine-search";
 
 interface PrescriptionViewDrawerProps {
   prescription: Prescription | null;
@@ -25,14 +29,17 @@ interface PrescriptionViewDrawerProps {
 }
 
 export function PrescriptionViewDrawer({ prescription, open, onOpenChange }: PrescriptionViewDrawerProps) {
-  if (!prescription) return null;
+  const { data: prescriptions = [] } = usePrescriptions();
+  const currentPrescription = prescriptions.find(p => p.id === prescription?.id) || prescription;
+
+  if (!currentPrescription) return null;
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
       <DrawerContent className="max-h-[90dvh] flex flex-col">
         <DrawerHeader className="border-b shrink-0">
-          <DrawerTitle>{prescription.genericName}</DrawerTitle>
-          <p className="text-sm text-muted-foreground">{prescription.indication}</p>
+          <DrawerTitle>{currentPrescription.genericName}</DrawerTitle>
+          <p className="text-sm text-muted-foreground">{currentPrescription.indication}</p>
         </DrawerHeader>
 
         <div className="flex-1 overflow-y-auto">
@@ -47,15 +54,15 @@ export function PrescriptionViewDrawer({ prescription, open, onOpenChange }: Pre
 
             <div className="flex-1 overflow-y-auto p-4">
               <TabsContent value="details" className="mt-0 space-y-6">
-                <DetailsTab prescription={prescription} />
+                <DetailsTab prescription={currentPrescription} onOpenChange={onOpenChange} />
               </TabsContent>
 
               <TabsContent value="titration" className="mt-0">
-                <TitrationTab prescription={prescription} />
+                <TitrationTab prescription={currentPrescription} />
               </TabsContent>
 
               <TabsContent value="info" className="mt-0">
-                <InfoTab prescription={prescription} />
+                <InfoTab prescription={currentPrescription} />
               </TabsContent>
             </div>
           </Tabs>
@@ -65,13 +72,14 @@ export function PrescriptionViewDrawer({ prescription, open, onOpenChange }: Pre
   );
 }
 
-function DetailsTab({ prescription }: { prescription: Prescription }) {
+function DetailsTab({ prescription, onOpenChange }: { prescription: Prescription, onOpenChange: (open: boolean) => void }) {
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(prescription.genericName);
   const [indication, setIndication] = useState(prescription.indication);
   const [notes, setNotes] = useState(prescription.notes || "");
   
   const updatePrescription = useUpdatePrescription();
+  const deletePrescription = useDeletePrescription();
 
   // Reset form when prescription changes
   useEffect(() => {
@@ -91,6 +99,13 @@ function DetailsTab({ prescription }: { prescription: Prescription }) {
       }
     });
     setIsEditing(false);
+  };
+
+  const handleDelete = async () => {
+    if (confirm("Are you sure you want to permanently delete this prescription and all its history? This action cannot be undone.")) {
+      await deletePrescription.mutateAsync(prescription.id);
+      onOpenChange(false);
+    }
   };
 
   return (
@@ -146,6 +161,17 @@ function DetailsTab({ prescription }: { prescription: Prescription }) {
               {prescription.notes || "No notes added."}
             </p>
           </div>
+
+          <div className="pt-4 border-t">
+            <Button 
+              variant="destructive" 
+              className="w-full" 
+              onClick={handleDelete}
+              disabled={deletePrescription.isPending}
+            >
+              {deletePrescription.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Delete Prescription"}
+            </Button>
+          </div>
         </div>
       )}
     </div>
@@ -153,12 +179,44 @@ function DetailsTab({ prescription }: { prescription: Prescription }) {
 }
 
 function InfoTab({ prescription }: { prescription: Prescription }) {
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const updatePrescription = useUpdatePrescription();
+  const searchMutation = useMedicineSearch();
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      const result = await searchMutation.mutateAsync(prescription.genericName);
+      if (result) {
+        await updatePrescription.mutateAsync({
+          id: prescription.id,
+          updates: {
+            contraindications: result.contraindications || [],
+            warnings: result.warnings || []
+          }
+        });
+      }
+    } catch (e) {
+      console.error("Failed to refresh AI data", e);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold text-sm">AI Information</h3>
+        <Button size="sm" variant="outline" className="gap-1 h-8 text-xs" onClick={handleRefresh} disabled={isRefreshing || updatePrescription.isPending}>
+          {isRefreshing || updatePrescription.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Clock className="w-3 h-3" />}
+          Refresh AI Data
+        </Button>
+      </div>
+
       <div className="space-y-2">
         <h3 className="font-semibold text-sm text-red-500 dark:text-red-400">Contraindications</h3>
         {prescription.contraindications && prescription.contraindications.length > 0 ? (
-          <ul className="list-disc list-inside text-sm space-y-1 text-muted-foreground">
+          <ul className="list-disc list-inside text-sm space-y-1 text-muted-foreground uppercase">
             {prescription.contraindications.map((c, i) => (
               <li key={i}>{c}</li>
             ))}
@@ -194,10 +252,11 @@ function TitrationTab({ prescription }: { prescription: Prescription }) {
   const [isAdding, setIsAdding] = useState(false);
 
   // Form state
-  const [dosageStrength, setDosageStrength] = useState("");
-  const [dosageAmount, setDosageAmount] = useState(1);
+  const [unit, setUnit] = useState("mg");
   const [type, setType] = useState<"maintenance" | "titration">("titration");
-  const [time, setTime] = useState("08:00");
+  const [schedules, setSchedules] = useState<{ time: string; dosage: number }[]>([
+    { time: "08:00", dosage: 100 }
+  ]);
 
   if (isLoading) {
     return (
@@ -208,21 +267,28 @@ function TitrationTab({ prescription }: { prescription: Prescription }) {
   }
 
   const handleStartPhase = async () => {
-    if (!dosageStrength) return;
+    if (schedules.length === 0) return;
 
     await startNewPhase.mutateAsync({
       prescriptionId: prescription.id,
       type,
-      dosageAmount,
-      dosageStrength,
+      unit,
       startDate: Date.now(),
       foodInstruction: "none",
-      schedules: [
-        { time, daysOfWeek: [0, 1, 2, 3, 4, 5, 6] }
-      ]
+      schedules: schedules.map(s => ({ ...s, daysOfWeek: [0, 1, 2, 3, 4, 5, 6] }))
     });
     
     setIsAdding(false);
+  };
+
+  const addSchedule = () => setSchedules([...schedules, { time: "20:00", dosage: 100 }]);
+  const updateSchedule = (i: number, updates: Partial<{ time: string; dosage: number }>) => {
+    const next = [...schedules];
+    next[i] = { ...next[i], ...updates };
+    setSchedules(next);
+  };
+  const removeSchedule = (i: number) => {
+    setSchedules(schedules.filter((_, idx) => idx !== i));
   };
 
   return (
@@ -256,37 +322,42 @@ function TitrationTab({ prescription }: { prescription: Prescription }) {
             </div>
             
             <div className="space-y-1.5">
-              <Label className="text-xs">Strength (e.g. 75mg)</Label>
+              <Label className="text-xs">Unit (e.g. mg, ml)</Label>
               <Input 
-                value={dosageStrength} 
-                onChange={(e) => setDosageStrength(e.target.value)} 
+                value={unit} 
+                onChange={(e) => setUnit(e.target.value)} 
                 className="h-9"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Pills per dose</Label>
-              <Input 
-                type="number" 
-                step="0.5" 
-                min="0.5" 
-                value={dosageAmount} 
-                onChange={(e) => setDosageAmount(parseFloat(e.target.value))} 
-                className="h-9"
-              />
-            </div>
-            
-            <div className="space-y-1.5">
-              <Label className="text-xs">Daily Time</Label>
-              <Input 
-                type="time" 
-                value={time} 
-                onChange={(e) => setTime(e.target.value)} 
-                className="h-9"
-              />
-            </div>
+          <div className="space-y-3">
+            <Label className="text-xs">Daily Schedule</Label>
+            {schedules.map((s, i) => (
+              <div key={i} className="flex gap-2 items-center">
+                <Input 
+                  type="time" 
+                  value={s.time} 
+                  onChange={(e) => updateSchedule(i, { time: e.target.value })} 
+                  className="h-9"
+                />
+                <Input 
+                  type="number" 
+                  value={s.dosage} 
+                  onChange={(e) => updateSchedule(i, { dosage: parseFloat(e.target.value) || 0 })} 
+                  className="h-9"
+                  placeholder="Dosage"
+                />
+                {schedules.length > 1 && (
+                  <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => removeSchedule(i)}>
+                    <X className="w-4 h-4" />
+                  </Button>
+                )}
+              </div>
+            ))}
+            <Button size="sm" variant="outline" className="w-full gap-2 text-xs h-8 mt-1" onClick={addSchedule}>
+              <Plus className="w-3 h-3" /> Add Time
+            </Button>
           </div>
 
           <div className="flex gap-2 justify-end pt-2 border-t">
@@ -295,7 +366,7 @@ function TitrationTab({ prescription }: { prescription: Prescription }) {
               size="sm" 
               className="bg-teal-600 hover:bg-teal-700" 
               onClick={handleStartPhase}
-              disabled={startNewPhase.isPending || !dosageStrength}
+              disabled={startNewPhase.isPending || schedules.length === 0}
             >
               {startNewPhase.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Start Phase"}
             </Button>
@@ -305,46 +376,60 @@ function TitrationTab({ prescription }: { prescription: Prescription }) {
 
       <div className="space-y-3">
         {phases.map((phase) => (
-          <div 
-            key={phase.id} 
-            className={`p-4 rounded-xl border relative overflow-hidden ${
-              phase.status === "active" 
-                ? "bg-card border-teal-500/50 shadow-sm" 
-                : "bg-muted/30 border-dashed opacity-70"
-            }`}
-          >
-            {phase.status === "active" && (
-              <div className="absolute top-0 right-0 w-1.5 h-full bg-teal-500" />
-            )}
-            
-            <div className="flex items-center justify-between mb-2">
-              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                phase.type === "titration" 
-                  ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300" 
-                  : "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
-              }`}>
-                {phase.type === "titration" ? "Titration" : "Maintenance"}
-              </span>
-              
-              <span className="text-xs text-muted-foreground">
-                {format(phase.startDate, "MMM d, yyyy")}
-                {phase.endDate ? ` - ${format(phase.endDate, "MMM d, yyyy")}` : " - Present"}
-              </span>
-            </div>
-            
-            <div className="flex items-end gap-2">
-              <p className="text-xl font-bold">{phase.dosageStrength}</p>
-              <p className="text-sm text-muted-foreground mb-0.5">
-                ({phase.dosageAmount} pill{phase.dosageAmount !== 1 ? "s" : ""})
-              </p>
-            </div>
-          </div>
+          <PhaseCard key={phase.id} phase={phase} />
         ))}
         
         {phases.length === 0 && !isAdding && (
           <p className="text-sm text-center text-muted-foreground py-8">
             No dosage phases found.
           </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PhaseCard({ phase }: { phase: any }) {
+  const { data: schedules = [] } = useSchedulesForPhase(phase.id);
+  const totalDaily = schedules.reduce((acc, s) => acc + s.dosage, 0);
+
+  return (
+    <div 
+      className={`p-4 rounded-xl border relative overflow-hidden ${
+        phase.status === "active" 
+          ? "bg-card border-teal-500/50 shadow-sm" 
+          : "bg-muted/30 border-dashed opacity-70"
+      }`}
+    >
+      {phase.status === "active" && (
+        <div className="absolute top-0 right-0 w-1.5 h-full bg-teal-500" />
+      )}
+      
+      <div className="flex items-center justify-between mb-2">
+        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+          phase.type === "titration" 
+            ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300" 
+            : "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+        }`}>
+          {phase.type === "titration" ? "Titration" : "Maintenance"}
+        </span>
+        
+        <span className="text-xs text-muted-foreground">
+          {format(phase.startDate, "MMM d, yyyy")}
+          {phase.endDate ? ` - ${format(phase.endDate, "MMM d, yyyy")}` : " - Present"}
+        </span>
+      </div>
+      
+      <div className="flex flex-col gap-1 mt-3">
+        <p className="text-xl font-bold">
+          {totalDaily} <span className="text-sm font-normal text-muted-foreground">{phase.unit}/day</span>
+        </p>
+        {schedules.length > 0 && (
+          <div className="text-xs text-muted-foreground space-y-0.5 mt-1">
+            {schedules.map(s => (
+              <p key={s.id}>• {s.time} - {s.dosage} {phase.unit}</p>
+            ))}
+          </div>
         )}
       </div>
     </div>

@@ -9,14 +9,14 @@ export interface CreatePrescriptionInput {
   warnings?: string[];
   
   // Phase level (initial maintenance phase)
-  dosageAmount: number;
-  dosageStrength: string;
+  unit: string;
   foodInstruction: FoodInstruction;
   foodNote?: string;
   
   // Inventory level
   brandName: string;
   currentStock: number;
+  strength: number;
   pillShape: PillShape;
   pillColor: string;
   visualIdentification?: string;
@@ -24,7 +24,7 @@ export interface CreatePrescriptionInput {
   refillAlertPills?: number;
 
   // Schedules
-  schedules: { time: string; daysOfWeek: number[] }[];
+  schedules: { time: string; daysOfWeek: number[], dosage: number }[];
 }
 
 export async function addPrescription(input: CreatePrescriptionInput): Promise<{
@@ -51,8 +51,7 @@ export async function addPrescription(input: CreatePrescriptionInput): Promise<{
     id: crypto.randomUUID(),
     prescriptionId: prescription.id,
     type: "maintenance",
-    dosageAmount: input.dosageAmount,
-    dosageStrength: input.dosageStrength,
+    unit: input.unit,
     startDate: now,
     foodInstruction: input.foodInstruction,
     foodNote: input.foodNote,
@@ -65,6 +64,8 @@ export async function addPrescription(input: CreatePrescriptionInput): Promise<{
     prescriptionId: prescription.id,
     brandName: input.brandName,
     currentStock: input.currentStock,
+    strength: input.strength,
+    unit: input.unit,
     pillShape: input.pillShape,
     pillColor: input.pillColor,
     visualIdentification: input.visualIdentification,
@@ -79,6 +80,7 @@ export async function addPrescription(input: CreatePrescriptionInput): Promise<{
     id: crypto.randomUUID(),
     phaseId: phase.id,
     time: s.time,
+    dosage: s.dosage,
     daysOfWeek: s.daysOfWeek,
     enabled: true,
     createdAt: now,
@@ -182,25 +184,50 @@ export async function getPhasesForPrescription(prescriptionId: string): Promise<
   return db.medicationPhases.where("prescriptionId").equals(prescriptionId).reverse().sortBy("createdAt");
 }
 
-export async function adjustStock(inventoryItemId: string, delta: number): Promise<number> {
+export async function adjustStock(
+  inventoryItemId: string, 
+  delta: number, 
+  note?: string, 
+  type?: "refill" | "consumed" | "adjusted"
+): Promise<number> {
   const item = await db.inventoryItems.get(inventoryItemId);
   if (!item) throw new Error(`InventoryItem ${inventoryItemId} not found`);
   const newStock = Math.max(0, item.currentStock + delta);
-  await db.inventoryItems.update(inventoryItemId, { currentStock: newStock, updatedAt: Date.now() });
+  
+  await db.transaction("rw", [db.inventoryItems, db.inventoryTransactions], async () => {
+    await db.inventoryItems.update(inventoryItemId, { currentStock: newStock, updatedAt: Date.now() });
+    
+    await db.inventoryTransactions.add({
+      id: crypto.randomUUID(),
+      inventoryItemId,
+      timestamp: Date.now(),
+      amount: delta,
+      note,
+      type: type || (delta > 0 ? "refill" : "consumed")
+    });
+  });
+  
   return newStock;
+}
+
+export async function getInventoryTransactions(inventoryItemId: string) {
+  return db.inventoryTransactions
+    .where("inventoryItemId")
+    .equals(inventoryItemId)
+    .reverse()
+    .sortBy("timestamp");
 }
 
 export interface CreatePhaseInput {
   prescriptionId: string;
   type: "maintenance" | "titration";
-  dosageAmount: number;
-  dosageStrength: string;
+  unit: string;
   startDate: number;
   endDate?: number;
   foodInstruction: FoodInstruction;
   foodNote?: string;
   notes?: string;
-  schedules: { time: string; daysOfWeek: number[] }[];
+  schedules: { time: string; daysOfWeek: number[], dosage: number }[];
 }
 
 export async function startNewPhase(input: CreatePhaseInput): Promise<MedicationPhase> {
@@ -225,8 +252,7 @@ export async function startNewPhase(input: CreatePhaseInput): Promise<Medication
       id: crypto.randomUUID(),
       prescriptionId: input.prescriptionId,
       type: input.type,
-      dosageAmount: input.dosageAmount,
-      dosageStrength: input.dosageStrength,
+      unit: input.unit,
       startDate: input.startDate || now,
       endDate: input.endDate,
       foodInstruction: input.foodInstruction,
@@ -242,6 +268,7 @@ export async function startNewPhase(input: CreatePhaseInput): Promise<Medication
       id: crypto.randomUUID(),
       phaseId: phase.id,
       time: s.time,
+      dosage: s.dosage,
       daysOfWeek: s.daysOfWeek,
       enabled: true,
       createdAt: now,
