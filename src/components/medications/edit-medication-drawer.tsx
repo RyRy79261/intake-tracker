@@ -15,7 +15,8 @@ import {
   useUpdatePrescription,
   useDeletePrescription,
   useSchedulesForPhase,
-  usePrescriptions
+  usePrescriptions,
+  useUpdatePhase
 } from "@/hooks/use-medication-queries";
 import type { Prescription } from "@/lib/db";
 import { Loader2, Plus, Clock, Pill, Edit2, Check, X } from "lucide-react";
@@ -180,6 +181,11 @@ function DetailsTab({ prescription, onOpenChange }: { prescription: Prescription
 
 function InfoTab({ prescription }: { prescription: Prescription }) {
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [pendingAiData, setPendingAiData] = useState<{ contraindications: string[], warnings: string[] } | null>(null);
+  const [isEditingAiData, setIsEditingAiData] = useState(false);
+  const [editContraindications, setEditContraindications] = useState("");
+  const [editWarnings, setEditWarnings] = useState("");
+
   const updatePrescription = useUpdatePrescription();
   const searchMutation = useMedicineSearch();
 
@@ -188,12 +194,9 @@ function InfoTab({ prescription }: { prescription: Prescription }) {
     try {
       const result = await searchMutation.mutateAsync(prescription.genericName);
       if (result) {
-        await updatePrescription.mutateAsync({
-          id: prescription.id,
-          updates: {
-            contraindications: result.contraindications || [],
-            warnings: result.warnings || []
-          }
+        setPendingAiData({
+          contraindications: result.contraindications || [],
+          warnings: result.warnings || []
         });
       }
     } catch (e) {
@@ -202,6 +205,129 @@ function InfoTab({ prescription }: { prescription: Prescription }) {
       setIsRefreshing(false);
     }
   };
+
+  const handleAccept = async () => {
+    if (!pendingAiData) return;
+    await updatePrescription.mutateAsync({
+      id: prescription.id,
+      updates: {
+        contraindications: pendingAiData.contraindications,
+        warnings: pendingAiData.warnings
+      }
+    });
+    setPendingAiData(null);
+  };
+
+  const handleReject = () => {
+    setPendingAiData(null);
+    setIsEditingAiData(false);
+  };
+
+  const startEditing = () => {
+    if (!pendingAiData) return;
+    setEditContraindications(pendingAiData.contraindications.join("\n"));
+    setEditWarnings(pendingAiData.warnings.join("\n"));
+    setIsEditingAiData(true);
+  };
+
+  const saveEdits = async () => {
+    const newContraindications = editContraindications.split("\n").map(s => s.trim()).filter(Boolean);
+    const newWarnings = editWarnings.split("\n").map(s => s.trim()).filter(Boolean);
+    
+    await updatePrescription.mutateAsync({
+      id: prescription.id,
+      updates: {
+        contraindications: newContraindications,
+        warnings: newWarnings
+      }
+    });
+    setPendingAiData(null);
+    setIsEditingAiData(false);
+  };
+
+  if (pendingAiData) {
+    if (isEditingAiData) {
+      return (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-sm">Edit AI Information</h3>
+          </div>
+          
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-red-500 dark:text-red-400">Contraindications (one per line)</Label>
+              <Textarea 
+                value={editContraindications} 
+                onChange={(e) => setEditContraindications(e.target.value)} 
+                className="resize-none" 
+                rows={5}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-amber-500 dark:text-amber-400">Warnings (one per line)</Label>
+              <Textarea 
+                value={editWarnings} 
+                onChange={(e) => setEditWarnings(e.target.value)} 
+                className="resize-none" 
+                rows={5}
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-2 justify-end pt-4 border-t">
+            <Button size="sm" variant="ghost" onClick={() => setIsEditingAiData(false)}>Cancel</Button>
+            <Button size="sm" className="bg-teal-600 hover:bg-teal-700" onClick={saveEdits} disabled={updatePrescription.isPending}>
+              {updatePrescription.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Save"}
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-sm">Review AI Information</h3>
+        </div>
+
+        <div className="p-4 rounded-xl border border-teal-500/30 bg-teal-50/30 dark:bg-teal-950/10 space-y-4">
+          <div className="space-y-2">
+            <h4 className="font-semibold text-xs text-red-500 dark:text-red-400">New Contraindications</h4>
+            {pendingAiData.contraindications.length > 0 ? (
+              <ul className="list-disc list-inside text-sm space-y-1 text-muted-foreground">
+                {pendingAiData.contraindications.map((c, i) => (
+                  <li key={i}>{c.charAt(0).toUpperCase() + c.slice(1).toLowerCase()}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">None found.</p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <h4 className="font-semibold text-xs text-amber-500 dark:text-amber-400">New Warnings</h4>
+            {pendingAiData.warnings.length > 0 ? (
+              <ul className="list-disc list-inside text-sm space-y-1 text-muted-foreground">
+                {pendingAiData.warnings.map((w, i) => (
+                  <li key={i}>{w}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">None found.</p>
+            )}
+          </div>
+
+          <div className="flex gap-2 justify-end pt-4 border-t">
+            <Button size="sm" variant="ghost" onClick={handleReject}>Reject</Button>
+            <Button size="sm" variant="outline" onClick={startEditing}>Edit</Button>
+            <Button size="sm" className="bg-teal-600 hover:bg-teal-700" onClick={handleAccept} disabled={updatePrescription.isPending}>
+              {updatePrescription.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Accept"}
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -216,9 +342,9 @@ function InfoTab({ prescription }: { prescription: Prescription }) {
       <div className="space-y-2">
         <h3 className="font-semibold text-sm text-red-500 dark:text-red-400">Contraindications</h3>
         {prescription.contraindications && prescription.contraindications.length > 0 ? (
-          <ul className="list-disc list-inside text-sm space-y-1 text-muted-foreground uppercase">
+          <ul className="list-disc list-inside text-sm space-y-1 text-muted-foreground">
             {prescription.contraindications.map((c, i) => (
-              <li key={i}>{c}</li>
+              <li key={i}>{c.charAt(0).toUpperCase() + c.slice(1).toLowerCase()}</li>
             ))}
           </ul>
         ) : (
@@ -392,10 +518,119 @@ function TitrationTab({ prescription }: { prescription: Prescription }) {
 function PhaseCard({ phase }: { phase: any }) {
   const { data: schedules = [] } = useSchedulesForPhase(phase.id);
   const totalDaily = schedules.reduce((acc, s) => acc + s.dosage, 0);
+  const [isEditing, setIsEditing] = useState(false);
+  const updatePhase = useUpdatePhase();
+
+  const [unit, setUnit] = useState(phase.unit || "mg");
+  const [type, setType] = useState<"maintenance" | "titration">(phase.type || "titration");
+  const [editSchedules, setEditSchedules] = useState<{ id?: string; time: string; dosage: number }[]>([]);
+
+  useEffect(() => {
+    if (isEditing) {
+      setUnit(phase.unit || "mg");
+      setType(phase.type || "titration");
+      setEditSchedules(
+        schedules.length > 0
+          ? schedules.map(s => ({ id: s.id, time: s.time, dosage: s.dosage }))
+          : [{ time: "08:00", dosage: 100 }]
+      );
+    }
+  }, [isEditing, phase, schedules]);
+
+  const handleSave = async () => {
+    if (editSchedules.length === 0) return;
+    await updatePhase.mutateAsync({
+      id: phase.id,
+      type,
+      unit,
+      schedules: editSchedules.map(s => ({ ...s, daysOfWeek: [0, 1, 2, 3, 4, 5, 6] }))
+    });
+    setIsEditing(false);
+  };
+
+  const addSchedule = () => setEditSchedules([...editSchedules, { time: "20:00", dosage: 100 }]);
+  const updateSchedule = (i: number, updates: Partial<{ time: string; dosage: number }>) => {
+    const next = [...editSchedules];
+    next[i] = { ...next[i], ...updates };
+    setEditSchedules(next);
+  };
+  const removeSchedule = (i: number) => {
+    setEditSchedules(editSchedules.filter((_, idx) => idx !== i));
+  };
+
+  if (isEditing) {
+    return (
+      <div className="p-4 rounded-xl border border-teal-500/30 bg-teal-50/30 dark:bg-teal-950/10 space-y-4">
+        <div className="flex items-center justify-between">
+          <h4 className="font-medium text-sm">Edit Dosage Phase</h4>
+          <div className="flex items-center gap-1">
+            <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => setIsEditing(false)}>
+              <X className="w-4 h-4" />
+            </Button>
+            <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-teal-600" onClick={handleSave} disabled={updatePhase.isPending || editSchedules.length === 0}>
+              {updatePhase.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+            </Button>
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Type</Label>
+            <select 
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+              value={type}
+              onChange={(e) => setType(e.target.value as any)}
+            >
+              <option value="maintenance">Maintenance</option>
+              <option value="titration">Titration</option>
+            </select>
+          </div>
+          
+          <div className="space-y-1.5">
+            <Label className="text-xs">Unit (e.g. mg, ml)</Label>
+            <Input 
+              value={unit} 
+              onChange={(e) => setUnit(e.target.value)} 
+              className="h-9"
+            />
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <Label className="text-xs">Daily Schedule</Label>
+          {editSchedules.map((s, i) => (
+            <div key={i} className="flex gap-2 items-center">
+              <Input 
+                type="time" 
+                value={s.time} 
+                onChange={(e) => updateSchedule(i, { time: e.target.value })} 
+                className="h-9"
+              />
+              <Input 
+                type="number" 
+                value={s.dosage} 
+                onChange={(e) => updateSchedule(i, { dosage: parseFloat(e.target.value) || 0 })} 
+                className="h-9"
+                placeholder="Dosage"
+              />
+              {editSchedules.length > 1 && (
+                <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => removeSchedule(i)}>
+                  <X className="w-4 h-4" />
+                </Button>
+              )}
+            </div>
+          ))}
+          <Button size="sm" variant="outline" className="w-full gap-2 text-xs h-8 mt-1" onClick={addSchedule}>
+            <Plus className="w-3 h-3" /> Add Time
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div 
-      className={`p-4 rounded-xl border relative overflow-hidden ${
+      className={`p-4 rounded-xl border relative overflow-hidden group ${
         phase.status === "active" 
           ? "bg-card border-teal-500/50 shadow-sm" 
           : "bg-muted/30 border-dashed opacity-70"
@@ -405,7 +640,13 @@ function PhaseCard({ phase }: { phase: any }) {
         <div className="absolute top-0 right-0 w-1.5 h-full bg-teal-500" />
       )}
       
-      <div className="flex items-center justify-between mb-2">
+      <div className="absolute top-2 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+        <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => setIsEditing(true)}>
+          <Edit2 className="w-3.5 h-3.5" />
+        </Button>
+      </div>
+
+      <div className="flex items-center justify-between mb-2 pr-8">
         <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
           phase.type === "titration" 
             ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300" 

@@ -96,6 +96,92 @@ export async function addPrescription(input: CreatePrescriptionInput): Promise<{
   return { prescription, phase, inventory, schedules };
 }
 
+export interface AddMedicationToPrescriptionInput {
+  prescriptionId: string;
+  // Phase level
+  unit: string;
+  foodInstruction: FoodInstruction;
+  foodNote?: string;
+  
+  // Inventory level
+  brandName: string;
+  currentStock: number;
+  strength: number;
+  pillShape: PillShape;
+  pillColor: string;
+  visualIdentification?: string;
+  refillAlertDays?: number;
+  refillAlertPills?: number;
+
+  // Schedules
+  schedules: { time: string; daysOfWeek: number[], dosage: number }[];
+}
+
+export async function addMedicationToPrescription(input: AddMedicationToPrescriptionInput): Promise<void> {
+  const now = Date.now();
+  
+  const phase: MedicationPhase = {
+    id: crypto.randomUUID(),
+    prescriptionId: input.prescriptionId,
+    type: "maintenance",
+    unit: input.unit,
+    startDate: now,
+    foodInstruction: input.foodInstruction,
+    foodNote: input.foodNote,
+    status: "active",
+    createdAt: now,
+  };
+
+  const inventory: InventoryItem = {
+    id: crypto.randomUUID(),
+    prescriptionId: input.prescriptionId,
+    brandName: input.brandName,
+    currentStock: input.currentStock,
+    strength: input.strength,
+    unit: input.unit,
+    pillShape: input.pillShape,
+    pillColor: input.pillColor,
+    visualIdentification: input.visualIdentification,
+    refillAlertDays: input.refillAlertDays,
+    refillAlertPills: input.refillAlertPills,
+    isActive: true,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  const schedules: PhaseSchedule[] = input.schedules.map(s => ({
+    id: crypto.randomUUID(),
+    phaseId: phase.id,
+    time: s.time,
+    dosage: s.dosage,
+    daysOfWeek: s.daysOfWeek,
+    enabled: true,
+    createdAt: now,
+  }));
+
+  await db.transaction("rw", [db.medicationPhases, db.inventoryItems, db.phaseSchedules], async () => {
+    // Archive existing active inventory for this prescription
+    const existingInventory = await db.inventoryItems.where("prescriptionId").equals(input.prescriptionId).toArray();
+    for (const item of existingInventory) {
+      if (item.isActive) {
+        await db.inventoryItems.update(item.id, { isActive: false, isArchived: true, updatedAt: now });
+      }
+    }
+
+    // Complete existing active phase
+    const existingPhases = await db.medicationPhases.where("prescriptionId").equals(input.prescriptionId).toArray();
+    for (const p of existingPhases) {
+      if (p.status === "active") {
+        await db.medicationPhases.update(p.id, { status: "completed", endDate: now });
+      }
+    }
+
+    await db.medicationPhases.add(phase);
+    await db.inventoryItems.add(inventory);
+    await db.phaseSchedules.bulkAdd(schedules);
+  });
+}
+
 export async function updatePrescription(
   id: string,
   updates: Partial<Omit<Prescription, "id" | "createdAt">>
@@ -228,6 +314,66 @@ export interface CreatePhaseInput {
   foodNote?: string;
   notes?: string;
   schedules: { time: string; daysOfWeek: number[], dosage: number }[];
+}
+
+export interface UpdatePhaseInput {
+  id: string;
+  type?: "maintenance" | "titration";
+  unit?: string;
+  endDate?: number;
+  foodInstruction?: FoodInstruction;
+  foodNote?: string;
+  notes?: string;
+  status?: "active" | "completed" | "cancelled";
+  schedules?: { id?: string; time: string; daysOfWeek: number[], dosage: number }[];
+}
+
+export async function updatePhase(input: UpdatePhaseInput): Promise<void> {
+  await db.transaction("rw", [db.medicationPhases, db.phaseSchedules], async () => {
+    const { id, schedules, ...updates } = input;
+    
+    if (Object.keys(updates).length > 0) {
+      await db.medicationPhases.update(id, updates);
+    }
+    
+    if (schedules) {
+      const existingSchedules = await db.phaseSchedules.where("phaseId").equals(id).toArray();
+      const existingIds = new Set(existingSchedules.map(s => s.id));
+      
+      const toAdd = [];
+      const toUpdate = [];
+      const keptIds = new Set<string>();
+      
+      for (const s of schedules) {
+        if (s.id && existingIds.has(s.id)) {
+          toUpdate.push(s);
+          keptIds.add(s.id);
+        } else {
+          toAdd.push({
+            id: crypto.randomUUID(),
+            phaseId: id,
+            time: s.time,
+            dosage: s.dosage,
+            daysOfWeek: s.daysOfWeek,
+            enabled: true,
+            createdAt: Date.now(),
+          });
+        }
+      }
+      
+      const toDelete = Array.from(existingIds).filter(sid => !keptIds.has(sid));
+      
+      if (toDelete.length > 0) await db.phaseSchedules.bulkDelete(toDelete);
+      if (toAdd.length > 0) await db.phaseSchedules.bulkAdd(toAdd);
+      for (const u of toUpdate) {
+        await db.phaseSchedules.update(u.id!, {
+          time: u.time,
+          dosage: u.dosage,
+          daysOfWeek: u.daysOfWeek,
+        });
+      }
+    }
+  });
 }
 
 export async function startNewPhase(input: CreatePhaseInput): Promise<MedicationPhase> {

@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { PillIcon } from "./pill-icon";
 import { useMedicineSearch, type MedicineSearchResult } from "@/hooks/use-medicine-search";
-import { useAddPrescription } from "@/hooks/use-medication-queries";
+import { useAddPrescription, usePrescriptions, useAddMedicationToPrescription } from "@/hooks/use-medication-queries";
 import type { PillShape, FoodInstruction } from "@/lib/db";
 import { ArrowLeft, ArrowRight, Search, Loader2, Check, Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -91,8 +91,11 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
   const [step, setStep] = useState<WizardStep>("search");
   const searchMutation = useMedicineSearch();
   const addPrescriptionMutation = useAddPrescription();
+  const addMedicationToPrescriptionMutation = useAddMedicationToPrescription();
+  const { data: existingPrescriptions = [] } = usePrescriptions();
 
   // Form state
+  const [selectedPrescriptionId, setSelectedPrescriptionId] = useState<string>("new");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResult, setSearchResult] = useState<MedicineSearchResult | null>(null);
   const [brandName, setBrandName] = useState("");
@@ -123,6 +126,7 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
 
   const resetForm = useCallback(() => {
     setStep("search");
+    setSelectedPrescriptionId("new");
     setSearchQuery("");
     setSearchResult(null);
     setBrandName("");
@@ -215,25 +219,43 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
     const scheduleDosage = (finalDosage || 1) * strength;
 
     try {
-      await addPrescriptionMutation.mutateAsync({
-        brandName: brandName || capitalizeWords(searchQuery),
-        genericName: genericName || brandName,
-        strength,
-        unit,
-        pillShape,
-        pillColor,
-        visualIdentification: visualIdentification || undefined,
-        indication,
-        contraindications: contraindications.length > 0 ? contraindications : undefined,
-        warnings: warnings.length > 0 ? warnings : undefined,
-        foodInstruction,
-        foodNote: foodNote || undefined,
-        currentStock: parseInt(currentStock) || 0,
-        refillAlertDays: parseInt(refillAlertDays) || undefined,
-        refillAlertPills: parseInt(refillAlertPills) || undefined,
-        notes: notes || undefined,
-        schedules: schedules.filter(s => s.time && s.daysOfWeek.length > 0).map(s => ({ ...s, dosage: scheduleDosage }))
-      });
+      if (selectedPrescriptionId !== "new") {
+        await addMedicationToPrescriptionMutation.mutateAsync({
+          prescriptionId: selectedPrescriptionId,
+          brandName: brandName || capitalizeWords(searchQuery),
+          strength,
+          unit,
+          pillShape,
+          pillColor,
+          visualIdentification: visualIdentification || undefined,
+          foodInstruction,
+          foodNote: foodNote || undefined,
+          currentStock: parseInt(currentStock) || 0,
+          refillAlertDays: parseInt(refillAlertDays) || undefined,
+          refillAlertPills: parseInt(refillAlertPills) || undefined,
+          schedules: schedules.filter(s => s.time && s.daysOfWeek.length > 0).map(s => ({ ...s, dosage: scheduleDosage }))
+        });
+      } else {
+        await addPrescriptionMutation.mutateAsync({
+          brandName: brandName || capitalizeWords(searchQuery),
+          genericName: genericName || brandName,
+          strength,
+          unit,
+          pillShape,
+          pillColor,
+          visualIdentification: visualIdentification || undefined,
+          indication,
+          contraindications: contraindications.length > 0 ? contraindications : undefined,
+          warnings: warnings.length > 0 ? warnings : undefined,
+          foodInstruction,
+          foodNote: foodNote || undefined,
+          currentStock: parseInt(currentStock) || 0,
+          refillAlertDays: parseInt(refillAlertDays) || undefined,
+          refillAlertPills: parseInt(refillAlertPills) || undefined,
+          notes: notes || undefined,
+          schedules: schedules.filter(s => s.time && s.daysOfWeek.length > 0).map(s => ({ ...s, dosage: scheduleDosage }))
+        });
+      }
     } catch (err: any) {
       console.error(err);
     }
@@ -286,6 +308,9 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
                 onGenericNameChange={(v) => setGenericName(capitalizeWords(v))}
                 dosageStrength={dosageStrength}
                 onDosageStrengthChange={setDosageStrength}
+                selectedPrescriptionId={selectedPrescriptionId}
+                onSelectedPrescriptionIdChange={setSelectedPrescriptionId}
+                existingPrescriptions={existingPrescriptions}
               />
             )}
 
@@ -312,6 +337,7 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
                 onFoodNoteChange={setFoodNote}
                 notes={notes}
                 onNotesChange={setNotes}
+                isExistingPrescription={selectedPrescriptionId !== "new"}
               />
             )}
 
@@ -383,6 +409,8 @@ function SearchStep({
   query, onQueryChange, onSearch, isSearching, result, error,
   brandName, onBrandNameChange, genericName, onGenericNameChange,
   dosageStrength, onDosageStrengthChange,
+  selectedPrescriptionId, onSelectedPrescriptionIdChange,
+  existingPrescriptions,
 }: {
   query: string; onQueryChange: (v: string) => void;
   onSearch: () => void; isSearching: boolean;
@@ -390,9 +418,29 @@ function SearchStep({
   brandName: string; onBrandNameChange: (v: string) => void;
   genericName: string; onGenericNameChange: (v: string) => void;
   dosageStrength: string; onDosageStrengthChange: (v: string) => void;
+  selectedPrescriptionId: string; onSelectedPrescriptionIdChange: (v: string) => void;
+  existingPrescriptions: any[];
 }) {
   return (
     <div className="space-y-4">
+      {existingPrescriptions.length > 0 && (
+        <div>
+          <Label className="text-sm font-medium mb-1.5 block">Associate with prescription</Label>
+          <select
+            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+            value={selectedPrescriptionId}
+            onChange={(e) => onSelectedPrescriptionIdChange(e.target.value)}
+          >
+            <option value="new">Create new prescription</option>
+            {existingPrescriptions.map((p) => (
+              <option key={p.id} value={p.id}>
+                Add to: {p.genericName}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       <div>
         <Label className="text-sm font-medium mb-1.5 block">Search medication</Label>
         <div className="flex gap-2">
@@ -565,12 +613,14 @@ function IndicationStep({
   foodInstruction, onFoodInstructionChange,
   foodNote, onFoodNoteChange,
   notes, onNotesChange,
+  isExistingPrescription = false,
 }: {
   indication: string; onIndicationChange: (v: string) => void;
   contraindications: string[]; warnings: string[];
   foodInstruction: FoodInstruction; onFoodInstructionChange: (v: FoodInstruction) => void;
   foodNote: string; onFoodNoteChange: (v: string) => void;
   notes: string; onNotesChange: (v: string) => void;
+  isExistingPrescription?: boolean;
 }) {
   const foodOptions: { value: FoodInstruction; label: string }[] = [
     { value: "before", label: "Before eating" },
@@ -580,39 +630,43 @@ function IndicationStep({
 
   return (
     <div className="space-y-4">
-      <div>
-        <Label className="text-sm font-medium mb-1.5 block">What is this medication for?</Label>
-        <Textarea
-          value={indication}
-          onChange={(e) => onIndicationChange(e.target.value)}
-          placeholder="e.g. Acute Myocardial Infarction, STEMI"
-          rows={2}
-        />
-      </div>
+      {!isExistingPrescription && (
+        <>
+          <div>
+            <Label className="text-sm font-medium mb-1.5 block">What is this medication for?</Label>
+            <Textarea
+              value={indication}
+              onChange={(e) => onIndicationChange(e.target.value)}
+              placeholder="e.g. Acute Myocardial Infarction, STEMI"
+              rows={2}
+            />
+          </div>
 
-      {(contraindications.length > 0 || warnings.length > 0) && (
-        <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 rounded-lg p-3 space-y-3">
-          {contraindications.length > 0 && (
-            <div>
-              <p className="text-xs font-semibold text-red-800 dark:text-red-400 uppercase tracking-wider mb-1">
-                Contraindications
-              </p>
-              <ul className="list-disc list-inside text-xs text-red-700 dark:text-red-300 ml-4 space-y-0.5">
-                {contraindications.map((c, i) => <li key={i}>{c}</li>)}
-              </ul>
+          {(contraindications.length > 0 || warnings.length > 0) && (
+            <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 rounded-lg p-3 space-y-3">
+              {contraindications.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-red-800 dark:text-red-400 uppercase tracking-wider mb-1">
+                    Contraindications
+                  </p>
+                  <ul className="list-disc list-inside text-xs text-red-700 dark:text-red-300 ml-4 space-y-0.5">
+                    {contraindications.map((c, i) => <li key={i}>{c.charAt(0).toUpperCase() + c.slice(1).toLowerCase()}</li>)}
+                  </ul>
+                </div>
+              )}
+              {warnings.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-amber-800 dark:text-amber-500 uppercase tracking-wider mb-1">
+                    Warnings
+                  </p>
+                  <ul className="list-disc list-inside text-xs text-amber-700 dark:text-amber-400 ml-4 space-y-0.5">
+                    {warnings.map((w, i) => <li key={i}>{w}</li>)}
+                  </ul>
+                </div>
+              )}
             </div>
           )}
-          {warnings.length > 0 && (
-            <div>
-              <p className="text-xs font-semibold text-amber-800 dark:text-amber-500 uppercase tracking-wider mb-1">
-                Warnings
-              </p>
-              <ul className="list-disc list-inside text-xs text-amber-700 dark:text-amber-400 ml-4 space-y-0.5">
-                {warnings.map((w, i) => <li key={i}>{w}</li>)}
-              </ul>
-            </div>
-          )}
-        </div>
+        </>
       )}
 
       <div>

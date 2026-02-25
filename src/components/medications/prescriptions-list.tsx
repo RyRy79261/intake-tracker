@@ -110,21 +110,21 @@ function PrescriptionRow({ prescription: med, onClick }: { prescription: Prescri
           </div>
         )}
       </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-baseline gap-2">
-          <p className="font-semibold text-sm truncate">
-            {med.genericName}
-          </p>
+      <div className="flex-1 min-w-0 flex items-center justify-between gap-4">
+        <p className="font-semibold text-sm truncate">
+          {med.genericName}
+        </p>
+        <div className="text-right shrink-0">
+          {activePhase ? (
+            <p className="text-xs text-muted-foreground truncate">
+              {totalDaily} {activePhase.unit}/day ({schedules.length}x daily)
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground truncate">
+              No active phase
+            </p>
+          )}
         </div>
-        {activePhase ? (
-          <p className="text-xs text-muted-foreground mt-0.5 truncate">
-            {totalDaily} {activePhase.unit}/day ({schedules.length}x daily)
-          </p>
-        ) : (
-          <p className="text-xs text-muted-foreground mt-0.5 truncate">
-            No active phase
-          </p>
-        )}
       </div>
     </button>
   );
