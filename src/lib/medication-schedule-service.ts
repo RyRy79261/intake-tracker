@@ -9,7 +9,8 @@ export interface ScheduleWithDetails {
 
 export async function getDailySchedule(dayOfWeek: number): Promise<Map<string, ScheduleWithDetails[]>> {
   // 1. Get all active prescriptions
-  const activePrescriptions = await db.prescriptions.where("isActive").equals(1).toArray();
+  const allPrescriptions = await db.prescriptions.toArray();
+  const activePrescriptions = allPrescriptions.filter(p => p.isActive);
   const prescriptionMap = new Map(activePrescriptions.map(p => [p.id, p]));
   
   // 2. Get active phases for these prescriptions
@@ -19,13 +20,14 @@ export async function getDailySchedule(dayOfWeek: number): Promise<Map<string, S
   const phaseMap = new Map(activePhases.map(p => [p.id, p]));
   
   // 3. Get active inventory for these prescriptions
-  const inventoryItems = await db.inventoryItems.where("isActive").equals(1).toArray();
+  const allInventoryItems = await db.inventoryItems.toArray();
+  const inventoryItems = allInventoryItems.filter(i => i.isActive);
   const inventoryMap = new Map(inventoryItems.map(i => [i.prescriptionId, i]));
 
   // 4. Get enabled schedules for these active phases
   const phaseIds = activePhases.map(p => p.id);
-  const allSchedules = await db.phaseSchedules.where("enabled").equals(1).toArray();
-  const activeSchedules = allSchedules.filter(s => phaseIds.includes(s.phaseId) && s.daysOfWeek.includes(dayOfWeek));
+  const allSchedules = await db.phaseSchedules.toArray();
+  const activeSchedules = allSchedules.filter(s => s.enabled && phaseIds.includes(s.phaseId) && s.daysOfWeek.includes(dayOfWeek));
 
   const grouped = new Map<string, ScheduleWithDetails[]>();
 

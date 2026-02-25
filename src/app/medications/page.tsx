@@ -8,11 +8,13 @@ import { MedFooter, type MedTab } from "@/components/medications/med-footer";
 import { ScheduleView } from "@/components/medications/schedule-view";
 import { StatusView } from "@/components/medications/status-view";
 import { MedicationsList } from "@/components/medications/medications-list";
+import { PrescriptionsList } from "@/components/medications/prescriptions-list";
 import { MedicationSettingsView } from "@/components/medications/medication-settings-view";
 import { DoseDetailDialog } from "@/components/medications/dose-detail-dialog";
 import { MarkAllModal } from "@/components/medications/mark-all-modal";
 import { AddMedicationWizard } from "@/components/medications/add-medication-wizard";
-import { EditMedicationDrawer } from "@/components/medications/edit-medication-drawer";
+import { InventoryItemViewDrawer } from "@/components/medications/inventory-item-view-drawer";
+import { PrescriptionViewDrawer } from "@/components/medications/edit-medication-drawer";
 import { useScrollHide } from "@/hooks/use-scroll-hide";
 import { useSettings } from "@/hooks/use-settings";
 import type { DoseLog, Prescription } from "@/lib/db";
@@ -28,8 +30,11 @@ function MedicationsContent() {
   const [selectedEntry, setSelectedEntry] = useState<ScheduleWithDetails | null>(null);
   const [selectedDoseLog, setSelectedDoseLog] = useState<DoseLog | undefined>(undefined);
 
-  const [editMedOpen, setEditMedOpen] = useState(false);
+  const [editCompoundOpen, setEditCompoundOpen] = useState(false);
   const [selectedPrescription, setSelectedPrescription] = useState<Prescription | null>(null);
+
+  const [editInventoryOpen, setEditInventoryOpen] = useState(false);
+  const [selectedInventory, setSelectedInventory] = useState<any>(null); // Will type properly later
 
   const [markAllOpen, setMarkAllOpen] = useState(false);
   const [markAllTime, setMarkAllTime] = useState("");
@@ -65,9 +70,14 @@ function MedicationsContent() {
     setWizardOpen(true);
   }, []);
 
-  const handleEditMed = useCallback((prescription: Prescription) => {
+  const handleEditCompound = useCallback((prescription: Prescription) => {
     setSelectedPrescription(prescription);
-    setEditMedOpen(true);
+    setEditCompoundOpen(true);
+  }, []);
+
+  const handleEditInventory = useCallback((item: any) => {
+    setSelectedInventory(item);
+    setEditInventoryOpen(true);
   }, []);
 
   return (
@@ -91,8 +101,12 @@ function MedicationsContent() {
 
       {activeTab === "status" && <StatusView />}
 
+      {activeTab === "prescriptions" && (
+        <PrescriptionsList onAddCompound={() => {}} onEditCompound={handleEditCompound} />
+      )}
+
       {activeTab === "medications" && (
-        <MedicationsList onAddMed={handleAddMed} onEditMed={handleEditMed} />
+        <MedicationsList onAddMed={handleAddMed} onEditMed={handleEditInventory} />
       )}
 
       {activeTab === "settings" && <MedicationSettingsView />}
@@ -125,10 +139,16 @@ function MedicationsContent() {
         onOpenChange={setWizardOpen}
       />
 
-      <EditMedicationDrawer
-        open={editMedOpen}
-        onOpenChange={setEditMedOpen}
+      <PrescriptionViewDrawer
+        open={editCompoundOpen}
+        onOpenChange={setEditCompoundOpen}
         prescription={selectedPrescription}
+      />
+
+      <InventoryItemViewDrawer
+        open={editInventoryOpen}
+        onOpenChange={setEditInventoryOpen}
+        prescription={selectedInventory}
       />
     </>
   );

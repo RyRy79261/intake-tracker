@@ -123,11 +123,13 @@ export async function getPrescriptions(): Promise<Prescription[]> {
 }
 
 export async function getActivePrescriptions(): Promise<Prescription[]> {
-  return db.prescriptions.where("isActive").equals(1).toArray();
+  const all = await db.prescriptions.toArray();
+  return all.filter(p => p.isActive);
 }
 
 export async function getInactivePrescriptions(): Promise<Prescription[]> {
-  return db.prescriptions.where("isActive").equals(0).toArray();
+  const all = await db.prescriptions.toArray();
+  return all.filter(p => !p.isActive);
 }
 
 export async function getInventoryForPrescription(prescriptionId: string): Promise<InventoryItem[]> {
@@ -139,8 +141,13 @@ export async function getActiveInventoryForPrescription(prescriptionId: string):
   return items.find(i => i.isActive);
 }
 
+export async function getAllInventoryItems(): Promise<InventoryItem[]> {
+  return db.inventoryItems.toArray();
+}
+
 export async function getAllActiveInventoryItems(): Promise<InventoryItem[]> {
-  return db.inventoryItems.where("isActive").equals(1).toArray();
+  const all = await db.inventoryItems.toArray();
+  return all.filter(i => i.isActive);
 }
 
 export async function addInventoryItem(input: Omit<InventoryItem, "id" | "createdAt" | "updatedAt">): Promise<InventoryItem> {

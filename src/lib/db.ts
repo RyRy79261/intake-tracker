@@ -123,6 +123,7 @@ export interface InventoryItem {
   refillAlertDays?: number;
   refillAlertPills?: number;
   isActive: boolean;
+  isArchived?: boolean;
   createdAt: number;
   updatedAt: number;
 }

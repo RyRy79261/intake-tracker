@@ -9,6 +9,7 @@ import {
   getPhasesForPrescription,
   getInventoryForPrescription,
   getAllActiveInventoryItems,
+  getAllInventoryItems,
   type CreatePrescriptionInput,
 } from "@/lib/medication-service";
 import {
@@ -69,8 +70,15 @@ export function useInventoryForPrescription(prescriptionId: string | undefined) 
 
 export function useAllActiveInventoryItems() {
   return useQuery({
-    queryKey: ["inventoryItems"],
+    queryKey: ["inventoryItems", "active"],
     queryFn: getAllActiveInventoryItems,
+  });
+}
+
+export function useAllInventoryItems() {
+  return useQuery({
+    queryKey: ["inventoryItems", "all"],
+    queryFn: getAllInventoryItems,
   });
 }
 

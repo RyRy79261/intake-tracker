@@ -16,13 +16,13 @@ import type { Prescription } from "@/lib/db";
 import { Loader2, Plus, Clock, Pill } from "lucide-react";
 import { format } from "date-fns";
 
-interface EditMedicationDrawerProps {
+interface PrescriptionViewDrawerProps {
   prescription: Prescription | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-export function EditMedicationDrawer({ prescription, open, onOpenChange }: EditMedicationDrawerProps) {
+export function PrescriptionViewDrawer({ prescription, open, onOpenChange }: PrescriptionViewDrawerProps) {
   if (!prescription) return null;
 
   return (

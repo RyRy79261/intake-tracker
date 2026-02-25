@@ -1,11 +1,11 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { PillIcon } from "./pill-icon";
-import { usePrescriptions, useInventoryForPrescription } from "@/hooks/use-medication-queries";
-import type { Prescription } from "@/lib/db";
-import { Loader2, Plus, Pill } from "lucide-react";
+import { useAllInventoryItems, usePrescriptions } from "@/hooks/use-medication-queries";
+import type { InventoryItem, Prescription } from "@/lib/db";
+import { Loader2, Plus, Pill, ChevronDown, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface MedicationsListProps {
@@ -14,17 +14,31 @@ interface MedicationsListProps {
 }
 
 export function MedicationsList({ onAddMed, onEditMed }: MedicationsListProps) {
-  const { data: prescriptions = [], isLoading } = usePrescriptions();
+  const { data: inventoryItems = [], isLoading: invLoading } = useAllInventoryItems();
+  const { data: prescriptions = [], isLoading: pLoading } = usePrescriptions();
+  const [showArchived, setShowArchived] = useState(false);
 
-  const { active, inactive } = useMemo(() => {
-    const active: Prescription[] = [];
-    const inactive: Prescription[] = [];
-    for (const med of prescriptions) {
-      if (med.isActive) active.push(med);
-      else inactive.push(med);
+  const isLoading = invLoading || pLoading;
+
+  const { active, inStock, outOfStock, archived } = useMemo(() => {
+    const active: InventoryItem[] = [];
+    const inStock: InventoryItem[] = [];
+    const outOfStock: InventoryItem[] = [];
+    const archived: InventoryItem[] = [];
+
+    for (const item of inventoryItems) {
+      if (item.isArchived) {
+        archived.push(item);
+      } else if (item.isActive) {
+        active.push(item);
+      } else if (item.currentStock > 0) {
+        inStock.push(item);
+      } else {
+        outOfStock.push(item);
+      }
     }
-    return { active, inactive };
-  }, [prescriptions]);
+    return { active, inStock, outOfStock, archived };
+  }, [inventoryItems]);
 
   if (isLoading) {
     return (
@@ -34,45 +48,87 @@ export function MedicationsList({ onAddMed, onEditMed }: MedicationsListProps) {
     );
   }
 
-  if (prescriptions.length === 0) {
+  if (inventoryItems.length === 0) {
     return (
       <div className="text-center py-12 text-muted-foreground">
         <Pill className="w-12 h-12 mx-auto mb-4 opacity-30" />
-        <p className="text-lg font-medium mb-2">No medications</p>
-        <p className="text-sm mb-4">Add your first medication to start tracking</p>
+        <p className="text-lg font-medium mb-2">No stock</p>
+        <p className="text-sm mb-4">Add medication stock to start tracking</p>
         <Button onClick={onAddMed} className="gap-2 bg-teal-600 hover:bg-teal-700">
           <Plus className="w-4 h-4" />
-          Add a med
+          Add stock
         </Button>
       </div>
     );
   }
+
+  const getPrescription = (id: string) => prescriptions.find(p => p.id === id);
 
   return (
     <div className="space-y-6 pb-24">
       {active.length > 0 && (
         <div>
           <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
-            Active meds
+            Active Phase
           </h3>
           <div className="space-y-1">
-            {active.map((med) => (
-              <PrescriptionRow key={med.id} prescription={med} onClick={() => onEditMed(med)} />
-            ))}
+            {active.map((item) => {
+              const p = getPrescription(item.prescriptionId);
+              if (!p) return null;
+              return <InventoryRow key={item.id} item={item} prescription={p} onClick={() => onEditMed(p)} />;
+            })}
           </div>
         </div>
       )}
 
-      {inactive.length > 0 && (
+      {inStock.length > 0 && (
         <div>
           <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
-            Inactive meds
+            In Stock
           </h3>
           <div className="space-y-1">
-            {inactive.map((med) => (
-              <PrescriptionRow key={med.id} prescription={med} onClick={() => onEditMed(med)} />
-            ))}
+            {inStock.map((item) => {
+              const p = getPrescription(item.prescriptionId);
+              if (!p) return null;
+              return <InventoryRow key={item.id} item={item} prescription={p} onClick={() => onEditMed(p)} />;
+            })}
           </div>
+        </div>
+      )}
+
+      {outOfStock.length > 0 && (
+        <div>
+          <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
+            Out of Stock
+          </h3>
+          <div className="space-y-1">
+            {outOfStock.map((item) => {
+              const p = getPrescription(item.prescriptionId);
+              if (!p) return null;
+              return <InventoryRow key={item.id} item={item} prescription={p} onClick={() => onEditMed(p)} />;
+            })}
+          </div>
+        </div>
+      )}
+
+      {archived.length > 0 && (
+        <div>
+          <button
+            onClick={() => setShowArchived(!showArchived)}
+            className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3 w-full hover:text-foreground transition-colors"
+          >
+            {showArchived ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+            Archived
+          </button>
+          {showArchived && (
+            <div className="space-y-1">
+              {archived.map((item) => {
+                const p = getPrescription(item.prescriptionId);
+                if (!p) return null;
+                return <InventoryRow key={item.id} item={item} prescription={p} onClick={() => onEditMed(p)} />;
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -81,34 +137,34 @@ export function MedicationsList({ onAddMed, onEditMed }: MedicationsListProps) {
         className="w-full gap-2 bg-teal-600 hover:bg-teal-700 text-white"
         size="lg"
       >
-        Add a med
+        Add stock
       </Button>
     </div>
   );
 }
 
-function PrescriptionRow({ prescription: med, onClick }: { prescription: Prescription; onClick: () => void }) {
-  const { data: inventoryList = [] } = useInventoryForPrescription(med.id);
-  const activeInventory = inventoryList.find((i) => i.isActive) || inventoryList[0];
-
+function InventoryRow({ item, prescription, onClick }: { item: InventoryItem; prescription: Prescription; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="w-full text-left flex items-center gap-3 px-3 py-3 rounded-lg border border-border hover:bg-muted/50 transition-colors active:scale-[0.99]"
+      className={cn(
+        "w-full text-left flex items-center gap-3 px-3 py-3 rounded-lg border border-border hover:bg-muted/50 transition-colors active:scale-[0.99]",
+        item.isArchived && "opacity-60"
+      )}
     >
-      <PillIcon shape={activeInventory?.pillShape || "round"} color={activeInventory?.pillColor || "#ccc"} size={28} />
+      <PillIcon shape={item.pillShape || "round"} color={item.pillColor || "#ccc"} size={28} />
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline gap-2">
           <p className="font-semibold text-sm truncate">
-            {activeInventory?.brandName || med.genericName}
+            {item.brandName || prescription.genericName}
           </p>
-          <span className="text-xs text-muted-foreground shrink-0">{med.genericName}</span>
+          <span className="text-xs text-muted-foreground shrink-0">{prescription.genericName}</span>
         </div>
         <p className={cn(
           "text-xs mt-0.5",
-          (activeInventory?.currentStock || 0) === 0 ? "text-red-500 font-medium" : "text-muted-foreground"
+          item.currentStock === 0 ? "text-red-500 font-medium" : "text-muted-foreground"
         )}>
-          {activeInventory?.currentStock || 0} Pill(s) left
+          {item.currentStock} Pill(s) left
         </p>
       </div>
     </button>
