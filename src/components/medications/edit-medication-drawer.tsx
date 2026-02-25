@@ -17,7 +17,6 @@ import {
 import type { Prescription } from "@/lib/db";
 import { Loader2, Plus, Clock, Pill, Edit2, Check, X } from "lucide-react";
 import { format } from "date-fns";
-import { useEffect } from "react";
 
 interface PrescriptionViewDrawerProps {
   prescription: Prescription | null;

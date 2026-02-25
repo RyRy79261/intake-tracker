@@ -76,7 +76,7 @@ export function ScheduleView({ selectedDate, onDoseClick, onMarkAll, onAddMed }:
     // Create a mutable copy of the schedule map
     const groups = new Map<string, ScheduleWithDetails[]>();
     
-    for (const [time, entries] of scheduleMap.entries()) {
+    for (const [time, entries] of Array.from(scheduleMap.entries())) {
       groups.set(time, [...entries]);
     }
 

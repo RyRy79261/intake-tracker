@@ -29,7 +29,18 @@ export function useMedicineSearch() {
 
   return useMutation({
     mutationFn: async (query: string): Promise<MedicineSearchResult> => {
-      const country = useSettingsStore.getState().userCountry;
+      const state = useSettingsStore.getState();
+      const primary = state.primaryRegion;
+      const secondary = state.secondaryRegion;
+      
+      let countryContext: string | undefined = undefined;
+      if (primary && primary !== "none") {
+        countryContext = primary;
+        if (secondary && secondary !== "None" && secondary !== "none") {
+          countryContext += ` (and ${secondary} as secondary fallback)`;
+        }
+      }
+
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
       };
@@ -47,7 +58,7 @@ export function useMedicineSearch() {
         body: JSON.stringify({
           query,
           clientApiKey: clientApiKey || undefined,
-          country: country && country !== "none" ? country : undefined,
+          country: countryContext,
         }),
       });
 

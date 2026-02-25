@@ -30,7 +30,7 @@ export function StatusView() {
     // Calculate expected total from base schedule
     let baseExpectedTotal = 0;
     if (scheduleMap) {
-      for (const entries of scheduleMap.values()) {
+      for (const entries of Array.from(scheduleMap.values())) {
         baseExpectedTotal += entries.length;
       }
     }
