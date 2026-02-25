@@ -72,8 +72,55 @@ export function ScheduleView({ selectedDate, onDoseClick, onMarkAll, onAddMed }:
 
   const timeGroups = useMemo(() => {
     if (!scheduleMap) return [];
-    return Array.from(scheduleMap.entries()).map(([time, entries]) => ({ time, entries }));
-  }, [scheduleMap]);
+    
+    // Create a mutable copy of the schedule map
+    const groups = new Map<string, ScheduleWithDetails[]>();
+    
+    for (const [time, entries] of scheduleMap.entries()) {
+      groups.set(time, [...entries]);
+    }
+
+    // Process dose logs for rescheduled doses
+    for (const log of doseLogs) {
+      if (log.status === "rescheduled" && log.rescheduledTo) {
+        // Remove from original time
+        const originalEntries = groups.get(log.scheduledTime);
+        if (originalEntries) {
+          const filtered = originalEntries.filter(e => 
+            !(e.prescription.id === log.prescriptionId && 
+              e.phase.id === log.phaseId && 
+              e.schedule.id === log.scheduleId)
+          );
+          if (filtered.length > 0) {
+            groups.set(log.scheduledTime, filtered);
+          } else {
+            groups.delete(log.scheduledTime);
+          }
+          
+          // Find the entry to move
+          const entryToMove = originalEntries.find(e => 
+            e.prescription.id === log.prescriptionId && 
+            e.phase.id === log.phaseId && 
+            e.schedule.id === log.scheduleId
+          );
+          
+          // Add to new time
+          if (entryToMove) {
+            const newTimeEntries = groups.get(log.rescheduledTo) || [];
+            // Only add if not already there (prevent duplicates if multiple logs somehow)
+            if (!newTimeEntries.some(e => e.schedule.id === entryToMove.schedule.id)) {
+              newTimeEntries.push(entryToMove);
+            }
+            groups.set(log.rescheduledTo, newTimeEntries);
+          }
+        }
+      }
+    }
+
+    // Sort by time
+    const sortedGroups = Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b));
+    return sortedGroups.map(([time, entries]) => ({ time, entries }));
+  }, [scheduleMap, doseLogs]);
 
   if (isLoading) {
     return (

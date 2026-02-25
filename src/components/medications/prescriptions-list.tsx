@@ -37,11 +37,11 @@ export function PrescriptionsList({ onAddCompound, onEditCompound }: Prescriptio
     return (
       <div className="text-center py-12 text-muted-foreground">
         <FlaskConical className="w-12 h-12 mx-auto mb-4 opacity-30" />
-        <p className="text-lg font-medium mb-2">No compounds</p>
-        <p className="text-sm mb-4">Add your first compound to start tracking</p>
+        <p className="text-lg font-medium mb-2">No prescriptions</p>
+        <p className="text-sm mb-4">Add your first prescription to start tracking</p>
         <Button onClick={onAddCompound} className="gap-2 bg-teal-600 hover:bg-teal-700">
           <Plus className="w-4 h-4" />
-          Add a compound
+          Add a prescription
         </Button>
       </div>
     );
@@ -52,7 +52,7 @@ export function PrescriptionsList({ onAddCompound, onEditCompound }: Prescriptio
       {active.length > 0 && (
         <div>
           <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
-            Active Compounds
+            Active Prescriptions
           </h3>
           <div className="space-y-1">
             {active.map((med) => (
@@ -65,7 +65,7 @@ export function PrescriptionsList({ onAddCompound, onEditCompound }: Prescriptio
       {inactive.length > 0 && (
         <div>
           <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
-            Inactive Compounds
+            Inactive Prescriptions
           </h3>
           <div className="space-y-1">
             {inactive.map((med) => (
@@ -80,7 +80,7 @@ export function PrescriptionsList({ onAddCompound, onEditCompound }: Prescriptio
         className="w-full gap-2 bg-teal-600 hover:bg-teal-700 text-white"
         size="lg"
       >
-        Add a compound
+        Add a prescription
       </Button>
     </div>
   );

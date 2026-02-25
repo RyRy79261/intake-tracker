@@ -12,8 +12,10 @@ import {
 import { Globe } from "lucide-react";
 
 export function MedicationSettingsView() {
-  const country = useSettingsStore((s) => s.userCountry);
-  const setCountry = useSettingsStore((s) => s.setUserCountry);
+  const primaryRegion = useSettingsStore((s) => s.primaryRegion);
+  const setPrimaryRegion = useSettingsStore((s) => s.setPrimaryRegion);
+  const secondaryRegion = useSettingsStore((s) => s.secondaryRegion);
+  const setSecondaryRegion = useSettingsStore((s) => s.setSecondaryRegion);
 
   const COUNTRIES = [
     { value: "", label: "Not Specified (Global Search)" },
@@ -30,7 +32,7 @@ export function MedicationSettingsView() {
     { value: "IN", label: "India" },
     { value: "CN", label: "China" },
     { value: "JP", label: "Japan" },
-    { value: "KR", label: "Japan" },
+    { value: "KR", label: "South Korea" },
   ];
 
   return (
@@ -48,12 +50,31 @@ export function MedicationSettingsView() {
           <h3 className="font-medium">Localization</h3>
         </div>
         
-        <div className="space-y-1.5">
-          <Label>Country / Region</Label>
+        <div className="space-y-1.5 mb-4">
+          <Label>Primary Region</Label>
           <p className="text-[13px] text-muted-foreground mb-2">
             This is used by the AI to search for local brand names and alternatives when adding a new medication.
           </p>
-          <Select value={country} onValueChange={setCountry}>
+          <Select value={primaryRegion} onValueChange={setPrimaryRegion}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select a country" />
+            </SelectTrigger>
+            <SelectContent>
+              {COUNTRIES.map((c) => (
+                <SelectItem key={c.value || "none"} value={c.value || "none"}>
+                  {c.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label>Secondary Region (Optional)</Label>
+          <p className="text-[13px] text-muted-foreground mb-2">
+            Used as a fallback for finding medication alternatives.
+          </p>
+          <Select value={secondaryRegion} onValueChange={setSecondaryRegion}>
             <SelectTrigger>
               <SelectValue placeholder="Select a country" />
             </SelectTrigger>

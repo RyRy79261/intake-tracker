@@ -169,6 +169,10 @@ export async function updateInventoryItem(
   await db.inventoryItems.update(id, { ...updates, updatedAt: Date.now() });
 }
 
+export async function deleteInventoryItem(id: string): Promise<void> {
+  await db.inventoryItems.delete(id);
+}
+
 export async function getActivePhaseForPrescription(prescriptionId: string): Promise<MedicationPhase | undefined> {
   const phases = await db.medicationPhases.where("prescriptionId").equals(prescriptionId).toArray();
   return phases.find(p => p.status === "active");

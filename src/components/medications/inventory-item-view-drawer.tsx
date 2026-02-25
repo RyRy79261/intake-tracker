@@ -14,7 +14,7 @@ import {
 import type { Prescription } from "@/lib/db";
 import { Loader2, Archive, ArchiveRestore, Plus } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { updateInventoryItem, adjustStock } from "@/lib/medication-service";
+import { updateInventoryItem, adjustStock, deleteInventoryItem } from "@/lib/medication-service";
 
 interface InventoryItemViewDrawerProps {
   prescription: Prescription | null; // We pass prescription here, but we also need the specific inventory item. For now, we'll fetch the active inventory item for this prescription.
@@ -48,7 +48,7 @@ export function InventoryItemViewDrawer({ prescription, open, onOpenChange }: In
               </TabsContent>
 
               <TabsContent value="manage" className="mt-0">
-                <ManageTab prescription={prescription} />
+                <ManageTab prescription={prescription} onOpenChange={onOpenChange} />
               </TabsContent>
             </div>
           </Tabs>
@@ -134,7 +134,7 @@ function DetailsTab({ prescription }: { prescription: Prescription }) {
   );
 }
 
-function ManageTab({ prescription }: { prescription: Prescription }) {
+function ManageTab({ prescription, onOpenChange }: { prescription: Prescription, onOpenChange: (open: boolean) => void }) {
   const qc = useQueryClient();
   const { data: inventory = [], isLoading } = useInventoryForPrescription(prescription.id);
   const [refillAmount, setRefillAmount] = useState<number>(30);
@@ -152,6 +152,14 @@ function ManageTab({ prescription }: { prescription: Prescription }) {
     mutationFn: (amount: number) => adjustStock(activeItem!.id, amount),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["inventoryItems"] });
+    }
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteInventoryItem(activeItem!.id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["inventoryItems"] });
+      onOpenChange(false);
     }
   });
 
@@ -190,9 +198,9 @@ function ManageTab({ prescription }: { prescription: Prescription }) {
       </div>
 
       <div className="space-y-4 pt-4 border-t">
-        <h3 className="font-semibold text-sm">Archive Medication</h3>
+        <h3 className="font-semibold text-sm">Archive Supply</h3>
         <p className="text-xs text-muted-foreground">
-          Archiving will hide this medication from the active list but keep its history.
+          Archiving will hide this supply from the active list but keep its history.
         </p>
         <Button 
           variant={activeItem.isArchived ? "outline" : "destructive"} 
@@ -214,6 +222,25 @@ function ManageTab({ prescription }: { prescription: Prescription }) {
             </>
           )}
         </Button>
+
+        {activeItem.isArchived && (
+          <Button 
+            variant="destructive" 
+            className="w-full mt-2"
+            onClick={() => {
+              if (confirm("Are you sure you want to permanently delete this supply? This action cannot be undone.")) {
+                deleteMutation.mutate();
+              }
+            }}
+            disabled={deleteMutation.isPending}
+          >
+            {deleteMutation.isPending ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              "Delete Permanently"
+            )}
+          </Button>
+        )}
       </div>
     </div>
   );

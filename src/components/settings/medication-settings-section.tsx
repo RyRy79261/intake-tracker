@@ -16,7 +16,7 @@ const COUNTRIES = [
 ];
 
 export function MedicationSettingsSection() {
-  const { userCountry, setUserCountry } = useSettingsStore();
+  const { primaryRegion, setPrimaryRegion, secondaryRegion, setSecondaryRegion } = useSettingsStore();
 
   return (
     <div className="space-y-4">
@@ -27,8 +27,8 @@ export function MedicationSettingsSection() {
       
       <div className="space-y-3">
         <div className="space-y-1">
-          <Label className="text-sm font-medium">User Country</Label>
-          <Select value={userCountry || "US"} onValueChange={setUserCountry}>
+          <Label className="text-sm font-medium">Primary Region</Label>
+          <Select value={primaryRegion || "US"} onValueChange={setPrimaryRegion}>
             <SelectTrigger className="w-full">
               <SelectValue placeholder="Select Country" />
             </SelectTrigger>
@@ -40,6 +40,24 @@ export function MedicationSettingsSection() {
           </Select>
           <p className="text-xs text-muted-foreground mt-1">
             Used to find local medication alternatives in search results.
+          </p>
+        </div>
+
+        <div className="space-y-1">
+          <Label className="text-sm font-medium">Secondary Region (Optional)</Label>
+          <Select value={secondaryRegion || "None"} onValueChange={setSecondaryRegion}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select Country" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="None">None</SelectItem>
+              {COUNTRIES.map((c) => (
+                <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground mt-1">
+            Used as a fallback for finding medication alternatives.
           </p>
         </div>
       </div>

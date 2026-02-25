@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { usePrescriptions, useDoseLogsForDate, useAllActiveInventoryItems } from "@/hooks/use-medication-queries";
+import { useDailySchedule, usePrescriptions, useDoseLogsForDate, useAllActiveInventoryItems } from "@/hooks/use-medication-queries";
 import { PillIcon } from "./pill-icon";
 import { Loader2, CheckCircle2, XCircle, Clock, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -18,16 +18,28 @@ export function StatusView() {
   const { data: doseLogs = [], isLoading: logsLoading } = useDoseLogsForDate(dateStr);
   const { data: inventoryItems = [], isLoading: invLoading } = useAllActiveInventoryItems();
 
-  const isLoading = medsLoading || logsLoading || invLoading;
+  const { data: scheduleMap, isLoading: schedLoading } = useDailySchedule(new Date().getDay());
+
+  const isLoading = medsLoading || logsLoading || invLoading || schedLoading;
 
   const stats = useMemo(() => {
     const taken = doseLogs.filter((l) => l.status === "taken").length;
     const skipped = doseLogs.filter((l) => l.status === "skipped").length;
     const rescheduled = doseLogs.filter((l) => l.status === "rescheduled").length;
-    const total = doseLogs.length;
+    
+    // Calculate expected total from base schedule
+    let baseExpectedTotal = 0;
+    if (scheduleMap) {
+      for (const entries of scheduleMap.values()) {
+        baseExpectedTotal += entries.length;
+      }
+    }
+    
+    // Fallback to doseLogs length if it's somehow higher (shouldn't happen but safe)
+    const total = Math.max(baseExpectedTotal, doseLogs.length);
     const pct = total > 0 ? Math.round((taken / total) * 100) : 0;
     return { taken, skipped, rescheduled, total, pct };
-  }, [doseLogs]);
+  }, [doseLogs, scheduleMap]);
 
   // TODO: Update lowStockMeds to use inventory
   const lowStockMeds: any[] = [];

@@ -9,8 +9,8 @@ export type MedTab = "schedule" | "status" | "prescriptions" | "medications" | "
 const TABS: { id: MedTab; icon: React.ComponentType<{ className?: string }>; label: string }[] = [
   { id: "schedule", icon: CalendarDays, label: "Schedule" },
   { id: "status", icon: ClipboardList, label: "Status" },
-  { id: "prescriptions", icon: FlaskConical, label: "Compounds" },
-  { id: "medications", icon: Pill, label: "Stock" },
+  { id: "prescriptions", icon: FlaskConical, label: "Prescription" },
+  { id: "medications", icon: Pill, label: "Supply" },
   { id: "settings", icon: Settings, label: "Settings" },
 ];
 

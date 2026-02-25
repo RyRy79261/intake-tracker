@@ -52,11 +52,11 @@ export function MedicationsList({ onAddMed, onEditMed }: MedicationsListProps) {
     return (
       <div className="text-center py-12 text-muted-foreground">
         <Pill className="w-12 h-12 mx-auto mb-4 opacity-30" />
-        <p className="text-lg font-medium mb-2">No stock</p>
-        <p className="text-sm mb-4">Add medication stock to start tracking</p>
+        <p className="text-lg font-medium mb-2">No supply</p>
+        <p className="text-sm mb-4">Add medication supply to start tracking</p>
         <Button onClick={onAddMed} className="gap-2 bg-teal-600 hover:bg-teal-700">
           <Plus className="w-4 h-4" />
-          Add stock
+          Add supply
         </Button>
       </div>
     );
@@ -84,7 +84,7 @@ export function MedicationsList({ onAddMed, onEditMed }: MedicationsListProps) {
       {inStock.length > 0 && (
         <div>
           <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
-            In Stock
+            In Supply
           </h3>
           <div className="space-y-1">
             {inStock.map((item) => {
@@ -99,7 +99,7 @@ export function MedicationsList({ onAddMed, onEditMed }: MedicationsListProps) {
       {outOfStock.length > 0 && (
         <div>
           <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
-            Out of Stock
+            Out of Supply
           </h3>
           <div className="space-y-1">
             {outOfStock.map((item) => {
@@ -137,7 +137,7 @@ export function MedicationsList({ onAddMed, onEditMed }: MedicationsListProps) {
         className="w-full gap-2 bg-teal-600 hover:bg-teal-700 text-white"
         size="lg"
       >
-        Add stock
+        Add supply
       </Button>
     </div>
   );

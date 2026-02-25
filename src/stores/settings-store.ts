@@ -49,7 +49,8 @@ export interface Settings {
   coffeeDefaultType: string;
 
   // Medication settings
-  userCountry: string;
+  primaryRegion: string;
+  secondaryRegion: string;
 
   // Weight graph defaults
   weightGraphShowEating: boolean;
@@ -83,7 +84,8 @@ interface SettingsActions {
   setWeightGraphShowUrination: (value: boolean) => void;
   setWeightGraphShowDefecation: (value: boolean) => void;
   setWeightGraphShowDrinking: (value: boolean) => void;
-  setUserCountry: (country: string) => void;
+  setPrimaryRegion: (region: string) => void;
+  setSecondaryRegion: (region: string) => void;
   resetToDefaults: () => void;
 }
 
@@ -110,7 +112,8 @@ const defaultSettings: Settings = {
   weightGraphShowUrination: true,
   weightGraphShowDefecation: true,
   weightGraphShowDrinking: true,
-  userCountry: "",
+  primaryRegion: "",
+  secondaryRegion: "",
 };
 
 export const useSettingsStore = create<Settings & SettingsActions>()(
@@ -166,7 +169,8 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
       setWeightGraphShowUrination: (value) => set({ weightGraphShowUrination: value }),
       setWeightGraphShowDefecation: (value) => set({ weightGraphShowDefecation: value }),
       setWeightGraphShowDrinking: (value) => set({ weightGraphShowDrinking: value }),
-      setUserCountry: (value) => set({ userCountry: value }),
+      setPrimaryRegion: (value) => set({ primaryRegion: value }),
+      setSecondaryRegion: (value) => set({ secondaryRegion: value }),
 
       resetToDefaults: () => set(defaultSettings),
     }),
