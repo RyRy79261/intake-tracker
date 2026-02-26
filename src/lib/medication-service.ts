@@ -86,11 +86,22 @@ export async function addPrescription(input: CreatePrescriptionInput): Promise<{
     createdAt: now,
   }));
 
-  await db.transaction("rw", [db.prescriptions, db.medicationPhases, db.inventoryItems, db.phaseSchedules], async () => {
+  await db.transaction("rw", [db.prescriptions, db.medicationPhases, db.inventoryItems, db.phaseSchedules, db.inventoryTransactions], async () => {
     await db.prescriptions.add(prescription);
     await db.medicationPhases.add(phase);
     await db.inventoryItems.add(inventory);
     await db.phaseSchedules.bulkAdd(schedules);
+    
+    if (input.currentStock > 0) {
+      await db.inventoryTransactions.add({
+        id: crypto.randomUUID(),
+        inventoryItemId: inventory.id,
+        timestamp: now,
+        amount: input.currentStock,
+        type: "refill",
+        note: "Initial stock"
+      });
+    }
   });
 
   return { prescription, phase, inventory, schedules };
@@ -159,7 +170,7 @@ export async function addMedicationToPrescription(input: AddMedicationToPrescrip
     createdAt: now,
   }));
 
-  await db.transaction("rw", [db.medicationPhases, db.inventoryItems, db.phaseSchedules], async () => {
+  await db.transaction("rw", [db.medicationPhases, db.inventoryItems, db.phaseSchedules, db.inventoryTransactions], async () => {
     // Archive existing active inventory for this prescription
     const existingInventory = await db.inventoryItems.where("prescriptionId").equals(input.prescriptionId).toArray();
     for (const item of existingInventory) {
@@ -179,6 +190,17 @@ export async function addMedicationToPrescription(input: AddMedicationToPrescrip
     await db.medicationPhases.add(phase);
     await db.inventoryItems.add(inventory);
     await db.phaseSchedules.bulkAdd(schedules);
+    
+    if (input.currentStock > 0) {
+      await db.inventoryTransactions.add({
+        id: crypto.randomUUID(),
+        inventoryItemId: inventory.id,
+        timestamp: now,
+        amount: input.currentStock,
+        type: "refill",
+        note: "Initial stock"
+      });
+    }
   });
 }
 
@@ -320,11 +342,12 @@ export interface UpdatePhaseInput {
   id: string;
   type?: "maintenance" | "titration";
   unit?: string;
+  startDate?: number;
   endDate?: number;
   foodInstruction?: FoodInstruction;
   foodNote?: string;
   notes?: string;
-  status?: "active" | "completed" | "cancelled";
+  status?: "active" | "completed" | "cancelled" | "pending";
   schedules?: { id?: string; time: string; daysOfWeek: number[], dosage: number }[];
 }
 
@@ -376,14 +399,23 @@ export async function updatePhase(input: UpdatePhaseInput): Promise<void> {
   });
 }
 
-export async function startNewPhase(input: CreatePhaseInput): Promise<MedicationPhase> {
+export async function deletePhase(id: string): Promise<void> {
+  await db.transaction("rw", [db.medicationPhases, db.phaseSchedules], async () => {
+    await db.phaseSchedules.where("phaseId").equals(id).delete();
+    await db.medicationPhases.delete(id);
+  });
+}
+
+export async function activatePhase(id: string): Promise<void> {
   const now = Date.now();
-  
-  return await db.transaction("rw", [db.medicationPhases, db.phaseSchedules], async () => {
-    // Find currently active phase and complete it
+  await db.transaction("rw", [db.medicationPhases], async () => {
+    const phase = await db.medicationPhases.get(id);
+    if (!phase) throw new Error("Phase not found");
+
+    // Complete the currently active phase for this prescription
     const activePhases = await db.medicationPhases
       .where("prescriptionId")
-      .equals(input.prescriptionId)
+      .equals(phase.prescriptionId)
       .toArray();
       
     const currentActive = activePhases.find(p => p.status === "active");
@@ -392,6 +424,34 @@ export async function startNewPhase(input: CreatePhaseInput): Promise<Medication
         status: "completed", 
         endDate: currentActive.endDate || now 
       });
+    }
+
+    // Activate the pending phase
+    await db.medicationPhases.update(id, { status: "active", startDate: now });
+  });
+}
+
+export async function startNewPhase(input: CreatePhaseInput): Promise<MedicationPhase> {
+  const now = Date.now();
+  
+  return await db.transaction("rw", [db.medicationPhases, db.phaseSchedules], async () => {
+    const isFuture = input.startDate && input.startDate > now;
+    const status = isFuture ? "pending" : "active";
+
+    // Find currently active phase and complete it ONLY if the new phase is active
+    if (status === "active") {
+      const activePhases = await db.medicationPhases
+        .where("prescriptionId")
+        .equals(input.prescriptionId)
+        .toArray();
+        
+      const currentActive = activePhases.find(p => p.status === "active");
+      if (currentActive) {
+        await db.medicationPhases.update(currentActive.id, { 
+          status: "completed", 
+          endDate: currentActive.endDate || now 
+        });
+      }
     }
 
     const phase: MedicationPhase = {
@@ -404,7 +464,7 @@ export async function startNewPhase(input: CreatePhaseInput): Promise<Medication
       foodInstruction: input.foodInstruction,
       foodNote: input.foodNote,
       notes: input.notes,
-      status: "active",
+      status: status,
       createdAt: now,
     };
     

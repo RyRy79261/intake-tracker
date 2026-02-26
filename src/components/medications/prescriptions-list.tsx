@@ -111,10 +111,22 @@ function PrescriptionRow({ prescription: med, onClick }: { prescription: Prescri
         )}
       </div>
       <div className="flex-1 min-w-0 flex items-center justify-between gap-4">
-        <p className="font-semibold text-sm truncate">
-          {med.genericName}
-        </p>
+        <div className="min-w-0">
+          <p className="font-semibold text-sm truncate">
+            {med.genericName}
+          </p>
+          {activeInventory && activeInventory.brandName !== med.genericName && (
+            <p className="text-xs text-muted-foreground truncate">
+              {activeInventory.brandName}
+            </p>
+          )}
+        </div>
         <div className="text-right shrink-0">
+          {activeInventory && (
+            <p className="text-xs font-medium text-teal-700 dark:text-teal-400 mb-0.5">
+              {activeInventory.brandName} {activeInventory.strength}{activeInventory.unit}
+            </p>
+          )}
           {activePhase ? (
             <p className="text-xs text-muted-foreground truncate">
               {totalDaily} {activePhase.unit}/day ({schedules.length}x daily)

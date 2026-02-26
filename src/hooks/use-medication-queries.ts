@@ -22,7 +22,7 @@ import {
   deleteSchedule,
   getSchedulesForPhase,
 } from "@/lib/medication-schedule-service";
-import { startNewPhase, updatePhase, type CreatePhaseInput, type UpdatePhaseInput } from "@/lib/medication-service";
+import { startNewPhase, updatePhase, deletePhase, activatePhase, type CreatePhaseInput, type UpdatePhaseInput } from "@/lib/medication-service";
 import {
   getDoseLogsForDate,
   getDoseLogsWithDetailsForDate,
@@ -191,6 +191,22 @@ export function useUpdatePhase() {
   const invalidate = useInvalidateMeds();
   return useMutation({
     mutationFn: (input: UpdatePhaseInput) => updatePhase(input),
+    onSuccess: invalidate,
+  });
+}
+
+export function useDeletePhase() {
+  const invalidate = useInvalidateMeds();
+  return useMutation({
+    mutationFn: (id: string) => deletePhase(id),
+    onSuccess: invalidate,
+  });
+}
+
+export function useActivatePhase() {
+  const invalidate = useInvalidateMeds();
+  return useMutation({
+    mutationFn: (id: string) => activatePhase(id),
     onSuccess: invalidate,
   });
 }

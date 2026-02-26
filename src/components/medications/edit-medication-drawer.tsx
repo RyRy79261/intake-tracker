@@ -5,6 +5,7 @@ import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/u
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { PillIcon } from "./pill-icon";
@@ -16,10 +17,12 @@ import {
   useDeletePrescription,
   useSchedulesForPhase,
   usePrescriptions,
-  useUpdatePhase
+  useUpdatePhase,
+  useDeletePhase,
+  useActivatePhase
 } from "@/hooks/use-medication-queries";
 import type { Prescription } from "@/lib/db";
-import { Loader2, Plus, Clock, Pill, Edit2, Check, X } from "lucide-react";
+import { Loader2, Plus, Clock, Pill, Edit2, Check, X, Trash2, Play } from "lucide-react";
 import { format } from "date-fns";
 import { useMedicineSearch } from "@/hooks/use-medicine-search";
 
@@ -32,14 +35,21 @@ interface PrescriptionViewDrawerProps {
 export function PrescriptionViewDrawer({ prescription, open, onOpenChange }: PrescriptionViewDrawerProps) {
   const { data: prescriptions = [] } = usePrescriptions();
   const currentPrescription = prescriptions.find(p => p.id === prescription?.id) || prescription;
+  
+  const { data: inventory = [] } = useInventoryForPrescription(currentPrescription?.id);
+  const activeInventory = inventory.find(i => i.isActive && !i.isArchived) || inventory[0];
 
   if (!currentPrescription) return null;
+
+  const drawerTitle = activeInventory 
+    ? `${activeInventory.brandName} ${activeInventory.strength}${activeInventory.unit}`
+    : currentPrescription.genericName;
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
       <DrawerContent className="max-h-[90dvh] flex flex-col">
         <DrawerHeader className="border-b shrink-0">
-          <DrawerTitle>{currentPrescription.genericName}</DrawerTitle>
+          <DrawerTitle>{drawerTitle}</DrawerTitle>
           <p className="text-sm text-muted-foreground">{currentPrescription.indication}</p>
         </DrawerHeader>
 
@@ -78,6 +88,7 @@ function DetailsTab({ prescription, onOpenChange }: { prescription: Prescription
   const [name, setName] = useState(prescription.genericName);
   const [indication, setIndication] = useState(prescription.indication);
   const [notes, setNotes] = useState(prescription.notes || "");
+  const [isActive, setIsActive] = useState(prescription.isActive);
   
   const updatePrescription = useUpdatePrescription();
   const deletePrescription = useDeletePrescription();
@@ -87,6 +98,7 @@ function DetailsTab({ prescription, onOpenChange }: { prescription: Prescription
     setName(prescription.genericName);
     setIndication(prescription.indication);
     setNotes(prescription.notes || "");
+    setIsActive(prescription.isActive);
     setIsEditing(false);
   }, [prescription]);
 
@@ -96,7 +108,8 @@ function DetailsTab({ prescription, onOpenChange }: { prescription: Prescription
       updates: {
         genericName: name,
         indication,
-        notes
+        notes,
+        isActive
       }
     });
     setIsEditing(false);
@@ -107,6 +120,16 @@ function DetailsTab({ prescription, onOpenChange }: { prescription: Prescription
       await deletePrescription.mutateAsync(prescription.id);
       onOpenChange(false);
     }
+  };
+
+  const handleToggleActive = async (checked: boolean) => {
+    setIsActive(checked);
+    await updatePrescription.mutateAsync({
+      id: prescription.id,
+      updates: {
+        isActive: checked
+      }
+    });
   };
 
   return (
@@ -131,6 +154,18 @@ function DetailsTab({ prescription, onOpenChange }: { prescription: Prescription
 
       {isEditing ? (
         <div className="space-y-4">
+          <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
+            <div className="space-y-0.5">
+              <Label className="text-sm">Active Prescription</Label>
+              <p className="text-xs text-muted-foreground">
+                Turn off to hide from daily tracking
+              </p>
+            </div>
+            <Switch 
+              checked={isActive} 
+              onCheckedChange={setIsActive} 
+            />
+          </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Name</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} className="h-9" />
@@ -151,6 +186,19 @@ function DetailsTab({ prescription, onOpenChange }: { prescription: Prescription
         </div>
       ) : (
         <div className="space-y-4">
+          <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
+            <div className="space-y-0.5">
+              <Label className="text-sm">Active Prescription</Label>
+              <p className="text-xs text-muted-foreground">
+                Turn off to hide from daily tracking
+              </p>
+            </div>
+            <Switch 
+              checked={isActive} 
+              onCheckedChange={handleToggleActive} 
+            />
+          </div>
+          
           <div>
             <p className="text-xs text-muted-foreground mb-1">Reason for use</p>
             <p className="text-sm font-medium">{prescription.indication || "None specified"}</p>
@@ -380,6 +428,7 @@ function TitrationTab({ prescription }: { prescription: Prescription }) {
   // Form state
   const [unit, setUnit] = useState("mg");
   const [type, setType] = useState<"maintenance" | "titration">("titration");
+  const [startDate, setStartDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [schedules, setSchedules] = useState<{ time: string; dosage: number }[]>([
     { time: "08:00", dosage: 100 }
   ]);
@@ -395,11 +444,15 @@ function TitrationTab({ prescription }: { prescription: Prescription }) {
   const handleStartPhase = async () => {
     if (schedules.length === 0) return;
 
+    // Parse the start date (default to now if invalid)
+    const parsedDate = new Date(startDate);
+    const startTimestamp = isNaN(parsedDate.getTime()) ? Date.now() : parsedDate.getTime();
+
     await startNewPhase.mutateAsync({
       prescriptionId: prescription.id,
       type,
       unit,
-      startDate: Date.now(),
+      startDate: startTimestamp,
       foodInstruction: "none",
       schedules: schedules.map(s => ({ ...s, daysOfWeek: [0, 1, 2, 3, 4, 5, 6] }))
     });
@@ -421,7 +474,7 @@ function TitrationTab({ prescription }: { prescription: Prescription }) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h3 className="font-semibold text-sm flex items-center gap-2">
-          <Clock className="w-4 h-4" /> Dosage History
+          <Clock className="w-4 h-4" /> Titration Phases
         </h3>
         {!isAdding && (
           <Button size="sm" variant="outline" className="gap-1 h-8 text-xs" onClick={() => setIsAdding(true)}>
@@ -455,6 +508,16 @@ function TitrationTab({ prescription }: { prescription: Prescription }) {
                 className="h-9"
               />
             </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs">Start Date</Label>
+            <Input 
+              type="date"
+              value={startDate} 
+              onChange={(e) => setStartDate(e.target.value)} 
+              className="h-9"
+            />
           </div>
 
           <div className="space-y-3">
@@ -520,15 +583,19 @@ function PhaseCard({ phase }: { phase: any }) {
   const totalDaily = schedules.reduce((acc, s) => acc + s.dosage, 0);
   const [isEditing, setIsEditing] = useState(false);
   const updatePhase = useUpdatePhase();
+  const deletePhase = useDeletePhase();
+  const activatePhase = useActivatePhase();
 
   const [unit, setUnit] = useState(phase.unit || "mg");
   const [type, setType] = useState<"maintenance" | "titration">(phase.type || "titration");
+  const [startDate, setStartDate] = useState(format(phase.startDate || Date.now(), "yyyy-MM-dd"));
   const [editSchedules, setEditSchedules] = useState<{ id?: string; time: string; dosage: number }[]>([]);
 
   useEffect(() => {
     if (isEditing) {
       setUnit(phase.unit || "mg");
       setType(phase.type || "titration");
+      setStartDate(format(phase.startDate || Date.now(), "yyyy-MM-dd"));
       setEditSchedules(
         schedules.length > 0
           ? schedules.map(s => ({ id: s.id, time: s.time, dosage: s.dosage }))
@@ -539,10 +606,15 @@ function PhaseCard({ phase }: { phase: any }) {
 
   const handleSave = async () => {
     if (editSchedules.length === 0) return;
+    
+    const parsedDate = new Date(startDate);
+    const startTimestamp = isNaN(parsedDate.getTime()) ? phase.startDate : parsedDate.getTime();
+    
     await updatePhase.mutateAsync({
       id: phase.id,
       type,
       unit,
+      startDate: startTimestamp,
       schedules: editSchedules.map(s => ({ ...s, daysOfWeek: [0, 1, 2, 3, 4, 5, 6] }))
     });
     setIsEditing(false);
@@ -596,6 +668,16 @@ function PhaseCard({ phase }: { phase: any }) {
           </div>
         </div>
 
+        <div className="space-y-1.5">
+          <Label className="text-xs">Start Date</Label>
+          <Input 
+            type="date"
+            value={startDate} 
+            onChange={(e) => setStartDate(e.target.value)} 
+            className="h-9"
+          />
+        </div>
+
         <div className="space-y-3">
           <Label className="text-xs">Daily Schedule</Label>
           {editSchedules.map((s, i) => (
@@ -633,31 +715,71 @@ function PhaseCard({ phase }: { phase: any }) {
       className={`p-4 rounded-xl border relative overflow-hidden group ${
         phase.status === "active" 
           ? "bg-card border-teal-500/50 shadow-sm" 
+          : phase.status === "pending"
+          ? "bg-muted/10 border-amber-500/30 border-dashed"
           : "bg-muted/30 border-dashed opacity-70"
       }`}
     >
       {phase.status === "active" && (
         <div className="absolute top-0 right-0 w-1.5 h-full bg-teal-500" />
       )}
+      {phase.status === "pending" && (
+        <div className="absolute top-0 right-0 w-1.5 h-full bg-amber-500/50" />
+      )}
       
-      <div className="absolute top-2 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="absolute top-2 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+        {phase.status === "pending" && (
+          <>
+            <Button 
+              size="sm" 
+              variant="ghost" 
+              className="h-8 w-8 p-0 text-amber-600 hover:text-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/30" 
+              onClick={() => activatePhase.mutateAsync(phase.id)}
+              disabled={activatePhase.isPending}
+              title="Set as Active"
+            >
+              {activatePhase.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
+            </Button>
+            <Button 
+              size="sm" 
+              variant="ghost" 
+              className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-100 dark:hover:bg-red-900/30" 
+              onClick={() => {
+                if (confirm("Are you sure you want to delete this pending phase?")) {
+                  deletePhase.mutateAsync(phase.id);
+                }
+              }}
+              disabled={deletePhase.isPending}
+              title="Delete Phase"
+            >
+              {deletePhase.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+            </Button>
+          </>
+        )}
         <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => setIsEditing(true)}>
           <Edit2 className="w-3.5 h-3.5" />
         </Button>
       </div>
 
-      <div className="flex items-center justify-between mb-2 pr-8">
-        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-          phase.type === "titration" 
-            ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300" 
-            : "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
-        }`}>
-          {phase.type === "titration" ? "Titration" : "Maintenance"}
-        </span>
+      <div className="flex items-center justify-between mb-2 pr-20">
+        <div className="flex items-center gap-2">
+          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+            phase.type === "titration" 
+              ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300" 
+              : "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+          }`}>
+            {phase.type === "titration" ? "Titration" : "Maintenance"}
+          </span>
+          {phase.status === "pending" && (
+            <span className="text-[10px] font-medium uppercase tracking-wider text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800 px-1.5 rounded bg-amber-50 dark:bg-amber-950/30">
+              Pending
+            </span>
+          )}
+        </div>
         
         <span className="text-xs text-muted-foreground">
           {format(phase.startDate, "MMM d, yyyy")}
-          {phase.endDate ? ` - ${format(phase.endDate, "MMM d, yyyy")}` : " - Present"}
+          {phase.endDate ? ` - ${format(phase.endDate, "MMM d, yyyy")}` : phase.status === "pending" ? "" : " - Present"}
         </span>
       </div>
       

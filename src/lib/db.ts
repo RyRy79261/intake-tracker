@@ -98,7 +98,7 @@ export interface MedicationPhase {
   foodInstruction: FoodInstruction;
   foodNote?: string;
   notes?: string;
-  status: "active" | "completed" | "cancelled";
+  status: "active" | "completed" | "cancelled" | "pending";
   createdAt: number;
 }
 
