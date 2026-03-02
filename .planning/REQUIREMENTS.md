@@ -58,7 +58,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Testability
 
-- [ ] **TEST-01**: Vitest + fake-indexeddb test infrastructure configured and working
+- [x] **TEST-01**: Vitest + fake-indexeddb test infrastructure configured and working
 - [ ] **TEST-02**: Unit tests for all service layer functions
 - [ ] **TEST-03**: Migration tests for schema version upgrades
 - [ ] **TEST-04**: Timezone-specific test runs in both `TZ=Africa/Johannesburg` and `TZ=Europe/Berlin`
@@ -104,7 +104,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SCHM-02 | Phase 1 | Pending |
 | SCHM-03 | Phase 1 | Pending |
 | SCHM-04 | Phase 1 | Pending |
-| TEST-01 | Phase 1 | Pending |
+| TEST-01 | Phase 1 | Complete |
 | SRVC-03 | Phase 2 | Pending |
 | SRVC-04 | Phase 2 | Pending |
 | SRVC-01 | Phase 3 | Pending |
