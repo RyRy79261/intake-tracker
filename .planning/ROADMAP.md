@@ -36,10 +36,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. `currentStock` is no longer stored as a mutable counter on InventoryItem — computed value only, derived from transaction sum
   4. A migration test using `fake-indexeddb` runs against the version 10 upgrade and passes without errors
   5. Vitest test runner is configured, executes, and reports results in the terminal
-**Plans**: TBD
+**Plans**: 3
 
 Plans:
-- [ ] 01-01: TBD
+- [ ] 01-01: Test Infrastructure Setup (TEST-01)
+- [ ] 01-02: Dexie v10 Schema Rewrite (SCHM-01, SCHM-03, SCHM-04)
+- [ ] 01-03: Migration Test Suite (SCHM-02)
 
 ### Phase 2: TypeScript and Service Contracts
 **Goal**: TypeScript strict flags are on, all surfaced bugs are fixed, and service boundary rules prevent UI from touching the database directly
@@ -188,7 +190,7 @@ Note: Phase 5 (Security) depends only on Phase 2 and can begin in parallel with 
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Schema Foundation | 0/TBD | Not started | - |
+| 1. Schema Foundation | 0/3 | Planned | - |
 | 2. TypeScript and Service Contracts | 0/TBD | Not started | - |
 | 3. Service Layer Rebuild | 0/TBD | Not started | - |
 | 4. Analytics Service | 0/TBD | Not started | - |
