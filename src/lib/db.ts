@@ -231,12 +231,6 @@ const db = new Dexie("IntakeTrackerDB") as Dexie & {
   eatingRecords: EntityTable<EatingRecord, "id">;
   urinationRecords: EntityTable<UrinationRecord, "id">;
   defecationRecords: EntityTable<DefecationRecord, "id">;
-  
-  // Legacy tables for migration
-  medications: EntityTable<any, "id">;
-  medicationSchedules: EntityTable<any, "id">;
-  
-  // New tables
   prescriptions: EntityTable<Prescription, "id">;
   medicationPhases: EntityTable<MedicationPhase, "id">;
   phaseSchedules: EntityTable<PhaseSchedule, "id">;
@@ -246,213 +240,92 @@ const db = new Dexie("IntakeTrackerDB") as Dexie & {
   doseLogs: EntityTable<DoseLog, "id">;
 };
 
-// Version 1: Initial schema
-// Version 2: Added audit logs
-// Version 3: Added weight and blood pressure records
-// Version 4: Added optional note field to IntakeRecord (no index needed)
-db.version(4).stores({
-  intakeRecords: "id, type, timestamp, source",
-  auditLogs: "id, timestamp, action",
-  weightRecords: "id, timestamp",
-  bloodPressureRecords: "id, timestamp, position, arm",
-});
-// Version 5: Added eating and urination records (additive only; existing stores unchanged)
-db.version(5).stores({
-  intakeRecords: "id, type, timestamp, source",
-  auditLogs: "id, timestamp, action",
-  weightRecords: "id, timestamp",
-  bloodPressureRecords: "id, timestamp, position, arm",
-  eatingRecords: "id, timestamp",
-  urinationRecords: "id, timestamp",
-});
-// Version 6: Added defecation records
-db.version(6).stores({
-  intakeRecords: "id, type, timestamp, source",
-  auditLogs: "id, timestamp, action",
-  weightRecords: "id, timestamp",
-  bloodPressureRecords: "id, timestamp, position, arm",
-  eatingRecords: "id, timestamp",
-  urinationRecords: "id, timestamp",
-  defecationRecords: "id, timestamp",
-});
-// Version 7: Added old medication tracking tables
-db.version(7).stores({
-  intakeRecords: "id, type, timestamp, source",
-  auditLogs: "id, timestamp, action",
-  weightRecords: "id, timestamp",
-  bloodPressureRecords: "id, timestamp, position, arm",
-  eatingRecords: "id, timestamp",
-  urinationRecords: "id, timestamp",
-  defecationRecords: "id, timestamp",
-  medications: "id, isActive, createdAt",
-  medicationSchedules: "id, medicationId, time, enabled",
-  doseLogs: "id, medicationId, scheduleId, scheduledDate, scheduledTime, status",
-});
+// Version 10: Consolidated schema with sync-readiness fields, compound indexes,
+// and event-sourced inventory. Replaces v4-v9 (all prior migrations ran on
+// production data and are no longer needed in code). Legacy `medications` and
+// `medicationSchedules` tables intentionally omitted — Dexie will delete them.
+db.version(10).stores({
+  // Health records — compound indexes for date-range correlation queries
+  intakeRecords:           "id, [type+timestamp], timestamp, source, updatedAt",
+  weightRecords:           "id, timestamp, updatedAt",
+  bloodPressureRecords:    "id, timestamp, position, arm, updatedAt",
+  eatingRecords:           "id, timestamp, updatedAt",
+  urinationRecords:        "id, timestamp, updatedAt",
+  defecationRecords:       "id, timestamp, updatedAt",
 
-// Version 8: Refactored medication tracking (Prescriptions, Phases, Inventory)
-db.version(8).stores({
-  prescriptions: "id, isActive, createdAt",
-  medicationPhases: "id, prescriptionId, status, type",
-  phaseSchedules: "id, phaseId, time, enabled",
-  inventoryItems: "id, prescriptionId, isActive",
-  dailyNotes: "id, date, prescriptionId, doseLogId",
-  doseLogs: "id, prescriptionId, phaseId, scheduleId, scheduledDate, scheduledTime, status",
+  // Medication domain — compound indexes for cross-domain queries
+  prescriptions:           "id, isActive, updatedAt",
+  medicationPhases:        "id, prescriptionId, status, type, updatedAt",
+  phaseSchedules:          "id, phaseId, time, enabled, updatedAt",
+  inventoryItems:          "id, prescriptionId, isActive, updatedAt",
+  inventoryTransactions:   "id, [inventoryItemId+timestamp], inventoryItemId, timestamp, type, updatedAt",
+  doseLogs:                "id, [prescriptionId+scheduledDate], prescriptionId, phaseId, scheduleId, scheduledDate, scheduledTime, status, updatedAt",
+  dailyNotes:              "id, date, prescriptionId, doseLogId, updatedAt",
+
+  // Audit and system
+  auditLogs:               "id, [action+timestamp], timestamp, action",
 }).upgrade(async (trans) => {
-  // Migrate existing medications
-  const oldMeds = await trans.table("medications").toArray();
-  const oldSchedules = await trans.table("medicationSchedules").toArray();
-  const oldDoseLogs = await trans.table("doseLogs").toArray();
-  
-  for (const oldMed of oldMeds) {
-    // Create Prescription
-    const prescription: Prescription = {
-      id: oldMed.id, // Keep the same ID for ease
-      genericName: oldMed.genericName || oldMed.brandName || "Unknown",
-      indication: oldMed.indication || "",
-      notes: oldMed.notes,
-      contraindications: oldMed.contraindications,
-      warnings: oldMed.warnings,
-      isActive: oldMed.isActive,
-      createdAt: oldMed.createdAt,
-      updatedAt: oldMed.updatedAt || oldMed.createdAt,
-    };
-    await trans.table("prescriptions").add(prescription);
-    
-    // Create initial MedicationPhase
-    const phaseId = crypto.randomUUID();
-    const phase: any = {
-      id: phaseId,
-      prescriptionId: prescription.id,
-      type: "maintenance",
-      dosageAmount: oldMed.dosageAmount || 1,
-      dosageStrength: oldMed.dosageStrength || "",
-      startDate: oldMed.createdAt,
-      foodInstruction: oldMed.foodInstruction || "none",
-      foodNote: oldMed.foodNote,
-      status: "active",
-      createdAt: oldMed.createdAt,
-    };
-    await trans.table("medicationPhases").add(phase);
-    
-    // Create InventoryItem
-    const inventoryItemId = crypto.randomUUID();
-    const inventory: any = {
-      id: inventoryItemId,
-      prescriptionId: prescription.id,
-      brandName: oldMed.brandName || oldMed.genericName || "Unknown",
-      currentStock: oldMed.currentStock || 0,
-      pillShape: oldMed.pillShape || "round",
-      pillColor: oldMed.pillColor || "#FFFFFF",
-      refillAlertDays: oldMed.refillAlertDays,
-      refillAlertPills: oldMed.refillAlertPills,
-      isActive: true,
-      createdAt: oldMed.createdAt,
-      updatedAt: oldMed.updatedAt || oldMed.createdAt,
-    };
-    await trans.table("inventoryItems").add(inventory);
-    
-    // Migrate schedules to phaseSchedules
-    const schedulesForMed = oldSchedules.filter((s: any) => s.medicationId === oldMed.id);
-    for (const oldSched of schedulesForMed) {
-      const phaseSchedule: any = {
-        id: oldSched.id, // Keep same ID so doseLogs still link (sort of)
-        phaseId: phase.id,
-        time: oldSched.time,
-        daysOfWeek: oldSched.daysOfWeek || [],
-        enabled: oldSched.enabled,
-        createdAt: oldSched.createdAt,
-      };
-      await trans.table("phaseSchedules").add(phaseSchedule);
-    }
-  }
-  
-  // Migrate doseLogs (just update prescriptionId and phaseId where possible)
-  for (const oldLog of oldDoseLogs) {
-    // We kept the prescriptionId same as old medicationId
-    // And phaseId we just created above for this med. We have to look it up.
-    const phase = await trans.table("medicationPhases").where("prescriptionId").equals(oldLog.medicationId).first();
-    if (phase) {
-      oldLog.prescriptionId = oldLog.medicationId;
-      oldLog.phaseId = phase.id;
-      // scheduleId remains the same since we kept oldSched.id
-      delete oldLog.medicationId;
-      await trans.table("doseLogs").put(oldLog);
-    }
-  }
-  
-  await trans.table("medications").clear();
-  await trans.table("medicationSchedules").clear();
-});
+  const now = Date.now();
+  const deviceId = "migrated-v10";
 
-// Version 9: Decouple dosage and strength
-db.version(9).stores({
-  prescriptions: "id, isActive, createdAt",
-  medicationPhases: "id, prescriptionId, status, type",
-  phaseSchedules: "id, phaseId, time, enabled",
-  inventoryItems: "id, prescriptionId, isActive",
-  inventoryTransactions: "id, inventoryItemId, timestamp",
-  dailyNotes: "id, date, prescriptionId, doseLogId",
-  doseLogs: "id, prescriptionId, phaseId, scheduleId, scheduledDate, scheduledTime, status",
-}).upgrade(async (trans) => {
-  const phases = await trans.table("medicationPhases").toArray();
-  const schedules = await trans.table("phaseSchedules").toArray();
-  const inventories = await trans.table("inventoryItems").toArray();
-
-  const parseStrength = (str: string): { strength: number; unit: string } => {
-    if (!str) return { strength: 1, unit: "mg" };
-    const match = str.match(/(\d+(?:\.\d+)?)\s*([a-zA-Z]+)/);
-    if (match) {
-      return { strength: parseFloat(match[1]), unit: match[2].toLowerCase() };
-    }
-    const num = parseFloat(str);
-    if (!isNaN(num)) return { strength: num, unit: "mg" };
-    return { strength: 1, unit: "mg" };
+  // Helper: backfill sync fields on all records in a table
+  const backfill = async (tableName: string, timestampField = "timestamp") => {
+    await trans.table(tableName).toCollection().modify((record: any) => {
+      if (record.createdAt == null) {
+        record.createdAt = record[timestampField] ?? record.createdAt ?? now;
+      }
+      if (record.updatedAt == null) {
+        record.updatedAt = record.createdAt;
+      }
+      if (!("deletedAt" in record) || record.deletedAt === undefined) {
+        record.deletedAt = null;
+      }
+      if (record.deviceId == null) {
+        record.deviceId = deviceId;
+      }
+    });
   };
 
-  const phaseMap = new Map();
+  // Backfill all health record tables
+  await backfill("intakeRecords");
+  await backfill("weightRecords");
+  await backfill("bloodPressureRecords");
+  await backfill("eatingRecords");
+  await backfill("urinationRecords");
+  await backfill("defecationRecords");
 
-  for (const p of phases) {
-    const { strength, unit } = parseStrength(p.dosageStrength);
-    
-    // Save mapping to update schedules and inventory
-    phaseMap.set(p.id, {
-      pills: p.dosageAmount || 1,
-      strength,
-      unit,
-      prescriptionId: p.prescriptionId
-    });
+  // Backfill medication tables
+  await backfill("prescriptions", "createdAt");
+  await backfill("medicationPhases", "createdAt");
+  await backfill("phaseSchedules", "createdAt");
+  await backfill("inventoryItems", "createdAt");
+  await backfill("inventoryTransactions");
+  await backfill("doseLogs", "actionTimestamp");
+  await backfill("dailyNotes", "createdAt");
+  await backfill("auditLogs");
 
-    // Update phase to remove old fields and add unit
-    delete p.dosageAmount;
-    delete p.dosageStrength;
-    p.unit = unit;
-    await trans.table("medicationPhases").put(p);
-  }
-
-  for (const s of schedules) {
-    const pInfo = phaseMap.get(s.phaseId);
-    if (pInfo) {
-      s.dosage = pInfo.pills * pInfo.strength;
-    } else {
-      s.dosage = 1;
+  // Event-source inventory: convert legacy currentStock to "initial" transactions
+  const items = await trans.table("inventoryItems").toArray();
+  for (const item of items) {
+    if (item.currentStock != null && item.currentStock > 0) {
+      await trans.table("inventoryTransactions").add({
+        id: crypto.randomUUID(),
+        inventoryItemId: item.id,
+        timestamp: item.createdAt ?? now,
+        amount: item.currentStock,
+        type: "initial",
+        note: "Migrated from v9 currentStock field",
+        doseLogId: undefined,
+        createdAt: item.createdAt ?? now,
+        updatedAt: item.createdAt ?? now,
+        deletedAt: null,
+        deviceId: deviceId,
+      });
     }
-    await trans.table("phaseSchedules").put(s);
-  }
-
-  for (const inv of inventories) {
-    // Attempt to find a phase for this prescription to get the strength
-    let strength = 1;
-    let unit = "mg";
-    for (const pInfo of Array.from(phaseMap.values())) {
-      if (pInfo.prescriptionId === inv.prescriptionId) {
-        strength = pInfo.strength;
-        unit = pInfo.unit;
-        break;
-      }
-    }
-    inv.strength = strength;
-    inv.unit = unit;
-    await trans.table("inventoryItems").put(inv);
+    // Do not delete currentStock from the record — it stays as a deprecated
+    // optional field. Services read it until Phase 3 removes those reads.
+    // Setting it to undefined here would cause TypeScript errors in Phase 3
+    // to surface correctly (undefined !== absent field in IDB).
   }
 });
 
