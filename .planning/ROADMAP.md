@@ -40,7 +40,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 Plans:
 - [x] 01-01: Test Infrastructure Setup (TEST-01)
-- [ ] 01-02: Dexie v10 Schema Rewrite (SCHM-01, SCHM-03, SCHM-04)
+- [x] 01-02: Dexie v10 Schema Rewrite (SCHM-01, SCHM-03, SCHM-04)
 - [ ] 01-03: Migration Test Suite (SCHM-02)
 
 ### Phase 2: TypeScript and Service Contracts
@@ -190,7 +190,7 @@ Note: Phase 5 (Security) depends only on Phase 2 and can begin in parallel with 
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Schema Foundation | 1/3 | In Progress | - |
+| 1. Schema Foundation | 2/3 | In Progress | - |
 | 2. TypeScript and Service Contracts | 0/TBD | Not started | - |
 | 3. Service Layer Rebuild | 0/TBD | Not started | - |
 | 4. Analytics Service | 0/TBD | Not started | - |
