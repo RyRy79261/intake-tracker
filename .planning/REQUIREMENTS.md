@@ -100,44 +100,44 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SCHM-01 | — | Pending |
-| SCHM-02 | — | Pending |
-| SCHM-03 | — | Pending |
-| SCHM-04 | — | Pending |
-| SRVC-01 | — | Pending |
-| SRVC-02 | — | Pending |
-| SRVC-03 | — | Pending |
-| SRVC-04 | — | Pending |
-| SRVC-05 | — | Pending |
-| SRVC-06 | — | Pending |
-| MEDX-01 | — | Pending |
-| MEDX-02 | — | Pending |
-| MEDX-03 | — | Pending |
-| MEDX-04 | — | Pending |
-| MEDX-05 | — | Pending |
-| MEDX-06 | — | Pending |
-| MEDX-07 | — | Pending |
-| INTR-01 | — | Pending |
-| INTR-02 | — | Pending |
-| INTR-03 | — | Pending |
-| INTR-04 | — | Pending |
-| NOTF-01 | — | Pending |
-| SECU-01 | — | Pending |
-| SECU-02 | — | Pending |
-| SECU-03 | — | Pending |
-| DATA-01 | — | Pending |
-| DATA-02 | — | Pending |
-| DATA-03 | — | Pending |
-| TEST-01 | — | Pending |
-| TEST-02 | — | Pending |
-| TEST-03 | — | Pending |
-| TEST-04 | — | Pending |
+| SCHM-01 | Phase 1 | Pending |
+| SCHM-02 | Phase 1 | Pending |
+| SCHM-03 | Phase 1 | Pending |
+| SCHM-04 | Phase 1 | Pending |
+| TEST-01 | Phase 1 | Pending |
+| SRVC-03 | Phase 2 | Pending |
+| SRVC-04 | Phase 2 | Pending |
+| SRVC-01 | Phase 3 | Pending |
+| SRVC-02 | Phase 3 | Pending |
+| SRVC-06 | Phase 3 | Pending |
+| SRVC-05 | Phase 4 | Pending |
+| SECU-01 | Phase 5 | Pending |
+| SECU-02 | Phase 5 | Pending |
+| SECU-03 | Phase 5 | Pending |
+| MEDX-01 | Phase 6 | Pending |
+| MEDX-02 | Phase 6 | Pending |
+| MEDX-03 | Phase 6 | Pending |
+| MEDX-04 | Phase 6 | Pending |
+| MEDX-05 | Phase 6 | Pending |
+| MEDX-06 | Phase 6 | Pending |
+| MEDX-07 | Phase 7 | Pending |
+| INTR-01 | Phase 8 | Pending |
+| INTR-02 | Phase 8 | Pending |
+| INTR-03 | Phase 8 | Pending |
+| INTR-04 | Phase 8 | Pending |
+| DATA-01 | Phase 9 | Pending |
+| DATA-02 | Phase 9 | Pending |
+| DATA-03 | Phase 9 | Pending |
+| TEST-02 | Phase 10 | Pending |
+| TEST-03 | Phase 10 | Pending |
+| TEST-04 | Phase 10 | Pending |
+| NOTF-01 | Phase 11 | Pending |
 
 **Coverage:**
 - v1 requirements: 32 total
-- Mapped to phases: 0
-- Unmapped: 32 ⚠️
+- Mapped to phases: 32
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-02*
-*Last updated: 2026-03-02 after initial definition*
+*Last updated: 2026-03-02 after roadmap creation — all 32 requirements mapped to phases 1-11*
