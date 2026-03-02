@@ -7,9 +7,13 @@ export interface IntakeRecord {
   timestamp: number; // Unix timestamp in milliseconds
   source?: string; // "manual", "food:apple", "voice", etc.
   note?: string; // Optional note for the entry
+  createdAt: number; // Unix ms — set once on creation
+  updatedAt: number; // Unix ms — updated on every mutation
+  deletedAt: number | null; // null = active, number = soft-deleted timestamp
+  deviceId: string; // device identifier for sync conflict resolution
 }
 
-export type AuditAction = 
+export type AuditAction =
   | "ai_parse_request"
   | "ai_parse_success"
   | "ai_parse_error"
@@ -21,13 +25,24 @@ export type AuditAction =
   | "api_key_clear"
   | "pin_set"
   | "pin_verify_success"
-  | "pin_verify_failure";
+  | "pin_verify_failure"
+  | "dose_taken"
+  | "dose_skipped"
+  | "dose_rescheduled"
+  | "prescription_added"
+  | "prescription_updated"
+  | "inventory_adjusted"
+  | "phase_activated";
 
 export interface AuditLog {
   id: string;
   timestamp: number;
   action: AuditAction;
   details?: string;
+  createdAt: number;
+  updatedAt: number;
+  deletedAt: number | null;
+  deviceId: string;
 }
 
 export interface WeightRecord {
@@ -35,6 +50,10 @@ export interface WeightRecord {
   weight: number; // in kg
   timestamp: number;
   note?: string;
+  createdAt: number;
+  updatedAt: number;
+  deletedAt: number | null;
+  deviceId: string;
 }
 
 export interface BloodPressureRecord {
@@ -47,6 +66,10 @@ export interface BloodPressureRecord {
   arm: "left" | "right";
   timestamp: number;
   note?: string;
+  createdAt: number;
+  updatedAt: number;
+  deletedAt: number | null;
+  deviceId: string;
 }
 
 export interface EatingRecord {
@@ -54,6 +77,10 @@ export interface EatingRecord {
   timestamp: number;
   grams?: number; // optional weight in grams
   note?: string;
+  createdAt: number;
+  updatedAt: number;
+  deletedAt: number | null;
+  deviceId: string;
 }
 
 export interface UrinationRecord {
@@ -61,6 +88,10 @@ export interface UrinationRecord {
   timestamp: number;
   amountEstimate?: string;
   note?: string;
+  createdAt: number;
+  updatedAt: number;
+  deletedAt: number | null;
+  deviceId: string;
 }
 
 export interface DefecationRecord {
@@ -68,6 +99,10 @@ export interface DefecationRecord {
   timestamp: number;
   amountEstimate?: string; // "small" | "medium" | "large"
   note?: string;
+  createdAt: number;
+  updatedAt: number;
+  deletedAt: number | null;
+  deviceId: string;
 }
 
 export type PillShape = "round" | "oval" | "capsule" | "diamond" | "tablet";
@@ -84,6 +119,8 @@ export interface Prescription {
   isActive: boolean;
   createdAt: number;
   updatedAt: number;
+  deletedAt: number | null;
+  deviceId: string;
 }
 
 export type PhaseType = "maintenance" | "titration";
@@ -100,6 +137,9 @@ export interface MedicationPhase {
   notes?: string;
   status: "active" | "completed" | "cancelled" | "pending";
   createdAt: number;
+  updatedAt: number;
+  deletedAt: number | null;
+  deviceId: string;
 }
 
 export interface PhaseSchedule {
@@ -109,14 +149,19 @@ export interface PhaseSchedule {
   dosage: number;
   daysOfWeek: number[];
   enabled: boolean;
+  unit?: string; // dosage unit for display, e.g. "mg"
   createdAt: number;
+  updatedAt: number;
+  deletedAt: number | null;
+  deviceId: string;
 }
 
 export interface InventoryItem {
   id: string;
   prescriptionId: string;
   brandName: string;
-  currentStock: number;
+  /** @deprecated Use inventoryTransactions sum. Will be removed in Phase 3. */
+  currentStock?: number;
   strength: number;
   unit: string;
   pillShape: PillShape;
@@ -128,6 +173,8 @@ export interface InventoryItem {
   isArchived?: boolean;
   createdAt: number;
   updatedAt: number;
+  deletedAt: number | null;
+  deviceId: string;
 }
 
 export interface InventoryTransaction {
@@ -136,7 +183,12 @@ export interface InventoryTransaction {
   timestamp: number;
   amount: number;
   note?: string;
-  type: "refill" | "consumed" | "adjusted";
+  type: "refill" | "consumed" | "adjusted" | "initial";
+  doseLogId?: string; // links consumed transaction to the dose that caused it
+  createdAt: number;
+  updatedAt: number;
+  deletedAt: number | null;
+  deviceId: string;
 }
 
 export interface DailyNote {
@@ -147,6 +199,8 @@ export interface DailyNote {
   note: string;
   createdAt: number;
   updatedAt: number;
+  deletedAt: number | null;
+  deviceId: string;
 }
 
 export interface DoseLog {
@@ -162,6 +216,11 @@ export interface DoseLog {
   rescheduledTo?: string;
   skipReason?: string;
   note?: string;
+  timezone?: string; // IANA timezone string, e.g. "Africa/Johannesburg"
+  createdAt: number;
+  updatedAt: number;
+  deletedAt: number | null;
+  deviceId: string;
 }
 
 const db = new Dexie("IntakeTrackerDB") as Dexie & {
