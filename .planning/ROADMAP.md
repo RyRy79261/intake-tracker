@@ -12,7 +12,7 @@ This milestone is an engineering overhaul of an existing health tracking PWA. Th
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Schema Foundation** - Dexie v10 migration with compound indexes, event-sourced inventory, sync-ready timestamps, and test infrastructure
+- [x] **Phase 1: Schema Foundation** - Dexie v10 migration with compound indexes, event-sourced inventory, sync-ready timestamps, and test infrastructure
 - [ ] **Phase 2: TypeScript and Service Contracts** - Strict TypeScript flags enabled with all latent errors fixed; clean service boundary rules enforced
 - [ ] **Phase 3: Service Layer Rebuild** - Medication services rebuilt with transactional atomicity, timezone-aware scheduling, and fractional dose math
 - [ ] **Phase 4: Analytics Service** - Cross-domain query seam implemented as the data foundation for future AI analysis
@@ -41,7 +41,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 Plans:
 - [x] 01-01: Test Infrastructure Setup (TEST-01)
 - [x] 01-02: Dexie v10 Schema Rewrite (SCHM-01, SCHM-03, SCHM-04)
-- [ ] 01-03: Migration Test Suite (SCHM-02)
+- [x] 01-03: Migration Test Suite (SCHM-02)
 
 ### Phase 2: TypeScript and Service Contracts
 **Goal**: TypeScript strict flags are on, all surfaced bugs are fixed, and service boundary rules prevent UI from touching the database directly
@@ -190,7 +190,7 @@ Note: Phase 5 (Security) depends only on Phase 2 and can begin in parallel with 
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Schema Foundation | 2/3 | In Progress | - |
+| 1. Schema Foundation | 3/3 | Complete | 2026-03-02 |
 | 2. TypeScript and Service Contracts | 0/TBD | Not started | - |
 | 3. Service Layer Rebuild | 0/TBD | Not started | - |
 | 4. Analytics Service | 0/TBD | Not started | - |

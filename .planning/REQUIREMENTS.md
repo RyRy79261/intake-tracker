@@ -10,7 +10,7 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Schema
 
 - [x] **SCHM-01**: Dexie v10 migration with compound indexes for cross-domain queries (`[prescriptionId+scheduledDate]`, `[type+timestamp]`, etc.)
-- [ ] **SCHM-02**: Migration test harness that verifies schema upgrades don't corrupt or brick the database
+- [x] **SCHM-02**: Migration test harness that verifies schema upgrades don't corrupt or brick the database
 - [x] **SCHM-03**: Event-sourced inventory — `currentStock` derived from `inventoryTransactions`, not stored as mutable counter
 - [x] **SCHM-04**: `updatedAt` timestamps on all tables for future sync readiness
 
@@ -101,7 +101,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | SCHM-01 | Phase 1 | Complete |
-| SCHM-02 | Phase 1 | Pending |
+| SCHM-02 | Phase 1 | Complete |
 | SCHM-03 | Phase 1 | Complete |
 | SCHM-04 | Phase 1 | Complete |
 | TEST-01 | Phase 1 | Complete |
