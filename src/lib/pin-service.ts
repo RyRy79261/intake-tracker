@@ -13,6 +13,7 @@
  */
 
 import { encrypt, decrypt, isCryptoAvailable, type EncryptedData } from "./crypto";
+import { ok, err, type ServiceResult } from "./service-result";
 
 // Storage keys
 const PIN_STORAGE_KEY = "intake-tracker-pin";
@@ -131,13 +132,13 @@ export function isWithin24Hours(): boolean {
  * @param pin The PIN to set (4-6 digits recommended)
  * @returns true if successful
  */
-export async function setupPin(pin: string): Promise<boolean> {
+export async function setupPin(pin: string): Promise<ServiceResult<boolean>> {
   if (!isCryptoAvailable()) {
-    throw new Error("Web Crypto API not available");
+    return err("Web Crypto API not available");
   }
-  
+
   if (!pin || pin.length < 4) {
-    throw new Error("PIN must be at least 4 characters");
+    return err("PIN must be at least 4 characters");
   }
   
   // Generate a new gate secret
@@ -154,8 +155,8 @@ export async function setupPin(pin: string): Promise<boolean> {
   
   // Store the decrypted secret in session (user is now unlocked)
   setSessionSecret(gateSecret);
-  
-  return true;
+
+  return ok(true);
 }
 
 /**

@@ -4,6 +4,7 @@
  */
 
 import { db, type IntakeRecord, type WeightRecord, type BloodPressureRecord, type EatingRecord, type UrinationRecord, type DefecationRecord } from "./db";
+import { ok, err, type ServiceResult } from "./service-result";
 import { logAudit } from "./audit";
 
 export interface BackupData {
@@ -36,7 +37,7 @@ const CURRENT_BACKUP_VERSION = 3;
 /**
  * Export all health data to a JSON blob
  */
-export async function exportBackup(): Promise<Blob> {
+export async function exportBackup(): Promise<ServiceResult<Blob>> {
   const [intakeRecords, weightRecords, bloodPressureRecords, eatingRecords, urinationRecords, defecationRecords] = await Promise.all([
     db.intakeRecords.toArray(),
     db.weightRecords.toArray(),
@@ -79,7 +80,7 @@ export async function exportBackup(): Promise<Blob> {
   logAudit("data_export", `Exported ${intakeRecords.length} intake, ${weightRecords.length} weight, ${bloodPressureRecords.length} BP, ${eatingRecords.length} eating, ${urinationRecords.length} urination, ${defecationRecords.length} defecation records`);
 
   const json = JSON.stringify(backupData, null, 2);
-  return new Blob([json], { type: "application/json" });
+  return ok(new Blob([json], { type: "application/json" }));
 }
 
 /**
@@ -93,8 +94,10 @@ export function generateBackupFilename(): string {
 /**
  * Download a backup file
  */
-export async function downloadBackup(): Promise<void> {
-  const blob = await exportBackup();
+export async function downloadBackup(): Promise<ServiceResult<void>> {
+  const blobResult = await exportBackup();
+  if (!blobResult.success) return blobResult;
+  const blob = blobResult.data;
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -103,6 +106,7 @@ export async function downloadBackup(): Promise<void> {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+  return ok(undefined);
 }
 
 /**
@@ -204,7 +208,7 @@ function isValidDefecationRecord(record: unknown): record is DefecationRecord {
 export async function importBackup(
   file: File,
   mode: "merge" | "replace" = "merge"
-): Promise<ImportResult> {
+): Promise<ServiceResult<ImportResult>> {
   const result: ImportResult = {
     success: false,
     intakeImported: 0,
@@ -225,7 +229,7 @@ export async function importBackup(
       data = JSON.parse(text);
     } catch {
       result.errors.push("Invalid JSON format");
-      return result;
+      return ok(result);
     }
 
     // Handle legacy format (version 1 with just "records")
@@ -242,7 +246,7 @@ export async function importBackup(
 
     if (!validateBackupData(data)) {
       result.errors.push("Invalid backup file format");
-      return result;
+      return ok(result);
     }
 
     // Clear existing data if replacing (merge never clears; we only add/update)
@@ -405,7 +409,7 @@ export async function importBackup(
     result.errors.push(error instanceof Error ? error.message : "Unknown error during import");
   }
 
-  return result;
+  return ok(result);
 }
 
 /**

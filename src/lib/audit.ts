@@ -10,6 +10,7 @@
  */
 
 import { db, type AuditAction, type AuditLog } from "./db";
+import { getDeviceId } from "./utils";
 
 // Re-export the types
 export type { AuditAction };
@@ -23,11 +24,16 @@ let flushTimeout: NodeJS.Timeout | null = null;
  * Log an audit event
  */
 export function logAudit(action: AuditAction, details?: string): void {
+  const now = Date.now();
   const entry: AuditEntry = {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-    timestamp: Date.now(),
+    id: `${now}-${Math.random().toString(36).slice(2, 9)}`,
+    timestamp: now,
     action,
-    details: details?.slice(0, 100), // Limit detail length
+    ...(details !== undefined && { details: details.slice(0, 100) }),
+    createdAt: now,
+    updatedAt: now,
+    deletedAt: null,
+    deviceId: getDeviceId(),
   };
   
   auditBuffer.push(entry);

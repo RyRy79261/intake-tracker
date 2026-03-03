@@ -1,51 +1,74 @@
 import { db, type UrinationRecord } from "./db";
-import { generateId } from "./utils";
+import { ok, err, type ServiceResult } from "./service-result";
+import { generateId, syncFields } from "./utils";
 
 export async function addUrinationRecord(
   timestamp?: number,
   amountEstimate?: string,
   note?: string
-): Promise<UrinationRecord> {
-  const record: UrinationRecord = {
-    id: generateId(),
-    timestamp: timestamp ?? Date.now(),
-    amountEstimate: amountEstimate?.trim() || undefined,
-    note: note?.trim() || undefined,
-  };
+): Promise<ServiceResult<UrinationRecord>> {
+  try {
+    const trimmedAmount = amountEstimate?.trim();
+    const trimmedNote = note?.trim();
+    const record: UrinationRecord = {
+      id: generateId(),
+      timestamp: timestamp ?? Date.now(),
+      ...(trimmedAmount !== undefined && trimmedAmount !== "" && { amountEstimate: trimmedAmount }),
+      ...(trimmedNote !== undefined && trimmedNote !== "" && { note: trimmedNote }),
+      ...syncFields(),
+    };
 
-  await db.urinationRecords.add(record);
-  return record;
+    await db.urinationRecords.add(record);
+    return ok(record);
+  } catch (e) {
+    return err("Failed to add urination record", e);
+  }
 }
 
 export async function getUrinationRecords(
   limit?: number
-): Promise<UrinationRecord[]> {
-  let query = db.urinationRecords.orderBy("timestamp").reverse();
-
-  if (limit) {
-    return query.limit(limit).toArray();
+): Promise<ServiceResult<UrinationRecord[]>> {
+  try {
+    let query = db.urinationRecords.orderBy("timestamp").reverse();
+    const records = limit ? await query.limit(limit).toArray() : await query.toArray();
+    return ok(records);
+  } catch (e) {
+    return err("Failed to get urination records", e);
   }
-
-  return query.toArray();
 }
 
 export async function getUrinationRecordsByDateRange(
   startTime: number,
   endTime: number
-): Promise<UrinationRecord[]> {
-  return db.urinationRecords
-    .where("timestamp")
-    .between(startTime, endTime)
-    .toArray();
+): Promise<ServiceResult<UrinationRecord[]>> {
+  try {
+    const records = await db.urinationRecords
+      .where("timestamp")
+      .between(startTime, endTime)
+      .toArray();
+    return ok(records);
+  } catch (e) {
+    return err("Failed to get urination records by date range", e);
+  }
 }
 
-export async function deleteUrinationRecord(id: string): Promise<void> {
-  await db.urinationRecords.delete(id);
+export async function deleteUrinationRecord(id: string): Promise<ServiceResult<void>> {
+  try {
+    await db.urinationRecords.delete(id);
+    return ok(undefined);
+  } catch (e) {
+    return err("Failed to delete urination record", e);
+  }
 }
 
 export async function updateUrinationRecord(
   id: string,
   updates: { timestamp?: number; amountEstimate?: string; note?: string }
-): Promise<void> {
-  await db.urinationRecords.update(id, updates);
+): Promise<ServiceResult<void>> {
+  try {
+    await db.urinationRecords.update(id, updates);
+    return ok(undefined);
+  } catch (e) {
+    return err("Failed to update urination record", e);
+  }
 }

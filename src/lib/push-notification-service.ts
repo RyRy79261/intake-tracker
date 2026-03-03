@@ -4,6 +4,7 @@
  */
 
 import { db } from "./db";
+import { ok, err, type ServiceResult } from "./service-result";
 
 export type NotificationPermissionState = "granted" | "denied" | "default";
 
@@ -25,17 +26,16 @@ export function getNotificationPermission(): NotificationPermissionState {
 /**
  * Request notification permission
  */
-export async function requestNotificationPermission(): Promise<NotificationPermissionState> {
+export async function requestNotificationPermission(): Promise<ServiceResult<NotificationPermissionState>> {
   if (!isNotificationSupported()) {
-    return "denied";
+    return ok("denied" as NotificationPermissionState);
   }
 
   try {
     const permission = await Notification.requestPermission();
-    return permission as NotificationPermissionState;
+    return ok(permission as NotificationPermissionState);
   } catch (error) {
-    console.error("Failed to request notification permission:", error);
-    return "denied";
+    return err("Failed to request notification permission", error);
   }
 }
 
