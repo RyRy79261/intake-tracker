@@ -50,7 +50,8 @@ export function DefecationCard() {
   const [amount, setAmount] = useState<string>(settings.defecationDefaultAmount || "");
   const [note, setNote] = useState("");
   const [detailTime, setDetailTime] = useState(getCurrentDateTimeLocal());
-  const { data: recentRecords, isLoading } = useDefecationRecords(5);
+  const recentRecords = useDefecationRecords(5);
+  const isLoading = !recentRecords;
   const addMutation = useAddDefecation();
   const deleteMutation = useDeleteDefecation();
   const updateMutation = useUpdateDefecation();

@@ -117,8 +117,8 @@ export function IntakeCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liquidType]);
 
-  // Fetch recent records using TanStack Query
-  const { data: recentRecords } = useRecentIntakeRecords(type);
+  // Fetch recent records via useLiveQuery
+  const recentRecords = useRecentIntakeRecords(type);
 
   const theme = CARD_THEMES[type];
   const Icon = theme.icon;

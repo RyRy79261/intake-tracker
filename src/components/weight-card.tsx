@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Check, Loader2, AlertCircle } from "lucide-react";
+import { Check, Loader2 } from "lucide-react";
 import { z } from "zod";
 import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
@@ -38,7 +38,8 @@ export function WeightCard() {
   const [showTimeInput, setShowTimeInput] = useState(false);
   const [customTime, setCustomTime] = useState(getCurrentDateTimeLocal());
 
-  const { data: recentRecords, isLoading, error } = useWeightRecords(5);
+  const recentRecords = useWeightRecords(5);
+  const isLoading = !recentRecords;
   const addMutation = useAddWeight();
   const deleteMutation = useDeleteWeight();
   const updateMutation = useUpdateWeight();
@@ -124,11 +125,6 @@ export function WeightCard() {
             <div className="animate-pulse text-right">
               <div className={cn("h-6 w-16 rounded ml-auto", theme.loadingBg)} />
               <div className="h-4 w-24 bg-muted rounded mt-1 ml-auto" />
-            </div>
-          ) : error ? (
-            <div className="text-sm text-red-500 flex items-center gap-1">
-              <AlertCircle className="w-4 h-4" />
-              <span>Failed to load</span>
             </div>
           ) : latestWeight ? (
             <div className="text-right">

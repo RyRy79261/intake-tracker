@@ -50,7 +50,8 @@ export function UrinationCard() {
   const [amount, setAmount] = useState<string>(settings.urinationDefaultAmount);
   const [note, setNote] = useState("");
   const [detailTime, setDetailTime] = useState(getCurrentDateTimeLocal());
-  const { data: recentRecords, isLoading } = useUrinationRecords(5);
+  const recentRecords = useUrinationRecords(5);
+  const isLoading = !recentRecords;
   const addMutation = useAddUrination();
   const deleteMutation = useDeleteUrination();
   const updateMutation = useUpdateUrination();

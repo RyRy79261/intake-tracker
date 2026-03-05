@@ -31,7 +31,8 @@ const VIEW_OPTIONS: { value: ViewType; label: string; icon: React.ReactNode }[] 
 export function HistoricalGraph() {
   const [view, setView] = useState<ViewType>("intake");
   const [scope, setScope] = useState<GraphScope>("24h");
-  const { data, isLoading, error } = useGraphData(scope);
+  const data = useGraphData(scope);
+  const isLoading = data === undefined;
   const settings = useSettings();
   const now = useNow(60_000);
 
@@ -77,11 +78,6 @@ export function HistoricalGraph() {
             {isLoading && (
               <div className="flex items-center justify-center h-[280px] text-muted-foreground">
                 <Loader2 className="w-8 h-8 animate-spin" />
-              </div>
-            )}
-            {error && (
-              <div className="flex items-center justify-center h-[280px] text-sm text-destructive">
-                Failed to load graph data
               </div>
             )}
             {data && !isLoading && view === "intake" && (

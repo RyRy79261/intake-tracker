@@ -19,7 +19,8 @@ export function DailyNotesDrawer({
   prescriptionId?: string;
   prescriptionName?: string;
 }) {
-  const { data: notes = [], isLoading } = useDailyNotes(date, prescriptionId);
+  const notes = useDailyNotes(date, prescriptionId);
+  const isLoading = !notes;
   const addNoteMut = useAddDailyNote();
   
   const [newNote, setNewNote] = useState("");

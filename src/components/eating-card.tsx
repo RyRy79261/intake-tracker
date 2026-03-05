@@ -45,7 +45,8 @@ export function EatingCard() {
   const [detailNote, setDetailNote] = useState("");
   const [detailGrams, setDetailGrams] = useState("");
   const [detailTime, setDetailTime] = useState(getCurrentDateTimeLocal());
-  const { data: recentRecords, isLoading } = useEatingRecords(5);
+  const recentRecords = useEatingRecords(5);
+  const isLoading = !recentRecords;
   const addMutation = useAddEating();
   const deleteMutation = useDeleteEating();
   const updateMutation = useUpdateEating();

@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Check, Loader2, AlertCircle, ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
+import { Check, Loader2, ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
 import { z } from "zod";
 import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
@@ -53,7 +53,8 @@ export function BloodPressureCard() {
   const [showTimeInput, setShowTimeInput] = useState(false);
   const [customTime, setCustomTime] = useState(getCurrentDateTimeLocal());
 
-  const { data: recentRecords, isLoading, error } = useBloodPressureRecords(5);
+  const recentRecords = useBloodPressureRecords(5);
+  const isLoading = !recentRecords;
   const addMutation = useAddBloodPressure();
   const deleteMutation = useDeleteBloodPressure();
   const updateMutation = useUpdateBloodPressure();
@@ -188,11 +189,6 @@ export function BloodPressureCard() {
             <div className="animate-pulse text-right">
               <div className={cn("h-6 w-20 rounded ml-auto", theme.loadingBg)} />
               <div className="h-4 w-16 bg-muted rounded mt-1 ml-auto" />
-            </div>
-          ) : error ? (
-            <div className="text-sm text-red-500 flex items-center gap-1">
-              <AlertCircle className="w-4 h-4" />
-              <span>Failed to load</span>
             </div>
           ) : latestReading ? (
             <div className="text-right">

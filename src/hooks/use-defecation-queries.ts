@@ -1,7 +1,7 @@
 "use client";
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { type DefecationRecord } from "@/lib/db";
+import { useLiveQuery } from "dexie-react-hooks";
+import { useMutation } from "@tanstack/react-query";
 import {
   addDefecationRecord,
   getDefecationRecords,
@@ -9,7 +9,6 @@ import {
   updateDefecationRecord,
   deleteDefecationRecord,
 } from "@/lib/defecation-service";
-import { graphKeys } from "@/hooks/use-graph-data";
 import { unwrap } from "@/lib/service-result";
 
 export type AddDefecationParams = {
@@ -27,34 +26,22 @@ export type UpdateDefecationParams = {
   };
 };
 
-export const defecationKeys = {
-  all: ["defecation"] as const,
-  records: (limit?: number) => [...defecationKeys.all, "records", limit] as const,
-  byDateRange: (start: number, end: number) =>
-    [...defecationKeys.all, "dateRange", start, end] as const,
-};
-
 export function useDefecationRecords(limit: number = 10) {
-  return useQuery({
-    queryKey: defecationKeys.records(limit),
-    queryFn: async () => unwrap(await getDefecationRecords(limit)),
-  });
+  return useLiveQuery(() => getDefecationRecords(limit), [limit], []);
 }
 
 export function useDefecationRecordsByDateRange(
   startTime: number,
   endTime: number
 ) {
-  return useQuery({
-    queryKey: defecationKeys.byDateRange(startTime, endTime),
-    queryFn: async () => unwrap(await getDefecationRecordsByDateRange(startTime, endTime)),
-    enabled: startTime < endTime,
-  });
+  return useLiveQuery(
+    () => startTime < endTime ? getDefecationRecordsByDateRange(startTime, endTime) : Promise.resolve([]),
+    [startTime, endTime],
+    []
+  );
 }
 
 export function useAddDefecation() {
-  const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: async (params: AddDefecationParams) =>
       unwrap(await addDefecationRecord(
@@ -62,34 +49,18 @@ export function useAddDefecation() {
         params.amountEstimate,
         params.note
       )),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: defecationKeys.all });
-      queryClient.invalidateQueries({ queryKey: graphKeys.all });
-    },
   });
 }
 
 export function useUpdateDefecation() {
-  const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: async (params: UpdateDefecationParams) =>
       unwrap(await updateDefecationRecord(params.id, params.updates)),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: defecationKeys.all });
-      queryClient.invalidateQueries({ queryKey: graphKeys.all });
-    },
   });
 }
 
 export function useDeleteDefecation() {
-  const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: async (id: string) => unwrap(await deleteDefecationRecord(id)),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: defecationKeys.all });
-      queryClient.invalidateQueries({ queryKey: graphKeys.all });
-    },
   });
 }

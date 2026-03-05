@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useLiveQuery } from "dexie-react-hooks";
 import { getRecordsByDateRange } from "@/lib/intake-service";
 import {
   getWeightRecordsByDateRange,
@@ -15,7 +15,6 @@ import {
 import {
   getDefecationRecordsByDateRange,
 } from "@/lib/defecation-service";
-import { unwrap } from "@/lib/service-result";
 import type {
   IntakeRecord,
   WeightRecord,
@@ -125,13 +124,13 @@ async function fetchGraphData(scope: GraphScope): Promise<GraphData> {
 
   const [waterRecords, saltRecords, weightRecords, bloodPressureRecords, eatingRecords, urinationRecords, defecationRecords] =
     await Promise.all([
-      getRecordsByDateRange(intakeLookbackStart, endTime, "water").then(unwrap),
-      getRecordsByDateRange(intakeLookbackStart, endTime, "salt").then(unwrap),
-      getWeightRecordsByDateRange(startTime, endTime).then(unwrap),
-      getBloodPressureRecordsByDateRange(startTime, endTime).then(unwrap),
-      getEatingRecordsByDateRange(startTime, endTime).then(unwrap),
-      getUrinationRecordsByDateRange(startTime, endTime).then(unwrap),
-      getDefecationRecordsByDateRange(startTime, endTime).then(unwrap),
+      getRecordsByDateRange(intakeLookbackStart, endTime, "water"),
+      getRecordsByDateRange(intakeLookbackStart, endTime, "salt"),
+      getWeightRecordsByDateRange(startTime, endTime),
+      getBloodPressureRecordsByDateRange(startTime, endTime),
+      getEatingRecordsByDateRange(startTime, endTime),
+      getUrinationRecordsByDateRange(startTime, endTime),
+      getDefecationRecordsByDateRange(startTime, endTime),
     ]);
 
   const metrics = computeMetrics(weightRecords, bloodPressureRecords);
@@ -152,16 +151,8 @@ async function fetchGraphData(scope: GraphScope): Promise<GraphData> {
   };
 }
 
-export const graphKeys = {
-  all: ["graph"] as const,
-  byScope: (scope: GraphScope) => [...graphKeys.all, scope] as const,
-};
-
 export function useGraphData(scope: GraphScope) {
-  return useQuery({
-    queryKey: graphKeys.byScope(scope),
-    queryFn: () => fetchGraphData(scope),
-  });
+  return useLiveQuery(() => fetchGraphData(scope), [scope]);
 }
 
 export { getRange };
