@@ -88,6 +88,10 @@ Recent decisions affecting current work:
 - [03-03]: useLiveQuery default values eliminate loading states for array-returning hooks
 - [03-03]: graphKeys export removed (no invalidation needed with useLiveQuery)
 - [03-03]: Optimistic updates removed from health add mutations (useLiveQuery provides fast enough reactivity)
+- [03-04]: useLiveQuery default values eliminate loading states for medication hooks (instant render with [])
+- [03-04]: History hook returns reactive data object instead of async fetch callback
+- [03-04]: Rescheduled dose slots map to skipped status in DoseSlot derivation
+- [03-04]: Inventory warnings prioritize negative_stock over odd_fraction
 - [03-05]: ESLint override added for providers.tsx (infrastructure file needs service import for stock recalculation init)
 - [03-05]: Debug panel uses collapsible sections (not tabs) for audit logs, stock management, raw records
 
