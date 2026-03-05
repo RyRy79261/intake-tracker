@@ -21,9 +21,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Apple, Calculator } from "lucide-react";
+import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
+import { logAudit } from "@/lib/audit";
 import { formatAmount } from "@/lib/utils";
 import { FOOD_PRESETS } from "@/lib/constants";
+
+const FoodCalculatorSchema = z.object({
+  selectedFood: z.string().min(1, "Please select a food type"),
+  weightGrams: z.number({ invalid_type_error: "Weight is required" })
+    .positive("Weight must be positive")
+    .max(10000, "Weight seems too high"),
+});
 
 interface FoodCalculatorProps {
   onAddWater: (amount: number, source: string) => Promise<void>;
@@ -39,6 +48,7 @@ export function FoodCalculator({ onAddWater, open: controlledOpen, onOpenChange 
   const [weightGrams, setWeightGrams] = useState<string>("");
   const [customPercent, setCustomPercent] = useState<string>("80");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const { toast } = useToast();
 
   const selectedPreset = FOOD_PRESETS.find((f) => f.name === selectedFood);
@@ -54,6 +64,24 @@ export function FoodCalculator({ onAddWater, open: controlledOpen, onOpenChange 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const weight = parseInt(weightGrams, 10);
+    const parsed = FoodCalculatorSchema.safeParse({
+      selectedFood,
+      weightGrams: isNaN(weight) ? undefined : weight,
+    });
+    if (!parsed.success) {
+      const errors: Record<string, string> = {};
+      for (const issue of parsed.error.issues) {
+        const field = issue.path[0];
+        if (field && typeof field === "string") errors[field] = issue.message;
+      }
+      setFieldErrors(errors);
+      logAudit("validation_error", JSON.stringify({ form: "food_calculator", errors: parsed.error.flatten() }).slice(0, 100));
+      return;
+    }
+    setFieldErrors({});
+
     if (calculatedWater <= 0) return;
 
     setIsSubmitting(true);
@@ -124,6 +152,9 @@ export function FoodCalculator({ onAddWater, open: controlledOpen, onOpenChange 
                 ))}
               </SelectContent>
             </Select>
+            {fieldErrors.selectedFood && (
+              <p className="text-sm text-destructive mt-1">{fieldErrors.selectedFood}</p>
+            )}
           </div>
 
           {/* Weight Input */}
@@ -139,6 +170,9 @@ export function FoodCalculator({ onAddWater, open: controlledOpen, onOpenChange 
               placeholder="Enter weight in grams"
               className="h-12"
             />
+            {fieldErrors.weightGrams && (
+              <p className="text-sm text-destructive mt-1">{fieldErrors.weightGrams}</p>
+            )}
           </div>
 
           {/* Custom Percentage (only shown when Custom is selected) */}

@@ -6,8 +6,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Check, Loader2, AlertCircle, ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
+import { z } from "zod";
 import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
+import { logAudit } from "@/lib/audit";
+
+const BloodPressureFormSchema = z.object({
+  systolic: z.number({ invalid_type_error: "Systolic is required" })
+    .int("Must be a whole number").min(50, "Too low").max(300, "Too high"),
+  diastolic: z.number({ invalid_type_error: "Diastolic is required" })
+    .int("Must be a whole number").min(20, "Too low").max(200, "Too high"),
+  heartRate: z.number().int("Must be a whole number").min(20, "Too low").max(250, "Too high").optional(),
+});
 import { CollapsibleTimeInputControlled } from "@/components/collapsible-time-input";
 import { RecentEntriesList } from "@/components/recent-entries-list";
 import { EditBloodPressureDialog } from "@/components/edit-blood-pressure-dialog";
@@ -104,8 +114,9 @@ export function BloodPressureCard() {
     mutateAsync: updateMutation.mutateAsync,
   });
 
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const latestReading = recentRecords?.[0];
-  const bpCategory = latestReading 
+  const bpCategory = latestReading
     ? getBPCategory(latestReading.systolic, latestReading.diastolic)
     : null;
 
@@ -114,23 +125,22 @@ export function BloodPressureCard() {
     const diastolic = parseInt(diastolicInput, 10);
     const heartRate = heartRateInput ? parseInt(heartRateInput, 10) : undefined;
 
-    if (isNaN(systolic) || systolic <= 0 || isNaN(diastolic) || diastolic <= 0) {
-      toast({
-        title: "Invalid reading",
-        description: "Please enter valid systolic and diastolic values",
-        variant: "destructive",
-      });
+    const parsed = BloodPressureFormSchema.safeParse({
+      systolic: isNaN(systolic) ? undefined : systolic,
+      diastolic: isNaN(diastolic) ? undefined : diastolic,
+      ...(heartRate !== undefined && !isNaN(heartRate) && { heartRate }),
+    });
+    if (!parsed.success) {
+      const errors: Record<string, string> = {};
+      for (const issue of parsed.error.issues) {
+        const field = issue.path[0];
+        if (field && typeof field === "string") errors[field] = issue.message;
+      }
+      setFieldErrors(errors);
+      logAudit("validation_error", JSON.stringify({ form: "blood_pressure", errors: parsed.error.flatten() }).slice(0, 100));
       return;
     }
-
-    if (heartRate !== undefined && (isNaN(heartRate) || heartRate <= 0)) {
-      toast({
-        title: "Invalid heart rate",
-        description: "Please enter a valid heart rate or leave it empty",
-        variant: "destructive",
-      });
-      return;
-    }
+    setFieldErrors({});
 
     try {
       const timestamp = showTimeInput ? dateTimeLocalToTimestamp(customTime) : undefined;
@@ -214,6 +224,9 @@ export function BloodPressureCard() {
                 onChange={(e) => setSystolicInput(e.target.value)}
                 className="h-12 text-lg text-center bg-white/80 dark:bg-slate-900/50"
               />
+              {fieldErrors.systolic && (
+                <p className="text-sm text-destructive mt-1">{fieldErrors.systolic}</p>
+              )}
             </div>
             <div className="space-y-1">
               <Label htmlFor="diastolic" className="text-xs">Diastolic (bottom)</Label>
@@ -227,6 +240,9 @@ export function BloodPressureCard() {
                 onChange={(e) => setDiastolicInput(e.target.value)}
                 className="h-12 text-lg text-center bg-white/80 dark:bg-slate-900/50"
               />
+              {fieldErrors.diastolic && (
+                <p className="text-sm text-destructive mt-1">{fieldErrors.diastolic}</p>
+              )}
             </div>
           </div>
 
@@ -248,6 +264,9 @@ export function BloodPressureCard() {
                 BPM
               </div>
             </div>
+            {fieldErrors.heartRate && (
+              <p className="text-sm text-destructive mt-1">{fieldErrors.heartRate}</p>
+            )}
           </div>
 
           {/* Position Toggle */}

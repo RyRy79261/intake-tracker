@@ -14,7 +14,25 @@ import { useMedicineSearch, type MedicineSearchResult } from "@/hooks/use-medici
 import { useAddPrescription, usePrescriptions, useAddMedicationToPrescription } from "@/hooks/use-medication-queries";
 import type { PillShape, FoodInstruction, Prescription } from "@/lib/db";
 import { ArrowLeft, ArrowRight, Search, Loader2, Check, Plus, X } from "lucide-react";
+import { z } from "zod";
 import { cn } from "@/lib/utils";
+import { logAudit } from "@/lib/audit";
+
+// --- Per-step Zod schemas (co-located per user decision) ---
+
+const SearchStepSchema = z.object({
+  brandName: z.string().min(1, "Medication name is required"),
+});
+
+const ScheduleEntrySchema = z.object({
+  time: z.string().min(1, "Time is required"),
+  dosage: z.number().positive("Dosage must be positive"),
+  daysOfWeek: z.array(z.number()).min(1, "Select at least one day"),
+});
+
+const InventoryStepSchema = z.object({
+  currentStock: z.number({ invalid_type_error: "Stock must be a number" }).min(0, "Stock cannot be negative"),
+});
 
 type WizardStep = "search" | "appearance" | "indication" | "dosage" | "schedule" | "inventory";
 
@@ -189,22 +207,78 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
     }
   };
 
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const validateCurrentStep = (): boolean => {
+    if (step === "search") {
+      const name = brandName || capitalizeWords(searchQuery);
+      const parsed = SearchStepSchema.safeParse({ brandName: name });
+      if (!parsed.success) {
+        const errors: Record<string, string> = {};
+        for (const issue of parsed.error.issues) {
+          const field = issue.path[0];
+          if (field && typeof field === "string") errors[field] = issue.message;
+        }
+        setFieldErrors(errors);
+        logAudit("validation_error", JSON.stringify({ form: "medication_wizard_search", errors: parsed.error.flatten() }).slice(0, 100));
+        return false;
+      }
+    }
+    if (step === "schedule") {
+      for (let i = 0; i < schedules.length; i++) {
+        const sched = schedules[i];
+        if (!sched) continue;
+        const parsed = ScheduleEntrySchema.safeParse(sched);
+        if (!parsed.success) {
+          const errors: Record<string, string> = {};
+          for (const issue of parsed.error.issues) {
+            const field = issue.path[0];
+            if (field && typeof field === "string") errors[field] = `Schedule ${i + 1}: ${issue.message}`;
+          }
+          setFieldErrors(errors);
+          logAudit("validation_error", JSON.stringify({ form: "medication_wizard_schedule", errors: parsed.error.flatten() }).slice(0, 100));
+          return false;
+        }
+      }
+    }
+    if (step === "inventory") {
+      const stock = parseInt(currentStock) || 0;
+      const parsed = InventoryStepSchema.safeParse({ currentStock: stock });
+      if (!parsed.success) {
+        const errors: Record<string, string> = {};
+        for (const issue of parsed.error.issues) {
+          const field = issue.path[0];
+          if (field && typeof field === "string") errors[field] = issue.message;
+        }
+        setFieldErrors(errors);
+        logAudit("validation_error", JSON.stringify({ form: "medication_wizard_inventory", errors: parsed.error.flatten() }).slice(0, 100));
+        return false;
+      }
+    }
+    setFieldErrors({});
+    return true;
+  };
+
   const currentStepIndex = STEPS.indexOf(step);
   const canGoBack = currentStepIndex > 0;
   const canGoNext = currentStepIndex < STEPS.length - 1;
   const isLastStep = currentStepIndex === STEPS.length - 1;
 
   const goBack = () => {
+    setFieldErrors({});
     const prev = STEPS[currentStepIndex - 1];
     if (canGoBack && prev) setStep(prev);
   };
 
   const goNext = () => {
+    if (!validateCurrentStep()) return;
     const next = STEPS[currentStepIndex + 1];
     if (canGoNext && next) setStep(next);
   };
 
   const handleSave = async () => {
+    if (!validateCurrentStep()) return;
+
     const parseStrength = (str: string): { strength: number; unit: string } => {
       if (!str) return { strength: 1, unit: "mg" };
       const match = str.match(/(\d+(?:\.\d+)?)\s*([a-zA-Z]+)/);
@@ -316,6 +390,7 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
                 selectedPrescriptionId={selectedPrescriptionId}
                 onSelectedPrescriptionIdChange={setSelectedPrescriptionId}
                 existingPrescriptions={existingPrescriptions}
+                fieldErrors={fieldErrors}
               />
             )}
 
@@ -415,7 +490,7 @@ function SearchStep({
   brandName, onBrandNameChange, genericName, onGenericNameChange,
   dosageStrength, onDosageStrengthChange,
   selectedPrescriptionId, onSelectedPrescriptionIdChange,
-  existingPrescriptions,
+  existingPrescriptions, fieldErrors = {},
 }: {
   query: string; onQueryChange: (v: string) => void;
   onSearch: () => void; isSearching: boolean;
@@ -425,6 +500,7 @@ function SearchStep({
   dosageStrength: string; onDosageStrengthChange: (v: string) => void;
   selectedPrescriptionId: string; onSelectedPrescriptionIdChange: (v: string) => void;
   existingPrescriptions: Prescription[];
+  fieldErrors?: Record<string, string>;
 }) {
   return (
     <div className="space-y-4">
@@ -503,6 +579,9 @@ function SearchStep({
         <div>
           <Label className="text-sm mb-1.5 block">Brand name</Label>
           <Input value={brandName} onChange={(e) => onBrandNameChange(e.target.value)} placeholder="e.g. Aviolix" />
+          {fieldErrors.brandName && (
+            <p className="text-sm text-destructive mt-1">{fieldErrors.brandName}</p>
+          )}
         </div>
         <div>
           <Label className="text-sm mb-1.5 block">Active ingredient</Label>

@@ -14,8 +14,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Loader2, Check, PlusCircle } from "lucide-react";
+import { z } from "zod";
 import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
+import { logAudit } from "@/lib/audit";
+
+const EatingDetailFormSchema = z.object({
+  note: z.string().max(500, "Note too long").optional(),
+  grams: z.number().positive("Must be positive").max(10000, "Too high").optional(),
+});
 import { RecentEntriesList } from "@/components/recent-entries-list";
 import { EditEatingDialog } from "@/components/edit-eating-dialog";
 import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
@@ -91,12 +98,31 @@ export function EatingCard() {
     setDetailsOpen(true);
   };
 
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
   const handleSubmitDetails = async () => {
+    const grams = detailGrams ? parseInt(detailGrams, 10) : undefined;
+    const noteVal = detailNote || undefined;
+    const gramsVal = grams && !isNaN(grams) && grams > 0 ? grams : undefined;
+
+    const parsed = EatingDetailFormSchema.safeParse({
+      ...(noteVal !== undefined && { note: noteVal }),
+      ...(gramsVal !== undefined && { grams: gramsVal }),
+    });
+    if (!parsed.success) {
+      const errors: Record<string, string> = {};
+      for (const issue of parsed.error.issues) {
+        const field = issue.path[0];
+        if (field && typeof field === "string") errors[field] = issue.message;
+      }
+      setFieldErrors(errors);
+      logAudit("validation_error", JSON.stringify({ form: "eating", errors: parsed.error.flatten() }).slice(0, 100));
+      return;
+    }
+    setFieldErrors({});
+
     try {
       const timestamp = dateTimeLocalToTimestamp(detailTime);
-      const grams = detailGrams ? parseInt(detailGrams, 10) : undefined;
-      const noteVal = detailNote || undefined;
-      const gramsVal = grams && grams > 0 ? grams : undefined;
       await addMutation.mutateAsync({ timestamp, ...(noteVal !== undefined && { note: noteVal }), ...(gramsVal !== undefined && { grams: gramsVal }) });
       toast({
         title: "Logged",
@@ -215,6 +241,9 @@ export function EatingCard() {
                 onChange={(e) => setDetailNote(e.target.value)}
                 className="min-h-[80px]"
               />
+              {fieldErrors.note && (
+                <p className="text-sm text-destructive mt-1">{fieldErrors.note}</p>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="eating-grams">Weight in grams (optional)</Label>
@@ -227,6 +256,9 @@ export function EatingCard() {
                 value={detailGrams}
                 onChange={(e) => setDetailGrams(e.target.value)}
               />
+              {fieldErrors.grams && (
+                <p className="text-sm text-destructive mt-1">{fieldErrors.grams}</p>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="eating-time">When</Label>

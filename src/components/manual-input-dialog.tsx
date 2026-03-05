@@ -12,8 +12,16 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { z } from "zod";
 import { cn } from "@/lib/utils";
+import { logAudit } from "@/lib/audit";
 import { Clock, ChevronDown, ChevronUp, StickyNote } from "lucide-react";
+
+const IntakeFormSchema = z.object({
+  amount: z.number({ invalid_type_error: "Amount is required" })
+    .positive("Amount must be positive"),
+  note: z.string().max(200, "Note too long").optional(),
+});
 import { Textarea } from "@/components/ui/textarea";
 import {
   getCurrentDateTimeLocal,
@@ -42,6 +50,7 @@ export function ManualInputDialog({
   const [customTime, setCustomTime] = useState(getCurrentDateTimeLocal());
   const [showNoteInput, setShowNoteInput] = useState(false);
   const [note, setNote] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const isWater = type === "water";
   const unit = isWater ? "ml" : "mg";
@@ -60,13 +69,27 @@ export function ManualInputDialog({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const amount = parseInt(value, 10);
-    if (isNaN(amount) || amount <= 0) return;
-    
+    const trimmedNote = note.trim() || undefined;
+
+    const parsed = IntakeFormSchema.safeParse({
+      amount: isNaN(amount) ? undefined : amount,
+      ...(trimmedNote !== undefined && { note: trimmedNote }),
+    });
+    if (!parsed.success) {
+      const errors: Record<string, string> = {};
+      for (const issue of parsed.error.issues) {
+        const field = issue.path[0];
+        if (field && typeof field === "string") errors[field] = issue.message;
+      }
+      setFieldErrors(errors);
+      logAudit("validation_error", JSON.stringify({ form: "intake", errors: parsed.error.flatten() }).slice(0, 100));
+      return;
+    }
+    setFieldErrors({});
+
     // Pass custom timestamp if time input is shown, otherwise use current time
     const timestamp = showTimeInput ? dateTimeLocalToTimestamp(customTime) : undefined;
-    // Pass note if provided
-    const trimmedNote = note.trim() || undefined;
-    await onSubmit(amount, timestamp, trimmedNote);
+    await onSubmit(parsed.data.amount, timestamp, trimmedNote);
   };
 
   const quickValues = isWater
@@ -99,6 +122,9 @@ export function ManualInputDialog({
               className="text-lg h-12"
               autoFocus
             />
+            {fieldErrors.amount && (
+              <p className="text-sm text-destructive mt-1">{fieldErrors.amount}</p>
+            )}
           </div>
 
           {/* Quick value buttons */}

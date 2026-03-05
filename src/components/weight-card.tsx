@@ -5,8 +5,16 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Check, Loader2, AlertCircle } from "lucide-react";
+import { z } from "zod";
 import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
+import { logAudit } from "@/lib/audit";
+
+const WeightFormSchema = z.object({
+  weight: z.number({ invalid_type_error: "Weight is required" })
+    .positive("Weight must be positive")
+    .max(1000, "Weight seems too high"),
+});
 import { CollapsibleTimeInputControlled } from "@/components/collapsible-time-input";
 import { RecentEntriesList } from "@/components/recent-entries-list";
 import { EditWeightDialog } from "@/components/edit-weight-dialog";
@@ -61,18 +69,23 @@ export function WeightCard() {
     mutateAsync: updateMutation.mutateAsync,
   });
 
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const latestWeight = recentRecords?.[0];
 
   const handleSubmit = async () => {
     const weight = parseFloat(weightInput);
-    if (isNaN(weight) || weight <= 0) {
-      toast({
-        title: "Invalid weight",
-        description: "Please enter a valid weight",
-        variant: "destructive",
-      });
+    const parsed = WeightFormSchema.safeParse({ weight: isNaN(weight) ? undefined : weight });
+    if (!parsed.success) {
+      const errors: Record<string, string> = {};
+      for (const issue of parsed.error.issues) {
+        const field = issue.path[0];
+        if (field && typeof field === "string") errors[field] = issue.message;
+      }
+      setFieldErrors(errors);
+      logAudit("validation_error", JSON.stringify({ form: "weight", errors: parsed.error.flatten() }).slice(0, 100));
       return;
     }
+    setFieldErrors({});
 
     try {
       const timestamp = showTimeInput ? dateTimeLocalToTimestamp(customTime) : undefined;
@@ -142,6 +155,9 @@ export function WeightCard() {
                 onChange={(e) => setWeightInput(e.target.value)}
                 className="h-12 text-lg text-center bg-white/80 dark:bg-slate-900/50"
               />
+              {fieldErrors.weight && (
+                <p className="text-sm text-destructive mt-1">{fieldErrors.weight}</p>
+              )}
             </div>
             <div className="flex items-center px-3 text-sm font-medium text-muted-foreground bg-muted rounded-md">
               kg
