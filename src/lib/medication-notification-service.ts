@@ -142,9 +142,12 @@ export async function checkRefillAlerts(): Promise<void> {
 
     if (!activePhase) continue;
 
-    const schedulesResult = await getSchedulesForPhase(activePhase.id);
-    if (!schedulesResult.success) continue;
-    const schedules = schedulesResult.data;
+    let schedules;
+    try {
+      schedules = await getSchedulesForPhase(activePhase.id);
+    } catch {
+      continue;
+    }
 
     const inventories = await db.inventoryItems.where("prescriptionId").equals(prescription.id).toArray();
     const activeInventory = inventories.find(i => i.isActive && !i.isArchived);

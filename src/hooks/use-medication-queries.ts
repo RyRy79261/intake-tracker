@@ -52,14 +52,14 @@ export type { DoseLogWithDetails };
 export function usePrescriptions() {
   return useQuery({
     queryKey: ["prescriptions"],
-    queryFn: async () => unwrap(await getPrescriptions()),
+    queryFn: () => getPrescriptions(),
   });
 }
 
 export function useDailySchedule(dayOfWeek: number) {
   return useQuery({
     queryKey: ["dailySchedule", dayOfWeek],
-    queryFn: async () => unwrap(await getDailySchedule(dayOfWeek)),
+    queryFn: () => getDailySchedule(dayOfWeek),
   });
 }
 
@@ -80,7 +80,7 @@ export function useDoseLogsWithDetailsForDate(date: string) {
 export function usePhasesForPrescription(prescriptionId: string | undefined) {
   return useQuery({
     queryKey: ["medicationPhases", prescriptionId],
-    queryFn: async () => unwrap(await getPhasesForPrescription(prescriptionId!)),
+    queryFn: () => getPhasesForPrescription(prescriptionId!),
     enabled: !!prescriptionId,
   });
 }
@@ -88,7 +88,7 @@ export function usePhasesForPrescription(prescriptionId: string | undefined) {
 export function useInventoryForPrescription(prescriptionId: string | undefined) {
   return useQuery({
     queryKey: ["inventoryItems", prescriptionId],
-    queryFn: async () => unwrap(await getInventoryForPrescription(prescriptionId!)),
+    queryFn: () => getInventoryForPrescription(prescriptionId!),
     enabled: !!prescriptionId,
   });
 }
@@ -96,7 +96,7 @@ export function useInventoryForPrescription(prescriptionId: string | undefined) 
 export function useInventoryTransactions(inventoryItemId: string | undefined) {
   return useQuery({
     queryKey: ["inventoryTransactions", inventoryItemId],
-    queryFn: async () => unwrap(await getInventoryTransactions(inventoryItemId!)),
+    queryFn: () => getInventoryTransactions(inventoryItemId!),
     enabled: !!inventoryItemId,
   });
 }
@@ -104,21 +104,21 @@ export function useInventoryTransactions(inventoryItemId: string | undefined) {
 export function useAllActiveInventoryItems() {
   return useQuery({
     queryKey: ["inventoryItems", "active"],
-    queryFn: async () => unwrap(await getAllActiveInventoryItems()),
+    queryFn: () => getAllActiveInventoryItems(),
   });
 }
 
 export function useAllInventoryItems() {
   return useQuery({
     queryKey: ["inventoryItems", "all"],
-    queryFn: async () => unwrap(await getAllInventoryItems()),
+    queryFn: () => getAllInventoryItems(),
   });
 }
 
 export function useSchedulesForPhase(phaseId: string | undefined) {
   return useQuery({
     queryKey: ["phaseSchedules", phaseId],
-    queryFn: async () => unwrap(await getSchedulesForPhase(phaseId!)),
+    queryFn: () => getSchedulesForPhase(phaseId!),
     enabled: !!phaseId,
   });
 }
