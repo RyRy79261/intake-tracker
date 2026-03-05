@@ -1,5 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { verifyAndCheckWhitelist, isPrivyConfigured } from "@/lib/privy-server";
+
+// --- Zod Schemas (co-located per user decision) ---
+
+const MedicineSearchRequestSchema = z.object({
+  query: z.string().min(1, "Query is required").max(200, "Query too long"),
+  clientApiKey: z.string().startsWith("pplx-").optional(),
+  country: z.string().max(100).optional(),
+});
+
+const MedicineSearchResponseSchema = z.object({
+  brandNames: z.array(z.string()).default([]),
+  localAlternatives: z.array(z.string()).default([]),
+  genericName: z.string().default(""),
+  dosageStrengths: z.array(z.string()).default([]),
+  commonIndications: z.array(z.string()).default([]),
+  foodInstruction: z.enum(["before", "after", "none"]).default("none"),
+  foodNote: z.string().optional(),
+  pillColor: z.string().default(""),
+  pillShape: z.string().default(""),
+  pillDescription: z.string().default(""),
+  drugClass: z.string().default(""),
+  visualIdentification: z.string().optional(),
+  contraindications: z.array(z.string()).default([]),
+  warnings: z.array(z.string()).default([]),
+  isGenericFallback: z.boolean().default(false),
+});
+
+// --- System Prompt ---
 
 const SYSTEM_PROMPT = `You are a pharmaceutical information assistant. When given a medication name or active ingredient, respond with a JSON object containing information about the medication. Pay special attention to looking up the physical appearance of the pill (its color and shape) and country specific brand names.
 
@@ -62,11 +91,18 @@ export async function POST(request: NextRequest) {
     const authToken = authHeader?.replace("Bearer ", "") || null;
 
     const body = await request.json();
-    const { query, clientApiKey, country } = body;
 
-    if (!query || typeof query !== "string" || query.trim().length === 0) {
-      return NextResponse.json({ error: "Query is required" }, { status: 400 });
+    // Validate request body with Zod
+    const parsed = MedicineSearchRequestSchema.safeParse(body);
+    if (!parsed.success) {
+      console.error("[VALIDATION] Medicine search request validation failed:", JSON.stringify(parsed.error.flatten()));
+      return NextResponse.json(
+        { error: "Invalid request", details: parsed.error.flatten() },
+        { status: 400 }
+      );
     }
+
+    const { query, clientApiKey, country } = parsed.data;
 
     const apiKey = process.env.PERPLEXITY_API_KEY;
 
@@ -100,17 +136,10 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function searchWithKey(query: string, apiKey: string, country?: string) {
-  if (!apiKey || !apiKey.startsWith("pplx-")) {
-    return NextResponse.json(
-      { error: "Invalid API key format" },
-      { status: 400 }
-    );
-  }
-
+async function callPerplexityMedicine(query: string, apiKey: string, country?: string) {
   const sanitized = query.slice(0, 200);
 
-  const prompt = country 
+  const prompt = country
     ? `Look up this medication and provide detailed pharmaceutical information, focusing specifically on brands and availability in ${country}: "${sanitized}"`
     : `Look up this medication and provide detailed pharmaceutical information: "${sanitized}"`;
 
@@ -134,48 +163,78 @@ async function searchWithKey(query: string, apiKey: string, country?: string) {
   if (!response.ok) {
     const errorText = await response.text();
     console.error(`Perplexity API error [${response.status}]:`, errorText);
-    return NextResponse.json(
-      { error: "AI service unavailable" },
-      { status: 502 }
-    );
+    return { ok: false as const, error: "AI service unavailable", status: response.status };
   }
 
   const data = await response.json();
   const content = data.choices?.[0]?.message?.content;
 
   if (!content) {
+    return { ok: false as const, error: "No response from AI service", status: 502 };
+  }
+
+  return { ok: true as const, content };
+}
+
+function parseAndValidateMedicineResponse(content: string): z.infer<typeof MedicineSearchResponseSchema> | null {
+  try {
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return null;
+
+    const rawParsed = JSON.parse(jsonMatch[0]);
+    const validated = MedicineSearchResponseSchema.safeParse(rawParsed);
+
+    if (!validated.success) {
+      console.error("[VALIDATION] Medicine search response validation failed:", JSON.stringify(validated.error.flatten()));
+      return null;
+    }
+
+    return validated.data;
+  } catch {
+    return null;
+  }
+}
+
+async function searchWithKey(query: string, apiKey: string, country?: string) {
+  if (!apiKey || !apiKey.startsWith("pplx-")) {
     return NextResponse.json(
-      { error: "No response from AI service" },
+      { error: "Invalid API key format" },
+      { status: 400 }
+    );
+  }
+
+  // First attempt
+  const result1 = await callPerplexityMedicine(query, apiKey, country);
+  if (!result1.ok) {
+    return NextResponse.json(
+      { error: result1.error },
       { status: 502 }
     );
   }
 
-  try {
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error("No valid JSON found");
-    const parsed = JSON.parse(jsonMatch[0]);
+  const validated1 = parseAndValidateMedicineResponse(result1.content);
+  if (validated1) {
+    return NextResponse.json(validated1);
+  }
 
-    return NextResponse.json({
-      brandNames: Array.isArray(parsed.brandNames) ? parsed.brandNames : [],
-      localAlternatives: Array.isArray(parsed.localAlternatives) ? parsed.localAlternatives : [],
-      genericName: typeof parsed.genericName === "string" ? parsed.genericName : "",
-      dosageStrengths: Array.isArray(parsed.dosageStrengths) ? parsed.dosageStrengths : [],
-      commonIndications: Array.isArray(parsed.commonIndications) ? parsed.commonIndications : [],
-      foodInstruction: ["before", "after", "none"].includes(parsed.foodInstruction) ? parsed.foodInstruction : "none",
-      foodNote: typeof parsed.foodNote === "string" ? parsed.foodNote : undefined,
-      pillColor: typeof parsed.pillColor === "string" ? parsed.pillColor : "",
-      pillShape: typeof parsed.pillShape === "string" ? parsed.pillShape : "",
-      pillDescription: typeof parsed.pillDescription === "string" ? parsed.pillDescription : "",
-      drugClass: typeof parsed.drugClass === "string" ? parsed.drugClass : "",
-      visualIdentification: typeof parsed.visualIdentification === "string" ? parsed.visualIdentification : undefined,
-      contraindications: Array.isArray(parsed.contraindications) ? parsed.contraindications : [],
-      warnings: Array.isArray(parsed.warnings) ? parsed.warnings : [],
-      isGenericFallback: typeof parsed.isGenericFallback === "boolean" ? parsed.isGenericFallback : false,
-    });
-  } catch {
+  // Retry once on AI response validation failure
+  console.log("[RETRY] Medicine search response validation failed, retrying once...");
+  const result2 = await callPerplexityMedicine(query, apiKey, country);
+  if (!result2.ok) {
     return NextResponse.json(
-      { error: "Could not parse AI response" },
-      { status: 422 }
+      { error: result2.error },
+      { status: 502 }
     );
   }
+
+  const validated2 = parseAndValidateMedicineResponse(result2.content);
+  if (validated2) {
+    return NextResponse.json(validated2);
+  }
+
+  // Second failure — fallback to manual entry
+  return NextResponse.json(
+    { error: "AI response format invalid", fallbackToManual: true },
+    { status: 422 }
+  );
 }

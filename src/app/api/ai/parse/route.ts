@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { verifyAndCheckWhitelist, isPrivyConfigured } from "@/lib/privy-server";
 
 /**
  * Server-side API route for Perplexity AI parsing.
- * 
+ *
  * SECURITY:
  * - Privy authentication with whitelist enforcement
  * - API key stored in server environment only (never sent to client)
@@ -11,6 +12,21 @@ import { verifyAndCheckWhitelist, isPrivyConfigured } from "@/lib/privy-server";
  * - Input validation and PII stripping
  * - Audit logging
  */
+
+// --- Zod Schemas (co-located per user decision) ---
+
+const ParseRequestSchema = z.object({
+  input: z.string().min(1, "Input is required").max(500, "Input too long"),
+  clientApiKey: z.string().startsWith("pplx-").optional(),
+});
+
+const AIParseResponseSchema = z.object({
+  water: z.number().min(0).max(10000).nullable(),
+  salt: z.number().min(0).max(50000).nullable(),
+  reasoning: z.string().max(500).optional(),
+});
+
+// --- System Prompt ---
 
 const SYSTEM_PROMPT = `You are a nutrition parsing assistant. Your job is to analyze food and drink descriptions and estimate their water and sodium (salt) content.
 
@@ -46,16 +62,16 @@ const RATE_WINDOW = 60 * 1000; // 1 minute
 function checkRateLimit(ip: string): boolean {
   const now = Date.now();
   const record = rateLimitMap.get(ip);
-  
+
   if (!record || now > record.resetTime) {
     rateLimitMap.set(ip, { count: 1, resetTime: now + RATE_WINDOW });
     return true;
   }
-  
+
   if (record.count >= RATE_LIMIT) {
     return false;
   }
-  
+
   record.count++;
   return true;
 }
@@ -70,21 +86,13 @@ function sanitizeInput(input: string): string {
     .slice(0, 500);
 }
 
-// Validate numeric output
-function sanitizeNumber(value: unknown, min: number, max: number): number | null {
-  if (typeof value !== "number" || isNaN(value) || !isFinite(value)) {
-    return null;
-  }
-  return Math.max(min, Math.min(max, Math.round(value)));
-}
-
 export async function POST(request: NextRequest) {
   try {
     // Get client IP for rate limiting
-    const ip = request.headers.get("x-forwarded-for")?.split(",")[0] || 
-               request.headers.get("x-real-ip") || 
+    const ip = request.headers.get("x-forwarded-for")?.split(",")[0] ||
+               request.headers.get("x-real-ip") ||
                "unknown";
-    
+
     // Check rate limit
     if (!checkRateLimit(ip)) {
       return NextResponse.json(
@@ -98,47 +106,58 @@ export async function POST(request: NextRequest) {
     const authToken = authHeader?.replace("Bearer ", "") || null;
 
     const body = await request.json();
-    const { input, clientApiKey } = body;
+
+    // Validate request body with Zod
+    const parsed = ParseRequestSchema.safeParse(body);
+    if (!parsed.success) {
+      console.error("[VALIDATION] Parse request validation failed:", JSON.stringify(parsed.error.flatten()));
+      return NextResponse.json(
+        { error: "Invalid request", details: parsed.error.flatten() },
+        { status: 400 }
+      );
+    }
+
+    const { input, clientApiKey } = parsed.data;
 
     // Get server API key
     const apiKey = process.env.PERPLEXITY_API_KEY;
-    
+
     // Check if Privy is configured for authentication
     if (isPrivyConfigured()) {
       // Verify Privy token and check whitelist
       const authResult = await verifyAndCheckWhitelist(authToken);
-      
+
       if (!authResult.success) {
         return NextResponse.json(
-          { 
-            error: authResult.error || "Unauthorized", 
-            requiresAuth: true 
+          {
+            error: authResult.error || "Unauthorized",
+            requiresAuth: true
           },
           { status: 401 }
         );
       }
-      
+
       // User is authenticated and on whitelist
       console.log(`[AUDIT] AI request from user: ${authResult.userId} (${authResult.email || authResult.wallet})`);
-      
+
       // Use server API key for authenticated users
       if (apiKey) {
         return await processWithKey(input, apiKey);
       }
     }
-    
+
     // Fallback: No Privy configured, or no server API key
     // Allow client to use their own API key
     if (!clientApiKey) {
       return NextResponse.json(
-        { 
-          error: "AI not configured. Sign in or add your own API key in settings.", 
-          requiresAuth: !isPrivyConfigured() 
+        {
+          error: "AI not configured. Sign in or add your own API key in settings.",
+          requiresAuth: !isPrivyConfigured()
         },
         { status: 503 }
       );
     }
-    
+
     // Use client's own API key
     return await processWithKey(input, clientApiKey);
   } catch (error) {
@@ -151,27 +170,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function processWithKey(input: string, apiKey: string) {
-  // Validate API key format
-  if (!apiKey || !apiKey.startsWith("pplx-")) {
-    return NextResponse.json(
-      { error: "Invalid API key format. Perplexity keys start with 'pplx-'" },
-      { status: 400 }
-    );
-  }
-
-  const sanitizedInput = sanitizeInput(input);
-  
-  if (!sanitizedInput) {
-    return NextResponse.json(
-      { error: "Invalid input after sanitization" },
-      { status: 400 }
-    );
-  }
-
-  // Log for audit (in production, send to proper logging service)
-  console.log(`[AUDIT] AI parse request at ${new Date().toISOString()}`);
-
+async function callPerplexity(sanitizedInput: string, apiKey: string) {
   const response = await fetch("https://api.perplexity.ai/chat/completions", {
     method: "POST",
     headers: {
@@ -195,7 +194,7 @@ async function processWithKey(input: string, apiKey: string) {
   if (!response.ok) {
     const errorText = await response.text();
     console.error(`Perplexity API error [${response.status}]:`, errorText);
-    
+
     // Parse error details if possible
     let errorDetail = "AI service unavailable";
     try {
@@ -215,42 +214,107 @@ async function processWithKey(input: string, apiKey: string) {
         errorDetail = "Invalid request to Perplexity API";
       }
     }
-    
-    return NextResponse.json(
-      { error: errorDetail, status: response.status },
-      { status: 502 }
-    );
+
+    return { ok: false as const, error: errorDetail, status: response.status };
   }
 
   const data = await response.json();
   const content = data.choices?.[0]?.message?.content;
 
   if (!content) {
+    return { ok: false as const, error: "No response from AI service", status: 502 };
+  }
+
+  return { ok: true as const, content };
+}
+
+function parseAndValidateAIResponse(content: string): z.infer<typeof AIParseResponseSchema> | null {
+  try {
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return null;
+
+    const rawParsed = JSON.parse(jsonMatch[0]);
+
+    // Coerce numbers (AI sometimes returns strings)
+    const toValidate = {
+      water: typeof rawParsed.water === "number" ? rawParsed.water : (typeof rawParsed.water === "string" ? parseFloat(rawParsed.water) : null),
+      salt: typeof rawParsed.salt === "number" ? rawParsed.salt : (typeof rawParsed.salt === "string" ? parseFloat(rawParsed.salt) : null),
+      ...(typeof rawParsed.reasoning === "string" && { reasoning: rawParsed.reasoning.slice(0, 500) }),
+    };
+
+    const validated = AIParseResponseSchema.safeParse(toValidate);
+    if (!validated.success) {
+      console.error("[VALIDATION] AI response validation failed:", JSON.stringify(validated.error.flatten()));
+      return null;
+    }
+
+    return validated.data;
+  } catch {
+    return null;
+  }
+}
+
+async function processWithKey(input: string, apiKey: string) {
+  // Validate API key format
+  if (!apiKey || !apiKey.startsWith("pplx-")) {
     return NextResponse.json(
-      { error: "No response from AI service" },
+      { error: "Invalid API key format. Perplexity keys start with 'pplx-'" },
+      { status: 400 }
+    );
+  }
+
+  const sanitizedInput = sanitizeInput(input);
+
+  if (!sanitizedInput) {
+    return NextResponse.json(
+      { error: "Invalid input after sanitization" },
+      { status: 400 }
+    );
+  }
+
+  // Log for audit (in production, send to proper logging service)
+  console.log(`[AUDIT] AI parse request at ${new Date().toISOString()}`);
+
+  // First attempt
+  const result1 = await callPerplexity(sanitizedInput, apiKey);
+  if (!result1.ok) {
+    return NextResponse.json(
+      { error: result1.error },
       { status: 502 }
     );
   }
 
-  try {
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error("No valid JSON found");
-    }
-
-    const parsed = JSON.parse(jsonMatch[0]);
-
+  const validated1 = parseAndValidateAIResponse(result1.content);
+  if (validated1) {
     return NextResponse.json({
-      water: sanitizeNumber(parsed.water, 0, 10000),
-      salt: sanitizeNumber(parsed.salt, 0, 50000),
-      reasoning: typeof parsed.reasoning === "string" 
-        ? parsed.reasoning.slice(0, 200) 
-        : undefined,
+      water: validated1.water,
+      salt: validated1.salt,
+      ...(validated1.reasoning !== undefined && { reasoning: validated1.reasoning }),
     });
-  } catch {
+  }
+
+  // Retry once on AI response validation failure
+  console.log("[RETRY] AI response validation failed, retrying once...");
+  const result2 = await callPerplexity(sanitizedInput, apiKey);
+  if (!result2.ok) {
     return NextResponse.json(
-      { error: "Could not parse AI response" },
-      { status: 422 }
+      { error: result2.error },
+      { status: 502 }
     );
   }
+
+  const validated2 = parseAndValidateAIResponse(result2.content);
+  if (validated2) {
+    return NextResponse.json({
+      water: validated2.water,
+      salt: validated2.salt,
+      ...(validated2.reasoning !== undefined && { reasoning: validated2.reasoning }),
+    });
+  }
+
+  // Second failure — fallback to manual entry
+  return NextResponse.json(
+    { error: "AI response format invalid", fallbackToManual: true },
+    { status: 422 }
+  );
 }

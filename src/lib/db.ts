@@ -32,7 +32,8 @@ export type AuditAction =
   | "prescription_added"
   | "prescription_updated"
   | "inventory_adjusted"
-  | "phase_activated";
+  | "phase_activated"
+  | "validation_error";
 
 export interface AuditLog {
   id: string;
