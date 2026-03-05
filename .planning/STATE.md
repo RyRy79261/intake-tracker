@@ -18,14 +18,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-02)
 
 **Core value:** Accurate, queryable health data across intake, vitals, and medication adherence — structured for cross-domain analysis and future AI querying
-**Current focus:** Phase 2 complete — ready for Phase 3
+**Current focus:** Phase 3 context gathered — ready for planning
 
 ## Current Position
 
-Phase: 2 of 11 (TypeScript and Service Contracts) -- COMPLETE
-Plan: 4 of 4 in current phase (all done)
-Status: Phase 02 complete — All 4 plans executed
-Last activity: 2026-03-05 — Completed Plan 02-04 (Zod Validation)
+Phase: 3 of 11 (Service Layer Rebuild) -- CONTEXT GATHERED
+Plan: 0 of TBD in current phase
+Status: Phase 03 context gathered — ready for planning
+Last activity: 2026-03-05 — Phase 3 context discussion complete
 
 Progress: [######░░░░] 21%
 
@@ -84,11 +84,11 @@ None yet.
 
 ### Blockers/Concerns
 
-- [Pre-phase]: useLiveQuery vs. React Query reactivity pattern must be decided explicitly before Phase 3 (Service Layer Rebuild). Options documented in .planning/research/PITFALLS.md. Failure to decide before Phase 3 planning risks hooks being written inconsistently.
+- [RESOLVED]: useLiveQuery vs. React Query — decided: useLiveQuery for ALL reads (all services), useMutation kept for writes. No invalidation needed. Resolved in Phase 3 context discussion.
 - [Pre-phase]: "NanoDB" identity unconfirmed — PROJECT.md references it as future cloud sync target, but likely means Dexie Cloud. Does not block this milestone.
 
 ## Session Continuity
 
 Last session: 2026-03-05
-Stopped at: Completed 02-04-PLAN.md (Zod Validation) -- Phase 02 complete
-Resume file: None
+Stopped at: Phase 3 context gathered — ready for planning
+Resume file: .planning/phases/03-service-layer-rebuild/03-CONTEXT.md
