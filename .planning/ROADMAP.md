@@ -13,7 +13,7 @@ This milestone is an engineering overhaul of an existing health tracking PWA. Th
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Schema Foundation** - Dexie v10 migration with compound indexes, event-sourced inventory, sync-ready timestamps, and test infrastructure
-- [ ] **Phase 2: TypeScript and Service Contracts** - Strict TypeScript flags enabled with all latent errors fixed; clean service boundary rules enforced
+- [x] **Phase 2: TypeScript and Service Contracts** - Strict TypeScript flags enabled with all latent errors fixed; clean service boundary rules enforced
 - [ ] **Phase 3: Service Layer Rebuild** - Medication services rebuilt with transactional atomicity, timezone-aware scheduling, and fractional dose math
 - [ ] **Phase 4: Analytics Service** - Cross-domain query seam implemented as the data foundation for future AI analysis
 - [ ] **Phase 5: Security Hardening** - API keys server-side only, encryption foundations for data at rest, auth patterns ready for cloud sync
@@ -58,7 +58,7 @@ Plans:
 - [x] 02-01-PLAN.md — Strict TypeScript flags + ServiceResult foundation + service-layer fixes
 - [x] 02-02-PLAN.md — ESLint import boundaries + UI TypeScript fixes + any elimination
 - [x] 02-03-PLAN.md — Import boundary enforcement (hooks refactoring)
-- [ ] 02-04-PLAN.md — TBD
+- [x] 02-04-PLAN.md — Zod validation at all external boundaries (API routes, AI responses, forms)
 
 ### Phase 3: Service Layer Rebuild
 **Goal**: All multi-table medication writes are atomic, dose scheduling is timezone-aware for SA/Germany travel, and fractional pill math is correct

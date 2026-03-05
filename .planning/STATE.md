@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in-progress
-last_updated: "2026-03-05T18:36:33Z"
+last_updated: "2026-03-05T18:46:18Z"
 progress:
   total_phases: 11
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 5
-  completed_plans: 6
+  completed_plans: 7
 ---
 
 # Project State
@@ -18,33 +18,33 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-02)
 
 **Core value:** Accurate, queryable health data across intake, vitals, and medication adherence — structured for cross-domain analysis and future AI querying
-**Current focus:** Phase 2 — TypeScript and Service Contracts
+**Current focus:** Phase 2 complete — ready for Phase 3
 
 ## Current Position
 
-Phase: 2 of 11 (TypeScript and Service Contracts)
-Plan: 3 of 4 in current phase
-Status: Plan 02-03 complete — Import boundary enforcement done
-Last activity: 2026-03-05 — Completed Plan 02-03 (Import Boundary Enforcement)
+Phase: 2 of 11 (TypeScript and Service Contracts) -- COMPLETE
+Plan: 4 of 4 in current phase (all done)
+Status: Phase 02 complete — All 4 plans executed
+Last activity: 2026-03-05 — Completed Plan 02-04 (Zod Validation)
 
-Progress: [#####░░░░░] 18%
+Progress: [######░░░░] 21%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 6
-- Average duration: 5.7 min
-- Total execution time: 0.57 hours
+- Total plans completed: 7
+- Average duration: 5.6 min
+- Total execution time: 0.65 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 1 - Schema Foundation | 3 | 11 min | 3.7 min |
-| 2 - TypeScript and Service Contracts | 3 | 23 min | 7.7 min |
+| 2 - TypeScript and Service Contracts | 4 | 29 min | 7.3 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-03 (2 min), 02-01 (~0 min, WIP), 02-02 (13 min), 02-03 (10 min)
+- Last 5 plans: 02-01 (~0 min, WIP), 02-02 (13 min), 02-03 (10 min), 02-04 (6 min)
 - Trend: stable
 
 *Updated after each plan completion*
@@ -74,6 +74,9 @@ Recent decisions affecting current work:
 - [02-03]: useHistoryData hook encapsulates multi-service loading (preserves manual state management in history page)
 - [02-03]: DoseLogWithDetails re-exported from hooks layer (components never import from services)
 - [02-03]: ESLint test override added for src/__tests__/**
+- [02-04]: Co-located Zod schemas per file (not centralized)
+- [02-04]: AI response validation uses retry-once then 422 with fallbackToManual
+- [02-04]: Per-step validation in medication wizard (search, schedule, inventory)
 
 ### Pending Todos
 
@@ -87,5 +90,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-05
-Stopped at: Completed 02-03-PLAN.md (Import Boundary Enforcement)
+Stopped at: Completed 02-04-PLAN.md (Zod Validation) -- Phase 02 complete
 Resume file: None
