@@ -1,0 +1,32 @@
+{
+  "extends": "next/core-web-vitals",
+  "rules": {
+    "no-restricted-imports": ["error", {
+      "patterns": [
+        {
+          "group": ["@/lib/db"],
+          "importNames": ["db"],
+          "message": "Components must not import 'db' directly. Use hooks instead. Type imports are allowed."
+        },
+        {
+          "group": ["@/lib/*-service", "@/lib/*-service.ts"],
+          "message": "Components/pages must not import services directly. Use hooks in src/hooks/ instead."
+        }
+      ]
+    }]
+  },
+  "overrides": [
+    {
+      "files": ["src/hooks/**/*", "src/lib/**/*"],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    },
+    {
+      "files": ["src/components/debug-panel.tsx"],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    }
+  ]
+}
