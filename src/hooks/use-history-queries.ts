@@ -31,12 +31,12 @@ export function useHistoryData() {
     let urinationRecords: UrinationRecord[] = [];
     let defecationRecords: DefecationRecord[] = [];
 
-    try { const result = unwrap(await getRecordsByCursor(undefined, limit)); intakeRecords = result.records; } catch (e) { console.error("Failed to load intake records:", e); }
-    try { weightRecords = unwrap(await getWeightRecords(limit)); } catch (e) { console.error("Failed to load weight records:", e); }
-    try { bpRecords = unwrap(await getBloodPressureRecords(limit)); } catch (e) { console.error("Failed to load BP records:", e); }
-    try { eatingRecords = unwrap(await getEatingRecords(limit)); } catch (e) { console.error("Failed to load eating records:", e); }
-    try { urinationRecords = unwrap(await getUrinationRecords(limit)); } catch (e) { console.error("Failed to load urination records:", e); }
-    try { defecationRecords = unwrap(await getDefecationRecords(limit)); } catch (e) { console.error("Failed to load defecation records:", e); }
+    try { const result = await getRecordsByCursor(undefined, limit); intakeRecords = result.records; } catch (e) { console.error("Failed to load intake records:", e); }
+    try { weightRecords = await getWeightRecords(limit); } catch (e) { console.error("Failed to load weight records:", e); }
+    try { bpRecords = await getBloodPressureRecords(limit); } catch (e) { console.error("Failed to load BP records:", e); }
+    try { eatingRecords = await getEatingRecords(limit); } catch (e) { console.error("Failed to load eating records:", e); }
+    try { urinationRecords = await getUrinationRecords(limit); } catch (e) { console.error("Failed to load urination records:", e); }
+    try { defecationRecords = await getDefecationRecords(limit); } catch (e) { console.error("Failed to load defecation records:", e); }
 
     return { intakeRecords, weightRecords, bpRecords, eatingRecords, urinationRecords, defecationRecords };
   }, []);

@@ -33,6 +33,10 @@ import {
   takeAllDoses,
   skipAllDoses,
   type DoseLogWithDetails,
+  type TakeDoseInput,
+  type UntakeDoseInput,
+  type SkipDoseInput,
+  type RescheduleDoseInput,
 } from "@/lib/dose-log-service";
 import {
   updateInventoryItem,
@@ -62,14 +66,14 @@ export function useDailySchedule(dayOfWeek: number) {
 export function useDoseLogsForDate(date: string) {
   return useQuery({
     queryKey: ["doseLogs", date],
-    queryFn: async () => unwrap(await getDoseLogsForDate(date)),
+    queryFn: () => getDoseLogsForDate(date),
   });
 }
 
 export function useDoseLogsWithDetailsForDate(date: string) {
   return useQuery({
     queryKey: ["doseLogsWithDetails", date],
-    queryFn: async () => unwrap(await getDoseLogsWithDetailsForDate(date)),
+    queryFn: () => getDoseLogsWithDetailsForDate(date),
   });
 }
 
@@ -224,8 +228,7 @@ export function useActivatePhase() {
 export function useTakeDose() {
   const invalidate = useInvalidateMeds();
   return useMutation({
-    mutationFn: async (args: { prescriptionId: string; phaseId: string; scheduleId: string; date: string; time: string; dosageAmount: number }) =>
-      unwrap(await takeDose(args.prescriptionId, args.phaseId, args.scheduleId, args.date, args.time, args.dosageAmount)),
+    mutationFn: async (input: TakeDoseInput) => unwrap(await takeDose(input)),
     onSuccess: invalidate,
   });
 }
@@ -233,8 +236,7 @@ export function useTakeDose() {
 export function useUntakeDose() {
   const invalidate = useInvalidateMeds();
   return useMutation({
-    mutationFn: async (args: { prescriptionId: string; phaseId: string; scheduleId: string; date: string; time: string; dosageAmount: number }) =>
-      unwrap(await untakeDose(args.prescriptionId, args.phaseId, args.scheduleId, args.date, args.time, args.dosageAmount)),
+    mutationFn: async (input: UntakeDoseInput) => unwrap(await untakeDose(input)),
     onSuccess: invalidate,
   });
 }
@@ -242,8 +244,7 @@ export function useUntakeDose() {
 export function useSkipDose() {
   const invalidate = useInvalidateMeds();
   return useMutation({
-    mutationFn: async (args: { prescriptionId: string; phaseId: string; scheduleId: string; date: string; time: string; dosageAmount: number; reason?: string }) =>
-      unwrap(await skipDose(args.prescriptionId, args.phaseId, args.scheduleId, args.date, args.time, args.dosageAmount, args.reason)),
+    mutationFn: async (input: SkipDoseInput) => unwrap(await skipDose(input)),
     onSuccess: invalidate,
   });
 }
@@ -251,8 +252,7 @@ export function useSkipDose() {
 export function useRescheduleDose() {
   const invalidate = useInvalidateMeds();
   return useMutation({
-    mutationFn: async (args: { prescriptionId: string; phaseId: string; scheduleId: string; date: string; time: string; newTime: string; dosageAmount: number }) =>
-      unwrap(await rescheduleDose(args.prescriptionId, args.phaseId, args.scheduleId, args.date, args.time, args.newTime, args.dosageAmount)),
+    mutationFn: async (input: RescheduleDoseInput) => unwrap(await rescheduleDose(input)),
     onSuccess: invalidate,
   });
 }
@@ -260,7 +260,7 @@ export function useRescheduleDose() {
 export function useTakeAllDoses() {
   const invalidate = useInvalidateMeds();
   return useMutation({
-    mutationFn: async (args: { entries: { prescriptionId: string; phaseId: string; scheduleId: string; dosageAmount: number }[]; date: string; time: string }) =>
+    mutationFn: async (args: { entries: { prescriptionId: string; phaseId: string; scheduleId: string; dosageMg: number }[]; date: string; time: string }) =>
       unwrap(await takeAllDoses(args.entries, args.date, args.time)),
     onSuccess: invalidate,
   });
@@ -269,7 +269,7 @@ export function useTakeAllDoses() {
 export function useSkipAllDoses() {
   const invalidate = useInvalidateMeds();
   return useMutation({
-    mutationFn: async (args: { entries: { prescriptionId: string; phaseId: string; scheduleId: string; dosageAmount: number }[]; date: string; time: string; reason?: string }) =>
+    mutationFn: async (args: { entries: { prescriptionId: string; phaseId: string; scheduleId: string; dosageMg: number }[]; date: string; time: string; reason?: string }) =>
       unwrap(await skipAllDoses(args.entries, args.date, args.time, args.reason)),
     onSuccess: invalidate,
   });

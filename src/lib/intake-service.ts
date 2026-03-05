@@ -77,28 +77,19 @@ export async function updateIntakeRecord(
 
 export async function getRecordsInLast24Hours(
   type?: "water" | "salt"
-): Promise<ServiceResult<IntakeRecord[]>> {
-  try {
-    const cutoffTime = Date.now() - TWENTY_FOUR_HOURS_MS;
-    let query = db.intakeRecords.where("timestamp").aboveOrEqual(cutoffTime);
-    const records = await query.toArray();
-    if (type) {
-      return ok(records.filter((r) => r.type === type));
-    }
-    return ok(records);
-  } catch (e) {
-    return err("Failed to get records in last 24 hours", e);
+): Promise<IntakeRecord[]> {
+  const cutoffTime = Date.now() - TWENTY_FOUR_HOURS_MS;
+  const query = db.intakeRecords.where("timestamp").aboveOrEqual(cutoffTime);
+  const records = await query.toArray();
+  if (type) {
+    return records.filter((r) => r.type === type);
   }
+  return records;
 }
 
-export async function getTotalInLast24Hours(type: "water" | "salt"): Promise<ServiceResult<number>> {
-  try {
-    const result = await getRecordsInLast24Hours(type);
-    if (!result.success) return result;
-    return ok(result.data.reduce((sum, record) => sum + record.amount, 0));
-  } catch (e) {
-    return err("Failed to get total in last 24 hours", e);
-  }
+export async function getTotalInLast24Hours(type: "water" | "salt"): Promise<number> {
+  const records = await getRecordsInLast24Hours(type);
+  return records.reduce((sum, record) => sum + record.amount, 0);
 }
 
 /**
@@ -114,39 +105,26 @@ function getDayStartTimestamp(dayStartHour: number): number {
   return dayStart.getTime();
 }
 
-export async function getDailyTotal(type: "water" | "salt", dayStartHour: number): Promise<ServiceResult<number>> {
-  try {
-    const cutoffTime = getDayStartTimestamp(dayStartHour);
-    const records = await db.intakeRecords
-      .where("timestamp")
-      .aboveOrEqual(cutoffTime)
-      .filter((r) => r.type === type)
-      .toArray();
-    return ok(records.reduce((sum, r) => sum + r.amount, 0));
-  } catch (e) {
-    return err("Failed to get daily total", e);
-  }
+export async function getDailyTotal(type: "water" | "salt", dayStartHour: number): Promise<number> {
+  const cutoffTime = getDayStartTimestamp(dayStartHour);
+  const records = await db.intakeRecords
+    .where("timestamp")
+    .aboveOrEqual(cutoffTime)
+    .filter((r) => r.type === type)
+    .toArray();
+  return records.reduce((sum, r) => sum + r.amount, 0);
 }
 
-export async function getRecentRecords(type: "water" | "salt", limit: number = 3): Promise<ServiceResult<IntakeRecord[]>> {
-  try {
-    const records = await db.intakeRecords
-      .where("type")
-      .equals(type)
-      .toArray();
-    return ok(records.sort((a, b) => b.timestamp - a.timestamp).slice(0, limit));
-  } catch (e) {
-    return err("Failed to get recent records", e);
-  }
+export async function getRecentRecords(type: "water" | "salt", limit: number = 3): Promise<IntakeRecord[]> {
+  const records = await db.intakeRecords
+    .where("type")
+    .equals(type)
+    .toArray();
+  return records.sort((a, b) => b.timestamp - a.timestamp).slice(0, limit);
 }
 
-export async function getAllRecords(): Promise<ServiceResult<IntakeRecord[]>> {
-  try {
-    const records = await db.intakeRecords.orderBy("timestamp").reverse().toArray();
-    return ok(records);
-  } catch (e) {
-    return err("Failed to get all records", e);
-  }
+export async function getAllRecords(): Promise<IntakeRecord[]> {
+  return db.intakeRecords.orderBy("timestamp").reverse().toArray();
 }
 
 export interface PaginatedResult<T> {
@@ -158,85 +136,68 @@ export interface PaginatedResult<T> {
 export async function getRecordsPaginated(
   page: number = 1,
   limit: number = 20
-): Promise<ServiceResult<PaginatedResult<IntakeRecord>>> {
-  try {
-    const offset = (page - 1) * limit;
-    const total = await db.intakeRecords.count();
-    const records = await db.intakeRecords
-      .orderBy("timestamp")
-      .reverse()
-      .offset(offset)
-      .limit(limit)
-      .toArray();
-    return ok({ records, hasMore: offset + records.length < total, total });
-  } catch (e) {
-    return err("Failed to get paginated records", e);
-  }
+): Promise<PaginatedResult<IntakeRecord>> {
+  const offset = (page - 1) * limit;
+  const total = await db.intakeRecords.count();
+  const records = await db.intakeRecords
+    .orderBy("timestamp")
+    .reverse()
+    .offset(offset)
+    .limit(limit)
+    .toArray();
+  return { records, hasMore: offset + records.length < total, total };
 }
 
 export async function getRecordsByCursor(
   beforeTimestamp?: number,
   limit: number = 20
-): Promise<ServiceResult<{ records: IntakeRecord[]; nextCursor: number | null }>> {
-  try {
-    let query = db.intakeRecords.orderBy("timestamp").reverse();
+): Promise<{ records: IntakeRecord[]; nextCursor: number | null }> {
+  let query = db.intakeRecords.orderBy("timestamp").reverse();
 
-    if (beforeTimestamp !== undefined) {
-      query = db.intakeRecords
-        .where("timestamp")
-        .below(beforeTimestamp)
-        .reverse();
-    }
-
-    const records = await query.limit(limit + 1).toArray();
-
-    const hasMore = records.length > limit;
-    if (hasMore) {
-      records.pop();
-    }
-
-    const lastRecord = records[records.length - 1];
-    const nextCursor = hasMore && lastRecord
-      ? lastRecord.timestamp
-      : null;
-
-    return ok({ records, nextCursor });
-  } catch (e) {
-    return err("Failed to get records by cursor", e);
+  if (beforeTimestamp !== undefined) {
+    query = db.intakeRecords
+      .where("timestamp")
+      .below(beforeTimestamp)
+      .reverse();
   }
+
+  const records = await query.limit(limit + 1).toArray();
+
+  const hasMore = records.length > limit;
+  if (hasMore) {
+    records.pop();
+  }
+
+  const lastRecord = records[records.length - 1];
+  const nextCursor = hasMore && lastRecord
+    ? lastRecord.timestamp
+    : null;
+
+  return { records, nextCursor };
 }
 
 export async function getRecordsByDateRange(
   startTime: number,
   endTime: number,
   type?: "water" | "salt"
-): Promise<ServiceResult<IntakeRecord[]>> {
-  try {
-    let records = await db.intakeRecords
-      .where("timestamp")
-      .between(startTime, endTime)
-      .toArray();
-    if (type) {
-      records = records.filter((r) => r.type === type);
-    }
-    return ok(records);
-  } catch (e) {
-    return err("Failed to get records by date range", e);
+): Promise<IntakeRecord[]> {
+  let records = await db.intakeRecords
+    .where("timestamp")
+    .between(startTime, endTime)
+    .toArray();
+  if (type) {
+    records = records.filter((r) => r.type === type);
   }
+  return records;
 }
 
-export async function exportAllData(): Promise<ServiceResult<string>> {
-  try {
-    const result = await getAllRecords();
-    if (!result.success) return result;
-    return ok(JSON.stringify(
-      { version: 1, exportedAt: new Date().toISOString(), records: result.data },
-      null,
-      2
-    ));
-  } catch (e) {
-    return err("Failed to export data", e);
-  }
+export async function exportAllData(): Promise<string> {
+  const records = await getAllRecords();
+  return JSON.stringify(
+    { version: 1, exportedAt: new Date().toISOString(), records },
+    null,
+    2
+  );
 }
 
 export interface ImportResult {

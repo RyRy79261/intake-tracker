@@ -27,29 +27,19 @@ export async function addDefecationRecord(
 
 export async function getDefecationRecords(
   limit?: number
-): Promise<ServiceResult<DefecationRecord[]>> {
-  try {
-    let query = db.defecationRecords.orderBy("timestamp").reverse();
-    const records = limit ? await query.limit(limit).toArray() : await query.toArray();
-    return ok(records);
-  } catch (e) {
-    return err("Failed to get defecation records", e);
-  }
+): Promise<DefecationRecord[]> {
+  const query = db.defecationRecords.orderBy("timestamp").reverse();
+  return limit ? query.limit(limit).toArray() : query.toArray();
 }
 
 export async function getDefecationRecordsByDateRange(
   startTime: number,
   endTime: number
-): Promise<ServiceResult<DefecationRecord[]>> {
-  try {
-    const records = await db.defecationRecords
-      .where("timestamp")
-      .between(startTime, endTime)
-      .toArray();
-    return ok(records);
-  } catch (e) {
-    return err("Failed to get defecation records by date range", e);
-  }
+): Promise<DefecationRecord[]> {
+  return db.defecationRecords
+    .where("timestamp")
+    .between(startTime, endTime)
+    .toArray();
 }
 
 export async function deleteDefecationRecord(id: string): Promise<ServiceResult<void>> {

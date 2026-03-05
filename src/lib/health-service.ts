@@ -26,38 +26,24 @@ export async function addWeightRecord(
   }
 }
 
-export async function getWeightRecords(limit?: number): Promise<ServiceResult<WeightRecord[]>> {
-  try {
-    let query = db.weightRecords.orderBy("timestamp").reverse();
-    const records = limit ? await query.limit(limit).toArray() : await query.toArray();
-    return ok(records);
-  } catch (e) {
-    return err("Failed to get weight records", e);
-  }
+export async function getWeightRecords(limit?: number): Promise<WeightRecord[]> {
+  const query = db.weightRecords.orderBy("timestamp").reverse();
+  return limit ? query.limit(limit).toArray() : query.toArray();
 }
 
 export async function getWeightRecordsByDateRange(
   startTime: number,
   endTime: number
-): Promise<ServiceResult<WeightRecord[]>> {
-  try {
-    const records = await db.weightRecords
-      .where("timestamp")
-      .between(startTime, endTime)
-      .toArray();
-    return ok(records);
-  } catch (e) {
-    return err("Failed to get weight records by date range", e);
-  }
+): Promise<WeightRecord[]> {
+  return db.weightRecords
+    .where("timestamp")
+    .between(startTime, endTime)
+    .toArray();
 }
 
-export async function getLatestWeightRecord(): Promise<ServiceResult<WeightRecord | undefined>> {
-  try {
-    const records = await db.weightRecords.orderBy("timestamp").reverse().limit(1).toArray();
-    return ok(records[0]);
-  } catch (e) {
-    return err("Failed to get latest weight record", e);
-  }
+export async function getLatestWeightRecord(): Promise<WeightRecord | undefined> {
+  const records = await db.weightRecords.orderBy("timestamp").reverse().limit(1).toArray();
+  return records[0];
 }
 
 export async function deleteWeightRecord(id: string): Promise<ServiceResult<void>> {
@@ -115,38 +101,24 @@ export async function addBloodPressureRecord(
   }
 }
 
-export async function getBloodPressureRecords(limit?: number): Promise<ServiceResult<BloodPressureRecord[]>> {
-  try {
-    let query = db.bloodPressureRecords.orderBy("timestamp").reverse();
-    const records = limit ? await query.limit(limit).toArray() : await query.toArray();
-    return ok(records);
-  } catch (e) {
-    return err("Failed to get blood pressure records", e);
-  }
+export async function getBloodPressureRecords(limit?: number): Promise<BloodPressureRecord[]> {
+  const query = db.bloodPressureRecords.orderBy("timestamp").reverse();
+  return limit ? query.limit(limit).toArray() : query.toArray();
 }
 
 export async function getBloodPressureRecordsByDateRange(
   startTime: number,
   endTime: number
-): Promise<ServiceResult<BloodPressureRecord[]>> {
-  try {
-    const records = await db.bloodPressureRecords
-      .where("timestamp")
-      .between(startTime, endTime)
-      .toArray();
-    return ok(records);
-  } catch (e) {
-    return err("Failed to get blood pressure records by date range", e);
-  }
+): Promise<BloodPressureRecord[]> {
+  return db.bloodPressureRecords
+    .where("timestamp")
+    .between(startTime, endTime)
+    .toArray();
 }
 
-export async function getLatestBloodPressureRecord(): Promise<ServiceResult<BloodPressureRecord | undefined>> {
-  try {
-    const records = await db.bloodPressureRecords.orderBy("timestamp").reverse().limit(1).toArray();
-    return ok(records[0]);
-  } catch (e) {
-    return err("Failed to get latest blood pressure record", e);
-  }
+export async function getLatestBloodPressureRecord(): Promise<BloodPressureRecord | undefined> {
+  const records = await db.bloodPressureRecords.orderBy("timestamp").reverse().limit(1).toArray();
+  return records[0];
 }
 
 export async function deleteBloodPressureRecord(id: string): Promise<ServiceResult<void>> {
@@ -190,37 +162,29 @@ export interface PaginatedResult<T> {
 export async function getWeightRecordsPaginated(
   page: number = 1,
   limit: number = 20
-): Promise<ServiceResult<PaginatedResult<WeightRecord>>> {
-  try {
-    const offset = (page - 1) * limit;
-    const total = await db.weightRecords.count();
-    const records = await db.weightRecords
-      .orderBy("timestamp")
-      .reverse()
-      .offset(offset)
-      .limit(limit)
-      .toArray();
-    return ok({ records, hasMore: offset + records.length < total, total });
-  } catch (e) {
-    return err("Failed to get paginated weight records", e);
-  }
+): Promise<PaginatedResult<WeightRecord>> {
+  const offset = (page - 1) * limit;
+  const total = await db.weightRecords.count();
+  const records = await db.weightRecords
+    .orderBy("timestamp")
+    .reverse()
+    .offset(offset)
+    .limit(limit)
+    .toArray();
+  return { records, hasMore: offset + records.length < total, total };
 }
 
 export async function getBloodPressureRecordsPaginated(
   page: number = 1,
   limit: number = 20
-): Promise<ServiceResult<PaginatedResult<BloodPressureRecord>>> {
-  try {
-    const offset = (page - 1) * limit;
-    const total = await db.bloodPressureRecords.count();
-    const records = await db.bloodPressureRecords
-      .orderBy("timestamp")
-      .reverse()
-      .offset(offset)
-      .limit(limit)
-      .toArray();
-    return ok({ records, hasMore: offset + records.length < total, total });
-  } catch (e) {
-    return err("Failed to get paginated blood pressure records", e);
-  }
+): Promise<PaginatedResult<BloodPressureRecord>> {
+  const offset = (page - 1) * limit;
+  const total = await db.bloodPressureRecords.count();
+  const records = await db.bloodPressureRecords
+    .orderBy("timestamp")
+    .reverse()
+    .offset(offset)
+    .limit(limit)
+    .toArray();
+  return { records, hasMore: offset + records.length < total, total };
 }

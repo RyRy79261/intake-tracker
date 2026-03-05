@@ -33,7 +33,7 @@ export function MarkAllModal({ open, onOpenChange, time, entries, date }: MarkAl
           prescriptionId: e.prescription.id,
           phaseId: e.phase.id,
           scheduleId: e.schedule.id,
-          dosageAmount: pillsToTake,
+          dosageMg: e.schedule.dosage,
         };
       }),
       date,
@@ -51,7 +51,7 @@ export function MarkAllModal({ open, onOpenChange, time, entries, date }: MarkAl
           prescriptionId: e.prescription.id,
           phaseId: e.phase.id,
           scheduleId: e.schedule.id,
-          dosageAmount: pillsToTake,
+          dosageMg: e.schedule.dosage,
         };
       }),
       date,

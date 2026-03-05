@@ -27,29 +27,19 @@ export async function addUrinationRecord(
 
 export async function getUrinationRecords(
   limit?: number
-): Promise<ServiceResult<UrinationRecord[]>> {
-  try {
-    let query = db.urinationRecords.orderBy("timestamp").reverse();
-    const records = limit ? await query.limit(limit).toArray() : await query.toArray();
-    return ok(records);
-  } catch (e) {
-    return err("Failed to get urination records", e);
-  }
+): Promise<UrinationRecord[]> {
+  const query = db.urinationRecords.orderBy("timestamp").reverse();
+  return limit ? query.limit(limit).toArray() : query.toArray();
 }
 
 export async function getUrinationRecordsByDateRange(
   startTime: number,
   endTime: number
-): Promise<ServiceResult<UrinationRecord[]>> {
-  try {
-    const records = await db.urinationRecords
-      .where("timestamp")
-      .between(startTime, endTime)
-      .toArray();
-    return ok(records);
-  } catch (e) {
-    return err("Failed to get urination records by date range", e);
-  }
+): Promise<UrinationRecord[]> {
+  return db.urinationRecords
+    .where("timestamp")
+    .between(startTime, endTime)
+    .toArray();
 }
 
 export async function deleteUrinationRecord(id: string): Promise<ServiceResult<void>> {

@@ -24,29 +24,19 @@ export async function addEatingRecord(
   }
 }
 
-export async function getEatingRecords(limit?: number): Promise<ServiceResult<EatingRecord[]>> {
-  try {
-    let query = db.eatingRecords.orderBy("timestamp").reverse();
-    const records = limit ? await query.limit(limit).toArray() : await query.toArray();
-    return ok(records);
-  } catch (e) {
-    return err("Failed to get eating records", e);
-  }
+export async function getEatingRecords(limit?: number): Promise<EatingRecord[]> {
+  const query = db.eatingRecords.orderBy("timestamp").reverse();
+  return limit ? query.limit(limit).toArray() : query.toArray();
 }
 
 export async function getEatingRecordsByDateRange(
   startTime: number,
   endTime: number
-): Promise<ServiceResult<EatingRecord[]>> {
-  try {
-    const records = await db.eatingRecords
-      .where("timestamp")
-      .between(startTime, endTime)
-      .toArray();
-    return ok(records);
-  } catch (e) {
-    return err("Failed to get eating records by date range", e);
-  }
+): Promise<EatingRecord[]> {
+  return db.eatingRecords
+    .where("timestamp")
+    .between(startTime, endTime)
+    .toArray();
 }
 
 export async function deleteEatingRecord(id: string): Promise<ServiceResult<void>> {

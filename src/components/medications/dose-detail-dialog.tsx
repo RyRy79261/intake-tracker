@@ -53,7 +53,7 @@ export function DoseDetailDialog({
       scheduleId: schedule.id,
       date,
       time: log.scheduledTime,
-      dosageAmount: pillsToTake,
+      dosageMg: schedule.dosage,
     });
     onOpenChange(false);
   };
@@ -65,7 +65,7 @@ export function DoseDetailDialog({
       scheduleId: schedule.id,
       date,
       time: log.scheduledTime,
-      dosageAmount: pillsToTake,
+      dosageMg: schedule.dosage,
     });
     onOpenChange(false);
   };
@@ -77,7 +77,7 @@ export function DoseDetailDialog({
       scheduleId: schedule.id,
       date,
       time: log.scheduledTime,
-      dosageAmount: pillsToTake,
+      dosageMg: schedule.dosage,
     });
     onOpenChange(false);
   };
@@ -91,7 +91,7 @@ export function DoseDetailDialog({
       date,
       time: log.scheduledTime,
       newTime: rescheduleTime,
-      dosageAmount: pillsToTake,
+      dosageMg: schedule.dosage,
     });
     setShowReschedule(false);
     onOpenChange(false);

@@ -35,9 +35,10 @@ export interface ImportResult {
 const CURRENT_BACKUP_VERSION = 3;
 
 /**
- * Export all health data to a JSON blob
+ * Export all health data to a JSON blob.
+ * Read function — returns Blob directly, lets errors propagate.
  */
-export async function exportBackup(): Promise<ServiceResult<Blob>> {
+export async function exportBackup(): Promise<Blob> {
   const [intakeRecords, weightRecords, bloodPressureRecords, eatingRecords, urinationRecords, defecationRecords] = await Promise.all([
     db.intakeRecords.toArray(),
     db.weightRecords.toArray(),
@@ -80,7 +81,7 @@ export async function exportBackup(): Promise<ServiceResult<Blob>> {
   logAudit("data_export", `Exported ${intakeRecords.length} intake, ${weightRecords.length} weight, ${bloodPressureRecords.length} BP, ${eatingRecords.length} eating, ${urinationRecords.length} urination, ${defecationRecords.length} defecation records`);
 
   const json = JSON.stringify(backupData, null, 2);
-  return ok(new Blob([json], { type: "application/json" }));
+  return new Blob([json], { type: "application/json" });
 }
 
 /**
@@ -92,21 +93,23 @@ export function generateBackupFilename(): string {
 }
 
 /**
- * Download a backup file
+ * Download a backup file (mutation — keeps ServiceResult)
  */
 export async function downloadBackup(): Promise<ServiceResult<void>> {
-  const blobResult = await exportBackup();
-  if (!blobResult.success) return blobResult;
-  const blob = blobResult.data;
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = generateBackupFilename();
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-  return ok(undefined);
+  try {
+    const blob = await exportBackup();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = generateBackupFilename();
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    return ok(undefined);
+  } catch (e) {
+    return err("Failed to download backup", e);
+  }
 }
 
 /**
@@ -114,13 +117,13 @@ export async function downloadBackup(): Promise<ServiceResult<void>> {
  */
 function validateBackupData(data: unknown): data is BackupData {
   if (!data || typeof data !== "object") return false;
-  
+
   const backup = data as Record<string, unknown>;
-  
+
   // Check required fields
   if (typeof backup.version !== "number") return false;
   if (typeof backup.exportedAt !== "string") return false;
-  
+
   // Arrays can be missing (for older versions) but if present must be arrays
   if (backup.intakeRecords !== undefined && !Array.isArray(backup.intakeRecords)) return false;
   if (backup.weightRecords !== undefined && !Array.isArray(backup.weightRecords)) return false;
@@ -203,7 +206,7 @@ function isValidDefecationRecord(record: unknown): record is DefecationRecord {
 }
 
 /**
- * Import backup data from a file
+ * Import backup data from a file (mutation — keeps ServiceResult)
  */
 export async function importBackup(
   file: File,
@@ -224,7 +227,7 @@ export async function importBackup(
   try {
     const text = await file.text();
     let data: unknown;
-    
+
     try {
       data = JSON.parse(text);
     } catch {
@@ -413,7 +416,8 @@ export async function importBackup(
 }
 
 /**
- * Get backup statistics
+ * Get backup statistics.
+ * Read function — returns T directly, lets errors propagate.
  */
 export async function getBackupStats(): Promise<{
   intakeCount: number;
