@@ -69,10 +69,14 @@ Plans:
   2. `scheduledDate` is generated from local date (not UTC), and the device timezone is stored with each dose log
   3. Logging a half-pill dose decrements inventory by 0.5 of the physical pill unit, not by the prescribed dose amount
   4. The phase-activation invariant (only one active phase per prescription) is enforced inside a transaction in `activatePhase()`
-**Plans**: TBD
+**Plans**: 5
 
 Plans:
-- [ ] 03-01: TBD
+- [ ] 03-01-PLAN.md — Dexie v11 schema migration + timezone utilities + audit service
+- [ ] 03-02-PLAN.md — Medication service rebuild with atomic transactions, fractional math, audit logging
+- [ ] 03-03-PLAN.md — Non-medication service cleanup + hook useLiveQuery migration
+- [ ] 03-04-PLAN.md — Dose schedule service (derive-at-read) + medication hook migration
+- [ ] 03-05-PLAN.md — Inventory stock recalculation + debug panel rebuild
 
 ### Phase 4: Analytics Service
 **Goal**: A dedicated analytics service provides cross-domain query shapes that future AI analysis can call without touching the database directly
@@ -194,8 +198,8 @@ Note: Phase 5 (Security) depends only on Phase 2 and can begin in parallel with 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Schema Foundation | 3/3 | Complete | 2026-03-02 |
-| 2. TypeScript and Service Contracts | 3/4 | In progress | - |
-| 3. Service Layer Rebuild | 0/TBD | Not started | - |
+| 2. TypeScript and Service Contracts | 4/4 | Complete | - |
+| 3. Service Layer Rebuild | 0/5 | Not started | - |
 | 4. Analytics Service | 0/TBD | Not started | - |
 | 5. Security Hardening | 0/TBD | Not started | - |
 | 6. Medication UX Core | 0/TBD | Not started | - |
