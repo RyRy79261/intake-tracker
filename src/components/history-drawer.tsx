@@ -237,9 +237,10 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
     if (isNaN(newTimestamp)) { toast({ title: "Invalid date/time", variant: "destructive" }); return; }
     const rec = editingIntake;
     try {
-      await updateMutation.mutateAsync({ id: rec.id, updates: { amount: newAmount, timestamp: newTimestamp, note: newNote } });
+      await updateMutation.mutateAsync({ id: rec.id, updates: { amount: newAmount, timestamp: newTimestamp, ...(newNote !== undefined && { note: newNote }) } });
       setEditingIntake(null);
-      setRecords(prev => prev.map(r => r.type === "intake" && r.record.id === rec.id ? { ...r, record: { ...r.record, amount: newAmount, timestamp: newTimestamp, note: newNote } } : r).sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a)));
+      const updatedRecord = { ...rec, amount: newAmount, timestamp: newTimestamp, ...(newNote !== undefined && { note: newNote }) };
+      setRecords(prev => prev.map(r => r.type === "intake" && r.record.id === rec.id ? { ...r, record: updatedRecord } : r).sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a)));
       toast({ title: "Entry updated" });
     } catch { toast({ title: "Error", description: "Could not update the entry", variant: "destructive" }); }
   }, [editingIntake, editAmount, editTimestamp, editNote, toast, updateMutation]);
@@ -253,9 +254,11 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
     if (isNaN(newTimestamp)) { toast({ title: "Invalid date/time", variant: "destructive" }); return; }
     const rec = editingWeight;
     try {
-      await updateWeightMutation.mutateAsync({ id: rec.id, updates: { weight: newWeight, timestamp: newTimestamp, note: editNote || undefined } });
+      const noteVal = editNote || undefined;
+      await updateWeightMutation.mutateAsync({ id: rec.id, updates: { weight: newWeight, timestamp: newTimestamp, ...(noteVal !== undefined && { note: noteVal }) } });
       setEditingWeight(null);
-      setRecords(prev => prev.map(r => r.type === "weight" && r.record.id === rec.id ? { ...r, record: { ...r.record, weight: newWeight, timestamp: newTimestamp, note: editNote || undefined } } : r).sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a)));
+      const updatedWeight = { ...rec, weight: newWeight, timestamp: newTimestamp, ...(noteVal !== undefined && { note: noteVal }) };
+      setRecords(prev => prev.map(r => r.type === "weight" && r.record.id === rec.id ? { ...r, record: updatedWeight } : r).sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a)));
       toast({ title: "Entry updated" });
     } catch { toast({ title: "Error", description: "Could not update the entry", variant: "destructive" }); }
   }, [editingWeight, editWeight, editTimestamp, editNote, toast, updateWeightMutation]);
@@ -271,9 +274,11 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
     if (isNaN(newTimestamp)) { toast({ title: "Invalid date/time", variant: "destructive" }); return; }
     const rec = editingBP;
     try {
-      await updateBPMutation.mutateAsync({ id: rec.id, updates: { systolic: newSystolic, diastolic: newDiastolic, heartRate: newHeartRate, position: editPosition, arm: editArm, timestamp: newTimestamp, note: editNote || undefined } });
+      const bpNoteVal = editNote || undefined;
+      await updateBPMutation.mutateAsync({ id: rec.id, updates: { systolic: newSystolic, diastolic: newDiastolic, ...(newHeartRate !== undefined && { heartRate: newHeartRate }), position: editPosition, arm: editArm, timestamp: newTimestamp, ...(bpNoteVal !== undefined && { note: bpNoteVal }) } });
       setEditingBP(null);
-      setRecords(prev => prev.map(r => r.type === "bp" && r.record.id === rec.id ? { ...r, record: { ...r.record, systolic: newSystolic, diastolic: newDiastolic, heartRate: newHeartRate, position: editPosition, arm: editArm, timestamp: newTimestamp, note: editNote || undefined } } : r).sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a)));
+      const updatedBP = { ...rec, systolic: newSystolic, diastolic: newDiastolic, ...(newHeartRate !== undefined && { heartRate: newHeartRate }), position: editPosition, arm: editArm, timestamp: newTimestamp, ...(bpNoteVal !== undefined && { note: bpNoteVal }) };
+      setRecords(prev => prev.map(r => r.type === "bp" && r.record.id === rec.id ? { ...r, record: updatedBP } : r).sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a)));
       toast({ title: "Entry updated" });
     } catch { toast({ title: "Error", description: "Could not update the entry", variant: "destructive" }); }
   }, [editingBP, editSystolic, editDiastolic, editHeartRate, editPosition, editArm, editTimestamp, editNote, toast, updateBPMutation]);
@@ -285,9 +290,11 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
     if (isNaN(newTimestamp)) { toast({ title: "Invalid date/time", variant: "destructive" }); return; }
     const rec = editingEating;
     try {
-      await updateEatingMutation.mutateAsync({ id: rec.id, updates: { timestamp: newTimestamp, note: editNote.trim() || undefined } });
+      const eatingNote = editNote.trim() || undefined;
+      await updateEatingMutation.mutateAsync({ id: rec.id, updates: { timestamp: newTimestamp, ...(eatingNote !== undefined && { note: eatingNote }) } });
       setEditingEating(null);
-      setRecords(prev => prev.map(r => r.type === "eating" && r.record.id === rec.id ? { ...r, record: { ...r.record, timestamp: newTimestamp, note: editNote.trim() || undefined } } : r).sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a)));
+      const updatedEating = { ...rec, timestamp: newTimestamp, ...(eatingNote !== undefined && { note: eatingNote }) };
+      setRecords(prev => prev.map(r => r.type === "eating" && r.record.id === rec.id ? { ...r, record: updatedEating } : r).sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a)));
       toast({ title: "Entry updated" });
     } catch { toast({ title: "Error", description: "Could not update", variant: "destructive" }); }
   }, [editingEating, editTimestamp, editNote, toast, updateEatingMutation]);
@@ -299,9 +306,12 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
     if (isNaN(newTimestamp)) { toast({ title: "Invalid date/time", variant: "destructive" }); return; }
     const rec = editingUrination;
     try {
-      await updateUrinationMutation.mutateAsync({ id: rec.id, updates: { timestamp: newTimestamp, amountEstimate: editAmountUrination || undefined, note: editNote.trim() || undefined } });
+      const urinationAmt = editAmountUrination || undefined;
+      const urinationNote = editNote.trim() || undefined;
+      await updateUrinationMutation.mutateAsync({ id: rec.id, updates: { timestamp: newTimestamp, ...(urinationAmt !== undefined && { amountEstimate: urinationAmt }), ...(urinationNote !== undefined && { note: urinationNote }) } });
       setEditingUrination(null);
-      setRecords(prev => prev.map(r => r.type === "urination" && r.record.id === rec.id ? { ...r, record: { ...r.record, timestamp: newTimestamp, amountEstimate: editAmountUrination || undefined, note: editNote.trim() || undefined } } : r).sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a)));
+      const updatedUrination = { ...rec, timestamp: newTimestamp, ...(urinationAmt !== undefined && { amountEstimate: urinationAmt }), ...(urinationNote !== undefined && { note: urinationNote }) };
+      setRecords(prev => prev.map(r => r.type === "urination" && r.record.id === rec.id ? { ...r, record: updatedUrination } : r).sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a)));
       toast({ title: "Entry updated" });
     } catch { toast({ title: "Error", description: "Could not update", variant: "destructive" }); }
   }, [editingUrination, editTimestamp, editAmountUrination, editNote, toast, updateUrinationMutation]);
@@ -313,9 +323,12 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
     if (isNaN(newTimestamp)) { toast({ title: "Invalid date/time", variant: "destructive" }); return; }
     const rec = editingDefecation;
     try {
-      await updateDefecationMutation.mutateAsync({ id: rec.id, updates: { timestamp: newTimestamp, amountEstimate: editAmountDefecation || undefined, note: editNote.trim() || undefined } });
+      const defecationAmt = editAmountDefecation || undefined;
+      const defecationNote = editNote.trim() || undefined;
+      await updateDefecationMutation.mutateAsync({ id: rec.id, updates: { timestamp: newTimestamp, ...(defecationAmt !== undefined && { amountEstimate: defecationAmt }), ...(defecationNote !== undefined && { note: defecationNote }) } });
       setEditingDefecation(null);
-      setRecords(prev => prev.map(r => r.type === "defecation" && r.record.id === rec.id ? { ...r, record: { ...r.record, timestamp: newTimestamp, amountEstimate: editAmountDefecation || undefined, note: editNote.trim() || undefined } } : r).sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a)));
+      const updatedDefecation = { ...rec, timestamp: newTimestamp, ...(defecationAmt !== undefined && { amountEstimate: defecationAmt }), ...(defecationNote !== undefined && { note: defecationNote }) };
+      setRecords(prev => prev.map(r => r.type === "defecation" && r.record.id === rec.id ? { ...r, record: updatedDefecation } : r).sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a)));
       toast({ title: "Entry updated" });
     } catch { toast({ title: "Error", description: "Could not update", variant: "destructive" }); }
   }, [editingDefecation, editTimestamp, editAmountDefecation, editNote, toast, updateDefecationMutation]);

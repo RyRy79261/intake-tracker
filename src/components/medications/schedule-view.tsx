@@ -24,7 +24,9 @@ function formatActionTime(timestamp: number): string {
 }
 
 function isTimeOverdue(time24: string): boolean {
-  const [h, m] = time24.split(":").map(Number);
+  const parts = time24.split(":").map(Number);
+  const h = parts[0] ?? 0;
+  const m = parts[1] ?? 0;
   const now = new Date();
   const schedMinutes = h * 60 + m;
   const nowMinutes = now.getHours() * 60 + now.getMinutes();

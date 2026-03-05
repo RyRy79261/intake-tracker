@@ -34,7 +34,7 @@ function MedicationsContent() {
   const [selectedPrescription, setSelectedPrescription] = useState<Prescription | null>(null);
 
   const [editInventoryOpen, setEditInventoryOpen] = useState(false);
-  const [selectedInventory, setSelectedInventory] = useState<any>(null); // Will type properly later
+  const [selectedInventory, setSelectedInventory] = useState<Prescription | null>(null);
 
   const [markAllOpen, setMarkAllOpen] = useState(false);
   const [markAllTime, setMarkAllTime] = useState("");
@@ -75,7 +75,7 @@ function MedicationsContent() {
     setEditCompoundOpen(true);
   }, []);
 
-  const handleEditInventory = useCallback((item: any) => {
+  const handleEditInventory = useCallback((item: Prescription) => {
     setSelectedInventory(item);
     setEditInventoryOpen(true);
   }, []);

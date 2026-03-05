@@ -42,19 +42,20 @@ export function DataManagementSection() {
     try {
       const result = await importBackup(file, "merge");
       if (result.success) {
+        const data = result.data;
         const total =
-          result.intakeImported +
-          result.weightImported +
-          result.bpImported +
-          result.eatingImported +
-          result.urinationImported;
+          data.intakeImported +
+          data.weightImported +
+          data.bpImported +
+          data.eatingImported +
+          data.urinationImported;
         toast({
           title: "Import successful",
-          description: `Imported ${total} records (${result.skipped} skipped)`,
+          description: `Imported ${total} records (${data.skipped} skipped)`,
           variant: "success",
         });
       } else {
-        throw new Error(result.errors.join(", ") || "Import failed");
+        throw new Error(result.error || "Import failed");
       }
     } catch (error) {
       toast({

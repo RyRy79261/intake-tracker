@@ -110,8 +110,8 @@ export function DefecationCard() {
       const effectiveAmount = amount && amount !== "__none__" ? amount : undefined;
       await addMutation.mutateAsync({
         timestamp,
-        amountEstimate: effectiveAmount,
-        note: note || undefined,
+        ...(effectiveAmount !== undefined && { amountEstimate: effectiveAmount }),
+        ...(note && { note }),
       });
       toast({
         title: "Logged",

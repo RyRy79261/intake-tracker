@@ -76,7 +76,7 @@ export function WeightCard() {
 
     try {
       const timestamp = showTimeInput ? dateTimeLocalToTimestamp(customTime) : undefined;
-      await addMutation.mutateAsync({ weight, timestamp });
+      await addMutation.mutateAsync({ weight, ...(timestamp !== undefined && { timestamp }) });
       toast({
         title: "Weight recorded",
         description: `${weight} kg logged successfully`,

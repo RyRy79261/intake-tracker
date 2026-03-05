@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { PillIcon } from "./pill-icon";
 import { useMedicineSearch, type MedicineSearchResult } from "@/hooks/use-medicine-search";
 import { useAddPrescription, usePrescriptions, useAddMedicationToPrescription } from "@/hooks/use-medication-queries";
-import type { PillShape, FoodInstruction } from "@/lib/db";
+import type { PillShape, FoodInstruction, Prescription } from "@/lib/db";
 import { ArrowLeft, ArrowRight, Search, Loader2, Check, Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -169,7 +169,7 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
       }
       
       if (result.genericName) setGenericName(capitalizeWords(result.genericName));
-      if (result.dosageStrengths.length > 0) setDosageStrength(result.dosageStrengths[0]);
+      if (result.dosageStrengths.length > 0 && result.dosageStrengths[0]) setDosageStrength(result.dosageStrengths[0]);
       if (result.commonIndications.length > 0) setIndication(result.commonIndications.join(", "));
       if (result.contraindications) setContraindications(result.contraindications);
       if (result.warnings) setWarnings(result.warnings);
@@ -195,18 +195,20 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
   const isLastStep = currentStepIndex === STEPS.length - 1;
 
   const goBack = () => {
-    if (canGoBack) setStep(STEPS[currentStepIndex - 1]);
+    const prev = STEPS[currentStepIndex - 1];
+    if (canGoBack && prev) setStep(prev);
   };
 
   const goNext = () => {
-    if (canGoNext) setStep(STEPS[currentStepIndex + 1]);
+    const next = STEPS[currentStepIndex + 1];
+    if (canGoNext && next) setStep(next);
   };
 
   const handleSave = async () => {
     const parseStrength = (str: string): { strength: number; unit: string } => {
       if (!str) return { strength: 1, unit: "mg" };
       const match = str.match(/(\d+(?:\.\d+)?)\s*([a-zA-Z]+)/);
-      if (match) {
+      if (match && match[1] && match[2]) {
         return { strength: parseFloat(match[1]), unit: match[2].toLowerCase() };
       }
       const num = parseFloat(str);
@@ -219,6 +221,9 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
     const scheduleDosage = (finalDosage || 1) * strength;
 
     try {
+      const refillDays = parseInt(refillAlertDays) || undefined;
+      const refillPills = parseInt(refillAlertPills) || undefined;
+
       if (selectedPrescriptionId !== "new") {
         await addMedicationToPrescriptionMutation.mutateAsync({
           prescriptionId: selectedPrescriptionId,
@@ -227,12 +232,12 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
           unit,
           pillShape,
           pillColor,
-          visualIdentification: visualIdentification || undefined,
+          ...(visualIdentification && { visualIdentification }),
           foodInstruction,
-          foodNote: foodNote || undefined,
+          ...(foodNote && { foodNote }),
           currentStock: parseInt(currentStock) || 0,
-          refillAlertDays: parseInt(refillAlertDays) || undefined,
-          refillAlertPills: parseInt(refillAlertPills) || undefined,
+          ...(refillDays !== undefined && { refillAlertDays: refillDays }),
+          ...(refillPills !== undefined && { refillAlertPills: refillPills }),
           schedules: schedules.filter(s => s.time && s.daysOfWeek.length > 0).map(s => ({ ...s, dosage: scheduleDosage }))
         });
       } else {
@@ -243,20 +248,20 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
           unit,
           pillShape,
           pillColor,
-          visualIdentification: visualIdentification || undefined,
+          ...(visualIdentification && { visualIdentification }),
           indication,
-          contraindications: contraindications.length > 0 ? contraindications : undefined,
-          warnings: warnings.length > 0 ? warnings : undefined,
+          ...(contraindications.length > 0 && { contraindications }),
+          ...(warnings.length > 0 && { warnings }),
           foodInstruction,
-          foodNote: foodNote || undefined,
+          ...(foodNote && { foodNote }),
           currentStock: parseInt(currentStock) || 0,
-          refillAlertDays: parseInt(refillAlertDays) || undefined,
-          refillAlertPills: parseInt(refillAlertPills) || undefined,
-          notes: notes || undefined,
+          ...(refillDays !== undefined && { refillAlertDays: refillDays }),
+          ...(refillPills !== undefined && { refillAlertPills: refillPills }),
+          ...(notes && { notes }),
           schedules: schedules.filter(s => s.time && s.daysOfWeek.length > 0).map(s => ({ ...s, dosage: scheduleDosage }))
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
     }
 
@@ -301,7 +306,7 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
                 onSearch={handleSearch}
                 isSearching={searchMutation.isPending}
                 result={searchResult}
-                error={searchMutation.error?.message}
+                {...(searchMutation.error?.message && { error: searchMutation.error.message })}
                 brandName={brandName}
                 onBrandNameChange={(v) => setBrandName(capitalizeWords(v))}
                 genericName={genericName}
@@ -419,7 +424,7 @@ function SearchStep({
   genericName: string; onGenericNameChange: (v: string) => void;
   dosageStrength: string; onDosageStrengthChange: (v: string) => void;
   selectedPrescriptionId: string; onSelectedPrescriptionIdChange: (v: string) => void;
-  existingPrescriptions: any[];
+  existingPrescriptions: Prescription[];
 }) {
   return (
     <div className="space-y-4">
@@ -772,8 +777,11 @@ function ScheduleStep({
 }) {
   const updateSchedule = (index: number, updates: Partial<ScheduleEntry>) => {
     const next = [...schedules];
-    next[index] = { ...next[index], ...updates };
-    onSchedulesChange(next);
+    const existing = next[index];
+    if (existing) {
+      next[index] = { ...existing, ...updates };
+      onSchedulesChange(next);
+    }
   };
 
   const addScheduleEntry = () => {
@@ -787,6 +795,7 @@ function ScheduleStep({
 
   const toggleDay = (schedIndex: number, day: number) => {
     const sched = schedules[schedIndex];
+    if (!sched) return;
     const days = sched.daysOfWeek.includes(day)
       ? sched.daysOfWeek.filter((d) => d !== day)
       : [...sched.daysOfWeek, day].sort();

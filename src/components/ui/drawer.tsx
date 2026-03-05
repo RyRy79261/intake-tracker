@@ -45,8 +45,8 @@ const Drawer = ({
   return (
     <DrawerPrimitive.Root
       shouldScaleBackground={shouldScaleBackground}
-      open={open}
-      onOpenChange={onOpenChange}
+      {...(open !== undefined && { open })}
+      {...(onOpenChange !== undefined && { onOpenChange })}
       {...props}
     />
   );

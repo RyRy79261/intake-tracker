@@ -100,10 +100,11 @@ function buildBPChartData(
     const armLabel = arm === "left" ? "L" : "R";
     const posLabel = position === "sitting" ? "Sit" : "Stand";
     const metricLabel = metric === "systolic" ? "Sys" : metric === "diastolic" ? "Dia" : "HR";
+    const dash = getBPLineDash(arm);
     activeKeys.push({
       key: toggleKey,
       color: getBPLineColor(metric, position),
-      dash: getBPLineDash(arm),
+      ...(dash !== undefined && { dash }),
       label: `${armLabel} ${posLabel} ${metricLabel}`,
     });
   }

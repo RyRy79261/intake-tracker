@@ -31,7 +31,7 @@ export function MedicationsList({ onAddMed, onEditMed }: MedicationsListProps) {
         archived.push(item);
       } else if (item.isActive) {
         active.push(item);
-      } else if (item.currentStock > 0) {
+      } else if ((item.currentStock ?? 0) > 0) {
         inStock.push(item);
       } else {
         outOfStock.push(item);

@@ -93,12 +93,12 @@ export function BloodPressureCard() {
       return {
         systolic: newSystolic,
         diastolic: newDiastolic,
-        heartRate: newHeartRate,
-        irregularHeartbeat: editIrregularHeartbeat || undefined,
+        ...(newHeartRate !== undefined && { heartRate: newHeartRate }),
+        ...(editIrregularHeartbeat && { irregularHeartbeat: true as const }),
         position: editPosition,
         arm: editArm,
-        timestamp,
-        note,
+        ...(timestamp !== undefined && { timestamp }),
+        ...(note !== undefined && { note }),
       };
     },
     mutateAsync: updateMutation.mutateAsync,
@@ -134,7 +134,12 @@ export function BloodPressureCard() {
 
     try {
       const timestamp = showTimeInput ? dateTimeLocalToTimestamp(customTime) : undefined;
-      await addMutation.mutateAsync({ systolic, diastolic, position, arm, heartRate, irregularHeartbeat: irregularHeartbeat || undefined, timestamp });
+      await addMutation.mutateAsync({
+        systolic, diastolic, position, arm,
+        ...(heartRate !== undefined && { heartRate }),
+        ...(irregularHeartbeat && { irregularHeartbeat: true as const }),
+        ...(timestamp !== undefined && { timestamp }),
+      });
       toast({
         title: "Blood pressure recorded",
         description: `${systolic}/${diastolic} mmHg logged successfully`,

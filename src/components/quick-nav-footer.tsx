@@ -4,12 +4,13 @@ import { useMemo } from "react";
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { CARD_THEMES, UTILITY_THEMES, type CardThemeKey } from "@/lib/card-themes";
+import type { LucideIcon } from "lucide-react";
 
 // ── Section nav items (scrollable gallery) ──────────────────
 
 interface SectionNavItem {
   id: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: LucideIcon;
   label: string;
   iconColor: string;
   bgColor: string;
@@ -125,7 +126,7 @@ function UtilityButton({
   item,
   onClick,
 }: {
-  item: { icon: React.ComponentType<{ className?: string }>; label: string; iconColor: string; bgColor: string };
+  item: { icon: LucideIcon; label: string; iconColor: string; bgColor: string };
   onClick: () => void;
 }) {
   return (

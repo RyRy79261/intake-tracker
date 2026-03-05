@@ -86,9 +86,10 @@ export function VoiceInput({ onAddWater, onAddSalt, open: controlledOpen, onOpen
         authToken = await getAccessToken() || undefined;
       }
 
+      const clientApiKey = hasKey ? getApiKey() : undefined;
       const result = await parseIntakeWithPerplexity(input, {
-        authToken,
-        clientApiKey: hasKey ? getApiKey() : undefined,
+        ...(authToken !== undefined && { authToken }),
+        ...(clientApiKey !== undefined && { clientApiKey }),
       });
       setParsedResult(result);
     } catch (error) {

@@ -46,7 +46,7 @@ function PrivyProviderWithTheme({
   return (
     <PrivyProvider
       appId={appId}
-      clientId={clientId}
+      {...(clientId !== undefined && { clientId })}
       config={{
         // Login methods to show in the modal
         loginMethods: ["email", "google"],
@@ -93,7 +93,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <PrivyProviderWithTheme appId={appId} clientId={clientId}>
+          <PrivyProviderWithTheme appId={appId} {...(clientId !== undefined && { clientId })}>
             {children}
           </PrivyProviderWithTheme>
         </ThemeProvider>

@@ -6,6 +6,7 @@ import { PillIcon } from "./pill-icon";
 import { Loader2, CheckCircle2, XCircle, Clock, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { DoseLogWithDetails } from "@/lib/dose-log-service";
+import type { InventoryItem } from "@/lib/db";
 
 function todayStr(): string {
   const d = new Date();
@@ -37,8 +38,9 @@ export function StatusView() {
   const lowStockMeds = useMemo(() => {
     return inventoryItems.filter(item => {
       // Find matching phase logic could go here, but for simplicity we just check alert bounds
-      if (item.refillAlertPills && item.currentStock <= item.refillAlertPills) return true;
-      if (item.refillAlertDays && item.currentStock <= (item.refillAlertDays * 2)) return true; // simplified estimate
+      const stock = item.currentStock ?? 0;
+      if (item.refillAlertPills && stock <= item.refillAlertPills) return true;
+      if (item.refillAlertDays && stock <= (item.refillAlertDays * 2)) return true; // simplified estimate
       return false;
     });
   }, [inventoryItems]);
@@ -138,7 +140,7 @@ export function StatusView() {
   );
 }
 
-function RefillAlertCard({ item }: { item: any }) {
+function RefillAlertCard({ item }: { item: InventoryItem }) {
   return (
     <div className="flex items-center gap-3 px-3 py-3 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20">
       <PillIcon shape={item.pillShape} color={item.pillColor} size={28} />

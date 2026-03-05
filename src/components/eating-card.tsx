@@ -95,7 +95,9 @@ export function EatingCard() {
     try {
       const timestamp = dateTimeLocalToTimestamp(detailTime);
       const grams = detailGrams ? parseInt(detailGrams, 10) : undefined;
-      await addMutation.mutateAsync({ timestamp, note: detailNote || undefined, grams: grams && grams > 0 ? grams : undefined });
+      const noteVal = detailNote || undefined;
+      const gramsVal = grams && grams > 0 ? grams : undefined;
+      await addMutation.mutateAsync({ timestamp, ...(noteVal !== undefined && { note: noteVal }), ...(gramsVal !== undefined && { grams: gramsVal }) });
       toast({
         title: "Logged",
         description: detailNote ? "Meal with details recorded" : "Eating event recorded",

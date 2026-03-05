@@ -8,6 +8,7 @@ import {
   updateIntakeRecord,
   deleteIntakeRecord,
 } from "@/lib/intake-service";
+import { unwrap } from "@/lib/service-result";
 import { useSettingsStore } from "@/stores/settings-store";
 import { graphKeys } from "@/hooks/use-graph-data";
 
@@ -168,7 +169,7 @@ export function useAddIntake() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({
+    mutationFn: async ({
       type,
       amount,
       source = "manual",
@@ -180,7 +181,7 @@ export function useAddIntake() {
       source?: string;
       timestamp?: number;
       note?: string;
-    }) => addIntakeRecord(type, amount, source, timestamp, note),
+    }) => unwrap(await addIntakeRecord(type, amount, source, timestamp, note)),
     onSuccess: (_, variables) => {
       // Invalidate all affected queries for this type
       queryClient.invalidateQueries({ queryKey: intakeKeys.total(variables.type) });
@@ -200,13 +201,13 @@ export function useUpdateIntake() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({
+    mutationFn: async ({
       id,
       updates,
     }: {
       id: string;
       updates: { amount?: number; timestamp?: number; note?: string };
-    }) => updateIntakeRecord(id, updates),
+    }) => unwrap(await updateIntakeRecord(id, updates)),
     onSuccess: () => {
       // Invalidate all totals since we don't know which type was affected
       // and timestamp changes could move records in/out of windows
@@ -226,7 +227,7 @@ export function useDeleteIntake() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => deleteIntakeRecord(id),
+    mutationFn: async (id: string) => unwrap(await deleteIntakeRecord(id)),
     onSuccess: () => {
       // Invalidate all intake queries since we don't know which type was affected
       queryClient.invalidateQueries({ queryKey: intakeKeys.all });
@@ -249,7 +250,7 @@ export function useIntake(type: "water" | "salt") {
 
   const addRecord = useCallback(
     async (amount: number, source: string = "manual", timestamp?: number, note?: string) => {
-      return addMutation.mutateAsync({ type, amount, source, timestamp, note });
+      return addMutation.mutateAsync({ type, amount, source, ...(timestamp !== undefined && { timestamp }), ...(note !== undefined && { note }) });
     },
     [addMutation, type]
   );

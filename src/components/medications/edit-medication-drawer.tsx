@@ -21,7 +21,7 @@ import {
   useDeletePhase,
   useActivatePhase
 } from "@/hooks/use-medication-queries";
-import type { Prescription } from "@/lib/db";
+import type { Prescription, MedicationPhase } from "@/lib/db";
 import { Loader2, Plus, Clock, Pill, Edit2, Check, X, Trash2, Play } from "lucide-react";
 import { format } from "date-fns";
 import { useMedicineSearch } from "@/hooks/use-medicine-search";
@@ -463,8 +463,11 @@ function TitrationTab({ prescription }: { prescription: Prescription }) {
   const addSchedule = () => setSchedules([...schedules, { time: "20:00", dosage: 100 }]);
   const updateSchedule = (i: number, updates: Partial<{ time: string; dosage: number }>) => {
     const next = [...schedules];
-    next[i] = { ...next[i], ...updates };
-    setSchedules(next);
+    const existing = next[i];
+    if (existing) {
+      next[i] = { ...existing, ...updates };
+      setSchedules(next);
+    }
   };
   const removeSchedule = (i: number) => {
     setSchedules(schedules.filter((_, idx) => idx !== i));
@@ -578,7 +581,7 @@ function TitrationTab({ prescription }: { prescription: Prescription }) {
   );
 }
 
-function PhaseCard({ phase }: { phase: any }) {
+function PhaseCard({ phase }: { phase: MedicationPhase }) {
   const { data: schedules = [] } = useSchedulesForPhase(phase.id);
   const totalDaily = schedules.reduce((acc, s) => acc + s.dosage, 0);
   const [isEditing, setIsEditing] = useState(false);
@@ -623,8 +626,11 @@ function PhaseCard({ phase }: { phase: any }) {
   const addSchedule = () => setEditSchedules([...editSchedules, { time: "20:00", dosage: 100 }]);
   const updateSchedule = (i: number, updates: Partial<{ time: string; dosage: number }>) => {
     const next = [...editSchedules];
-    next[i] = { ...next[i], ...updates };
-    setEditSchedules(next);
+    const existing = next[i];
+    if (existing) {
+      next[i] = { ...existing, ...updates };
+      setEditSchedules(next);
+    }
   };
   const removeSchedule = (i: number) => {
     setEditSchedules(editSchedules.filter((_, idx) => idx !== i));

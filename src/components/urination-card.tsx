@@ -109,8 +109,8 @@ export function UrinationCard() {
       const timestamp = dateTimeLocalToTimestamp(detailTime);
       await addMutation.mutateAsync({
         timestamp,
-        amountEstimate: amount || undefined,
-        note: note || undefined,
+        ...(amount && { amountEstimate: amount }),
+        ...(note && { note }),
       });
       toast({
         title: "Logged",

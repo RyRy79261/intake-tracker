@@ -494,7 +494,7 @@ export function DebugPanel() {
       setNotifTestResult({
         method: "serviceWorker",
         success,
-        error: success ? undefined : "showNotification returned false",
+        ...(!success && { error: "showNotification returned false" }),
       });
     } catch (error) {
       setNotifTestResult({
@@ -585,16 +585,17 @@ export function DebugPanel() {
         authToken = (await getAccessToken()) || undefined;
       }
 
+      const clientApiKey = hasKey ? getApiKey() : undefined;
       const result = await parseIntakeWithPerplexity("a glass of water", {
-        authToken,
-        clientApiKey: hasKey ? getApiKey() : undefined,
+        ...(authToken !== undefined && { authToken }),
+        ...(clientApiKey !== undefined && { clientApiKey }),
       });
 
       setAiTestResult({
         success: true,
         water: result.water,
         salt: result.salt,
-        reasoning: result.reasoning,
+        ...(result.reasoning !== undefined && { reasoning: result.reasoning }),
         duration: Date.now() - startTime,
       });
     } catch (error) {

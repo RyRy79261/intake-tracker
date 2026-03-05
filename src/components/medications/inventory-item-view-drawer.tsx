@@ -13,7 +13,7 @@ import {
   useInventoryTransactions,
   useSchedulesForPhase
 } from "@/hooks/use-medication-queries";
-import type { Prescription } from "@/lib/db";
+import type { Prescription, InventoryItem } from "@/lib/db";
 import { Loader2, Archive, ArchiveRestore, Plus } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { updateInventoryItem, adjustStock, deleteInventoryItem } from "@/lib/medication-service";
@@ -180,7 +180,7 @@ function InventoryTab({ prescription }: { prescription: Prescription }) {
     const dailyDosage = schedules.reduce((acc, s) => acc + (s.dosage * (s.daysOfWeek.length / 7)), 0);
     const dailyPills = dailyDosage / activeItem.strength;
     if (dailyPills > 0) {
-      daysLeft = Math.floor(activeItem.currentStock / dailyPills);
+      daysLeft = Math.floor((activeItem.currentStock ?? 0) / dailyPills);
     }
   }
 
@@ -257,7 +257,7 @@ function ManageTab({ prescription, onOpenChange }: { prescription: Prescription,
   const activeItem = inventory.find(i => i.isActive) || inventory[0];
 
   const updateMutation = useMutation({
-    mutationFn: (updates: any) => updateInventoryItem(activeItem!.id, updates),
+    mutationFn: (updates: Partial<Omit<InventoryItem, "id" | "createdAt" | "prescriptionId">>) => updateInventoryItem(activeItem!.id, updates),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["inventoryItems"] });
     }
