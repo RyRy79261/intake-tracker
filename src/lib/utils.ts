@@ -1,5 +1,6 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { getDeviceTimezone } from "@/lib/timezone";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -36,7 +37,7 @@ export function getDeviceId(): string {
 
 export function syncFields() {
   const now = Date.now();
-  return { createdAt: now, updatedAt: now, deletedAt: null as null, deviceId: getDeviceId() };
+  return { createdAt: now, updatedAt: now, deletedAt: null as null, deviceId: getDeviceId(), timezone: getDeviceTimezone() };
 }
 
 /**
