@@ -73,8 +73,8 @@ Plans:
 
 Plans:
 - [x] 03-01-PLAN.md — Dexie v11 schema migration + timezone utilities + audit service
-- [ ] 03-02-PLAN.md — Medication service rebuild with atomic transactions, fractional math, audit logging
-- [ ] 03-03-PLAN.md — Non-medication service cleanup + hook useLiveQuery migration
+- [x] 03-02-PLAN.md — Medication service rebuild with atomic transactions, fractional math, audit logging
+- [x] 03-03-PLAN.md — Non-medication service cleanup + hook useLiveQuery migration
 - [ ] 03-04-PLAN.md — Dose schedule service (derive-at-read) + medication hook migration
 - [ ] 03-05-PLAN.md — Inventory stock recalculation + debug panel rebuild
 
@@ -199,7 +199,7 @@ Note: Phase 5 (Security) depends only on Phase 2 and can begin in parallel with 
 |-------|----------------|--------|-----------|
 | 1. Schema Foundation | 3/3 | Complete | 2026-03-02 |
 | 2. TypeScript and Service Contracts | 4/4 | Complete | - |
-| 3. Service Layer Rebuild | 2/5 | In progress | - |
+| 3. Service Layer Rebuild | 3/5 | In progress | - |
 | 4. Analytics Service | 0/TBD | Not started | - |
 | 5. Security Hardening | 0/TBD | Not started | - |
 | 6. Medication UX Core | 0/TBD | Not started | - |

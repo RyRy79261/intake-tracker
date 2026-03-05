@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in-progress
-last_updated: "2026-03-05T21:55:00Z"
+last_updated: "2026-03-05T21:59:37Z"
 progress:
   total_phases: 2
   completed_phases: 2
   total_plans: 12
-  completed_plans: 9
+  completed_plans: 10
 ---
 
 # Project State
@@ -23,18 +23,18 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 ## Current Position
 
 Phase: 3 of 11 (Service Layer Rebuild) -- IN PROGRESS
-Plan: 3 of 5 in current phase (03-03 complete)
-Status: Plan 03-03 complete — non-medication services and hooks migrated to useLiveQuery
-Last activity: 2026-03-05 — Plan 03-03 executed
+Plan: 3 of 5 in current phase (03-02 and 03-03 complete)
+Status: Plan 03-02 complete — medication services rebuilt with atomic transactions and audit logging
+Last activity: 2026-03-05 — Plan 03-02 executed
 
-Progress: [#######░░░] 27%
+Progress: [########░░] 30%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 9
-- Average duration: 6.1 min
-- Total execution time: 0.92 hours
+- Total plans completed: 10
+- Average duration: 6.9 min
+- Total execution time: 1.15 hours
 
 **By Phase:**
 
@@ -42,10 +42,10 @@ Progress: [#######░░░] 27%
 |-------|-------|-------|----------|
 | 1 - Schema Foundation | 3 | 11 min | 3.7 min |
 | 2 - TypeScript and Service Contracts | 4 | 29 min | 7.3 min |
-| 3 - Service Layer Rebuild | 2 | 16 min | 8.0 min |
+| 3 - Service Layer Rebuild | 3 | 30 min | 10.0 min |
 
 **Recent Trend:**
-- Last 5 plans: 02-03 (10 min), 02-04 (6 min), 03-01 (7 min), 03-03 (9 min)
+- Last 5 plans: 02-04 (6 min), 03-01 (7 min), 03-02 (14 min), 03-03 (9 min)
 - Trend: stable
 
 *Updated after each plan completion*
@@ -81,6 +81,10 @@ Recent decisions affecting current work:
 - [03-01]: UTC offset via locale-string diff trick (cross-browser reliable without external libs)
 - [03-01]: Migration uses hardcoded timezone rules (not device timezone) for backfill
 - [03-01]: PhaseSchedule keeps deprecated time field alongside scheduleTimeUTC for v10 compat
+- [03-02]: Stock math inlined into dose transactions (no nested transactions -- Dexie Pitfall 4)
+- [03-02]: Negative stock allowed with no blocking per user decision
+- [03-02]: Individual transactions per dose in takeAll/skipAll (one failure doesn't block others)
+- [03-02]: Components pass dosageMg (mg) not pill count -- service handles pill math internally
 - [03-03]: useLiveQuery default values eliminate loading states for array-returning hooks
 - [03-03]: graphKeys export removed (no invalidation needed with useLiveQuery)
 - [03-03]: Optimistic updates removed from health add mutations (useLiveQuery provides fast enough reactivity)
@@ -97,5 +101,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-05
-Stopped at: Completed 03-03-PLAN.md
-Resume file: .planning/phases/03-service-layer-rebuild/03-03-SUMMARY.md
+Stopped at: Completed 03-02-PLAN.md
+Resume file: .planning/phases/03-service-layer-rebuild/03-02-SUMMARY.md
