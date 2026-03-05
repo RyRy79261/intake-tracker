@@ -1,4 +1,8 @@
 import Dexie, { type EntityTable } from "dexie";
+import {
+  getTimezoneForTimestamp,
+  localHHMMStringToUTCMinutes,
+} from "@/lib/timezone";
 
 export interface IntakeRecord {
   id: string;
@@ -11,6 +15,7 @@ export interface IntakeRecord {
   updatedAt: number; // Unix ms — updated on every mutation
   deletedAt: number | null; // null = active, number = soft-deleted timestamp
   deviceId: string; // device identifier for sync conflict resolution
+  timezone: string; // IANA timezone, e.g. "Europe/Berlin"
 }
 
 export type AuditAction =
@@ -33,7 +38,14 @@ export type AuditAction =
   | "prescription_updated"
   | "inventory_adjusted"
   | "phase_activated"
-  | "validation_error";
+  | "validation_error"
+  | "dose_untaken"
+  | "prescription_deleted"
+  | "phase_completed"
+  | "phase_started"
+  | "stock_recalculated"
+  | "inventory_added"
+  | "inventory_deleted";
 
 export interface AuditLog {
   id: string;
@@ -44,6 +56,7 @@ export interface AuditLog {
   updatedAt: number;
   deletedAt: number | null;
   deviceId: string;
+  timezone: string;
 }
 
 export interface WeightRecord {
@@ -55,6 +68,7 @@ export interface WeightRecord {
   updatedAt: number;
   deletedAt: number | null;
   deviceId: string;
+  timezone: string;
 }
 
 export interface BloodPressureRecord {
@@ -71,6 +85,7 @@ export interface BloodPressureRecord {
   updatedAt: number;
   deletedAt: number | null;
   deviceId: string;
+  timezone: string;
 }
 
 export interface EatingRecord {
@@ -82,6 +97,7 @@ export interface EatingRecord {
   updatedAt: number;
   deletedAt: number | null;
   deviceId: string;
+  timezone: string;
 }
 
 export interface UrinationRecord {
@@ -93,6 +109,7 @@ export interface UrinationRecord {
   updatedAt: number;
   deletedAt: number | null;
   deviceId: string;
+  timezone: string;
 }
 
 export interface DefecationRecord {
@@ -104,6 +121,7 @@ export interface DefecationRecord {
   updatedAt: number;
   deletedAt: number | null;
   deviceId: string;
+  timezone: string;
 }
 
 export type PillShape = "round" | "oval" | "capsule" | "diamond" | "tablet";
@@ -146,7 +164,10 @@ export interface MedicationPhase {
 export interface PhaseSchedule {
   id: string;
   phaseId: string;
+  /** @deprecated Use scheduleTimeUTC. Kept for v10 DB record compatibility. */
   time: string;
+  scheduleTimeUTC: number; // minutes from midnight UTC (integer)
+  anchorTimezone: string; // IANA timezone when schedule was created
   dosage: number;
   daysOfWeek: number[];
   enabled: boolean;
@@ -176,6 +197,7 @@ export interface InventoryItem {
   updatedAt: number;
   deletedAt: number | null;
   deviceId: string;
+  timezone: string;
 }
 
 export interface InventoryTransaction {
@@ -190,6 +212,7 @@ export interface InventoryTransaction {
   updatedAt: number;
   deletedAt: number | null;
   deviceId: string;
+  timezone: string;
 }
 
 export interface DailyNote {
@@ -202,6 +225,7 @@ export interface DailyNote {
   updatedAt: number;
   deletedAt: number | null;
   deviceId: string;
+  timezone: string;
 }
 
 export interface DoseLog {
@@ -217,7 +241,7 @@ export interface DoseLog {
   rescheduledTo?: string;
   skipReason?: string;
   note?: string;
-  timezone?: string; // IANA timezone string, e.g. "Africa/Johannesburg"
+  timezone: string; // IANA timezone string, e.g. "Africa/Johannesburg"
   createdAt: number;
   updatedAt: number;
   deletedAt: number | null;
@@ -328,6 +352,81 @@ db.version(10).stores({
     // Setting it to undefined here would cause TypeScript errors in Phase 3
     // to surface correctly (undefined !== absent field in IDB).
   }
+});
+
+// Version 11: Add timezone field to all record types. Convert PhaseSchedule
+// `time` (HH:MM string) to `scheduleTimeUTC` (minutes from midnight UTC).
+// Backfill timezone using date-based rules:
+//   - Before 2026-02-12 → "Africa/Johannesburg"
+//   - From 2026-02-12 onward → "Europe/Berlin"
+db.version(11).stores({
+  // Same store definitions as v10 — no index changes needed
+  intakeRecords:           "id, [type+timestamp], timestamp, source, updatedAt",
+  weightRecords:           "id, timestamp, updatedAt",
+  bloodPressureRecords:    "id, timestamp, position, arm, updatedAt",
+  eatingRecords:           "id, timestamp, updatedAt",
+  urinationRecords:        "id, timestamp, updatedAt",
+  defecationRecords:       "id, timestamp, updatedAt",
+  prescriptions:           "id, isActive, updatedAt",
+  medicationPhases:        "id, prescriptionId, status, type, updatedAt",
+  phaseSchedules:          "id, phaseId, time, enabled, updatedAt",
+  inventoryItems:          "id, prescriptionId, isActive, updatedAt",
+  inventoryTransactions:   "id, [inventoryItemId+timestamp], inventoryItemId, timestamp, type, updatedAt",
+  doseLogs:                "id, [prescriptionId+scheduledDate], prescriptionId, phaseId, scheduleId, scheduledDate, scheduledTime, status, updatedAt",
+  dailyNotes:              "id, date, prescriptionId, doseLogId, updatedAt",
+  auditLogs:               "id, [action+timestamp], timestamp, action",
+}).upgrade(async (trans) => {
+  const now = Date.now();
+
+  // Helper: backfill timezone on a table using its primary timestamp field
+  const backfillTimezone = async (
+    tableName: string,
+    timestampField = "timestamp",
+  ) => {
+    await trans.table(tableName).toCollection().modify((record: Record<string, unknown>) => {
+      const ts = (record[timestampField] as number | undefined)
+        ?? (record.createdAt as number | undefined)
+        ?? now;
+      record.timezone = getTimezoneForTimestamp(ts);
+      record.updatedAt = now;
+    });
+  };
+
+  // Backfill timezone on all health record tables
+  await backfillTimezone("intakeRecords");
+  await backfillTimezone("weightRecords");
+  await backfillTimezone("bloodPressureRecords");
+  await backfillTimezone("eatingRecords");
+  await backfillTimezone("urinationRecords");
+  await backfillTimezone("defecationRecords");
+
+  // Backfill timezone on medication domain tables
+  await backfillTimezone("prescriptions", "createdAt");
+  await backfillTimezone("medicationPhases", "createdAt");
+  await backfillTimezone("inventoryItems", "createdAt");
+  await backfillTimezone("inventoryTransactions");
+  await backfillTimezone("doseLogs", "actionTimestamp");
+  await backfillTimezone("dailyNotes", "createdAt");
+  await backfillTimezone("auditLogs");
+
+  // PhaseSchedule: backfill timezone AND convert time → scheduleTimeUTC
+  await trans.table("phaseSchedules").toCollection().modify((record: Record<string, unknown>) => {
+    const ts = (record.createdAt as number | undefined) ?? now;
+    const tz = getTimezoneForTimestamp(ts);
+    record.timezone = tz;
+    record.anchorTimezone = tz;
+
+    // Convert "HH:MM" string to UTC minutes using the backfilled timezone
+    const timeStr = record.time as string | undefined;
+    if (timeStr && typeof timeStr === "string" && timeStr.includes(":")) {
+      record.scheduleTimeUTC = localHHMMStringToUTCMinutes(timeStr, tz);
+    } else {
+      // Fallback: default to 0 (midnight UTC) if time is missing/invalid
+      record.scheduleTimeUTC = 0;
+    }
+
+    record.updatedAt = now;
+  });
 });
 
 export { db };

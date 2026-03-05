@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db, type DailyNote } from "@/lib/db";
+import { syncFields } from "@/lib/utils";
 
 export const dailyNotesKeys = {
   all: ["dailyNotes"] as const,
@@ -33,17 +34,13 @@ export function useAddDailyNote() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: AddDailyNoteInput) => {
-      const now = Date.now();
       const entry: DailyNote = {
         id: crypto.randomUUID(),
         date: input.date,
         ...(input.prescriptionId !== undefined && { prescriptionId: input.prescriptionId }),
         ...(input.doseLogId !== undefined && { doseLogId: input.doseLogId }),
         note: input.note,
-        createdAt: now,
-        updatedAt: now,
-        deletedAt: null,
-        deviceId: "web",
+        ...syncFields(),
       };
       await db.dailyNotes.add(entry);
       return entry;

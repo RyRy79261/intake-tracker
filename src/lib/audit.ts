@@ -11,6 +11,7 @@
 
 import { db, type AuditAction, type AuditLog } from "./db";
 import { getDeviceId } from "./utils";
+import { getDeviceTimezone } from "./timezone";
 
 // Re-export the types
 export type { AuditAction };
@@ -34,6 +35,7 @@ export function logAudit(action: AuditAction, details?: string): void {
     updatedAt: now,
     deletedAt: null,
     deviceId: getDeviceId(),
+    timezone: getDeviceTimezone(),
   };
   
   auditBuffer.push(entry);

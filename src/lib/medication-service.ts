@@ -1,6 +1,7 @@
 import { db, type Prescription, type MedicationPhase, type InventoryItem, type PhaseSchedule, type PillShape, type FoodInstruction } from "./db";
 import { ok, err, type ServiceResult } from "./service-result";
 import { syncFields } from "./utils";
+import { getDeviceTimezone, localHHMMStringToUTCMinutes } from "./timezone";
 
 export interface CreatePrescriptionInput {
   // Prescription level
@@ -85,15 +86,19 @@ function buildInventory(prescriptionId: string, input: { brandName: string; curr
     updatedAt: now,
     deletedAt: null,
     deviceId: sf.deviceId,
+    timezone: sf.timezone,
   };
 }
 
 function buildSchedules(phaseId: string, schedules: { time: string; daysOfWeek: number[]; dosage: number }[], now: number): PhaseSchedule[] {
   const sf = syncFields();
+  const tz = getDeviceTimezone();
   return schedules.map(s => ({
     id: crypto.randomUUID(),
     phaseId,
     time: s.time,
+    scheduleTimeUTC: localHHMMStringToUTCMinutes(s.time, tz),
+    anchorTimezone: tz,
     dosage: s.dosage,
     daysOfWeek: s.daysOfWeek,
     enabled: true,
@@ -105,7 +110,7 @@ function buildSchedules(phaseId: string, schedules: { time: string; daysOfWeek: 
 }
 
 function buildTransaction(inventoryItemId: string, amount: number, type: "refill" | "consumed" | "adjusted" | "initial", now: number, note?: string): {
-  id: string; inventoryItemId: string; timestamp: number; amount: number; type: "refill" | "consumed" | "adjusted" | "initial"; createdAt: number; updatedAt: number; deletedAt: null; deviceId: string; note?: string;
+  id: string; inventoryItemId: string; timestamp: number; amount: number; type: "refill" | "consumed" | "adjusted" | "initial"; createdAt: number; updatedAt: number; deletedAt: null; deviceId: string; timezone: string; note?: string;
 } {
   const sf = syncFields();
   return {
@@ -119,6 +124,7 @@ function buildTransaction(inventoryItemId: string, amount: number, type: "refill
     updatedAt: now,
     deletedAt: null,
     deviceId: sf.deviceId,
+    timezone: sf.timezone,
   };
 }
 
@@ -453,10 +459,13 @@ export async function updatePhase(input: UpdatePhaseInput): Promise<ServiceResul
             keptIds.add(s.id);
           } else {
             const sf = syncFields();
+            const tz = getDeviceTimezone();
             toAdd.push({
               id: crypto.randomUUID(),
               phaseId: id,
               time: s.time,
+              scheduleTimeUTC: localHHMMStringToUTCMinutes(s.time, tz),
+              anchorTimezone: tz,
               dosage: s.dosage,
               daysOfWeek: s.daysOfWeek,
               enabled: true,
