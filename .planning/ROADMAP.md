@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Schema Foundation** - Dexie v10 migration with compound indexes, event-sourced inventory, sync-ready timestamps, and test infrastructure
 - [x] **Phase 2: TypeScript and Service Contracts** - Strict TypeScript flags enabled with all latent errors fixed; clean service boundary rules enforced
-- [ ] **Phase 3: Service Layer Rebuild** - Medication services rebuilt with transactional atomicity, timezone-aware scheduling, and fractional dose math
+- [x] **Phase 3: Service Layer Rebuild** - Medication services rebuilt with transactional atomicity, timezone-aware scheduling, and fractional dose math
 - [ ] **Phase 4: Analytics Service** - Cross-domain query seam implemented as the data foundation for future AI analysis
 - [ ] **Phase 5: Security Hardening** - API keys server-side only, encryption foundations for data at rest, auth patterns ready for cloud sync
 - [ ] **Phase 6: Medication UX Core** - Compound-first prescription views, dose logging with stock depletion, retroactive logging, multi-region inventory
@@ -75,8 +75,8 @@ Plans:
 - [x] 03-01-PLAN.md — Dexie v11 schema migration + timezone utilities + audit service
 - [x] 03-02-PLAN.md — Medication service rebuild with atomic transactions, fractional math, audit logging
 - [x] 03-03-PLAN.md — Non-medication service cleanup + hook useLiveQuery migration
-- [ ] 03-04-PLAN.md — Dose schedule service (derive-at-read) + medication hook migration
-- [ ] 03-05-PLAN.md — Inventory stock recalculation + debug panel rebuild
+- [x] 03-04-PLAN.md — Dose schedule service (derive-at-read) + medication hook migration
+- [x] 03-05-PLAN.md — Inventory stock recalculation + debug panel rebuild
 
 ### Phase 4: Analytics Service
 **Goal**: A dedicated analytics service provides cross-domain query shapes that future AI analysis can call without touching the database directly
