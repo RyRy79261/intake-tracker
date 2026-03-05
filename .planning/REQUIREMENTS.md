@@ -105,8 +105,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SCHM-03 | Phase 1 | Complete |
 | SCHM-04 | Phase 1 | Complete |
 | TEST-01 | Phase 1 | Complete |
-| SRVC-03 | Phase 2 | Pending |
-| SRVC-04 | Phase 2 | Pending |
+| SRVC-03 | Phase 2 | In Progress |
+| SRVC-04 | Phase 2 | In Progress |
 | SRVC-01 | Phase 3 | Pending |
 | SRVC-02 | Phase 3 | Pending |
 | SRVC-06 | Phase 3 | Pending |

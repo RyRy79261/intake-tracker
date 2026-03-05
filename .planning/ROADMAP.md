@@ -52,12 +52,13 @@ Plans:
   2. `pnpm build` and `pnpm lint` pass with no TypeScript errors
   3. No component or page file contains an import from `db.ts` or any `*-service.ts` file (verifiable by grep)
   4. Zod validation schemas exist at all external data entry points (API routes, user input boundaries)
-**Plans**: 3
+**Plans**: 4
 
 Plans:
-- [ ] 02-01-PLAN.md — Strict TypeScript flags + ServiceResult foundation + service-layer fixes
-- [ ] 02-02-PLAN.md — ESLint import boundaries + UI TypeScript fixes + any elimination
+- [x] 02-01-PLAN.md — Strict TypeScript flags + ServiceResult foundation + service-layer fixes
+- [x] 02-02-PLAN.md — ESLint import boundaries + UI TypeScript fixes + any elimination
 - [ ] 02-03-PLAN.md — Service boundary refactoring (hooks) + Zod validation at API boundaries
+- [ ] 02-04-PLAN.md — TBD
 
 ### Phase 3: Service Layer Rebuild
 **Goal**: All multi-table medication writes are atomic, dose scheduling is timezone-aware for SA/Germany travel, and fractional pill math is correct
@@ -193,7 +194,7 @@ Note: Phase 5 (Security) depends only on Phase 2 and can begin in parallel with 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Schema Foundation | 3/3 | Complete | 2026-03-02 |
-| 2. TypeScript and Service Contracts | 0/3 | Not started | - |
+| 2. TypeScript and Service Contracts | 2/4 | In progress | - |
 | 3. Service Layer Rebuild | 0/TBD | Not started | - |
 | 4. Analytics Service | 0/TBD | Not started | - |
 | 5. Security Hardening | 0/TBD | Not started | - |
