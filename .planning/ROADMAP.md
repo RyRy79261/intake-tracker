@@ -199,7 +199,7 @@ Note: Phase 5 (Security) depends only on Phase 2 and can begin in parallel with 
 |-------|----------------|--------|-----------|
 | 1. Schema Foundation | 3/3 | Complete | 2026-03-02 |
 | 2. TypeScript and Service Contracts | 4/4 | Complete | - |
-| 3. Service Layer Rebuild | 1/5 | In progress | - |
+| 3. Service Layer Rebuild | 2/5 | In progress | - |
 | 4. Analytics Service | 0/TBD | Not started | - |
 | 5. Security Hardening | 0/TBD | Not started | - |
 | 6. Medication UX Core | 0/TBD | Not started | - |

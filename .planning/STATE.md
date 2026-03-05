@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in-progress
-last_updated: "2026-03-05T21:43:20Z"
+last_updated: "2026-03-05T21:55:00Z"
 progress:
   total_phases: 2
   completed_phases: 2
   total_plans: 12
-  completed_plans: 8
+  completed_plans: 9
 ---
 
 # Project State
@@ -18,23 +18,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-02)
 
 **Core value:** Accurate, queryable health data across intake, vitals, and medication adherence — structured for cross-domain analysis and future AI querying
-**Current focus:** Phase 3 context gathered — ready for planning
+**Current focus:** Phase 3 service layer rebuild in progress
 
 ## Current Position
 
 Phase: 3 of 11 (Service Layer Rebuild) -- IN PROGRESS
-Plan: 1 of 5 in current phase (03-01 complete)
-Status: Plan 03-01 complete — v11 schema, timezone utils, audit service
-Last activity: 2026-03-05 — Plan 03-01 executed
+Plan: 3 of 5 in current phase (03-03 complete)
+Status: Plan 03-03 complete — non-medication services and hooks migrated to useLiveQuery
+Last activity: 2026-03-05 — Plan 03-03 executed
 
-Progress: [######░░░░] 24%
+Progress: [#######░░░] 27%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 8
-- Average duration: 5.8 min
-- Total execution time: 0.77 hours
+- Total plans completed: 9
+- Average duration: 6.1 min
+- Total execution time: 0.92 hours
 
 **By Phase:**
 
@@ -42,10 +42,10 @@ Progress: [######░░░░] 24%
 |-------|-------|-------|----------|
 | 1 - Schema Foundation | 3 | 11 min | 3.7 min |
 | 2 - TypeScript and Service Contracts | 4 | 29 min | 7.3 min |
-| 3 - Service Layer Rebuild | 1 | 7 min | 7.0 min |
+| 3 - Service Layer Rebuild | 2 | 16 min | 8.0 min |
 
 **Recent Trend:**
-- Last 5 plans: 02-02 (13 min), 02-03 (10 min), 02-04 (6 min), 03-01 (7 min)
+- Last 5 plans: 02-03 (10 min), 02-04 (6 min), 03-01 (7 min), 03-03 (9 min)
 - Trend: stable
 
 *Updated after each plan completion*
@@ -81,6 +81,9 @@ Recent decisions affecting current work:
 - [03-01]: UTC offset via locale-string diff trick (cross-browser reliable without external libs)
 - [03-01]: Migration uses hardcoded timezone rules (not device timezone) for backfill
 - [03-01]: PhaseSchedule keeps deprecated time field alongside scheduleTimeUTC for v10 compat
+- [03-03]: useLiveQuery default values eliminate loading states for array-returning hooks
+- [03-03]: graphKeys export removed (no invalidation needed with useLiveQuery)
+- [03-03]: Optimistic updates removed from health add mutations (useLiveQuery provides fast enough reactivity)
 
 ### Pending Todos
 
@@ -94,5 +97,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-05
-Stopped at: Completed 03-01-PLAN.md
-Resume file: .planning/phases/03-service-layer-rebuild/03-01-SUMMARY.md
+Stopped at: Completed 03-03-PLAN.md
+Resume file: .planning/phases/03-service-layer-rebuild/03-03-SUMMARY.md
