@@ -7,7 +7,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { PillIcon } from "./pill-icon";
 import { useTakeAllDoses, useSkipAllDoses } from "@/hooks/use-medication-queries";
-import type { DoseLogWithDetails } from "@/lib/dose-log-service";
+import type { DoseLogWithDetails } from "@/hooks/use-medication-queries";
 import type { DoseStatus } from "@/lib/db";
 import { X, Check, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";

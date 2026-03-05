@@ -2,17 +2,20 @@
 
 import { useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { db, type IntakeRecord } from "@/lib/db";
+import { type IntakeRecord } from "@/lib/db";
 import {
   addIntakeRecord,
   updateIntakeRecord,
   deleteIntakeRecord,
+  getTotalInLast24Hours,
+  getRecordsInLast24Hours,
+  getDailyTotal,
+  getRecentRecords,
 } from "@/lib/intake-service";
 import { unwrap } from "@/lib/service-result";
 import { useSettingsStore } from "@/stores/settings-store";
 import { graphKeys } from "@/hooks/use-graph-data";
 
-const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 const REFRESH_INTERVAL_MS = 60 * 1000; // 1 minute
 
 // Query keys factory
@@ -45,47 +48,6 @@ export function getDayStartTimestamp(dayStartHour: number): number {
   return dayStart.getTime();
 }
 
-// Fetch total for a type in the last 24 hours (rolling window)
-async function fetchTotal(type: "water" | "salt"): Promise<number> {
-  const cutoffTime = Date.now() - TWENTY_FOUR_HOURS_MS;
-  const records = await db.intakeRecords
-    .where("timestamp")
-    .aboveOrEqual(cutoffTime)
-    .filter((r) => r.type === type)
-    .toArray();
-  return records.reduce((sum, r) => sum + r.amount, 0);
-}
-
-// Fetch total for a type since the day start (daily budget)
-async function fetchDailyTotal(type: "water" | "salt", dayStartHour: number): Promise<number> {
-  const cutoffTime = getDayStartTimestamp(dayStartHour);
-  const records = await db.intakeRecords
-    .where("timestamp")
-    .aboveOrEqual(cutoffTime)
-    .filter((r) => r.type === type)
-    .toArray();
-  return records.reduce((sum, r) => sum + r.amount, 0);
-}
-
-// Fetch records for a type in the last 24 hours
-async function fetchRecords(type: "water" | "salt"): Promise<IntakeRecord[]> {
-  const cutoffTime = Date.now() - TWENTY_FOUR_HOURS_MS;
-  const records = await db.intakeRecords
-    .where("timestamp")
-    .aboveOrEqual(cutoffTime)
-    .filter((r) => r.type === type)
-    .toArray();
-  return records;
-}
-
-// Fetch recent records for a type (last 3, sorted by timestamp desc)
-async function fetchRecentRecords(type: "water" | "salt"): Promise<IntakeRecord[]> {
-  const records = await db.intakeRecords
-    .where("type")
-    .equals(type)
-    .toArray();
-  return records.sort((a, b) => b.timestamp - a.timestamp).slice(0, 3);
-}
 
 /**
  * Hook to get the total intake for a type in the last 24 hours.
@@ -104,7 +66,7 @@ export function useIntakeTotal(type: "water" | "salt") {
 
   return useQuery({
     queryKey: intakeKeys.total(type),
-    queryFn: () => fetchTotal(type),
+    queryFn: async () => unwrap(await getTotalInLast24Hours(type)),
   });
 }
 
@@ -127,7 +89,7 @@ export function useDailyIntakeTotal(type: "water" | "salt") {
 
   return useQuery({
     queryKey: intakeKeys.dailyTotal(type, dayStartHour),
-    queryFn: () => fetchDailyTotal(type, dayStartHour),
+    queryFn: async () => unwrap(await getDailyTotal(type, dayStartHour)),
   });
 }
 
@@ -147,7 +109,7 @@ export function useIntakeRecords(type: "water" | "salt") {
 
   return useQuery({
     queryKey: intakeKeys.records(type),
-    queryFn: () => fetchRecords(type),
+    queryFn: async () => unwrap(await getRecordsInLast24Hours(type)),
   });
 }
 
@@ -157,7 +119,7 @@ export function useIntakeRecords(type: "water" | "salt") {
 export function useRecentIntakeRecords(type: "water" | "salt") {
   return useQuery({
     queryKey: intakeKeys.recent(type),
-    queryFn: () => fetchRecentRecords(type),
+    queryFn: async () => unwrap(await getRecentRecords(type)),
   });
 }
 

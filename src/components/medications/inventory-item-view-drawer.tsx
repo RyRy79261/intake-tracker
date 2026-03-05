@@ -7,16 +7,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PillIcon } from "./pill-icon";
-import { 
+import {
   usePhasesForPrescription,
   useInventoryForPrescription,
   useInventoryTransactions,
-  useSchedulesForPhase
+  useSchedulesForPhase,
+  useUpdateInventoryItem,
+  useAdjustStock,
+  useDeleteInventoryItem,
 } from "@/hooks/use-medication-queries";
 import type { Prescription, InventoryItem } from "@/lib/db";
 import { Loader2, Archive, ArchiveRestore, Plus } from "lucide-react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { updateInventoryItem, adjustStock, deleteInventoryItem } from "@/lib/medication-service";
 
 interface InventoryItemViewDrawerProps {
   prescription: Prescription | null; // We pass prescription here, but we also need the specific inventory item. For now, we'll fetch the active inventory item for this prescription.
@@ -141,10 +142,9 @@ function DetailsTab({ prescription }: { prescription: Prescription }) {
 }
 
 function InventoryTab({ prescription }: { prescription: Prescription }) {
-  const qc = useQueryClient();
   const { data: inventory = [], isLoading: invLoading } = useInventoryForPrescription(prescription.id);
   const activeItem = inventory.find(i => i.isActive) || inventory[0];
-  
+
   const { data: transactions = [], isLoading: txLoading } = useInventoryTransactions(activeItem?.id);
   const { data: phases = [] } = usePhasesForPrescription(prescription.id);
   const activePhase = phases.find(p => p.status === "active");
@@ -153,15 +153,7 @@ function InventoryTab({ prescription }: { prescription: Prescription }) {
   const [refillAmount, setRefillAmount] = useState<number>(30);
   const [refillNote, setRefillNote] = useState<string>("");
 
-  const refillMutation = useMutation({
-    mutationFn: (amount: number) => adjustStock(activeItem!.id, amount, refillNote || undefined, "refill"),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["inventoryItems"] });
-      qc.invalidateQueries({ queryKey: ["inventoryTransactions"] });
-      setRefillAmount(30);
-      setRefillNote("");
-    }
-  });
+  const refillMutation = useAdjustStock();
 
   if (invLoading || txLoading) {
     return (
@@ -213,7 +205,10 @@ function InventoryTab({ prescription }: { prescription: Prescription }) {
             className="flex-1"
           />
           <Button 
-            onClick={() => refillMutation.mutate(refillAmount)}
+            onClick={() => {
+              const note = refillNote.trim();
+              refillMutation.mutate({ inventoryItemId: activeItem!.id, amount: refillAmount, ...(note !== "" && { note }), type: "refill" }, { onSuccess: () => { setRefillAmount(30); setRefillNote(""); } });
+            }}
             disabled={refillMutation.isPending || refillAmount <= 0}
             className="bg-teal-600 hover:bg-teal-700 shrink-0"
           >
@@ -251,25 +246,12 @@ function InventoryTab({ prescription }: { prescription: Prescription }) {
 }
 
 function ManageTab({ prescription, onOpenChange }: { prescription: Prescription, onOpenChange: (open: boolean) => void }) {
-  const qc = useQueryClient();
   const { data: inventory = [], isLoading } = useInventoryForPrescription(prescription.id);
 
   const activeItem = inventory.find(i => i.isActive) || inventory[0];
 
-  const updateMutation = useMutation({
-    mutationFn: (updates: Partial<Omit<InventoryItem, "id" | "createdAt" | "prescriptionId">>) => updateInventoryItem(activeItem!.id, updates),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["inventoryItems"] });
-    }
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: () => deleteInventoryItem(activeItem!.id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["inventoryItems"] });
-      onOpenChange(false);
-    }
-  });
+  const updateMutation = useUpdateInventoryItem();
+  const deleteMutation = useDeleteInventoryItem();
 
   if (isLoading) {
     return (
@@ -293,7 +275,7 @@ function ManageTab({ prescription, onOpenChange }: { prescription: Prescription,
         <Button 
           variant={activeItem.isArchived ? "outline" : "destructive"} 
           className="w-full"
-          onClick={() => updateMutation.mutate({ isArchived: !activeItem.isArchived })}
+          onClick={() => updateMutation.mutate({ id: activeItem.id, updates: { isArchived: !activeItem.isArchived } })}
           disabled={updateMutation.isPending}
         >
           {updateMutation.isPending ? (
@@ -317,7 +299,7 @@ function ManageTab({ prescription, onOpenChange }: { prescription: Prescription,
             className="w-full mt-2"
             onClick={() => {
               if (confirm("Are you sure you want to permanently delete this supply? This action cannot be undone.")) {
-                deleteMutation.mutate();
+                deleteMutation.mutate(activeItem.id, { onSuccess: () => onOpenChange(false) });
               }
             }}
             disabled={deleteMutation.isPending}

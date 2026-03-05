@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { AuthGuard } from "@/components/auth-guard";
 import { AppHeader } from "@/components/app-header";
 import { WeekDaySelector } from "@/components/medications/week-day-selector";
@@ -18,8 +18,8 @@ import { PrescriptionViewDrawer } from "@/components/medications/edit-medication
 import { useScrollHide } from "@/hooks/use-scroll-hide";
 import { useSettings } from "@/hooks/use-settings";
 import type { DoseLog, Prescription } from "@/lib/db";
-import type { DoseLogWithDetails } from "@/lib/dose-log-service";
-import { startMedicationNotifications, stopMedicationNotifications } from "@/lib/medication-notification-service";
+import type { DoseLogWithDetails } from "@/hooks/use-medication-queries";
+import { useMedicationNotifications } from "@/hooks/use-medication-notifications";
 
 function MedicationsContent() {
   const [activeTab, setActiveTab] = useState<MedTab>("schedule");
@@ -40,10 +40,7 @@ function MedicationsContent() {
   const [markAllTime, setMarkAllTime] = useState("");
   const [markAllEntries, setMarkAllEntries] = useState<DoseLogWithDetails[]>([]);
 
-  useEffect(() => {
-    startMedicationNotifications();
-    return () => stopMedicationNotifications();
-  }, []);
+  useMedicationNotifications();
 
   const settings = useSettings();
   const barTransitionSec = settings.barTransitionDurationMs / 1000;

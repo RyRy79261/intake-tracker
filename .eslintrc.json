@@ -27,6 +27,12 @@
       "rules": {
         "no-restricted-imports": "off"
       }
+    },
+    {
+      "files": ["src/__tests__/**/*"],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
     }
   ]
 }

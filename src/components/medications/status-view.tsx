@@ -5,7 +5,7 @@ import { useDoseLogsWithDetailsForDate, useAllActiveInventoryItems } from "@/hoo
 import { PillIcon } from "./pill-icon";
 import { Loader2, CheckCircle2, XCircle, Clock, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { DoseLogWithDetails } from "@/lib/dose-log-service";
+import type { DoseLogWithDetails } from "@/hooks/use-medication-queries";
 import type { InventoryItem } from "@/lib/db";
 
 function todayStr(): string {

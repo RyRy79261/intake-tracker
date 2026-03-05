@@ -101,6 +101,45 @@ export async function getTotalInLast24Hours(type: "water" | "salt"): Promise<Ser
   }
 }
 
+/**
+ * Get the timestamp for when the current "day" started based on the configurable hour.
+ */
+function getDayStartTimestamp(dayStartHour: number): number {
+  const now = new Date();
+  const dayStart = new Date(now);
+  dayStart.setHours(dayStartHour, 0, 0, 0);
+  if (now < dayStart) {
+    dayStart.setDate(dayStart.getDate() - 1);
+  }
+  return dayStart.getTime();
+}
+
+export async function getDailyTotal(type: "water" | "salt", dayStartHour: number): Promise<ServiceResult<number>> {
+  try {
+    const cutoffTime = getDayStartTimestamp(dayStartHour);
+    const records = await db.intakeRecords
+      .where("timestamp")
+      .aboveOrEqual(cutoffTime)
+      .filter((r) => r.type === type)
+      .toArray();
+    return ok(records.reduce((sum, r) => sum + r.amount, 0));
+  } catch (e) {
+    return err("Failed to get daily total", e);
+  }
+}
+
+export async function getRecentRecords(type: "water" | "salt", limit: number = 3): Promise<ServiceResult<IntakeRecord[]>> {
+  try {
+    const records = await db.intakeRecords
+      .where("type")
+      .equals(type)
+      .toArray();
+    return ok(records.sort((a, b) => b.timestamp - a.timestamp).slice(0, limit));
+  } catch (e) {
+    return err("Failed to get recent records", e);
+  }
+}
+
 export async function getAllRecords(): Promise<ServiceResult<IntakeRecord[]>> {
   try {
     const records = await db.intakeRecords.orderBy("timestamp").reverse().toArray();

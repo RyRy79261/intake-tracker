@@ -27,12 +27,8 @@ import {
   filterRecords,
 } from "@/lib/history-types";
 import { CARD_THEMES } from "@/lib/card-themes";
-import { getRecordsByCursor } from "@/lib/intake-service";
-import { getWeightRecords, deleteWeightRecord, getBloodPressureRecords, deleteBloodPressureRecord } from "@/lib/health-service";
-import { getEatingRecords } from "@/lib/eating-service";
-import { getUrinationRecords } from "@/lib/urination-service";
-import { getDefecationRecords } from "@/lib/defecation-service";
 import { useUpdateIntake, useDeleteIntake } from "@/hooks/use-intake-queries";
+import { useHistoryData } from "@/hooks/use-history-queries";
 import { useUpdateWeight, useUpdateBloodPressure } from "@/hooks/use-health-queries";
 import { useUpdateEating, useDeleteEating } from "@/hooks/use-eating-queries";
 import { useUpdateUrination, useDeleteUrination } from "@/hooks/use-urination-queries";
@@ -62,6 +58,7 @@ function HistoryContent() {
     autoHideDelayMs: settings.autoHideDelayMs,
   });
 
+  const { loadAllRecords: fetchHistoryRecords, deleteWeight: historyDeleteWeight, deleteBP: historyDeleteBP } = useHistoryData();
   const updateMutation = useUpdateIntake();
   const deleteMutation = useDeleteIntake();
   const updateWeightMutation = useUpdateWeight();
@@ -104,27 +101,15 @@ function HistoryContent() {
     else setIsLoadingMore(true);
 
     try {
-      let intakeRecords: IntakeRecord[] = [];
-      let weightRecordsData: WeightRecord[] = [];
-      let bpRecordsData: BloodPressureRecord[] = [];
-      let eatingRecordsData: EatingRecord[] = [];
-      let urinationRecordsData: UrinationRecord[] = [];
-      let defecationRecordsData: DefecationRecord[] = [];
-
-      try { const result = await getRecordsByCursor(undefined, 100); intakeRecords = result.records; } catch (e) { console.error("Failed to load intake records:", e); }
-      try { weightRecordsData = await getWeightRecords(100); } catch (e) { console.error("Failed to load weight records:", e); }
-      try { bpRecordsData = await getBloodPressureRecords(100); } catch (e) { console.error("Failed to load BP records:", e); }
-      try { eatingRecordsData = await getEatingRecords(100); } catch (e) { console.error("Failed to load eating records:", e); }
-      try { urinationRecordsData = await getUrinationRecords(100); } catch (e) { console.error("Failed to load urination records:", e); }
-      try { defecationRecordsData = await getDefecationRecords(100); } catch (e) { console.error("Failed to load defecation records:", e); }
+      const data = await fetchHistoryRecords(100);
 
       const unified: UnifiedRecord[] = [
-        ...intakeRecords.map((r) => ({ type: "intake" as const, record: r })),
-        ...weightRecordsData.map((r) => ({ type: "weight" as const, record: r })),
-        ...bpRecordsData.map((r) => ({ type: "bp" as const, record: r })),
-        ...eatingRecordsData.map((r) => ({ type: "eating" as const, record: r })),
-        ...urinationRecordsData.map((r) => ({ type: "urination" as const, record: r })),
-        ...defecationRecordsData.map((r) => ({ type: "defecation" as const, record: r })),
+        ...data.intakeRecords.map((r) => ({ type: "intake" as const, record: r })),
+        ...data.weightRecords.map((r) => ({ type: "weight" as const, record: r })),
+        ...data.bpRecords.map((r) => ({ type: "bp" as const, record: r })),
+        ...data.eatingRecords.map((r) => ({ type: "eating" as const, record: r })),
+        ...data.urinationRecords.map((r) => ({ type: "urination" as const, record: r })),
+        ...data.defecationRecords.map((r) => ({ type: "defecation" as const, record: r })),
       ];
 
       unified.sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a));
@@ -146,7 +131,7 @@ function HistoryContent() {
       setIsLoading(false);
       setIsLoadingMore(false);
     }
-  }, [toast]);
+  }, [fetchHistoryRecords, toast]);
 
   useEffect(() => {
     loadAllRecords(1);
@@ -162,8 +147,8 @@ function HistoryContent() {
     setDeletingId(id);
     try {
       if (unified.type === "intake") await deleteMutation.mutateAsync(id);
-      else if (unified.type === "weight") await deleteWeightRecord(id);
-      else if (unified.type === "bp") await deleteBloodPressureRecord(id);
+      else if (unified.type === "weight") await historyDeleteWeight(id);
+      else if (unified.type === "bp") await historyDeleteBP(id);
       else if (unified.type === "eating") await deleteEatingMutation.mutateAsync(id);
       else if (unified.type === "urination") await deleteUrinationMutation.mutateAsync(id);
       else if (unified.type === "defecation") await deleteDefecationMutation.mutateAsync(id);
@@ -175,7 +160,7 @@ function HistoryContent() {
     } finally {
       setDeletingId(null);
     }
-  }, [toast, deleteMutation, deleteEatingMutation, deleteUrinationMutation, deleteDefecationMutation]);
+  }, [toast, deleteMutation, historyDeleteWeight, historyDeleteBP, deleteEatingMutation, deleteUrinationMutation, deleteDefecationMutation]);
 
   const openEdit = useCallback((unified: UnifiedRecord) => {
     setEditTimestamp(timestampToDateTimeLocal(unified.record.timestamp));

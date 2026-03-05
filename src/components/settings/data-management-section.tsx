@@ -1,93 +1,39 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Download, Upload, Trash2 } from "lucide-react";
-import { clearAllData } from "@/lib/intake-service";
-import { downloadBackup, importBackup } from "@/lib/backup-service";
-import { useToast } from "@/hooks/use-toast";
+import { useDownloadBackup, useUploadBackup, useClearAllData } from "@/hooks/use-backup-queries";
+import { useState } from "react";
 
 export function DataManagementSection() {
-  const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isExporting, setIsExporting] = useState(false);
-  const [isImporting, setIsImporting] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
-  const handleExport = async () => {
-    setIsExporting(true);
-    try {
-      await downloadBackup();
-      toast({
-        title: "Export successful",
-        description: "Your data has been downloaded",
-        variant: "success",
-      });
-    } catch {
-      toast({
-        title: "Export failed",
-        description: "Could not export data",
-        variant: "destructive",
-      });
-    } finally {
-      setIsExporting(false);
-    }
+  const downloadMut = useDownloadBackup();
+  const uploadMut = useUploadBackup();
+  const clearMut = useClearAllData();
+
+  const handleExport = () => {
+    downloadMut.mutate();
   };
 
-  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    setIsImporting(true);
-    try {
-      const result = await importBackup(file, "merge");
-      if (result.success) {
-        const data = result.data;
-        const total =
-          data.intakeImported +
-          data.weightImported +
-          data.bpImported +
-          data.eatingImported +
-          data.urinationImported;
-        toast({
-          title: "Import successful",
-          description: `Imported ${total} records (${data.skipped} skipped)`,
-          variant: "success",
-        });
-      } else {
-        throw new Error(result.error || "Import failed");
-      }
-    } catch (error) {
-      toast({
-        title: "Import failed",
-        description:
-          error instanceof Error ? error.message : "Could not import data",
-        variant: "destructive",
-      });
-    } finally {
-      setIsImporting(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-    }
+    uploadMut.mutate({ file, mode: "merge" }, {
+      onSettled: () => {
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
+      },
+    });
   };
 
-  const handleClearData = async () => {
-    try {
-      await clearAllData();
-      toast({
-        title: "Data cleared",
-        description: "All intake records have been deleted",
-        variant: "success",
-      });
-      setShowClearConfirm(false);
-    } catch {
-      toast({
-        title: "Error",
-        description: "Could not clear data",
-        variant: "destructive",
-      });
-    }
+  const handleClearData = () => {
+    clearMut.mutate(undefined, {
+      onSuccess: () => setShowClearConfirm(false),
+    });
   };
 
   return (
@@ -98,10 +44,10 @@ export function DataManagementSection() {
           variant="outline"
           className="w-full justify-start gap-2"
           onClick={handleExport}
-          disabled={isExporting}
+          disabled={downloadMut.isPending}
         >
           <Download className="w-4 h-4" />
-          {isExporting ? "Exporting..." : "Export Data"}
+          {downloadMut.isPending ? "Exporting..." : "Export Data"}
         </Button>
 
         <input
@@ -115,10 +61,10 @@ export function DataManagementSection() {
           variant="outline"
           className="w-full justify-start gap-2"
           onClick={() => fileInputRef.current?.click()}
-          disabled={isImporting}
+          disabled={uploadMut.isPending}
         >
           <Upload className="w-4 h-4" />
-          {isImporting ? "Importing..." : "Import Data"}
+          {uploadMut.isPending ? "Importing..." : "Import Data"}
         </Button>
 
         {!showClearConfirm ? (

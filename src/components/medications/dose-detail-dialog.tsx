@@ -10,7 +10,7 @@ import { PillIcon } from "./pill-icon";
 import { useTakeDose, useUntakeDose, useSkipDose, useRescheduleDose } from "@/hooks/use-medication-queries";
 import { Info, Trash2, Pencil, X, RotateCcw, Clock, Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { DoseLogWithDetails } from "@/lib/dose-log-service";
+import type { DoseLogWithDetails } from "@/hooks/use-medication-queries";
 
 interface DoseDetailDialogProps {
   open: boolean;

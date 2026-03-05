@@ -32,41 +32,51 @@ import {
   rescheduleDose,
   takeAllDoses,
   skipAllDoses,
+  type DoseLogWithDetails,
 } from "@/lib/dose-log-service";
-import type { Prescription, PhaseSchedule } from "@/lib/db";
+import {
+  updateInventoryItem,
+  adjustStock,
+  deleteInventoryItem,
+} from "@/lib/medication-service";
+import type { Prescription, PhaseSchedule, InventoryItem } from "@/lib/db";
+import { unwrap } from "@/lib/service-result";
+
+// Re-export DoseLogWithDetails so components import from hooks, not services
+export type { DoseLogWithDetails };
 
 export function usePrescriptions() {
   return useQuery({
     queryKey: ["prescriptions"],
-    queryFn: getPrescriptions,
+    queryFn: async () => unwrap(await getPrescriptions()),
   });
 }
 
 export function useDailySchedule(dayOfWeek: number) {
   return useQuery({
     queryKey: ["dailySchedule", dayOfWeek],
-    queryFn: () => getDailySchedule(dayOfWeek),
+    queryFn: async () => unwrap(await getDailySchedule(dayOfWeek)),
   });
 }
 
 export function useDoseLogsForDate(date: string) {
   return useQuery({
     queryKey: ["doseLogs", date],
-    queryFn: () => getDoseLogsForDate(date),
+    queryFn: async () => unwrap(await getDoseLogsForDate(date)),
   });
 }
 
 export function useDoseLogsWithDetailsForDate(date: string) {
   return useQuery({
     queryKey: ["doseLogsWithDetails", date],
-    queryFn: () => getDoseLogsWithDetailsForDate(date),
+    queryFn: async () => unwrap(await getDoseLogsWithDetailsForDate(date)),
   });
 }
 
 export function usePhasesForPrescription(prescriptionId: string | undefined) {
   return useQuery({
     queryKey: ["medicationPhases", prescriptionId],
-    queryFn: () => getPhasesForPrescription(prescriptionId!),
+    queryFn: async () => unwrap(await getPhasesForPrescription(prescriptionId!)),
     enabled: !!prescriptionId,
   });
 }
@@ -74,7 +84,7 @@ export function usePhasesForPrescription(prescriptionId: string | undefined) {
 export function useInventoryForPrescription(prescriptionId: string | undefined) {
   return useQuery({
     queryKey: ["inventoryItems", prescriptionId],
-    queryFn: () => getInventoryForPrescription(prescriptionId!),
+    queryFn: async () => unwrap(await getInventoryForPrescription(prescriptionId!)),
     enabled: !!prescriptionId,
   });
 }
@@ -82,7 +92,7 @@ export function useInventoryForPrescription(prescriptionId: string | undefined) 
 export function useInventoryTransactions(inventoryItemId: string | undefined) {
   return useQuery({
     queryKey: ["inventoryTransactions", inventoryItemId],
-    queryFn: () => getInventoryTransactions(inventoryItemId!),
+    queryFn: async () => unwrap(await getInventoryTransactions(inventoryItemId!)),
     enabled: !!inventoryItemId,
   });
 }
@@ -90,21 +100,21 @@ export function useInventoryTransactions(inventoryItemId: string | undefined) {
 export function useAllActiveInventoryItems() {
   return useQuery({
     queryKey: ["inventoryItems", "active"],
-    queryFn: getAllActiveInventoryItems,
+    queryFn: async () => unwrap(await getAllActiveInventoryItems()),
   });
 }
 
 export function useAllInventoryItems() {
   return useQuery({
     queryKey: ["inventoryItems", "all"],
-    queryFn: getAllInventoryItems,
+    queryFn: async () => unwrap(await getAllInventoryItems()),
   });
 }
 
 export function useSchedulesForPhase(phaseId: string | undefined) {
   return useQuery({
     queryKey: ["phaseSchedules", phaseId],
-    queryFn: () => getSchedulesForPhase(phaseId!),
+    queryFn: async () => unwrap(await getSchedulesForPhase(phaseId!)),
     enabled: !!phaseId,
   });
 }
@@ -124,7 +134,7 @@ function useInvalidateMeds() {
 export function useAddPrescription() {
   const invalidate = useInvalidateMeds();
   return useMutation({
-    mutationFn: (input: CreatePrescriptionInput) => addPrescription(input),
+    mutationFn: async (input: CreatePrescriptionInput) => unwrap(await addPrescription(input)),
     onSuccess: invalidate,
   });
 }
@@ -132,7 +142,7 @@ export function useAddPrescription() {
 export function useAddMedicationToPrescription() {
   const invalidate = useInvalidateMeds();
   return useMutation({
-    mutationFn: (input: AddMedicationToPrescriptionInput) => addMedicationToPrescription(input),
+    mutationFn: async (input: AddMedicationToPrescriptionInput) => unwrap(await addMedicationToPrescription(input)),
     onSuccess: invalidate,
   });
 }
@@ -140,8 +150,8 @@ export function useAddMedicationToPrescription() {
 export function useUpdatePrescription() {
   const invalidate = useInvalidateMeds();
   return useMutation({
-    mutationFn: ({ id, updates }: { id: string; updates: Partial<Omit<Prescription, "id" | "createdAt">> }) =>
-      updatePrescription(id, updates),
+    mutationFn: async ({ id, updates }: { id: string; updates: Partial<Omit<Prescription, "id" | "createdAt">> }) =>
+      unwrap(await updatePrescription(id, updates)),
     onSuccess: invalidate,
   });
 }
@@ -149,7 +159,7 @@ export function useUpdatePrescription() {
 export function useDeletePrescription() {
   const invalidate = useInvalidateMeds();
   return useMutation({
-    mutationFn: (id: string) => deletePrescription(id),
+    mutationFn: async (id: string) => unwrap(await deletePrescription(id)),
     onSuccess: invalidate,
   });
 }
@@ -157,7 +167,7 @@ export function useDeletePrescription() {
 export function useAddSchedule() {
   const invalidate = useInvalidateMeds();
   return useMutation({
-    mutationFn: (input: Omit<PhaseSchedule, "id" | "createdAt" | "enabled">) => addSchedule(input),
+    mutationFn: async (input: Omit<PhaseSchedule, "id" | "createdAt" | "enabled">) => unwrap(await addSchedule(input)),
     onSuccess: invalidate,
   });
 }
@@ -165,8 +175,8 @@ export function useAddSchedule() {
 export function useUpdateSchedule() {
   const invalidate = useInvalidateMeds();
   return useMutation({
-    mutationFn: ({ id, updates }: { id: string; updates: Partial<Omit<PhaseSchedule, "id" | "createdAt" | "phaseId">> }) =>
-      updateSchedule(id, updates),
+    mutationFn: async ({ id, updates }: { id: string; updates: Partial<Omit<PhaseSchedule, "id" | "createdAt" | "phaseId">> }) =>
+      unwrap(await updateSchedule(id, updates)),
     onSuccess: invalidate,
   });
 }
@@ -174,7 +184,7 @@ export function useUpdateSchedule() {
 export function useDeleteSchedule() {
   const invalidate = useInvalidateMeds();
   return useMutation({
-    mutationFn: (id: string) => deleteSchedule(id),
+    mutationFn: async (id: string) => unwrap(await deleteSchedule(id)),
     onSuccess: invalidate,
   });
 }
@@ -182,7 +192,7 @@ export function useDeleteSchedule() {
 export function useStartNewPhase() {
   const invalidate = useInvalidateMeds();
   return useMutation({
-    mutationFn: (input: CreatePhaseInput) => startNewPhase(input),
+    mutationFn: async (input: CreatePhaseInput) => unwrap(await startNewPhase(input)),
     onSuccess: invalidate,
   });
 }
@@ -190,7 +200,7 @@ export function useStartNewPhase() {
 export function useUpdatePhase() {
   const invalidate = useInvalidateMeds();
   return useMutation({
-    mutationFn: (input: UpdatePhaseInput) => updatePhase(input),
+    mutationFn: async (input: UpdatePhaseInput) => unwrap(await updatePhase(input)),
     onSuccess: invalidate,
   });
 }
@@ -198,7 +208,7 @@ export function useUpdatePhase() {
 export function useDeletePhase() {
   const invalidate = useInvalidateMeds();
   return useMutation({
-    mutationFn: (id: string) => deletePhase(id),
+    mutationFn: async (id: string) => unwrap(await deletePhase(id)),
     onSuccess: invalidate,
   });
 }
@@ -206,7 +216,7 @@ export function useDeletePhase() {
 export function useActivatePhase() {
   const invalidate = useInvalidateMeds();
   return useMutation({
-    mutationFn: (id: string) => activatePhase(id),
+    mutationFn: async (id: string) => unwrap(await activatePhase(id)),
     onSuccess: invalidate,
   });
 }
@@ -214,8 +224,8 @@ export function useActivatePhase() {
 export function useTakeDose() {
   const invalidate = useInvalidateMeds();
   return useMutation({
-    mutationFn: (args: { prescriptionId: string; phaseId: string; scheduleId: string; date: string; time: string; dosageAmount: number }) =>
-      takeDose(args.prescriptionId, args.phaseId, args.scheduleId, args.date, args.time, args.dosageAmount),
+    mutationFn: async (args: { prescriptionId: string; phaseId: string; scheduleId: string; date: string; time: string; dosageAmount: number }) =>
+      unwrap(await takeDose(args.prescriptionId, args.phaseId, args.scheduleId, args.date, args.time, args.dosageAmount)),
     onSuccess: invalidate,
   });
 }
@@ -223,8 +233,8 @@ export function useTakeDose() {
 export function useUntakeDose() {
   const invalidate = useInvalidateMeds();
   return useMutation({
-    mutationFn: (args: { prescriptionId: string; phaseId: string; scheduleId: string; date: string; time: string; dosageAmount: number }) =>
-      untakeDose(args.prescriptionId, args.phaseId, args.scheduleId, args.date, args.time, args.dosageAmount),
+    mutationFn: async (args: { prescriptionId: string; phaseId: string; scheduleId: string; date: string; time: string; dosageAmount: number }) =>
+      unwrap(await untakeDose(args.prescriptionId, args.phaseId, args.scheduleId, args.date, args.time, args.dosageAmount)),
     onSuccess: invalidate,
   });
 }
@@ -232,8 +242,8 @@ export function useUntakeDose() {
 export function useSkipDose() {
   const invalidate = useInvalidateMeds();
   return useMutation({
-    mutationFn: (args: { prescriptionId: string; phaseId: string; scheduleId: string; date: string; time: string; dosageAmount: number; reason?: string }) =>
-      skipDose(args.prescriptionId, args.phaseId, args.scheduleId, args.date, args.time, args.dosageAmount, args.reason),
+    mutationFn: async (args: { prescriptionId: string; phaseId: string; scheduleId: string; date: string; time: string; dosageAmount: number; reason?: string }) =>
+      unwrap(await skipDose(args.prescriptionId, args.phaseId, args.scheduleId, args.date, args.time, args.dosageAmount, args.reason)),
     onSuccess: invalidate,
   });
 }
@@ -241,8 +251,8 @@ export function useSkipDose() {
 export function useRescheduleDose() {
   const invalidate = useInvalidateMeds();
   return useMutation({
-    mutationFn: (args: { prescriptionId: string; phaseId: string; scheduleId: string; date: string; time: string; newTime: string; dosageAmount: number }) =>
-      rescheduleDose(args.prescriptionId, args.phaseId, args.scheduleId, args.date, args.time, args.newTime, args.dosageAmount),
+    mutationFn: async (args: { prescriptionId: string; phaseId: string; scheduleId: string; date: string; time: string; newTime: string; dosageAmount: number }) =>
+      unwrap(await rescheduleDose(args.prescriptionId, args.phaseId, args.scheduleId, args.date, args.time, args.newTime, args.dosageAmount)),
     onSuccess: invalidate,
   });
 }
@@ -250,8 +260,8 @@ export function useRescheduleDose() {
 export function useTakeAllDoses() {
   const invalidate = useInvalidateMeds();
   return useMutation({
-    mutationFn: (args: { entries: { prescriptionId: string; phaseId: string; scheduleId: string; dosageAmount: number }[]; date: string; time: string }) =>
-      takeAllDoses(args.entries, args.date, args.time),
+    mutationFn: async (args: { entries: { prescriptionId: string; phaseId: string; scheduleId: string; dosageAmount: number }[]; date: string; time: string }) =>
+      unwrap(await takeAllDoses(args.entries, args.date, args.time)),
     onSuccess: invalidate,
   });
 }
@@ -259,8 +269,38 @@ export function useTakeAllDoses() {
 export function useSkipAllDoses() {
   const invalidate = useInvalidateMeds();
   return useMutation({
-    mutationFn: (args: { entries: { prescriptionId: string; phaseId: string; scheduleId: string; dosageAmount: number }[]; date: string; time: string; reason?: string }) =>
-      skipAllDoses(args.entries, args.date, args.time, args.reason),
+    mutationFn: async (args: { entries: { prescriptionId: string; phaseId: string; scheduleId: string; dosageAmount: number }[]; date: string; time: string; reason?: string }) =>
+      unwrap(await skipAllDoses(args.entries, args.date, args.time, args.reason)),
+    onSuccess: invalidate,
+  });
+}
+
+// ============================================================================
+// Inventory Item Mutation Hooks
+// ============================================================================
+
+export function useUpdateInventoryItem() {
+  const invalidate = useInvalidateMeds();
+  return useMutation({
+    mutationFn: async ({ id, updates }: { id: string; updates: Partial<Omit<InventoryItem, "id" | "createdAt" | "prescriptionId">> }) =>
+      unwrap(await updateInventoryItem(id, updates)),
+    onSuccess: invalidate,
+  });
+}
+
+export function useAdjustStock() {
+  const invalidate = useInvalidateMeds();
+  return useMutation({
+    mutationFn: async ({ inventoryItemId, amount, note, type }: { inventoryItemId: string; amount: number; note?: string; type?: "refill" | "consumed" | "adjusted" }) =>
+      unwrap(await adjustStock(inventoryItemId, amount, note, type)),
+    onSuccess: invalidate,
+  });
+}
+
+export function useDeleteInventoryItem() {
+  const invalidate = useInvalidateMeds();
+  return useMutation({
+    mutationFn: async (id: string) => unwrap(await deleteInventoryItem(id)),
     onSuccess: invalidate,
   });
 }
