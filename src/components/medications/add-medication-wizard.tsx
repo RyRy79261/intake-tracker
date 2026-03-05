@@ -110,7 +110,7 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
   const searchMutation = useMedicineSearch();
   const addPrescriptionMutation = useAddPrescription();
   const addMedicationToPrescriptionMutation = useAddMedicationToPrescription();
-  const { data: existingPrescriptions = [] } = usePrescriptions();
+  const existingPrescriptions = usePrescriptions();
 
   // Form state
   const [selectedPrescriptionId, setSelectedPrescriptionId] = useState<string>("new");

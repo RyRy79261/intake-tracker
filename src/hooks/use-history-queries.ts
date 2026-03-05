@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback } from "react";
+import { useLiveQuery } from "dexie-react-hooks";
 import { type IntakeRecord, type WeightRecord, type BloodPressureRecord, type EatingRecord, type UrinationRecord, type DefecationRecord } from "@/lib/db";
 import { getRecordsByCursor } from "@/lib/intake-service";
 import { getWeightRecords, deleteWeightRecord, getBloodPressureRecords, deleteBloodPressureRecord } from "@/lib/health-service";
@@ -18,12 +19,21 @@ export interface HistoryDataResult {
   defecationRecords: DefecationRecord[];
 }
 
+const EMPTY_RESULT: HistoryDataResult = {
+  intakeRecords: [],
+  weightRecords: [],
+  bpRecords: [],
+  eatingRecords: [],
+  urinationRecords: [],
+  defecationRecords: [],
+};
+
 /**
- * Hook providing async functions for loading and managing history records.
- * Encapsulates service calls so the history page/drawer don't import services directly.
+ * Hook providing reactive history data via useLiveQuery and async mutation functions.
+ * Data is automatically refreshed when any underlying table changes.
  */
-export function useHistoryData() {
-  const loadAllRecords = useCallback(async (limit: number = 100): Promise<HistoryDataResult> => {
+export function useHistoryData(limit: number = 100) {
+  const data = useLiveQuery(async (): Promise<HistoryDataResult> => {
     let intakeRecords: IntakeRecord[] = [];
     let weightRecords: WeightRecord[] = [];
     let bpRecords: BloodPressureRecord[] = [];
@@ -39,7 +49,7 @@ export function useHistoryData() {
     try { defecationRecords = await getDefecationRecords(limit); } catch (e) { console.error("Failed to load defecation records:", e); }
 
     return { intakeRecords, weightRecords, bpRecords, eatingRecords, urinationRecords, defecationRecords };
-  }, []);
+  }, [limit], EMPTY_RESULT);
 
   const deleteWeight = useCallback(async (id: string) => {
     unwrap(await deleteWeightRecord(id));
@@ -49,5 +59,5 @@ export function useHistoryData() {
     unwrap(await deleteBloodPressureRecord(id));
   }, []);
 
-  return { loadAllRecords, deleteWeight, deleteBP };
+  return { data, deleteWeight, deleteBP };
 }

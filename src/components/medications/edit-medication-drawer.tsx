@@ -33,10 +33,10 @@ interface PrescriptionViewDrawerProps {
 }
 
 export function PrescriptionViewDrawer({ prescription, open, onOpenChange }: PrescriptionViewDrawerProps) {
-  const { data: prescriptions = [] } = usePrescriptions();
+  const prescriptions = usePrescriptions();
   const currentPrescription = prescriptions.find(p => p.id === prescription?.id) || prescription;
-  
-  const { data: inventory = [] } = useInventoryForPrescription(currentPrescription?.id);
+
+  const inventory = useInventoryForPrescription(currentPrescription?.id);
   const activeInventory = inventory.find(i => i.isActive && !i.isArchived) || inventory[0];
 
   if (!currentPrescription) return null;
@@ -421,7 +421,7 @@ function InfoTab({ prescription }: { prescription: Prescription }) {
 }
 
 function TitrationTab({ prescription }: { prescription: Prescription }) {
-  const { data: phases = [], isLoading } = usePhasesForPrescription(prescription.id);
+  const phases = usePhasesForPrescription(prescription.id);
   const startNewPhase = useStartNewPhase();
   const [isAdding, setIsAdding] = useState(false);
 
@@ -432,14 +432,6 @@ function TitrationTab({ prescription }: { prescription: Prescription }) {
   const [schedules, setSchedules] = useState<{ time: string; dosage: number }[]>([
     { time: "08:00", dosage: 100 }
   ]);
-
-  if (isLoading) {
-    return (
-      <div className="flex justify-center p-8">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
 
   const handleStartPhase = async () => {
     if (schedules.length === 0) return;
@@ -582,7 +574,7 @@ function TitrationTab({ prescription }: { prescription: Prescription }) {
 }
 
 function PhaseCard({ phase }: { phase: MedicationPhase }) {
-  const { data: schedules = [] } = useSchedulesForPhase(phase.id);
+  const schedules = useSchedulesForPhase(phase.id);
   const totalDaily = schedules.reduce((acc, s) => acc + s.dosage, 0);
   const [isEditing, setIsEditing] = useState(false);
   const updatePhase = useUpdatePhase();

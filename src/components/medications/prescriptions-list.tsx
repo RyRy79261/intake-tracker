@@ -5,8 +5,7 @@ import { Button } from "@/components/ui/button";
 import { usePrescriptions, usePhasesForPrescription, useInventoryForPrescription, useSchedulesForPhase } from "@/hooks/use-medication-queries";
 import { PillIcon } from "./pill-icon";
 import type { Prescription } from "@/lib/db";
-import { Loader2, Plus, FlaskConical } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Plus, FlaskConical } from "lucide-react";
 
 interface PrescriptionsListProps {
   onAddCompound: () => void;
@@ -14,7 +13,7 @@ interface PrescriptionsListProps {
 }
 
 export function PrescriptionsList({ onAddCompound, onEditCompound }: PrescriptionsListProps) {
-  const { data: prescriptions = [], isLoading } = usePrescriptions();
+  const prescriptions = usePrescriptions();
 
   const { active, inactive } = useMemo(() => {
     const active: Prescription[] = [];
@@ -25,14 +24,6 @@ export function PrescriptionsList({ onAddCompound, onEditCompound }: Prescriptio
     }
     return { active, inactive };
   }, [prescriptions]);
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
 
   if (prescriptions.length === 0) {
     return (
@@ -88,10 +79,10 @@ export function PrescriptionsList({ onAddCompound, onEditCompound }: Prescriptio
 }
 
 function PrescriptionRow({ prescription: med, onClick }: { prescription: Prescription; onClick: () => void }) {
-  const { data: phases = [] } = usePhasesForPrescription(med.id);
+  const phases = usePhasesForPrescription(med.id);
   const activePhase = phases.find(p => p.status === "active");
-  const { data: schedules = [] } = useSchedulesForPhase(activePhase?.id);
-  const { data: inventory = [] } = useInventoryForPrescription(med.id);
+  const schedules = useSchedulesForPhase(activePhase?.id);
+  const inventory = useInventoryForPrescription(med.id);
   const activeInventory = inventory.find(i => i.isActive && !i.isArchived) || inventory[0];
 
   const totalDaily = schedules.reduce((acc, s) => acc + s.dosage, 0);

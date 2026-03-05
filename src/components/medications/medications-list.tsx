@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { PillIcon } from "./pill-icon";
 import { useAllInventoryItems, usePrescriptions } from "@/hooks/use-medication-queries";
 import type { InventoryItem, Prescription } from "@/lib/db";
-import { Loader2, Plus, Pill, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, Pill, ChevronDown, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface MedicationsListProps {
@@ -14,11 +14,9 @@ interface MedicationsListProps {
 }
 
 export function MedicationsList({ onAddMed, onEditMed }: MedicationsListProps) {
-  const { data: inventoryItems = [], isLoading: invLoading } = useAllInventoryItems();
-  const { data: prescriptions = [], isLoading: pLoading } = usePrescriptions();
+  const inventoryItems = useAllInventoryItems();
+  const prescriptions = usePrescriptions();
   const [showArchived, setShowArchived] = useState(false);
-
-  const isLoading = invLoading || pLoading;
 
   const { active, inStock, outOfStock, archived } = useMemo(() => {
     const active: InventoryItem[] = [];
@@ -39,14 +37,6 @@ export function MedicationsList({ onAddMed, onEditMed }: MedicationsListProps) {
     }
     return { active, inStock, outOfStock, archived };
   }, [inventoryItems]);
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
 
   if (inventoryItems.length === 0) {
     return (

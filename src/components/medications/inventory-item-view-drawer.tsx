@@ -67,16 +67,8 @@ export function InventoryItemViewDrawer({ prescription, open, onOpenChange }: In
 }
 
 function DetailsTab({ prescription }: { prescription: Prescription }) {
-  const { data: inventory = [], isLoading: invLoading } = useInventoryForPrescription(prescription.id);
-  const { data: phases = [], isLoading: phasesLoading } = usePhasesForPrescription(prescription.id);
-
-  if (invLoading || phasesLoading) {
-    return (
-      <div className="flex justify-center p-8">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
+  const inventory = useInventoryForPrescription(prescription.id);
+  const phases = usePhasesForPrescription(prescription.id);
 
   const activeItem = inventory.find(i => i.isActive) || inventory[0];
   const activePhase = phases.find(p => p.status === "active");
@@ -142,26 +134,18 @@ function DetailsTab({ prescription }: { prescription: Prescription }) {
 }
 
 function InventoryTab({ prescription }: { prescription: Prescription }) {
-  const { data: inventory = [], isLoading: invLoading } = useInventoryForPrescription(prescription.id);
+  const inventory = useInventoryForPrescription(prescription.id);
   const activeItem = inventory.find(i => i.isActive) || inventory[0];
 
-  const { data: transactions = [], isLoading: txLoading } = useInventoryTransactions(activeItem?.id);
-  const { data: phases = [] } = usePhasesForPrescription(prescription.id);
+  const transactions = useInventoryTransactions(activeItem?.id);
+  const phases = usePhasesForPrescription(prescription.id);
   const activePhase = phases.find(p => p.status === "active");
-  const { data: schedules = [] } = useSchedulesForPhase(activePhase?.id);
+  const schedules = useSchedulesForPhase(activePhase?.id);
 
   const [refillAmount, setRefillAmount] = useState<number>(30);
   const [refillNote, setRefillNote] = useState<string>("");
 
   const refillMutation = useAdjustStock();
-
-  if (invLoading || txLoading) {
-    return (
-      <div className="flex justify-center p-8">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
 
   if (!activeItem) {
     return <p className="text-sm text-muted-foreground">No supply items found.</p>;
@@ -246,20 +230,12 @@ function InventoryTab({ prescription }: { prescription: Prescription }) {
 }
 
 function ManageTab({ prescription, onOpenChange }: { prescription: Prescription, onOpenChange: (open: boolean) => void }) {
-  const { data: inventory = [], isLoading } = useInventoryForPrescription(prescription.id);
+  const inventory = useInventoryForPrescription(prescription.id);
 
   const activeItem = inventory.find(i => i.isActive) || inventory[0];
 
   const updateMutation = useUpdateInventoryItem();
   const deleteMutation = useDeleteInventoryItem();
-
-  if (isLoading) {
-    return (
-      <div className="flex justify-center p-8">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
 
   if (!activeItem) {
     return <p className="text-sm text-muted-foreground">No supply items found.</p>;

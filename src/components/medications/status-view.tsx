@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { useDoseLogsWithDetailsForDate, useAllActiveInventoryItems } from "@/hooks/use-medication-queries";
 import { PillIcon } from "./pill-icon";
-import { Loader2, CheckCircle2, XCircle, Clock, AlertTriangle } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { DoseLogWithDetails } from "@/hooks/use-medication-queries";
 import type { InventoryItem } from "@/lib/db";
@@ -15,10 +15,8 @@ function todayStr(): string {
 
 export function StatusView() {
   const dateStr = useMemo(() => todayStr(), []);
-  const { data: logsWithDetails = [], isLoading: logsLoading } = useDoseLogsWithDetailsForDate(dateStr);
-  const { data: inventoryItems = [], isLoading: invLoading } = useAllActiveInventoryItems();
-
-  const isLoading = logsLoading || invLoading;
+  const logsWithDetails = useDoseLogsWithDetailsForDate(dateStr);
+  const inventoryItems = useAllActiveInventoryItems();
 
   const stats = useMemo(() => {
     // Only count active (not rescheduled) logs for the total expected
@@ -44,14 +42,6 @@ export function StatusView() {
       return false;
     });
   }, [inventoryItems]);
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6 pb-24">

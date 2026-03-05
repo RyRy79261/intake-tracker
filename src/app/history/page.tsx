@@ -58,7 +58,7 @@ function HistoryContent() {
     autoHideDelayMs: settings.autoHideDelayMs,
   });
 
-  const { loadAllRecords: fetchHistoryRecords, deleteWeight: historyDeleteWeight, deleteBP: historyDeleteBP } = useHistoryData();
+  const { data: historyData, deleteWeight: historyDeleteWeight, deleteBP: historyDeleteBP } = useHistoryData();
   const updateMutation = useUpdateIntake();
   const deleteMutation = useDeleteIntake();
   const updateWeightMutation = useUpdateWeight();
@@ -95,52 +95,31 @@ function HistoryContent() {
   const [editAmountUrination, setEditAmountUrination] = useState("");
   const [editAmountDefecation, setEditAmountDefecation] = useState("");
 
-  const loadAllRecords = useCallback(async (pageNum: number = 1) => {
-    const isInitial = pageNum === 1;
-    if (isInitial) setIsLoading(true);
-    else setIsLoadingMore(true);
-
-    try {
-      const data = await fetchHistoryRecords(100);
-
-      const unified: UnifiedRecord[] = [
-        ...data.intakeRecords.map((r) => ({ type: "intake" as const, record: r })),
-        ...data.weightRecords.map((r) => ({ type: "weight" as const, record: r })),
-        ...data.bpRecords.map((r) => ({ type: "bp" as const, record: r })),
-        ...data.eatingRecords.map((r) => ({ type: "eating" as const, record: r })),
-        ...data.urinationRecords.map((r) => ({ type: "urination" as const, record: r })),
-        ...data.defecationRecords.map((r) => ({ type: "defecation" as const, record: r })),
-      ];
-
-      unified.sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a));
-
-      const end = pageNum * PAGE_SIZE;
-
-      if (isInitial) {
-        setRecords(unified.slice(0, PAGE_SIZE));
-      } else {
-        const start = (pageNum - 1) * PAGE_SIZE;
-        setRecords(prev => [...prev, ...unified.slice(start, end)]);
-      }
-      setHasMore(end < unified.length);
-      setPage(pageNum);
-    } catch (error) {
-      console.error("Failed to load history:", error);
-      toast({ title: "Error", description: "Could not load history", variant: "destructive" });
-    } finally {
-      setIsLoading(false);
-      setIsLoadingMore(false);
-    }
-  }, [fetchHistoryRecords, toast]);
-
+  // Derive unified records from reactive history data
   useEffect(() => {
-    loadAllRecords(1);
-  }, [loadAllRecords]);
+    if (!historyData) return;
+
+    const unified: UnifiedRecord[] = [
+      ...historyData.intakeRecords.map((r) => ({ type: "intake" as const, record: r })),
+      ...historyData.weightRecords.map((r) => ({ type: "weight" as const, record: r })),
+      ...historyData.bpRecords.map((r) => ({ type: "bp" as const, record: r })),
+      ...historyData.eatingRecords.map((r) => ({ type: "eating" as const, record: r })),
+      ...historyData.urinationRecords.map((r) => ({ type: "urination" as const, record: r })),
+      ...historyData.defecationRecords.map((r) => ({ type: "defecation" as const, record: r })),
+    ];
+
+    unified.sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a));
+
+    const end = page * PAGE_SIZE;
+    setRecords(unified.slice(0, end));
+    setHasMore(end < unified.length);
+    setIsLoading(false);
+  }, [historyData, page]);
 
   const loadMoreRecords = useCallback(() => {
     if (!hasMore || isLoadingMore) return;
-    loadAllRecords(page + 1);
-  }, [hasMore, isLoadingMore, page, loadAllRecords]);
+    setPage(prev => prev + 1);
+  }, [hasMore, isLoadingMore]);
 
   const handleDelete = useCallback(async (unified: UnifiedRecord) => {
     const id = getRecordId(unified);

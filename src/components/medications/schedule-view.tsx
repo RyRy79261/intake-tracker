@@ -6,7 +6,7 @@ import { PillIconWithBadge } from "./pill-icon";
 import { useDoseLogsWithDetailsForDate } from "@/hooks/use-medication-queries";
 import type { DoseLog, DoseStatus } from "@/lib/db";
 import type { DoseLogWithDetails } from "@/hooks/use-medication-queries";
-import { Loader2, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 function formatActionTime(timestamp: number): string {
@@ -43,18 +43,18 @@ interface ScheduleViewProps {
 export function ScheduleView({ selectedDate, onDoseClick, onMarkAll, onAddMed }: ScheduleViewProps) {
   const dateStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`;
 
-  const { data: logsWithDetails = [], isLoading } = useDoseLogsWithDetailsForDate(dateStr);
+  const logsWithDetails = useDoseLogsWithDetailsForDate(dateStr);
 
   const timeGroups = useMemo(() => {
     const groups = new Map<string, DoseLogWithDetails[]>();
-    
+
     for (const detail of logsWithDetails) {
       // Determine what time this log should be grouped under.
       // If it was rescheduled, use the rescheduledTo time, otherwise the scheduledTime.
       const time = (detail.log.status === "rescheduled" && detail.log.rescheduledTo)
         ? detail.log.rescheduledTo
         : detail.log.scheduledTime;
-        
+
       const existing = groups.get(time) || [];
       existing.push(detail);
       groups.set(time, existing);
@@ -63,14 +63,6 @@ export function ScheduleView({ selectedDate, onDoseClick, onMarkAll, onAddMed }:
     const sortedGroups = Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b));
     return sortedGroups.map(([time, entries]) => ({ time, entries }));
   }, [logsWithDetails]);
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
 
   if (timeGroups.length === 0) {
     return (

@@ -62,7 +62,7 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
   const [filter, setFilter] = useState<FilterType>("all");
 
   // History data loader
-  const { loadAllRecords: fetchHistoryRecords, deleteWeight: historyDeleteWeight, deleteBP: historyDeleteBP } = useHistoryData();
+  const { data: historyData, deleteWeight: historyDeleteWeight, deleteBP: historyDeleteBP } = useHistoryData();
 
   // Mutations
   const updateMutation = useUpdateIntake();
@@ -104,48 +104,26 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
   const [editAmountUrination, setEditAmountUrination] = useState("");
   const [editAmountDefecation, setEditAmountDefecation] = useState("");
 
-  // Load all records
-  const loadAllRecords = useCallback(async (pageNum: number = 1) => {
-    const isInitial = pageNum === 1;
-    if (isInitial) setIsLoading(true);
-    else setIsLoadingMore(true);
-
-    try {
-      const data = await fetchHistoryRecords(100);
-
-      const unified: UnifiedRecord[] = [
-        ...data.intakeRecords.map((r) => ({ type: "intake" as const, record: r })),
-        ...data.weightRecords.map((r) => ({ type: "weight" as const, record: r })),
-        ...data.bpRecords.map((r) => ({ type: "bp" as const, record: r })),
-        ...data.eatingRecords.map((r) => ({ type: "eating" as const, record: r })),
-        ...data.urinationRecords.map((r) => ({ type: "urination" as const, record: r })),
-        ...data.defecationRecords.map((r) => ({ type: "defecation" as const, record: r })),
-      ];
-
-      unified.sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a));
-
-      const end = pageNum * PAGE_SIZE;
-
-      if (isInitial) {
-        setRecords(unified.slice(0, PAGE_SIZE));
-      } else {
-        const start = (pageNum - 1) * PAGE_SIZE;
-        setRecords(prev => [...prev, ...unified.slice(start, end)]);
-      }
-      setHasMore(end < unified.length);
-      setPage(pageNum);
-    } catch (error) {
-      console.error("Failed to load history:", error);
-      toast({ title: "Error", description: "Could not load history", variant: "destructive" });
-    } finally {
-      setIsLoading(false);
-      setIsLoadingMore(false);
-    }
-  }, [fetchHistoryRecords, toast]);
-
+  // Derive unified records from reactive history data
   useEffect(() => {
-    if (open) loadAllRecords(1);
-  }, [open, loadAllRecords]);
+    if (!open || !historyData) return;
+
+    const unified: UnifiedRecord[] = [
+      ...historyData.intakeRecords.map((r) => ({ type: "intake" as const, record: r })),
+      ...historyData.weightRecords.map((r) => ({ type: "weight" as const, record: r })),
+      ...historyData.bpRecords.map((r) => ({ type: "bp" as const, record: r })),
+      ...historyData.eatingRecords.map((r) => ({ type: "eating" as const, record: r })),
+      ...historyData.urinationRecords.map((r) => ({ type: "urination" as const, record: r })),
+      ...historyData.defecationRecords.map((r) => ({ type: "defecation" as const, record: r })),
+    ];
+
+    unified.sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a));
+
+    const end = page * PAGE_SIZE;
+    setRecords(unified.slice(0, end));
+    setHasMore(end < unified.length);
+    setIsLoading(false);
+  }, [open, historyData, page]);
 
   // Handle open change with PIN protection
   const handleOpenChange = useCallback(async (newOpen: boolean) => {
@@ -159,8 +137,8 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
 
   const loadMoreRecords = useCallback(() => {
     if (!hasMore || isLoadingMore) return;
-    loadAllRecords(page + 1);
-  }, [hasMore, isLoadingMore, page, loadAllRecords]);
+    setPage(prev => prev + 1);
+  }, [hasMore, isLoadingMore]);
 
   // ── Delete handlers ──────────────────────────────────────────
   const handleDelete = useCallback(async (unified: UnifiedRecord) => {
