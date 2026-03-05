@@ -11,6 +11,7 @@ import {
   removePin,
   lock,
 } from "@/lib/pin-service";
+import { unwrap } from "@/lib/service-result";
 import { PinDialog, type PinDialogMode } from "@/components/pin-dialog";
 
 interface PinGateContextValue {
@@ -134,7 +135,7 @@ export function PinGateProvider({ children }: PinGateProviderProps) {
           break;
           
         case "setup":
-          success = await setupPin(pin);
+          success = unwrap(await setupPin(pin));
           if (success) {
             setHasPinEnabled(true);
             setUnlocked(true);
@@ -204,7 +205,7 @@ export function PinGateProvider({ children }: PinGateProviderProps) {
         onOpenChange={handleDialogOpenChange}
         mode={dialogMode}
         onSubmit={handleDialogSubmit}
-        onCancel={dialogMode === "enter" ? handleDialogCancel : undefined}
+        {...(dialogMode === "enter" && { onCancel: handleDialogCancel })}
       />
     </PinGateContext.Provider>
   );

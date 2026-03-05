@@ -15,6 +15,7 @@ import {
 import {
   getDefecationRecordsByDateRange,
 } from "@/lib/defecation-service";
+import { unwrap } from "@/lib/service-result";
 import type {
   IntakeRecord,
   WeightRecord,
@@ -124,13 +125,13 @@ async function fetchGraphData(scope: GraphScope): Promise<GraphData> {
 
   const [waterRecords, saltRecords, weightRecords, bloodPressureRecords, eatingRecords, urinationRecords, defecationRecords] =
     await Promise.all([
-      getRecordsByDateRange(intakeLookbackStart, endTime, "water"),
-      getRecordsByDateRange(intakeLookbackStart, endTime, "salt"),
-      getWeightRecordsByDateRange(startTime, endTime),
-      getBloodPressureRecordsByDateRange(startTime, endTime),
-      getEatingRecordsByDateRange(startTime, endTime),
-      getUrinationRecordsByDateRange(startTime, endTime),
-      getDefecationRecordsByDateRange(startTime, endTime),
+      getRecordsByDateRange(intakeLookbackStart, endTime, "water").then(unwrap),
+      getRecordsByDateRange(intakeLookbackStart, endTime, "salt").then(unwrap),
+      getWeightRecordsByDateRange(startTime, endTime).then(unwrap),
+      getBloodPressureRecordsByDateRange(startTime, endTime).then(unwrap),
+      getEatingRecordsByDateRange(startTime, endTime).then(unwrap),
+      getUrinationRecordsByDateRange(startTime, endTime).then(unwrap),
+      getDefecationRecordsByDateRange(startTime, endTime).then(unwrap),
     ]);
 
   const metrics = computeMetrics(weightRecords, bloodPressureRecords);

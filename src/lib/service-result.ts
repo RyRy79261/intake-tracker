@@ -9,3 +9,8 @@ export function ok<T>(data: T): ServiceResult<T> {
 export function err<T = never>(error: string, details?: unknown): ServiceResult<T> {
   return { success: false, error, details };
 }
+
+export function unwrap<T>(result: ServiceResult<T>): T {
+  if (result.success) return result.data;
+  throw new Error(result.error);
+}

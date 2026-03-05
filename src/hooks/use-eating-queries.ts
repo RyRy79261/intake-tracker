@@ -10,6 +10,7 @@ import {
   deleteEatingRecord,
 } from "@/lib/eating-service";
 import { graphKeys } from "@/hooks/use-graph-data";
+import { unwrap } from "@/lib/service-result";
 
 export type AddEatingParams = {
   timestamp?: number;
@@ -32,7 +33,7 @@ export const eatingKeys = {
 export function useEatingRecords(limit: number = 10) {
   return useQuery({
     queryKey: eatingKeys.records(limit),
-    queryFn: () => getEatingRecords(limit),
+    queryFn: async () => unwrap(await getEatingRecords(limit)),
   });
 }
 
@@ -42,7 +43,7 @@ export function useEatingRecordsByDateRange(
 ) {
   return useQuery({
     queryKey: eatingKeys.byDateRange(startTime, endTime),
-    queryFn: () => getEatingRecordsByDateRange(startTime, endTime),
+    queryFn: async () => unwrap(await getEatingRecordsByDateRange(startTime, endTime)),
     enabled: startTime < endTime,
   });
 }
@@ -51,8 +52,8 @@ export function useAddEating() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (params: AddEatingParams) =>
-      addEatingRecord(params.timestamp, params.note, params.grams),
+    mutationFn: async (params: AddEatingParams) =>
+      unwrap(await addEatingRecord(params.timestamp, params.note, params.grams)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: eatingKeys.all });
       queryClient.invalidateQueries({ queryKey: graphKeys.all });
@@ -64,8 +65,8 @@ export function useUpdateEating() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (params: UpdateEatingParams) =>
-      updateEatingRecord(params.id, params.updates),
+    mutationFn: async (params: UpdateEatingParams) =>
+      unwrap(await updateEatingRecord(params.id, params.updates)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: eatingKeys.all });
       queryClient.invalidateQueries({ queryKey: graphKeys.all });
@@ -77,7 +78,7 @@ export function useDeleteEating() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => deleteEatingRecord(id),
+    mutationFn: async (id: string) => unwrap(await deleteEatingRecord(id)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: eatingKeys.all });
       queryClient.invalidateQueries({ queryKey: graphKeys.all });

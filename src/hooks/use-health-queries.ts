@@ -12,6 +12,7 @@ import {
   updateBloodPressureRecord,
   deleteBloodPressureRecord,
 } from "@/lib/health-service";
+import { unwrap } from "@/lib/service-result";
 import { graphKeys } from "@/hooks/use-graph-data";
 
 // ============================================================================
@@ -81,7 +82,7 @@ export const healthKeys = {
 export function useWeightRecords(limit: number = 5) {
   return useQuery({
     queryKey: healthKeys.weightRecords(limit),
-    queryFn: () => getWeightRecords(limit),
+    queryFn: async () => unwrap(await getWeightRecords(limit)),
   });
 }
 
@@ -92,7 +93,7 @@ export function useLatestWeight() {
   return useQuery({
     queryKey: healthKeys.weightLatest(),
     queryFn: async () => {
-      const records = await getWeightRecords(1);
+      const records = unwrap(await getWeightRecords(1));
       return records[0] ?? null;
     },
   });
@@ -105,8 +106,8 @@ export function useAddWeight() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (params: AddWeightParams) =>
-      addWeightRecord(params.weight, params.timestamp, params.note),
+    mutationFn: async (params: AddWeightParams) =>
+      unwrap(await addWeightRecord(params.weight, params.timestamp, params.note)),
     onMutate: async (newWeight) => {
       // Cancel any outgoing refetches
       await queryClient.cancelQueries({ queryKey: healthKeys.weight() });
@@ -119,14 +120,14 @@ export function useAddWeight() {
       // Optimistically update to the new value
       queryClient.setQueryData<WeightRecord[]>(
         healthKeys.weightRecords(5),
-        (old = []) => [
+        (old) => [
           {
             id: `temp-${Date.now()}`,
             weight: newWeight.weight,
             timestamp: newWeight.timestamp ?? Date.now(),
-            note: newWeight.note,
-          },
-          ...old.slice(0, 4),
+            ...(newWeight.note !== undefined && { note: newWeight.note }),
+          } as WeightRecord,
+          ...(old ?? []).slice(0, 4),
         ]
       );
 
@@ -154,8 +155,8 @@ export function useUpdateWeight() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (params: UpdateWeightParams) =>
-      updateWeightRecord(params.id, params.updates),
+    mutationFn: async (params: UpdateWeightParams) =>
+      unwrap(await updateWeightRecord(params.id, params.updates)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: healthKeys.weight() });
       queryClient.invalidateQueries({ queryKey: graphKeys.all });
@@ -170,7 +171,7 @@ export function useDeleteWeight() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => deleteWeightRecord(id),
+    mutationFn: async (id: string) => unwrap(await deleteWeightRecord(id)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: healthKeys.weight() });
       queryClient.invalidateQueries({ queryKey: graphKeys.all });
@@ -188,7 +189,7 @@ export function useDeleteWeight() {
 export function useBloodPressureRecords(limit: number = 5) {
   return useQuery({
     queryKey: healthKeys.bpRecords(limit),
-    queryFn: () => getBloodPressureRecords(limit),
+    queryFn: async () => unwrap(await getBloodPressureRecords(limit)),
   });
 }
 
@@ -199,7 +200,7 @@ export function useLatestBloodPressure() {
   return useQuery({
     queryKey: healthKeys.bpLatest(),
     queryFn: async () => {
-      const records = await getBloodPressureRecords(1);
+      const records = unwrap(await getBloodPressureRecords(1));
       return records[0] ?? null;
     },
   });
@@ -212,8 +213,8 @@ export function useAddBloodPressure() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (params: AddBloodPressureParams) =>
-      addBloodPressureRecord(
+    mutationFn: async (params: AddBloodPressureParams) =>
+      unwrap(await addBloodPressureRecord(
         params.systolic,
         params.diastolic,
         params.position,
@@ -222,7 +223,7 @@ export function useAddBloodPressure() {
         params.timestamp,
         params.note,
         params.irregularHeartbeat
-      ),
+      )),
     onMutate: async (newBP) => {
       // Cancel any outgoing refetches
       await queryClient.cancelQueries({ queryKey: healthKeys.bloodPressure() });
@@ -235,18 +236,18 @@ export function useAddBloodPressure() {
       // Optimistically update to the new value
       queryClient.setQueryData<BloodPressureRecord[]>(
         healthKeys.bpRecords(5),
-        (old = []) => [
+        (old) => [
           {
             id: `temp-${Date.now()}`,
             systolic: newBP.systolic,
             diastolic: newBP.diastolic,
             position: newBP.position,
             arm: newBP.arm,
-            heartRate: newBP.heartRate,
+            ...(newBP.heartRate !== undefined && { heartRate: newBP.heartRate }),
             timestamp: newBP.timestamp ?? Date.now(),
-            note: newBP.note,
-          },
-          ...old.slice(0, 4),
+            ...(newBP.note !== undefined && { note: newBP.note }),
+          } as BloodPressureRecord,
+          ...(old ?? []).slice(0, 4),
         ]
       );
 
@@ -274,8 +275,8 @@ export function useUpdateBloodPressure() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (params: UpdateBloodPressureParams) =>
-      updateBloodPressureRecord(params.id, params.updates),
+    mutationFn: async (params: UpdateBloodPressureParams) =>
+      unwrap(await updateBloodPressureRecord(params.id, params.updates)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: healthKeys.bloodPressure() });
       queryClient.invalidateQueries({ queryKey: graphKeys.all });
@@ -290,7 +291,7 @@ export function useDeleteBloodPressure() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => deleteBloodPressureRecord(id),
+    mutationFn: async (id: string) => unwrap(await deleteBloodPressureRecord(id)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: healthKeys.bloodPressure() });
       queryClient.invalidateQueries({ queryKey: graphKeys.all });
