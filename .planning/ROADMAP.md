@@ -57,7 +57,7 @@ Plans:
 Plans:
 - [x] 02-01-PLAN.md — Strict TypeScript flags + ServiceResult foundation + service-layer fixes
 - [x] 02-02-PLAN.md — ESLint import boundaries + UI TypeScript fixes + any elimination
-- [ ] 02-03-PLAN.md — Service boundary refactoring (hooks) + Zod validation at API boundaries
+- [x] 02-03-PLAN.md — Import boundary enforcement (hooks refactoring)
 - [ ] 02-04-PLAN.md — TBD
 
 ### Phase 3: Service Layer Rebuild
@@ -194,7 +194,7 @@ Note: Phase 5 (Security) depends only on Phase 2 and can begin in parallel with 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Schema Foundation | 3/3 | Complete | 2026-03-02 |
-| 2. TypeScript and Service Contracts | 2/4 | In progress | - |
+| 2. TypeScript and Service Contracts | 3/4 | In progress | - |
 | 3. Service Layer Rebuild | 0/TBD | Not started | - |
 | 4. Analytics Service | 0/TBD | Not started | - |
 | 5. Security Hardening | 0/TBD | Not started | - |

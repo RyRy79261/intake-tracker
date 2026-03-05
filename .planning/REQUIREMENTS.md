@@ -19,7 +19,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **SRVC-01**: All multi-table writes wrapped in `db.transaction` (fixes `takeDose`/`skipDose` atomicity bug)
 - [ ] **SRVC-02**: Timezone-aware dose log generation — correct day-of-week for SA (UTC+2) and Germany (UTC+1/+2 DST) travel
 - [ ] **SRVC-03**: Strict TypeScript across all services — `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, Zod validation at boundaries, no `any`
-- [ ] **SRVC-04**: Clean service layer boundaries — services don't import each other's internals, UI never touches `db.ts` directly
+- [x] **SRVC-04**: Clean service layer boundaries — services don't import each other's internals, UI never touches `db.ts` directly
 - [ ] **SRVC-05**: Cross-domain analytics service (`analytics-service.ts`) as query seam for future AI analysis
 - [ ] **SRVC-06**: Fractional dose depletion math — half and quarter pill tracking with correct inventory decrement
 
@@ -106,7 +106,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SCHM-04 | Phase 1 | Complete |
 | TEST-01 | Phase 1 | Complete |
 | SRVC-03 | Phase 2 | In Progress |
-| SRVC-04 | Phase 2 | In Progress |
+| SRVC-04 | Phase 2 | Complete |
 | SRVC-01 | Phase 3 | Pending |
 | SRVC-02 | Phase 3 | Pending |
 | SRVC-06 | Phase 3 | Pending |
