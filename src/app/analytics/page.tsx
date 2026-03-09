@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { TimeRangeSelector } from "@/components/analytics/time-range-selector";
 import { RecordsTab } from "@/components/analytics/records-tab";
+import { InsightsTab } from "@/components/analytics/insights-tab";
 import { AppHeader } from "@/components/app-header";
 import { AuthGuard } from "@/components/auth-guard";
 import { useTimeScopeRange } from "@/hooks/use-analytics-queries";
@@ -15,13 +17,27 @@ type AnalyticsTab = "records" | "insights" | "correlations" | "titration";
 
 function AnalyticsContent() {
   const settings = useSettings();
+  const searchParams = useSearchParams();
   const barTransitionSec = settings.barTransitionDurationMs / 1000;
   const { isHidden } = useScrollHide({
     scrollDurationMs: settings.scrollDurationMs,
     autoHideDelayMs: settings.autoHideDelayMs,
   });
 
-  const [activeTab, setActiveTab] = useState<AnalyticsTab>("records");
+  const tabParam = searchParams.get("tab");
+  const initialTab: AnalyticsTab =
+    tabParam && ["records", "insights", "correlations", "titration"].includes(tabParam)
+      ? (tabParam as AnalyticsTab)
+      : "records";
+
+  const [activeTab, setActiveTab] = useState<AnalyticsTab>(initialTab);
+
+  // Sync tab with URL param changes
+  useEffect(() => {
+    if (tabParam && ["records", "insights", "correlations", "titration"].includes(tabParam)) {
+      setActiveTab(tabParam as AnalyticsTab);
+    }
+  }, [tabParam]);
   const [scope, setScope] = useState<TimeScope>("7d");
   const [customRange, setCustomRange] = useState<TimeRange | null>(null);
 
@@ -64,10 +80,7 @@ function AnalyticsContent() {
           </TabsContent>
 
           <TabsContent value="insights">
-            <div className="py-12 text-center text-muted-foreground">
-              <p className="text-lg font-medium">Insights</p>
-              <p className="text-sm mt-1">Coming soon</p>
-            </div>
+            <InsightsTab range={effectiveRange} />
           </TabsContent>
 
           <TabsContent value="correlations">

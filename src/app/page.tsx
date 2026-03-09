@@ -16,6 +16,7 @@ import { DefecationCard } from "@/components/defecation-card";
 import { useIntake } from "@/hooks/use-intake-queries";
 import { useSettings } from "@/hooks/use-settings";
 import { SubstanceRow } from "@/components/substance/substance-row";
+import { InsightBadge } from "@/components/insight-badge";
 import { useScrollHide } from "@/hooks/use-scroll-hide";
 import { cn } from "@/lib/utils";
 import { Droplets } from "lucide-react";
@@ -69,6 +70,10 @@ function HomeContent() {
         headerHidden={isHidden}
         transitionDuration={barTransitionSec}
       />
+
+      <div className="mb-4">
+        <InsightBadge />
+      </div>
 
       <div className="-mx-3 mb-6 px-1">
         <HistoricalGraph />
