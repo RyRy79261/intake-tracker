@@ -1,4 +1,4 @@
-import { type IntakeRecord, type WeightRecord, type BloodPressureRecord, type EatingRecord, type UrinationRecord, type DefecationRecord } from "@/lib/db";
+import { type IntakeRecord, type WeightRecord, type BloodPressureRecord, type EatingRecord, type UrinationRecord, type DefecationRecord, type SubstanceRecord } from "@/lib/db";
 
 /** Unified record type for display in history */
 export type UnifiedRecord =
@@ -7,9 +7,11 @@ export type UnifiedRecord =
   | { type: "bp"; record: BloodPressureRecord }
   | { type: "eating"; record: EatingRecord }
   | { type: "urination"; record: UrinationRecord }
-  | { type: "defecation"; record: DefecationRecord };
+  | { type: "defecation"; record: DefecationRecord }
+  | { type: "caffeine"; record: SubstanceRecord }
+  | { type: "alcohol"; record: SubstanceRecord };
 
-export type FilterType = "all" | "water" | "salt" | "weight" | "bp" | "eating" | "urination" | "defecation";
+export type FilterType = "all" | "water" | "salt" | "weight" | "bp" | "eating" | "urination" | "defecation" | "caffeine" | "alcohol";
 
 /** Get timestamp from unified record */
 export function getRecordTimestamp(unified: UnifiedRecord): number {
@@ -48,5 +50,7 @@ export function filterRecords(records: UnifiedRecord[], filter: FilterType): Uni
   if (filter === "all") return records;
   if (filter === "water") return records.filter((r) => r.type === "intake" && r.record.type === "water");
   if (filter === "salt") return records.filter((r) => r.type === "intake" && r.record.type === "salt");
+  if (filter === "caffeine") return records.filter((r) => r.type === "caffeine");
+  if (filter === "alcohol") return records.filter((r) => r.type === "alcohol");
   return records.filter((r) => r.type === filter);
 }

@@ -103,9 +103,9 @@ export function correlateTimeSeries(
       groups.set(key, arr);
     }
     const result = new Map<string, number>();
-    for (const [key, vals] of groups) {
+    groups.forEach((vals, key) => {
       result.set(key, mean(vals));
-    }
+    });
     return result;
   };
 
@@ -122,14 +122,14 @@ export function correlateTimeSeries(
   const pairedA: number[] = [];
   const pairedB: number[] = [];
 
-  for (const [dateA, valA] of mapA) {
+  mapA.forEach((valA, dateA) => {
     const dateB = lagDays === 0 ? dateA : shiftDay(dateA, lagDays);
     const valB = mapB.get(dateB);
     if (valB !== undefined) {
       pairedA.push(valA);
       pairedB.push(valB);
     }
-  }
+  });
 
   if (pairedA.length < 3) return empty;
 
