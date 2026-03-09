@@ -4,7 +4,7 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Completed 04-07-PLAN.md
-last_updated: "2026-03-09T23:16:43.585Z"
+last_updated: "2026-03-09T23:16:59.801Z"
 last_activity: 2026-03-10 — Plan 04-05 executed
 progress:
   total_phases: 11
@@ -58,6 +58,7 @@ Progress: [█████████░] 85%
 | Phase 04 P04 | 6min | 2 tasks | 7 files |
 | Phase 04 P06 | 4min | 2 tasks | 6 files |
 | Phase 04 P05 | 16min | 2 tasks | 9 files |
+| Phase 04 P07 | 16min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -118,6 +119,9 @@ Recent decisions affecting current work:
 - [Phase 04]: useRecordsTabData hook aggregates all domain services into unified sorted array (respects no-direct-service-import ESLint rule)
 - [Phase 04]: UnifiedRecord extended with caffeine/alcohol types, RecordRow handles substance display
 - [Phase 04]: Substance records are delete-only (no edit dialog) since derived from intake records
+- [Phase 04]: [04-07]: ESLint override for titration-tab.tsx (direct service calls in useLiveQuery -- hooks cannot be nested)
+- [Phase 04]: [04-07]: CorrelationChart auto-selects overlay vs scatter based on data shape (lagDays > 0 or series > 5)
+- [Phase 04]: [04-07]: Titration data loaded via single useLiveQuery calling service functions directly per phase range
 
 ### Pending Todos
 
