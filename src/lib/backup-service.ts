@@ -3,7 +3,7 @@
  * Supports export/import of intake records, weight records, and blood pressure records.
  */
 
-import { db, type IntakeRecord, type WeightRecord, type BloodPressureRecord, type EatingRecord, type UrinationRecord, type DefecationRecord } from "./db";
+import { db, type IntakeRecord, type WeightRecord, type BloodPressureRecord, type EatingRecord, type UrinationRecord, type DefecationRecord, type SubstanceRecord } from "./db";
 import { ok, err, type ServiceResult } from "./service-result";
 import { logAudit } from "./audit";
 
@@ -17,6 +17,7 @@ export interface BackupData {
   eatingRecords?: EatingRecord[];
   urinationRecords?: UrinationRecord[];
   defecationRecords?: DefecationRecord[];
+  substanceRecords?: SubstanceRecord[];
   settings?: Record<string, unknown>;
 }
 
@@ -28,24 +29,26 @@ export interface ImportResult {
   eatingImported: number;
   urinationImported: number;
   defecationImported: number;
+  substanceImported: number;
   skipped: number;
   errors: string[];
 }
 
-const CURRENT_BACKUP_VERSION = 3;
+const CURRENT_BACKUP_VERSION = 4;
 
 /**
  * Export all health data to a JSON blob.
  * Read function — returns Blob directly, lets errors propagate.
  */
 export async function exportBackup(): Promise<Blob> {
-  const [intakeRecords, weightRecords, bloodPressureRecords, eatingRecords, urinationRecords, defecationRecords] = await Promise.all([
+  const [intakeRecords, weightRecords, bloodPressureRecords, eatingRecords, urinationRecords, defecationRecords, substanceRecords] = await Promise.all([
     db.intakeRecords.toArray(),
     db.weightRecords.toArray(),
     db.bloodPressureRecords.toArray(),
     db.eatingRecords.toArray(),
     db.urinationRecords.toArray(),
     db.defecationRecords.toArray(),
+    db.substanceRecords.toArray(),
   ]);
 
   // Get settings from localStorage (excluding sensitive data)
@@ -75,10 +78,11 @@ export async function exportBackup(): Promise<Blob> {
     eatingRecords,
     urinationRecords,
     defecationRecords,
+    substanceRecords,
     settings,
   };
 
-  logAudit("data_export", `Exported ${intakeRecords.length} intake, ${weightRecords.length} weight, ${bloodPressureRecords.length} BP, ${eatingRecords.length} eating, ${urinationRecords.length} urination, ${defecationRecords.length} defecation records`);
+  logAudit("data_export", `Exported ${intakeRecords.length} intake, ${weightRecords.length} weight, ${bloodPressureRecords.length} BP, ${eatingRecords.length} eating, ${urinationRecords.length} urination, ${defecationRecords.length} defecation, ${substanceRecords.length} substance records`);
 
   const json = JSON.stringify(backupData, null, 2);
   return new Blob([json], { type: "application/json" });
@@ -131,6 +135,7 @@ function validateBackupData(data: unknown): data is BackupData {
   if (backup.eatingRecords !== undefined && !Array.isArray(backup.eatingRecords)) return false;
   if (backup.urinationRecords !== undefined && !Array.isArray(backup.urinationRecords)) return false;
   if (backup.defecationRecords !== undefined && !Array.isArray(backup.defecationRecords)) return false;
+  if (backup.substanceRecords !== undefined && !Array.isArray(backup.substanceRecords)) return false;
 
   return true;
 }
@@ -206,6 +211,19 @@ function isValidDefecationRecord(record: unknown): record is DefecationRecord {
 }
 
 /**
+ * Validate a substance record
+ */
+function isValidSubstanceRecord(record: unknown): record is SubstanceRecord {
+  if (!record || typeof record !== "object") return false;
+  const r = record as Record<string, unknown>;
+  return (
+    typeof r.id === "string" &&
+    (r.type === "caffeine" || r.type === "alcohol") &&
+    typeof r.timestamp === "number"
+  );
+}
+
+/**
  * Import backup data from a file (mutation — keeps ServiceResult)
  */
 export async function importBackup(
@@ -220,6 +238,7 @@ export async function importBackup(
     eatingImported: 0,
     urinationImported: 0,
     defecationImported: 0,
+    substanceImported: 0,
     skipped: 0,
     errors: [],
   };
@@ -261,6 +280,7 @@ export async function importBackup(
         db.eatingRecords.clear(),
         db.urinationRecords.clear(),
         db.defecationRecords.clear(),
+        db.substanceRecords.clear(),
       ]);
     }
 
@@ -271,15 +291,17 @@ export async function importBackup(
     let existingEatingIds = new Set<string>();
     let existingUrinationIds = new Set<string>();
     let existingDefecationIds = new Set<string>();
+    let existingSubstanceIds = new Set<string>();
 
     if (mode === "merge") {
-      const [intakeIds, weightIds, bpIds, eatingIds, urinationIds, defecationIds] = await Promise.all([
+      const [intakeIds, weightIds, bpIds, eatingIds, urinationIds, defecationIds, substanceIds] = await Promise.all([
         db.intakeRecords.toCollection().primaryKeys(),
         db.weightRecords.toCollection().primaryKeys(),
         db.bloodPressureRecords.toCollection().primaryKeys(),
         db.eatingRecords.toCollection().primaryKeys(),
         db.urinationRecords.toCollection().primaryKeys(),
         db.defecationRecords.toCollection().primaryKeys(),
+        db.substanceRecords.toCollection().primaryKeys(),
       ]);
       existingIntakeIds = new Set(intakeIds);
       existingWeightIds = new Set(weightIds);
@@ -287,6 +309,7 @@ export async function importBackup(
       existingEatingIds = new Set(eatingIds);
       existingUrinationIds = new Set(urinationIds);
       existingDefecationIds = new Set(defecationIds);
+      existingSubstanceIds = new Set(substanceIds);
     }
 
     // Import intake records
@@ -397,6 +420,24 @@ export async function importBackup(
       result.defecationImported = defecationToImport.length;
     }
 
+    // Import substance records (optional in backup file)
+    const substanceToImport: SubstanceRecord[] = [];
+    for (const record of data.substanceRecords || []) {
+      if (!isValidSubstanceRecord(record)) {
+        result.skipped++;
+        continue;
+      }
+      if (mode === "merge" && existingSubstanceIds.has(record.id)) {
+        result.skipped++;
+        continue;
+      }
+      substanceToImport.push(record);
+    }
+    if (substanceToImport.length > 0) {
+      await db.substanceRecords.bulkPut(substanceToImport);
+      result.substanceImported = substanceToImport.length;
+    }
+
     result.success = true;
 
     const totalImported =
@@ -405,7 +446,8 @@ export async function importBackup(
       result.bpImported +
       result.eatingImported +
       result.urinationImported +
-      result.defecationImported;
+      result.defecationImported +
+      result.substanceImported;
     logAudit("data_import", `Imported ${totalImported} records (${result.skipped} skipped)`);
 
   } catch (error) {
@@ -426,17 +468,19 @@ export async function getBackupStats(): Promise<{
   eatingCount: number;
   urinationCount: number;
   defecationCount: number;
+  substanceCount: number;
   totalCount: number;
   oldestRecord: Date | null;
   newestRecord: Date | null;
 }> {
-  const [intakeRecords, weightRecords, bpRecords, eatingRecords, urinationRecords, defecationRecords] = await Promise.all([
+  const [intakeRecords, weightRecords, bpRecords, eatingRecords, urinationRecords, defecationRecords, substanceRecords] = await Promise.all([
     db.intakeRecords.toArray(),
     db.weightRecords.toArray(),
     db.bloodPressureRecords.toArray(),
     db.eatingRecords.toArray(),
     db.urinationRecords.toArray(),
     db.defecationRecords.toArray(),
+    db.substanceRecords.toArray(),
   ]);
 
   const allTimestamps = [
@@ -446,6 +490,7 @@ export async function getBackupStats(): Promise<{
     ...eatingRecords.map((r) => r.timestamp),
     ...urinationRecords.map((r) => r.timestamp),
     ...defecationRecords.map((r) => r.timestamp),
+    ...substanceRecords.map((r) => r.timestamp),
   ];
 
   return {
@@ -455,6 +500,7 @@ export async function getBackupStats(): Promise<{
     eatingCount: eatingRecords.length,
     urinationCount: urinationRecords.length,
     defecationCount: defecationRecords.length,
+    substanceCount: substanceRecords.length,
     totalCount: allTimestamps.length,
     oldestRecord: allTimestamps.length > 0 ? new Date(Math.min(...allTimestamps)) : null,
     newestRecord: allTimestamps.length > 0 ? new Date(Math.max(...allTimestamps)) : null,

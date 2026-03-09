@@ -6,6 +6,9 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { TimeRangeSelector } from "@/components/analytics/time-range-selector";
 import { RecordsTab } from "@/components/analytics/records-tab";
 import { InsightsTab } from "@/components/analytics/insights-tab";
+import { CorrelationsTab } from "@/components/analytics/correlations-tab";
+import { TitrationTab } from "@/components/analytics/titration-tab";
+import { ExportControls } from "@/components/analytics/export-controls";
 import { AppHeader } from "@/components/app-header";
 import { AuthGuard } from "@/components/auth-guard";
 import { useTimeScopeRange } from "@/hooks/use-analytics-queries";
@@ -49,12 +52,15 @@ function AnalyticsContent() {
       <AppHeader headerHidden={isHidden} transitionDuration={barTransitionSec} />
 
       <div className="space-y-4">
-        <TimeRangeSelector
-          scope={scope}
-          onScopeChange={setScope}
-          customRange={customRange}
-          onCustomRangeChange={setCustomRange}
-        />
+        <div className="flex items-center justify-between gap-2">
+          <TimeRangeSelector
+            scope={scope}
+            onScopeChange={setScope}
+            customRange={customRange}
+            onCustomRangeChange={setCustomRange}
+          />
+          <ExportControls range={effectiveRange} />
+        </div>
 
         <Tabs
           value={activeTab}
@@ -84,17 +90,11 @@ function AnalyticsContent() {
           </TabsContent>
 
           <TabsContent value="correlations">
-            <div className="py-12 text-center text-muted-foreground">
-              <p className="text-lg font-medium">Correlations</p>
-              <p className="text-sm mt-1">Coming soon</p>
-            </div>
+            <CorrelationsTab range={effectiveRange} />
           </TabsContent>
 
           <TabsContent value="titration">
-            <div className="py-12 text-center text-muted-foreground">
-              <p className="text-lg font-medium">Titration</p>
-              <p className="text-sm mt-1">Coming soon</p>
-            </div>
+            <TitrationTab range={effectiveRange} />
           </TabsContent>
         </Tabs>
       </div>

@@ -41,7 +41,7 @@
       }
     },
     {
-      "files": ["src/components/analytics/titration-tab.tsx", "src/components/analytics/records-tab.tsx"],
+      "files": ["src/components/analytics/titration-tab.tsx", "src/components/analytics/records-tab.tsx", "src/components/analytics/export-controls.tsx"],
       "rules": {
         "no-restricted-imports": "off"
       }
