@@ -21,6 +21,7 @@ import { DataManagementSection } from "@/components/settings/data-management-sec
 import { PrivacySecuritySection } from "@/components/settings/privacy-security-section";
 import { PermissionsSection } from "@/components/settings/permissions-section";
 import { AppUpdatesSection } from "@/components/settings/app-updates-section";
+import { SubstanceSettingsSection } from "@/components/settings/substance-settings-section";
 
 function SettingsContent() {
   const settings = useSettings();
@@ -52,6 +53,7 @@ function SettingsContent() {
         <DaySettingsSection />
         <WaterSettingsSection />
         <SaltSettingsSection />
+        <SubstanceSettingsSection />
         <AppearanceSection />
         <QuickNavSection />
         <AiIntegrationSection />

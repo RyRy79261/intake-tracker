@@ -15,6 +15,7 @@ import { UrinationCard } from "@/components/urination-card";
 import { DefecationCard } from "@/components/defecation-card";
 import { useIntake } from "@/hooks/use-intake-queries";
 import { useSettings } from "@/hooks/use-settings";
+import { SubstanceRow } from "@/components/substance/substance-row";
 import { useScrollHide } from "@/hooks/use-scroll-hide";
 import { cn } from "@/lib/utils";
 import { Droplets } from "lucide-react";
@@ -98,6 +99,18 @@ function HomeContent() {
             isLoading={saltIntake.isLoading}
           />
         </div>
+
+        {settings.substanceConfig?.caffeine?.enabled && (
+          <div id="section-caffeine">
+            <SubstanceRow type="caffeine" />
+          </div>
+        )}
+
+        {settings.substanceConfig?.alcohol?.enabled && (
+          <div id="section-alcohol">
+            <SubstanceRow type="alcohol" />
+          </div>
+        )}
       </div>
 
       <div className="flex gap-3 mb-6">
