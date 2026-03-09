@@ -18,7 +18,7 @@ describe("v12 migration: substanceRecords table", () => {
     await db.substanceRecords.bulkAdd([
       makeSubstanceRecord({ id: "s1", type: "caffeine", timestamp: base + 1000 }),
       makeSubstanceRecord({ id: "s2", type: "caffeine", timestamp: base + 2000 }),
-      makeSubstanceRecord({ id: "s3", type: "alcohol", timestamp: base + 1500, amountMg: undefined, amountStandardDrinks: 1 }),
+      makeSubstanceRecord({ id: "s3", type: "alcohol", timestamp: base + 1500, amountStandardDrinks: 1 }),
       makeSubstanceRecord({ id: "s4", type: "caffeine", timestamp: base + 3000 }),
     ]);
 
