@@ -48,6 +48,18 @@ export interface Settings {
   defecationDefaultAmount: "small" | "medium" | "large";
   coffeeDefaultType: string;
 
+  // Substance tracking configuration
+  substanceConfig: {
+    caffeine: {
+      enabled: boolean;
+      types: Array<{ name: string; defaultMg: number; defaultVolumeMl: number; icon?: string }>;
+    };
+    alcohol: {
+      enabled: boolean;
+      types: Array<{ name: string; defaultDrinks: number; defaultVolumeMl: number; icon?: string }>;
+    };
+  };
+
   // Medication settings
   primaryRegion: string;
   secondaryRegion: string;
@@ -86,6 +98,7 @@ interface SettingsActions {
   setWeightGraphShowDrinking: (value: boolean) => void;
   setPrimaryRegion: (region: string) => void;
   setSecondaryRegion: (region: string) => void;
+  setSubstanceConfig: (config: Settings["substanceConfig"]) => void;
   resetToDefaults: () => void;
 }
 
@@ -108,6 +121,26 @@ const defaultSettings: Settings = {
   urinationDefaultAmount: "small" as const,
   defecationDefaultAmount: "medium" as const,
   coffeeDefaultType: "double-espresso",
+  substanceConfig: {
+    caffeine: {
+      enabled: true,
+      types: [
+        { name: "Coffee", defaultMg: 95, defaultVolumeMl: 250 },
+        { name: "Espresso", defaultMg: 63, defaultVolumeMl: 30 },
+        { name: "Tea", defaultMg: 47, defaultVolumeMl: 250 },
+        { name: "Other", defaultMg: 95, defaultVolumeMl: 250 },
+      ],
+    },
+    alcohol: {
+      enabled: true,
+      types: [
+        { name: "Beer", defaultDrinks: 1, defaultVolumeMl: 330 },
+        { name: "Wine", defaultDrinks: 1, defaultVolumeMl: 150 },
+        { name: "Spirit", defaultDrinks: 1, defaultVolumeMl: 45 },
+        { name: "Other", defaultDrinks: 1, defaultVolumeMl: 250 },
+      ],
+    },
+  },
   weightGraphShowEating: true,
   weightGraphShowUrination: true,
   weightGraphShowDefecation: true,
@@ -171,6 +204,7 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
       setWeightGraphShowDrinking: (value) => set({ weightGraphShowDrinking: value }),
       setPrimaryRegion: (value) => set({ primaryRegion: value }),
       setSecondaryRegion: (value) => set({ secondaryRegion: value }),
+      setSubstanceConfig: (config) => set({ substanceConfig: config }),
 
       resetToDefaults: () => set(defaultSettings),
     }),
