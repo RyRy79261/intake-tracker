@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Schema Foundation** - Dexie v10 migration with compound indexes, event-sourced inventory, sync-ready timestamps, and test infrastructure
 - [x] **Phase 2: TypeScript and Service Contracts** - Strict TypeScript flags enabled with all latent errors fixed; clean service boundary rules enforced
 - [x] **Phase 3: Service Layer Rebuild** - Medication services rebuilt with transactional atomicity, timezone-aware scheduling, and fractional dose math
-- [ ] **Phase 4: Analytics Service** - Cross-domain analytics service with substance tracking, correlation analysis, and analytics page replacing /history
+- [x] **Phase 4: Analytics Service** - Cross-domain analytics service with substance tracking, correlation analysis, and analytics page replacing /history
 - [ ] **Phase 5: Security Hardening** - API keys server-side only, encryption foundations for data at rest, auth patterns ready for cloud sync
 - [ ] **Phase 6: Medication UX Core** - Compound-first prescription views, dose logging with stock depletion, retroactive logging, multi-region inventory
 - [ ] **Phase 7: Schedule Visualization** - Maintenance vs titration phase display with named phases and transition clarity
@@ -89,14 +89,14 @@ Plans:
 **Plans**: 8
 
 Plans:
-- [ ] 04-01-PLAN.md — Analytics types + stats helpers + core analytics service
-- [ ] 04-02-PLAN.md — Dexie v12 migration + substance service + substance hooks
-- [ ] 04-03-PLAN.md — Query registry + analytics hooks
-- [ ] 04-04-PLAN.md — Substance dashboard UI + type picker + settings
-- [ ] 04-05-PLAN.md — Analytics page shell + time range selector + records tab
-- [ ] 04-06-PLAN.md — Insights tab + insight banners + dashboard badge
-- [ ] 04-07-PLAN.md — Correlations tab + titration tab
-- [ ] 04-08-PLAN.md — PDF/CSV export + cleanup + backup update
+- [x] 04-01-PLAN.md — Analytics types + stats helpers + core analytics service
+- [x] 04-02-PLAN.md — Dexie v12 migration + substance service + substance hooks
+- [x] 04-03-PLAN.md — Query registry + analytics hooks
+- [x] 04-04-PLAN.md — Substance dashboard UI + type picker + settings
+- [x] 04-05-PLAN.md — Analytics page shell + time range selector + records tab
+- [x] 04-06-PLAN.md — Insights tab + insight banners + dashboard badge
+- [x] 04-07-PLAN.md — Correlations tab + titration tab
+- [x] 04-08-PLAN.md — PDF/CSV export + cleanup + backup update
 
 ### Phase 5: Security Hardening
 **Goal**: No secrets are exposed to the client, data at rest has encryption foundations, and auth patterns require no retrofit when cloud sync is added
