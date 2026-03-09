@@ -3,13 +3,13 @@
 import { usePathname, useRouter } from "next/navigation";
 import { motion } from "motion/react";
 import { Button } from "@/components/ui/button";
-import { Droplets, Pill, History, Settings } from "lucide-react";
+import { Droplets, Pill, BarChart3, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
   { path: "/", icon: Droplets, label: "Intake", title: "Intake Tracker", subtitle: "Daily budget tracking" },
   { path: "/medications", icon: Pill, label: "Meds", title: "Medications", subtitle: "Medicine schedule & tracking" },
-  { path: "/history", icon: History, label: "History", title: "Health History", subtitle: "View & manage logged entries" },
+  { path: "/analytics", icon: BarChart3, label: "Analytics", title: "Analytics", subtitle: "Insights & record browsing" },
   { path: "/settings", icon: Settings, label: "Settings", title: "Settings", subtitle: "Configure preferences" },
 ] as const;
 
