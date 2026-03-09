@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: in-progress
-stopped_at: Completed 04-02-PLAN.md
-last_updated: "2026-03-09T22:43:23Z"
+status: executing
+stopped_at: Completed 04-01-PLAN.md
+last_updated: "2026-03-09T22:48:31.371Z"
 last_activity: 2026-03-09 — Plan 04-02 executed
 progress:
   total_phases: 11
@@ -53,6 +53,7 @@ Progress: [##############░░░░░░] 40%
 - Trend: stable
 
 *Updated after each plan completion*
+| Phase 04 P01 | 10min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -102,6 +103,9 @@ Recent decisions affecting current work:
 - [04-02]: Only one substance record per intake record (first keyword match wins, caffeine before alcohol)
 - [04-02]: Background enrichment batches 5 records with 1s delay between batches
 - [04-02]: Substance-intake linking via source field format 'substance:{id}'
+- [Phase 04-01]: db.ts import exception for substance records (no substance-service exists yet)
+- [Phase 04-01]: Map.forEach instead of for-of iteration (downlevelIteration not enabled)
+- [Phase 04-01]: Conditional spread for optional heartRate (exactOptionalPropertyTypes compliance)
 
 ### Pending Todos
 
@@ -114,6 +118,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-09T22:43:23Z
-Stopped at: Completed 04-02-PLAN.md
-Resume file: .planning/phases/04-analytics-service/04-02-SUMMARY.md
+Last session: 2026-03-09T22:48:31.369Z
+Stopped at: Completed 04-01-PLAN.md
+Resume file: None
