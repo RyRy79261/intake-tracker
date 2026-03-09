@@ -248,6 +248,24 @@ export interface DoseLog {
   deviceId: string;
 }
 
+export interface SubstanceRecord {
+  id: string;
+  type: 'caffeine' | 'alcohol';
+  amountMg?: number;           // caffeine mg
+  amountStandardDrinks?: number; // alcohol standard drinks
+  volumeMl?: number;            // liquid volume for fluid balance linking
+  description: string;
+  source: 'water_intake' | 'eating' | 'standalone';
+  sourceRecordId?: string;      // links to original intake record if migrated
+  aiEnriched?: boolean;         // true if Perplexity has refined the estimate
+  timestamp: number;
+  createdAt: number;
+  updatedAt: number;
+  deletedAt: number | null;
+  deviceId: string;
+  timezone: string;
+}
+
 const db = new Dexie("IntakeTrackerDB") as Dexie & {
   intakeRecords: EntityTable<IntakeRecord, "id">;
   auditLogs: EntityTable<AuditLog, "id">;
@@ -263,6 +281,7 @@ const db = new Dexie("IntakeTrackerDB") as Dexie & {
   inventoryTransactions: EntityTable<InventoryTransaction, "id">;
   dailyNotes: EntityTable<DailyNote, "id">;
   doseLogs: EntityTable<DoseLog, "id">;
+  substanceRecords: EntityTable<SubstanceRecord, "id">;
 };
 
 // Version 10: Consolidated schema with sync-readiness fields, compound indexes,
@@ -427,6 +446,94 @@ db.version(11).stores({
 
     record.updatedAt = now;
   });
+});
+
+// Version 12: Add substanceRecords table for structured caffeine/alcohol tracking.
+// Migrates existing intake records that contain caffeine/alcohol keywords in their
+// `note` field into new SubstanceRecord entries with default estimated amounts.
+// No network calls — AI enrichment (Pass 2) happens post-load in the client.
+
+const CAFFEINE_KEYWORDS = ['coffee', 'espresso', 'tea', 'caffeine', 'matcha', 'latte', 'cappuccino'] as const;
+const ALCOHOL_KEYWORDS = ['beer', 'wine', 'whiskey', 'whisky', 'vodka', 'gin', 'rum', 'cocktail', 'spirit', 'alcohol', 'brandy'] as const;
+
+const DEFAULT_CAFFEINE_MG: Record<string, number> = {
+  coffee: 95, espresso: 63, tea: 47, latte: 95, cappuccino: 95, matcha: 70,
+};
+const DEFAULT_CAFFEINE_VOLUME_ML: Record<string, number> = {
+  coffee: 250, espresso: 30, tea: 250, latte: 350, cappuccino: 250, matcha: 250,
+};
+const DEFAULT_ALCOHOL_DRINKS: Record<string, number> = {
+  beer: 1, wine: 1, cocktail: 1.5,
+};
+
+db.version(12).stores({
+  // Repeat all v11 store definitions
+  intakeRecords:           "id, [type+timestamp], timestamp, source, updatedAt",
+  weightRecords:           "id, timestamp, updatedAt",
+  bloodPressureRecords:    "id, timestamp, position, arm, updatedAt",
+  eatingRecords:           "id, timestamp, updatedAt",
+  urinationRecords:        "id, timestamp, updatedAt",
+  defecationRecords:       "id, timestamp, updatedAt",
+  prescriptions:           "id, isActive, updatedAt",
+  medicationPhases:        "id, prescriptionId, status, type, updatedAt",
+  phaseSchedules:          "id, phaseId, time, enabled, updatedAt",
+  inventoryItems:          "id, prescriptionId, isActive, updatedAt",
+  inventoryTransactions:   "id, [inventoryItemId+timestamp], inventoryItemId, timestamp, type, updatedAt",
+  doseLogs:                "id, [prescriptionId+scheduledDate], prescriptionId, phaseId, scheduleId, scheduledDate, scheduledTime, status, updatedAt",
+  dailyNotes:              "id, date, prescriptionId, doseLogId, updatedAt",
+  auditLogs:               "id, [action+timestamp], timestamp, action",
+  // New table
+  substanceRecords:        "id, [type+timestamp], type, timestamp, source, sourceRecordId, updatedAt",
+}).upgrade(async (trans) => {
+  const intakeRecords = await trans.table("intakeRecords").toArray();
+  const substanceTable = trans.table("substanceRecords");
+
+  for (const record of intakeRecords) {
+    const note = (record.note ?? "").toLowerCase();
+    if (!note) continue;
+
+    // Check caffeine keywords
+    const caffeineMatch = CAFFEINE_KEYWORDS.find((kw) => note.includes(kw));
+    if (caffeineMatch) {
+      await substanceTable.add({
+        id: crypto.randomUUID(),
+        type: "caffeine",
+        amountMg: DEFAULT_CAFFEINE_MG[caffeineMatch] ?? 95,
+        volumeMl: DEFAULT_CAFFEINE_VOLUME_ML[caffeineMatch] ?? 250,
+        description: record.note ?? caffeineMatch,
+        source: "water_intake",
+        sourceRecordId: record.id,
+        aiEnriched: false,
+        timestamp: record.timestamp,
+        createdAt: record.createdAt ?? record.timestamp,
+        updatedAt: record.updatedAt ?? record.timestamp,
+        deletedAt: record.deletedAt ?? null,
+        deviceId: record.deviceId ?? "migrated-v12",
+        timezone: record.timezone ?? "UTC",
+      });
+      continue; // Only create one substance record per intake record
+    }
+
+    // Check alcohol keywords
+    const alcoholMatch = ALCOHOL_KEYWORDS.find((kw) => note.includes(kw));
+    if (alcoholMatch) {
+      await substanceTable.add({
+        id: crypto.randomUUID(),
+        type: "alcohol",
+        amountStandardDrinks: DEFAULT_ALCOHOL_DRINKS[alcoholMatch] ?? 1,
+        description: record.note ?? alcoholMatch,
+        source: "water_intake",
+        sourceRecordId: record.id,
+        aiEnriched: false,
+        timestamp: record.timestamp,
+        createdAt: record.createdAt ?? record.timestamp,
+        updatedAt: record.updatedAt ?? record.timestamp,
+        deletedAt: record.deletedAt ?? null,
+        deviceId: record.deviceId ?? "migrated-v12",
+        timezone: record.timezone ?? "UTC",
+      });
+    }
+  }
 });
 
 export { db };
