@@ -60,6 +60,9 @@ export interface Settings {
     };
   };
 
+  // Dismissed insights persistence
+  dismissedInsights: Record<string, { dismissedAt: number; triggerValue: number }>;
+
   // Medication settings
   primaryRegion: string;
   secondaryRegion: string;
@@ -99,6 +102,9 @@ interface SettingsActions {
   setPrimaryRegion: (region: string) => void;
   setSecondaryRegion: (region: string) => void;
   setSubstanceConfig: (config: Settings["substanceConfig"]) => void;
+  dismissInsight: (id: string, triggerValue: number) => void;
+  clearDismissedInsight: (id: string) => void;
+  isDismissed: (id: string, currentValue: number, threshold?: number) => boolean;
   resetToDefaults: () => void;
 }
 
@@ -121,6 +127,7 @@ const defaultSettings: Settings = {
   urinationDefaultAmount: "small" as const,
   defecationDefaultAmount: "medium" as const,
   coffeeDefaultType: "double-espresso",
+  dismissedInsights: {},
   substanceConfig: {
     caffeine: {
       enabled: true,
@@ -205,6 +212,30 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
       setPrimaryRegion: (value) => set({ primaryRegion: value }),
       setSecondaryRegion: (value) => set({ secondaryRegion: value }),
       setSubstanceConfig: (config) => set({ substanceConfig: config }),
+
+      dismissInsight: (id, triggerValue) =>
+        set((state) => ({
+          dismissedInsights: {
+            ...state.dismissedInsights,
+            [id]: { dismissedAt: Date.now(), triggerValue },
+          },
+        })),
+
+      clearDismissedInsight: (id) =>
+        set((state) => {
+          const next = { ...state.dismissedInsights };
+          delete next[id];
+          return { dismissedInsights: next };
+        }),
+
+      isDismissed: (id, currentValue, threshold = 0.1) => {
+        const entry = get().dismissedInsights[id];
+        if (!entry) return false;
+        // Reappear if current value changed by more than threshold from trigger value
+        const diff = Math.abs(currentValue - entry.triggerValue);
+        const base = Math.abs(entry.triggerValue) || 1; // avoid division by zero
+        return diff / base <= threshold;
+      },
 
       resetToDefaults: () => set(defaultSettings),
     }),
