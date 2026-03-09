@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: completed
-stopped_at: Phase 4 context gathered
-last_updated: "2026-03-09T21:59:21.356Z"
-last_activity: 2026-03-05 — Plan 03-05 executed
+status: in-progress
+stopped_at: Completed 04-02-PLAN.md
+last_updated: "2026-03-09T22:43:23Z"
+last_activity: 2026-03-09 — Plan 04-02 executed
 progress:
   total_phases: 11
   completed_phases: 3
-  total_plans: 12
-  completed_plans: 12
-  percent: 35
+  total_plans: 20
+  completed_plans: 14
+  percent: 40
 ---
 
 # Project State
@@ -21,23 +21,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-02)
 
 **Core value:** Accurate, queryable health data across intake, vitals, and medication adherence — structured for cross-domain analysis and future AI querying
-**Current focus:** Phase 3 service layer rebuild in progress
+**Current focus:** Phase 4 analytics service in progress
 
 ## Current Position
 
-Phase: 3 of 11 (Service Layer Rebuild) -- COMPLETE
-Plan: 5 of 5 in current phase (all plans complete)
-Status: Phase 3 complete — all service layer plans executed
-Last activity: 2026-03-05 — Plan 03-05 executed
+Phase: 4 of 11 (Analytics Service)
+Plan: 2 of 8 in current phase (04-02 complete)
+Status: Phase 4 in progress — substance tracking data layer complete
+Last activity: 2026-03-09 — Plan 04-02 executed
 
-Progress: [############░░░░░░░░] 35%
+Progress: [##############░░░░░░] 40%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 12
-- Average duration: 7.0 min
-- Total execution time: 1.45 hours
+- Total plans completed: 14
+- Average duration: 6.9 min
+- Total execution time: 1.57 hours
 
 **By Phase:**
 
@@ -46,9 +46,10 @@ Progress: [############░░░░░░░░] 35%
 | 1 - Schema Foundation | 3 | 11 min | 3.7 min |
 | 2 - TypeScript and Service Contracts | 4 | 29 min | 7.3 min |
 | 3 - Service Layer Rebuild | 5 | 48 min | 9.6 min |
+| 4 - Analytics Service | 2 | 6 min | 3.0 min |
 
 **Recent Trend:**
-- Last 5 plans: 03-01 (7 min), 03-02 (14 min), 03-03 (9 min), 03-04 (9 min), 03-05 (9 min)
+- Last 5 plans: 03-03 (9 min), 03-04 (9 min), 03-05 (9 min), 04-01 (est), 04-02 (6 min)
 - Trend: stable
 
 *Updated after each plan completion*
@@ -97,6 +98,10 @@ Recent decisions affecting current work:
 - [03-04]: Inventory warnings prioritize negative_stock over odd_fraction
 - [03-05]: ESLint override added for providers.tsx (infrastructure file needs service import for stock recalculation init)
 - [03-05]: Debug panel uses collapsible sections (not tabs) for audit logs, stock management, raw records
+- [04-02]: v12 migration uses keyword matching on intake note field (no network calls in migration)
+- [04-02]: Only one substance record per intake record (first keyword match wins, caffeine before alcohol)
+- [04-02]: Background enrichment batches 5 records with 1s delay between batches
+- [04-02]: Substance-intake linking via source field format 'substance:{id}'
 
 ### Pending Todos
 
@@ -109,6 +114,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-09T21:59:21.353Z
-Stopped at: Phase 4 context gathered
-Resume file: .planning/phases/04-analytics-service/04-CONTEXT.md
+Last session: 2026-03-09T22:43:23Z
+Stopped at: Completed 04-02-PLAN.md
+Resume file: .planning/phases/04-analytics-service/04-02-SUMMARY.md

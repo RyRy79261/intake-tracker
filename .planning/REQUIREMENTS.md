@@ -20,7 +20,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **SRVC-02**: Timezone-aware dose log generation — correct day-of-week for SA (UTC+2) and Germany (UTC+1/+2 DST) travel
 - [x] **SRVC-03**: Strict TypeScript across all services — `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, Zod validation at boundaries, no `any`
 - [x] **SRVC-04**: Clean service layer boundaries — services don't import each other's internals, UI never touches `db.ts` directly
-- [ ] **SRVC-05**: Cross-domain analytics service (`analytics-service.ts`) as query seam for future AI analysis
+- [x] **SRVC-05**: Cross-domain analytics service (`analytics-service.ts`) as query seam for future AI analysis
 - [x] **SRVC-06**: Fractional dose depletion math — half and quarter pill tracking with correct inventory decrement
 
 ### Medication UX
@@ -110,7 +110,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SRVC-01 | Phase 3 | Complete |
 | SRVC-02 | Phase 3 | Pending |
 | SRVC-06 | Phase 3 | Complete |
-| SRVC-05 | Phase 4 | Pending |
+| SRVC-05 | Phase 4 | Complete |
 | SECU-01 | Phase 5 | Pending |
 | SECU-02 | Phase 5 | Pending |
 | SECU-03 | Phase 5 | Pending |
