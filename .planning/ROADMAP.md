@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Schema Foundation** - Dexie v10 migration with compound indexes, event-sourced inventory, sync-ready timestamps, and test infrastructure
 - [x] **Phase 2: TypeScript and Service Contracts** - Strict TypeScript flags enabled with all latent errors fixed; clean service boundary rules enforced
 - [x] **Phase 3: Service Layer Rebuild** - Medication services rebuilt with transactional atomicity, timezone-aware scheduling, and fractional dose math
-- [ ] **Phase 4: Analytics Service** - Cross-domain query seam implemented as the data foundation for future AI analysis
+- [ ] **Phase 4: Analytics Service** - Cross-domain analytics service with substance tracking, correlation analysis, and analytics page replacing /history
 - [ ] **Phase 5: Security Hardening** - API keys server-side only, encryption foundations for data at rest, auth patterns ready for cloud sync
 - [ ] **Phase 6: Medication UX Core** - Compound-first prescription views, dose logging with stock depletion, retroactive logging, multi-region inventory
 - [ ] **Phase 7: Schedule Visualization** - Maintenance vs titration phase display with named phases and transition clarity
@@ -79,17 +79,24 @@ Plans:
 - [x] 03-05-PLAN.md — Inventory stock recalculation + debug panel rebuild
 
 ### Phase 4: Analytics Service
-**Goal**: A dedicated analytics service provides cross-domain query shapes that future AI analysis can call without touching the database directly
+**Goal**: A dedicated analytics service provides cross-domain query shapes, substance tracking, correlation analysis, insights, and a unified analytics page -- the data foundation for future AI analysis
 **Depends on**: Phase 3
 **Requirements**: SRVC-05
 **Success Criteria** (what must be TRUE):
   1. `analytics-service.ts` exists in `src/lib/` and provides at least fluid balance and medication adherence query functions
   2. The analytics service reads from multiple domain services but writes nothing and has no side effects
   3. Calling an analytics query returns a typed result usable by a React Query hook without additional transformation
-**Plans**: TBD
+**Plans**: 8
 
 Plans:
-- [ ] 04-01: TBD
+- [ ] 04-01-PLAN.md — Analytics types + stats helpers + core analytics service
+- [ ] 04-02-PLAN.md — Dexie v12 migration + substance service + substance hooks
+- [ ] 04-03-PLAN.md — Query registry + analytics hooks
+- [ ] 04-04-PLAN.md — Substance dashboard UI + type picker + settings
+- [ ] 04-05-PLAN.md — Analytics page shell + time range selector + records tab
+- [ ] 04-06-PLAN.md — Insights tab + insight banners + dashboard badge
+- [ ] 04-07-PLAN.md — Correlations tab + titration tab
+- [ ] 04-08-PLAN.md — PDF/CSV export + cleanup + backup update
 
 ### Phase 5: Security Hardening
 **Goal**: No secrets are exposed to the client, data at rest has encryption foundations, and auth patterns require no retrofit when cloud sync is added
@@ -191,7 +198,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10 -> 11
 
 Note: Phase 5 (Security) depends only on Phase 2 and can begin in parallel with Phase 3 if needed.
 
@@ -199,8 +206,8 @@ Note: Phase 5 (Security) depends only on Phase 2 and can begin in parallel with 
 |-------|----------------|--------|-----------|
 | 1. Schema Foundation | 3/3 | Complete | 2026-03-02 |
 | 2. TypeScript and Service Contracts | 4/4 | Complete | - |
-| 3. Service Layer Rebuild | 3/5 | In progress | - |
-| 4. Analytics Service | 0/TBD | Not started | - |
+| 3. Service Layer Rebuild | 5/5 | Complete | - |
+| 4. Analytics Service | 0/8 | Not started | - |
 | 5. Security Hardening | 0/TBD | Not started | - |
 | 6. Medication UX Core | 0/TBD | Not started | - |
 | 7. Schedule Visualization | 0/TBD | Not started | - |
