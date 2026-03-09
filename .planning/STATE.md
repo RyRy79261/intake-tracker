@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 04-06-PLAN.md
-last_updated: "2026-03-09T23:03:00.000Z"
-last_activity: 2026-03-09 — Plan 04-06 executed
+stopped_at: Completed 04-07-PLAN.md
+last_updated: "2026-03-09T23:16:43.585Z"
+last_activity: 2026-03-10 — Plan 04-05 executed
 progress:
   total_phases: 11
   completed_phases: 3
   total_plans: 20
-  completed_plans: 18
+  completed_plans: 19
   percent: 85
 ---
 
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 ## Current Position
 
 Phase: 4 of 11 (Analytics Service)
-Plan: 6 of 8 in current phase (04-06 complete)
-Status: Phase 4 in progress — insights tab and dashboard badge complete
-Last activity: 2026-03-09 — Plan 04-06 executed
+Plan: 6 of 8 in current phase (04-05 complete, 04-06 also complete)
+Status: Phase 4 in progress — analytics page shell and records tab complete
+Last activity: 2026-03-10 — Plan 04-05 executed
 
 Progress: [█████████░] 85%
 
@@ -57,6 +57,7 @@ Progress: [█████████░] 85%
 | Phase 04 P03 | 2min | 2 tasks | 3 files |
 | Phase 04 P04 | 6min | 2 tasks | 7 files |
 | Phase 04 P06 | 4min | 2 tasks | 6 files |
+| Phase 04 P05 | 16min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -114,6 +115,9 @@ Recent decisions affecting current work:
 - [Phase 04]: Caffeine yellow / alcohol fuchsia card themes to differentiate from existing amber salt and rose BP
 - [Phase 04-06]: isDismissed uses ratio-based threshold (10%) against trigger value for insight reappearance
 - [Phase 04-06]: Analytics page reads ?tab= URL param so InsightBadge navigation opens correct tab
+- [Phase 04]: useRecordsTabData hook aggregates all domain services into unified sorted array (respects no-direct-service-import ESLint rule)
+- [Phase 04]: UnifiedRecord extended with caffeine/alcohol types, RecordRow handles substance display
+- [Phase 04]: Substance records are delete-only (no edit dialog) since derived from intake records
 
 ### Pending Todos
 
@@ -126,6 +130,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-09T23:03:00.000Z
-Stopped at: Completed 04-06-PLAN.md
+Last session: 2026-03-09T23:16:43.583Z
+Stopped at: Completed 04-07-PLAN.md
 Resume file: None
