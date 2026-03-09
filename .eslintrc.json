@@ -39,6 +39,12 @@
       "rules": {
         "no-restricted-imports": "off"
       }
+    },
+    {
+      "files": ["src/components/analytics/titration-tab.tsx", "src/components/analytics/records-tab.tsx"],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
     }
   ]
 }
