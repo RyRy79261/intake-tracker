@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { verifyAndCheckWhitelist, isPrivyConfigured } from "@/lib/privy-server";
+import { verifyAndCheckWhitelist } from "@/lib/privy-server";
 
 /**
  * Server-side API route for Perplexity AI parsing.
@@ -17,7 +17,6 @@ import { verifyAndCheckWhitelist, isPrivyConfigured } from "@/lib/privy-server";
 
 const ParseRequestSchema = z.object({
   input: z.string().min(1, "Input is required").max(500, "Input too long"),
-  clientApiKey: z.string().startsWith("pplx-").optional(),
 });
 
 const AIParseResponseSchema = z.object({
@@ -117,49 +116,35 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { input, clientApiKey } = parsed.data;
+    const { input } = parsed.data;
+
+    // Verify authentication
+    const authResult = await verifyAndCheckWhitelist(authToken);
+
+    if (!authResult.success) {
+      return NextResponse.json(
+        {
+          error: authResult.error || "Unauthorized",
+          requiresAuth: true
+        },
+        { status: 401 }
+      );
+    }
+
+    // User is authenticated and on whitelist
+    console.log(`[AUDIT] AI request from user: ${authResult.userId} (${authResult.email || authResult.wallet})`);
 
     // Get server API key
     const apiKey = process.env.PERPLEXITY_API_KEY;
 
-    // Check if Privy is configured for authentication
-    if (isPrivyConfigured()) {
-      // Verify Privy token and check whitelist
-      const authResult = await verifyAndCheckWhitelist(authToken);
-
-      if (!authResult.success) {
-        return NextResponse.json(
-          {
-            error: authResult.error || "Unauthorized",
-            requiresAuth: true
-          },
-          { status: 401 }
-        );
-      }
-
-      // User is authenticated and on whitelist
-      console.log(`[AUDIT] AI request from user: ${authResult.userId} (${authResult.email || authResult.wallet})`);
-
-      // Use server API key for authenticated users
-      if (apiKey) {
-        return await processWithKey(input, apiKey);
-      }
-    }
-
-    // Fallback: No Privy configured, or no server API key
-    // Allow client to use their own API key
-    if (!clientApiKey) {
+    if (!apiKey) {
       return NextResponse.json(
-        {
-          error: "AI not configured. Sign in or add your own API key in settings.",
-          requiresAuth: !isPrivyConfigured()
-        },
+        { error: "AI service not configured on server" },
         { status: 503 }
       );
     }
 
-    // Use client's own API key
-    return await processWithKey(input, clientApiKey);
+    return await processWithKey(input, apiKey);
   } catch (error) {
     console.error("AI parse error:", error);
     const errorMessage = error instanceof Error ? error.message : "Unknown error";

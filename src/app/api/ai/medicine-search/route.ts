@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { verifyAndCheckWhitelist, isPrivyConfigured } from "@/lib/privy-server";
+import { verifyAndCheckWhitelist } from "@/lib/privy-server";
 
 // --- Zod Schemas (co-located per user decision) ---
 
 const MedicineSearchRequestSchema = z.object({
   query: z.string().min(1, "Query is required").max(200, "Query too long"),
-  clientApiKey: z.string().startsWith("pplx-").optional(),
   country: z.string().max(100).optional(),
 });
 
@@ -102,31 +101,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { query, clientApiKey, country } = parsed.data;
+    const { query, country } = parsed.data;
 
-    const apiKey = process.env.PERPLEXITY_API_KEY;
-
-    if (isPrivyConfigured()) {
-      const authResult = await verifyAndCheckWhitelist(authToken);
-      if (!authResult.success) {
-        return NextResponse.json(
-          { error: authResult.error || "Unauthorized", requiresAuth: true },
-          { status: 401 }
-        );
-      }
-      if (apiKey) {
-        return await searchWithKey(query.trim(), apiKey, country);
-      }
+    // Verify authentication
+    const authResult = await verifyAndCheckWhitelist(authToken);
+    if (!authResult.success) {
+      return NextResponse.json(
+        { error: authResult.error || "Unauthorized", requiresAuth: true },
+        { status: 401 }
+      );
     }
 
-    if (!clientApiKey) {
+    const apiKey = process.env.PERPLEXITY_API_KEY;
+    if (!apiKey) {
       return NextResponse.json(
-        { error: "AI not configured. Sign in or add your own API key in settings.", requiresAuth: !isPrivyConfigured() },
+        { error: "AI service not configured on server" },
         { status: 503 }
       );
     }
 
-    return await searchWithKey(query.trim(), clientApiKey, country);
+    return await searchWithKey(query.trim(), apiKey, country);
   } catch (error) {
     console.error("Medicine search error:", error);
     return NextResponse.json(

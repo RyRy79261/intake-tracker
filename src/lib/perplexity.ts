@@ -18,32 +18,27 @@ export interface ParsedIntake {
 export async function parseIntakeWithPerplexity(
   input: string,
   options?: {
-    clientApiKey?: string;
     authToken?: string; // Privy access token
   }
 ): Promise<ParsedIntake> {
   logAudit("ai_parse_request");
 
   try {
-    // Build headers with optional auth token
+    // Build headers with auth token
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
     };
-    
+
     // Add Privy auth token if available
     if (options?.authToken) {
       headers["Authorization"] = `Bearer ${options.authToken}`;
     }
 
-    // Use server-side route (API key in env, more secure)
+    // Use server-side route (API key in env only)
     const response = await fetch("/api/ai/parse", {
       method: "POST",
       headers,
-      body: JSON.stringify({ 
-        input,
-        // Fallback: client's own API key (if not using Privy auth)
-        clientApiKey: options?.clientApiKey,
-      }),
+      body: JSON.stringify({ input }),
     });
 
     if (!response.ok) {

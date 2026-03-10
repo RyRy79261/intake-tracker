@@ -16,7 +16,6 @@ import { WaterSettingsSection } from "@/components/settings/water-settings-secti
 import { SaltSettingsSection } from "@/components/settings/salt-settings-section";
 import { AppearanceSection } from "@/components/settings/appearance-section";
 import { QuickNavSection } from "@/components/settings/quick-nav-section";
-import { AiIntegrationSection } from "@/components/settings/ai-integration-section";
 import { DataManagementSection } from "@/components/settings/data-management-section";
 import { PrivacySecuritySection } from "@/components/settings/privacy-security-section";
 import { PermissionsSection } from "@/components/settings/permissions-section";
@@ -56,7 +55,6 @@ function SettingsContent() {
         <SubstanceSettingsSection />
         <AppearanceSection />
         <QuickNavSection />
-        <AiIntegrationSection />
         <DataManagementSection />
         <PrivacySecuritySection />
         <PermissionsSection />

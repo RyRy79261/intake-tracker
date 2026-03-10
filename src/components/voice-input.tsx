@@ -16,7 +16,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Mic, MicOff, Loader2, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { usePerplexityKey } from "@/hooks/use-settings";
 import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 import { ParsedIntakeDisplay } from "@/components/parsed-intake-display";
 import { parseIntakeWithPerplexity, type ParsedIntake } from "@/lib/perplexity";
@@ -37,7 +36,6 @@ export function VoiceInput({ onAddWater, onAddSalt, open: controlledOpen, onOpen
   const [isProcessing, setIsProcessing] = useState(false);
   const [parsedResult, setParsedResult] = useState<ParsedIntake | null>(null);
   const { toast } = useToast();
-  const { getApiKey, hasKey } = usePerplexityKey();
   const { authenticated, getAccessToken } = usePrivy();
 
   const handleFinalTranscript = useCallback((transcript: string) => {
@@ -53,7 +51,7 @@ export function VoiceInput({ onAddWater, onAddSalt, open: controlledOpen, onOpen
     cleanup,
   } = useSpeechRecognition(handleFinalTranscript);
 
-  const aiAvailable = authenticated || hasKey;
+  const aiAvailable = authenticated;
 
   // Warn when controlled without an onOpenChange handler
   useEffect(() => {
@@ -86,10 +84,8 @@ export function VoiceInput({ onAddWater, onAddSalt, open: controlledOpen, onOpen
         authToken = await getAccessToken() || undefined;
       }
 
-      const clientApiKey = hasKey ? getApiKey() : undefined;
       const result = await parseIntakeWithPerplexity(input, {
         ...(authToken !== undefined && { authToken }),
-        ...(clientApiKey !== undefined && { clientApiKey }),
       });
       setParsedResult(result);
     } catch (error) {
@@ -157,7 +153,7 @@ export function VoiceInput({ onAddWater, onAddSalt, open: controlledOpen, onOpen
         variant="outline"
         disabled
         className="flex-1 h-12 gap-2 opacity-50"
-        title="Sign in or add your own API key to enable AI features"
+        title="Sign in to enable AI features"
       >
         <Mic className="w-5 h-5" />
         <span>AI Input</span>

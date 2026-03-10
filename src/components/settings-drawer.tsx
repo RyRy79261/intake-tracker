@@ -24,7 +24,6 @@ import { WaterSettingsSection } from "./settings/water-settings-section";
 import { SaltSettingsSection } from "./settings/salt-settings-section";
 import { AppearanceSection } from "./settings/appearance-section";
 import { QuickNavSection } from "./settings/quick-nav-section";
-import { AiIntegrationSection } from "./settings/ai-integration-section";
 import { DataManagementSection } from "./settings/data-management-section";
 import { MedicationSettingsSection } from "./settings/medication-settings-section";
 import { PrivacySecuritySection } from "./settings/privacy-security-section";
@@ -81,7 +80,6 @@ export function SettingsDrawer({ open, onOpenChange }: SettingsDrawerProps) {
             <SaltSettingsSection />
             <AppearanceSection />
             <QuickNavSection />
-            <AiIntegrationSection />
             <DataManagementSection />
             <MedicationSettingsSection />
             <PrivacySecuritySection />

@@ -91,11 +91,6 @@ export async function exportAllUserData(): Promise<string> {
       const stored = localStorage.getItem("intake-tracker-settings");
       if (stored) {
         settings = JSON.parse(stored);
-        // Remove sensitive data from export
-        if ('state' in settings && typeof settings.state === 'object' && settings.state !== null) {
-          const state = settings.state as Record<string, unknown>;
-          delete state.perplexityApiKey;
-        }
       }
     } catch {
       // Ignore parse errors

@@ -2,7 +2,6 @@
 
 import { useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/components/auth-guard";
-import { usePerplexityKey } from "@/hooks/use-settings";
 import { useSettingsStore } from "@/stores/settings-store";
 
 export interface MedicineSearchResult {
@@ -25,7 +24,6 @@ export interface MedicineSearchResult {
 
 export function useMedicineSearch() {
   const { getAuthHeader } = useAuth();
-  const { getApiKey } = usePerplexityKey();
 
   return useMutation({
     mutationFn: async (query: string): Promise<MedicineSearchResult> => {
@@ -50,14 +48,11 @@ export function useMedicineSearch() {
         headers.Authorization = authHeader.Authorization;
       }
 
-      const clientApiKey = getApiKey();
-
       const response = await fetch("/api/ai/medicine-search", {
         method: "POST",
         headers,
         body: JSON.stringify({
           query,
-          clientApiKey: clientApiKey || undefined,
           country: countryContext,
         }),
       });
