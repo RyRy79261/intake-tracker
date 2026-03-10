@@ -107,10 +107,12 @@ Plans:
   2. Scanning the compiled client bundle (`pnpm build` output) finds no API key strings
   3. PIN-based access control has a documented encryption pattern for data at rest (even if full encryption is deferred, the foundation pattern is in place)
   4. Auth session handling is documented as sync-ready (no auth patterns that would require breaking changes for Dexie Cloud)
-**Plans**: TBD
+**Plans**: 3
 
 Plans:
-- [ ] 05-01: TBD
+- [ ] 05-01-PLAN.md — Auth middleware + client API key removal from store, security utils, hooks, and components (SECU-01, SECU-03)
+- [ ] 05-02-PLAN.md — Encryption foundations: useEncryptedField hook, encrypted backup, SECURITY.md (SECU-02)
+- [ ] 05-03-PLAN.md — API route auth migration, bundle security scan, PII hardening, CSP refinement (SECU-01, SECU-03)
 
 ### Phase 6: Medication UX Core
 **Goal**: A user can manage their full medication workflow — view prescriptions by compound, log doses, track retroactive doses, and see clearly which regional brand stock is being used
@@ -207,8 +209,8 @@ Note: Phase 5 (Security) depends only on Phase 2 and can begin in parallel with 
 | 1. Schema Foundation | 3/3 | Complete | 2026-03-02 |
 | 2. TypeScript and Service Contracts | 4/4 | Complete | - |
 | 3. Service Layer Rebuild | 5/5 | Complete | - |
-| 4. Analytics Service | 1/8 | In Progress|  |
-| 5. Security Hardening | 0/TBD | Not started | - |
+| 4. Analytics Service | 8/8 | Complete |  |
+| 5. Security Hardening | 0/3 | Not started | - |
 | 6. Medication UX Core | 0/TBD | Not started | - |
 | 7. Schedule Visualization | 0/TBD | Not started | - |
 | 8. Drug Interactions | 0/TBD | Not started | - |
