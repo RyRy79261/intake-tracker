@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 Phase: 5 of 11 (Security Hardening)
 Plan: 3 of 3 in current phase (05-03 complete)
 Status: Phase 5 complete — all plans executed
-Last activity: 2026-03-10 — Plan 05-03 executed
+Last activity: 2026-03-10 - Completed quick task 1: Pencil.dev AppImage setup
 
 Progress: [██████████] 100%
 
@@ -149,6 +149,12 @@ None yet.
 
 - [RESOLVED]: useLiveQuery vs. React Query — decided: useLiveQuery for ALL reads (all services), useMutation kept for writes. No invalidation needed. Resolved in Phase 3 context discussion.
 - [Pre-phase]: "NanoDB" identity unconfirmed — PROJECT.md references it as future cloud sync target, but likely means Dexie Cloud. Does not block this milestone.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 1 | Download Pencil.dev Linux AppImage, run via WSLg, verify MCP connectivity | 2026-03-10 | 911f838 | [1-download-pencil-dev-linux-appimage-run-i](./quick/1-download-pencil-dev-linux-appimage-run-i/) |
 
 ## Session Continuity
 
