@@ -17,6 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: Service Layer Rebuild** - Medication services rebuilt with transactional atomicity, timezone-aware scheduling, and fractional dose math
 - [x] **Phase 4: Analytics Service** - Cross-domain analytics service with substance tracking, correlation analysis, and analytics page replacing /history
 - [x] **Phase 5: Security Hardening** - API keys server-side only, encryption foundations for data at rest, auth patterns ready for cloud sync (completed 2026-03-10)
+- [ ] **Phase 5.1: Pencil Design System Onboarding** - Import design system components, establish app design tokens, create reusable app components, design all key screens for Phase 6+ UI reference (INSERTED)
 - [ ] **Phase 6: Medication UX Core** - Compound-first prescription views, dose logging with stock depletion, retroactive logging, multi-region inventory
 - [ ] **Phase 7: Schedule Visualization** - Maintenance vs titration phase display with named phases and transition clarity
 - [ ] **Phase 8: Drug Interactions** - AI-powered compound interaction data stored and surfaced per prescription with ad-hoc lookup
@@ -114,6 +115,21 @@ Plans:
 - [ ] 05-02-PLAN.md — Encryption foundations: useEncryptedField hook, encrypted backup, SECURITY.md (SECU-02)
 - [ ] 05-03-PLAN.md — API route auth migration, bundle security scan, PII hardening, CSP refinement (SECU-01, SECU-03)
 
+### Phase 5.1: Pencil Design System Onboarding (INSERTED)
+
+**Goal:** Pencil.dev design system is fully onboarded — app design tokens, reusable components, and all key screen designs exist in `design/app.pen` so Phase 6+ UI work references authoritative designs
+**Requirements**: TBD
+**Depends on:** Phase 5
+**Success Criteria** (what must be TRUE):
+  1. `design/app.pen` contains design variables matching the app's Tailwind color tokens (water, salt, weight, BP, eating, urination, defecation themes)
+  2. Reusable Pencil components exist for: intake card, health metric card, tracking card, app header, quick-nav footer
+  3. Complete screen designs exist for: Intake Dashboard, Medications, Analytics, Settings
+  4. A documented Pencil workflow exists so future phases can generate and reference designs
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 05.1 to break down)
+
 ### Phase 6: Medication UX Core
 **Goal**: A user can manage their full medication workflow — view prescriptions by compound, log doses, track retroactive doses, and see clearly which regional brand stock is being used
 **Depends on**: Phase 3, Phase 5
@@ -200,7 +216,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10 -> 11
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 5.1 -> 6 -> 7 -> 8 -> 9 -> 10 -> 11
 
 Note: Phase 5 (Security) depends only on Phase 2 and can begin in parallel with Phase 3 if needed.
 
@@ -211,6 +227,7 @@ Note: Phase 5 (Security) depends only on Phase 2 and can begin in parallel with 
 | 3. Service Layer Rebuild | 5/5 | Complete | - |
 | 4. Analytics Service | 8/8 | Complete |  |
 | 5. Security Hardening | 3/3 | Complete   | 2026-03-10 |
+| 5.1 Pencil Design System Onboarding | 0/TBD | Not started | - |
 | 6. Medication UX Core | 0/TBD | Not started | - |
 | 7. Schedule Visualization | 0/TBD | Not started | - |
 | 8. Drug Interactions | 0/TBD | Not started | - |
