@@ -62,6 +62,7 @@ Progress: [█████████░] 92%
 | Phase 04 P08 | 9min | 2 tasks | 6 files |
 | Phase 04 P09 | 2min | 2 tasks | 1 files |
 | Phase 04 P10 | 4min | 2 tasks | 2 files |
+| Phase 05 P01 | 13min | 2 tasks | 13 files |
 | Phase 05 P02 | 7min | 2 tasks | 3 files |
 
 ## Accumulated Context
@@ -130,6 +131,9 @@ Recent decisions affecting current work:
 - [Phase 04]: Backup version 4 with substanceRecords support
 - [Phase 04]: No upgrade function needed for v13 (Dexie auto-indexes existing createdAt data)
 - [Phase 04]: Quick-add buttons use same handleSelect logic as drawer picker (no duplication)
+- [05-01]: Zustand persist migration uses version 0->1 with double-cast for TypeScript strictness
+- [05-01]: API routes require auth always (no clientApiKey fallback) -- server-side PERPLEXITY_API_KEY only
+- [05-01]: LOCAL_AGENT_MODE production guard logs warning but does not bypass auth in production
 - [05-02]: useEncryptedField returns memoized object with encrypt/decrypt/isAvailable (not wired to tables)
 - [05-02]: EncryptedBackup envelope: { encrypted: true, payload: EncryptedData, version } for format detection
 - [05-02]: importBackup auto-detects encrypted format, returns error directing to importEncryptedBackup
