@@ -1,15 +1,16 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { z } from "zod";
-import { verifyAndCheckWhitelist } from "@/lib/privy-server";
+import { withAuth } from "@/lib/auth-middleware";
+import { sanitizeForAI } from "@/lib/security";
 
 /**
  * Server-side API route for Perplexity AI parsing.
  *
  * SECURITY:
- * - Privy authentication with whitelist enforcement
+ * - Centralized auth middleware (withAuth) handles Privy verification + whitelist
  * - API key stored in server environment only (never sent to client)
  * - Rate limiting applied per IP
- * - Input validation and PII stripping
+ * - Input validation and PII stripping via sanitizeForAI
  * - Audit logging
  */
 
@@ -75,17 +76,7 @@ function checkRateLimit(ip: string): boolean {
   return true;
 }
 
-// Sanitize input - strip PII patterns
-function sanitizeInput(input: string): string {
-  return input
-    .replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g, "[email]")
-    .replace(/\b\d{3}[-.]?\d{3}[-.]?\d{4}\b/g, "[phone]")
-    .replace(/\b\d{3}[-]?\d{2}[-]?\d{4}\b/g, "[ssn]")
-    .trim()
-    .slice(0, 500);
-}
-
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async ({ request, auth }) => {
   try {
     // Get client IP for rate limiting
     const ip = request.headers.get("x-forwarded-for")?.split(",")[0] ||
@@ -99,10 +90,6 @@ export async function POST(request: NextRequest) {
         { status: 429 }
       );
     }
-
-    // Get the Authorization header (Bearer token from Privy)
-    const authHeader = request.headers.get("authorization");
-    const authToken = authHeader?.replace("Bearer ", "") || null;
 
     const body = await request.json();
 
@@ -118,21 +105,8 @@ export async function POST(request: NextRequest) {
 
     const { input } = parsed.data;
 
-    // Verify authentication
-    const authResult = await verifyAndCheckWhitelist(authToken);
-
-    if (!authResult.success) {
-      return NextResponse.json(
-        {
-          error: authResult.error || "Unauthorized",
-          requiresAuth: true
-        },
-        { status: 401 }
-      );
-    }
-
-    // User is authenticated and on whitelist
-    console.log(`[AUDIT] AI request from user: ${authResult.userId} (${authResult.email || authResult.wallet})`);
+    // User is authenticated and on whitelist (handled by withAuth)
+    console.log(`[AUDIT] AI request from user: ${auth.userId} (${auth.email || auth.wallet})`);
 
     // Get server API key
     const apiKey = process.env.PERPLEXITY_API_KEY;
@@ -153,7 +127,7 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+});
 
 async function callPerplexity(sanitizedInput: string, apiKey: string) {
   const response = await fetch("https://api.perplexity.ai/chat/completions", {
@@ -248,7 +222,7 @@ async function processWithKey(input: string, apiKey: string) {
     );
   }
 
-  const sanitizedInput = sanitizeInput(input);
+  const sanitizedInput = sanitizeForAI(input);
 
   if (!sanitizedInput) {
     return NextResponse.json(

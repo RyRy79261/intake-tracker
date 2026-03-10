@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { z } from "zod";
-import { verifyAndCheckWhitelist } from "@/lib/privy-server";
+import { withAuth } from "@/lib/auth-middleware";
+import { sanitizeForAI } from "@/lib/security";
 
 // --- Zod Schemas (co-located per user decision) ---
 
@@ -72,7 +73,7 @@ function checkRateLimit(ip: string): boolean {
   return true;
 }
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async ({ request, auth }) => {
   try {
     const ip =
       request.headers.get("x-forwarded-for")?.split(",")[0] ||
@@ -85,9 +86,6 @@ export async function POST(request: NextRequest) {
         { status: 429 }
       );
     }
-
-    const authHeader = request.headers.get("authorization");
-    const authToken = authHeader?.replace("Bearer ", "") || null;
 
     const body = await request.json();
 
@@ -103,14 +101,7 @@ export async function POST(request: NextRequest) {
 
     const { query, country } = parsed.data;
 
-    // Verify authentication
-    const authResult = await verifyAndCheckWhitelist(authToken);
-    if (!authResult.success) {
-      return NextResponse.json(
-        { error: authResult.error || "Unauthorized", requiresAuth: true },
-        { status: 401 }
-      );
-    }
+    console.log(`[AUDIT] Medicine search request from user: ${auth.userId}`);
 
     const apiKey = process.env.PERPLEXITY_API_KEY;
     if (!apiKey) {
@@ -128,10 +119,10 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+});
 
 async function callPerplexityMedicine(query: string, apiKey: string, country?: string) {
-  const sanitized = query.slice(0, 200);
+  const sanitized = sanitizeForAI(query);
 
   const prompt = country
     ? `Look up this medication and provide detailed pharmaceutical information, focusing specifically on brands and availability in ${country}: "${sanitized}"`

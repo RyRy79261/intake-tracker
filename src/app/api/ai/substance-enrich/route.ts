@@ -1,15 +1,16 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { z } from "zod";
-import { verifyAndCheckWhitelist, isPrivyConfigured } from "@/lib/privy-server";
+import { withAuth } from "@/lib/auth-middleware";
+import { sanitizeForAI } from "@/lib/security";
 
 /**
  * Server-side API route for substance (caffeine/alcohol) AI enrichment via Perplexity.
  *
  * SECURITY:
- * - Privy authentication with whitelist enforcement
+ * - Centralized auth middleware (withAuth) handles Privy verification + whitelist
  * - API key stored in server environment only
  * - Rate limiting applied per IP
- * - Input validation and PII stripping
+ * - Input validation and PII stripping via sanitizeForAI
  */
 
 // --- Zod Schemas ---
@@ -70,17 +71,7 @@ function checkRateLimit(ip: string): boolean {
   return true;
 }
 
-// Sanitize input - strip PII patterns
-function sanitizeInput(input: string): string {
-  return input
-    .replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g, "[email]")
-    .replace(/\b\d{3}[-.]?\d{3}[-.]?\d{4}\b/g, "[phone]")
-    .replace(/\b\d{3}[-]?\d{2}[-]?\d{4}\b/g, "[ssn]")
-    .trim()
-    .slice(0, 500);
-}
-
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async ({ request, auth }) => {
   try {
     const ip = request.headers.get("x-forwarded-for")?.split(",")[0] ||
                request.headers.get("x-real-ip") ||
@@ -92,9 +83,6 @@ export async function POST(request: NextRequest) {
         { status: 429 }
       );
     }
-
-    const authHeader = request.headers.get("authorization");
-    const authToken = authHeader?.replace("Bearer ", "") || null;
 
     const body = await request.json();
 
@@ -109,25 +97,9 @@ export async function POST(request: NextRequest) {
 
     const { description, type } = parsed.data;
 
+    console.log(`[AUDIT] Substance enrich request from user: ${auth.userId}`);
+
     const apiKey = process.env.PERPLEXITY_API_KEY;
-
-    if (isPrivyConfigured()) {
-      const authResult = await verifyAndCheckWhitelist(authToken);
-
-      if (!authResult.success) {
-        return NextResponse.json(
-          { error: authResult.error || "Unauthorized", requiresAuth: true },
-          { status: 401 }
-        );
-      }
-
-      console.log(`[AUDIT] Substance enrich request from user: ${authResult.userId}`);
-
-      if (apiKey) {
-        return await processEnrichment(description, type, apiKey);
-      }
-    }
-
     if (!apiKey) {
       return NextResponse.json(
         { error: "AI not configured. Server API key required for substance enrichment." },
@@ -144,7 +116,7 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+});
 
 async function callPerplexity(sanitizedInput: string, type: 'caffeine' | 'alcohol', apiKey: string) {
   const systemPrompt = type === "caffeine" ? CAFFEINE_SYSTEM_PROMPT : ALCOHOL_SYSTEM_PROMPT;
@@ -213,7 +185,7 @@ async function processEnrichment(description: string, type: 'caffeine' | 'alcoho
     );
   }
 
-  const sanitized = sanitizeInput(description);
+  const sanitized = sanitizeForAI(description);
   if (!sanitized) {
     return NextResponse.json(
       { error: "Invalid input after sanitization" },
