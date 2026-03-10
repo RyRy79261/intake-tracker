@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-02)
 
 **Core value:** Accurate, queryable health data across intake, vitals, and medication adherence — structured for cross-domain analysis and future AI querying
-**Current focus:** Phase 5.1 Pencil Design System Onboarding (next up)
+**Current focus:** Phase 5.1 Pencil Design System Onboarding (executing)
 
 ## Current Position
 
 Phase: 5.1 of 11 (Pencil Design System Onboarding — INSERTED)
-Plan: 0 of TBD (not yet planned)
-Status: Phase inserted, awaiting planning
-Last activity: 2026-03-10 — Phase 5.1 inserted into roadmap
+Plan: 1 of 7 complete
+Status: Executing Wave 1
+Last activity: 2026-03-11 — Plan 05.1-01 complete (design token foundation)
 
 Progress: [██████████] 100%
 
@@ -140,6 +140,9 @@ Recent decisions affecting current work:
 - [05-02]: importBackup auto-detects encrypted format, returns error directing to importEncryptedBackup
 - [05-02]: importEncryptedBackup delegates to importBackup after decryption (single import logic path)
 - [Phase 05]: Status route kept public but stripped of key length/format info (info leak)
+- [05.1-01]: Pencil .pen file stores data internally — disk file stays as {} placeholder, changes managed via MCP tools
+- [05.1-01]: Dark mode foreground colors use 220 20% 8% (matching existing dark --background)
+- [05.1-01]: Caffeine-foreground uses black in light mode (yellow text needs dark contrast)
 
 ### Pending Todos
 
