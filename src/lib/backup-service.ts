@@ -58,17 +58,15 @@ export async function exportBackup(): Promise<Blob> {
     db.substanceRecords.toArray(),
   ]);
 
-  // Get settings from localStorage (excluding sensitive data)
+  // Get settings from localStorage
   let settings: Record<string, unknown> = {};
   if (typeof window !== "undefined") {
     try {
       const stored = localStorage.getItem("intake-tracker-settings");
       if (stored) {
         const parsed = JSON.parse(stored);
-        // Remove sensitive data from backup
         if (parsed?.state) {
-          const { perplexityApiKey, ...safeState } = parsed.state;
-          settings = { state: safeState };
+          settings = { state: parsed.state };
         }
       }
     } catch {
