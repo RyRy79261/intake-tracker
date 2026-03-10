@@ -47,7 +47,7 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Security
 
 - [ ] **SECU-01**: API keys removed from client storage — Perplexity key server-side only
-- [ ] **SECU-02**: Encryption foundations for data at rest (PIN + encryption patterns)
+- [x] **SECU-02**: Encryption foundations for data at rest (PIN + encryption patterns)
 - [ ] **SECU-03**: Auth patterns designed for future cloud sync (no retrofit needed)
 
 ### Data Integrity
@@ -112,7 +112,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SRVC-06 | Phase 3 | Complete |
 | SRVC-05 | Phase 4 | Complete |
 | SECU-01 | Phase 5 | Pending |
-| SECU-02 | Phase 5 | Pending |
+| SECU-02 | Phase 5 | Complete |
 | SECU-03 | Phase 5 | Pending |
 | MEDX-01 | Phase 6 | Pending |
 | MEDX-02 | Phase 6 | Pending |
