@@ -62,7 +62,7 @@ Load plan inventory with wave grouping in one call:
 PLAN_INDEX=$(node "./.claude/get-shit-done/bin/gsd-tools.cjs" phase-plan-index "${PHASE_NUMBER}")
 ```
 
-Parse JSON for: `phase`, `plans[]` (each with `id`, `wave`, `autonomous`, `objective`, `files_modified`, `task_count`, `has_summary`), `waves` (map of wave number → plan IDs), `incomplete`, `has_checkpoints`.
+Parse JSON for: `phase`, `plans[]` (each with `id`, `wave`, `autonomous`, `execution_context`, `objective`, `files_modified`, `task_count`, `has_summary`), `waves` (map of wave number → plan IDs), `incomplete`, `has_checkpoints`.
 
 **Filtering:** Skip plans where `has_summary: true`. If `--gaps-only`: also skip non-gap_closure plans. If all filtered: "No matching incomplete plans" → exit.
 
@@ -102,7 +102,23 @@ Execute each wave in sequence. Within a wave: parallel if `PARALLELIZATION=true`
    - Bad: "Executing terrain generation plan"
    - Good: "Procedural terrain generator using Perlin noise — creates height maps, biome zones, and collision meshes. Required before vehicle physics can interact with ground."
 
-2. **Spawn executor agents:**
+2. **Route plans by execution context:**
+
+   Check each plan's `execution_context` field from the plan index.
+
+   **If `execution_context: main` — Execute inline (Pattern C):**
+
+   Plans requiring MCP tools (Pencil design, browser automation, etc.) MUST run in the main conversation where MCP servers are connected. Subagents cannot access MCP tools — this is a platform constraint.
+
+   For each `execution_context: main` plan in the wave (sequentially, even if parallelization is enabled — MCP tools are single-threaded):
+
+   1. Read the plan file: `{phase_dir}/{plan_file}`
+   2. Read STATE.md, config.json, CLAUDE.md
+   3. Follow the plan's `<tasks>` section exactly, using MCP tools as specified
+   4. Follow execute-plan.md Pattern C flow: execute tasks → verify → commit per task → create SUMMARY.md → update STATE.md → update ROADMAP.md
+   5. Report completion inline before proceeding
+
+   **If `execution_context: subagent` (default) — Spawn executor agents:**
 
    Pass paths only — executors read files themselves with their fresh 200k context.
    This keeps orchestrator context lean (~10-15%).
@@ -143,6 +159,8 @@ Execute each wave in sequence. Within a wave: parallel if `PARALLELIZATION=true`
      "
    )
    ```
+
+   **Mixed waves:** If a wave has both `main` and `subagent` plans, spawn subagent plans first (parallel), then execute main plans sequentially after subagents complete.
 
 3. **Wait for all agents in wave to complete.**
 

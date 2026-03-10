@@ -277,10 +277,14 @@ function cmdPhasePlanIndex(cwd, phase, raw) {
       incomplete.push(planId);
     }
 
+    // Parse execution_context (default: 'subagent')
+    const executionContext = fm['execution_context'] || 'subagent';
+
     const plan = {
       id: planId,
       wave,
       autonomous,
+      execution_context: executionContext,
       objective: extractObjective(content) || fm.objective || null,
       files_modified: filesModified,
       task_count: taskCount,
