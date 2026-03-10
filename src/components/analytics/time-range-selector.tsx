@@ -78,13 +78,13 @@ export function TimeRangeSelector({
 
   return (
     <div className="space-y-2">
-      <div className="flex gap-1 overflow-x-auto pb-1">
+      <div className="flex flex-wrap gap-1">
         {SCOPE_OPTIONS.map((opt) => (
           <Button
             key={opt.value}
             variant={!showCustom && scope === opt.value ? "default" : "outline"}
             size="sm"
-            className="text-xs shrink-0"
+            className="text-xs flex-1 min-w-[3rem]"
             onClick={() => handleScopeClick(opt.value)}
           >
             {opt.label}
@@ -93,7 +93,7 @@ export function TimeRangeSelector({
         <Button
           variant={showCustom ? "default" : "outline"}
           size="sm"
-          className="text-xs shrink-0"
+          className="text-xs flex-1 min-w-[3rem]"
           onClick={handleCustomClick}
         >
           Custom
