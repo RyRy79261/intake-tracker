@@ -6,6 +6,7 @@
 import { db, type IntakeRecord, type WeightRecord, type BloodPressureRecord, type EatingRecord, type UrinationRecord, type DefecationRecord, type SubstanceRecord } from "./db";
 import { ok, err, type ServiceResult } from "./service-result";
 import { logAudit } from "./audit";
+import { encrypt, decrypt, type EncryptedData } from "./crypto";
 
 export interface BackupData {
   version: number;
@@ -35,6 +36,12 @@ export interface ImportResult {
 }
 
 const CURRENT_BACKUP_VERSION = 4;
+
+export interface EncryptedBackup {
+  encrypted: true;
+  payload: EncryptedData;
+  version: number;
+}
 
 /**
  * Export all health data to a JSON blob.
@@ -113,6 +120,128 @@ export async function downloadBackup(): Promise<ServiceResult<void>> {
     return ok(undefined);
   } catch (e) {
     return err("Failed to download backup", e);
+  }
+}
+
+/**
+ * Export all health data as an encrypted JSON blob.
+ * The backup data is encrypted with the user's PIN using AES-GCM.
+ */
+export async function exportEncryptedBackup(pin: string): Promise<Blob> {
+  const plainBlob = await exportBackup();
+  const json = await plainBlob.text();
+  const payload = await encrypt(json, pin);
+
+  const encryptedBackup: EncryptedBackup = {
+    encrypted: true,
+    payload,
+    version: CURRENT_BACKUP_VERSION,
+  };
+
+  logAudit("data_export", "Exported encrypted backup");
+
+  return new Blob([JSON.stringify(encryptedBackup, null, 2)], {
+    type: "application/json",
+  });
+}
+
+/**
+ * Download an encrypted backup file (mutation -- keeps ServiceResult)
+ */
+export async function downloadEncryptedBackup(
+  pin: string
+): Promise<ServiceResult<void>> {
+  try {
+    const blob = await exportEncryptedBackup(pin);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const date = new Date().toISOString().split("T")[0];
+    a.download = `intake-tracker-backup-${date}-encrypted.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    return ok(undefined);
+  } catch (e) {
+    return err("Failed to download encrypted backup", e);
+  }
+}
+
+/**
+ * Import an encrypted backup file using the user's PIN.
+ * Decrypts the payload, then delegates to normal import logic.
+ */
+export async function importEncryptedBackup(
+  file: File,
+  pin: string,
+  mode: "merge" | "replace" = "merge"
+): Promise<ServiceResult<ImportResult>> {
+  try {
+    const text = await file.text();
+    let outer: unknown;
+
+    try {
+      outer = JSON.parse(text);
+    } catch {
+      return ok({
+        success: false,
+        intakeImported: 0,
+        weightImported: 0,
+        bpImported: 0,
+        eatingImported: 0,
+        urinationImported: 0,
+        defecationImported: 0,
+        substanceImported: 0,
+        skipped: 0,
+        errors: ["Invalid JSON format"],
+      });
+    }
+
+    if (
+      !outer ||
+      typeof outer !== "object" ||
+      !(outer as Record<string, unknown>).encrypted
+    ) {
+      return ok({
+        success: false,
+        intakeImported: 0,
+        weightImported: 0,
+        bpImported: 0,
+        eatingImported: 0,
+        urinationImported: 0,
+        defecationImported: 0,
+        substanceImported: 0,
+        skipped: 0,
+        errors: [
+          "File is not an encrypted backup. Use importBackup() for unencrypted files.",
+        ],
+      });
+    }
+
+    const encryptedBackup = outer as EncryptedBackup;
+    const decryptedJson = await decrypt(encryptedBackup.payload, pin);
+
+    // Create a new File from the decrypted JSON and delegate to importBackup
+    const decryptedFile = new File([decryptedJson], file.name, {
+      type: "application/json",
+    });
+    return importBackup(decryptedFile, mode);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unknown decryption error";
+    return ok({
+      success: false,
+      intakeImported: 0,
+      weightImported: 0,
+      bpImported: 0,
+      eatingImported: 0,
+      urinationImported: 0,
+      defecationImported: 0,
+      substanceImported: 0,
+      skipped: 0,
+      errors: [message],
+    });
   }
 }
 
@@ -251,6 +380,18 @@ export async function importBackup(
       data = JSON.parse(text);
     } catch {
       result.errors.push("Invalid JSON format");
+      return ok(result);
+    }
+
+    // Detect encrypted backup and return informative error
+    if (
+      data &&
+      typeof data === "object" &&
+      (data as Record<string, unknown>).encrypted === true
+    ) {
+      result.errors.push(
+        "This backup is encrypted. Please use importEncryptedBackup() with your PIN."
+      );
       return ok(result);
     }
 
