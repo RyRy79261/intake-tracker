@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 ## Current Position
 
 Phase: 5.1 of 11 (Pencil Design System Onboarding — INSERTED)
-Plan: 1 of 7 complete
-Status: Executing Wave 1
-Last activity: 2026-03-11 — Plan 05.1-01 complete (design token foundation)
+Plan: 2 of 7 complete
+Status: Executing Wave 2
+Last activity: 2026-03-11 — Plan 05.1-02 complete (shadcn primitive components)
 
 Progress: [██████████] 100%
 
