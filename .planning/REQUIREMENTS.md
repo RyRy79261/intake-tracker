@@ -23,6 +23,15 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **SRVC-05**: Cross-domain analytics service (`analytics-service.ts`) as query seam for future AI analysis
 - [x] **SRVC-06**: Fractional dose depletion math — half and quarter pill tracking with correct inventory decrement
 
+### Design System
+
+- [ ] **DSGN-01**: Design tokens — all domain colors as CSS custom properties, Tailwind config entries, and Pencil variables with light/dark theme support
+- [ ] **DSGN-02**: Pencil primitive components — all 17 shadcn/ui primitives mirrored as reusable Pencil components with 1:1 visual parity
+- [ ] **DSGN-03**: Pencil domain components — intake cards, health metric cards, tracking cards, substance cards, medication components, app header, quick-nav footer
+- [ ] **DSGN-04**: Screen designs — Dashboard, Medications (list + detail + flows), Analytics (4 tabs), Settings with populated/empty/loading/error state variants
+- [ ] **DSGN-05**: Overlay designs — all dialogs, drawers, and wizard flows designed in Pencil
+- [ ] **DSGN-06**: Design-first workflow — documented Pencil convention in CLAUDE.md for future phases
+
 ### Medication UX
 
 - [ ] **MEDX-01**: Prescription-first views — compound identity as primary, not brand names
@@ -114,6 +123,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SECU-01 | Phase 5 | Complete |
 | SECU-02 | Phase 5 | Complete |
 | SECU-03 | Phase 5 | Complete |
+| DSGN-01 | Phase 5.1 | Pending |
+| DSGN-02 | Phase 5.1 | Pending |
+| DSGN-03 | Phase 5.1 | Pending |
+| DSGN-04 | Phase 5.1 | Pending |
+| DSGN-05 | Phase 5.1 | Pending |
+| DSGN-06 | Phase 5.1 | Pending |
 | MEDX-01 | Phase 6 | Pending |
 | MEDX-02 | Phase 6 | Pending |
 | MEDX-03 | Phase 6 | Pending |
@@ -134,10 +149,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | NOTF-01 | Phase 11 | Pending |
 
 **Coverage:**
-- v1 requirements: 32 total
-- Mapped to phases: 32
-- Unmapped: 0 ✓
+- v1 requirements: 38 total
+- Mapped to phases: 38
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-02*
-*Last updated: 2026-03-02 after roadmap creation — all 32 requirements mapped to phases 1-11*
+*Last updated: 2026-03-10 after Phase 5.1 planning — 6 DSGN requirements added, 38 total requirements mapped*

@@ -118,17 +118,23 @@ Plans:
 ### Phase 5.1: Pencil Design System Onboarding (INSERTED)
 
 **Goal:** Pencil.dev design system is fully onboarded — app design tokens, reusable components, and all key screen designs exist in `design/app.pen` so Phase 6+ UI work references authoritative designs
-**Requirements**: TBD
+**Requirements**: DSGN-01, DSGN-02, DSGN-03, DSGN-04, DSGN-05, DSGN-06
 **Depends on:** Phase 5
 **Success Criteria** (what must be TRUE):
   1. `design/app.pen` contains design variables matching the app's Tailwind color tokens (water, salt, weight, BP, eating, urination, defecation themes)
   2. Reusable Pencil components exist for: intake card, health metric card, tracking card, app header, quick-nav footer
   3. Complete screen designs exist for: Intake Dashboard, Medications, Analytics, Settings
   4. A documented Pencil workflow exists so future phases can generate and reference designs
-**Plans:** 0 plans
+**Plans:** 7 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 05.1 to break down)
+- [ ] 05.1-01-PLAN.md — Design tokens: CSS custom properties + Tailwind config + Pencil variables with light/dark themes (DSGN-01)
+- [ ] 05.1-02-PLAN.md — Pencil primitive components: all 17 shadcn mirrors (DSGN-02)
+- [ ] 05.1-03-PLAN.md — Pencil domain components + app chrome (DSGN-03)
+- [ ] 05.1-04-PLAN.md — Screen designs: Dashboard + Settings (DSGN-04)
+- [ ] 05.1-05-PLAN.md — Screen designs: Medications list, detail, wizard, dose logging, inventory (DSGN-04)
+- [ ] 05.1-06-PLAN.md — Screen designs: Analytics with all 4 tab variants (DSGN-04)
+- [ ] 05.1-07-PLAN.md — Overlay dialog/drawer designs + CLAUDE.md workflow documentation (DSGN-05, DSGN-06)
 
 ### Phase 6: Medication UX Core
 **Goal**: A user can manage their full medication workflow — view prescriptions by compound, log doses, track retroactive doses, and see clearly which regional brand stock is being used
@@ -227,7 +233,7 @@ Note: Phase 5 (Security) depends only on Phase 2 and can begin in parallel with 
 | 3. Service Layer Rebuild | 5/5 | Complete | - |
 | 4. Analytics Service | 8/8 | Complete |  |
 | 5. Security Hardening | 3/3 | Complete   | 2026-03-10 |
-| 5.1 Pencil Design System Onboarding | 0/TBD | Not started | - |
+| 5.1 Pencil Design System Onboarding | 0/7 | Not started | - |
 | 6. Medication UX Core | 0/TBD | Not started | - |
 | 7. Schedule Visualization | 0/TBD | Not started | - |
 | 8. Drug Interactions | 0/TBD | Not started | - |
