@@ -27,9 +27,18 @@ export function SubstanceRow({ type }: SubstanceRowProps) {
   const [isAdding, setIsAdding] = useState(false);
   const addSubstance = useAddSubstance();
   const dayStartHour = useSettingsStore((s) => s.dayStartHour);
+  const substanceConfig = useSettingsStore((s) => s.substanceConfig);
 
   const theme = type === "caffeine" ? CARD_THEMES.caffeine : CARD_THEMES.alcohol;
   const Icon = theme.icon;
+
+  // Get known types (excluding "Other") for inline buttons
+  const knownTypes = useMemo(() => {
+    const types = type === "caffeine"
+      ? substanceConfig.caffeine.types
+      : substanceConfig.alcohol.types;
+    return types.filter((t) => t.name !== "Other");
+  }, [type, substanceConfig]);
 
   // Get today's records using day start boundary
   const dayStart = useMemo(() => getDayStartTimestamp(dayStartHour), [dayStartHour]);
@@ -80,10 +89,34 @@ export function SubstanceRow({ type }: SubstanceRowProps) {
     }
   };
 
+  const handleQuickAdd = (typeName: string) => {
+    if (type === "caffeine") {
+      const found = substanceConfig.caffeine.types.find((t) => t.name === typeName);
+      if (found) {
+        handleSelect({
+          name: found.name,
+          amountMg: found.defaultMg,
+          volumeMl: found.defaultVolumeMl,
+          description: found.name,
+        });
+      }
+    } else {
+      const found = substanceConfig.alcohol.types.find((t) => t.name === typeName);
+      if (found) {
+        handleSelect({
+          name: found.name,
+          amountStandardDrinks: found.defaultDrinks,
+          volumeMl: found.defaultVolumeMl,
+          description: found.name,
+        });
+      }
+    }
+  };
+
   const totalDisplay =
     type === "caffeine"
       ? `${Math.round(todayTotal)} mg`
-      : `${todayTotal.toFixed(1)} drinks`;
+      : `${todayTotal.toFixed(1)} std drinks`;
 
   return (
     <>
@@ -109,20 +142,33 @@ export function SubstanceRow({ type }: SubstanceRowProps) {
             </div>
           </div>
 
-          <Button
-            onClick={() => setPickerOpen(true)}
-            disabled={isAdding}
-            className={cn("w-full h-11", theme.buttonBg)}
-          >
-            {isAdding ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <>
-                <PlusCircle className="w-4 h-4 mr-2" />
-                Add {type === "caffeine" ? "Caffeine" : "Alcohol"}
-              </>
-            )}
-          </Button>
+          {/* Inline quick-add buttons for known types + Other */}
+          <div className="flex flex-wrap gap-2">
+            {knownTypes.map((t) => (
+              <Button
+                key={t.name}
+                variant="outline"
+                size="sm"
+                disabled={isAdding}
+                onClick={() => handleQuickAdd(t.name)}
+              >
+                {isAdding ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  t.name
+                )}
+              </Button>
+            ))}
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={isAdding}
+              onClick={() => setPickerOpen(true)}
+            >
+              <PlusCircle className="w-4 h-4 mr-1" />
+              Other
+            </Button>
+          </div>
 
           {/* Recent entries */}
           {recentEntries.length > 0 && (
@@ -139,7 +185,7 @@ export function SubstanceRow({ type }: SubstanceRowProps) {
                   <span className="font-medium ml-2 shrink-0">
                     {type === "caffeine"
                       ? `${entry.amountMg ?? 0}mg`
-                      : `${entry.amountStandardDrinks ?? 0} dr`}
+                      : `${(entry.amountStandardDrinks ?? 0).toFixed(1)} std`}
                   </span>
                 </div>
               ))}
