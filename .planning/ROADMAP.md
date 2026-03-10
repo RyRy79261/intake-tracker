@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: TypeScript and Service Contracts** - Strict TypeScript flags enabled with all latent errors fixed; clean service boundary rules enforced
 - [x] **Phase 3: Service Layer Rebuild** - Medication services rebuilt with transactional atomicity, timezone-aware scheduling, and fractional dose math
 - [x] **Phase 4: Analytics Service** - Cross-domain analytics service with substance tracking, correlation analysis, and analytics page replacing /history
-- [ ] **Phase 5: Security Hardening** - API keys server-side only, encryption foundations for data at rest, auth patterns ready for cloud sync
+- [x] **Phase 5: Security Hardening** - API keys server-side only, encryption foundations for data at rest, auth patterns ready for cloud sync (completed 2026-03-10)
 - [ ] **Phase 6: Medication UX Core** - Compound-first prescription views, dose logging with stock depletion, retroactive logging, multi-region inventory
 - [ ] **Phase 7: Schedule Visualization** - Maintenance vs titration phase display with named phases and transition clarity
 - [ ] **Phase 8: Drug Interactions** - AI-powered compound interaction data stored and surfaced per prescription with ad-hoc lookup
@@ -210,7 +210,7 @@ Note: Phase 5 (Security) depends only on Phase 2 and can begin in parallel with 
 | 2. TypeScript and Service Contracts | 4/4 | Complete | - |
 | 3. Service Layer Rebuild | 5/5 | Complete | - |
 | 4. Analytics Service | 8/8 | Complete |  |
-| 5. Security Hardening | 0/3 | Not started | - |
+| 5. Security Hardening | 3/3 | Complete   | 2026-03-10 |
 | 6. Medication UX Core | 0/TBD | Not started | - |
 | 7. Schedule Visualization | 0/TBD | Not started | - |
 | 8. Drug Interactions | 0/TBD | Not started | - |
