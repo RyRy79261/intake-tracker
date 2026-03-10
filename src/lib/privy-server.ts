@@ -71,9 +71,13 @@ function isDevFallbackAllowed(): boolean {
 export async function verifyAndCheckWhitelist(
   authToken: string | null
 ): Promise<VerificationResult> {
-  // Local agent mode bypass
+  // Local agent mode bypass — never allowed in production
   if (process.env.NEXT_PUBLIC_LOCAL_AGENT_MODE === "true") {
-    return { success: true, userId: "local-agent-dev" };
+    if (process.env.NODE_ENV === "production") {
+      console.warn("LOCAL_AGENT_MODE is set in production -- ignoring for security");
+    } else {
+      return { success: true, userId: "local-agent-dev" };
+    }
   }
 
   if (!authToken) {

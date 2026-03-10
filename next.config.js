@@ -12,6 +12,7 @@ const securityHeaders = [
     key: 'Content-Security-Policy',
     value: [
       "default-src 'self'",
+      // 'unsafe-eval' is required for Next.js dev mode; could be conditionally removed for production in future
       "script-src 'self' 'unsafe-eval' 'unsafe-inline'", // Required for Next.js
       "style-src 'self' 'unsafe-inline'", // Required for Tailwind
       "img-src 'self' data: blob:",
@@ -38,6 +39,10 @@ const securityHeaders = [
   {
     key: 'Permissions-Policy',
     value: 'camera=(), microphone=(self), geolocation=()'
+  },
+  {
+    key: 'Strict-Transport-Security',
+    value: 'max-age=63072000; includeSubDomains; preload'
   }
 ];
 

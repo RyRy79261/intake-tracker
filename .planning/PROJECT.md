@@ -41,7 +41,7 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 
 ### Out of Scope
 
-- Cloud sync (NanoDB) — future milestone, but data model should be sync-friendly
+- Cloud sync (NeonDB (Postgres)) — future milestone, but data model should be sync-friendly
 - AI-powered data querying / natural language questions — future milestone, but schema should be queryable
 - Doctor-ready report generation / PDF export — future milestone
 - Self-tracking dashboards beyond current Recharts history — future milestone
@@ -64,7 +64,7 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 - **Offline-first**: All data in IndexedDB, no server-side database for user data
 - **Package manager**: pnpm (enforced)
 - **Mobile-focused**: max-w-lg container, touch-friendly UI
-- **Sync-friendly schema**: Data model decisions must not block future NanoDB cloud sync
+- **Sync-friendly schema**: Data model decisions must not block future NeonDB (Postgres) cloud sync
 - **Queryable schema**: Indexing and relationships must support future cross-domain AI analysis
 
 ## Key Decisions
@@ -73,7 +73,7 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 |----------|-----------|---------|
 | Prescription → Schedule → Inventory model | Maps to user's mental model: medical info vs treatment plan vs physical stock. Handles multi-region brands and pill cutting math. | — Pending |
 | Full app overhaul vs medication-only | Existing code quality concerns across the board; future cloud sync and AI features require solid foundations everywhere | — Pending |
-| IndexedDB via Dexie.js for all data | Established pattern, offline-first requirement, sync-friendly with NanoDB later | — Pending |
+| IndexedDB via Dexie.js for all data | Established pattern, offline-first requirement, sync-friendly with NeonDB (Postgres) later | — Pending |
 | Security defense-in-depth | Data at rest protection, API key handling, auth patterns — build for cloud sync from start so it's not a retrofit | — Pending |
 
 ---
