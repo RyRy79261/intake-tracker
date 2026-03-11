@@ -1,7 +1,8 @@
 # Phase 6: Medication UX Core - Context
 
 **Gathered:** 2026-03-11
-**Status:** Ready for planning
+**Updated:** 2026-03-11 (post-UAT revision)
+**Status:** In progress — plans 01-04 executed, gap closure needed
 
 <domain>
 ## Phase Boundary
@@ -13,14 +14,54 @@ Full medication workflow UI — compound-first prescription views, dose logging 
 <decisions>
 ## Implementation Decisions
 
-### Compound-First Views
-- **Merge prescriptions + medications tabs into one "Medications" list** — single list of compounds, no separate tabs for prescription info vs inventory items
-- **Compound card shows**: compound name (heading), prescribed dose (mg), active brand name, active stock level, next dose status
-- **Inline expand on tap** — card expands in-place to show all inventory items, schedule info, last 3-5 dose history, edit/history actions. No drawer overlay
-- **Region is secondary info** — not shown at list level, only visible in detail/expanded view. Region notes where a brand is from but isn't critical at a glance
-- **3-tab layout**: Schedule (today's dashboard), Medications (merged compound list), Settings (med preferences). Status tab absorbed into Schedule
-- **Add medication**: FAB on Medications tab + "Add first medication" prompt in empty schedule. Keep existing add-medication wizard as-is, updated for compound-first model
-- **Brand switching**: Dedicated "Switch active brand" action in expanded card with picker (not simple tap-to-activate)
+### Data Model Hierarchy
+- **Prescription is the root entity** — a doctor's order: compound, dose amount, schedule, titration phases
+- **Medication fulfills a prescription** — physical product: brand, region, pill strength, inventory/stock
+- **A prescription can exist without medications** (prescribed but not yet purchased)
+- **A medication gets assigned to a prescription** — multiple medications can sit under one prescription, only one active (has stock)
+- **When adding a medication**, user can also create the prescription inline if one doesn't exist for that compound
+- **A prescription can also be created standalone** (without a medication)
+- **Physical pill contents determine pills-per-dose** — e.g., 6.25mg dose with 3.125mg pills = 2 pills per dose
+
+### 4-Tab Layout
+- **4 tabs**: Schedule, Medications, Prescriptions, Settings
+- **Schedule tab**: today's dose dashboard (unchanged from plans 01-04)
+- **Medications tab**: compound/brand inventory, stock, refills, which prescription each medication is assigned to
+- **Prescriptions tab**: manage prescriptions, current dosage config, titration phases, simplified schedules
+- **Settings tab**: med preferences (unchanged)
+
+### Prescriptions Tab
+- **List of active prescriptions** — each showing compound name, current dose, current schedule, titration status
+- **Titration phase management** — see current dosage, set up planned future phases (increase/decrease dose or frequency)
+- **Titration is planned but activated ad-hoc** — user creates a phase config in advance, then manually activates when ready
+- **Titration examples**: Spironolactone 3.125mg → 6.25mg per dose, OR same dose but twice daily instead of once
+- **Notes/scratchpad per prescription** — add notes without editing prescription details (doctor instructions, side effect observations, etc.)
+- **Schedule display is simplified** — flat list of times, same every day. Optional day selection for once-weekly drugs
+- **"As needed" schedule type** — set a reminder time but expect frequent skips (e.g., Furosemide)
+
+### Medications Tab (revised)
+- **Compound card shows**: compound name (heading), active brand name, active stock level, region
+- **Inline expand on tap** — shows all inventory items (brands/regions), refill history, edit stock
+- **"Add another medication" button** below the medication list (in addition to FAB)
+- **Medication assigned to a prescription** on add — but only active if no other stocked medication fulfills that prescription
+- **Region is secondary info** — not shown at list level, only in expanded view
+- **Brand switching**: Dedicated "Switch active brand" action in expanded card
+
+### Schedule Simplification
+- **No "Schedule 1, Schedule 2" naming** — just a flat list of time entries
+- **Always requires at least 1 schedule entry** per prescription
+- **Same times every day** by default — optional day-of-week selection for weekly drugs
+- **"As needed" type** — single reminder time, no strict schedule
+
+### Add Medication Wizard Fixes
+- **AI auto-select dosage strength** — if user searches "Eliquis 5mg", auto-select the 5mg option from AI results
+- **Don't force prescription creation** — adding a medication assigns it to an existing prescription, or creates one inline if needed
+
+### Bug Fixes (from UAT)
+- **Schedule not updating** after creating a medicine — cache invalidation bug, schedule tab must refresh
+- **Inventory button doesn't navigate** — clicking inventory should open the inventory/expanded view
+- **Expanded card shows wrong content** — should show actual dosage amounts, not "current phase" label
+- **Can't edit refill entries** — need ability to correct inventory transaction mistakes
 
 ### Dose Logging Flow
 - **Take = immediate log at current time** — tap Take, dose logged instantly, 5-second auto-dismiss toast with Undo button
@@ -114,7 +155,9 @@ Full medication workflow UI — compound-first prescription views, dose logging 
 <deferred>
 ## Deferred Ideas
 
-None — discussion stayed within phase scope
+- Pill icon AI integration (fetching shape/color from AI during add) — nice-to-have, manual selection is MVP
+- Adherence streaks / gamification — explicitly rejected
+- Status dots on WeekDaySelector — explicitly rejected
 
 </deferred>
 
