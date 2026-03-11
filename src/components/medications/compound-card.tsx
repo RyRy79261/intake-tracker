@@ -107,6 +107,11 @@ export function CompoundCard({ prescription }: CompoundCardProps) {
             <h3 className="font-semibold text-sm truncate">
               {prescription.genericName}
             </h3>
+            {prescription.indication && (
+              <p className="text-[11px] text-muted-foreground truncate">
+                {prescription.indication}
+              </p>
+            )}
             <div className="flex items-center gap-2">
               {dosageMg !== undefined && (
                 <span className="text-xs text-muted-foreground">
@@ -116,6 +121,11 @@ export function CompoundCard({ prescription }: CompoundCardProps) {
               {activeInventory && (
                 <span className="text-xs text-muted-foreground">
                   {activeInventory.brandName}
+                </span>
+              )}
+              {inventoryItems.length > 1 && (
+                <span className="text-xs text-muted-foreground">
+                  {inventoryItems.length} medications
                 </span>
               )}
             </div>
