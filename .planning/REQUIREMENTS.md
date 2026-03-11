@@ -40,7 +40,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **MEDX-04**: Multi-region inventory grouping — SA vs Germany brands clearly distinguished per compound
 - [x] **MEDX-05**: Fractional pill display — 0.5 tablet, 0.25 tablet shown clearly in UI
 - [x] **MEDX-06**: Today's medication dashboard — immediate view of due/taken/pending doses for the day
-- [ ] **MEDX-07**: Schedule visualization — maintenance vs titration phases displayed clearly
+- [x] **MEDX-07**: Schedule visualization — maintenance vs titration phases displayed clearly
 
 ### Interactions
 
@@ -135,7 +135,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MEDX-04 | Phase 6 | Complete |
 | MEDX-05 | Phase 6 | Complete |
 | MEDX-06 | Phase 6 | Complete |
-| MEDX-07 | Phase 7 | Pending |
+| MEDX-07 | Phase 7 | Complete |
 | INTR-01 | Phase 8 | Pending |
 | INTR-02 | Phase 8 | Pending |
 | INTR-03 | Phase 8 | Pending |
