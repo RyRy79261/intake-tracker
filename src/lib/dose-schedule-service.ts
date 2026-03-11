@@ -162,6 +162,12 @@ export async function getDailyDoseSchedule(
     const prescription = prescriptionMap.get(phase.prescriptionId);
     if (!prescription) continue;
 
+    // Don't show doses for dates before the prescription was created
+    const createdDate = prescription.createdAt
+      ? new Date(prescription.createdAt).toISOString().split("T")[0]
+      : undefined;
+    if (createdDate && dateStr < createdDate) continue;
+
     const logKey = `${prescription.id}|${phase.id}|${schedule.id}`;
     const existingLog = logMap.get(logKey);
 

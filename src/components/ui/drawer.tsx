@@ -100,7 +100,7 @@ const DrawerContent = React.forwardRef<
       <DrawerPrimitive.Content
         ref={ref}
         className={cn(
-          "fixed z-50 bg-background",
+          "fixed z-50 bg-background outline-none",
           directionStyles[direction],
           className
         )}

@@ -4,7 +4,7 @@ import { useState, useCallback } from "react";
 import { AuthGuard } from "@/components/auth-guard";
 import { AppHeader } from "@/components/app-header";
 import { WeekDaySelector } from "@/components/medications/week-day-selector";
-import { MedFooter, type MedTab } from "@/components/medications/med-footer";
+import { MedTabBar, type MedTab } from "@/components/medications/med-footer";
 import { ScheduleView } from "@/components/medications/schedule-view";
 import { MedicationSettingsView } from "@/components/medications/medication-settings-view";
 import { DoseDetailDialog } from "@/components/medications/dose-detail-dialog";
@@ -51,6 +51,8 @@ function MedicationsContent() {
         transitionDuration={barTransitionSec}
       />
 
+      <MedTabBar activeTab={activeTab} onTabChange={setActiveTab} />
+
       {activeTab === "schedule" && (
         <>
           <WeekDaySelector selectedDate={selectedDate} onSelectDate={setSelectedDate} />
@@ -72,12 +74,6 @@ function MedicationsContent() {
 
       {activeTab === "settings" && <MedicationSettingsView />}
 
-      <MedFooter
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        hidden={isHidden}
-        transitionDuration={barTransitionSec}
-      />
 
       <DoseDetailDialog
         open={doseDetailOpen}

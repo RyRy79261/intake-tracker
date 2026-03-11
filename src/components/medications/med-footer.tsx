@@ -1,6 +1,5 @@
 "use client";
 
-import { motion } from "motion/react";
 import { CalendarDays, Pill, ClipboardList, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";
@@ -10,56 +9,39 @@ export type MedTab = "schedule" | "medications" | "prescriptions" | "settings";
 const TABS: { id: MedTab; icon: LucideIcon; label: string }[] = [
   { id: "schedule", icon: CalendarDays, label: "Schedule" },
   { id: "medications", icon: Pill, label: "Medications" },
-  { id: "prescriptions", icon: ClipboardList, label: "Rx" },
+  { id: "prescriptions", icon: ClipboardList, label: "Prescriptions" },
   { id: "settings", icon: Settings, label: "Settings" },
 ];
 
-interface MedFooterProps {
+interface MedTabBarProps {
   activeTab: MedTab;
   onTabChange: (tab: MedTab) => void;
-  hidden: boolean;
-  transitionDuration?: number;
 }
 
-export function MedFooter({ activeTab, onTabChange, hidden, transitionDuration = 0.2 }: MedFooterProps) {
+export function MedTabBar({ activeTab, onTabChange }: MedTabBarProps) {
   return (
-    <motion.footer
-      className="fixed bottom-0 left-0 right-0 z-40 border-t bg-gradient-to-t from-slate-50 to-slate-50/95 dark:from-slate-950 dark:to-slate-950/95 backdrop-blur-sm"
-      style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
-      animate={{ y: hidden ? "100%" : 0 }}
-      transition={{ duration: transitionDuration, ease: "easeInOut" }}
-    >
-      <div className="flex items-center justify-around px-4 py-2">
-        {TABS.map((tab) => {
-          const isActive = tab.id === activeTab;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => onTabChange(tab.id)}
-              className={cn(
-                "flex flex-col items-center gap-1 px-4 py-1.5 rounded-xl transition-colors",
-                "hover:bg-muted/80 active:scale-95",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              )}
-            >
-              <tab.icon
-                className={cn(
-                  "w-5 h-5 transition-colors",
-                  isActive ? "text-teal-600 dark:text-teal-400" : "text-muted-foreground"
-                )}
-              />
-              <span
-                className={cn(
-                  "text-[10px] font-medium transition-colors",
-                  isActive ? "text-teal-600 dark:text-teal-400" : "text-muted-foreground"
-                )}
-              >
-                {tab.label}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-    </motion.footer>
+    <div className="flex items-stretch border-b bg-background/95 backdrop-blur-sm -mx-4 mb-3">
+      {TABS.map((tab) => {
+        const isActive = tab.id === activeTab;
+        return (
+          <button
+            key={tab.id}
+            onClick={() => onTabChange(tab.id)}
+            className={cn(
+              "flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors relative",
+              "hover:text-foreground",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+              isActive ? "text-teal-600 dark:text-teal-400" : "text-muted-foreground"
+            )}
+          >
+            <tab.icon className="w-4 h-4" />
+            <span>{tab.label}</span>
+            {isActive && (
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-teal-600 dark:bg-teal-400" />
+            )}
+          </button>
+        );
+      })}
+    </div>
   );
 }
