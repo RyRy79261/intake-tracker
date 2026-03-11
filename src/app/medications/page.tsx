@@ -10,7 +10,7 @@ import { MedicationSettingsView } from "@/components/medications/medication-sett
 import { DoseDetailDialog } from "@/components/medications/dose-detail-dialog";
 import { AddMedicationWizard } from "@/components/medications/add-medication-wizard";
 import { CompoundList } from "@/components/medications/compound-list";
-import { ClipboardList } from "lucide-react";
+import { PrescriptionsView } from "@/components/medications/prescriptions-view";
 import { useScrollHide } from "@/hooks/use-scroll-hide";
 import { useSettings } from "@/hooks/use-settings";
 import type { DoseSlot } from "@/hooks/use-medication-queries";
@@ -67,10 +67,7 @@ function MedicationsContent() {
       )}
 
       {activeTab === "prescriptions" && (
-        <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
-          <ClipboardList className="w-16 h-16 text-muted-foreground/40 mb-4" />
-          <p className="text-muted-foreground text-sm">Prescriptions coming soon</p>
-        </div>
+        <PrescriptionsView onAddMed={handleAddMed} />
       )}
 
       {activeTab === "settings" && <MedicationSettingsView />}
