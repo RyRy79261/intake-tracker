@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 ## Current Position
 
 Phase: 6 of 11 (Medication UX Core)
-Plan: 2 of 4
+Plan: 3 of 4
 Status: In progress — executing plans
-Last activity: 2026-03-11 — Completed 06-02 expanded compound card and brand switch picker
+Last activity: 2026-03-11 — Completed 06-03 schedule dashboard with inline Take/Skip
 
 Progress: [██████████] 100%
 
@@ -66,6 +66,7 @@ Progress: [██████████] 100%
 | Phase 05 P02 | 7min | 2 tasks | 3 files |
 | Phase 05 P03 | 11min | 2 tasks | 10 files |
 | Phase 06 P01 | 8min | 2 tasks | 7 files |
+| Phase 06 P03 | 55min | 2 tasks | 8 files |
 | Phase 06 P02 | 51min | 2 tasks | 3 files |
 
 ## Accumulated Context
@@ -145,6 +146,9 @@ Recent decisions affecting current work:
 - [06-01]: MedTab reduced from 5 to 3 values (schedule, medications, settings) -- status and prescriptions tabs removed
 - [06-01]: CompoundCard uses useDailyDoseSchedule to derive next dose status per prescription
 - [06-01]: Stock displayed as pill count (formatPillCount for fractional, plain number for whole)
+- [06-03]: Mark All handled inline via immediate+undo pattern instead of MarkAllModal dialog
+- [06-03]: DoseSlot converted to DoseLogWithDetails for DoseDetailDialog backward compatibility
+- [06-03]: compound-card-expanded fixed: foodInstruction before/after (not with_food/without_food), DoseSlotStatus has no rescheduled
 - [06-02]: No region field on InventoryItem -- brandName and strength differentiate items
 - [06-02]: BrandSwitchPicker uses Dialog (not Drawer) for focused selection
 - [06-02]: Inline expand uses AnimatePresence height 0->auto with stopPropagation on nested actions
@@ -171,7 +175,7 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-11T14:39:00Z
-Stopped at: Completed 06-02-PLAN.md
+Last session: 2026-03-11T14:43:00Z
+Stopped at: Completed 06-03-PLAN.md
 Resume file:
-.planning/phases/06-medication-ux-core/06-02-SUMMARY.md
+.planning/phases/06-medication-ux-core/06-03-SUMMARY.md
