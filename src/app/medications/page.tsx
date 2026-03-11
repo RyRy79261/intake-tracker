@@ -12,7 +12,7 @@ import { AddMedicationWizard } from "@/components/medications/add-medication-wiz
 import { CompoundList } from "@/components/medications/compound-list";
 import { useScrollHide } from "@/hooks/use-scroll-hide";
 import { useSettings } from "@/hooks/use-settings";
-import type { DoseSlot, DoseLogWithDetails } from "@/hooks/use-medication-queries";
+import type { DoseSlot } from "@/hooks/use-medication-queries";
 import { useMedicationNotifications } from "@/hooks/use-medication-notifications";
 
 function MedicationsContent() {
@@ -21,7 +21,7 @@ function MedicationsContent() {
   const [wizardOpen, setWizardOpen] = useState(false);
 
   const [doseDetailOpen, setDoseDetailOpen] = useState(false);
-  const [selectedEntry, setSelectedEntry] = useState<DoseLogWithDetails | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<DoseSlot | null>(null);
 
   useMedicationNotifications();
 
@@ -32,20 +32,11 @@ function MedicationsContent() {
     autoHideDelayMs: settings.autoHideDelayMs,
   });
 
-  const dateStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`;
+  const isToday = selectedDate.toDateString() === new Date().toDateString();
 
   const handleDoseClick = useCallback((slot: DoseSlot) => {
-    // Convert DoseSlot to DoseLogWithDetails for DoseDetailDialog compatibility
-    if (slot.existingLog) {
-      setSelectedEntry({
-        log: slot.existingLog,
-        prescription: slot.prescription,
-        phase: slot.phase,
-        schedule: slot.schedule,
-        ...(slot.inventory !== undefined && { inventory: slot.inventory }),
-      });
-      setDoseDetailOpen(true);
-    }
+    setSelectedSlot(slot);
+    setDoseDetailOpen(true);
   }, []);
 
   const handleAddMed = useCallback(() => {
@@ -86,8 +77,8 @@ function MedicationsContent() {
       <DoseDetailDialog
         open={doseDetailOpen}
         onOpenChange={setDoseDetailOpen}
-        entry={selectedEntry}
-        date={dateStr}
+        slot={selectedSlot}
+        isToday={isToday}
       />
 
       <AddMedicationWizard
