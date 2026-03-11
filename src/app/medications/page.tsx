@@ -8,13 +8,11 @@ import { MedFooter, type MedTab } from "@/components/medications/med-footer";
 import { ScheduleView } from "@/components/medications/schedule-view";
 import { MedicationSettingsView } from "@/components/medications/medication-settings-view";
 import { DoseDetailDialog } from "@/components/medications/dose-detail-dialog";
-import { MarkAllModal } from "@/components/medications/mark-all-modal";
 import { AddMedicationWizard } from "@/components/medications/add-medication-wizard";
 import { CompoundList } from "@/components/medications/compound-list";
 import { useScrollHide } from "@/hooks/use-scroll-hide";
 import { useSettings } from "@/hooks/use-settings";
-import type { DoseLog } from "@/lib/db";
-import type { DoseLogWithDetails } from "@/hooks/use-medication-queries";
+import type { DoseSlot, DoseLogWithDetails } from "@/hooks/use-medication-queries";
 import { useMedicationNotifications } from "@/hooks/use-medication-notifications";
 
 function MedicationsContent() {
@@ -24,11 +22,6 @@ function MedicationsContent() {
 
   const [doseDetailOpen, setDoseDetailOpen] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<DoseLogWithDetails | null>(null);
-  const [selectedDoseLog, setSelectedDoseLog] = useState<DoseLog | undefined>(undefined);
-
-  const [markAllOpen, setMarkAllOpen] = useState(false);
-  const [markAllTime, setMarkAllTime] = useState("");
-  const [markAllEntries, setMarkAllEntries] = useState<DoseLogWithDetails[]>([]);
 
   useMedicationNotifications();
 
@@ -41,22 +34,23 @@ function MedicationsContent() {
 
   const dateStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`;
 
-  const handleDoseClick = useCallback((entry: DoseLogWithDetails) => {
-    setSelectedEntry(entry);
-    setSelectedDoseLog(entry.log);
-    setDoseDetailOpen(true);
-  }, []);
-
-  const handleMarkAll = useCallback((time: string, entries: DoseLogWithDetails[]) => {
-    setMarkAllTime(time);
-    setMarkAllEntries(entries);
-    setMarkAllOpen(true);
+  const handleDoseClick = useCallback((slot: DoseSlot) => {
+    // Convert DoseSlot to DoseLogWithDetails for DoseDetailDialog compatibility
+    if (slot.existingLog) {
+      setSelectedEntry({
+        log: slot.existingLog,
+        prescription: slot.prescription,
+        phase: slot.phase,
+        schedule: slot.schedule,
+        ...(slot.inventory !== undefined && { inventory: slot.inventory }),
+      });
+      setDoseDetailOpen(true);
+    }
   }, []);
 
   const handleAddMed = useCallback(() => {
     setWizardOpen(true);
   }, []);
-
 
   return (
     <>
@@ -71,7 +65,6 @@ function MedicationsContent() {
           <ScheduleView
             selectedDate={selectedDate}
             onDoseClick={handleDoseClick}
-            onMarkAll={handleMarkAll}
             onAddMed={handleAddMed}
           />
         </>
@@ -94,14 +87,6 @@ function MedicationsContent() {
         open={doseDetailOpen}
         onOpenChange={setDoseDetailOpen}
         entry={selectedEntry}
-        date={dateStr}
-      />
-
-      <MarkAllModal
-        open={markAllOpen}
-        onOpenChange={setMarkAllOpen}
-        time={markAllTime}
-        entries={markAllEntries}
         date={dateStr}
       />
 
