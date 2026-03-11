@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: In progress — executing plans
-stopped_at: Completed 06-02-PLAN.md
-last_updated: "2026-03-11T14:39:00Z"
-last_activity: 2026-03-11 — Completed 06-02 expanded compound card and brand switch picker
+stopped_at: Completed 06-05-PLAN.md
+last_updated: "2026-03-11T19:16:00Z"
+last_activity: 2026-03-11 — Completed 06-05 gap closure (boolean fix, dosage display, 4th tab, editable refills)
 progress:
   total_phases: 11
   completed_phases: 5
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 ## Current Position
 
 Phase: 6 of 11 (Medication UX Core)
-Plan: 3 of 4
+Plan: 6 of 7
 Status: In progress — executing plans
-Last activity: 2026-03-11 — Completed 06-03 schedule dashboard with inline Take/Skip
+Last activity: 2026-03-11 — Completed 06-05 gap closure (boolean fix, dosage display, 4th tab, editable refills)
 
 Progress: [██████████] 100%
 
@@ -68,6 +68,7 @@ Progress: [██████████] 100%
 | Phase 06 P01 | 8min | 2 tasks | 7 files |
 | Phase 06 P03 | 55min | 2 tasks | 8 files |
 | Phase 06 P02 | 51min | 2 tasks | 3 files |
+| Phase 06 P05 | 7min | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -152,6 +153,9 @@ Recent decisions affecting current work:
 - [06-02]: No region field on InventoryItem -- brandName and strength differentiate items
 - [06-02]: BrandSwitchPicker uses Dialog (not Drawer) for focused selection
 - [06-02]: Inline expand uses AnimatePresence height 0->auto with stopPropagation on nested actions
+- [06-05]: Dexie boolean fields queried via .toArray().filter() -- .where().equals(1) does not match boolean true
+- [06-05]: Transaction edit/delete recalculates stock by summing all non-deleted transactions
+- [06-05]: Conditional spread for optional note field (exactOptionalPropertyTypes compliance)
 
 ### Pending Todos
 
@@ -175,7 +179,7 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-11T14:43:00Z
-Stopped at: Completed 06-03-PLAN.md
+Last session: 2026-03-11T19:16:00Z
+Stopped at: Completed 06-05-PLAN.md
 Resume file:
-.planning/phases/06-medication-ux-core/06-03-SUMMARY.md
+.planning/phases/06-medication-ux-core/06-05-SUMMARY.md
