@@ -6,18 +6,11 @@ This milestone is an engineering overhaul of an existing health tracking PWA. Th
 
 ## Phases
 
-**Phase Numbering:**
-- Integer phases (1, 2, 3): Planned milestone work
-- Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
-
-Decimal phases appear between their surrounding integers in numeric order.
-
 - [x] **Phase 1: Schema Foundation** - Dexie v10 migration with compound indexes, event-sourced inventory, sync-ready timestamps, and test infrastructure
 - [x] **Phase 2: TypeScript and Service Contracts** - Strict TypeScript flags enabled with all latent errors fixed; clean service boundary rules enforced
 - [x] **Phase 3: Service Layer Rebuild** - Medication services rebuilt with transactional atomicity, timezone-aware scheduling, and fractional dose math
 - [x] **Phase 4: Analytics Service** - Cross-domain analytics service with substance tracking, correlation analysis, and analytics page replacing /history
 - [x] **Phase 5: Security Hardening** - API keys server-side only, encryption foundations for data at rest, auth patterns ready for cloud sync (completed 2026-03-10)
-- [ ] **Phase 5.1: Pencil Design System Onboarding** - Import design system components, establish app design tokens, create reusable app components, design all key screens for Phase 6+ UI reference (INSERTED)
 - [ ] **Phase 6: Medication UX Core** - Compound-first prescription views, dose logging with stock depletion, retroactive logging, multi-region inventory
 - [ ] **Phase 7: Schedule Visualization** - Maintenance vs titration phase display with named phases and transition clarity
 - [ ] **Phase 8: Drug Interactions** - AI-powered compound interaction data stored and surfaced per prescription with ad-hoc lookup
@@ -115,27 +108,6 @@ Plans:
 - [ ] 05-02-PLAN.md — Encryption foundations: useEncryptedField hook, encrypted backup, SECURITY.md (SECU-02)
 - [ ] 05-03-PLAN.md — API route auth migration, bundle security scan, PII hardening, CSP refinement (SECU-01, SECU-03)
 
-### Phase 5.1: Pencil Design System Onboarding (INSERTED)
-
-**Goal:** Pencil.dev design system is fully onboarded — app design tokens, reusable components, and all key screen designs exist in `design/app.pen` so Phase 6+ UI work references authoritative designs
-**Requirements**: DSGN-01, DSGN-02, DSGN-03, DSGN-04, DSGN-05, DSGN-06
-**Depends on:** Phase 5
-**Success Criteria** (what must be TRUE):
-  1. `design/app.pen` contains design variables matching the app's Tailwind color tokens (water, salt, weight, BP, eating, urination, defecation themes)
-  2. Reusable Pencil components exist for: intake card, health metric card, tracking card, app header, quick-nav footer
-  3. Complete screen designs exist for: Intake Dashboard, Medications, Analytics, Settings
-  4. A documented Pencil workflow exists so future phases can generate and reference designs
-**Plans:** 7 plans
-
-Plans:
-- [ ] 05.1-01-PLAN.md — Design tokens: CSS custom properties + Tailwind config + Pencil variables with light/dark themes (DSGN-01)
-- [ ] 05.1-02-PLAN.md — Pencil primitive components: all 17 shadcn mirrors (DSGN-02)
-- [ ] 05.1-03-PLAN.md — Pencil domain components + app chrome (DSGN-03)
-- [ ] 05.1-04-PLAN.md — Screen designs: Dashboard + Settings (DSGN-04)
-- [ ] 05.1-05-PLAN.md — Screen designs: Medications list, detail, wizard, dose logging, inventory (DSGN-04)
-- [ ] 05.1-06-PLAN.md — Screen designs: Analytics with all 4 tab variants (DSGN-04)
-- [ ] 05.1-07-PLAN.md — Overlay dialog/drawer designs + CLAUDE.md workflow documentation (DSGN-05, DSGN-06)
-
 ### Phase 6: Medication UX Core
 **Goal**: A user can manage their full medication workflow — view prescriptions by compound, log doses, track retroactive doses, and see clearly which regional brand stock is being used
 **Depends on**: Phase 3, Phase 5
@@ -222,7 +194,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 5.1 -> 6 -> 7 -> 8 -> 9 -> 10 -> 11
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10 -> 11
 
 Note: Phase 5 (Security) depends only on Phase 2 and can begin in parallel with Phase 3 if needed.
 
@@ -233,7 +205,6 @@ Note: Phase 5 (Security) depends only on Phase 2 and can begin in parallel with 
 | 3. Service Layer Rebuild | 5/5 | Complete | - |
 | 4. Analytics Service | 8/8 | Complete |  |
 | 5. Security Hardening | 3/3 | Complete   | 2026-03-10 |
-| 5.1 Pencil Design System Onboarding | 0/7 | Not started | - |
 | 6. Medication UX Core | 0/TBD | Not started | - |
 | 7. Schedule Visualization | 0/TBD | Not started | - |
 | 8. Drug Interactions | 0/TBD | Not started | - |
