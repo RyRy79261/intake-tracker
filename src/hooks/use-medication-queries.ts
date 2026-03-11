@@ -53,7 +53,7 @@ import type { Prescription, PhaseSchedule, InventoryItem } from "@/lib/db";
 import { unwrap } from "@/lib/service-result";
 
 // Re-export types so components import from hooks, not services
-export type { DoseLogWithDetails, DoseSlot };
+export type { DoseLogWithDetails, DoseSlot, CreatePhaseInput };
 
 // ============================================================================
 // Read Hooks — useLiveQuery (no invalidation needed)

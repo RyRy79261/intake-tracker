@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Cat } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PrescriptionCard } from "@/components/medications/prescription-card";
+import { PrescriptionDetailDrawer } from "@/components/medications/prescription-detail-drawer";
 import { usePrescriptions } from "@/hooks/use-medication-queries";
 import type { Prescription } from "@/lib/db";
 
@@ -51,8 +52,11 @@ export function PrescriptionsView({ onAddMed }: PrescriptionsViewProps) {
         />
       ))}
 
-      {/* Detail drawer will be wired in Task 2 */}
-      {selectedPrescription && detailOpen && null}
+      <PrescriptionDetailDrawer
+        prescription={selectedPrescription}
+        open={detailOpen}
+        onOpenChange={setDetailOpen}
+      />
     </div>
   );
 }
