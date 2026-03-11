@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: In progress — executing plans
-stopped_at: Completed 06-05-PLAN.md
-last_updated: "2026-03-11T19:16:00Z"
-last_activity: 2026-03-11 — Completed 06-05 gap closure (boolean fix, dosage display, 4th tab, editable refills)
+status: executing
+stopped_at: Completed 06-07-PLAN.md
+last_updated: "2026-03-11T19:37:46.201Z"
+last_activity: 2026-03-11 — Completed 06-07 wizard AI auto-select and prescription assignment
 progress:
   total_phases: 11
   completed_phases: 5
-  total_plans: 29
-  completed_plans: 27
-  percent: 93
+  total_plans: 32
+  completed_plans: 31
+  percent: 100
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 ## Current Position
 
 Phase: 6 of 11 (Medication UX Core)
-Plan: 6 of 7
+Plan: 7 of 7
 Status: In progress — executing plans
-Last activity: 2026-03-11 — Completed 06-05 gap closure (boolean fix, dosage display, 4th tab, editable refills)
+Last activity: 2026-03-11 — Completed 06-07 wizard AI auto-select and prescription assignment
 
 Progress: [██████████] 100%
 
@@ -69,6 +69,8 @@ Progress: [██████████] 100%
 | Phase 06 P03 | 55min | 2 tasks | 8 files |
 | Phase 06 P02 | 51min | 2 tasks | 3 files |
 | Phase 06 P05 | 7min | 2 tasks | 10 files |
+| Phase 06 P07 | 14min | 2 tasks | 3 files |
+| Phase 06 P06 | 14min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -156,6 +158,11 @@ Recent decisions affecting current work:
 - [06-05]: Dexie boolean fields queried via .toArray().filter() -- .where().equals(1) does not match boolean true
 - [06-05]: Transaction edit/delete recalculates stock by summing all non-deleted transactions
 - [06-05]: Conditional spread for optional note field (exactOptionalPropertyTypes compliance)
+- [06-07]: Dosage auto-select uses simple regex matching on search query for mg pattern
+- [06-07]: Dynamic wizard steps: filter STEPS array to skip indication when assigning to existing prescription
+- [06-07]: Pre-populate foodInstruction from existing prescription's active phase via usePhasesForPrescription
+- [Phase 06]: Conditional spread for notes field (exactOptionalPropertyTypes compliance)
+- [Phase 06]: CreatePhaseInput re-exported from hooks layer for component boundary compliance
 
 ### Pending Todos
 
@@ -179,7 +186,7 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-11T19:16:00Z
-Stopped at: Completed 06-05-PLAN.md
+Last session: 2026-03-11T19:35:00Z
+Stopped at: Completed 06-07-PLAN.md
 Resume file:
-.planning/phases/06-medication-ux-core/06-05-SUMMARY.md
+.planning/phases/06-medication-ux-core/06-07-SUMMARY.md
