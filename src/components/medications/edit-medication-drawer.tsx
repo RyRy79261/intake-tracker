@@ -486,7 +486,7 @@ function TitrationTab({ prescription }: { prescription: Prescription }) {
             <div className="space-y-1.5">
               <Label className="text-xs">Type</Label>
               <select 
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                className="flex h-9 w-full rounded-md border border-input bg-background text-foreground px-3 py-1 text-sm shadow-sm"
                 value={type}
                 onChange={(e) => setType(e.target.value as any)}
               >
@@ -647,7 +647,7 @@ function PhaseCard({ phase }: { phase: MedicationPhase }) {
           <div className="space-y-1.5">
             <Label className="text-xs">Type</Label>
             <select 
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+              className="flex h-9 w-full rounded-md border border-input bg-background text-foreground px-3 py-1 text-sm shadow-sm"
               value={type}
               onChange={(e) => setType(e.target.value as any)}
             >

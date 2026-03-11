@@ -58,6 +58,11 @@ export function MedicationCard({ item, prescription }: MedicationCardProps) {
 
             <div className="flex flex-col items-end gap-1 shrink-0">
               <span className="text-xs text-muted-foreground">{stockDisplay}</span>
+              {item.updatedAt && (
+                <span className="text-[10px] text-muted-foreground/70">
+                  Refilled {new Date(item.updatedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                </span>
+              )}
               {isNegativeStock && (
                 <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
                   Negative

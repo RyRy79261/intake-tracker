@@ -1,110 +1,174 @@
 "use client";
 
+import { useState } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { CompoundCardExpanded } from "@/components/medications/compound-card-expanded";
+import { ChevronDown } from "lucide-react";
+import { PillIconWithBadge } from "@/components/medications/pill-icon";
+import { formatPillCount } from "@/lib/medication-ui-utils";
 import {
   usePhasesForPrescription,
-  useSchedulesForPhase,
+  useInventoryForPrescription,
+  useDailyDoseSchedule,
 } from "@/hooks/use-medication-queries";
 import type { Prescription } from "@/lib/db";
 
 interface PrescriptionCardProps {
   prescription: Prescription;
-  onSelect: (p: Prescription) => void;
 }
 
-function formatDosageSummary(
-  schedules: { dosage: number; time: string }[],
-  unit: string
-): string {
-  if (schedules.length === 0) return "No schedule";
-
-  const dosages = schedules.map((s) => s.dosage);
-  const allSame = dosages.every((d) => d === dosages[0]);
-
-  if (allSame) {
-    const freq =
-      schedules.length === 1
-        ? "once daily"
-        : schedules.length === 2
-          ? "twice daily"
-          : `${schedules.length}x daily`;
-    return `${dosages[0]}${unit} ${freq}`;
-  }
-
-  // Different dosages: "6.25mg / 3.125mg daily"
-  return dosages.map((d) => `${d}${unit}`).join(" / ") + " daily";
+function getTodayDateStr(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
-function formatFoodInstruction(instruction: string): string | null {
-  if (instruction === "before") return "Take before eating";
-  if (instruction === "after") return "Take after eating";
-  return null;
-}
+export function PrescriptionCard({ prescription }: PrescriptionCardProps) {
+  const [expanded, setExpanded] = useState(false);
 
-export function PrescriptionCard({
-  prescription,
-  onSelect,
-}: PrescriptionCardProps) {
+  const todayDateStr = getTodayDateStr();
   const phases = usePhasesForPrescription(prescription.id);
+  const inventoryItems = useInventoryForPrescription(prescription.id);
+  const allSlots = useDailyDoseSchedule(todayDateStr);
+
   const activePhase = phases.find((p) => p.status === "active");
   const hasPendingPhase = phases.some((p) => p.status === "pending");
-  const schedules = useSchedulesForPhase(activePhase?.id);
+  const activeInventory = inventoryItems.find((item) => item.isActive && !item.isArchived);
 
-  const unit = activePhase?.unit ?? "mg";
-  const dosageSummary = formatDosageSummary(
-    schedules
-      .filter((s) => s.enabled)
-      .map((s) => ({ dosage: s.dosage, time: s.time })),
-    unit
+  const slotsArray = allSlots ?? [];
+  const prescriptionSlots = slotsArray.filter(
+    (s) => s.prescriptionId === prescription.id
   );
 
-  const timeList = schedules
-    .filter((s) => s.enabled)
-    .map((s) => s.time)
-    .sort()
-    .join(", ");
+  const firstSlot = prescriptionSlots.length > 0 ? prescriptionSlots[0] : undefined;
+  const dosageMg = firstSlot?.dosageMg;
+  const unit = activePhase?.unit ?? "mg";
 
-  const foodText = activePhase
-    ? formatFoodInstruction(activePhase.foodInstruction)
-    : null;
+  const pendingSlots = prescriptionSlots.filter((s) => s.status === "pending");
+  const allHandled = prescriptionSlots.length > 0 && pendingSlots.length === 0;
+  const firstPending = pendingSlots.length > 0 ? pendingSlots[0] : undefined;
+  const nextDoseTime = firstPending?.localTime ?? null;
+
+  let nextDoseLabel: string;
+  if (prescriptionSlots.length === 0) {
+    nextDoseLabel = "No doses today";
+  } else if (allHandled) {
+    nextDoseLabel = "All done";
+  } else if (nextDoseTime) {
+    nextDoseLabel = `Next: ${nextDoseTime}`;
+  } else {
+    nextDoseLabel = "No doses today";
+  }
+
+  const currentStock = activeInventory?.currentStock ?? 0;
+  const isFractional = currentStock % 1 !== 0;
+  const stockDisplay = isFractional
+    ? formatPillCount(currentStock)
+    : `${currentStock} pills`;
+
+  const isNegativeStock = activeInventory && currentStock < 0;
+  const isLowStock =
+    activeInventory &&
+    !isNegativeStock &&
+    activeInventory.refillAlertPills !== undefined &&
+    currentStock <= activeInventory.refillAlertPills;
+
+  const pillShape = activeInventory?.pillShape ?? "round";
+  const pillColor = activeInventory?.pillColor ?? "#94a3b8";
 
   return (
-    <Card
-      className="p-3 cursor-pointer hover:bg-muted/40 transition-colors active:scale-[0.98]"
-      onClick={() => onSelect(prescription)}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-semibold truncate">
-            {prescription.genericName}
-          </h3>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {dosageSummary}
-          </p>
-          {timeList && (
-            <p className="text-xs text-muted-foreground">{timeList}</p>
-          )}
-          {foodText && (
-            <p className="text-xs text-muted-foreground/70 mt-0.5">
-              {foodText}
-            </p>
-          )}
-          {prescription.indication && (
-            <p className="text-xs text-muted-foreground/50 mt-1">
-              {prescription.indication}
-            </p>
-          )}
+    <motion.div whileTap={{ scale: 0.98 }} transition={{ duration: 0.1 }}>
+      <Card
+        className="p-3 cursor-pointer hover:bg-muted/40 transition-colors"
+        onClick={() => setExpanded(!expanded)}
+      >
+        <div className="flex items-center gap-3">
+          <PillIconWithBadge shape={pillShape} color={pillColor} size={36} />
+
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold text-sm truncate">
+              {prescription.genericName}
+            </h3>
+            {prescription.indication && (
+              <p className="text-[11px] text-muted-foreground truncate">
+                {prescription.indication}
+              </p>
+            )}
+            <div className="flex items-center gap-2 flex-wrap">
+              {dosageMg !== undefined && (
+                <span className="text-xs text-muted-foreground">
+                  {dosageMg}{unit}
+                </span>
+              )}
+              {activeInventory && (
+                <span className="text-xs text-muted-foreground">
+                  {activeInventory.brandName}
+                </span>
+              )}
+              {inventoryItems.length > 1 && (
+                <span className="text-xs text-muted-foreground">
+                  {inventoryItems.length} medications
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-col items-end gap-1 shrink-0">
+            {activeInventory && (
+              <span className="text-xs text-muted-foreground">
+                {stockDisplay}
+              </span>
+            )}
+            <span className="text-xs text-muted-foreground">
+              {nextDoseLabel}
+            </span>
+            {hasPendingPhase && (
+              <Badge className="text-[10px] px-1.5 py-0 bg-blue-500 hover:bg-blue-600 text-white">
+                Titration planned
+              </Badge>
+            )}
+            {isNegativeStock && (
+              <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
+                Negative stock
+              </Badge>
+            )}
+            {isLowStock && (
+              <Badge className="text-[10px] px-1.5 py-0 bg-amber-500 hover:bg-amber-600 text-white">
+                Low stock
+              </Badge>
+            )}
+          </div>
+
+          <motion.div
+            animate={{ rotate: expanded ? 180 : 0 }}
+            transition={{ duration: 0.2 }}
+            className="shrink-0"
+          >
+            <ChevronDown className="w-4 h-4 text-muted-foreground" />
+          </motion.div>
         </div>
 
-        <div className="flex flex-col items-end gap-1 shrink-0">
-          {hasPendingPhase && (
-            <Badge className="text-[10px] px-1.5 py-0 bg-amber-500 hover:bg-amber-600 text-white">
-              Titration planned
-            </Badge>
+        <AnimatePresence>
+          {expanded && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden"
+            >
+              <CompoundCardExpanded
+                prescription={prescription}
+                onClose={() => setExpanded(false)}
+              />
+            </motion.div>
           )}
-        </div>
-      </div>
-    </Card>
+        </AnimatePresence>
+      </Card>
+    </motion.div>
   );
 }

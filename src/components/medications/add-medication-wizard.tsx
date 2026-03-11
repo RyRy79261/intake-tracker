@@ -453,6 +453,8 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
                 notes={notes}
                 onNotesChange={setNotes}
                 isExistingPrescription={selectedPrescriptionId !== "new"}
+                onRefreshAI={handleSearch}
+                isRefreshing={searchMutation.isPending}
               />
             )}
 
@@ -543,7 +545,7 @@ function SearchStep({
         <div>
           <Label className="text-sm font-medium mb-1.5 block">Assign to prescription</Label>
           <select
-            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+            className="flex h-9 w-full rounded-md border border-input bg-background text-foreground px-3 py-1 text-sm shadow-sm"
             value={selectedPrescriptionId}
             onChange={(e) => onSelectedPrescriptionIdChange(e.target.value)}
           >
@@ -733,6 +735,7 @@ function IndicationStep({
   foodNote, onFoodNoteChange,
   notes, onNotesChange,
   isExistingPrescription = false,
+  onRefreshAI, isRefreshing = false,
 }: {
   indication: string; onIndicationChange: (v: string) => void;
   contraindications: string[]; warnings: string[];
@@ -740,6 +743,8 @@ function IndicationStep({
   foodNote: string; onFoodNoteChange: (v: string) => void;
   notes: string; onNotesChange: (v: string) => void;
   isExistingPrescription?: boolean;
+  onRefreshAI?: () => void;
+  isRefreshing?: boolean;
 }) {
   const foodOptions: { value: FoodInstruction; label: string }[] = [
     { value: "before", label: "Before eating" },
@@ -752,11 +757,25 @@ function IndicationStep({
       {!isExistingPrescription && (
         <>
           <div>
-            <Label className="text-sm font-medium mb-1.5 block">What is this medication for?</Label>
+            <div className="flex items-center justify-between mb-1.5">
+              <Label className="text-sm font-medium">What is this medication for?</Label>
+              {onRefreshAI && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onRefreshAI}
+                  disabled={isRefreshing}
+                  className="h-7 text-xs gap-1 text-teal-600"
+                >
+                  {isRefreshing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Search className="w-3 h-3" />}
+                  AI Suggest
+                </Button>
+              )}
+            </div>
             <Textarea
               value={indication}
               onChange={(e) => onIndicationChange(e.target.value)}
-              placeholder="e.g. Acute Myocardial Infarction, STEMI"
+              placeholder="e.g. Heart failure, Acute Myocardial Infarction"
               rows={2}
             />
           </div>
