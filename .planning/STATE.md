@@ -159,9 +159,10 @@ None yet.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 1 | Download Pencil.dev Linux AppImage, run via WSLg, verify MCP connectivity | 2026-03-10 | 911f838 | [1-download-pencil-dev-linux-appimage-run-i](./quick/1-download-pencil-dev-linux-appimage-run-i/) |
+| 2 | Remove Phase 5.1 from roadmap (never started, no downstream deps) | 2026-03-11 | 756f12f | [2-review-roadmap-and-plans-to-assess-penci](./quick/2-review-roadmap-and-plans-to-assess-penci/) |
 
 ## Session Continuity
 
-Last session: 2026-03-10T21:28:35.840Z
+Last session: 2026-03-11T08:02:25Z
 Stopped at: Phase 5.1 removed from roadmap, ready for Phase 6 planning
 Resume file:
