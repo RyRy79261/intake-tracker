@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { CompoundCardExpanded } from "@/components/medications/compound-card-expanded";
+import { ChevronDown } from "lucide-react";
 import { PillIconWithBadge } from "@/components/medications/pill-icon";
 import { formatPillCount } from "@/lib/medication-ui-utils";
 import {
@@ -119,7 +121,7 @@ export function CompoundCard({ prescription }: CompoundCardProps) {
             </div>
           </div>
 
-          {/* Right: Stock + next dose */}
+          {/* Right: Stock + next dose + chevron */}
           <div className="flex flex-col items-end gap-1 shrink-0">
             {activeInventory && (
               <span className="text-xs text-muted-foreground">
@@ -140,7 +142,34 @@ export function CompoundCard({ prescription }: CompoundCardProps) {
               </Badge>
             )}
           </div>
+
+          {/* Chevron indicator */}
+          <motion.div
+            animate={{ rotate: expanded ? 180 : 0 }}
+            transition={{ duration: 0.2 }}
+            className="shrink-0"
+          >
+            <ChevronDown className="w-4 h-4 text-muted-foreground" />
+          </motion.div>
         </div>
+
+        {/* Expanded content */}
+        <AnimatePresence>
+          {expanded && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden"
+            >
+              <CompoundCardExpanded
+                prescription={prescription}
+                onClose={() => setExpanded(false)}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </Card>
     </motion.div>
   );
