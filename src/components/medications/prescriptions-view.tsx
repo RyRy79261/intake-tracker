@@ -1,6 +1,6 @@
 "use client";
 
-import { Cat } from "lucide-react";
+import { Cat, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PrescriptionCard } from "@/components/medications/prescription-card";
 import { usePrescriptions } from "@/hooks/use-medication-queries";
@@ -31,10 +31,16 @@ export function PrescriptionsView({ onAddMed }: PrescriptionsViewProps) {
   }
 
   return (
-    <div className="space-y-3 pb-24 px-4">
-      {active.map((prescription) => (
-        <PrescriptionCard key={prescription.id} prescription={prescription} />
-      ))}
+    <div className="pb-24 px-4 space-y-3">
+      <div className="grid grid-cols-2 gap-2">
+        {active.map((prescription) => (
+          <PrescriptionCard key={prescription.id} prescription={prescription} />
+        ))}
+      </div>
+
+      <Button variant="outline" size="sm" onClick={onAddMed} className="w-full">
+        <Plus className="w-4 h-4 mr-2" /> Add prescription
+      </Button>
     </div>
   );
 }

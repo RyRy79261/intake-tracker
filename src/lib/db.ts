@@ -155,6 +155,23 @@ export interface MedicationPhase {
   foodNote?: string;
   notes?: string;
   status: "active" | "completed" | "cancelled" | "pending";
+  titrationPlanId?: string; // links titration phases to their parent plan
+  createdAt: number;
+  updatedAt: number;
+  deletedAt: number | null;
+  deviceId: string;
+}
+
+export type TitrationPlanStatus = "draft" | "active" | "completed" | "cancelled";
+
+export interface TitrationPlan {
+  id: string;
+  title: string;
+  conditionLabel: string; // e.g. "Heart failure", managed as unique labels
+  recommendedStartDate?: number;
+  status: TitrationPlanStatus;
+  notes?: string;
+  warnings?: string[]; // warning signs to look out for
   createdAt: number;
   updatedAt: number;
   deletedAt: number | null;
@@ -282,6 +299,7 @@ const db = new Dexie("IntakeTrackerDB") as Dexie & {
   dailyNotes: EntityTable<DailyNote, "id">;
   doseLogs: EntityTable<DoseLog, "id">;
   substanceRecords: EntityTable<SubstanceRecord, "id">;
+  titrationPlans: EntityTable<TitrationPlan, "id">;
 };
 
 // Version 10: Consolidated schema with sync-readiness fields, compound indexes,
@@ -556,6 +574,28 @@ db.version(13).stores({
   dailyNotes:              "id, date, prescriptionId, doseLogId, updatedAt",
   auditLogs:               "id, [action+timestamp], timestamp, action",
   substanceRecords:        "id, [type+timestamp], type, timestamp, source, sourceRecordId, updatedAt",
+});
+
+// Version 14: Add titrationPlans table and titrationPlanId index on medicationPhases.
+// Titration plans group cross-prescription dosage adjustments for a condition.
+// No data migration needed — new tables only.
+db.version(14).stores({
+  intakeRecords:           "id, [type+timestamp], timestamp, source, updatedAt",
+  weightRecords:           "id, timestamp, updatedAt",
+  bloodPressureRecords:    "id, timestamp, position, arm, updatedAt",
+  eatingRecords:           "id, timestamp, updatedAt",
+  urinationRecords:        "id, timestamp, updatedAt",
+  defecationRecords:       "id, timestamp, updatedAt",
+  prescriptions:           "id, isActive, updatedAt, createdAt",
+  medicationPhases:        "id, prescriptionId, status, type, titrationPlanId, updatedAt",
+  phaseSchedules:          "id, phaseId, time, enabled, updatedAt",
+  inventoryItems:          "id, prescriptionId, isActive, updatedAt",
+  inventoryTransactions:   "id, [inventoryItemId+timestamp], inventoryItemId, timestamp, type, updatedAt",
+  doseLogs:                "id, [prescriptionId+scheduledDate], prescriptionId, phaseId, scheduleId, scheduledDate, scheduledTime, status, updatedAt",
+  dailyNotes:              "id, date, prescriptionId, doseLogId, updatedAt",
+  auditLogs:               "id, [action+timestamp], timestamp, action",
+  substanceRecords:        "id, [type+timestamp], type, timestamp, source, sourceRecordId, updatedAt",
+  titrationPlans:          "id, conditionLabel, status, updatedAt",
 });
 
 export { db };

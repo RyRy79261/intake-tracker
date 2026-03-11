@@ -111,14 +111,30 @@ export async function getDailyDoseSchedule(
   const prescriptionMap = new Map(activePrescriptions.map((p) => [p.id, p]));
   const prescriptionIds = activePrescriptions.map((p) => p.id);
 
-  // 3. Get active phases for those prescriptions
+  // 3. Get active phases for those prescriptions.
+  // Prefer titration phases over maintenance: if a prescription has an active
+  // titration phase (linked to a titrationPlanId), use that instead of its
+  // maintenance phase.
   const allActivePhases = await db.medicationPhases
     .where("status")
     .equals("active")
     .toArray();
-  const activePhases = allActivePhases.filter((p) =>
+  const allRelevantPhases = allActivePhases.filter((p) =>
     prescriptionIds.includes(p.prescriptionId),
   );
+
+  // For each prescription, pick the titration phase if one exists, else maintenance
+  const phaseByPrescription = new Map<string, typeof allRelevantPhases[number]>();
+  for (const phase of allRelevantPhases) {
+    const existing = phaseByPrescription.get(phase.prescriptionId);
+    if (!existing) {
+      phaseByPrescription.set(phase.prescriptionId, phase);
+    } else if (phase.type === "titration" && phase.titrationPlanId) {
+      // Titration overrides maintenance
+      phaseByPrescription.set(phase.prescriptionId, phase);
+    }
+  }
+  const activePhases = Array.from(phaseByPrescription.values());
   const phaseMap = new Map(activePhases.map((p) => [p.id, p]));
   const phaseIds = activePhases.map((p) => p.id);
 

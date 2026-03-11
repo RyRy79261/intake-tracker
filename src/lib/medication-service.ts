@@ -265,7 +265,7 @@ export async function getInventoryTransactions(inventoryItemId: string): Promise
 
 export async function addPrescription(input: CreatePrescriptionInput): Promise<ServiceResult<{
   prescription: Prescription;
-  phase: MedicationPhase;
+  phase: MedicationPhase | null;
   inventory: InventoryItem;
   schedules: PhaseSchedule[];
 }>> {
@@ -273,15 +273,20 @@ export async function addPrescription(input: CreatePrescriptionInput): Promise<S
     const now = Date.now();
 
     const prescription = buildPrescription(input, now);
-    const phase = buildPhase(prescription.id, input, now);
     const inventory = buildInventory(prescription.id, input, now);
-    const schedules = buildSchedules(phase.id, input.schedules, now);
+
+    // PRN / as-needed meds: no phase or schedules when schedule list is empty
+    const hasSchedules = input.schedules.length > 0;
+    const phase = hasSchedules ? buildPhase(prescription.id, input, now) : null;
+    const schedules = phase ? buildSchedules(phase.id, input.schedules, now) : [];
 
     await db.transaction("rw", [db.prescriptions, db.medicationPhases, db.inventoryItems, db.phaseSchedules, db.inventoryTransactions, db.auditLogs], async () => {
       await db.prescriptions.add(prescription);
-      await db.medicationPhases.add(phase);
+      if (phase) {
+        await db.medicationPhases.add(phase);
+        if (schedules.length > 0) await db.phaseSchedules.bulkAdd(schedules);
+      }
       await db.inventoryItems.add(inventory);
-      await db.phaseSchedules.bulkAdd(schedules);
 
       if (input.currentStock > 0) {
         await db.inventoryTransactions.add(buildTransaction(inventory.id, input.currentStock, "refill", now, "Initial stock"));
@@ -303,9 +308,10 @@ export async function addMedicationToPrescription(input: AddMedicationToPrescrip
   try {
     const now = Date.now();
 
-    const phase = buildPhase(input.prescriptionId, input, now);
+    const hasSchedules = input.schedules.length > 0;
+    const phase = hasSchedules ? buildPhase(input.prescriptionId, input, now) : null;
     const inventory = buildInventory(input.prescriptionId, input, now);
-    const schedules = buildSchedules(phase.id, input.schedules, now);
+    const schedules = phase ? buildSchedules(phase.id, input.schedules, now) : [];
 
     await db.transaction("rw", [db.medicationPhases, db.inventoryItems, db.phaseSchedules, db.inventoryTransactions, db.auditLogs], async () => {
       const existingInventory = await db.inventoryItems.where("prescriptionId").equals(input.prescriptionId).toArray();
@@ -322,9 +328,11 @@ export async function addMedicationToPrescription(input: AddMedicationToPrescrip
         }
       }
 
-      await db.medicationPhases.add(phase);
+      if (phase) {
+        await db.medicationPhases.add(phase);
+        if (schedules.length > 0) await db.phaseSchedules.bulkAdd(schedules);
+      }
       await db.inventoryItems.add(inventory);
-      await db.phaseSchedules.bulkAdd(schedules);
 
       if (input.currentStock > 0) {
         await db.inventoryTransactions.add(buildTransaction(inventory.id, input.currentStock, "refill", now, "Initial stock"));
@@ -333,7 +341,7 @@ export async function addMedicationToPrescription(input: AddMedicationToPrescrip
       await db.auditLogs.add(buildAuditEntry("prescription_updated", {
         prescriptionId: input.prescriptionId,
         action: "medication_added",
-        phaseId: phase.id,
+        phaseId: phase?.id ?? "none",
         inventoryId: inventory.id,
       }));
     });

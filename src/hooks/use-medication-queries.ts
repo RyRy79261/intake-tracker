@@ -24,6 +24,17 @@ import {
 } from "@/lib/medication-schedule-service";
 import { startNewPhase, updatePhase, deletePhase, activatePhase, type CreatePhaseInput, type UpdatePhaseInput } from "@/lib/medication-service";
 import {
+  getTitrationPlans,
+  getPhasesForTitrationPlan,
+  getConditionLabels,
+  createTitrationPlan,
+  activateTitrationPlan,
+  completeTitrationPlan,
+  cancelTitrationPlan,
+  deleteTitrationPlan,
+  type CreateTitrationPlanInput,
+} from "@/lib/titration-service";
+import {
   getDoseLogsForDate,
   getDoseLogsWithDetailsForDate,
   takeDose,
@@ -53,7 +64,7 @@ import type { Prescription, PhaseSchedule, InventoryItem } from "@/lib/db";
 import { unwrap } from "@/lib/service-result";
 
 // Re-export types so components import from hooks, not services
-export type { DoseLogWithDetails, DoseSlot, CreatePhaseInput };
+export type { DoseLogWithDetails, DoseSlot, CreatePhaseInput, CreateTitrationPlanInput };
 
 // ============================================================================
 // Read Hooks — useLiveQuery (no invalidation needed)
@@ -259,5 +270,56 @@ export function useUpdateInventoryTransaction() {
 export function useDeleteInventoryTransaction() {
   return useMutation({
     mutationFn: async (id: string) => unwrap(await deleteInventoryTransaction(id)),
+  });
+}
+
+// ============================================================================
+// Titration Plan Hooks
+// ============================================================================
+
+export function useTitrationPlans() {
+  return useLiveQuery(() => getTitrationPlans(), [], []);
+}
+
+export function usePhasesForTitrationPlan(planId: string | undefined) {
+  return useLiveQuery(
+    () => (planId ? getPhasesForTitrationPlan(planId) : []),
+    [planId],
+    [],
+  );
+}
+
+export function useConditionLabels() {
+  return useLiveQuery(() => getConditionLabels(), [], []);
+}
+
+export function useCreateTitrationPlan() {
+  return useMutation({
+    mutationFn: async (input: CreateTitrationPlanInput) =>
+      unwrap(await createTitrationPlan(input)),
+  });
+}
+
+export function useActivateTitrationPlan() {
+  return useMutation({
+    mutationFn: async (id: string) => unwrap(await activateTitrationPlan(id)),
+  });
+}
+
+export function useCompleteTitrationPlan() {
+  return useMutation({
+    mutationFn: async (id: string) => unwrap(await completeTitrationPlan(id)),
+  });
+}
+
+export function useCancelTitrationPlan() {
+  return useMutation({
+    mutationFn: async (id: string) => unwrap(await cancelTitrationPlan(id)),
+  });
+}
+
+export function useDeleteTitrationPlan() {
+  return useMutation({
+    mutationFn: async (id: string) => unwrap(await deleteTitrationPlan(id)),
   });
 }

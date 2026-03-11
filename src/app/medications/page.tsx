@@ -11,6 +11,7 @@ import { DoseDetailDialog } from "@/components/medications/dose-detail-dialog";
 import { AddMedicationWizard } from "@/components/medications/add-medication-wizard";
 import { CompoundList } from "@/components/medications/compound-list";
 import { PrescriptionsView } from "@/components/medications/prescriptions-view";
+import { TitrationsView } from "@/components/medications/titrations-view";
 import { useScrollHide } from "@/hooks/use-scroll-hide";
 import { useSettings } from "@/hooks/use-settings";
 import type { DoseSlot } from "@/hooks/use-medication-queries";
@@ -71,6 +72,8 @@ function MedicationsContent() {
       {activeTab === "prescriptions" && (
         <PrescriptionsView onAddMed={handleAddMed} />
       )}
+
+      {activeTab === "titrations" && <TitrationsView />}
 
       {activeTab === "settings" && <MedicationSettingsView />}
 

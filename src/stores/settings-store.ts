@@ -54,6 +54,7 @@ export interface Settings {
   // Medication settings
   primaryRegion: string;
   secondaryRegion: string;
+  timeFormat: "12h" | "24h";
 
   // Weight graph defaults
   weightGraphShowEating: boolean;
@@ -85,6 +86,7 @@ interface SettingsActions {
   setWeightGraphShowDrinking: (value: boolean) => void;
   setPrimaryRegion: (region: string) => void;
   setSecondaryRegion: (region: string) => void;
+  setTimeFormat: (format: "12h" | "24h") => void;
   setSubstanceConfig: (config: Settings["substanceConfig"]) => void;
   dismissInsight: (id: string, triggerValue: number) => void;
   clearDismissedInsight: (id: string) => void;
@@ -136,6 +138,7 @@ const defaultSettings: Settings = {
   weightGraphShowDrinking: true,
   primaryRegion: "",
   secondaryRegion: "",
+  timeFormat: "24h" as const,
 };
 
 export const useSettingsStore = create<Settings & SettingsActions>()(
@@ -179,6 +182,7 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
       setWeightGraphShowDrinking: (value) => set({ weightGraphShowDrinking: value }),
       setPrimaryRegion: (value) => set({ primaryRegion: value }),
       setSecondaryRegion: (value) => set({ secondaryRegion: value }),
+      setTimeFormat: (value) => set({ timeFormat: value }),
       setSubstanceConfig: (config) => set({ substanceConfig: config }),
 
       dismissInsight: (id, triggerValue) =>

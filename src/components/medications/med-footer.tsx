@@ -1,15 +1,16 @@
 "use client";
 
-import { CalendarDays, Pill, ClipboardList, Settings } from "lucide-react";
+import { CalendarDays, Pill, ClipboardList, Settings, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";
 
-export type MedTab = "schedule" | "medications" | "prescriptions" | "settings";
+export type MedTab = "schedule" | "prescriptions" | "medications" | "titrations" | "settings";
 
 const TABS: { id: MedTab; icon: LucideIcon; label: string }[] = [
   { id: "schedule", icon: CalendarDays, label: "Schedule" },
-  { id: "medications", icon: Pill, label: "Medications" },
-  { id: "prescriptions", icon: ClipboardList, label: "Prescriptions" },
+  { id: "prescriptions", icon: ClipboardList, label: "Rx" },
+  { id: "medications", icon: Pill, label: "Meds" },
+  { id: "titrations", icon: TrendingUp, label: "Titrations" },
   { id: "settings", icon: Settings, label: "Settings" },
 ];
 

@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { PillIcon } from "./pill-icon";
 import { useMedicineSearch, type MedicineSearchResult } from "@/hooks/use-medicine-search";
 import { useAddPrescription, usePrescriptions, useAddMedicationToPrescription, usePhasesForPrescription } from "@/hooks/use-medication-queries";
+import { Switch } from "@/components/ui/switch";
 import type { PillShape, FoodInstruction, Prescription, MedicationPhase } from "@/lib/db";
 import { ArrowLeft, ArrowRight, Search, Loader2, Check, Plus, X } from "lucide-react";
 import { z } from "zod";
@@ -120,10 +121,12 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
     isExistingPrescription ? selectedPrescriptionId : undefined
   );
 
-  // Dynamic steps: skip indication when assigning to existing prescription
-  const activeSteps = isExistingPrescription
-    ? STEPS.filter(s => s !== "indication")
-    : STEPS;
+  // Dynamic steps: skip indication for existing rx, skip schedule for as-needed
+  const activeSteps = STEPS.filter(s => {
+    if (s === "indication" && isExistingPrescription) return false;
+    if (s === "schedule" && asNeeded) return false;
+    return true;
+  });
 
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResult, setSearchResult] = useState<MedicineSearchResult | null>(null);
@@ -145,6 +148,7 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
   const [dosageAmount, setDosageAmount] = useState(1);
   const [customDosage, setCustomDosage] = useState("");
 
+  const [asNeeded, setAsNeeded] = useState(false);
   const [schedules, setSchedules] = useState<ScheduleEntry[]>([
     { time: "08:30", daysOfWeek: [...ALL_DAYS], dosage: 1 },
   ]);
@@ -172,6 +176,7 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
     setNotes("");
     setDosageAmount(1);
     setCustomDosage("");
+    setAsNeeded(false);
     setSchedules([{ time: "08:30", daysOfWeek: [...ALL_DAYS], dosage: 1 }]);
     setCurrentStock("");
     setRefillAlertDays("");
@@ -347,7 +352,7 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
           currentStock: parseInt(currentStock) || 0,
           ...(refillDays !== undefined && { refillAlertDays: refillDays }),
           ...(refillPills !== undefined && { refillAlertPills: refillPills }),
-          schedules: schedules.filter(s => s.time && s.daysOfWeek.length > 0).map(s => ({ ...s, dosage: scheduleDosage }))
+          schedules: asNeeded ? [] : schedules.filter(s => s.time && s.daysOfWeek.length > 0).map(s => ({ ...s, dosage: scheduleDosage }))
         });
       } else {
         await addPrescriptionMutation.mutateAsync({
@@ -367,7 +372,7 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
           ...(refillDays !== undefined && { refillAlertDays: refillDays }),
           ...(refillPills !== undefined && { refillAlertPills: refillPills }),
           ...(notes && { notes }),
-          schedules: schedules.filter(s => s.time && s.daysOfWeek.length > 0).map(s => ({ ...s, dosage: scheduleDosage }))
+          schedules: asNeeded ? [] : schedules.filter(s => s.time && s.daysOfWeek.length > 0).map(s => ({ ...s, dosage: scheduleDosage }))
         });
       }
     } catch (err: unknown) {
@@ -465,6 +470,8 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
                 customDosage={customDosage}
                 onCustomDosageChange={setCustomDosage}
                 dosageStrength={dosageStrength}
+                asNeeded={asNeeded}
+                onAsNeededChange={setAsNeeded}
               />
             )}
 
@@ -855,10 +862,12 @@ function DosageStep({
   dosageAmount, onDosageAmountChange,
   customDosage, onCustomDosageChange,
   dosageStrength,
+  asNeeded, onAsNeededChange,
 }: {
   dosageAmount: number; onDosageAmountChange: (v: number) => void;
   customDosage: string; onCustomDosageChange: (v: string) => void;
   dosageStrength: string;
+  asNeeded: boolean; onAsNeededChange: (v: boolean) => void;
 }) {
   const parseStrengthNum = (str: string): number => {
     const match = str.match(/(\d+(?:\.\d+)?)/);
@@ -934,6 +943,14 @@ function DosageStep({
           </span>
           {pillsNeeded < 1 && " (partial pill)"}
         </p>
+      </div>
+
+      <div className="flex items-center justify-between rounded-lg border p-3">
+        <div>
+          <p className="text-sm font-medium">As needed (PRN)</p>
+          <p className="text-xs text-muted-foreground">No fixed schedule — take when needed</p>
+        </div>
+        <Switch checked={asNeeded} onCheckedChange={onAsNeededChange} />
       </div>
     </div>
   );
