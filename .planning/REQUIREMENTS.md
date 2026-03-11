@@ -34,11 +34,11 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Medication UX
 
-- [ ] **MEDX-01**: Prescription-first views — compound identity as primary, not brand names
+- [x] **MEDX-01**: Prescription-first views — compound identity as primary, not brand names
 - [ ] **MEDX-02**: Dose logging with schedule display and automatic stock depletion
 - [ ] **MEDX-03**: Retroactive dose logging — mark a dose taken at a specific past time
-- [ ] **MEDX-04**: Multi-region inventory grouping — SA vs Germany brands clearly distinguished per compound
-- [ ] **MEDX-05**: Fractional pill display — 0.5 tablet, 0.25 tablet shown clearly in UI
+- [x] **MEDX-04**: Multi-region inventory grouping — SA vs Germany brands clearly distinguished per compound
+- [x] **MEDX-05**: Fractional pill display — 0.5 tablet, 0.25 tablet shown clearly in UI
 - [ ] **MEDX-06**: Today's medication dashboard — immediate view of due/taken/pending doses for the day
 - [ ] **MEDX-07**: Schedule visualization — maintenance vs titration phases displayed clearly
 
@@ -129,11 +129,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DSGN-04 | Phase 5.1 | Pending |
 | DSGN-05 | Phase 5.1 | Pending |
 | DSGN-06 | Phase 5.1 | Pending |
-| MEDX-01 | Phase 6 | Pending |
+| MEDX-01 | Phase 6 | Complete |
 | MEDX-02 | Phase 6 | Pending |
 | MEDX-03 | Phase 6 | Pending |
-| MEDX-04 | Phase 6 | Pending |
-| MEDX-05 | Phase 6 | Pending |
+| MEDX-04 | Phase 6 | Complete |
+| MEDX-05 | Phase 6 | Complete |
 | MEDX-06 | Phase 6 | Pending |
 | MEDX-07 | Phase 7 | Pending |
 | INTR-01 | Phase 8 | Pending |

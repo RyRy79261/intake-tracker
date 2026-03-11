@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Not started — ready for discuss-phase
-stopped_at: Phase 6 context gathered
-last_updated: "2026-03-11T13:12:55.812Z"
-last_activity: 2026-03-11 — Phase 5.1 removed from roadmap
+status: In progress — executing plans
+stopped_at: Completed 06-01-PLAN.md
+last_updated: "2026-03-11T13:45:37Z"
+last_activity: 2026-03-11 — Completed 06-01 tab restructure and compound list
 progress:
   total_phases: 11
   completed_phases: 5
-  total_plans: 25
-  completed_plans: 25
-  percent: 100
+  total_plans: 29
+  completed_plans: 26
+  percent: 90
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-02)
 
 **Core value:** Accurate, queryable health data across intake, vitals, and medication adherence — structured for cross-domain analysis and future AI querying
-**Current focus:** Phase 6 Medication UX Core (next)
+**Current focus:** Phase 6 Medication UX Core (in progress)
 
 ## Current Position
 
-Phase: 6 of 11 (Medication UX Core — next)
-Plan: 0 of TBD
-Status: Not started — ready for discuss-phase
-Last activity: 2026-03-11 — Phase 5.1 removed from roadmap
+Phase: 6 of 11 (Medication UX Core)
+Plan: 1 of 4
+Status: In progress — executing plans
+Last activity: 2026-03-11 — Completed 06-01 tab restructure and compound list
 
 Progress: [██████████] 100%
 
@@ -65,6 +65,7 @@ Progress: [██████████] 100%
 | Phase 05 P01 | 13min | 2 tasks | 13 files |
 | Phase 05 P02 | 7min | 2 tasks | 3 files |
 | Phase 05 P03 | 11min | 2 tasks | 10 files |
+| Phase 06 P01 | 8min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -140,6 +141,9 @@ Recent decisions affecting current work:
 - [05-02]: importBackup auto-detects encrypted format, returns error directing to importEncryptedBackup
 - [05-02]: importEncryptedBackup delegates to importBackup after decryption (single import logic path)
 - [Phase 05]: Status route kept public but stripped of key length/format info (info leak)
+- [06-01]: MedTab reduced from 5 to 3 values (schedule, medications, settings) -- status and prescriptions tabs removed
+- [06-01]: CompoundCard uses useDailyDoseSchedule to derive next dose status per prescription
+- [06-01]: Stock displayed as pill count (formatPillCount for fractional, plain number for whole)
 
 ### Pending Todos
 
@@ -163,7 +167,7 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-11T13:12:55.807Z
-Stopped at: Phase 6 context gathered
+Last session: 2026-03-11T13:45:37Z
+Stopped at: Completed 06-01-PLAN.md
 Resume file:
-.planning/phases/06-medication-ux-core/06-CONTEXT.md
+.planning/phases/06-medication-ux-core/06-01-SUMMARY.md
