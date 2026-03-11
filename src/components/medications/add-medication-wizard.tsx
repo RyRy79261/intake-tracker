@@ -11,8 +11,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { PillIcon } from "./pill-icon";
 import { useMedicineSearch, type MedicineSearchResult } from "@/hooks/use-medicine-search";
-import { useAddPrescription, usePrescriptions, useAddMedicationToPrescription } from "@/hooks/use-medication-queries";
-import type { PillShape, FoodInstruction, Prescription } from "@/lib/db";
+import { useAddPrescription, usePrescriptions, useAddMedicationToPrescription, usePhasesForPrescription } from "@/hooks/use-medication-queries";
+import type { PillShape, FoodInstruction, Prescription, MedicationPhase } from "@/lib/db";
 import { ArrowLeft, ArrowRight, Search, Loader2, Check, Plus, X } from "lucide-react";
 import { z } from "zod";
 import { cn } from "@/lib/utils";
@@ -114,6 +114,16 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
 
   // Form state
   const [selectedPrescriptionId, setSelectedPrescriptionId] = useState<string>("new");
+  const isExistingPrescription = selectedPrescriptionId !== "new";
+  const selectedPrescriptionPhases = usePhasesForPrescription(
+    isExistingPrescription ? selectedPrescriptionId : undefined
+  );
+
+  // Dynamic steps: skip indication when assigning to existing prescription
+  const activeSteps = isExistingPrescription
+    ? STEPS.filter(s => s !== "indication")
+    : STEPS;
+
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResult, setSearchResult] = useState<MedicineSearchResult | null>(null);
   const [brandName, setBrandName] = useState("");
@@ -167,6 +177,18 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
     setRefillAlertPills("");
   }, []);
 
+  // Pre-populate fields from existing prescription's active phase
+  const handlePrescriptionSelect = useCallback((id: string) => {
+    setSelectedPrescriptionId(id);
+    if (id !== "new") {
+      const activePhase = selectedPrescriptionPhases.find((p: MedicationPhase) => p.status === "active");
+      if (activePhase) {
+        setFoodInstruction(activePhase.foodInstruction);
+        if (activePhase.foodNote) setFoodNote(activePhase.foodNote);
+      }
+    }
+  }, [selectedPrescriptionPhases]);
+
   const handleClose = useCallback(() => {
     onOpenChange(false);
     setTimeout(resetForm, 300);
@@ -187,7 +209,19 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
       }
       
       if (result.genericName) setGenericName(capitalizeWords(result.genericName));
-      if (result.dosageStrengths.length > 0 && result.dosageStrengths[0]) setDosageStrength(result.dosageStrengths[0]);
+      // Auto-select dosage strength from search query (e.g., "Eliquis 5mg" -> select "5mg")
+      if (result.dosageStrengths.length > 0) {
+        const doseMatch = searchQuery.match(/(\d+(?:\.\d+)?)\s*mg/i);
+        if (doseMatch && doseMatch[1]) {
+          const queryDose = doseMatch[1];
+          const matchingStrength = result.dosageStrengths.find(s =>
+            s.toLowerCase().includes(queryDose + "mg") || s.toLowerCase().includes(queryDose + " mg")
+          );
+          setDosageStrength(matchingStrength ?? result.dosageStrengths[0] ?? "");
+        } else if (result.dosageStrengths[0]) {
+          setDosageStrength(result.dosageStrengths[0]);
+        }
+      }
       if (result.commonIndications.length > 0) setIndication(result.commonIndications.join(", "));
       if (result.contraindications) setContraindications(result.contraindications);
       if (result.warnings) setWarnings(result.warnings);
@@ -259,20 +293,20 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
     return true;
   };
 
-  const currentStepIndex = STEPS.indexOf(step);
+  const currentStepIndex = activeSteps.indexOf(step);
   const canGoBack = currentStepIndex > 0;
-  const canGoNext = currentStepIndex < STEPS.length - 1;
-  const isLastStep = currentStepIndex === STEPS.length - 1;
+  const canGoNext = currentStepIndex < activeSteps.length - 1;
+  const isLastStep = currentStepIndex === activeSteps.length - 1;
 
   const goBack = () => {
     setFieldErrors({});
-    const prev = STEPS[currentStepIndex - 1];
+    const prev = activeSteps[currentStepIndex - 1];
     if (canGoBack && prev) setStep(prev);
   };
 
   const goNext = () => {
     if (!validateCurrentStep()) return;
-    const next = STEPS[currentStepIndex + 1];
+    const next = activeSteps[currentStepIndex + 1];
     if (canGoNext && next) setStep(next);
   };
 
@@ -354,14 +388,14 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
             <div className="text-center">
               <p className="text-sm font-medium">{STEP_LABELS[step]}</p>
               <p className="text-xs text-muted-foreground">
-                Step {currentStepIndex + 1} of {STEPS.length}
+                Step {currentStepIndex + 1} of {activeSteps.length}
               </p>
             </div>
             <div className="w-10" />
           </div>
 
           <div className="flex gap-1 mb-6">
-            {STEPS.map((s, i) => (
+            {activeSteps.map((s, i) => (
               <div
                 key={s}
                 className={cn(
@@ -388,7 +422,7 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
                 dosageStrength={dosageStrength}
                 onDosageStrengthChange={setDosageStrength}
                 selectedPrescriptionId={selectedPrescriptionId}
-                onSelectedPrescriptionIdChange={setSelectedPrescriptionId}
+                onSelectedPrescriptionIdChange={handlePrescriptionSelect}
                 existingPrescriptions={existingPrescriptions}
                 fieldErrors={fieldErrors}
               />
@@ -460,10 +494,10 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
             {isLastStep ? (
               <Button
                 onClick={handleSave}
-                disabled={addPrescriptionMutation.isPending}
+                disabled={addPrescriptionMutation.isPending || addMedicationToPrescriptionMutation.isPending}
                 className="flex-1 gap-2 bg-teal-600 hover:bg-teal-700"
               >
-                {addPrescriptionMutation.isPending ? (
+                {(addPrescriptionMutation.isPending || addMedicationToPrescriptionMutation.isPending) ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
                   <Check className="w-4 h-4" />
@@ -506,7 +540,7 @@ function SearchStep({
     <div className="space-y-4">
       {existingPrescriptions.length > 0 && (
         <div>
-          <Label className="text-sm font-medium mb-1.5 block">Associate with prescription</Label>
+          <Label className="text-sm font-medium mb-1.5 block">Assign to prescription</Label>
           <select
             className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
             value={selectedPrescriptionId}
@@ -515,7 +549,7 @@ function SearchStep({
             <option value="new">Create new prescription</option>
             {existingPrescriptions.map((p) => (
               <option key={p.id} value={p.id}>
-                Add to: {p.genericName}
+                {p.genericName}{p.indication ? ` - ${p.indication}` : ""}
               </option>
             ))}
           </select>
