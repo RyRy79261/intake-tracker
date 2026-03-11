@@ -1,17 +1,15 @@
 "use client";
 
 import { motion } from "motion/react";
-import { CalendarDays, ClipboardList, Pill, Settings, FlaskConical } from "lucide-react";
+import { CalendarDays, Pill, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";
 
-export type MedTab = "schedule" | "status" | "prescriptions" | "medications" | "settings";
+export type MedTab = "schedule" | "medications" | "settings";
 
 const TABS: { id: MedTab; icon: LucideIcon; label: string }[] = [
   { id: "schedule", icon: CalendarDays, label: "Schedule" },
-  { id: "status", icon: ClipboardList, label: "Status" },
-  { id: "prescriptions", icon: FlaskConical, label: "Prescription" },
-  { id: "medications", icon: Pill, label: "Supply" },
+  { id: "medications", icon: Pill, label: "Medications" },
   { id: "settings", icon: Settings, label: "Settings" },
 ];
 
