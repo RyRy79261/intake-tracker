@@ -11,7 +11,7 @@ This milestone is an engineering overhaul of an existing health tracking PWA. Th
 - [x] **Phase 3: Service Layer Rebuild** - Medication services rebuilt with transactional atomicity, timezone-aware scheduling, and fractional dose math
 - [x] **Phase 4: Analytics Service** - Cross-domain analytics service with substance tracking, correlation analysis, and analytics page replacing /history
 - [x] **Phase 5: Security Hardening** - API keys server-side only, encryption foundations for data at rest, auth patterns ready for cloud sync (completed 2026-03-10)
-- [ ] **Phase 6: Medication UX Core** - Compound-first prescription views, dose logging with stock depletion, retroactive logging, multi-region inventory
+- [ ] **Phase 6: Medication UX Core** - Compound-first prescription views, dose logging with stock depletion, retroactive logging, multi-region inventory, prescriptions tab, wizard improvements
 - [ ] **Phase 7: Schedule Visualization** - Maintenance vs titration phase display with named phases and transition clarity
 - [ ] **Phase 8: Drug Interactions** - AI-powered compound interaction data stored and surfaced per prescription with ad-hoc lookup
 - [ ] **Phase 9: Data Integrity and Backup** - Backup includes all medication tables, audit logging enforced, round-trip test verified
@@ -109,9 +109,9 @@ Plans:
 - [ ] 05-03-PLAN.md — API route auth migration, bundle security scan, PII hardening, CSP refinement (SECU-01, SECU-03)
 
 ### Phase 6: Medication UX Core
-**Goal**: A user can manage their full medication workflow — view prescriptions by compound, log doses, track retroactive doses, and see clearly which regional brand stock is being used
+**Goal**: A user can manage their full medication workflow — view prescriptions by compound, log doses, track retroactive doses, manage prescriptions and titration phases, and see clearly which regional brand stock is being used
 **Depends on**: Phase 3, Phase 5
-**Requirements**: MEDX-01, MEDX-02, MEDX-03, MEDX-04, MEDX-05, MEDX-06
+**Requirements**: MEDX-01, MEDX-02, MEDX-03, MEDX-04, MEDX-05, MEDX-06, MEDX-07
 **Success Criteria** (what must be TRUE):
   1. The prescription list shows compound name as the primary identity; brand names appear as sub-labels under each compound
   2. Tapping "Take" on today's dose dashboard decrements the correct inventory item's stock and records the dose log in a single operation
@@ -119,13 +119,17 @@ Plans:
   4. SA and Germany inventory items for the same prescription are visually grouped under one compound entry with region and brand clearly labeled
   5. Fractional doses (0.5 tablet, 0.25 tablet) display correctly in both the schedule and the dose confirmation UI
   6. Today's medication dashboard shows due, taken, and pending doses at a glance without navigating to the prescription detail
-**Plans**: 4 plans
+  7. Prescriptions tab shows active prescriptions with dosage, schedule, and titration phase management
+**Plans**: 7 plans
 
 Plans:
-- [ ] 06-01-PLAN.md — Tab restructure (5->3 tabs) + shared utilities + compound card (collapsed) (MEDX-01, MEDX-04, MEDX-05)
-- [ ] 06-02-PLAN.md — Compound card expanded view + brand switching + multi-region inventory (MEDX-01, MEDX-04)
-- [ ] 06-03-PLAN.md — Schedule dashboard rebuild with inline Take/Skip, progress summary, undo toast (MEDX-02, MEDX-05, MEDX-06)
-- [ ] 06-04-PLAN.md — Retroactive dose logging + dose detail with Untake + visual verification (MEDX-03)
+- [x] 06-01-PLAN.md — Tab restructure (5->3 tabs) + shared utilities + compound card (collapsed) (MEDX-01, MEDX-04, MEDX-05)
+- [x] 06-02-PLAN.md — Compound card expanded view + brand switching + multi-region inventory (MEDX-01, MEDX-04)
+- [x] 06-03-PLAN.md — Schedule dashboard rebuild with inline Take/Skip, progress summary, undo toast (MEDX-02, MEDX-05, MEDX-06)
+- [x] 06-04-PLAN.md — Retroactive dose logging + dose detail with Untake + visual verification (MEDX-03)
+- [ ] 06-05-PLAN.md — Bug fixes (boolean indexing, expanded card, inventory nav) + 4th tab + editable refills (MEDX-01, MEDX-02, MEDX-04)
+- [ ] 06-06-PLAN.md — Prescriptions tab with list, detail drawer, titration phases, notes (MEDX-05, MEDX-06, MEDX-07)
+- [ ] 06-07-PLAN.md — Wizard AI auto-select + prescription assignment + compound card relationship (MEDX-01, MEDX-03)
 
 ### Phase 7: Schedule Visualization
 **Goal**: A user can see their titration and maintenance phases laid out clearly, understanding which phase is active and what the transition looks like
@@ -208,7 +212,7 @@ Note: Phase 5 (Security) depends only on Phase 2 and can begin in parallel with 
 | 3. Service Layer Rebuild | 5/5 | Complete | - |
 | 4. Analytics Service | 8/8 | Complete |  |
 | 5. Security Hardening | 3/3 | Complete   | 2026-03-10 |
-| 6. Medication UX Core | 3/4 | In Progress|  |
+| 6. Medication UX Core | 4/7 | In Progress|  |
 | 7. Schedule Visualization | 0/TBD | Not started | - |
 | 8. Drug Interactions | 0/TBD | Not started | - |
 | 9. Data Integrity and Backup | 0/TBD | Not started | - |
