@@ -3,11 +3,11 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Phase 5.1 context gathered
+stopped_at: Phase 5.1 removed from roadmap, ready for Phase 6 planning
 last_updated: "2026-03-10T21:28:35.843Z"
-last_activity: 2026-03-10 — Phase 5.1 inserted into roadmap
+last_activity: 2026-03-11 — Phase 5.1 removed from active roadmap (never started)
 progress:
-  total_phases: 12
+  total_phases: 11
   completed_phases: 5
   total_plans: 25
   completed_plans: 25
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-02)
 
 **Core value:** Accurate, queryable health data across intake, vitals, and medication adherence — structured for cross-domain analysis and future AI querying
-**Current focus:** Phase 5.1 Pencil Design System Onboarding (executing)
+**Current focus:** Phase 6 Medication UX Core (next)
 
 ## Current Position
 
-Phase: 5.1 of 11 (Pencil Design System Onboarding — INSERTED)
-Plan: 5 of 7 complete
-Status: Wave 3 in progress (plans 04-05 done, 06-07 pending)
-Last activity: 2026-03-11 — Plan 05.1-05 complete (Medications screens + flows)
+Phase: 6 of 11 (Medication UX Core — next)
+Plan: 0 of TBD
+Status: Not started — ready for discuss-phase
+Last activity: 2026-03-11 — Phase 5.1 removed from roadmap
 
 Progress: [██████████] 100%
 
@@ -140,9 +140,6 @@ Recent decisions affecting current work:
 - [05-02]: importBackup auto-detects encrypted format, returns error directing to importEncryptedBackup
 - [05-02]: importEncryptedBackup delegates to importBackup after decryption (single import logic path)
 - [Phase 05]: Status route kept public but stripped of key length/format info (info leak)
-- [05.1-01]: Pencil .pen file stores data internally — disk file stays as {} placeholder, changes managed via MCP tools
-- [05.1-01]: Dark mode foreground colors use 220 20% 8% (matching existing dark --background)
-- [05.1-01]: Caffeine-foreground uses black in light mode (yellow text needs dark contrast)
 
 ### Pending Todos
 
@@ -150,7 +147,7 @@ None yet.
 
 ### Roadmap Evolution
 
-- Phase 5.1 inserted after Phase 5: Pencil Design System Onboarding (INSERTED) — design system setup before Phase 6 UI work
+- Phase 5.1 inserted after Phase 5 then removed (2026-03-11) — Pencil design-first workflow abandoned, no downstream dependencies existed
 
 ### Blockers/Concerns
 
@@ -166,5 +163,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-10T21:28:35.840Z
-Stopped at: Phase 5.1 context gathered
-Resume file: .planning/phases/05.1-pencil-design-system-onboarding/05.1-CONTEXT.md
+Stopped at: Phase 5.1 removed from roadmap, ready for Phase 6 planning
+Resume file:
