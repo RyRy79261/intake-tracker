@@ -119,10 +119,13 @@ Plans:
   4. SA and Germany inventory items for the same prescription are visually grouped under one compound entry with region and brand clearly labeled
   5. Fractional doses (0.5 tablet, 0.25 tablet) display correctly in both the schedule and the dose confirmation UI
   6. Today's medication dashboard shows due, taken, and pending doses at a glance without navigating to the prescription detail
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] 06-01: TBD
+- [ ] 06-01-PLAN.md — Tab restructure (5->3 tabs) + shared utilities + compound card (collapsed) (MEDX-01, MEDX-04, MEDX-05)
+- [ ] 06-02-PLAN.md — Compound card expanded view + brand switching + multi-region inventory (MEDX-01, MEDX-04)
+- [ ] 06-03-PLAN.md — Schedule dashboard rebuild with inline Take/Skip, progress summary, undo toast (MEDX-02, MEDX-05, MEDX-06)
+- [ ] 06-04-PLAN.md — Retroactive dose logging + dose detail with Untake + visual verification (MEDX-03)
 
 ### Phase 7: Schedule Visualization
 **Goal**: A user can see their titration and maintenance phases laid out clearly, understanding which phase is active and what the transition looks like
@@ -205,7 +208,7 @@ Note: Phase 5 (Security) depends only on Phase 2 and can begin in parallel with 
 | 3. Service Layer Rebuild | 5/5 | Complete | - |
 | 4. Analytics Service | 8/8 | Complete |  |
 | 5. Security Hardening | 3/3 | Complete   | 2026-03-10 |
-| 6. Medication UX Core | 0/TBD | Not started | - |
+| 6. Medication UX Core | 0/4 | Not started | - |
 | 7. Schedule Visualization | 0/TBD | Not started | - |
 | 8. Drug Interactions | 0/TBD | Not started | - |
 | 9. Data Integrity and Backup | 0/TBD | Not started | - |
