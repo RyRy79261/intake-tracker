@@ -9,8 +9,10 @@ interface TimeSlotGroupProps {
   time: string;
   slots: DoseSlot[];
   isToday: boolean;
+  isFuture: boolean;
   isNextUpcoming: boolean;
   onTake: (slot: DoseSlot) => void;
+  onRetroactiveTake: (slot: DoseSlot, time: string) => void;
   onSkip: (slot: DoseSlot) => void;
   onDoseClick: (slot: DoseSlot) => void;
   onMarkAll: (time: string, slots: DoseSlot[]) => void;
@@ -37,8 +39,10 @@ export function TimeSlotGroup({
   time,
   slots,
   isToday,
+  isFuture,
   isNextUpcoming,
   onTake,
+  onRetroactiveTake,
   onSkip,
   onDoseClick,
   onMarkAll,
@@ -65,7 +69,7 @@ export function TimeSlotGroup({
         >
           {formatTime12(time)}
         </h3>
-        {hasPending && (
+        {!isFuture && hasPending && (
           <Button
             variant="ghost"
             size="sm"
@@ -83,7 +87,9 @@ export function TimeSlotGroup({
             key={`${slot.scheduleId}-${slot.localTime}`}
             slot={slot}
             isToday={isToday}
+            isFuture={isFuture}
             onTake={onTake}
+            onRetroactiveTake={onRetroactiveTake}
             onSkip={onSkip}
             onDoseClick={onDoseClick}
           />

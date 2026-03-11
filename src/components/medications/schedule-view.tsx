@@ -40,7 +40,11 @@ export function ScheduleView({ selectedDate, onDoseClick, onAddMed }: ScheduleVi
   const [skipPickerOpen, setSkipPickerOpen] = useState(false);
   const [skipTarget, setSkipTarget] = useState<DoseSlot | null>(null);
 
-  const isToday = selectedDate.toDateString() === new Date().toDateString();
+  const today = new Date();
+  const isToday = selectedDate.toDateString() === today.toDateString();
+
+  // Future date: selectedDate is after today (not today)
+  const isFuture = !isToday && selectedDate > today;
 
   // Group slots by localTime
   const timeGroups = useMemo(() => {
@@ -106,7 +110,7 @@ export function ScheduleView({ selectedDate, onDoseClick, onAddMed }: ScheduleVi
     }
   }, [isToday, nextUpcomingTime]);
 
-  // Handle Take
+  // Handle Take (today -- immediate)
   const handleTake = useCallback(
     async (slot: DoseSlot) => {
       hapticTake();
@@ -133,6 +137,41 @@ export function ScheduleView({ selectedDate, onDoseClick, onAddMed }: ScheduleVi
             scheduleId: slot.scheduleId,
             date: slot.scheduledDate,
             time: slot.localTime,
+            dosageMg: slot.dosageMg,
+          });
+        },
+      });
+    },
+    [takeDoseMut, untakeDoseMut],
+  );
+
+  // Handle Retroactive Take (past date -- user-specified time)
+  const handleRetroactiveTake = useCallback(
+    async (slot: DoseSlot, time: string) => {
+      hapticTake();
+      await takeDoseMut.mutateAsync({
+        prescriptionId: slot.prescriptionId,
+        phaseId: slot.phaseId,
+        scheduleId: slot.scheduleId,
+        date: slot.scheduledDate,
+        time,
+        dosageMg: slot.dosageMg,
+      });
+
+      const description = slot.inventory
+        ? `${slot.pillsPerDose ?? 1} pill(s) deducted`
+        : "Dose logged -- no stock tracked";
+
+      showUndoToast({
+        title: `${slot.prescription.genericName} taken`,
+        description,
+        onUndo: () => {
+          untakeDoseMut.mutateAsync({
+            prescriptionId: slot.prescriptionId,
+            phaseId: slot.phaseId,
+            scheduleId: slot.scheduleId,
+            date: slot.scheduledDate,
+            time,
             dosageMg: slot.dosageMg,
           });
         },
@@ -216,8 +255,10 @@ export function ScheduleView({ selectedDate, onDoseClick, onAddMed }: ScheduleVi
           time={time}
           slots={groupSlots}
           isToday={isToday}
+          isFuture={isFuture}
           isNextUpcoming={time === nextUpcomingTime}
           onTake={handleTake}
+          onRetroactiveTake={handleRetroactiveTake}
           onSkip={handleSkipStart}
           onDoseClick={onDoseClick}
           onMarkAll={handleMarkAll}
