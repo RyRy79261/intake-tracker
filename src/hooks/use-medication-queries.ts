@@ -46,6 +46,8 @@ import {
   updateInventoryItem,
   adjustStock,
   deleteInventoryItem,
+  updateInventoryTransaction,
+  deleteInventoryTransaction,
 } from "@/lib/medication-service";
 import type { Prescription, PhaseSchedule, InventoryItem } from "@/lib/db";
 import { unwrap } from "@/lib/service-result";
@@ -244,5 +246,18 @@ export function useAdjustStock() {
 export function useDeleteInventoryItem() {
   return useMutation({
     mutationFn: async (id: string) => unwrap(await deleteInventoryItem(id)),
+  });
+}
+
+export function useUpdateInventoryTransaction() {
+  return useMutation({
+    mutationFn: async ({ id, updates }: { id: string; updates: { amount?: number; note?: string } }) =>
+      unwrap(await updateInventoryTransaction(id, updates)),
+  });
+}
+
+export function useDeleteInventoryTransaction() {
+  return useMutation({
+    mutationFn: async (id: string) => unwrap(await deleteInventoryTransaction(id)),
   });
 }

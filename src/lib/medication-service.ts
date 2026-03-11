@@ -215,7 +215,8 @@ export async function getPrescriptionById(id: string): Promise<Prescription | un
 }
 
 export async function getActivePrescriptions(): Promise<Prescription[]> {
-  return db.prescriptions.where("isActive").equals(1).toArray();
+  const all = await db.prescriptions.toArray();
+  return all.filter(p => p.isActive === true);
 }
 
 export async function getInactivePrescriptions(): Promise<Prescription[]> {
@@ -228,9 +229,8 @@ export async function getInventoryForPrescription(prescriptionId: string): Promi
 }
 
 export async function getActiveInventoryForPrescription(prescriptionId: string): Promise<InventoryItem | undefined> {
-  return db.inventoryItems
-    .where({ prescriptionId, isActive: 1 })
-    .first();
+  const items = await db.inventoryItems.where("prescriptionId").equals(prescriptionId).toArray();
+  return items.find(i => i.isActive === true);
 }
 
 export async function getAllInventoryItems(): Promise<InventoryItem[]> {
@@ -238,7 +238,8 @@ export async function getAllInventoryItems(): Promise<InventoryItem[]> {
 }
 
 export async function getAllActiveInventoryItems(): Promise<InventoryItem[]> {
-  return db.inventoryItems.where("isActive").equals(1).toArray();
+  const all = await db.inventoryItems.toArray();
+  return all.filter(i => i.isActive === true);
 }
 
 export async function getActivePhaseForPrescription(prescriptionId: string): Promise<MedicationPhase | undefined> {
@@ -471,6 +472,88 @@ export async function adjustStock(
     return ok(newStock);
   } catch (e) {
     return err("Failed to adjust stock", e);
+  }
+}
+
+export async function updateInventoryTransaction(
+  id: string,
+  updates: { amount?: number; note?: string },
+): Promise<ServiceResult<void>> {
+  try {
+    const now = Date.now();
+
+    await db.transaction("rw", [db.inventoryTransactions, db.inventoryItems, db.auditLogs], async () => {
+      const tx = await db.inventoryTransactions.get(id);
+      if (!tx) throw new Error(`Transaction ${id} not found`);
+
+      await db.inventoryTransactions.update(id, { ...updates, updatedAt: now });
+
+      // Recalculate currentStock from all non-deleted transactions
+      const allTxs = await db.inventoryTransactions
+        .where("inventoryItemId")
+        .equals(tx.inventoryItemId)
+        .toArray();
+      const newStock = allTxs
+        .filter(t => t.deletedAt === null)
+        .reduce((sum, t) => {
+          const amount = t.id === id && updates.amount !== undefined ? updates.amount : t.amount;
+          return sum + amount;
+        }, 0);
+
+      await db.inventoryItems.update(tx.inventoryItemId, {
+        currentStock: Math.round(newStock * 10000) / 10000,
+        updatedAt: now,
+      });
+
+      await db.auditLogs.add(buildAuditEntry("inventory_adjusted", {
+        transactionId: id,
+        inventoryItemId: tx.inventoryItemId,
+        action: "transaction_updated",
+        updatedFields: Object.keys(updates),
+      }));
+    });
+
+    return ok(undefined);
+  } catch (e) {
+    return err("Failed to update inventory transaction", e);
+  }
+}
+
+export async function deleteInventoryTransaction(id: string): Promise<ServiceResult<void>> {
+  try {
+    const now = Date.now();
+
+    await db.transaction("rw", [db.inventoryTransactions, db.inventoryItems, db.auditLogs], async () => {
+      const tx = await db.inventoryTransactions.get(id);
+      if (!tx) throw new Error(`Transaction ${id} not found`);
+
+      // Soft-delete
+      await db.inventoryTransactions.update(id, { deletedAt: now, updatedAt: now });
+
+      // Recalculate currentStock from all non-deleted transactions (excluding this one)
+      const allTxs = await db.inventoryTransactions
+        .where("inventoryItemId")
+        .equals(tx.inventoryItemId)
+        .toArray();
+      const newStock = allTxs
+        .filter(t => t.deletedAt === null && t.id !== id)
+        .reduce((sum, t) => sum + t.amount, 0);
+
+      await db.inventoryItems.update(tx.inventoryItemId, {
+        currentStock: Math.round(newStock * 10000) / 10000,
+        updatedAt: now,
+      });
+
+      await db.auditLogs.add(buildAuditEntry("inventory_adjusted", {
+        transactionId: id,
+        inventoryItemId: tx.inventoryItemId,
+        action: "transaction_deleted",
+      }));
+    });
+
+    return ok(undefined);
+  } catch (e) {
+    return err("Failed to delete inventory transaction", e);
   }
 }
 

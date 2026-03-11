@@ -64,13 +64,15 @@ export async function checkDoseReminders(): Promise<void> {
   const todayParts = now.toISOString().split("T");
   const todayKey = todayParts[0] ?? "";
 
-  const activePrescriptions = await db.prescriptions.where("isActive").equals(1).toArray();
+  const allPrescriptions = await db.prescriptions.toArray();
+  const activePrescriptions = allPrescriptions.filter(p => p.isActive === true);
   const prescriptionMap = new Map(activePrescriptions.map(p => [p.id, p]));
 
   const phases = await db.medicationPhases.where("status").equals("active").toArray();
   const phaseMap = new Map(phases.map(p => [p.id, p]));
 
-  const allSchedules = await db.phaseSchedules.where("enabled").equals(1).toArray();
+  const allPhaseSchedules = await db.phaseSchedules.toArray();
+  const allSchedules = allPhaseSchedules.filter(s => s.enabled === true);
 
   const dayOfWeek = now.getDay();
   const dueNow: { name: string; time: string }[] = [];
@@ -130,7 +132,8 @@ export async function checkRefillAlerts(): Promise<void> {
     return;
   }
 
-  const activePrescriptions = await db.prescriptions.where("isActive").equals(1).toArray();
+  const allRxs = await db.prescriptions.toArray();
+  const activePrescriptions = allRxs.filter(p => p.isActive === true);
   const newRefillNotifications: string[] = [];
 
   for (const prescription of activePrescriptions) {

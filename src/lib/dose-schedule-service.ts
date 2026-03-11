@@ -105,11 +105,9 @@ export async function getDailyDoseSchedule(
   const parsedDate = new Date(dateStr + "T12:00:00");
   const dayOfWeek = parsedDate.getDay(); // 0=Sunday
 
-  // 2. Get all active prescriptions
-  const activePrescriptions = await db.prescriptions
-    .where("isActive")
-    .equals(1)
-    .toArray();
+  // 2. Get all active prescriptions (filter on boolean, not indexed integer)
+  const allPrescriptions = await db.prescriptions.toArray();
+  const activePrescriptions = allPrescriptions.filter(p => p.isActive === true);
   const prescriptionMap = new Map(activePrescriptions.map((p) => [p.id, p]));
   const prescriptionIds = activePrescriptions.map((p) => p.id);
 
@@ -125,10 +123,8 @@ export async function getDailyDoseSchedule(
   const phaseIds = activePhases.map((p) => p.id);
 
   // 4. Get enabled schedules for active phases on this day-of-week
-  const enabledSchedules = await db.phaseSchedules
-    .where("enabled")
-    .equals(1)
-    .toArray();
+  const allSchedules = await db.phaseSchedules.toArray();
+  const enabledSchedules = allSchedules.filter(s => s.enabled === true);
   const applicableSchedules = enabledSchedules.filter(
     (s) => phaseIds.includes(s.phaseId) && s.daysOfWeek.includes(dayOfWeek),
   );
@@ -146,11 +142,9 @@ export async function getDailyDoseSchedule(
     logMap.set(key, log);
   }
 
-  // 6. Get all active inventory items
-  const activeInventory = await db.inventoryItems
-    .where("isActive")
-    .equals(1)
-    .toArray();
+  // 6. Get all active inventory items (filter on boolean, not indexed integer)
+  const allInventory = await db.inventoryItems.toArray();
+  const activeInventory = allInventory.filter(i => i.isActive === true);
   const inventoryByPrescription = new Map<string, InventoryItem>();
   for (const inv of activeInventory) {
     if (!inv.isArchived) {

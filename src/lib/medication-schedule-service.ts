@@ -24,8 +24,9 @@ export interface ScheduleWithDetails {
  * Uses indexed queries where possible to avoid .toArray().filter() anti-pattern.
  */
 export async function getDailySchedule(dayOfWeek: number): Promise<Map<string, ScheduleWithDetails[]>> {
-  // Use .where() on indexed isActive field (Dexie stores boolean true as 1)
-  const activePrescriptions = await db.prescriptions.where("isActive").equals(1).toArray();
+  // Filter on boolean isActive (Dexie boolean indexing unreliable)
+  const allPrescriptions = await db.prescriptions.toArray();
+  const activePrescriptions = allPrescriptions.filter(p => p.isActive === true);
   const prescriptionMap = new Map(activePrescriptions.map(p => [p.id, p]));
 
   const prescriptionIds = activePrescriptions.map(p => p.id);
@@ -33,14 +34,16 @@ export async function getDailySchedule(dayOfWeek: number): Promise<Map<string, S
   const activePhases = phases.filter(p => prescriptionIds.includes(p.prescriptionId));
   const phaseMap = new Map(activePhases.map(p => [p.id, p]));
 
-  // Use .where() on indexed isActive; filter out archived in JS (isArchived not indexed)
-  const activeInventory = await db.inventoryItems.where("isActive").equals(1).toArray();
+  // Filter on boolean isActive; filter out archived in JS (isArchived not indexed)
+  const allInventory = await db.inventoryItems.toArray();
+  const activeInventory = allInventory.filter(i => i.isActive === true);
   const inventoryItems = activeInventory.filter(i => !i.isArchived);
   const inventoryMap = new Map(inventoryItems.map(i => [i.prescriptionId, i]));
 
   const phaseIds = activePhases.map(p => p.id);
-  // Use .where() on indexed enabled field; filter by phaseId + dayOfWeek in JS
-  const enabledSchedules = await db.phaseSchedules.where("enabled").equals(1).toArray();
+  // Filter on boolean enabled field; filter by phaseId + dayOfWeek in JS
+  const allSchedules = await db.phaseSchedules.toArray();
+  const enabledSchedules = allSchedules.filter(s => s.enabled === true);
   const activeSchedules = enabledSchedules.filter(
     s => phaseIds.includes(s.phaseId) && s.daysOfWeek.includes(dayOfWeek),
   );
