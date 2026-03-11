@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 ## Current Position
 
 Phase: 5.1 of 11 (Pencil Design System Onboarding — INSERTED)
-Plan: 3 of 7 complete
-Status: Wave 2 complete, Wave 3 pending
-Last activity: 2026-03-11 — Plan 05.1-03 complete (domain components + app chrome)
+Plan: 4 of 7 complete
+Status: Wave 3 in progress (plan 04 done, 05-07 pending)
+Last activity: 2026-03-11 — Plan 05.1-04 complete (Dashboard + Settings screens)
 
 Progress: [██████████] 100%
 
