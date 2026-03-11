@@ -37,6 +37,10 @@ export function CompoundList({ onAddMed }: CompoundListProps) {
         <CompoundCard key={prescription.id} prescription={prescription} />
       ))}
 
+      <Button variant="outline" size="sm" onClick={onAddMed} className="w-full">
+        <Plus className="w-4 h-4 mr-2" /> Add another medication
+      </Button>
+
       {/* FAB button */}
       <button
         onClick={onAddMed}

@@ -15,9 +15,11 @@ import {
   useUpdateInventoryItem,
   useAdjustStock,
   useDeleteInventoryItem,
+  useUpdateInventoryTransaction,
+  useDeleteInventoryTransaction,
 } from "@/hooks/use-medication-queries";
 import type { Prescription, InventoryItem } from "@/lib/db";
-import { Loader2, Archive, ArchiveRestore, Plus } from "lucide-react";
+import { Loader2, Archive, ArchiveRestore, Plus, Pencil, Trash2, Check, X } from "lucide-react";
 
 interface InventoryItemViewDrawerProps {
   prescription: Prescription | null; // We pass prescription here, but we also need the specific inventory item. For now, we'll fetch the active inventory item for this prescription.
@@ -206,25 +208,102 @@ function InventoryTab({ prescription }: { prescription: Prescription }) {
         <div className="space-y-3 pt-4 border-t">
           <h3 className="font-semibold text-sm">History</h3>
           <div className="space-y-2 max-h-[40vh] overflow-y-auto pr-2">
-            {transactions.map(tx => (
-              <div key={tx.id} className="flex items-center justify-between p-3 rounded-lg border bg-muted/30 text-sm">
-                <div>
-                  <p className="font-medium">
-                    {tx.type === "refill" ? "Refill" : tx.type === "consumed" ? "Consumed" : "Adjusted"}
-                    <span className={tx.amount > 0 ? "text-emerald-600 ml-2" : "text-red-500 ml-2"}>
-                      {tx.amount > 0 ? "+" : ""}{tx.amount}
-                    </span>
-                  </p>
-                  {tx.note && <p className="text-xs text-muted-foreground mt-0.5">{tx.note}</p>}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {new Date(tx.timestamp).toLocaleDateString()}
-                </p>
-              </div>
+            {transactions.filter(tx => tx.deletedAt === null).map(tx => (
+              <TransactionRow key={tx.id} tx={tx} />
             ))}
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function TransactionRow({ tx }: { tx: { id: string; type: string; amount: number; note?: string; timestamp: number } }) {
+  const [editing, setEditing] = useState(false);
+  const [editAmount, setEditAmount] = useState(tx.amount);
+  const [editNote, setEditNote] = useState(tx.note ?? "");
+
+  const updateMutation = useUpdateInventoryTransaction();
+  const deleteMutation = useDeleteInventoryTransaction();
+
+  const isEditable = tx.type === "refill" || tx.type === "adjusted";
+
+  const handleSave = () => {
+    updateMutation.mutate(
+      { id: tx.id, updates: { amount: editAmount, ...(editNote ? { note: editNote } : {}) } },
+      { onSuccess: () => setEditing(false) },
+    );
+  };
+
+  const handleDelete = () => {
+    if (window.confirm("Delete this transaction? Stock will be recalculated.")) {
+      deleteMutation.mutate(tx.id);
+    }
+  };
+
+  if (editing) {
+    return (
+      <div className="p-3 rounded-lg border bg-muted/30 text-sm space-y-2">
+        <div className="flex gap-2 items-center">
+          <Input
+            type="number"
+            value={editAmount}
+            onChange={(e) => setEditAmount(parseFloat(e.target.value) || 0)}
+            className="w-24 h-8 text-sm"
+          />
+          <Input
+            placeholder="Note..."
+            value={editNote}
+            onChange={(e) => setEditNote(e.target.value)}
+            className="flex-1 h-8 text-sm"
+          />
+        </div>
+        <div className="flex gap-1 justify-end">
+          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setEditing(false)}>
+            <X className="w-3 h-3 mr-1" /> Cancel
+          </Button>
+          <Button size="sm" className="h-7 text-xs bg-teal-600 hover:bg-teal-700" onClick={handleSave} disabled={updateMutation.isPending}>
+            {updateMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3 mr-1" />}
+            Save
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30 text-sm">
+      <div className="flex-1 min-w-0">
+        <p className="font-medium">
+          {tx.type === "refill" ? "Refill" : tx.type === "consumed" ? "Consumed" : tx.type === "initial" ? "Initial" : "Adjusted"}
+          <span className={tx.amount > 0 ? "text-emerald-600 ml-2" : "text-red-500 ml-2"}>
+            {tx.amount > 0 ? "+" : ""}{tx.amount}
+          </span>
+        </p>
+        {tx.note && <p className="text-xs text-muted-foreground mt-0.5">{tx.note}</p>}
+      </div>
+      <div className="flex items-center gap-1 shrink-0">
+        <span className="text-xs text-muted-foreground mr-1">
+          {new Date(tx.timestamp).toLocaleDateString()}
+        </span>
+        {isEditable && (
+          <>
+            <button
+              onClick={() => { setEditAmount(tx.amount); setEditNote(tx.note ?? ""); setEditing(true); }}
+              className="p-1 rounded hover:bg-muted transition-colors"
+            >
+              <Pencil className="w-3 h-3 text-muted-foreground" />
+            </button>
+            <button
+              onClick={handleDelete}
+              className="p-1 rounded hover:bg-muted transition-colors"
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3 text-muted-foreground" />}
+            </button>
+          </>
+        )}
+      </div>
     </div>
   );
 }

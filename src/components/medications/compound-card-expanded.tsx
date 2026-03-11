@@ -145,43 +145,42 @@ export function CompoundCardExpanded({ prescription, onClose }: CompoundCardExpa
             Schedule
           </h4>
           <div className="space-y-1">
-            <div className="flex items-center gap-2 mb-1">
-              <Badge
-                variant="outline"
-                className={`text-[10px] px-1.5 py-0 ${
-                  activePhase.type === "titration"
-                    ? "border-amber-500 text-amber-600 dark:text-amber-400"
-                    : "border-blue-500 text-blue-600 dark:text-blue-400"
-                }`}
-              >
-                {activePhase.type === "titration" ? "Titration" : "Maintenance"}
-              </Badge>
-              {activePhase.foodInstruction !== "none" && (
-                <span className="text-[10px] text-muted-foreground">
-                  {activePhase.foodInstruction === "before"
-                    ? "Take before eating"
-                    : activePhase.foodInstruction === "after"
-                    ? "Take after eating"
-                    : activePhase.foodInstruction}
-                </span>
-              )}
-            </div>
             {schedules.length > 0 ? (
-              schedules.map((s) => (
-                <div
-                  key={s.id}
-                  className="flex items-center gap-2 text-xs text-muted-foreground"
-                >
-                  <Clock className="w-3 h-3" />
-                  <span>
-                    {s.time} — {s.dosage}
-                    {activePhase.unit}
-                  </span>
-                </div>
-              ))
+              (() => {
+                const allSameDosage = schedules.every(s => s.dosage === schedules[0]?.dosage);
+                if (allSameDosage && schedules[0]) {
+                  const times = schedules.map(s => s.time).join(", ");
+                  const freq = schedules.length === 1 ? "daily" : schedules.length === 2 ? "twice daily" : `${schedules.length}x daily`;
+                  return (
+                    <div className="flex items-center gap-2 text-xs">
+                      <Clock className="w-3 h-3 text-muted-foreground" />
+                      <span className="font-medium">
+                        {schedules[0].dosage}{activePhase.unit} {freq}
+                      </span>
+                      <span className="text-muted-foreground">at {times}</span>
+                    </div>
+                  );
+                }
+                return schedules.map(s => (
+                  <div key={s.id} className="flex items-center gap-2 text-xs">
+                    <Clock className="w-3 h-3 text-muted-foreground" />
+                    <span className="font-medium">{s.dosage}{activePhase.unit}</span>
+                    <span className="text-muted-foreground">at {s.time}</span>
+                  </div>
+                ));
+              })()
             ) : (
               <p className="text-xs text-muted-foreground">
                 No schedules configured
+              </p>
+            )}
+            {activePhase.foodInstruction !== "none" && (
+              <p className="text-[10px] text-muted-foreground mt-1">
+                {activePhase.foodInstruction === "before"
+                  ? "Take before eating"
+                  : activePhase.foodInstruction === "after"
+                  ? "Take after eating"
+                  : activePhase.foodInstruction}
               </p>
             )}
           </div>
@@ -243,7 +242,7 @@ export function CompoundCardExpanded({ prescription, onClose }: CompoundCardExpa
             variant="outline"
             size="sm"
             className="h-7 text-xs gap-1"
-            onClick={() => setBrandPickerOpen(true)}
+            onClick={(e) => { e.stopPropagation(); setBrandPickerOpen(true); }}
           >
             <ArrowRightLeft className="w-3 h-3" />
             Switch Brand
@@ -253,7 +252,7 @@ export function CompoundCardExpanded({ prescription, onClose }: CompoundCardExpa
           variant="outline"
           size="sm"
           className="h-7 text-xs gap-1"
-          onClick={() => setEditDrawerOpen(true)}
+          onClick={(e) => { e.stopPropagation(); setEditDrawerOpen(true); }}
         >
           <Edit2 className="w-3 h-3" />
           Edit
@@ -262,7 +261,7 @@ export function CompoundCardExpanded({ prescription, onClose }: CompoundCardExpa
           variant="outline"
           size="sm"
           className="h-7 text-xs gap-1"
-          onClick={() => setInventoryDrawerOpen(true)}
+          onClick={(e) => { e.stopPropagation(); setInventoryDrawerOpen(true); }}
         >
           <Package className="w-3 h-3" />
           Inventory
