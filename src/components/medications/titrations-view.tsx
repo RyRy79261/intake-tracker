@@ -817,7 +817,7 @@ function RxEntryCard({
     <div className="border rounded-lg p-3 space-y-3">
       <div className="flex items-center gap-2">
         <Select
-          value={entry.prescriptionId || undefined}
+          value={entry.prescriptionId || ""}
           onValueChange={(val) => onSelectPrescription(val)}
         >
           <SelectTrigger className="flex-1 h-9 text-sm">
