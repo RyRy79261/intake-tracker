@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Check, Loader2, ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
+import { Check, Loader2, ChevronDown, ChevronUp } from "lucide-react";
 import { z } from "zod";
 import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
@@ -49,7 +49,7 @@ export function BloodPressureCard() {
   const [position, setPosition] = useState<"sitting" | "standing">("sitting");
   const [arm, setArm] = useState<"left" | "right">("left");
   const [irregularHeartbeat, setIrregularHeartbeat] = useState(false);
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
   const [showTimeInput, setShowTimeInput] = useState(false);
   const [customTime, setCustomTime] = useState(getCurrentDateTimeLocal());
 
@@ -160,7 +160,7 @@ export function BloodPressureCard() {
       setDiastolicInput("");
       setHeartRateInput("");
       setIrregularHeartbeat(false);
-      setShowAdvanced(false);
+      setShowDetails(false);
       setShowTimeInput(false);
       setCustomTime(getCurrentDateTimeLocal());
     } catch (error) {
@@ -205,8 +205,8 @@ export function BloodPressureCard() {
         </div>
 
         {/* Input Section */}
-        <div className="space-y-4">
-          {/* Systolic / Diastolic */}
+        <div className="space-y-3">
+          {/* Primary inputs: Systolic / Diastolic (always visible) */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label htmlFor="systolic" className="text-xs">Systolic (top)</Label>
@@ -242,112 +242,130 @@ export function BloodPressureCard() {
             </div>
           </div>
 
-          {/* Heart Rate (optional) */}
-          <div className="space-y-1">
-            <Label htmlFor="heartrate" className="text-xs">Heart Rate (optional)</Label>
-            <div className="flex gap-2">
-              <Input
-                id="heartrate"
-                type="number"
-                min="0"
-                max="250"
-                placeholder="72"
-                value={heartRateInput}
-                onChange={(e) => setHeartRateInput(e.target.value)}
-                className="h-10 text-center bg-white/80 dark:bg-slate-900/50"
-              />
-              <div className="flex items-center px-3 text-sm font-medium text-muted-foreground bg-muted rounded-md">
-                BPM
-              </div>
-            </div>
-            {fieldErrors.heartRate && (
-              <p className="text-sm text-destructive mt-1">{fieldErrors.heartRate}</p>
+          {/* Record button (ABOVE the details expander for quick one-tap recording) */}
+          <Button
+            onClick={handleSubmit}
+            disabled={addMutation.isPending || !systolicInput || !diastolicInput}
+            className={cn("w-full h-11", theme.buttonBg)}
+          >
+            {addMutation.isPending ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Recording...
+              </>
+            ) : (
+              <>
+                <Check className="w-4 h-4 mr-2" />
+                Record Reading
+              </>
             )}
-          </div>
+          </Button>
 
-          {/* Position Toggle */}
-          <div className="space-y-2">
-            <Label className="text-xs">Position</Label>
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className={cn(
-                  "flex-1 transition-all",
-                  position === "sitting" && theme.activeToggle
-                )}
-                onClick={() => setPosition("sitting")}
-              >
-                Sitting
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className={cn(
-                  "flex-1 transition-all",
-                  position === "standing" && theme.activeToggle
-                )}
-                onClick={() => setPosition("standing")}
-              >
-                Standing
-              </Button>
-            </div>
-          </div>
+          {/* Expandable details section */}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="w-full justify-between text-muted-foreground hover:text-foreground"
+            onClick={() => setShowDetails(!showDetails)}
+          >
+            <span>More options</span>
+            {showDetails ? (
+              <ChevronUp className="w-4 h-4" />
+            ) : (
+              <ChevronDown className="w-4 h-4" />
+            )}
+          </Button>
 
-          {/* Arm Toggle */}
-          <div className="space-y-2">
-            <Label className="text-xs">Arm</Label>
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className={cn(
-                  "flex-1 transition-all",
-                  arm === "left" && theme.activeToggle
+          {showDetails && (
+            <div className="p-3 rounded-lg bg-muted/50 border space-y-3">
+              {/* Heart Rate (optional) */}
+              <div className="space-y-1">
+                <Label htmlFor="heartrate" className="text-xs">Heart Rate (optional)</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="heartrate"
+                    type="number"
+                    min="0"
+                    max="250"
+                    placeholder="72"
+                    value={heartRateInput}
+                    onChange={(e) => setHeartRateInput(e.target.value)}
+                    className="h-10 text-center bg-white/80 dark:bg-slate-900/50"
+                  />
+                  <div className="flex items-center px-3 text-sm font-medium text-muted-foreground bg-muted rounded-md">
+                    BPM
+                  </div>
+                </div>
+                {fieldErrors.heartRate && (
+                  <p className="text-sm text-destructive mt-1">{fieldErrors.heartRate}</p>
                 )}
-                onClick={() => setArm("left")}
-              >
-                Left
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className={cn(
-                  "flex-1 transition-all",
-                  arm === "right" && theme.activeToggle
-                )}
-                onClick={() => setArm("right")}
-              >
-                Right
-              </Button>
-            </div>
-          </div>
+              </div>
 
-          {/* Advanced Section */}
-          <div className="space-y-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="w-full justify-between text-muted-foreground hover:text-foreground"
-              onClick={() => setShowAdvanced(!showAdvanced)}
-            >
-              <span className="flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4" />
-                Advanced
-              </span>
-              {showAdvanced ? (
-                <ChevronUp className="w-4 h-4" />
-              ) : (
-                <ChevronDown className="w-4 h-4" />
-              )}
-            </Button>
-            {showAdvanced && (
-              <div className="p-3 rounded-lg bg-muted/50 border space-y-2">
+              {/* Position Toggle */}
+              <div className="space-y-2">
+                <Label className="text-xs">Position</Label>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className={cn(
+                      "flex-1 transition-all",
+                      position === "sitting" && theme.activeToggle
+                    )}
+                    onClick={() => setPosition("sitting")}
+                  >
+                    Sitting
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className={cn(
+                      "flex-1 transition-all",
+                      position === "standing" && theme.activeToggle
+                    )}
+                    onClick={() => setPosition("standing")}
+                  >
+                    Standing
+                  </Button>
+                </div>
+              </div>
+
+              {/* Arm Toggle */}
+              <div className="space-y-2">
+                <Label className="text-xs">Arm</Label>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className={cn(
+                      "flex-1 transition-all",
+                      arm === "left" && theme.activeToggle
+                    )}
+                    onClick={() => setArm("left")}
+                  >
+                    Left
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className={cn(
+                      "flex-1 transition-all",
+                      arm === "right" && theme.activeToggle
+                    )}
+                    onClick={() => setArm("right")}
+                  >
+                    Right
+                  </Button>
+                </div>
+              </div>
+
+              {/* Irregular Heartbeat */}
+              <div className="space-y-2">
                 <Label className="text-xs">Irregular Heartbeat</Label>
                 <div className="flex gap-2">
                   <Button
@@ -376,34 +394,17 @@ export function BloodPressureCard() {
                   </Button>
                 </div>
               </div>
-            )}
-          </div>
 
-          <CollapsibleTimeInputControlled
-            value={customTime}
-            onChange={setCustomTime}
-            expanded={showTimeInput}
-            onToggle={() => setShowTimeInput(!showTimeInput)}
-            id="bp-time"
-          />
-
-          <Button
-            onClick={handleSubmit}
-            disabled={addMutation.isPending || !systolicInput || !diastolicInput}
-            className={cn("w-full h-11", theme.buttonBg)}
-          >
-            {addMutation.isPending ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Recording...
-              </>
-            ) : (
-              <>
-                <Check className="w-4 h-4 mr-2" />
-                Record Reading
-              </>
-            )}
-          </Button>
+              {/* Time Override */}
+              <CollapsibleTimeInputControlled
+                value={customTime}
+                onChange={setCustomTime}
+                expanded={showTimeInput}
+                onToggle={() => setShowTimeInput(!showTimeInput)}
+                id="bp-time"
+              />
+            </div>
+          )}
         </div>
 
         {/* Recent History */}
