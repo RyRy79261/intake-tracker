@@ -12,7 +12,7 @@ This milestone is an engineering overhaul of an existing health tracking PWA. Th
 - [x] **Phase 4: Analytics Service** - Cross-domain analytics service with substance tracking, correlation analysis, and analytics page replacing /history
 - [x] **Phase 5: Security Hardening** - API keys server-side only, encryption foundations for data at rest, auth patterns ready for cloud sync (completed 2026-03-10)
 - [x] **Phase 6: Medication UX Core** - Compound-first prescription views, dose logging with stock depletion, retroactive logging, multi-region inventory, prescriptions tab, wizard improvements
-- [ ] **Phase 7: Schedule Visualization** - Maintenance vs titration phase display with named phases and transition clarity
+- [x] **Phase 7: Schedule Visualization** - Maintenance vs titration phase display with named phases and transition clarity (completed 2026-03-20)
 - [ ] **Phase 8: Drug Interactions** - AI-powered compound interaction data stored and surfaced per prescription with ad-hoc lookup
 - [ ] **Phase 9: Data Integrity and Backup** - Backup includes all medication tables, audit logging enforced, round-trip test verified
 - [ ] **Phase 10: Test Coverage** - Full service unit test suite, migration tests, timezone-variant test runs
@@ -232,7 +232,7 @@ Note: Phase 5 (Security) depends only on Phase 2 and can begin in parallel with 
 | 5. Security Hardening | 3/3 | Complete   | 2026-03-10 |
 | 6. Medication UX Core | 7/7 | Complete | 2026-03-20 |
 | 6.1. Dashboard Input Redesign | 0/2 | Not started | - |
-| 7. Schedule Visualization | 0/1 | Not started | - |
+| 7. Schedule Visualization | 1/1 | Complete   | 2026-03-20 |
 | 8. Drug Interactions | 0/TBD | Not started | - |
 | 9. Data Integrity and Backup | 0/TBD | Not started | - |
 | 10. Test Coverage | 0/TBD | Not started | - |
