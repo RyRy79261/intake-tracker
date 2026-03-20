@@ -1,10 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Check, Loader2 } from "lucide-react";
+import { Minus, Plus, Check, Loader2 } from "lucide-react";
 import { z } from "zod";
 import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
@@ -20,6 +19,7 @@ import { RecentEntriesList } from "@/components/recent-entries-list";
 import { EditWeightDialog } from "@/components/edit-weight-dialog";
 import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
 import { useEditRecord } from "@/hooks/use-edit-record";
+import { useSettings } from "@/hooks/use-settings";
 import { useToast } from "@/hooks/use-toast";
 import { type WeightRecord } from "@/lib/db";
 import { useWeightRecords, useAddWeight, useDeleteWeight, useUpdateWeight } from "@/hooks/use-health-queries";
@@ -34,16 +34,26 @@ const Icon = theme.icon;
 
 export function WeightCard() {
   const { toast } = useToast();
-  const [weightInput, setWeightInput] = useState("");
+  const settings = useSettings();
+  const [pendingWeight, setPendingWeight] = useState<number | null>(null);
   const [showTimeInput, setShowTimeInput] = useState(false);
   const [customTime, setCustomTime] = useState(getCurrentDateTimeLocal());
 
   const recentRecords = useWeightRecords(5);
-  const isLoading = !recentRecords;
+  const isLoading = !recentRecords || recentRecords.length === 0 && pendingWeight === null;
   const addMutation = useAddWeight();
   const deleteMutation = useDeleteWeight();
   const updateMutation = useUpdateWeight();
   const { deletingId, handleDelete } = useDeleteWithToast(deleteMutation, "Weight record removed");
+
+  // Pre-fill with latest weight when records load
+  useEffect(() => {
+    if (pendingWeight === null && recentRecords && recentRecords.length > 0) {
+      setPendingWeight(recentRecords[0].weight);
+    } else if (pendingWeight === null && recentRecords && recentRecords.length === 0) {
+      setPendingWeight(70);
+    }
+  }, [recentRecords, pendingWeight]);
 
   // Extra edit field
   const [editWeight, setEditWeight] = useState("");
@@ -73,9 +83,24 @@ export function WeightCard() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const latestWeight = recentRecords?.[0];
 
+  const handleDecrement = () => {
+    setPendingWeight((prev) => {
+      if (prev === null) return null;
+      const next = Math.round((prev - settings.weightIncrement) * 10) / 10;
+      return Math.max(0.1, next);
+    });
+  };
+
+  const handleIncrement = () => {
+    setPendingWeight((prev) => {
+      if (prev === null) return null;
+      return Math.round((prev + settings.weightIncrement) * 10) / 10;
+    });
+  };
+
   const handleSubmit = async () => {
-    const weight = parseFloat(weightInput);
-    const parsed = WeightFormSchema.safeParse({ weight: isNaN(weight) ? undefined : weight });
+    if (pendingWeight === null) return;
+    const parsed = WeightFormSchema.safeParse({ weight: pendingWeight });
     if (!parsed.success) {
       const errors: Record<string, string> = {};
       for (const issue of parsed.error.issues) {
@@ -90,13 +115,13 @@ export function WeightCard() {
 
     try {
       const timestamp = showTimeInput ? dateTimeLocalToTimestamp(customTime) : undefined;
-      await addMutation.mutateAsync({ weight, ...(timestamp !== undefined && { timestamp }) });
+      await addMutation.mutateAsync({ weight: pendingWeight, ...(timestamp !== undefined && { timestamp }) });
       toast({
         title: "Weight recorded",
-        description: `${weight} kg logged successfully`,
+        description: `${pendingWeight.toFixed(1)} kg logged successfully`,
         variant: "success",
       });
-      setWeightInput("");
+      // Keep current value as starting point for next entry
       setShowTimeInput(false);
       setCustomTime(getCurrentDateTimeLocal());
     } catch (error) {
@@ -138,27 +163,43 @@ export function WeightCard() {
           ) : null}
         </div>
 
-        {/* Input Section */}
+        {/* Increment/Decrement Input Section */}
         <div className="space-y-3">
-          <div className="flex gap-2">
-            <div className="flex-1">
-              <Input
-                type="number"
-                step="0.1"
-                min="0"
-                placeholder="Enter weight"
-                value={weightInput}
-                onChange={(e) => setWeightInput(e.target.value)}
-                className="h-12 text-lg text-center bg-white/80 dark:bg-slate-900/50"
-              />
-              {fieldErrors.weight && (
-                <p className="text-sm text-destructive mt-1">{fieldErrors.weight}</p>
-              )}
+          <div className="flex items-center justify-between gap-3">
+            {/* Minus Button */}
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handleDecrement}
+              disabled={pendingWeight === null || pendingWeight <= settings.weightIncrement}
+              className={cn("h-14 w-14 shrink-0 rounded-full transition-all", theme.hoverBg)}
+            >
+              <Minus className="w-6 h-6" />
+            </Button>
+
+            {/* Center Display */}
+            <div className="flex-1 text-center">
+              <span className="text-4xl font-bold tabular-nums">
+                {pendingWeight?.toFixed(1) ?? "--"}
+              </span>
+              <span className="text-lg text-muted-foreground ml-1">kg</span>
             </div>
-            <div className="flex items-center px-3 text-sm font-medium text-muted-foreground bg-muted rounded-md">
-              kg
-            </div>
+
+            {/* Plus Button */}
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handleIncrement}
+              disabled={pendingWeight === null}
+              className={cn("h-14 w-14 shrink-0 rounded-full transition-all", theme.hoverBg)}
+            >
+              <Plus className="w-6 h-6" />
+            </Button>
           </div>
+
+          {fieldErrors.weight && (
+            <p className="text-sm text-destructive text-center">{fieldErrors.weight}</p>
+          )}
 
           <CollapsibleTimeInputControlled
             value={customTime}
@@ -170,7 +211,7 @@ export function WeightCard() {
 
           <Button
             onClick={handleSubmit}
-            disabled={addMutation.isPending || !weightInput}
+            disabled={addMutation.isPending || pendingWeight === null}
             className={cn("w-full h-11", theme.buttonBg)}
           >
             {addMutation.isPending ? (

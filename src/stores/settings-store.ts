@@ -34,6 +34,7 @@ export interface Settings {
   // Tracking defaults
   urinationDefaultAmount: "small" | "medium" | "large";
   defecationDefaultAmount: "small" | "medium" | "large";
+  weightIncrement: number; // kg step for +/- buttons (default 0.1)
   coffeeDefaultType: string;
 
   // Substance tracking configuration
@@ -79,6 +80,7 @@ interface SettingsActions {
   setBarTransitionDurationMs: (value: number) => void;
   setUrinationDefaultAmount: (value: "small" | "medium" | "large") => void;
   setDefecationDefaultAmount: (value: "small" | "medium" | "large") => void;
+  setWeightIncrement: (value: number) => void;
   setCoffeeDefaultType: (value: string) => void;
   setWeightGraphShowEating: (value: boolean) => void;
   setWeightGraphShowUrination: (value: boolean) => void;
@@ -110,6 +112,7 @@ const defaultSettings: Settings = {
   barTransitionDurationMs: 200,
   urinationDefaultAmount: "small" as const,
   defecationDefaultAmount: "medium" as const,
+  weightIncrement: 0.1,
   coffeeDefaultType: "double-espresso",
   dismissedInsights: {},
   substanceConfig: {
@@ -175,6 +178,8 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
 
       setUrinationDefaultAmount: (value) => set({ urinationDefaultAmount: value }),
       setDefecationDefaultAmount: (value) => set({ defecationDefaultAmount: value }),
+      setWeightIncrement: (value) =>
+        set({ weightIncrement: sanitizeNumericInput(value, 0.01, 10) }),
       setCoffeeDefaultType: (value) => set({ coffeeDefaultType: value }),
       setWeightGraphShowEating: (value) => set({ weightGraphShowEating: value }),
       setWeightGraphShowUrination: (value) => set({ weightGraphShowUrination: value }),
