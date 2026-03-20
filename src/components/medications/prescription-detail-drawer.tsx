@@ -15,6 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { PhaseTimeline } from "@/components/medications/phase-timeline";
+import { InteractionsSection } from "@/components/medications/interactions-section";
 import { Plus, Trash2 } from "lucide-react";
 import {
   usePhasesForPrescription,
@@ -426,6 +427,7 @@ function PrescriptionDetailContent({
         prescriptionId={prescription.id}
         currentUnit={currentUnit}
       />
+      <InteractionsSection prescription={prescription} />
       <NotesSection prescription={prescription} />
     </>
   );
