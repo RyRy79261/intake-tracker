@@ -6,14 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Loader2, Check, PlusCircle } from "lucide-react";
+import { Loader2, Check, ChevronDown, ChevronUp } from "lucide-react";
 import { z } from "zod";
 import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
@@ -41,7 +34,7 @@ const Icon = theme.icon;
 
 export function EatingCard() {
   const { toast } = useToast();
-  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
   const [detailNote, setDetailNote] = useState("");
   const [detailGrams, setDetailGrams] = useState("");
   const [detailTime, setDetailTime] = useState(getCurrentDateTimeLocal());
@@ -92,13 +85,6 @@ export function EatingCard() {
     }
   };
 
-  const handleOpenDetails = () => {
-    setDetailNote("");
-    setDetailGrams("");
-    setDetailTime(getCurrentDateTimeLocal());
-    setDetailsOpen(true);
-  };
-
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const handleSubmitDetails = async () => {
@@ -130,7 +116,10 @@ export function EatingCard() {
         description: detailNote ? "Meal with details recorded" : "Eating event recorded",
         variant: "success",
       });
-      setDetailsOpen(false);
+      setShowDetails(false);
+      setDetailNote("");
+      setDetailGrams("");
+      setDetailTime(getCurrentDateTimeLocal());
     } catch (error) {
       toast({
         title: "Error",
@@ -177,15 +166,70 @@ export function EatingCard() {
                 </>
               )}
             </Button>
+
             <Button
-              variant="outline"
+              variant="ghost"
               size="sm"
-              className={cn("w-full", theme.outlineBorder, theme.outlineText)}
-              onClick={handleOpenDetails}
+              className="w-full justify-between text-muted-foreground"
+              onClick={() => setShowDetails(!showDetails)}
             >
-              <PlusCircle className="w-4 h-4 mr-2" />
-              Add details (what I ate)
+              <span>Add details</span>
+              {showDetails ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </Button>
+
+            {showDetails && (
+              <div className="p-3 rounded-lg bg-muted/50 border space-y-3">
+                <div className="space-y-2">
+                  <Label htmlFor="eating-note">What I ate (optional)</Label>
+                  <Textarea
+                    id="eating-note"
+                    placeholder="e.g. Sandwich, apple, water"
+                    value={detailNote}
+                    onChange={(e) => setDetailNote(e.target.value)}
+                    className="min-h-[80px]"
+                  />
+                  {fieldErrors.note && (
+                    <p className="text-sm text-destructive mt-1">{fieldErrors.note}</p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="eating-grams">Weight in grams (optional)</Label>
+                  <Input
+                    id="eating-grams"
+                    type="number"
+                    min="1"
+                    max="10000"
+                    placeholder="e.g. 250"
+                    value={detailGrams}
+                    onChange={(e) => setDetailGrams(e.target.value)}
+                  />
+                  {fieldErrors.grams && (
+                    <p className="text-sm text-destructive mt-1">{fieldErrors.grams}</p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="eating-time">When</Label>
+                  <Input
+                    id="eating-time"
+                    type="datetime-local"
+                    value={detailTime}
+                    onChange={(e) => setDetailTime(e.target.value)}
+                    max={getCurrentDateTimeLocal()}
+                  />
+                </div>
+                <Button
+                  onClick={handleSubmitDetails}
+                  disabled={addMutation.isPending}
+                  className={cn("w-full", theme.buttonBg)}
+                >
+                  {addMutation.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    "Record with details"
+                  )}
+                </Button>
+              </div>
+            )}
           </div>
 
           {/* Recent History */}
@@ -223,68 +267,6 @@ export function EatingCard() {
         grams={editGrams}
         onGramsChange={setEditGrams}
       />
-
-      <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Log meal with details</DialogTitle>
-            <DialogDescription>
-              Optionally add what you ate and when.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="eating-note">What I ate (optional)</Label>
-              <Textarea
-                id="eating-note"
-                placeholder="e.g. Sandwich, apple, water"
-                value={detailNote}
-                onChange={(e) => setDetailNote(e.target.value)}
-                className="min-h-[80px]"
-              />
-              {fieldErrors.note && (
-                <p className="text-sm text-destructive mt-1">{fieldErrors.note}</p>
-              )}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="eating-grams">Weight in grams (optional)</Label>
-              <Input
-                id="eating-grams"
-                type="number"
-                min="1"
-                max="10000"
-                placeholder="e.g. 250"
-                value={detailGrams}
-                onChange={(e) => setDetailGrams(e.target.value)}
-              />
-              {fieldErrors.grams && (
-                <p className="text-sm text-destructive mt-1">{fieldErrors.grams}</p>
-              )}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="eating-time">When</Label>
-              <Input
-                id="eating-time"
-                type="datetime-local"
-                value={detailTime}
-                onChange={(e) => setDetailTime(e.target.value)}
-                max={getCurrentDateTimeLocal()}
-              />
-            </div>
-            <Button
-              onClick={handleSubmitDetails}
-              disabled={addMutation.isPending}
-              className={cn("w-full", theme.buttonBg)}
-            >
-              {addMutation.isPending ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                "Record"
-              )}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </>
   );
 }
