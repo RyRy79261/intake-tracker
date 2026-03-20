@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 06.1-02-PLAN.md
-last_updated: "2026-03-20T14:34:38.879Z"
+stopped_at: Completed 06.1-01-PLAN.md
+last_updated: "2026-03-20T14:36:54.104Z"
 progress:
   total_phases: 12
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 34
-  completed_plans: 33
+  completed_plans: 34
 ---
 
 # Project State
@@ -23,7 +23,7 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 
 ## Current Position
 
-Phase: 06.1 (dashboard-input-redesign) — COMPLETE
+Phase: 06.1 (dashboard-input-redesign) — EXECUTING
 Plan: 2 of 2
 
 ## Performance Metrics
@@ -68,6 +68,7 @@ Plan: 2 of 2
 | Phase 06 P07 | 14min | 2 tasks | 3 files |
 | Phase 06 P06 | 14min | 2 tasks | 6 files |
 | Phase 06.1 P02 | 5min | 2 tasks | 3 files |
+| Phase 06.1 P01 | 7min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -162,6 +163,9 @@ Recent decisions affecting current work:
 - [Phase 06]: CreatePhaseInput re-exported from hooks layer for component boundary compliance
 - [Phase 06.1]: Eating card uses plain datetime-local for time input (consistent with existing pattern)
 - [Phase 06.1]: Quick-log buttons disable siblings while submitting to prevent double-tap
+- [Phase 06.1]: Weight pre-fills with latest recorded value (fallback 70kg) instead of blank input
+- [Phase 06.1]: BP Record button placed above details expander for one-tap recording
+- [Phase 06.1]: Merged BP Advanced and detail sections into single 'More options' collapsible
 
 ### Pending Todos
 
@@ -186,7 +190,7 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-20T14:34:38.875Z
-Stopped at: Completed 06.1-02-PLAN.md
+Last session: 2026-03-20T14:36:54.100Z
+Stopped at: Completed 06.1-01-PLAN.md
 Resume file:
 None

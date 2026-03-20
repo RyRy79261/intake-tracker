@@ -143,7 +143,7 @@ Plans:
   4. Urination card has inline small/medium/large amount buttons that log on tap (no popup)
   5. Defecation card has inline small/medium/large amount buttons that log on tap (no popup)
   6. No card uses a Dialog component for new entry creation — modals only for editing existing records
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 - [ ] 06.1-01-PLAN.md — Weight card increment/decrement + BP card expandable details (DASH-01, DASH-02)

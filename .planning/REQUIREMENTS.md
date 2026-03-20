@@ -44,8 +44,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Dashboard UX
 
-- [ ] **DASH-01**: Weight card inline increment/decrement input with pre-filled latest value and configurable step size
-- [ ] **DASH-02**: Blood pressure card with primary sys/dia inputs always visible and details in expandable section
+- [x] **DASH-01**: Weight card inline increment/decrement input with pre-filled latest value and configurable step size
+- [x] **DASH-02**: Blood pressure card with primary sys/dia inputs always visible and details in expandable section
 - [x] **DASH-03**: Eating card one-tap log with inline expandable details (no popup dialog)
 - [x] **DASH-04**: Urination card inline amount selector buttons with quick-log on tap (no popup dialog)
 - [x] **DASH-05**: Defecation card inline amount selector buttons with quick-log on tap (no popup dialog)
@@ -144,8 +144,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MEDX-05 | Phase 6 | Complete |
 | MEDX-06 | Phase 6 | Complete |
 | MEDX-07 | Phase 7 | Complete |
-| DASH-01 | Phase 6.1 | Pending |
-| DASH-02 | Phase 6.1 | Pending |
+| DASH-01 | Phase 6.1 | Complete |
+| DASH-02 | Phase 6.1 | Complete |
 | DASH-03 | Phase 6.1 | Complete |
 | DASH-04 | Phase 6.1 | Complete |
 | DASH-05 | Phase 6.1 | Complete |
