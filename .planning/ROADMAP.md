@@ -11,7 +11,7 @@ This milestone is an engineering overhaul of an existing health tracking PWA. Th
 - [x] **Phase 3: Service Layer Rebuild** - Medication services rebuilt with transactional atomicity, timezone-aware scheduling, and fractional dose math
 - [x] **Phase 4: Analytics Service** - Cross-domain analytics service with substance tracking, correlation analysis, and analytics page replacing /history
 - [x] **Phase 5: Security Hardening** - API keys server-side only, encryption foundations for data at rest, auth patterns ready for cloud sync (completed 2026-03-10)
-- [ ] **Phase 6: Medication UX Core** - Compound-first prescription views, dose logging with stock depletion, retroactive logging, multi-region inventory, prescriptions tab, wizard improvements
+- [x] **Phase 6: Medication UX Core** - Compound-first prescription views, dose logging with stock depletion, retroactive logging, multi-region inventory, prescriptions tab, wizard improvements
 - [ ] **Phase 7: Schedule Visualization** - Maintenance vs titration phase display with named phases and transition clarity
 - [ ] **Phase 8: Drug Interactions** - AI-powered compound interaction data stored and surfaced per prescription with ad-hoc lookup
 - [ ] **Phase 9: Data Integrity and Backup** - Backup includes all medication tables, audit logging enforced, round-trip test verified
@@ -127,9 +127,19 @@ Plans:
 - [x] 06-02-PLAN.md — Compound card expanded view + brand switching + multi-region inventory (MEDX-01, MEDX-04)
 - [x] 06-03-PLAN.md — Schedule dashboard rebuild with inline Take/Skip, progress summary, undo toast (MEDX-02, MEDX-05, MEDX-06)
 - [x] 06-04-PLAN.md — Retroactive dose logging + dose detail with Untake + visual verification (MEDX-03)
-- [ ] 06-05-PLAN.md — Bug fixes (boolean indexing, expanded card, inventory nav) + 4th tab + editable refills (MEDX-01, MEDX-02, MEDX-04)
-- [ ] 06-06-PLAN.md — Prescriptions tab with list, detail drawer, titration phases, notes (MEDX-05, MEDX-06, MEDX-07)
-- [ ] 06-07-PLAN.md — Wizard AI auto-select + prescription assignment + compound card relationship (MEDX-01, MEDX-03)
+- [x] 06-05-PLAN.md — Bug fixes (boolean indexing, expanded card, inventory nav) + 4th tab + editable refills (MEDX-01, MEDX-02, MEDX-04)
+- [x] 06-06-PLAN.md — Prescriptions tab with list, detail drawer, titration phases, notes (MEDX-05, MEDX-06, MEDX-07)
+- [x] 06-07-PLAN.md — Wizard AI auto-select + prescription assignment + compound card relationship (MEDX-01, MEDX-03)
+
+### Phase 06.1: Dashboard Input Redesign (INSERTED)
+
+**Goal:** [Urgent work - to be planned]
+**Requirements**: TBD
+**Depends on:** Phase 6
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 06.1 to break down)
 
 ### Phase 7: Schedule Visualization
 **Goal**: A user can see their titration and maintenance phases laid out clearly, understanding which phase is active and what the transition looks like
@@ -212,7 +222,7 @@ Note: Phase 5 (Security) depends only on Phase 2 and can begin in parallel with 
 | 3. Service Layer Rebuild | 5/5 | Complete | - |
 | 4. Analytics Service | 8/8 | Complete |  |
 | 5. Security Hardening | 3/3 | Complete   | 2026-03-10 |
-| 6. Medication UX Core | 6/7 | In Progress|  |
+| 6. Medication UX Core | 7/7 | Complete | 2026-03-20 |
 | 7. Schedule Visualization | 0/TBD | Not started | - |
 | 8. Drug Interactions | 0/TBD | Not started | - |
 | 9. Data Integrity and Backup | 0/TBD | Not started | - |
