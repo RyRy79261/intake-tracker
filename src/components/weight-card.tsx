@@ -49,7 +49,8 @@ export function WeightCard() {
   // Pre-fill with latest weight when records load
   useEffect(() => {
     if (pendingWeight === null && recentRecords && recentRecords.length > 0) {
-      setPendingWeight(recentRecords[0].weight);
+      const latest = recentRecords[0];
+      if (latest) setPendingWeight(latest.weight);
     } else if (pendingWeight === null && recentRecords && recentRecords.length === 0) {
       setPendingWeight(70);
     }
