@@ -28,15 +28,22 @@ const STATUS_ORDER: Record<string, number> = {
   cancelled: 3,
 };
 
+const DEFAULT_TYPE_BADGE = {
+  label: "Maintenance",
+  className: "bg-blue-500 hover:bg-blue-600 text-white",
+};
+
 const TYPE_BADGE: Record<string, { label: string; className: string }> = {
-  maintenance: {
-    label: "Maintenance",
-    className: "bg-blue-500 hover:bg-blue-600 text-white",
-  },
+  maintenance: DEFAULT_TYPE_BADGE,
   titration: {
     label: "Titration",
     className: "bg-amber-500 hover:bg-amber-600 text-white",
   },
+};
+
+const DEFAULT_STATUS_BADGE = {
+  label: "Pending",
+  className: "bg-gray-400 hover:bg-gray-500 text-white",
 };
 
 const STATUS_BADGE: Record<string, { label: string; className: string }> = {
@@ -44,10 +51,7 @@ const STATUS_BADGE: Record<string, { label: string; className: string }> = {
     label: "Active",
     className: "bg-green-500 hover:bg-green-600 text-white",
   },
-  pending: {
-    label: "Pending",
-    className: "bg-gray-400 hover:bg-gray-500 text-white",
-  },
+  pending: DEFAULT_STATUS_BADGE,
   completed: {
     label: "Completed",
     className: "bg-muted text-muted-foreground",
@@ -101,7 +105,7 @@ function TimelineDot({ status }: { status: MedicationPhase["status"] }) {
     pending: "bg-background border-muted-foreground/50",
     cancelled: "bg-muted border-muted-foreground/30",
   };
-  return <div className={cn(base, variants[status])} />;
+  return <div className={cn(base, variants[status] ?? variants.pending)} />;
 }
 
 // ============================================================================
@@ -159,7 +163,7 @@ function PhaseDetailCompact({
   unit: string;
 }) {
   const dosageText = totalDosage > 0 ? `${totalDosage}${unit}` : "No dosage";
-  const typeStyle = TYPE_BADGE[phase.type] ?? TYPE_BADGE.maintenance;
+  const typeStyle = TYPE_BADGE[phase.type] ?? DEFAULT_TYPE_BADGE;
 
   if (phase.status === "completed" || phase.status === "cancelled") {
     const start = formatDate(phase.startDate);
@@ -203,8 +207,8 @@ function PhaseDetailExpanded({
   schedules: { time: string; dosage: number; enabled: boolean }[];
   unit: string;
 }) {
-  const typeStyle = TYPE_BADGE[phase.type] ?? TYPE_BADGE.maintenance;
-  const statusStyle = STATUS_BADGE[phase.status] ?? STATUS_BADGE.pending;
+  const typeStyle = TYPE_BADGE[phase.type] ?? DEFAULT_TYPE_BADGE;
+  const statusStyle = STATUS_BADGE[phase.status] ?? DEFAULT_STATUS_BADGE;
   const enabled = schedules
     .filter((s) => s.enabled)
     .sort((a, b) => a.time.localeCompare(b.time));
@@ -265,7 +269,7 @@ function TimelineNode({
   phase: MedicationPhase;
   isActive: boolean;
   defaultExpanded: boolean;
-  activeRef?: React.RefObject<HTMLDivElement | null>;
+  activeRef?: React.Ref<HTMLDivElement>;
 }) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
   const schedules = useSchedulesForPhase(phase.id);
@@ -274,7 +278,7 @@ function TimelineNode({
 
   return (
     <div
-      ref={isActive ? activeRef : undefined}
+      ref={activeRef}
       className={cn(
         "relative pl-5 py-1.5 cursor-pointer rounded-md",
         isActive && "border-l-2 border-l-emerald-500 bg-emerald-500/5",
@@ -386,7 +390,7 @@ export function PhaseTimeline({
               phase={phase}
               isActive={isActive}
               defaultExpanded={isActive}
-              activeRef={isActive ? activeRef : undefined}
+              {...(isActive && { activeRef })}
             />
           </div>
         );

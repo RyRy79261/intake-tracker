@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { TitrationPhaseCard } from "@/components/medications/titration-phase-card";
+import { PhaseTimeline } from "@/components/medications/phase-timeline";
 import { Plus, Trash2 } from "lucide-react";
 import {
   usePhasesForPrescription,
@@ -88,10 +88,10 @@ function ActiveScheduleDisplay({ phase }: { phase: MedicationPhase }) {
 }
 
 // ============================================================================
-// Phases Section
+// Phase Timeline Section
 // ============================================================================
 
-function PhasesSection({
+function PhaseTimelineSection({
   phases,
   prescriptionId,
   currentUnit,
@@ -102,29 +102,14 @@ function PhasesSection({
 }) {
   const [showForm, setShowForm] = useState(false);
 
-  // Sort: active first, then pending, then completed/cancelled
-  const statusOrder: Record<string, number> = {
-    active: 0,
-    pending: 1,
-    completed: 2,
-    cancelled: 3,
-  };
-  const sorted = [...phases].sort(
-    (a, b) => (statusOrder[a.status] ?? 4) - (statusOrder[b.status] ?? 4)
-  );
-
   return (
     <section className="mb-6">
-      <h3 className="text-sm font-semibold mb-2">Dosage Phases</h3>
-      <div className="space-y-2">
-        {sorted.map((phase) => (
-          <TitrationPhaseCard
-            key={phase.id}
-            phase={phase}
-            isOnly={phases.length <= 1}
-          />
-        ))}
-      </div>
+      <h3 className="text-sm font-semibold mb-2">Phase Timeline</h3>
+      <PhaseTimeline
+        phases={phases}
+        prescriptionId={prescriptionId}
+        currentUnit={currentUnit}
+      />
 
       {showForm ? (
         <NewPhaseForm
@@ -436,7 +421,7 @@ function PrescriptionDetailContent({
   return (
     <>
       <ScheduleSection phases={phases} />
-      <PhasesSection
+      <PhaseTimelineSection
         phases={phases}
         prescriptionId={prescription.id}
         currentUnit={currentUnit}
