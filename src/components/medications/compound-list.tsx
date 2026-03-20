@@ -5,6 +5,7 @@ import { Cat, ChevronDown, Plus } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { MedicationCard } from "@/components/medications/compound-card";
+import { InteractionSearch } from "@/components/medications/interaction-search";
 import { usePrescriptions, useAllInventoryItems } from "@/hooks/use-medication-queries";
 import type { InventoryItem, Prescription } from "@/lib/db";
 
@@ -64,6 +65,8 @@ export function CompoundList({ onAddMed }: CompoundListProps) {
 
   return (
     <div className="space-y-4 pb-24 px-4">
+      <InteractionSearch />
+
       {/* Active medications — always expanded */}
       {active.length > 0 && (
         <section>
