@@ -5,6 +5,7 @@ import {
   Drawer,
   DrawerContent,
 } from "@/components/ui/drawer";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,7 +15,8 @@ import { useMedicineSearch, type MedicineSearchResult } from "@/hooks/use-medici
 import { useAddPrescription, usePrescriptions, useAddMedicationToPrescription, usePhasesForPrescription } from "@/hooks/use-medication-queries";
 import { Switch } from "@/components/ui/switch";
 import type { PillShape, FoodInstruction, Prescription, MedicationPhase } from "@/lib/db";
-import { ArrowLeft, ArrowRight, Search, Loader2, Check, Plus, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Search, Loader2, Check, Plus, X, AlertTriangle } from "lucide-react";
+import { useInteractionCheck } from "@/hooks/use-interaction-check";
 import { z } from "zod";
 import { cn } from "@/lib/utils";
 import { logAudit } from "@/lib/audit";
@@ -121,13 +123,6 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
     isExistingPrescription ? selectedPrescriptionId : undefined
   );
 
-  // Dynamic steps: skip indication for existing rx, skip schedule for as-needed
-  const activeSteps = STEPS.filter(s => {
-    if (s === "indication" && isExistingPrescription) return false;
-    if (s === "schedule" && asNeeded) return false;
-    return true;
-  });
-
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResult, setSearchResult] = useState<MedicineSearchResult | null>(null);
   const [brandName, setBrandName] = useState("");
@@ -149,6 +144,13 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
   const [customDosage, setCustomDosage] = useState("");
 
   const [asNeeded, setAsNeeded] = useState(false);
+
+  // Dynamic steps: skip indication for existing rx, skip schedule for as-needed
+  const activeSteps = STEPS.filter(s => {
+    if (s === "indication" && isExistingPrescription) return false;
+    if (s === "schedule" && asNeeded) return false;
+    return true;
+  });
   const [schedules, setSchedules] = useState<ScheduleEntry[]>([
     { time: "08:30", daysOfWeek: [...ALL_DAYS], dosage: 1 },
   ]);
@@ -156,6 +158,10 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
   const [currentStock, setCurrentStock] = useState("");
   const [refillAlertDays, setRefillAlertDays] = useState("");
   const [refillAlertPills, setRefillAlertPills] = useState("");
+
+  // Conflict check state
+  const [conflictCheckState, setConflictCheckState] = useState<"idle" | "checking" | "warning" | "unavailable">("idle");
+  const { check: checkInteractions, data: conflictData, reset: resetConflicts } = useInteractionCheck();
 
   const resetForm = useCallback(() => {
     setStep("search");
@@ -181,7 +187,9 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
     setCurrentStock("");
     setRefillAlertDays("");
     setRefillAlertPills("");
-  }, []);
+    setConflictCheckState("idle");
+    resetConflicts();
+  }, [resetConflicts]);
 
   // Pre-populate fields from existing prescription's active phase
   const handlePrescriptionSelect = useCallback((id: string) => {
@@ -306,6 +314,8 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
 
   const goBack = () => {
     setFieldErrors({});
+    setConflictCheckState("idle");
+    resetConflicts();
     const prev = activeSteps[currentStepIndex - 1];
     if (canGoBack && prev) setStep(prev);
   };
@@ -318,6 +328,35 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
 
   const handleSave = async () => {
     if (!validateCurrentStep()) return;
+
+    // Conflict check for new prescriptions
+    if (conflictCheckState === "idle" && selectedPrescriptionId === "new") {
+      const activeMeds = existingPrescriptions.filter((p) => p.isActive);
+      if (activeMeds.length > 0) {
+        setConflictCheckState("checking");
+        try {
+          const result = await checkInteractions({
+            mode: "conflict",
+            newMedication: genericName || searchQuery,
+            activePrescriptions: activeMeds.map((p) => ({ genericName: p.genericName })),
+          });
+          if (result) {
+            const hasConflicts = result.interactions.some(
+              (i) => i.severity === "AVOID" || i.severity === "CAUTION"
+            );
+            if (hasConflicts) {
+              setConflictCheckState("warning");
+              return;
+            }
+          }
+          // No result (error) or no conflicts — proceed to save
+        } catch {
+          // AI unavailable — proceed to save
+        }
+      }
+    }
+
+    // If warning, user acknowledged via "Save Anyway" — proceed to save
 
     const parseStrength = (str: string): { strength: number; unit: string } => {
       if (!str) return { strength: 1, unit: "mg" };
@@ -385,6 +424,80 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
   return (
     <Drawer open={open} onOpenChange={(o) => { if (!o) handleClose(); }} repositionInputs={false}>
       <DrawerContent className="w-full max-w-[100vw] overflow-hidden max-h-[90dvh]">
+        {/* Conflict check: checking overlay */}
+        {conflictCheckState === "checking" && (
+          <div className="absolute inset-0 bg-background/95 z-10 flex flex-col items-center justify-center p-4">
+            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground mb-3" />
+            <p className="text-sm text-muted-foreground">Checking for interactions...</p>
+          </div>
+        )}
+
+        {/* Conflict check: warning overlay */}
+        {conflictCheckState === "warning" && conflictData && (
+          <div className="absolute inset-0 bg-background/95 z-10 flex flex-col p-4 overflow-y-auto">
+            <div className="flex items-center gap-2 mb-4">
+              <AlertTriangle className="w-5 h-5 text-amber-500" />
+              <h3 className="text-sm font-semibold">Interaction Warning</h3>
+            </div>
+
+            {conflictData.summary && (
+              <p className="text-xs text-muted-foreground mb-3">{conflictData.summary}</p>
+            )}
+
+            {conflictData.interactions
+              .filter((i) => i.severity === "AVOID" || i.severity === "CAUTION")
+              .map((item, idx) => (
+                <div
+                  key={idx}
+                  className={`flex items-start gap-2 p-2 rounded-md mb-2 ${
+                    item.severity === "AVOID"
+                      ? "bg-red-50 dark:bg-red-950/30"
+                      : "bg-amber-50 dark:bg-amber-950/30"
+                  }`}
+                >
+                  <Badge
+                    {...(item.severity === "AVOID"
+                      ? { variant: "destructive" as const }
+                      : {})}
+                    className={`text-[10px] shrink-0 ${
+                      item.severity === "CAUTION"
+                        ? "bg-amber-500 hover:bg-amber-600 text-white"
+                        : ""
+                    }`}
+                  >
+                    {item.severity}
+                  </Badge>
+                  <div className="text-xs">
+                    <span className="font-medium">{item.medication}:</span>{" "}
+                    {item.description}
+                  </div>
+                </div>
+              ))}
+
+            <div className="flex gap-3 mt-auto pt-4">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => {
+                  resetConflicts();
+                  setConflictCheckState("idle");
+                }}
+              >
+                Go Back
+              </Button>
+              <Button
+                className="flex-1 bg-amber-600 hover:bg-amber-700"
+                onClick={() => {
+                  setConflictCheckState("warning");
+                  handleSave();
+                }}
+              >
+                I&apos;m Aware, Save Anyway
+              </Button>
+            </div>
+          </div>
+        )}
+
         <div className="p-4 px-5">
           {/* Progress */}
           <div className="flex items-center justify-between mb-4">
