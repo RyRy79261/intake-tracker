@@ -42,6 +42,14 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **MEDX-06**: Today's medication dashboard — immediate view of due/taken/pending doses for the day
 - [x] **MEDX-07**: Schedule visualization — maintenance vs titration phases displayed clearly
 
+### Dashboard UX
+
+- [ ] **DASH-01**: Weight card inline increment/decrement input with pre-filled latest value and configurable step size
+- [ ] **DASH-02**: Blood pressure card with primary sys/dia inputs always visible and details in expandable section
+- [ ] **DASH-03**: Eating card one-tap log with inline expandable details (no popup dialog)
+- [ ] **DASH-04**: Urination card inline amount selector buttons with quick-log on tap (no popup dialog)
+- [ ] **DASH-05**: Defecation card inline amount selector buttons with quick-log on tap (no popup dialog)
+
 ### Interactions
 
 - [ ] **INTR-01**: AI-powered compound interaction/contraindication data stored per prescription (via Perplexity or similar)
@@ -136,6 +144,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MEDX-05 | Phase 6 | Complete |
 | MEDX-06 | Phase 6 | Complete |
 | MEDX-07 | Phase 7 | Complete |
+| DASH-01 | Phase 6.1 | Pending |
+| DASH-02 | Phase 6.1 | Pending |
+| DASH-03 | Phase 6.1 | Pending |
+| DASH-04 | Phase 6.1 | Pending |
+| DASH-05 | Phase 6.1 | Pending |
 | INTR-01 | Phase 8 | Pending |
 | INTR-02 | Phase 8 | Pending |
 | INTR-03 | Phase 8 | Pending |
@@ -149,10 +162,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | NOTF-01 | Phase 11 | Pending |
 
 **Coverage:**
-- v1 requirements: 38 total
-- Mapped to phases: 38
+- v1 requirements: 43 total
+- Mapped to phases: 43
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-02*
-*Last updated: 2026-03-10 after Phase 5.1 planning — 6 DSGN requirements added, 38 total requirements mapped*
+*Last updated: 2026-03-20 after Phase 6.1 planning — 5 DASH requirements added, 43 total requirements mapped*

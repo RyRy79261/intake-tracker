@@ -133,13 +133,21 @@ Plans:
 
 ### Phase 06.1: Dashboard Input Redesign (INSERTED)
 
-**Goal:** [Urgent work - to be planned]
-**Requirements**: TBD
+**Goal:** Replace popup modals with inline input flows for all dashboard intake metrics (weight, BP, eating, urination, defecation). Weight gets increment/decrement with pre-filled last value. Others get comprehensive inline inputs like the water/coffee pattern.
+**Requirements**: DASH-01, DASH-02, DASH-03, DASH-04, DASH-05
 **Depends on:** Phase 6
-**Plans:** 0 plans
+**Success Criteria** (what must be TRUE):
+  1. Weight card shows increment/decrement buttons flanking a centered value pre-filled with latest recorded weight
+  2. Blood pressure card has systolic/diastolic inputs always visible with details (HR, position, arm) in expandable section
+  3. Eating card has one-tap "I ate" button with optional inline expandable details (no popup)
+  4. Urination card has inline small/medium/large amount buttons that log on tap (no popup)
+  5. Defecation card has inline small/medium/large amount buttons that log on tap (no popup)
+  6. No card uses a Dialog component for new entry creation — modals only for editing existing records
+**Plans:** 2 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 06.1 to break down)
+- [ ] 06.1-01-PLAN.md — Weight card increment/decrement + BP card expandable details (DASH-01, DASH-02)
+- [ ] 06.1-02-PLAN.md — Eating, urination, defecation cards with inline inputs (DASH-03, DASH-04, DASH-05)
 
 ### Phase 7: Schedule Visualization
 **Goal**: A user can see their titration and maintenance phases laid out clearly, understanding which phase is active and what the transition looks like
@@ -211,7 +219,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10 -> 11
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 6.1 -> 7 -> 8 -> 9 -> 10 -> 11
 
 Note: Phase 5 (Security) depends only on Phase 2 and can begin in parallel with Phase 3 if needed.
 
@@ -223,6 +231,7 @@ Note: Phase 5 (Security) depends only on Phase 2 and can begin in parallel with 
 | 4. Analytics Service | 8/8 | Complete |  |
 | 5. Security Hardening | 3/3 | Complete   | 2026-03-10 |
 | 6. Medication UX Core | 7/7 | Complete | 2026-03-20 |
+| 6.1. Dashboard Input Redesign | 0/2 | Not started | - |
 | 7. Schedule Visualization | 0/TBD | Not started | - |
 | 8. Drug Interactions | 0/TBD | Not started | - |
 | 9. Data Integrity and Backup | 0/TBD | Not started | - |
