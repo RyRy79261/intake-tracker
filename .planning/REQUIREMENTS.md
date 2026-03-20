@@ -52,7 +52,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Interactions
 
-- [ ] **INTR-01**: AI-powered compound interaction/contraindication data stored per prescription (via Perplexity or similar)
+- [x] **INTR-01**: AI-powered compound interaction/contraindication data stored per prescription (via Perplexity or similar)
 - [ ] **INTR-02**: Interaction check on add — warn when new prescription conflicts with existing ones
 - [ ] **INTR-03**: Persistent interaction section on prescription detail view — known interactions, contraindications, drug class warnings (e.g., "no NSAIDs")
 - [ ] **INTR-04**: Ad-hoc "can I take X?" lookup — check a substance against current prescriptions
@@ -149,7 +149,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DASH-03 | Phase 6.1 | Complete |
 | DASH-04 | Phase 6.1 | Complete |
 | DASH-05 | Phase 6.1 | Complete |
-| INTR-01 | Phase 8 | Pending |
+| INTR-01 | Phase 8 | Complete |
 | INTR-02 | Phase 8 | Pending |
 | INTR-03 | Phase 8 | Pending |
 | INTR-04 | Phase 8 | Pending |
