@@ -157,10 +157,10 @@ Plans:
   1. The prescription detail view shows named phases (e.g., "Titration Week 1", "Maintenance") in a visual timeline or list
   2. The active phase is clearly distinguished from past and future phases
   3. A maintenance phase vs titration phase are visually distinct — the user can tell at a glance which type is active
-**Plans**: TBD
+**Plans**: 1
 
 Plans:
-- [ ] 07-01: TBD
+- [ ] 07-01-PLAN.md — PhaseTimeline component + PrescriptionDetailDrawer integration (MEDX-07)
 
 ### Phase 8: Drug Interactions
 **Goal**: A user can see known interactions and contraindications for their prescriptions and check whether a new substance is safe to take
@@ -232,7 +232,7 @@ Note: Phase 5 (Security) depends only on Phase 2 and can begin in parallel with 
 | 5. Security Hardening | 3/3 | Complete   | 2026-03-10 |
 | 6. Medication UX Core | 7/7 | Complete | 2026-03-20 |
 | 6.1. Dashboard Input Redesign | 0/2 | Not started | - |
-| 7. Schedule Visualization | 0/TBD | Not started | - |
+| 7. Schedule Visualization | 0/1 | Not started | - |
 | 8. Drug Interactions | 0/TBD | Not started | - |
 | 9. Data Integrity and Backup | 0/TBD | Not started | - |
 | 10. Test Coverage | 0/TBD | Not started | - |
