@@ -171,10 +171,12 @@ Plans:
   2. Adding a new prescription triggers an AI interaction check against existing prescriptions and surfaces any conflicts before saving
   3. A user can type a substance name into an ad-hoc lookup and get a result indicating whether it conflicts with any current prescription
   4. Interaction data is stored per prescription in the database — it persists offline without re-querying the AI
-**Plans**: TBD
+**Plans**: 3
 
 Plans:
-- [ ] 08-01: TBD
+- [ ] 08-01-PLAN.md — Interaction-check API route + localStorage cache + React hooks (INTR-01)
+- [ ] 08-02-PLAN.md — Interactions section in prescription drawer + wizard conflict check (INTR-02, INTR-03)
+- [ ] 08-03-PLAN.md — Ad-hoc substance interaction search on Medications tab (INTR-04)
 
 ### Phase 9: Data Integrity and Backup
 **Goal**: A user's full medication history is included in backups and can be fully restored, and all medication mutations produce an audit trail
@@ -233,7 +235,7 @@ Note: Phase 5 (Security) depends only on Phase 2 and can begin in parallel with 
 | 6. Medication UX Core | 7/7 | Complete | 2026-03-20 |
 | 6.1. Dashboard Input Redesign | 0/2 | Not started | - |
 | 7. Schedule Visualization | 1/1 | Complete   | 2026-03-20 |
-| 8. Drug Interactions | 0/TBD | Not started | - |
+| 8. Drug Interactions | 0/3 | Not started | - |
 | 9. Data Integrity and Backup | 0/TBD | Not started | - |
 | 10. Test Coverage | 0/TBD | Not started | - |
 | 11. Push Notifications | 0/TBD | Not started | - |
