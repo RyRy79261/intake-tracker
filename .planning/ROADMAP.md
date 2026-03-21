@@ -186,10 +186,11 @@ Plans:
   1. Triggering a backup export produces a file that includes prescriptions, phases, phaseSchedules, inventoryItems, inventoryTransactions, doseLogs, and auditLogs
   2. Clearing all app data and restoring from the exported backup results in all medication records being present and correct (verifiable by count and spot-check)
   3. Every medication mutation (take dose, skip dose, add prescription, adjust inventory) produces an entry in the audit log table
-**Plans**: TBD
+**Plans**: 2
 
 Plans:
-- [ ] 09-01: TBD
+- [ ] 09-01-PLAN.md — Extend backup to all 16 tables + conflict detection + round-trip tests (DATA-01, DATA-02, DATA-03)
+- [ ] 09-02-PLAN.md — Conflict review Drawer UI + import confirmation + summary flow (DATA-02)
 
 ### Phase 10: Test Coverage
 **Goal**: All service functions have unit tests, all migration paths are tested, and the test suite runs correctly under both SA and Germany timezones
@@ -236,6 +237,6 @@ Note: Phase 5 (Security) depends only on Phase 2 and can begin in parallel with 
 | 6.1. Dashboard Input Redesign | 0/2 | Not started | - |
 | 7. Schedule Visualization | 1/1 | Complete   | 2026-03-20 |
 | 8. Drug Interactions | 3/3 | Complete   | 2026-03-20 |
-| 9. Data Integrity and Backup | 0/TBD | Not started | - |
+| 9. Data Integrity and Backup | 0/2 | Not started | - |
 | 10. Test Coverage | 0/TBD | Not started | - |
 | 11. Push Notifications | 0/TBD | Not started | - |
