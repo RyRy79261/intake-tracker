@@ -189,7 +189,7 @@ Plans:
 **Plans**: 2
 
 Plans:
-- [ ] 09-01-PLAN.md — Extend backup to all 16 tables + conflict detection + round-trip tests (DATA-01, DATA-02, DATA-03)
+- [x] 09-01-PLAN.md — Extend backup to all 16 tables + conflict detection + round-trip tests (DATA-01, DATA-02, DATA-03)
 - [ ] 09-02-PLAN.md — Conflict review Drawer UI + import confirmation + summary flow (DATA-02)
 
 ### Phase 10: Test Coverage

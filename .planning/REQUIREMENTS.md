@@ -69,9 +69,9 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Data Integrity
 
-- [ ] **DATA-01**: Backup/export includes all tables — prescriptions, phases, inventory, dose logs, daily notes (currently missing)
-- [ ] **DATA-02**: Backup round-trip test — export → clear → import → verify all data
-- [ ] **DATA-03**: Audit logging for all medication operations
+- [x] **DATA-01**: Backup/export includes all tables — prescriptions, phases, inventory, dose logs, daily notes (currently missing)
+- [x] **DATA-02**: Backup round-trip test — export → clear → import → verify all data
+- [x] **DATA-03**: Audit logging for all medication operations
 
 ### Testability
 
@@ -153,9 +153,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INTR-02 | Phase 8 | Complete |
 | INTR-03 | Phase 8 | Complete |
 | INTR-04 | Phase 8 | Complete |
-| DATA-01 | Phase 9 | Pending |
-| DATA-02 | Phase 9 | Pending |
-| DATA-03 | Phase 9 | Pending |
+| DATA-01 | Phase 9 | Complete |
+| DATA-02 | Phase 9 | Complete |
+| DATA-03 | Phase 9 | Complete |
 | TEST-02 | Phase 10 | Pending |
 | TEST-03 | Phase 10 | Pending |
 | TEST-04 | Phase 10 | Pending |
