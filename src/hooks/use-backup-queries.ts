@@ -1,10 +1,12 @@
 "use client";
 
 import { useMutation } from "@tanstack/react-query";
-import { downloadBackup, importBackup, type ImportResult } from "@/lib/backup-service";
+import { downloadBackup, importBackup, resolveConflicts, type ImportResult, type ConflictRecord } from "@/lib/backup-service";
 import { clearAllData } from "@/lib/intake-service";
 import { unwrap } from "@/lib/service-result";
 import { useToast } from "@/hooks/use-toast";
+
+export type { ImportResult, ConflictRecord };
 
 export function useDownloadBackup() {
   const { toast } = useToast();
@@ -41,10 +43,20 @@ export function useUploadBackup() {
         data.bpImported +
         data.eatingImported +
         data.urinationImported +
-        data.defecationImported;
+        data.defecationImported +
+        data.substanceImported +
+        data.prescriptionsImported +
+        data.phasesImported +
+        data.schedulesImported +
+        data.inventoryItemsImported +
+        data.inventoryTransactionsImported +
+        data.doseLogsImported +
+        data.titrationPlansImported +
+        data.dailyNotesImported +
+        data.auditLogsImported;
       toast({
         title: "Import successful",
-        description: `Imported ${total} records (${data.skipped} skipped)`,
+        description: `Imported ${total} records (${data.skipped} skipped${data.conflicts.length > 0 ? `, ${data.conflicts.length} conflicts` : ""})`,
         variant: "success",
       });
     },
@@ -52,6 +64,29 @@ export function useUploadBackup() {
       toast({
         title: "Import failed",
         description: `Failed to import data: ${error.message}`,
+        variant: "destructive",
+      });
+    },
+  });
+}
+
+export function useResolveConflicts() {
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async (resolutions: Array<{ table: string; id: string; useBackup: boolean; backupRecord: Record<string, unknown> }>) => {
+      return unwrap(await resolveConflicts(resolutions));
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Conflicts resolved",
+        description: `${data.resolved} records updated`,
+        variant: "success",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Resolution failed",
+        description: error.message,
         variant: "destructive",
       });
     },
