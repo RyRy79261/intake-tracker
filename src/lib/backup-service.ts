@@ -118,10 +118,28 @@ function emptyImportResult(): ImportResult {
 const IGNORE_FIELDS = new Set(["createdAt", "updatedAt", "deletedAt", "deviceId", "timezone"]);
 
 function isContentEqual(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
-  const aKeys = Object.keys(a).filter(k => !IGNORE_FIELDS.has(k));
-  const bKeys = Object.keys(b).filter(k => !IGNORE_FIELDS.has(k));
-  if (aKeys.length !== bKeys.length) return false;
-  return aKeys.every(k => JSON.stringify(a[k]) === JSON.stringify(b[k]));
+  // Collect all keys from both objects, excluding sync metadata
+  const allKeys: string[] = [];
+  const seen = new Set<string>();
+  const addKeys = (keys: string[]) => {
+    keys.forEach(k => {
+      if (!IGNORE_FIELDS.has(k) && !seen.has(k)) {
+        seen.add(k);
+        allKeys.push(k);
+      }
+    });
+  };
+  addKeys(Object.keys(a));
+  addKeys(Object.keys(b));
+  // Compare values -- treat missing keys and undefined as equivalent
+  for (let i = 0; i < allKeys.length; i++) {
+    const k = allKeys[i]!;
+    const aVal = a[k];
+    const bVal = b[k];
+    if (aVal === undefined && bVal === undefined) continue;
+    if (JSON.stringify(aVal) !== JSON.stringify(bVal)) return false;
+  }
+  return true;
 }
 
 /**
