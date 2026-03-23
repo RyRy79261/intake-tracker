@@ -131,7 +131,10 @@ export async function addComposableEntry(
       }
     });
 
-    return ok({ groupId, eatingId, intakeIds, substanceId });
+    const result: ComposableEntryResult = { groupId, intakeIds };
+    if (eatingId !== undefined) result.eatingId = eatingId;
+    if (substanceId !== undefined) result.substanceId = substanceId;
+    return ok(result);
   } catch (e) {
     return err("Failed to add composable entry", e);
   }

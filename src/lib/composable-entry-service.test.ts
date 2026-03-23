@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import { db } from "@/lib/db";
-import { makeEatingRecord, makeIntakeRecord, makeSubstanceRecord, seedComposableGroup } from "@/__tests__/fixtures/db-fixtures";
+import { makeIntakeRecord, seedComposableGroup } from "@/__tests__/fixtures/db-fixtures";
 import {
   addComposableEntry,
   deleteEntryGroup,
@@ -59,7 +59,7 @@ describe("composable-entry-service", () => {
 
       // Verify groupId is shared
       const eating = await db.eatingRecords.get(result.data.eatingId!);
-      const intake = await db.intakeRecords.get(result.data.intakeIds[0]);
+      const intake = await db.intakeRecords.get(result.data.intakeIds[0]!);
       expect(eating?.groupId).toBe(result.data.groupId);
       expect(intake?.groupId).toBe(result.data.groupId);
     });
@@ -104,7 +104,7 @@ describe("composable-entry-service", () => {
       if (!result.success) return;
 
       const eating = await db.eatingRecords.get(result.data.eatingId!);
-      const intake = await db.intakeRecords.get(result.data.intakeIds[0]);
+      const intake = await db.intakeRecords.get(result.data.intakeIds[0]!);
       const substance = await db.substanceRecords.get(result.data.substanceId!);
 
       expect(eating?.timestamp).toBe(ts);
@@ -128,7 +128,7 @@ describe("composable-entry-service", () => {
       expect(eating?.deviceId).toBeTypeOf("string");
       expect(eating?.timezone).toBeTypeOf("string");
 
-      const intake = await db.intakeRecords.get(result.data.intakeIds[0]);
+      const intake = await db.intakeRecords.get(result.data.intakeIds[0]!);
       expect(intake?.createdAt).toBeTypeOf("number");
       expect(intake?.updatedAt).toBeTypeOf("number");
       expect(intake?.deletedAt).toBeNull();
@@ -198,7 +198,7 @@ describe("composable-entry-service", () => {
       const eating = await db.eatingRecords.get(result.data.eatingId!);
       expect(eating?.groupSource).toBe("ai_food_parse");
 
-      const intake = await db.intakeRecords.get(result.data.intakeIds[0]);
+      const intake = await db.intakeRecords.get(result.data.intakeIds[0]!);
       expect(intake?.groupSource).toBe("ai_food_parse");
     });
 
@@ -214,20 +214,22 @@ describe("composable-entry-service", () => {
       };
 
       // Monkey-patch crypto.randomUUID to return the existing id on the second call
-      const originalRandomUUID = crypto.randomUUID;
+      const originalRandomUUID = crypto.randomUUID.bind(crypto);
       let callCount = 0;
-      crypto.randomUUID = () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (crypto as any).randomUUID = (): string => {
         callCount++;
         // First call = groupId, second call = eating record, third call = intake record
         if (callCount === 3) return existingRecord.id;
-        return originalRandomUUID.call(crypto);
+        return originalRandomUUID();
       };
 
       try {
         const result = await addComposableEntry(input);
         expect(result.success).toBe(false);
       } finally {
-        crypto.randomUUID = originalRandomUUID;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (crypto as any).randomUUID = originalRandomUUID;
       }
 
       // Verify no eating records were created (transaction rolled back)
@@ -276,16 +278,16 @@ describe("composable-entry-service", () => {
     });
 
     it("Test 12: skips records already soft-deleted", async () => {
-      const { groupId, eatingId } = await seedComposableGroup({
+      await seedComposableGroup({
         eating: { note: "Pre-deleted", deletedAt: 1700000000000 },
         intakes: [{ type: "water", amount: 200 }],
+      }).then(async ({ groupId }) => {
+        const result = await deleteEntryGroup(groupId);
+        expect(result.success).toBe(true);
+        if (!result.success) return;
+        // Only the intake record should be counted (eating already deleted)
+        expect(result.data.deletedCount).toBe(1);
       });
-
-      const result = await deleteEntryGroup(groupId);
-      expect(result.success).toBe(true);
-      if (!result.success) return;
-      // Only the intake record should be counted (eating already deleted)
-      expect(result.data.deletedCount).toBe(1);
     });
 
     it("Test 13: after deleteEntryGroup, records still exist in DB but have non-null deletedAt", async () => {
@@ -301,7 +303,7 @@ describe("composable-entry-service", () => {
       expect(eating).toBeTruthy();
       expect(eating?.deletedAt).not.toBeNull();
 
-      const intake = await db.intakeRecords.get(intakeIds[0]);
+      const intake = await db.intakeRecords.get(intakeIds[0]!);
       expect(intake).toBeTruthy();
       expect(intake?.deletedAt).not.toBeNull();
     });
@@ -325,7 +327,7 @@ describe("composable-entry-service", () => {
       const eating = await db.eatingRecords.get(eatingId!);
       expect(eating?.deletedAt).toBeNull();
 
-      const intake = await db.intakeRecords.get(intakeIds[0]);
+      const intake = await db.intakeRecords.get(intakeIds[0]!);
       expect(intake?.deletedAt).toBeNull();
     });
 
@@ -358,7 +360,7 @@ describe("composable-entry-service", () => {
       expect(result.data.restoredCount).toBe(1);
 
       // The intake that was never deleted should still be fine
-      const intake = await db.intakeRecords.get(intakeIds[0]);
+      const intake = await db.intakeRecords.get(intakeIds[0]!);
       expect(intake?.deletedAt).toBeNull();
     });
   });
@@ -414,31 +416,31 @@ describe("composable-entry-service", () => {
 
   describe("deleteSingleGroupRecord", () => {
     it("Test 21: soft-deletes a single intake record, leaving other group members intact", async () => {
-      const { groupId, eatingId, intakeIds } = await seedComposableGroup({
+      const { eatingId, intakeIds } = await seedComposableGroup({
         eating: { note: "Keep eating" },
         intakes: [{ type: "water", amount: 200 }, { type: "salt", amount: 300 }],
       });
 
-      const result = await deleteSingleGroupRecord("intakeRecords", intakeIds[0]);
+      const result = await deleteSingleGroupRecord("intakeRecords", intakeIds[0]!);
       expect(result.success).toBe(true);
       if (!result.success) return;
       expect(result.data.table).toBe("intakeRecords");
       expect(result.data.id).toBe(intakeIds[0]);
 
       // Deleted record
-      const deleted = await db.intakeRecords.get(intakeIds[0]);
+      const deleted = await db.intakeRecords.get(intakeIds[0]!);
       expect(deleted?.deletedAt).toBeTypeOf("number");
 
       // Other group members intact
       const eating = await db.eatingRecords.get(eatingId!);
       expect(eating?.deletedAt).toBeNull();
 
-      const otherIntake = await db.intakeRecords.get(intakeIds[1]);
+      const otherIntake = await db.intakeRecords.get(intakeIds[1]!);
       expect(otherIntake?.deletedAt).toBeNull();
     });
 
     it("Test 22: soft-deletes a single eating record, leaving other group members intact", async () => {
-      const { groupId, eatingId, intakeIds } = await seedComposableGroup({
+      const { eatingId, intakeIds } = await seedComposableGroup({
         eating: { note: "Delete just me" },
         intakes: [{ type: "water", amount: 100 }],
       });
@@ -449,12 +451,12 @@ describe("composable-entry-service", () => {
       const eating = await db.eatingRecords.get(eatingId!);
       expect(eating?.deletedAt).toBeTypeOf("number");
 
-      const intake = await db.intakeRecords.get(intakeIds[0]);
+      const intake = await db.intakeRecords.get(intakeIds[0]!);
       expect(intake?.deletedAt).toBeNull();
     });
 
     it("Test 23: soft-deletes a single substance record, leaving other group members intact", async () => {
-      const { groupId, eatingId, substanceId } = await seedComposableGroup({
+      const { eatingId, substanceId } = await seedComposableGroup({
         eating: { note: "Still here" },
         substance: { type: "caffeine", amountMg: 95, description: "Espresso" },
       });
@@ -474,7 +476,7 @@ describe("composable-entry-service", () => {
         intakes: [{ type: "water", amount: 200 }],
       });
 
-      const result = await deleteSingleGroupRecord("intakeRecords", intakeIds[0]);
+      const result = await deleteSingleGroupRecord("intakeRecords", intakeIds[0]!);
       expect(result.success).toBe(true);
       if (!result.success) return;
       expect(result.data).toEqual({ table: "intakeRecords", id: intakeIds[0] });
@@ -485,17 +487,17 @@ describe("composable-entry-service", () => {
 
   describe("undoDeleteSingleRecord", () => {
     it("Test 25: restores a single soft-deleted intake record, other group members unchanged", async () => {
-      const { groupId, eatingId, intakeIds } = await seedComposableGroup({
+      const { eatingId, intakeIds } = await seedComposableGroup({
         eating: { note: "Untouched" },
         intakes: [{ type: "water", amount: 200 }],
       });
 
       // Delete then undo
-      await deleteSingleGroupRecord("intakeRecords", intakeIds[0]);
-      const result = await undoDeleteSingleRecord("intakeRecords", intakeIds[0]);
+      await deleteSingleGroupRecord("intakeRecords", intakeIds[0]!);
+      const result = await undoDeleteSingleRecord("intakeRecords", intakeIds[0]!);
       expect(result.success).toBe(true);
 
-      const intake = await db.intakeRecords.get(intakeIds[0]);
+      const intake = await db.intakeRecords.get(intakeIds[0]!);
       expect(intake?.deletedAt).toBeNull();
 
       // Eating was never touched
@@ -521,8 +523,8 @@ describe("composable-entry-service", () => {
         intakes: [{ type: "water", amount: 150 }],
       });
 
-      await deleteSingleGroupRecord("intakeRecords", intakeIds[0]);
-      const result = await undoDeleteSingleRecord("intakeRecords", intakeIds[0]);
+      await deleteSingleGroupRecord("intakeRecords", intakeIds[0]!);
+      const result = await undoDeleteSingleRecord("intakeRecords", intakeIds[0]!);
       expect(result.success).toBe(true);
       if (!result.success) return;
       expect(result.data).toEqual({ table: "intakeRecords", id: intakeIds[0] });
