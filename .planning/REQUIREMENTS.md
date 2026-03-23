@@ -78,7 +78,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **TEST-01**: Vitest + fake-indexeddb test infrastructure configured and working
 - [x] **TEST-02**: Unit tests for all service layer functions
 - [ ] **TEST-03**: Migration tests for schema version upgrades
-- [ ] **TEST-04**: Timezone-specific test runs in both `TZ=Africa/Johannesburg` and `TZ=Europe/Berlin`
+- [x] **TEST-04**: Timezone-specific test runs in both `TZ=Africa/Johannesburg` and `TZ=Europe/Berlin`
 
 ## v2 Requirements
 
@@ -158,7 +158,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DATA-03 | Phase 9 | Complete |
 | TEST-02 | Phase 10 | Complete |
 | TEST-03 | Phase 10 | Pending |
-| TEST-04 | Phase 10 | Pending |
+| TEST-04 | Phase 10 | Complete |
 | NOTF-01 | Phase 11 | Pending |
 
 **Coverage:**

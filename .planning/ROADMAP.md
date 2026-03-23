@@ -204,7 +204,7 @@ Plans:
 **Plans**: 3
 
 Plans:
-- [ ] 10-01-PLAN.md — Dose log service + dose schedule service unit tests (TEST-02, TEST-04)
+- [x] 10-01-PLAN.md — Dose log service + dose schedule service unit tests (TEST-02, TEST-04)
 - [x] 10-02-PLAN.md — Medication service + titration service unit tests (TEST-02)
 - [ ] 10-03-PLAN.md — P2 service tests + migration tests v11/v13/v14 + timezone dual-pass scripts (TEST-02, TEST-03, TEST-04)
 
@@ -240,5 +240,5 @@ Note: Phase 5 (Security) depends only on Phase 2 and can begin in parallel with 
 | 7. Schedule Visualization | 1/1 | Complete   | 2026-03-20 |
 | 8. Drug Interactions | 3/3 | Complete   | 2026-03-20 |
 | 9. Data Integrity and Backup | 0/2 | Not started | - |
-| 10. Test Coverage | 1/3 | In Progress|  |
+| 10. Test Coverage | 2/3 | In Progress|  |
 | 11. Push Notifications | 0/TBD | Not started | - |
