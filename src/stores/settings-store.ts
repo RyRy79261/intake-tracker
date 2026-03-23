@@ -62,6 +62,11 @@ export interface Settings {
   weightGraphShowUrination: boolean;
   weightGraphShowDefecation: boolean;
   weightGraphShowDrinking: boolean;
+
+  // Dose reminder settings
+  doseRemindersEnabled: boolean;
+  reminderFollowUpCount: number;     // 0-5 follow-up reminders
+  reminderFollowUpInterval: number;  // minutes between follow-ups (5-30)
 }
 
 interface SettingsActions {
@@ -90,6 +95,9 @@ interface SettingsActions {
   setSecondaryRegion: (region: string) => void;
   setTimeFormat: (format: "12h" | "24h") => void;
   setSubstanceConfig: (config: Settings["substanceConfig"]) => void;
+  setDoseRemindersEnabled: (value: boolean) => void;
+  setReminderFollowUpCount: (value: number) => void;
+  setReminderFollowUpInterval: (value: number) => void;
   dismissInsight: (id: string, triggerValue: number) => void;
   clearDismissedInsight: (id: string) => void;
   isDismissed: (id: string, currentValue: number, threshold?: number) => boolean;
@@ -142,6 +150,9 @@ const defaultSettings: Settings = {
   primaryRegion: "",
   secondaryRegion: "",
   timeFormat: "24h" as const,
+  doseRemindersEnabled: false,
+  reminderFollowUpCount: 2,
+  reminderFollowUpInterval: 10,
 };
 
 export const useSettingsStore = create<Settings & SettingsActions>()(
@@ -189,6 +200,11 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
       setSecondaryRegion: (value) => set({ secondaryRegion: value }),
       setTimeFormat: (value) => set({ timeFormat: value }),
       setSubstanceConfig: (config) => set({ substanceConfig: config }),
+      setDoseRemindersEnabled: (value) => set({ doseRemindersEnabled: value }),
+      setReminderFollowUpCount: (value) =>
+        set({ reminderFollowUpCount: sanitizeNumericInput(value, 0, 5) }),
+      setReminderFollowUpInterval: (value) =>
+        set({ reminderFollowUpInterval: sanitizeNumericInput(value, 5, 30) }),
 
       dismissInsight: (id, triggerValue) =>
         set((state) => ({
