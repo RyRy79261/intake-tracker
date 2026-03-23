@@ -14,6 +14,9 @@
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run",
+    "test:tz:sa": "TZ=Africa/Johannesburg vitest run",
+    "test:tz:de": "TZ=Europe/Berlin vitest run",
+    "test:tz": "pnpm test:tz:sa && pnpm test:tz:de",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test"
