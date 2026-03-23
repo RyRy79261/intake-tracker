@@ -54,10 +54,21 @@ export async function addIntakeRecord(
 
 export async function deleteIntakeRecord(id: string): Promise<ServiceResult<void>> {
   try {
-    await db.intakeRecords.delete(id);
+    const now = Date.now();
+    await db.intakeRecords.update(id, { deletedAt: now, updatedAt: now });
     return ok(undefined);
   } catch (e) {
     return err("Failed to delete intake record", e);
+  }
+}
+
+export async function undoDeleteIntakeRecord(id: string): Promise<ServiceResult<void>> {
+  try {
+    const now = Date.now();
+    await db.intakeRecords.update(id, { deletedAt: null, updatedAt: now });
+    return ok(undefined);
+  } catch (e) {
+    return err("Failed to undo delete intake record", e);
   }
 }
 
@@ -82,9 +93,9 @@ export async function getRecordsInLast24Hours(
   const query = db.intakeRecords.where("timestamp").aboveOrEqual(cutoffTime);
   const records = await query.toArray();
   if (type) {
-    return records.filter((r) => r.type === type);
+    return records.filter((r) => r.type === type && r.deletedAt === null);
   }
-  return records;
+  return records.filter((r) => r.deletedAt === null);
 }
 
 export async function getTotalInLast24Hours(type: "water" | "salt"): Promise<number> {
@@ -110,7 +121,7 @@ export async function getDailyTotal(type: "water" | "salt", dayStartHour: number
   const records = await db.intakeRecords
     .where("timestamp")
     .aboveOrEqual(cutoffTime)
-    .filter((r) => r.type === type)
+    .filter((r) => r.type === type && r.deletedAt === null)
     .toArray();
   return records.reduce((sum, r) => sum + r.amount, 0);
 }
@@ -120,11 +131,15 @@ export async function getRecentRecords(type: "water" | "salt", limit: number = 3
     .where("type")
     .equals(type)
     .toArray();
-  return records.sort((a, b) => b.timestamp - a.timestamp).slice(0, limit);
+  return records
+    .filter((r) => r.deletedAt === null)
+    .sort((a, b) => b.timestamp - a.timestamp)
+    .slice(0, limit);
 }
 
 export async function getAllRecords(): Promise<IntakeRecord[]> {
-  return db.intakeRecords.orderBy("timestamp").reverse().toArray();
+  const records = await db.intakeRecords.orderBy("timestamp").reverse().toArray();
+  return records.filter((r) => r.deletedAt === null);
 }
 
 export interface PaginatedResult<T> {
@@ -138,13 +153,16 @@ export async function getRecordsPaginated(
   limit: number = 20
 ): Promise<PaginatedResult<IntakeRecord>> {
   const offset = (page - 1) * limit;
-  const total = await db.intakeRecords.count();
-  const records = await db.intakeRecords
+  // Load all non-deleted records, then apply offset/limit manually.
+  // Dexie's .offset()/.limit() run before .filter(), so soft-deleted records
+  // would occupy slots. Data volume is small (single-user app), so this is fine.
+  const allRecords = await db.intakeRecords
     .orderBy("timestamp")
     .reverse()
-    .offset(offset)
-    .limit(limit)
     .toArray();
+  const activeRecords = allRecords.filter((r) => r.deletedAt === null);
+  const total = activeRecords.length;
+  const records = activeRecords.slice(offset, offset + limit);
   return { records, hasMore: offset + records.length < total, total };
 }
 
@@ -161,7 +179,11 @@ export async function getRecordsByCursor(
       .reverse();
   }
 
-  const records = await query.limit(limit + 1).toArray();
+  // Fetch extra to compensate for filtered-out soft-deleted records,
+  // then apply soft-delete filter and limit manually.
+  const raw = await query.toArray();
+  const active = raw.filter((r) => r.deletedAt === null);
+  const records = active.slice(0, limit + 1);
 
   const hasMore = records.length > limit;
   if (hasMore) {
@@ -185,6 +207,7 @@ export async function getRecordsByDateRange(
     .where("timestamp")
     .between(startTime, endTime)
     .toArray();
+  records = records.filter((r) => r.deletedAt === null);
   if (type) {
     records = records.filter((r) => r.type === type);
   }
