@@ -1,98 +1,122 @@
 # Requirements: Intake Tracker
 
-**Defined:** 2026-03-02
+**Defined:** 2026-03-23
 **Core Value:** Accurate, queryable health data across all domains — intake, vitals, bodily functions, and medication adherence — structured so that cross-domain analysis is reliable and future AI querying is possible.
 
-## v1 Requirements
+## v1.1 Requirements
 
-Requirements for initial release. Each maps to roadmap phases.
+Requirements for milestone v1.1 UI Overhaul. Each maps to roadmap phases.
 
-### Schema
+### Composable Data Model
 
-- [x] **SCHM-01**: Dexie v10 migration with compound indexes for cross-domain queries (`[prescriptionId+scheduledDate]`, `[type+timestamp]`, etc.)
-- [x] **SCHM-02**: Migration test harness that verifies schema upgrades don't corrupt or brick the database
-- [x] **SCHM-03**: Event-sourced inventory — `currentStock` derived from `inventoryTransactions`, not stored as mutable counter
-- [x] **SCHM-04**: `updatedAt` timestamps on all tables for future sync readiness
+- [ ] **COMP-01**: User can create a single input that atomically produces linked records across multiple tables (e.g., food → eating + water + salt records) via a shared groupId
+- [ ] **COMP-02**: Dexie v15 schema migration adds groupId index to intakeRecords, eatingRecords, and substanceRecords without corrupting existing data
+- [ ] **COMP-03**: Deleting a composable entry group soft-deletes all linked records in a single transaction (intake records standardized to soft-delete)
+- [ ] **COMP-04**: User can view all records linked to a composable group as a unit via useLiveQuery hooks
 
-### Services
+### Liquid Tracking
 
-- [x] **SRVC-01**: All multi-table writes wrapped in `db.transaction` (fixes `takeDose`/`skipDose` atomicity bug)
-- [ ] **SRVC-02**: Timezone-aware dose log generation — correct day-of-week for SA (UTC+2) and Germany (UTC+1/+2 DST) travel
-- [x] **SRVC-03**: Strict TypeScript across all services — `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, Zod validation at boundaries, no `any`
-- [x] **SRVC-04**: Clean service layer boundaries — services don't import each other's internals, UI never touches `db.ts` directly
-- [x] **SRVC-05**: Cross-domain analytics service (`analytics-service.ts`) as query seam for future AI analysis
-- [x] **SRVC-06**: Fractional dose depletion math — half and quarter pill tracking with correct inventory decrement
+- [ ] **LIQD-01**: User can track water, coffee, and alcohol intake via tabs within a single Liquids card, with the water tab preserving the existing increment/decrement UX
+- [ ] **LIQD-02**: User can save beverage presets (name, type, volume, substance-per-100ml) and log them with one tap
+- [ ] **LIQD-03**: User can trigger an AI lookup (FAB) to get caffeine-per-100ml or alcohol-per-100ml for a beverage, with the result editable before saving as a preset
+- [ ] **LIQD-04**: Logging a coffee or alcohol beverage auto-calculates substance amount from volume * per-100ml preset data and creates a linked substance record
 
-### Design System
+### Food + Salt
 
-- [ ] **DSGN-01**: Design tokens — all domain colors as CSS custom properties, Tailwind config entries, and Pencil variables with light/dark theme support
-- [ ] **DSGN-02**: Pencil primitive components — all 17 shadcn/ui primitives mirrored as reusable Pencil components with 1:1 visual parity
-- [ ] **DSGN-03**: Pencil domain components — intake cards, health metric cards, tracking cards, substance cards, medication components, app header, quick-nav footer
-- [ ] **DSGN-04**: Screen designs — Dashboard, Medications (list + detail + flows), Analytics (4 tabs), Settings with populated/empty/loading/error state variants
-- [ ] **DSGN-05**: Overlay designs — all dialogs, drawers, and wizard flows designed in Pencil
-- [ ] **DSGN-06**: Design-first workflow — documented Pencil convention in CLAUDE.md for future phases
-
-### Medication UX
-
-- [x] **MEDX-01**: Prescription-first views — compound identity as primary, not brand names
-- [x] **MEDX-02**: Dose logging with schedule display and automatic stock depletion
-- [x] **MEDX-03**: Retroactive dose logging — mark a dose taken at a specific past time
-- [x] **MEDX-04**: Multi-region inventory grouping — SA vs Germany brands clearly distinguished per compound
-- [x] **MEDX-05**: Fractional pill display — 0.5 tablet, 0.25 tablet shown clearly in UI
-- [x] **MEDX-06**: Today's medication dashboard — immediate view of due/taken/pending doses for the day
-- [x] **MEDX-07**: Schedule visualization — maintenance vs titration phases displayed clearly
+- [ ] **FOOD-01**: User can log food and salt from a single unified Food+Salt card, with manual salt input retained (salt tablets, seasoning)
+- [ ] **FOOD-02**: AI food parsing creates composable linked entries (eating + water + salt records) atomically via the composable entry service
+- [ ] **FOOD-03**: User sees a preview of all linked records before confirming an AI food parse, with ability to edit or remove individual entries
 
 ### Dashboard UX
 
-- [x] **DASH-01**: Weight card inline increment/decrement input with pre-filled latest value and configurable step size
-- [x] **DASH-02**: Blood pressure card with primary sys/dia inputs always visible and details in expandable section
-- [x] **DASH-03**: Eating card one-tap log with inline expandable details (no popup dialog)
-- [x] **DASH-04**: Urination card inline amount selector buttons with quick-log on tap (no popup dialog)
-- [x] **DASH-05**: Defecation card inline amount selector buttons with quick-log on tap (no popup dialog)
+- [ ] **DASH-06**: Heart rate input is always visible on the blood pressure card without expanding "more options"
+- [ ] **DASH-07**: Food calculator feature is removed from the codebase
+- [ ] **DASH-08**: Intake page displays text-based metrics (today's limits, caffeine/alcohol totals, weekly Monday-start summary) instead of graphs
+- [ ] **DASH-09**: Existing coffee settings are migrated to become liquid tab defaults/presets in the unified Liquids card
+- [ ] **DASH-10**: Card ordering on intake page: Liquids → Food+Salt → remaining health metric cards
+
+### Timezone
+
+- [ ] **TMZN-01**: Dose log generation produces correct day-of-week schedules for both SA (UTC+2) and Germany (UTC+1/+2 DST) timezones, with device timezone stored per dose log
+
+## v1.0 Requirements (completed)
+
+### Schema
+
+- [x] **SCHM-01**: Dexie v10 migration with compound indexes for cross-domain queries
+- [x] **SCHM-02**: Migration test harness that verifies schema upgrades don't corrupt the database
+- [x] **SCHM-03**: Event-sourced inventory — currentStock derived from inventoryTransactions
+- [x] **SCHM-04**: updatedAt timestamps on all tables for future sync readiness
+
+### Services
+
+- [x] **SRVC-01**: All multi-table writes wrapped in db.transaction
+- [x] **SRVC-03**: Strict TypeScript across all services
+- [x] **SRVC-04**: Clean service layer boundaries
+- [x] **SRVC-05**: Cross-domain analytics service
+- [x] **SRVC-06**: Fractional dose depletion math
+
+### Medication UX
+
+- [x] **MEDX-01**: Prescription-first views
+- [x] **MEDX-02**: Dose logging with schedule display and automatic stock depletion
+- [x] **MEDX-03**: Retroactive dose logging
+- [x] **MEDX-04**: Multi-region inventory grouping
+- [x] **MEDX-05**: Fractional pill display
+- [x] **MEDX-06**: Today's medication dashboard
+- [x] **MEDX-07**: Schedule visualization
+
+### Dashboard UX (v1.0)
+
+- [x] **DASH-01**: Weight card inline increment/decrement
+- [x] **DASH-02**: Blood pressure card with expandable details
+- [x] **DASH-03**: Eating card one-tap log
+- [x] **DASH-04**: Urination card inline amount selector
+- [x] **DASH-05**: Defecation card inline amount selector
 
 ### Interactions
 
-- [x] **INTR-01**: AI-powered compound interaction/contraindication data stored per prescription (via Perplexity or similar)
-- [x] **INTR-02**: Interaction check on add — warn when new prescription conflicts with existing ones
-- [x] **INTR-03**: Persistent interaction section on prescription detail view — known interactions, contraindications, drug class warnings (e.g., "no NSAIDs")
-- [x] **INTR-04**: Ad-hoc "can I take X?" lookup — check a substance against current prescriptions
+- [x] **INTR-01**: AI-powered compound interaction data
+- [x] **INTR-02**: Interaction check on add
+- [x] **INTR-03**: Persistent interaction section on prescription detail
+- [x] **INTR-04**: Ad-hoc substance lookup
 
 ### Notifications
 
-- [x] **NOTF-01**: Push notifications for scheduled doses (Android/PWA, iOS not required)
+- [x] **NOTF-01**: Push notifications for scheduled doses
 
 ### Security
 
-- [x] **SECU-01**: API keys removed from client storage — Perplexity key server-side only
-- [x] **SECU-02**: Encryption foundations for data at rest (PIN + encryption patterns)
-- [x] **SECU-03**: Auth patterns designed for future cloud sync (no retrofit needed)
+- [x] **SECU-01**: API keys removed from client storage
+- [x] **SECU-02**: Encryption foundations for data at rest
+- [x] **SECU-03**: Auth patterns designed for future cloud sync
 
 ### Data Integrity
 
-- [x] **DATA-01**: Backup/export includes all tables — prescriptions, phases, inventory, dose logs, daily notes (currently missing)
-- [x] **DATA-02**: Backup round-trip test — export → clear → import → verify all data
+- [x] **DATA-01**: Backup/export includes all tables
+- [x] **DATA-02**: Backup round-trip test
 - [x] **DATA-03**: Audit logging for all medication operations
 
 ### Testability
 
-- [x] **TEST-01**: Vitest + fake-indexeddb test infrastructure configured and working
+- [x] **TEST-01**: Vitest + fake-indexeddb test infrastructure
 - [x] **TEST-02**: Unit tests for all service layer functions
 - [x] **TEST-03**: Migration tests for schema version upgrades
-- [x] **TEST-04**: Timezone-specific test runs in both `TZ=Africa/Johannesburg` and `TZ=Europe/Berlin`
+- [x] **TEST-04**: Timezone-specific test runs
 
-## v2 Requirements
+## Future Requirements
 
 ### Sync
 
-- **SYNC-01**: Cloud sync via Dexie Cloud (or "NanoDB") across devices
+- **SYNC-01**: Cloud sync via Dexie Cloud across devices
 
 ### AI Querying
 
-- **AIQL-01**: Natural language questions against health data (cross-domain analysis)
+- **AIQL-01**: Natural language questions against health data
 
 ### Reporting
 
-- **REPT-01**: Doctor-ready report generation (PDF export with adherence, vitals, trends)
+- **REPT-01**: Doctor-ready report generation (PDF export)
 - **REPT-02**: Self-tracking dashboards beyond current charts
 
 ### Platform
@@ -100,16 +124,22 @@ Requirements for initial release. Each maps to roadmap phases.
 - **PLAT-01**: Capacitor wrapper for Android Play Store distribution
 - **PLAT-02**: iOS push notification support
 
+### Analytics
+
+- **ANLT-01**: Improved intake page graphs moved to insights/analytics page
+
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Licensed drug interaction database | AI-powered is sufficient for personal use; licensing is cost-prohibitive |
-| Gamification | Creates shame and perverse incentives around logging accuracy |
-| Multi-user support | Single-user personal app |
-| iOS push notifications | PWA push unreliable on iOS; Android-first |
-| Market positioning / business features | Open source, quality-first — not competing commercially |
-| Real-time chat / social features | Not relevant to personal health tracking |
+| Full nutritional database (USDA/NCCDB) | AI lookup via Perplexity is sufficient for single-user; database maintenance burden is disproportionate |
+| Barcode scanning for beverages | SA/German products have poor coverage in barcode databases; text + AI is more reliable |
+| Real-time caffeine metabolism tracking | Half-life varies by individual and medication; false precision could influence medical decisions |
+| Food photo recognition | Unreliable for water/salt estimation; breaks offline-first; privacy concerns |
+| Intake page graph improvements | Deferred to separate analytics milestone (ANLT-01) |
+| Licensed drug interaction database | AI-powered is sufficient for personal use |
+| Multi-user support | Single-user app |
+| Cloud sync | Future milestone |
 
 ## Traceability
 
@@ -117,55 +147,29 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SCHM-01 | Phase 1 | Complete |
-| SCHM-02 | Phase 1 | Complete |
-| SCHM-03 | Phase 1 | Complete |
-| SCHM-04 | Phase 1 | Complete |
-| TEST-01 | Phase 1 | Complete |
-| SRVC-03 | Phase 2 | Complete |
-| SRVC-04 | Phase 2 | Complete |
-| SRVC-01 | Phase 3 | Complete |
-| SRVC-02 | Phase 3 | Pending |
-| SRVC-06 | Phase 3 | Complete |
-| SRVC-05 | Phase 4 | Complete |
-| SECU-01 | Phase 5 | Complete |
-| SECU-02 | Phase 5 | Complete |
-| SECU-03 | Phase 5 | Complete |
-| DSGN-01 | Phase 5.1 | Pending |
-| DSGN-02 | Phase 5.1 | Pending |
-| DSGN-03 | Phase 5.1 | Pending |
-| DSGN-04 | Phase 5.1 | Pending |
-| DSGN-05 | Phase 5.1 | Pending |
-| DSGN-06 | Phase 5.1 | Pending |
-| MEDX-01 | Phase 6 | Complete |
-| MEDX-02 | Phase 6 | Complete |
-| MEDX-03 | Phase 6 | Complete |
-| MEDX-04 | Phase 6 | Complete |
-| MEDX-05 | Phase 6 | Complete |
-| MEDX-06 | Phase 6 | Complete |
-| MEDX-07 | Phase 7 | Complete |
-| DASH-01 | Phase 6.1 | Complete |
-| DASH-02 | Phase 6.1 | Complete |
-| DASH-03 | Phase 6.1 | Complete |
-| DASH-04 | Phase 6.1 | Complete |
-| DASH-05 | Phase 6.1 | Complete |
-| INTR-01 | Phase 8 | Complete |
-| INTR-02 | Phase 8 | Complete |
-| INTR-03 | Phase 8 | Complete |
-| INTR-04 | Phase 8 | Complete |
-| DATA-01 | Phase 9 | Complete |
-| DATA-02 | Phase 9 | Complete |
-| DATA-03 | Phase 9 | Complete |
-| TEST-02 | Phase 10 | Complete |
-| TEST-03 | Phase 10 | Complete |
-| TEST-04 | Phase 10 | Complete |
-| NOTF-01 | Phase 11 | Complete |
+| COMP-01 | — | Pending |
+| COMP-02 | — | Pending |
+| COMP-03 | — | Pending |
+| COMP-04 | — | Pending |
+| LIQD-01 | — | Pending |
+| LIQD-02 | — | Pending |
+| LIQD-03 | — | Pending |
+| LIQD-04 | — | Pending |
+| FOOD-01 | — | Pending |
+| FOOD-02 | — | Pending |
+| FOOD-03 | — | Pending |
+| DASH-06 | — | Pending |
+| DASH-07 | — | Pending |
+| DASH-08 | — | Pending |
+| DASH-09 | — | Pending |
+| DASH-10 | — | Pending |
+| TMZN-01 | — | Pending |
 
 **Coverage:**
-- v1 requirements: 43 total
-- Mapped to phases: 43
-- Unmapped: 0
+- v1.1 requirements: 17 total
+- Mapped to phases: 0
+- Unmapped: 17
 
 ---
-*Requirements defined: 2026-03-02*
-*Last updated: 2026-03-20 after Phase 6.1 planning — 5 DASH requirements added, 43 total requirements mapped*
+*Requirements defined: 2026-03-23*
+*Last updated: 2026-03-23 after milestone v1.1 definition*
