@@ -7,12 +7,14 @@ import {
   addIntakeRecord,
   updateIntakeRecord,
   deleteIntakeRecord,
+  undoDeleteIntakeRecord,
   getTotalInLast24Hours,
   getRecordsInLast24Hours,
   getDailyTotal,
   getRecentRecords,
 } from "@/lib/intake-service";
 import { unwrap } from "@/lib/service-result";
+import { showUndoToast } from "@/components/medications/undo-toast";
 import { useSettingsStore } from "@/stores/settings-store";
 
 /**
@@ -123,10 +125,17 @@ export function useUpdateIntake() {
 
 /**
  * Hook to delete an intake record.
+ * Shows an undo toast with ~5 second window per D-08.
  */
 export function useDeleteIntake() {
   return useMutation({
     mutationFn: async (id: string) => unwrap(await deleteIntakeRecord(id)),
+    onSuccess: (_data, id) => {
+      showUndoToast({
+        title: "Record deleted",
+        onUndo: () => { undoDeleteIntakeRecord(id); },
+      });
+    },
   });
 }
 
