@@ -10,8 +10,8 @@ Requirements for milestone v1.1 UI Overhaul. Each maps to roadmap phases.
 ### Composable Data Model
 
 - [ ] **COMP-01**: User can create a single input that atomically produces linked records across multiple tables (e.g., food → eating + water + salt records) via a shared groupId
-- [ ] **COMP-02**: Dexie v15 schema migration adds groupId index to intakeRecords, eatingRecords, and substanceRecords without corrupting existing data
-- [ ] **COMP-03**: Deleting a composable entry group soft-deletes all linked records in a single transaction (intake records standardized to soft-delete)
+- [x] **COMP-02**: Dexie v15 schema migration adds groupId index to intakeRecords, eatingRecords, and substanceRecords without corrupting existing data
+- [x] **COMP-03**: Deleting a composable entry group soft-deletes all linked records in a single transaction (intake records standardized to soft-delete)
 - [ ] **COMP-04**: User can view all records linked to a composable group as a unit via useLiveQuery hooks
 
 ### Liquid Tracking
@@ -148,8 +148,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | COMP-01 | Phase 12 | Pending |
-| COMP-02 | Phase 12 | Pending |
-| COMP-03 | Phase 12 | Pending |
+| COMP-02 | Phase 12 | Complete |
+| COMP-03 | Phase 12 | Complete |
 | COMP-04 | Phase 12 | Pending |
 | LIQD-01 | Phase 14 | Pending |
 | LIQD-02 | Phase 13 | Pending |
