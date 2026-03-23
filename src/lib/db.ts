@@ -16,6 +16,9 @@ export interface IntakeRecord {
   deletedAt: number | null; // null = active, number = soft-deleted timestamp
   deviceId: string; // device identifier for sync conflict resolution
   timezone: string; // IANA timezone, e.g. "Europe/Berlin"
+  groupId?: string; // shared key linking records in a composable group
+  originalInputText?: string; // stored on primary record only, for AI re-run
+  groupSource?: string; // "ai_food_parse" | "ai_substance_lookup" | "manual"
 }
 
 export type AuditAction =
@@ -99,6 +102,9 @@ export interface EatingRecord {
   deletedAt: number | null;
   deviceId: string;
   timezone: string;
+  groupId?: string; // shared key linking records in a composable group
+  originalInputText?: string; // stored on primary record only, for AI re-run
+  groupSource?: string; // "ai_food_parse" | "ai_substance_lookup" | "manual"
 }
 
 export interface UrinationRecord {
@@ -282,6 +288,8 @@ export interface SubstanceRecord {
   deletedAt: number | null;
   deviceId: string;
   timezone: string;
+  groupId?: string; // shared key linking records in a composable group
+  groupSource?: string; // "ai_food_parse" | "ai_substance_lookup" | "manual"
 }
 
 const db = new Dexie("IntakeTrackerDB") as Dexie & {
@@ -596,6 +604,29 @@ db.version(14).stores({
   dailyNotes:              "id, date, prescriptionId, doseLogId, updatedAt",
   auditLogs:               "id, [action+timestamp], timestamp, action",
   substanceRecords:        "id, [type+timestamp], type, timestamp, source, sourceRecordId, updatedAt",
+  titrationPlans:          "id, conditionLabel, status, updatedAt",
+});
+
+// Version 15: Add groupId index to intakeRecords, eatingRecords, substanceRecords.
+// Enables composable entry queries — records sharing a groupId form an atomic group.
+// No .upgrade() needed — existing records have undefined groupId, which IndexedDB
+// excludes from index entries. Zero backfill required.
+db.version(15).stores({
+  intakeRecords:           "id, [type+timestamp], timestamp, source, groupId, updatedAt",
+  weightRecords:           "id, timestamp, updatedAt",
+  bloodPressureRecords:    "id, timestamp, position, arm, updatedAt",
+  eatingRecords:           "id, timestamp, groupId, updatedAt",
+  urinationRecords:        "id, timestamp, updatedAt",
+  defecationRecords:       "id, timestamp, updatedAt",
+  prescriptions:           "id, isActive, updatedAt, createdAt",
+  medicationPhases:        "id, prescriptionId, status, type, titrationPlanId, updatedAt",
+  phaseSchedules:          "id, phaseId, time, enabled, updatedAt",
+  inventoryItems:          "id, prescriptionId, isActive, updatedAt",
+  inventoryTransactions:   "id, [inventoryItemId+timestamp], inventoryItemId, timestamp, type, updatedAt",
+  doseLogs:                "id, [prescriptionId+scheduledDate], prescriptionId, phaseId, scheduleId, scheduledDate, scheduledTime, status, updatedAt",
+  dailyNotes:              "id, date, prescriptionId, doseLogId, updatedAt",
+  auditLogs:               "id, [action+timestamp], timestamp, action",
+  substanceRecords:        "id, [type+timestamp], type, timestamp, source, sourceRecordId, groupId, updatedAt",
   titrationPlans:          "id, conditionLabel, status, updatedAt",
 });
 
