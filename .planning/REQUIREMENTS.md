@@ -59,7 +59,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Notifications
 
-- [ ] **NOTF-01**: Push notifications for scheduled doses (Android/PWA, iOS not required)
+- [x] **NOTF-01**: Push notifications for scheduled doses (Android/PWA, iOS not required)
 
 ### Security
 
@@ -159,7 +159,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TEST-02 | Phase 10 | Complete |
 | TEST-03 | Phase 10 | Complete |
 | TEST-04 | Phase 10 | Complete |
-| NOTF-01 | Phase 11 | Pending |
+| NOTF-01 | Phase 11 | Complete |
 
 **Coverage:**
 - v1 requirements: 43 total

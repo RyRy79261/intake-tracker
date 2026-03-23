@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Phase complete — ready for verification
-stopped_at: Phase 11 context gathered
-last_updated: "2026-03-23T12:46:14.544Z"
+status: Ready to execute
+stopped_at: Completed 11-01-PLAN.md
+last_updated: "2026-03-23T14:20:48.845Z"
 progress:
   total_phases: 12
   completed_phases: 11
-  total_plans: 43
-  completed_plans: 43
+  total_plans: 46
+  completed_plans: 44
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-02)
 
 **Core value:** Accurate, queryable health data across intake, vitals, and medication adherence — structured for cross-domain analysis and future AI querying
-**Current focus:** Phase 10 — test-coverage
+**Current focus:** Phase 11 — push-notifications
 
 ## Current Position
 
-Phase: 10 (test-coverage) — EXECUTING
-Plan: 3 of 3
+Phase: 11 (push-notifications) — EXECUTING
+Plan: 2 of 3
 
 ## Performance Metrics
 
@@ -78,6 +78,7 @@ Plan: 3 of 3
 | Phase 10 P02 | 3min | 2 tasks | 2 files |
 | Phase 10 P01 | 4min | 2 tasks | 2 files |
 | Phase 10 P03 | 2min | 2 tasks | 6 files |
+| Phase 11 P01 | 9min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -191,6 +192,8 @@ Recent decisions affecting current work:
 - [Phase 10]: Tests call actual service functions against fake-indexeddb (not mocks) for realistic coverage
 - [Phase 10]: isActive: 1 cast needed in test fixtures because Dexie indexes booleans as integers; fake-indexeddb requires numeric value for .where() queries
 - [Phase 10]: getCurrentStock does not filter soft-deleted transactions -- tests reflect actual behavior
+- [Phase 11]: neon() SQL tagged template for all Postgres queries (serverless-friendly, no connection pool)
+- [Phase 11]: requireInteraction: true on push notifications for persistent display until user action
 
 ### Pending Todos
 
@@ -215,7 +218,7 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-23T12:46:14.538Z
-Stopped at: Phase 11 context gathered
+Last session: 2026-03-23T14:20:48.840Z
+Stopped at: Completed 11-01-PLAN.md
 Resume file:
-.planning/phases/11-push-notifications/11-CONTEXT.md
+None
