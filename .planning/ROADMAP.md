@@ -216,10 +216,12 @@ Plans:
   1. A user on Android receives a push notification at the scheduled dose time even if the app is in the background or closed
   2. Tapping the notification navigates directly to the dose confirmation for the relevant medication
   3. Notifications respect the user's day-start-hour setting and do not fire for missed doses from previous days
-**Plans**: TBD
+**Plans**: 3
 
 Plans:
-- [ ] 11-01: TBD
+- [ ] 11-01-PLAN.md — Server infrastructure: push-db, push-sender, VAPID script, SQL migration, service worker push handlers (NOTF-01)
+- [ ] 11-02-PLAN.md — API routes (subscribe, unsubscribe, sync-schedule, send) + client push subscription (NOTF-01)
+- [ ] 11-03-PLAN.md — Settings UI, Zustand fields, schedule sync hook, medication page wiring (NOTF-01)
 
 ## Progress
 
@@ -241,4 +243,4 @@ Note: Phase 5 (Security) depends only on Phase 2 and can begin in parallel with 
 | 8. Drug Interactions | 3/3 | Complete   | 2026-03-20 |
 | 9. Data Integrity and Backup | 0/2 | Not started | - |
 | 10. Test Coverage | 3/3 | Complete   | 2026-03-23 |
-| 11. Push Notifications | 0/TBD | Not started | - |
+| 11. Push Notifications | 0/3 | Not started | - |
