@@ -16,7 +16,7 @@ This milestone is an engineering overhaul of an existing health tracking PWA. Th
 - [x] **Phase 8: Drug Interactions** - AI-powered compound interaction data stored and surfaced per prescription with ad-hoc lookup (completed 2026-03-20)
 - [ ] **Phase 9: Data Integrity and Backup** - Backup includes all medication tables, audit logging enforced, round-trip test verified
 - [x] **Phase 10: Test Coverage** - Full service unit test suite, migration tests, timezone-variant test runs (completed 2026-03-23)
-- [ ] **Phase 11: Push Notifications** - PWA/Android push notifications for scheduled doses
+- [x] **Phase 11: Push Notifications** - PWA/Android push notifications for scheduled doses (completed 2026-03-23)
 
 ## Phase Details
 
@@ -221,7 +221,7 @@ Plans:
 Plans:
 - [x] 11-01-PLAN.md — Server infrastructure: push-db, push-sender, VAPID script, SQL migration, service worker push handlers (NOTF-01)
 - [x] 11-02-PLAN.md — API routes (subscribe, unsubscribe, sync-schedule, send) + client push subscription (NOTF-01)
-- [ ] 11-03-PLAN.md — Settings UI, Zustand fields, schedule sync hook, medication page wiring (NOTF-01)
+- [x] 11-03-PLAN.md — Settings UI, Zustand fields, schedule sync hook, medication page wiring (NOTF-01)
 
 ## Progress
 
@@ -243,4 +243,4 @@ Note: Phase 5 (Security) depends only on Phase 2 and can begin in parallel with 
 | 8. Drug Interactions | 3/3 | Complete   | 2026-03-20 |
 | 9. Data Integrity and Backup | 0/2 | Not started | - |
 | 10. Test Coverage | 3/3 | Complete   | 2026-03-23 |
-| 11. Push Notifications | 2/3 | In Progress|  |
+| 11. Push Notifications | 3/3 | Complete   | 2026-03-23 |
