@@ -8,43 +8,65 @@ A personal health tracking PWA for monitoring daily intake (water, salt), vital 
 
 Accurate, queryable health data across all domains — intake, vitals, bodily functions, and medication adherence — structured so that cross-domain analysis (e.g., correlating fluid intake with urination and weight) is reliable and future AI querying is possible.
 
+## Current Milestone: v1.1 UI Overhaul
+
+**Goal:** Redesign the intake tracking UI with composable data entries, unified input cards, and AI-powered substance lookup
+
+**Target features:**
+- Composable data entries — single input creates linked records across domains (food + liquid + salt), atomic CRUD with cascading delete
+- Unified Liquids card — water/coffee/alcohol as tabs; AI FAB for caffeine-per-100ml and alcohol-per-100ml lookup with saved presets
+- Unified Food+Salt card — eating and salt merged; AI food input auto-creates salt/liquid entries; manual salt input retained
+- BP heart rate always visible without expanding "more options"
+- Replace intake page graphs with text metrics (today's limits, caffeine/alcohol totals, weekly summary Monday-start)
+- Remove food calculator (unused)
+- Coffee settings become liquid tab defaults
+- Carry-over: timezone-aware dose logging (SRVC-02)
+
 ## Requirements
 
 ### Validated
 
-<!-- Inferred from existing codebase -->
-
-- ✓ Water and salt intake tracking with configurable increments and limits — existing
-- ✓ Blood pressure recording — existing
-- ✓ Weight recording — existing
-- ✓ Urination and defecation logging — existing
-- ✓ Eating/food logging with AI-powered nutritional parsing (Perplexity) — existing
-- ✓ Daily notes — existing
-- ✓ Settings persistence (day-start-hour, theme, limits) — existing
-- ✓ History/analytics with charts (Recharts) — existing
-- ✓ PWA installable, offline-capable — existing
-- ✓ Auth via Privy (email/Google) with whitelist enforcement — existing
-- ✓ PIN gate for local access control — existing
+- ✓ Water and salt intake tracking with configurable increments and limits — v1.0
+- ✓ Blood pressure recording — v1.0
+- ✓ Weight recording — v1.0
+- ✓ Urination and defecation logging — v1.0
+- ✓ Eating/food logging with AI-powered nutritional parsing (Perplexity) — v1.0
+- ✓ Daily notes — v1.0
+- ✓ Settings persistence (day-start-hour, theme, limits) — v1.0
+- ✓ History/analytics with charts (Recharts) — v1.0
+- ✓ PWA installable, offline-capable — v1.0
+- ✓ Auth via Privy (email/Google) with whitelist enforcement — v1.0
+- ✓ PIN gate for local access control — v1.0
+- ✓ Full engineering overhaul: clean data model, strict TypeScript, service boundaries, testability, security — v1.0
+- ✓ Medication data model: Prescription → MedicationPhase → PhaseSchedule → Inventory → DoseLogs — v1.0
+- ✓ Medication UX: compound-first views, dose logging, retroactive doses, multi-region inventory, schedule visualization — v1.0
+- ✓ Drug interaction checks (AI-powered, per-prescription, ad-hoc lookup) — v1.0
+- ✓ Push notifications for scheduled doses — v1.0
+- ✓ Backup/restore all 16 tables with conflict detection — v1.0
+- ✓ Unit tests, migration tests, timezone dual-pass — v1.0
 
 ### Active
 
-- [ ] Full engineering overhaul: clean data model, strong TypeScript types, separation of concerns, testability, security
-- [ ] Medication data model: Prescription (compound, dosage, medical info) → Schedule (maintenance/titration plans) → Inventory (physical pills, brand, region, strength, stock levels)
-- [ ] Medication UX: prescription-first views, clear stock disambiguation between SA/Germany brands, schedule visualization
-- [ ] Retroactive dose logging: mark a dose taken at a specific past time, not just in response to a notification
-- [ ] Dose logging with inventory depletion: logging a dose decrements stock, tracks adherence over time
-- [ ] Inventory management: track pill stock per region/brand, know what to buy, what's running low
-- [ ] Audit logging for data integrity and future sync preparation
-- [ ] API key protection and secure handling of secrets
-- [ ] Data-at-rest security patterns (PIN, encryption foundations)
-- [ ] Indexing strategy designed for cross-domain querying and future AI analysis
+- [ ] Composable data entries: single input creates linked records across multiple metric domains with atomic CRUD and cascading operations
+- [ ] Unified Liquids card with water/coffee/alcohol tabs and current water increment UX preserved
+- [ ] AI-powered caffeine-per-100ml lookup for coffee types, saved as reusable presets
+- [ ] AI-powered alcohol-per-100ml lookup, saved as reusable presets
+- [ ] Volume-based caffeine/alcohol calculation from presets
+- [ ] Unified Food+Salt card with AI food parsing that auto-creates linked liquid/salt entries
+- [ ] Manual salt input within food card (salt tablets, seasoning additions)
+- [ ] BP heart rate field always visible (no expand required)
+- [ ] Text-based intake metrics replacing graphs (today's limits, substance totals, weekly summary)
+- [ ] Food calculator removal
+- [ ] Coffee settings migrated to liquid tab defaults
+- [ ] Card reordering: Liquids → Food+Salt → health cards
+- [ ] Timezone-aware dose log generation for SA/Germany travel (carry-over from v1.0)
 
 ### Out of Scope
 
-- Cloud sync (NeonDB (Postgres)) — future milestone, but data model should be sync-friendly
-- AI-powered data querying / natural language questions — future milestone, but schema should be queryable
+- Cloud sync (NeonDB/Dexie Cloud) — future milestone
+- AI-powered data querying / natural language questions — future milestone
 - Doctor-ready report generation / PDF export — future milestone
-- Self-tracking dashboards beyond current Recharts history — future milestone
+- Intake page graph improvements — separate milestone (move to insights page)
 - Capacitor Android wrapper — future milestone, PWA-first for now
 - Pencil design workflow integration — tooling concern, not app feature
 - Multi-user support — single-user app
@@ -53,9 +75,9 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 
 - User travels between South Africa and Germany regularly. Same prescribed compounds exist under different brand names, pill sizes, and strengths in each country. Dosages often require cutting pills (halves, quarters), so tracking the physical pill vs the prescribed dose is essential.
 - The medication model is inspired by Medisafe but addresses specific pain points: inability to retroactively log doses, confusing stock views where the same compound appears multiple times without clear differentiation, and lack of prescription-first medical views.
-- Current codebase uses Next.js 14 App Router, IndexedDB via Dexie.js (schema version 9), Zustand for settings, React Query for data fetching, shadcn/ui + Tailwind for UI. The medication tracking feature exists on the current branch but implementation quality is a concern — needs to be rebuilt with proper engineering.
-- The existing intake/health tracking features work but should also receive the engineering overhaul treatment (clean types, service boundaries, testability).
-- Future AI querying will need to correlate data across domains (e.g., "Is my water intake aligned with urination data given a 500ml fluid limit above output?"). This means the data model must support efficient cross-domain queries from day one.
+- Codebase uses Next.js 14 App Router, IndexedDB via Dexie.js (schema version 14), Zustand for settings, useLiveQuery for reads, shadcn/ui + Tailwind for UI. Engineering overhaul complete in v1.0 — strict TypeScript, clean service boundaries, atomic transactions, full test suite.
+- The intake tracking UI needs modernization: alcohol and caffeine cards are underused, food/salt are separate when they should be unified, and AI food parsing should automatically create linked entries across metric domains.
+- Future AI querying will need to correlate data across domains (e.g., "Is my water intake aligned with urination data given a 500ml fluid limit above output?"). Composable entries strengthen this by explicitly linking related records.
 
 ## Constraints
 
@@ -71,10 +93,28 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Prescription → Schedule → Inventory model | Maps to user's mental model: medical info vs treatment plan vs physical stock. Handles multi-region brands and pill cutting math. | — Pending |
-| Full app overhaul vs medication-only | Existing code quality concerns across the board; future cloud sync and AI features require solid foundations everywhere | — Pending |
-| IndexedDB via Dexie.js for all data | Established pattern, offline-first requirement, sync-friendly with NeonDB (Postgres) later | — Pending |
-| Security defense-in-depth | Data at rest protection, API key handling, auth patterns — build for cloud sync from start so it's not a retrofit | — Pending |
+| Prescription → Schedule → Inventory model | Maps to user's mental model: medical info vs treatment plan vs physical stock. Handles multi-region brands and pill cutting math. | ✓ Good |
+| Full app overhaul vs medication-only | Existing code quality concerns across the board; future cloud sync and AI features require solid foundations everywhere | ✓ Good |
+| IndexedDB via Dexie.js for all data | Established pattern, offline-first requirement, sync-friendly with NeonDB (Postgres) later | ✓ Good |
+| Security defense-in-depth | Data at rest protection, API key handling, auth patterns — build for cloud sync from start so it's not a retrofit | ✓ Good |
+| Composable data entries | Single input creates linked records across domains; enables "type what I ate" → food + liquid + salt entries atomically | — Pending |
+
+## Evolution
+
+This document evolves at phase transitions and milestone boundaries.
+
+**After each phase transition** (via `/gsd:transition`):
+1. Requirements invalidated? → Move to Out of Scope with reason
+2. Requirements validated? → Move to Validated with phase reference
+3. New requirements emerged? → Add to Active
+4. Decisions to log? → Add to Key Decisions
+5. "What This Is" still accurate? → Update if drifted
+
+**After each milestone** (via `/gsd:complete-milestone`):
+1. Full review of all sections
+2. Core Value check — still the right priority?
+3. Audit Out of Scope — reasons still valid?
+4. Update Context with current state
 
 ---
-*Last updated: 2026-03-02 after initialization*
+*Last updated: 2026-03-23 after milestone v1.1 initialization*
