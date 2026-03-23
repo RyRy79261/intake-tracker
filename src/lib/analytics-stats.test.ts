@@ -123,7 +123,7 @@ describe("detectAnomalies", () => {
     const pts = makePoints([100, 101, 99, 100, 102, 98, 100, 200]);
     const anomalies = detectAnomalies(pts, 2.0);
     expect(anomalies.length).toBeGreaterThan(0);
-    expect(anomalies[0].value).toBe(200);
+    expect(anomalies[0]?.value).toBe(200);
   });
 
   it("returns empty array for empty input", () => {

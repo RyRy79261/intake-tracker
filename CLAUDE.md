@@ -20,9 +20,9 @@ Package manager is **pnpm** (enforced via `preinstall` hook; npm/yarn will fail)
 
 ### Data Layer (Client-Side)
 
-All data lives in **IndexedDB via Dexie.js** (`src/lib/db.ts`). There is no server-side database for user data. The schema is at version 9 with migration logic for each version in `db.ts`.
+All data lives in **IndexedDB via Dexie.js** (`src/lib/db.ts`). There is no server-side database for user data (push notification subscriptions use server-side Neon Postgres). The schema is at version 14 with migration logic for each version in `db.ts`.
 
-**Tables:** intakeRecords, weightRecords, bloodPressureRecords, eatingRecords, urinationRecords, defecationRecords, prescriptions, medicationPhases, phaseSchedules, inventoryItems, inventoryTransactions, doseLogs, dailyNotes, auditLogs.
+**Tables:** intakeRecords, weightRecords, bloodPressureRecords, eatingRecords, urinationRecords, defecationRecords, substanceRecords, prescriptions, medicationPhases, phaseSchedules, inventoryItems, inventoryTransactions, doseLogs, titrationPlans, dailyNotes, auditLogs.
 
 When adding a new Dexie version, you must repeat all existing store definitions (Dexie requires the full schema each version).
 

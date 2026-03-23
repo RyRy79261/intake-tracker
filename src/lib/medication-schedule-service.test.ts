@@ -40,11 +40,12 @@ describe("getDailySchedule", () => {
     const entries = result.get("08:00");
     expect(entries).toBeDefined();
     expect(entries!.length).toBe(1);
-    expect(entries![0].prescription.id).toBe("rx-daily-1");
-    expect(entries![0].phase.id).toBe("phase-daily-1");
-    expect(entries![0].schedule.id).toBe("sched-daily-1");
-    expect(entries![0].inventory).toBeDefined();
-    expect(entries![0].inventory!.id).toBe("inv-daily-1");
+    const first = entries![0]!;
+    expect(first.prescription.id).toBe("rx-daily-1");
+    expect(first.phase.id).toBe("phase-daily-1");
+    expect(first.schedule.id).toBe("sched-daily-1");
+    expect(first.inventory).toBeDefined();
+    expect(first.inventory!.id).toBe("inv-daily-1");
   });
 
   it("returns empty Map for dayOfWeek with no matching schedules", async () => {

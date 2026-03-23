@@ -139,6 +139,8 @@ export function makePhaseSchedule(phaseId: string, overrides?: Partial<PhaseSche
     id: crypto.randomUUID(),
     phaseId,
     time: "08:00",
+    scheduleTimeUTC: 480, // 08:00 in minutes from midnight UTC
+    anchorTimezone: "UTC",
     dosage: 50,
     daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
     enabled: true,
