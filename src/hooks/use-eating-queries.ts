@@ -8,8 +8,10 @@ import {
   getEatingRecordsByDateRange,
   updateEatingRecord,
   deleteEatingRecord,
+  undoDeleteEatingRecord,
 } from "@/lib/eating-service";
 import { unwrap } from "@/lib/service-result";
+import { showUndoToast } from "@/components/medications/undo-toast";
 
 export type AddEatingParams = {
   timestamp?: number;
@@ -51,8 +53,18 @@ export function useUpdateEating() {
   });
 }
 
+/**
+ * Hook to delete an eating record.
+ * Shows an undo toast with ~5 second window per D-08.
+ */
 export function useDeleteEating() {
   return useMutation({
     mutationFn: async (id: string) => unwrap(await deleteEatingRecord(id)),
+    onSuccess: (_data, id) => {
+      showUndoToast({
+        title: "Record deleted",
+        onUndo: () => { undoDeleteEatingRecord(id); },
+      });
+    },
   });
 }

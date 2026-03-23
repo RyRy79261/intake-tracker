@@ -1,4 +1,4 @@
-import { type IntakeRecord, type WeightRecord, type BloodPressureRecord,
+import { db, type IntakeRecord, type WeightRecord, type BloodPressureRecord,
   type EatingRecord, type UrinationRecord, type DefecationRecord,
   type Prescription, type MedicationPhase, type PhaseSchedule,
   type InventoryItem, type InventoryTransaction, type DoseLog,
@@ -18,6 +18,7 @@ export function makeIntakeRecord(overrides?: Partial<IntakeRecord>): IntakeRecor
     updatedAt: BASE_TS,
     deletedAt: null,
     deviceId: "test-device",
+    timezone: "UTC",
     ...overrides,
   } as IntakeRecord;
 }
@@ -65,6 +66,7 @@ export function makeEatingRecord(overrides?: Partial<EatingRecord>): EatingRecor
     updatedAt: BASE_TS,
     deletedAt: null,
     deviceId: "test-device",
+    timezone: "UTC",
     ...overrides,
   } as EatingRecord;
 }
@@ -278,4 +280,40 @@ export function makeSubstanceRecord(overrides?: Partial<SubstanceRecord>): Subst
     timezone: "UTC",
     ...overrides,
   } as SubstanceRecord;
+}
+
+/**
+ * Create a group of records sharing the same groupId for composable entry tests.
+ * Seeds records directly into IndexedDB via Dexie.
+ */
+export async function seedComposableGroup(overrides?: {
+  groupId?: string;
+  eating?: Partial<EatingRecord>;
+  intakes?: Array<Partial<IntakeRecord>>;
+  substance?: Partial<SubstanceRecord>;
+}): Promise<{ groupId: string; eatingId?: string; intakeIds: string[]; substanceId?: string }> {
+  const groupId = overrides?.groupId ?? crypto.randomUUID();
+  const intakeIds: string[] = [];
+  let eatingId: string | undefined;
+  let substanceId: string | undefined;
+
+  if (overrides?.eating) {
+    const record = makeEatingRecord({ ...overrides.eating, groupId });
+    await db.eatingRecords.add(record);
+    eatingId = record.id;
+  }
+
+  for (const intakeOverride of overrides?.intakes ?? []) {
+    const record = makeIntakeRecord({ ...intakeOverride, groupId });
+    await db.intakeRecords.add(record);
+    intakeIds.push(record.id);
+  }
+
+  if (overrides?.substance) {
+    const record = makeSubstanceRecord({ ...overrides.substance, groupId });
+    await db.substanceRecords.add(record);
+    substanceId = record.id;
+  }
+
+  return { groupId, eatingId, intakeIds, substanceId };
 }
