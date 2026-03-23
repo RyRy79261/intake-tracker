@@ -289,6 +289,7 @@ export interface SubstanceRecord {
   deviceId: string;
   timezone: string;
   groupId?: string; // shared key linking records in a composable group
+  originalInputText?: string; // stored on primary record only, for AI re-run
   groupSource?: string; // "ai_food_parse" | "ai_substance_lookup" | "manual"
 }
 
