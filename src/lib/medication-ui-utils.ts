@@ -48,6 +48,7 @@ export function hapticSkip(): void {
 
 /**
  * Compute progress from a DoseSlot array.
+ * Only counts slots up to the current time (plus any future slots already actioned).
  */
 export function computeProgress(slots: DoseSlot[]): {
   total: number;
@@ -57,15 +58,26 @@ export function computeProgress(slots: DoseSlot[]): {
   pct: number;
   allDone: boolean;
 } {
-  const total = slots.length;
+  const now = new Date();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+  let total = 0;
   let taken = 0;
   let skipped = 0;
   let pending = 0;
 
   for (const slot of slots) {
-    if (slot.status === "taken") taken++;
-    else if (slot.status === "skipped") skipped++;
-    else pending++;
+    const parts = slot.localTime.split(":").map(Number);
+    const slotMinutes = (parts[0] ?? 0) * 60 + (parts[1] ?? 0);
+    const isFutureSlot = slotMinutes > nowMinutes;
+
+    // Count if slot is in the past/now, OR if a future slot was already actioned
+    if (!isFutureSlot || slot.status === "taken" || slot.status === "skipped") {
+      total++;
+      if (slot.status === "taken") taken++;
+      else if (slot.status === "skipped") skipped++;
+      else pending++;
+    }
   }
 
   const handled = taken + skipped;

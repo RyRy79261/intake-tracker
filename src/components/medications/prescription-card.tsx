@@ -12,12 +12,14 @@ import {
   usePhasesForPrescription,
   useInventoryForPrescription,
   useDailyDoseSchedule,
-  useSchedulesForPhase,
 } from "@/hooks/use-medication-queries";
-import type { Prescription, InventoryItem, MedicationPhase } from "@/lib/db";
+import type { Prescription } from "@/lib/db";
 
 interface PrescriptionCardProps {
   prescription: Prescription;
+  expanded?: boolean;
+  onToggleExpanded?: () => void;
+  className?: string;
 }
 
 function getTodayDateStr(): string {
@@ -28,8 +30,10 @@ function getTodayDateStr(): string {
   return `${y}-${m}-${d}`;
 }
 
-export function PrescriptionCard({ prescription }: PrescriptionCardProps) {
-  const [expanded, setExpanded] = useState(false);
+export function PrescriptionCard({ prescription, expanded: controlledExpanded, onToggleExpanded, className }: PrescriptionCardProps) {
+  const [internalExpanded, setInternalExpanded] = useState(false);
+  const expanded = controlledExpanded ?? internalExpanded;
+  const toggleExpanded = onToggleExpanded ?? (() => setInternalExpanded((v) => !v));
 
   const todayDateStr = getTodayDateStr();
   const phases = usePhasesForPrescription(prescription.id);
@@ -83,10 +87,14 @@ export function PrescriptionCard({ prescription }: PrescriptionCardProps) {
     currentStock <= activeInventory.refillAlertPills;
 
   return (
-    <motion.div whileTap={{ scale: 0.98 }} transition={{ duration: 0.1 }}>
+    <motion.div
+      whileTap={{ scale: 0.98 }}
+      transition={{ duration: 0.1 }}
+      className={className}
+    >
       <Card
         className="p-2.5 cursor-pointer hover:bg-muted/40 transition-colors h-full"
-        onClick={() => setExpanded(!expanded)}
+        onClick={toggleExpanded}
       >
         <div className="flex items-start justify-between gap-1">
           <div className="min-w-0 flex-1">
@@ -137,6 +145,33 @@ export function PrescriptionCard({ prescription }: PrescriptionCardProps) {
           )}
         </div>
 
+        {/* Active medication mini-card — always visible */}
+        {activeInventory && (
+          <div className="mt-1.5 p-1.5 rounded-md bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200/60 dark:border-emerald-800/40 flex items-center gap-1.5">
+            <PillIconWithBadge
+              shape={activeInventory.pillShape ?? "round"}
+              color={activeInventory.pillColor ?? "#94a3b8"}
+              size={18}
+            />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-medium text-emerald-800 dark:text-emerald-300 truncate">
+                  {activeInventory.brandName}
+                </span>
+                <span className="text-[9px] text-emerald-600 dark:text-emerald-400 shrink-0 ml-auto">
+                  {activeInventory.strength}{activeInventory.unit}
+                </span>
+              </div>
+              {firstSlot?.pillsPerDose != null && dosageMg != null && (
+                <p className="text-[9px] text-emerald-600 dark:text-emerald-400">
+                  {formatPillCount(firstSlot.pillsPerDose)} of {dosageMg}{unit}
+                  {activePhase?.foodInstruction && activePhase.foodInstruction !== "none" && ` · ${activePhase.foodInstruction} eating`}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
         <AnimatePresence>
           {expanded && (
             <motion.div
@@ -146,17 +181,9 @@ export function PrescriptionCard({ prescription }: PrescriptionCardProps) {
               transition={{ duration: 0.2 }}
               className="overflow-hidden"
             >
-              {/* Active medication sub-component slot */}
-              {activeInventory && (
-                <ActiveMedicationSlot
-                  item={activeInventory}
-                  phase={activePhase}
-                  stockDisplay={stockDisplay}
-                />
-              )}
               <CompoundCardExpanded
                 prescription={prescription}
-                onClose={() => setExpanded(false)}
+                onClose={toggleExpanded}
               />
             </motion.div>
           )}
@@ -166,51 +193,3 @@ export function PrescriptionCard({ prescription }: PrescriptionCardProps) {
   );
 }
 
-function ActiveMedicationSlot({
-  item,
-  phase,
-  stockDisplay,
-}: {
-  item: InventoryItem;
-  phase: MedicationPhase | undefined;
-  stockDisplay: string;
-}) {
-  const schedules = useSchedulesForPhase(phase?.id);
-
-  const dailyDosage = phase && schedules.length > 0
-    ? schedules.reduce((acc, s) => acc + s.dosage, 0)
-    : undefined;
-
-  const pillsPerDose = phase && schedules.length > 0 && item.strength > 0
-    ? (schedules[0]?.dosage ?? 0) / item.strength
-    : undefined;
-
-  return (
-    <div className="mt-2">
-      <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider ml-1">
-        Active medication
-      </span>
-      <div className="mt-0.5 p-2 rounded-lg bg-muted/40 border border-border/50 flex items-center gap-2.5">
-        <PillIconWithBadge
-          shape={item.pillShape ?? "round"}
-          color={item.pillColor ?? "#94a3b8"}
-          size={24}
-        />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs font-medium truncate">{item.brandName}</span>
-            <span className="text-[10px] text-muted-foreground">{item.strength}{item.unit}</span>
-          </div>
-          {pillsPerDose !== undefined && pillsPerDose !== 1 && (
-            <span className="text-[10px] text-muted-foreground">
-              {pillsPerDose < 1 ? `${pillsPerDose} pill` : `${pillsPerDose} pills`} per dose
-            </span>
-          )}
-        </div>
-        <div className="text-right shrink-0">
-          <span className="text-xs text-muted-foreground">{stockDisplay}</span>
-        </div>
-      </div>
-    </div>
-  );
-}

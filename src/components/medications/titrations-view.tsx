@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Card } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,6 +42,7 @@ import {
   usePhasesForPrescription,
   useSchedulesForPhase,
   useCreateTitrationPlan,
+  useUpdateTitrationPlan,
   useActivateTitrationPlan,
   useCompleteTitrationPlan,
   useCancelTitrationPlan,
@@ -58,6 +60,7 @@ import {
   XCircle,
   ChevronDown,
   X,
+  Pencil,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -65,7 +68,8 @@ import {
 // ---------------------------------------------------------------------------
 
 export function TitrationsView() {
-  const [createDrawerOpen, setCreateDrawerOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [editingPlan, setEditingPlan] = useState<TitrationPlan | null>(null);
   const prescriptions = usePrescriptions();
   const plans = useTitrationPlans();
 
@@ -87,25 +91,12 @@ export function TitrationsView() {
           variant="outline"
           size="sm"
           className="gap-1"
-          onClick={() => setCreateDrawerOpen(true)}
+          onClick={() => { setEditingPlan(null); setDrawerOpen(true); }}
         >
           <Plus className="w-3.5 h-3.5" />
           New
         </Button>
       </div>
-
-      {/* Current maintenance overview */}
-      {activePrescriptions.length > 0 && (
-        <Section label="Current Maintenance">
-          <div className="space-y-2">
-            {activePrescriptions
-              .sort((a, b) => a.genericName.localeCompare(b.genericName))
-              .map((rx) => (
-                <MaintenanceRow key={rx.id} prescription={rx} />
-              ))}
-          </div>
-        </Section>
-      )}
 
       {plans.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -122,7 +113,7 @@ export function TitrationsView() {
           {activePlans.length > 0 && (
             <Section label="Active">
               {activePlans.map((plan) => (
-                <TitrationPlanCard key={plan.id} plan={plan} />
+                <TitrationPlanCard key={plan.id} plan={plan} onEdit={() => { setEditingPlan(plan); setDrawerOpen(true); }} />
               ))}
             </Section>
           )}
@@ -130,7 +121,7 @@ export function TitrationsView() {
           {draftPlans.length > 0 && (
             <Section label="Planned">
               {draftPlans.map((plan) => (
-                <TitrationPlanCard key={plan.id} plan={plan} />
+                <TitrationPlanCard key={plan.id} plan={plan} onEdit={() => { setEditingPlan(plan); setDrawerOpen(true); }} />
               ))}
             </Section>
           )}
@@ -138,17 +129,31 @@ export function TitrationsView() {
           {pastPlans.length > 0 && (
             <Section label="Past">
               {pastPlans.map((plan) => (
-                <TitrationPlanCard key={plan.id} plan={plan} />
+                <TitrationPlanCard key={plan.id} plan={plan} onEdit={() => { setEditingPlan(plan); setDrawerOpen(true); }} />
               ))}
             </Section>
           )}
         </>
       )}
 
-      <CreateTitrationDrawer
-        open={createDrawerOpen}
-        onOpenChange={setCreateDrawerOpen}
+      {/* Current maintenance overview — at bottom */}
+      {activePrescriptions.length > 0 && (
+        <Section label="Current Maintenance">
+          <div className="space-y-2">
+            {activePrescriptions
+              .sort((a, b) => a.genericName.localeCompare(b.genericName))
+              .map((rx) => (
+                <MaintenanceRow key={rx.id} prescription={rx} />
+              ))}
+          </div>
+        </Section>
+      )}
+
+      <TitrationDrawer
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
         prescriptions={activePrescriptions}
+        editingPlan={editingPlan}
       />
     </div>
   );
@@ -221,7 +226,7 @@ function MaintenanceRow({ prescription }: { prescription: Prescription }) {
 // Plan card
 // ---------------------------------------------------------------------------
 
-function TitrationPlanCard({ plan }: { plan: TitrationPlan }) {
+function TitrationPlanCard({ plan, onEdit }: { plan: TitrationPlan; onEdit: () => void }) {
   const [expanded, setExpanded] = useState(false);
   const phases = usePhasesForTitrationPlan(plan.id);
 
@@ -246,12 +251,17 @@ function TitrationPlanCard({ plan }: { plan: TitrationPlan }) {
       })
     : null;
 
+  const isActive = plan.status === "active";
+
   return (
     <Card
-      className="p-3 cursor-pointer hover:bg-muted/40 transition-colors"
+      className={cn(
+        "p-3 cursor-pointer hover:bg-muted/40 transition-colors",
+        isActive && "border-emerald-400 dark:border-emerald-600 border-2",
+      )}
       onClick={() => setExpanded(!expanded)}
     >
-      <div className="flex items-center gap-2">
+      <div className="flex items-start gap-2">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <h4 className="text-sm font-semibold truncate">{plan.title}</h4>
@@ -265,27 +275,28 @@ function TitrationPlanCard({ plan }: { plan: TitrationPlan }) {
             <span className="text-[11px] text-muted-foreground">
               {plan.conditionLabel}
             </span>
-            {startDateLabel && plan.status === "draft" && (
-              <span className="text-[11px] text-muted-foreground">
-                Starts {startDateLabel}
-              </span>
-            )}
             <span className="text-[11px] text-muted-foreground">
               {phases.length} prescription{phases.length !== 1 ? "s" : ""}
             </span>
           </div>
         </div>
-        <motion.div
-          animate={{ rotate: expanded ? 180 : 0 }}
-          transition={{ duration: 0.2 }}
-          className="shrink-0"
-        >
-          <ChevronDown className="w-4 h-4 text-muted-foreground" />
-        </motion.div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {startDateLabel && (
+            <span className="text-[10px] text-muted-foreground">
+              {startDateLabel}
+            </span>
+          )}
+          <motion.div
+            animate={{ rotate: expanded ? 180 : 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <ChevronDown className="w-4 h-4 text-muted-foreground" />
+          </motion.div>
+        </div>
       </div>
 
-      {/* Warnings */}
-      {plan.warnings && plan.warnings.length > 0 && (
+      {/* Warnings — show when collapsed only if active */}
+      {plan.warnings && plan.warnings.length > 0 && (isActive || expanded) && (
         <div className="mt-2 space-y-1">
           {plan.warnings.map((w, i) => (
             <div
@@ -322,6 +333,17 @@ function TitrationPlanCard({ plan }: { plan: TitrationPlan }) {
 
               {/* Actions */}
               <div className="flex flex-wrap gap-2 pt-2">
+                {(plan.status === "draft" || plan.status === "active") && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs gap-1"
+                    onClick={onEdit}
+                  >
+                    <Pencil className="w-3 h-3" />
+                    Edit
+                  </Button>
+                )}
                 {plan.status === "draft" && (
                   <Button
                     variant="default"
@@ -457,30 +479,72 @@ interface RxEntry {
   schedules: { time: string; daysOfWeek: number[]; dosage: string }[];
 }
 
-function CreateTitrationDrawer({
+function TitrationDrawer({
   open,
   onOpenChange,
   prescriptions,
+  editingPlan,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   prescriptions: Prescription[];
+  editingPlan: TitrationPlan | null;
 }) {
   const createMutation = useCreateTitrationPlan();
+  const updateMutation = useUpdateTitrationPlan();
+  const isEditing = editingPlan !== null;
 
-  const [title, setTitle] = useState("");
-  const [startNow, setStartNow] = useState(false);
-  const [startDate, setStartDate] = useState(() => {
+  // Load existing phases for editing
+  const editingPhases = usePhasesForTitrationPlan(editingPlan?.id);
+
+  const todayStr = (() => {
     const d = new Date();
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, "0");
     const day = String(d.getDate()).padStart(2, "0");
     return `${y}-${m}-${day}`;
-  });
+  })();
+
+  const [title, setTitle] = useState("");
+  const [startNow, setStartNow] = useState(false);
+  const [startDate, setStartDate] = useState(todayStr);
   const [notes, setNotes] = useState("");
   const [warnings, setWarnings] = useState("");
   const [entries, setEntries] = useState<RxEntry[]>([]);
   const [aiLoading, setAiLoading] = useState(false);
+  const [initialized, setInitialized] = useState(false);
+
+  // Populate form when editing plan data is available
+  // We need useEffect to avoid setting state during render
+  const editPlanId = editingPlan?.id ?? null;
+  const phasesReady = editingPhases.length > 0;
+
+  // Use a ref-like approach: track which plan we've initialized for
+  if (open && isEditing && !initialized && phasesReady) {
+    setTitle(editingPlan.title);
+    setNotes(editingPlan.notes ?? "");
+    setWarnings(editingPlan.warnings?.join("\n") ?? "");
+    if (editingPlan.recommendedStartDate) {
+      const d = new Date(editingPlan.recommendedStartDate);
+      setStartDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
+      setStartNow(false);
+    } else {
+      setStartNow(editingPlan.status === "active");
+    }
+    // Entries will be populated by PrefillFromMaintenance or by EditPhaseScheduleLoader below
+    setEntries(
+      editingPhases.map((phase) => ({
+        prescriptionId: phase.prescriptionId,
+        schedules: [{ time: "08:00", daysOfWeek: [0, 1, 2, 3, 4, 5, 6], dosage: "" }],
+      })),
+    );
+    setInitialized(true);
+  }
+
+  // Reset when drawer closes
+  if (!open && initialized) {
+    setInitialized(false);
+  }
 
   const addEntry = () => {
     setEntries([
@@ -546,20 +610,36 @@ function CreateTitrationDrawer({
     );
 
   const handleGenerateWarnings = async () => {
-    const rxWithNames = entries
+    const titrationRxIds = new Set(entries.filter((e) => e.prescriptionId).map((e) => e.prescriptionId));
+
+    // Prescriptions being titrated — include full schedule detail
+    const changingRx = entries
       .filter((e) => e.prescriptionId)
       .map((e) => {
         const rx = prescriptions.find((p) => p.id === e.prescriptionId);
-        const dosages = e.schedules
+        const newSchedule = e.schedules
           .filter((s) => s.dosage)
-          .map((s) => `${s.dosage}mg`);
+          .map((s) => {
+            const days = s.daysOfWeek.length === 7 ? "daily" : s.daysOfWeek.map((d) => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d]).join(", ");
+            return `${s.dosage}mg at ${s.time} (${days})`;
+          });
+        const totalNew = e.schedules.reduce((sum, s) => sum + (parseFloat(s.dosage) || 0), 0);
         return {
           genericName: rx?.genericName ?? "Unknown",
-          newDosage: dosages.join(", ") || undefined,
+          newSchedule: newSchedule.length > 0 ? newSchedule : undefined,
+          newTotalDaily: totalNew > 0 ? `${totalNew}mg/day` : undefined,
+          frequency: `${e.schedules.length}x daily`,
         };
       });
 
-    if (rxWithNames.length === 0) return;
+    // Other active prescriptions (for interaction context)
+    const otherRx = prescriptions
+      .filter((p) => !titrationRxIds.has(p.id))
+      .map((p) => ({
+        genericName: p.genericName,
+      }));
+
+    if (changingRx.length === 0) return;
 
     setAiLoading(true);
     try {
@@ -567,7 +647,8 @@ function CreateTitrationDrawer({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prescriptions: rxWithNames,
+          prescriptions: changingRx,
+          otherMedications: otherRx.length > 0 ? otherRx : undefined,
           title: title || undefined,
         }),
       });
@@ -587,7 +668,7 @@ function CreateTitrationDrawer({
     }
   };
 
-  const handleCreate = () => {
+  const handleSubmit = () => {
     if (!canSubmit) return;
 
     const warningsList = warnings
@@ -595,51 +676,81 @@ function CreateTitrationDrawer({
       .map((w) => w.trim())
       .filter(Boolean);
 
-    // Derive condition from the first prescription's indication
     const firstRx = prescriptions.find(
       (p) => p.id === entries[0]?.prescriptionId,
     );
     const conditionLabel = firstRx?.indication || title.trim();
 
-    createMutation.mutate(
-      {
-        title: title.trim(),
-        conditionLabel,
-        startImmediately: startNow,
-        ...(!startNow && {
-          recommendedStartDate: new Date(startDate + "T00:00:00").getTime(),
-        }),
-        ...(notes.trim() && { notes: notes.trim() }),
-        ...(warningsList.length > 0 && { warnings: warningsList }),
-        entries: entries.map((e) => ({
-          prescriptionId: e.prescriptionId,
-          unit: "mg",
-          schedules: e.schedules.map((s) => ({
-            time: s.time,
-            daysOfWeek: s.daysOfWeek,
-            dosage: parseFloat(s.dosage),
-          })),
-        })),
-      },
-      {
-        onSuccess: () => {
-          setTitle("");
-          setNotes("");
-          setWarnings("");
-          setEntries([]);
-          setStartNow(false);
-          onOpenChange(false);
+    const entryData = entries.map((e) => ({
+      prescriptionId: e.prescriptionId,
+      unit: "mg",
+      schedules: e.schedules.map((s) => ({
+        time: s.time,
+        daysOfWeek: s.daysOfWeek,
+        dosage: parseFloat(s.dosage),
+      })),
+    }));
+
+    const onSuccess = () => {
+      setTitle("");
+      setNotes("");
+      setWarnings("");
+      setEntries([]);
+      setStartNow(false);
+      onOpenChange(false);
+    };
+
+    if (isEditing) {
+      updateMutation.mutate(
+        {
+          planId: editingPlan.id,
+          title: title.trim(),
+          conditionLabel,
+          ...(!startNow && {
+            recommendedStartDate: new Date(startDate + "T00:00:00").getTime(),
+          }),
+          ...(notes.trim() ? { notes: notes.trim() } : {}),
+          ...(warningsList.length > 0 ? { warnings: warningsList } : {}),
+          entries: entryData,
         },
-      },
-    );
+        { onSuccess },
+      );
+    } else {
+      createMutation.mutate(
+        {
+          title: title.trim(),
+          conditionLabel,
+          startImmediately: startNow,
+          ...(!startNow && {
+            recommendedStartDate: new Date(startDate + "T00:00:00").getTime(),
+          }),
+          ...(notes.trim() && { notes: notes.trim() }),
+          ...(warningsList.length > 0 && { warnings: warningsList }),
+          entries: entryData,
+        },
+        { onSuccess },
+      );
+    }
   };
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
       <DrawerContent className="max-h-[90dvh] flex flex-col outline-none">
         <DrawerHeader className="border-b shrink-0">
-          <DrawerTitle>New Titration Plan</DrawerTitle>
+          <DrawerTitle>{isEditing ? "Edit Titration Plan" : "New Titration Plan"}</DrawerTitle>
         </DrawerHeader>
+
+        {/* Hidden loaders that populate entry schedules from existing titration phases */}
+        {isEditing && editingPhases.map((phase, idx) => (
+          <EditPhaseScheduleLoader
+            key={phase.id}
+            phaseId={phase.id}
+            entryIdx={idx}
+            onLoad={(schedules) => {
+              setEntries((prev) => prev.map((e, i) => i === idx ? { ...e, schedules } : e));
+            }}
+          />
+        ))}
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {/* Title */}
@@ -765,14 +876,16 @@ function CreateTitrationDrawer({
         <div className="p-4 border-t shrink-0">
           <Button
             className="w-full bg-teal-600 hover:bg-teal-700"
-            onClick={handleCreate}
-            disabled={!canSubmit || createMutation.isPending}
+            onClick={handleSubmit}
+            disabled={!canSubmit || createMutation.isPending || updateMutation.isPending}
           >
-            {createMutation.isPending
-              ? "Creating..."
-              : startNow
-                ? "Create & Activate"
-                : "Create Plan"}
+            {(createMutation.isPending || updateMutation.isPending)
+              ? (isEditing ? "Saving..." : "Creating...")
+              : isEditing
+                ? "Save Changes"
+                : startNow
+                  ? "Create & Activate"
+                  : "Create Plan"}
           </Button>
         </div>
       </DrawerContent>
@@ -966,5 +1079,35 @@ function PrefillFromMaintenance({
       </Button>
     </div>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Edit phase schedule loader — populates entry schedules from existing phase
+// ---------------------------------------------------------------------------
+
+function EditPhaseScheduleLoader({
+  phaseId,
+  entryIdx,
+  onLoad,
+}: {
+  phaseId: string;
+  entryIdx: number;
+  onLoad: (schedules: RxEntry["schedules"]) => void;
+}) {
+  const schedules = useSchedulesForPhase(phaseId);
+  const [loaded, setLoaded] = useState(false);
+
+  if (schedules.length > 0 && !loaded) {
+    onLoad(
+      schedules.map((s) => ({
+        time: s.time,
+        daysOfWeek: s.daysOfWeek,
+        dosage: String(s.dosage),
+      })),
+    );
+    setLoaded(true);
+  }
+
+  return null;
 }
 

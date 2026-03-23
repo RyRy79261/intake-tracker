@@ -19,9 +19,19 @@ interface DoseRowProps {
   onDoseClick: (slot: DoseSlot) => void;
 }
 
-function formatActionTime(timestamp: number): string {
-  const d = new Date(timestamp);
-  return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+const LATE_THRESHOLD_MINUTES = 30;
+
+function isLateDose(scheduledTime: string): boolean {
+  const now = new Date();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const parts = scheduledTime.split(":").map(Number);
+  const schedMinutes = (parts[0] ?? 0) * 60 + (parts[1] ?? 0);
+  return nowMinutes - schedMinutes > LATE_THRESHOLD_MINUTES;
+}
+
+function formatTimestamp(ts: number): string {
+  const d = new Date(ts);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
 export function DoseRow({ slot, isToday, isFuture, onTake, onRetroactiveTake, onSkip, onDoseClick }: DoseRowProps) {
@@ -37,10 +47,11 @@ export function DoseRow({ slot, isToday, isFuture, onTake, onRetroactiveTake, on
   const foodInstruction = phase.foodInstruction !== "none" ? phase.foodInstruction : null;
 
   const handleTakeClick = () => {
-    if (isToday) {
+    if (isToday && !isLateDose(slot.localTime)) {
+      // Within notification window — log immediately at current time
       onTake(slot);
     } else {
-      // Past date -- open time picker
+      // Past date or late today — ask what time they took it
       setTimePickerOpen(true);
     }
   };
@@ -48,6 +59,11 @@ export function DoseRow({ slot, isToday, isFuture, onTake, onRetroactiveTake, on
   const handleRetroactiveConfirm = (time: string) => {
     onRetroactiveTake(slot, time);
   };
+
+  // Display the time the dose was actually taken
+  const takenAtDisplay = slot.existingLog?.actionTimestamp
+    ? formatTimestamp(slot.existingLog.actionTimestamp)
+    : slot.localTime;
 
   return (
     <>
@@ -84,10 +100,10 @@ export function DoseRow({ slot, isToday, isFuture, onTake, onRetroactiveTake, on
               {foodInstruction && ` -- ${foodInstruction} eating`}
             </p>
 
-            {status === "taken" && slot.existingLog?.actionTimestamp && (
+            {status === "taken" && (
               <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1">
                 <Check className="w-3 h-3" />
-                Taken at {formatActionTime(slot.existingLog.actionTimestamp)}
+                Taken at {takenAtDisplay}
               </p>
             )}
 

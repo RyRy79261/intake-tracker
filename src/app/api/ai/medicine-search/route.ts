@@ -135,13 +135,13 @@ async function callPerplexityMedicine(query: string, apiKey: string, country?: s
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "sonar-pro",
+      model: "sonar-reasoning-pro",
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: prompt },
       ],
       temperature: 0.1,
-      max_tokens: 800,
+      max_tokens: 2000,
     }),
   });
 

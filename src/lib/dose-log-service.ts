@@ -23,6 +23,7 @@ export interface TakeDoseInput {
   date: string;
   time: string;
   dosageMg: number;
+  takenAtTime?: string; // "HH:MM" — user-specified time they actually took the dose
 }
 
 export interface UntakeDoseInput {
@@ -111,7 +112,7 @@ function buildDoseLog(
   date: string,
   time: string,
   status: DoseStatus,
-  extra?: Partial<Pick<DoseLog, "rescheduledTo" | "skipReason" | "note" | "inventoryItemId">>,
+  extra?: Partial<Pick<DoseLog, "rescheduledTo" | "skipReason" | "note" | "inventoryItemId" | "actionTimestamp">>,
 ): DoseLog {
   return {
     id: crypto.randomUUID(),
@@ -137,7 +138,7 @@ async function upsertDoseLog(
   date: string,
   time: string,
   status: DoseStatus,
-  extra?: Partial<Pick<DoseLog, "rescheduledTo" | "skipReason" | "note" | "inventoryItemId">>,
+  extra?: Partial<Pick<DoseLog, "rescheduledTo" | "skipReason" | "note" | "inventoryItemId" | "actionTimestamp">>,
 ): Promise<DoseLog> {
   const existing = await getDoseLogRaw(prescriptionId, phaseId, scheduleId, date, time);
   const now = Date.now();
@@ -229,7 +230,16 @@ export async function getDoseLogsWithDetailsForDate(date: string): Promise<DoseL
  */
 export async function takeDose(input: TakeDoseInput): Promise<ServiceResult<DoseLog>> {
   try {
-    const { prescriptionId, phaseId, scheduleId, date, time, dosageMg } = input;
+    const { prescriptionId, phaseId, scheduleId, date, time, dosageMg, takenAtTime } = input;
+
+    // Convert user-specified taken time to a timestamp if provided
+    let actionTimestampOverride: number | undefined;
+    if (takenAtTime) {
+      const [h, m] = takenAtTime.split(":").map(Number);
+      const d = new Date(date + "T00:00:00");
+      d.setHours(h ?? 0, m ?? 0, 0, 0);
+      actionTimestampOverride = d.getTime();
+    }
 
     const log = await db.transaction(
       "rw",
@@ -276,10 +286,14 @@ export async function takeDose(input: TakeDoseInput): Promise<ServiceResult<Dose
           }
         }
 
+        const extra: Partial<Pick<DoseLog, "inventoryItemId" | "actionTimestamp">> = {};
+        if (inventoryItemId !== undefined) extra.inventoryItemId = inventoryItemId;
+        if (actionTimestampOverride !== undefined) extra.actionTimestamp = actionTimestampOverride;
+
         // Upsert dose log
         const doseLog = await upsertDoseLog(
           prescriptionId, phaseId, scheduleId, date, time, "taken",
-          inventoryItemId !== undefined ? { inventoryItemId } : undefined,
+          Object.keys(extra).length > 0 ? extra : undefined,
         );
 
         // Audit log
@@ -504,6 +518,7 @@ export async function takeAllDoses(
   entries: { prescriptionId: string; phaseId: string; scheduleId: string; dosageMg: number }[],
   date: string,
   time: string,
+  takenAtTime?: string,
 ): Promise<ServiceResult<void>> {
   const errors: string[] = [];
 
@@ -515,6 +530,7 @@ export async function takeAllDoses(
       date,
       time,
       dosageMg: entry.dosageMg,
+      ...(takenAtTime ? { takenAtTime } : {}),
     });
     if (!result.success) {
       errors.push(result.error);

@@ -173,6 +173,108 @@ export async function createTitrationPlan(
   }
 }
 
+export interface UpdateTitrationPlanInput {
+  planId: string;
+  title?: string;
+  conditionLabel?: string;
+  recommendedStartDate?: number;
+  notes?: string;
+  warnings?: string[];
+  entries?: TitrationEntryInput[];
+}
+
+export async function updateTitrationPlan(
+  input: UpdateTitrationPlanInput,
+): Promise<ServiceResult<TitrationPlan>> {
+  try {
+    const plan = await db.titrationPlans.get(input.planId);
+    if (!plan) return err("Titration plan not found");
+
+    const now = Date.now();
+    const sf = syncFields();
+    const tz = getDeviceTimezone();
+
+    // Update plan metadata
+    const planUpdates: Partial<TitrationPlan> = { updatedAt: now };
+    if (input.title !== undefined) planUpdates.title = input.title;
+    if (input.conditionLabel !== undefined) planUpdates.conditionLabel = input.conditionLabel;
+    if (input.recommendedStartDate !== undefined) planUpdates.recommendedStartDate = input.recommendedStartDate;
+    if (input.notes !== undefined) planUpdates.notes = input.notes;
+    if (input.warnings !== undefined) planUpdates.warnings = input.warnings;
+
+    await db.transaction(
+      "rw",
+      [db.titrationPlans, db.medicationPhases, db.phaseSchedules, db.auditLogs],
+      async () => {
+        await db.titrationPlans.update(plan.id, planUpdates);
+
+        // If entries provided, replace all phases and schedules
+        if (input.entries) {
+          // Delete existing phases and their schedules
+          const existingPhases = await db.medicationPhases
+            .filter((p) => p.titrationPlanId === plan.id)
+            .toArray();
+
+          for (const phase of existingPhases) {
+            await db.phaseSchedules.where({ phaseId: phase.id }).delete();
+          }
+          await db.medicationPhases
+            .filter((p) => p.titrationPlanId === plan.id)
+            .delete();
+
+          // Create new phases and schedules
+          for (const entry of input.entries) {
+            const phaseId = crypto.randomUUID();
+            await db.medicationPhases.add({
+              id: phaseId,
+              prescriptionId: entry.prescriptionId,
+              type: "titration",
+              unit: entry.unit,
+              startDate: plan.recommendedStartDate ?? now,
+              foodInstruction: entry.foodInstruction ?? "none",
+              status: plan.status === "active" ? "active" : "pending",
+              titrationPlanId: plan.id,
+              createdAt: now,
+              updatedAt: now,
+              deletedAt: null,
+              deviceId: sf.deviceId,
+            });
+
+            for (const s of entry.schedules) {
+              await db.phaseSchedules.add({
+                id: crypto.randomUUID(),
+                phaseId,
+                time: s.time,
+                scheduleTimeUTC: localHHMMStringToUTCMinutes(s.time, tz),
+                anchorTimezone: tz,
+                dosage: s.dosage,
+                daysOfWeek: s.daysOfWeek,
+                enabled: true,
+                createdAt: now,
+                updatedAt: now,
+                deletedAt: null,
+                deviceId: sf.deviceId,
+              });
+            }
+          }
+        }
+
+        await db.auditLogs.add(
+          buildAuditEntry("titration_plan_updated", {
+            titrationPlanId: plan.id,
+            title: input.title ?? plan.title,
+          }),
+        );
+      },
+    );
+
+    const updated = await db.titrationPlans.get(plan.id);
+    return ok(updated!);
+  } catch (e) {
+    return err("Failed to update titration plan", e);
+  }
+}
+
 export async function activateTitrationPlan(
   planId: string,
 ): Promise<ServiceResult<void>> {

@@ -10,6 +10,7 @@ import { DoseProgressSummary } from "./dose-progress-summary";
 import { TimeSlotGroup } from "./time-slot-group";
 import { SkipReasonPicker } from "./skip-reason-picker";
 import { EmptySchedule } from "./empty-schedule";
+import { RetroactiveTimePicker } from "./retroactive-time-picker";
 
 interface ScheduleViewProps {
   selectedDate: Date;
@@ -39,6 +40,10 @@ export function ScheduleView({ selectedDate, onDoseClick, onAddMed }: ScheduleVi
   // Skip reason picker state
   const [skipPickerOpen, setSkipPickerOpen] = useState(false);
   const [skipTarget, setSkipTarget] = useState<DoseSlot | null>(null);
+
+  // Mark All time picker state (for late doses)
+  const [markAllPickerOpen, setMarkAllPickerOpen] = useState(false);
+  const [markAllTarget, setMarkAllTarget] = useState<{ time: string; slots: DoseSlot[] } | null>(null);
 
   const today = new Date();
   const isToday = selectedDate.toDateString() === today.toDateString();
@@ -145,17 +150,18 @@ export function ScheduleView({ selectedDate, onDoseClick, onAddMed }: ScheduleVi
     [takeDoseMut, untakeDoseMut],
   );
 
-  // Handle Retroactive Take (past date -- user-specified time)
+  // Handle Take with user-specified time (late dose today or past date)
   const handleRetroactiveTake = useCallback(
-    async (slot: DoseSlot, time: string) => {
+    async (slot: DoseSlot, takenAtTime: string) => {
       hapticTake();
       await takeDoseMut.mutateAsync({
         prescriptionId: slot.prescriptionId,
         phaseId: slot.phaseId,
         scheduleId: slot.scheduleId,
         date: slot.scheduledDate,
-        time,
+        time: slot.localTime, // always use scheduled time as lookup key
         dosageMg: slot.dosageMg,
+        takenAtTime, // user-specified time stored in actionTimestamp
       });
 
       const description = slot.inventory
@@ -171,7 +177,7 @@ export function ScheduleView({ selectedDate, onDoseClick, onAddMed }: ScheduleVi
             phaseId: slot.phaseId,
             scheduleId: slot.scheduleId,
             date: slot.scheduledDate,
-            time,
+            time: slot.localTime,
             dosageMg: slot.dosageMg,
           });
         },
@@ -207,7 +213,32 @@ export function ScheduleView({ selectedDate, onDoseClick, onAddMed }: ScheduleVi
 
   // Handle Mark All (take all at a time slot)
   const handleMarkAll = useCallback(
-    async (time: string, pendingSlots: DoseSlot[]) => {
+    (time: string, pendingSlots: DoseSlot[]) => {
+      if (isToday) {
+        const now = new Date();
+        const nowMinutes = now.getHours() * 60 + now.getMinutes();
+        const parts = time.split(":").map(Number);
+        const schedMinutes = (parts[0] ?? 0) * 60 + (parts[1] ?? 0);
+        if (nowMinutes - schedMinutes > 30) {
+          // Late — ask what time they took them
+          setMarkAllTarget({ time, slots: pendingSlots });
+          setMarkAllPickerOpen(true);
+          return;
+        }
+      } else {
+        // Past date — ask what time
+        setMarkAllTarget({ time, slots: pendingSlots });
+        setMarkAllPickerOpen(true);
+        return;
+      }
+      // On time — take immediately
+      executeMarkAll(time, pendingSlots);
+    },
+    [isToday],
+  );
+
+  const executeMarkAll = useCallback(
+    async (time: string, pendingSlots: DoseSlot[], takenAtTime?: string) => {
       hapticTake();
       await takeAllDosesMut.mutateAsync({
         entries: pendingSlots.map((s) => ({
@@ -218,6 +249,7 @@ export function ScheduleView({ selectedDate, onDoseClick, onAddMed }: ScheduleVi
         })),
         date: dateStr,
         time,
+        ...(takenAtTime ? { takenAtTime } : {}),
       });
 
       showUndoToast({
@@ -237,6 +269,16 @@ export function ScheduleView({ selectedDate, onDoseClick, onAddMed }: ScheduleVi
       });
     },
     [takeAllDosesMut, untakeDoseMut, dateStr],
+  );
+
+  const handleMarkAllTimeConfirm = useCallback(
+    (takenAtTime: string) => {
+      if (markAllTarget) {
+        executeMarkAll(markAllTarget.time, markAllTarget.slots, takenAtTime);
+        setMarkAllTarget(null);
+      }
+    },
+    [markAllTarget, executeMarkAll],
   );
 
   if (!slots || slots.length === 0) {
@@ -273,6 +315,14 @@ export function ScheduleView({ selectedDate, onDoseClick, onAddMed }: ScheduleVi
           skipTarget?.inventoryWarning === "negative_stock" ||
           skipTarget?.inventoryWarning === "no_inventory"
         }
+      />
+
+      <RetroactiveTimePicker
+        open={markAllPickerOpen}
+        onOpenChange={setMarkAllPickerOpen}
+        defaultTime={markAllTarget?.time ?? "08:00"}
+        compoundName="all doses"
+        onConfirm={handleMarkAllTimeConfirm}
       />
 
       <button

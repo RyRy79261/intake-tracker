@@ -45,7 +45,8 @@ export type AuditAction =
   | "phase_started"
   | "stock_recalculated"
   | "inventory_added"
-  | "inventory_deleted";
+  | "inventory_deleted"
+  | "titration_plan_updated";
 
 export interface AuditLog {
   id: string;

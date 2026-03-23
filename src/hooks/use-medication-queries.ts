@@ -28,11 +28,13 @@ import {
   getPhasesForTitrationPlan,
   getConditionLabels,
   createTitrationPlan,
+  updateTitrationPlan,
   activateTitrationPlan,
   completeTitrationPlan,
   cancelTitrationPlan,
   deleteTitrationPlan,
   type CreateTitrationPlanInput,
+  type UpdateTitrationPlanInput,
 } from "@/lib/titration-service";
 import {
   getDoseLogsForDate,
@@ -224,8 +226,8 @@ export function useRescheduleDose() {
 
 export function useTakeAllDoses() {
   return useMutation({
-    mutationFn: async (args: { entries: { prescriptionId: string; phaseId: string; scheduleId: string; dosageMg: number }[]; date: string; time: string }) =>
-      unwrap(await takeAllDoses(args.entries, args.date, args.time)),
+    mutationFn: async (args: { entries: { prescriptionId: string; phaseId: string; scheduleId: string; dosageMg: number }[]; date: string; time: string; takenAtTime?: string }) =>
+      unwrap(await takeAllDoses(args.entries, args.date, args.time, args.takenAtTime)),
   });
 }
 
@@ -297,6 +299,13 @@ export function useCreateTitrationPlan() {
   return useMutation({
     mutationFn: async (input: CreateTitrationPlanInput) =>
       unwrap(await createTitrationPlan(input)),
+  });
+}
+
+export function useUpdateTitrationPlan() {
+  return useMutation({
+    mutationFn: async (input: UpdateTitrationPlanInput) =>
+      unwrap(await updateTitrationPlan(input)),
   });
 }
 
