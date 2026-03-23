@@ -47,7 +47,7 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 
 ### Active
 
-- [ ] Composable data entries: single input creates linked records across multiple metric domains with atomic CRUD and cascading operations
+- ✓ Composable data entries: Dexie v15 groupId schema, atomic cross-table writes, cascading soft-delete, undo toasts — Phase 12
 - [ ] Unified Liquids card with water/coffee/alcohol tabs and current water increment UX preserved
 - [ ] AI-powered caffeine-per-100ml lookup for coffee types, saved as reusable presets
 - [ ] AI-powered alcohol-per-100ml lookup, saved as reusable presets
@@ -97,7 +97,7 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 | Full app overhaul vs medication-only | Existing code quality concerns across the board; future cloud sync and AI features require solid foundations everywhere | ✓ Good |
 | IndexedDB via Dexie.js for all data | Established pattern, offline-first requirement, sync-friendly with NeonDB (Postgres) later | ✓ Good |
 | Security defense-in-depth | Data at rest protection, API key handling, auth patterns — build for cloud sync from start so it's not a retrofit | ✓ Good |
-| Composable data entries | Single input creates linked records across domains; enables "type what I ate" → food + liquid + salt entries atomically | — Pending |
+| Composable data entries via groupId | Single input creates linked records across domains; groupId on child records (no parent table), atomic transactions, cascading soft-delete | ✓ Good |
 
 ## Evolution
 
@@ -117,4 +117,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-23 after milestone v1.1 initialization*
+*Last updated: 2026-03-23 after Phase 12 completion*
