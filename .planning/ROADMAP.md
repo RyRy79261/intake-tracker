@@ -2,9 +2,17 @@
 
 ## Overview
 
-This milestone is an engineering overhaul of an existing health tracking PWA. The app already handles water/salt intake, vitals, and partial medication tracking. The overhaul rebuilds the medication management subsystem correctly, hardens the data model for future cloud sync and AI querying, and establishes a test foundation that currently does not exist. Build order is non-negotiable: schema first (irreversible Dexie migrations must be correct before anything is built on top), then TypeScript contract enforcement, then service layer, then UI. Security, backup completeness, and test coverage fill out the remaining phases.
+This project is a personal health tracking PWA. v1.0 rebuilt the medication management subsystem, hardened the data model, and established test infrastructure. v1.1 redesigns the intake tracking UI with composable data entries (single input creates linked records across domains), unified input cards (Liquids with tabs, Food+Salt merged), AI-powered substance lookup with saved presets, and dashboard modernization (text metrics, card reordering, cleanup).
+
+## Milestones
+
+- **v1.0 Engineering Overhaul** - Phases 1-11 (shipped 2026-03-23)
+- **v1.1 UI Overhaul** - Phases 12-17 (in progress)
 
 ## Phases
+
+<details>
+<summary>v1.0 Engineering Overhaul (Phases 1-11) - SHIPPED 2026-03-23</summary>
 
 - [x] **Phase 1: Schema Foundation** - Dexie v10 migration with compound indexes, event-sourced inventory, sync-ready timestamps, and test infrastructure
 - [x] **Phase 2: TypeScript and Service Contracts** - Strict TypeScript flags enabled with all latent errors fixed; clean service boundary rules enforced
@@ -12,13 +20,12 @@ This milestone is an engineering overhaul of an existing health tracking PWA. Th
 - [x] **Phase 4: Analytics Service** - Cross-domain analytics service with substance tracking, correlation analysis, and analytics page replacing /history
 - [x] **Phase 5: Security Hardening** - API keys server-side only, encryption foundations for data at rest, auth patterns ready for cloud sync (completed 2026-03-10)
 - [x] **Phase 6: Medication UX Core** - Compound-first prescription views, dose logging with stock depletion, retroactive logging, multi-region inventory, prescriptions tab, wizard improvements
+- [x] **Phase 6.1: Dashboard Input Redesign** - Replace popup modals with inline input flows for all dashboard intake metrics (completed 2026-03-20)
 - [x] **Phase 7: Schedule Visualization** - Maintenance vs titration phase display with named phases and transition clarity (completed 2026-03-20)
 - [x] **Phase 8: Drug Interactions** - AI-powered compound interaction data stored and surfaced per prescription with ad-hoc lookup (completed 2026-03-20)
-- [ ] **Phase 9: Data Integrity and Backup** - Backup includes all medication tables, audit logging enforced, round-trip test verified
+- [x] **Phase 9: Data Integrity and Backup** - Backup includes all medication tables, audit logging enforced, round-trip test verified
 - [x] **Phase 10: Test Coverage** - Full service unit test suite, migration tests, timezone-variant test runs (completed 2026-03-23)
 - [x] **Phase 11: Push Notifications** - PWA/Android push notifications for scheduled doses (completed 2026-03-23)
-
-## Phase Details
 
 ### Phase 1: Schema Foundation
 **Goal**: The Dexie schema is correct, safe to deploy, and tested before any service depends on it
@@ -104,9 +111,9 @@ Plans:
 **Plans**: 3
 
 Plans:
-- [ ] 05-01-PLAN.md — Auth middleware + client API key removal from store, security utils, hooks, and components (SECU-01, SECU-03)
-- [ ] 05-02-PLAN.md — Encryption foundations: useEncryptedField hook, encrypted backup, SECURITY.md (SECU-02)
-- [ ] 05-03-PLAN.md — API route auth migration, bundle security scan, PII hardening, CSP refinement (SECU-01, SECU-03)
+- [x] 05-01-PLAN.md — Auth middleware + client API key removal from store, security utils, hooks, and components (SECU-01, SECU-03)
+- [x] 05-02-PLAN.md — Encryption foundations: useEncryptedField hook, encrypted backup, SECURITY.md (SECU-02)
+- [x] 05-03-PLAN.md — API route auth migration, bundle security scan, PII hardening, CSP refinement (SECU-01, SECU-03)
 
 ### Phase 6: Medication UX Core
 **Goal**: A user can manage their full medication workflow — view prescriptions by compound, log doses, track retroactive doses, manage prescriptions and titration phases, and see clearly which regional brand stock is being used
@@ -131,8 +138,7 @@ Plans:
 - [x] 06-06-PLAN.md — Prescriptions tab with list, detail drawer, titration phases, notes (MEDX-05, MEDX-06, MEDX-07)
 - [x] 06-07-PLAN.md — Wizard AI auto-select + prescription assignment + compound card relationship (MEDX-01, MEDX-03)
 
-### Phase 06.1: Dashboard Input Redesign (INSERTED)
-
+### Phase 6.1: Dashboard Input Redesign (INSERTED)
 **Goal:** Replace popup modals with inline input flows for all dashboard intake metrics (weight, BP, eating, urination, defecation). Weight gets increment/decrement with pre-filled last value. Others get comprehensive inline inputs like the water/coffee pattern.
 **Requirements**: DASH-01, DASH-02, DASH-03, DASH-04, DASH-05
 **Depends on:** Phase 6
@@ -146,8 +152,8 @@ Plans:
 **Plans:** 2/2 plans complete
 
 Plans:
-- [ ] 06.1-01-PLAN.md — Weight card increment/decrement + BP card expandable details (DASH-01, DASH-02)
-- [ ] 06.1-02-PLAN.md — Eating, urination, defecation cards with inline inputs (DASH-03, DASH-04, DASH-05)
+- [x] 06.1-01-PLAN.md — Weight card increment/decrement + BP card expandable details (DASH-01, DASH-02)
+- [x] 06.1-02-PLAN.md — Eating, urination, defecation cards with inline inputs (DASH-03, DASH-04, DASH-05)
 
 ### Phase 7: Schedule Visualization
 **Goal**: A user can see their titration and maintenance phases laid out clearly, understanding which phase is active and what the transition looks like
@@ -160,7 +166,7 @@ Plans:
 **Plans**: 1
 
 Plans:
-- [ ] 07-01-PLAN.md — PhaseTimeline component + PrescriptionDetailDrawer integration (MEDX-07)
+- [x] 07-01-PLAN.md — PhaseTimeline component + PrescriptionDetailDrawer integration (MEDX-07)
 
 ### Phase 8: Drug Interactions
 **Goal**: A user can see known interactions and contraindications for their prescriptions and check whether a new substance is safe to take
@@ -174,9 +180,9 @@ Plans:
 **Plans**: 3
 
 Plans:
-- [ ] 08-01-PLAN.md — Interaction-check API route + localStorage cache + React hooks (INTR-01)
-- [ ] 08-02-PLAN.md — Interactions section in prescription drawer + wizard conflict check (INTR-02, INTR-03)
-- [ ] 08-03-PLAN.md — Ad-hoc substance interaction search on Medications tab (INTR-04)
+- [x] 08-01-PLAN.md — Interaction-check API route + localStorage cache + React hooks (INTR-01)
+- [x] 08-02-PLAN.md — Interactions section in prescription drawer + wizard conflict check (INTR-02, INTR-03)
+- [x] 08-03-PLAN.md — Ad-hoc substance interaction search on Medications tab (INTR-04)
 
 ### Phase 9: Data Integrity and Backup
 **Goal**: A user's full medication history is included in backups and can be fully restored, and all medication mutations produce an audit trail
@@ -223,24 +229,112 @@ Plans:
 - [x] 11-02-PLAN.md — API routes (subscribe, unsubscribe, sync-schedule, send) + client push subscription (NOTF-01)
 - [x] 11-03-PLAN.md — Settings UI, Zustand fields, schedule sync hook, medication page wiring (NOTF-01)
 
+</details>
+
+### v1.1 UI Overhaul (In Progress)
+
+**Milestone Goal:** Redesign the intake tracking UI with composable data entries, unified input cards, AI-powered substance lookup, and dashboard modernization
+
+- [ ] **Phase 12: Composable Data Foundation** - Dexie v15 schema migration with groupId, composable entry service for atomic cross-table writes, and soft-delete standardization
+- [ ] **Phase 13: Liquid Presets and AI Lookup** - Zustand preset store for beverages and AI-powered caffeine/alcohol per-100ml lookup route
+- [ ] **Phase 14: Unified Liquids Card** - Tabbed water/coffee/alcohol card with preset-based logging and substance auto-calculation
+- [ ] **Phase 15: Unified Food+Salt Card** - Merged food and salt input with AI parsing that creates composable linked entries
+- [ ] **Phase 16: Dashboard Cleanup and Text Metrics** - BP heart rate visible, food calculator removed, text metrics, coffee settings migrated, card reordering
+- [ ] **Phase 17: Timezone-Aware Dose Logging** - Correct day-of-week schedule generation for SA/Germany timezones with device timezone stored per dose log
+
+## Phase Details
+
+### Phase 12: Composable Data Foundation
+**Goal**: A composable entry service can atomically create, read, and soft-delete linked records across multiple tables, backed by a tested Dexie v15 schema migration
+**Depends on**: Phase 11 (continues from v1.0)
+**Requirements**: COMP-01, COMP-02, COMP-03, COMP-04
+**Success Criteria** (what must be TRUE):
+  1. Creating a composable entry with food, water, and salt data produces records in eatingRecords, intakeRecords, and substanceRecords that all share the same groupId
+  2. Dexie v15 migration adds groupId index to intakeRecords, eatingRecords, and substanceRecords without corrupting any existing records (verified by migration test with fake-indexeddb)
+  3. Deleting a composable entry group sets deletedAt on all linked records in a single transaction -- no orphaned records survive if any individual delete fails
+  4. Querying by groupId via useLiveQuery returns all linked records across tables in a single reactive callback
+**Plans**: TBD
+
+### Phase 13: Liquid Presets and AI Lookup
+**Goal**: Users can save beverage presets with substance content and look up caffeine/alcohol concentrations via AI, ready for the Liquids card to consume
+**Depends on**: Phase 12
+**Requirements**: LIQD-02, LIQD-03
+**Success Criteria** (what must be TRUE):
+  1. User can create, edit, and delete beverage presets (name, type, default volume, substance-per-100ml) that persist across app restarts
+  2. Hitting the AI lookup for a beverage name returns a caffeine-per-100ml or alcohol-per-100ml estimate with Zod-validated bounds, and the user can edit the value before saving as a preset
+  3. Existing coffee presets are available as built-in defaults in the new preset system (seeded from current COFFEE_PRESETS constant)
+**Plans**: TBD
+
+### Phase 14: Unified Liquids Card
+**Goal**: Users can track water, coffee, and alcohol from a single tabbed Liquids card, with water preserving its existing zero-friction UX and coffee/alcohol using presets with auto-calculated substance amounts
+**Depends on**: Phase 12, Phase 13
+**Requirements**: LIQD-01, LIQD-04
+**Success Criteria** (what must be TRUE):
+  1. The Liquids card shows water, coffee, and alcohol as tabs -- the water tab preserves the existing increment/decrement buttons and daily total exactly as they work today
+  2. Selecting a coffee or alcohol preset and confirming a volume logs an intake record and a linked substance record with the correct calculated amount (volume * per-100ml / 100)
+  3. The user can switch between tabs without losing in-progress input on any tab
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 15: Unified Food+Salt Card
+**Goal**: Users can log food and salt from a single card, with AI food parsing automatically creating composable linked entries across eating, water, and salt domains
+**Depends on**: Phase 12, Phase 13
+**Requirements**: FOOD-01, FOOD-02, FOOD-03
+**Success Criteria** (what must be TRUE):
+  1. The Food+Salt card provides both AI food input and manual salt input (salt tablets, seasoning) in a single unified card
+  2. Typing a food description and triggering AI parse shows a preview of all linked records (eating, water, salt) that will be created, with the ability to edit or remove individual entries before confirming
+  3. Confirming an AI food parse atomically creates all linked records via the composable entry service -- all records share a groupId and appear as a unit in the UI
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 16: Dashboard Cleanup and Text Metrics
+**Goal**: The intake dashboard is reorganized with text metrics replacing graphs, cleaned-up cards in the correct order, and quick UI wins applied
+**Depends on**: Phase 14, Phase 15
+**Requirements**: DASH-06, DASH-07, DASH-08, DASH-09, DASH-10
+**Success Criteria** (what must be TRUE):
+  1. Heart rate input is always visible on the blood pressure card without needing to expand "more options"
+  2. The food calculator feature is fully removed from the codebase (no dead code, no route, no UI entry point)
+  3. The intake page shows text-based metrics -- today's water/salt limits with progress, caffeine and alcohol totals, and a weekly summary starting Monday -- instead of inline graphs
+  4. Coffee settings have been migrated to serve as liquid tab defaults in the unified Liquids card
+  5. Cards on the intake page appear in order: Liquids, Food+Salt, then remaining health metric cards (BP, weight, urination, defecation)
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 17: Timezone-Aware Dose Logging
+**Goal**: Dose log generation produces correct schedules when the user travels between South Africa and Germany, with each dose log recording the device timezone at time of logging
+**Depends on**: Phase 11
+**Requirements**: TMZN-01
+**Success Criteria** (what must be TRUE):
+  1. Dose schedule generation produces correct day-of-week slots for UTC+2 (SA) and UTC+1/UTC+2 DST (Germany) without manual user intervention
+  2. Each dose log record stores the device timezone at the time of logging, enabling retrospective analysis of when doses were taken relative to local time
+  3. Switching device timezone (simulating travel) does not duplicate or drop scheduled dose slots for the transition day
+**Plans**: TBD
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 6.1 -> 7 -> 8 -> 9 -> 10 -> 11
+v1.0: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 6.1 -> 7 -> 8 -> 9 -> 10 -> 11
+v1.1: 12 -> 13 -> 14 -> 15 -> 16 -> 17
 
-Note: Phase 5 (Security) depends only on Phase 2 and can begin in parallel with Phase 3 if needed.
+Note: Phase 14 and Phase 15 both depend on Phase 12 and 13 but are independent of each other -- they can execute in either order. Phase 17 depends only on Phase 11 and can execute in parallel with earlier v1.1 phases if needed.
 
-| Phase | Plans Complete | Status | Completed |
-|-------|----------------|--------|-----------|
-| 1. Schema Foundation | 3/3 | Complete | 2026-03-02 |
-| 2. TypeScript and Service Contracts | 4/4 | Complete | - |
-| 3. Service Layer Rebuild | 5/5 | Complete | - |
-| 4. Analytics Service | 8/8 | Complete |  |
-| 5. Security Hardening | 3/3 | Complete   | 2026-03-10 |
-| 6. Medication UX Core | 7/7 | Complete | 2026-03-20 |
-| 6.1. Dashboard Input Redesign | 0/2 | Not started | - |
-| 7. Schedule Visualization | 1/1 | Complete   | 2026-03-20 |
-| 8. Drug Interactions | 3/3 | Complete   | 2026-03-20 |
-| 9. Data Integrity and Backup | 0/2 | Not started | - |
-| 10. Test Coverage | 3/3 | Complete   | 2026-03-23 |
-| 11. Push Notifications | 3/3 | Complete   | 2026-03-23 |
+| Phase | Milestone | Plans Complete | Status | Completed |
+|-------|-----------|----------------|--------|-----------|
+| 1. Schema Foundation | v1.0 | 3/3 | Complete | 2026-03-02 |
+| 2. TypeScript and Service Contracts | v1.0 | 4/4 | Complete | - |
+| 3. Service Layer Rebuild | v1.0 | 5/5 | Complete | - |
+| 4. Analytics Service | v1.0 | 8/8 | Complete | - |
+| 5. Security Hardening | v1.0 | 3/3 | Complete | 2026-03-10 |
+| 6. Medication UX Core | v1.0 | 7/7 | Complete | 2026-03-20 |
+| 6.1. Dashboard Input Redesign | v1.0 | 2/2 | Complete | 2026-03-20 |
+| 7. Schedule Visualization | v1.0 | 1/1 | Complete | 2026-03-20 |
+| 8. Drug Interactions | v1.0 | 3/3 | Complete | 2026-03-20 |
+| 9. Data Integrity and Backup | v1.0 | 2/2 | Complete | - |
+| 10. Test Coverage | v1.0 | 3/3 | Complete | 2026-03-23 |
+| 11. Push Notifications | v1.0 | 3/3 | Complete | 2026-03-23 |
+| 12. Composable Data Foundation | v1.1 | 0/0 | Not started | - |
+| 13. Liquid Presets and AI Lookup | v1.1 | 0/0 | Not started | - |
+| 14. Unified Liquids Card | v1.1 | 0/0 | Not started | - |
+| 15. Unified Food+Salt Card | v1.1 | 0/0 | Not started | - |
+| 16. Dashboard Cleanup and Text Metrics | v1.1 | 0/0 | Not started | - |
+| 17. Timezone-Aware Dose Logging | v1.1 | 0/0 | Not started | - |

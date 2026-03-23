@@ -147,29 +147,29 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| COMP-01 | — | Pending |
-| COMP-02 | — | Pending |
-| COMP-03 | — | Pending |
-| COMP-04 | — | Pending |
-| LIQD-01 | — | Pending |
-| LIQD-02 | — | Pending |
-| LIQD-03 | — | Pending |
-| LIQD-04 | — | Pending |
-| FOOD-01 | — | Pending |
-| FOOD-02 | — | Pending |
-| FOOD-03 | — | Pending |
-| DASH-06 | — | Pending |
-| DASH-07 | — | Pending |
-| DASH-08 | — | Pending |
-| DASH-09 | — | Pending |
-| DASH-10 | — | Pending |
-| TMZN-01 | — | Pending |
+| COMP-01 | Phase 12 | Pending |
+| COMP-02 | Phase 12 | Pending |
+| COMP-03 | Phase 12 | Pending |
+| COMP-04 | Phase 12 | Pending |
+| LIQD-01 | Phase 14 | Pending |
+| LIQD-02 | Phase 13 | Pending |
+| LIQD-03 | Phase 13 | Pending |
+| LIQD-04 | Phase 14 | Pending |
+| FOOD-01 | Phase 15 | Pending |
+| FOOD-02 | Phase 15 | Pending |
+| FOOD-03 | Phase 15 | Pending |
+| DASH-06 | Phase 16 | Pending |
+| DASH-07 | Phase 16 | Pending |
+| DASH-08 | Phase 16 | Pending |
+| DASH-09 | Phase 16 | Pending |
+| DASH-10 | Phase 16 | Pending |
+| TMZN-01 | Phase 17 | Pending |
 
 **Coverage:**
 - v1.1 requirements: 17 total
-- Mapped to phases: 0
-- Unmapped: 17
+- Mapped to phases: 17
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-23*
-*Last updated: 2026-03-23 after milestone v1.1 definition*
+*Last updated: 2026-03-23 after roadmap creation*
