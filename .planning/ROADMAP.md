@@ -235,7 +235,7 @@ Plans:
 
 **Milestone Goal:** Redesign the intake tracking UI with composable data entries, unified input cards, AI-powered substance lookup, and dashboard modernization
 
-- [ ] **Phase 12: Composable Data Foundation** - Dexie v15 schema migration with groupId, composable entry service for atomic cross-table writes, and soft-delete standardization
+- [x] **Phase 12: Composable Data Foundation** - Dexie v15 schema migration with groupId, composable entry service for atomic cross-table writes, and soft-delete standardization (completed 2026-03-23)
 - [ ] **Phase 13: Liquid Presets and AI Lookup** - Zustand preset store for beverages and AI-powered caffeine/alcohol per-100ml lookup route
 - [ ] **Phase 14: Unified Liquids Card** - Tabbed water/coffee/alcohol card with preset-based logging and substance auto-calculation
 - [ ] **Phase 15: Unified Food+Salt Card** - Merged food and salt input with AI parsing that creates composable linked entries
@@ -257,7 +257,7 @@ Plans:
 
 Plans:
 - [x] 12-01-PLAN.md -- Dexie v15 schema migration + soft-delete standardization (COMP-02, COMP-03)
-- [ ] 12-02-PLAN.md -- Composable entry service + hooks (COMP-01, COMP-03, COMP-04)
+- [x] 12-02-PLAN.md -- Composable entry service + hooks (COMP-01, COMP-03, COMP-04)
 
 ### Phase 13: Liquid Presets and AI Lookup
 **Goal**: Users can save beverage presets with substance content and look up caffeine/alcohol concentrations via AI, ready for the Liquids card to consume
@@ -336,7 +336,7 @@ Note: Phase 14 and Phase 15 both depend on Phase 12 and 13 but are independent o
 | 9. Data Integrity and Backup | v1.0 | 2/2 | Complete | - |
 | 10. Test Coverage | v1.0 | 3/3 | Complete | 2026-03-23 |
 | 11. Push Notifications | v1.0 | 3/3 | Complete | 2026-03-23 |
-| 12. Composable Data Foundation | v1.1 | 1/2 | In Progress|  |
+| 12. Composable Data Foundation | v1.1 | 2/2 | Complete   | 2026-03-23 |
 | 13. Liquid Presets and AI Lookup | v1.1 | 0/0 | Not started | - |
 | 14. Unified Liquids Card | v1.1 | 0/0 | Not started | - |
 | 15. Unified Food+Salt Card | v1.1 | 0/0 | Not started | - |

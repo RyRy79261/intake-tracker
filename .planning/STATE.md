@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: UI Overhaul
-status: Ready to execute
-stopped_at: Completed 12-01-PLAN.md
-last_updated: "2026-03-23T22:05:33.819Z"
+status: Phase complete — ready for verification
+stopped_at: Completed 12-02-PLAN.md
+last_updated: "2026-03-23T22:20:29.808Z"
 progress:
   total_phases: 6
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
-  completed_plans: 1
+  completed_plans: 2
 ---
 
 # Project State
@@ -49,6 +49,7 @@ Plan: 2 of 2
 
 *Updated after each plan completion*
 | Phase 12 P01 | 15min | 3 tasks | 9 files |
+| Phase 12 P02 | 12min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -66,6 +67,9 @@ Key decisions carrying forward into v1.1:
 - [v1.1-research]: Intake records need soft-delete standardization before composable cascading delete
 - [Phase 12]: v15 schema uses no .upgrade() — undefined groupId naturally excluded from IndexedDB index entries
 - [Phase 12]: Soft-delete pagination loads all then slices — acceptable for single-user data volume
+- [Phase 12]: originalInputText on eating record (primary) with fallback to substance — composable entry storage pattern
+- [Phase 12]: COMPOSABLE_TABLES const for consistent transaction scope across service functions
+- [Phase 12]: Hooks layer reads via service getEntryGroup (not direct db import) for Dexie observation
 
 ### Pending Todos
 
@@ -83,6 +87,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-23T22:05:33.816Z
-Stopped at: Completed 12-01-PLAN.md
+Last session: 2026-03-23T22:20:29.803Z
+Stopped at: Completed 12-02-PLAN.md
 Resume file: None
