@@ -253,7 +253,11 @@ Plans:
   2. Dexie v15 migration adds groupId index to intakeRecords, eatingRecords, and substanceRecords without corrupting any existing records (verified by migration test with fake-indexeddb)
   3. Deleting a composable entry group sets deletedAt on all linked records in a single transaction -- no orphaned records survive if any individual delete fails
   4. Querying by groupId via useLiveQuery returns all linked records across tables in a single reactive callback
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 12-01-PLAN.md -- Dexie v15 schema migration + soft-delete standardization (COMP-02, COMP-03)
+- [ ] 12-02-PLAN.md -- Composable entry service + hooks (COMP-01, COMP-03, COMP-04)
 
 ### Phase 13: Liquid Presets and AI Lookup
 **Goal**: Users can save beverage presets with substance content and look up caffeine/alcohol concentrations via AI, ready for the Liquids card to consume
@@ -332,7 +336,7 @@ Note: Phase 14 and Phase 15 both depend on Phase 12 and 13 but are independent o
 | 9. Data Integrity and Backup | v1.0 | 2/2 | Complete | - |
 | 10. Test Coverage | v1.0 | 3/3 | Complete | 2026-03-23 |
 | 11. Push Notifications | v1.0 | 3/3 | Complete | 2026-03-23 |
-| 12. Composable Data Foundation | v1.1 | 0/0 | Not started | - |
+| 12. Composable Data Foundation | v1.1 | 0/2 | Planned | - |
 | 13. Liquid Presets and AI Lookup | v1.1 | 0/0 | Not started | - |
 | 14. Unified Liquids Card | v1.1 | 0/0 | Not started | - |
 | 15. Unified Food+Salt Card | v1.1 | 0/0 | Not started | - |
