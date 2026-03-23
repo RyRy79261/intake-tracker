@@ -230,8 +230,110 @@ export function shouldCheckExpiry(): boolean {
  */
 export async function runExpiryCheck(retentionDays: number): Promise<boolean> {
   if (!shouldCheckExpiry()) return false;
-  
+
   saveNotificationSettings({ lastCheck: Date.now() });
-  
+
   return notifyExpiringRecords(retentionDays);
+}
+
+// ----- Push Subscription Management -----
+
+/**
+ * Convert a VAPID public key from URL-safe base64 to Uint8Array
+ * (required by PushManager.subscribe applicationServerKey)
+ */
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding)
+    .replace(/-/g, "+")
+    .replace(/_/g, "/");
+
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
+/**
+ * Register for push notifications via PushManager and sync subscription to server.
+ * Re-sends existing subscriptions in case the server lost them.
+ */
+export async function subscribeToPush(
+  authToken: string
+): Promise<PushSubscription | null> {
+  if (
+    !("serviceWorker" in navigator) ||
+    !("PushManager" in window)
+  ) {
+    return null;
+  }
+
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    let subscription = await registration.pushManager.getSubscription();
+
+    if (!subscription) {
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(
+          process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!
+        ) as BufferSource,
+      });
+    }
+
+    const subJson = subscription.toJSON();
+    await fetch("/api/push/subscribe", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify({
+        endpoint: subscription.endpoint,
+        keys: {
+          p256dh: subJson.keys?.p256dh,
+          auth: subJson.keys?.auth,
+        },
+      }),
+    });
+
+    return subscription;
+  } catch (error) {
+    console.error("[push] Failed to subscribe:", error);
+    return null;
+  }
+}
+
+/**
+ * Unsubscribe from push notifications and notify the server.
+ */
+export async function unsubscribeFromPush(
+  authToken: string
+): Promise<boolean> {
+  try {
+    if ("serviceWorker" in navigator) {
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+
+      if (subscription) {
+        await subscription.unsubscribe();
+      }
+    }
+
+    await fetch("/api/push/unsubscribe", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${authToken}`,
+      },
+    });
+
+    return true;
+  } catch (error) {
+    console.error("[push] Failed to unsubscribe:", error);
+    return false;
+  }
 }
