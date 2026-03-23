@@ -1,8 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useDailyDoseSchedule } from "@/hooks/use-medication-queries";
+import {
+  subscribeToPush,
+  unsubscribeFromPush,
+  requestNotificationPermission,
+  isNotificationSupported,
+} from "@/lib/push-notification-service";
 
 function getTodayDateStr(): string {
   const now = new Date();
@@ -125,4 +131,42 @@ export function usePushScheduleSync(getAuthToken?: () => Promise<string | null>)
 
     syncSchedule(entries);
   }, [slots, doseRemindersEnabled, followUpCount, followUpInterval, syncSchedule]);
+}
+
+/**
+ * Hook that provides a toggle handler for dose reminders.
+ * Wraps push subscription/unsubscription logic so components
+ * don't need to import service files directly.
+ */
+export function useDoseReminderToggle() {
+  const setDoseRemindersEnabled = useSettingsStore((s) => s.setDoseRemindersEnabled);
+  const [toggling, setToggling] = useState(false);
+  const supported = typeof window !== "undefined" && isNotificationSupported();
+
+  const handleToggle = useCallback(async (enabled: boolean) => {
+    setToggling(true);
+    try {
+      if (enabled) {
+        const permResult = await requestNotificationPermission();
+        if (!permResult.success || permResult.data !== "granted") {
+          return;
+        }
+        const subscription = await subscribeToPush("");
+        if (!subscription) {
+          console.warn("[dose-reminders] Push subscription failed");
+          return;
+        }
+        setDoseRemindersEnabled(true);
+      } else {
+        await unsubscribeFromPush("");
+        setDoseRemindersEnabled(false);
+      }
+    } catch (error) {
+      console.error("[dose-reminders] Toggle failed:", error);
+    } finally {
+      setToggling(false);
+    }
+  }, [setDoseRemindersEnabled]);
+
+  return { handleToggle, toggling, supported };
 }

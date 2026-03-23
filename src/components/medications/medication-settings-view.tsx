@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import { useSettingsStore } from "@/stores/settings-store";
+import { useDoseReminderToggle } from "@/hooks/use-push-schedule-sync";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -24,7 +26,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { Check, ChevronsUpDown, Clock, Globe } from "lucide-react";
+import { Bell, Check, ChevronsUpDown, Clock, Globe } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // ISO 3166-1 countries sorted alphabetically
@@ -296,6 +298,13 @@ export function MedicationSettingsView() {
   const setSecondaryRegion = useSettingsStore((s) => s.setSecondaryRegion);
   const timeFormat = useSettingsStore((s) => s.timeFormat);
   const setTimeFormat = useSettingsStore((s) => s.setTimeFormat);
+  const doseRemindersEnabled = useSettingsStore((s) => s.doseRemindersEnabled);
+  const reminderFollowUpCount = useSettingsStore((s) => s.reminderFollowUpCount);
+  const setReminderFollowUpCount = useSettingsStore((s) => s.setReminderFollowUpCount);
+  const reminderFollowUpInterval = useSettingsStore((s) => s.reminderFollowUpInterval);
+  const setReminderFollowUpInterval = useSettingsStore((s) => s.setReminderFollowUpInterval);
+
+  const { handleToggle: handleToggleReminders, toggling: togglingReminders, supported: notificationsSupported } = useDoseReminderToggle();
 
   return (
     <div className="space-y-6 pb-24">
@@ -304,6 +313,77 @@ export function MedicationSettingsView() {
         <p className="text-sm text-muted-foreground mb-6">
           Configure preferences that apply to your prescriptions and search results.
         </p>
+      </div>
+
+      {/* Dose Reminders Section */}
+      <div className="space-y-4 rounded-xl border bg-card p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <Bell className="w-5 h-5 text-teal-600 dark:text-teal-400" />
+          <h3 className="font-medium">Dose Reminders</h3>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <div className="space-y-0.5">
+            <Label htmlFor="dose-reminders-toggle">Enable Reminders</Label>
+            <p className="text-[13px] text-muted-foreground">
+              {notificationsSupported
+                ? "Get push notifications when medications are due"
+                : "Notifications not supported in this browser"}
+            </p>
+          </div>
+          <Switch
+            id="dose-reminders-toggle"
+            checked={doseRemindersEnabled}
+            onCheckedChange={handleToggleReminders}
+            disabled={!notificationsSupported || togglingReminders}
+          />
+        </div>
+
+        {doseRemindersEnabled && (
+          <>
+            <div className="space-y-1.5">
+              <Label>Follow-up reminders</Label>
+              <p className="text-[13px] text-muted-foreground mb-2">
+                Additional reminders if dose not confirmed
+              </p>
+              <Select
+                value={String(reminderFollowUpCount)}
+                onValueChange={(v) => setReminderFollowUpCount(Number(v))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">None</SelectItem>
+                  <SelectItem value="1">1 follow-up</SelectItem>
+                  <SelectItem value="2">2 follow-ups</SelectItem>
+                  <SelectItem value="3">3 follow-ups</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {reminderFollowUpCount > 0 && (
+              <div className="space-y-1.5">
+                <Label>Reminder interval</Label>
+                <Select
+                  value={String(reminderFollowUpInterval)}
+                  onValueChange={(v) => setReminderFollowUpInterval(Number(v))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="5">Every 5 minutes</SelectItem>
+                    <SelectItem value="10">Every 10 minutes</SelectItem>
+                    <SelectItem value="15">Every 15 minutes</SelectItem>
+                    <SelectItem value="20">Every 20 minutes</SelectItem>
+                    <SelectItem value="30">Every 30 minutes</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       <div className="space-y-4 rounded-xl border bg-card p-4">
