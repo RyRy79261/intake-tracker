@@ -22,6 +22,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.0.2",
     "@privy-io/react-auth": "^3.12.0",
     "@privy-io/server-auth": "^1.32.5",
     "@radix-ui/react-alert-dialog": "^1.1.15",
@@ -57,6 +58,7 @@
     "tailwind-merge": "^2.5.4",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^1.1.2",
+    "web-push": "^3.6.7",
     "zod": "3",
     "zustand": "^5.0.0"
   },
@@ -66,6 +68,7 @@
     "@types/node": "^22.8.1",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
+    "@types/web-push": "^3.6.4",
     "@vitest/coverage-v8": "^4.0.18",
     "autoprefixer": "^10.4.20",
     "babel-loader": "^10.0.0",
