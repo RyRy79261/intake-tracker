@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { PillIcon } from "./pill-icon";
 import { useMedicineSearch, type MedicineSearchResult } from "@/hooks/use-medicine-search";
 import { useAddPrescription, usePrescriptions, useAddMedicationToPrescription, usePhasesForPrescription } from "@/hooks/use-medication-queries";
+import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 import type { PillShape, FoodInstruction, Prescription, MedicationPhase } from "@/lib/db";
 import { ArrowLeft, ArrowRight, Search, Loader2, Check, Plus, X, AlertTriangle } from "lucide-react";
@@ -110,6 +111,7 @@ function capitalizeWords(str: string) {
 }
 
 export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardProps) {
+  const { toast } = useToast();
   const [step, setStep] = useState<WizardStep>("search");
   const searchMutation = useMedicineSearch();
   const addPrescriptionMutation = useAddPrescription();
@@ -414,11 +416,15 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
           schedules: asNeeded ? [] : schedules.filter(s => s.time && s.daysOfWeek.length > 0).map(s => ({ ...s, dosage: scheduleDosage }))
         });
       }
+      handleClose();
     } catch (err: unknown) {
       console.error(err);
+      toast({
+        title: "Failed to save prescription",
+        description: err instanceof Error ? err.message : "Please try again",
+        variant: "destructive",
+      });
     }
-
-    handleClose();
   };
 
   return (

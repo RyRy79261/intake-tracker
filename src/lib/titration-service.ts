@@ -210,11 +210,18 @@ export async function updateTitrationPlan(
 
         // If entries provided, replace all phases and schedules
         if (input.entries) {
-          // Delete existing phases and their schedules
+          // Collect existing phases (to remap dose logs)
           const existingPhases = await db.medicationPhases
             .filter((p) => p.titrationPlanId === plan.id)
             .toArray();
 
+          // Build old phaseId → prescriptionId map for dose log remapping
+          const oldPhaseToRx = new Map<string, string>();
+          for (const phase of existingPhases) {
+            oldPhaseToRx.set(phase.id, phase.prescriptionId);
+          }
+
+          // Delete existing schedules and phases
           for (const phase of existingPhases) {
             await db.phaseSchedules.where({ phaseId: phase.id }).delete();
           }
@@ -222,9 +229,12 @@ export async function updateTitrationPlan(
             .filter((p) => p.titrationPlanId === plan.id)
             .delete();
 
-          // Create new phases and schedules
+          // Create new phases and schedules, tracking rx → new phaseId mapping
+          const rxToNewPhase = new Map<string, string>();
           for (const entry of input.entries) {
             const phaseId = crypto.randomUUID();
+            rxToNewPhase.set(entry.prescriptionId, phaseId);
+
             await db.medicationPhases.add({
               id: phaseId,
               prescriptionId: entry.prescriptionId,
@@ -255,6 +265,21 @@ export async function updateTitrationPlan(
                 deletedAt: null,
                 deviceId: sf.deviceId,
               });
+            }
+          }
+
+          // Remap existing dose logs from old phase IDs to new ones (by prescriptionId)
+          const remapEntries = Array.from(oldPhaseToRx.entries());
+          for (let i = 0; i < remapEntries.length; i++) {
+            const entry = remapEntries[i]!;
+            const oldPhaseId = entry[0];
+            const rxId = entry[1];
+            const newPhaseId = rxToNewPhase.get(rxId);
+            if (newPhaseId) {
+              await db.doseLogs
+                .where("phaseId")
+                .equals(oldPhaseId)
+                .modify({ phaseId: newPhaseId, updatedAt: now });
             }
           }
         }
