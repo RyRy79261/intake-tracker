@@ -201,10 +201,12 @@ Plans:
   2. Every Dexie schema migration path from version 1 through current has a test that verifies the upgrade completes without data loss
   3. Running the full test suite with `TZ=Africa/Johannesburg` and `TZ=Europe/Berlin` both pass with no timezone-related failures
   4. No service function has a test that passes by accident — timezone edge cases, fractional dose math, and phase-activation invariant each have explicit assertions
-**Plans**: TBD
+**Plans**: 3
 
 Plans:
-- [ ] 10-01: TBD
+- [ ] 10-01-PLAN.md — Dose log service + dose schedule service unit tests (TEST-02, TEST-04)
+- [ ] 10-02-PLAN.md — Medication service + titration service unit tests (TEST-02)
+- [ ] 10-03-PLAN.md — P2 service tests + migration tests v11/v13/v14 + timezone dual-pass scripts (TEST-02, TEST-03, TEST-04)
 
 ### Phase 11: Push Notifications
 **Goal**: The app sends push notifications for scheduled medication doses on Android/PWA without requiring the app to be open
@@ -238,5 +240,5 @@ Note: Phase 5 (Security) depends only on Phase 2 and can begin in parallel with 
 | 7. Schedule Visualization | 1/1 | Complete   | 2026-03-20 |
 | 8. Drug Interactions | 3/3 | Complete   | 2026-03-20 |
 | 9. Data Integrity and Backup | 0/2 | Not started | - |
-| 10. Test Coverage | 0/TBD | Not started | - |
+| 10. Test Coverage | 0/3 | Not started | - |
 | 11. Push Notifications | 0/TBD | Not started | - |
