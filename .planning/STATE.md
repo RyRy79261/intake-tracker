@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: UI Overhaul
 status: Ready to plan
-stopped_at: Phase 13 context gathered
-last_updated: "2026-03-23T22:44:41.751Z"
+stopped_at: Completed 13-03-PLAN.md (Phase 13 complete)
+last_updated: "2026-03-24T07:29:35.043Z"
 progress:
   total_phases: 6
-  completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
+  completed_phases: 2
+  total_plans: 5
+  completed_plans: 5
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-23)
 
 **Core value:** Accurate, queryable health data across intake, vitals, and medication adherence — structured for cross-domain analysis and future AI querying
-**Current focus:** Phase 12 — Composable Data Foundation
+**Current focus:** Phase 13 — Liquid Presets and AI Lookup (complete)
 
 ## Current Position
 
 Phase: 13
-Plan: Not started
+Plan: 3 of 3 (complete)
 
 ## Performance Metrics
 
@@ -50,6 +50,7 @@ Plan: Not started
 *Updated after each plan completion*
 | Phase 12 P01 | 15min | 3 tasks | 9 files |
 | Phase 12 P02 | 12min | 2 tasks | 4 files |
+| Phase 13 P03 | 12min | 2 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -70,6 +71,8 @@ Key decisions carrying forward into v1.1:
 - [Phase 12]: originalInputText on eating record (primary) with fallback to substance — composable entry storage pattern
 - [Phase 12]: COMPOSABLE_TABLES const for consistent transaction scope across service functions
 - [Phase 12]: Hooks layer reads via service getEntryGroup (not direct db import) for Dexie observation
+- [Phase 13]: Removed vestigial perplexityApiKey from Settings interface (dead code after usePerplexityKey hook removal)
+- [Phase 13]: ANTHROPIC_API_KEY is the single env var for all AI services (D-08 fully satisfied)
 
 ### Pending Todos
 
@@ -87,6 +90,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-23T22:44:41.748Z
-Stopped at: Phase 13 context gathered
-Resume file: .planning/phases/13-liquid-presets-and-ai-lookup/13-CONTEXT.md
+Last session: 2026-03-24T07:29:35.040Z
+Stopped at: Completed 13-03-PLAN.md (Phase 13 complete)
+Resume file: None

@@ -236,7 +236,7 @@ Plans:
 **Milestone Goal:** Redesign the intake tracking UI with composable data entries, unified input cards, AI-powered substance lookup, and dashboard modernization
 
 - [x] **Phase 12: Composable Data Foundation** - Dexie v15 schema migration with groupId, composable entry service for atomic cross-table writes, and soft-delete standardization (completed 2026-03-23)
-- [ ] **Phase 13: Liquid Presets and AI Lookup** - Zustand preset store for beverages and AI-powered caffeine/alcohol per-100ml lookup route
+- [x] **Phase 13: Liquid Presets and AI Lookup** - Zustand preset store for beverages and AI-powered caffeine/alcohol per-100ml lookup route (completed 2026-03-24)
 - [ ] **Phase 14: Unified Liquids Card** - Tabbed water/coffee/alcohol card with preset-based logging and substance auto-calculation
 - [ ] **Phase 15: Unified Food+Salt Card** - Merged food and salt input with AI parsing that creates composable linked entries
 - [ ] **Phase 16: Dashboard Cleanup and Text Metrics** - BP heart rate visible, food calculator removed, text metrics, coffee settings migrated, card reordering
@@ -270,9 +270,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 13-01-PLAN.md -- Preset system in Zustand + shared Claude client + DEFAULT_LIQUID_PRESETS (LIQD-02)
-- [ ] 13-02-PLAN.md -- Migrate all 5 Perplexity AI routes to Claude + new substance-lookup route (LIQD-03)
-- [ ] 13-03-PLAN.md -- Perplexity cleanup: rename client lib, update imports, env, docs, CSP, bundle test (LIQD-02, LIQD-03)
+- [x] 13-01-PLAN.md -- Preset system in Zustand + shared Claude client + DEFAULT_LIQUID_PRESETS (LIQD-02)
+- [x] 13-02-PLAN.md -- Migrate all 5 Perplexity AI routes to Claude + new substance-lookup route (LIQD-03)
+- [x] 13-03-PLAN.md -- Perplexity cleanup: rename client lib, update imports, env, docs, CSP, bundle test (LIQD-02, LIQD-03)
 
 ### Phase 14: Unified Liquids Card
 **Goal**: Users can track water, coffee, and alcohol from a single tabbed Liquids card, with water preserving its existing zero-friction UX and coffee/alcohol using presets with auto-calculated substance amounts
@@ -342,7 +342,7 @@ Note: Phase 14 and Phase 15 both depend on Phase 12 and 13 but are independent o
 | 10. Test Coverage | v1.0 | 3/3 | Complete | 2026-03-23 |
 | 11. Push Notifications | v1.0 | 3/3 | Complete | 2026-03-23 |
 | 12. Composable Data Foundation | v1.1 | 2/2 | Complete    | 2026-03-23 |
-| 13. Liquid Presets and AI Lookup | v1.1 | 0/3 | Planning complete | - |
+| 13. Liquid Presets and AI Lookup | v1.1 | 3/3 | Complete   | 2026-03-24 |
 | 14. Unified Liquids Card | v1.1 | 0/0 | Not started | - |
 | 15. Unified Food+Salt Card | v1.1 | 0/0 | Not started | - |
 | 16. Dashboard Cleanup and Text Metrics | v1.1 | 0/0 | Not started | - |
