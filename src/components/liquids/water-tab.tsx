@@ -30,7 +30,7 @@ export function WaterTab() {
   const waterLimit = settings.waterLimit;
 
   const waterIntake = useIntake("water");
-  const { data: recentRecords } = useRecentIntakeRecords("water");
+  const recentRecords = useRecentIntakeRecords("water");
 
   const [pendingAmount, setPendingAmount] = useState(waterIncrement);
   const [isSubmitting, setIsSubmitting] = useState(false);
