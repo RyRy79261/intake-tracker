@@ -54,11 +54,11 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 - [ ] Volume-based caffeine/alcohol calculation from presets
 - ✓ Unified Food+Salt card with stacked sections, AI food parse → composable preview → atomic linked entries — Phase 15
 - ✓ Manual salt input within food card (salt tablets, seasoning) — salt UX preserved exactly — Phase 15
-- [ ] BP heart rate field always visible (no expand required)
-- [ ] Text-based intake metrics replacing graphs (today's limits, substance totals, weekly summary)
-- [ ] Food calculator removal
-- [ ] Coffee settings migrated to liquid tab defaults
-- [ ] Card reordering: Liquids → Food+Salt → health cards
+- ✓ BP heart rate always visible (promoted from collapsible to primary area) — Phase 16
+- ✓ Text metrics replacing graphs (water/salt progress, caffeine/alcohol totals, weekly Monday-start summary) — Phase 16
+- ✓ Food calculator removed + 13 dead code files deleted (2,541 lines) — Phase 16
+- ✓ Coffee settings → Liquid Presets manager with multi-substance model (caffeine/alcohol/salt per-100ml + waterContentPercent) — Phase 16
+- ✓ Card reordering: TextMetrics → Liquids → Food+Salt → BP → Weight → Urination → Defecation — Phase 16
 - [ ] Timezone-aware dose log generation for SA/Germany travel (carry-over from v1.0)
 
 ### Out of Scope
@@ -117,4 +117,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-24 after Phase 15 completion*
+*Last updated: 2026-03-24 after Phase 16 completion*
