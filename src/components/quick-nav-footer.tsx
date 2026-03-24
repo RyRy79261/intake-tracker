@@ -55,8 +55,8 @@ interface QuickNavFooterProps {
   utilityOrder: "ai-right" | "food-right";
   transitionDuration?: number;
   onScrollTo: (sectionId: string) => void;
-  onOpenFoodCalculator: () => void;
-  onOpenVoiceInput: () => void;
+  onOpenFoodCalculator?: () => void;
+  onOpenVoiceInput?: () => void;
 }
 
 export function QuickNavFooter({
@@ -74,7 +74,8 @@ export function QuickNavFooter({
     [order]
   );
 
-  // Build utility row: two buttons ordered by utilityOrder setting
+  // Build utility row: two buttons ordered by utilityOrder setting (only when callbacks provided)
+  const showUtilityRow = onOpenFoodCalculator && onOpenVoiceInput;
   const utilityLeft = utilityOrder === "ai-right" ? FOOD_ITEM : AI_ITEM;
   const utilityRight = utilityOrder === "ai-right" ? AI_ITEM : FOOD_ITEM;
   const onClickLeft = utilityOrder === "ai-right" ? onOpenFoodCalculator : onOpenVoiceInput;
@@ -111,11 +112,13 @@ export function QuickNavFooter({
         ))}
       </div>
 
-      {/* Row 2: Utility buttons (Food Calculator & AI) */}
-      <div className="flex items-center gap-2 px-3 pb-2 pt-0.5">
-        <UtilityButton item={utilityLeft} onClick={onClickLeft} />
-        <UtilityButton item={utilityRight} onClick={onClickRight} />
-      </div>
+      {/* Row 2: Utility buttons (Food Calculator & AI) — shown when callbacks provided */}
+      {showUtilityRow && (
+        <div className="flex items-center gap-2 px-3 pb-2 pt-0.5">
+          <UtilityButton item={utilityLeft} onClick={onClickLeft!} />
+          <UtilityButton item={utilityRight} onClick={onClickRight!} />
+        </div>
+      )}
     </motion.footer>
   );
 }

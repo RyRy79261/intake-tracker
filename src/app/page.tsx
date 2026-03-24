@@ -1,21 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { IntakeCard } from "@/components/intake-card";
-import { FoodCalculator } from "@/components/food-calculator";
-import { VoiceInput } from "@/components/voice-input";
+import { useEffect, useState } from "react";
 import { AuthGuard } from "@/components/auth-guard";
 import { WeightCard } from "@/components/weight-card";
 import { BloodPressureCard } from "@/components/blood-pressure-card";
 import { AppHeader } from "@/components/app-header";
 import { QuickNavFooter } from "@/components/quick-nav-footer";
 import { HistoricalGraph } from "@/components/historical-graph";
-import { EatingCard } from "@/components/eating-card";
 import { UrinationCard } from "@/components/urination-card";
 import { DefecationCard } from "@/components/defecation-card";
-import { useIntake } from "@/hooks/use-intake-queries";
 import { useSettings } from "@/hooks/use-settings";
 import { LiquidsCard } from "@/components/liquids-card";
+import { FoodSaltCard } from "@/components/food-salt-card";
 import { InsightBadge } from "@/components/insight-badge";
 import { useScrollHide } from "@/hooks/use-scroll-hide";
 import { cn } from "@/lib/utils";
@@ -23,10 +19,6 @@ import { Droplets } from "lucide-react";
 
 function HomeContent() {
   const [mounted, setMounted] = useState(false);
-  const [foodCalcOpen, setFoodCalcOpen] = useState(false);
-  const [voiceInputOpen, setVoiceInputOpen] = useState(false);
-  const waterIntake = useIntake("water");
-  const saltIntake = useIntake("salt");
   const settings = useSettings();
 
   const barTransitionSec = settings.barTransitionDurationMs / 1000;
@@ -38,20 +30,6 @@ function HomeContent() {
   useEffect(() => {
     setMounted(true);
   }, []);
-
-  const handleAddWater = useCallback(
-    async (amount: number, source: string = "manual", timestamp?: number, note?: string) => {
-      await waterIntake.addRecord(amount, source, timestamp, note);
-    },
-    [waterIntake]
-  );
-
-  const handleAddSalt = useCallback(
-    async (amount: number, source: string = "manual", timestamp?: number, note?: string) => {
-      await saltIntake.addRecord(amount, source, timestamp, note);
-    },
-    [saltIntake]
-  );
 
   if (!mounted) {
     return (
@@ -84,32 +62,9 @@ function HomeContent() {
           <LiquidsCard />
         </div>
 
-        <div id="section-salt">
-          <IntakeCard
-            type="salt"
-            dailyTotal={saltIntake.dailyTotal}
-            rollingTotal={saltIntake.rollingTotal}
-            limit={settings.saltLimit}
-            increment={settings.saltIncrement}
-            onConfirm={(amount, timestamp, note) => handleAddSalt(amount, "manual", timestamp, note)}
-            isLoading={saltIntake.isLoading}
-          />
+        <div id="section-food-salt">
+          <FoodSaltCard />
         </div>
-
-      </div>
-
-      <div className="flex gap-3 mb-6">
-        <FoodCalculator
-          onAddWater={handleAddWater}
-          open={foodCalcOpen}
-          onOpenChange={setFoodCalcOpen}
-        />
-        <VoiceInput
-          onAddWater={handleAddWater}
-          onAddSalt={handleAddSalt}
-          open={voiceInputOpen}
-          onOpenChange={setVoiceInputOpen}
-        />
       </div>
 
       <div className="space-y-4 mb-6">
@@ -122,9 +77,6 @@ function HomeContent() {
       </div>
 
       <div className="space-y-4 mb-6">
-        <div id="section-eating">
-          <EatingCard />
-        </div>
         <div id="section-urination">
           <UrinationCard />
         </div>
@@ -147,8 +99,6 @@ function HomeContent() {
           utilityOrder={settings.utilityOrder}
           transitionDuration={barTransitionSec}
           onScrollTo={handleQuickNav}
-          onOpenFoodCalculator={() => setFoodCalcOpen(true)}
-          onOpenVoiceInput={() => setVoiceInputOpen(true)}
         />
       )}
     </>
