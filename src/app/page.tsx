@@ -6,7 +6,7 @@ import { WeightCard } from "@/components/weight-card";
 import { BloodPressureCard } from "@/components/blood-pressure-card";
 import { AppHeader } from "@/components/app-header";
 import { QuickNavFooter } from "@/components/quick-nav-footer";
-import { HistoricalGraph } from "@/components/historical-graph";
+import { TextMetrics } from "@/components/text-metrics";
 import { UrinationCard } from "@/components/urination-card";
 import { DefecationCard } from "@/components/defecation-card";
 import { useSettings } from "@/hooks/use-settings";
@@ -53,8 +53,8 @@ function HomeContent() {
         <InsightBadge />
       </div>
 
-      <div className="-mx-3 mb-6 px-1">
-        <HistoricalGraph />
+      <div className="mb-6">
+        <TextMetrics />
       </div>
 
       <div className="space-y-4 mb-6">
@@ -68,11 +68,11 @@ function HomeContent() {
       </div>
 
       <div className="space-y-4 mb-6">
-        <div id="section-weight">
-          <WeightCard />
-        </div>
         <div id="section-bp">
           <BloodPressureCard />
+        </div>
+        <div id="section-weight">
+          <WeightCard />
         </div>
       </div>
 
