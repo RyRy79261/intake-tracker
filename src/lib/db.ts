@@ -281,7 +281,7 @@ export interface SubstanceRecord {
   description: string;
   source: 'water_intake' | 'eating' | 'standalone';
   sourceRecordId?: string;      // links to original intake record if migrated
-  aiEnriched?: boolean;         // true if Perplexity has refined the estimate
+  aiEnriched?: boolean;         // true if AI has refined the estimate
   timestamp: number;
   createdAt: number;
   updatedAt: number;

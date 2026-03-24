@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { formatAmount } from "@/lib/utils";
-import { type ParsedIntake } from "@/lib/perplexity";
+import { type ParsedIntake } from "@/lib/ai-client";
 
 interface ParsedIntakeDisplayProps {
   result: ParsedIntake;

@@ -18,10 +18,6 @@ export interface Settings {
   waterLimit: number; // ml (default 1000ml = 1L)
   saltLimit: number; // mg (default 1500mg)
 
-  // Perplexity API integration (stored obfuscated)
-  // NOTE: Prefer server-side API key via PERPLEXITY_API_KEY env var
-  perplexityApiKey: string;
-  
   // Secret to authenticate with server-side AI (if using server API key)
   // Set AI_AUTH_SECRET env var on server, enter same value here
   aiAuthSecret: string;
@@ -66,8 +62,6 @@ interface SettingsActions {
   setSaltIncrement: (value: number) => void;
   setWaterLimit: (value: number) => void;
   setSaltLimit: (value: number) => void;
-  setPerplexityApiKey: (key: string) => void;
-  getDeobfuscatedApiKey: () => string;
   setAiAuthSecret: (secret: string) => void;
   getDeobfuscatedAuthSecret: () => string;
   setTheme: (theme: "light" | "dark" | "system") => void;
@@ -97,7 +91,6 @@ const defaultSettings: Settings = {
   saltIncrement: 250,
   waterLimit: 1000,
   saltLimit: 1500,
-  perplexityApiKey: "",
   aiAuthSecret: "",
   theme: "system",
   dataRetentionDays: 90, // Default: keep 90 days of data
@@ -131,13 +124,6 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
         set({ waterLimit: sanitizeNumericInput(value, 100, 10000) }),
       setSaltLimit: (value) => 
         set({ saltLimit: sanitizeNumericInput(value, 100, 10000) }),
-      
-      // Store API key with obfuscation (NOT encryption - see security.ts)
-      setPerplexityApiKey: (key) => 
-        set({ perplexityApiKey: obfuscateApiKey(key) }),
-      
-      // Get the actual API key for use
-      getDeobfuscatedApiKey: () => deobfuscateApiKey(get().perplexityApiKey),
       
       // Store auth secret with obfuscation
       setAiAuthSecret: (secret) =>
