@@ -45,6 +45,7 @@ export interface Settings {
   // Tracking defaults
   urinationDefaultAmount: "small" | "medium" | "large";
   defecationDefaultAmount: "small" | "medium" | "large";
+  /** @deprecated Removed in v3 migration. Kept temporarily for build compat with intake-card.tsx and customization-panel.tsx (deleted in Plan 03). */
   coffeeDefaultType: string;
 
   // Weight graph defaults
@@ -181,7 +182,7 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
     {
       name: "intake-tracker-settings",
       storage: createJSONStorage(() => localStorage),
-      version: 2,
+      version: 3,
       migrate: (persisted, version) => {
         const state = persisted as Record<string, unknown>;
         if (version === 0) {
@@ -190,6 +191,28 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
         }
         if (version < 2) {
           state.liquidPresets = DEFAULT_LIQUID_PRESETS;
+        }
+        if (version < 3) {
+          // D-07: Remove deprecated coffeeDefaultType from persisted state
+          delete state.coffeeDefaultType;
+          // D-12: Convert old LiquidPreset format (type/substancePer100ml) to new multi-substance format
+          const presets = state.liquidPresets as Array<Record<string, unknown>>;
+          if (Array.isArray(presets)) {
+            state.liquidPresets = presets.map(p => {
+              // Skip if already migrated (has `tab` field)
+              if ('tab' in p) return p;
+              const oldType = p.type as string;
+              const oldPer100ml = p.substancePer100ml as number;
+              const { type: _t, substancePer100ml: _s, ...rest } = p;
+              return {
+                ...rest,
+                tab: oldType === "caffeine" ? "coffee" : "alcohol",
+                waterContentPercent: 100,
+                ...(oldType === "caffeine" && { caffeinePer100ml: oldPer100ml }),
+                ...(oldType === "alcohol" && { alcoholPer100ml: oldPer100ml }),
+              };
+            });
+          }
         }
         return state as unknown as Settings & SettingsActions;
       },
