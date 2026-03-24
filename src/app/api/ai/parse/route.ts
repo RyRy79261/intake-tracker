@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
+import { getClaudeClient, CLAUDE_MODELS } from "../_shared/claude-client";
 
 /**
- * Server-side API route for Perplexity AI parsing.
+ * Server-side API route for AI parsing via Anthropic Claude.
  *
  * SECURITY:
  * - Centralized auth middleware (withAuth) handles Privy verification + whitelist
@@ -53,6 +54,23 @@ Always respond with valid JSON only, no additional text.
 
 Example response:
 {"water": 250, "salt": 5, "reasoning": "A glass of water (250ml) contains 250ml water and negligible sodium"}`;
+
+// --- Tool Definition ---
+
+const PARSE_RESULT_TOOL = {
+  name: "parse_result",
+  description: "Return parsed water and salt content from a food/drink description",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      water: { type: ["number", "null"] as const, description: "Water content in ml, null if cannot estimate" },
+      salt: { type: ["number", "null"] as const, description: "Sodium content in mg, null if cannot estimate" },
+      reasoning: { type: "string" as const, description: "Brief explanation of the estimate" },
+    },
+    required: ["water", "salt", "reasoning"] as const,
+    additionalProperties: false,
+  },
+};
 
 // Simple in-memory rate limiting (per IP, resets on server restart)
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
@@ -108,172 +126,64 @@ export const POST = withAuth(async ({ request, auth }) => {
     // User is authenticated and on whitelist (handled by withAuth)
     console.log(`[AUDIT] AI request from user: ${auth.userId} (${auth.email || auth.wallet})`);
 
-    // Get server API key
-    const apiKey = process.env.PERPLEXITY_API_KEY;
-
-    if (!apiKey) {
+    let client;
+    try {
+      client = getClaudeClient();
+    } catch {
       return NextResponse.json(
         { error: "AI service not configured on server" },
         { status: 503 }
       );
     }
 
-    return await processWithKey(input, apiKey);
+    const sanitizedInput = sanitizeForAI(input);
+
+    if (!sanitizedInput) {
+      return NextResponse.json(
+        { error: "Invalid input after sanitization" },
+        { status: 400 }
+      );
+    }
+
+    // Log for audit (in production, send to proper logging service)
+    console.log(`[AUDIT] AI parse request at ${new Date().toISOString()}`);
+
+    const response = await client.messages.create({
+      model: CLAUDE_MODELS.fast,
+      max_tokens: 512,
+      system: SYSTEM_PROMPT,
+      tools: [PARSE_RESULT_TOOL],
+      tool_choice: { type: "tool", name: "parse_result" },
+      messages: [{ role: "user", content: `Parse the following food/drink description and estimate water and salt content:\n\n"${sanitizedInput}"` }],
+    });
+
+    const toolBlock = response.content.find(b => b.type === "tool_use");
+    if (!toolBlock || toolBlock.type !== "tool_use") {
+      return NextResponse.json(
+        { error: "AI response format invalid", fallbackToManual: true },
+        { status: 422 }
+      );
+    }
+
+    const validated = AIParseResponseSchema.safeParse(toolBlock.input);
+    if (!validated.success) {
+      console.error("[VALIDATION] AI response validation failed:", JSON.stringify(validated.error.flatten()));
+      return NextResponse.json(
+        { error: "AI response format invalid", fallbackToManual: true },
+        { status: 422 }
+      );
+    }
+
+    return NextResponse.json({
+      water: validated.data.water,
+      salt: validated.data.salt,
+      ...(validated.data.reasoning !== undefined && { reasoning: validated.data.reasoning }),
+    });
   } catch (error) {
     console.error("AI parse error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { error: `Failed to process request: ${errorMessage}` },
-      { status: 500 }
+      { error: "Failed to process request" },
+      { status: 502 }
     );
   }
 });
-
-async function callPerplexity(sanitizedInput: string, apiKey: string) {
-  const response = await fetch("https://api.perplexity.ai/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "sonar-pro",
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        {
-          role: "user",
-          content: `Parse the following food/drink description and estimate water and salt content:\n\n"${sanitizedInput}"`,
-        },
-      ],
-      temperature: 0.1,
-      max_tokens: 500,
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error(`Perplexity API error [${response.status}]:`, errorText);
-
-    // Parse error details if possible
-    let errorDetail = "AI service unavailable";
-    try {
-      const errorJson = JSON.parse(errorText);
-      if (errorJson.error?.message) {
-        errorDetail = `Perplexity API: ${errorJson.error.message}`;
-      } else if (errorJson.detail) {
-        errorDetail = `Perplexity API: ${errorJson.detail}`;
-      }
-    } catch {
-      // Use status-based messages if we can't parse the error
-      if (response.status === 401) {
-        errorDetail = "Invalid API key";
-      } else if (response.status === 429) {
-        errorDetail = "Perplexity rate limit exceeded";
-      } else if (response.status === 400) {
-        errorDetail = "Invalid request to Perplexity API";
-      }
-    }
-
-    return { ok: false as const, error: errorDetail, status: response.status };
-  }
-
-  const data = await response.json();
-  const content = data.choices?.[0]?.message?.content;
-
-  if (!content) {
-    return { ok: false as const, error: "No response from AI service", status: 502 };
-  }
-
-  return { ok: true as const, content };
-}
-
-function parseAndValidateAIResponse(content: string): z.infer<typeof AIParseResponseSchema> | null {
-  try {
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return null;
-
-    const rawParsed = JSON.parse(jsonMatch[0]);
-
-    // Coerce numbers (AI sometimes returns strings)
-    const toValidate = {
-      water: typeof rawParsed.water === "number" ? rawParsed.water : (typeof rawParsed.water === "string" ? parseFloat(rawParsed.water) : null),
-      salt: typeof rawParsed.salt === "number" ? rawParsed.salt : (typeof rawParsed.salt === "string" ? parseFloat(rawParsed.salt) : null),
-      ...(typeof rawParsed.reasoning === "string" && { reasoning: rawParsed.reasoning.slice(0, 500) }),
-    };
-
-    const validated = AIParseResponseSchema.safeParse(toValidate);
-    if (!validated.success) {
-      console.error("[VALIDATION] AI response validation failed:", JSON.stringify(validated.error.flatten()));
-      return null;
-    }
-
-    return validated.data;
-  } catch {
-    return null;
-  }
-}
-
-async function processWithKey(input: string, apiKey: string) {
-  // Validate API key format
-  if (!apiKey || !apiKey.startsWith("pplx-")) {
-    return NextResponse.json(
-      { error: "Invalid API key format. Perplexity keys start with 'pplx-'" },
-      { status: 400 }
-    );
-  }
-
-  const sanitizedInput = sanitizeForAI(input);
-
-  if (!sanitizedInput) {
-    return NextResponse.json(
-      { error: "Invalid input after sanitization" },
-      { status: 400 }
-    );
-  }
-
-  // Log for audit (in production, send to proper logging service)
-  console.log(`[AUDIT] AI parse request at ${new Date().toISOString()}`);
-
-  // First attempt
-  const result1 = await callPerplexity(sanitizedInput, apiKey);
-  if (!result1.ok) {
-    return NextResponse.json(
-      { error: result1.error },
-      { status: 502 }
-    );
-  }
-
-  const validated1 = parseAndValidateAIResponse(result1.content);
-  if (validated1) {
-    return NextResponse.json({
-      water: validated1.water,
-      salt: validated1.salt,
-      ...(validated1.reasoning !== undefined && { reasoning: validated1.reasoning }),
-    });
-  }
-
-  // Retry once on AI response validation failure
-  console.log("[RETRY] AI response validation failed, retrying once...");
-  const result2 = await callPerplexity(sanitizedInput, apiKey);
-  if (!result2.ok) {
-    return NextResponse.json(
-      { error: result2.error },
-      { status: 502 }
-    );
-  }
-
-  const validated2 = parseAndValidateAIResponse(result2.content);
-  if (validated2) {
-    return NextResponse.json({
-      water: validated2.water,
-      salt: validated2.salt,
-      ...(validated2.reasoning !== undefined && { reasoning: validated2.reasoning }),
-    });
-  }
-
-  // Second failure — fallback to manual entry
-  return NextResponse.json(
-    { error: "AI response format invalid", fallbackToManual: true },
-    { status: 422 }
-  );
-}

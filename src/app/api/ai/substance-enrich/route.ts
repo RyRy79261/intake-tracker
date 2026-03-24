@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
+import { getClaudeClient, CLAUDE_MODELS } from "../_shared/claude-client";
 
 /**
- * Server-side API route for substance (caffeine/alcohol) AI enrichment via Perplexity.
+ * Server-side API route for substance (caffeine/alcohol) AI enrichment via Anthropic Claude.
  *
  * SECURITY:
  * - Centralized auth middleware (withAuth) handles Privy verification + whitelist
@@ -32,22 +33,48 @@ const AlcoholResponseSchema = z.object({
   reasoning: z.string().max(500).optional(),
 });
 
+// --- Tool Definitions ---
+
+const CAFFEINE_ENRICH_TOOL = {
+  name: "caffeine_enrichment",
+  description: "Return caffeine content estimate for a beverage",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      caffeineMg: { type: "number" as const, description: "Estimated caffeine in mg" },
+      volumeMl: { type: "number" as const, description: "Estimated volume in ml" },
+      reasoning: { type: "string" as const, description: "Brief explanation" },
+    },
+    required: ["caffeineMg", "volumeMl", "reasoning"] as const,
+    additionalProperties: false,
+  },
+};
+
+const ALCOHOL_ENRICH_TOOL = {
+  name: "alcohol_enrichment",
+  description: "Return alcohol content estimate for a beverage",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      standardDrinks: { type: "number" as const, description: "Estimated standard drinks" },
+      volumeMl: { type: "number" as const, description: "Estimated volume in ml" },
+      reasoning: { type: "string" as const, description: "Brief explanation" },
+    },
+    required: ["standardDrinks", "volumeMl", "reasoning"] as const,
+    additionalProperties: false,
+  },
+};
+
 // --- System Prompts ---
 
 const CAFFEINE_SYSTEM_PROMPT = `You are a nutritional analysis assistant specializing in caffeine content estimation.
 Given a description of a caffeinated beverage or food, estimate the caffeine content.
-Respond with valid JSON only, no additional text.
-
-Example response:
-{"caffeineMg": 95, "volumeMl": 250, "reasoning": "A standard cup of drip coffee (250ml) contains approximately 95mg of caffeine"}`;
+Respond using the caffeine_enrichment tool with caffeineMg, volumeMl, and reasoning.`;
 
 const ALCOHOL_SYSTEM_PROMPT = `You are a nutritional analysis assistant specializing in alcohol content estimation.
 Given a description of an alcoholic beverage, estimate the number of standard drinks and volume.
 A standard drink contains approximately 14g (0.6 oz) of pure alcohol.
-Respond with valid JSON only, no additional text.
-
-Example response:
-{"standardDrinks": 1, "volumeMl": 330, "reasoning": "A standard 330ml beer at 5% ABV contains approximately 1 standard drink"}`;
+Respond using the alcohol_enrichment tool with standardDrinks, volumeMl, and reasoning.`;
 
 // Simple in-memory rate limiting (per IP, resets on server restart)
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
@@ -99,127 +126,66 @@ export const POST = withAuth(async ({ request, auth }) => {
 
     console.log(`[AUDIT] Substance enrich request from user: ${auth.userId}`);
 
-    const apiKey = process.env.PERPLEXITY_API_KEY;
-    if (!apiKey) {
+    let client;
+    try {
+      client = getClaudeClient();
+    } catch {
       return NextResponse.json(
-        { error: "AI not configured. Server API key required for substance enrichment." },
+        { error: "AI service not configured on server" },
         { status: 503 }
       );
     }
 
-    return await processEnrichment(description, type, apiKey);
+    const sanitized = sanitizeForAI(description);
+    if (!sanitized) {
+      return NextResponse.json(
+        { error: "Invalid input after sanitization" },
+        { status: 400 }
+      );
+    }
+
+    console.log(`[AUDIT] Substance enrich request at ${new Date().toISOString()}`);
+
+    const systemPrompt = type === "caffeine" ? CAFFEINE_SYSTEM_PROMPT : ALCOHOL_SYSTEM_PROMPT;
+    const tool = type === "caffeine" ? CAFFEINE_ENRICH_TOOL : ALCOHOL_ENRICH_TOOL;
+    const schema = type === "caffeine" ? CaffeineResponseSchema : AlcoholResponseSchema;
+
+    const userPrompt = type === "caffeine"
+      ? `Estimate caffeine content in mg for: "${sanitized}". Return caffeineMg, volumeMl, and reasoning.`
+      : `Estimate standard drinks and volume for: "${sanitized}". Return standardDrinks, volumeMl, and reasoning.`;
+
+    const response = await client.messages.create({
+      model: CLAUDE_MODELS.fast,
+      max_tokens: 512,
+      system: systemPrompt,
+      tools: [tool],
+      tool_choice: { type: "tool", name: tool.name },
+      messages: [{ role: "user", content: userPrompt }],
+    });
+
+    const toolBlock = response.content.find(b => b.type === "tool_use");
+    if (!toolBlock || toolBlock.type !== "tool_use") {
+      return NextResponse.json(
+        { error: "AI response format invalid", fallbackToManual: true },
+        { status: 422 }
+      );
+    }
+
+    const validated = schema.safeParse(toolBlock.input);
+    if (!validated.success) {
+      console.error("[VALIDATION] AI enrichment response validation failed:", JSON.stringify(validated.error.flatten()));
+      return NextResponse.json(
+        { error: "AI response format invalid", fallbackToManual: true },
+        { status: 422 }
+      );
+    }
+
+    return NextResponse.json(validated.data);
   } catch (error) {
     console.error("Substance enrich error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { error: `Failed to process request: ${errorMessage}` },
-      { status: 500 }
+      { error: "Failed to process request" },
+      { status: 502 }
     );
   }
 });
-
-async function callPerplexity(sanitizedInput: string, type: 'caffeine' | 'alcohol', apiKey: string) {
-  const systemPrompt = type === "caffeine" ? CAFFEINE_SYSTEM_PROMPT : ALCOHOL_SYSTEM_PROMPT;
-  const userPrompt = type === "caffeine"
-    ? `Estimate caffeine content in mg for: "${sanitizedInput}". Return JSON: { caffeineMg: number, volumeMl: number, reasoning: string }`
-    : `Estimate standard drinks and volume for: "${sanitizedInput}". Return JSON: { standardDrinks: number, volumeMl: number, reasoning: string }`;
-
-  const response = await fetch("https://api.perplexity.ai/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "sonar-pro",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      temperature: 0.1,
-      max_tokens: 500,
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error(`Perplexity API error [${response.status}]:`, errorText);
-    return { ok: false as const, error: "AI service unavailable", status: response.status };
-  }
-
-  const data = await response.json();
-  const content = data.choices?.[0]?.message?.content;
-
-  if (!content) {
-    return { ok: false as const, error: "No response from AI service", status: 502 };
-  }
-
-  return { ok: true as const, content };
-}
-
-function parseAndValidateResponse(content: string, type: 'caffeine' | 'alcohol') {
-  try {
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return null;
-
-    const raw = JSON.parse(jsonMatch[0]);
-    const schema = type === "caffeine" ? CaffeineResponseSchema : AlcoholResponseSchema;
-    const validated = schema.safeParse(raw);
-
-    if (!validated.success) {
-      console.error("[VALIDATION] AI enrichment response validation failed:", JSON.stringify(validated.error.flatten()));
-      return null;
-    }
-
-    return validated.data;
-  } catch {
-    return null;
-  }
-}
-
-async function processEnrichment(description: string, type: 'caffeine' | 'alcohol', apiKey: string) {
-  if (!apiKey.startsWith("pplx-")) {
-    return NextResponse.json(
-      { error: "Invalid API key format" },
-      { status: 400 }
-    );
-  }
-
-  const sanitized = sanitizeForAI(description);
-  if (!sanitized) {
-    return NextResponse.json(
-      { error: "Invalid input after sanitization" },
-      { status: 400 }
-    );
-  }
-
-  console.log(`[AUDIT] Substance enrich request at ${new Date().toISOString()}`);
-
-  // First attempt
-  const result1 = await callPerplexity(sanitized, type, apiKey);
-  if (!result1.ok) {
-    return NextResponse.json({ error: result1.error }, { status: 502 });
-  }
-
-  const validated1 = parseAndValidateResponse(result1.content, type);
-  if (validated1) {
-    return NextResponse.json(validated1);
-  }
-
-  // Retry once on validation failure
-  console.log("[RETRY] Substance enrich response validation failed, retrying once...");
-  const result2 = await callPerplexity(sanitized, type, apiKey);
-  if (!result2.ok) {
-    return NextResponse.json({ error: result2.error }, { status: 502 });
-  }
-
-  const validated2 = parseAndValidateResponse(result2.content, type);
-  if (validated2) {
-    return NextResponse.json(validated2);
-  }
-
-  return NextResponse.json(
-    { error: "AI response format invalid", fallbackToManual: true },
-    { status: 422 }
-  );
-}
