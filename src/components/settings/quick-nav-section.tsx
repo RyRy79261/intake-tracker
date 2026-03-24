@@ -76,30 +76,6 @@ export function QuickNavSection() {
               </p>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="utility-order">
-                <span className="flex items-center gap-1.5">
-                  <ArrowRightLeft className="w-3.5 h-3.5" />
-                  Utility Row Order
-                </span>
-              </Label>
-              <Select
-                value={settings.utilityOrder}
-                onValueChange={(value: "ai-right" | "food-right") => settings.setUtilityOrder(value)}
-              >
-                <SelectTrigger id="utility-order" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ai-right">AI Right, Food Left (recommended)</SelectItem>
-                  <SelectItem value="food-right">Food Right, AI Left</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Order of the Food Calculator and AI buttons below the section icons
-              </p>
-            </div>
-
             <div className="pt-2 space-y-3">
               <div className="flex items-center gap-1.5 text-muted-foreground">
                 <Timer className="w-3.5 h-3.5" />

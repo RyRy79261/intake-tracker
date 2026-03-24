@@ -5,7 +5,6 @@ import {
   Heart,
   Utensils,
   Droplet,
-  Apple,
   CircleDot,
   Coffee,
   Wine,
@@ -206,21 +205,4 @@ export const CARD_THEMES = {
   },
 } as const;
 
-/** Utility-only themes (Food Calculator, AI Input) for quick-nav-footer */
-export const UTILITY_THEMES = {
-  food: {
-    label: "Food",
-    icon: Apple,
-    iconBg: "bg-green-100 dark:bg-green-900/50",
-    iconColor: "text-green-600 dark:text-green-400",
-  },
-  ai: {
-    label: "AI",
-    icon: Sparkles,
-    iconBg: "bg-violet-100 dark:bg-violet-900/50",
-    iconColor: "text-violet-600 dark:text-violet-400",
-  },
-} as const;
-
 export type CardThemeKey = keyof typeof CARD_THEMES;
-export type UtilityThemeKey = keyof typeof UTILITY_THEMES;
