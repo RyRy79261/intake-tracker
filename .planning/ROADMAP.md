@@ -299,7 +299,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 15-01-PLAN.md -- SaltSection + ComposablePreview + FoodSection components (FOOD-01, FOOD-02, FOOD-03)
+- [x] 15-01-PLAN.md -- SaltSection + ComposablePreview + FoodSection components (FOOD-01, FOOD-02, FOOD-03)
 - [ ] 15-02-PLAN.md -- FoodSaltCard shell + dashboard integration (FOOD-01, FOOD-02, FOOD-03)
 
 ### Phase 16: Dashboard Cleanup and Text Metrics
@@ -350,6 +350,6 @@ Note: Phase 14 and Phase 15 both depend on Phase 12 and 13 but are independent o
 | 12. Composable Data Foundation | v1.1 | 2/2 | Complete    | 2026-03-23 |
 | 13. Liquid Presets and AI Lookup | v1.1 | 3/3 | Complete    | 2026-03-24 |
 | 14. Unified Liquids Card | v1.1 | 2/2 | Complete    | 2026-03-24 |
-| 15. Unified Food+Salt Card | v1.1 | 0/2 | Planning    | - |
+| 15. Unified Food+Salt Card | v1.1 | 1/2 | In Progress|  |
 | 16. Dashboard Cleanup and Text Metrics | v1.1 | 0/0 | Not started | - |
 | 17. Timezone-Aware Dose Logging | v1.1 | 0/0 | Not started | - |

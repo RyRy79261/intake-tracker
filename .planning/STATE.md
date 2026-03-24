@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: UI Overhaul
-status: Ready to plan
-stopped_at: Phase 15 UI-SPEC approved
-last_updated: "2026-03-24T11:21:46.245Z"
+status: Ready to execute
+stopped_at: Completed 15-01-PLAN.md
+last_updated: "2026-03-24T12:02:45.439Z"
 progress:
   total_phases: 6
   completed_phases: 3
-  total_plans: 7
-  completed_plans: 7
+  total_plans: 9
+  completed_plans: 8
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-23)
 
 **Core value:** Accurate, queryable health data across intake, vitals, and medication adherence — structured for cross-domain analysis and future AI querying
-**Current focus:** Phase 14 — Unified Liquids Card
+**Current focus:** Phase 15 — Unified Food+Salt Card
 
 ## Current Position
 
-Phase: 15
-Plan: Not started
+Phase: 15 (Unified Food+Salt Card) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -53,6 +53,7 @@ Plan: Not started
 | Phase 13 P03 | 12min | 2 tasks | 14 files |
 | Phase 14 P01 | 8min | 2 tasks | 4 files |
 | Phase 14 P02 | 10min | 2 tasks | 3 files |
+| Phase 15 P01 | 11min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -80,6 +81,9 @@ Key decisions carrying forward into v1.1:
 - [Phase 14]: Added caffeine and alcohol themes to CARD_THEMES as prerequisite for LiquidsCard tab theming
 - [Phase 14]: PresetTab uses useAddComposableEntry for atomic substance + water intake creation (not addSubstanceRecord)
 - [Phase 14]: Coffee/Alcohol header totals deferred -- right header left empty for substance tabs
+- [Phase 15]: SaltSection uses icon-only sub-header (no text label) to avoid collision with card header
+- [Phase 15]: ComposablePreview uses updater function pattern for record editing to comply with exactOptionalPropertyTypes
+- [Phase 15]: FoodSection calls hooks directly (Phase 14 WaterTab precedent); useLiveQuery returns arrays directly
 
 ### Pending Todos
 
@@ -97,6 +101,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-24T11:21:46.242Z
-Stopped at: Phase 15 UI-SPEC approved
-Resume file: .planning/phases/15-unified-food-salt-card/15-UI-SPEC.md
+Last session: 2026-03-24T12:02:45.434Z
+Stopped at: Completed 15-01-PLAN.md
+Resume file: None

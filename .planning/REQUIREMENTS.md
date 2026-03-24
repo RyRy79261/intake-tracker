@@ -23,9 +23,9 @@ Requirements for milestone v1.1 UI Overhaul. Each maps to roadmap phases.
 
 ### Food + Salt
 
-- [ ] **FOOD-01**: User can log food and salt from a single unified Food+Salt card, with manual salt input retained (salt tablets, seasoning)
-- [ ] **FOOD-02**: AI food parsing creates composable linked entries (eating + water + salt records) atomically via the composable entry service
-- [ ] **FOOD-03**: User sees a preview of all linked records before confirming an AI food parse, with ability to edit or remove individual entries
+- [x] **FOOD-01**: User can log food and salt from a single unified Food+Salt card, with manual salt input retained (salt tablets, seasoning)
+- [x] **FOOD-02**: AI food parsing creates composable linked entries (eating + water + salt records) atomically via the composable entry service
+- [x] **FOOD-03**: User sees a preview of all linked records before confirming an AI food parse, with ability to edit or remove individual entries
 
 ### Dashboard UX
 
@@ -155,9 +155,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | LIQD-02 | Phase 13 | Complete |
 | LIQD-03 | Phase 13 | Complete |
 | LIQD-04 | Phase 14 | Complete |
-| FOOD-01 | Phase 15 | Pending |
-| FOOD-02 | Phase 15 | Pending |
-| FOOD-03 | Phase 15 | Pending |
+| FOOD-01 | Phase 15 | Complete |
+| FOOD-02 | Phase 15 | Complete |
+| FOOD-03 | Phase 15 | Complete |
 | DASH-06 | Phase 16 | Pending |
 | DASH-07 | Phase 16 | Pending |
 | DASH-08 | Phase 16 | Pending |
