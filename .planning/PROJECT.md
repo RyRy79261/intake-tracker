@@ -49,8 +49,8 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 
 - ✓ Composable data entries: Dexie v15 groupId schema, atomic cross-table writes, cascading soft-delete, undo toasts — Phase 12
 - [ ] Unified Liquids card with water/coffee/alcohol tabs and current water increment UX preserved
-- [ ] AI-powered caffeine-per-100ml lookup for coffee types, saved as reusable presets
-- [ ] AI-powered alcohol-per-100ml lookup, saved as reusable presets
+- ✓ Liquid preset system (Zustand CRUD, 8 defaults, per-100ml primary unit) + AI substance lookup route — Phase 13
+- ✓ All AI routes migrated from Perplexity to Anthropic Claude with tool_use — Phase 13
 - [ ] Volume-based caffeine/alcohol calculation from presets
 - [ ] Unified Food+Salt card with AI food parsing that auto-creates linked liquid/salt entries
 - [ ] Manual salt input within food card (salt tablets, seasoning additions)
@@ -117,4 +117,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-23 after Phase 12 completion*
+*Last updated: 2026-03-24 after Phase 13 completion*
