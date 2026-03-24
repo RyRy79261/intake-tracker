@@ -16,7 +16,7 @@ Requirements for milestone v1.1 UI Overhaul. Each maps to roadmap phases.
 
 ### Liquid Tracking
 
-- [ ] **LIQD-01**: User can track water, coffee, and alcohol intake via tabs within a single Liquids card, with the water tab preserving the existing increment/decrement UX
+- [x] **LIQD-01**: User can track water, coffee, and alcohol intake via tabs within a single Liquids card, with the water tab preserving the existing increment/decrement UX
 - [x] **LIQD-02**: User can save beverage presets (name, type, volume, substance-per-100ml) and log them with one tap
 - [x] **LIQD-03**: User can trigger an AI lookup (FAB) to get caffeine-per-100ml or alcohol-per-100ml for a beverage, with the result editable before saving as a preset
 - [ ] **LIQD-04**: Logging a coffee or alcohol beverage auto-calculates substance amount from volume * per-100ml preset data and creates a linked substance record
@@ -151,7 +151,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | COMP-02 | Phase 12 | Complete |
 | COMP-03 | Phase 12 | Complete |
 | COMP-04 | Phase 12 | Complete |
-| LIQD-01 | Phase 14 | Pending |
+| LIQD-01 | Phase 14 | Complete |
 | LIQD-02 | Phase 13 | Complete |
 | LIQD-03 | Phase 13 | Complete |
 | LIQD-04 | Phase 14 | Pending |

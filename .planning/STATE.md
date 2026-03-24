@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: UI Overhaul
-status: Ready to plan
-stopped_at: Phase 14 UI-SPEC approved
-last_updated: "2026-03-24T09:03:01.243Z"
+status: Ready to execute
+stopped_at: Completed 14-01-PLAN.md
+last_updated: "2026-03-24T09:39:29.593Z"
 progress:
   total_phases: 6
   completed_phases: 2
-  total_plans: 5
-  completed_plans: 5
+  total_plans: 7
+  completed_plans: 6
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-23)
 
 **Core value:** Accurate, queryable health data across intake, vitals, and medication adherence — structured for cross-domain analysis and future AI querying
-**Current focus:** Phase 13 — Liquid Presets and AI Lookup (complete)
+**Current focus:** Phase 14 — Unified Liquids Card
 
 ## Current Position
 
-Phase: 14
-Plan: Not started
+Phase: 14 (Unified Liquids Card) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -51,6 +51,7 @@ Plan: Not started
 | Phase 12 P01 | 15min | 3 tasks | 9 files |
 | Phase 12 P02 | 12min | 2 tasks | 4 files |
 | Phase 13 P03 | 12min | 2 tasks | 14 files |
+| Phase 14 P01 | 8min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -73,6 +74,9 @@ Key decisions carrying forward into v1.1:
 - [Phase 12]: Hooks layer reads via service getEntryGroup (not direct db import) for Dexie observation
 - [Phase 13]: Removed vestigial perplexityApiKey from Settings interface (dead code after usePerplexityKey hook removal)
 - [Phase 13]: ANTHROPIC_API_KEY is the single env var for all AI services (D-08 fully satisfied)
+- [Phase 14]: WaterTab calls hooks directly instead of receiving callbacks via props -- cleaner component boundaries
+- [Phase 14]: BeverageTab logs as water intake records with beverage:{name} source tag for unified hydration tracking
+- [Phase 14]: Added caffeine and alcohol themes to CARD_THEMES as prerequisite for LiquidsCard tab theming
 
 ### Pending Todos
 
@@ -90,6 +94,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-24T09:03:01.238Z
-Stopped at: Phase 14 UI-SPEC approved
-Resume file: .planning/phases/14-unified-liquids-card/14-UI-SPEC.md
+Last session: 2026-03-24T09:39:29.587Z
+Stopped at: Completed 14-01-PLAN.md
+Resume file: None
