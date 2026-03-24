@@ -125,7 +125,7 @@ export function LiquidsCard() {
             forceMount
             className="data-[state=inactive]:hidden mt-4"
           >
-            <PresetTab type="caffeine" />
+            <PresetTab tab="coffee" />
           </TabsContent>
 
           {/* Alcohol Tab */}
@@ -134,7 +134,7 @@ export function LiquidsCard() {
             forceMount
             className="data-[state=inactive]:hidden mt-4"
           >
-            <PresetTab type="alcohol" />
+            <PresetTab tab="alcohol" />
           </TabsContent>
         </Tabs>
       </CardContent>
