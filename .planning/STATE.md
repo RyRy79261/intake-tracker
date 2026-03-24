@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: UI Overhaul
 status: Ready to plan
-stopped_at: Phase 14 context gathered
-last_updated: "2026-03-24T08:49:48.161Z"
+stopped_at: Phase 14 UI-SPEC approved
+last_updated: "2026-03-24T09:03:01.243Z"
 progress:
   total_phases: 6
   completed_phases: 2
@@ -90,6 +90,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-24T08:49:48.145Z
-Stopped at: Phase 14 context gathered
-Resume file: .planning/phases/14-unified-liquids-card/14-CONTEXT.md
+Last session: 2026-03-24T09:03:01.238Z
+Stopped at: Phase 14 UI-SPEC approved
+Resume file: .planning/phases/14-unified-liquids-card/14-UI-SPEC.md
