@@ -237,7 +237,7 @@ Plans:
 
 - [x] **Phase 12: Composable Data Foundation** - Dexie v15 schema migration with groupId, composable entry service for atomic cross-table writes, and soft-delete standardization (completed 2026-03-23)
 - [x] **Phase 13: Liquid Presets and AI Lookup** - Zustand preset store for beverages and AI-powered caffeine/alcohol per-100ml lookup route (completed 2026-03-24)
-- [ ] **Phase 14: Unified Liquids Card** - Tabbed water/coffee/alcohol card with preset-based logging and substance auto-calculation
+- [x] **Phase 14: Unified Liquids Card** - Tabbed water/coffee/alcohol card with preset-based logging and substance auto-calculation (completed 2026-03-24)
 - [ ] **Phase 15: Unified Food+Salt Card** - Merged food and salt input with AI parsing that creates composable linked entries
 - [ ] **Phase 16: Dashboard Cleanup and Text Metrics** - BP heart rate visible, food calculator removed, text metrics, coffee settings migrated, card reordering
 - [ ] **Phase 17: Timezone-Aware Dose Logging** - Correct day-of-week schedule generation for SA/Germany timezones with device timezone stored per dose log
@@ -343,7 +343,7 @@ Note: Phase 14 and Phase 15 both depend on Phase 12 and 13 but are independent o
 | 11. Push Notifications | v1.0 | 3/3 | Complete | 2026-03-23 |
 | 12. Composable Data Foundation | v1.1 | 2/2 | Complete    | 2026-03-23 |
 | 13. Liquid Presets and AI Lookup | v1.1 | 3/3 | Complete    | 2026-03-24 |
-| 14. Unified Liquids Card | v1.1 | 1/2 | In Progress|  |
+| 14. Unified Liquids Card | v1.1 | 2/2 | Complete   | 2026-03-24 |
 | 15. Unified Food+Salt Card | v1.1 | 0/0 | Not started | - |
 | 16. Dashboard Cleanup and Text Metrics | v1.1 | 0/0 | Not started | - |
 | 17. Timezone-Aware Dose Logging | v1.1 | 0/0 | Not started | - |

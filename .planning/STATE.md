@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: UI Overhaul
-status: Ready to execute
-stopped_at: Completed 14-01-PLAN.md
-last_updated: "2026-03-24T09:39:29.593Z"
+status: Phase complete — ready for verification
+stopped_at: Completed 14-02-PLAN.md
+last_updated: "2026-03-24T09:53:05.673Z"
 progress:
   total_phases: 6
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 7
-  completed_plans: 6
+  completed_plans: 7
 ---
 
 # Project State
@@ -52,6 +52,7 @@ Plan: 2 of 2
 | Phase 12 P02 | 12min | 2 tasks | 4 files |
 | Phase 13 P03 | 12min | 2 tasks | 14 files |
 | Phase 14 P01 | 8min | 2 tasks | 4 files |
+| Phase 14 P02 | 10min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -77,6 +78,8 @@ Key decisions carrying forward into v1.1:
 - [Phase 14]: WaterTab calls hooks directly instead of receiving callbacks via props -- cleaner component boundaries
 - [Phase 14]: BeverageTab logs as water intake records with beverage:{name} source tag for unified hydration tracking
 - [Phase 14]: Added caffeine and alcohol themes to CARD_THEMES as prerequisite for LiquidsCard tab theming
+- [Phase 14]: PresetTab uses useAddComposableEntry for atomic substance + water intake creation (not addSubstanceRecord)
+- [Phase 14]: Coffee/Alcohol header totals deferred -- right header left empty for substance tabs
 
 ### Pending Todos
 
@@ -94,6 +97,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-24T09:39:29.587Z
-Stopped at: Completed 14-01-PLAN.md
+Last session: 2026-03-24T09:53:05.669Z
+Stopped at: Completed 14-02-PLAN.md
 Resume file: None
