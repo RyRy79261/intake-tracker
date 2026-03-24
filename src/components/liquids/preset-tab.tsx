@@ -11,16 +11,20 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { useAddComposableEntry } from "@/hooks/use-composable-entry";
 import { useToast } from "@/hooks/use-toast";
 import type { ComposableEntryInput } from "@/lib/composable-entry-service";
+import type { LiquidPreset } from "@/lib/constants";
 
 interface PresetTabProps {
-  type: "caffeine" | "alcohol";
+  tab: "coffee" | "alcohol" | "beverage";
 }
 
-export function PresetTab({ type }: PresetTabProps) {
+export function PresetTab({ tab }: PresetTabProps) {
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
   const [searchText, setSearchText] = useState("");
   const [volumeMl, setVolumeMl] = useState<number>(0);
-  const [substancePer100ml, setSubstancePer100ml] = useState<number>(0);
+  const [caffeinePer100ml, setCaffeinePer100ml] = useState<number>(0);
+  const [alcoholPer100ml, setAlcoholPer100ml] = useState<number>(0);
+  const [saltPer100ml, setSaltPer100ml] = useState<number>(0);
+  const [waterContentPercent, setWaterContentPercent] = useState<number>(100);
   const [beverageName, setBeverageName] = useState("");
   const [isLookingUp, setIsLookingUp] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -32,23 +36,47 @@ export function PresetTab({ type }: PresetTabProps) {
   const addEntry = useAddComposableEntry();
   const { toast } = useToast();
 
-  // Filter presets by tab (mapped from type prop)
-  const tabFilter = type === "caffeine" ? "coffee" : "alcohol";
+  // Filter presets by tab prop
   const presets = useMemo(
-    () => allPresets.filter((p) => p.tab === tabFilter),
-    [allPresets, tabFilter]
+    () => allPresets.filter((p) => p.tab === tab),
+    [allPresets, tab]
   );
 
-  const theme = type === "caffeine" ? CARD_THEMES.caffeine : CARD_THEMES.alcohol;
+  // Determine theme based on tab
+  const theme =
+    tab === "coffee"
+      ? CARD_THEMES.caffeine
+      : tab === "alcohol"
+        ? CARD_THEMES.alcohol
+        : CARD_THEMES.water;
 
-  // Calculated substance amount
-  const calculatedAmount = useMemo(() => {
-    if (volumeMl <= 0 || substancePer100ml <= 0) return null;
-    if (type === "caffeine") {
-      return Math.round((volumeMl / 100) * substancePer100ml);
+  // AI lookup type mapping
+  const aiLookupType = tab === "coffee" ? "caffeine" : tab === "alcohol" ? "alcohol" : "caffeine";
+
+  // Calculated substance amounts for display
+  const calculatedDisplay = useMemo(() => {
+    if (volumeMl <= 0) return null;
+    const parts: string[] = [];
+    if (caffeinePer100ml > 0) {
+      parts.push(
+        `${Math.round((volumeMl / 100) * caffeinePer100ml)} mg caffeine`
+      );
     }
-    return parseFloat(((volumeMl / 100) * substancePer100ml).toFixed(1));
-  }, [volumeMl, substancePer100ml, type]);
+    if (alcoholPer100ml > 0) {
+      parts.push(
+        `${parseFloat(((volumeMl / 100) * alcoholPer100ml).toFixed(1))} std drinks`
+      );
+    }
+    if (parts.length === 0 && saltPer100ml > 0) {
+      parts.push(
+        `${Math.round((volumeMl / 100) * saltPer100ml)} mg salt`
+      );
+    }
+    return parts.length > 0 ? parts.join(", ") : null;
+  }, [volumeMl, caffeinePer100ml, alcoholPer100ml, saltPer100ml]);
+
+  // Whether we have any loggable substance
+  const hasSubstance = caffeinePer100ml > 0 || alcoholPer100ml > 0;
 
   // Presets to display (collapse if more than 8)
   const visiblePresets = useMemo(() => {
@@ -56,26 +84,32 @@ export function PresetTab({ type }: PresetTabProps) {
     return presets.slice(0, 6);
   }, [presets, showAllPresets]);
 
+  const selectPreset = (preset: LiquidPreset) => {
+    setVolumeMl(preset.defaultVolumeMl);
+    setCaffeinePer100ml(preset.caffeinePer100ml ?? 0);
+    setAlcoholPer100ml(preset.alcoholPer100ml ?? 0);
+    setSaltPer100ml(preset.saltPer100ml ?? 0);
+    setWaterContentPercent(preset.waterContentPercent);
+    setBeverageName(preset.name);
+    setSearchText("");
+  };
+
   const handlePresetTap = (presetId: string) => {
     if (selectedPresetId === presetId) {
       // Deselect
       setSelectedPresetId(null);
       setVolumeMl(0);
-      setSubstancePer100ml(0);
+      setCaffeinePer100ml(0);
+      setAlcoholPer100ml(0);
+      setSaltPer100ml(0);
+      setWaterContentPercent(100);
       setBeverageName("");
       return;
     }
     const preset = presets.find((p) => p.id === presetId);
     if (!preset) return;
     setSelectedPresetId(presetId);
-    setVolumeMl(preset.defaultVolumeMl);
-    setSubstancePer100ml(
-      type === "caffeine"
-        ? (preset.caffeinePer100ml ?? 0)
-        : (preset.alcoholPer100ml ?? 0)
-    );
-    setBeverageName(preset.name);
-    setSearchText("");
+    selectPreset(preset);
   };
 
   const handleAiLookup = async () => {
@@ -86,13 +120,24 @@ export function PresetTab({ type }: PresetTabProps) {
       const res = await fetch("/api/ai/substance-lookup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: searchText.trim(), type }),
+        body: JSON.stringify({ query: searchText.trim(), type: aiLookupType }),
       });
       if (!res.ok) throw new Error("Lookup failed");
       const data = await res.json();
-      setSubstancePer100ml(data.substancePer100ml);
+      // Map AI response substancePer100ml to correct per-100ml field based on tab
+      if (tab === "coffee") {
+        setCaffeinePer100ml(data.substancePer100ml ?? 0);
+        setAlcoholPer100ml(0);
+      } else if (tab === "alcohol") {
+        setAlcoholPer100ml(data.substancePer100ml ?? 0);
+        setCaffeinePer100ml(0);
+      } else {
+        // beverage tab: could be either, default to caffeine
+        setCaffeinePer100ml(data.substancePer100ml ?? 0);
+      }
       setVolumeMl(data.defaultVolumeMl);
       setBeverageName(data.beverageName);
+      setWaterContentPercent(data.waterContentPercent ?? 100);
       setAiLookupUsed(true);
     } catch {
       toast({
@@ -105,27 +150,82 @@ export function PresetTab({ type }: PresetTabProps) {
     }
   };
 
+  const buildComposableEntry = (): ComposableEntryInput => {
+    const description =
+      beverageName ||
+      searchText.trim() ||
+      (tab === "coffee" ? "Coffee" : tab === "alcohol" ? "Drink" : "Beverage");
+
+    const entry: ComposableEntryInput = {
+      groupSource: `preset:${selectedPresetId ?? "manual"}`,
+    };
+
+    // Water intake from waterContentPercent
+    const waterAmount = Math.round(
+      (volumeMl * waterContentPercent) / 100
+    );
+    const intakes: ComposableEntryInput["intakes"] = [];
+    if (waterAmount > 0) {
+      intakes.push({
+        type: "water",
+        amount: waterAmount,
+        source: `preset:${selectedPresetId ?? "manual"}`,
+      });
+    }
+    // Salt intake
+    if (saltPer100ml > 0) {
+      intakes.push({
+        type: "salt",
+        amount: Math.round((volumeMl / 100) * saltPer100ml),
+      });
+    }
+    if (intakes.length > 0) {
+      entry.intakes = intakes;
+    }
+
+    // Build substance records
+    const substances: Array<{
+      type: "caffeine" | "alcohol";
+      amountMg?: number;
+      amountStandardDrinks?: number;
+      volumeMl?: number;
+      description: string;
+    }> = [];
+
+    if (caffeinePer100ml > 0) {
+      substances.push({
+        type: "caffeine",
+        amountMg: Math.round((volumeMl / 100) * caffeinePer100ml),
+        volumeMl,
+        description,
+      });
+    }
+    if (alcoholPer100ml > 0) {
+      substances.push({
+        type: "alcohol",
+        amountStandardDrinks: parseFloat(
+          ((volumeMl / 100) * alcoholPer100ml).toFixed(1)
+        ),
+        volumeMl,
+        description,
+      });
+    }
+
+    // If only 1 substance: use singular field for backward compat
+    if (substances.length === 1 && substances[0]) {
+      entry.substance = substances[0];
+    } else if (substances.length > 1) {
+      entry.substances = substances;
+    }
+
+    return entry;
+  };
+
   const handleLog = async () => {
-    if (isSubmitting || volumeMl <= 0 || substancePer100ml <= 0) return;
+    if (isSubmitting || volumeMl <= 0 || !hasSubstance) return;
     setIsSubmitting(true);
     try {
-      const entry: ComposableEntryInput = {
-        substance: {
-          type,
-          description:
-            beverageName ||
-            searchText.trim() ||
-            (type === "caffeine" ? "Coffee" : "Drink"),
-          volumeMl,
-          ...(type === "caffeine"
-            ? { amountMg: Math.round((volumeMl / 100) * substancePer100ml) }
-            : {
-                amountStandardDrinks: parseFloat(
-                  ((volumeMl / 100) * substancePer100ml).toFixed(1)
-                ),
-              }),
-        },
-      };
+      const entry = buildComposableEntry();
       await addEntry(entry);
       toast({
         title: "Logged",
@@ -133,12 +233,7 @@ export function PresetTab({ type }: PresetTabProps) {
         variant: "success",
       });
       // Reset fields
-      setVolumeMl(0);
-      setSubstancePer100ml(0);
-      setBeverageName("");
-      setSearchText("");
-      setSelectedPresetId(null);
-      setAiLookupUsed(false);
+      resetFields();
     } catch {
       toast({
         title: "Error",
@@ -156,28 +251,16 @@ export function PresetTab({ type }: PresetTabProps) {
     try {
       addPreset({
         name: beverageName.trim(),
-        tab: tabFilter,
+        tab,
         defaultVolumeMl: volumeMl,
-        waterContentPercent: 100,
-        ...(type === "caffeine" && { caffeinePer100ml: substancePer100ml }),
-        ...(type === "alcohol" && { alcoholPer100ml: substancePer100ml }),
+        waterContentPercent,
+        ...(caffeinePer100ml > 0 && { caffeinePer100ml }),
+        ...(alcoholPer100ml > 0 && { alcoholPer100ml }),
+        ...(saltPer100ml > 0 && { saltPer100ml }),
         isDefault: false,
         source: aiLookupUsed ? "ai" : "manual",
       });
-      const entry: ComposableEntryInput = {
-        substance: {
-          type,
-          description: beverageName.trim(),
-          volumeMl,
-          ...(type === "caffeine"
-            ? { amountMg: Math.round((volumeMl / 100) * substancePer100ml) }
-            : {
-                amountStandardDrinks: parseFloat(
-                  ((volumeMl / 100) * substancePer100ml).toFixed(1)
-                ),
-              }),
-        },
-      };
+      const entry = buildComposableEntry();
       await addEntry(entry);
       toast({
         title: "Saved & Logged",
@@ -185,12 +268,7 @@ export function PresetTab({ type }: PresetTabProps) {
         variant: "success",
       });
       // Reset
-      setVolumeMl(0);
-      setSubstancePer100ml(0);
-      setBeverageName("");
-      setSearchText("");
-      setSelectedPresetId(null);
-      setAiLookupUsed(false);
+      resetFields();
     } catch {
       toast({
         title: "Error",
@@ -202,15 +280,28 @@ export function PresetTab({ type }: PresetTabProps) {
     }
   };
 
-  const substanceUnitLabel =
-    type === "caffeine" ? "per 100ml (mg)" : "per 100ml (std drinks)";
+  const resetFields = () => {
+    setVolumeMl(0);
+    setCaffeinePer100ml(0);
+    setAlcoholPer100ml(0);
+    setSaltPer100ml(0);
+    setWaterContentPercent(100);
+    setBeverageName("");
+    setSearchText("");
+    setSelectedPresetId(null);
+    setAiLookupUsed(false);
+  };
+
+  // Primary substance label for the per-100ml input
+  const primarySubstanceLabel =
+    tab === "coffee" ? "per 100ml (mg caffeine)" : tab === "alcohol" ? "per 100ml (std drinks)" : "per 100ml (mg)";
 
   return (
     <>
       {/* 1. Preset Grid */}
       {presets.length === 0 ? (
         <p className="text-sm text-muted-foreground mb-3">
-          No {type} presets yet. Use AI lookup or enter values manually to
+          No {tab} presets yet. Use AI lookup or enter values manually to
           create one.
         </p>
       ) : (
@@ -253,7 +344,11 @@ export function PresetTab({ type }: PresetTabProps) {
           value={searchText}
           onChange={(e) => setSearchText(e.target.value)}
           placeholder={
-            type === "caffeine" ? "Search beverage..." : "Search drink..."
+            tab === "coffee"
+              ? "Search beverage..."
+              : tab === "alcohol"
+                ? "Search drink..."
+                : "Search beverage..."
           }
           aria-label="Search beverages for AI lookup"
           disabled={isLookingUp}
@@ -283,11 +378,11 @@ export function PresetTab({ type }: PresetTabProps) {
       {/* 3. Volume and Substance Fields */}
       <div className="grid grid-cols-2 gap-3 mb-2">
         <div>
-          <Label htmlFor={`${type}-volume`} className="text-xs text-muted-foreground">
+          <Label htmlFor={`${tab}-volume`} className="text-xs text-muted-foreground">
             Volume (ml)
           </Label>
           <Input
-            id={`${type}-volume`}
+            id={`${tab}-volume`}
             type="number"
             value={volumeMl || ""}
             onChange={(e) => {
@@ -300,32 +395,40 @@ export function PresetTab({ type }: PresetTabProps) {
         </div>
         <div>
           <Label
-            htmlFor={`${type}-per100ml`}
+            htmlFor={`${tab}-per100ml`}
             className="text-xs text-muted-foreground"
           >
-            {substanceUnitLabel}
+            {primarySubstanceLabel}
           </Label>
           <Input
-            id={`${type}-per100ml`}
+            id={`${tab}-per100ml`}
             type="number"
-            value={substancePer100ml || ""}
+            value={
+              tab === "coffee"
+                ? caffeinePer100ml || ""
+                : tab === "alcohol"
+                  ? alcoholPer100ml || ""
+                  : caffeinePer100ml || ""
+            }
             onChange={(e) => {
-              setSubstancePer100ml(Number(e.target.value) || 0);
+              const val = Number(e.target.value) || 0;
+              if (tab === "coffee") setCaffeinePer100ml(val);
+              else if (tab === "alcohol") setAlcoholPer100ml(val);
+              else setCaffeinePer100ml(val);
               setSelectedPresetId(null);
             }}
             className="h-10"
             min={0}
-            step={type === "alcohol" ? "0.01" : "1"}
+            step={tab === "alcohol" ? "0.01" : "1"}
           />
         </div>
       </div>
 
       {/* 4. Calculated Amount Display */}
       <div className="mb-4">
-        {calculatedAmount !== null ? (
+        {calculatedDisplay ? (
           <p className={cn("text-sm font-semibold", theme.iconColor)}>
-            {calculatedAmount}{" "}
-            {type === "caffeine" ? "mg caffeine" : "standard drinks"}
+            {calculatedDisplay}
           </p>
         ) : (
           <p className="text-sm text-muted-foreground">
@@ -339,7 +442,7 @@ export function PresetTab({ type }: PresetTabProps) {
         <Button
           variant="outline"
           onClick={handleLog}
-          disabled={isSubmitting || volumeMl <= 0 || substancePer100ml <= 0}
+          disabled={isSubmitting || volumeMl <= 0 || !hasSubstance}
           className={cn("h-12 w-full border", theme.outlineBorder)}
         >
           {isSubmitting ? "Logging..." : "Log Entry"}
@@ -350,7 +453,7 @@ export function PresetTab({ type }: PresetTabProps) {
           disabled={
             isSubmitting ||
             volumeMl <= 0 ||
-            substancePer100ml <= 0 ||
+            !hasSubstance ||
             !beverageName.trim()
           }
           className={cn("h-12 w-full", theme.buttonBg)}

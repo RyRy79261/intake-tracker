@@ -242,6 +242,29 @@ export function BloodPressureCard() {
             </div>
           </div>
 
+          {/* Heart Rate (optional) - promoted to primary input area */}
+          <div className="space-y-1 mt-2">
+            <Label htmlFor="heartrate" className="text-xs">Heart Rate (optional)</Label>
+            <div className="flex gap-2">
+              <Input
+                id="heartrate"
+                type="number"
+                min="0"
+                max="250"
+                placeholder="72"
+                value={heartRateInput}
+                onChange={(e) => setHeartRateInput(e.target.value)}
+                className="h-11 text-center bg-white/80 dark:bg-slate-900/50"
+              />
+              <div className="flex items-center px-3 text-sm font-medium text-muted-foreground bg-muted rounded-md">
+                BPM
+              </div>
+            </div>
+            {fieldErrors.heartRate && (
+              <p className="text-sm text-destructive mt-1">{fieldErrors.heartRate}</p>
+            )}
+          </div>
+
           {/* Record button (ABOVE the details expander for quick one-tap recording) */}
           <Button
             onClick={handleSubmit}
@@ -279,29 +302,6 @@ export function BloodPressureCard() {
 
           {showDetails && (
             <div className="p-3 rounded-lg bg-muted/50 border space-y-3">
-              {/* Heart Rate (optional) */}
-              <div className="space-y-1">
-                <Label htmlFor="heartrate" className="text-xs">Heart Rate (optional)</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="heartrate"
-                    type="number"
-                    min="0"
-                    max="250"
-                    placeholder="72"
-                    value={heartRateInput}
-                    onChange={(e) => setHeartRateInput(e.target.value)}
-                    className="h-10 text-center bg-white/80 dark:bg-slate-900/50"
-                  />
-                  <div className="flex items-center px-3 text-sm font-medium text-muted-foreground bg-muted rounded-md">
-                    BPM
-                  </div>
-                </div>
-                {fieldErrors.heartRate && (
-                  <p className="text-sm text-destructive mt-1">{fieldErrors.heartRate}</p>
-                )}
-              </div>
-
               {/* Position Toggle */}
               <div className="space-y-2">
                 <Label className="text-xs">Position</Label>

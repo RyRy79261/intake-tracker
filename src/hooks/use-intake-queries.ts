@@ -12,6 +12,7 @@ import {
   getRecordsInLast24Hours,
   getDailyTotal,
   getRecentRecords,
+  getRecordsByDateRange,
 } from "@/lib/intake-service";
 import { unwrap } from "@/lib/service-result";
 import { showUndoToast } from "@/components/medications/undo-toast";
@@ -174,6 +175,28 @@ export function useIntake(type: "water" | "salt") {
     addRecord,
     removeRecord,
   };
+}
+
+/**
+ * Hook to get intake records within a date range, optionally filtered by type.
+ * Uses useLiveQuery for reactive updates. Re-runs every 60s via tick dep.
+ */
+export function useIntakeRecordsByDateRange(
+  startTime: number,
+  endTime: number,
+  type?: "water" | "salt"
+) {
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const interval = setInterval(() => setTick(t => t + 1), 60_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return useLiveQuery(
+    () => getRecordsByDateRange(startTime, endTime, type),
+    [startTime, endTime, type, tick],
+    []
+  );
 }
 
 /**
