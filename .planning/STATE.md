@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: UI Overhaul
 status: Ready to plan
-stopped_at: Phase 16 context gathered
-last_updated: "2026-03-24T12:47:21.654Z"
+stopped_at: Phase 16 UI-SPEC approved
+last_updated: "2026-03-24T12:58:23.963Z"
 progress:
   total_phases: 6
   completed_phases: 4
@@ -104,6 +104,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-24T12:47:21.651Z
-Stopped at: Phase 16 context gathered
-Resume file: .planning/phases/16-dashboard-cleanup-and-text-metrics/16-CONTEXT.md
+Last session: 2026-03-24T12:58:23.960Z
+Stopped at: Phase 16 UI-SPEC approved
+Resume file: .planning/phases/16-dashboard-cleanup-and-text-metrics/16-UI-SPEC.md
