@@ -315,8 +315,8 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 16-01-PLAN.md -- LiquidPreset multi-substance model + composable entry service extension + Zustand v3 migration (DASH-09)
-- [ ] 16-02-PLAN.md -- TextMetrics component + BP heart rate promotion + Liquid Presets tab + PresetTab update + dashboard reorder (DASH-06, DASH-08, DASH-09, DASH-10)
+- [x] 16-01-PLAN.md -- LiquidPreset multi-substance model + composable entry service extension + Zustand v3 migration (DASH-09)
+- [x] 16-02-PLAN.md -- TextMetrics component + BP heart rate promotion + Liquid Presets tab + PresetTab update + dashboard reorder (DASH-06, DASH-08, DASH-09, DASH-10)
 - [ ] 16-03-PLAN.md -- Dead code deletion: 13 replaced files + constants/themes/settings cleanup (DASH-07)
 **UI hint**: yes
 
@@ -358,5 +358,5 @@ Note: Phase 14 and Phase 15 both depend on Phase 12 and 13 but are independent o
 | 13. Liquid Presets and AI Lookup | v1.1 | 3/3 | Complete    | 2026-03-24 |
 | 14. Unified Liquids Card | v1.1 | 2/2 | Complete    | 2026-03-24 |
 | 15. Unified Food+Salt Card | v1.1 | 2/2 | Complete    | 2026-03-24 |
-| 16. Dashboard Cleanup and Text Metrics | v1.1 | 0/3 | Planned | - |
+| 16. Dashboard Cleanup and Text Metrics | v1.1 | 2/3 | In Progress|  |
 | 17. Timezone-Aware Dose Logging | v1.1 | 0/0 | Not started | - |

@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: UI Overhaul
-status: Ready to plan
-stopped_at: Phase 16 UI-SPEC approved
-last_updated: "2026-03-24T12:58:23.963Z"
+status: Ready to execute
+stopped_at: Completed 16-02-PLAN.md
+last_updated: "2026-03-24T21:32:22.937Z"
 progress:
   total_phases: 6
   completed_phases: 4
-  total_plans: 9
-  completed_plans: 9
+  total_plans: 12
+  completed_plans: 11
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-23)
 
 **Core value:** Accurate, queryable health data across intake, vitals, and medication adherence — structured for cross-domain analysis and future AI querying
-**Current focus:** Phase 15 — Unified Food+Salt Card
+**Current focus:** Phase 16 — Dashboard Cleanup and Text Metrics
 
 ## Current Position
 
-Phase: 16
-Plan: Not started
+Phase: 16 (Dashboard Cleanup and Text Metrics) — EXECUTING
+Plan: 3 of 3
 
 ## Performance Metrics
 
@@ -55,6 +55,8 @@ Plan: Not started
 | Phase 14 P02 | 10min | 2 tasks | 3 files |
 | Phase 15 P01 | 11min | 2 tasks | 3 files |
 | Phase 15 P02 | 5min | 2 tasks | 3 files |
+| Phase 16 P01 | 11min | 2 tasks | 6 files |
+| Phase 16 P02 | 9min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -87,6 +89,11 @@ Key decisions carrying forward into v1.1:
 - [Phase 15]: FoodSection calls hooks directly (Phase 14 WaterTab precedent); useLiveQuery returns arrays directly
 - [Phase 15]: FoodSaltCard is a thin shell with no state -- delegates to self-contained FoodSection and SaltSection
 - [Phase 15]: QuickNavFooter utility row props made optional for backward compatibility when FoodCalculator/VoiceInput removed
+- [Phase 16]: Substances[] path does NOT auto-create water intake -- water handled via intakes[] for multi-substance presets (per D-11)
+- [Phase 16]: coffeeDefaultType kept @deprecated for build compat with intake-card.tsx (deleted in Plan 03)
+- [Phase 16]: TextMetrics uses hooks-only data access pattern (no direct service imports in components)
+- [Phase 16]: PresetTab uses singular substance field for backward compat, substances[] array for multi-substance presets
+- [Phase 16]: Liquid Presets manager uses inline edit forms in CustomizationPanel rather than separate dialogs
 
 ### Pending Todos
 
@@ -104,6 +111,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-24T12:58:23.960Z
-Stopped at: Phase 16 UI-SPEC approved
-Resume file: .planning/phases/16-dashboard-cleanup-and-text-metrics/16-UI-SPEC.md
+Last session: 2026-03-24T21:32:22.934Z
+Stopped at: Completed 16-02-PLAN.md
+Resume file: None

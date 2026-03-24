@@ -29,11 +29,11 @@ Requirements for milestone v1.1 UI Overhaul. Each maps to roadmap phases.
 
 ### Dashboard UX
 
-- [ ] **DASH-06**: Heart rate input is always visible on the blood pressure card without expanding "more options"
+- [x] **DASH-06**: Heart rate input is always visible on the blood pressure card without expanding "more options"
 - [ ] **DASH-07**: Food calculator feature is removed from the codebase
-- [ ] **DASH-08**: Intake page displays text-based metrics (today's limits, caffeine/alcohol totals, weekly Monday-start summary) instead of graphs
-- [ ] **DASH-09**: Existing coffee settings are migrated to become liquid tab defaults/presets in the unified Liquids card
-- [ ] **DASH-10**: Card ordering on intake page: Liquids → Food+Salt → remaining health metric cards
+- [x] **DASH-08**: Intake page displays text-based metrics (today's limits, caffeine/alcohol totals, weekly Monday-start summary) instead of graphs
+- [x] **DASH-09**: Existing coffee settings are migrated to become liquid tab defaults/presets in the unified Liquids card
+- [x] **DASH-10**: Card ordering on intake page: Liquids → Food+Salt → remaining health metric cards
 
 ### Timezone
 
@@ -158,11 +158,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | FOOD-01 | Phase 15 | Complete |
 | FOOD-02 | Phase 15 | Complete |
 | FOOD-03 | Phase 15 | Complete |
-| DASH-06 | Phase 16 | Pending |
+| DASH-06 | Phase 16 | Complete |
 | DASH-07 | Phase 16 | Pending |
-| DASH-08 | Phase 16 | Pending |
-| DASH-09 | Phase 16 | Pending |
-| DASH-10 | Phase 16 | Pending |
+| DASH-08 | Phase 16 | Complete |
+| DASH-09 | Phase 16 | Complete |
+| DASH-10 | Phase 16 | Complete |
 | TMZN-01 | Phase 17 | Pending |
 
 **Coverage:**
