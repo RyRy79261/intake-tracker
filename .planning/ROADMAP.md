@@ -282,8 +282,11 @@ Plans:
   1. The Liquids card shows water, coffee, and alcohol as tabs -- the water tab preserves the existing increment/decrement buttons and daily total exactly as they work today
   2. Selecting a coffee or alcohol preset and confirming a volume logs an intake record and a linked substance record with the correct calculated amount (volume * per-100ml / 100)
   3. The user can switch between tabs without losing in-progress input on any tab
-**Plans**: TBD
-**UI hint**: yes
+**Plans**: 2 plans
+
+Plans:
+- [x] 14-01-PLAN.md -- LiquidsCard shell + WaterTab + BeverageTab (LIQD-01)
+- [x] 14-02-PLAN.md -- PresetTab for Coffee/Alcohol + dashboard swap (LIQD-01, LIQD-04)
 
 ### Phase 15: Unified Food+Salt Card
 **Goal**: Users can log food and salt from a single card, with AI food parsing automatically creating composable linked entries across eating, water, and salt domains
@@ -293,8 +296,11 @@ Plans:
   1. The Food+Salt card provides both AI food input and manual salt input (salt tablets, seasoning) in a single unified card
   2. Typing a food description and triggering AI parse shows a preview of all linked records (eating, water, salt) that will be created, with the ability to edit or remove individual entries before confirming
   3. Confirming an AI food parse atomically creates all linked records via the composable entry service -- all records share a groupId and appear as a unit in the UI
-**Plans**: TBD
-**UI hint**: yes
+**Plans**: 2 plans
+
+Plans:
+- [ ] 15-01-PLAN.md -- SaltSection + ComposablePreview + FoodSection components (FOOD-01, FOOD-02, FOOD-03)
+- [ ] 15-02-PLAN.md -- FoodSaltCard shell + dashboard integration (FOOD-01, FOOD-02, FOOD-03)
 
 ### Phase 16: Dashboard Cleanup and Text Metrics
 **Goal**: The intake dashboard is reorganized with text metrics replacing graphs, cleaned-up cards in the correct order, and quick UI wins applied
@@ -344,6 +350,6 @@ Note: Phase 14 and Phase 15 both depend on Phase 12 and 13 but are independent o
 | 12. Composable Data Foundation | v1.1 | 2/2 | Complete    | 2026-03-23 |
 | 13. Liquid Presets and AI Lookup | v1.1 | 3/3 | Complete    | 2026-03-24 |
 | 14. Unified Liquids Card | v1.1 | 2/2 | Complete    | 2026-03-24 |
-| 15. Unified Food+Salt Card | v1.1 | 0/0 | Not started | - |
+| 15. Unified Food+Salt Card | v1.1 | 0/2 | Planning    | - |
 | 16. Dashboard Cleanup and Text Metrics | v1.1 | 0/0 | Not started | - |
 | 17. Timezone-Aware Dose Logging | v1.1 | 0/0 | Not started | - |
