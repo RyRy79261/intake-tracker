@@ -239,7 +239,7 @@ Plans:
 - [x] **Phase 13: Liquid Presets and AI Lookup** - Zustand preset store for beverages and AI-powered caffeine/alcohol per-100ml lookup route (completed 2026-03-24)
 - [x] **Phase 14: Unified Liquids Card** - Tabbed water/coffee/alcohol card with preset-based logging and substance auto-calculation (completed 2026-03-24)
 - [x] **Phase 15: Unified Food+Salt Card** - Merged food and salt input with AI parsing that creates composable linked entries (completed 2026-03-24)
-- [ ] **Phase 16: Dashboard Cleanup and Text Metrics** - BP heart rate visible, food calculator removed, text metrics, coffee settings migrated, card reordering
+- [x] **Phase 16: Dashboard Cleanup and Text Metrics** - BP heart rate visible, food calculator removed, text metrics, coffee settings migrated, card reordering (completed 2026-03-24)
 - [ ] **Phase 17: Timezone-Aware Dose Logging** - Correct day-of-week schedule generation for SA/Germany timezones with device timezone stored per dose log
 
 ## Phase Details
@@ -317,7 +317,7 @@ Plans:
 Plans:
 - [x] 16-01-PLAN.md -- LiquidPreset multi-substance model + composable entry service extension + Zustand v3 migration (DASH-09)
 - [x] 16-02-PLAN.md -- TextMetrics component + BP heart rate promotion + Liquid Presets tab + PresetTab update + dashboard reorder (DASH-06, DASH-08, DASH-09, DASH-10)
-- [ ] 16-03-PLAN.md -- Dead code deletion: 13 replaced files + constants/themes/settings cleanup (DASH-07)
+- [x] 16-03-PLAN.md -- Dead code deletion: 13 replaced files + constants/themes/settings cleanup (DASH-07)
 **UI hint**: yes
 
 
@@ -358,5 +358,5 @@ Note: Phase 14 and Phase 15 both depend on Phase 12 and 13 but are independent o
 | 13. Liquid Presets and AI Lookup | v1.1 | 3/3 | Complete    | 2026-03-24 |
 | 14. Unified Liquids Card | v1.1 | 2/2 | Complete    | 2026-03-24 |
 | 15. Unified Food+Salt Card | v1.1 | 2/2 | Complete    | 2026-03-24 |
-| 16. Dashboard Cleanup and Text Metrics | v1.1 | 2/3 | In Progress|  |
+| 16. Dashboard Cleanup and Text Metrics | v1.1 | 3/3 | Complete   | 2026-03-24 |
 | 17. Timezone-Aware Dose Logging | v1.1 | 0/0 | Not started | - |

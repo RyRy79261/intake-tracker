@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: UI Overhaul
-status: Ready to execute
-stopped_at: Completed 16-02-PLAN.md
-last_updated: "2026-03-24T21:32:22.937Z"
+status: Phase complete — ready for verification
+stopped_at: Completed 16-03-PLAN.md
+last_updated: "2026-03-24T21:44:58.213Z"
 progress:
   total_phases: 6
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 12
-  completed_plans: 11
+  completed_plans: 12
 ---
 
 # Project State
@@ -57,6 +57,7 @@ Plan: 3 of 3
 | Phase 15 P02 | 5min | 2 tasks | 3 files |
 | Phase 16 P01 | 11min | 2 tasks | 6 files |
 | Phase 16 P02 | 9min | 2 tasks | 7 files |
+| Phase 16 P03 | 7min | 2 tasks | 19 files |
 
 ## Accumulated Context
 
@@ -94,6 +95,8 @@ Key decisions carrying forward into v1.1:
 - [Phase 16]: TextMetrics uses hooks-only data access pattern (no direct service imports in components)
 - [Phase 16]: PresetTab uses singular substance field for backward compat, substances[] array for multi-substance presets
 - [Phase 16]: Liquid Presets manager uses inline edit forms in CustomizationPanel rather than separate dialogs
+- [Phase 16]: LIQUID_TYPE_OPTIONS removed alongside COFFEE_PRESETS (zero consumers after intake-card.tsx deletion)
+- [Phase 16]: utilityOrder cleanup added to v3 persist migration rather than bumping to v4
 
 ### Pending Todos
 
@@ -111,6 +114,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-24T21:32:22.934Z
-Stopped at: Completed 16-02-PLAN.md
+Last session: 2026-03-24T21:44:58.209Z
+Stopped at: Completed 16-03-PLAN.md
 Resume file: None
