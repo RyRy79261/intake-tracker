@@ -10,7 +10,7 @@ export async function GET() {
     timestamp: new Date().toISOString(),
     config: {
       privyConfigured: isPrivyConfigured(),
-      serverApiKeyConfigured: !!process.env.PERPLEXITY_API_KEY,
+      serverApiKeyConfigured: !!process.env.ANTHROPIC_API_KEY,
     },
     environment: process.env.NODE_ENV,
   });

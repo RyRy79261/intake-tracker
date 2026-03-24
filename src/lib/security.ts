@@ -55,7 +55,7 @@ export function getSecurityWarnings(): string[] {
   return warnings;
 }
 
-// Data minimization helper for Perplexity API
+// Data minimization helper for AI API
 // Strips any potentially sensitive info before sending to AI
 export function sanitizeForAI(input: string): string {
   // Remove potential PII patterns

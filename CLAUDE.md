@@ -49,11 +49,12 @@ Each data domain has a service file in `src/lib/` (e.g., `intake-service.ts`, `m
 
 ### API Routes (`src/app/api/`)
 
-- `POST /api/ai/parse` — Sends food/drink descriptions to Perplexity API for nutritional parsing
+- `POST /api/ai/parse` — Sends food/drink descriptions to Anthropic Claude API for nutritional parsing
 - `POST /api/ai/medicine-search` — AI-assisted medicine lookup
+- `POST /api/ai/substance-lookup` — AI-powered beverage substance per-100ml lookup
 - `GET /api/ai/status` — Health check for AI service
 
-API routes handle server-side Perplexity calls (key never exposed to client). PII is stripped before sending to external APIs.
+API routes handle server-side Claude API calls (key never exposed to client). PII is stripped before sending to external APIs.
 
 ### Auth
 

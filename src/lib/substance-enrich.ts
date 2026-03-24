@@ -5,7 +5,7 @@ import { getUnenrichedSubstanceRecords, updateSubstanceRecord } from "./substanc
  *
  * Finds substance records that were created via keyword extraction during
  * the v12 migration (source='water_intake', aiEnriched=false) and sends
- * them to the Perplexity API for refined caffeine/alcohol estimates.
+ * them to the AI API for refined caffeine/alcohol estimates.
  *
  * Designed to be called once after app loads:
  * ```typescript

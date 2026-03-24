@@ -18,7 +18,7 @@ import { Mic, MicOff, Loader2, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 import { ParsedIntakeDisplay } from "@/components/parsed-intake-display";
-import { parseIntakeWithPerplexity, type ParsedIntake } from "@/lib/perplexity";
+import { parseIntakeWithAI, type ParsedIntake } from "@/lib/ai-client";
 import { formatAmount } from "@/lib/utils";
 
 interface VoiceInputProps {
@@ -84,7 +84,7 @@ export function VoiceInput({ onAddWater, onAddSalt, open: controlledOpen, onOpen
         authToken = await getAccessToken() || undefined;
       }
 
-      const result = await parseIntakeWithPerplexity(input, {
+      const result = await parseIntakeWithAI(input, {
         ...(authToken !== undefined && { authToken }),
       });
       setParsedResult(result);
@@ -269,7 +269,7 @@ export function VoiceInput({ onAddWater, onAddSalt, open: controlledOpen, onOpen
 
         <DialogFooter className="sm:justify-start">
           <p className="text-xs text-muted-foreground">
-            Powered by Perplexity AI
+            Powered by Claude AI
           </p>
         </DialogFooter>
       </DialogContent>

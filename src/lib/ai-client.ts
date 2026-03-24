@@ -15,7 +15,7 @@ export interface ParsedIntake {
  * - All requests are audit logged
  */
 
-export async function parseIntakeWithPerplexity(
+export async function parseIntakeWithAI(
   input: string,
   options?: {
     authToken?: string; // Privy access token
