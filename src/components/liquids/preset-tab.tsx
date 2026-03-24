@@ -32,10 +32,11 @@ export function PresetTab({ type }: PresetTabProps) {
   const addEntry = useAddComposableEntry();
   const { toast } = useToast();
 
-  // Filter presets by type
+  // Filter presets by tab (mapped from type prop)
+  const tabFilter = type === "caffeine" ? "coffee" : "alcohol";
   const presets = useMemo(
-    () => allPresets.filter((p) => p.type === type),
-    [allPresets, type]
+    () => allPresets.filter((p) => p.tab === tabFilter),
+    [allPresets, tabFilter]
   );
 
   const theme = type === "caffeine" ? CARD_THEMES.caffeine : CARD_THEMES.alcohol;
@@ -68,7 +69,11 @@ export function PresetTab({ type }: PresetTabProps) {
     if (!preset) return;
     setSelectedPresetId(presetId);
     setVolumeMl(preset.defaultVolumeMl);
-    setSubstancePer100ml(preset.substancePer100ml);
+    setSubstancePer100ml(
+      type === "caffeine"
+        ? (preset.caffeinePer100ml ?? 0)
+        : (preset.alcoholPer100ml ?? 0)
+    );
     setBeverageName(preset.name);
     setSearchText("");
   };
@@ -151,9 +156,11 @@ export function PresetTab({ type }: PresetTabProps) {
     try {
       addPreset({
         name: beverageName.trim(),
-        type,
-        substancePer100ml,
+        tab: tabFilter,
         defaultVolumeMl: volumeMl,
+        waterContentPercent: 100,
+        ...(type === "caffeine" && { caffeinePer100ml: substancePer100ml }),
+        ...(type === "alcohol" && { alcoholPer100ml: substancePer100ml }),
         isDefault: false,
         source: aiLookupUsed ? "ai" : "manual",
       });

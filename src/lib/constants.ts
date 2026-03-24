@@ -102,28 +102,31 @@ export const LIQUID_TYPE_OPTIONS = [
   { value: "food", label: "Food" },
 ] as const;
 
-// ─── Liquid Presets (per D-01: per-100ml is the primary unit) ───────
+// ─── Liquid Presets (multi-substance, per D-10) ─────────────────────
 
 export interface LiquidPreset {
   id: string;
   name: string;
-  type: "caffeine" | "alcohol";
-  substancePer100ml: number; // mg for caffeine, standard drinks for alcohol
+  tab: "coffee" | "alcohol" | "beverage";   // which LiquidsCard tab (replaces old `type`)
   defaultVolumeMl: number;
+  waterContentPercent: number;                // 0-100, default 100
+  caffeinePer100ml?: number;                 // mg per 100ml
+  alcoholPer100ml?: number;                  // standard drinks per 100ml
+  saltPer100ml?: number;                     // mg sodium per 100ml
   isDefault: boolean;
   source: "manual" | "ai";
   aiConfidence?: number;
 }
 
 export const DEFAULT_LIQUID_PRESETS: LiquidPreset[] = [
-  // Caffeine presets (seeded from COFFEE_PRESETS + substanceConfig.caffeine.types)
-  { id: "default-espresso", name: "Espresso", type: "caffeine", substancePer100ml: 210, defaultVolumeMl: 30, isDefault: true, source: "manual" },
-  { id: "default-double-espresso", name: "Double Espresso", type: "caffeine", substancePer100ml: 210, defaultVolumeMl: 60, isDefault: true, source: "manual" },
-  { id: "default-moka", name: "Moka", type: "caffeine", substancePer100ml: 130, defaultVolumeMl: 50, isDefault: true, source: "manual" },
-  { id: "default-coffee", name: "Coffee", type: "caffeine", substancePer100ml: 38, defaultVolumeMl: 250, isDefault: true, source: "manual" },
-  { id: "default-tea", name: "Tea", type: "caffeine", substancePer100ml: 19, defaultVolumeMl: 250, isDefault: true, source: "manual" },
-  // Alcohol presets (seeded from substanceConfig.alcohol.types)
-  { id: "default-beer", name: "Beer", type: "alcohol", substancePer100ml: 0.30, defaultVolumeMl: 330, isDefault: true, source: "manual" },
-  { id: "default-wine", name: "Wine", type: "alcohol", substancePer100ml: 0.67, defaultVolumeMl: 150, isDefault: true, source: "manual" },
-  { id: "default-spirit", name: "Spirit", type: "alcohol", substancePer100ml: 2.22, defaultVolumeMl: 45, isDefault: true, source: "manual" },
+  // Caffeine presets
+  { id: "default-espresso", name: "Espresso", tab: "coffee", caffeinePer100ml: 210, waterContentPercent: 98, defaultVolumeMl: 30, isDefault: true, source: "manual" },
+  { id: "default-double-espresso", name: "Double Espresso", tab: "coffee", caffeinePer100ml: 210, waterContentPercent: 98, defaultVolumeMl: 60, isDefault: true, source: "manual" },
+  { id: "default-moka", name: "Moka", tab: "coffee", caffeinePer100ml: 130, waterContentPercent: 98, defaultVolumeMl: 50, isDefault: true, source: "manual" },
+  { id: "default-coffee", name: "Coffee", tab: "coffee", caffeinePer100ml: 38, waterContentPercent: 99, defaultVolumeMl: 250, isDefault: true, source: "manual" },
+  { id: "default-tea", name: "Tea", tab: "coffee", caffeinePer100ml: 19, waterContentPercent: 99, defaultVolumeMl: 250, isDefault: true, source: "manual" },
+  // Alcohol presets
+  { id: "default-beer", name: "Beer", tab: "alcohol", alcoholPer100ml: 0.30, waterContentPercent: 93, defaultVolumeMl: 330, isDefault: true, source: "manual" },
+  { id: "default-wine", name: "Wine", tab: "alcohol", alcoholPer100ml: 0.67, waterContentPercent: 87, defaultVolumeMl: 150, isDefault: true, source: "manual" },
+  { id: "default-spirit", name: "Spirit", tab: "alcohol", alcoholPer100ml: 2.22, waterContentPercent: 60, defaultVolumeMl: 45, isDefault: true, source: "manual" },
 ];

@@ -17,6 +17,13 @@ export interface ComposableEntryInput {
     volumeMl?: number;
     description: string;
   };
+  substances?: Array<{
+    type: "caffeine" | "alcohol";
+    amountMg?: number;
+    amountStandardDrinks?: number;
+    volumeMl?: number;
+    description: string;
+  }>;
   originalInputText?: string;
   groupSource?: string;
 }
@@ -25,7 +32,8 @@ export interface ComposableEntryResult {
   groupId: string;
   eatingId?: string;
   intakeIds: string[];
-  substanceId?: string;
+  substanceId?: string;    // kept for backward compat (single substance)
+  substanceIds: string[];  // all substance record IDs
 }
 
 export interface EntryGroup {
@@ -48,6 +56,7 @@ export async function addComposableEntry(
     const ts = timestamp ?? Date.now();
     const fields = syncFields();
     const intakeIds: string[] = [];
+    const substanceIds: string[] = [];
     let eatingId: string | undefined;
     let substanceId: string | undefined;
 
@@ -89,10 +98,11 @@ export async function addComposableEntry(
         }
       }
 
-      // ── Substance record ──
+      // ── Substance record (singular — backward compat) ──
       if (input.substance) {
         const id = crypto.randomUUID();
         substanceId = id;
+        substanceIds.push(id);
         const record: SubstanceRecord = {
           id,
           type: input.substance.type,
@@ -129,9 +139,34 @@ export async function addComposableEntry(
           await db.intakeRecords.add(waterRecord);
         }
       }
+
+      // ── Substance records (plural — multi-substance presets, per D-11) ──
+      // NOTE: substances path does NOT auto-create water intake.
+      // Water is handled explicitly via intakes[] when using multi-substance presets.
+      if (input.substances) {
+        for (const sub of input.substances) {
+          const id = crypto.randomUUID();
+          substanceIds.push(id);
+          const record: SubstanceRecord = {
+            id,
+            type: sub.type,
+            ...(sub.amountMg !== undefined && { amountMg: sub.amountMg }),
+            ...(sub.amountStandardDrinks !== undefined && { amountStandardDrinks: sub.amountStandardDrinks }),
+            ...(sub.volumeMl !== undefined && { volumeMl: sub.volumeMl }),
+            description: sub.description,
+            source: "standalone" as const,
+            aiEnriched: false,
+            timestamp: ts,
+            groupId,
+            ...(input.groupSource !== undefined && { groupSource: input.groupSource }),
+            ...fields,
+          };
+          await db.substanceRecords.add(record);
+        }
+      }
     });
 
-    const result: ComposableEntryResult = { groupId, intakeIds };
+    const result: ComposableEntryResult = { groupId, intakeIds, substanceIds };
     if (eatingId !== undefined) result.eatingId = eatingId;
     if (substanceId !== undefined) result.substanceId = substanceId;
     return ok(result);

@@ -17,8 +17,9 @@ describe("liquidPresets CRUD", () => {
     const { addLiquidPreset } = useSettingsStore.getState();
     addLiquidPreset({
       name: "Cold Brew",
-      type: "caffeine",
-      substancePer100ml: 65,
+      tab: "coffee",
+      caffeinePer100ml: 65,
+      waterContentPercent: 99,
       defaultVolumeMl: 350,
       isDefault: false,
       source: "manual",
@@ -30,21 +31,21 @@ describe("liquidPresets CRUD", () => {
     expect(added.name).toBe("Cold Brew");
     expect(added.id).toBeTruthy();
     expect(added.id).not.toBe("");
-    expect(added.substancePer100ml).toBe(65);
+    expect(added.caffeinePer100ml).toBe(65);
   });
 
   it("updateLiquidPreset updates the matching preset's fields by id", () => {
     const { updateLiquidPreset } = useSettingsStore.getState();
-    updateLiquidPreset("default-espresso", { name: "Ristretto", substancePer100ml: 250 });
+    updateLiquidPreset("default-espresso", { name: "Ristretto", caffeinePer100ml: 250 });
 
     const { liquidPresets } = useSettingsStore.getState();
     const updated = liquidPresets.find((p) => p.id === "default-espresso");
     expect(updated).toBeDefined();
     expect(updated!.name).toBe("Ristretto");
-    expect(updated!.substancePer100ml).toBe(250);
+    expect(updated!.caffeinePer100ml).toBe(250);
     // Other fields unchanged
     expect(updated!.defaultVolumeMl).toBe(30);
-    expect(updated!.type).toBe("caffeine");
+    expect(updated!.tab).toBe("coffee");
   });
 
   it("deleteLiquidPreset removes the preset by id", () => {
@@ -60,8 +61,9 @@ describe("liquidPresets CRUD", () => {
     const { addLiquidPreset } = useSettingsStore.getState();
     addLiquidPreset({
       name: "Espresso",
-      type: "caffeine",
-      substancePer100ml: 200,
+      tab: "coffee",
+      caffeinePer100ml: 200,
+      waterContentPercent: 98,
       defaultVolumeMl: 30,
       isDefault: false,
       source: "manual",
