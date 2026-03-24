@@ -52,8 +52,8 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 - ✓ Liquid preset system (Zustand CRUD, 8 defaults, per-100ml primary unit) + AI substance lookup route — Phase 13
 - ✓ All AI routes migrated from Perplexity to Anthropic Claude with tool_use — Phase 13
 - [ ] Volume-based caffeine/alcohol calculation from presets
-- [ ] Unified Food+Salt card with AI food parsing that auto-creates linked liquid/salt entries
-- [ ] Manual salt input within food card (salt tablets, seasoning additions)
+- ✓ Unified Food+Salt card with stacked sections, AI food parse → composable preview → atomic linked entries — Phase 15
+- ✓ Manual salt input within food card (salt tablets, seasoning) — salt UX preserved exactly — Phase 15
 - [ ] BP heart rate field always visible (no expand required)
 - [ ] Text-based intake metrics replacing graphs (today's limits, substance totals, weekly summary)
 - [ ] Food calculator removal
@@ -117,4 +117,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-24 after Phase 14 completion*
+*Last updated: 2026-03-24 after Phase 15 completion*
