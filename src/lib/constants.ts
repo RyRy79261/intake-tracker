@@ -101,3 +101,29 @@ export const LIQUID_TYPE_OPTIONS = [
   { value: "coffee", label: "Coffee" },
   { value: "food", label: "Food" },
 ] as const;
+
+// ─── Liquid Presets (per D-01: per-100ml is the primary unit) ───────
+
+export interface LiquidPreset {
+  id: string;
+  name: string;
+  type: "caffeine" | "alcohol";
+  substancePer100ml: number; // mg for caffeine, standard drinks for alcohol
+  defaultVolumeMl: number;
+  isDefault: boolean;
+  source: "manual" | "ai";
+  aiConfidence?: number;
+}
+
+export const DEFAULT_LIQUID_PRESETS: LiquidPreset[] = [
+  // Caffeine presets (seeded from COFFEE_PRESETS + substanceConfig.caffeine.types)
+  { id: "default-espresso", name: "Espresso", type: "caffeine", substancePer100ml: 210, defaultVolumeMl: 30, isDefault: true, source: "manual" },
+  { id: "default-double-espresso", name: "Double Espresso", type: "caffeine", substancePer100ml: 210, defaultVolumeMl: 60, isDefault: true, source: "manual" },
+  { id: "default-moka", name: "Moka", type: "caffeine", substancePer100ml: 130, defaultVolumeMl: 50, isDefault: true, source: "manual" },
+  { id: "default-coffee", name: "Coffee", type: "caffeine", substancePer100ml: 38, defaultVolumeMl: 250, isDefault: true, source: "manual" },
+  { id: "default-tea", name: "Tea", type: "caffeine", substancePer100ml: 19, defaultVolumeMl: 250, isDefault: true, source: "manual" },
+  // Alcohol presets (seeded from substanceConfig.alcohol.types)
+  { id: "default-beer", name: "Beer", type: "alcohol", substancePer100ml: 0.30, defaultVolumeMl: 330, isDefault: true, source: "manual" },
+  { id: "default-wine", name: "Wine", type: "alcohol", substancePer100ml: 0.67, defaultVolumeMl: 150, isDefault: true, source: "manual" },
+  { id: "default-spirit", name: "Spirit", type: "alcohol", substancePer100ml: 2.22, defaultVolumeMl: 45, isDefault: true, source: "manual" },
+];
