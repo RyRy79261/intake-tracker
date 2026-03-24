@@ -15,7 +15,7 @@ import { UrinationCard } from "@/components/urination-card";
 import { DefecationCard } from "@/components/defecation-card";
 import { useIntake } from "@/hooks/use-intake-queries";
 import { useSettings } from "@/hooks/use-settings";
-import { SubstanceRow } from "@/components/substance/substance-row";
+import { LiquidsCard } from "@/components/liquids-card";
 import { InsightBadge } from "@/components/insight-badge";
 import { useScrollHide } from "@/hooks/use-scroll-hide";
 import { cn } from "@/lib/utils";
@@ -81,16 +81,7 @@ function HomeContent() {
 
       <div className="space-y-4 mb-6">
         <div id="section-water">
-          <IntakeCard
-            type="water"
-            dailyTotal={waterIntake.dailyTotal}
-            rollingTotal={waterIntake.rollingTotal}
-            limit={settings.waterLimit}
-            increment={settings.waterIncrement}
-            onConfirm={(amount, timestamp, note) => handleAddWater(amount, "manual", timestamp, note)}
-            onConfirmWithSource={(amount, source, timestamp, note) => handleAddWater(amount, source, timestamp, note)}
-            isLoading={waterIntake.isLoading}
-          />
+          <LiquidsCard />
         </div>
 
         <div id="section-salt">
@@ -105,17 +96,6 @@ function HomeContent() {
           />
         </div>
 
-        {settings.substanceConfig?.caffeine?.enabled && (
-          <div id="section-caffeine">
-            <SubstanceRow type="caffeine" />
-          </div>
-        )}
-
-        {settings.substanceConfig?.alcohol?.enabled && (
-          <div id="section-alcohol">
-            <SubstanceRow type="alcohol" />
-          </div>
-        )}
       </div>
 
       <div className="flex gap-3 mb-6">

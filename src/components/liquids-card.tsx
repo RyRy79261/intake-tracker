@@ -7,6 +7,7 @@ import { CARD_THEMES } from "@/lib/card-themes";
 import { Droplets, Coffee, Wine } from "lucide-react";
 import { WaterTab } from "@/components/liquids/water-tab";
 import { BeverageTab } from "@/components/liquids/beverage-tab";
+import { PresetTab } from "@/components/liquids/preset-tab";
 import { useIntake } from "@/hooks/use-intake-queries";
 import { useSettings } from "@/hooks/use-settings";
 import { cn, formatAmount } from "@/lib/utils";
@@ -124,9 +125,7 @@ export function LiquidsCard() {
             forceMount
             className="data-[state=inactive]:hidden mt-4"
           >
-            <div className="text-center text-sm text-muted-foreground py-8">
-              Coffee presets coming soon
-            </div>
+            <PresetTab type="caffeine" />
           </TabsContent>
 
           {/* Alcohol Tab */}
@@ -135,9 +134,7 @@ export function LiquidsCard() {
             forceMount
             className="data-[state=inactive]:hidden mt-4"
           >
-            <div className="text-center text-sm text-muted-foreground py-8">
-              Alcohol presets coming soon
-            </div>
+            <PresetTab type="alcohol" />
           </TabsContent>
         </Tabs>
       </CardContent>
