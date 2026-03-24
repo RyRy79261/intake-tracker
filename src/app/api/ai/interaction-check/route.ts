@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
+import { getClaudeClient, CLAUDE_MODELS } from "../_shared/claude-client";
 
 // --- Zod Schemas (co-located per project convention) ---
 
@@ -42,7 +43,7 @@ const InteractionResultSchema = z.object({
 
 // --- System Prompt ---
 
-const SYSTEM_PROMPT = `You are a clinical pharmacist assistant. Given a patient's current medications and a substance to check, identify drug interactions. Return JSON with an interactions array, drugClass (of the queried substance), and summary.
+const SYSTEM_PROMPT = `You are a clinical pharmacist assistant. Given a patient's current medications and a substance to check, identify drug interactions. Return the results using the interaction_check_result tool.
 
 Severity levels:
 - AVOID: Dangerous combination, should not be taken together
@@ -51,21 +52,37 @@ Severity levels:
 
 Be precise and evidence-based. Err on the side of CAUTION when uncertain.
 
-Return ONLY valid JSON with this format:
-{
-  "interactions": [
-    {
-      "substance": "the queried substance",
-      "medication": "the interacting medication name",
-      "severity": "AVOID" | "CAUTION" | "OK",
-      "description": "brief description of the interaction"
-    }
-  ],
-  "drugClass": "pharmacological class of the queried substance",
-  "summary": "one-line overall safety summary"
-}
-
 Check the queried substance against EACH active medication. Include an entry for every medication, even if the severity is OK.`;
+
+// --- Tool Definition ---
+
+const INTERACTION_CHECK_TOOL = {
+  name: "interaction_check_result" as const,
+  description: "Return drug interaction analysis for a substance against current medications",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      interactions: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            substance: { type: "string" },
+            medication: { type: "string" },
+            severity: { type: "string", enum: ["AVOID", "CAUTION", "OK"] },
+            description: { type: "string" },
+          },
+          required: ["substance", "medication", "severity", "description"],
+          additionalProperties: false,
+        },
+      },
+      drugClass: { type: "string", description: "Pharmacological class of the queried substance" },
+      summary: { type: "string", description: "One-line overall safety summary" },
+    },
+    required: ["interactions", "drugClass", "summary"],
+    additionalProperties: false,
+  },
+};
 
 // --- Rate Limiting ---
 
@@ -110,8 +127,10 @@ export const POST = withAuth(async ({ request, auth }) => {
       );
     }
 
-    const apiKey = process.env.PERPLEXITY_API_KEY;
-    if (!apiKey) {
+    let client;
+    try {
+      client = getClaudeClient();
+    } catch {
       return NextResponse.json(
         { error: "AI service not configured" },
         { status: 503 }
@@ -136,63 +155,33 @@ export const POST = withAuth(async ({ request, auth }) => {
 
     console.log(`[AUDIT] Interaction check request from user: ${auth.userId}, mode: ${parsed.data.mode}`);
 
-    const callApi = async () => {
-      const response = await fetch("https://api.perplexity.ai/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "sonar-reasoning-pro",
-          messages: [
-            { role: "system", content: SYSTEM_PROMPT },
-            { role: "user", content: prompt },
-          ],
-          temperature: 0.2,
-          max_tokens: 2000,
-        }),
-      });
+    const response = await client.messages.create({
+      model: CLAUDE_MODELS.quality,
+      max_tokens: 2048,
+      system: SYSTEM_PROMPT,
+      tools: [INTERACTION_CHECK_TOOL],
+      tool_choice: { type: "tool", name: "interaction_check_result" },
+      messages: [{ role: "user", content: prompt }],
+    });
 
-      if (!response.ok) return null;
-      const data = await response.json();
-      return data.choices?.[0]?.message?.content as string | undefined;
-    };
-
-    const parseContent = (content: string) => {
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        try {
-          const validated = InteractionResultSchema.safeParse(
-            JSON.parse(jsonMatch[0])
-          );
-          if (validated.success) return validated.data;
-        } catch {
-          // Fall through to retry
-        }
-      }
-      return null;
-    };
-
-    // First attempt
-    const content1 = await callApi();
-    if (content1) {
-      const result1 = parseContent(content1);
-      if (result1) return NextResponse.json(result1);
+    const toolBlock = response.content.find(b => b.type === "tool_use");
+    if (!toolBlock || toolBlock.type !== "tool_use") {
+      return NextResponse.json(
+        { error: "AI service unavailable" },
+        { status: 502 }
+      );
     }
 
-    // Retry once
-    console.log("[RETRY] Interaction check first attempt failed, retrying...");
-    const content2 = await callApi();
-    if (content2) {
-      const result2 = parseContent(content2);
-      if (result2) return NextResponse.json(result2);
+    const validated = InteractionResultSchema.safeParse(toolBlock.input);
+    if (!validated.success) {
+      console.error("[VALIDATION] Interaction check response validation failed:", JSON.stringify(validated.error.flatten()));
+      return NextResponse.json(
+        { error: "AI service unavailable" },
+        { status: 502 }
+      );
     }
 
-    return NextResponse.json(
-      { error: "AI service unavailable" },
-      { status: 502 }
-    );
+    return NextResponse.json(validated.data);
   } catch (error) {
     console.error("Interaction check error:", error);
     return NextResponse.json(

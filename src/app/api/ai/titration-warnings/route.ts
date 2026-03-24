@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
+import { getClaudeClient, CLAUDE_MODELS } from "../_shared/claude-client";
 
 const RequestSchema = z.object({
   prescriptions: z
@@ -30,21 +31,35 @@ const ResponseSchema = z.object({
   warnings: z.array(z.string()),
 });
 
+// --- Tool Definition ---
+
+const TITRATION_WARNINGS_TOOL = {
+  name: "titration_warnings_result" as const,
+  description: "Return warning signs to watch during medication titration",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      warnings: {
+        type: "array",
+        items: { type: "string" },
+      },
+    },
+    required: ["warnings"],
+    additionalProperties: false,
+  },
+};
+
 const SYSTEM_PROMPT = `You are a clinical pharmacist assistant. Given a list of medications involved in a dosage titration (with schedule details including times, amounts, and frequency), provide a concise list of warning signs the patient should watch for during the titration period.
 
 Focus on:
 - Symptoms that indicate the new dosage is too high or causing adverse effects
 - Timing-specific concerns (e.g., evening doses causing insomnia, morning doses causing drowsiness)
 - Drug interaction concerns when multiple medications change simultaneously or are taken at the same time
-- Frequency changes (e.g., going from 1x to 2x daily — peak/trough effects)
+- Frequency changes (e.g., going from 1x to 2x daily -- peak/trough effects)
 - Vital sign thresholds to watch (blood pressure, heart rate, etc.)
 - Symptoms requiring immediate medical attention
 
-Return ONLY valid JSON with this format:
-{
-  "warnings": ["warning 1", "warning 2", ...]
-}
-
+Use the titration_warnings_result tool to return the warnings.
 Keep each warning to one short sentence. Aim for 4-8 warnings. Be practical and patient-friendly, not overly clinical.`;
 
 export const POST = withAuth(async ({ request, auth }) => {
@@ -58,8 +73,10 @@ export const POST = withAuth(async ({ request, auth }) => {
       );
     }
 
-    const apiKey = process.env.PERPLEXITY_API_KEY;
-    if (!apiKey) {
+    let client;
+    try {
+      client = getClaudeClient();
+    } catch {
       return NextResponse.json(
         { error: "AI service not configured" },
         { status: 503 },
@@ -97,71 +114,33 @@ export const POST = withAuth(async ({ request, auth }) => {
 
     console.log(`[AUDIT] Titration warnings request from user: ${auth.userId}`);
 
-    const callApi = async () => {
-      const response = await fetch("https://api.perplexity.ai/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "sonar-reasoning-pro",
-          messages: [
-            { role: "system", content: SYSTEM_PROMPT },
-            { role: "user", content: prompt },
-          ],
-          temperature: 0.2,
-          max_tokens: 1500,
-        }),
-      });
+    const response = await client.messages.create({
+      model: CLAUDE_MODELS.quality,
+      max_tokens: 1536,
+      system: SYSTEM_PROMPT,
+      tools: [TITRATION_WARNINGS_TOOL],
+      tool_choice: { type: "tool", name: "titration_warnings_result" },
+      messages: [{ role: "user", content: prompt }],
+    });
 
-      if (!response.ok) return null;
-      const data = await response.json();
-      return data.choices?.[0]?.message?.content as string | undefined;
-    };
-
-    const parseContent = (content: string) => {
-      // Try JSON extraction first
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        try {
-          const validated = ResponseSchema.safeParse(JSON.parse(jsonMatch[0]));
-          if (validated.success) return validated.data;
-        } catch {
-          // Fall through
-        }
-      }
-
-      // Fallback: extract warnings from markdown bullet points
-      const bulletWarnings = content
-        .split("\n")
-        .map((line: string) => line.replace(/^[\s]*[-*•]\s*\**/, "").replace(/\*+$/, "").trim())
-        .filter((line: string) => line.length > 10 && line.length < 200 && !line.startsWith("#") && !line.startsWith("{"))
-        .slice(0, 10);
-
-      if (bulletWarnings.length > 0) return { warnings: bulletWarnings };
-      return null;
-    };
-
-    // First attempt
-    const content1 = await callApi();
-    if (content1) {
-      const result1 = parseContent(content1);
-      if (result1) return NextResponse.json(result1);
+    const toolBlock = response.content.find(b => b.type === "tool_use");
+    if (!toolBlock || toolBlock.type !== "tool_use") {
+      return NextResponse.json(
+        { error: "AI service unavailable" },
+        { status: 502 },
+      );
     }
 
-    // Retry once (reasoning models can be flaky on first call)
-    console.log("[RETRY] Titration warnings first attempt failed, retrying...");
-    const content2 = await callApi();
-    if (content2) {
-      const result2 = parseContent(content2);
-      if (result2) return NextResponse.json(result2);
+    const validated = ResponseSchema.safeParse(toolBlock.input);
+    if (!validated.success) {
+      console.error("[VALIDATION] Titration warnings response validation failed:", JSON.stringify(validated.error.flatten()));
+      return NextResponse.json(
+        { error: "AI service unavailable" },
+        { status: 502 },
+      );
     }
 
-    return NextResponse.json(
-      { error: "AI service unavailable" },
-      { status: 502 },
-    );
+    return NextResponse.json(validated.data);
   } catch (error) {
     console.error("Titration warnings error:", error);
     return NextResponse.json(
