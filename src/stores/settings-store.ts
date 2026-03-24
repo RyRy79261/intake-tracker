@@ -35,7 +35,6 @@ export interface Settings {
   // Quick Nav footer
   showQuickNav: boolean;
   quickNavOrder: "ltr" | "rtl";
-  utilityOrder: "ai-right" | "food-right";
 
   // Animation timing settings (ms)
   scrollDurationMs: number;        // how fast page scrolls to section (100-1000)
@@ -45,9 +44,6 @@ export interface Settings {
   // Tracking defaults
   urinationDefaultAmount: "small" | "medium" | "large";
   defecationDefaultAmount: "small" | "medium" | "large";
-  /** @deprecated Removed in v3 migration. Kept temporarily for build compat with intake-card.tsx and customization-panel.tsx (deleted in Plan 03). */
-  coffeeDefaultType: string;
-
   // Weight graph defaults
   weightGraphShowEating: boolean;
   weightGraphShowUrination: boolean;
@@ -70,13 +66,11 @@ interface SettingsActions {
   setDayStartHour: (hour: number) => void;
   setShowQuickNav: (value: boolean) => void;
   setQuickNavOrder: (order: "ltr" | "rtl") => void;
-  setUtilityOrder: (order: "ai-right" | "food-right") => void;
   setScrollDurationMs: (value: number) => void;
   setAutoHideDelayMs: (value: number) => void;
   setBarTransitionDurationMs: (value: number) => void;
   setUrinationDefaultAmount: (value: "small" | "medium" | "large") => void;
   setDefecationDefaultAmount: (value: "small" | "medium" | "large") => void;
-  setCoffeeDefaultType: (value: string) => void;
   setWeightGraphShowEating: (value: boolean) => void;
   setWeightGraphShowUrination: (value: boolean) => void;
   setWeightGraphShowDefecation: (value: boolean) => void;
@@ -98,13 +92,11 @@ const defaultSettings: Settings = {
   dayStartHour: 2, // Default: 2am - day starts at 2am for budget tracking
   showQuickNav: true,
   quickNavOrder: "rtl" as const,
-  utilityOrder: "ai-right" as const,
   scrollDurationMs: 300,
   autoHideDelayMs: 500,
   barTransitionDurationMs: 200,
   urinationDefaultAmount: "small" as const,
   defecationDefaultAmount: "medium" as const,
-  coffeeDefaultType: "double-espresso",
   weightGraphShowEating: true,
   weightGraphShowUrination: true,
   weightGraphShowDefecation: true,
@@ -143,7 +135,6 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
 
       setShowQuickNav: (value) => set({ showQuickNav: value }),
       setQuickNavOrder: (order) => set({ quickNavOrder: order }),
-      setUtilityOrder: (order) => set({ utilityOrder: order }),
       setScrollDurationMs: (value) =>
         set({ scrollDurationMs: sanitizeNumericInput(value, 100, 1000) }),
       setAutoHideDelayMs: (value) =>
@@ -153,7 +144,6 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
 
       setUrinationDefaultAmount: (value) => set({ urinationDefaultAmount: value }),
       setDefecationDefaultAmount: (value) => set({ defecationDefaultAmount: value }),
-      setCoffeeDefaultType: (value) => set({ coffeeDefaultType: value }),
       setWeightGraphShowEating: (value) => set({ weightGraphShowEating: value }),
       setWeightGraphShowUrination: (value) => set({ weightGraphShowUrination: value }),
       setWeightGraphShowDefecation: (value) => set({ weightGraphShowDefecation: value }),
@@ -195,6 +185,8 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
         if (version < 3) {
           // D-07: Remove deprecated coffeeDefaultType from persisted state
           delete state.coffeeDefaultType;
+          // Remove utility row ordering (utility row removed in Plan 03)
+          delete state.utilityOrder;
           // D-12: Convert old LiquidPreset format (type/substancePer100ml) to new multi-substance format
           const presets = state.liquidPresets as Array<Record<string, unknown>>;
           if (Array.isArray(presets)) {

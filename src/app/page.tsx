@@ -96,7 +96,6 @@ function HomeContent() {
         <QuickNavFooter
           hidden={isHidden}
           order={settings.quickNavOrder}
-          utilityOrder={settings.utilityOrder}
           transitionDuration={barTransitionSec}
           onScrollTo={handleQuickNav}
         />
