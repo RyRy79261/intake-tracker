@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: UI Overhaul
 status: Ready to plan
-stopped_at: Phase 15 context gathered
-last_updated: "2026-03-24T11:12:22.871Z"
+stopped_at: Phase 15 UI-SPEC approved
+last_updated: "2026-03-24T11:21:46.245Z"
 progress:
   total_phases: 6
   completed_phases: 3
@@ -97,6 +97,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-24T11:12:22.866Z
-Stopped at: Phase 15 context gathered
-Resume file: .planning/phases/15-unified-food-salt-card/15-CONTEXT.md
+Last session: 2026-03-24T11:21:46.242Z
+Stopped at: Phase 15 UI-SPEC approved
+Resume file: .planning/phases/15-unified-food-salt-card/15-UI-SPEC.md
