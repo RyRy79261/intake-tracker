@@ -38,14 +38,14 @@ describe("client bundle security", () => {
   it("client bundle should not contain API key patterns", () => {
     const content = readBundleContents(staticDir);
 
-    // Perplexity API key prefix
-    expect(content).not.toMatch(/pplx-[a-zA-Z0-9]{20,}/);
+    // Anthropic API key prefix
+    expect(content).not.toMatch(/sk-ant-[a-zA-Z0-9]{20,}/);
 
     // OpenAI-style secret key prefix
     expect(content).not.toMatch(/sk-[a-zA-Z0-9]{20,}/);
 
     // Env var names that should never appear in client code
-    expect(content).not.toContain("PERPLEXITY_API_KEY");
+    expect(content).not.toContain("ANTHROPIC_API_KEY");
     expect(content).not.toContain("PRIVY_APP_SECRET");
   });
 

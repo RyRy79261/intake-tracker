@@ -34,7 +34,7 @@ Single-user health tracking PWA. All user data lives client-side in IndexedDB. T
 
 All API keys are server-side only. No secrets are exposed via `NEXT_PUBLIC_` environment variables.
 
-- `PERPLEXITY_API_KEY` -- used in API routes only (`src/app/api/ai/parse/route.ts`, `src/app/api/ai/medicine-search/route.ts`, `src/app/api/ai/substance-enrich/route.ts`)
+- `ANTHROPIC_API_KEY` -- used in API routes only (`src/app/api/ai/_shared/claude-client.ts` shared by all AI routes)
 - `PRIVY_APP_SECRET` -- used in `src/lib/privy-server.ts` for JWT verification
 
 ### Auth Middleware
@@ -43,7 +43,7 @@ API routes use auth middleware from `src/lib/auth-middleware.ts` to verify Privy
 
 ### PII Sanitization
 
-`sanitizeForAI()` in `src/lib/security.ts` strips emails, phone numbers, and SSN patterns from text before sending to Perplexity API. Input is also length-limited to 500 characters.
+`sanitizeForAI()` in `src/lib/security.ts` strips emails, phone numbers, and SSN patterns from text before sending to the AI API. Input is also length-limited to 500 characters.
 
 ## Encryption Model
 
@@ -88,7 +88,7 @@ Defined in `next.config.js` and applied to all routes via response headers:
 | `style-src` | `'self' 'unsafe-inline'` | Required for Tailwind CSS |
 | `img-src` | `'self' data: blob:` | App-generated images |
 | `font-src` | `'self' data:` | Outfit font via next/font |
-| `connect-src` | `'self' https://api.perplexity.ai https://auth.privy.io https://*.walletconnect.com https://*.walletconnect.org wss://*.walletconnect.org` | Perplexity API + Privy Auth |
+| `connect-src` | `'self' https://api.anthropic.com https://auth.privy.io https://*.walletconnect.com https://*.walletconnect.org wss://*.walletconnect.org` | Anthropic Claude API + Privy Auth |
 | `frame-src` | `'self' https://auth.privy.io` | Privy login modal |
 | `frame-ancestors` | `'none'` | Prevent embedding (clickjacking) |
 
@@ -109,7 +109,7 @@ The auth patterns are designed for future server-side sync:
 |----------|--------|----------|---------|
 | `NEXT_PUBLIC_PRIVY_APP_ID` | Safe | Client + Server | Privy app identifier |
 | `PRIVY_APP_SECRET` | **Secret** | Server only | Privy JWT verification |
-| `PERPLEXITY_API_KEY` | **Secret** | Server only | AI parse/search/enrich API |
+| `ANTHROPIC_API_KEY` | **Secret** | Server only | AI parse/search/enrich API |
 | `ALLOWED_EMAILS` | Safe | Server only | Email whitelist for auth |
 | `NEXT_PUBLIC_LOCAL_AGENT_MODE` | Safe | Client + Server | E2E test auth bypass |
 | `NEXT_PUBLIC_APP_VERSION` | Safe | Client | Display version (from package.json) |
