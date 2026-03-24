@@ -36,31 +36,31 @@ const AlcoholResponseSchema = z.object({
 // --- Tool Definitions ---
 
 const CAFFEINE_ENRICH_TOOL = {
-  name: "caffeine_enrichment",
+  name: "caffeine_enrichment" as const,
   description: "Return caffeine content estimate for a beverage",
   input_schema: {
     type: "object" as const,
     properties: {
-      caffeineMg: { type: "number" as const, description: "Estimated caffeine in mg" },
-      volumeMl: { type: "number" as const, description: "Estimated volume in ml" },
-      reasoning: { type: "string" as const, description: "Brief explanation" },
+      caffeineMg: { type: "number", description: "Estimated caffeine in mg" },
+      volumeMl: { type: "number", description: "Estimated volume in ml" },
+      reasoning: { type: "string", description: "Brief explanation" },
     },
-    required: ["caffeineMg", "volumeMl", "reasoning"] as const,
+    required: ["caffeineMg", "volumeMl", "reasoning"],
     additionalProperties: false,
   },
 };
 
 const ALCOHOL_ENRICH_TOOL = {
-  name: "alcohol_enrichment",
+  name: "alcohol_enrichment" as const,
   description: "Return alcohol content estimate for a beverage",
   input_schema: {
     type: "object" as const,
     properties: {
-      standardDrinks: { type: "number" as const, description: "Estimated standard drinks" },
-      volumeMl: { type: "number" as const, description: "Estimated volume in ml" },
-      reasoning: { type: "string" as const, description: "Brief explanation" },
+      standardDrinks: { type: "number", description: "Estimated standard drinks" },
+      volumeMl: { type: "number", description: "Estimated volume in ml" },
+      reasoning: { type: "string", description: "Brief explanation" },
     },
-    required: ["standardDrinks", "volumeMl", "reasoning"] as const,
+    required: ["standardDrinks", "volumeMl", "reasoning"],
     additionalProperties: false,
   },
 };

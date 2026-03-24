@@ -58,16 +58,16 @@ Example response:
 // --- Tool Definition ---
 
 const PARSE_RESULT_TOOL = {
-  name: "parse_result",
+  name: "parse_result" as const,
   description: "Return parsed water and salt content from a food/drink description",
   input_schema: {
     type: "object" as const,
     properties: {
-      water: { type: ["number", "null"] as const, description: "Water content in ml, null if cannot estimate" },
-      salt: { type: ["number", "null"] as const, description: "Sodium content in mg, null if cannot estimate" },
-      reasoning: { type: "string" as const, description: "Brief explanation of the estimate" },
+      water: { type: ["number", "null"], description: "Water content in ml, null if cannot estimate" },
+      salt: { type: ["number", "null"], description: "Sodium content in mg, null if cannot estimate" },
+      reasoning: { type: "string", description: "Brief explanation of the estimate" },
     },
-    required: ["water", "salt", "reasoning"] as const,
+    required: ["water", "salt", "reasoning"],
     additionalProperties: false,
   },
 };
