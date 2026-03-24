@@ -48,9 +48,9 @@ Exceptions: Touch target minimum 44px height for preset grid buttons and action 
 | Role | Size | Weight | Line Height | Usage in this phase |
 |------|------|--------|-------------|---------------------|
 | Body | 14px | 400 (regular) | 1.5 | Field labels, helper text, recent entry rows, per-100ml display |
-| Label | 12px | 500 (medium) | 1.4 | Tab trigger text, "tap to edit" hint, muted annotations, unit suffixes |
+| Label | 12px | 400 (regular) | 1.4 | Tab trigger text, "tap to edit" hint, muted annotations, unit suffixes |
 | Heading | 18px | 600 (semibold) | 1.2 | Card header "LIQUIDS" label (text-lg font-semibold uppercase tracking-wide) |
-| Display | 30px | 700 (bold) | 1.1 | Pending amount value in water tab center (+250ml), daily total on water tab |
+| Display | 30px | 600 (semibold) | 1.1 | Pending amount value in water tab center (+250ml), daily total on water tab |
 
 ---
 
@@ -80,7 +80,7 @@ This phase uses **domain-specific color tokens** already defined in the project,
 
 - Active tab trigger indicator (`data-[state=active]:bg-background data-[state=active]:shadow-sm`)
 - Selected preset button border highlight (e.g. `bg-yellow-100 border-yellow-300` for coffee)
-- Confirm/Log button fill color
+- Confirm/Log Entry button fill color
 - Progress bar indicator (water tab only)
 - AI lookup icon button tint when idle
 - Over-limit warning uses `text-red-600 dark:text-red-400` (not theme accent)
@@ -100,7 +100,7 @@ When switching tabs, the card background gradient transitions smoothly. Use `tra
 | `LiquidsCard` | `src/components/liquids-card.tsx` | Outer card shell with Radix Tabs, tab-aware theming, header with icon + daily total |
 | `WaterTab` | `src/components/liquids/water-tab.tsx` | Lift of current IntakeCard water UX: +/- buttons, pending amount, manual input dialog, progress bar, recent entries |
 | `BeverageTab` | `src/components/liquids/beverage-tab.tsx` | Water-style +/- volume input + text field for drink name, logs as water intake with `beverage:{name}` source |
-| `PresetTab` | `src/components/liquids/preset-tab.tsx` | Shared component for Coffee and Alcohol tabs. Props: `type: "caffeine" \| "alcohol"`. Contains preset grid, AI text input, volume/substance fields, Log + Save & Log buttons |
+| `PresetTab` | `src/components/liquids/preset-tab.tsx` | Shared component for Coffee and Alcohol tabs. Props: `type: "caffeine" \| "alcohol"`. Contains preset grid, AI text input, volume/substance fields, Log Entry + Save & Log buttons |
 
 ### Reused Components (no changes needed)
 
@@ -108,7 +108,7 @@ When switching tabs, the card background gradient transitions smoothly. Use `tra
 |-----------|-------|
 | `Card`, `CardContent` | Outer card wrapper |
 | `Tabs`, `TabsList`, `TabsTrigger`, `TabsContent` | Tab structure |
-| `Button` | All buttons (preset grid, +/-, confirm, Log, Save & Log) |
+| `Button` | All buttons (preset grid, +/-, confirm, Log Entry, Save & Log) |
 | `Input` | Volume field, per-100ml field, beverage name field, AI text input |
 | `Progress` | Water tab progress bar |
 | `Label` | Field labels |
@@ -149,7 +149,7 @@ When switching tabs, the card background gradient transitions smoothly. Use `tra
 
 - Full-width `TabsList` with 4 `TabsTrigger` elements
 - `TabsList` className: `w-full grid grid-cols-4` (equal width columns)
-- Each trigger: `text-xs font-medium` (12px) to fit 4 tabs
+- Each trigger: `text-xs` (12px) to fit 4 tabs
 - Active trigger: standard shadcn active style (`bg-background text-foreground shadow-sm`)
 - Tab strip sits below the header, above tab content
 - Margin: `mb-4` below header to tab strip, `mt-4` from tab strip to content (via TabsContent default mt-2 + additional spacing)
@@ -172,7 +172,7 @@ Recent entries list                                   mt-4
 ```
 
 - Minus/Plus: `Button variant="outline" size="icon-lg"` (h-14, w-14, rounded-full)
-- Center value: `text-3xl font-bold tabular-nums` on tappable surface
+- Center value: `text-3xl font-semibold tabular-nums` on tappable surface
 - Confirm: `Button` full-width, h-12, themed `bg-sky-600`
 - Progress bar: `Progress` component, `h-3`, gradient fill
 - Over-limit: progress turns `bg-red-500`, total turns `text-red-600`
@@ -209,14 +209,14 @@ Volume (ml)          per 100ml
 
 Calculated: 525 mg caffeine                           mb-4
 
-[== Log ==] [== Save & Log ==]                        gap-3
+[== Log Entry ==] [== Save & Log ==]                  gap-3
 ```
 
 #### Preset Grid
 
 - 2-column grid: `grid grid-cols-2 gap-2`
 - Each preset button: `Button variant="outline" size="sm"` with min-height 40px
-- Content: preset name (left-aligned, `text-sm font-medium`) + volume hint (right-aligned, `text-xs text-muted-foreground`)
+- Content: preset name (left-aligned, `text-sm font-semibold`) + volume hint (right-aligned, `text-xs text-muted-foreground`)
 - Layout inside button: `flex items-center justify-between w-full`
 - Selected state: themed active toggle from CARD_THEMES (e.g. `bg-yellow-100 border-yellow-300` for caffeine)
 - Max 8 presets visible without scroll. If more than 8, show first 6 + "Show all" expansion
@@ -243,7 +243,7 @@ Calculated: 525 mg caffeine                           mb-4
 #### Calculated Amount Display
 
 - Full-width row below the fields
-- Format: `text-sm font-medium` with theme color
+- Format: `text-sm font-semibold` with theme color
 - Coffee: "{amount} mg caffeine" (e.g. "525 mg caffeine")
 - Alcohol: "{amount} standard drinks" (e.g. "1.5 standard drinks")
 - Calculation: `Math.round((volumeMl / 100) * substancePer100ml)` for caffeine, `((volumeMl / 100) * substancePer100ml).toFixed(1)` for alcohol
@@ -253,7 +253,7 @@ Calculated: 525 mg caffeine                           mb-4
 #### Action Buttons
 
 - Two buttons side by side: `grid grid-cols-2 gap-3`
-- "Log" button: `Button variant="outline"`, h-12, themed border color, full-width. Logs intake + substance record, does not save preset.
+- "Log Entry" button: `Button variant="outline"`, h-12, themed border color, full-width. Logs intake + substance record, does not save preset.
 - "Save & Log" button: `Button variant="default"`, h-12, themed fill color, full-width. Saves as preset then logs. Shows confirmation toast: "Saved {name} as preset and logged."
 - Both disabled when: `isSubmitting || volumeMl <= 0 || substancePer100ml <= 0`
 - "Save & Log" additionally disabled when: text input is empty (no name to save)
@@ -320,7 +320,7 @@ Calculated: 525 mg caffeine                           mb-4
 | Tab triggers | "Water" / "Beverage" / "Coffee" / "Alcohol" |
 | Water tab CTA | "Confirm Entry" |
 | Beverage tab CTA | "Log Beverage" |
-| Coffee/Alcohol Log CTA | "Log" |
+| Coffee/Alcohol Log CTA | "Log Entry" |
 | Coffee/Alcohol Save CTA | "Save & Log" |
 | Water pending hint | "tap to edit" |
 | AI input placeholder (coffee) | "Search beverage..." |
