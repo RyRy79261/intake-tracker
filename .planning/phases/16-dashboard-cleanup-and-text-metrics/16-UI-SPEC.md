@@ -141,6 +141,10 @@ Each metric row uses its domain theme color for the progress bar fill and the va
 
 ## Layout Specifications
 
+### Visual Focal Point
+
+**Primary visual anchor: TextMetrics section with per-domain colored progress bars.** The TextMetrics container is the first content block below InsightBadge and above all domain cards. Its domain-colored progress bars (water sky-to-cyan, salt amber-to-orange) against the neutral `bg-muted/50` surface create the strongest color contrast on the page, drawing the eye immediately on load. All other cards sit below in a secondary reading flow.
+
 ### Dashboard Page Order (D-09)
 
 ```
@@ -350,7 +354,7 @@ Liquid Presets                                     section heading
 | Empty list | "No custom presets. Default presets are always available." in `text-sm text-muted-foreground` |
 | Default preset | Name + badge "Default", no delete button, edit button available |
 | Custom preset | Name + edit + delete buttons |
-| Delete custom | Confirmation: "Delete {name}?" with Cancel and Delete buttons. Delete button uses `variant="destructive"`. |
+| Delete custom | Confirmation: "Delete {name}?" with "Keep Preset" and "Delete Preset" buttons. "Delete Preset" button uses `variant="destructive"`. |
 | Edit preset | Inline form or dialog with fields pre-filled. Save button: "Save Changes". Cancel dismisses without saving. |
 | Add preset | Same form as edit but empty. Save button: "Add Preset". |
 
@@ -394,8 +398,8 @@ Liquid Presets                                     section heading
 | Add preset CTA | "Add Preset" |
 | Edit preset CTA | "Save Changes" |
 | Delete preset confirmation | "Delete {name}?" |
-| Delete preset CTA | "Delete" |
-| Delete preset cancel | "Cancel" |
+| Delete preset CTA | "Delete Preset" |
+| Delete preset cancel | "Keep Preset" |
 | Multi-substance calculated display | Comma-separated: "{amt} mg caffeine, {amt} std drinks" (only present substances) |
 | Multi-substance log success toast | title: "Logged", description: "{name} recorded" |
 | Food calculator removed | (no replacement copy -- feature deleted) |
