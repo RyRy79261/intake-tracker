@@ -330,7 +330,11 @@ Plans:
   1. Dose schedule generation produces correct day-of-week slots for UTC+2 (SA) and UTC+1/UTC+2 DST (Germany) without manual user intervention
   2. Each dose log record stores the device timezone at the time of logging, enabling retrospective analysis of when doses were taken relative to local time
   3. Switching device timezone (simulating travel) does not duplicate or drop scheduled dose slots for the transition day
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 17-01-PLAN.md -- Timezone cache-busting + recalculateScheduleTimezones service + audit action + tests (TMZN-01)
+- [ ] 17-02-PLAN.md -- Timezone detection hook + confirmation dialog + provider wiring (TMZN-01)
 
 ## Progress
 
@@ -359,4 +363,4 @@ Note: Phase 14 and Phase 15 both depend on Phase 12 and 13 but are independent o
 | 14. Unified Liquids Card | v1.1 | 2/2 | Complete    | 2026-03-24 |
 | 15. Unified Food+Salt Card | v1.1 | 2/2 | Complete    | 2026-03-24 |
 | 16. Dashboard Cleanup and Text Metrics | v1.1 | 3/3 | Complete    | 2026-03-24 |
-| 17. Timezone-Aware Dose Logging | v1.1 | 0/0 | Not started | - |
+| 17. Timezone-Aware Dose Logging | v1.1 | 0/2 | Not started | - |
