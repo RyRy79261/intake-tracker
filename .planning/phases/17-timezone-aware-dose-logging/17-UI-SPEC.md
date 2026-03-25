@@ -48,11 +48,12 @@ Exceptions: none
 | Role | Size | Weight | Line Height |
 |------|------|--------|-------------|
 | Body | 14px (text-sm) | 400 (normal) | 1.5 |
-| Label | 14px (text-sm) | 500 (medium) | 1.5 |
 | Heading | 18px (text-lg) | 600 (semibold) | 1.2 |
 | Caption | 12px (text-xs) | 400 (normal) | 1.5 |
 
 Source: Matches existing dialog typography -- AlertDialogTitle uses `text-lg font-semibold`, AlertDialogDescription uses `text-sm text-muted-foreground`.
+
+**Primary focal point:** AlertDialogTitle ("Timezone Changed") + the "Adjust Schedules" primary button. These two elements anchor the user's attention and decision path within the dialog.
 
 ---
 
