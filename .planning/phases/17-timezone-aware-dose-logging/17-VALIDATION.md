@@ -2,8 +2,8 @@
 phase: 17
 slug: timezone-aware-dose-logging
 status: draft
-nyquist_compliant: false
-wave_0_complete: false
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-03-25
 ---
 
@@ -19,16 +19,16 @@ created: 2026-03-25
 |----------|-------|
 | **Framework** | vitest (via pnpm test) / Playwright (via pnpm test:e2e) |
 | **Config file** | `vitest.config.ts` / `playwright.config.ts` |
-| **Quick run command** | `pnpm test -- --run src/lib/dose-schedule-service.test.ts src/lib/timezone.test.ts` |
-| **Full suite command** | `pnpm test -- --run && pnpm test:e2e` |
+| **Quick run command** | `pnpm vitest run src/lib/timezone.test.ts src/lib/timezone-recalculation-service.test.ts src/hooks/use-timezone-detection.test.ts` |
+| **Full suite command** | `pnpm vitest run && pnpm test:e2e` |
 | **Estimated runtime** | ~15 seconds (unit) / ~60 seconds (e2e) |
 
 ---
 
 ## Sampling Rate
 
-- **After every task commit:** Run `pnpm test -- --run src/lib/dose-schedule-service.test.ts src/lib/timezone.test.ts`
-- **After every plan wave:** Run `pnpm test -- --run`
+- **After every task commit:** Run `pnpm vitest run src/lib/timezone.test.ts src/lib/timezone-recalculation-service.test.ts src/hooks/use-timezone-detection.test.ts`
+- **After every plan wave:** Run `pnpm vitest run`
 - **Before `/gsd:verify-work`:** Full suite must be green
 - **Max feedback latency:** 15 seconds
 
@@ -38,7 +38,11 @@ created: 2026-03-25
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| *Populated during planning* | | | TMZN-01 | unit + integration | `pnpm test -- --run` | ⬜ | ⬜ pending |
+| 17-01-T1 | 01 | 1 | TMZN-01 | unit | `pnpm vitest run src/lib/timezone.test.ts --reporter=verbose` | src/lib/timezone.test.ts | ⬜ pending |
+| 17-01-T2 | 01 | 1 | TMZN-01 | unit + integration | `pnpm vitest run src/lib/timezone-recalculation-service.test.ts src/lib/dose-schedule-service.test.ts --reporter=verbose` | src/lib/timezone-recalculation-service.test.ts | ⬜ pending |
+| 17-02-T1 | 02 | 2 | TMZN-01 | unit + build | `pnpm vitest run src/hooks/use-timezone-detection.test.ts --reporter=verbose && pnpm build` | src/hooks/use-timezone-detection.test.ts | ⬜ pending |
+| 17-02-T2 | 02 | 2 | TMZN-01 | build | `pnpm build` | src/app/providers.tsx | ⬜ pending |
+| 17-02-T3 | 02 | 2 | TMZN-01 | checkpoint | Manual verification | N/A | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -48,9 +52,9 @@ created: 2026-03-25
 
 - Existing `src/lib/dose-schedule-service.test.ts` covers base schedule generation
 - Existing `src/lib/dose-log-service.test.ts` covers dose log mutations
-- Existing `src/lib/timezone.test.ts` covers UTC<->local conversion
+- No existing `src/lib/timezone.test.ts` -- created by Plan 01 Task 1
 
-*Existing infrastructure covers base requirements. New timezone-specific test cases will be added as part of implementation tasks.*
+*New test files are created as part of implementation tasks (Plan 01 Task 1 creates timezone.test.ts, Plan 01 Task 2 creates timezone-recalculation-service.test.ts, Plan 02 Task 1 creates use-timezone-detection.test.ts).*
 
 ---
 
@@ -65,11 +69,11 @@ created: 2026-03-25
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 15s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 15s
+- [x] `nyquist_compliant: true` set in frontmatter
 
 **Approval:** pending
