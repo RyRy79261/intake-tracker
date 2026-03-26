@@ -369,6 +369,34 @@ describe("timezone behavior", () => {
     expect(slots[0]!.localTime).toBe("23:30");
     expect(slots[0]!.scheduledDate).toBe(TUESDAY);
   });
+
+  it("recalculateScheduleTimezones preserves wall-clock time for getDailyDoseSchedule", async () => {
+    const { recalculateScheduleTimezones } = await import("./timezone-recalculation-service");
+
+    // Seed schedule anchored at SA: 08:30 SA (UTC+2) = 06:30 UTC = 390 min
+    const rx = makePrescription({ createdAt: 1700000000000 });
+    const phase = makeMedicationPhase(rx.id);
+    const schedule = makePhaseSchedule(phase.id, {
+      scheduleTimeUTC: 390,
+      anchorTimezone: "Africa/Johannesburg",
+      daysOfWeek: [2], // Tuesday
+      time: "08:30",
+    });
+    const inv = makeInventoryItem(rx.id, { strength: 50, currentStock: 30 });
+
+    await db.prescriptions.add(rx);
+    await db.medicationPhases.add(phase);
+    await db.phaseSchedules.add(schedule);
+    await db.inventoryItems.add(inv);
+
+    // Recalculate to Berlin
+    await recalculateScheduleTimezones("Europe/Berlin");
+
+    // Query schedule for Tuesday in Berlin timezone
+    const slots = await getDailyDoseSchedule(TUESDAY, "Europe/Berlin");
+    expect(slots).toHaveLength(1);
+    expect(slots[0]!.localTime).toBe("08:30"); // wall-clock preserved
+  });
 });
 
 // ---------------------------------------------------------------------------
