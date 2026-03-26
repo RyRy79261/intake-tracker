@@ -37,7 +37,7 @@ Requirements for milestone v1.1 UI Overhaul. Each maps to roadmap phases.
 
 ### Timezone
 
-- [ ] **TMZN-01**: Dose log generation produces correct day-of-week schedules for both SA (UTC+2) and Germany (UTC+1/+2 DST) timezones, with device timezone stored per dose log
+- [x] **TMZN-01**: Dose log generation produces correct day-of-week schedules for both SA (UTC+2) and Germany (UTC+1/+2 DST) timezones, with device timezone stored per dose log
 
 ## v1.0 Requirements (completed)
 
@@ -163,7 +163,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DASH-08 | Phase 16 | Complete |
 | DASH-09 | Phase 16 | Complete |
 | DASH-10 | Phase 16 | Complete |
-| TMZN-01 | Phase 17 | Pending |
+| TMZN-01 | Phase 17 | Complete |
 
 **Coverage:**
 - v1.1 requirements: 17 total

@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: UI Overhaul
-status: Ready to plan
-stopped_at: Phase 17 context gathered
-last_updated: "2026-03-24T22:23:44.299Z"
+status: Ready to execute
+stopped_at: Completed 17-01-PLAN.md
+last_updated: "2026-03-26T00:20:00.784Z"
 progress:
   total_phases: 6
   completed_phases: 5
-  total_plans: 12
+  total_plans: 14
   completed_plans: 12
 ---
 
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-23)
 
 **Core value:** Accurate, queryable health data across intake, vitals, and medication adherence — structured for cross-domain analysis and future AI querying
-**Current focus:** Phase 16 — Dashboard Cleanup and Text Metrics
+**Current focus:** Phase 17 — timezone-aware-dose-logging
 
 ## Current Position
 
-Phase: 17
-Plan: Not started
+Phase: 17 (timezone-aware-dose-logging) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -58,6 +58,7 @@ Plan: Not started
 | Phase 16 P01 | 11min | 2 tasks | 6 files |
 | Phase 16 P02 | 9min | 2 tasks | 7 files |
 | Phase 16 P03 | 7min | 2 tasks | 19 files |
+| Phase 17 P01 | 7min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -97,6 +98,8 @@ Key decisions carrying forward into v1.1:
 - [Phase 16]: Liquid Presets manager uses inline edit forms in CustomizationPanel rather than separate dialogs
 - [Phase 16]: LIQUID_TYPE_OPTIONS removed alongside COFFEE_PRESETS (zero consumers after intake-card.tsx deletion)
 - [Phase 16]: utilityOrder cleanup added to v3 persist migration rather than bumping to v4
+- [Phase 17]: Wall-clock time preservation: recalculation converts UTC offset while keeping HH:MM identical
+- [Phase 17]: D-03 invariant enforced: recalculation never modifies doseLogs table
 
 ### Pending Todos
 
@@ -114,6 +117,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-24T22:23:44.291Z
-Stopped at: Phase 17 context gathered
-Resume file: .planning/phases/17-timezone-aware-dose-logging/17-CONTEXT.md
+Last session: 2026-03-26T00:20:00.778Z
+Stopped at: Completed 17-01-PLAN.md
+Resume file: None
