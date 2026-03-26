@@ -216,7 +216,6 @@ describe("composable-entry-service", () => {
       // Monkey-patch crypto.randomUUID to return the existing id on the second call
       const originalRandomUUID = crypto.randomUUID.bind(crypto);
       let callCount = 0;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (crypto as any).randomUUID = (): string => {
         callCount++;
         // First call = groupId, second call = eating record, third call = intake record
@@ -228,7 +227,6 @@ describe("composable-entry-service", () => {
         const result = await addComposableEntry(input);
         expect(result.success).toBe(false);
       } finally {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (crypto as any).randomUUID = originalRandomUUID;
       }
 

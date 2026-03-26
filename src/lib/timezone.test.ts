@@ -9,7 +9,6 @@ describe("clearTimezoneCache", () => {
     originalDateTimeFormat = Intl.DateTimeFormat;
     // Ensure `window` exists so getDeviceTimezone() reads from Intl API
     if (!hadWindow) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (globalThis as any).window = {};
     }
     // Always start with a clean cache
@@ -23,7 +22,6 @@ describe("clearTimezoneCache", () => {
     clearTimezoneCache();
     // Remove the window shim if we added it
     if (!hadWindow) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (globalThis as any).window;
     }
   });
