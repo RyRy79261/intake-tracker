@@ -348,7 +348,10 @@ Plans:
   2. `dismissInsight` and `isDismissed` either exist in the Settings store or their references are removed from InsightBadge and InsightsTab
   3. No TypeScript errors in `medication-settings-view.tsx`, `medication-settings-section.tsx`, or `substance-settings-section.tsx`
   4. Dashboard renders without runtime crashes when insights are active
-**Plans**: 0 plans (not yet planned)
+**Plans**: 1 plan
+
+Plans:
+- [ ] 18-01-PLAN.md -- Restore missing Settings store fields + fix ESLint import boundary violations
 
 ### Phase 19: AI Substance Lookup Enhancement
 **Goal**: The substance-lookup API returns waterContentPercent so AI-sourced beverage presets produce accurate hydration records
@@ -389,5 +392,5 @@ Note: Phase 14 and Phase 15 both depend on Phase 12 and 13 but are independent o
 | 15. Unified Food+Salt Card | v1.1 | 2/2 | Complete    | 2026-03-24 |
 | 16. Dashboard Cleanup and Text Metrics | v1.1 | 3/3 | Complete    | 2026-03-24 |
 | 17. Timezone-Aware Dose Logging | v1.1 | 2/2 | Complete    | 2026-03-26 |
-| 18. Build Stability and Dead Code Cleanup | v1.1 | 0/0 | Planned | - |
+| 18. Build Stability and Dead Code Cleanup | v1.1 | 0/1 | Planned | - |
 | 19. AI Substance Lookup Enhancement | v1.1 | 0/0 | Planned | - |
