@@ -11,6 +11,45 @@
  * - XSS attacks could potentially access stored data
  */
 
+// Obfuscate API key in memory (NOT encryption, just basic obfuscation)
+// This prevents casual inspection but NOT determined attackers
+const OBFUSCATION_KEY = 'intake-tracker-v1';
+
+export function obfuscateApiKey(key: string): string {
+  if (!key) return '';
+  try {
+    const encoded = btoa(
+      key
+        .split('')
+        .map((char, i) =>
+          String.fromCharCode(char.charCodeAt(0) ^ OBFUSCATION_KEY.charCodeAt(i % OBFUSCATION_KEY.length))
+        )
+        .join('')
+    );
+    return `obf:${encoded}`;
+  } catch {
+    return key;
+  }
+}
+
+export function deobfuscateApiKey(obfuscated: string): string {
+  if (!obfuscated) return '';
+  if (!obfuscated.startsWith('obf:')) return obfuscated;
+
+  try {
+    const encoded = obfuscated.slice(4);
+    const decoded = atob(encoded);
+    return decoded
+      .split('')
+      .map((char, i) =>
+        String.fromCharCode(char.charCodeAt(0) ^ OBFUSCATION_KEY.charCodeAt(i % OBFUSCATION_KEY.length))
+      )
+      .join('');
+  } catch {
+    return '';
+  }
+}
+
 // Validate and sanitize numeric input
 export function sanitizeNumericInput(value: string | number, min = 0, max = 100000): number {
   const num = typeof value === 'string' ? parseInt(value, 10) : value;

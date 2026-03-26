@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-23)
 ## Current Position
 
 Phase: 17 (timezone-aware-dose-logging) — EXECUTING
-Plan: 2 of 2
+Plan: 1 of 2
 
 ## Performance Metrics
 
