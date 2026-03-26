@@ -240,7 +240,7 @@ Plans:
 - [x] **Phase 14: Unified Liquids Card** - Tabbed water/coffee/alcohol card with preset-based logging and substance auto-calculation (completed 2026-03-24)
 - [x] **Phase 15: Unified Food+Salt Card** - Merged food and salt input with AI parsing that creates composable linked entries (completed 2026-03-24)
 - [x] **Phase 16: Dashboard Cleanup and Text Metrics** - BP heart rate visible, food calculator removed, text metrics, coffee settings migrated, card reordering (completed 2026-03-24)
-- [ ] **Phase 17: Timezone-Aware Dose Logging** - Correct day-of-week schedule generation for SA/Germany timezones with device timezone stored per dose log
+- [x] **Phase 17: Timezone-Aware Dose Logging** - Correct day-of-week schedule generation for SA/Germany timezones with device timezone stored per dose log (completed 2026-03-26)
 
 ## Phase Details
 
@@ -333,8 +333,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 17-01-PLAN.md -- Timezone cache-busting + recalculateScheduleTimezones service + audit action + tests (TMZN-01)
-- [ ] 17-02-PLAN.md -- Timezone detection hook + confirmation dialog + provider wiring (TMZN-01)
+- [x] 17-01-PLAN.md -- Timezone cache-busting + recalculateScheduleTimezones service + audit action + tests (TMZN-01)
+- [x] 17-02-PLAN.md -- Timezone detection hook + confirmation dialog + provider wiring (TMZN-01)
 
 ## Progress
 
@@ -363,4 +363,4 @@ Note: Phase 14 and Phase 15 both depend on Phase 12 and 13 but are independent o
 | 14. Unified Liquids Card | v1.1 | 2/2 | Complete    | 2026-03-24 |
 | 15. Unified Food+Salt Card | v1.1 | 2/2 | Complete    | 2026-03-24 |
 | 16. Dashboard Cleanup and Text Metrics | v1.1 | 3/3 | Complete    | 2026-03-24 |
-| 17. Timezone-Aware Dose Logging | v1.1 | 0/2 | Planned    |  |
+| 17. Timezone-Aware Dose Logging | v1.1 | 2/2 | Complete   | 2026-03-26 |

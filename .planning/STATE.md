@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: UI Overhaul
-status: Ready to execute
-stopped_at: Completed 17-01-PLAN.md
-last_updated: "2026-03-26T00:20:00.784Z"
+status: Phase complete — ready for verification
+stopped_at: Completed 17-02-PLAN.md
+last_updated: "2026-03-26T17:49:03.616Z"
 progress:
   total_phases: 6
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 14
-  completed_plans: 12
+  completed_plans: 14
 ---
 
 # Project State
@@ -59,6 +59,7 @@ Plan: 2 of 2
 | Phase 16 P02 | 9min | 2 tasks | 7 files |
 | Phase 16 P03 | 7min | 2 tasks | 19 files |
 | Phase 17 P01 | 7min | 2 tasks | 6 files |
+| Phase 17 P02 | 5min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -100,6 +101,8 @@ Key decisions carrying forward into v1.1:
 - [Phase 16]: utilityOrder cleanup added to v3 persist migration rather than bumping to v4
 - [Phase 17]: Wall-clock time preservation: recalculation converts UTC offset while keeping HH:MM identical
 - [Phase 17]: D-03 invariant enforced: recalculation never modifies doseLogs table
+- [Phase 17]: Module-level _dismissedThisSession flag resets on page reload (D-07) -- no localStorage needed
+- [Phase 17]: TimezoneGuard placed inside PinGateProvider so timezone dialog only shows after auth/PIN
 
 ### Pending Todos
 
@@ -117,6 +120,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-26T00:20:00.778Z
-Stopped at: Completed 17-01-PLAN.md
+Last session: 2026-03-26T17:49:03.612Z
+Stopped at: Completed 17-02-PLAN.md
 Resume file: None
