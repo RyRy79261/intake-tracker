@@ -59,7 +59,7 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 - ✓ Food calculator removed + 13 dead code files deleted (2,541 lines) — Phase 16
 - ✓ Coffee settings → Liquid Presets manager with multi-substance model (caffeine/alcohol/salt per-100ml + waterContentPercent) — Phase 16
 - ✓ Card reordering: TextMetrics → Liquids → Food+Salt → BP → Weight → Urination → Defecation — Phase 16
-- [ ] Timezone-aware dose log generation for SA/Germany travel (carry-over from v1.0)
+- ✓ Timezone-aware dose log generation for SA/Germany travel — Phase 17
 
 ### Out of Scope
 
@@ -117,4 +117,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-24 after Phase 16 completion*
+*Last updated: 2026-03-26 after Phase 17 completion*
