@@ -7,6 +7,8 @@ import { ThemeProvider, useTheme } from "next-themes";
 import { PinGateProvider } from "@/hooks/use-pin-gate";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { initStockRecalculation } from "@/lib/inventory-service";
+import { useTimezoneDetection } from "@/hooks/use-timezone-detection";
+import { TimezoneChangeDialog } from "@/components/medications/timezone-change-dialog";
 
 function makeQueryClient() {
   return new QueryClient({
@@ -66,8 +68,33 @@ function PrivyProviderWithTheme({
         },
       }}
     >
-      <PinGateProvider>{children}</PinGateProvider>
+      <PinGateProvider><TimezoneGuard>{children}</TimezoneGuard></PinGateProvider>
     </PrivyProvider>
+  );
+}
+
+function TimezoneGuard({ children }: { children: React.ReactNode }) {
+  const {
+    dialogOpen,
+    oldTimezone,
+    newTimezone,
+    isRecalculating,
+    handleConfirm,
+    handleDismiss,
+  } = useTimezoneDetection();
+
+  return (
+    <>
+      {children}
+      <TimezoneChangeDialog
+        open={dialogOpen}
+        oldTimezone={oldTimezone}
+        newTimezone={newTimezone}
+        isRecalculating={isRecalculating}
+        onConfirm={handleConfirm}
+        onDismiss={handleDismiss}
+      />
+    </>
   );
 }
 
@@ -92,7 +119,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-            <PinGateProvider>{children}</PinGateProvider>
+            <PinGateProvider><TimezoneGuard>{children}</TimezoneGuard></PinGateProvider>
           </ThemeProvider>
         </QueryClientProvider>
       </ErrorBoundary>
