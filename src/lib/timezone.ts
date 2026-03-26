@@ -22,6 +22,15 @@ export function getDeviceTimezone(): string {
   return _cachedTimezone;
 }
 
+/**
+ * Clear the cached timezone so the next getDeviceTimezone() call
+ * re-reads from the Intl API. Call this on app resume to detect
+ * timezone changes after travel.
+ */
+export function clearTimezoneCache(): void {
+  _cachedTimezone = null;
+}
+
 // ---------------------------------------------------------------------------
 // UTC offset helpers
 // ---------------------------------------------------------------------------

@@ -49,7 +49,8 @@ export type AuditAction =
   | "stock_recalculated"
   | "inventory_added"
   | "inventory_deleted"
-  | "titration_plan_updated";
+  | "titration_plan_updated"
+  | "timezone_adjusted";
 
 export interface AuditLog {
   id: string;
