@@ -7,7 +7,7 @@ This project is a personal health tracking PWA. v1.0 rebuilt the medication mana
 ## Milestones
 
 - **v1.0 Engineering Overhaul** - Phases 1-11 (shipped 2026-03-23)
-- **v1.1 UI Overhaul** - Phases 12-17 (in progress)
+- **v1.1 UI Overhaul** - Phases 12-19 (in progress)
 
 ## Phases
 
@@ -241,6 +241,8 @@ Plans:
 - [x] **Phase 15: Unified Food+Salt Card** - Merged food and salt input with AI parsing that creates composable linked entries (completed 2026-03-24)
 - [x] **Phase 16: Dashboard Cleanup and Text Metrics** - BP heart rate visible, food calculator removed, text metrics, coffee settings migrated, card reordering (completed 2026-03-24)
 - [x] **Phase 17: Timezone-Aware Dose Logging** - Correct day-of-week schedule generation for SA/Germany timezones with device timezone stored per dose log (completed 2026-03-26)
+- [ ] **Phase 18: Build Stability and Dead Code Cleanup** - Fix pnpm build failures, remove dead Settings store references, resolve missing store methods (gap closure)
+- [ ] **Phase 19: AI Substance Lookup Enhancement** - Add waterContentPercent to substance-lookup API response for accurate hydration tracking from AI-sourced presets (gap closure)
 
 ## Phase Details
 
@@ -336,11 +338,34 @@ Plans:
 - [x] 17-01-PLAN.md -- Timezone cache-busting + recalculateScheduleTimezones service + audit action + tests (TMZN-01)
 - [x] 17-02-PLAN.md -- Timezone detection hook + confirmation dialog + provider wiring (TMZN-01)
 
+### Phase 18: Build Stability and Dead Code Cleanup
+**Goal**: pnpm build passes with zero TypeScript/ESLint errors, and all Settings store references resolve to real methods
+**Depends on**: Phase 16 (dashboard cleanup)
+**Requirements**: Gap closure — no new REQ-IDs
+**Gap Closure**: Closes gaps from v1.1-MILESTONE-AUDIT.md
+**Success Criteria** (what must be TRUE):
+  1. `pnpm build` completes successfully with zero errors
+  2. `dismissInsight` and `isDismissed` either exist in the Settings store or their references are removed from InsightBadge and InsightsTab
+  3. No TypeScript errors in `medication-settings-view.tsx`, `medication-settings-section.tsx`, or `substance-settings-section.tsx`
+  4. Dashboard renders without runtime crashes when insights are active
+**Plans**: 0 plans (not yet planned)
+
+### Phase 19: AI Substance Lookup Enhancement
+**Goal**: The substance-lookup API returns waterContentPercent so AI-sourced beverage presets produce accurate hydration records
+**Depends on**: Phase 13 (substance-lookup route)
+**Requirements**: Gap closure — improves LIQD-03, LIQD-04 data quality
+**Gap Closure**: Closes gaps from v1.1-MILESTONE-AUDIT.md
+**Success Criteria** (what must be TRUE):
+  1. `/api/ai/substance-lookup` response includes `waterContentPercent` (0-100) in both the Zod schema and Claude tool definition
+  2. PresetTab uses the API-returned `waterContentPercent` instead of defaulting to 100%
+  3. Looking up "beer" via AI returns waterContentPercent ~93, not 100
+**Plans**: 0 plans (not yet planned)
+
 ## Progress
 
 **Execution Order:**
 v1.0: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 6.1 -> 7 -> 8 -> 9 -> 10 -> 11
-v1.1: 12 -> 13 -> 14 -> 15 -> 16 -> 17
+v1.1: 12 -> 13 -> 14 -> 15 -> 16 -> 17 -> 18 -> 19
 
 Note: Phase 14 and Phase 15 both depend on Phase 12 and 13 but are independent of each other -- they can execute in either order. Phase 17 depends only on Phase 11 and can execute in parallel with earlier v1.1 phases if needed.
 
@@ -364,3 +389,5 @@ Note: Phase 14 and Phase 15 both depend on Phase 12 and 13 but are independent o
 | 15. Unified Food+Salt Card | v1.1 | 2/2 | Complete    | 2026-03-24 |
 | 16. Dashboard Cleanup and Text Metrics | v1.1 | 3/3 | Complete    | 2026-03-24 |
 | 17. Timezone-Aware Dose Logging | v1.1 | 2/2 | Complete    | 2026-03-26 |
+| 18. Build Stability and Dead Code Cleanup | v1.1 | 0/0 | Planned | - |
+| 19. AI Substance Lookup Enhancement | v1.1 | 0/0 | Planned | - |
