@@ -1,491 +1,735 @@
-# Architecture Patterns
+# Architecture Patterns: CI & Data Integrity
 
-**Domain:** Composable data entries, unified input cards, AI substance lookup
-**Researched:** 2026-03-23
-**Supersedes:** 2026-03-02 architecture research (v1.0 milestone). Retains foundational patterns; adds composable entry layer.
+**Domain:** CI pipeline, E2E testing, data integrity gates, supply chain security
+**Project:** Intake Tracker v1.2
+**Researched:** 2026-03-27
+**Confidence:** HIGH (patterns verified against reference repo + official docs + existing codebase)
+
+## Current State Assessment
+
+### What Exists
+
+| Component | State | Location |
+|-----------|-------|----------|
+| Vitest unit tests | 28 test files, `fake-indexeddb` setup | `src/**/*.test.ts` |
+| Vitest config | Node environment, tsconfig paths | `vitest.config.ts` |
+| Playwright E2E | 3 specs (auth-bypass, intake-logs, medication-wizard) | `e2e/*.spec.ts` |
+| Playwright config | Chromium-only, webServer with LOCAL_AGENT_MODE | `playwright.config.ts` |
+| Migration tests | v10-v15, raw IndexedDB seeding pattern | `src/__tests__/migration/` |
+| Backup round-trip | Full 16-table export/import/verify | `src/__tests__/backup/round-trip.test.ts` |
+| Bundle security | API key leak detection in `.next/static` | `src/__tests__/bundle-security.test.ts` |
+| Test fixtures | Factory functions for all 16 table types | `src/__tests__/fixtures/db-fixtures.ts` |
+| GitHub workflows | Only `version-bump.yml` (on push to main) | `.github/workflows/` |
+| Coverage config | `@vitest/coverage-v8` installed, `test:coverage` script exists | `package.json` |
+
+### What Does Not Exist
+
+| Component | Notes |
+|-----------|-------|
+| CI workflow | No pull_request workflow at all |
+| Lint in CI | `pnpm lint` exists but never runs automatically |
+| Build verification | `pnpm build` never runs in CI |
+| Typecheck in CI | No `tsc --noEmit` in any workflow or script |
+| Coverage reporting | No PR comments, no baseline tracking |
+| Playwright in CI | No workflow to install browsers, run E2E |
+| Migration safety gates | Tests exist but nothing blocks a PR that breaks them |
+| Supply chain checks | No `pnpm audit`, no lockfile integrity checks |
+| Dynamic test selection | No path-based filtering |
+| PR title enforcement | No conventional commits check |
 
 ## Recommended Architecture
 
-### Core Concept: Entry Groups via `groupId` Foreign Key
+### Workflow Topology
 
-The composable data entry system links records across existing tables through a shared `groupId` field rather than introducing a new junction table or parent entity. This is the right pattern because:
-
-1. **Each child record remains independently valid** -- an eating record is still an eating record whether or not it was created as part of a group.
-2. **Existing service layer untouched for reads** -- queries that fetch eating records, intake records, or substance records continue to work without modification.
-3. **GroupId is an optional field** -- records created outside composable entries simply have `groupId: undefined`. No migration of existing data needed.
-4. **Dexie transactions already handle cross-table atomicity** -- the codebase has 25+ examples of `db.transaction("rw", [...tables], async () => {...})`.
-
-The alternative (a parent `EntryGroup` table with junction records) was rejected because it adds a table that contains no health data, just metadata. Every query would need a join. The parent table accumulates without providing queryable health information. Backup/restore gets more complex.
-
-The `groupId` pattern is already proven in this codebase: `SubstanceRecord.sourceRecordId` links to intake records, `InventoryTransaction.doseLogId` links to dose logs, `DailyNote.doseLogId` links to dose logs. The composable entry pattern generalizes this to a shared group key across N tables.
-
-### Component Boundaries
-
-| Component | Responsibility | Communicates With |
-|-----------|---------------|-------------------|
-| `composable-entry-service.ts` (NEW) | Atomic cross-table writes, cascading deletes, group queries | `db.ts` (direct), inherits validation patterns from existing services |
-| `use-composable-entry.ts` (NEW) | React hooks wrapping composable entry service | `composable-entry-service.ts` |
-| `LiquidsCard` (NEW) | Tabbed UI for water/coffee/alcohol input | `use-intake-queries`, `use-substance-queries`, `use-composable-entry` |
-| `FoodSaltCard` (NEW) | Unified food+salt input with AI parsing | `use-eating-queries`, `use-intake-queries`, `use-composable-entry` |
-| `TextMetrics` (NEW) | Today's limits, substance totals, weekly summary | `use-intake-queries`, `use-substance-queries`, `use-analytics-queries` |
-| `/api/ai/substance-lookup/route.ts` (NEW) | AI-powered caffeine/alcohol per-100ml lookup for presets | Perplexity API |
-| Liquid presets (NEW, Zustand) | Saved caffeine-per-100ml / alcohol-per-100ml user presets | `settings-store.ts` |
-
-### Data Flow
-
-**Composable Entry Creation (e.g., "scrambled eggs on toast with coffee"):**
 ```
-User input
-  -> AI parse (food -> water + salt estimates)
-  -> User confirms/adjusts
-  -> composable-entry-service.addComposableEntry({
-       eating: { note: "scrambled eggs on toast", grams: 200 },
-       intakes: [
-         { type: "water", amount: 89, source: "food:scrambled-eggs" },
-         { type: "salt", amount: 520, source: "food:scrambled-eggs" },
-       ],
-       substance: { type: "caffeine", amountMg: 95, volumeMl: 250, description: "filter coffee" }
-     })
-  -> Single db.transaction writes all records with same groupId + timestamp
-  -> useLiveQuery reactivity fires: intake totals, eating list, substance totals all update
+PR opened/synchronized
+    |
+    v
+[ci.yml] ---------> detect-changes (dorny/paths-filter)
+    |                    |
+    |                    +---> outputs: src, db, e2e, deps
+    |
+    +---> lint           (always)
+    +---> typecheck      (if src changed)
+    +---> unit-tests     (if src changed, matrix: 3 TZ)
+    +---> migration-gate (if db changed)
+    +---> build          (if src changed)
+    +---> bundle-security(after build, if src changed)
+    +---> coverage       (after unit-tests)
+    +---> e2e            (after build, if src or e2e changed)
+    +---> supply-chain   (if deps changed: package.json or pnpm-lock.yaml)
+
+[pr-title.yml] ----> conventional commits check (separate workflow)
+
+Push to main
+    |
+    v
+[version-bump.yml]   (existing)
+[codecov-base.yml]   (new - upload baseline coverage)
 ```
 
-**Cascading Delete:**
+### Single Workflow vs Multi-Workflow Decision
+
+**Use a single `ci.yml` workflow.** Rationale:
+
+1. The cipher-box reference repo splits into `ci.yml` + `e2e.yml` + `release-gate.yml` because it is a monorepo with separate Tauri desktop + web + API packages. This project is a single Next.js app -- the complexity overhead of multiple workflows is not justified.
+2. A single workflow with `dorny/paths-filter` + conditional `needs` achieves the same selective execution.
+3. GitHub's required status checks work most cleanly with jobs inside one workflow (avoids the "skipped workflow doesn't report status" footgun).
+
+Exception: `pr-title.yml` should be its own workflow because it has a different trigger (`types: [opened, edited, synchronize]`) and no dependency on code changes.
+
+## Component Boundaries
+
+### New Files to Create
+
+| File | Responsibility | Communicates With |
+|------|---------------|-------------------|
+| `.github/workflows/ci.yml` | Main CI orchestration | All test/lint/build jobs |
+| `.github/workflows/pr-title.yml` | PR title conventional commits check | None (standalone) |
+| `.github/workflows/codecov-base.yml` | Upload coverage baseline on main push | ci.yml coverage artifact |
+| `src/__tests__/schema/schema-snapshot.test.ts` | Validates db.ts schema against snapshot | `db.ts` |
+| `src/__tests__/schema/__snapshots__/` | Snapshot files for schema state | schema-snapshot test |
+| `scripts/check-supply-chain.sh` | Package age + audit wrapper | pnpm-lock.yaml |
+
+### Existing Files to Modify
+
+| File | Change | Why |
+|------|--------|-----|
+| `playwright.config.ts` | Add CI reporter (github, blob), CI-aware webServer command | CI needs machine-readable output + built app |
+| `vitest.config.ts` | Add coverage thresholds, reporters | Coverage gates + PR reporting |
+| `package.json` | Add `test:migration`, `test:schema` scripts | Explicit CI entry points |
+
+### Files That Must NOT Change
+
+| File | Why |
+|------|-----|
+| `src/lib/db.ts` | This milestone is about protecting it, not changing it |
+| `src/__tests__/setup.ts` | Existing setup is correct for unit tests |
+| `e2e/*.spec.ts` (existing) | Existing E2E tests are valid; new tests extend, not replace |
+
+## Data Flow: PR to CI to Feedback
+
 ```
-User deletes the eating record from a group
-  -> UI offers: "Delete this item only" vs "Delete all linked entries"
-  -> If "all": composable-entry-service.deleteEntryGroup(groupId)
-    -> Single db.transaction:
-       - Soft-delete all records where groupId matches across 3 tables
-       - Each table queried via groupId index
-  -> If "this only": eating-service.deleteEatingRecord(id)
-    -> Only that record deleted; groupId link preserved on siblings
+Developer opens PR
+    |
+    v
+GitHub triggers ci.yml (pull_request on main)
+    |
+    +---> dorny/paths-filter analyzes changed files
+    |     outputs: { src: true, db: false, e2e: true, deps: false }
+    |
+    +---> lint (always): pnpm lint
+    |     result: pass/fail status check
+    |
+    +---> typecheck (if src): npx tsc --noEmit
+    |     result: pass/fail status check
+    |
+    +---> unit-tests (if src):
+    |     matrix: [UTC, Africa/Johannesburg, Europe/Berlin]
+    |     - TZ=${{ matrix.tz }} pnpm test
+    |     result: pass/fail + coverage JSON artifacts (UTC run only)
+    |
+    +---> migration-gate (if db changed):
+    |     - pnpm vitest run src/__tests__/migration/
+    |     - pnpm vitest run src/__tests__/schema/
+    |     - pnpm vitest run src/__tests__/backup/round-trip.test.ts
+    |     result: pass/fail (BLOCKING -- protects live data)
+    |
+    +---> build (if src): pnpm build
+    |     result: pass/fail + .next/ artifact for downstream
+    |
+    +---> bundle-security (after build):
+    |     - pnpm vitest run src/__tests__/bundle-security.test.ts
+    |     result: pass/fail (verifies no API key leaks)
+    |
+    +---> e2e (after build, if src|e2e):
+    |     - Install Playwright Chromium
+    |     - NEXT_PUBLIC_LOCAL_AGENT_MODE=true pnpm exec playwright test
+    |     result: pass/fail + playwright-report artifact
+    |
+    +---> coverage (after unit-tests):
+    |     - davelosert/vitest-coverage-report-action
+    |     result: PR comment with coverage summary + delta
+    |
+    +---> supply-chain (if deps):
+    |     - pnpm install --frozen-lockfile
+    |     - pnpm audit --audit-level=high
+    |     result: pass/fail
+    |
+    v
+All checks reported as GitHub status checks
+PR mergeable only if all required checks pass
 ```
 
-**Independent Edit:**
+## CI Job Dependency Graph
+
 ```
-User edits the salt amount on a linked salt record
-  -> Normal intake-service.updateIntakeRecord(id, { amount: 500 })
-  -> Only that record changes; groupId link preserved
-  -> Existing useLiveQuery hooks automatically reflect the change
-```
-
-**AI Substance Lookup (for presets):**
-```
-User types "cortado" in coffee tab preset creator
-  -> POST /api/ai/substance-lookup { name: "cortado", type: "caffeine" }
-  -> Response: { per100ml: 212, defaultVolumeMl: 120, reasoning: "..." }
-  -> User confirms, preset saved to Zustand: { name: "Cortado", caffeinePer100ml: 212, defaultVolumeMl: 120 }
-  -> Next time user selects "Cortado" preset: caffeine auto-calculated from volume
-```
-
-## Schema Changes (Dexie v15)
-
-### New Fields on Existing Interfaces
-
-Add `groupId?: string` to these interfaces in `db.ts`:
-- `IntakeRecord`
-- `EatingRecord`
-- `SubstanceRecord`
-
-These are the only tables that participate in composable entries. Weight, BP, urination, defecation, and medication tables remain standalone -- they have no use case for linked creation.
-
-### New Index Definition
-
-```typescript
-db.version(15).stores({
-  // Modified: add groupId index
-  intakeRecords:        "id, [type+timestamp], timestamp, source, groupId, updatedAt",
-  eatingRecords:        "id, timestamp, groupId, updatedAt",
-  substanceRecords:     "id, [type+timestamp], type, timestamp, source, sourceRecordId, groupId, updatedAt",
-
-  // Unchanged: repeat all v14 definitions exactly
-  weightRecords:        "id, timestamp, updatedAt",
-  bloodPressureRecords: "id, timestamp, position, arm, updatedAt",
-  urinationRecords:     "id, timestamp, updatedAt",
-  defecationRecords:    "id, timestamp, updatedAt",
-  prescriptions:        "id, isActive, updatedAt, createdAt",
-  medicationPhases:     "id, prescriptionId, status, type, titrationPlanId, updatedAt",
-  phaseSchedules:       "id, phaseId, time, enabled, updatedAt",
-  inventoryItems:       "id, prescriptionId, isActive, updatedAt",
-  inventoryTransactions:"id, [inventoryItemId+timestamp], inventoryItemId, timestamp, type, updatedAt",
-  doseLogs:             "id, [prescriptionId+scheduledDate], prescriptionId, phaseId, scheduleId, scheduledDate, scheduledTime, status, updatedAt",
-  dailyNotes:           "id, date, prescriptionId, doseLogId, updatedAt",
-  auditLogs:            "id, [action+timestamp], timestamp, action",
-  titrationPlans:       "id, conditionLabel, status, updatedAt",
-});
-// No upgrade function needed.
+detect-changes ----+
+    |               |
+    v               v
+  lint          pr-title (separate workflow)
+    |
+    +---> typecheck ------+
+    |                     |
+    +---> unit-tests --+  |
+    |     (matrix: 3)  |  |
+    |                  v  v
+    |              coverage
+    |
+    +---> migration-gate (if db changed)
+    |
+    +---> build ----------+
+    |                     |
+    +---> bundle-security (after build)
+    |                     |
+    +---> e2e (after build)
+    |
+    +---> supply-chain (if deps changed)
 ```
 
-**Why no migration:** `groupId` is optional. Existing records have `undefined` for this field, and IndexedDB excludes `undefined` values from index entries. Existing queries on other indexes are completely unaffected. No data backfill required.
+Jobs that must be required status checks for merge:
+- `lint`
+- `typecheck` (when triggered)
+- `unit-tests` (when triggered)
+- `migration-gate` (when triggered)
+- `build` (when triggered)
+- `e2e` (when triggered)
 
-### Liquid Presets (Zustand, NOT Dexie)
-
-Presets are user preferences, not health data. They belong in Zustand/localStorage alongside existing settings like `coffeeDefaultType`, `waterIncrement`, etc.
-
-```typescript
-// Added to settings-store.ts
-
-interface LiquidPreset {
-  id: string;
-  name: string;                // "Cortado", "Craft IPA", "Green Tea"
-  category: 'coffee' | 'alcohol' | 'other';
-  defaultVolumeMl: number;     // typical serving size
-  caffeinePer100ml?: number;   // mg per 100ml (coffee/tea)
-  alcoholPer100ml?: number;    // grams pure alcohol per 100ml
-  isDefault?: boolean;         // built-in presets (cannot be deleted)
-}
-
-// State additions:
-liquidPresets: LiquidPreset[];
-addLiquidPreset: (preset: Omit<LiquidPreset, 'id'>) => void;
-updateLiquidPreset: (id: string, updates: Partial<LiquidPreset>) => void;
-deleteLiquidPreset: (id: string) => void;
-```
-
-**Why Zustand not Dexie:** Presets are configuration, not time-series health data. They don't need timestamps, soft-delete, deviceId, or sync fields. The existing `COFFEE_PRESETS` constant in `constants.ts` proves the pattern -- this just makes them user-editable and AI-populatable. If future cloud sync is needed, Zustand's localStorage persistence is trivially syncable as a single settings blob.
-
-**Migration from existing COFFEE_PRESETS:** The default `liquidPresets` array in the store initializer includes the current 4 coffee presets (espresso 30ml, double-espresso 60ml, moka 50ml, other 0ml) as `isDefault: true` entries. The `COFFEE_PRESETS` constant in `constants.ts` is then deprecated.
+Jobs that inform but should not block merge:
+- `coverage` (provides PR comment; threshold enforcement is in vitest config)
+- `pr-title` (enforce once commit conventions are stable)
 
 ## Patterns to Follow
 
-### Pattern 1: Composable Entry Service
+### Pattern 1: Path-Based Change Detection
 
-The new service sits alongside existing services, not above them. It uses `db` directly (same as all other services) and wraps multi-table writes in a single transaction.
+**What:** Use `dorny/paths-filter@v3` as the first job to conditionally skip expensive jobs when irrelevant files change.
 
-**What:** A service that creates/deletes linked records across tables atomically.
-**When:** Any input that creates records in 2+ tables simultaneously.
+**When:** Every PR workflow invocation.
+
+**Implementation:**
+
+```yaml
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      src: ${{ steps.filter.outputs.src }}
+      db: ${{ steps.filter.outputs.db }}
+      e2e: ${{ steps.filter.outputs.e2e }}
+      deps: ${{ steps.filter.outputs.deps }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            src:
+              - 'src/**'
+              - 'public/**'
+              - 'next.config.js'
+              - 'tsconfig.json'
+              - 'tailwind.config.ts'
+              - 'postcss.config.js'
+            db:
+              - 'src/lib/db.ts'
+              - 'src/lib/*-service.ts'
+              - 'src/__tests__/migration/**'
+              - 'src/__tests__/backup/**'
+              - 'src/__tests__/schema/**'
+            e2e:
+              - 'e2e/**'
+              - 'playwright.config.ts'
+            deps:
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+```
+
+**Why this filter set:** The `db` filter is deliberately broad -- any change to a service file could introduce a query against a new index or column that requires a migration. Catching this early prevents "works on dev, breaks on upgrade" scenarios.
+
+### Pattern 2: Migration Safety Gate
+
+**What:** A dedicated job that runs migration tests, schema snapshot tests, and backup round-trip verification whenever `db.ts` or service files change.
+
+**When:** Any PR touching data layer files.
+
+The migration gate has three sub-checks:
+
+1. **Migration chain tests** (`src/__tests__/migration/v*.test.ts`): Verify each upgrade path produces correct data. Already exist for v10-v15.
+
+2. **Schema snapshot test** (NEW): Extract the current Dexie schema definitions programmatically and compare against a committed snapshot. If the schema changes, the snapshot must be explicitly updated -- forcing the developer to acknowledge they are changing the data model.
 
 ```typescript
-// src/lib/composable-entry-service.ts
+// src/__tests__/schema/schema-snapshot.test.ts
+import { describe, it, expect } from "vitest";
+import { db } from "@/lib/db";
 
-import { db } from "./db";
-import { ok, err, type ServiceResult } from "./service-result";
-import { generateId, syncFields } from "./utils";
+describe("schema snapshot", () => {
+  it("current schema matches committed snapshot", () => {
+    const schema = db.tables.map(t => ({
+      name: t.name,
+      schema: t.schema.primKey.src + ", " +
+        t.schema.indexes.map(i => i.src).join(", "),
+    })).sort((a, b) => a.name.localeCompare(b.name));
 
-interface ComposableIntakeInput {
-  type: "water" | "salt";
-  amount: number;
-  source?: string;
-  note?: string;
-}
+    expect(schema).toMatchSnapshot();
+  });
 
-interface ComposableSubstanceInput {
-  type: "caffeine" | "alcohol";
-  amountMg?: number;
-  amountStandardDrinks?: number;
-  volumeMl?: number;
-  description: string;
-}
+  it("database version is expected value", () => {
+    // Dexie multiplies by 10 internally. Declared latest is v15.
+    expect(db.verno).toBe(15);
+  });
+});
+```
 
-interface ComposableEntryInput {
-  eating?: { note?: string; grams?: number };
-  intakes?: ComposableIntakeInput[];
-  substance?: ComposableSubstanceInput;
-}
+3. **Backup round-trip** (`src/__tests__/backup/round-trip.test.ts`): Already exists. Ensures export + clear + import restores all 16 tables. Include in the gate because a schema change that breaks serialization would destroy user data.
 
-interface ComposableEntryResult {
-  groupId: string;
-  eatingId?: string;
-  intakeIds: string[];
-  substanceId?: string;
-}
+**Why this is the most important CI check:** The user's production data lives on their phone in IndexedDB with no server-side backup. A bad migration or broken backup means irrecoverable data loss.
 
-export async function addComposableEntry(
-  input: ComposableEntryInput,
-  timestamp?: number
-): Promise<ServiceResult<ComposableEntryResult>> {
-  const groupId = generateId();
-  const ts = timestamp ?? Date.now();
-  const fields = syncFields();
-  const result: ComposableEntryResult = { groupId, intakeIds: [] };
+### Pattern 3: Timezone Dual-Pass Testing
 
-  try {
-    await db.transaction(
-      "rw",
-      [db.intakeRecords, db.eatingRecords, db.substanceRecords],
-      async () => {
-        // Eating record
-        if (input.eating) {
-          const id = generateId();
-          await db.eatingRecords.add({
-            id, timestamp: ts, groupId,
-            ...(input.eating.note && { note: input.eating.note }),
-            ...(input.eating.grams && { grams: input.eating.grams }),
-            ...fields,
-          });
-          result.eatingId = id;
-        }
+**What:** Run the full unit test suite three times under different TZ environment variables.
 
-        // Intake records (water, salt from food parsing)
-        for (const intake of input.intakes ?? []) {
-          const id = generateId();
-          await db.intakeRecords.add({
-            id, timestamp: ts, groupId,
-            type: intake.type,
-            amount: intake.amount,
-            source: intake.source ?? "composable",
-            ...(intake.note && { note: intake.note }),
-            ...fields,
-          });
-          result.intakeIds.push(id);
-        }
+**When:** Any PR touching `src/**`.
 
-        // Substance record + its linked water intake
-        if (input.substance) {
-          const substanceId = generateId();
-          await db.substanceRecords.add({
-            id: substanceId, timestamp: ts, groupId,
-            type: input.substance.type,
-            ...(input.substance.amountMg !== undefined && { amountMg: input.substance.amountMg }),
-            ...(input.substance.amountStandardDrinks !== undefined && {
-              amountStandardDrinks: input.substance.amountStandardDrinks,
-            }),
-            ...(input.substance.volumeMl !== undefined && { volumeMl: input.substance.volumeMl }),
-            description: input.substance.description,
-            source: "standalone",
-            aiEnriched: false,
-            ...fields,
-          });
-          result.substanceId = substanceId;
+```yaml
+unit-tests:
+  needs: [detect-changes, lint]
+  if: needs.detect-changes.outputs.src == 'true'
+  runs-on: ubuntu-latest
+  strategy:
+    matrix:
+      tz: ['UTC', 'Africa/Johannesburg', 'Europe/Berlin']
+  steps:
+    - uses: actions/checkout@v4
+    - uses: pnpm/action-setup@v4
+      with: { version: 10 }
+    - uses: actions/setup-node@v4
+      with: { node-version: '18', cache: 'pnpm' }
+    - run: pnpm install --frozen-lockfile
+    - name: Run tests (TZ=${{ matrix.tz }})
+      run: pnpm test
+      env:
+        TZ: ${{ matrix.tz }}
+    - name: Generate coverage (UTC only)
+      if: matrix.tz == 'UTC'
+      run: pnpm test:coverage
+    - uses: actions/upload-artifact@v4
+      if: matrix.tz == 'UTC'
+      with:
+        name: coverage
+        path: coverage/
+```
 
-          // Substance volume counts as water intake for fluid balance
-          if (input.substance.volumeMl) {
-            const intakeId = generateId();
-            await db.intakeRecords.add({
-              id: intakeId, timestamp: ts, groupId,
-              type: "water",
-              amount: input.substance.volumeMl,
-              source: `substance:${substanceId}`,
-              note: input.substance.description,
-              ...fields,
-            });
-            result.intakeIds.push(intakeId);
-          }
-        }
-      }
-    );
+**Why:** The user travels between South Africa and Germany. Timezone-dependent bugs in date parsing, schedule generation, and migration backfill are the project's #1 historical bug category. The existing `test:tz:sa` and `test:tz:de` scripts prove this was already a concern.
 
-    return ok(result);
-  } catch (e) {
-    return err("Failed to create composable entry", e);
-  }
-}
+Only the UTC pass generates coverage to avoid double-counting.
 
-export async function deleteEntryGroup(
-  groupId: string
-): Promise<ServiceResult<{ deletedCount: number }>> {
-  const now = Date.now();
-  let deletedCount = 0;
+### Pattern 4: E2E with Build Artifact Reuse
 
-  try {
-    await db.transaction(
-      "rw",
-      [db.intakeRecords, db.eatingRecords, db.substanceRecords],
-      async () => {
-        // Soft-delete all records sharing this groupId
-        for (const table of [db.intakeRecords, db.eatingRecords, db.substanceRecords]) {
-          const records = await table.where("groupId").equals(groupId).toArray();
-          for (const r of records) {
-            await table.update(r.id, { deletedAt: now, updatedAt: now });
-            deletedCount++;
-          }
-        }
-      }
-    );
+**What:** Build once, reuse the `.next/` output for both bundle-security and E2E tests.
 
-    return ok({ deletedCount });
-  } catch (e) {
-    return err("Failed to delete entry group", e);
-  }
-}
+**When:** E2E tests need a running server.
 
-export async function getEntryGroup(groupId: string) {
-  const [intakes, eatings, substances] = await Promise.all([
-    db.intakeRecords.where("groupId").equals(groupId).toArray(),
-    db.eatingRecords.where("groupId").equals(groupId).toArray(),
-    db.substanceRecords.where("groupId").equals(groupId).toArray(),
-  ]);
-  return {
-    intakes: intakes.filter(r => r.deletedAt === null),
-    eatings: eatings.filter(r => r.deletedAt === null),
-    substances: substances.filter(r => r.deletedAt === null),
-  };
+```yaml
+build:
+  needs: [detect-changes, typecheck]
+  if: needs.detect-changes.outputs.src == 'true'
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@v4
+    # ... setup pnpm, node, install
+    - run: pnpm build
+    - uses: actions/upload-artifact@v4
+      with:
+        name: nextjs-build
+        path: .next/
+        retention-days: 1
+
+e2e:
+  needs: [detect-changes, build]
+  if: >-
+    needs.detect-changes.outputs.src == 'true' ||
+    needs.detect-changes.outputs.e2e == 'true'
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@v4
+    # ... setup pnpm, node, install
+    - uses: actions/download-artifact@v4
+      with: { name: nextjs-build, path: .next/ }
+    - run: pnpm exec playwright install chromium --with-deps
+    - run: pnpm exec playwright test
+      env:
+        CI: true
+        NEXT_PUBLIC_LOCAL_AGENT_MODE: true
+    - uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: playwright-report
+        path: playwright-report/
+        retention-days: 7
+```
+
+**Recommended change to `playwright.config.ts`:**
+
+The existing config uses `pnpm run dev` for the webServer. In CI, use `pnpm start` against the built artifact instead -- it is faster and catches production build issues (especially with next-pwa which is disabled in development):
+
+```typescript
+webServer: {
+  command: process.env.CI
+    ? 'NEXT_PUBLIC_LOCAL_AGENT_MODE=true pnpm start'
+    : 'NEXT_PUBLIC_LOCAL_AGENT_MODE=true pnpm run dev',
+  url: 'http://localhost:3000',
+  reuseExistingServer: !process.env.CI,
+  stdout: 'pipe',
+  stderr: 'pipe',
+  timeout: 120 * 1000,
+},
+```
+
+### Pattern 5: Coverage Tracking with PR Comments
+
+**What:** Generate coverage report on PRs, post as comment, enforce minimum thresholds.
+
+**When:** Every PR with source code changes.
+
+```yaml
+coverage:
+  needs: [unit-tests]
+  runs-on: ubuntu-latest
+  permissions:
+    pull-requests: write
+  steps:
+    - uses: actions/checkout@v4
+    - uses: actions/download-artifact@v4
+      with: { name: coverage, path: coverage/ }
+    - uses: davelosert/vitest-coverage-report-action@v2
+      with:
+        json-summary-path: coverage/coverage-summary.json
+        json-final-path: coverage/coverage-final.json
+```
+
+**Vitest config addition:**
+
+```typescript
+// vitest.config.ts
+test: {
+  coverage: {
+    provider: "v8",
+    reporter: ["text", "json-summary", "json", "lcov"],
+    reportsDirectory: "coverage",
+    thresholds: {
+      // Start conservative, ratchet up over time
+      statements: 40,
+      branches: 30,
+      functions: 35,
+      lines: 40,
+    },
+  },
 }
 ```
 
-### Pattern 2: Unified Card with Tabs (LiquidsCard)
+**Why start with low thresholds:** The codebase is ~44K LOC with 28 test files. Attempting to enforce 80% coverage from day one would block all PRs. Measure current coverage first, set thresholds 2% below that, then ratchet up as tests are added.
 
-**What:** Single card component with tabs for water/coffee/alcohol, replacing the current liquid type dropdown in `intake-card.tsx`.
-**When:** The main intake dashboard.
+### Pattern 6: Supply Chain Hardening
 
-```
-LiquidsCard
-  |-- TabBar: [Water] [Coffee] [Alcohol]
-  |
-  |-- WaterTab:
-  |     Preserves EXACT existing UX: increment buttons, +/- amount, manual entry.
-  |     Uses existing useIntake("water") hook directly (no composable entry needed).
-  |     Single-table write: intake-service.addIntakeRecord("water", amount).
-  |
-  |-- CoffeeTab:
-  |     Preset selector (from Zustand liquidPresets where category === 'coffee')
-  |     Volume input (seeded from preset.defaultVolumeMl)
-  |     Caffeine auto-calculated: (volume / 100) * preset.caffeinePer100ml
-  |     AI FAB: calls /api/ai/substance-lookup to populate a new preset
-  |     On submit: composable-entry-service.addComposableEntry({
-  |       substance: { type: "caffeine", amountMg, volumeMl, description },
-  |       // No separate water intake needed -- substance service creates linked intake
-  |     })
-  |
-  |-- AlcoholTab:
-  |     Same pattern as CoffeeTab but with alcohol presets
-  |     Standard drinks auto-calculated from alcohol-per-100ml * volume
+**What:** Audit dependencies, verify lockfile integrity, optionally block packages newer than 24 hours.
+
+**When:** Any PR changing `package.json` or `pnpm-lock.yaml`.
+
+```yaml
+supply-chain:
+  needs: [detect-changes]
+  if: needs.detect-changes.outputs.deps == 'true'
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@v4
+    - uses: pnpm/action-setup@v4
+      with: { version: 10 }
+    - uses: actions/setup-node@v4
+      with: { node-version: '18', cache: 'pnpm' }
+    - name: Verify lockfile integrity
+      run: pnpm install --frozen-lockfile
+    - name: Audit for high/critical vulnerabilities
+      run: pnpm audit --audit-level=high
+    - name: Check package ages (24h minimum)
+      run: bash scripts/check-supply-chain.sh
 ```
 
-**Key integration point:** The Water tab preserves the existing `useIntake("water")` hook and increment button UX exactly. Coffee and Alcohol tabs use the composable entry service which creates both the substance record AND the linked water intake record atomically (same pattern as current `substance-service.ts` line 39-49, but through composable entry for consistency).
+The `check-supply-chain.sh` script should:
+1. Parse `pnpm-lock.yaml` for new/changed packages (diff against main)
+2. Query npm registry for publish dates
+3. Fail if any newly-added package was published less than 24 hours ago
 
-### Pattern 3: AI Substance Lookup Route
+**Why 24 hours:** The npm "Shai Hulud" attack (September 2025) and the self-replicating worm (November 2025) both relied on rapid compromise followed by quick installations. A 24-hour delay gives the community time to detect and report malicious packages.
 
-**What:** New API route for looking up caffeine-per-100ml or alcohol-per-100ml for a beverage name.
-**When:** User creates a new liquid preset or uses the AI FAB on coffee/alcohol tabs.
+### Pattern 7: Fail-Fast with Lint Gate
 
+**What:** Lint runs unconditionally and fast. Expensive jobs wait for lint to pass.
+
+**When:** Every PR.
+
+**Why:** No point running 2-minute E2E tests if there are lint errors.
+
+```yaml
+typecheck:
+  needs: [detect-changes, lint]  # lint must pass first
+  if: needs.detect-changes.outputs.src == 'true'
+
+unit-tests:
+  needs: [detect-changes, lint]  # lint must pass first
+  if: needs.detect-changes.outputs.src == 'true'
 ```
-POST /api/ai/substance-lookup
-  Body: { name: "cortado", type: "caffeine" | "alcohol" }
-  Response: {
-    per100ml: number,         // mg caffeine or grams pure alcohol per 100ml
-    defaultVolumeMl: number,  // typical serving size for this beverage
-    reasoning: string
-  }
-```
-
-**Why a separate route from `/api/ai/substance-enrich`:** The existing enrich route takes a free-text description and returns absolute amounts for a specific drink instance (e.g., "95mg caffeine in this 250ml coffee"). The lookup route takes a beverage name and returns per-100ml rates for saving as a reusable preset (e.g., "cortado has 212mg caffeine per 100ml, typical serving 120ml"). Different prompts, different response schemas, different use cases. The existing route continues to work for backward-compatible substance enrichment.
-
-**Implementation follows the established pattern:** Same structure as `/api/ai/substance-enrich/route.ts` -- Zod request/response validation, `withAuth` middleware, rate limiting, `sanitizeForAI`, Perplexity API call with retry.
-
-### Pattern 4: Food+Salt Card AI Integration
-
-**What:** The unified Food+Salt card sends food descriptions to the existing `/api/ai/parse` route, then uses the response to auto-create linked entries via composable entry service.
-**When:** User describes food in the food card's AI input.
-
-```
-User types: "scrambled eggs on toast with butter"
-  -> POST /api/ai/parse { input: "scrambled eggs on toast with butter" }
-  -> Response: { water: 89, salt: 520, reasoning: "..." }
-  -> UI shows preview: eating record (auto), +89ml water (toggle), +520mg salt (toggle)
-  -> User can adjust any value or toggle off water/salt auto-creation
-  -> On confirm: composable-entry-service.addComposableEntry({
-       eating: { note: "scrambled eggs on toast with butter" },
-       intakes: [
-         { type: "water", amount: 89, source: "food:scrambled-eggs-on-toast" },
-         { type: "salt", amount: 520, source: "food:scrambled-eggs-on-toast" },
-       ]
-     })
-```
-
-**No changes to `/api/ai/parse` needed.** The existing route already returns water + salt estimates. The change is purely client-side: instead of creating separate unlinked records, the UI creates a composable entry with all records sharing a groupId.
-
-**Manual salt input (salt tablets, seasoning):** Remains a standalone intake record via `addIntakeRecord("salt", amount)`. No groupId needed -- it's not linked to a food entry.
 
 ## Anti-Patterns to Avoid
 
-### Anti-Pattern 1: Parent Entity Table
-**What:** Creating a `ComposableEntry` table that acts as a parent, with child records pointing to it via `entryId`.
-**Why bad:** Adds a table with no health data, just metadata. Every query that wants group context needs a join. Backup/restore must handle the parent table. The parent can become orphaned if children are deleted independently.
-**Instead:** Use `groupId` on child records. The "group" is implicit -- defined by records sharing the same groupId value.
+### Anti-Pattern 1: Running All Tests on Every PR
 
-### Anti-Pattern 2: Denormalized Composite Records
-**What:** Storing all linked data in a single mega-record (eating + water + salt + substance all in one row in a new table).
-**Why bad:** Breaks the existing service layer contract. Analytics that query `intakeRecords` for water totals would miss water from composite records. Every consumer (hooks, analytics, backup/restore, future AI queries) would need to know about the composite format.
-**Instead:** Keep records in their natural tables. Composable entry creates multiple standard records linked by groupId.
+**What:** No path filtering -- every PR runs lint, typecheck, all unit tests, build, E2E, and supply chain regardless of what changed.
 
-### Anti-Pattern 3: Cascading Deletes via Application Logic in Each Service
-**What:** Having `deleteEatingRecord` check if it's part of a group and cascade-delete related records in other tables.
-**Why bad:** Couples every service to every other service. The eating service should not know about substance records or intake records. Introduces circular dependency risk and makes delete behavior unpredictable.
-**Instead:** Cascade deletes go through `composable-entry-service.deleteEntryGroup()`. Individual record deletes (via existing services) only affect that single record -- the UI decides whether to offer "delete group" vs "delete this record only."
+**Why bad:** A README-only change would take 8+ minutes. Developers stop waiting for CI and merge without green checks.
 
-### Anti-Pattern 4: Storing Presets in Dexie
-**What:** Creating a `liquidPresets` Dexie table with full sync fields (createdAt, updatedAt, deletedAt, deviceId, timezone).
-**Why bad:** Presets are user preferences (like theme, increment size, day-start-hour). They don't have timestamps, aren't time-series data, and don't participate in health analytics. Adding them to Dexie means they need migration logic, backup/restore handling, and increase schema complexity.
-**Instead:** Store in Zustand (persisted to localStorage) alongside existing settings. The existing `COFFEE_PRESETS` constant proves this pattern works for presets.
+**Instead:** Use `dorny/paths-filter` to skip irrelevant jobs. A docs-only PR should complete in under 60 seconds (just lint + pr-title).
 
-### Anti-Pattern 5: Modifying Existing Service Delete Functions
-**What:** Changing `substance-service.deleteSubstanceRecord()` to also check for and delete linked intake records AND composable group siblings.
-**Why bad:** The existing delete function already handles the substance-to-intake link correctly (lines 116-129 in `substance-service.ts`). Making it also aware of groupId creates coupling to the composable entry concept. If a substance record was created standalone (no groupId), the existing behavior is correct. If it was created as part of a group, `deleteEntryGroup` handles cascade.
-**Instead:** Keep existing service deletes unchanged. Add `deleteEntryGroup` as a new function in `composable-entry-service.ts` for group-level operations.
+### Anti-Pattern 2: E2E Tests Against Dev Server in CI
 
-## New vs Modified Files
+**What:** Using `pnpm dev` for Playwright tests in CI.
 
-### New Files
-| File | Purpose |
-|------|---------|
-| `src/lib/composable-entry-service.ts` | Atomic cross-table writes, cascading deletes, group queries |
-| `src/hooks/use-composable-entry.ts` | React hooks wrapping composable entry service (useLiveQuery for getEntryGroup, useCallback for mutations) |
-| `src/components/liquids-card.tsx` | Tabbed liquids input (water/coffee/alcohol) |
-| `src/components/food-salt-card.tsx` | Unified food+salt with AI parsing and composable entries |
-| `src/components/text-metrics.tsx` | Text-based intake metrics replacing graphs |
-| `src/app/api/ai/substance-lookup/route.ts` | AI caffeine/alcohol per-100ml lookup for presets |
+**Why bad:** Dev server is slower to start, includes HMR overhead, and can mask production build issues (especially with next-pwa which is disabled in development via `next.config.js`).
 
-### Modified Files
-| File | Change | Scope |
-|------|--------|-------|
-| `src/lib/db.ts` | v15: add `groupId?: string` to IntakeRecord, EatingRecord, SubstanceRecord interfaces; add `groupId` index to 3 tables | Small -- 3 interface additions + 1 new version block |
-| `src/stores/settings-store.ts` | Add `liquidPresets` array with CRUD actions; default values migrated from COFFEE_PRESETS | Medium -- new state slice |
-| `src/lib/constants.ts` | Add `DEFAULT_LIQUID_PRESETS` replacing `COFFEE_PRESETS`; deprecate `COFFEE_PRESETS` | Small |
-| `src/app/page.tsx` | Replace intake-card + food-calculator with LiquidsCard + FoodSaltCard + TextMetrics; reorder cards | Medium -- layout rewire |
-| `src/components/intake-card.tsx` | REMOVED (replaced by LiquidsCard) | -- |
-| `src/components/food-calculator.tsx` | REMOVED (replaced by FoodSaltCard) | -- |
+**Instead:** Build first with `pnpm build`, then run E2E against `pnpm start`. This also catches build-time errors before E2E runs.
 
-### Unchanged Files (critical to verify)
-| File | Why Unchanged |
-|------|---------------|
-| `src/lib/intake-service.ts` | Reads don't need groupId awareness; standalone writes (water tab) still use this directly |
-| `src/lib/eating-service.ts` | Standalone eating records still use this; composable entries bypass it |
-| `src/lib/substance-service.ts` | Existing substance-to-intake linking still works; composable entries use the new service instead |
-| `src/lib/health-service.ts` | BP and weight are never part of composable entries |
-| `src/hooks/use-intake-queries.ts` | Daily totals, recent records, rolling 24h -- all unchanged because records are in the same intakeRecords table regardless of groupId |
-| `src/hooks/use-substance-queries.ts` | Substance queries work unchanged; groupId is transparent to existing reads |
-| All medication files | No interaction with composable entries |
+### Anti-Pattern 3: Schema Snapshot Without Explicit Update Path
 
-## Suggested Build Order
+**What:** Adding a snapshot test for the Dexie schema but not documenting how to update it.
 
-Build order driven by data model dependencies:
+**Why bad:** Developers change `db.ts`, CI fails with "snapshot mismatch", they run `--updateSnapshot` reflexively without reviewing the diff. The safety gate becomes theater.
 
-### Phase 1: Data Layer (no UI risk)
-1. **Dexie v15 schema migration** -- Add `groupId` to 3 interfaces and 3 index definitions. Write migration test.
-2. **`composable-entry-service.ts`** -- `addComposableEntry`, `deleteEntryGroup`, `getEntryGroup`. Unit test with fake-indexeddb.
-3. **`use-composable-entry.ts`** -- Thin hooks wrapping the service.
+**Instead:** Document the update command. The PR diff will show the snapshot change, making schema changes reviewable.
 
-### Phase 2: Presets + AI (independent of UI)
-4. **Liquid presets in Zustand** -- `settings-store.ts` additions + `DEFAULT_LIQUID_PRESETS` in constants.
-5. **`/api/ai/substance-lookup` route** -- New route following existing pattern. Test independently via curl/Playwright.
+### Anti-Pattern 4: Coverage Thresholds That Block Everything
 
-### Phase 3: UI (depends on phases 1-2)
-6. **LiquidsCard** -- Tabbed water/coffee/alcohol. Water tab reuses existing `useIntake("water")`. Coffee/Alcohol tabs use composable entry + presets + AI lookup.
-7. **FoodSaltCard** -- Unified food+salt. Uses existing `/api/ai/parse` + composable entry service.
-8. **TextMetrics** -- Pure read component, queries existing data via existing hooks.
+**What:** Setting coverage thresholds at 80% on day one.
 
-### Phase 4: Dashboard Integration
-9. **Dashboard rewire** -- Update `page.tsx`: LiquidsCard, FoodSaltCard, TextMetrics, health cards. Remove intake-card.tsx and food-calculator.tsx.
-10. **BP heart rate visibility** -- Small change to existing BP card component (unrelated to composable entries).
-11. **Card reordering** -- Liquids -> Food+Salt -> health cards.
+**Why bad:** Existing coverage is likely 40-50%. Every PR would fail until massive test backfill is done, paralyzing development.
 
-**Rationale:** Phases 1-2 are pure service/data layer with zero UI risk and can be tested in isolation. Phase 3 builds the new UI components. Phase 4 is the swap -- old components out, new components in. This minimizes the window where the app is in a broken state.
+**Instead:** Measure current coverage, set thresholds 2% below that, ratchet up over time. Never let thresholds drop.
+
+### Anti-Pattern 5: `pnpm audit` Blocking on Moderate Vulnerabilities
+
+**What:** Running `pnpm audit` with default severity (all levels).
+
+**Why bad:** Moderate vulnerabilities in deep transitive dependencies are common and often irrelevant to the actual attack surface. Blocking on every moderate finding creates alert fatigue.
+
+**Instead:** Use `--audit-level=high` to only block on high and critical.
+
+### Anti-Pattern 6: E2E Tests Without Failure Artifacts
+
+**What:** E2E tests fail in CI with no trace or screenshot to debug.
+
+**Why bad:** Impossible to diagnose without reproducing locally. Wastes hours.
+
+**Instead:** Upload Playwright HTML report + traces as artifacts on failure (`if: always()` on artifact upload step).
+
+### Anti-Pattern 7: Monolithic CI Job
+
+**What:** Single job that runs lint, typecheck, test, build, E2E sequentially.
+
+**Why bad:** 10+ minute CI times. One failure blocks all feedback. Cannot skip irrelevant checks.
+
+**Instead:** Parallel jobs with change detection. Each job takes 1-3 minutes.
+
+## Dexie Migration Safety: Deep Dive
+
+### Why Migrations Are the Critical Path
+
+The user's production data lives exclusively in IndexedDB on their phone. There is no server-side backup, no cloud sync. A bad migration means:
+
+1. **Data loss**: If a migration drops or corrupts records, there is no recovery path
+2. **Stuck app**: If a migration throws, Dexie refuses to open the database -- the app becomes completely unusable
+3. **Silent corruption**: If a migration transforms data incorrectly (e.g., wrong timezone backfill), the user sees wrong data with no indication it was corrupted
+
+### How Current Migration Tests Work
+
+Each migration test (v10-v15) follows this pattern:
+
+1. Open raw IndexedDB at the previous version number (Dexie multiplies by 10, so v14 = IDB version 140)
+2. Seed records with the previous schema shape via raw IDB API
+3. Close the raw connection
+4. Open via `db.ts` (Dexie) -- this triggers the upgrade chain
+5. Assert records survived with correct data
+
+This is the correct pattern. The CI migration gate must run these tests.
+
+### What the Schema Snapshot Adds
+
+The migration tests verify that upgrades work. The schema snapshot verifies that the current schema definition hasn't changed accidentally. These are complementary:
+
+- Migration tests catch: "upgrade from v14 to v15 corrupts data"
+- Schema snapshot catches: "someone removed an index from v15 without creating v16"
+
+### Migration Safety Rules (Enforce via PR Review)
+
+1. **Never modify an existing version definition** -- always create a new version
+2. **Always add a migration test for new versions** -- CI will run it
+3. **Always update the schema snapshot** -- CI will fail until it is updated
+4. **Test upgrade from N-1 to N** -- the most common real-world path
+5. **Backup round-trip must pass** -- if serialization breaks, data is unrecoverable
+
+## E2E Test Structure Recommendations
+
+### Current State
+
+Three tests exist, all basic happy-path flows:
+- `auth-bypass.spec.ts` -- verifies LOCAL_AGENT_MODE works
+- `intake-logs.spec.ts` -- adds water and salt entries
+- `medication-wizard.spec.ts` -- full wizard flow with mocked AI
+
+### Recommended Expansion Strategy
+
+Organize E2E tests by feature domain, mirroring the route structure:
+
+```
+e2e/
+  auth-bypass.spec.ts          (existing)
+  intake/
+    water-salt.spec.ts         (extracted from existing)
+    liquid-presets.spec.ts     (NEW: test preset flow)
+    food-entry.spec.ts         (NEW: AI parse mock + composable entry)
+  medications/
+    wizard.spec.ts             (extracted from existing)
+    dose-logging.spec.ts       (NEW: mark taken/skipped/rescheduled)
+    inventory.spec.ts          (NEW: stock tracking, refill flow)
+  settings/
+    preferences.spec.ts        (NEW: day-start-hour, theme toggle)
+    backup-restore.spec.ts     (NEW: export + import via UI)
+  cross-domain/
+    composable-entries.spec.ts (NEW: food parse creates linked records)
+```
+
+### E2E Test Principles
+
+1. **Mock all AI routes** -- the existing `medication-wizard.spec.ts` already does this correctly with `page.route()`. Apply the same pattern to food parse and substance lookup.
+2. **Test user workflows, not implementation** -- "Add water, verify toast, check history" rather than testing specific CSS selectors.
+3. **Seed data where needed** -- For tests that need existing prescriptions, use `page.evaluate()` to insert via Dexie directly rather than navigating through the wizard every time.
+4. **No cross-test dependencies** -- Each spec must work independently. IndexedDB is ephemeral per browser context in Playwright.
+
+## Required GitHub Secrets
+
+| Secret | Purpose | Required For |
+|--------|---------|-------------|
+| None for basic CI | Unit tests, lint, build, E2E all work without secrets | ci.yml |
+| `CODECOV_TOKEN` | Coverage upload to Codecov (optional) | codecov-base.yml |
+
+The app's AI routes require `ANTHROPIC_API_KEY` but E2E tests mock these routes, so no API key is needed in CI. The `NEXT_PUBLIC_LOCAL_AGENT_MODE=true` flag bypasses auth. This is a significant advantage -- the CI pipeline requires zero secrets for all critical checks.
 
 ## Scalability Considerations
 
-| Concern | Current (single user) | Future (cloud sync) |
-|---------|----------------------|---------------------|
-| GroupId queries | Index lookup on 3 tables, <1ms for any volume | GroupId is a standard indexed FK, syncs naturally via Dexie Cloud |
-| Transaction scope | 3-table transactions are well within IndexedDB limits | Dexie Cloud handles multi-table sync transactions natively |
-| Preset storage | localStorage via Zustand, <2KB for 50 presets | Sync as user settings blob, not individual records |
-| Cascade deletes | Soft-delete via groupId index, 3 parallel where-queries | Soft-delete propagates via sync; deletedAt timestamp resolves conflicts |
-| Backward compat | Old records have no groupId, queries exclude undefined from index | Same -- undefined groupId records are standalone, fully compatible |
+| Concern | Now (3 E2E, 28 unit) | At 30 E2E, 100 unit | At 100+ E2E, 500 unit |
+|---------|----------------------|----------------------|-----------------------|
+| CI time | ~5 min total | ~8 min total | Shard Vitest + Playwright |
+| Flakiness | Negligible | Retry on first failure | Quarantine flaky tests |
+| Browser coverage | Chromium only | Still Chromium only | Add Firefox for regression |
+| Build caching | Not needed | Cache .next/cache | Essential for speed |
+| Artifact storage | Minimal | ~50MB reports | Reduce retention-days |
+
+Chromium-only E2E is correct for the foreseeable future because the app is a mobile PWA primarily used in Chrome/Chromium-based browsers.
+
+## Suggested Build Order
+
+Based on dependency analysis, the recommended implementation order:
+
+### Phase 1: Foundation (Zero Dependencies)
+
+**Build:** `ci.yml` with lint + typecheck + unit tests (including TZ matrix)
+
+**Rationale:** These jobs run existing scripts (`pnpm lint`, `pnpm test`) in a workflow. Immediately provides value by catching regressions on every PR. No new files or code changes beyond the workflow file.
+
+**Files created:**
+- `.github/workflows/ci.yml` (initial: lint, typecheck, unit-tests jobs only)
+
+### Phase 2: Build Verification + Bundle Security
+
+**Build:** Add `build` job to `ci.yml`, run `bundle-security.test.ts` post-build
+
+**Rationale:** The bundle-security test already exists but requires a build artifact. Running it in CI catches API key leaks automatically.
+
+**Files modified:**
+- `.github/workflows/ci.yml` (add build + bundle-security jobs)
+- `playwright.config.ts` (add CI-aware webServer command)
+
+### Phase 3: E2E in CI
+
+**Build:** Add `e2e` job to `ci.yml` using build artifact from Phase 2
+
+**Rationale:** The 3 existing E2E tests run without any code changes. This phase is purely CI wiring.
+
+**Files modified:**
+- `.github/workflows/ci.yml` (add e2e job with Playwright install + artifact upload)
+
+### Phase 4: Data Integrity Gates
+
+**Build:** Schema snapshot test + migration gate job
+
+**Rationale:** Highest-value safety feature but requires writing new test code (schema snapshot). Placed after basic CI is running so there is an existing feedback loop.
+
+**Files created:**
+- `src/__tests__/schema/schema-snapshot.test.ts`
+- `src/__tests__/schema/__snapshots__/` (generated by vitest)
+
+**Files modified:**
+- `.github/workflows/ci.yml` (add migration-gate job)
+- `package.json` (add `test:migration` script)
+
+### Phase 5: Coverage Tracking
+
+**Build:** Add coverage reporting to PRs + baseline uploads on main
+
+**Rationale:** Depends on unit tests being stable in CI (Phase 1). Adding coverage too early risks noisy PR comments on a still-stabilizing pipeline.
+
+**Files created:**
+- `.github/workflows/codecov-base.yml`
+
+**Files modified:**
+- `vitest.config.ts` (add coverage thresholds + reporters)
+- `.github/workflows/ci.yml` (add coverage job)
+
+### Phase 6: Supply Chain Security
+
+**Build:** Audit + lockfile integrity + package age checks
+
+**Rationale:** Only triggers on dependency changes (rare) and has the most complexity (package age script). Other phases provide more immediate value.
+
+**Files created:**
+- `scripts/check-supply-chain.sh`
+
+**Files modified:**
+- `.github/workflows/ci.yml` (add supply-chain job)
+
+### Phase 7: Dynamic Test Selection + PR Title
+
+**Build:** Path filtering via `dorny/paths-filter` + PR title lint workflow
+
+**Rationale:** Optimization phase. CI works without path filtering -- it just runs everything. Adding `detect-changes` reduces CI time for focused PRs but is not correctness-critical. PR title enforcement is polish.
+
+**Files created:**
+- `.github/workflows/pr-title.yml`
+
+**Files modified:**
+- `.github/workflows/ci.yml` (add detect-changes job, wire `if` conditions)
+
+### Alternative: Combine Phases 1-3 Into One
+
+Phases 1-3 are all "wire existing functionality into CI" with no new test code. A confident implementer could build all three in a single phase. The split above is for risk management -- if CI configuration has issues, smaller phases are easier to debug.
 
 ## Sources
 
-- **Existing codebase analysis (HIGH confidence):** `db.ts` (schema v10-v14 pattern), `substance-service.ts` (existing cross-table transaction + linked record pattern at lines 39-49 and 116-129), `intake-service.ts` (service layer pattern), `settings-store.ts` (Zustand persistence pattern), `constants.ts` (static preset pattern), `use-substance-queries.ts` and `use-intake-queries.ts` (hook patterns)
-- **Dexie.js transaction behavior (HIGH confidence):** Transactions scope across listed tables with auto-rollback on error. Verified across 25+ existing usages in the codebase.
-- **IndexedDB index behavior with undefined (HIGH confidence):** Per IndexedDB spec, `undefined` property values are excluded from index entries. Adding a `groupId` index does not affect records where groupId is undefined -- they simply don't appear in index lookups.
-- **Existing API route patterns (HIGH confidence):** `/api/ai/substance-enrich/route.ts` and `/api/ai/parse/route.ts` establish the pattern for the new `/api/ai/substance-lookup` route: Zod validation, `withAuth` middleware, rate limiting, `sanitizeForAI`, Perplexity retry logic.
+- [Playwright CI setup](https://playwright.dev/docs/ci-intro) -- official Playwright CI documentation (HIGH confidence)
+- [dorny/paths-filter](https://github.com/dorny/paths-filter) -- GitHub Action for path-based filtering (HIGH confidence)
+- [davelosert/vitest-coverage-report-action](https://github.com/davelosert/vitest-coverage-report-action) -- Coverage PR comments (HIGH confidence)
+- [pnpm audit CLI docs](https://pnpm.io/cli/audit) -- Supply chain auditing (HIGH confidence)
+- [cipher-box reference repo](https://github.com/FSM1/cipher-box/tree/main/.github) -- Workflow structure patterns (HIGH confidence, directly examined)
+- [npm Supply Chain Attack Analysis 2025](https://www.propelcode.ai/blog/npm-supply-chain-attack-analysis-2025) -- Context for 24h package age rule (MEDIUM confidence)
+- [fake-indexeddb](https://www.npmjs.com/package/fake-indexeddb) -- Already in use for Dexie testing in CI (HIGH confidence, in codebase)
