@@ -204,7 +204,7 @@ export async function updateTitrationPlan(
 
     await db.transaction(
       "rw",
-      [db.titrationPlans, db.medicationPhases, db.phaseSchedules, db.auditLogs],
+      [db.titrationPlans, db.medicationPhases, db.phaseSchedules, db.doseLogs, db.auditLogs],
       async () => {
         await db.titrationPlans.update(plan.id, planUpdates);
 
@@ -225,9 +225,7 @@ export async function updateTitrationPlan(
           for (const phase of existingPhases) {
             await db.phaseSchedules.where({ phaseId: phase.id }).delete();
           }
-          await db.medicationPhases
-            .filter((p) => p.titrationPlanId === plan.id)
-            .delete();
+          await db.medicationPhases.bulkDelete(existingPhases.map((p) => p.id));
 
           // Create new phases and schedules, tracking rx → new phaseId mapping
           const rxToNewPhase = new Map<string, string>();
