@@ -60,6 +60,7 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 - ✓ Coffee settings → Liquid Presets manager with multi-substance model (caffeine/alcohol/salt per-100ml + waterContentPercent) — Phase 16
 - ✓ Card reordering: TextMetrics → Liquids → Food+Salt → BP → Weight → Urination → Defecation — Phase 16
 - ✓ Timezone-aware dose log generation for SA/Germany travel — Phase 17
+- ✓ Build stability: all Settings store references resolve, pnpm build passes — Phase 18
 
 ### Out of Scope
 
@@ -117,4 +118,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-26 after Phase 17 completion*
+*Last updated: 2026-03-27 after Phase 18 completion*
