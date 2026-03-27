@@ -2,7 +2,7 @@
 
 export const dynamic = "force-dynamic";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { TimeRangeSelector } from "@/components/analytics/time-range-selector";
@@ -107,7 +107,9 @@ function AnalyticsContent() {
 export default function AnalyticsPage() {
   return (
     <AuthGuard>
-      <AnalyticsContent />
+      <Suspense>
+        <AnalyticsContent />
+      </Suspense>
     </AuthGuard>
   );
 }

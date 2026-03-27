@@ -79,6 +79,9 @@ export interface Settings {
   reminderFollowUpCount: number;
   reminderFollowUpInterval: number; // minutes
 
+  // Weight increment for +/- buttons (kg)
+  weightIncrement: number;
+
   // Substance tracking configuration
   substanceConfig: SubstanceConfig;
 }
@@ -119,6 +122,8 @@ interface SettingsActions {
   setDoseRemindersEnabled: (value: boolean) => void;
   setReminderFollowUpCount: (value: number) => void;
   setReminderFollowUpInterval: (value: number) => void;
+  // Weight increment
+  setWeightIncrement: (value: number) => void;
   // Substance config
   setSubstanceConfig: (config: SubstanceConfig) => void;
   resetToDefaults: () => void;
@@ -145,6 +150,7 @@ const defaultSettings: Settings = {
   weightGraphShowDefecation: true,
   weightGraphShowDrinking: true,
   liquidPresets: DEFAULT_LIQUID_PRESETS,
+  weightIncrement: 0.1,
   dismissedInsights: {},
   primaryRegion: "",
   secondaryRegion: "",
@@ -240,6 +246,10 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
       setDoseRemindersEnabled: (value) => set({ doseRemindersEnabled: value }),
       setReminderFollowUpCount: (value) => set({ reminderFollowUpCount: value }),
       setReminderFollowUpInterval: (value) => set({ reminderFollowUpInterval: value }),
+
+      // Weight increment
+      setWeightIncrement: (value) =>
+        set({ weightIncrement: sanitizeNumericInput(value, 0.1, 10) }),
 
       // Substance config
       setSubstanceConfig: (config) => set({ substanceConfig: config }),
