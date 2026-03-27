@@ -2,16 +2,6 @@
   "hooks": {
     "PostToolUse": [
       {
-        "matcher": "Bash|Edit|Write|MultiEdit|Agent|Task",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node .claude/hooks/gsd-context-monitor.js",
-            "timeout": 10
-          }
-        ]
-      },
-      {
         "matcher": "Task",
         "hooks": [
           {
@@ -32,15 +22,6 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Write|Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node .claude/hooks/gsd-prompt-guard.js"
-          }
-        ]
-      },
-      {
         "matcher": "Task",
         "hooks": [
           {
@@ -57,21 +38,6 @@
           {
             "type": "command",
             "command": "entire hooks claude-code session-end"
-          }
-        ]
-      }
-    ],
-    "SessionStart": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node .claude/hooks/gsd-check-update.js"
-          },
-          {
-            "type": "command",
-            "command": "entire hooks claude-code session-start"
           }
         ]
       }
@@ -103,9 +69,5 @@
     "deny": [
       "Read(./.entire/metadata/**)"
     ]
-  },
-  "statusLine": {
-    "type": "command",
-    "command": "node .claude/hooks/gsd-statusline.js"
   }
 }
