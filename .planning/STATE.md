@@ -1,9 +1,9 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: UI Overhaul
-status: v1.1 milestone complete
-stopped_at: Completed quick/260327-rpe
+milestone: v1.2
+milestone_name: CI & Data Integrity
+status: Defining requirements
+stopped_at: null
 last_updated: "2026-03-27T21:27:53.661Z"
 last_activity: 2026-03-27
 progress:
@@ -20,11 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-27)
 
 **Core value:** Accurate, queryable health data across intake, vitals, and medication adherence — structured for cross-domain analysis and future AI querying
-**Current focus:** Between milestones — v1.0 + v1.1 archived, next milestone TBD
+**Current focus:** v1.2 CI & Data Integrity — defining requirements
 
 ## Current Position
 
-No active milestone. Run `/gsd:new-milestone` to start next.
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-27 — Milestone v1.2 started
 
 ## Performance Metrics
 
@@ -129,7 +132,7 @@ None — both blockers resolved in v1.1.
 
 ## Session Continuity
 
-Last activity: 2026-03-27 — v1.0 + v1.1 milestones archived
+Last activity: 2026-03-27 — Milestone v1.2 started
 Last session: 2026-03-27
-Stopped at: Milestones v1.0 + v1.1 archived
+Stopped at: Defining requirements for v1.2
 Resume file: None

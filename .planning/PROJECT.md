@@ -12,7 +12,19 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 
 **Shipped:** v1.0 Engineering Overhaul + v1.1 UI Overhaul
 **Codebase:** ~44K LOC TypeScript, Next.js 14 App Router, Dexie.js v15 (IndexedDB)
-**Status:** Both milestones complete. No active milestone — ready for `/gsd:new-milestone`.
+
+## Current Milestone: v1.2 CI & Data Integrity
+
+**Goal:** World-class CI pipeline that protects live data integrity above all else, catches regressions through automated UI and scenario testing, and hardens the supply chain against attacks.
+
+**Target features:**
+- Data integrity protection — migration safety gates, schema validation, backup verification in CI
+- E2E UI testing via Playwright — scenario-based, regression-catching, actively exercising the UI
+- Dynamic test selection — affected-path analysis to keep CI fast
+- Code coverage tracking and benchmarking
+- Supply chain security — lockfile audit, 24h package age minimum, no automatic dependency updates
+- CI workflow orchestration — GitHub Actions, parallel jobs, caching
+- Performance profiling (evaluate flame graphs for relevance)
 
 ## Requirements
 
@@ -48,7 +60,14 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 
 ### Active
 
-(Empty — no active milestone. Define in `/gsd:new-milestone`.)
+- [ ] Data integrity gates in CI — schema migration validation, backup round-trip, no data-destructive changes without explicit approval
+- [ ] E2E scenario testing — Playwright tests exercising real user workflows across intake, medications, settings
+- [ ] Regression detection — UI visual/functional regression catching on every PR
+- [ ] Dynamic test selection — only run tests affected by changed files to keep CI fast
+- [ ] Coverage tracking — code coverage metrics reported per PR
+- [ ] Benchmarking — performance baselines with regression detection
+- [ ] Supply chain hardening — lockfile audit, package age enforcement (24h minimum), no auto-updates
+- [ ] CI orchestration — GitHub Actions workflows with parallelism, caching, and clear failure reporting
 
 ### Out of Scope
 
@@ -107,4 +126,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-27 after v1.1 milestone completion*
+*Last updated: 2026-03-27 after v1.2 milestone start*
