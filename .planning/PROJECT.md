@@ -2,25 +2,17 @@
 
 ## What This Is
 
-A personal health tracking PWA for monitoring daily intake (water, salt), vital signs (blood pressure, weight), bodily functions (urination, defecation, eating), and medication management. Built for a single user who travels between South Africa and Germany, requiring medication tracking that handles different regional brands, pill presentations, and strengths for the same prescribed compounds. Offline-first, mobile-focused.
+A personal health tracking PWA for monitoring daily intake (water, salt, caffeine, alcohol), vital signs (blood pressure, weight), bodily functions (urination, defecation, eating), and medication management. Built for a single user who travels between South Africa and Germany, requiring medication tracking that handles different regional brands, pill presentations, and strengths for the same prescribed compounds. Offline-first, mobile-focused, with AI-powered food parsing and substance lookup.
 
 ## Core Value
 
 Accurate, queryable health data across all domains — intake, vitals, bodily functions, and medication adherence — structured so that cross-domain analysis (e.g., correlating fluid intake with urination and weight) is reliable and future AI querying is possible.
 
-## Current Milestone: v1.1 UI Overhaul
+## Current State
 
-**Goal:** Redesign the intake tracking UI with composable data entries, unified input cards, and AI-powered substance lookup
-
-**Target features:**
-- Composable data entries — single input creates linked records across domains (food + liquid + salt), atomic CRUD with cascading delete
-- Unified Liquids card — water/coffee/alcohol as tabs; AI FAB for caffeine-per-100ml and alcohol-per-100ml lookup with saved presets
-- Unified Food+Salt card — eating and salt merged; AI food input auto-creates salt/liquid entries; manual salt input retained
-- BP heart rate always visible without expanding "more options"
-- Replace intake page graphs with text metrics (today's limits, caffeine/alcohol totals, weekly summary Monday-start)
-- Remove food calculator (unused)
-- Coffee settings become liquid tab defaults
-- Carry-over: timezone-aware dose logging (SRVC-02)
+**Shipped:** v1.0 Engineering Overhaul + v1.1 UI Overhaul
+**Codebase:** ~44K LOC TypeScript, Next.js 14 App Router, Dexie.js v15 (IndexedDB)
+**Status:** Both milestones complete. No active milestone — ready for `/gsd:new-milestone`.
 
 ## Requirements
 
@@ -37,30 +29,26 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 - ✓ PWA installable, offline-capable — v1.0
 - ✓ Auth via Privy (email/Google) with whitelist enforcement — v1.0
 - ✓ PIN gate for local access control — v1.0
-- ✓ Full engineering overhaul: clean data model, strict TypeScript, service boundaries, testability, security — v1.0
+- ✓ Full engineering overhaul: strict TypeScript, service boundaries, testability, security — v1.0
 - ✓ Medication data model: Prescription → MedicationPhase → PhaseSchedule → Inventory → DoseLogs — v1.0
 - ✓ Medication UX: compound-first views, dose logging, retroactive doses, multi-region inventory, schedule visualization — v1.0
 - ✓ Drug interaction checks (AI-powered, per-prescription, ad-hoc lookup) — v1.0
 - ✓ Push notifications for scheduled doses — v1.0
 - ✓ Backup/restore all 16 tables with conflict detection — v1.0
 - ✓ Unit tests, migration tests, timezone dual-pass — v1.0
+- ✓ Composable data entries: Dexie v15 groupId, atomic cross-table writes, cascading soft-delete — v1.1
+- ✓ Unified Liquids card with water/coffee/alcohol tabs, preset grid, AI lookup, substance auto-calc — v1.1
+- ✓ Liquid preset system (Zustand CRUD, 8 defaults, multi-substance model) + AI substance lookup — v1.1
+- ✓ All AI routes migrated from Perplexity to Anthropic Claude with tool_use — v1.1
+- ✓ Unified Food+Salt card with AI parse → composable preview → atomic linked entries — v1.1
+- ✓ Text metrics replacing graphs, BP heart rate promoted, dashboard card reordering — v1.1
+- ✓ Food calculator removed, 13 dead code files deleted — v1.1
+- ✓ Timezone-aware dose log generation for SA/Germany travel — v1.1
+- ✓ Build stability and waterContentPercent for AI-sourced presets — v1.1
 
 ### Active
 
-- ✓ Composable data entries: Dexie v15 groupId schema, atomic cross-table writes, cascading soft-delete, undo toasts — Phase 12
-- ✓ Unified Liquids card with water/beverage/coffee/alcohol tabs, preset grid, AI lookup, substance auto-calc — Phase 14
-- ✓ Liquid preset system (Zustand CRUD, 8 defaults, per-100ml primary unit) + AI substance lookup route — Phase 13
-- ✓ All AI routes migrated from Perplexity to Anthropic Claude with tool_use — Phase 13
-- [ ] Volume-based caffeine/alcohol calculation from presets
-- ✓ Unified Food+Salt card with stacked sections, AI food parse → composable preview → atomic linked entries — Phase 15
-- ✓ Manual salt input within food card (salt tablets, seasoning) — salt UX preserved exactly — Phase 15
-- ✓ BP heart rate always visible (promoted from collapsible to primary area) — Phase 16
-- ✓ Text metrics replacing graphs (water/salt progress, caffeine/alcohol totals, weekly Monday-start summary) — Phase 16
-- ✓ Food calculator removed + 13 dead code files deleted (2,541 lines) — Phase 16
-- ✓ Coffee settings → Liquid Presets manager with multi-substance model (caffeine/alcohol/salt per-100ml + waterContentPercent) — Phase 16
-- ✓ Card reordering: TextMetrics → Liquids → Food+Salt → BP → Weight → Urination → Defecation — Phase 16
-- ✓ Timezone-aware dose log generation for SA/Germany travel — Phase 17
-- ✓ Build stability: all Settings store references resolve, pnpm build passes — Phase 18
+(Empty — no active milestone. Define in `/gsd:new-milestone`.)
 
 ### Out of Scope
 
@@ -69,16 +57,15 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 - Doctor-ready report generation / PDF export — future milestone
 - Intake page graph improvements — separate milestone (move to insights page)
 - Capacitor Android wrapper — future milestone, PWA-first for now
-- Pencil design workflow integration — tooling concern, not app feature
 - Multi-user support — single-user app
 
 ## Context
 
-- User travels between South Africa and Germany regularly. Same prescribed compounds exist under different brand names, pill sizes, and strengths in each country. Dosages often require cutting pills (halves, quarters), so tracking the physical pill vs the prescribed dose is essential.
-- The medication model is inspired by Medisafe but addresses specific pain points: inability to retroactively log doses, confusing stock views where the same compound appears multiple times without clear differentiation, and lack of prescription-first medical views.
-- Codebase uses Next.js 14 App Router, IndexedDB via Dexie.js (schema version 14), Zustand for settings, useLiveQuery for reads, shadcn/ui + Tailwind for UI. Engineering overhaul complete in v1.0 — strict TypeScript, clean service boundaries, atomic transactions, full test suite.
-- The intake tracking UI needs modernization: alcohol and caffeine cards are underused, food/salt are separate when they should be unified, and AI food parsing should automatically create linked entries across metric domains.
-- Future AI querying will need to correlate data across domains (e.g., "Is my water intake aligned with urination data given a 500ml fluid limit above output?"). Composable entries strengthen this by explicitly linking related records.
+- User travels between South Africa and Germany regularly. Same prescribed compounds exist under different brand names, pill sizes, and strengths in each country. Dosages often require cutting pills (halves, quarters).
+- The medication model is inspired by Medisafe but addresses specific pain points: inability to retroactively log doses, confusing stock views, and lack of prescription-first medical views.
+- Codebase uses Next.js 14 App Router, IndexedDB via Dexie.js (schema v15), Zustand for settings, useLiveQuery for reads, shadcn/ui + Tailwind for UI.
+- All AI routes use Anthropic Claude with tool_use (migrated from Perplexity in v1.1).
+- Composable entries explicitly link related records across domains via groupId, strengthening future cross-domain AI analysis.
 
 ## Constraints
 
@@ -87,35 +74,37 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 - **Offline-first**: All data in IndexedDB, no server-side database for user data
 - **Package manager**: pnpm (enforced)
 - **Mobile-focused**: max-w-lg container, touch-friendly UI
-- **Sync-friendly schema**: Data model decisions must not block future NeonDB (Postgres) cloud sync
+- **Sync-friendly schema**: Data model decisions must not block future cloud sync
 - **Queryable schema**: Indexing and relationships must support future cross-domain AI analysis
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Prescription → Schedule → Inventory model | Maps to user's mental model: medical info vs treatment plan vs physical stock. Handles multi-region brands and pill cutting math. | ✓ Good |
-| Full app overhaul vs medication-only | Existing code quality concerns across the board; future cloud sync and AI features require solid foundations everywhere | ✓ Good |
-| IndexedDB via Dexie.js for all data | Established pattern, offline-first requirement, sync-friendly with NeonDB (Postgres) later | ✓ Good |
-| Security defense-in-depth | Data at rest protection, API key handling, auth patterns — build for cloud sync from start so it's not a retrofit | ✓ Good |
-| Composable data entries via groupId | Single input creates linked records across domains; groupId on child records (no parent table), atomic transactions, cascading soft-delete | ✓ Good |
+| Prescription → Schedule → Inventory model | Maps to user's mental model: medical info vs treatment plan vs physical stock | ✓ Good |
+| Full app overhaul vs medication-only | Future cloud sync and AI features require solid foundations everywhere | ✓ Good |
+| IndexedDB via Dexie.js for all data | Offline-first, sync-friendly with NeonDB later | ✓ Good |
+| Security defense-in-depth | Build for cloud sync from start so it's not a retrofit | ✓ Good |
+| Composable data entries via groupId | groupId on child records (no parent table), atomic transactions, cascading soft-delete | ✓ Good |
+| Perplexity → Anthropic Claude migration | Better medical query handling, tool_use for structured output | ✓ Good |
+| Multi-substance preset model | Per-100ml fields for caffeine/alcohol/salt + waterContentPercent enables accurate hydration tracking | ✓ Good |
 
 ## Evolution
 
 This document evolves at phase transitions and milestone boundaries.
 
-**After each phase transition** (via `/gsd:transition`):
+**After each phase transition:**
 1. Requirements invalidated? → Move to Out of Scope with reason
 2. Requirements validated? → Move to Validated with phase reference
 3. New requirements emerged? → Add to Active
 4. Decisions to log? → Add to Key Decisions
 5. "What This Is" still accurate? → Update if drifted
 
-**After each milestone** (via `/gsd:complete-milestone`):
+**After each milestone:**
 1. Full review of all sections
 2. Core Value check — still the right priority?
 3. Audit Out of Scope — reasons still valid?
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-27 after v1.0 milestone archival*
+*Last updated: 2026-03-27 after v1.1 milestone completion*

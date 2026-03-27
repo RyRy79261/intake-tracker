@@ -1,5 +1,24 @@
 # Milestones
 
+## v1.1 UI Overhaul (Shipped: 2026-03-27)
+
+**Phases completed:** 8 phases (12–19), 16 plans, 134 commits
+**Timeline:** 4 days (2026-03-23 → 2026-03-27)
+**Scope:** 200 files changed, ~21.9K insertions, 3.7K deletions
+
+**Key accomplishments:**
+
+- Composable data foundation: Dexie v15 schema with groupId, atomic cross-table entry service, cascading soft-delete, undo toasts
+- Unified Liquids card: tabbed water/coffee/alcohol with preset grid, AI substance lookup (caffeine/alcohol per-100ml), and auto-calculated substance records
+- Unified Food+Salt card: AI food parsing → composable preview → atomic linked entries (eating + water + salt), manual salt input preserved
+- Liquid preset system: Zustand CRUD with 8 defaults, multi-substance model (caffeine/alcohol/salt per-100ml + waterContentPercent)
+- All 5 AI routes migrated from Perplexity to Anthropic Claude with tool_use — Perplexity fully removed
+- Dashboard modernization: text metrics replacing graphs, BP heart rate promoted, card reordering, 13 dead code files deleted (2,541 lines)
+- Timezone-aware dose logging: correct SA/Germany schedule generation, timezone change detection with confirmation dialog, 21 new tests
+- Build stability: dead code cleanup, missing Settings store fields restored, waterContentPercent added to substance-lookup API
+
+---
+
 ## v1.0 Engineering Overhaul (Shipped: 2026-03-23)
 
 **Phases completed:** 13 phases (1–11, 5.1 abandoned, 6.1 inserted), 44 plans, ~322 commits
