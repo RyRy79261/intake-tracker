@@ -26,8 +26,7 @@ import {
   type PreviewRecord,
 } from "@/components/food-salt/composable-preview";
 import { parseIntakeWithAI } from "@/lib/ai-client";
-import type { ComposableEntryInput } from "@/lib/composable-entry-service";
-import { useAddComposableEntry } from "@/hooks/use-composable-entry";
+import { useAddComposableEntry, type ComposableEntryInput } from "@/hooks/use-composable-entry";
 import {
   useEatingRecords,
   useAddEating,
