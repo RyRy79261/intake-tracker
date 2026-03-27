@@ -9,14 +9,15 @@ const RequestSchema = z.object({
   type: z.enum(["caffeine", "alcohol"]),
 });
 
-const SubstanceLookupResponseSchema = z.object({
+export const SubstanceLookupResponseSchema = z.object({
   substancePer100ml: z.number().min(0).max(500),
   defaultVolumeMl: z.number().min(1).max(5000),
   beverageName: z.string(),
   reasoning: z.string(),
+  waterContentPercent: z.number().min(0).max(100),
 });
 
-const SUBSTANCE_LOOKUP_TOOL = {
+export const SUBSTANCE_LOOKUP_TOOL = {
   name: "substance_lookup_result" as const,
   description: "Return the substance content per 100ml and typical serving size for a beverage",
   input_schema: {
@@ -38,8 +39,12 @@ const SUBSTANCE_LOOKUP_TOOL = {
         type: "string",
         description: "Brief explanation of the estimate and data source",
       },
+      waterContentPercent: {
+        type: "number",
+        description: "Estimated water content as a percentage (0-100). Reference: black coffee ~99, beer ~93, wine ~87, spirits ~60.",
+      },
     },
-    required: ["substancePer100ml", "defaultVolumeMl", "beverageName", "reasoning"],
+    required: ["substancePer100ml", "defaultVolumeMl", "beverageName", "reasoning", "waterContentPercent"],
     additionalProperties: false,
   },
 };
@@ -98,8 +103,8 @@ export const POST = withAuth(async ({ request, auth }) => {
     }
 
     const systemPrompt = type === "caffeine"
-      ? "You are a beverage nutrition expert. Given a beverage name, estimate its caffeine content per 100ml and typical serving size. Be as accurate as possible based on known beverage data."
-      : "You are a beverage nutrition expert. Given a beverage name, estimate its alcohol content in standard drinks per 100ml and typical serving size. A standard drink contains approximately 14g (0.6 oz) of pure alcohol.";
+      ? "You are a beverage nutrition expert. Given a beverage name, estimate its caffeine content per 100ml and typical serving size. Be as accurate as possible based on known beverage data. Also estimate the beverage's water content as a percentage (0-100). Reference points: black coffee ~99%, beer ~93%, wine ~87%, spirits ~60%."
+      : "You are a beverage nutrition expert. Given a beverage name, estimate its alcohol content in standard drinks per 100ml and typical serving size. A standard drink contains approximately 14g (0.6 oz) of pure alcohol. Also estimate the beverage's water content as a percentage (0-100). Reference points: black coffee ~99%, beer ~93%, wine ~87%, spirits ~60%.";
 
     const response = await client.messages.create({
       model: CLAUDE_MODELS.fast,
