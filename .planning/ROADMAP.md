@@ -241,7 +241,7 @@ Plans:
 - [x] **Phase 15: Unified Food+Salt Card** - Merged food and salt input with AI parsing that creates composable linked entries (completed 2026-03-24)
 - [x] **Phase 16: Dashboard Cleanup and Text Metrics** - BP heart rate visible, food calculator removed, text metrics, coffee settings migrated, card reordering (completed 2026-03-24)
 - [x] **Phase 17: Timezone-Aware Dose Logging** - Correct day-of-week schedule generation for SA/Germany timezones with device timezone stored per dose log (completed 2026-03-26)
-- [ ] **Phase 18: Build Stability and Dead Code Cleanup** - Fix pnpm build failures, remove dead Settings store references, resolve missing store methods (gap closure)
+- [x] **Phase 18: Build Stability and Dead Code Cleanup** - Fix pnpm build failures, remove dead Settings store references, resolve missing store methods (gap closure) (completed 2026-03-27)
 - [ ] **Phase 19: AI Substance Lookup Enhancement** - Add waterContentPercent to substance-lookup API response for accurate hydration tracking from AI-sourced presets (gap closure)
 
 ## Phase Details
@@ -351,7 +351,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 18-01-PLAN.md -- Restore missing Settings store fields + fix ESLint import boundary violations
+- [x] 18-01-PLAN.md -- Restore missing Settings store fields + fix ESLint import boundary violations
 
 ### Phase 19: AI Substance Lookup Enhancement
 **Goal**: The substance-lookup API returns waterContentPercent so AI-sourced beverage presets produce accurate hydration records
@@ -392,5 +392,5 @@ Note: Phase 14 and Phase 15 both depend on Phase 12 and 13 but are independent o
 | 15. Unified Food+Salt Card | v1.1 | 2/2 | Complete    | 2026-03-24 |
 | 16. Dashboard Cleanup and Text Metrics | v1.1 | 3/3 | Complete    | 2026-03-24 |
 | 17. Timezone-Aware Dose Logging | v1.1 | 2/2 | Complete    | 2026-03-26 |
-| 18. Build Stability and Dead Code Cleanup | v1.1 | 0/1 | Planned | - |
+| 18. Build Stability and Dead Code Cleanup | v1.1 | 1/1 | Complete   | 2026-03-27 |
 | 19. AI Substance Lookup Enhancement | v1.1 | 0/0 | Planned | - |

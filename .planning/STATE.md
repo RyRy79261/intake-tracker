@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: UI Overhaul
-status: Milestone complete
-stopped_at: Completed 17-02-PLAN.md
-last_updated: "2026-03-26T17:59:54.314Z"
+status: Phase complete — ready for verification
+stopped_at: Completed 18-01-PLAN.md
+last_updated: "2026-03-27T10:06:25.975Z"
 progress:
-  total_phases: 6
-  completed_phases: 6
-  total_plans: 14
-  completed_plans: 14
+  total_phases: 8
+  completed_phases: 7
+  total_plans: 15
+  completed_plans: 15
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-23)
 
 **Core value:** Accurate, queryable health data across intake, vitals, and medication adherence — structured for cross-domain analysis and future AI querying
-**Current focus:** Phase 17 — timezone-aware-dose-logging
+**Current focus:** Phase 18 — build-stability-and-dead-code-cleanup
 
 ## Current Position
 
-Phase: 17
-Plan: Not started
+Phase: 18 (build-stability-and-dead-code-cleanup) — EXECUTING
+Plan: 1 of 1
 
 ## Performance Metrics
 
@@ -60,6 +60,7 @@ Plan: Not started
 | Phase 16 P03 | 7min | 2 tasks | 19 files |
 | Phase 17 P01 | 7min | 2 tasks | 6 files |
 | Phase 17 P02 | 5min | 2 tasks | 4 files |
+| Phase 18 P01 | 6min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -103,6 +104,7 @@ Key decisions carrying forward into v1.1:
 - [Phase 17]: D-03 invariant enforced: recalculation never modifies doseLogs table
 - [Phase 17]: Module-level _dismissedThisSession flag resets on page reload (D-07) -- no localStorage needed
 - [Phase 17]: TimezoneGuard placed inside PinGateProvider so timezone dialog only shows after auth/PIN
+- [Phase 18]: Persist version stays at 3 for new Settings fields; Zustand handles missing keys via defaults spread
 
 ### Pending Todos
 
@@ -120,6 +122,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-26T17:49:03.612Z
-Stopped at: Completed 17-02-PLAN.md
+Last session: 2026-03-27T10:06:25.972Z
+Stopped at: Completed 18-01-PLAN.md
 Resume file: None
