@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: UI Overhaul
-status: Milestone complete
+status: "v1.1 shipped — PR #18"
 stopped_at: Completed 19-01-PLAN.md
-last_updated: "2026-03-27T13:10:37.586Z"
+last_updated: "2026-03-27T17:36:14.061Z"
 progress:
   total_phases: 8
   completed_phases: 8
