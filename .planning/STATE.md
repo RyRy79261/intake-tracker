@@ -2,9 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: UI Overhaul
-status: "v1.1 shipped — PR #18"
+status: v1.0 archived, v1.1 complete — awaiting archive
 stopped_at: Completed quick/260327-rpe
-last_updated: "2026-03-27T19:04:33.373Z"
+last_updated: "2026-03-27T21:21:16.916Z"
+last_activity: 2026-03-27
 progress:
   total_phases: 8
   completed_phases: 8
@@ -16,7 +17,7 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-23)
+See: .planning/PROJECT.md (updated 2026-03-27)
 
 **Core value:** Accurate, queryable health data across intake, vitals, and medication adherence — structured for cross-domain analysis and future AI querying
 **Current focus:** Phase 19 — ai-substance-lookup-enhancement
@@ -130,7 +131,7 @@ None yet.
 
 ## Session Continuity
 
-Last activity: 2026-03-27 - Completed quick task 260327-rpe: Migrate AI endpoints from Perplexity to Anthropic Claude
+Last activity: 2026-03-27
 Last session: 2026-03-27T19:04:33.370Z
 Stopped at: Completed quick/260327-rpe
 Resume file: None

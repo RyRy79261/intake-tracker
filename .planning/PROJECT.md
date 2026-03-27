@@ -30,7 +30,7 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 - ✓ Blood pressure recording — v1.0
 - ✓ Weight recording — v1.0
 - ✓ Urination and defecation logging — v1.0
-- ✓ Eating/food logging with AI-powered nutritional parsing (Perplexity) — v1.0
+- ✓ Eating/food logging with AI-powered nutritional parsing — v1.0
 - ✓ Daily notes — v1.0
 - ✓ Settings persistence (day-start-hour, theme, limits) — v1.0
 - ✓ History/analytics with charts (Recharts) — v1.0
@@ -118,4 +118,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-27 after Phase 19 completion (v1.1 milestone complete)*
+*Last updated: 2026-03-27 after v1.0 milestone archival*
