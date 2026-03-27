@@ -84,30 +84,30 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CIPL-01 | — | Planned |
-| CIPL-02 | — | Planned |
-| CIPL-03 | — | Planned |
-| DATA-04 | — | Planned |
-| DATA-05 | — | Planned |
-| DATA-06 | — | Planned |
-| DATA-07 | — | Planned |
-| E2E-01 | — | Planned |
-| E2E-02 | — | Planned |
-| E2E-03 | — | Planned |
-| SCHN-01 | — | Planned |
-| SCHN-02 | — | Planned |
-| SCHN-03 | — | Planned |
-| SCHN-04 | — | Planned |
-| CIOP-01 | — | Planned |
-| CIOP-02 | — | Planned |
-| CIOP-03 | — | Planned |
-| BNCH-01 | — | Planned |
+| CIPL-01 | Phase 20 | Pending |
+| CIPL-02 | Phase 20 | Pending |
+| CIPL-03 | Phase 20 | Pending |
+| DATA-04 | Phase 21 | Pending |
+| DATA-05 | Phase 21 | Pending |
+| DATA-06 | Phase 21 | Pending |
+| DATA-07 | Phase 21 | Pending |
+| E2E-01 | Phase 22 | Pending |
+| E2E-02 | Phase 22 | Pending |
+| E2E-03 | Phase 22 | Pending |
+| SCHN-01 | Phase 23 | Pending |
+| SCHN-02 | Phase 23 | Pending |
+| SCHN-03 | Phase 23 | Pending |
+| SCHN-04 | Phase 23 | Pending |
+| CIOP-01 | Phase 24 | Pending |
+| CIOP-02 | Phase 24 | Pending |
+| CIOP-03 | Phase 24 | Pending |
+| BNCH-01 | Phase 24 | Pending |
 
 **Coverage:**
 - v1.2 requirements: 18 total
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: 18
+- Mapped to phases: 18/18
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-27*
-*Last updated: 2026-03-27*
+*Last updated: 2026-03-27 — traceability updated during roadmap creation*
