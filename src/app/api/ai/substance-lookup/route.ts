@@ -72,7 +72,7 @@ export const POST = withAuth(async ({ request, auth }) => {
       max_tokens: 512,
       system: systemPrompt,
       tools: [SUBSTANCE_LOOKUP_TOOL],
-      tool_choice: { type: "tool", name: "substance_lookup_result" },
+      tool_choice: { type: "tool", name: SUBSTANCE_LOOKUP_TOOL.name },
       messages: [{ role: "user", content: `Estimate ${type} content per 100ml for: "${sanitized}"` }],
     });
 

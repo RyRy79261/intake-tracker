@@ -212,7 +212,8 @@ export async function updateTitrationPlan(
         if (input.entries) {
           // Collect existing phases (to remap dose logs)
           const existingPhases = await db.medicationPhases
-            .filter((p) => p.titrationPlanId === plan.id)
+            .where("titrationPlanId")
+            .equals(plan.id)
             .toArray();
 
           // Build old phaseId → prescriptionId map for dose log remapping
