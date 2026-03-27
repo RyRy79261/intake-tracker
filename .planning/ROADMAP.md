@@ -392,5 +392,5 @@ Note: Phase 14 and Phase 15 both depend on Phase 12 and 13 but are independent o
 | 15. Unified Food+Salt Card | v1.1 | 2/2 | Complete    | 2026-03-24 |
 | 16. Dashboard Cleanup and Text Metrics | v1.1 | 3/3 | Complete    | 2026-03-24 |
 | 17. Timezone-Aware Dose Logging | v1.1 | 2/2 | Complete    | 2026-03-26 |
-| 18. Build Stability and Dead Code Cleanup | v1.1 | 1/1 | Complete   | 2026-03-27 |
+| 18. Build Stability and Dead Code Cleanup | v1.1 | 1/1 | Complete    | 2026-03-27 |
 | 19. AI Substance Lookup Enhancement | v1.1 | 0/0 | Planned | - |
