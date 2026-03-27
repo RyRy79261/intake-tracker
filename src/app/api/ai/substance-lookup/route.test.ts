@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { SubstanceLookupResponseSchema, SUBSTANCE_LOOKUP_TOOL } from "./route";
+import { SubstanceLookupResponseSchema, SUBSTANCE_LOOKUP_TOOL } from "./schema";
 
 const validResponse = {
   substancePer100ml: 38,

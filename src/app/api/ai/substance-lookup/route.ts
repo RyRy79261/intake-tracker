@@ -3,51 +3,12 @@ import { z } from "zod";
 import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
 import { getClaudeClient, CLAUDE_MODELS } from "../_shared/claude-client";
+import { SubstanceLookupResponseSchema, SUBSTANCE_LOOKUP_TOOL } from "./schema";
 
 const RequestSchema = z.object({
   query: z.string().min(1).max(200),
   type: z.enum(["caffeine", "alcohol"]),
 });
-
-export const SubstanceLookupResponseSchema = z.object({
-  substancePer100ml: z.number().min(0).max(500),
-  defaultVolumeMl: z.number().min(1).max(5000),
-  beverageName: z.string(),
-  reasoning: z.string(),
-  waterContentPercent: z.number().min(0).max(100),
-});
-
-export const SUBSTANCE_LOOKUP_TOOL = {
-  name: "substance_lookup_result" as const,
-  description: "Return the substance content per 100ml and typical serving size for a beverage",
-  input_schema: {
-    type: "object" as const,
-    properties: {
-      substancePer100ml: {
-        type: "number",
-        description: "For caffeine: mg per 100ml. For alcohol: standard drinks per 100ml.",
-      },
-      defaultVolumeMl: {
-        type: "number",
-        description: "Typical single serving volume in ml",
-      },
-      beverageName: {
-        type: "string",
-        description: "Normalized name of the beverage",
-      },
-      reasoning: {
-        type: "string",
-        description: "Brief explanation of the estimate and data source",
-      },
-      waterContentPercent: {
-        type: "number",
-        description: "Estimated water content as a percentage (0-100). Reference: black coffee ~99, beer ~93, wine ~87, spirits ~60.",
-      },
-    },
-    required: ["substancePer100ml", "defaultVolumeMl", "beverageName", "reasoning", "waterContentPercent"],
-    additionalProperties: false,
-  },
-};
 
 // Rate limiting: 15 requests/min (same as other AI routes)
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
