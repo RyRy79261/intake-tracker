@@ -14,6 +14,8 @@ import {
   type EntryGroup,
   type RecordTable,
 } from "@/lib/composable-entry-service";
+
+export type { ComposableEntryInput, ComposableEntryResult, EntryGroup, RecordTable };
 import { unwrap } from "@/lib/service-result";
 import { showUndoToast } from "@/components/medications/undo-toast";
 

@@ -8,9 +8,8 @@ import { Sparkles, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { useSettingsStore } from "@/stores/settings-store";
-import { useAddComposableEntry } from "@/hooks/use-composable-entry";
+import { useAddComposableEntry, type ComposableEntryInput } from "@/hooks/use-composable-entry";
 import { useToast } from "@/hooks/use-toast";
-import type { ComposableEntryInput } from "@/lib/composable-entry-service";
 import type { LiquidPreset } from "@/lib/constants";
 
 interface PresetTabProps {
