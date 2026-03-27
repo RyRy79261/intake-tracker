@@ -117,6 +117,12 @@ None yet.
 - [Research]: Soft delete vs hard delete inconsistency must be resolved in Phase 12 before cascading delete
 - [Research]: Composable entry preview/confirmation UX has no existing pattern — needs design decision in Phase 15 planning
 
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260327-rpe | Migrate AI endpoints from Perplexity to Anthropic Claude | 2026-03-27 | 570411d | [260327-rpe-migrate-ai-endpoints-from-perplexity-to-](./quick/260327-rpe-migrate-ai-endpoints-from-perplexity-to-/) |
+
 ### Roadmap Evolution
 
 - v1.0 shipped 2026-03-23 (Phases 1-11)
@@ -124,6 +130,7 @@ None yet.
 
 ## Session Continuity
 
+Last activity: 2026-03-27 - Completed quick task 260327-rpe: Migrate AI endpoints from Perplexity to Anthropic Claude
 Last session: 2026-03-27T19:04:33.370Z
 Stopped at: Completed quick/260327-rpe
 Resume file: None
