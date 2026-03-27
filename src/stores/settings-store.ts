@@ -9,6 +9,17 @@ import { DEFAULT_LIQUID_PRESETS, type LiquidPreset } from "@/lib/constants";
 
 export type { LiquidPreset } from "@/lib/constants";
 
+export interface SubstanceConfig {
+  caffeine: {
+    enabled: boolean;
+    types: Array<{ name: string; defaultMg: number; defaultVolumeMl: number }>;
+  };
+  alcohol: {
+    enabled: boolean;
+    types: Array<{ name: string; defaultDrinks: number; defaultVolumeMl: number }>;
+  };
+}
+
 export interface Settings {
   // Increment values for +/- buttons
   waterIncrement: number; // ml
@@ -24,10 +35,10 @@ export interface Settings {
 
   // Theme preference
   theme: "light" | "dark" | "system";
-  
+
   // Data retention (days, 0 = keep forever)
   dataRetentionDays: number;
-  
+
   // Day start hour for budget tracking (0-23, default 2 = 2am)
   // Records after this hour count toward "today's" budget
   dayStartHour: number;
@@ -52,6 +63,24 @@ export interface Settings {
 
   // Liquid presets (beverage CRUD)
   liquidPresets: LiquidPreset[];
+
+  // Insight dismissal (maps insight id to the value at time of dismissal)
+  dismissedInsights: Record<string, string | number>;
+
+  // Medication region settings
+  primaryRegion: string;
+  secondaryRegion: string;
+
+  // Time format
+  timeFormat: "12h" | "24h";
+
+  // Dose reminder settings
+  doseRemindersEnabled: boolean;
+  reminderFollowUpCount: number;
+  reminderFollowUpInterval: number; // minutes
+
+  // Substance tracking configuration
+  substanceConfig: SubstanceConfig;
 }
 
 interface SettingsActions {
@@ -78,6 +107,20 @@ interface SettingsActions {
   addLiquidPreset: (preset: Omit<LiquidPreset, "id">) => void;
   updateLiquidPreset: (id: string, updates: Partial<Omit<LiquidPreset, "id">>) => void;
   deleteLiquidPreset: (id: string) => void;
+  // Insight dismissal
+  dismissInsight: (id: string, value: string | number) => void;
+  isDismissed: (id: string, currentValue: string | number) => boolean;
+  // Medication region settings
+  setPrimaryRegion: (value: string) => void;
+  setSecondaryRegion: (value: string) => void;
+  // Time format
+  setTimeFormat: (format: "12h" | "24h") => void;
+  // Dose reminders
+  setDoseRemindersEnabled: (value: boolean) => void;
+  setReminderFollowUpCount: (value: number) => void;
+  setReminderFollowUpInterval: (value: number) => void;
+  // Substance config
+  setSubstanceConfig: (config: SubstanceConfig) => void;
   resetToDefaults: () => void;
 }
 
@@ -102,6 +145,33 @@ const defaultSettings: Settings = {
   weightGraphShowDefecation: true,
   weightGraphShowDrinking: true,
   liquidPresets: DEFAULT_LIQUID_PRESETS,
+  dismissedInsights: {},
+  primaryRegion: "",
+  secondaryRegion: "",
+  timeFormat: "24h" as const,
+  doseRemindersEnabled: false,
+  reminderFollowUpCount: 2,
+  reminderFollowUpInterval: 10,
+  substanceConfig: {
+    caffeine: {
+      enabled: true,
+      types: [
+        { name: "Coffee", defaultMg: 95, defaultVolumeMl: 250 },
+        { name: "Espresso", defaultMg: 63, defaultVolumeMl: 30 },
+        { name: "Tea", defaultMg: 47, defaultVolumeMl: 250 },
+        { name: "Other", defaultMg: 80, defaultVolumeMl: 250 },
+      ],
+    },
+    alcohol: {
+      enabled: true,
+      types: [
+        { name: "Beer", defaultDrinks: 1, defaultVolumeMl: 330 },
+        { name: "Wine", defaultDrinks: 1, defaultVolumeMl: 150 },
+        { name: "Spirits", defaultDrinks: 1, defaultVolumeMl: 45 },
+        { name: "Other", defaultDrinks: 1, defaultVolumeMl: 250 },
+      ],
+    },
+  },
 };
 
 export const useSettingsStore = create<Settings & SettingsActions>()(
@@ -148,6 +218,31 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
       setWeightGraphShowUrination: (value) => set({ weightGraphShowUrination: value }),
       setWeightGraphShowDefecation: (value) => set({ weightGraphShowDefecation: value }),
       setWeightGraphShowDrinking: (value) => set({ weightGraphShowDrinking: value }),
+
+      // Insight dismissal
+      dismissInsight: (id, value) =>
+        set((state) => ({
+          dismissedInsights: { ...state.dismissedInsights, [id]: value },
+        })),
+      isDismissed: (id, currentValue) => {
+        const dismissed = get().dismissedInsights;
+        return dismissed[id] !== undefined && dismissed[id] === currentValue;
+      },
+
+      // Medication region settings
+      setPrimaryRegion: (value) => set({ primaryRegion: value }),
+      setSecondaryRegion: (value) => set({ secondaryRegion: value }),
+
+      // Time format
+      setTimeFormat: (format) => set({ timeFormat: format }),
+
+      // Dose reminders
+      setDoseRemindersEnabled: (value) => set({ doseRemindersEnabled: value }),
+      setReminderFollowUpCount: (value) => set({ reminderFollowUpCount: value }),
+      setReminderFollowUpInterval: (value) => set({ reminderFollowUpInterval: value }),
+
+      // Substance config
+      setSubstanceConfig: (config) => set({ substanceConfig: config }),
 
       addLiquidPreset: (preset) =>
         set((state) => ({
