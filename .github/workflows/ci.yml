@@ -83,9 +83,31 @@ jobs:
       - name: Schema consistency & backup integrity
         run: pnpm exec vitest run src/__tests__/integrity/
 
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium --with-deps
+      - name: Run E2E tests
+        run: pnpm test:e2e
+      - name: Upload test traces
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-traces
+          path: test-results/
+          retention-days: 7
+
   ci-pass:
     if: always()
-    needs: [lint, typecheck, test-tz-sa, test-tz-de, build, data-integrity]
+    needs: [lint, typecheck, test-tz-sa, test-tz-de, build, data-integrity, e2e]
     runs-on: ubuntu-latest
     steps:
       - name: Check all jobs passed
@@ -95,7 +117,8 @@ jobs:
                 "${{ needs.test-tz-sa.result }}" != "success" ||
                 "${{ needs.test-tz-de.result }}" != "success" ||
                 "${{ needs.build.result }}" != "success" ||
-                "${{ needs.data-integrity.result }}" != "success" ]]; then
+                "${{ needs.data-integrity.result }}" != "success" ||
+                "${{ needs.e2e.result }}" != "success" ]]; then
             echo "::error::One or more CI jobs failed or were cancelled"
             exit 1
           fi
