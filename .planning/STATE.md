@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: CI & Data Integrity
 status: executing
-stopped_at: Phase 23 context gathered
-last_updated: "2026-03-28T12:44:53.879Z"
+stopped_at: Completed 23-01-PLAN.md
+last_updated: "2026-03-28T13:48:23.757Z"
 last_activity: 2026-03-28
 progress:
   total_phases: 5
   completed_phases: 3
-  total_plans: 6
-  completed_plans: 6
+  total_plans: 8
+  completed_plans: 7
   percent: 75
 ---
 
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-27)
 
 **Core value:** Accurate, queryable health data across intake, vitals, and medication adherence — structured for cross-domain analysis and future AI querying
-**Current focus:** Phase 22 — e2e-testing-in-ci
+**Current focus:** Phase 23 — supply-chain-hardening
 
 ## Current Position
 
-Phase: 23
-Plan: Not started
-Status: Executing Phase 22
+Phase: 23 (supply-chain-hardening) — EXECUTING
+Plan: 2 of 2
+Status: Ready to execute
 Last activity: 2026-03-28
 
 Progress: [████████░░] 75%
@@ -57,6 +57,7 @@ Progress: [████████░░] 75%
 | Phase 20 P02 | 2min | 1 tasks | 1 files |
 | Phase 21 P01 | 3min | 3 tasks | 3 files |
 | Phase 21 P02 | 2min | 2 tasks | 2 files |
+| Phase 23 P01 | 13min | 1 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -79,6 +80,10 @@ Key decisions carrying forward into v1.2:
 - [Phase 21]: Explicit TABLE_TO_FIXTURE mapping for three-way sync (handles naming inconsistencies safely)
 - [Phase 21]: JSON.stringify deep equality for backup round-trip field verification (matches existing isContentEqual pattern)
 - [Phase 21]: Unconditional data-integrity CI job (no path-filter) ensures db.ts changes always trigger integrity tests
+- [Phase 23]: trustPolicyExclude for 5 packages with legitimate trust regressions
+- [Phase 23]: GHSA-h25m-26qc-wcjf ignored: Next.js RSC DoS only affects 15+ RSC; app uses 14.x
+- [Phase 23]: pnpm 10.30 auditConfig.ignoreCves not read by CLI; CI must use --ignore flag
+- [Phase 23]: Rollup override removed: breaks next-pwa build; accepted for transitive-only usage
 
 ### Pending Todos
 
@@ -103,6 +108,6 @@ None.
 ## Session Continuity
 
 Last activity: 2026-03-28 -- Phase 20 plan 02 complete
-Last session: 2026-03-28T12:44:53.876Z
-Stopped at: Phase 23 context gathered
-Resume file: .planning/phases/23-supply-chain-hardening/23-CONTEXT.md
+Last session: 2026-03-28T13:48:23.754Z
+Stopped at: Completed 23-01-PLAN.md
+Resume file: None
