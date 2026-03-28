@@ -10,7 +10,7 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 
 ## Current State
 
-**Shipped:** v1.0 Engineering Overhaul + v1.1 UI Overhaul
+**Shipped:** v1.0 Engineering Overhaul + v1.1 UI Overhaul + Phase 20 (Core CI Pipeline)
 **Codebase:** ~44K LOC TypeScript, Next.js 14 App Router, Dexie.js v15 (IndexedDB)
 
 ## Current Milestone: v1.2 CI & Data Integrity
@@ -67,7 +67,7 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 - [ ] Coverage tracking — code coverage metrics reported per PR
 - [ ] Benchmarking — performance baselines with regression detection
 - [ ] Supply chain hardening — lockfile audit, package age enforcement (24h minimum), no auto-updates
-- [ ] CI orchestration — GitHub Actions workflows with parallelism, caching, and clear failure reporting
+- ✓ CI orchestration — GitHub Actions workflow with 5 parallel jobs (lint, typecheck, dual-TZ tests, build+security), gated by ci-pass — Phase 20
 
 ### Out of Scope
 
@@ -126,4 +126,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-27 after v1.2 milestone start*
+*Last updated: 2026-03-28 after Phase 20 completion*
