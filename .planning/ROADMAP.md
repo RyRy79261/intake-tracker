@@ -112,10 +112,10 @@ Plans:
   1. `pnpm typecheck` (`tsc --noEmit`) exits 0 with zero errors
   2. `benchmarks/results.json` contains relative or CI-compatible paths, not worktree-absolute paths
   3. Supply chain drift check verifies all 4 pnpm security settings (minimumReleaseAge, trustPolicy, blockExoticSubdeps, auditLevel)
-**Plans**: 0 plans (to be created via `/gsd:plan-phase 25`)
+**Plans**: 1 plan
 
 Plans:
-(none yet)
+- [ ] 25-01-PLAN.md — Fix tsconfig target, regenerate benchmark baselines, complete supply chain drift check
 
 ## Progress
 
@@ -130,4 +130,4 @@ Phases execute in numeric order: 20 → 21 → 22 → 23 → 24 → 25
 | 22. E2E Testing in CI | v1.2 | 1/2 | Complete    | 2026-03-28 |
 | 23. Supply Chain Hardening | v1.2 | 3/3 | Complete    | 2026-03-28 |
 | 24. CI Optimization & Benchmarking | v1.2 | 2/2 | Complete    | 2026-03-28 |
-| 25. CI Integration Fixes | v1.2 | 0/0 | Planned     | — |
+| 25. CI Integration Fixes | v1.2 | 0/1 | Planned     | — |
