@@ -1,0 +1,74 @@
+{
+  "files": [
+    {
+      "filepath": "/home/ryan/repos/Personal/intake-tracker/.claude/worktrees/agent-a4dfb4bb/src/__tests__/bench/backup.bench.ts",
+      "groups": [
+        {
+          "fullName": "src/__tests__/bench/backup.bench.ts > backup round-trip",
+          "benchmarks": [
+            {
+              "id": "-1222129167_0_0",
+              "name": "export + import all 16 tables",
+              "rank": 1,
+              "rme": 9.726446621273139,
+              "samples": [],
+              "totalTime": 2023.1381959999992,
+              "min": 12.197141999999985,
+              "max": 52.683210000000145,
+              "hz": 33.116867711987,
+              "period": 30.196092477611927,
+              "mean": 30.196092477611927,
+              "variance": 144.92008561390108,
+              "sd": 12.038275857194048,
+              "sem": 1.4707094724813208,
+              "df": 66,
+              "critical": 1.997,
+              "moe": 2.937006816545198,
+              "p75": 43.18164899999988,
+              "p99": 52.683210000000145,
+              "p995": 52.683210000000145,
+              "p999": 52.683210000000145,
+              "sampleCount": 67,
+              "median": 27.688531999999896
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "filepath": "/home/ryan/repos/Personal/intake-tracker/.claude/worktrees/agent-a4dfb4bb/src/__tests__/bench/migration.bench.ts",
+      "groups": [
+        {
+          "fullName": "src/__tests__/bench/migration.bench.ts > migration chain v10-v15",
+          "benchmarks": [
+            {
+              "id": "1200514005_0_0",
+              "name": "full migration chain: open db at v10 then upgrade to v15",
+              "rank": 1,
+              "rme": 2.1057300160656607,
+              "samples": [],
+              "totalTime": 2001.65984,
+              "min": 1.2014180000001033,
+              "max": 7.085076000000015,
+              "hz": 588.0119970833806,
+              "period": 1.7006455734919286,
+              "mean": 1.7006455734919286,
+              "variance": 0.39291383558154463,
+              "sd": 0.6268283940454075,
+              "sem": 0.01827092056526099,
+              "df": 1176,
+              "critical": 1.96,
+              "moe": 0.03581100430791154,
+              "p75": 1.6965589999999793,
+              "p99": 4.023896000000036,
+              "p995": 4.461197999999968,
+              "p999": 5.719606999999996,
+              "sampleCount": 1177,
+              "median": 1.4477850000000672
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
