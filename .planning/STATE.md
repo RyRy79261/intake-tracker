@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: CI & Data Integrity
-status: verifying
-stopped_at: Completed 23-02-PLAN.md
-last_updated: "2026-03-28T13:54:14.577Z"
+status: executing
+stopped_at: Completed 23-03-PLAN.md
+last_updated: "2026-03-28T14:33:26.039Z"
 last_activity: 2026-03-28
 progress:
   total_phases: 5
-  completed_phases: 3
-  total_plans: 8
-  completed_plans: 7
+  completed_phases: 4
+  total_plans: 9
+  completed_plans: 9
   percent: 75
 ---
 
@@ -26,8 +26,8 @@ See: .planning/PROJECT.md (updated 2026-03-27)
 ## Current Position
 
 Phase: 23 (supply-chain-hardening) — EXECUTING
-Plan: 2 of 2
-Status: Phase complete — ready for verification
+Plan: 2 of 3
+Status: Ready to execute
 Last activity: 2026-03-28
 
 Progress: [████████░░] 75%
@@ -59,6 +59,7 @@ Progress: [████████░░] 75%
 | Phase 21 P02 | 2min | 2 tasks | 2 files |
 | Phase 23 P01 | 13min | 1 tasks | 4 files |
 | Phase 23 P02 | 1min | 1 tasks | 1 files |
+| Phase 23 P03 | 5min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -86,6 +87,8 @@ Key decisions carrying forward into v1.2:
 - [Phase 23]: pnpm 10.30 auditConfig.ignoreCves not read by CLI; CI must use --ignore flag
 - [Phase 23]: Rollup override removed: breaks next-pwa build; accepted for transitive-only usage
 - [Phase 23]: Dedicated supply-chain CI job for clear failure attribution; config drift checks pnpm-workspace.yaml (not .npmrc)
+- [Phase 23]: Overrides for minimatch/picomatch not honored by incremental pnpm install; added to ignoreCves instead of deleting lockfile
+- [Phase 23]: 6 --ignore flags in CI audit step mirror auditConfig.ignoreCves exactly (pnpm 10.30 workaround)
 
 ### Pending Todos
 
@@ -110,6 +113,6 @@ None.
 ## Session Continuity
 
 Last activity: 2026-03-28 -- Phase 20 plan 02 complete
-Last session: 2026-03-28T13:54:14.574Z
-Stopped at: Completed 23-02-PLAN.md
+Last session: 2026-03-28T14:33:26.037Z
+Stopped at: Completed 23-03-PLAN.md
 Resume file: None

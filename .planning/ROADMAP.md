@@ -21,7 +21,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 20: Core CI Pipeline** - GitHub Actions with parallel lint, typecheck, unit tests, build, and timezone dual-pass (completed 2026-03-28)
 - [x] **Phase 21: Data Integrity Gates** - Schema migration safety, backup round-trip verification, and table coverage enforcement in CI (completed 2026-03-28)
 - [x] **Phase 22: E2E Testing in CI** - Playwright against production build with expanded scenario coverage (completed 2026-03-28)
-- [ ] **Phase 23: Supply Chain Hardening** - pnpm security configuration and vulnerability audit in CI
+- [x] **Phase 23: Supply Chain Hardening** - pnpm security configuration and vulnerability audit in CI (completed 2026-03-28)
 - [ ] **Phase 24: CI Optimization & Benchmarking** - Dynamic test selection, coverage reporting, build caching, and performance baselines
 
 ## Phase Details
@@ -85,7 +85,7 @@ Plans:
 Plans:
 - [x] 23-01-PLAN.md — Add pnpm security settings and resolve all critical/high vulnerabilities
 - [x] 23-02-PLAN.md — Add supply-chain CI job with config drift check and audit gate
-- [ ] 23-03-PLAN.md — Gap closure: fix lockfile override resolution and CI audit --ignore flags
+- [x] 23-03-PLAN.md — Gap closure: fix lockfile override resolution and CI audit --ignore flags
 
 ### Phase 24: CI Optimization & Benchmarking
 **Goal**: CI is fast and informative -- expensive jobs only run when relevant files change, coverage trends are visible per PR, builds are cached, and performance baselines exist for critical paths
@@ -109,5 +109,5 @@ Phases execute in numeric order: 20 → 21 → 22 → 23 → 24
 | 20. Core CI Pipeline | v1.2 | 2/2 | Complete    | 2026-03-28 |
 | 21. Data Integrity Gates | v1.2 | 2/2 | Complete    | 2026-03-28 |
 | 22. E2E Testing in CI | v1.2 | 1/2 | Complete    | 2026-03-28 |
-| 23. Supply Chain Hardening | v1.2 | 2/3 | In Progress|  |
+| 23. Supply Chain Hardening | v1.2 | 3/3 | Complete   | 2026-03-28 |
 | 24. CI Optimization & Benchmarking | v1.2 | 0/? | Not started | - |
