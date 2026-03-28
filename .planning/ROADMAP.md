@@ -18,7 +18,7 @@ Personal health tracking PWA. v1.0 rebuilt the engineering foundation (strict Ty
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 20: Core CI Pipeline** - GitHub Actions with parallel lint, typecheck, unit tests, build, and timezone dual-pass
+- [x] **Phase 20: Core CI Pipeline** - GitHub Actions with parallel lint, typecheck, unit tests, build, and timezone dual-pass (completed 2026-03-28)
 - [ ] **Phase 21: Data Integrity Gates** - Schema migration safety, backup round-trip verification, and table coverage enforcement in CI
 - [ ] **Phase 22: E2E Testing in CI** - Playwright against production build with expanded scenario coverage
 - [ ] **Phase 23: Supply Chain Hardening** - pnpm security configuration and vulnerability audit in CI
@@ -39,7 +39,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 Plans:
 - [x] 20-01-PLAN.md — Fix TypeScript strict-mode errors, add typecheck script, extend bundle security patterns
-- [ ] 20-02-PLAN.md — Create CI workflow with parallel jobs and gate
+- [x] 20-02-PLAN.md — Create CI workflow with parallel jobs and gate
 
 ### Phase 21: Data Integrity Gates
 **Goal**: CI prevents any change from corrupting the Dexie schema, breaking migrations, or losing data during backup/restore -- protecting the user's irreplaceable phone-side health data
@@ -93,7 +93,7 @@ Phases execute in numeric order: 20 → 21 → 22 → 23 → 24
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 20. Core CI Pipeline | v1.2 | 1/2 | Executing | - |
+| 20. Core CI Pipeline | v1.2 | 2/2 | Complete   | 2026-03-28 |
 | 21. Data Integrity Gates | v1.2 | 0/? | Not started | - |
 | 22. E2E Testing in CI | v1.2 | 0/? | Not started | - |
 | 23. Supply Chain Hardening | v1.2 | 0/? | Not started | - |

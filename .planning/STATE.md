@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: CI & Data Integrity
 status: executing
-stopped_at: Completed 20-01-PLAN.md
-last_updated: "2026-03-28T08:32:01Z"
-last_activity: 2026-03-28 -- Phase 20 plan 01 complete
+stopped_at: Completed 20-02-PLAN.md
+last_updated: "2026-03-28T08:39:53Z"
+last_activity: 2026-03-28 -- Phase 20 plan 02 complete
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 2
-  completed_plans: 1
+  completed_plans: 2
   percent: 10
 ---
 
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-03-27)
 ## Current Position
 
 Phase: 20 (core-ci-pipeline) — EXECUTING
-Plan: 1 of 2 complete
+Plan: 2 of 2 complete
 Status: Executing Phase 20
-Last activity: 2026-03-28 -- Phase 20 plan 01 complete
+Last activity: 2026-03-28 -- Phase 20 plan 02 complete
 
 Progress: [#░░░░░░░░░] 10%
 
@@ -54,6 +54,7 @@ Progress: [#░░░░░░░░░] 10%
 | 19 - Build Stability | 1 | 22 min |
 
 *Updated after each plan completion*
+| Phase 20 P02 | 2min | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -71,6 +72,7 @@ Key decisions carrying forward into v1.2:
 
 - [v1.2-20-01]: Non-null assertion pattern for array index accesses in tests (concise + type-safe)
 - [v1.2-20-01]: ServiceResult narrowing with throw guard for readable test assertions
+- [Phase 20]: Node 20 for CI runners (Node 18 EOL); explicit per-job result checks in gate (avoids runner bug #1540)
 
 ### Pending Todos
 
@@ -94,7 +96,7 @@ None.
 
 ## Session Continuity
 
-Last activity: 2026-03-28 -- Phase 20 plan 01 complete
-Last session: 2026-03-28T08:32:01Z
-Stopped at: Completed 20-01-PLAN.md
-Resume file: .planning/phases/20-core-ci-pipeline/20-01-SUMMARY.md
+Last activity: 2026-03-28 -- Phase 20 plan 02 complete
+Last session: 2026-03-28T08:39:53Z
+Stopped at: Completed 20-02-PLAN.md
+Resume file: .planning/phases/20-core-ci-pipeline/20-02-SUMMARY.md

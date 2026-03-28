@@ -9,9 +9,9 @@ Requirements for milestone v1.2 CI & Data Integrity. Each maps to roadmap phases
 
 ### CI Pipeline
 
-- [ ] **CIPL-01**: GitHub Actions workflow runs ESLint, TypeScript check, and Vitest unit tests as parallel jobs on every PR
-- [ ] **CIPL-02**: CI runs `pnpm build` and verifies no secrets in the client bundle
-- [ ] **CIPL-03**: Unit tests run under both TZ=Africa/Johannesburg and TZ=Europe/Berlin in CI
+- [x] **CIPL-01**: GitHub Actions workflow runs ESLint, TypeScript check, and Vitest unit tests as parallel jobs on every PR
+- [x] **CIPL-02**: CI runs `pnpm build` and verifies no secrets in the client bundle
+- [x] **CIPL-03**: Unit tests run under both TZ=Africa/Johannesburg and TZ=Europe/Berlin in CI
 
 ### Data Integrity
 
@@ -84,9 +84,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CIPL-01 | Phase 20 | Pending |
-| CIPL-02 | Phase 20 | Pending |
-| CIPL-03 | Phase 20 | Pending |
+| CIPL-01 | Phase 20 | Complete |
+| CIPL-02 | Phase 20 | Complete |
+| CIPL-03 | Phase 20 | Complete |
 | DATA-04 | Phase 21 | Pending |
 | DATA-05 | Phase 21 | Pending |
 | DATA-06 | Phase 21 | Pending |
