@@ -96,7 +96,11 @@ Plans:
   2. Every PR receives a coverage report comment showing change in coverage relative to the base branch (not an absolute threshold)
   3. Next.js build cache (`.next/cache`) is preserved between CI runs, measurably reducing build times on subsequent runs
   4. Vitest bench establishes performance baselines for critical paths (migration speed, service layer operations) that can detect regressions
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 24-01-PLAN.md — Benchmark test files, baseline generation, and coverage config
+- [ ] 24-02-PLAN.md — CI workflow overhaul: paths-filter gating, build cache, coverage job, benchmark job, skip-aware gate
 
 ## Progress
 
@@ -110,4 +114,4 @@ Phases execute in numeric order: 20 → 21 → 22 → 23 → 24
 | 21. Data Integrity Gates | v1.2 | 2/2 | Complete    | 2026-03-28 |
 | 22. E2E Testing in CI | v1.2 | 1/2 | Complete    | 2026-03-28 |
 | 23. Supply Chain Hardening | v1.2 | 3/3 | Complete    | 2026-03-28 |
-| 24. CI Optimization & Benchmarking | v1.2 | 0/? | Not started | - |
+| 24. CI Optimization & Benchmarking | v1.2 | 0/2 | Not started | - |
