@@ -20,7 +20,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 20: Core CI Pipeline** - GitHub Actions with parallel lint, typecheck, unit tests, build, and timezone dual-pass (completed 2026-03-28)
 - [x] **Phase 21: Data Integrity Gates** - Schema migration safety, backup round-trip verification, and table coverage enforcement in CI (completed 2026-03-28)
-- [ ] **Phase 22: E2E Testing in CI** - Playwright against production build with expanded scenario coverage
+- [x] **Phase 22: E2E Testing in CI** - Playwright against production build with expanded scenario coverage (completed 2026-03-28)
 - [ ] **Phase 23: Supply Chain Hardening** - pnpm security configuration and vulnerability audit in CI
 - [ ] **Phase 24: CI Optimization & Benchmarking** - Dynamic test selection, coverage reporting, build caching, and performance baselines
 
@@ -103,6 +103,6 @@ Phases execute in numeric order: 20 → 21 → 22 → 23 → 24
 |-------|-----------|----------------|--------|-----------|
 | 20. Core CI Pipeline | v1.2 | 2/2 | Complete    | 2026-03-28 |
 | 21. Data Integrity Gates | v1.2 | 2/2 | Complete    | 2026-03-28 |
-| 22. E2E Testing in CI | v1.2 | 1/2 | In Progress|  |
+| 22. E2E Testing in CI | v1.2 | 1/2 | Complete    | 2026-03-28 |
 | 23. Supply Chain Hardening | v1.2 | 0/? | Not started | - |
 | 24. CI Optimization & Benchmarking | v1.2 | 0/? | Not started | - |

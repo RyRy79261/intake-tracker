@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: CI & Data Integrity
-status: verifying
-stopped_at: Completed 22-02-PLAN.md
-last_updated: "2026-03-28T12:18:57.618Z"
+status: executing
+stopped_at: Phase 22 UI-SPEC approved
+last_updated: "2026-03-28T12:27:05.529Z"
 last_activity: 2026-03-28
 progress:
   total_phases: 5
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 6
-  completed_plans: 5
+  completed_plans: 6
   percent: 75
 ---
 
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-27)
 
 **Core value:** Accurate, queryable health data across intake, vitals, and medication adherence — structured for cross-domain analysis and future AI querying
-**Current focus:** Phase 21 — data-integrity-gates
+**Current focus:** Phase 22 — e2e-testing-in-ci
 
 ## Current Position
 
-Phase: 22
+Phase: 23
 Plan: Not started
-Status: Phase complete — ready for verification
+Status: Executing Phase 22
 Last activity: 2026-03-28
 
 Progress: [████████░░] 75%
@@ -57,7 +57,6 @@ Progress: [████████░░] 75%
 | Phase 20 P02 | 2min | 1 tasks | 1 files |
 | Phase 21 P01 | 3min | 3 tasks | 3 files |
 | Phase 21 P02 | 2min | 2 tasks | 2 files |
-| Phase 22 P02 | 2min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -80,7 +79,6 @@ Key decisions carrying forward into v1.2:
 - [Phase 21]: Explicit TABLE_TO_FIXTURE mapping for three-way sync (handles naming inconsistencies safely)
 - [Phase 21]: JSON.stringify deep equality for backup round-trip field verification (matches existing isContentEqual pattern)
 - [Phase 21]: Unconditional data-integrity CI job (no path-filter) ensures db.ts changes always trigger integrity tests
-- [Phase 22]: Used inline DoseRow Take button for E2E tests (more reliable than DoseDetailDialog drawer for pending doses)
 
 ### Pending Todos
 
@@ -105,6 +103,6 @@ None.
 ## Session Continuity
 
 Last activity: 2026-03-28 -- Phase 20 plan 02 complete
-Last session: 2026-03-28T12:18:57.615Z
-Stopped at: Completed 22-02-PLAN.md
-Resume file: None
+Last session: 2026-03-28T10:42:24.968Z
+Stopped at: Phase 22 UI-SPEC approved
+Resume file: .planning/phases/22-e2e-testing-in-ci/22-UI-SPEC.md
