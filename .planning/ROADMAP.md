@@ -68,8 +68,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [x] 22-01-PLAN.md — Playwright CI config (dual webServer, service worker blocking), e2e CI job, settings persistence test
-- [ ] 22-02-PLAN.md — Food/liquid composable entry tests and medication dose logging lifecycle test
+- [ ] 22-01-PLAN.md — Playwright CI config (dual webServer, service worker blocking), e2e CI job, settings persistence test
+- [x] 22-02-PLAN.md — Food/liquid composable entry tests and medication dose logging lifecycle test
 
 ### Phase 23: Supply Chain Hardening
 **Goal**: The project is protected against supply chain attacks through pnpm security configuration and automated vulnerability scanning
