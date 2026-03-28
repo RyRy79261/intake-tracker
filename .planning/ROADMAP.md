@@ -65,7 +65,11 @@ Plans:
   2. E2E tests exercise at least three key workflows: composable entry creation (food/liquid), medication dose logging lifecycle, and settings persistence across page reload
   3. E2E tests run against a production build (`pnpm build && pnpm start`), not the dev server, so regressions in the optimized bundle are caught
   4. A PR that breaks any exercised user workflow is blocked from merging
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 22-01-PLAN.md — Playwright CI config (dual webServer, service worker blocking), e2e CI job, settings persistence test
+- [ ] 22-02-PLAN.md — Food/liquid composable entry tests and medication dose logging lifecycle test
 
 ### Phase 23: Supply Chain Hardening
 **Goal**: The project is protected against supply chain attacks through pnpm security configuration and automated vulnerability scanning
@@ -99,6 +103,6 @@ Phases execute in numeric order: 20 → 21 → 22 → 23 → 24
 |-------|-----------|----------------|--------|-----------|
 | 20. Core CI Pipeline | v1.2 | 2/2 | Complete    | 2026-03-28 |
 | 21. Data Integrity Gates | v1.2 | 2/2 | Complete    | 2026-03-28 |
-| 22. E2E Testing in CI | v1.2 | 0/? | Not started | - |
+| 22. E2E Testing in CI | v1.2 | 0/2 | Not started | - |
 | 23. Supply Chain Hardening | v1.2 | 0/? | Not started | - |
 | 24. CI Optimization & Benchmarking | v1.2 | 0/? | Not started | - |
