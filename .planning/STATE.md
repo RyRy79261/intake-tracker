@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: CI & Data Integrity
-status: planning
-stopped_at: Phase 20 context gathered
-last_updated: "2026-03-27T23:13:07.665Z"
-last_activity: 2026-03-27 — Roadmap created for v1.2
+status: executing
+stopped_at: Completed 20-01-PLAN.md
+last_updated: "2026-03-28T08:32:01Z"
+last_activity: 2026-03-28 -- Phase 20 plan 01 complete
 progress:
   total_phases: 5
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  total_plans: 2
+  completed_plans: 1
+  percent: 10
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-27)
 
 **Core value:** Accurate, queryable health data across intake, vitals, and medication adherence — structured for cross-domain analysis and future AI querying
-**Current focus:** v1.2 CI & Data Integrity — Phase 20 ready to plan
+**Current focus:** Phase 20 — core-ci-pipeline
 
 ## Current Position
 
-Phase: 20 of 24 (Core CI Pipeline) — first of 5 phases in v1.2
-Plan: —
-Status: Ready to plan
-Last activity: 2026-03-27 — Roadmap created for v1.2
+Phase: 20 (core-ci-pipeline) — EXECUTING
+Plan: 1 of 2 complete
+Status: Executing Phase 20
+Last activity: 2026-03-28 -- Phase 20 plan 01 complete
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [#░░░░░░░░░] 10%
 
 ## Performance Metrics
 
@@ -69,6 +69,9 @@ Key decisions carrying forward into v1.2:
 - [v1.2-research]: Zero new npm packages needed — all from existing deps + pnpm config + free GitHub Actions
 - [v1.2-research]: fake-indexeddb does not replicate browser-specific migration behavior — acknowledged limitation
 
+- [v1.2-20-01]: Non-null assertion pattern for array index accesses in tests (concise + type-safe)
+- [v1.2-20-01]: ServiceResult narrowing with throw guard for readable test assertions
+
 ### Pending Todos
 
 None yet.
@@ -91,7 +94,7 @@ None.
 
 ## Session Continuity
 
-Last activity: 2026-03-27 — Roadmap created for v1.2
-Last session: 2026-03-27T23:13:07.663Z
-Stopped at: Phase 20 context gathered
-Resume file: .planning/phases/20-core-ci-pipeline/20-CONTEXT.md
+Last activity: 2026-03-28 -- Phase 20 plan 01 complete
+Last session: 2026-03-28T08:32:01Z
+Stopped at: Completed 20-01-PLAN.md
+Resume file: .planning/phases/20-core-ci-pipeline/20-01-SUMMARY.md
