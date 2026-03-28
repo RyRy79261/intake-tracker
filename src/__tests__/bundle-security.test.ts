@@ -47,6 +47,9 @@ describe("client bundle security", () => {
     // Env var names that should never appear in client code
     expect(content).not.toContain("ANTHROPIC_API_KEY");
     expect(content).not.toContain("PRIVY_APP_SECRET");
+
+    // Neon/Postgres connection strings (D-06)
+    expect(content).not.toMatch(/postgres(ql)?:\/\/[^\s'"]+/);
   });
 
   it("client bundle should not contain sensitive env var values", () => {
@@ -56,5 +59,9 @@ describe("client bundle security", () => {
     expect(content).not.toContain("ALLOWED_EMAILS");
     expect(content).not.toContain("DATABASE_URL");
     expect(content).not.toContain("ALLOW_DEV_FALLBACK");
+
+    // Neon-specific env var names (D-06)
+    expect(content).not.toContain("NEON_DATABASE_URL");
+    expect(content).not.toContain("NEON_API_KEY");
   });
 });

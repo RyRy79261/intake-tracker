@@ -13,6 +13,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:tz:sa": "TZ=Africa/Johannesburg vitest run",
     "test:tz:de": "TZ=Europe/Berlin vitest run",
