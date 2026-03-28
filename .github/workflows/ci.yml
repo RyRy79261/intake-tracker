@@ -105,9 +105,37 @@ jobs:
           path: test-results/
           retention-days: 7
 
+  supply-chain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - name: Verify supply chain config
+        run: |
+          echo "Checking pnpm-workspace.yaml for required security settings..."
+          missing=0
+          for setting in minimumReleaseAge trustPolicy blockExoticSubdeps; do
+            if ! grep -q "^${setting}:" pnpm-workspace.yaml; then
+              echo "::error::Missing required security setting: ${setting} in pnpm-workspace.yaml"
+              missing=1
+            fi
+          done
+          if [ "$missing" -eq 1 ]; then
+            echo "Add the missing settings to pnpm-workspace.yaml. See Phase 23 docs."
+            exit 1
+          fi
+          echo "All supply chain settings present"
+      - name: Audit dependencies
+        run: pnpm audit --audit-level high
+
   ci-pass:
     if: always()
-    needs: [lint, typecheck, test-tz-sa, test-tz-de, build, data-integrity, e2e]
+    needs: [lint, typecheck, test-tz-sa, test-tz-de, build, data-integrity, e2e, supply-chain]
     runs-on: ubuntu-latest
     steps:
       - name: Check all jobs passed
@@ -118,7 +146,8 @@ jobs:
                 "${{ needs.test-tz-de.result }}" != "success" ||
                 "${{ needs.build.result }}" != "success" ||
                 "${{ needs.data-integrity.result }}" != "success" ||
-                "${{ needs.e2e.result }}" != "success" ]]; then
+                "${{ needs.e2e.result }}" != "success" ||
+                "${{ needs.supply-chain.result }}" != "success" ]]; then
             echo "::error::One or more CI jobs failed or were cancelled"
             exit 1
           fi
