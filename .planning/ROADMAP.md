@@ -19,7 +19,7 @@ Personal health tracking PWA. v1.0 rebuilt the engineering foundation (strict Ty
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 20: Core CI Pipeline** - GitHub Actions with parallel lint, typecheck, unit tests, build, and timezone dual-pass (completed 2026-03-28)
-- [ ] **Phase 21: Data Integrity Gates** - Schema migration safety, backup round-trip verification, and table coverage enforcement in CI
+- [x] **Phase 21: Data Integrity Gates** - Schema migration safety, backup round-trip verification, and table coverage enforcement in CI (completed 2026-03-28)
 - [ ] **Phase 22: E2E Testing in CI** - Playwright against production build with expanded scenario coverage
 - [ ] **Phase 23: Supply Chain Hardening** - pnpm security configuration and vulnerability audit in CI
 - [ ] **Phase 24: CI Optimization & Benchmarking** - Dynamic test selection, coverage reporting, build caching, and performance baselines
@@ -54,7 +54,7 @@ Plans:
 
 Plans:
 - [x] 21-01-PLAN.md — Static schema parser, schema consistency test (DATA-04), and three-way table sync test (DATA-07)
-- [ ] 21-02-PLAN.md — Deep equality backup round-trip test (DATA-06) and data-integrity CI job (DATA-05)
+- [x] 21-02-PLAN.md — Deep equality backup round-trip test (DATA-06) and data-integrity CI job (DATA-05)
 
 ### Phase 22: E2E Testing in CI
 **Goal**: Real user workflows are exercised against the production build on every PR, catching functional regressions that unit tests miss
@@ -98,7 +98,7 @@ Phases execute in numeric order: 20 → 21 → 22 → 23 → 24
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 20. Core CI Pipeline | v1.2 | 2/2 | Complete    | 2026-03-28 |
-| 21. Data Integrity Gates | v1.2 | 1/2 | In Progress|  |
+| 21. Data Integrity Gates | v1.2 | 2/2 | Complete   | 2026-03-28 |
 | 22. E2E Testing in CI | v1.2 | 0/? | Not started | - |
 | 23. Supply Chain Hardening | v1.2 | 0/? | Not started | - |
 | 24. CI Optimization & Benchmarking | v1.2 | 0/? | Not started | - |

@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: CI & Data Integrity
-status: executing
-stopped_at: Completed 21-01-PLAN.md
-last_updated: "2026-03-28T09:42:36.138Z"
+status: verifying
+stopped_at: Completed 21-02-PLAN.md
+last_updated: "2026-03-28T09:49:39.119Z"
 last_activity: 2026-03-28
 progress:
   total_phases: 5
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 4
-  completed_plans: 3
-  percent: 10
+  completed_plans: 4
+  percent: 75
 ---
 
 # Project State
@@ -27,8 +27,8 @@ See: .planning/PROJECT.md (updated 2026-03-27)
 
 Phase: 21 (data-integrity-gates) -- EXECUTING
 Plan: 2 of 2
-Status: Executing Phase 21 -- Plan 01 complete
-Last activity: 2026-03-28 -- Phase 21 Plan 01 complete
+Status: Phase complete — ready for verification
+Last activity: 2026-03-28
 
 Progress: [████████░░] 75%
 
@@ -56,6 +56,7 @@ Progress: [████████░░] 75%
 *Updated after each plan completion*
 | Phase 20 P02 | 2min | 1 tasks | 1 files |
 | Phase 21 P01 | 3min | 3 tasks | 3 files |
+| Phase 21 P02 | 2min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -76,6 +77,8 @@ Key decisions carrying forward into v1.2:
 - [Phase 20]: Node 20 for CI runners (Node 18 EOL); explicit per-job result checks in gate (avoids runner bug #1540)
 - [Phase 21]: Static file reading via fs.readFileSync for integrity tests (avoids Dexie init side effects)
 - [Phase 21]: Explicit TABLE_TO_FIXTURE mapping for three-way sync (handles naming inconsistencies safely)
+- [Phase 21]: JSON.stringify deep equality for backup round-trip field verification (matches existing isContentEqual pattern)
+- [Phase 21]: Unconditional data-integrity CI job (no path-filter) ensures db.ts changes always trigger integrity tests
 
 ### Pending Todos
 
@@ -100,6 +103,6 @@ None.
 ## Session Continuity
 
 Last activity: 2026-03-28 -- Phase 20 plan 02 complete
-Last session: 2026-03-28T09:42:36.135Z
-Stopped at: Completed 21-01-PLAN.md
+Last session: 2026-03-28T09:49:34.946Z
+Stopped at: Completed 21-02-PLAN.md
 Resume file: None
