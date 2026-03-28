@@ -38,22 +38,21 @@ created: 2026-03-28
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 22-01-01 | 01 | 1 | E2E-01 | e2e | `npx playwright test` | ✅ | ⬜ pending |
-| 22-02-01 | 02 | 2 | E2E-02 | e2e | `npx playwright test e2e/intake-logs.spec.ts` | ✅ | ⬜ pending |
-| 22-02-02 | 02 | 2 | E2E-02 | e2e | `npx playwright test e2e/medication-wizard.spec.ts` | ✅ | ⬜ pending |
-| 22-02-03 | 02 | 2 | E2E-02 | e2e | `npx playwright test e2e/settings.spec.ts` | ❌ W0 | ⬜ pending |
-| 22-03-01 | 03 | 3 | E2E-03 | ci | `gh workflow run ci.yml` | ✅ | ⬜ pending |
+| 22-01-01 | 01 | 1 | E2E-01 | e2e | `npx playwright test` | Yes | pending |
+| 22-01-02 | 01 | 1 | E2E-01 | ci | `grep -q "e2e:" .github/workflows/ci.yml` | Yes | pending |
+| 22-01-03 | 01 | 1 | E2E-02 | e2e | `npx playwright test e2e/settings.spec.ts` | Yes | pending |
+| 22-02-01 | 02 | 1 | E2E-02 | e2e | `npx playwright test e2e/intake-logs.spec.ts` | Yes | pending |
+| 22-02-02 | 02 | 1 | E2E-02 | e2e | `npx playwright test e2e/medication-wizard.spec.ts` | Yes | pending |
 
-*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+*Status: pending / green / red / flaky*
 
 ---
 
 ## Wave 0 Requirements
 
-- [ ] `e2e/settings.spec.ts` — stubs for E2E-02 settings persistence tests
-- [ ] Verify `playwright.config.ts` has CI-aware webServer config
+No Wave 0 requirements. All spec files either exist or are created by Plan 01 tasks. Both plans are Wave 1 with no inter-plan dependencies.
 
-*Existing infrastructure covers most phase requirements — Playwright installed, spec files exist.*
+*Existing infrastructure covers most phase requirements -- Playwright installed, spec files exist.*
 
 ---
 
