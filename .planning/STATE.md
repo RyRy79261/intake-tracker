@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-03-27)
 
 ## Current Position
 
-Phase: 22
-Plan: Not started
-Status: Phase complete — ready for verification
-Last activity: 2026-03-28
+Phase: 22 (e2e-testing-in-ci) — EXECUTING
+Plan: 1 of 2 complete
+Status: Executing Phase 22
+Last activity: 2026-03-28 -- Phase 22 Plan 01 complete
 
 Progress: [████████░░] 75%
 
@@ -57,6 +57,7 @@ Progress: [████████░░] 75%
 | Phase 20 P02 | 2min | 1 tasks | 1 files |
 | Phase 21 P01 | 3min | 3 tasks | 3 files |
 | Phase 21 P02 | 2min | 2 tasks | 2 files |
+| Phase 22 P01 | 2min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -79,6 +80,9 @@ Key decisions carrying forward into v1.2:
 - [Phase 21]: Explicit TABLE_TO_FIXTURE mapping for three-way sync (handles naming inconsistencies safely)
 - [Phase 21]: JSON.stringify deep equality for backup round-trip field verification (matches existing isContentEqual pattern)
 - [Phase 21]: Unconditional data-integrity CI job (no path-filter) ensures db.ts changes always trigger integrity tests
+- [Phase 22]: serviceWorkers: 'block' in Playwright config prevents PWA SW from intercepting page.route() mocks
+- [Phase 22]: CI dual-mode webServer via process.env.CI ternary (production build in CI, dev server locally)
+- [Phase 22]: NEXT_PUBLIC_LOCAL_AGENT_MODE=true on both build and start in CI (Next.js build-time inlining)
 
 ### Pending Todos
 
@@ -102,7 +106,7 @@ None.
 
 ## Session Continuity
 
-Last activity: 2026-03-28 -- Phase 20 plan 02 complete
-Last session: 2026-03-28T10:16:58.317Z
-Stopped at: Phase 22 context gathered
-Resume file: .planning/phases/22-e2e-testing-in-ci/22-CONTEXT.md
+Last activity: 2026-03-28 -- Phase 22 Plan 01 complete
+Last session: 2026-03-28T12:16:41Z
+Stopped at: Completed 22-01-PLAN.md
+Resume file: .planning/phases/22-e2e-testing-in-ci/22-01-SUMMARY.md
