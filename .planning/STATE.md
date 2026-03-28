@@ -26,7 +26,6 @@ See: .planning/PROJECT.md (updated 2026-03-27)
 ## Current Position
 
 Phase: 24 (ci-optimization-benchmarking) — EXECUTING
-<<<<<<< Updated upstream
 Plan: 2 of 2 -- COMPLETE
 Status: Ready to execute
 Last activity: 2026-03-28
