@@ -21,7 +21,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-27)
 
 **Core value:** Accurate, queryable health data across intake, vitals, and medication adherence — structured for cross-domain analysis and future AI querying
-**Current focus:** Phase 20 — core-ci-pipeline
+**Current focus:** Phase 21 — data-integrity-gates
 
 ## Current Position
 
