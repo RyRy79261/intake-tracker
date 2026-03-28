@@ -22,6 +22,9 @@ export default defineConfig({
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
+
+    /* Block service workers so page.route() mocks work against production builds */
+    serviceWorkers: 'block',
   },
 
   /* Configure projects for major browsers */
@@ -33,12 +36,20 @@ export default defineConfig({
   ],
 
   /* Run your local dev server before starting the tests */
-  webServer: {
-    command: 'NEXT_PUBLIC_LOCAL_AGENT_MODE=true pnpm run dev',
-    url: 'http://localhost:3000',
-    reuseExistingServer: true,
-    stdout: 'pipe',
-    stderr: 'pipe',
-    timeout: 120 * 1000,
-  },
+  webServer: process.env.CI
+    ? {
+        command:
+          'NEXT_PUBLIC_LOCAL_AGENT_MODE=true pnpm build && NEXT_PUBLIC_LOCAL_AGENT_MODE=true pnpm start',
+        url: 'http://localhost:3000',
+        reuseExistingServer: false,
+        timeout: 120 * 1000,
+      }
+    : {
+        command: 'NEXT_PUBLIC_LOCAL_AGENT_MODE=true pnpm run dev',
+        url: 'http://localhost:3000',
+        reuseExistingServer: true,
+        stdout: 'pipe',
+        stderr: 'pipe',
+        timeout: 120 * 1000,
+      },
 });
