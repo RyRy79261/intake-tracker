@@ -15,10 +15,10 @@ Requirements for milestone v1.2 CI & Data Integrity. Each maps to roadmap phases
 
 ### Data Integrity
 
-- [ ] **DATA-04**: Schema consistency check verifies each `db.version(N)` includes all tables from prior versions
+- [x] **DATA-04**: Schema consistency check verifies each `db.version(N)` includes all tables from prior versions
 - [ ] **DATA-05**: Any change to `db.ts` forces all migration and backup round-trip tests to run
 - [ ] **DATA-06**: CI runs backup export + import round-trip covering all 16 tables and verifies no data loss
-- [ ] **DATA-07**: CI fails if a new Dexie table is added without updating the backup service and test fixtures
+- [x] **DATA-07**: CI fails if a new Dexie table is added without updating the backup service and test fixtures
 
 ### E2E Testing
 
@@ -87,10 +87,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CIPL-01 | Phase 20 | Complete |
 | CIPL-02 | Phase 20 | Complete |
 | CIPL-03 | Phase 20 | Complete |
-| DATA-04 | Phase 21 | Pending |
+| DATA-04 | Phase 21 | Complete |
 | DATA-05 | Phase 21 | Pending |
 | DATA-06 | Phase 21 | Pending |
-| DATA-07 | Phase 21 | Pending |
+| DATA-07 | Phase 21 | Complete |
 | E2E-01 | Phase 22 | Pending |
 | E2E-02 | Phase 22 | Pending |
 | E2E-03 | Phase 22 | Pending |

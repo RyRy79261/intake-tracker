@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: CI & Data Integrity
 status: executing
-stopped_at: Phase 21 context gathered
-last_updated: "2026-03-28T09:02:50.034Z"
+stopped_at: Completed 21-01-PLAN.md
+last_updated: "2026-03-28T09:42:36.138Z"
 last_activity: 2026-03-28
 progress:
   total_phases: 5
   completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
+  total_plans: 4
+  completed_plans: 3
   percent: 10
 ---
 
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-03-27)
 
 ## Current Position
 
-Phase: 21
-Plan: Not started
-Status: Executing Phase 20
-Last activity: 2026-03-28
+Phase: 21 (data-integrity-gates) -- EXECUTING
+Plan: 2 of 2
+Status: Executing Phase 21 -- Plan 01 complete
+Last activity: 2026-03-28 -- Phase 21 Plan 01 complete
 
-Progress: [#░░░░░░░░░] 10%
+Progress: [████████░░] 75%
 
 ## Performance Metrics
 
@@ -55,6 +55,7 @@ Progress: [#░░░░░░░░░] 10%
 
 *Updated after each plan completion*
 | Phase 20 P02 | 2min | 1 tasks | 1 files |
+| Phase 21 P01 | 3min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -73,6 +74,8 @@ Key decisions carrying forward into v1.2:
 - [v1.2-20-01]: Non-null assertion pattern for array index accesses in tests (concise + type-safe)
 - [v1.2-20-01]: ServiceResult narrowing with throw guard for readable test assertions
 - [Phase 20]: Node 20 for CI runners (Node 18 EOL); explicit per-job result checks in gate (avoids runner bug #1540)
+- [Phase 21]: Static file reading via fs.readFileSync for integrity tests (avoids Dexie init side effects)
+- [Phase 21]: Explicit TABLE_TO_FIXTURE mapping for three-way sync (handles naming inconsistencies safely)
 
 ### Pending Todos
 
@@ -97,6 +100,6 @@ None.
 ## Session Continuity
 
 Last activity: 2026-03-28 -- Phase 20 plan 02 complete
-Last session: 2026-03-28T09:02:50.030Z
-Stopped at: Phase 21 context gathered
-Resume file: .planning/phases/21-data-integrity-gates/21-CONTEXT.md
+Last session: 2026-03-28T09:42:36.135Z
+Stopped at: Completed 21-01-PLAN.md
+Resume file: None
