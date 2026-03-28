@@ -31,7 +31,7 @@ Requirements for milestone v1.2 CI & Data Integrity. Each maps to roadmap phases
 - [x] **SCHN-01**: pnpm enforces 24h minimum package age via `minimumReleaseAge=1440`
 - [x] **SCHN-02**: pnpm `trustPolicy=no-downgrade` detects compromised publisher accounts
 - [x] **SCHN-03**: pnpm `blockExoticSubdeps=true` prevents git/tarball transitive dependencies
-- [ ] **SCHN-04**: `pnpm audit` runs in CI and fails on known vulnerabilities
+- [x] **SCHN-04**: `pnpm audit` runs in CI and fails on known vulnerabilities
 
 ### CI Optimization
 
@@ -97,7 +97,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SCHN-01 | Phase 23 | Complete |
 | SCHN-02 | Phase 23 | Complete |
 | SCHN-03 | Phase 23 | Complete |
-| SCHN-04 | Phase 23 | Pending |
+| SCHN-04 | Phase 23 | Complete |
 | CIOP-01 | Phase 24 | Pending |
 | CIOP-02 | Phase 24 | Pending |
 | CIOP-03 | Phase 24 | Pending |
