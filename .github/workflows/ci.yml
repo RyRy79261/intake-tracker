@@ -70,9 +70,22 @@ jobs:
       - name: Bundle security scan
         run: pnpm exec vitest run src/__tests__/bundle-security.test.ts
 
+  data-integrity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - name: Schema consistency & backup integrity
+        run: pnpm exec vitest run src/__tests__/integrity/
+
   ci-pass:
     if: always()
-    needs: [lint, typecheck, test-tz-sa, test-tz-de, build]
+    needs: [lint, typecheck, test-tz-sa, test-tz-de, build, data-integrity]
     runs-on: ubuntu-latest
     steps:
       - name: Check all jobs passed
@@ -81,7 +94,8 @@ jobs:
                 "${{ needs.typecheck.result }}" != "success" ||
                 "${{ needs.test-tz-sa.result }}" != "success" ||
                 "${{ needs.test-tz-de.result }}" != "success" ||
-                "${{ needs.build.result }}" != "success" ]]; then
+                "${{ needs.build.result }}" != "success" ||
+                "${{ needs.data-integrity.result }}" != "success" ]]; then
             echo "::error::One or more CI jobs failed or were cancelled"
             exit 1
           fi
