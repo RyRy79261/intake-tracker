@@ -131,7 +131,16 @@ jobs:
           fi
           echo "All supply chain settings present"
       - name: Audit dependencies
-        run: pnpm audit --audit-level high
+        run: |
+          # --ignore flags mirror auditConfig.ignoreCves in pnpm-workspace.yaml
+          # Required because pnpm 10.30 does not read ignoreCves from workspace config
+          pnpm audit --audit-level high \
+            --ignore GHSA-h25m-26qc-wcjf \
+            --ignore GHSA-mw96-cpmx-2vgc \
+            --ignore GHSA-3ppc-4f35-3m26 \
+            --ignore GHSA-7r86-cg39-jmmj \
+            --ignore GHSA-23c5-xmqv-rm74 \
+            --ignore GHSA-c2c7-rcm5-vvqj
 
   ci-pass:
     if: always()
