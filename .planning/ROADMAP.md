@@ -8,7 +8,7 @@ Personal health tracking PWA. v1.0 rebuilt the engineering foundation (strict Ty
 
 - ✅ **v1.0 Engineering Overhaul** — Phases 1–11, 44 plans (shipped 2026-03-23) — [archived](./milestones/v1.0-ROADMAP.md)
 - ✅ **v1.1 UI Overhaul** — Phases 12–19, 16 plans (shipped 2026-03-27) — [archived](./milestones/v1.1-ROADMAP.md)
-- 🚧 **v1.2 CI & Data Integrity** — Phases 20–24 (in progress)
+- 🚧 **v1.2 CI & Data Integrity** — Phases 20–25 (in progress)
 
 ## Phases
 
@@ -23,6 +23,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 22: E2E Testing in CI** - Playwright against production build with expanded scenario coverage (completed 2026-03-28)
 - [x] **Phase 23: Supply Chain Hardening** - pnpm security configuration and vulnerability audit in CI (completed 2026-03-28)
 - [x] **Phase 24: CI Optimization & Benchmarking** - Dynamic test selection, coverage reporting, build caching, and performance baselines (completed 2026-03-28)
+- [ ] **Phase 25: CI Integration Fixes** - Fix typecheck target, regenerate benchmark baselines, complete drift check (gap closure)
 
 ## Phase Details
 
@@ -102,11 +103,25 @@ Plans:
 - [x] 24-01-PLAN.md — Benchmark test files, baseline generation, and coverage config
 - [x] 24-02-PLAN.md — CI workflow overhaul: paths-filter gating, build cache, coverage job, benchmark job, skip-aware gate
 
+### Phase 25: CI Integration Fixes
+**Goal**: All CI jobs pass on a clean PR — typecheck succeeds, benchmark baselines compare correctly, and supply chain drift check is complete
+**Depends on**: Phase 24 (gap closure for milestone audit defects)
+**Requirements**: CIPL-01, CIPL-03, BNCH-01, SCHN-04
+**Gap Closure**: Closes DEFECT-01 (critical), DEFECT-02 (warning), DEFECT-03 (minor) from v1.2 milestone audit
+**Success Criteria** (what must be TRUE):
+  1. `pnpm typecheck` (`tsc --noEmit`) exits 0 with zero errors
+  2. `benchmarks/results.json` contains relative or CI-compatible paths, not worktree-absolute paths
+  3. Supply chain drift check verifies all 4 pnpm security settings (minimumReleaseAge, trustPolicy, blockExoticSubdeps, auditLevel)
+**Plans**: 0 plans (to be created via `/gsd:plan-phase 25`)
+
+Plans:
+(none yet)
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 20 → 21 → 22 → 23 → 24
-(Phases 21, 22, 23 can execute in any order after 20; Phase 24 depends on all prior phases)
+Phases execute in numeric order: 20 → 21 → 22 → 23 → 24 → 25
+(Phases 21, 22, 23 can execute in any order after 20; Phase 24 depends on all prior phases; Phase 25 is gap closure)
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -115,3 +130,4 @@ Phases execute in numeric order: 20 → 21 → 22 → 23 → 24
 | 22. E2E Testing in CI | v1.2 | 1/2 | Complete    | 2026-03-28 |
 | 23. Supply Chain Hardening | v1.2 | 3/3 | Complete    | 2026-03-28 |
 | 24. CI Optimization & Benchmarking | v1.2 | 2/2 | Complete    | 2026-03-28 |
+| 25. CI Integration Fixes | v1.2 | 0/0 | Planned     | — |
