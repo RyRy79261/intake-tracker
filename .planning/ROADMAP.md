@@ -80,11 +80,12 @@ Plans:
   2. pnpm detects and blocks publisher account compromises via trust policy (no-downgrade)
   3. Transitive dependencies using git URLs or tarball references are blocked (no exotic subdeps)
   4. `pnpm audit` runs in CI on every PR and fails the build if known vulnerabilities are found
-**Plans**: 2 plans
+**Plans**: 3 plans
 
 Plans:
 - [x] 23-01-PLAN.md — Add pnpm security settings and resolve all critical/high vulnerabilities
-- [ ] 23-02-PLAN.md — Add supply-chain CI job with config drift check and audit gate
+- [x] 23-02-PLAN.md — Add supply-chain CI job with config drift check and audit gate
+- [ ] 23-03-PLAN.md — Gap closure: fix lockfile override resolution and CI audit --ignore flags
 
 ### Phase 24: CI Optimization & Benchmarking
 **Goal**: CI is fast and informative -- expensive jobs only run when relevant files change, coverage trends are visible per PR, builds are cached, and performance baselines exist for critical paths
@@ -108,5 +109,5 @@ Phases execute in numeric order: 20 → 21 → 22 → 23 → 24
 | 20. Core CI Pipeline | v1.2 | 2/2 | Complete    | 2026-03-28 |
 | 21. Data Integrity Gates | v1.2 | 2/2 | Complete    | 2026-03-28 |
 | 22. E2E Testing in CI | v1.2 | 1/2 | Complete    | 2026-03-28 |
-| 23. Supply Chain Hardening | v1.2 | 1/2 | In Progress|  |
+| 23. Supply Chain Hardening | v1.2 | 2/3 | In Progress|  |
 | 24. CI Optimization & Benchmarking | v1.2 | 0/? | Not started | - |
