@@ -20,7 +20,9 @@
     "test:tz": "pnpm test:tz:sa && pnpm test:tz:de",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "bench": "vitest bench",
+    "bench:ci": "vitest bench --outputJson benchmarks/results.json"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",
