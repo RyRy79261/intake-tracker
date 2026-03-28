@@ -1,0 +1,74 @@
+{
+  "files": [
+    {
+      "filepath": "/home/ryan/repos/Personal/intake-tracker/src/__tests__/bench/backup.bench.ts",
+      "groups": [
+        {
+          "fullName": "src/__tests__/bench/backup.bench.ts > backup round-trip",
+          "benchmarks": [
+            {
+              "id": "-1222129167_0_0",
+              "name": "export + import all 16 tables",
+              "rank": 1,
+              "rme": 10.659814763149761,
+              "samples": [],
+              "totalTime": 2009.6737530000005,
+              "min": 13.947493000000009,
+              "max": 67.07449600000018,
+              "hz": 31.348371797141137,
+              "period": 31.89958338095239,
+              "mean": 31.89958338095239,
+              "variance": 182.29900543439496,
+              "sd": 13.501814894094606,
+              "sem": 1.7010687837048675,
+              "df": 62,
+              "critical": 1.999,
+              "moe": 3.4004364986260303,
+              "p75": 43.295465999999806,
+              "p99": 67.07449600000018,
+              "p995": 67.07449600000018,
+              "p999": 67.07449600000018,
+              "sampleCount": 63,
+              "median": 29.18424499999992
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "filepath": "/home/ryan/repos/Personal/intake-tracker/src/__tests__/bench/migration.bench.ts",
+      "groups": [
+        {
+          "fullName": "src/__tests__/bench/migration.bench.ts > migration chain v10-v15",
+          "benchmarks": [
+            {
+              "id": "1200514005_0_0",
+              "name": "full migration chain: open db at v10 then upgrade to v15",
+              "rank": 1,
+              "rme": 2.618650849346155,
+              "samples": [],
+              "totalTime": 2000.6748650000013,
+              "min": 1.221903999999995,
+              "max": 7.7120029999999815,
+              "hz": 543.8164986393225,
+              "period": 1.8388555744485306,
+              "mean": 1.8388555744485306,
+              "variance": 0.6567002590358402,
+              "sd": 0.8103704455592147,
+              "sem": 0.02456796281558447,
+              "df": 1087,
+              "critical": 1.96,
+              "moe": 0.04815320711854556,
+              "p75": 1.8597270000000208,
+              "p99": 4.999305999999706,
+              "p995": 5.83706600000005,
+              "p999": 7.447960999999964,
+              "sampleCount": 1088,
+              "median": 1.527061000000117
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
