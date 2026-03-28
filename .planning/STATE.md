@@ -3,11 +3,11 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: CI & Data Integrity
 status: executing
-stopped_at: Completed 24-02-PLAN.md
-last_updated: "2026-03-28T20:34:23.688Z"
+stopped_at: Phase 25 context gathered
+last_updated: "2026-03-28T21:30:06.616Z"
 last_activity: 2026-03-28
 progress:
-  total_phases: 5
+  total_phases: 6
   completed_phases: 5
   total_plans: 11
   completed_plans: 11
@@ -120,6 +120,6 @@ None.
 ## Session Continuity
 
 Last activity: 2026-03-28 -- Phase 24 plan 01 complete
-Last session: 2026-03-28T20:23:33.879Z
-Stopped at: Completed 24-02-PLAN.md
-Resume file: None
+Last session: 2026-03-28T21:30:06.614Z
+Stopped at: Phase 25 context gathered
+Resume file: .planning/phases/25-ci-integration-fixes/25-CONTEXT.md
