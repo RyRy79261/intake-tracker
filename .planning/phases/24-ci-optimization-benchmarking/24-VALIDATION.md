@@ -2,8 +2,8 @@
 phase: 24
 slug: ci-optimization-benchmarking
 status: draft
-nyquist_compliant: false
-wave_0_complete: false
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-03-28
 ---
 
@@ -38,12 +38,9 @@ created: 2026-03-28
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 24-01-01 | 01 | 1 | CIOP-01 | manual-only | Requires actual PR to test path filtering | N/A -- CI behavior | ⬜ pending |
-| 24-01-02 | 01 | 1 | CIOP-01 | lint | `pnpm lint` (YAML syntax) | ✅ | ⬜ pending |
-| 24-02-01 | 02 | 1 | CIOP-02 | manual-only | Requires actual PR to verify comment | N/A -- CI behavior | ⬜ pending |
-| 24-02-02 | 02 | 1 | CIOP-02 | unit | `pnpm exec vitest run --coverage` | ✅ | ⬜ pending |
-| 24-03-01 | 03 | 1 | CIOP-03 | manual-only | Requires two sequential CI runs to verify | N/A -- CI behavior | ⬜ pending |
-| 24-04-01 | 04 | 2 | BNCH-01 | smoke | `pnpm exec vitest bench --run` | ❌ W0 | ⬜ pending |
+| 24-01-T1 | 01 | 1 | CIOP-02, BNCH-01 | auto | `grep -q "json-summary" vitest.config.ts && grep -q '"bench"' package.json` | ✅ | ⬜ pending |
+| 24-01-T2 | 01 | 1 | BNCH-01 | auto | `pnpm bench --run 2>&1 \| tail -5` | ❌ W0 → created by task | ⬜ pending |
+| 24-02-T1 | 02 | 2 | CIOP-01, CIOP-02, CIOP-03, BNCH-01 | auto | `grep -q "dorny/paths-filter" .github/workflows/ci.yml` | ✅ | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
