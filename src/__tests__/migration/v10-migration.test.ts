@@ -264,8 +264,8 @@ describe("SCHM-02: v10 upgrade migrates currentStock to initial transaction", ()
       .toArray();
 
     expect(transactions).toHaveLength(1);
-    expect(transactions[0].type).toBe("initial");
-    expect(transactions[0].amount).toBe(42);
+    expect(transactions[0]!.type).toBe("initial");
+    expect(transactions[0]!.amount).toBe(42);
 
     // Assert: the legacy item still exists (not deleted)
     const item = await db.inventoryItems.get("legacy-item-1");

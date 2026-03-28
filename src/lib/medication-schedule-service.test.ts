@@ -134,6 +134,8 @@ describe("addSchedule", () => {
       dosage: 25,
       daysOfWeek: [1, 3, 5],
       unit: "mg",
+      scheduleTimeUTC: 0, // computed by addSchedule from time + timezone
+      anchorTimezone: "UTC", // computed by addSchedule from device timezone
     });
 
     expect(result.success).toBe(true);

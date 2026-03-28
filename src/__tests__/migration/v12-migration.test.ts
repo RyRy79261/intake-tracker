@@ -73,10 +73,10 @@ describe("v12 migration: keyword extraction from intake records", () => {
 
     const substances = await db.substanceRecords.toArray();
     expect(substances).toHaveLength(1);
-    expect(substances[0].type).toBe("caffeine");
-    expect(substances[0].amountMg).toBe(95);
-    expect(substances[0].source).toBe("water_intake");
-    expect(substances[0].sourceRecordId).toBe("intake-coffee-1");
+    expect(substances[0]!.type).toBe("caffeine");
+    expect(substances[0]!.amountMg).toBe(95);
+    expect(substances[0]!.source).toBe("water_intake");
+    expect(substances[0]!.sourceRecordId).toBe("intake-coffee-1");
   });
 
   it("intake record with 'beer' note creates alcohol substance record with 1 standard drink", async () => {
@@ -117,10 +117,10 @@ describe("v12 migration: keyword extraction from intake records", () => {
 
     const substances = await db.substanceRecords.toArray();
     expect(substances).toHaveLength(1);
-    expect(substances[0].type).toBe("alcohol");
-    expect(substances[0].amountStandardDrinks).toBe(1);
-    expect(substances[0].source).toBe("water_intake");
-    expect(substances[0].sourceRecordId).toBe("intake-beer-1");
+    expect(substances[0]!.type).toBe("alcohol");
+    expect(substances[0]!.amountStandardDrinks).toBe(1);
+    expect(substances[0]!.source).toBe("water_intake");
+    expect(substances[0]!.sourceRecordId).toBe("intake-beer-1");
   });
 
   it("intake record with no matching keywords creates no substance record", async () => {
@@ -203,9 +203,9 @@ describe("v12 migration: keyword extraction from intake records", () => {
 
     const substances = await db.substanceRecords.toArray();
     expect(substances).toHaveLength(1);
-    expect(substances[0].sourceRecordId).toBe(intakeId);
-    expect(substances[0].amountMg).toBe(95); // latte default
-    expect(substances[0].volumeMl).toBe(350); // latte default volume
+    expect(substances[0]!.sourceRecordId).toBe(intakeId);
+    expect(substances[0]!.amountMg).toBe(95); // latte default
+    expect(substances[0]!.volumeMl).toBe(350); // latte default volume
   });
 
   it("migrated records have aiEnriched=false (awaiting Pass 2)", async () => {

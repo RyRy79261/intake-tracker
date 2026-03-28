@@ -27,7 +27,7 @@ describe("liquidPresets CRUD", () => {
 
     const { liquidPresets } = useSettingsStore.getState();
     expect(liquidPresets).toHaveLength(9);
-    const added = liquidPresets[liquidPresets.length - 1];
+    const added = liquidPresets[liquidPresets.length - 1]!;
     expect(added.name).toBe("Cold Brew");
     expect(added.id).toBeTruthy();
     expect(added.id).not.toBe("");

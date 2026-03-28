@@ -49,8 +49,8 @@ describe("v13 migration: createdAt index on prescriptions", () => {
     // Verify createdAt index works (orderBy requires an index in Dexie)
     const ordered = await db.prescriptions.orderBy("createdAt").toArray();
     expect(ordered).toHaveLength(2);
-    expect(ordered[0].id).toBe("rx-old");
-    expect(ordered[1].id).toBe("rx-new");
+    expect(ordered[0]!.id).toBe("rx-old");
+    expect(ordered[1]!.id).toBe("rx-new");
   });
 
   it("preserves existing prescription data after upgrade", async () => {

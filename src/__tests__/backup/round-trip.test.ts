@@ -119,9 +119,9 @@ describe("backup-service", () => {
     expect(data.auditLogs!.length).toBeGreaterThanOrEqual(1);
 
     // Verify IDs match
-    expect(data.intakeRecords[0].id).toBe(intake.id);
-    expect(data.prescriptions![0].id).toBe(prescription.id);
-    expect(data.titrationPlans![0].id).toBe(titrationPlan.id);
+    expect(data.intakeRecords[0]!.id).toBe(intake.id);
+    expect(data.prescriptions![0]!.id).toBe(prescription.id);
+    expect(data.titrationPlans![0]!.id).toBe(titrationPlan.id);
   });
 
   it("round-trip: export -> clear -> import -> verify", async () => {
@@ -201,7 +201,8 @@ describe("backup-service", () => {
     const backupData = await blobToBackupData(blob);
     const file = backupDataToFile(backupData);
     const importResult = await importBackup(file, "replace");
-    expect(importResult.data?.success).toBe(true);
+    expect(importResult.success).toBe(true);
+    if (!importResult.success) throw new Error("Expected success");
 
     // Verify counts match originals
     expect(await db.intakeRecords.count()).toBe(records.intakeRecords.length);
@@ -245,10 +246,11 @@ describe("backup-service", () => {
     const file = backupDataToFile(backupData);
     const result = await importBackup(file, "merge");
 
-    expect(result.data?.success).toBe(true);
-    expect(result.data?.prescriptionsImported).toBe(1); // only p3
-    expect(result.data?.skipped).toBeGreaterThanOrEqual(2); // p1 and p2 skipped as duplicates
-    expect(result.data?.conflicts).toHaveLength(0); // identical records are not conflicts
+    expect(result.success).toBe(true);
+    if (!result.success) throw new Error("Expected success");
+    expect(result.data.prescriptionsImported).toBe(1); // only p3
+    expect(result.data.skipped).toBeGreaterThanOrEqual(2); // p1 and p2 skipped as duplicates
+    expect(result.data.conflicts).toHaveLength(0); // identical records are not conflicts
     expect(await db.prescriptions.count()).toBe(3);
   });
 
@@ -271,13 +273,14 @@ describe("backup-service", () => {
     const file = backupDataToFile(backupData);
     const result = await importBackup(file, "merge");
 
-    expect(result.data?.success).toBe(true);
-    expect(result.data?.conflicts).toHaveLength(1);
-    expect(result.data?.conflicts[0].table).toBe("prescriptions");
-    expect(result.data?.conflicts[0].id).toBe(localRx.id);
-    expect((result.data?.conflicts[0].current as { genericName: string }).genericName).toBe("Metoprolol");
-    expect((result.data?.conflicts[0].backup as { genericName: string }).genericName).toBe("Metoprolol Succinate");
-    expect(result.data?.prescriptionsImported).toBe(0); // conflict not auto-imported
+    expect(result.success).toBe(true);
+    if (!result.success) throw new Error("Expected success");
+    expect(result.data.conflicts).toHaveLength(1);
+    expect(result.data.conflicts[0]!.table).toBe("prescriptions");
+    expect(result.data.conflicts[0]!.id).toBe(localRx.id);
+    expect((result.data.conflicts[0]!.current as { genericName: string }).genericName).toBe("Metoprolol");
+    expect((result.data.conflicts[0]!.backup as { genericName: string }).genericName).toBe("Metoprolol Succinate");
+    expect(result.data.prescriptionsImported).toBe(0); // conflict not auto-imported
   });
 
   it("resolveConflicts applies backup data when useBackup=true", async () => {
@@ -297,7 +300,9 @@ describe("backup-service", () => {
 
     const file = backupDataToFile(backupData);
     const importResult = await importBackup(file, "merge");
-    expect(importResult.data?.conflicts).toHaveLength(1);
+    expect(importResult.success).toBe(true);
+    if (!importResult.success) throw new Error("Expected success");
+    expect(importResult.data.conflicts).toHaveLength(1);
 
     // Resolve: use backup version
     const resolveResult = await resolveConflicts([
@@ -309,7 +314,9 @@ describe("backup-service", () => {
       },
     ]);
 
-    expect(resolveResult.data?.resolved).toBe(1);
+    expect(resolveResult.success).toBe(true);
+    if (!resolveResult.success) throw new Error("Expected success");
+    expect(resolveResult.data.resolved).toBe(1);
 
     // Verify the local record now has backup content
     const updated = await db.prescriptions.get(localRx.id);
@@ -335,11 +342,12 @@ describe("backup-service", () => {
     });
     const result = await importBackup(file, "merge");
 
-    expect(result.data?.success).toBe(true);
-    expect(result.data?.intakeImported).toBe(1);
-    expect(result.data?.prescriptionsImported).toBe(0);
-    expect(result.data?.phasesImported).toBe(0);
-    expect(result.data?.errors).toHaveLength(0);
+    expect(result.success).toBe(true);
+    if (!result.success) throw new Error("Expected success");
+    expect(result.data.intakeImported).toBe(1);
+    expect(result.data.prescriptionsImported).toBe(0);
+    expect(result.data.phasesImported).toBe(0);
+    expect(result.data.errors).toHaveLength(0);
   });
 
   it("replace mode clears all 16 tables", async () => {
@@ -380,8 +388,9 @@ describe("backup-service", () => {
     const file = backupDataToFile(backupData);
     const result = await importBackup(file, "replace");
 
-    expect(result.data?.success).toBe(true);
-    expect(result.data?.intakeImported).toBe(1);
+    expect(result.success).toBe(true);
+    if (!result.success) throw new Error("Expected success");
+    expect(result.data.intakeImported).toBe(1);
 
     // All original records should be gone
     expect(await db.prescriptions.count()).toBe(0);

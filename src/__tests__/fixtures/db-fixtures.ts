@@ -315,5 +315,10 @@ export async function seedComposableGroup(overrides?: {
     substanceId = record.id;
   }
 
-  return { groupId, eatingId, intakeIds, substanceId };
+  return {
+    groupId,
+    intakeIds,
+    ...(eatingId !== undefined && { eatingId }),
+    ...(substanceId !== undefined && { substanceId }),
+  };
 }

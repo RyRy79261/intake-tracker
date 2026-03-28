@@ -166,13 +166,13 @@ describe("fluidBalance", () => {
     expect(result.unit).toBe("ml");
     expect(result.value.daily).toHaveLength(2);
 
-    const d1 = result.value.daily[0];
+    const d1 = result.value.daily[0]!;
     expect(d1.intakeMl).toBe(800); // 500 + 300
     expect(d1.urinationCount).toBe(1);
     expect(d1.urinationEstimatedMl).toBe(300);
     expect(d1.balance).toBe(500); // 800 - 300
 
-    const d2 = result.value.daily[1];
+    const d2 = result.value.daily[1]!;
     expect(d2.intakeMl).toBe(400);
     expect(d2.urinationEstimatedMl).toBe(500);
     expect(d2.balance).toBe(-100); // 400 - 500
@@ -427,6 +427,6 @@ describe("building blocks", () => {
 
     const points = await getRecordsByDomain("water", makeRange(1));
     expect(points).toHaveLength(1);
-    expect(points[0].value).toBe(500);
+    expect(points[0]!.value).toBe(500);
   });
 });

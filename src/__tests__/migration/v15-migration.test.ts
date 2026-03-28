@@ -238,9 +238,9 @@ describe("v15 migration: groupId index on intakeRecords, eatingRecords, substanc
 
     const results = await db.intakeRecords.where("groupId").equals("grp-1").toArray();
     expect(results).toHaveLength(1);
-    expect(results[0].id).toBe("grouped-1");
-    expect(results[0].groupId).toBe("grp-1");
-    expect(results[0].originalInputText).toBe("200ml coffee");
-    expect(results[0].groupSource).toBe("ai_food_parse");
+    expect(results[0]!.id).toBe("grouped-1");
+    expect(results[0]!.groupId).toBe("grp-1");
+    expect(results[0]!.originalInputText).toBe("200ml coffee");
+    expect(results[0]!.groupSource).toBe("ai_food_parse");
   });
 });
