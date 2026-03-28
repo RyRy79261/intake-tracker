@@ -22,7 +22,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 21: Data Integrity Gates** - Schema migration safety, backup round-trip verification, and table coverage enforcement in CI (completed 2026-03-28)
 - [x] **Phase 22: E2E Testing in CI** - Playwright against production build with expanded scenario coverage (completed 2026-03-28)
 - [x] **Phase 23: Supply Chain Hardening** - pnpm security configuration and vulnerability audit in CI (completed 2026-03-28)
-- [ ] **Phase 24: CI Optimization & Benchmarking** - Dynamic test selection, coverage reporting, build caching, and performance baselines
+- [x] **Phase 24: CI Optimization & Benchmarking** - Dynamic test selection, coverage reporting, build caching, and performance baselines (completed 2026-03-28)
 
 ## Phase Details
 
@@ -100,7 +100,7 @@ Plans:
 
 Plans:
 - [x] 24-01-PLAN.md — Benchmark test files, baseline generation, and coverage config
-- [ ] 24-02-PLAN.md — CI workflow overhaul: paths-filter gating, build cache, coverage job, benchmark job, skip-aware gate
+- [x] 24-02-PLAN.md — CI workflow overhaul: paths-filter gating, build cache, coverage job, benchmark job, skip-aware gate
 
 ## Progress
 
@@ -114,4 +114,4 @@ Phases execute in numeric order: 20 → 21 → 22 → 23 → 24
 | 21. Data Integrity Gates | v1.2 | 2/2 | Complete    | 2026-03-28 |
 | 22. E2E Testing in CI | v1.2 | 1/2 | Complete    | 2026-03-28 |
 | 23. Supply Chain Hardening | v1.2 | 3/3 | Complete    | 2026-03-28 |
-| 24. CI Optimization & Benchmarking | v1.2 | 1/2 | In Progress|  |
+| 24. CI Optimization & Benchmarking | v1.2 | 2/2 | Complete   | 2026-03-28 |
