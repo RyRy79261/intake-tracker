@@ -98,7 +98,7 @@ Phases execute in numeric order: 20 → 21 → 22 → 23 → 24
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 20. Core CI Pipeline | v1.2 | 2/2 | Complete    | 2026-03-28 |
-| 21. Data Integrity Gates | v1.2 | 2/2 | Complete   | 2026-03-28 |
+| 21. Data Integrity Gates | v1.2 | 2/2 | Complete    | 2026-03-28 |
 | 22. E2E Testing in CI | v1.2 | 0/? | Not started | - |
 | 23. Supply Chain Hardening | v1.2 | 0/? | Not started | - |
 | 24. CI Optimization & Benchmarking | v1.2 | 0/? | Not started | - |
