@@ -22,9 +22,9 @@ Requirements for milestone v1.2 CI & Data Integrity. Each maps to roadmap phases
 
 ### E2E Testing
 
-- [ ] **E2E-01**: Playwright runs in headless Chromium in CI with browser caching for fast startup
+- [x] **E2E-01**: Playwright runs in headless Chromium in CI with browser caching for fast startup
 - [x] **E2E-02**: E2E scenarios cover composable entry creation, medication dose logging lifecycle, and settings persistence
-- [ ] **E2E-03**: E2E tests run against production build (`pnpm build && pnpm start`) not dev server
+- [x] **E2E-03**: E2E tests run against production build (`pnpm build && pnpm start`) not dev server
 
 ### Supply Chain Security
 
@@ -91,9 +91,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DATA-05 | Phase 21 | Complete |
 | DATA-06 | Phase 21 | Complete |
 | DATA-07 | Phase 21 | Complete |
-| E2E-01 | Phase 22 | Pending |
+| E2E-01 | Phase 22 | Complete |
 | E2E-02 | Phase 22 | Complete |
-| E2E-03 | Phase 22 | Pending |
+| E2E-03 | Phase 22 | Complete |
 | SCHN-01 | Phase 23 | Complete |
 | SCHN-02 | Phase 23 | Complete |
 | SCHN-03 | Phase 23 | Complete |
