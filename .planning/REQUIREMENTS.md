@@ -36,12 +36,12 @@ Requirements for milestone v1.2 CI & Data Integrity. Each maps to roadmap phases
 ### CI Optimization
 
 - [ ] **CIOP-01**: Dynamic test selection via `dorny/paths-filter` gates expensive jobs on changed file categories
-- [ ] **CIOP-02**: Coverage report posted as PR comment, tracking decrease rather than absolute threshold
+- [x] **CIOP-02**: Coverage report posted as PR comment, tracking decrease rather than absolute threshold
 - [ ] **CIOP-03**: Next.js `.next/cache` preserved between CI runs for faster builds
 
 ### Benchmarking
 
-- [ ] **BNCH-01**: Vitest bench establishes performance baselines for critical paths (migration speed, service layer operations)
+- [x] **BNCH-01**: Vitest bench establishes performance baselines for critical paths (migration speed, service layer operations)
 
 ## v1.0–v1.1 Requirements (completed)
 
@@ -99,9 +99,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SCHN-03 | Phase 23 | Complete |
 | SCHN-04 | Phase 23 | Complete |
 | CIOP-01 | Phase 24 | Pending |
-| CIOP-02 | Phase 24 | Pending |
+| CIOP-02 | Phase 24 | Complete |
 | CIOP-03 | Phase 24 | Pending |
-| BNCH-01 | Phase 24 | Pending |
+| BNCH-01 | Phase 24 | Complete |
 
 **Coverage:**
 - v1.2 requirements: 18 total
