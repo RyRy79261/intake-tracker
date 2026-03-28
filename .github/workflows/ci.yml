@@ -161,7 +161,7 @@ jobs:
         run: |
           echo "Checking pnpm-workspace.yaml for required security settings..."
           missing=0
-          for setting in minimumReleaseAge trustPolicy blockExoticSubdeps; do
+          for setting in minimumReleaseAge trustPolicy blockExoticSubdeps auditLevel; do
             if ! grep -q "^${setting}:" pnpm-workspace.yaml; then
               echo "::error::Missing required security setting: ${setting} in pnpm-workspace.yaml"
               missing=1

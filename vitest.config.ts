@@ -7,7 +7,10 @@ export default defineConfig({
     environment: "node",
     setupFiles: ["src/__tests__/setup.ts"],
     include: ["src/**/*.test.ts"],
-    exclude: ["e2e/**", "node_modules/**"],
+    exclude: ["e2e/**", "node_modules/**", ".claude/**"],
+    benchmark: {
+      exclude: ["node_modules/**", ".claude/**"],
+    },
     globals: false,
     coverage: {
       provider: "v8",
