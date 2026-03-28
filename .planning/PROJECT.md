@@ -10,7 +10,7 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 
 ## Current State
 
-**Shipped:** v1.0 Engineering Overhaul + v1.1 UI Overhaul + Phase 20 (Core CI Pipeline) + Phase 21 (Data Integrity Gates)
+**Shipped:** v1.0 Engineering Overhaul + v1.1 UI Overhaul + Phase 20 (Core CI Pipeline) + Phase 21 (Data Integrity Gates) + Phase 22 (E2E Testing in CI)
 **Codebase:** ~44K LOC TypeScript, Next.js 14 App Router, Dexie.js v15 (IndexedDB)
 
 ## Current Milestone: v1.2 CI & Data Integrity
@@ -126,4 +126,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-28 after Phase 21 completion*
+*Last updated: 2026-03-28 after Phase 22 completion*
