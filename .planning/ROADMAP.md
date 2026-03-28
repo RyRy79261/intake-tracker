@@ -23,7 +23,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 22: E2E Testing in CI** - Playwright against production build with expanded scenario coverage (completed 2026-03-28)
 - [x] **Phase 23: Supply Chain Hardening** - pnpm security configuration and vulnerability audit in CI (completed 2026-03-28)
 - [x] **Phase 24: CI Optimization & Benchmarking** - Dynamic test selection, coverage reporting, build caching, and performance baselines (completed 2026-03-28)
-- [ ] **Phase 25: CI Integration Fixes** - Fix typecheck target, regenerate benchmark baselines, complete drift check (gap closure)
+- [x] **Phase 25: CI Integration Fixes** - Fix typecheck target, regenerate benchmark baselines, complete drift check (gap closure) (completed 2026-03-28)
 
 ## Phase Details
 
@@ -115,7 +115,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 25-01-PLAN.md — Fix tsconfig target, regenerate benchmark baselines, complete supply chain drift check
+- [x] 25-01-PLAN.md — Fix tsconfig target, regenerate benchmark baselines, complete supply chain drift check
 
 ## Progress
 
@@ -130,4 +130,4 @@ Phases execute in numeric order: 20 → 21 → 22 → 23 → 24 → 25
 | 22. E2E Testing in CI | v1.2 | 1/2 | Complete    | 2026-03-28 |
 | 23. Supply Chain Hardening | v1.2 | 3/3 | Complete    | 2026-03-28 |
 | 24. CI Optimization & Benchmarking | v1.2 | 2/2 | Complete    | 2026-03-28 |
-| 25. CI Integration Fixes | v1.2 | 0/1 | Planned     | — |
+| 25. CI Integration Fixes | v1.2 | 1/1 | Complete   | 2026-03-28 |

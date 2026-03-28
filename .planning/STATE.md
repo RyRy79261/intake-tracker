@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: CI & Data Integrity
-status: executing
-stopped_at: Phase 25 context gathered
-last_updated: "2026-03-28T21:30:06.616Z"
+status: verifying
+stopped_at: Completed 25-01-PLAN.md
+last_updated: "2026-03-28T22:35:54.661Z"
 last_activity: 2026-03-28
 progress:
   total_phases: 6
-  completed_phases: 5
-  total_plans: 11
-  completed_plans: 11
+  completed_phases: 6
+  total_plans: 12
+  completed_plans: 12
   percent: 82
 ---
 
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-27)
 
 **Core value:** Accurate, queryable health data across intake, vitals, and medication adherence — structured for cross-domain analysis and future AI querying
-**Current focus:** Phase 24 — ci-optimization-benchmarking
+**Current focus:** Phase 25 — ci-integration-fixes
 
 ## Current Position
 
-Phase: 24
-Plan: Not started
-Status: Ready to execute
+Phase: 25 (ci-integration-fixes) — EXECUTING
+Plan: 1 of 1
+Status: Phase complete — ready for verification
 Last activity: 2026-03-28
 
 Progress: [████████░░] 82%
@@ -62,6 +62,7 @@ Progress: [████████░░] 82%
 | Phase 23 P03 | 5min | 2 tasks | 2 files |
 | Phase 24 P01 | 3min | 2 tasks | 5 files |
 | Phase 24 P02 | 2min | 1 tasks | 1 files |
+| Phase 25 P01 | 6min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -96,6 +97,8 @@ Key decisions carrying forward into v1.2:
 - [Phase 24]: Coverage job uses sequential dual-branch approach (base then PR) in single job for simplicity
 - [Phase 24]: Benchmark CI uses --compare (read-only) to avoid overwriting committed baselines
 - [Phase 24]: ci-pass gate splits unconditional (must succeed) from gated (success or skipped) job checks
+- [Phase 25]: ES2020 target chosen as minimum needed for TS1501/TS2802 fixes (not ESNext) since it only affects tsc --noEmit
+- [Phase 25]: Added .claude/** to vitest exclude and benchmark.exclude to prevent worktree bench file discovery
 
 ### Pending Todos
 
@@ -120,6 +123,6 @@ None.
 ## Session Continuity
 
 Last activity: 2026-03-28 -- Phase 24 plan 01 complete
-Last session: 2026-03-28T21:30:06.614Z
-Stopped at: Phase 25 context gathered
-Resume file: .planning/phases/25-ci-integration-fixes/25-CONTEXT.md
+Last session: 2026-03-28T22:35:54.659Z
+Stopped at: Completed 25-01-PLAN.md
+Resume file: None
