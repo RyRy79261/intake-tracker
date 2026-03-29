@@ -174,6 +174,20 @@ describe("benchmark baseline JSON exists for CI regression comparison (BNCH-01)"
       "benchmarks/results.json must not contain the string 'worktrees'"
     ).not.toContain("worktrees");
   });
+
+  it("benchmarks/results.json filepath entries use relative paths for CI compatibility (BNCH-01)", () => {
+    // Absolute paths like /home/ryan/... won't match in CI where the workspace
+    // is /home/runner/work/..., causing --compare to silently find no baselines.
+    // bench:ci post-processes the JSON to strip the project root.
+    const baselinePath = path.join(ROOT, "benchmarks/results.json");
+    const data = JSON.parse(fs.readFileSync(baselinePath, "utf-8"));
+    for (const file of data.files) {
+      expect(
+        file.filepath,
+        `filepath "${file.filepath}" must be relative (not start with /)`
+      ).not.toMatch(/^\//);
+    }
+  });
 });
 
 describe("tsconfig.json has ES2020 target required for typecheck CI job (CIPL-01)", () => {

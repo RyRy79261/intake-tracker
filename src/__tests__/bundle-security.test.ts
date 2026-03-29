@@ -9,6 +9,9 @@ import { describe, it, expect } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
 
+const staticDir = path.resolve(process.cwd(), ".next/static");
+const hasBuildArtifacts = fs.existsSync(staticDir);
+
 function getAllFilesRecursive(dir: string): string[] {
   const files: string[] = [];
   if (!fs.existsSync(dir)) return files;
@@ -32,8 +35,7 @@ function readBundleContents(staticDir: string): string {
   return files.map((f) => fs.readFileSync(f, "utf-8")).join("\n");
 }
 
-describe("client bundle security", () => {
-  const staticDir = path.resolve(process.cwd(), ".next/static");
+describe.skipIf(!hasBuildArtifacts)("client bundle security", () => {
 
   it("client bundle should not contain API key patterns", () => {
     const content = readBundleContents(staticDir);

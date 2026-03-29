@@ -22,7 +22,7 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "bench": "vitest bench",
-    "bench:ci": "vitest bench --outputJson benchmarks/results.json"
+    "bench:ci": "vitest bench --outputJson benchmarks/results.json && node -e \"const f='benchmarks/results.json';const d=JSON.parse(require('fs').readFileSync(f,'utf8'));d.files.forEach(e=>{e.filepath=e.filepath.replace(process.cwd()+'/','')});require('fs').writeFileSync(f,JSON.stringify(d,null,2)+'\\n')\""
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",
