@@ -164,7 +164,7 @@ function PresetEditForm({
           />
         </div>
         <div className="space-y-1">
-          <Label className="text-xs">Salt/100ml</Label>
+          <Label className="text-xs">Na/100ml</Label>
           <Input
             type="number"
             value={saltPer100ml || ""}

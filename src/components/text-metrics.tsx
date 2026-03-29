@@ -212,7 +212,7 @@ export function TextMetrics() {
               className={cn("w-4 h-4", CARD_THEMES.salt.iconColor)}
               aria-hidden="true"
             />
-            <span className="text-sm text-foreground w-16">Salt</span>
+            <span className="text-sm text-foreground w-16">Sodium</span>
             <Progress
               value={saltPct}
               className="h-2 flex-1"
@@ -221,7 +221,7 @@ export function TextMetrics() {
                   ? "bg-red-500"
                   : CARD_THEMES.salt.progressGradient
               }
-              aria-label="Salt intake progress"
+              aria-label="Sodium intake progress"
             />
             <span
               className={cn(
@@ -325,8 +325,8 @@ export function TextMetrics() {
             );
           })}
 
-          {/* Salt row */}
-          <div className="text-xs text-muted-foreground">Salt</div>
+          {/* Sodium row */}
+          <div className="text-xs text-muted-foreground">Na</div>
           {weeklySalt.map((val, i) => {
             const isFuture = i > todayIndex;
             const isToday = i === todayIndex;

@@ -122,9 +122,9 @@ export const queryRegistry: QueryDescriptor[] = [
   },
   {
     id: "salt_vs_weight",
-    name: "Salt vs Weight Correlation",
+    name: "Sodium vs Weight Correlation",
     description:
-      "Pearson correlation between daily salt intake and weight with configurable lag (default 2 days) to detect delayed effects.",
+      "Pearson correlation between daily sodium intake and weight with configurable lag (default 2 days) to detect delayed effects.",
     category: "correlation",
     parameters: SaltWeightParamsSchema,
     execute: async (params) => {

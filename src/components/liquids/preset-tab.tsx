@@ -437,28 +437,30 @@ export function PresetTab({ tab }: PresetTabProps) {
       </div>
 
       {/* 5. Action Buttons */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="space-y-2">
         <Button
-          variant="outline"
+          variant="default"
           onClick={handleLog}
           disabled={isSubmitting || volumeMl <= 0 || !hasSubstance}
-          className={cn("h-12 w-full border", theme.outlineBorder)}
+          className={cn("h-12 w-full", theme.buttonBg)}
         >
           {isSubmitting ? "Logging..." : "Log Entry"}
         </Button>
-        <Button
-          variant="default"
-          onClick={handleSaveAndLog}
-          disabled={
-            isSubmitting ||
-            volumeMl <= 0 ||
-            !hasSubstance ||
-            !beverageName.trim()
-          }
-          className={cn("h-12 w-full", theme.buttonBg)}
-        >
-          {isSubmitting ? "Saving..." : "Save & Log"}
-        </Button>
+        {beverageName.trim() && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSaveAndLog}
+            disabled={
+              isSubmitting ||
+              volumeMl <= 0 ||
+              !hasSubstance
+            }
+            className={cn("w-full text-xs text-muted-foreground border", theme.outlineBorder)}
+          >
+            {isSubmitting ? "Saving..." : "Save as preset & log"}
+          </Button>
+        )}
       </div>
     </>
   );

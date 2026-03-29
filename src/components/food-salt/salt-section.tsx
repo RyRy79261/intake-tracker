@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Minus, Plus, Check } from "lucide-react";
@@ -19,6 +19,7 @@ import {
   useDeleteIntake,
   useUpdateIntake,
 } from "@/hooks/use-intake-queries";
+import { useSettingsStore } from "@/stores/settings-store";
 import { type IntakeRecord } from "@/lib/db";
 
 const theme = CARD_THEMES.salt;
@@ -26,22 +27,33 @@ const Icon = theme.icon;
 
 export function SaltSection() {
   const settings = useSettings();
+  const sodiumPresets = useSettingsStore((s) => s.sodiumPresets);
   const saltIntake = useIntake("salt");
   const recentRecords = useRecentIntakeRecords("salt");
   const { toast } = useToast();
 
+  const [selectedPresetId, setSelectedPresetId] = useState(
+    () => sodiumPresets[0]?.id ?? ""
+  );
   const [pendingAmount, setPendingAmount] = useState(settings.saltIncrement);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showManualInput, setShowManualInput] = useState(false);
+
+  const selectedPreset = useMemo(
+    () => sodiumPresets.find((p) => p.id === selectedPresetId) ?? sodiumPresets[0],
+    [sodiumPresets, selectedPresetId]
+  );
+
+  const sodiumPercent = selectedPreset?.sodiumPercent ?? 100;
+  const sodiumAmount = Math.round(pendingAmount * sodiumPercent / 100);
 
   const deleteMutation = useDeleteIntake();
   const updateMutation = useUpdateIntake();
   const { deletingId, handleDelete } = useDeleteWithToast(
     deleteMutation,
-    "Salt entry removed"
+    "Sodium entry removed"
   );
 
-  // Extra edit field (amount is record-specific)
   const [editAmount, setEditAmount] = useState("");
 
   const {
@@ -73,7 +85,7 @@ export function SaltSection() {
   const progressPercent =
     limit > 0 ? Math.min((dailyTotal / limit) * 100, 100) : 0;
   const isOverLimit = limit > 0 && dailyTotal > limit;
-  const wouldExceedLimit = limit > 0 && dailyTotal + pendingAmount > limit;
+  const wouldExceedLimit = limit > 0 && dailyTotal + sodiumAmount > limit;
 
   const handleIncrement = useCallback(() => {
     setPendingAmount((prev) => prev + increment);
@@ -84,14 +96,17 @@ export function SaltSection() {
   }, [increment]);
 
   const handleConfirm = useCallback(async () => {
-    if (pendingAmount <= 0 || isSubmitting) return;
+    if (sodiumAmount <= 0 || isSubmitting) return;
 
     setIsSubmitting(true);
     try {
-      await saltIntake.addRecord(pendingAmount, "manual");
+      const sourceName = selectedPreset?.name ?? "manual";
+      await saltIntake.addRecord(sodiumAmount, `manual:${sourceName}`);
       toast({
-        title: `Added ${formatAmount(pendingAmount, "mg")}`,
-        description: "Salt intake recorded",
+        title: `Added ${formatAmount(sodiumAmount, "mg")} sodium`,
+        description: sodiumPercent < 100
+          ? `From ${formatAmount(pendingAmount, "mg")} ${selectedPreset?.name}`
+          : "Sodium intake recorded",
         variant: "success",
       });
       setPendingAmount(increment);
@@ -104,18 +119,19 @@ export function SaltSection() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [pendingAmount, isSubmitting, saltIntake, toast, increment]);
+  }, [sodiumAmount, isSubmitting, saltIntake, toast, increment, pendingAmount, sodiumPercent, selectedPreset]);
 
   const handleManualSubmit = useCallback(
     async (amount: number, timestamp?: number, note?: string) => {
       setIsSubmitting(true);
       try {
+        // Manual input enters sodium directly (no conversion)
         await saltIntake.addRecord(amount, "manual", timestamp, note);
         toast({
-          title: `Added ${formatAmount(amount, "mg")}`,
+          title: `Added ${formatAmount(amount, "mg")} sodium`,
           description: timestamp
-            ? "Salt intake recorded for earlier time"
-            : "Salt intake recorded",
+            ? "Sodium intake recorded for earlier time"
+            : "Sodium intake recorded",
           variant: "success",
         });
         setShowManualInput(false);
@@ -142,7 +158,7 @@ export function SaltSection() {
 
   return (
     <>
-      {/* Salt sub-header: icon only (no text label) + daily total / limit */}
+      {/* Sodium sub-header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <div className={cn("p-2 rounded-lg", theme.iconBg)}>
@@ -160,7 +176,7 @@ export function SaltSection() {
           >
             {formatAmount(dailyTotal, "mg")} / {formatAmount(limit, "mg")}
           </p>
-          <p className="text-xs text-muted-foreground">today</p>
+          <p className="text-xs text-muted-foreground">today (sodium)</p>
           <p className="text-xs text-muted-foreground/70">
             24h: {formatAmount(rollingTotal, "mg")}
           </p>
@@ -178,9 +194,33 @@ export function SaltSection() {
         />
       </div>
 
+      {/* Sodium Source Presets */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        {sodiumPresets.map((preset) => (
+          <Button
+            key={preset.id}
+            variant="outline"
+            size="sm"
+            onClick={() => setSelectedPresetId(preset.id)}
+            className={cn(
+              "text-xs transition-all",
+              selectedPresetId === preset.id
+                ? theme.activeToggle
+                : "opacity-70"
+            )}
+          >
+            {preset.name}
+            {preset.sodiumPercent < 100 && (
+              <span className="ml-1 text-muted-foreground">
+                {preset.sodiumPercent}%
+              </span>
+            )}
+          </Button>
+        ))}
+      </div>
+
       {/* +/- Controls */}
       <div className="flex items-center justify-between gap-3">
-        {/* Decrement Button */}
         <Button
           variant="outline"
           size="icon-lg"
@@ -191,7 +231,6 @@ export function SaltSection() {
           <Minus className="w-6 h-6" />
         </Button>
 
-        {/* Center Value - Clickable for manual input */}
         <button
           onClick={() => setShowManualInput(true)}
           disabled={isSubmitting}
@@ -212,10 +251,15 @@ export function SaltSection() {
           >
             +{formatAmount(pendingAmount, "mg")}
           </span>
-          <span className="text-xs text-muted-foreground">tap to edit</span>
+          {sodiumPercent < 100 ? (
+            <span className="text-xs text-muted-foreground">
+              {selectedPreset?.name} → {formatAmount(sodiumAmount, "mg")} sodium
+            </span>
+          ) : (
+            <span className="text-xs text-muted-foreground">sodium · tap to edit</span>
+          )}
         </button>
 
-        {/* Increment Button */}
         <Button
           variant="outline"
           size="icon-lg"
@@ -230,7 +274,7 @@ export function SaltSection() {
       {/* Confirm Entry Button */}
       <Button
         onClick={handleConfirm}
-        disabled={isSubmitting || saltIntake.isLoading || pendingAmount <= 0}
+        disabled={isSubmitting || saltIntake.isLoading || sodiumAmount <= 0}
         className={cn("w-full mt-4 h-12 text-base font-semibold", theme.buttonBg)}
       >
         <Check className="w-5 h-5 mr-2" />
@@ -250,7 +294,7 @@ export function SaltSection() {
               {formatTime(record.timestamp)}
             </span>
             <span className="font-medium">
-              {formatAmount(record.amount, "mg")}
+              {formatAmount(record.amount, "mg")} Na
             </span>
           </>
         )}

@@ -101,7 +101,7 @@ export function ManualInputDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
-            Enter {isWater ? "Water" : "Salt"} Amount
+            Enter {isWater ? "Water" : "Sodium"} Amount
           </DialogTitle>
           <DialogDescription>
             Enter the exact amount in {unit} to add to your intake.

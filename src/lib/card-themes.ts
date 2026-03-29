@@ -52,7 +52,7 @@ export const CARD_THEMES = {
     sectionId: "section-water",
   },
   salt: {
-    label: "Salt",
+    label: "Sodium",
     icon: Sparkles,
     gradient: "from-amber-50 to-orange-50 dark:from-amber-950/40 dark:to-orange-950/40",
     border: "border-amber-200 dark:border-amber-800",

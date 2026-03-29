@@ -5,9 +5,9 @@ import {
   deobfuscateApiKey,
   sanitizeNumericInput
 } from "@/lib/security";
-import { DEFAULT_LIQUID_PRESETS, type LiquidPreset } from "@/lib/constants";
+import { DEFAULT_LIQUID_PRESETS, DEFAULT_SODIUM_PRESETS, type LiquidPreset, type SodiumPreset } from "@/lib/constants";
 
-export type { LiquidPreset } from "@/lib/constants";
+export type { LiquidPreset, SodiumPreset } from "@/lib/constants";
 
 export interface SubstanceConfig {
   caffeine: {
@@ -64,6 +64,9 @@ export interface Settings {
   // Liquid presets (beverage CRUD)
   liquidPresets: LiquidPreset[];
 
+  // Sodium source presets
+  sodiumPresets: SodiumPreset[];
+
   // Insight dismissal (maps insight id to the value at time of dismissal)
   dismissedInsights: Record<string, string | number>;
 
@@ -110,6 +113,8 @@ interface SettingsActions {
   addLiquidPreset: (preset: Omit<LiquidPreset, "id">) => void;
   updateLiquidPreset: (id: string, updates: Partial<Omit<LiquidPreset, "id">>) => void;
   deleteLiquidPreset: (id: string) => void;
+  addSodiumPreset: (preset: Omit<SodiumPreset, "id" | "isDefault">) => void;
+  deleteSodiumPreset: (id: string) => void;
   // Insight dismissal
   dismissInsight: (id: string, value: string | number) => void;
   isDismissed: (id: string, currentValue: string | number) => boolean;
@@ -150,6 +155,7 @@ const defaultSettings: Settings = {
   weightGraphShowDefecation: true,
   weightGraphShowDrinking: true,
   liquidPresets: DEFAULT_LIQUID_PRESETS,
+  sodiumPresets: DEFAULT_SODIUM_PRESETS,
   weightIncrement: 0.1,
   dismissedInsights: {},
   primaryRegion: "",
@@ -272,12 +278,24 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
           liquidPresets: state.liquidPresets.filter((p) => p.id !== id),
         })),
 
+      addSodiumPreset: (preset) =>
+        set((state) => ({
+          sodiumPresets: [
+            ...state.sodiumPresets,
+            { ...preset, id: crypto.randomUUID(), isDefault: false },
+          ],
+        })),
+      deleteSodiumPreset: (id) =>
+        set((state) => ({
+          sodiumPresets: state.sodiumPresets.filter((p) => p.id !== id),
+        })),
+
       resetToDefaults: () => set(defaultSettings),
     }),
     {
       name: "intake-tracker-settings",
       storage: createJSONStorage(() => localStorage),
-      version: 3,
+      version: 4,
       migrate: (persisted, version) => {
         const state = persisted as Record<string, unknown>;
         if (version === 0) {
@@ -310,6 +328,9 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
               };
             });
           }
+        }
+        if (version < 4) {
+          state.sodiumPresets = DEFAULT_SODIUM_PRESETS;
         }
         return state as unknown as Settings & SettingsActions;
       },

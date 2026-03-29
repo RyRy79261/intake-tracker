@@ -78,6 +78,21 @@ export const DEFECATION_AMOUNT_OPTIONS: readonly AmountOption[] = [
   { value: "large", label: "Large" },
 ] as const;
 
+// ─── Sodium Source Presets ──────────────────────────────────────────
+
+export interface SodiumPreset {
+  id: string;
+  name: string;
+  sodiumPercent: number; // sodium content by weight (0-100)
+  isDefault: boolean;
+}
+
+export const DEFAULT_SODIUM_PRESETS: SodiumPreset[] = [
+  { id: "default-sodium", name: "Sodium", sodiumPercent: 100, isDefault: true },
+  { id: "default-table-salt", name: "Table Salt", sodiumPercent: 39, isDefault: true },
+  { id: "default-msg", name: "MSG", sodiumPercent: 12, isDefault: true },
+];
+
 // ─── Liquid Presets (multi-substance, per D-10) ─────────────────────
 
 export interface LiquidPreset {

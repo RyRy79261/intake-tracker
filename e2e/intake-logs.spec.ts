@@ -22,7 +22,7 @@ test.describe('Intake Logs', () => {
     await foodSaltCard.locator('button', { hasText: 'Confirm Entry' }).click();
 
     // Wait for the success toast
-    await expect(page.getByText('Salt intake recorded', { exact: true })).toBeVisible();
+    await expect(page.getByText('Sodium intake recorded', { exact: true })).toBeVisible();
   });
 
   test('should create composable food entry via AI parse', async ({ page }) => {
@@ -50,7 +50,7 @@ test.describe('Intake Logs', () => {
     await expect(page.locator('text=Eating')).toBeVisible();
     await expect(page.locator('text=Water')).toBeVisible();
     await expect(page.locator('text=200 ml')).toBeVisible();
-    await expect(page.locator('text=Salt')).toBeVisible();
+    await expect(page.locator('text=Sodium')).toBeVisible();
     await expect(page.locator('text=450 mg')).toBeVisible();
 
     // Confirm all linked records

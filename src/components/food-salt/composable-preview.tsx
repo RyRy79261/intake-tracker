@@ -48,7 +48,7 @@ function getRecordLabel(type: PreviewRecord["type"]): string {
     case "water":
       return "Water";
     case "salt":
-      return "Salt";
+      return "Sodium";
   }
 }
 

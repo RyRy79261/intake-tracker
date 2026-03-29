@@ -31,7 +31,7 @@ export function FoodSaltCard() {
               />
             </div>
             <span className="font-semibold text-lg uppercase tracking-wide">
-              Food + Salt
+              Food + Sodium
             </span>
           </div>
           {latestEating ? (

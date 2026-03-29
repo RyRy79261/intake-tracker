@@ -88,7 +88,7 @@ function HomeContent() {
       <footer className={cn("mt-8 text-center text-xs text-muted-foreground", settings.showQuickNav ? "pb-28" : "pb-6")}>
         <p>Track your intake to maintain heart health</p>
         <p className="mt-1">
-          Water: max 1L/day · Salt: max 1500mg/day
+          Water: max 1L/day · Sodium: max 1500mg/day
         </p>
       </footer>
 
