@@ -113,6 +113,7 @@ None.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260327-rpe | Migrate AI endpoints from Perplexity to Anthropic Claude | 2026-03-27 | 570411d | [260327-rpe-migrate-ai-endpoints-from-perplexity-to-](./quick/260327-rpe-migrate-ai-endpoints-from-perplexity-to-/) |
+| 260330-131 | Replace LOCAL_AGENT_MODE bypass with Privy test credentials | 2026-03-30 | fe605aa | [260330-131-replace-local-agent-mode-bypass-with-pri](./quick/260330-131-replace-local-agent-mode-bypass-with-pri/) |
 
 ### Roadmap Evolution
 
