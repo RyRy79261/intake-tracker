@@ -1,10 +1,11 @@
 ---
 phase: 21
 slug: data-integrity-gates
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: complete
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-03-28
+updated: 2026-03-29
 ---
 
 # Phase 21 — Validation Strategy
@@ -21,7 +22,7 @@ created: 2026-03-28
 | **Config file** | `vitest.config.ts` |
 | **Quick run command** | `pnpm exec vitest run src/__tests__/integrity/` |
 | **Full suite command** | `pnpm test` |
-| **Estimated runtime** | ~5 seconds |
+| **Estimated runtime** | ~450ms (integrity), ~2.5s (full) |
 
 ---
 
@@ -38,23 +39,12 @@ created: 2026-03-28
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 21-01-01 | 01 | 1 | DATA-04 | unit (static) | `pnpm exec vitest run src/__tests__/integrity/schema-consistency.test.ts` | Wave 0 | pending |
-| 21-01-02 | 01 | 1 | DATA-06 | unit (fake-indexeddb) | `pnpm exec vitest run src/__tests__/integrity/backup-round-trip.test.ts` | Wave 0 | pending |
-| 21-01-03 | 01 | 1 | DATA-07 | unit (static) | `pnpm exec vitest run src/__tests__/integrity/table-sync.test.ts` | Wave 0 | pending |
-| 21-02-01 | 02 | 2 | DATA-05 | CI config | Verified by `data-integrity` job in ci.yml | N/A | pending |
+| 21-01-01 | 01 | 1 | DATA-04 | unit (static) | `pnpm exec vitest run src/__tests__/integrity/schema-consistency.test.ts` | ✅ 4 tests | ✅ green |
+| 21-01-02 | 01 | 1 | DATA-06 | unit (fake-indexeddb) | `pnpm exec vitest run src/__tests__/integrity/backup-round-trip.test.ts` | ✅ 3 tests | ✅ green |
+| 21-01-03 | 01 | 1 | DATA-07 | unit (static) | `pnpm exec vitest run src/__tests__/integrity/table-sync.test.ts` | ✅ 4 tests | ✅ green |
+| 21-02-01 | 02 | 2 | DATA-05 | unit (CI config) | `pnpm exec vitest run src/__tests__/ci-workflow-structure.test.ts` | ✅ 6 tests (DATA-05 block) | ✅ green |
 
-*Status: pending / green / red / flaky*
-
----
-
-## Wave 0 Requirements
-
-- [ ] `src/__tests__/integrity/parse-schema.ts` -- reusable parser utility (D-01, D-03)
-- [ ] `src/__tests__/integrity/schema-consistency.test.ts` -- stubs for DATA-04
-- [ ] `src/__tests__/integrity/backup-round-trip.test.ts` -- stubs for DATA-06
-- [ ] `src/__tests__/integrity/table-sync.test.ts` -- stubs for DATA-07
-
-*Wave 0 creates the test files that the integrity suite depends on.*
+*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
 ---
 
@@ -66,11 +56,22 @@ created: 2026-03-28
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 10s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] No watch-mode flags
+- [x] Feedback latency < 10s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** complete
+
+---
+
+## Validation Audit 2026-03-29
+
+| Metric | Count |
+|--------|-------|
+| Gaps found | 1 |
+| Resolved | 1 |
+| Escalated | 0 |
+
+**Gap resolved:** DATA-05 CI wiring validation — 6 tests added to `ci-workflow-structure.test.ts` verifying data-integrity job exists, runs unconditionally, and is wired to ci-pass gate.
