@@ -44,7 +44,7 @@ jobs:
           node-version: '22'
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
-      - run: npx eslint . --ext .ts,.tsx
+      - run: pnpm lint
 
   typecheck:
     runs-on: ubuntu-latest
