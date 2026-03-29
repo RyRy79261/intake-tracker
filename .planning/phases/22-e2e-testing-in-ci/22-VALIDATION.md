@@ -1,10 +1,11 @@
 ---
 phase: 22
 slug: e2e-testing-in-ci
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: complete
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-03-28
+updated: 2026-03-29
 ---
 
 # Phase 22 — Validation Strategy
@@ -17,11 +18,11 @@ created: 2026-03-28
 
 | Property | Value |
 |----------|-------|
-| **Framework** | Playwright 1.58.2 |
+| **Framework** | Playwright 1.58.2 + Vitest 4.0.18 (config validation) |
 | **Config file** | `playwright.config.ts` |
 | **Quick run command** | `npx playwright test --reporter=line` |
 | **Full suite command** | `pnpm test:e2e` |
-| **Estimated runtime** | ~30 seconds |
+| **Estimated runtime** | ~30s (E2E), ~500ms (config validation) |
 
 ---
 
@@ -38,21 +39,13 @@ created: 2026-03-28
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 22-01-01 | 01 | 1 | E2E-01 | e2e | `npx playwright test` | Yes | pending |
-| 22-01-02 | 01 | 1 | E2E-01 | ci | `grep -q "e2e:" .github/workflows/ci.yml` | Yes | pending |
-| 22-01-03 | 01 | 1 | E2E-02 | e2e | `npx playwright test e2e/settings.spec.ts` | Yes | pending |
-| 22-02-01 | 02 | 1 | E2E-02 | e2e | `npx playwright test e2e/intake-logs.spec.ts` | Yes | pending |
-| 22-02-02 | 02 | 1 | E2E-02 | e2e | `npx playwright test e2e/medication-wizard.spec.ts` | Yes | pending |
+| 22-01-01 | 01 | 1 | E2E-01, E2E-03 | unit (static) | `pnpm exec vitest run src/__tests__/playwright-config.test.ts` | ✅ 9 tests | ✅ green |
+| 22-01-02 | 01 | 1 | E2E-01 | unit (CI config) | `pnpm exec vitest run src/__tests__/ci-workflow-structure.test.ts` | ✅ 8 tests (E2E block) | ✅ green |
+| 22-01-03 | 01 | 1 | E2E-02 | e2e | `npx playwright test e2e/settings.spec.ts` | ✅ settings.spec.ts | ✅ green |
+| 22-02-01 | 02 | 1 | E2E-02 | e2e | `npx playwright test e2e/intake-logs.spec.ts` | ✅ intake-logs.spec.ts (3 tests) | ✅ green |
+| 22-02-02 | 02 | 1 | E2E-02 | e2e | `npx playwright test e2e/medication-wizard.spec.ts` | ✅ medication-wizard.spec.ts (2 tests) | ✅ green |
 
-*Status: pending / green / red / flaky*
-
----
-
-## Wave 0 Requirements
-
-No Wave 0 requirements. All spec files either exist or are created by Plan 01 tasks. Both plans are Wave 1 with no inter-plan dependencies.
-
-*Existing infrastructure covers most phase requirements -- Playwright installed, spec files exist.*
+*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
 ---
 
@@ -66,11 +59,24 @@ No Wave 0 requirements. All spec files either exist or are created by Plan 01 ta
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 30s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] No watch-mode flags
+- [x] Feedback latency < 30s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** complete
+
+---
+
+## Validation Audit 2026-03-29
+
+| Metric | Count |
+|--------|-------|
+| Gaps found | 2 |
+| Resolved | 2 |
+| Escalated | 0 |
+
+**Gap 1 resolved:** Playwright config validation (`playwright-config.test.ts`) — 9 tests verifying CI dual-mode webServer, service worker blocking, production build commands, and LOCAL_AGENT_MODE.
+
+**Gap 2 resolved:** E2E CI job wiring (`ci-workflow-structure.test.ts`) — 8 tests verifying e2e job exists, installs Chromium with caching, runs pnpm test:e2e, uploads traces on failure, and is wired to ci-pass gate.
