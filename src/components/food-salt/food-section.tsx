@@ -11,7 +11,6 @@ import {
   CollapsibleContent,
 } from "@/components/ui/collapsible";
 import {
-  Check,
   Loader2,
   ChevronDown,
   ChevronUp,
@@ -139,23 +138,6 @@ export function FoodSection() {
   });
 
   // ─── Handlers ─────────────────────────────────────────────────────
-
-  const handleQuickLog = useCallback(async () => {
-    try {
-      await addEatingMutation.mutateAsync({});
-      toast({
-        title: "Logged",
-        description: "Eating event recorded",
-        variant: "success",
-      });
-    } catch {
-      toast({
-        title: "Error",
-        description: "Failed to record",
-        variant: "destructive",
-      });
-    }
-  }, [addEatingMutation, toast]);
 
   const handleDetailSubmit = useCallback(async () => {
     try {
@@ -290,22 +272,6 @@ export function FoodSection() {
 
   return (
     <>
-      {/* "I ate" Quick-Log Button */}
-      <Button
-        onClick={handleQuickLog}
-        disabled={addEatingMutation.isPending}
-        className={cn("w-full h-11 mb-2", theme.buttonBg)}
-      >
-        {addEatingMutation.isPending ? (
-          <Loader2 className="w-4 h-4 animate-spin" />
-        ) : (
-          <>
-            <Check className="w-4 h-4 mr-2" />
-            I ate
-          </>
-        )}
-      </Button>
-
       {/* "Add details" Expandable — hidden when AI preview is visible */}
       {!showPreview && (
         <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>

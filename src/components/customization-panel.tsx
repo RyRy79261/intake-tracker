@@ -153,14 +153,14 @@ function PresetEditForm({
           />
         </div>
         <div className="space-y-1">
-          <Label className="text-xs">Alcohol/100ml</Label>
+          <Label className="text-xs">% ABV</Label>
           <Input
             type="number"
             value={alcoholPer100ml || ""}
             onChange={(e) => setAlcoholPer100ml(Number(e.target.value) || 0)}
             className="h-9"
             min={0}
-            step="0.01"
+            step="0.5"
           />
         </div>
         <div className="space-y-1">

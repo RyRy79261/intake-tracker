@@ -87,7 +87,7 @@ export interface LiquidPreset {
   defaultVolumeMl: number;
   waterContentPercent: number;                // 0-100, default 100
   caffeinePer100ml?: number;                 // mg per 100ml
-  alcoholPer100ml?: number;                  // standard drinks per 100ml
+  alcoholPer100ml?: number;                  // ABV percentage (e.g. 5 for beer, 12 for wine)
   saltPer100ml?: number;                     // mg sodium per 100ml
   isDefault: boolean;
   source: "manual" | "ai";
@@ -102,7 +102,7 @@ export const DEFAULT_LIQUID_PRESETS: LiquidPreset[] = [
   { id: "default-coffee", name: "Coffee", tab: "coffee", caffeinePer100ml: 38, waterContentPercent: 99, defaultVolumeMl: 250, isDefault: true, source: "manual" },
   { id: "default-tea", name: "Tea", tab: "coffee", caffeinePer100ml: 19, waterContentPercent: 99, defaultVolumeMl: 250, isDefault: true, source: "manual" },
   // Alcohol presets
-  { id: "default-beer", name: "Beer", tab: "alcohol", alcoholPer100ml: 0.30, waterContentPercent: 93, defaultVolumeMl: 330, isDefault: true, source: "manual" },
-  { id: "default-wine", name: "Wine", tab: "alcohol", alcoholPer100ml: 0.67, waterContentPercent: 87, defaultVolumeMl: 150, isDefault: true, source: "manual" },
-  { id: "default-spirit", name: "Spirit", tab: "alcohol", alcoholPer100ml: 2.22, waterContentPercent: 60, defaultVolumeMl: 45, isDefault: true, source: "manual" },
+  { id: "default-beer", name: "Beer", tab: "alcohol", alcoholPer100ml: 5, waterContentPercent: 93, defaultVolumeMl: 330, isDefault: true, source: "manual" },
+  { id: "default-wine", name: "Wine", tab: "alcohol", alcoholPer100ml: 12, waterContentPercent: 87, defaultVolumeMl: 150, isDefault: true, source: "manual" },
+  { id: "default-spirit", name: "Spirit", tab: "alcohol", alcoholPer100ml: 40, waterContentPercent: 60, defaultVolumeMl: 45, isDefault: true, source: "manual" },
 ];

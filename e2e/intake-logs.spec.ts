@@ -13,16 +13,16 @@ test.describe('Intake Logs', () => {
     await expect(waterCard).toBeVisible();
     await waterCard.locator('button', { hasText: 'Confirm Entry' }).click();
 
-    // Wait for the success toast
-    await expect(page.locator('text=Water intake recorded')).toBeVisible();
+    // Wait for the success toast (use getByText with exact match to avoid aria-live duplication)
+    await expect(page.getByText('Water intake recorded', { exact: true })).toBeVisible();
 
-    // Click "Confirm Entry" in the Salt card
-    const saltCard = page.locator('#section-salt');
-    await expect(saltCard).toBeVisible();
-    await saltCard.locator('button', { hasText: 'Confirm Entry' }).click();
+    // Click "Confirm Entry" in the Food/Salt card
+    const foodSaltCard = page.locator('#section-food-salt');
+    await expect(foodSaltCard).toBeVisible();
+    await foodSaltCard.locator('button', { hasText: 'Confirm Entry' }).click();
 
     // Wait for the success toast
-    await expect(page.locator('text=Salt intake recorded')).toBeVisible();
+    await expect(page.getByText('Salt intake recorded', { exact: true })).toBeVisible();
   });
 
   test('should create composable food entry via AI parse', async ({ page }) => {

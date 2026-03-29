@@ -198,7 +198,7 @@ export function SaltSection() {
           className={cn(
             "flex-1 py-4 px-6 rounded-xl transition-all",
             "flex flex-col items-center justify-center gap-1",
-            "hover:scale-105 active:scale-95",
+            "active:scale-95",
             theme.inputBg
           )}
         >

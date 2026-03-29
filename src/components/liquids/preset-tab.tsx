@@ -62,8 +62,9 @@ export function PresetTab({ tab }: PresetTabProps) {
       );
     }
     if (alcoholPer100ml > 0) {
+      const stdDrinks = volumeMl * (alcoholPer100ml / 100) * 0.789 / 14;
       parts.push(
-        `${parseFloat(((volumeMl / 100) * alcoholPer100ml).toFixed(1))} std drinks`
+        `${alcoholPer100ml}% ABV (${parseFloat(stdDrinks.toFixed(1))} std drinks)`
       );
     }
     if (parts.length === 0 && saltPer100ml > 0) {
@@ -200,11 +201,10 @@ export function PresetTab({ tab }: PresetTabProps) {
       });
     }
     if (alcoholPer100ml > 0) {
+      const stdDrinks = volumeMl * (alcoholPer100ml / 100) * 0.789 / 14;
       substances.push({
         type: "alcohol",
-        amountStandardDrinks: parseFloat(
-          ((volumeMl / 100) * alcoholPer100ml).toFixed(1)
-        ),
+        amountStandardDrinks: parseFloat(stdDrinks.toFixed(1)),
         volumeMl,
         description,
       });
@@ -293,7 +293,7 @@ export function PresetTab({ tab }: PresetTabProps) {
 
   // Primary substance label for the per-100ml input
   const primarySubstanceLabel =
-    tab === "coffee" ? "per 100ml (mg caffeine)" : tab === "alcohol" ? "per 100ml (std drinks)" : "per 100ml (mg)";
+    tab === "coffee" ? "per 100ml (mg caffeine)" : tab === "alcohol" ? "% ABV" : "per 100ml (mg)";
 
   return (
     <>
@@ -418,7 +418,7 @@ export function PresetTab({ tab }: PresetTabProps) {
             }}
             className="h-10"
             min={0}
-            step={tab === "alcohol" ? "0.01" : "1"}
+            step={tab === "alcohol" ? "0.5" : "1"}
           />
         </div>
       </div>

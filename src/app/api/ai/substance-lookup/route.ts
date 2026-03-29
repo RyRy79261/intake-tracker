@@ -65,7 +65,7 @@ export const POST = withAuth(async ({ request, auth }) => {
 
     const systemPrompt = type === "caffeine"
       ? "You are a beverage nutrition expert. Given a beverage name, estimate its caffeine content per 100ml and typical serving size. Be as accurate as possible based on known beverage data. Also estimate the beverage's water content as a percentage (0-100). Reference points: black coffee ~99%, beer ~93%, wine ~87%, spirits ~60%."
-      : "You are a beverage nutrition expert. Given a beverage name, estimate its alcohol content in standard drinks per 100ml and typical serving size. A standard drink contains approximately 14g (0.6 oz) of pure alcohol. Also estimate the beverage's water content as a percentage (0-100). Reference points: black coffee ~99%, beer ~93%, wine ~87%, spirits ~60%.";
+      : "You are a beverage nutrition expert. Given a beverage name, estimate its ABV (alcohol by volume) percentage and typical serving size. Return the ABV as a percentage (e.g. 5 for beer, 12 for wine, 40 for spirits). Also estimate the beverage's water content as a percentage (0-100). Reference points: black coffee ~99%, beer ~93%, wine ~87%, spirits ~60%.";
 
     const response = await client.messages.create({
       model: CLAUDE_MODELS.fast,

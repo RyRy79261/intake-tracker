@@ -16,7 +16,7 @@ export const SUBSTANCE_LOOKUP_TOOL = {
     properties: {
       substancePer100ml: {
         type: "number",
-        description: "For caffeine: mg per 100ml. For alcohol: standard drinks per 100ml.",
+        description: "For caffeine: mg per 100ml. For alcohol: ABV percentage (e.g. 5 for beer, 12 for wine, 40 for spirits).",
       },
       defaultVolumeMl: {
         type: "number",
