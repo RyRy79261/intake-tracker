@@ -448,3 +448,224 @@ describe("Supply-chain job verifies config drift and audits dependencies (SCHN-0
     ).toContain("needs.supply-chain.result");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 24 additions: path filtering, coverage, build caching, benchmarks
+// ---------------------------------------------------------------------------
+
+describe("Path filtering gates expensive jobs on src/bench changes (CIOP-01)", () => {
+  it("changes job is defined and uses dorny/paths-filter@v4", () => {
+    // Without the changes job, all downstream gating logic collapses and every
+    // job runs unconditionally, defeating the purpose of path-based filtering.
+    expect(raw, "changes job must be defined").toMatch(/^  changes:/m);
+    const changesBlock = extractJobBlock("changes", raw);
+    expect(
+      changesBlock,
+      "changes job must use dorny/paths-filter@v4"
+    ).toContain("dorny/paths-filter@v4");
+  });
+
+  it("changes job defines 'src' and 'bench' filter categories as outputs", () => {
+    // Both categories are consumed downstream: src gates test/e2e/coverage jobs,
+    // bench gates the benchmark job. Missing either silently disables that gate.
+    const changesBlock = extractJobBlock("changes", raw);
+    expect(changesBlock, "changes job must define 'src' output").toContain(
+      "src:"
+    );
+    expect(changesBlock, "changes job must define 'bench' output").toContain(
+      "bench:"
+    );
+  });
+
+  it("test-tz-sa and test-tz-de jobs depend on changes and gate on src output", () => {
+    // Docs-only PRs must skip expensive test jobs. These jobs need changes in
+    // their needs array and a conditional checking the src output.
+    for (const job of ["test-tz-sa", "test-tz-de"]) {
+      const block = extractJobBlock(job, raw);
+      expect(block, `${job} must need the changes job`).toContain("changes");
+      expect(
+        block,
+        `${job} must gate on needs.changes.outputs.src == 'true'`
+      ).toContain("needs.changes.outputs.src");
+    }
+  });
+
+  it("e2e job depends on changes and gates on src output", () => {
+    // E2E tests are the most expensive job; gating on src changes prevents
+    // them from running on docs-only or config-only PRs.
+    const e2eBlock = extractJobBlock("e2e", raw);
+    expect(e2eBlock, "e2e job must need the changes job").toContain("changes");
+    expect(
+      e2eBlock,
+      "e2e must gate on needs.changes.outputs.src == 'true'"
+    ).toContain("needs.changes.outputs.src");
+  });
+
+  it("benchmark job depends on changes and gates on bench output", () => {
+    // The benchmark job only needs to run when db.ts, migration tests, integrity
+    // tests, or backup-service change. Gating on bench output keeps CI fast.
+    const benchBlock = extractJobBlock("benchmark", raw);
+    expect(benchBlock, "benchmark job must need the changes job").toContain(
+      "changes"
+    );
+    expect(
+      benchBlock,
+      "benchmark must gate on needs.changes.outputs.bench == 'true'"
+    ).toContain("needs.changes.outputs.bench");
+  });
+});
+
+describe("Coverage job produces delta PR comments for src changes (CIOP-02)", () => {
+  it("coverage job is defined in the workflow", () => {
+    // If the coverage job is removed, no coverage delta comments appear on PRs
+    // and regressions in test coverage go undetected before merge.
+    expect(raw, "coverage job must be defined").toMatch(/^  coverage:/m);
+  });
+
+  it("coverage job runs pnpm test:coverage to generate coverage data", () => {
+    // pnpm test:coverage invokes vitest with --coverage, which produces the
+    // coverage-summary.json files consumed by davelosert/vitest-coverage-report-action.
+    const block = extractJobBlock("coverage", raw);
+    expect(
+      block,
+      "coverage job must invoke pnpm test:coverage"
+    ).toContain("pnpm test:coverage");
+  });
+
+  it("coverage job uses davelosert/vitest-coverage-report-action@v2 to post PR comments", () => {
+    // This action reads the two coverage-summary.json files (base and PR branch)
+    // and posts a delta table as a PR comment. Without it, coverage data is
+    // generated but never surfaced to reviewers.
+    const block = extractJobBlock("coverage", raw);
+    expect(
+      block,
+      "coverage job must use davelosert/vitest-coverage-report-action@v2"
+    ).toContain("davelosert/vitest-coverage-report-action@v2");
+  });
+
+  it("coverage job is gated on src changes via the changes job", () => {
+    // Coverage is expensive to run twice (base + PR branch). Gating on src
+    // changes means docs-only PRs skip it entirely.
+    const block = extractJobBlock("coverage", raw);
+    expect(block, "coverage job must need the changes job").toContain("changes");
+    expect(
+      block,
+      "coverage must gate on needs.changes.outputs.src"
+    ).toContain("needs.changes.outputs.src");
+  });
+
+  it("ci-pass gate lists coverage in its needs array", () => {
+    // Without coverage in needs, ci-pass can complete while the coverage job
+    // is still running, allowing a PR to be merged before coverage is reported.
+    const ciPassBlock = extractJobBlock("ci-pass", raw);
+    expect(
+      ciPassBlock,
+      "ci-pass needs array must include coverage"
+    ).toContain("coverage");
+  });
+});
+
+describe("Build job caches .next/cache to speed up repeat builds (CIOP-03)", () => {
+  it("build job uses actions/cache@v4 to cache .next/cache", () => {
+    // Without caching the Next.js build cache, every CI run rebuilds from
+    // scratch, adding ~30-60 seconds to the build job on unchanged code.
+    const buildBlock = extractJobBlock("build", raw);
+    expect(
+      buildBlock,
+      "build job must use actions/cache@v4"
+    ).toContain("actions/cache@v4");
+    expect(
+      buildBlock,
+      "build job cache path must include .next/cache"
+    ).toContain(".next/cache");
+  });
+
+  it("build job cache key uses hashFiles over pnpm-lock.yaml and next.config", () => {
+    // A content-addressed key ensures the cache is invalidated when dependencies
+    // or Next.js config change, preventing stale cache hits from masking issues.
+    const buildBlock = extractJobBlock("build", raw);
+    expect(
+      buildBlock,
+      "build cache key must use hashFiles for pnpm-lock.yaml"
+    ).toContain("pnpm-lock.yaml");
+    expect(
+      buildBlock,
+      "build cache key must use hashFiles for next.config"
+    ).toContain("next.config");
+  });
+});
+
+describe("Benchmark job runs in CI gated on bench-relevant file changes (BNCH-01)", () => {
+  it("benchmark job is defined in the workflow", () => {
+    // If the benchmark job is removed, pnpm bench --compare never runs in CI
+    // and performance regressions in migration chains or backup round-trips
+    // go undetected before merge.
+    expect(raw, "benchmark job must be defined").toMatch(/^  benchmark:/m);
+  });
+
+  it("benchmark job runs pnpm bench with --run and --compare flags", () => {
+    // --run prevents vitest from entering watch mode in CI.
+    // --compare benchmarks/results.json reads the committed baseline and exits
+    // non-zero if any benchmark regresses beyond the threshold.
+    const block = extractJobBlock("benchmark", raw);
+    expect(
+      block,
+      "benchmark job must invoke pnpm bench"
+    ).toContain("pnpm bench");
+    expect(
+      block,
+      "benchmark job must pass --run flag"
+    ).toContain("--run");
+    expect(
+      block,
+      "benchmark job must pass --compare with baseline path"
+    ).toContain("--compare");
+    expect(
+      block,
+      "benchmark --compare must reference benchmarks/results.json"
+    ).toContain("benchmarks/results.json");
+  });
+
+  it("ci-pass gate lists benchmark in its needs array", () => {
+    // Without benchmark in needs, ci-pass can succeed before the benchmark
+    // job completes, allowing a perf regression to slip through the gate.
+    const ciPassBlock = extractJobBlock("ci-pass", raw);
+    expect(
+      ciPassBlock,
+      "ci-pass needs array must include benchmark"
+    ).toContain("benchmark");
+  });
+});
+
+describe("ci-pass gate accepts success or skipped for gated jobs (CIOP-01, BNCH-01)", () => {
+  it("ci-pass separates unconditional jobs (must succeed) from gated jobs (success or skipped)", () => {
+    // Unconditional jobs failing should always block the gate.
+    // Gated jobs legitimately skip on docs-only PRs; treating skip as failure
+    // would make docs PRs permanently un-mergeable.
+    const ciPassBlock = extractJobBlock("ci-pass", raw);
+    // Unconditional: must check != success (failure semantics)
+    expect(
+      ciPassBlock,
+      "ci-pass must check unconditional jobs for != success"
+    ).toContain("!= \"success\"");
+    // Gated: must accept skipped in addition to success
+    expect(
+      ciPassBlock,
+      "ci-pass must accept 'skipped' for gated jobs"
+    ).toContain("skipped");
+  });
+
+  it("ci-pass gated check covers test-tz-sa, test-tz-de, e2e, coverage, benchmark", () => {
+    // All five gated jobs must appear in the skipped-aware iteration block.
+    // If any is missing, a failure in that job cannot block the gate when
+    // the job runs (non-skip scenario).
+    const ciPassBlock = extractJobBlock("ci-pass", raw);
+    const gatedJobs = ["test-tz-sa", "test-tz-de", "e2e", "coverage", "benchmark"];
+    for (const job of gatedJobs) {
+      expect(
+        ciPassBlock,
+        `ci-pass must reference needs.${job}.result in gated check`
+      ).toContain(`needs.${job}.result`);
+    }
+  });
+});
