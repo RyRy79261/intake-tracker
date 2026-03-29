@@ -72,9 +72,9 @@ test.describe('Intake Logs', () => {
     await coffeeTab.click();
 
     // Wait for Coffee tab content to load — default coffee presets from Zustand
-    // Click the first available preset button (e.g., "Espresso") in the coffee tab content
-    // Presets render as buttons in a grid within the active tab panel
-    const presetButton = page.locator('[role="tabpanel"] button').first();
+    // Click the first visible preset button (e.g., "Espresso") in the active tab panel
+    // All tab panels are force-mounted but hidden via CSS — only match visible ones
+    const presetButton = page.locator('[role="tabpanel"][data-state="active"] button').first();
     await expect(presetButton).toBeVisible();
     await presetButton.click();
 

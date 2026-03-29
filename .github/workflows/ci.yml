@@ -202,27 +202,18 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.base_ref }}
       - uses: pnpm/action-setup@v5
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
-      - name: Run coverage (base branch)
-        run: pnpm test:coverage || echo "test:coverage not available on base branch, skipping baseline"
-      - name: Save base coverage
-        run: mkdir -p coverage-base && (cp coverage/coverage-summary.json coverage-base/coverage-summary.json 2>/dev/null || echo "{}" > coverage-base/coverage-summary.json)
-      - uses: actions/checkout@v4
-      - run: pnpm install --frozen-lockfile
-      - name: Run coverage (PR branch)
+      - name: Run coverage
         run: pnpm test:coverage
       - name: Report coverage
         if: always()
         uses: davelosert/vitest-coverage-report-action@v2
         with:
-          json-summary-compare-path: coverage-base/coverage-summary.json
           file-coverage-mode: none
 
   benchmark:
