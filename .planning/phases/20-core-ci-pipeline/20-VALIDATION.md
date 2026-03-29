@@ -1,10 +1,11 @@
 ---
 phase: 20
 slug: core-ci-pipeline
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: complete
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-03-28
+updated: 2026-03-29
 ---
 
 # Phase 20 — Validation Strategy
@@ -38,24 +39,11 @@ created: 2026-03-28
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 20-01-01 | 01 | 0 | CIPL-01 | unit | `pnpm exec tsc --noEmit` | ❌ W0 (57 TS errors to fix) | ⬜ pending |
-| 20-01-02 | 01 | 0 | CIPL-01 | unit | `pnpm typecheck` | ❌ W0 (script to add) | ⬜ pending |
-| 20-02-01 | 02 | 1 | CIPL-02 | unit | `pnpm exec vitest run src/__tests__/bundle-security.test.ts` | ✅ (needs Neon patterns) | ⬜ pending |
-| 20-03-01 | 03 | 1 | CIPL-01 | integration | Push PR branch → verify all jobs appear | Manual | ⬜ pending |
-| 20-03-02 | 03 | 1 | CIPL-03 | integration | Push PR branch → verify dual-TZ jobs | Manual | ⬜ pending |
-| 20-04-01 | 04 | 2 | CIPL-01 | integration | Verify ci-pass gate job in Actions UI | Manual | ⬜ pending |
+| 20-01-01 | 01 | 1 | CIPL-01 | unit | `pnpm typecheck` | ✅ package.json typecheck script | ✅ green |
+| 20-01-02 | 01 | 1 | CIPL-01, CIPL-02 | unit | `pnpm typecheck && pnpm exec vitest run src/__tests__/bundle-security.test.ts` | ✅ bundle-security.test.ts has Neon patterns | ✅ green |
+| 20-02-01 | 02 | 2 | CIPL-01, CIPL-02, CIPL-03 | unit (static) | `pnpm exec vitest run src/__tests__/ci-workflow-structure.test.ts` | ✅ 13 tests | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
-
----
-
-## Wave 0 Requirements
-
-- [ ] Fix 57 TypeScript errors in test files so `tsc --noEmit` passes
-- [ ] Add `"typecheck": "tsc --noEmit"` script to package.json
-- [ ] Add Neon DB patterns (`postgres://`, `NEON_*`) to `bundle-security.test.ts`
-
-*These must be completed before the CI workflow can pass.*
 
 ---
 
@@ -72,11 +60,22 @@ created: 2026-03-28
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 5s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Manual-Only designation
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] No watch-mode flags
+- [x] Feedback latency < 5s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** complete
+
+---
+
+## Validation Audit 2026-03-29
+
+| Metric | Count |
+|--------|-------|
+| Gaps found | 1 |
+| Resolved | 1 |
+| Escalated | 0 |
+
+**Gap resolved:** CI workflow structure validation test (`ci-workflow-structure.test.ts`) — 13 tests verifying CIPL-01, CIPL-02, CIPL-03 against ci.yml structure.
