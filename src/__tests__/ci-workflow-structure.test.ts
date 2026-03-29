@@ -209,3 +209,78 @@ describe("Dual-TZ jobs execute tests in both required timezones (CIPL-03)", () =
     ).toContain("needs.test-tz-de.result");
   });
 });
+
+describe("data-integrity job runs integrity tests unconditionally on every PR (DATA-05)", () => {
+  it("data-integrity job is defined in the workflow", () => {
+    // If this job is removed, no integrity test runs on PRs — removing it must
+    // be caught immediately rather than silently skipping the DATA-05 gate.
+    expect(raw, "data-integrity job must be defined").toMatch(
+      /^  data-integrity:/m
+    );
+  });
+
+  it("data-integrity job runs the full integrity test suite", () => {
+    // The integrity suite lives in src/__tests__/integrity/. Running the
+    // directory ensures schema-consistency, table-sync, and backup-round-trip
+    // tests all execute as part of the gate.
+    const block = extractJobBlock("data-integrity", raw);
+    expect(
+      block,
+      "data-integrity job must invoke pnpm exec vitest run src/__tests__/integrity/"
+    ).toContain("pnpm exec vitest run src/__tests__/integrity/");
+  });
+
+  it("data-integrity job uses Node 20 and frozen-lockfile install (consistent with other jobs)", () => {
+    // Consistency across jobs prevents Node version drift and lockfile mutations.
+    const block = extractJobBlock("data-integrity", raw);
+    expect(block, "data-integrity must use node-version: '20'").toContain(
+      "node-version: '20'"
+    );
+    expect(block, "data-integrity must use --frozen-lockfile").toContain(
+      "--frozen-lockfile"
+    );
+  });
+
+  it("data-integrity job sets up pnpm via pnpm/action-setup", () => {
+    const block = extractJobBlock("data-integrity", raw);
+    expect(
+      block,
+      "data-integrity must use pnpm/action-setup"
+    ).toContain("pnpm/action-setup");
+  });
+
+  it("data-integrity job has no path filter so it runs unconditionally", () => {
+    // A path filter would let db.ts changes slip through without integrity
+    // verification if the filter is misconfigured. DATA-05 requires the job
+    // to run on every PR regardless of which files changed.
+    const block = extractJobBlock("data-integrity", raw);
+    expect(
+      block,
+      "data-integrity must not have a paths: filter (must run unconditionally)"
+    ).not.toContain("paths:");
+    expect(
+      block,
+      "data-integrity must not be gated on a changes output"
+    ).not.toContain("needs.changes.outputs");
+  });
+
+  it("ci-pass gate lists data-integrity in its needs array", () => {
+    // Without data-integrity in needs, the gate can complete before the
+    // integrity job finishes, letting a failing integrity check pass the gate.
+    const ciPassBlock = extractJobBlock("ci-pass", raw);
+    expect(
+      ciPassBlock,
+      "ci-pass needs array must include data-integrity"
+    ).toContain("data-integrity");
+  });
+
+  it("ci-pass gate explicitly checks data-integrity result for success", () => {
+    // Presence in needs alone is not sufficient — the gate's shell script must
+    // explicitly fail when data-integrity does not succeed.
+    const ciPassBlock = extractJobBlock("ci-pass", raw);
+    expect(
+      ciPassBlock,
+      "ci-pass must explicitly check needs.data-integrity.result"
+    ).toContain("needs.data-integrity.result");
+  });
+});
