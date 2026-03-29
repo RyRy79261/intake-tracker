@@ -418,6 +418,19 @@ describe("Supply-chain job verifies config drift and audits dependencies (SCHN-0
     ).toContain("pnpm audit");
   });
 
+  it("supply-chain config drift step checks auditLevel is present in pnpm-workspace.yaml (SCHN-04)", () => {
+    // Phase 25 added auditLevel as the 4th security setting verified by the
+    // drift check for-loop. If auditLevel is removed from pnpm-workspace.yaml
+    // the audit enforcement level is silently lost. The CI grep loop must
+    // include auditLevel alongside the other 3 settings so accidental deletion
+    // is caught before reaching main.
+    const block = extractJobBlock("supply-chain", raw);
+    expect(
+      block,
+      "supply-chain config drift step must grep for auditLevel in pnpm-workspace.yaml"
+    ).toContain("auditLevel");
+  });
+
   it("supply-chain audit step uses --audit-level high so only critical/high CVEs fail the gate", () => {
     // --audit-level high means moderate and low findings are reported but
     // do not block the PR, matching the project's risk tolerance (D-01).

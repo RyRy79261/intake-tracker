@@ -157,4 +157,75 @@ describe("benchmark baseline JSON exists for CI regression comparison (BNCH-01)"
       "'files' must be an array"
     ).toBe(true);
   });
+
+  it("benchmarks/results.json filepath entries do not contain worktree paths (BNCH-01)", () => {
+    // Phase 25 regenerated the baseline from the main repo root to remove
+    // .claude/worktrees/ path references. If the file is regenerated from a
+    // worktree again, the CI --compare run will reference non-existent paths
+    // and the benchmark job will fail for wrong reasons.
+    const baselinePath = path.join(ROOT, "benchmarks/results.json");
+    const contents = fs.readFileSync(baselinePath, "utf-8");
+    expect(
+      contents,
+      "benchmarks/results.json must not contain worktree paths (.claude/worktrees)"
+    ).not.toContain(".claude/worktrees");
+    expect(
+      contents,
+      "benchmarks/results.json must not contain the string 'worktrees'"
+    ).not.toContain("worktrees");
+  });
+});
+
+describe("tsconfig.json has ES2020 target required for typecheck CI job (CIPL-01)", () => {
+  it("tsconfig.json sets target to ES2020 so tsc --noEmit passes without TS1501/TS2802 errors", () => {
+    // Phase 25 added "target": "ES2020" to fix 4 TypeScript errors:
+    // TS1501 (regex s-flag requires ES2018+) and TS2802 (Set spread requires ES2015+).
+    // Without this setting the typecheck CI job fails. ES2020 is the minimum
+    // target that resolves all 4 errors; this does not affect Next.js SWC transpilation.
+    const tsconfigPath = path.join(ROOT, "tsconfig.json");
+    expect(fs.existsSync(tsconfigPath), "tsconfig.json must exist").toBe(true);
+    const contents = fs.readFileSync(tsconfigPath, "utf-8");
+    const parsed = JSON.parse(contents) as {
+      compilerOptions?: { target?: string };
+    };
+    expect(
+      parsed.compilerOptions?.target,
+      'tsconfig.json compilerOptions.target must be "ES2020"'
+    ).toBe("ES2020");
+  });
+});
+
+describe("vitest.config.ts excludes .claude/** to prevent worktree bench file discovery (CIPL-03)", () => {
+  it("vitest test.exclude includes .claude/** so worktree test files are never discovered", () => {
+    // Phase 25 found that pnpm bench:ci from the main repo root picked up
+    // .bench.ts files from .claude/worktrees/ directories, producing worktree
+    // paths in results.json. Adding .claude/** to exclude prevents this.
+    const configPath = path.join(ROOT, "vitest.config.ts");
+    expect(fs.existsSync(configPath), "vitest.config.ts must exist").toBe(true);
+    const contents = fs.readFileSync(configPath, "utf-8");
+    expect(
+      contents,
+      "vitest.config.ts test.exclude must include '.claude/**'"
+    ).toContain(".claude/**");
+  });
+
+  it("vitest benchmark.exclude includes .claude/** so worktree bench files are never discovered", () => {
+    // The benchmark.exclude must separately list .claude/** because vitest bench
+    // uses a different discovery pass from the regular test runner.
+    const configPath = path.join(ROOT, "vitest.config.ts");
+    const contents = fs.readFileSync(configPath, "utf-8");
+    // Verify the exclude appears inside the benchmark block by checking that
+    // "benchmark" and ".claude/**" both appear in the config.
+    expect(
+      contents,
+      "vitest.config.ts must have a benchmark block"
+    ).toContain("benchmark:");
+    // Count occurrences — must appear at least twice (once in test.exclude, once
+    // in benchmark.exclude) to satisfy both exclusion paths.
+    const occurrences = (contents.match(/\.claude\/\*\*/g) ?? []).length;
+    expect(
+      occurrences,
+      "'.claude/**' must appear in both test.exclude and benchmark.exclude (at least 2 occurrences)"
+    ).toBeGreaterThanOrEqual(2);
+  });
 });
