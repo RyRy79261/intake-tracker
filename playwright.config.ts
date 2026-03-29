@@ -29,23 +29,28 @@ export default defineConfig({
 
   /* Configure projects for major browsers */
   projects: [
+    // Setup project: authenticates via Privy test account
+    { name: 'setup', testMatch: /auth\.setup\.ts/ },
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: {
+        ...devices['Desktop Chrome'],
+        storageState: 'e2e/.auth/user.json',
+      },
+      dependencies: ['setup'],
     },
   ],
 
   /* Run your local dev server before starting the tests */
   webServer: process.env.CI
     ? {
-        command:
-          'NEXT_PUBLIC_LOCAL_AGENT_MODE=true pnpm build && NEXT_PUBLIC_LOCAL_AGENT_MODE=true pnpm start',
+        command: 'pnpm build && pnpm start',
         url: 'http://localhost:3000',
         reuseExistingServer: false,
         timeout: 120 * 1000,
       }
     : {
-        command: 'NEXT_PUBLIC_LOCAL_AGENT_MODE=true pnpm run dev',
+        command: 'pnpm run dev',
         url: 'http://localhost:3000',
         reuseExistingServer: true,
         stdout: 'pipe',
