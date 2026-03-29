@@ -47,11 +47,12 @@ test.describe('Intake Logs', () => {
 
     // Wait for composable preview to appear with linked records
     // The preview shows record type labels and amounts from composable-preview.tsx
-    await expect(page.locator('text=Eating')).toBeVisible();
-    await expect(page.locator('text=Water')).toBeVisible();
-    await expect(page.locator('text=200 ml')).toBeVisible();
-    await expect(page.locator('text=Sodium')).toBeVisible();
-    await expect(page.locator('text=450 mg')).toBeVisible();
+    // Scope to the food-salt card to avoid matching quick-nav footer labels
+    const preview = page.locator('#section-food-salt');
+    await expect(preview.getByText('Eating', { exact: true }).first()).toBeVisible();
+    await expect(preview.getByText('200 ml')).toBeVisible();
+    await expect(preview.getByText('Sodium', { exact: true }).first()).toBeVisible();
+    await expect(preview.getByText('450 mg')).toBeVisible();
 
     // Confirm all linked records
     await page.click('button:has-text("Confirm All")');

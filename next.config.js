@@ -1,10 +1,13 @@
-const withPWA = require('next-pwa')({
-  dest: 'public',
-  register: true,
-  skipWaiting: true,  // Auto-activate new service workers immediately
-  customWorkerDir: 'worker',  // Custom service worker extensions
-  disable: process.env.NODE_ENV === 'development'
-});
+// Only load next-pwa in production to avoid ajv@8 polluting the module cache
+// during lint/dev (which breaks ESLint's ajv@6)
+const withPWA = process.env.NODE_ENV === 'production'
+  ? require('next-pwa')({
+      dest: 'public',
+      register: true,
+      skipWaiting: true,
+      customWorkerDir: 'worker',
+    })
+  : (config) => config;
 
 // Content Security Policy for production
 const securityHeaders = [
@@ -66,4 +69,4 @@ const nextConfig = {
   },
 };
 
-module.exports = process.env.NODE_ENV === 'development' ? nextConfig : withPWA(nextConfig);
+module.exports = withPWA(nextConfig);

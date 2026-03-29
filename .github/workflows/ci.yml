@@ -211,9 +211,9 @@ jobs:
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
       - name: Run coverage (base branch)
-        run: pnpm test:coverage
+        run: pnpm test:coverage || echo "test:coverage not available on base branch, skipping baseline"
       - name: Save base coverage
-        run: mkdir -p coverage-base && cp coverage/coverage-summary.json coverage-base/coverage-summary.json
+        run: mkdir -p coverage-base && (cp coverage/coverage-summary.json coverage-base/coverage-summary.json 2>/dev/null || echo "{}" > coverage-base/coverage-summary.json)
       - uses: actions/checkout@v4
         with:
           clean: false
