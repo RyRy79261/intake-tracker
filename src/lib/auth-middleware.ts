@@ -23,17 +23,6 @@ type AuthenticatedHandler = (
  */
 export function withAuth(handler: AuthenticatedHandler) {
   return async (request: NextRequest): Promise<NextResponse> => {
-    // Production guard: never allow LOCAL_AGENT_MODE bypass in production
-    if (
-      process.env.NEXT_PUBLIC_LOCAL_AGENT_MODE === "true" &&
-      process.env.NODE_ENV === "production"
-    ) {
-      console.warn(
-        "LOCAL_AGENT_MODE is enabled in production — ignoring it. " +
-          "Remove NEXT_PUBLIC_LOCAL_AGENT_MODE from your production environment."
-      );
-    }
-
     // Extract Bearer token from Authorization header
     const authHeader = request.headers.get("Authorization");
     const authToken = authHeader?.startsWith("Bearer ")

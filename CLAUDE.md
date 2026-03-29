@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 pnpm dev              # Start dev server (localhost:3000)
 pnpm build            # Production build
 pnpm lint             # ESLint
-pnpm test:e2e         # Playwright E2E tests (auto-starts dev server with LOCAL_AGENT_MODE=true)
+pnpm test:e2e         # Playwright E2E tests (auto-starts dev server; authenticates via Privy test account)
 npx playwright test e2e/intake-logs.spec.ts  # Run a single test file
 ```
 
@@ -58,7 +58,7 @@ API routes handle server-side Claude API calls (key never exposed to client). PI
 
 ### Auth
 
-**Privy** for authentication (email/Google). Whitelist enforcement via `ALLOWED_EMAILS` env var. `NEXT_PUBLIC_LOCAL_AGENT_MODE=true` bypasses auth for E2E testing.
+**Privy** for authentication (email/Google). Whitelist enforcement via `ALLOWED_EMAILS` env var. E2E tests authenticate via Privy test account credentials (PRIVY_TEST_EMAIL/PRIVY_TEST_OTP in .env.local).
 
 ### UI
 

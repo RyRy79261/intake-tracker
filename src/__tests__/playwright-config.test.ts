@@ -59,7 +59,7 @@ describe("Playwright config switches to production build in CI (E2E-01, E2E-03)"
 
   it("config defines a 'setup' project that runs auth.setup.ts", () => {
     // The setup project authenticates via Privy test account before other
-    // tests run, replacing the old LOCAL_AGENT_MODE auth bypass.
+    // tests run, so all tests start with a real authenticated session.
     expect(raw).toContain("name: 'setup'");
     expect(raw).toMatch(/testMatch:.*auth\\.setup\\.ts/);
   });
