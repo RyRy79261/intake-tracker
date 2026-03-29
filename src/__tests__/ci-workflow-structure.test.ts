@@ -284,3 +284,86 @@ describe("data-integrity job runs integrity tests unconditionally on every PR (D
     ).toContain("needs.data-integrity.result");
   });
 });
+
+describe("E2E job runs Playwright tests with Chromium in CI and blocks merge (E2E-01)", () => {
+  it("e2e job is defined in the workflow", () => {
+    // If the e2e job is missing, E2E tests never run in CI and regressions
+    // in UI flows can be merged silently.
+    expect(raw, "e2e job must be defined").toMatch(/^  e2e:/m);
+  });
+
+  it("e2e job installs Playwright Chromium for headless browser execution", () => {
+    // E2E-01 requires Chromium specifically (not Firefox/Safari) for CI runs.
+    // The install step must be present so the runner has the browser binary.
+    const e2eBlock = extractJobBlock("e2e", raw);
+    expect(
+      e2eBlock,
+      "e2e job must install Chromium via npx playwright install chromium"
+    ).toContain("playwright install chromium");
+  });
+
+  it("e2e job runs pnpm test:e2e to execute the full Playwright suite", () => {
+    // The test:e2e script wires the Playwright runner with the correct config.
+    // Running a subset or a different command could silently skip test files.
+    const e2eBlock = extractJobBlock("e2e", raw);
+    expect(
+      e2eBlock,
+      "e2e job must invoke pnpm test:e2e"
+    ).toContain("pnpm test:e2e");
+  });
+
+  it("e2e job uses actions/cache to cache Playwright browser binaries", () => {
+    // Chromium binaries are ~300MB. Caching them avoids re-downloading on
+    // every CI run, keeping E2E job startup time under 30 seconds.
+    const e2eBlock = extractJobBlock("e2e", raw);
+    expect(
+      e2eBlock,
+      "e2e job must cache Playwright browsers with actions/cache"
+    ).toContain("actions/cache");
+  });
+
+  it("e2e job uploads trace artifacts on failure for debugging flaky tests", () => {
+    // Playwright traces (.zip files) contain a recording of the failing test
+    // including DOM snapshots and network log. Without upload, failures in CI
+    // produce no evidence for post-mortem investigation.
+    const e2eBlock = extractJobBlock("e2e", raw);
+    expect(
+      e2eBlock,
+      "e2e job must upload artifacts using actions/upload-artifact"
+    ).toContain("actions/upload-artifact");
+    expect(
+      e2eBlock,
+      "trace upload step must only run on failure (if: failure())"
+    ).toContain("if: failure()");
+  });
+
+  it("e2e job stores traces in test-results/ for the artifact upload path", () => {
+    // Playwright writes trace files to test-results/ by default. The upload
+    // step must reference this path so traces are actually captured.
+    const e2eBlock = extractJobBlock("e2e", raw);
+    expect(
+      e2eBlock,
+      "artifact upload path must be test-results/"
+    ).toContain("test-results/");
+  });
+
+  it("ci-pass gate includes e2e in its needs array", () => {
+    // Without e2e in needs, ci-pass can complete before E2E tests finish,
+    // letting a failing E2E run be ignored and a PR merged anyway.
+    const ciPassBlock = extractJobBlock("ci-pass", raw);
+    expect(
+      ciPassBlock,
+      "ci-pass needs array must include e2e"
+    ).toContain("e2e");
+  });
+
+  it("ci-pass gate references e2e result so E2E failure blocks merge", () => {
+    // The gate's shell script must explicitly check needs.e2e.result.
+    // Presence in needs alone does not cause the gate to fail if E2E fails.
+    const ciPassBlock = extractJobBlock("ci-pass", raw);
+    expect(
+      ciPassBlock,
+      "ci-pass must reference needs.e2e.result"
+    ).toContain("needs.e2e.result");
+  });
+});
