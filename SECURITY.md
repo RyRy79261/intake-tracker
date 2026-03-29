@@ -23,10 +23,9 @@ Single-user health tracking PWA. All user data lives client-side in IndexedDB. T
 - **Expiry:** 24-hour session timeout
 - **Hashing:** PBKDF2 with 100,000 iterations via `hashPin()` in `src/lib/crypto.ts`
 
-### LOCAL_AGENT_MODE
+### E2E Test Authentication
 
-- **Purpose:** Bypass auth for E2E testing (`NEXT_PUBLIC_LOCAL_AGENT_MODE=true`)
-- **Production guard:** `src/lib/auth-middleware.ts` explicitly ignores this flag when `VERCEL_ENV === 'production'`, logging a warning if set
+E2E tests use Privy dashboard-provisioned test credentials (fixed email + OTP) for automated authentication. The Playwright setup project (`e2e/auth.setup.ts`) authenticates through the real Privy login flow and saves the session state for all test projects.
 
 ## API Security
 
@@ -111,9 +110,8 @@ The auth patterns are designed for future server-side sync:
 | `PRIVY_APP_SECRET` | **Secret** | Server only | Privy JWT verification |
 | `ANTHROPIC_API_KEY` | **Secret** | Server only | AI parse/search/enrich API |
 | `ALLOWED_EMAILS` | Safe | Server only | Email whitelist for auth |
-| `NEXT_PUBLIC_LOCAL_AGENT_MODE` | Safe | Client + Server | E2E test auth bypass |
 | `NEXT_PUBLIC_APP_VERSION` | Safe | Client | Display version (from package.json) |
 | `NEXT_PUBLIC_GIT_SHA` | Safe | Client | Display git SHA |
 | `NEXT_PUBLIC_VERCEL_ENV` | Safe | Client + Server | Environment detection |
 | `VERCEL_GIT_COMMIT_SHA` | Safe | Server (Vercel) | Git SHA source |
-| `VERCEL_ENV` | Safe | Server (Vercel) | Production guard for LOCAL_AGENT_MODE |
+| `VERCEL_ENV` | Safe | Server (Vercel) | Environment detection (production/preview/development) |

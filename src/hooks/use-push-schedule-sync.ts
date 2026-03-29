@@ -104,7 +104,7 @@ export function usePushScheduleSync(getAuthToken?: () => Promise<string | null>)
             headers["Authorization"] = `Bearer ${token}`;
           }
         } catch {
-          // Auth not available -- continue without (LOCAL_AGENT_MODE handles it)
+          // Auth not available -- continue without token (server falls back to dev user if Privy not configured)
         }
       }
 

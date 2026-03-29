@@ -57,17 +57,23 @@ describe("Playwright config switches to production build in CI (E2E-01, E2E-03)"
     expect(raw).toContain("pnpm start");
   });
 
-  it("CI branch sets NEXT_PUBLIC_LOCAL_AGENT_MODE=true on the build command", () => {
-    // NEXT_PUBLIC_ vars are inlined at build time by Next.js.
-    // If LOCAL_AGENT_MODE is missing during build, auth bypass is not compiled
-    // into the bundle and E2E tests cannot reach protected pages.
-    expect(raw).toMatch(/NEXT_PUBLIC_LOCAL_AGENT_MODE=true[^&\n]*pnpm build/);
+  it("config defines a 'setup' project that runs auth.setup.ts", () => {
+    // The setup project authenticates via Privy test account before other
+    // tests run, so all tests start with a real authenticated session.
+    expect(raw).toContain("name: 'setup'");
+    expect(raw).toMatch(/testMatch:.*auth\\.setup\\.ts/);
   });
 
-  it("CI branch sets NEXT_PUBLIC_LOCAL_AGENT_MODE=true on the start command", () => {
-    // Auth bypass must also be present at start/runtime for server-side code
-    // that reads the env var outside of static inlining.
-    expect(raw).toMatch(/NEXT_PUBLIC_LOCAL_AGENT_MODE=true[^&\n]*pnpm start/);
+  it("chromium project uses authenticated storageState from setup", () => {
+    // After the setup project authenticates, all chromium tests receive
+    // the saved auth state so they start already logged in.
+    expect(raw).toContain("storageState: 'e2e/.auth/user.json'");
+  });
+
+  it("chromium project depends on the setup project", () => {
+    // This ensures Playwright runs auth.setup.ts before any other tests,
+    // so the storageState file exists when chromium tests start.
+    expect(raw).toContain("dependencies: ['setup']");
   });
 
   it("CI branch sets reuseExistingServer to false so tests always build fresh", () => {

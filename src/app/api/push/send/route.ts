@@ -17,21 +17,15 @@ async function getSendPush() {
  * Authenticated via CRON_SECRET bearer token (not user auth).
  */
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  // Auth: CRON_SECRET or LOCAL_AGENT_MODE bypass
-  const isLocalAgent =
-    process.env.NEXT_PUBLIC_LOCAL_AGENT_MODE === "true" &&
-    process.env.NODE_ENV !== "production";
+  // Auth: CRON_SECRET bearer token required
+  const authHeader = request.headers.get("Authorization");
+  const token = authHeader?.startsWith("Bearer ")
+    ? authHeader.slice(7)
+    : null;
+  const cronSecret = process.env.CRON_SECRET;
 
-  if (!isLocalAgent) {
-    const authHeader = request.headers.get("Authorization");
-    const token = authHeader?.startsWith("Bearer ")
-      ? authHeader.slice(7)
-      : null;
-    const cronSecret = process.env.CRON_SECRET;
-
-    if (!cronSecret || token !== cronSecret) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+  if (!cronSecret || token !== cronSecret) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
