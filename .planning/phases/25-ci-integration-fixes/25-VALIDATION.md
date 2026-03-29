@@ -1,10 +1,11 @@
 ---
 phase: 25
 slug: ci-integration-fixes
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: complete
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-03-28
+updated: 2026-03-29
 ---
 
 # Phase 25 — Validation Strategy
@@ -17,10 +18,10 @@ created: 2026-03-28
 
 | Property | Value |
 |----------|-------|
-| **Framework** | vitest 4.0.18 + TypeScript 5.9.3 |
-| **Config file** | `vitest.config.ts` (unit tests), `tsconfig.json` (type checking) |
+| **Framework** | Vitest 4.0.18 |
+| **Config file** | `vitest.config.ts` |
 | **Quick run command** | `pnpm typecheck` |
-| **Full suite command** | `pnpm typecheck && pnpm bench --run --compare benchmarks/results.json` |
+| **Full suite command** | `pnpm typecheck && pnpm test` |
 | **Estimated runtime** | ~15 seconds |
 
 ---
@@ -28,7 +29,7 @@ created: 2026-03-28
 ## Sampling Rate
 
 - **After every task commit:** Run `pnpm typecheck`
-- **After every plan wave:** Run `pnpm typecheck && pnpm bench --run --compare benchmarks/results.json`
+- **After every plan wave:** Run `pnpm typecheck && pnpm test`
 - **Before `/gsd:verify-work`:** Full suite must be green
 - **Max feedback latency:** 15 seconds
 
@@ -38,36 +39,45 @@ created: 2026-03-28
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 25-01-01 | 01 | 1 | CIPL-01 | smoke | `pnpm typecheck` | N/A (uses tsc) | ⬜ pending |
-| 25-01-02 | 01 | 1 | BNCH-01 | smoke | `pnpm bench --run --compare benchmarks/results.json` | N/A (uses vitest bench) | ⬜ pending |
-| 25-01-03 | 01 | 1 | SCHN-04 | manual-only | Visual inspection of ci.yml grep loop | N/A (CI config) | ⬜ pending |
-| 25-01-04 | 01 | 1 | CIPL-03 | smoke | `pnpm typecheck` | N/A (existing tests) | ⬜ pending |
+| 25-01-01 | 01 | 1 | CIPL-01 | unit (static) | `pnpm exec vitest run src/__tests__/benchmark-coverage-config.test.ts` | ✅ tsconfig target test | ✅ green |
+| 25-01-02 | 01 | 1 | BNCH-01 | unit (static) | `pnpm exec vitest run src/__tests__/benchmark-coverage-config.test.ts` | ✅ worktree-path check | ✅ green |
+| 25-01-03 | 01 | 1 | SCHN-04 | unit (CI config) | `pnpm exec vitest run src/__tests__/ci-workflow-structure.test.ts` | ✅ auditLevel drift test | ✅ green |
+| 25-01-04 | 01 | 1 | CIPL-03 | unit (static) | `pnpm exec vitest run src/__tests__/benchmark-coverage-config.test.ts` | ✅ .claude/** exclude test | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
 ---
 
-## Wave 0 Requirements
-
-Existing infrastructure covers all phase requirements. No new test files needed.
-
----
-
 ## Manual-Only Verifications
 
-| Behavior | Requirement | Why Manual | Test Instructions |
-|----------|-------------|------------|-------------------|
-| Drift check covers all 4 settings | SCHN-04 | CI config not testable locally | Inspect ci.yml `for setting in` loop contains: minimumReleaseAge, trustPolicy, blockExoticSubdeps, auditLevel |
+*All phase behaviors have automated verification.*
 
 ---
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 15s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] No watch-mode flags
+- [x] Feedback latency < 15s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** complete
+
+---
+
+## Validation Audit 2026-03-29
+
+| Metric | Count |
+|--------|-------|
+| Gaps found | 4 |
+| Resolved | 4 |
+| Escalated | 0 |
+
+**Gap 1 resolved:** tsconfig.json ES2020 target validation — test verifies compilerOptions.target is "ES2020" (DEFECT-01).
+
+**Gap 2 resolved:** Benchmark baseline worktree-path check — test verifies benchmarks/results.json has no "worktrees" references (DEFECT-02).
+
+**Gap 3 resolved:** CI supply-chain drift check auditLevel — test verifies supply-chain job greps for auditLevel (DEFECT-03).
+
+**Gap 4 resolved:** Vitest .claude/** exclude — test verifies vitest.config.ts excludes .claude/** in both test and benchmark config.
