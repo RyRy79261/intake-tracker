@@ -113,13 +113,13 @@ describe("CI workflow gates PRs with required checks (CIPL-01)", () => {
     }
   });
 
-  it("each check job uses Node 20 and frozen-lockfile install", () => {
-    // Node 18 is EOL; frozen-lockfile prevents lockfile mutations in CI.
+  it("each check job uses Node 22 and frozen-lockfile install", () => {
+    // Node 20 has ajv compatibility issues with @typescript-eslint@8; frozen-lockfile prevents lockfile mutations in CI.
     const jobsToCheck = ["lint", "typecheck", "build"];
     for (const job of jobsToCheck) {
       const block = extractJobBlock(job, raw);
-      expect(block, `${job} must use node-version: '20'`).toContain(
-        "node-version: '20'"
+      expect(block, `${job} must use node-version: '22'`).toContain(
+        "node-version: '22'"
       );
       expect(block, `${job} must use --frozen-lockfile`).toContain(
         "--frozen-lockfile"
@@ -230,11 +230,11 @@ describe("data-integrity job runs integrity tests unconditionally on every PR (D
     ).toContain("pnpm exec vitest run src/__tests__/integrity/");
   });
 
-  it("data-integrity job uses Node 20 and frozen-lockfile install (consistent with other jobs)", () => {
+  it("data-integrity job uses Node 22 and frozen-lockfile install (consistent with other jobs)", () => {
     // Consistency across jobs prevents Node version drift and lockfile mutations.
     const block = extractJobBlock("data-integrity", raw);
-    expect(block, "data-integrity must use node-version: '20'").toContain(
-      "node-version: '20'"
+    expect(block, "data-integrity must use node-version: '22'").toContain(
+      "node-version: '22'"
     );
     expect(block, "data-integrity must use --frozen-lockfile").toContain(
       "--frozen-lockfile"

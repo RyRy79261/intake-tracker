@@ -181,14 +181,14 @@ describe("timezone detection logic", () => {
       enabled: true,
     });
 
-    // Recalculate to Berlin
-    const count = await recalculateScheduleTimezones("Europe/Berlin");
+    // Recalculate to New York (UTC-5/-4, never overlaps with SA's UTC+2)
+    const count = await recalculateScheduleTimezones("America/New_York");
     expect(count).toBe(1);
 
     // Verify the schedule was updated
     const updated = await db.phaseSchedules.get(schedule.id);
-    expect(updated?.anchorTimezone).toBe("Europe/Berlin");
-    // scheduleTimeUTC should have changed to preserve wall-clock 08:30 in Berlin
+    expect(updated?.anchorTimezone).toBe("America/New_York");
+    // scheduleTimeUTC should have changed to preserve wall-clock 08:30 in New York
     expect(updated?.scheduleTimeUTC).not.toBe(390);
   });
 });
