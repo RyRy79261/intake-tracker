@@ -58,7 +58,7 @@ test.describe('Intake Logs', () => {
     await page.click('button:has-text("Confirm All")');
 
     // Verify success toast
-    await expect(page.locator('text=Food logged')).toBeVisible();
+    await expect(page.getByText('Food logged', { exact: true })).toBeVisible();
   });
 
   test('should log a liquid entry via coffee preset', async ({ page }) => {

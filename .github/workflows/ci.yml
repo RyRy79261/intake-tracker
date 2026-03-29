@@ -44,7 +44,7 @@ jobs:
           node-version: '22'
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
-      - run: pnpm lint
+      - run: npx eslint . --ext .ts,.tsx
 
   typecheck:
     runs-on: ubuntu-latest
@@ -215,8 +215,6 @@ jobs:
       - name: Save base coverage
         run: mkdir -p coverage-base && (cp coverage/coverage-summary.json coverage-base/coverage-summary.json 2>/dev/null || echo "{}" > coverage-base/coverage-summary.json)
       - uses: actions/checkout@v4
-        with:
-          clean: false
       - run: pnpm install --frozen-lockfile
       - name: Run coverage (PR branch)
         run: pnpm test:coverage
