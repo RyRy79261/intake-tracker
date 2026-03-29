@@ -84,12 +84,13 @@ test.describe('Intake Logs', () => {
     await expect(page.locator('text=/\\d+\\s*mg caffeine/i')).toBeVisible();
 
     // After selecting a preset, volume and substance fields are populated
-    // Click "Log Entry" button to submit the entry
-    const logButton = page.locator('button:has-text("Log Entry")');
+    // Click "Log Entry" in the active tab panel (other force-mounted panels also have this button)
+    const activePanel = page.locator('[role="tabpanel"][data-state="active"]');
+    const logButton = activePanel.locator('button:has-text("Log Entry")');
     await expect(logButton).toBeVisible();
     await logButton.click();
 
     // Verify success feedback toast
-    await expect(page.locator('text=/recorded/i')).toBeVisible();
+    await expect(page.getByText(/recorded/i).first()).toBeVisible();
   });
 });
