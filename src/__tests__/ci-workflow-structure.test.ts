@@ -367,3 +367,84 @@ describe("E2E job runs Playwright tests with Chromium in CI and blocks merge (E2
     ).toContain("needs.e2e.result");
   });
 });
+
+describe("Supply-chain job verifies config drift and audits dependencies (SCHN-04)", () => {
+  it("supply-chain job is defined in the workflow", () => {
+    // If the supply-chain job is removed, no config drift or vulnerability
+    // check runs on PRs and SCHN-01..03 settings could be silently deleted.
+    expect(raw, "supply-chain job must be defined").toMatch(
+      /^  supply-chain:/m
+    );
+  });
+
+  it("supply-chain config drift step checks minimumReleaseAge is present in pnpm-workspace.yaml", () => {
+    // If minimumReleaseAge is removed from pnpm-workspace.yaml the 24-hour
+    // quarantine window (SCHN-01) is silently lost. The CI grep catch catches
+    // accidental deletion before it reaches main.
+    const block = extractJobBlock("supply-chain", raw);
+    expect(
+      block,
+      "supply-chain job must grep for minimumReleaseAge in pnpm-workspace.yaml"
+    ).toContain("minimumReleaseAge");
+  });
+
+  it("supply-chain config drift step checks trustPolicy is present in pnpm-workspace.yaml", () => {
+    // If trustPolicy is removed from pnpm-workspace.yaml the publisher
+    // downgrade detection (SCHN-02) is silently lost.
+    const block = extractJobBlock("supply-chain", raw);
+    expect(
+      block,
+      "supply-chain job must grep for trustPolicy in pnpm-workspace.yaml"
+    ).toContain("trustPolicy");
+  });
+
+  it("supply-chain config drift step checks blockExoticSubdeps is present in pnpm-workspace.yaml", () => {
+    // If blockExoticSubdeps is removed from pnpm-workspace.yaml the
+    // git/tarball blocking (SCHN-03) is silently lost.
+    const block = extractJobBlock("supply-chain", raw);
+    expect(
+      block,
+      "supply-chain job must grep for blockExoticSubdeps in pnpm-workspace.yaml"
+    ).toContain("blockExoticSubdeps");
+  });
+
+  it("supply-chain job runs pnpm audit to scan for known vulnerabilities", () => {
+    // The audit step catches new CVEs introduced via dependency updates
+    // and ensures the project stays below the high-severity threshold.
+    const block = extractJobBlock("supply-chain", raw);
+    expect(
+      block,
+      "supply-chain job must run pnpm audit"
+    ).toContain("pnpm audit");
+  });
+
+  it("supply-chain audit step uses --audit-level high so only critical/high CVEs fail the gate", () => {
+    // --audit-level high means moderate and low findings are reported but
+    // do not block the PR, matching the project's risk tolerance (D-01).
+    const block = extractJobBlock("supply-chain", raw);
+    expect(
+      block,
+      "supply-chain audit step must pass --audit-level high"
+    ).toContain("--audit-level high");
+  });
+
+  it("ci-pass gate includes supply-chain in its needs array", () => {
+    // Without supply-chain in needs, ci-pass can complete before the audit
+    // finishes, letting a failing audit be ignored while a PR is merged.
+    const ciPassBlock = extractJobBlock("ci-pass", raw);
+    expect(
+      ciPassBlock,
+      "ci-pass needs array must include supply-chain"
+    ).toContain("supply-chain");
+  });
+
+  it("ci-pass gate explicitly checks supply-chain result for success", () => {
+    // Presence in needs alone is not sufficient — the gate's shell script
+    // must explicitly fail when the supply-chain job does not succeed.
+    const ciPassBlock = extractJobBlock("ci-pass", raw);
+    expect(
+      ciPassBlock,
+      "ci-pass must explicitly check needs.supply-chain.result"
+    ).toContain("needs.supply-chain.result");
+  });
+});
