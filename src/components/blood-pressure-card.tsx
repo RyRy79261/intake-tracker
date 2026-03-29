@@ -265,25 +265,6 @@ export function BloodPressureCard() {
             )}
           </div>
 
-          {/* Record button (ABOVE the details expander for quick one-tap recording) */}
-          <Button
-            onClick={handleSubmit}
-            disabled={addMutation.isPending || !systolicInput || !diastolicInput}
-            className={cn("w-full h-11", theme.buttonBg)}
-          >
-            {addMutation.isPending ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Recording...
-              </>
-            ) : (
-              <>
-                <Check className="w-4 h-4 mr-2" />
-                Record Reading
-              </>
-            )}
-          </Button>
-
           {/* Expandable details section */}
           <Button
             type="button"
@@ -405,6 +386,25 @@ export function BloodPressureCard() {
               />
             </div>
           )}
+
+          {/* Record button */}
+          <Button
+            onClick={handleSubmit}
+            disabled={addMutation.isPending || !systolicInput || !diastolicInput}
+            className={cn("w-full h-11", theme.buttonBg)}
+          >
+            {addMutation.isPending ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Recording...
+              </>
+            ) : (
+              <>
+                <Check className="w-4 h-4 mr-2" />
+                Record Reading
+              </>
+            )}
+          </Button>
         </div>
 
         {/* Recent History */}

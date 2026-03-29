@@ -46,14 +46,21 @@ export function WeightCard() {
   const updateMutation = useUpdateWeight();
   const { deletingId, handleDelete } = useDeleteWithToast(deleteMutation, "Weight record removed");
 
-  // Pre-fill with latest weight when records load
+  // Pre-fill with latest weight when records load.
+  // useLiveQuery defaults to [] before Dexie resolves, so we delay the
+  // fallback to avoid setting 70 before real records arrive.
   useEffect(() => {
-    if (pendingWeight === null && recentRecords && recentRecords.length > 0) {
+    if (pendingWeight !== null) return;
+    if (recentRecords && recentRecords.length > 0) {
       const latest = recentRecords[0];
       if (latest) setPendingWeight(latest.weight);
-    } else if (pendingWeight === null && recentRecords && recentRecords.length === 0) {
-      setPendingWeight(70);
+      return;
     }
+    // Delay fallback so live query has time to resolve with real data
+    const timer = setTimeout(() => {
+      setPendingWeight(prev => prev === null ? 70 : prev);
+    }, 200);
+    return () => clearTimeout(timer);
   }, [recentRecords, pendingWeight]);
 
   // Extra edit field

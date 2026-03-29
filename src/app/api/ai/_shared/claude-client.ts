@@ -16,5 +16,5 @@ export function getClaudeClient(): Anthropic {
 
 export const CLAUDE_MODELS = {
   fast: "claude-haiku-4-5-20251001" as const,
-  quality: "claude-sonnet-4-5-20250514" as const,
+  quality: "claude-sonnet-4-6" as const,
 } as const;

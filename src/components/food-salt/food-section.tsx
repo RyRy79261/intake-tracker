@@ -272,6 +272,49 @@ export function FoodSection() {
 
   return (
     <>
+      {/* AI Food Input */}
+      <div className="relative mt-3">
+        <Input
+          value={foodText}
+          onChange={(e) => setFoodText(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Describe food for AI parsing..."
+          aria-label="Describe food for AI nutritional parsing"
+          className="h-10 pr-10"
+          disabled={isParsing}
+        />
+        <button
+          type="button"
+          onClick={handleParse}
+          disabled={!foodText.trim() || isParsing}
+          aria-label="Parse food with AI"
+          className={cn(
+            "absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md transition-colors",
+            "text-muted-foreground hover:text-orange-600 dark:hover:text-orange-400",
+            "disabled:opacity-50 disabled:cursor-not-allowed"
+          )}
+        >
+          {isParsing ? (
+            <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+          ) : (
+            <Sparkles className="w-4 h-4" />
+          )}
+        </button>
+      </div>
+
+      {/* Composable Preview */}
+      {showPreview && (
+        <ComposablePreview
+          records={previewRecords}
+          onRecordsChange={setPreviewRecords}
+          originalInputText={originalInputText}
+          reasoning={reasoning}
+          onConfirm={handleConfirmAll}
+          onTryAgain={handleTryAgain}
+          isConfirming={isConfirming}
+        />
+      )}
+
       {/* "Add details" Expandable — hidden when AI preview is visible */}
       {!showPreview && (
         <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
@@ -344,49 +387,6 @@ export function FoodSection() {
             </div>
           </CollapsibleContent>
         </Collapsible>
-      )}
-
-      {/* AI Food Input */}
-      <div className="relative mt-3">
-        <Input
-          value={foodText}
-          onChange={(e) => setFoodText(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Describe food for AI parsing..."
-          aria-label="Describe food for AI nutritional parsing"
-          className="h-10 pr-10"
-          disabled={isParsing}
-        />
-        <button
-          type="button"
-          onClick={handleParse}
-          disabled={!foodText.trim() || isParsing}
-          aria-label="Parse food with AI"
-          className={cn(
-            "absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md transition-colors",
-            "text-muted-foreground hover:text-orange-600 dark:hover:text-orange-400",
-            "disabled:opacity-50 disabled:cursor-not-allowed"
-          )}
-        >
-          {isParsing ? (
-            <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-          ) : (
-            <Sparkles className="w-4 h-4" />
-          )}
-        </button>
-      </div>
-
-      {/* Composable Preview */}
-      {showPreview && (
-        <ComposablePreview
-          records={previewRecords}
-          onRecordsChange={setPreviewRecords}
-          originalInputText={originalInputText}
-          reasoning={reasoning}
-          onConfirm={handleConfirmAll}
-          onTryAgain={handleTryAgain}
-          isConfirming={isConfirming}
-        />
       )}
 
       {/* Recent Eating Records */}
