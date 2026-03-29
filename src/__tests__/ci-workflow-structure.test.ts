@@ -43,14 +43,14 @@ function extractJobBlock(jobName: string, yaml: string): string {
   const boundaries: Array<{ name: string; start: number }> = [];
   let m: RegExpExecArray | null;
   while ((m = jobHeaderPattern.exec(yaml)) !== null) {
-    boundaries.push({ name: m[1], start: m.index });
+    boundaries.push({ name: m[1]!, start: m.index });
   }
 
   const idx = boundaries.findIndex((b) => b.name === jobName);
   if (idx === -1) return "";
 
-  const start = boundaries[idx].start;
-  const end = idx + 1 < boundaries.length ? boundaries[idx + 1].start : yaml.length;
+  const start = boundaries[idx]!.start;
+  const end = idx + 1 < boundaries.length ? boundaries[idx + 1]!.start : yaml.length;
   return yaml.slice(start, end);
 }
 

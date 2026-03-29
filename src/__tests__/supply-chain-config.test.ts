@@ -130,7 +130,7 @@ describe("pnpm-workspace.yaml documents all ignored CVE exceptions with rational
       let hasComment = false;
       let searchIdx = idx - 1;
       while (searchIdx >= 0) {
-        const above = lines[searchIdx].trim();
+        const above = lines[searchIdx]!.trim();
         if (/^#/.test(above)) {
           // Found a comment — this entry (or its group) is documented
           hasComment = true;
@@ -149,7 +149,7 @@ describe("pnpm-workspace.yaml documents all ignored CVE exceptions with rational
       const lineNumber = idx + 1; // 1-based for messaging
       expect(
         hasComment,
-        `GHSA entry on line ${lineNumber} ("${lines[idx].trim()}") must be covered by a rationale comment above its group`
+        `GHSA entry on line ${lineNumber} ("${lines[idx]!.trim()}") must be covered by a rationale comment above its group`
       ).toBe(true);
     }
   });
