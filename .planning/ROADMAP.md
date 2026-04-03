@@ -131,3 +131,13 @@ Phases execute in numeric order: 20 → 21 → 22 → 23 → 24 → 25
 | 23. Supply Chain Hardening | v1.2 | 3/3 | Complete    | 2026-03-28 |
 | 24. CI Optimization & Benchmarking | v1.2 | 2/2 | Complete    | 2026-03-28 |
 | 25. CI Integration Fixes | v1.2 | 1/1 | Complete    | 2026-03-28 |
+
+### Phase 26: Comprehensive E2E Test Coverage
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 25
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 26 to break down)
