@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('Medication Wizard', () => {
+test.describe('Medications', () => {
   test('should mock AI search and create medication', async ({ page }) => {
     // Mock the AI API
     await page.route('/api/ai/medicine-search', async route => {

@@ -148,6 +148,6 @@ Phases execute in numeric order: 20 → 21 → 22 → 23 → 24 → 25 → 26
 **Plans:** 1/3 plans executed
 
 Plans:
-- [ ] 26-01-PLAN.md — Rename spec files to mirror routes, expand dashboard.spec.ts with all card tests
+- [x] 26-01-PLAN.md — Rename spec files to mirror routes, expand dashboard.spec.ts with all card tests
 - [x] 26-02-PLAN.md — Create history.spec.ts for analytics page, expand settings.spec.ts with backup and account tests
 - [ ] 26-03-PLAN.md — Expand auth.spec.ts with lifecycle tests, expand medications.spec.ts with daily notes

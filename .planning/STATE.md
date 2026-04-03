@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: CI & Data Integrity
 status: executing
-stopped_at: Completed 26-02-PLAN.md
-last_updated: "2026-04-03T09:25:52.693Z"
-last_activity: 2026-04-03
+stopped_at: Completed Wave 1 (26-01, 26-02)
+last_updated: "2026-04-03T09:26:00Z"
+last_activity: 2026-04-03 -- Phase 26 Wave 1 complete
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 15
   completed_plans: 13
-  percent: 82
+  percent: 86
 ---
 
 # Project State
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-03-27)
 
 Phase: 26 (comprehensive-e2e-test-coverage) — EXECUTING
 Plan: 2 of 3
-Status: Ready to execute
-Last activity: 2026-04-03
+Status: Executing Phase 26 (Wave 1 complete, starting Wave 2)
+Last activity: 2026-04-03 -- Phase 26 Wave 1 complete
 
-Progress: [████████░░] 82%
+Progress: [████████░░] 84%
 
 ## Performance Metrics
 
@@ -63,6 +63,7 @@ Progress: [████████░░] 82%
 | Phase 24 P01 | 3min | 2 tasks | 5 files |
 | Phase 24 P02 | 2min | 1 tasks | 1 files |
 | Phase 25 P01 | 6min | 2 tasks | 4 files |
+| Phase 26 P01 | 2min | 2 tasks | 3 files |
 | Phase 26 P02 | 3min | 2 tasks | 2 files |
 
 ## Accumulated Context
@@ -100,6 +101,8 @@ Key decisions carrying forward into v1.2:
 - [Phase 24]: ci-pass gate splits unconditional (must succeed) from gated (success or skipped) job checks
 - [Phase 25]: ES2020 target chosen as minimum needed for TS1501/TS2802 fixes (not ESNext) since it only affects tsc --noEmit
 - [Phase 25]: Added .claude/** to vitest exclude and benchmark.exclude to prevent worktree bench file discovery
+- [Phase 26]: Route-mirrored spec file naming convention: spec files match app routes (dashboard.spec.ts for /, medications.spec.ts for /medications)
+- [Phase 26]: Section ID scoping pattern (#section-{name}) for card-specific E2E interactions
 - [Phase 26]: Navigate to /analytics not /history in E2E tests (redirect pitfall)
 - [Phase 26]: D-11 chart assertion: check SVG container presence only, never path values
 - [Phase 26]: D-12 data pipeline: create data via dashboard UI then verify in analytics
@@ -128,7 +131,7 @@ None.
 
 ## Session Continuity
 
-Last activity: 2026-03-30 - Completed quick task 260330-131: Replace LOCAL_AGENT_MODE bypass with Privy test credentials from ENV vars
-Last session: 2026-04-03T09:25:52.688Z
-Stopped at: Completed 26-02-PLAN.md
-Resume file: None
+Last activity: 2026-04-03 - Phase 26 Wave 1 complete (Plans 01+02)
+Last session: 2026-04-03T09:26:00Z
+Stopped at: Completed Wave 1 (26-01, 26-02)
+Resume file: .planning/phases/26-comprehensive-e2e-test-coverage/26-03-PLAN.md

@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('Intake Logs', () => {
+test.describe('Dashboard', () => {
   test('should allow adding water and salt logs', async ({ page }) => {
     // Go to the dashboard
     await page.goto('/');
@@ -92,5 +92,65 @@ test.describe('Intake Logs', () => {
 
     // Verify success feedback toast
     await expect(page.getByText(/recorded/i).first()).toBeVisible();
+  });
+
+  test('should record a blood pressure reading', async ({ page }) => {
+    await page.goto('/');
+    const bpCard = page.locator('#section-bp');
+    await bpCard.scrollIntoViewIfNeeded();
+    await expect(bpCard).toBeVisible();
+
+    // Fill systolic and diastolic fields
+    await bpCard.locator('#systolic').fill('120');
+    await bpCard.locator('#diastolic').fill('80');
+
+    // Submit the reading
+    await bpCard.locator('button:has-text("Record Reading")').click();
+
+    // Verify success toast
+    await expect(page.getByText('Blood pressure recorded', { exact: true })).toBeVisible();
+  });
+
+  test('should record a weight entry', async ({ page }) => {
+    await page.goto('/');
+    const weightCard = page.locator('#section-weight');
+    await weightCard.scrollIntoViewIfNeeded();
+    await expect(weightCard).toBeVisible();
+
+    // Wait for card to fully initialize (button becomes visible when ready)
+    const recordBtn = weightCard.locator('button:has-text("Record Weight")');
+    await expect(recordBtn).toBeVisible();
+
+    // Click Record Weight (uses default/pre-filled value)
+    await recordBtn.click();
+
+    // Verify success toast
+    await expect(page.getByText('Weight recorded', { exact: true })).toBeVisible();
+  });
+
+  test('should quick-log urination', async ({ page }) => {
+    await page.goto('/');
+    const urinationCard = page.locator('#section-urination');
+    await urinationCard.scrollIntoViewIfNeeded();
+    await expect(urinationCard).toBeVisible();
+
+    // Click "Medium" quick-log button
+    await urinationCard.locator('button', { hasText: 'Medium' }).click();
+
+    // Verify success toast (title is "Logged")
+    await expect(page.getByText('Logged', { exact: true })).toBeVisible();
+  });
+
+  test('should quick-log defecation', async ({ page }) => {
+    await page.goto('/');
+    const defecationCard = page.locator('#section-defecation');
+    await defecationCard.scrollIntoViewIfNeeded();
+    await expect(defecationCard).toBeVisible();
+
+    // Click "Large" quick-log button (use different size than urination test)
+    await defecationCard.locator('button', { hasText: 'Large' }).click();
+
+    // Verify success toast (title is "Logged")
+    await expect(page.getByText('Logged', { exact: true })).toBeVisible();
   });
 });
