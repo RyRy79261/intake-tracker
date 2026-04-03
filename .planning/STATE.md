@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: CI & Data Integrity
-status: verifying
-stopped_at: Phase 26 context gathered
-last_updated: "2026-04-03T08:25:32.740Z"
-last_activity: 2026-03-28
+status: executing
+stopped_at: Completed 26-01-PLAN.md
+last_updated: "2026-04-03T09:23:47Z"
+last_activity: 2026-04-03 -- Phase 26 Plan 01 complete
 progress:
   total_phases: 7
   completed_phases: 6
-  total_plans: 12
-  completed_plans: 12
-  percent: 82
+  total_plans: 15
+  completed_plans: 13
+  percent: 84
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-27)
 
 **Core value:** Accurate, queryable health data across intake, vitals, and medication adherence — structured for cross-domain analysis and future AI querying
-**Current focus:** Phase 25 — ci-integration-fixes
+**Current focus:** Phase 26 — comprehensive-e2e-test-coverage
 
 ## Current Position
 
-Phase: 25
-Plan: Not started
-Status: Phase complete — ready for verification
-Last activity: 2026-03-28
+Phase: 26 (comprehensive-e2e-test-coverage) — EXECUTING
+Plan: 2 of 3
+Status: Executing Phase 26 (Plan 01 complete)
+Last activity: 2026-04-03 -- Phase 26 Plan 01 complete
 
-Progress: [████████░░] 82%
+Progress: [████████░░] 84%
 
 ## Performance Metrics
 
@@ -63,6 +63,7 @@ Progress: [████████░░] 82%
 | Phase 24 P01 | 3min | 2 tasks | 5 files |
 | Phase 24 P02 | 2min | 1 tasks | 1 files |
 | Phase 25 P01 | 6min | 2 tasks | 4 files |
+| Phase 26 P01 | 2min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -99,6 +100,8 @@ Key decisions carrying forward into v1.2:
 - [Phase 24]: ci-pass gate splits unconditional (must succeed) from gated (success or skipped) job checks
 - [Phase 25]: ES2020 target chosen as minimum needed for TS1501/TS2802 fixes (not ESNext) since it only affects tsc --noEmit
 - [Phase 25]: Added .claude/** to vitest exclude and benchmark.exclude to prevent worktree bench file discovery
+- [Phase 26]: Route-mirrored spec file naming convention: spec files match app routes (dashboard.spec.ts for /, medications.spec.ts for /medications)
+- [Phase 26]: Section ID scoping pattern (#section-{name}) for card-specific E2E interactions
 
 ### Pending Todos
 
@@ -124,7 +127,7 @@ None.
 
 ## Session Continuity
 
-Last activity: 2026-03-30 - Completed quick task 260330-131: Replace LOCAL_AGENT_MODE bypass with Privy test credentials from ENV vars
-Last session: 2026-04-03T08:25:32.737Z
-Stopped at: Phase 26 context gathered
-Resume file: .planning/phases/26-comprehensive-e2e-test-coverage/26-CONTEXT.md
+Last activity: 2026-04-03 - Completed Phase 26 Plan 01: Route-mirrored spec renames + dashboard card coverage
+Last session: 2026-04-03T09:23:47Z
+Stopped at: Completed 26-01-PLAN.md
+Resume file: .planning/phases/26-comprehensive-e2e-test-coverage/26-02-PLAN.md
