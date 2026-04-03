@@ -184,4 +184,26 @@ test.describe('Medications', () => {
     // Dexie's boolean-to-number index mapping may differ in Playwright's Chromium
     await expect(page.locator('text=/\\d+ pills/')).toBeVisible({ timeout: 5000 });
   });
+
+  test('should show schedule empty state and navigate between tabs', async ({ page }) => {
+    await page.goto('/medications');
+    await expect(page.locator('text=Medications').first()).toBeVisible();
+
+    // Schedule tab is the default active tab
+    // With no prescriptions, the EmptySchedule component renders
+    // EmptySchedule shows "No medications scheduled for today" and an "Add a prescription" button
+    await expect(page.locator('text=Add a prescription')).toBeVisible({ timeout: 10000 });
+
+    // Navigate to the Meds tab (labeled "Meds" in MedTabBar)
+    await page.locator('button', { hasText: 'Meds' }).click();
+    // Meds tab should be visible (CompoundList renders)
+
+    // Navigate to the Rx tab (labeled "Rx" in MedTabBar, shows PrescriptionsView)
+    await page.locator('button', { hasText: 'Rx' }).click();
+
+    // Navigate back to Schedule tab
+    await page.locator('button', { hasText: 'Schedule' }).click();
+    // Verify we're back at the schedule view with empty state
+    await expect(page.locator('text=Add a prescription')).toBeVisible();
+  });
 });
