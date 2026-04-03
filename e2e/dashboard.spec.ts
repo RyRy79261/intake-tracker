@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('Intake Logs', () => {
+test.describe('Dashboard', () => {
   test('should allow adding water and salt logs', async ({ page }) => {
     // Go to the dashboard
     await page.goto('/');
