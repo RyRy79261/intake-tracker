@@ -120,8 +120,8 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 20 → 21 → 22 → 23 → 24 → 25
-(Phases 21, 22, 23 can execute in any order after 20; Phase 24 depends on all prior phases; Phase 25 is gap closure)
+Phases execute in numeric order: 20 → 21 → 22 → 23 → 24 → 25 → 26
+(Phases 21, 22, 23 can execute in any order after 20; Phase 24 depends on all prior phases; Phase 25 is gap closure; Phase 26 extends E2E coverage)
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -131,13 +131,23 @@ Phases execute in numeric order: 20 → 21 → 22 → 23 → 24 → 25
 | 23. Supply Chain Hardening | v1.2 | 3/3 | Complete    | 2026-03-28 |
 | 24. CI Optimization & Benchmarking | v1.2 | 2/2 | Complete    | 2026-03-28 |
 | 25. CI Integration Fixes | v1.2 | 1/1 | Complete    | 2026-03-28 |
+| 26. Comprehensive E2E Test Coverage | v1.2 | 0/3 | Planning    | - |
 
 ### Phase 26: Comprehensive E2E Test Coverage
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** Every app route has comprehensive E2E tests covering happy paths, error states, and edge cases -- spec files mirror app routes, all dashboard cards are tested, auth lifecycle is verified, analytics page is exercised with the full data pipeline, and the Privy test account integration is confirmed working in CI
+**Requirements**: D-01, D-02, D-03, D-04, D-05, D-06, D-07, D-08, D-09, D-10, D-11, D-12, D-13, D-14, D-15
 **Depends on:** Phase 25
-**Plans:** 0 plans
+**Success Criteria** (what must be TRUE):
+  1. Five spec files exist mirroring app routes: auth.spec.ts, dashboard.spec.ts, medications.spec.ts, history.spec.ts, settings.spec.ts
+  2. All dashboard cards have E2E tests: water, food-salt (AI), coffee preset, blood pressure, weight, urination, defecation
+  3. Auth lifecycle test exercises logout from settings, sees login prompt, re-authenticates via Privy E2E bridge, and reaches dashboard
+  4. Analytics page tests verify tab navigation, empty states, data pipeline (create via UI -> verify in records), and chart SVG container rendering
+  5. Settings tests cover theme persistence, day-start persistence, backup export, and account section display
+  6. Full E2E suite passes with Privy test account credentials (both locally and in CI)
+**Plans:** 3 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 26 to break down)
+- [ ] 26-01-PLAN.md — Rename spec files to mirror routes, expand dashboard.spec.ts with all card tests
+- [ ] 26-02-PLAN.md — Create history.spec.ts for analytics page, expand settings.spec.ts with backup and account tests
+- [ ] 26-03-PLAN.md — Expand auth.spec.ts with lifecycle tests, expand medications.spec.ts with daily notes
