@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('Settings Persistence', () => {
+test.describe('Settings', () => {
   test('theme persists across page reload', async ({ page }) => {
     // Navigate to settings
     await page.goto('/settings');
@@ -47,5 +47,34 @@ test.describe('Settings Persistence', () => {
 
     // Verify day-start-hour persisted after reload
     await expect(page.locator('#day-start')).toContainText('4:00 AM');
+  });
+
+  test('export data triggers download', async ({ page }) => {
+    await page.goto('/settings');
+    await expect(page.locator('h3', { hasText: 'Data Management' })).toBeVisible();
+
+    // Set up download listener before clicking
+    const downloadPromise = page.waitForEvent('download');
+
+    // Click "Export Data" button
+    await page.locator('button', { hasText: 'Export Data' }).click();
+
+    // Verify download was triggered
+    const download = await downloadPromise;
+    // Backup file should be a JSON file
+    expect(download.suggestedFilename()).toMatch(/\.json$/);
+  });
+
+  test('account section displays email and sign out option', async ({ page }) => {
+    await page.goto('/settings');
+
+    // Verify Account section is visible
+    await expect(page.locator('h3', { hasText: 'Account' })).toBeVisible();
+
+    // Verify "Signed in" text is shown
+    await expect(page.locator('text=Signed in')).toBeVisible();
+
+    // Verify Sign Out button exists
+    await expect(page.locator('button', { hasText: 'Sign Out' })).toBeVisible();
   });
 });
