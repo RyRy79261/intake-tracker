@@ -71,7 +71,7 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 
 - [x] Automated release pipeline with changelogs, semver, and GitHub Releases — v1.3 Phase 27
 - [ ] Stable staging environment with isolated Neon DB backend
-- [ ] Tagged promotion flow (staging → production) with approval gates
+- [x] Tagged promotion flow (staging → production) with approval gates — v1.3 Phase 29
 - [ ] CI/CD extensibility for future security reviews and platform builds
 
 ### Out of Scope
@@ -122,6 +122,7 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 | Route-mirrored E2E spec files | One spec per app route makes test ownership clear and scales naturally | ✓ Good |
 | Release Please over custom version-bump.yml | PR-based version bumps are more visible and reliable than bot commits on main; conventional commits provide clean changelogs | ✓ Good |
 | Commitlint + husky for commit enforcement | Formalizes existing conventional commit practice; hook validates locally, Release Please validates server-side | ✓ Good |
+| Separate promotion workflow + setup script for protection | Branch protection and environment rules are repo settings (not code); setup script documents and automates configuration via gh CLI | ✓ Good |
 
 ## Evolution
 
