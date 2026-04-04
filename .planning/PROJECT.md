@@ -21,9 +21,10 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 
 ## Current State
 
-**Shipped:** v1.0 Engineering Overhaul + v1.1 UI Overhaul + v1.2 CI & Data Integrity
+**Shipped:** v1.0 Engineering Overhaul + v1.1 UI Overhaul + v1.2 CI & Data Integrity + v1.3 Deployment Lifecycle
 **Codebase:** ~47K LOC TypeScript, Next.js 14 App Router, Dexie.js v15 (IndexedDB)
 **CI:** 12-job GitHub Actions pipeline — lint, typecheck, dual-TZ tests, build+security, data integrity, E2E (Playwright), supply chain audit, coverage, benchmarks
+**Deployment:** Release Please automation, stable staging environment, promotion workflow with Neon snapshots, version display, rollback runbook
 **E2E:** 22 Playwright tests across 5 route-mirrored spec files with Privy test account integration
 
 ## Requirements
@@ -70,9 +71,9 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 <!-- Current scope — v1.3 Deployment Lifecycle -->
 
 - [x] Automated release pipeline with changelogs, semver, and GitHub Releases — v1.3 Phase 27
-- [ ] Stable staging environment with isolated Neon DB backend
+- [x] Stable staging environment with isolated Neon DB backend — v1.3 Phase 28
 - [x] Tagged promotion flow (staging → production) with approval gates — v1.3 Phase 29
-- [ ] CI/CD extensibility for future security reviews and platform builds
+- [x] Version display and rollback runbook — v1.3 Phase 30
 
 ### Out of Scope
 
@@ -127,6 +128,8 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 ## Evolution
 
 This document evolves at phase transitions and milestone boundaries.
+
+*Last updated: 2026-04-05 after Phase 30 completion*
 
 **After each phase transition:**
 1. Requirements invalidated? → Move to Out of Scope with reason
