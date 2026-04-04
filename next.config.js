@@ -1,6 +1,7 @@
 // Only load next-pwa in production to avoid ajv@8 polluting the module cache
 // during lint/dev (which breaks ESLint's ajv@6)
-const withPWA = process.env.NODE_ENV === 'production'
+// Also skip on Vercel preview/staging deploys to prevent stale SW caching
+const withPWA = process.env.NODE_ENV === 'production' && process.env.VERCEL_ENV !== 'preview'
   ? require('next-pwa')({
       dest: 'public',
       register: true,
