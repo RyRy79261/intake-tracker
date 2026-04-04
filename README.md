@@ -240,6 +240,11 @@ When using the "AI Input" feature:
 
 AI features require Privy authentication and a server-side `ANTHROPIC_API_KEY`. The API key is stored in the server environment only and never exposed to the client.
 
+## Documentation
+
+- [Rollback & Recovery Runbook](docs/ROLLBACK.md) — How to recover from bad production deployments
+- [Staging Setup Guide](docs/staging-setup.md) — Manual Vercel and DNS configuration for staging
+
 ## License
 
 This work is licensed under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/).
