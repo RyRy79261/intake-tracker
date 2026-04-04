@@ -1,385 +1,173 @@
-# Feature Landscape: CI & Data Integrity
+# Feature Research: Deployment Lifecycle
 
-**Domain:** CI pipeline, automated testing, data integrity protection, supply chain security for an offline-first PWA
-**Researched:** 2026-03-27
-**Confidence:** HIGH (well-established ecosystem; tools are mature; patterns are documented by GitHub, Playwright, Vitest, and pnpm officially)
+**Domain:** Release automation, staging environments, and CI/CD deployment pipelines for a single Next.js app on Vercel
+**Researched:** 2026-04-04
+**Confidence:** HIGH
 
----
+## Feature Landscape
 
-## 1. Data Integrity Protection
+### Table Stakes (Users Expect These)
 
-The most unusual domain here. Traditional CI data integrity means "protect the production database." This app has no server-side database for user data -- all health data lives in IndexedDB on the user's phone. A bad migration shipped to production silently corrupts irreplaceable medical records. CI must catch schema/migration regressions *before* they reach the user's device.
+Features any production-grade single-app deployment pipeline should have. Missing these means the pipeline is incomplete or fragile.
 
-### Table Stakes
+| Feature | Why Expected | Complexity | CI Dependency | Notes |
+|---------|--------------|------------|---------------|-------|
+| **Conventional Commits enforcement** | Release automation tools (Release Please, semantic-release) require structured commit messages to determine version bumps and generate changelogs. Without enforcement, one bad commit message breaks the chain. | LOW | None (local git hook) | commitlint + husky. pnpm-native setup: `pnpm add -D @commitlint/cli @commitlint/config-conventional husky`. The commit-msg hook validates messages before they reach the repo. Existing `preinstall` hook already enforces pnpm. |
+| **Automated release pipeline (Release Please)** | Manual version bumps are error-prone, current `version-bump.yml` doesn't generate changelogs or GitHub Releases. Release Please parses conventional commits, maintains a release PR with changelog preview, bumps `package.json` version, tags the commit, and creates a GitHub Release on merge. | MEDIUM | Replaces `version-bump.yml`. Runs on push to `main`. | Use `googleapis/release-please-action` with `release-type: node`. Config files: `release-please-config.json` + `.release-please-manifest.json`. Single-app mode (not manifest multi-package). Creates a persistent "Release PR" that accumulates changes; merging it triggers the release. Current version is `0.1.0` -- first release will be whatever semver the accumulated conventional commits dictate. |
+| **CHANGELOG.md generation** | Users (and future-you) need a record of what changed per release. Release Please generates this automatically from conventional commit messages, grouped by type (features, fixes, etc.). | LOW | Part of Release Please -- no separate tool needed. | Generated file committed to repo by Release Please bot. No manual maintenance. |
+| **GitHub Releases with release notes** | GitHub Releases are the canonical way to communicate what shipped. Release Please creates these automatically when the release PR merges, populating the body from the changelog entry. | LOW | Part of Release Please. Requires `contents: write` permission on the workflow. | Each release gets a git tag (e.g., `v1.3.0`) and a GitHub Release with formatted notes. These serve as the source of truth for "what version is deployed." |
+| **Staging environment with stable URL** | Need to verify changes in a production-like environment before they go live. A persistent `staging.intake-tracker.ryanjnoble.dev` URL lets you test without hunting for preview deployment URLs. | MEDIUM | New staging workflow or branch-domain config in Vercel. | **Hobby plan approach:** Assign a custom domain (`staging.intake-tracker.ryanjnoble.dev`) to a `staging` branch in Vercel Dashboard (Settings > Domains > Edit > assign to staging branch). Vercel auto-deploys on push to that branch. No custom environments needed (Pro-only feature). Branch-specific env vars override Preview defaults. |
+| **Isolated staging database (Neon branch)** | Push notification subscriptions use server-side Neon Postgres. Staging must not pollute production data. A persistent Neon branch for staging provides schema isolation with near-zero cost. | LOW | Neon `create-branch-action` in staging deploy workflow, or manual one-time branch creation. | Neon free tier allows unlimited branches (0.5 GB storage per branch). Create a persistent `staging` branch from `main` once. Set `DATABASE_URL` as a staging-branch-specific env var in Vercel. Use `neondatabase/reset-branch-action` to refresh staging data from production periodically if needed. |
+| **CI-gated deployments (CI must pass before deploy)** | Deploying broken code to staging or production defeats the purpose. The existing 12-job CI pipeline should gate all deployments. | LOW | Existing `ci.yml` `ci-pass` job. New deploy workflows depend on CI passing. | For staging: deploy workflow triggers on push to `staging` branch, depends on CI passing. For production: Vercel auto-deploys on merge to `main` (current behavior) -- CI already gates PRs to main via branch protection. |
+| **Promotion flow (staging to production)** | After validating on staging, need a clear path to production. For a single-app Hobby plan, this is merge-to-main. No need for Vercel's "promote deployment" feature (Pro-only staged production builds). | LOW | Merge PR from `staging` to `main` triggers production deploy. | The simplest right-sized approach: staging branch gets a PR to main. CI runs, reviewer approves, merge triggers Vercel production deploy. This is just normal Git flow with a named staging branch. |
 
-| Feature | Why Expected | Complexity | Existing? | Notes |
-|---------|--------------|------------|-----------|-------|
-| Migration round-trip tests (v10 through v15) | Each Dexie version upgrade must be verified to not lose data. Dexie runs upgrade functions sequentially -- a broken v12 upgrade poisons all subsequent versions. | LOW | YES -- 6 migration test files exist covering v10-v15 | Already solid. CI just needs to run them reliably. |
-| Backup export/import round-trip test | Verifies all 16 tables survive export-to-JSON and re-import without data loss. The only disaster recovery mechanism for on-device data. | LOW | YES -- `round-trip.test.ts` covers all 16 tables, merge/replace modes, conflict detection | Already built. CI runs it. |
-| Schema version consistency check | Detects when a developer adds a new Dexie version but forgets to repeat all store definitions (Dexie requires full schema each version). Currently a manual discipline. | MEDIUM | NO | **New feature.** Write a unit test that programmatically extracts store definitions from each `db.version(N).stores()` call and verifies the final version includes all tables from all prior versions. This is the single highest-value data integrity gate for this codebase specifically. |
-| TypeScript strict mode in CI | Catches type mismatches between Dexie interfaces and service layer. A `number` field silently becoming `string | number` after a migration would break queries. | LOW | PARTIAL -- `strict: true` in tsconfig, but `tsc --noEmit` not enforced in CI | Add `tsc --noEmit` as a CI step. |
-| Build succeeds (no compile errors) | `pnpm build` must pass. Catches Next.js build-time errors including missing imports, bad dynamic routes, etc. | LOW | NO CI workflow exists yet | Table stakes for any CI pipeline. |
-| Bundle security scan (no leaked API keys) | Existing `bundle-security.test.ts` scans `.next/static` for API key patterns. Must run post-build. | LOW | YES -- test exists but requires `pnpm build` first | Wire into CI: build then run bundle security test. |
+### Differentiators (Competitive Advantage)
 
-### Differentiators
+Features that make the deployment pipeline notably better than "just push to main." Not required for a working pipeline, but add real value.
 
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| Schema drift detection (declared vs actual) | Programmatically compare Dexie's declared schema (from `db.version(N).stores()`) against what fake-indexeddb actually creates. Catches index mismatches, missing fields, and upgrade functions that silently skip records. Dexie has no built-in API for this (confirmed via Issue #950). | MEDIUM | Write a test that opens DB dynamically after all upgrades, extracts actual table/index structure, and compares against declared schema. Uses the approach from Dexie maintainer David Fahlander's workaround: `db.tables.map(t => ({ name: t.name, schema: t.schema }))`. |
-| Table count sentinel test | Hard-code expected table count (currently 16) and fail CI if it changes without updating the sentinel + backup service + fixture factory. Prevents adding a Dexie table while forgetting to update backup/restore. | LOW | Simple assertion: `expect(db.tables.length).toBe(16)`. The value is that it forces developers to consciously acknowledge new tables across the entire data pipeline. |
-| Upgrade path smoke test (v10 raw IDB to current) | Seed raw IndexedDB at v10 level (IDB version 100) with realistic fixture data, then open via `db.ts` to trigger the full v10->v15 upgrade chain. Verify zero data loss. | MEDIUM | The v15 migration test already does a version of this (seeds at v14=IDB 140). Extend to cover the full chain from v10. This catches cross-version interaction bugs. |
-| Migration idempotency check | Run the same migration twice and verify no duplicate records or corrupted state. Dexie upgrade functions run exactly once per version, but this guards against developer mistakes where upgrades have side effects that break on re-open. | LOW | Open db, close, re-open. Count records. Should be identical. |
+| Feature | Value Proposition | Complexity | CI Dependency | Notes |
+|---------|-------------------|------------|---------------|-------|
+| **GitHub environment protection rules** | Manual approval gate before production deployment. Adds a human checkpoint without complex tooling. Since the repo is public, GitHub Free plan supports required reviewers on environments. | LOW | New GitHub environment `production` with required reviewer. Deploy workflow uses `environment: production`. | Create `production` environment in repo Settings > Environments. Add yourself as required reviewer. The deploy-to-production workflow references this environment, pausing for approval. Public repos get this for free. |
+| **Deployment status notifications** | Know immediately when staging/production deploys succeed or fail without checking the dashboard. GitHub deployment status checks + Vercel's built-in GitHub integration already provide PR comments with preview URLs. | LOW | Vercel GitHub integration (already active). | Vercel's existing integration posts deployment status to PRs. For staging branch, this means every push shows deploy status. Slack/Discord webhooks are a future enhancement, not needed now. |
+| **CI-built artifacts deployed to Vercel (`--prebuilt`)** | "What CI tested is what production runs." Build once in GitHub Actions, deploy the artifact to Vercel without rebuilding. Eliminates the class of bugs where Vercel's build environment differs from CI. | HIGH | New deploy workflow: `vercel pull` + `vercel build --prod` + `vercel deploy --prebuilt --prod`. Requires `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` secrets. | This is the gold standard but adds significant complexity: must disable Vercel's auto-deploy on git push, manage Vercel CLI in CI, handle env var pulling. Right-sized recommendation: defer this. Vercel's built-in git integration is reliable for a single app. The CI pipeline already validates the build passes. |
+| **Rollback documentation / runbook** | When production breaks, you need a clear "how to roll back" procedure. Vercel's Instant Rollback feature + GitHub Release tags make this straightforward. | LOW | None -- this is documentation + Vercel Dashboard knowledge. | Document the rollback procedure: (1) Vercel Dashboard > Deployments > previous production deploy > Instant Rollback, or (2) `git revert` + push to main. No automation needed -- a documented runbook is the right level for a single-user app. |
+| **Release-triggered staging refresh** | After a production release, automatically reset the staging Neon branch to match production data. Keeps staging fresh without manual intervention. | LOW | `neondatabase/reset-branch-action` triggered by Release Please's release event. | Trigger on `release: published` event. Resets the staging Neon branch to the current state of the main branch. Low effort, high hygiene value. |
+| **Version display in app** | Show the current version in the app (settings page, footer, or meta tag). Helps verify which version is actually deployed to staging vs production. | LOW | Build-time injection from `package.json` version. | `process.env.npm_package_version` or read from `package.json` at build time. Display in Settings page. Trivial to implement, surprisingly useful for debugging "is my deploy live?" |
 
-### Anti-Features
+### Anti-Features (Commonly Requested, Often Problematic)
 
-| Anti-Feature | Why Avoid | What to Do Instead |
-|--------------|-----------|-------------------|
-| Visual schema diffing tool (like Prisma Migrate) | Dexie is not a server DB with DDL. IndexedDB schema changes are imperative (upgrade functions), not declarative. Building a visual diff tool is massive overhead for a 16-table schema. | Sentinel test + schema drift detection test cover the same ground at 1% of the cost. |
-| Automated rollback on schema failure | Dexie/IndexedDB cannot downgrade versions (Issue #1599). A lower version number causes `VersionError` and the DB refuses to open. Rolling back a deployed migration requires deleting the entire database. | Prevent bad migrations from shipping via CI gates. Backup/restore is the recovery mechanism. |
-| Production data snapshot testing | User's real data is on their phone. No way to pull it into CI. Running tests against "production-like" data requires synthetic fixtures. | Comprehensive fixture factory (already exists in `db-fixtures.ts`) with realistic data shapes. |
-| Schema migration approval workflow (manual gate) | Overkill for a single-developer project. The goal is automated detection, not process. | CI fails automatically on schema issues. Developer reviews the failure and fixes. |
+Features that seem appealing but add disproportionate complexity for a single-user single-app project.
 
----
-
-## 2. E2E UI Testing (Playwright)
-
-### Table Stakes
-
-| Feature | Why Expected | Complexity | Existing? | Notes |
-|---------|--------------|------------|-----------|-------|
-| Auth bypass for test execution | Tests must not require real Privy authentication. | LOW | YES -- `LOCAL_AGENT_MODE=true` env var bypasses Privy | Already working. |
-| Core user workflow tests | Intake logging (water, salt), medication wizard, navigation between pages. Tests that exercise the primary user journeys. | MEDIUM | PARTIAL -- 3 basic tests exist (auth bypass, intake logs, medication wizard) | Existing tests are thin. Medication wizard test is good (mocks AI, walks through 6 steps). Intake test just clicks "Confirm Entry" once. Need deeper scenario coverage. |
-| AI route mocking | AI API calls (`/api/ai/parse`, `/api/ai/medicine-search`, `/api/ai/substance-lookup`) must be mocked in E2E tests to avoid hitting real APIs, avoid flakiness from network issues, and avoid cost. | LOW | PARTIAL -- medication wizard mocks `medicine-search` via `page.route()` | Extend pattern to all AI routes. |
-| CI-compatible configuration | Single worker on CI (avoids race conditions), retries for flakiness, trace collection on failure. | LOW | YES -- `playwright.config.ts` already has CI-aware settings (`workers: 1`, `retries: 2`, `trace: 'on-first-retry'`) | Good foundation. |
-| Chromium-only testing | PWA is mobile-focused, single-user. Testing Firefox/Safari/WebKit adds CI time without meaningful coverage for this use case. | LOW | YES -- config only has Chromium project | Correct decision. Keep it. |
-| Artifact upload on failure | Playwright traces and screenshots must be uploadable from CI for debugging. | LOW | NO -- no CI workflow exists | Standard pattern: `actions/upload-artifact` with `if: failure()` condition. 7-day retention. |
-
-### Differentiators
-
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| Medication lifecycle E2E test | Full prescription lifecycle: create via wizard, log a dose, check inventory decrement, skip a dose with reason, verify history. This is the most complex user workflow and the most likely to regress. | HIGH | The medication wizard test is a starting point. Needs to continue beyond creation into the dose logging and inventory flow. |
-| Composable entry E2E test | Test the AI food parse flow: enter food description, verify preview shows linked water + salt + eating records, confirm, verify all records exist, delete primary record, verify cascade. | HIGH | Exercises the composable data model end-to-end through real UI. Highest-value new E2E test. |
-| Settings persistence E2E test | Change day-start-hour, theme, limits in settings. Navigate away. Return. Verify settings persisted. Tests Zustand localStorage persistence through real browser. | LOW | Low effort, catches real bugs (localStorage quota, serialization issues). |
-| Backup/restore E2E test | Export backup via UI, clear data, import backup, verify records restored. Tests the actual File API / download flow that unit tests cannot exercise. | MEDIUM | Playwright can intercept downloads and trigger file uploads. Tests the full browser-level backup flow. |
-| Mobile viewport testing | Run tests at 375px width (iPhone SE) since the app is mobile-focused (max-w-lg container). Catches responsive layout regressions. | LOW | Add a Playwright project with `devices['iPhone 13']`. Runs same tests at mobile dimensions. |
-| `--only-changed` for PR speed | Playwright v1.46+ supports `--only-changed=origin/$GITHUB_BASE_REF` to run only tests affected by changed files. On a feature branch that only changes the settings page, skip medication wizard tests. | LOW | Requires `fetch-depth: 0` in checkout action. Known issue: "dubious ownership" errors in GitHub Actions require `git config --global --add safe.directory`. Use as a "fast feedback" job, not a replacement for full suite. |
-
-### Anti-Features
-
-| Anti-Feature | Why Avoid | What to Do Instead |
-|--------------|-----------|-------------------|
-| Visual regression testing (screenshot comparison) | The app is pre-refinement (per memory notes). UI is actively changing. Screenshot comparisons would fail constantly and train developers to ignore failures. | Functional assertions (element visible, text content, navigation works). Add visual regression only after UI stabilizes. |
-| Multi-browser testing (Firefox, WebKit) | Single-user PWA. The user uses Chrome on Android. Firefox/WebKit testing adds 2-3x CI time for bugs that will never affect the real user. | Chromium-only. Revisit if the app gets external users. |
-| Service worker / offline testing in CI | Playwright has experimental service worker support, but it is unreliable in headless CI environments. next-pwa's service worker is generated at build time and difficult to test meaningfully in CI. | Test service worker registration manually on the real device. Focus CI E2E on application logic, not browser platform features. |
-| Playwright sharding | With ~5-10 E2E tests, sharding across 4 workers would create more overhead than savings. Sharding pays off at 50+ tests taking 10+ minutes. | Run all tests in a single job. Revisit when test count justifies the complexity. |
-| Playwright UI mode in CI | Interactive debugging tool. Useful locally, useless in headless CI. | Use trace viewer for CI failure debugging. Traces are non-interactive and uploadable as artifacts. |
-
----
-
-## 3. Dynamic Test Selection
-
-### Table Stakes
-
-| Feature | Why Expected | Complexity | Existing? | Notes |
-|---------|--------------|------------|-----------|-------|
-| Vitest `--changed` flag | Run only unit tests affected by changed files. Vitest traces imports from changed source files to their test files. Default behavior: changes to `vitest.config.ts` or `package.json` trigger full suite rerun. | LOW | NO -- not configured | Add `vitest run --changed=HEAD~1` (or `--changed=origin/main` on PRs) as a fast-feedback CI job. Full suite still runs as a separate job. |
-| Playwright `--only-changed` | Run only E2E tests whose spec files or imported utilities changed. Playwright v1.46+ traces import graphs. | LOW | NO -- not configured | Add as a "fast E2E" CI job alongside the full suite. Use `--only-changed=origin/$GITHUB_BASE_REF`. |
-| `forceRerunTriggers` for critical files | When `db.ts`, `backup-service.ts`, or `vitest.config.ts` change, rerun the entire test suite regardless of affected-file analysis. These files affect everything. | LOW | NO | Configure in `vitest.config.ts`: `forceRerunTriggers: ['**/db.ts', '**/backup-service.ts', '**/vitest.config.ts', '**/package.json']`. |
-| Path-based workflow filtering | GitHub Actions `paths` filter on workflow triggers. Don't run E2E tests when only `.md` files or `.planning/` changed. | LOW | NO -- no CI workflow exists | Use `paths-ignore: ['**.md', '.planning/**', 'docs/**']` on workflow triggers, or use dorny/paths-filter for job-level filtering (as seen in cipher-box reference repo). |
-
-### Differentiators
-
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| Two-tier CI: fast feedback + full suite | Job 1: lint + typecheck + `vitest --changed` + `playwright --only-changed` (runs in ~1-2 min). Job 2: full `vitest run` + full `playwright test` (runs in ~5-10 min). Developer gets fast signal while full validation runs in parallel. | MEDIUM | Requires two workflow jobs with different triggers. Fast job blocks merge only if it fails. Full job is the actual merge gate. |
-| dorny/paths-filter for job-level routing | Skip entire CI jobs based on which files changed. E.g., if only `src/lib/medication-service.ts` changed, skip the supply chain security audit job entirely. More granular than `paths` at workflow level. | LOW | Proven pattern from cipher-box reference repo. |
-
-### Anti-Features
-
-| Anti-Feature | Why Avoid | What to Do Instead |
-|--------------|-----------|-------------------|
-| Custom dependency graph analysis | Building a bespoke "which tests are affected by this source file" resolver. Vitest and Playwright already do this natively via import tracing. | Use built-in `--changed` and `--only-changed` flags. |
-| Test impact analysis via code coverage mapping | Tools like Launchable or Codecov's test selection use historical coverage data to predict affected tests. Massive complexity, requires a coverage database, and is designed for 1000+ test suites. | Overkill for 203 unit tests and ~10 E2E tests. Built-in `--changed` flags are sufficient. |
-| Skipping tests based on file extension patterns | "Only run tests if .ts files changed" -- too coarse. A changed `.css` file can break visual layouts that E2E tests catch. | Use import-graph-based analysis (Vitest/Playwright built-in), not file extension heuristics. |
-
----
-
-## 4. Code Coverage
-
-### Table Stakes
-
-| Feature | Why Expected | Complexity | Existing? | Notes |
-|---------|--------------|------------|-----------|-------|
-| V8 coverage provider in Vitest | `@vitest/coverage-v8` is already a devDependency. V8 provider is faster than Istanbul and works with TypeScript without extra transforms. | LOW | PARTIAL -- package installed, `test:coverage` script exists, but no CI integration or thresholds | Wire into CI. |
-| Coverage summary on PRs | Post a coverage comment on each PR showing overall coverage and per-file coverage for changed files. | LOW | NO | Use `davelosert/vitest-coverage-report-action` -- the standard GitHub Action for Vitest coverage. Requires `json-summary` and `json` reporters. |
-| Coverage thresholds | Fail CI if coverage drops below a minimum. Prevents gradual erosion. | LOW | NO | Set in `vitest.config.ts`: `coverage: { thresholds: { lines: 70, functions: 70, branches: 60 } }`. Start with realistic thresholds based on current coverage, then ratchet up. Do not set 80%+ initially -- it will block productive work. |
-| Coverage reporters for CI | Generate `json-summary` (for PR comments), `json` (for file-level details), and `text` (for console output). | LOW | NO -- only `--coverage` flag exists | Configure in `vitest.config.ts` under `coverage.reporter`. |
-
-### Differentiators
-
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| Coverage ratcheting | Never allow coverage to decrease. Track the "high water mark" and update thresholds in config as coverage improves. | LOW | Manual process: after each milestone, update thresholds to current coverage level. No tooling needed. |
-| Separate coverage for migration tests | Track migration test coverage independently. These tests are the most critical (data integrity) but cover a small code surface. High coverage on `db.ts` upgrade functions is more important than high coverage on UI components. | MEDIUM | Run migration tests with `--coverage` in a separate Vitest project/config. Report separately. |
-
-### Anti-Features
-
-| Anti-Feature | Why Avoid | What to Do Instead |
-|--------------|-----------|-------------------|
-| 100% coverage target | Forces writing meaningless tests for trivial code (type exports, re-exports, simple getters). Creates test maintenance burden without improving confidence. | Set pragmatic thresholds (70-80% lines). Focus coverage effort on services and data layer, not UI components. |
-| Coverage badges in README | Vanity metric for a single-developer project. No external audience to impress. | Coverage is reported on PRs where it matters for decision-making. |
-| Codecov / Coveralls integration | Third-party services add complexity (token management, API flakiness) for a single-developer project. The GitHub Action provides the same PR comment functionality without a third-party dependency. | Use `davelosert/vitest-coverage-report-action` for PR comments. Self-contained, no external service. |
-
----
-
-## 5. Benchmarking
-
-### Table Stakes
-
-| Feature | Why Expected | Complexity | Existing? | Notes |
-|---------|--------------|------------|-----------|-------|
-| Build time tracking | Track `pnpm build` duration across PRs. A build that goes from 30s to 120s indicates a problem. | LOW | NO | Log build duration in CI via GitHub Actions step timing. No special tooling needed. |
-| Test suite duration tracking | Track total Vitest and Playwright run times. Catch regressions in test speed. | LOW | NO | GitHub Actions natively shows step durations. Sufficient for a 44K LOC app. |
-
-### Differentiators
-
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| Vitest bench for service layer | Benchmark critical service functions (backup export, migration upgrade, analytics aggregation) using Vitest's experimental `bench` API. Track `ops/sec` across PRs. | MEDIUM | Vitest bench is still experimental. Use `github-action-benchmark` to store results and comment on PRs with regression alerts. `@codspeed/vitest-plugin` provides more consistent measurement in CI by using instrumented execution instead of wall-clock time, but adds a third-party dependency. |
-| IndexedDB operation benchmarks | Benchmark bulk insert/query times for realistic record counts (100, 1000, 10000 records across 16 tables). Catches performance regressions in Dexie queries or index misconfiguration. | MEDIUM | Relevant because the app will accumulate years of health data. A query that is fast with 100 records but slow with 10000 records is a real production bug. Uses fake-indexeddb, so measures algorithmic performance not browser IDB speed. |
-
-### Anti-Features
-
-| Anti-Feature | Why Avoid | What to Do Instead |
-|--------------|-----------|-------------------|
-| Flame graph generation in CI | CI environments have inconsistent CPU profiles. Flame graphs from GH Actions runners are not comparable across runs due to noisy neighbors, varying CPU frequency, and containerization overhead. | Run flame graphs locally when investigating a specific performance issue. CI benchmarks should use `ops/sec` or duration-based metrics. |
-| Lighthouse CI | Measures runtime performance, accessibility, SEO in a headless browser. Useful for public-facing websites. For a single-user PWA where the user is also the developer, the signal-to-noise ratio is low. | If performance profiling is needed, run Lighthouse locally. Don't gate CI on Lighthouse scores. |
-| Bundle size tracking | Tools like `size-limit` track JS bundle size across PRs. Useful for library authors and public websites. For a single-user PWA on a known device with known network conditions, bundle size is not a meaningful gate. | Monitor build output size informally. Don't add CI tooling for it. |
-
----
-
-## 6. Supply Chain Security
-
-### Table Stakes
-
-| Feature | Why Expected | Complexity | Existing? | Notes |
-|---------|--------------|------------|-----------|-------|
-| `pnpm audit` in CI | Check for known vulnerabilities in dependencies. pnpm audit checks the npm advisory database. | LOW | NO | Run `pnpm audit --audit-level=high` in CI. Fail on high/critical vulnerabilities. `--audit-level=moderate` will likely produce too many false positives for transitive devDependencies. |
-| Frozen lockfile enforcement | `pnpm install --frozen-lockfile` in CI ensures the lockfile is committed and matches `package.json`. Prevents accidental dependency updates during CI runs. | LOW | NO -- no CI workflow exists | Standard practice. Every CI job that installs dependencies must use `--frozen-lockfile`. |
-| `minimumReleaseAge` in pnpm config | Delay installation of newly published packages by 24+ hours. After the Shai-Hulud attacks (Nov 2025) and PackageGate zero-days (Jan 2026), this is now considered essential. pnpm 10.16+ supports this natively. | LOW | NO | Add to `.npmrc` or `pnpm-workspace.yaml`: `minimumReleaseAge: 1440` (24 hours in minutes). This means `pnpm install` will refuse packages published less than 24 hours ago. Set exclusions for known-safe packages if needed. |
-| Lockfile committed to repo | Prevents `pnpm install` from resolving different versions on different machines or CI runs. | LOW | YES -- `pnpm-lock.yaml` is committed | Already done. |
-| GitHub Actions pinned to SHA or major version | Prevent supply chain attacks via compromised GitHub Actions. Pin to specific commit SHAs or at minimum major versions (`actions/checkout@v4` not `actions/checkout@latest`). | LOW | NO -- no CI workflow exists | Pin all actions to specific versions. The cipher-box reference repo uses explicit `v4`/`v5` versioning. |
-
-### Differentiators
-
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| `trustPolicy: no-downgrade` | pnpm 10.21+ feature that detects when a package's trust level decreases (e.g., previously published via Trusted Publisher OIDC, now published without provenance). Early signal of account compromise. | LOW | Add to pnpm config. Zero runtime cost, significant security value. Requires pnpm 10.21+ (current project has `pnpm@10.30.2`, so this is available). |
-| `blockExoticSubdeps: true` | Prevents transitive dependencies from using git repositories or direct tarball URLs as sources. Forces all deps to come from the npm registry. | LOW | One line in pnpm config. Blocks a common supply chain attack vector. |
-| Lifecycle script blocking (default in pnpm 10) | pnpm 10 blocks postinstall scripts by default. Instead of `dangerouslyAllowAllBuilds`, use `allowBuilds` to whitelist specific packages that need lifecycle scripts. | LOW | pnpm 10 already does this by default. Audit existing `allowBuilds` entries if any. |
-| Dependabot/Renovate configured but NOT auto-merging | Automated dependency update PRs are useful for awareness but must require manual review. Auto-merging dependency updates is a supply chain attack vector (Shai-Hulud 2.0 used this). | LOW | Create a `dependabot.yml` or `renovate.json` with `automerge: false`. Weekly schedule, security updates only, or grouped by ecosystem. |
-
-### Anti-Features
-
-| Anti-Feature | Why Avoid | What to Do Instead |
-|--------------|-----------|-------------------|
-| Auto-merging dependency updates | Even with security-only scope, auto-merging removes the human review step. After PackageGate (Jan 2026) showed that lockfiles themselves can be exploited, human review of dependency changes is essential. | Dependabot/Renovate creates PRs. Human reviews and merges. |
-| Socket.dev / Snyk integration | Third-party security scanners that monitor every install. Useful for organizations, overkill for a single-developer project. Adds token management and API dependency. | `pnpm audit` + `minimumReleaseAge` + `trustPolicy` covers the same ground with zero external dependencies. |
-| npm provenance verification on every install | Checking SIGSTORE attestations for every package adds significant install time and requires network access to Rekor transparency log. Not all packages have provenance yet. | `trustPolicy: no-downgrade` catches the important case (trust level regression) without verifying every package. |
-
----
-
-## 7. CI Workflow Orchestration (GitHub Actions)
-
-### Table Stakes
-
-| Feature | Why Expected | Complexity | Existing? | Notes |
-|---------|--------------|------------|-----------|-------|
-| PR-triggered workflow | Run on `pull_request` to `main`. Every PR gets automated feedback before merge. | LOW | NO -- no CI workflow exists | Foundation of the entire CI pipeline. |
-| pnpm + Node.js setup with caching | Use `pnpm/action-setup` + `actions/setup-node` with `cache: 'pnpm'`. Caches pnpm store between runs. | LOW | NO | Standard pattern. Saves 30-60s per run. |
-| Parallel jobs for independent tasks | Lint, typecheck, unit tests, and E2E tests can run in parallel. Don't serialize tasks that don't depend on each other. | LOW | NO | Lint + typecheck have no deps. Unit tests need `pnpm install`. E2E tests need `pnpm build` + Playwright install. |
-| Next.js build cache | Cache `.next/cache` between runs. Next.js incremental compilation uses this to skip unchanged pages. | LOW | NO | Use `actions/cache` with key based on lockfile hash. Saves 30-60s on builds. |
-| Playwright browser caching | Cache `~/.cache/ms-playwright` keyed on Playwright version. Avoids re-downloading Chromium (~150MB) on every run. | LOW | NO | Key: `${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}`. Only install browsers when cache misses. |
-| Clear failure reporting | Each CI job has a descriptive name. Failed steps show which exact check failed. No "CI failed" with no context. | LOW | NO | Name jobs descriptively: `lint`, `typecheck`, `unit-tests`, `e2e-tests`, `supply-chain-audit`. |
-
-### Differentiators
-
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| Path-based job filtering (dorny/paths-filter) | Only run E2E tests when source code changes. Only run supply chain audit when `package.json` or `pnpm-lock.yaml` changes. Saves CI minutes on documentation-only PRs. | LOW | Proven pattern from cipher-box reference repo. Adds a `changes` job that downstream jobs `needs`. |
-| Timezone dual-pass in CI | Run unit tests twice: `TZ=Africa/Johannesburg` and `TZ=Europe/Berlin`. The user travels between SA and Germany; timezone bugs are real production risks. The `test:tz` script already does this locally. | LOW | Add `matrix: { tz: ['Africa/Johannesburg', 'Europe/Berlin'] }` to the unit test job. Two parallel runs. |
-| Build artifact reuse | Build once, reuse across E2E tests and bundle security scan. Don't rebuild for each downstream job. | MEDIUM | Use `actions/upload-artifact` / `actions/download-artifact` to share `.next/` build output. Saves 1-2 minutes per dependent job. |
-| Concurrency control | Cancel in-progress CI runs when a new commit is pushed to the same PR. Prevents wasting CI minutes on superseded commits. | LOW | `concurrency: { group: 'ci-${{ github.ref }}', cancel-in-progress: true }`. |
-
-### Anti-Features
-
-| Anti-Feature | Why Avoid | What to Do Instead |
-|--------------|-----------|-------------------|
-| Self-hosted runners | Maintenance burden (patching, security, uptime) for a single-developer project. GitHub-hosted runners are free for public repos and have generous limits for private repos. | Use `ubuntu-latest` GitHub-hosted runners. |
-| Docker-based CI | App has no Docker setup. Adding Docker to CI for an app that deploys to Vercel/static hosting adds complexity without benefit. | Run directly on the runner with `pnpm install`. |
-| Deployment from CI | CI should validate, not deploy. Deployment is a separate concern (Vercel preview deploys, or manual `pnpm build && push`). Mixing validation and deployment in the same workflow creates confusing failure modes. | Keep CI as a pure quality gate. Deploy separately. |
-| Matrix testing across Node versions | Single-developer app pinned to a specific Node version. Testing on Node 18, 20, and 22 adds CI time without value since the deployment target is fixed. | Pin to one Node version (match production/Vercel). |
-
----
+| Feature | Why Requested | Why Problematic | Alternative |
+|---------|---------------|-----------------|-------------|
+| **Release Please manifest mode (multi-package)** | Reference project (cipher-box) uses it for 15-package monorepo. | Manifest mode manages per-component versioning, separate changelogs, independent release cycles. This project is a single Next.js app -- manifest mode adds config overhead for zero benefit. | Use Release Please simple mode with `release-type: node`. One `package.json`, one `CHANGELOG.md`, one version. |
+| **Date-based staging tags (`staging-YYYYMMDD-release-N`)** | Reference project uses them for staging cut identification. | Useful in monorepos where "which packages are in this staging cut?" is ambiguous. For a single app, the staging branch HEAD *is* the staging cut. Extra tagging adds process overhead with no information gain. | The staging branch tip is the staging state. Git log provides full history. GitHub Releases mark production cuts. |
+| **Per-PR Neon database branches** | Neon docs heavily promote this pattern. Each PR gets its own DB branch for isolated testing. | This project's user data is entirely in IndexedDB (client-side). Neon is only used for push notification subscriptions -- a small, rarely-changing table. Per-PR DB branches add Actions complexity for a table that barely changes. | One persistent staging branch in Neon. E2E tests don't hit Neon (they use local IndexedDB via Playwright). |
+| **Vercel `--prebuilt` deployment pipeline (replace git integration)** | "Build once, deploy the tested artifact." Eliminates build-environment divergence. | Requires disabling Vercel's auto-deploy on git push, managing `VERCEL_TOKEN`/`VERCEL_ORG_ID`/`VERCEL_PROJECT_ID` secrets, pulling env vars in CI, handling the `.vercel/output` directory. For a single Next.js app where Vercel's build is deterministic (same Node version, same deps via lockfile), the risk of build-environment divergence is near-zero. | Keep Vercel's git integration. CI validates the build passes (`pnpm build` in CI). Vercel rebuilds from the same commit. If divergence ever appears, revisit then. |
+| **Custom Vercel environments (Pro plan)** | Named `staging` environment with branch rules, attached domain, separate env var namespace. | Requires Vercel Pro ($20/month). The Hobby plan branch-domain approach achieves 95% of the same result for free: assign a domain to the staging branch, use branch-specific env var overrides. | Hobby plan: assign `staging.intake-tracker.ryanjnoble.dev` to the `staging` branch. Override `DATABASE_URL` for that branch. Functionally identical for a single-user app. |
+| **Slack/Discord deployment notifications** | Real-time deployment status in chat. | Single-user app. You are the only person who needs to know. GitHub's existing notification system (email, mobile app) plus Vercel's dashboard already surface deployment status. Adding a webhook integration is overhead for an audience of one. | GitHub notification settings + Vercel Dashboard. If you want push notifications for deploys, Vercel's Slack integration is a 5-minute setup later -- but it's not infrastructure to build now. |
+| **Canary/blue-green deployments** | Gradual rollout to catch issues before full traffic shift. | Enterprise pattern for apps with thousands of users. This is a single-user app. You *are* the canary. Vercel doesn't support canary natively on Hobby. | Deploy to production. If it breaks, Instant Rollback (one click in Vercel Dashboard). |
+| **Automated E2E tests against staging deployment** | Run Playwright against the live staging URL to catch deployment-specific issues. | E2E tests require Privy test credentials, which are configured for `localhost:3000`. Reconfiguring for a live URL adds auth complexity (Privy origin restrictions). The existing CI E2E tests already validate the app works. Deployment-specific issues (env vars, routing) are rare and caught by manual smoke testing. | Run E2E in CI (already implemented). Manual smoke test on staging before promoting to production. If deployment-specific E2E is needed later, it's a separate phase. |
+| **Multi-environment Neon DB setup (dev/staging/prod)** | Full environment parity with three separate databases. | Only push notification subscriptions use Neon. Dev doesn't need Neon at all (app works without it per CLAUDE.md). Three environments for one small table is overengineered. | Two Neon environments: production (main branch) + staging (Neon branch). Local dev skips Neon entirely. |
 
 ## Feature Dependencies
 
 ```
-[GitHub Actions Workflow File]
-    |
-    +-- enables --> [All CI features below]
-    |
-    +-- contains --> [pnpm install --frozen-lockfile]
-    |                    |
-    |                    +-- enables --> [pnpm audit]
-    |                    +-- enables --> [Vitest run]
-    |                    +-- enables --> [Playwright install + test]
-    |
-    +-- contains --> [pnpm build]
-                         |
-                         +-- enables --> [Bundle security scan]
-                         +-- enables --> [E2E tests (need running app)]
-                         +-- enables --> [Build time tracking]
+[Conventional Commits (commitlint + husky)]
+    └──required by──> [Release Please]
+                           ├──produces──> [CHANGELOG.md]
+                           ├──produces──> [GitHub Releases + tags]
+                           └──produces──> [Version in package.json]
+                                              └──enables──> [Version display in app]
 
-[Supply Chain Config (pnpm settings)]
-    |
-    +-- independent of --> [CI workflow]
-    +-- works locally too --> [minimumReleaseAge, trustPolicy, blockExoticSubdeps]
+[Staging branch + domain config]
+    ├──requires──> [Neon staging branch (for DATABASE_URL)]
+    └──enhanced by──> [GitHub environment protection rules]
 
-[Vitest --changed / Playwright --only-changed]
-    |
-    +-- requires --> [fetch-depth: 0 in checkout]
-    +-- requires --> [forceRerunTriggers config for critical files]
-    +-- parallel with --> [Full test suite (separate job)]
+[Release Please release event]
+    └──triggers──> [Staging Neon branch refresh]
 
-[Coverage reporting]
-    |
-    +-- requires --> [Vitest coverage reporters configured]
-    +-- requires --> [vitest-coverage-report-action in workflow]
-
-[Schema drift detection test]
-    |
-    +-- requires --> [fake-indexeddb (already installed)]
-    +-- requires --> [Dexie dynamic mode for schema extraction]
-    +-- independent of --> [CI workflow (runs as regular unit test)]
-
-[Table count sentinel test]
-    |
-    +-- requires --> [Hard-coded expected count]
-    +-- triggers update to --> [backup-service.ts, db-fixtures.ts]
+[CI pipeline (existing)]
+    └──gates──> [All deployments (via branch protection)]
 ```
 
----
+### Dependency Notes
 
-## MVP Recommendation
+- **Release Please requires Conventional Commits:** Release Please parses commit messages to determine version bumps and generate changelog entries. Without commitlint enforcement, developers can write non-conventional messages that Release Please ignores, leading to silent version skips or empty changelogs.
+- **Staging domain requires Neon branch:** The staging environment needs its own `DATABASE_URL` pointing to an isolated Neon branch. Without this, staging would share the production database for push subscriptions.
+- **Version display requires Release Please:** The app version in the UI should match the released version. Release Please bumps `package.json` version on release, which the app reads at build time.
+- **Staging refresh requires Release Please release event:** The `release: published` GitHub event (from Release Please) triggers a Neon branch reset, keeping staging data fresh after each production release.
 
-### Phase 1: Foundation (must ship first)
+## MVP Definition
 
-Priority: Get the CI workflow running with maximum data integrity protection.
+### Launch With (v1.3 Core)
 
-1. **GitHub Actions workflow file** -- PR-triggered, with pnpm/Node setup, caching
-2. **Lint + typecheck (`tsc --noEmit`)** -- fastest feedback, zero new code
-3. **Unit tests with timezone dual-pass** -- existing 203 tests, two TZ matrix entries
-4. **Schema version consistency check** -- new test, highest-value data integrity feature
-5. **Table count sentinel test** -- one assertion, high leverage
-6. **pnpm build + bundle security scan** -- existing test, just needs CI wiring
-7. **Supply chain basics** -- `--frozen-lockfile`, `minimumReleaseAge`, `trustPolicy`
+The minimum set of features that constitutes a functioning deployment lifecycle.
 
-### Phase 2: E2E & Coverage
+- [ ] **Conventional Commits enforcement** -- Foundation for all release automation; install commitlint + husky
+- [ ] **Release Please pipeline** -- Replace `version-bump.yml` with `release-please-action`; produces changelogs, tags, GitHub Releases
+- [ ] **Staging branch with stable domain** -- Create `staging` branch, assign `staging.intake-tracker.ryanjnoble.dev` in Vercel, configure branch-specific env vars
+- [ ] **Neon staging branch** -- Create persistent staging branch in Neon, set `DATABASE_URL` override for staging in Vercel
+- [ ] **CI gates deployments** -- Ensure branch protection rules require CI to pass before merging to `staging` or `main`
 
-Priority: Real browser testing and coverage visibility.
+### Add After Validation (v1.3.x)
 
-1. **Playwright E2E in CI** -- browser caching, artifact upload on failure
-2. **Expand E2E test suite** -- composable entry test, settings persistence, medication lifecycle
-3. **Coverage reporting on PRs** -- vitest-coverage-report-action with pragmatic thresholds
-4. **`pnpm audit` in CI** -- supply chain vulnerability scanning
+Features to layer on once the core pipeline is proven to work.
 
-### Phase 3: Optimization & Polish
+- [ ] **GitHub environment protection rules** -- Add `production` environment with required reviewer approval; add when comfortable that the staging-to-main flow is solid
+- [ ] **Version display in app** -- Surface `package.json` version in Settings page; trivial but useful once versions are being properly tracked
+- [ ] **Release-triggered staging refresh** -- Wire up Neon branch reset on release event; add once you've observed the staging branch drifting from production
+- [ ] **Rollback runbook** -- Document the rollback procedure; write after the first real production deploy so the instructions are grounded in reality
 
-Priority: Speed up CI and add advanced features.
+### Future Consideration (v2+)
 
-1. **Dynamic test selection** -- `vitest --changed` + `playwright --only-changed` as fast-feedback jobs
-2. **Path-based job filtering** -- skip irrelevant jobs on documentation-only PRs
-3. **Build artifact reuse** -- build once, share across E2E + bundle security jobs
-4. **Concurrency control** -- cancel superseded CI runs
-5. **Dependabot/Renovate** -- automated dependency update PRs (no auto-merge)
+Features to defer until scale or pain demands them.
 
-### Defer
-
-- Visual regression testing -- UI is still evolving
-- Playwright sharding -- not enough tests to justify
-- Lighthouse CI -- single-user app, no external performance requirements
-- Third-party security scanners (Socket.dev, Snyk) -- pnpm native features are sufficient
-- Flame graphs -- local debugging tool, not CI
-- Bundle size tracking -- single-user app on known device
-- Benchmarking -- add only if performance concerns emerge from daily use
-
----
+- [ ] **CI-built Vercel deployments (`--prebuilt`)** -- Defer until build-environment divergence is observed; adds significant complexity for theoretical benefit
+- [ ] **Automated E2E on staging URL** -- Defer until Privy auth can be configured for staging origin; blocked by auth provider constraints
+- [ ] **Slack/Discord notifications** -- Defer until there's a team to notify; single-user app doesn't need this
 
 ## Feature Prioritization Matrix
 
-| Feature | Data Integrity Value | Implementation Cost | Priority |
-|---------|---------------------|---------------------|----------|
-| GitHub Actions workflow (PR trigger, caching) | HIGH (enables all gates) | MEDIUM | P0 |
-| Lint + tsc --noEmit in CI | MEDIUM | LOW | P0 |
-| Unit tests + TZ dual-pass in CI | HIGH | LOW | P0 |
-| Schema version consistency test | HIGH | MEDIUM | P0 |
-| Table count sentinel test | MEDIUM | LOW | P0 |
-| pnpm build + bundle security in CI | MEDIUM | LOW | P0 |
-| --frozen-lockfile + minimumReleaseAge + trustPolicy | HIGH | LOW | P0 |
-| Playwright E2E in CI | MEDIUM | MEDIUM | P1 |
-| Expanded E2E scenarios (composable, meds, backup) | MEDIUM | HIGH | P1 |
-| Coverage reporting on PRs | LOW | LOW | P1 |
-| Coverage thresholds | LOW | LOW | P1 |
-| pnpm audit in CI | MEDIUM | LOW | P1 |
-| Schema drift detection test | MEDIUM | MEDIUM | P1 |
-| vitest --changed / playwright --only-changed | LOW | LOW | P2 |
-| Path-based job filtering (dorny/paths-filter) | LOW | LOW | P2 |
-| Build artifact reuse | LOW | MEDIUM | P2 |
-| Concurrency control (cancel superseded runs) | LOW | LOW | P2 |
-| Migration idempotency test | LOW | LOW | P2 |
-| Vitest bench for services | LOW | MEDIUM | P3 |
-| IndexedDB operation benchmarks | LOW | MEDIUM | P3 |
-| Dependabot/Renovate (no auto-merge) | LOW | LOW | P3 |
+| Feature | User Value | Implementation Cost | Priority |
+|---------|------------|---------------------|----------|
+| Conventional Commits (commitlint + husky) | HIGH | LOW | P1 |
+| Release Please pipeline | HIGH | MEDIUM | P1 |
+| CHANGELOG.md generation | HIGH | LOW (free with Release Please) | P1 |
+| GitHub Releases | HIGH | LOW (free with Release Please) | P1 |
+| Staging branch + domain | HIGH | MEDIUM | P1 |
+| Neon staging branch | MEDIUM | LOW | P1 |
+| CI gates deployments | HIGH | LOW (mostly already exists) | P1 |
+| GitHub environment protection | MEDIUM | LOW | P2 |
+| Version display in app | LOW | LOW | P2 |
+| Staging Neon refresh on release | LOW | LOW | P2 |
+| Rollback runbook | MEDIUM | LOW | P2 |
+| CI-built Vercel deploys | LOW | HIGH | P3 |
+| E2E on staging | LOW | HIGH | P3 |
 
 **Priority key:**
-- P0: Foundation -- must exist before anything else works
-- P1: Core value -- the features that justify the milestone
-- P2: Optimization -- make CI faster and smarter
-- P3: Nice to have -- add when the core pipeline is solid
+- P1: Must have for v1.3 launch -- forms the deployment lifecycle backbone
+- P2: Should have, add in v1.3.x follow-up phases
+- P3: Nice to have, defer to future milestone
 
----
+## Existing CI Pipeline Integration Points
+
+The existing 12-job CI pipeline (`ci.yml`) already provides strong foundations. Here is how new deployment lifecycle features integrate:
+
+| Existing CI Job | Integration Point |
+|-----------------|-------------------|
+| `ci-pass` (gate job) | Deploy workflows for staging/production depend on this job passing via branch protection |
+| `build` | Validates the build succeeds in CI; Vercel rebuilds from same commit |
+| `e2e` | Validates app works end-to-end before merge to staging or main |
+| `data-integrity` | Ensures schema consistency before any deployment |
+| `supply-chain` | Audit runs on every PR, preventing compromised deps from reaching staging/production |
+| `version-bump.yml` | **Replaced** by Release Please. Delete after Release Please is configured. |
+
+## Right-Sizing Assessment: cipher-box vs intake-tracker
+
+| Aspect | cipher-box (reference) | intake-tracker (this project) | Right-sized approach |
+|--------|----------------------|-------------------------------|---------------------|
+| Repo structure | Monorepo, 15 packages | Single Next.js app | Simple mode Release Please, not manifest |
+| Release granularity | Per-component releases | Single version | One `CHANGELOG.md`, one version, one tag |
+| Staging identification | Date-based tags (`staging-YYYYMMDD-release-N`) | Branch tip | Staging branch = staging state; no extra tags |
+| Database isolation | Multiple services, multiple DBs | One Neon table (push subscriptions) | One persistent Neon staging branch |
+| Approval gates | Manual approval per component | Single approval before production | GitHub environment required reviewer |
+| CI complexity | Multi-package builds, per-package tests | Single build, single test suite | Existing `ci-pass` gate is sufficient |
 
 ## Sources
 
-### Official Documentation (HIGH confidence)
-- [Playwright CI Setup](https://playwright.dev/docs/ci-intro) -- official Playwright CI guide
-- [Playwright Best Practices](https://playwright.dev/docs/best-practices) -- official testing patterns
-- [Playwright Sharding](https://playwright.dev/docs/test-sharding) -- official sharding with GitHub Actions matrix
-- [Playwright --only-changed](https://dev.to/playwright/iterate-quickly-using-the-new-only-changed-option-55m2) -- official Playwright blog post
-- [pnpm Supply Chain Security](https://pnpm.io/supply-chain-security) -- official pnpm security features
-- [pnpm audit CLI](https://pnpm.io/cli/audit) -- official audit docs
-- [Next.js CI Build Caching](https://nextjs.org/docs/pages/guides/ci-build-caching) -- official Next.js CI guide
-- [Vitest CLI --changed](https://vitest.dev/guide/cli) -- official Vitest CLI reference
-- [davelosert/vitest-coverage-report-action](https://github.com/davelosert/vitest-coverage-report-action) -- GitHub Action for Vitest coverage PR comments
-
-### Reference Implementation (HIGH confidence)
-- [FSM1/cipher-box CI workflow](https://github.com/FSM1/cipher-box/tree/main/.github) -- real-world CI patterns: path-based filtering, codecov integration, release gates, E2E artifact handling
-
-### Ecosystem Research (MEDIUM confidence)
-- [npm minimumReleaseAge announcement](https://socket.dev/blog/npm-introduces-minimumreleaseage-and-bulk-oidc-configuration) -- Socket.dev blog, Nov 2025
-- [pnpm minimumReleaseAge](https://pnpm.io/blog/2025/12/05/newsroom-npm-supply-chain-security) -- pnpm blog on supply chain defense
-- [Shai-Hulud / PackageGate attacks](https://bastion.tech/blog/npm-supply-chain-attacks-2026-saas-security-guide) -- 2025-2026 attack context
-- [Vitest coverage with GitHub Actions](https://medium.com/@alvarado.david/vitest-code-coverage-with-github-actions-report-compare-and-block-prs-on-low-coverage-67fceaa79a47) -- community guide
-- [CodSpeed Vitest bench](https://codspeed.io/blog/vitest-bench-performance-regressions) -- benchmarking in CI
-- [github-action-benchmark](https://github.com/benchmark-action/github-action-benchmark) -- continuous benchmark tracking
-
-### Dexie.js Specific (MEDIUM confidence)
-- [Dexie Issue #950: Schema checking](https://github.com/dfahlander/Dexie.js/issues/950) -- no built-in schema comparison API; workaround via dynamic mode
-- [Dexie Issue #1599: Version downgrade](https://github.com/dexie/Dexie.js/issues/1599) -- IndexedDB cannot downgrade; VersionError on lower version
-- [fake-indexeddb](https://github.com/dumbmatter/fakeIndexedDB) -- pure JS IndexedDB implementation used in existing tests
+- [Release Please GitHub repository](https://github.com/googleapis/release-please) -- configuration, release types, manifest vs simple mode
+- [Release Please Action](https://github.com/googleapis/release-please-action) -- GitHub Action setup
+- [Vercel Environments documentation](https://vercel.com/docs/deployments/environments) -- Preview, Production, Custom environments, plan limitations
+- [Vercel Promoting Deployments](https://vercel.com/docs/deployments/promoting-a-deployment) -- Staged production, promotion, instant rollback
+- [Vercel Staging Environment KB](https://vercel.com/kb/guide/set-up-a-staging-environment-on-vercel) -- Hobby plan branch-domain approach
+- [Neon GitHub Actions branching guide](https://neon.com/docs/guides/branching-github-actions) -- create-branch, delete-branch, reset-branch actions
+- [Neon pricing/plans](https://neon.com/docs/introduction/plans) -- Free tier: unlimited branches, 0.5 GB storage per branch
+- [GitHub deployment environments](https://docs.github.com/en/actions/concepts/workflows-and-actions/deployment-environments) -- Protection rules, required reviewers (free for public repos)
+- [trstringer/manual-approval](https://github.com/trstringer/manual-approval) -- Workaround for private repos (not needed here, repo is public)
+- [Vercel + GitHub Actions deployment guide](https://vercel.com/kb/guide/how-can-i-use-github-actions-with-vercel) -- `--prebuilt` workflow pattern
+- [Release automation comparison](https://oleksiipopov.com/blog/npm-release-automation/) -- Release Please vs semantic-release vs Changesets
 
 ---
-*Feature research for: CI pipeline, data integrity, E2E testing, supply chain security*
-*Researched: 2026-03-27*
+*Feature research for: Deployment Lifecycle (v1.3)*
+*Researched: 2026-04-04*

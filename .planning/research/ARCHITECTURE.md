@@ -1,735 +1,467 @@
-# Architecture Patterns: CI & Data Integrity
+# Architecture Patterns: Deployment Lifecycle
 
-**Domain:** CI pipeline, E2E testing, data integrity gates, supply chain security
-**Project:** Intake Tracker v1.2
-**Researched:** 2026-03-27
-**Confidence:** HIGH (patterns verified against reference repo + official docs + existing codebase)
-
-## Current State Assessment
-
-### What Exists
-
-| Component | State | Location |
-|-----------|-------|----------|
-| Vitest unit tests | 28 test files, `fake-indexeddb` setup | `src/**/*.test.ts` |
-| Vitest config | Node environment, tsconfig paths | `vitest.config.ts` |
-| Playwright E2E | 3 specs (auth-bypass, intake-logs, medication-wizard) | `e2e/*.spec.ts` |
-| Playwright config | Chromium-only, webServer with LOCAL_AGENT_MODE | `playwright.config.ts` |
-| Migration tests | v10-v15, raw IndexedDB seeding pattern | `src/__tests__/migration/` |
-| Backup round-trip | Full 16-table export/import/verify | `src/__tests__/backup/round-trip.test.ts` |
-| Bundle security | API key leak detection in `.next/static` | `src/__tests__/bundle-security.test.ts` |
-| Test fixtures | Factory functions for all 16 table types | `src/__tests__/fixtures/db-fixtures.ts` |
-| GitHub workflows | Only `version-bump.yml` (on push to main) | `.github/workflows/` |
-| Coverage config | `@vitest/coverage-v8` installed, `test:coverage` script exists | `package.json` |
-
-### What Does Not Exist
-
-| Component | Notes |
-|-----------|-------|
-| CI workflow | No pull_request workflow at all |
-| Lint in CI | `pnpm lint` exists but never runs automatically |
-| Build verification | `pnpm build` never runs in CI |
-| Typecheck in CI | No `tsc --noEmit` in any workflow or script |
-| Coverage reporting | No PR comments, no baseline tracking |
-| Playwright in CI | No workflow to install browsers, run E2E |
-| Migration safety gates | Tests exist but nothing blocks a PR that breaks them |
-| Supply chain checks | No `pnpm audit`, no lockfile integrity checks |
-| Dynamic test selection | No path-based filtering |
-| PR title enforcement | No conventional commits check |
+**Domain:** Release automation, staging environments, database branching, CI/CD pipeline integration
+**Project:** Intake Tracker v1.3
+**Researched:** 2026-04-04
 
 ## Recommended Architecture
 
-### Workflow Topology
+Three systems integrate with the existing 12-job CI pipeline to form a release-and-deploy pipeline:
 
 ```
-PR opened/synchronized
-    |
-    v
-[ci.yml] ---------> detect-changes (dorny/paths-filter)
-    |                    |
-    |                    +---> outputs: src, db, e2e, deps
-    |
-    +---> lint           (always)
-    +---> typecheck      (if src changed)
-    +---> unit-tests     (if src changed, matrix: 3 TZ)
-    +---> migration-gate (if db changed)
-    +---> build          (if src changed)
-    +---> bundle-security(after build, if src changed)
-    +---> coverage       (after unit-tests)
-    +---> e2e            (after build, if src or e2e changed)
-    +---> supply-chain   (if deps changed: package.json or pnpm-lock.yaml)
+Developer PR ──> CI (existing 12 jobs) ──> merge to main
+                                               │
+                                    ┌──────────┴──────────┐
+                                    │                     │
+                              Release Please          Vercel auto-deploy
+                              (on push to main)       (production)
+                                    │
+                              Creates/updates
+                              release PR
+                                    │
+                              Merge release PR
+                                    │
+                         ┌──────────┴──────────┐
+                         │                     │
+                    GitHub Release         Tag v1.x.y
+                    + CHANGELOG.md         triggers Vercel
+                                           production deploy
 
-[pr-title.yml] ----> conventional commits check (separate workflow)
-
-Push to main
-    |
-    v
-[version-bump.yml]   (existing)
-[codecov-base.yml]   (new - upload baseline coverage)
+Developer PR ──> push to `staging` branch ──> Vercel preview deploy
+                                               │
+                                    staging.intake-tracker.ryanjnoble.dev
+                                               │
+                                    Neon staging branch (DATABASE_URL)
 ```
 
-### Single Workflow vs Multi-Workflow Decision
+### Component Boundaries
 
-**Use a single `ci.yml` workflow.** Rationale:
+| Component | Responsibility | Communicates With |
+|-----------|---------------|-------------------|
+| `release-please.yml` (NEW) | Automated versioning, changelogs, GitHub Releases | Replaces `version-bump.yml`; runs on push to main |
+| `release-please-config.json` (NEW) | Release Please configuration | Read by `release-please.yml` |
+| `.release-please-manifest.json` (NEW) | Tracks current version | Updated by Release Please PRs |
+| Vercel staging environment | Branch-based deploy at `staging.intake-tracker.ryanjnoble.dev` | Triggered by push to `staging` branch |
+| Neon staging branch | Isolated Postgres for staging push notifications | Used by staging Vercel deployment via `DATABASE_URL` |
+| `staging-reset.yml` (NEW) | Resets Neon staging branch to match production | Manual trigger (`workflow_dispatch`) |
+| `promote.yml` (NEW) | Promotes staging to production with approval gate | Manual trigger with GitHub environment protection |
+| `ci.yml` (MODIFIED) | Existing CI adds staging branch trigger | Adds `staging` to PR branch triggers |
+| `next.config.js` (MODIFIED) | Exposes staging-aware env vars | Reads `VERCEL_GIT_COMMIT_REF` for staging detection |
+| `about-dialog.tsx` (MODIFIED) | Shows staging environment label | Reads new `NEXT_PUBLIC_IS_STAGING` env var |
 
-1. The cipher-box reference repo splits into `ci.yml` + `e2e.yml` + `release-gate.yml` because it is a monorepo with separate Tauri desktop + web + API packages. This project is a single Next.js app -- the complexity overhead of multiple workflows is not justified.
-2. A single workflow with `dorny/paths-filter` + conditional `needs` achieves the same selective execution.
-3. GitHub's required status checks work most cleanly with jobs inside one workflow (avoids the "skipped workflow doesn't report status" footgun).
+### Data Flow
 
-Exception: `pr-title.yml` should be its own workflow because it has a different trigger (`types: [opened, edited, synchronize]`) and no dependency on code changes.
+**Release flow (main branch):**
+1. PR merges to `main` --> existing CI runs on PR, Vercel auto-deploys production
+2. Release Please action runs on push to `main`, scans conventional commits since last release
+3. If releasable commits found: creates/updates a release PR with CHANGELOG.md + version bump
+4. When release PR merges: creates GitHub Release with tag `v1.x.y`, bumps `package.json`, generates CHANGELOG
+5. Vercel picks up the merge and deploys production with the new version in `NEXT_PUBLIC_APP_VERSION`
 
-## Component Boundaries
+**Staging flow:**
+1. Developer pushes to `staging` branch (typically: `git merge main && git push origin staging`)
+2. Vercel auto-deploys preview for `staging` branch at `staging.intake-tracker.ryanjnoble.dev`
+3. Staging deployment uses staging-specific env vars including Neon staging branch `DATABASE_URL`
+4. `VERCEL_ENV` = `preview`, but `VERCEL_GIT_COMMIT_REF` = `staging` (used to detect staging)
+5. Manual promotion: verify staging, then either merge to main (new deploy) or use Vercel "Promote to Production"
 
-### New Files to Create
-
-| File | Responsibility | Communicates With |
-|------|---------------|-------------------|
-| `.github/workflows/ci.yml` | Main CI orchestration | All test/lint/build jobs |
-| `.github/workflows/pr-title.yml` | PR title conventional commits check | None (standalone) |
-| `.github/workflows/codecov-base.yml` | Upload coverage baseline on main push | ci.yml coverage artifact |
-| `src/__tests__/schema/schema-snapshot.test.ts` | Validates db.ts schema against snapshot | `db.ts` |
-| `src/__tests__/schema/__snapshots__/` | Snapshot files for schema state | schema-snapshot test |
-| `scripts/check-supply-chain.sh` | Package age + audit wrapper | pnpm-lock.yaml |
-
-### Existing Files to Modify
-
-| File | Change | Why |
-|------|--------|-----|
-| `playwright.config.ts` | Add CI reporter (github, blob), CI-aware webServer command | CI needs machine-readable output + built app |
-| `vitest.config.ts` | Add coverage thresholds, reporters | Coverage gates + PR reporting |
-| `package.json` | Add `test:migration`, `test:schema` scripts | Explicit CI entry points |
-
-### Files That Must NOT Change
-
-| File | Why |
-|------|-----|
-| `src/lib/db.ts` | This milestone is about protecting it, not changing it |
-| `src/__tests__/setup.ts` | Existing setup is correct for unit tests |
-| `e2e/*.spec.ts` (existing) | Existing E2E tests are valid; new tests extend, not replace |
-
-## Data Flow: PR to CI to Feedback
-
-```
-Developer opens PR
-    |
-    v
-GitHub triggers ci.yml (pull_request on main)
-    |
-    +---> dorny/paths-filter analyzes changed files
-    |     outputs: { src: true, db: false, e2e: true, deps: false }
-    |
-    +---> lint (always): pnpm lint
-    |     result: pass/fail status check
-    |
-    +---> typecheck (if src): npx tsc --noEmit
-    |     result: pass/fail status check
-    |
-    +---> unit-tests (if src):
-    |     matrix: [UTC, Africa/Johannesburg, Europe/Berlin]
-    |     - TZ=${{ matrix.tz }} pnpm test
-    |     result: pass/fail + coverage JSON artifacts (UTC run only)
-    |
-    +---> migration-gate (if db changed):
-    |     - pnpm vitest run src/__tests__/migration/
-    |     - pnpm vitest run src/__tests__/schema/
-    |     - pnpm vitest run src/__tests__/backup/round-trip.test.ts
-    |     result: pass/fail (BLOCKING -- protects live data)
-    |
-    +---> build (if src): pnpm build
-    |     result: pass/fail + .next/ artifact for downstream
-    |
-    +---> bundle-security (after build):
-    |     - pnpm vitest run src/__tests__/bundle-security.test.ts
-    |     result: pass/fail (verifies no API key leaks)
-    |
-    +---> e2e (after build, if src|e2e):
-    |     - Install Playwright Chromium
-    |     - NEXT_PUBLIC_LOCAL_AGENT_MODE=true pnpm exec playwright test
-    |     result: pass/fail + playwright-report artifact
-    |
-    +---> coverage (after unit-tests):
-    |     - davelosert/vitest-coverage-report-action
-    |     result: PR comment with coverage summary + delta
-    |
-    +---> supply-chain (if deps):
-    |     - pnpm install --frozen-lockfile
-    |     - pnpm audit --audit-level=high
-    |     result: pass/fail
-    |
-    v
-All checks reported as GitHub status checks
-PR mergeable only if all required checks pass
-```
-
-## CI Job Dependency Graph
-
-```
-detect-changes ----+
-    |               |
-    v               v
-  lint          pr-title (separate workflow)
-    |
-    +---> typecheck ------+
-    |                     |
-    +---> unit-tests --+  |
-    |     (matrix: 3)  |  |
-    |                  v  v
-    |              coverage
-    |
-    +---> migration-gate (if db changed)
-    |
-    +---> build ----------+
-    |                     |
-    +---> bundle-security (after build)
-    |                     |
-    +---> e2e (after build)
-    |
-    +---> supply-chain (if deps changed)
-```
-
-Jobs that must be required status checks for merge:
-- `lint`
-- `typecheck` (when triggered)
-- `unit-tests` (when triggered)
-- `migration-gate` (when triggered)
-- `build` (when triggered)
-- `e2e` (when triggered)
-
-Jobs that inform but should not block merge:
-- `coverage` (provides PR comment; threshold enforcement is in vitest config)
-- `pr-title` (enforce once commit conventions are stable)
+**Neon staging branch:**
+1. One-time setup: create persistent `staging` branch from production in Neon Console
+2. Staging Vercel deployment uses staging branch connection string (set as branch-specific env var)
+3. Reset when needed: `staging-reset.yml` runs `neondatabase/reset-branch-action` to sync from parent
+4. Connection string is preserved after reset (branch identity unchanged, data refreshed)
 
 ## Patterns to Follow
 
-### Pattern 1: Path-Based Change Detection
+### Pattern 1: Release Please with Manifest Config
 
-**What:** Use `dorny/paths-filter@v3` as the first job to conditionally skip expensive jobs when irrelevant files change.
+**What:** Use manifest-based Release Please configuration rather than inline action config.
+**Why:** Separates release config from workflow YAML, supports future monorepo expansion, tracks version in a dedicated manifest file.
+**Confidence:** HIGH (official docs, widely adopted pattern)
 
-**When:** Every PR workflow invocation.
+**Configuration files:**
 
-**Implementation:**
-
-```yaml
-jobs:
-  detect-changes:
-    runs-on: ubuntu-latest
-    permissions:
-      pull-requests: read
-    outputs:
-      src: ${{ steps.filter.outputs.src }}
-      db: ${{ steps.filter.outputs.db }}
-      e2e: ${{ steps.filter.outputs.e2e }}
-      deps: ${{ steps.filter.outputs.deps }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            src:
-              - 'src/**'
-              - 'public/**'
-              - 'next.config.js'
-              - 'tsconfig.json'
-              - 'tailwind.config.ts'
-              - 'postcss.config.js'
-            db:
-              - 'src/lib/db.ts'
-              - 'src/lib/*-service.ts'
-              - 'src/__tests__/migration/**'
-              - 'src/__tests__/backup/**'
-              - 'src/__tests__/schema/**'
-            e2e:
-              - 'e2e/**'
-              - 'playwright.config.ts'
-            deps:
-              - 'package.json'
-              - 'pnpm-lock.yaml'
-```
-
-**Why this filter set:** The `db` filter is deliberately broad -- any change to a service file could introduce a query against a new index or column that requires a migration. Catching this early prevents "works on dev, breaks on upgrade" scenarios.
-
-### Pattern 2: Migration Safety Gate
-
-**What:** A dedicated job that runs migration tests, schema snapshot tests, and backup round-trip verification whenever `db.ts` or service files change.
-
-**When:** Any PR touching data layer files.
-
-The migration gate has three sub-checks:
-
-1. **Migration chain tests** (`src/__tests__/migration/v*.test.ts`): Verify each upgrade path produces correct data. Already exist for v10-v15.
-
-2. **Schema snapshot test** (NEW): Extract the current Dexie schema definitions programmatically and compare against a committed snapshot. If the schema changes, the snapshot must be explicitly updated -- forcing the developer to acknowledge they are changing the data model.
-
-```typescript
-// src/__tests__/schema/schema-snapshot.test.ts
-import { describe, it, expect } from "vitest";
-import { db } from "@/lib/db";
-
-describe("schema snapshot", () => {
-  it("current schema matches committed snapshot", () => {
-    const schema = db.tables.map(t => ({
-      name: t.name,
-      schema: t.schema.primKey.src + ", " +
-        t.schema.indexes.map(i => i.src).join(", "),
-    })).sort((a, b) => a.name.localeCompare(b.name));
-
-    expect(schema).toMatchSnapshot();
-  });
-
-  it("database version is expected value", () => {
-    // Dexie multiplies by 10 internally. Declared latest is v15.
-    expect(db.verno).toBe(15);
-  });
-});
-```
-
-3. **Backup round-trip** (`src/__tests__/backup/round-trip.test.ts`): Already exists. Ensures export + clear + import restores all 16 tables. Include in the gate because a schema change that breaks serialization would destroy user data.
-
-**Why this is the most important CI check:** The user's production data lives on their phone in IndexedDB with no server-side backup. A bad migration or broken backup means irrecoverable data loss.
-
-### Pattern 3: Timezone Dual-Pass Testing
-
-**What:** Run the full unit test suite three times under different TZ environment variables.
-
-**When:** Any PR touching `src/**`.
-
-```yaml
-unit-tests:
-  needs: [detect-changes, lint]
-  if: needs.detect-changes.outputs.src == 'true'
-  runs-on: ubuntu-latest
-  strategy:
-    matrix:
-      tz: ['UTC', 'Africa/Johannesburg', 'Europe/Berlin']
-  steps:
-    - uses: actions/checkout@v4
-    - uses: pnpm/action-setup@v4
-      with: { version: 10 }
-    - uses: actions/setup-node@v4
-      with: { node-version: '18', cache: 'pnpm' }
-    - run: pnpm install --frozen-lockfile
-    - name: Run tests (TZ=${{ matrix.tz }})
-      run: pnpm test
-      env:
-        TZ: ${{ matrix.tz }}
-    - name: Generate coverage (UTC only)
-      if: matrix.tz == 'UTC'
-      run: pnpm test:coverage
-    - uses: actions/upload-artifact@v4
-      if: matrix.tz == 'UTC'
-      with:
-        name: coverage
-        path: coverage/
-```
-
-**Why:** The user travels between South Africa and Germany. Timezone-dependent bugs in date parsing, schedule generation, and migration backfill are the project's #1 historical bug category. The existing `test:tz:sa` and `test:tz:de` scripts prove this was already a concern.
-
-Only the UTC pass generates coverage to avoid double-counting.
-
-### Pattern 4: E2E with Build Artifact Reuse
-
-**What:** Build once, reuse the `.next/` output for both bundle-security and E2E tests.
-
-**When:** E2E tests need a running server.
-
-```yaml
-build:
-  needs: [detect-changes, typecheck]
-  if: needs.detect-changes.outputs.src == 'true'
-  runs-on: ubuntu-latest
-  steps:
-    - uses: actions/checkout@v4
-    # ... setup pnpm, node, install
-    - run: pnpm build
-    - uses: actions/upload-artifact@v4
-      with:
-        name: nextjs-build
-        path: .next/
-        retention-days: 1
-
-e2e:
-  needs: [detect-changes, build]
-  if: >-
-    needs.detect-changes.outputs.src == 'true' ||
-    needs.detect-changes.outputs.e2e == 'true'
-  runs-on: ubuntu-latest
-  steps:
-    - uses: actions/checkout@v4
-    # ... setup pnpm, node, install
-    - uses: actions/download-artifact@v4
-      with: { name: nextjs-build, path: .next/ }
-    - run: pnpm exec playwright install chromium --with-deps
-    - run: pnpm exec playwright test
-      env:
-        CI: true
-        NEXT_PUBLIC_LOCAL_AGENT_MODE: true
-    - uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: playwright-report
-        path: playwright-report/
-        retention-days: 7
-```
-
-**Recommended change to `playwright.config.ts`:**
-
-The existing config uses `pnpm run dev` for the webServer. In CI, use `pnpm start` against the built artifact instead -- it is faster and catches production build issues (especially with next-pwa which is disabled in development):
-
-```typescript
-webServer: {
-  command: process.env.CI
-    ? 'NEXT_PUBLIC_LOCAL_AGENT_MODE=true pnpm start'
-    : 'NEXT_PUBLIC_LOCAL_AGENT_MODE=true pnpm run dev',
-  url: 'http://localhost:3000',
-  reuseExistingServer: !process.env.CI,
-  stdout: 'pipe',
-  stderr: 'pipe',
-  timeout: 120 * 1000,
-},
-```
-
-### Pattern 5: Coverage Tracking with PR Comments
-
-**What:** Generate coverage report on PRs, post as comment, enforce minimum thresholds.
-
-**When:** Every PR with source code changes.
-
-```yaml
-coverage:
-  needs: [unit-tests]
-  runs-on: ubuntu-latest
-  permissions:
-    pull-requests: write
-  steps:
-    - uses: actions/checkout@v4
-    - uses: actions/download-artifact@v4
-      with: { name: coverage, path: coverage/ }
-    - uses: davelosert/vitest-coverage-report-action@v2
-      with:
-        json-summary-path: coverage/coverage-summary.json
-        json-final-path: coverage/coverage-final.json
-```
-
-**Vitest config addition:**
-
-```typescript
-// vitest.config.ts
-test: {
-  coverage: {
-    provider: "v8",
-    reporter: ["text", "json-summary", "json", "lcov"],
-    reportsDirectory: "coverage",
-    thresholds: {
-      // Start conservative, ratchet up over time
-      statements: 40,
-      branches: 30,
-      functions: 35,
-      lines: 40,
-    },
-  },
+`release-please-config.json`:
+```json
+{
+  "packages": {
+    ".": {
+      "release-type": "node",
+      "changelog-path": "CHANGELOG.md",
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": true
+    }
+  }
 }
 ```
 
-**Why start with low thresholds:** The codebase is ~44K LOC with 28 test files. Attempting to enforce 80% coverage from day one would block all PRs. Measure current coverage first, set thresholds 2% below that, then ratchet up as tests are added.
-
-### Pattern 6: Supply Chain Hardening
-
-**What:** Audit dependencies, verify lockfile integrity, optionally block packages newer than 24 hours.
-
-**When:** Any PR changing `package.json` or `pnpm-lock.yaml`.
-
-```yaml
-supply-chain:
-  needs: [detect-changes]
-  if: needs.detect-changes.outputs.deps == 'true'
-  runs-on: ubuntu-latest
-  steps:
-    - uses: actions/checkout@v4
-    - uses: pnpm/action-setup@v4
-      with: { version: 10 }
-    - uses: actions/setup-node@v4
-      with: { node-version: '18', cache: 'pnpm' }
-    - name: Verify lockfile integrity
-      run: pnpm install --frozen-lockfile
-    - name: Audit for high/critical vulnerabilities
-      run: pnpm audit --audit-level=high
-    - name: Check package ages (24h minimum)
-      run: bash scripts/check-supply-chain.sh
+`.release-please-manifest.json`:
+```json
+{
+  ".": "0.1.0"
+}
 ```
 
-The `check-supply-chain.sh` script should:
-1. Parse `pnpm-lock.yaml` for new/changed packages (diff against main)
-2. Query npm registry for publish dates
-3. Fail if any newly-added package was published less than 24 hours ago
-
-**Why 24 hours:** The npm "Shai Hulud" attack (September 2025) and the self-replicating worm (November 2025) both relied on rapid compromise followed by quick installations. A 24-hour delay gives the community time to detect and report malicious packages.
-
-### Pattern 7: Fail-Fast with Lint Gate
-
-**What:** Lint runs unconditionally and fast. Expensive jobs wait for lint to pass.
-
-**When:** Every PR.
-
-**Why:** No point running 2-minute E2E tests if there are lint errors.
-
+**Workflow (`.github/workflows/release-please.yml`):**
 ```yaml
-typecheck:
-  needs: [detect-changes, lint]  # lint must pass first
-  if: needs.detect-changes.outputs.src == 'true'
+name: Release Please
 
-unit-tests:
-  needs: [detect-changes, lint]  # lint must pass first
-  if: needs.detect-changes.outputs.src == 'true'
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      version: ${{ steps.release.outputs.version }}
+```
+
+**Key details:**
+- Action is at `googleapis/release-please-action@v4` (NOT `google-github-actions/` which is archived)
+- `bump-minor-pre-major: true` means breaking changes only bump minor while version < 1.0.0 (appropriate for current `0.1.0`)
+- Release Please auto-updates `package.json` version for `release-type: node`
+- The manifest `.release-please-manifest.json` must be set to current version (`0.1.0`) on first setup
+- `bootstrap-sha` can be set in config to prevent scanning entire git history on first run
+
+### Pattern 2: Branch-Based Staging on Vercel (All Plans)
+
+**What:** Assign a custom subdomain to a `staging` git branch in Vercel project settings.
+**Why:** Works on Hobby plan (no Pro required), provides stable URL, auto-deploys on push to branch.
+**Confidence:** HIGH (official Vercel KB article, well-documented approach)
+
+**Setup steps:**
+1. In Vercel Dashboard > Project > Settings > Domains
+2. Add `staging.intake-tracker.ryanjnoble.dev`
+3. Edit the domain assignment: set to Preview environment, Git Branch = `staging`
+4. Add CNAME record for `staging.intake-tracker.ryanjnoble.dev` pointing to `cname.vercel-dns.com` (same as production)
+
+**Environment variable configuration:**
+- In Vercel Dashboard > Project > Settings > Environment Variables
+- Add staging-specific overrides with "Preview" environment + branch filter `staging`:
+  - `DATABASE_URL` = Neon staging branch connection string
+  - `DATABASE_URL_UNPOOLED` = Neon staging branch unpooled connection string
+  - `NEXT_PUBLIC_IS_STAGING` = `true` (custom flag for UI)
+
+**Critical detail on `VERCEL_ENV`:**
+- `VERCEL_ENV` = `preview` for all non-production deployments (including staging on Hobby plan)
+- `VERCEL_TARGET_ENV` = custom environment name ONLY on Pro/Enterprise with custom environments
+- On Hobby plan: use `VERCEL_GIT_COMMIT_REF` (= `staging`) or a custom env var to distinguish staging from other preview deploys
+- Current `next.config.js` sets `NEXT_PUBLIC_VERCEL_ENV: process.env.VERCEL_ENV || 'development'` -- this will show `preview` for staging. Add `NEXT_PUBLIC_IS_STAGING` check for proper labeling.
+
+### Pattern 3: Persistent Neon Staging Branch
+
+**What:** Create a long-lived Neon branch named `staging` as child of the production (main) branch.
+**Why:** Preserves connection string across resets, isolates staging push notification data from production, enables testing push notification flows without affecting real dose schedules.
+**Confidence:** HIGH (official Neon docs, designed for this use case)
+
+**One-time setup:**
+1. In Neon Console or via CLI: create branch `staging` from the primary/main branch
+2. Note the connection string (it persists through resets)
+3. Store in Vercel as staging-specific `DATABASE_URL` env var
+4. Store `NEON_API_KEY` and `NEON_PROJECT_ID` in GitHub repository secrets/variables
+
+**Reset workflow (`.github/workflows/staging-reset.yml`):**
+```yaml
+name: Reset Staging Database
+
+on:
+  workflow_dispatch:
+
+jobs:
+  reset:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: neondatabase/reset-branch-action@v1
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          branch: staging
+          parent: true
+          api_key: ${{ secrets.NEON_API_KEY }}
+```
+
+**Neon action versions (current as of April 2026):**
+- `neondatabase/create-branch-action@v6` -- creates branches, returns `db_url`, `db_url_pooled`, `branch_id`, `password`
+- `neondatabase/reset-branch-action@v1` (v1.3.2) -- resets branch to parent state, preserves connection string
+- `neondatabase/delete-branch-action@v3` -- cleanup (not needed for persistent staging)
+
+### Pattern 4: Conventional Commits for Release Please
+
+**What:** Adopt conventional commit message format so Release Please can parse intent.
+**Why:** Release Please determines version bumps from commit prefixes. Without conventional commits, no releases are created.
+**Confidence:** HIGH (hard requirement of Release Please)
+
+**Commit prefixes that matter:**
+- `feat:` -- triggers minor version bump
+- `fix:` -- triggers patch version bump
+- `feat!:` or `fix!:` or `BREAKING CHANGE:` footer -- triggers major version bump (or minor while < 1.0.0)
+- `chore:`, `docs:`, `style:`, `refactor:`, `perf:`, `test:` -- appear in changelog but do NOT trigger release by default
+
+**Migration from current style:**
+The project currently uses prefixed messages like `chore: bump version`, `docs(phase-26): complete phase`, `feat/ui-fixes` branch names. The existing style partially aligns with conventional commits but needs consistency enforcement. No linting tool is required immediately (commitlint is optional and adds complexity) -- just team discipline.
+
+### Pattern 5: GitHub Environment Protection Rules for Promotion
+
+**What:** Use GitHub's environment protection rules to gate production promotions.
+**Why:** Prevents accidental production deploys, creates audit trail, works with manual `workflow_dispatch`.
+**Confidence:** HIGH (native GitHub feature, no third-party deps)
+
+**Setup:**
+1. In GitHub repo > Settings > Environments > Create `production` environment
+2. Add required reviewers (the repo owner)
+3. Create promotion workflow that references this environment
+
+**Promotion workflow (`.github/workflows/promote.yml`):**
+```yaml
+name: Promote Staging to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "promote" to confirm'
+        required: true
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    environment: production  # triggers approval gate
+    if: github.event.inputs.confirm == 'promote'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: staging
+      - name: Merge staging into main
+        run: |
+          git fetch origin main
+          git checkout main
+          git merge origin/staging --no-edit
+          git push origin main
+```
+
+**Note:** This is a lightweight approach. Vercel also supports staged production deployments (disable auto-assign domains, then manually promote), but that requires more Vercel Dashboard interaction and is less auditable than a GitHub-native workflow.
+
+## Integration Points with Existing CI
+
+### Existing `ci.yml` -- Modifications Required
+
+The current CI triggers on `pull_request` to `main` only. Two changes needed:
+
+**1. Add staging branch to CI triggers (OPTIONAL but recommended):**
+```yaml
+on:
+  pull_request:
+    branches: [main, staging]
+```
+This ensures PRs targeting staging also pass CI. However, if staging is always updated by merging main (which already passed CI), this may be unnecessary. Recommend adding it for safety -- someone might push directly to staging.
+
+**2. No changes needed to the 12 existing jobs.** The `ci-pass` gate job, path filters, E2E tests, supply chain audit, etc. all work as-is. The CI pipeline is purely a quality gate on PRs and does not interact with release or deployment logic.
+
+### Existing `version-bump.yml` -- DELETE
+
+Release Please completely replaces `version-bump.yml`. The current workflow:
+- Triggers on push to main
+- Parses commit messages for `[major]`/`[minor]` markers
+- Bumps `package.json` and pushes a commit
+
+Release Please does all of this better:
+- Uses conventional commit parsing (industry standard vs custom markers)
+- Creates a release PR instead of auto-committing (reviewable)
+- Generates CHANGELOG.md
+- Creates GitHub Releases with tags
+- Manifest tracks version separately from package.json
+
+**Migration path:** Delete `version-bump.yml` and add `release-please.yml` in the same PR. Set `.release-please-manifest.json` to current version `"0.1.0"` and optionally set `bootstrap-sha` in config to the current HEAD of main.
+
+### New Workflows Summary
+
+| Workflow | Trigger | Purpose | GitHub Secrets/Vars Needed |
+|----------|---------|---------|---------------------------|
+| `release-please.yml` | `push: branches: [main]` | Create release PRs, GitHub Releases | `GITHUB_TOKEN` (built-in) |
+| `staging-reset.yml` | `workflow_dispatch` | Reset Neon staging branch to production data | `NEON_API_KEY` (secret), `NEON_PROJECT_ID` (var) |
+| `promote.yml` | `workflow_dispatch` | Merge staging to main with approval gate | `GITHUB_TOKEN` (built-in) |
+
+### New GitHub Repository Configuration
+
+| Setting | Location | Value |
+|---------|----------|-------|
+| `NEON_API_KEY` | Repo Secrets | Neon API key from Neon Console > Account Settings |
+| `NEON_PROJECT_ID` | Repo Variables | Neon project ID from Neon Console > Project Settings |
+| `production` environment | Repo Settings > Environments | Required reviewer: repo owner |
+
+### New Vercel Project Configuration
+
+| Setting | Location | Value |
+|---------|----------|-------|
+| Domain `staging.intake-tracker.ryanjnoble.dev` | Project > Settings > Domains | Assigned to Preview env, branch `staging` |
+| DNS CNAME | DNS provider | `staging.intake-tracker.ryanjnoble.dev` -> `cname.vercel-dns.com` |
+| `DATABASE_URL` (staging override) | Project > Settings > Env Vars | Preview + branch `staging`, Neon staging branch URL |
+| `DATABASE_URL_UNPOOLED` (staging override) | Project > Settings > Env Vars | Preview + branch `staging`, Neon staging branch URL |
+| `NEXT_PUBLIC_IS_STAGING` | Project > Settings > Env Vars | Preview + branch `staging`, value `true` |
+
+### Code Changes Required
+
+**`next.config.js`** -- Add staging detection:
+```javascript
+env: {
+  NEXT_PUBLIC_APP_VERSION: packageJson.version,
+  NEXT_PUBLIC_GIT_SHA: process.env.VERCEL_GIT_COMMIT_SHA || 'local',
+  NEXT_PUBLIC_VERCEL_ENV: process.env.VERCEL_ENV || 'development',
+  // NEW: staging detection via branch name (Hobby plan compatible)
+  NEXT_PUBLIC_IS_STAGING: process.env.VERCEL_GIT_COMMIT_REF === 'staging' ? 'true' : '',
+},
+```
+
+**`about-dialog.tsx`** -- Add staging label:
+```typescript
+const isStaging = process.env.NEXT_PUBLIC_IS_STAGING === 'true';
+
+function getEnvLabel(env: string): { label: string; className: string } {
+  if (isStaging) {
+    return { label: "Staging", className: "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300" };
+  }
+  switch (env) {
+    case "production":
+      return { label: "Production", className: "..." };
+    // ...
+  }
+}
+```
+
+**`/api/version` route** -- Add staging flag:
+```typescript
+return NextResponse.json({
+  version: process.env.NEXT_PUBLIC_APP_VERSION || "0.0.0",
+  gitSha: process.env.NEXT_PUBLIC_GIT_SHA || "local",
+  environment: process.env.NEXT_PUBLIC_VERCEL_ENV || "development",
+  isStaging: process.env.NEXT_PUBLIC_IS_STAGING === 'true',
+});
 ```
 
 ## Anti-Patterns to Avoid
 
-### Anti-Pattern 1: Running All Tests on Every PR
+### Anti-Pattern 1: Ephemeral Per-PR Neon Branches
+**What:** Creating a new Neon branch for every PR and deleting on close.
+**Why bad:** This project has exactly one server-side database use (push notifications). Per-PR branches add workflow complexity for negligible benefit. The push notification tables contain schedule metadata, not user-facing content that varies per feature.
+**Instead:** Single persistent `staging` branch, reset manually when needed.
 
-**What:** No path filtering -- every PR runs lint, typecheck, all unit tests, build, E2E, and supply chain regardless of what changed.
+### Anti-Pattern 2: Vercel CLI Deploys from GitHub Actions
+**What:** Using `vercel deploy --prod` or `vercel deploy --target=staging` from CI.
+**Why bad:** Duplicates Vercel's built-in Git integration, requires managing Vercel tokens in GitHub, creates two deployment paths (Git push vs CLI), harder to debug.
+**Instead:** Let Vercel's Git integration handle deployments. Push to branch = deploy. The only CLI interaction needed is initial domain/env var setup.
 
-**Why bad:** A README-only change would take 8+ minutes. Developers stop waiting for CI and merge without green checks.
+### Anti-Pattern 3: Release Please with PAT Instead of GITHUB_TOKEN
+**What:** Creating a Personal Access Token for Release Please to trigger other workflows.
+**Why bad:** Security risk, token management overhead. Release Please PRs created with `GITHUB_TOKEN` intentionally don't trigger other workflows (prevents infinite loops).
+**Instead:** Use `GITHUB_TOKEN`. If you later need the release to trigger another workflow (e.g., Capacitor build), use `on: release` trigger in that workflow, which fires on the GitHub Release event regardless of token type.
 
-**Instead:** Use `dorny/paths-filter` to skip irrelevant jobs. A docs-only PR should complete in under 60 seconds (just lint + pr-title).
+### Anti-Pattern 4: Custom `VERCEL_ENV` Overrides
+**What:** Overriding `VERCEL_ENV` system variable via project env vars to make staging show as custom value.
+**Why bad:** `VERCEL_ENV` is a system variable, overriding it can break Vercel's internal behavior and Next.js conditional logic that depends on it.
+**Instead:** Use a custom `NEXT_PUBLIC_IS_STAGING` variable and detect via `VERCEL_GIT_COMMIT_REF`.
 
-### Anti-Pattern 2: E2E Tests Against Dev Server in CI
-
-**What:** Using `pnpm dev` for Playwright tests in CI.
-
-**Why bad:** Dev server is slower to start, includes HMR overhead, and can mask production build issues (especially with next-pwa which is disabled in development via `next.config.js`).
-
-**Instead:** Build first with `pnpm build`, then run E2E against `pnpm start`. This also catches build-time errors before E2E runs.
-
-### Anti-Pattern 3: Schema Snapshot Without Explicit Update Path
-
-**What:** Adding a snapshot test for the Dexie schema but not documenting how to update it.
-
-**Why bad:** Developers change `db.ts`, CI fails with "snapshot mismatch", they run `--updateSnapshot` reflexively without reviewing the diff. The safety gate becomes theater.
-
-**Instead:** Document the update command. The PR diff will show the snapshot change, making schema changes reviewable.
-
-### Anti-Pattern 4: Coverage Thresholds That Block Everything
-
-**What:** Setting coverage thresholds at 80% on day one.
-
-**Why bad:** Existing coverage is likely 40-50%. Every PR would fail until massive test backfill is done, paralyzing development.
-
-**Instead:** Measure current coverage, set thresholds 2% below that, ratchet up over time. Never let thresholds drop.
-
-### Anti-Pattern 5: `pnpm audit` Blocking on Moderate Vulnerabilities
-
-**What:** Running `pnpm audit` with default severity (all levels).
-
-**Why bad:** Moderate vulnerabilities in deep transitive dependencies are common and often irrelevant to the actual attack surface. Blocking on every moderate finding creates alert fatigue.
-
-**Instead:** Use `--audit-level=high` to only block on high and critical.
-
-### Anti-Pattern 6: E2E Tests Without Failure Artifacts
-
-**What:** E2E tests fail in CI with no trace or screenshot to debug.
-
-**Why bad:** Impossible to diagnose without reproducing locally. Wastes hours.
-
-**Instead:** Upload Playwright HTML report + traces as artifacts on failure (`if: always()` on artifact upload step).
-
-### Anti-Pattern 7: Monolithic CI Job
-
-**What:** Single job that runs lint, typecheck, test, build, E2E sequentially.
-
-**Why bad:** 10+ minute CI times. One failure blocks all feedback. Cannot skip irrelevant checks.
-
-**Instead:** Parallel jobs with change detection. Each job takes 1-3 minutes.
-
-## Dexie Migration Safety: Deep Dive
-
-### Why Migrations Are the Critical Path
-
-The user's production data lives exclusively in IndexedDB on their phone. There is no server-side backup, no cloud sync. A bad migration means:
-
-1. **Data loss**: If a migration drops or corrupts records, there is no recovery path
-2. **Stuck app**: If a migration throws, Dexie refuses to open the database -- the app becomes completely unusable
-3. **Silent corruption**: If a migration transforms data incorrectly (e.g., wrong timezone backfill), the user sees wrong data with no indication it was corrupted
-
-### How Current Migration Tests Work
-
-Each migration test (v10-v15) follows this pattern:
-
-1. Open raw IndexedDB at the previous version number (Dexie multiplies by 10, so v14 = IDB version 140)
-2. Seed records with the previous schema shape via raw IDB API
-3. Close the raw connection
-4. Open via `db.ts` (Dexie) -- this triggers the upgrade chain
-5. Assert records survived with correct data
-
-This is the correct pattern. The CI migration gate must run these tests.
-
-### What the Schema Snapshot Adds
-
-The migration tests verify that upgrades work. The schema snapshot verifies that the current schema definition hasn't changed accidentally. These are complementary:
-
-- Migration tests catch: "upgrade from v14 to v15 corrupts data"
-- Schema snapshot catches: "someone removed an index from v15 without creating v16"
-
-### Migration Safety Rules (Enforce via PR Review)
-
-1. **Never modify an existing version definition** -- always create a new version
-2. **Always add a migration test for new versions** -- CI will run it
-3. **Always update the schema snapshot** -- CI will fail until it is updated
-4. **Test upgrade from N-1 to N** -- the most common real-world path
-5. **Backup round-trip must pass** -- if serialization breaks, data is unrecoverable
-
-## E2E Test Structure Recommendations
-
-### Current State
-
-Three tests exist, all basic happy-path flows:
-- `auth-bypass.spec.ts` -- verifies LOCAL_AGENT_MODE works
-- `intake-logs.spec.ts` -- adds water and salt entries
-- `medication-wizard.spec.ts` -- full wizard flow with mocked AI
-
-### Recommended Expansion Strategy
-
-Organize E2E tests by feature domain, mirroring the route structure:
-
-```
-e2e/
-  auth-bypass.spec.ts          (existing)
-  intake/
-    water-salt.spec.ts         (extracted from existing)
-    liquid-presets.spec.ts     (NEW: test preset flow)
-    food-entry.spec.ts         (NEW: AI parse mock + composable entry)
-  medications/
-    wizard.spec.ts             (extracted from existing)
-    dose-logging.spec.ts       (NEW: mark taken/skipped/rescheduled)
-    inventory.spec.ts          (NEW: stock tracking, refill flow)
-  settings/
-    preferences.spec.ts        (NEW: day-start-hour, theme toggle)
-    backup-restore.spec.ts     (NEW: export + import via UI)
-  cross-domain/
-    composable-entries.spec.ts (NEW: food parse creates linked records)
-```
-
-### E2E Test Principles
-
-1. **Mock all AI routes** -- the existing `medication-wizard.spec.ts` already does this correctly with `page.route()`. Apply the same pattern to food parse and substance lookup.
-2. **Test user workflows, not implementation** -- "Add water, verify toast, check history" rather than testing specific CSS selectors.
-3. **Seed data where needed** -- For tests that need existing prescriptions, use `page.evaluate()` to insert via Dexie directly rather than navigating through the wizard every time.
-4. **No cross-test dependencies** -- Each spec must work independently. IndexedDB is ephemeral per browser context in Playwright.
-
-## Required GitHub Secrets
-
-| Secret | Purpose | Required For |
-|--------|---------|-------------|
-| None for basic CI | Unit tests, lint, build, E2E all work without secrets | ci.yml |
-| `CODECOV_TOKEN` | Coverage upload to Codecov (optional) | codecov-base.yml |
-
-The app's AI routes require `ANTHROPIC_API_KEY` but E2E tests mock these routes, so no API key is needed in CI. The `NEXT_PUBLIC_LOCAL_AGENT_MODE=true` flag bypasses auth. This is a significant advantage -- the CI pipeline requires zero secrets for all critical checks.
-
-## Scalability Considerations
-
-| Concern | Now (3 E2E, 28 unit) | At 30 E2E, 100 unit | At 100+ E2E, 500 unit |
-|---------|----------------------|----------------------|-----------------------|
-| CI time | ~5 min total | ~8 min total | Shard Vitest + Playwright |
-| Flakiness | Negligible | Retry on first failure | Quarantine flaky tests |
-| Browser coverage | Chromium only | Still Chromium only | Add Firefox for regression |
-| Build caching | Not needed | Cache .next/cache | Essential for speed |
-| Artifact storage | Minimal | ~50MB reports | Reduce retention-days |
-
-Chromium-only E2E is correct for the foreseeable future because the app is a mobile PWA primarily used in Chrome/Chromium-based browsers.
+### Anti-Pattern 5: Automatic Staging Reset on Every Push
+**What:** Resetting the Neon staging branch automatically whenever staging deploys.
+**Why bad:** Destroys any test data in staging that you're actively verifying. The staging DB should be stable during testing, only reset deliberately.
+**Instead:** Manual `workflow_dispatch` for staging reset. Developer decides when fresh data is needed.
 
 ## Suggested Build Order
 
-Based on dependency analysis, the recommended implementation order:
+Dependencies between features determine implementation order:
 
-### Phase 1: Foundation (Zero Dependencies)
+```
+Phase 1: Release Please (no external deps)
+   └──> Phase 2: Neon Staging Branch (independent, but needed before Phase 3)
+          └──> Phase 3: Vercel Staging Environment (needs Neon branch URL for env vars)
+                 └──> Phase 4: Promotion Workflow (needs staging to exist)
+                        └──> Phase 5: Code Changes (staging detection, UI labels)
+```
 
-**Build:** `ci.yml` with lint + typecheck + unit tests (including TZ matrix)
+### Phase 1: Release Please (~1-2 plans)
+- Create `release-please-config.json` and `.release-please-manifest.json`
+- Create `.github/workflows/release-please.yml`
+- Delete `.github/workflows/version-bump.yml`
+- Set `bootstrap-sha` to current HEAD of main
+- First release PR will appear after next conventional commit to main
+- **No CI changes needed.** Release Please runs independently of CI.
 
-**Rationale:** These jobs run existing scripts (`pnpm lint`, `pnpm test`) in a workflow. Immediately provides value by catching regressions on every PR. No new files or code changes beyond the workflow file.
+### Phase 2: Neon Staging Branch (~1 plan)
+- Create `staging` branch in Neon Console from primary branch
+- Note connection strings (pooled and unpooled)
+- Add `NEON_API_KEY` to GitHub repo secrets
+- Add `NEON_PROJECT_ID` to GitHub repo variables
+- Create `.github/workflows/staging-reset.yml`
+- **No CI changes needed.** This is infrastructure setup.
 
-**Files created:**
-- `.github/workflows/ci.yml` (initial: lint, typecheck, unit-tests jobs only)
+### Phase 3: Vercel Staging Environment (~1 plan)
+- Create `staging` git branch from `main`
+- Add `staging.intake-tracker.ryanjnoble.dev` domain in Vercel, assign to `staging` branch
+- Add DNS CNAME record
+- Add staging-specific env vars in Vercel (DATABASE_URL overrides, NEXT_PUBLIC_IS_STAGING)
+- Push to `staging` branch to trigger first staging deploy
+- Verify staging deploys and uses staging Neon branch
+- **Optional CI change:** Add `staging` to `ci.yml` PR branch targets
 
-### Phase 2: Build Verification + Bundle Security
+### Phase 4: Promotion Workflow (~1 plan)
+- Create `production` GitHub environment with approval gate
+- Create `.github/workflows/promote.yml`
+- Test promotion flow: staging -> approve -> merge to main -> production deploy
 
-**Build:** Add `build` job to `ci.yml`, run `bundle-security.test.ts` post-build
+### Phase 5: Code Changes (~1 plan)
+- Update `next.config.js` with staging detection
+- Update `about-dialog.tsx` with staging environment label
+- Update `/api/version` route with staging flag
+- Update any other environment-aware UI components
+- Add/update tests for environment detection logic
 
-**Rationale:** The bundle-security test already exists but requires a build artifact. Running it in CI catches API key leaks automatically.
+### Phase ordering rationale:
+1. **Release Please first** because it is fully independent, replaces the broken `version-bump.yml`, and every subsequent merge to main will generate proper releases
+2. **Neon before Vercel** because the staging Vercel environment needs the Neon staging connection string as an env var
+3. **Vercel staging before promotion** because there is nothing to promote until staging exists
+4. **Code changes last** because they are purely cosmetic (staging label) and the staging environment functions correctly without them
 
-**Files modified:**
-- `.github/workflows/ci.yml` (add build + bundle-security jobs)
-- `playwright.config.ts` (add CI-aware webServer command)
+## Scalability Considerations
 
-### Phase 3: E2E in CI
-
-**Build:** Add `e2e` job to `ci.yml` using build artifact from Phase 2
-
-**Rationale:** The 3 existing E2E tests run without any code changes. This phase is purely CI wiring.
-
-**Files modified:**
-- `.github/workflows/ci.yml` (add e2e job with Playwright install + artifact upload)
-
-### Phase 4: Data Integrity Gates
-
-**Build:** Schema snapshot test + migration gate job
-
-**Rationale:** Highest-value safety feature but requires writing new test code (schema snapshot). Placed after basic CI is running so there is an existing feedback loop.
-
-**Files created:**
-- `src/__tests__/schema/schema-snapshot.test.ts`
-- `src/__tests__/schema/__snapshots__/` (generated by vitest)
-
-**Files modified:**
-- `.github/workflows/ci.yml` (add migration-gate job)
-- `package.json` (add `test:migration` script)
-
-### Phase 5: Coverage Tracking
-
-**Build:** Add coverage reporting to PRs + baseline uploads on main
-
-**Rationale:** Depends on unit tests being stable in CI (Phase 1). Adding coverage too early risks noisy PR comments on a still-stabilizing pipeline.
-
-**Files created:**
-- `.github/workflows/codecov-base.yml`
-
-**Files modified:**
-- `vitest.config.ts` (add coverage thresholds + reporters)
-- `.github/workflows/ci.yml` (add coverage job)
-
-### Phase 6: Supply Chain Security
-
-**Build:** Audit + lockfile integrity + package age checks
-
-**Rationale:** Only triggers on dependency changes (rare) and has the most complexity (package age script). Other phases provide more immediate value.
-
-**Files created:**
-- `scripts/check-supply-chain.sh`
-
-**Files modified:**
-- `.github/workflows/ci.yml` (add supply-chain job)
-
-### Phase 7: Dynamic Test Selection + PR Title
-
-**Build:** Path filtering via `dorny/paths-filter` + PR title lint workflow
-
-**Rationale:** Optimization phase. CI works without path filtering -- it just runs everything. Adding `detect-changes` reduces CI time for focused PRs but is not correctness-critical. PR title enforcement is polish.
-
-**Files created:**
-- `.github/workflows/pr-title.yml`
-
-**Files modified:**
-- `.github/workflows/ci.yml` (add detect-changes job, wire `if` conditions)
-
-### Alternative: Combine Phases 1-3 Into One
-
-Phases 1-3 are all "wire existing functionality into CI" with no new test code. A confident implementer could build all three in a single phase. The split above is for risk management -- if CI configuration has issues, smaller phases are easier to debug.
+| Concern | Current (1 user) | Future (multi-env) | Future (multi-platform) |
+|---------|-------------------|---------------------|------------------------|
+| Release automation | Release Please, single package | Release Please manifest supports monorepo packages | Release Please can trigger platform-specific builds via `on: release` |
+| Staging environments | Single `staging` branch + Neon branch | Could add `qa` environment on Pro plan | Each platform build could have its own staging |
+| Database branches | 1 production + 1 staging | Neon supports many branches, per-PR if needed | Same pattern, more branches |
+| CI pipeline | 12 jobs, PR-only | Add staging branch targets | Add platform-specific build jobs |
+| Promotion gates | Manual workflow_dispatch | Could add automated smoke tests pre-promotion | Same pattern, more approval steps |
 
 ## Sources
 
-- [Playwright CI setup](https://playwright.dev/docs/ci-intro) -- official Playwright CI documentation (HIGH confidence)
-- [dorny/paths-filter](https://github.com/dorny/paths-filter) -- GitHub Action for path-based filtering (HIGH confidence)
-- [davelosert/vitest-coverage-report-action](https://github.com/davelosert/vitest-coverage-report-action) -- Coverage PR comments (HIGH confidence)
-- [pnpm audit CLI docs](https://pnpm.io/cli/audit) -- Supply chain auditing (HIGH confidence)
-- [cipher-box reference repo](https://github.com/FSM1/cipher-box/tree/main/.github) -- Workflow structure patterns (HIGH confidence, directly examined)
-- [npm Supply Chain Attack Analysis 2025](https://www.propelcode.ai/blog/npm-supply-chain-attack-analysis-2025) -- Context for 24h package age rule (MEDIUM confidence)
-- [fake-indexeddb](https://www.npmjs.com/package/fake-indexeddb) -- Already in use for Dexie testing in CI (HIGH confidence, in codebase)
+### Release Please
+- [googleapis/release-please-action (GitHub)](https://github.com/googleapis/release-please-action) -- HIGH confidence (official repo)
+- [Release Please manifest docs](https://github.com/googleapis/release-please/blob/main/docs/manifest-releaser.md) -- HIGH confidence (official docs)
+- [Release Please customization docs](https://github.com/googleapis/release-please/blob/main/docs/customizing.md) -- HIGH confidence (official docs)
+
+### Vercel Staging
+- [Vercel Environments docs](https://vercel.com/docs/deployments/environments) -- HIGH confidence (official docs)
+- [Vercel staging environment KB](https://vercel.com/kb/guide/set-up-a-staging-environment-on-vercel) -- HIGH confidence (official KB)
+- [Vercel assign domain to git branch](https://vercel.com/docs/domains/working-with-domains/assign-domain-to-a-git-branch) -- HIGH confidence (official docs)
+- [Vercel system environment variables](https://vercel.com/docs/environment-variables/system-environment-variables) -- HIGH confidence (official docs, critical for VERCEL_ENV vs VERCEL_TARGET_ENV distinction)
+- [Vercel promoting deployments](https://vercel.com/docs/deployments/promoting-a-deployment) -- HIGH confidence (official docs)
+
+### Neon Database Branching
+- [Neon GitHub Actions branching guide](https://neon.com/docs/guides/branching-github-actions) -- HIGH confidence (official docs)
+- [neondatabase/create-branch-action (GitHub)](https://github.com/neondatabase/create-branch-action) -- HIGH confidence (official action, v6)
+- [neondatabase/reset-branch-action (GitHub)](https://github.com/neondatabase/reset-branch-action) -- HIGH confidence (official action, v1.3.2)
+- [Neon branching with preview environments](https://neon.com/blog/branching-with-preview-environments) -- MEDIUM confidence (blog post, but official)
+- [Neon practical guide to database branching](https://neon.com/blog/practical-guide-to-database-branching) -- MEDIUM confidence (blog post, but official)
+
+### GitHub Actions
+- [GitHub environments for deployment](https://docs.github.com/actions/deployment/targeting-different-environments/using-environments-for-deployment) -- HIGH confidence (official docs)
+- [GitHub reviewing deployments (approval gates)](https://docs.github.com/actions/managing-workflow-runs/reviewing-deployments) -- HIGH confidence (official docs)

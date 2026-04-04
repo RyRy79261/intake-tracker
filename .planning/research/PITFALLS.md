@@ -1,378 +1,331 @@
-# Domain Pitfalls: CI & Data Integrity
+# Pitfalls Research
 
-**Domain:** CI pipeline, E2E testing, data integrity protection, and supply chain security for an offline-first health tracking PWA
-**Researched:** 2026-03-27
-**Confidence:** HIGH (codebase inspection + Dexie.js issue tracker + pnpm docs + Playwright docs + real-world supply chain incident analysis)
-
----
+**Domain:** Deployment lifecycle for existing Next.js 14 PWA (release automation, staging, CI/CD)
+**Researched:** 2026-04-04
+**Confidence:** HIGH (verified against official docs, existing codebase, and real-world migration reports)
 
 ## Critical Pitfalls
 
-Mistakes that cause data loss, create false security confidence, or render the CI pipeline counterproductive.
+### Pitfall 1: Release Please v4 `releases_created` vs `release_created` Output Trap
+
+**What goes wrong:**
+Release Please v4 has an output called `releases_created` (plural) that returns `true` regardless of whether a release was actually created. If you use this in a conditional step to trigger deployments, every merge to main triggers a production deployment -- even when no release PR was merged.
+
+**Why it happens:**
+The v4 action changed the semantics of this output from v3. The plural `releases_created` is a string representation of an array and JavaScript/YAML truthiness evaluates any non-empty string as true. The correct output for single-package repos is `release_created` (singular).
+
+**How to avoid:**
+Use `release_created` (singular) for non-monorepo projects. In the workflow:
+```yaml
+if: ${{ steps.release.outputs.release_created }}
+```
+Never use `releases_created` in conditionals. This is especially dangerous because the version-bump.yml replacement workflow will likely include a post-release step (tag push, Vercel production promote, etc.).
+
+**Warning signs:**
+- Production deployments happening on every merge to main, not just release PR merges
+- GitHub releases created with empty changelogs
+- Version not actually bumping between deployments
+
+**Phase to address:**
+Phase 1 (Release Please setup) -- must be correct from first implementation. Add a smoke test: merge a non-release commit and verify no deployment triggers.
+
+**Confidence:** HIGH -- documented in [Release Please Action repo](https://github.com/googleapis/release-please-action), confirmed by [real-world report](https://danwakeem.medium.com/beware-the-release-please-v4-github-action-ee71ff9de151).
 
 ---
 
-### Pitfall 1: Dexie Schema Migration Silently Corrupts Data on Production Devices (No Rollback)
+### Pitfall 2: Package.json Version vs Git Tag Mismatch on Bootstrap
 
-**What goes wrong:** A new `db.version(16)` ships to production. The user's phone browser upgrades IndexedDB from version 150 to 160 (Dexie multiplies by 10). The upgrade function has a bug -- perhaps it modifies records incorrectly or throws a partial error. The browser auto-commits whatever portion of the upgrade succeeded. Now you discover the bug and revert to the previous deployment. The user's browser tries to open version 150, but the database is already at version 160. IndexedDB throws `VersionError`. **The app is bricked on that device.** The data cannot be read by the old code OR the new code.
+**What goes wrong:**
+The current `package.json` shows version `"0.1.0"` but the repo has git tags `v1.0` and `v1.1`. Release Please uses `.release-please-manifest.json` as its source of truth for the current version. If the manifest is initialized with the wrong version -- either `0.1.0` from package.json or failing to account for `v1.1` -- Release Please will either try to create a release for a version that already exists, or skip the changelog for commits between `v1.1` and now.
 
-**Why it happens:** IndexedDB is fundamentally a forward-only schema system. There is no `ALTER TABLE` rollback. Dexie v3 threw `VersionError` when code tried to open a database newer than the declared version. Dexie v4.0.1 relaxed this -- it opens newer databases without error, which sounds helpful but creates a worse problem: the old code silently reads/writes records that are missing fields the upgrade was supposed to add, creating **inconsistent data where some records have the new fields and others do not**. When the fixed version re-deploys, the upgrade function does not re-run (version already matches), leaving a mix of migrated and unmigrated records.
+**Why it happens:**
+The existing `version-bump.yml` runs `npm version` (updating package.json) on every push to main, but the version never actually advanced past `0.1.0` because the workflow has a guard that skips bot-authored commits -- and most merges to main come from PRs where the version bump was the last commit. The tags `v1.0` and `v1.1` were created manually for milestones, not by the version-bump workflow. Release Please expects a clean version history where the manifest version matches the latest release.
 
-**Consequences:** For this app, records are UNRECOVERABLE. There is no server-side database. If the user's phone has corrupt data, that data is gone. Medication dose logs, blood pressure history, daily notes -- all potentially lost.
+**How to avoid:**
+1. Before enabling Release Please, update `package.json` version to match the last meaningful release tag (should be `1.2.0` since v1.2 CI & Data Integrity milestone is complete).
+2. Create `.release-please-manifest.json` with `{ ".": "1.2.0" }`.
+3. Create `release-please-config.json` with `release-type: node` and set `bootstrap-sha` to the commit that completed v1.2 (commit `a3a0b2d`).
+4. Create the `v1.2.0` git tag on commit `a3a0b2d` if one does not already exist.
+5. Delete `version-bump.yml` BEFORE enabling Release Please -- do not run them in parallel.
 
-**This codebase's specific exposure:**
-- 6 migration versions (v10-v15) with upgrade functions touching all 16 tables
-- The v10 upgrade backfills sync fields (`createdAt`, `updatedAt`, `deletedAt`, `deviceId`) across every table AND creates inventory transactions from legacy `currentStock` -- a destructive transform
-- The v11 upgrade converts PhaseSchedule `time` (HH:MM string) to `scheduleTimeUTC` (integer minutes) using timezone inference -- lossy conversion
-- The v12 upgrade creates SubstanceRecord entries from keyword matching in intake record notes -- creates new records from heuristics
-- Each migration depends on the previous one completing successfully. A partial v11 failure leaves some PhaseSchedules with `time` but no `scheduleTimeUTC`
+**Warning signs:**
+- Release Please PR proposing version `0.2.0` or `1.0.0` instead of `1.3.0`
+- Changelog containing every commit since the beginning of the repo
+- Duplicate GitHub releases for the same version
 
-**Prevention:**
-1. **Pre-deployment migration safety gate in CI:** Before any PR that touches `db.ts` can merge, CI must:
-   - Run the full migration chain (v10->v15+) against synthetic data representing the production schema shape
-   - Verify record counts before and after migration (no records lost)
-   - Verify specific field transformations (e.g., `scheduleTimeUTC` is a number for all PhaseSchedules)
-   - Detect any new `db.version()` call and require explicit approval label on the PR
-2. **Backup-before-migrate pattern:** The app should export a backup before applying any schema upgrade. CI should test that this backup can be re-imported to a fresh database and produce identical data.
-3. **Never ship an upgrade function that modifies existing records without a migration test.** The codebase already has v10-v15 migration tests -- this discipline must continue and be CI-enforced.
-4. **Schema diff detection:** CI should compare the current `db.version()` declarations against the base branch. If the latest version number changed, flag for review.
+**Phase to address:**
+Phase 1 (Release Please setup) -- the very first step should be version alignment before Release Please is activated.
 
-**Detection:** CI gate that runs on any diff to `src/lib/db.ts`. Blocks merge if migration tests fail or if new version lacks test coverage.
-
-**Confidence:** HIGH -- based on [Dexie.js issue #1599](https://github.com/dexie/Dexie.js/issues/1599) (version downgrade), [issue #2097](https://github.com/dexie/Dexie.js/issues/2097) (v4 VersionError relaxation), and direct inspection of this codebase's migration chain.
+**Confidence:** HIGH -- verified by inspecting existing repo state (tags: `v1.0`, `v1.1`; `package.json` version: `0.1.0`; last milestone commit: `a3a0b2d`).
 
 ---
 
-### Pitfall 2: Partial Migration on Browser Crash Leaves Database in Inconsistent State
+### Pitfall 3: Service Worker Caching Stale Content on Staging
 
-**What goes wrong:** The user opens the app, triggering a migration. Mid-upgrade (e.g., during the v10 backfill of 16 tables), the browser tab crashes, the phone runs out of battery, or iOS evicts the tab from memory. IndexedDB's upgrade transaction was in progress. Depending on the browser, the transaction either: (a) rolls back completely, or (b) partially commits whatever object store changes had been flushed. On next open, the browser sees the version is already upgraded (the `onupgradeneeded` event already fired) so it does NOT re-run the upgrade function.
+**What goes wrong:**
+next-pwa generates a service worker that precaches the entire Next.js build output using workbox. The service worker uses a stale-while-revalidate or cache-first strategy for static assets. On a persistent staging environment (`staging.intake-tracker.ryanjnoble.dev`), the service worker from a previous deployment continues to serve cached assets even after a new staging deployment. The user (you, testing on your phone) sees stale UI/behavior and thinks the deployment is broken.
 
-**Why it happens:** IndexedDB's `versionchange` transaction is a single transaction, but browsers differ in crash recovery behavior. Chrome generally rolls back incomplete `versionchange` transactions. Safari on iOS is known to be more aggressive about evicting tabs and has historically had bugs with incomplete upgrades. This was reported in [Dexie.js issue #942](https://github.com/dfahlander/Dexie.js/issues/942) where upgrade functions silently failed to run after a browser crash.
+**Why it happens:**
+Service workers are scoped to the origin (domain). The staging subdomain is a persistent origin, so the service worker installs once and persists. next-pwa's `skipWaiting: true` config helps but only when the NEW service worker is fetched -- if the browser is serving the old HTML from cache, it never fetches the new SW. The existing `worker/index.js` listens for `SKIP_WAITING` messages, but this requires the app code to send that message, which itself might be cached.
 
-**This codebase's specific exposure:**
-- The v10 upgrade iterates over ALL inventory items and creates new transaction records. If the browser crashes after processing 5 of 10 items, only 5 get initial transactions.
-- The v12 upgrade iterates over ALL intake records looking for caffeine/alcohol keywords. A partial run creates substance records for some but not all matching intakes.
-- Both upgrades use `await` inside loops, giving the browser multiple opportunities to evict the tab between iterations.
+The current `next.config.js` conditionally loads next-pwa based on `process.env.NODE_ENV === 'production'`. But Vercel ALWAYS builds in production mode, even for preview and staging deployments. So the service worker is generated for every Vercel deployment, including staging.
 
-**Consequences:** Records missing sync fields (`createdAt`, `updatedAt`), PhaseSchedules without `scheduleTimeUTC`, inventory items without corresponding initial transactions. The app appears to work but data is silently incomplete. Queries that filter by `deletedAt === null` return wrong results for records that were never backfilled.
+**How to avoid:**
+Disable the service worker on staging by adding a `VERCEL_ENV` check at build time:
+```js
+const withPWA = process.env.NODE_ENV === 'production' && process.env.VERCEL_ENV === 'production'
+  ? require('next-pwa')({ dest: 'public', register: true, skipWaiting: true, customWorkerDir: 'worker' })
+  : (config) => config;
+```
+This ensures the service worker only generates for the production domain. Staging gets a standard SPA experience without caching complications.
 
-**Prevention:**
-1. **Post-migration integrity checks:** On every app open (not just during migration), run a lightweight validation pass that checks critical invariants:
-   - All records across all tables have `createdAt`, `updatedAt`, `deletedAt` fields
-   - All PhaseSchedules have `scheduleTimeUTC` as a number
-   - All InventoryItems with historical `currentStock > 0` have at least one "initial" InventoryTransaction
-2. **Idempotent repair function:** A function that can safely re-run the backfill logic for any records that are missing expected fields, without creating duplicates. This is NOT a re-run of the migration -- it is a separate "heal" pass.
-3. **CI must test the integrity checker itself** -- seed a database with deliberately incomplete migration output and verify the checker catches it.
+**Warning signs:**
+- Staging shows old version number in About dialog after deployment
+- UI changes not appearing on staging despite Vercel dashboard showing successful deployment
+- "Works in incognito but not regular browser" reports
 
-**Detection:** Runtime integrity check on app startup. Log results to audit log. Surface warnings in the settings page if issues are found.
+**Phase to address:**
+Phase 2 (Staging environment setup) -- configure before the first staging deployment. Retrofitting after the SW is already installed requires manual cache clearing on every test device.
 
-**Confidence:** MEDIUM -- browser crash during migration is real but rare. Safari iOS is the highest risk. The [Dexie.js issue #942](https://github.com/dfahlander/Dexie.js/issues/942) confirms the failure mode exists.
-
----
-
-### Pitfall 3: fake-indexeddb Migration Tests Pass But Real Browser Migrations Fail
-
-**What goes wrong:** The existing migration tests (v10-v15) use `fake-indexeddb/auto` in Node.js via Vitest. fake-indexeddb is a pure JS in-memory implementation that passes the W3C IndexedDB test suite, but it does NOT replicate browser-specific behaviors: transaction timing, storage quota limits, multi-tab upgrade blocking, or Safari's aggressive transaction timeouts. A migration that works in fake-indexeddb may fail in Safari or Firefox.
-
-**This codebase's specific exposure:**
-- The test setup (`src/__tests__/setup.ts`) calls `db.delete()` + `db.open()` before every test. This means migrations always run on an empty database. **The tests never exercise upgrading a database that has actual data from a previous version in the same way a real user's phone would.**
-- The v10 migration test seeds raw IDB at version 9 then opens via `db.ts` -- this is good! But it only seeds `inventoryItems` and `intakeRecords`. It does not seed all 16 tables with representative data volumes.
-- fake-indexeddb does not enforce storage quotas. A migration that temporarily doubles storage (copying data to new format) would pass in tests but fail on a phone with 95% full storage.
-
-**Consequences:** CI shows green. The migration ships. On the user's phone with real data volume, the migration fails due to quota exceeded, or Safari's 500ms transaction timeout kills the upgrade mid-flight.
-
-**Prevention:**
-1. **Migration tests must seed ALL tables with realistic data shapes** -- not just the tables the migration touches. Other tables must survive the migration unchanged.
-2. **Add a Playwright-based migration E2E test** that runs in a real Chromium browser:
-   - Use `page.evaluate()` to seed IndexedDB at the previous version number using raw IDB API
-   - Navigate to the app (which opens the database and triggers migration)
-   - Verify all records survived with correct data
-3. **Keep the fake-indexeddb unit tests for fast CI feedback**, but add the Playwright browser test as a slower "safety net" gate.
-4. **Test with non-trivial data volumes** -- at least 100 records per table, not 1-2. This catches performance issues in upgrade loops.
-
-**Detection:** Playwright E2E test that runs migrations in a real browser context. This test should run on every PR that modifies `db.ts`.
-
-**Confidence:** HIGH -- fake-indexeddb's README explicitly states it "works exactly like IndexedDB except data is not persisted to disk." It does NOT claim to replicate browser-specific timing, quota, or transaction lifetime behaviors.
+**Confidence:** HIGH -- the codebase already conditionally loads next-pwa (`process.env.NODE_ENV === 'production'`), but this fires for both Vercel production and preview/staging since Vercel always builds in production mode. Verified in `next.config.js` line 3.
 
 ---
 
-### Pitfall 4: Supply Chain Attack Window Is Wider Than You Think (pnpm minimumReleaseAge Bypass Bug)
+### Pitfall 4: Vercel Preview Deployments Are Not Staging
 
-**What goes wrong:** You configure `minimumReleaseAge: 1440` (24 hours) in pnpm settings, thinking all dependencies must be 24 hours old before installation. But [pnpm issue #10438](https://github.com/pnpm/pnpm/issues/10438) (reported January 2026) reveals that **minimumReleaseAge is NOT enforced when the dependency already exists in the lockfile**. If a compromised version gets into `pnpm-lock.yaml` before the 24h window (e.g., through a Dependabot PR or manual `pnpm update`), subsequent `pnpm install` runs silently install it regardless of age.
+**What goes wrong:**
+Developers conflate Vercel's automatic preview deployments (one per PR, ephemeral URL like `intake-tracker-abc123.vercel.app`) with a stable staging environment. They set up environment variables on "Preview" scope thinking it creates a staging environment, but every PR deployment shares those variables. Preview env vars bleed across branches. There is no persistent URL to bookmark or test against.
 
-**Why it happens:** pnpm optimizes for speed by trusting the lockfile. The minimumReleaseAge check only runs during resolution (when adding new versions), not during lockfile-based installation. This is a known bug, not intended behavior.
+**Why it happens:**
+Vercel's environment scoping has three built-in targets: Production, Preview, and Development. "Preview" applies to ALL non-production deployments unless you use branch-specific overrides or custom environments (Pro plan). The Hobby plan does not have custom environments, but does support branch-based domain assignment.
 
-**This codebase's specific exposure:**
-- The September 2025 npm supply chain attack compromised `chalk`, `debug`, and 16 other packages with a combined 2.6 billion weekly downloads. These are common transitive dependencies of Next.js, Playwright, and ESLint -- all in this project's dependency tree.
-- The November 2025 self-replicating npm worm compromised 796 packages. The malware used `preinstall` scripts.
-- The February 2026 Cline CLI attack used a compromised npm publish token.
+**How to avoid:**
+1. Determine Vercel plan -- custom environments require Pro ($20/month). On Hobby, use branch-based domain assignment as a workaround.
+2. For the staging URL (`staging.intake-tracker.ryanjnoble.dev`):
+   - Add the domain in Vercel project settings
+   - Assign it to the `staging` git branch (not the default branch)
+   - Set branch-specific preview environment variables that override defaults for that branch
+3. Keep preview deployments separate -- they are for PR review, not for staging validation.
+4. Environment variables scoped to Preview branch `staging` will override general Preview variables. You only need to set the variables that DIFFER from production (e.g., `DATABASE_URL` for Neon staging branch, `NEXT_PUBLIC_ENVIRONMENT=staging`).
 
-**Prevention:**
-1. **Lockfile audit in CI:** Every PR must run `pnpm audit` and fail on high/critical vulnerabilities. This catches known compromised packages.
-2. **Lockfile diff detection:** CI should flag any change to `pnpm-lock.yaml` that adds or updates a dependency. Changes to the lockfile without a corresponding change to `package.json` are suspicious.
-3. **pnpm v10 postinstall script blocking:** pnpm v10 blocks postinstall scripts by default. Use `allowBuilds` to explicitly whitelist trusted packages. NEVER use `dangerouslyAllowAllBuilds`.
-4. **Block exotic subdependencies:** Set `blockExoticSubdeps: true` in pnpm settings to prevent transitive dependencies from using git repos or tarball URLs.
-5. **Pin exact versions in package.json** for critical dependencies (next, dexie, playwright). Use `^` ranges only for non-critical dev tools.
-6. **Do NOT auto-merge Dependabot/Renovate PRs.** Every dependency update must have a human review the diff.
-7. **Consider `trustPolicy: "no-downgrade"`** which blocks packages that show reduced trust levels compared to previous releases.
+**Warning signs:**
+- `DATABASE_URL` on staging pointing to production Neon
+- Privy auth failing on preview URLs because allowed origins only list production + staging domains
+- E2E tests passing against preview but failing on staging due to different env vars
 
-**Detection:** CI job that:
-- Runs `pnpm audit --audit-level=high`
-- Checks for lockfile changes without package.json changes
-- Verifies `minimumReleaseAge` is set (even with the bypass bug, it protects during `pnpm add` and `pnpm update`)
+**Phase to address:**
+Phase 2 (Staging environment setup) -- design the environment strategy before creating any configuration.
 
-**Confidence:** HIGH -- the pnpm bypass bug is documented. The September 2025 and November 2025 attacks are verified incidents that affected common Next.js transitive dependencies.
-
----
-
-### Pitfall 5: E2E Tests That Are Flaky From Day One Due to IndexedDB + PWA Timing
-
-**What goes wrong:** Playwright E2E tests interact with IndexedDB through the app's UI. IndexedDB operations are asynchronous and their timing varies by system load. On a CI runner under load, a test clicks "Confirm Entry," expects a toast notification, but the IndexedDB write + React Query invalidation + useLiveQuery re-render chain takes longer than expected. The test fails intermittently. After a few weeks of random failures, developers start ignoring CI results or adding retries that mask real bugs.
-
-**This codebase's specific exposure:**
-- The existing `intake-logs.spec.ts` test clicks "Confirm Entry" then immediately expects `text=Water intake recorded`. This works locally but depends on the speed of: IndexedDB write -> React Query mutation -> toast notification render. On a slow CI runner, this is a race condition.
-- The `medication-wizard.spec.ts` test navigates a 6-step wizard with form fills and button clicks. Any step timing out breaks the entire test.
-- The Playwright config has `retries: process.env.CI ? 2 : 0`. This means CI retries failed tests twice -- which masks flakiness instead of surfacing it.
-- Service worker caching in a PWA can serve stale JavaScript bundles. If the test navigates to the app and gets a cached version from a previous test run, the IndexedDB schema version might mismatch.
-
-**Consequences:** Flaky tests erode trust faster than no tests at all. Developers learn to "just re-run CI" instead of investigating failures. Real regressions hide behind the noise. The CI pipeline becomes a ritual that nobody trusts.
-
-**Prevention:**
-1. **Use Playwright's built-in waiting mechanisms, not manual waits:**
-   - `await expect(locator).toBeVisible()` already polls. Set a generous timeout (10s, not the default 5s) for CI.
-   - Never use `page.waitForTimeout()`. If you need to wait, wait for a specific DOM state.
-2. **Disable service workers in Playwright tests:** Set `serviceWorkers: 'block'` in the Playwright config's `use` options. This prevents cached assets from interfering with tests.
-3. **Clean IndexedDB state before each test:**
-   ```typescript
-   test.beforeEach(async ({ page }) => {
-     await page.goto('/');
-     await page.evaluate(() => {
-       indexedDB.deleteDatabase('IntakeTrackerDB');
-     });
-     await page.reload();
-   });
-   ```
-4. **Do NOT use retries to mask flakiness.** Start with `retries: 0` even in CI. A test that needs retries is a test that needs fixing. Add retries later (1, not 2) only for tests that have proven stable over 50+ runs.
-5. **Use `data-testid` attributes** instead of text selectors. The existing tests use `text=Intake Tracker` and `text=Confirm Entry` -- these break on any copy change and are locale-dependent.
-6. **Run tests in serial (not parallel) until the suite is proven stable.** The existing config already does `workers: 1` on CI -- keep this.
-7. **Trace on first failure, not first retry:** Change trace config from `on-first-retry` to `retain-on-failure` so you capture diagnostics on the FIRST failure, not after a retry masks the original state.
-
-**Detection:** Track flaky test rate over time. Any test that fails then passes on retry is flaky. If flaky rate exceeds 5%, stop and fix before adding new tests.
-
-**Confidence:** HIGH -- the existing test code uses patterns known to cause flakiness (text selectors, no DB cleanup between E2E runs, retry-based masking). Verified against [Playwright best practices documentation](https://playwright.dev/docs/best-practices).
+**Confidence:** HIGH -- verified against [Vercel environments docs](https://vercel.com/docs/deployments/environments) and [staging setup guide](https://vercel.com/kb/guide/set-up-a-staging-environment-on-vercel).
 
 ---
 
-## Moderate Pitfalls
+### Pitfall 5: Neon Staging Branch Schema Drift After Migration Changes
+
+**What goes wrong:**
+A Neon branch is created from the production database for staging. New code is deployed to staging that expects a schema change (e.g., a new column on `push_settings`). But the branch was created before the migration ran, so it still has the old schema. The staging deployment crashes with a SQL error. Alternatively, a migration runs on the staging branch but never makes it to production, creating forward drift.
+
+**Why it happens:**
+Neon branches use copy-on-write -- they snapshot the parent at creation time. Schema changes on one branch do not propagate to other branches. Unlike Dexie.js (which handles migrations in client code), the Neon tables use raw SQL migrations (`scripts/push-migration.sql`). There is no automated migration runner for the Neon tables in this project -- the migration script is run manually via `psql`.
+
+**How to avoid:**
+1. Use Neon's "Reset branch" action to periodically sync the staging branch back to production state. Automate this with `neondatabase/reset-branch-action` in a scheduled workflow or as part of the staging deployment pipeline.
+2. For the 4 push notification tables, create a proper migration strategy:
+   - Track applied migrations (even a simple version table)
+   - Run migrations as part of deployment, not manually
+   - Or: since the schema is simple (4 tables, all use `CREATE TABLE IF NOT EXISTS`), re-run the migration script on every staging reset -- it is idempotent for table creation but NOT for column additions
+3. Never apply schema changes to the staging branch that have not been committed to the repo. Schema changes go through PR, land in the migration script, then get applied after reset.
+
+**Warning signs:**
+- API routes returning 500 errors on staging but working in production
+- `push_subscriptions` table missing columns that exist in the migration script
+- Staging working fine after reset but breaking again after a week
+
+**Phase to address:**
+Phase 2 or 3 (Neon branching setup) -- establish the reset cadence and migration strategy before relying on staging for testing.
+
+**Confidence:** HIGH -- verified against [Neon branching docs](https://neon.com/docs/introduction/branching) and [staging sync guide](https://neon.com/blog/how-to-keep-staging-in-sync-with-production-in-postgres).
 
 ---
 
-### Pitfall 6: CI Pipeline Gets Too Slow and Developers Start Bypassing It
+### Pitfall 6: Privy Auth Failing on Staging Due to Origin Mismatch
 
-**What goes wrong:** The CI pipeline starts at 5 minutes. Over time, more tests are added. E2E tests are slow (Playwright needs a dev server + browser). Coverage collection adds overhead. The pipeline grows to 15+ minutes. Developers start pushing directly to main, merging without waiting for CI, or marking PRs as "skip CI" for "trivial" changes that turn out to break things.
+**What goes wrong:**
+Privy enforces allowed origins for authentication. The staging subdomain (`staging.intake-tracker.ryanjnoble.dev`) is not listed in Privy's allowed origins, causing auth to fail silently or with cryptic CORS errors. Users see a blank screen or the Privy modal refuses to load. The E2E tests, which use the Privy test account, also fail on staging.
 
-**Why it happens:** Every CI feature adds time. Lint (30s) + typecheck (60s) + unit tests (30s) + E2E tests (3-5 min) + coverage (30s) + supply chain audit (20s) is already 6-7 minutes minimum. If these run sequentially, it is 7+ minutes. If the Next.js build is included (for verifying production builds), add 2-3 more minutes.
+**Why it happens:**
+Privy validates the requesting origin against the app's configured allowed origins list. Production (`intake-tracker.ryanjnoble.dev`) is configured, but the staging subdomain is a different origin. The code in `providers.tsx` passes `appId` directly to `PrivyProvider`, meaning the same Privy app is used everywhere -- but Privy's dashboard controls which origins can use that app.
 
-**This codebase's specific exposure:**
-- 44K LOC TypeScript means typecheck is not instant
-- 6 migration test files + unit tests + timezone dual-pass means the test suite is already non-trivial
-- Playwright E2E starts a dev server with a 120s timeout, adding overhead even before tests run
-- The `test:tz` script runs the ENTIRE test suite twice (once per timezone) -- this should NOT be in the PR pipeline
+**How to avoid:**
+For this single-user app, use the single Privy App approach:
+1. Add `staging.intake-tracker.ryanjnoble.dev` to the allowed origins list in the Privy Dashboard (Configuration > App settings).
+2. Optionally create a staging-specific App Client with its own `clientId` if cookie behavior needs to differ. Set `NEXT_PUBLIC_PRIVY_CLIENT_ID` per-environment in Vercel.
+3. The E2E test credentials (`PRIVY_TEST_EMAIL`, `PRIVY_TEST_OTP`) work against the same Privy app regardless of origin, so they need no changes.
 
-**Prevention:**
-1. **Parallel jobs, not sequential steps.** The reference repo (cipher-box) demonstrates this well: lint, typecheck, and tests run as separate parallel jobs. Only jobs with actual dependencies (typecheck depends on lint) are chained.
-2. **Dynamic test selection (affected-path analysis):** Use `dorny/paths-filter` (as cipher-box does) to skip E2E tests when only docs or config files changed. Only run migration tests when `db.ts` changes.
-3. **Cache aggressively:** Cache pnpm store, Next.js `.next/cache`, Playwright browsers. The cipher-box CI uses `actions/setup-node` with `cache: 'pnpm'`.
-4. **Separate "fast" and "slow" pipelines:**
-   - Fast (every PR): lint + typecheck + unit tests + supply chain audit. Target: under 3 minutes.
-   - Slow (PR to main, or explicitly triggered): E2E tests + coverage + timezone dual-pass. Target: under 8 minutes.
-5. **Never include `pnpm build` in the PR pipeline** unless specifically testing build output. It adds 2-3 minutes with zero value for most PRs.
-6. **Do NOT run timezone dual-pass on every PR.** Run it nightly or on PRs that modify timezone-related files.
+Do NOT create a separate Privy app for staging -- that doubles configuration overhead and requires maintaining two sets of test accounts for a single-user app.
 
-**Detection:** Measure CI duration per PR over time. Alert if median exceeds 5 minutes for the fast pipeline.
+**Warning signs:**
+- Privy login modal not appearing on staging
+- CORS errors in browser console mentioning `auth.privy.io`
+- E2E tests timing out on staging waiting for Privy iframe
+- Login works in incognito (no cached cookies from production) but fails in regular browser
 
-**Confidence:** HIGH -- research shows developers context-switch when CI exceeds 15 minutes, and teams cut pipeline duration 40-60% by targeting the top 3 slowest jobs.
+**Phase to address:**
+Phase 2 (Staging environment setup) -- configure Privy origins before deploying to the staging subdomain.
 
----
-
-### Pitfall 7: Coverage Metrics Incentivize Writing Bad Tests (Goodhart's Law)
-
-**What goes wrong:** A coverage target is set (e.g., "80% coverage required to merge"). Developers write tests that technically cover lines but don't actually test anything meaningful. A test that calls a function without asserting results increases coverage while adding zero value. The migration tests are already thorough, but service-layer tests could easily devolve into "call function, assert it didn't throw" patterns that inflate coverage without catching bugs.
-
-**Why it happens:** Goodhart's Law: "When a measure becomes a target, it ceases to be a good measure." Coverage counts which lines EXECUTED, not which lines were TESTED MEANINGFULLY. A test with no assertions covers code. A test that asserts `expect(true).toBe(true)` covers code. Neither catches regressions.
-
-**This codebase's specific exposure:**
-- The backup service (`backup-service.ts`) has 16 validator functions with similar structure. Achieving "coverage" on these is trivial (call with valid data), but the important tests are the INVALID data cases.
-- The medication service has complex multi-table transactions. A coverage-focused test might call `createPrescription()` and check it returns, but miss that inventory transactions were not created correctly.
-- AI API route handlers are difficult to meaningfully test in unit tests (they depend on external API responses). Forcing coverage on these leads to brittle mocks that test mock behavior, not real behavior.
-
-**Prevention:**
-1. **Track coverage as a METRIC, not a GATE.** Report coverage on PRs (using a tool like `@vitest/coverage-v8` which is already installed) but do NOT block merge on coverage thresholds.
-2. **Use coverage DECREASE detection instead:** Block merge if a PR DECREASES coverage by more than 2% without explanation. This prevents regression without incentivizing bad tests.
-3. **Require assertion density, not line coverage.** A test file with 10 tests and 5 assertions is suspicious. Code review should catch tests without meaningful assertions.
-4. **Exclude generated code and type-only files from coverage.** The 16 Dexie table interfaces in `db.ts` don't need coverage. AI route handlers should be covered by E2E tests, not unit tests.
-5. **Do NOT set a coverage target in the first milestone.** Establish a baseline first. After 2-3 months of organic test growth, evaluate whether a floor is needed.
-
-**Detection:** Review coverage reports for files with high coverage but low assertion counts. Flag test files where `expect()` count is less than 50% of test count.
-
-**Confidence:** HIGH -- well-documented anti-pattern. The existing codebase already has good migration tests as a positive example of meaningful coverage.
+**Confidence:** HIGH -- verified against [Privy settings docs](https://docs.privy.io/guide/dashboard/settings) and [app clients docs](https://docs.privy.io/guide/react/configuration/app-clients).
 
 ---
 
-### Pitfall 8: Backup Round-Trip Test Gives False Confidence Without Schema Awareness
+### Pitfall 7: CI Gate Job Failing After Adding New Workflow Jobs
 
-**What goes wrong:** CI includes a "backup round-trip" test: export all data, import to fresh database, compare. The test passes. But the backup format (`BackupData` interface in `backup-service.ts`) is at version 5, while the database schema is at version 15. A new migration adds a field (`groupId` on intakeRecords). The backup service exports the field (it serializes full records). The import service writes records with the field. But the import validator (`isValidIntakeRecord`) does NOT check for `groupId` -- it only checks `id`, `type`, `amount`, `timestamp`. A backup with corrupt `groupId` values passes validation and imports silently.
+**What goes wrong:**
+The existing `ci-pass` gate job in `ci.yml` explicitly lists all 11 dependent jobs in its `needs` array and checks each result by name. Adding a new job to `ci.yml` without updating `ci-pass` means the gate does not wait for or validate the new job. Conversely, adding a reference to a job that runs in a different workflow file causes a workflow syntax error because cross-workflow job dependencies are not supported in GitHub Actions.
 
-**This codebase's specific exposure:**
-- The validators in `backup-service.ts` are minimal: `isValidIntakeRecord` checks 4 fields out of 12. Records missing `createdAt`, `updatedAt`, `deletedAt`, `deviceId`, `timezone`, `groupId`, `source`, `note` all pass validation.
-- The backup format version (5) has not been updated despite schema versions advancing from v10 to v15.
-- The `isContentEqual` comparison ignores `createdAt`, `updatedAt`, `deletedAt`, `deviceId`, `timezone` -- exactly the fields that migrations transform. A backup round-trip would not detect if a migration scrambled these fields.
+**Why it happens:**
+The `ci-pass` job is a branch protection mechanism -- GitHub branch protection rules require `ci-pass` to succeed before merging. The job uses a hand-maintained list of job names in both the `needs` array AND the result-checking bash script. Both must be updated in sync when jobs change.
 
-**Prevention:**
-1. **CI backup round-trip test must validate ALL fields**, not just the 4 that `isValidIntakeRecord` checks. Use the TypeScript interface types to generate validators, or use Zod schemas for both runtime validation and type generation.
-2. **After a migration run, export backup and verify it re-imports without data loss.** This means: seed DB with known data, run migration, export, import to fresh DB, compare record-by-record with deep equality on ALL fields.
-3. **Bump backup format version when schema version changes.** The backup version should track which schema fields are expected.
-4. **Test import of backups from OLDER format versions.** A v3 backup imported into a v15 database should work (the import should handle missing fields gracefully).
+**How to avoid:**
+1. Release Please and staging deployment workflows should be SEPARATE workflow files (e.g., `release.yml`, `deploy-staging.yml`), not additional jobs in `ci.yml`. CI validates code quality; deployment is a separate concern triggered by different events (push to main vs PR).
+2. If any new quality gate jobs ARE added to `ci.yml` (e.g., schema diff check), update BOTH the `ci-pass.needs` array AND the result-checking script, including deciding whether the new job is "unconditional" (must succeed) or "gated" (success or skipped).
+3. Document the pattern: CI jobs go in `ci.yml` with gate wiring; deployment jobs go in separate workflows triggered by different events (`push` to `main`, `workflow_dispatch`).
 
-**Detection:** CI test that compares backup export before and after migration, field-by-field, with no exclusions.
+**Warning signs:**
+- PRs merging without new quality checks running
+- `ci-pass` succeeding but a required job actually failed (it was not in the needs list)
+- Workflow file validation errors after adding jobs
 
-**Confidence:** HIGH -- directly verified by reading `backup-service.ts` validators and `isContentEqual` exclusion set.
+**Phase to address:**
+Phase 1 (Release Please setup) -- establish the workflow file boundaries before adding any new workflows.
 
----
-
-### Pitfall 9: PWA Service Worker Serves Stale Code After CI-Verified Deployment
-
-**What goes wrong:** CI verifies the build, tests pass, the new version deploys. The user's phone has the old service worker cached. The service worker serves the old JavaScript bundle (with the old `db.version()` declarations). The user continues using the app with OLD code that does not know about the new schema. If the new version included a migration, the migration never runs because the old code does not declare the new version. When the service worker finally updates (could be hours or days later), the migration runs -- but the user has been creating records with the old code, potentially writing data that the migration assumes does not exist yet.
-
-**Why it happens:** PWA service workers update asynchronously. The update check happens on navigation, but the new worker does not activate until all tabs are closed. On mobile, tabs persist indefinitely. The user may run old code for days after deployment.
-
-**This codebase's specific exposure:**
-- The app is a PWA (`next.config.js` likely has PWA configuration)
-- The app is used on a phone by a single user who travels between SA and Germany
-- The user may open the app, use it, and close it without fully closing the browser tab, preventing service worker updates
-
-**Prevention:**
-1. **Service worker update notification:** Show an in-app prompt when a new version is detected: "A new version is available. Please refresh to update." This is standard PWA practice but critical when schema migrations are involved.
-2. **CI cannot directly prevent this.** But CI can verify that the service worker update notification component exists and functions correctly (E2E test).
-3. **Migration code must handle data created by both old and new code.** Upgrade functions should use defensive checks (`if (record.field == null)`) rather than assuming all records are from the old version.
-4. **The existing migration code already does this well** (the v10 backfill checks `if (record.createdAt == null)`). Enforce this pattern via code review and CI linting.
-
-**Detection:** E2E test that verifies the service worker update prompt appears when a new version is available.
-
-**Confidence:** MEDIUM -- depends on the specific PWA configuration. The risk is real for any PWA with schema migrations, but the existing migration code already uses defensive patterns.
+**Confidence:** HIGH -- verified by reading the existing `ci.yml` gate implementation (line 243-287).
 
 ---
 
-## Minor Pitfalls
+## Technical Debt Patterns
 
----
+Shortcuts that seem reasonable but create long-term problems.
 
-### Pitfall 10: Running Full Timezone Dual-Pass in CI Doubles Test Time
+| Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
+|----------|-------------------|----------------|-----------------|
+| Running version-bump.yml alongside Release Please "just temporarily" | Avoids immediate workflow change | Double version bumps, Release Please confused by bot commits, manifest drift, possible infinite commit loop | Never -- delete version-bump.yml before first Release Please merge |
+| Using production Neon database for staging | No branch setup needed | Staging push notification tests corrupt production data via `push_sent_log`, risk of sending real notifications from staging cron | Never -- the 4 push notification tables are small but contain real device endpoints |
+| Hardcoding staging DATABASE_URL in repo/workflow files | Quick to set up | Connection string rotated by Neon = broken staging, credentials in git history | Never -- use Vercel environment variables or GitHub secrets |
+| Skipping conventional commit linting | No new tooling to add | Release Please generates empty changelogs or wrong version bumps because non-conforming commits are invisible to it | Acceptable for v1.3 MVP if commit discipline is manual; the existing codebase already uses conventional commits on the feature branch. Add commitlint enforcement in a later milestone. |
+| Using `ALLOW_DEV_FALLBACK=true` on staging to bypass Privy | Auth works immediately without configuring Privy origins | Security bypass in a production-like environment; does not test real auth flow; masks auth bugs that will appear in production | Never for staging -- staging must mirror production auth behavior |
+| Manually promoting staging to production via Vercel dashboard | Works without any automation | Human error risk (wrong deployment promoted), no audit trail, no CI gate before promotion | Acceptable initially; automate in later phase |
 
-**What goes wrong:** The `test:tz` script runs the entire Vitest suite twice: once with `TZ=Africa/Johannesburg` and once with `TZ=Europe/Berlin`. This is valuable for catching timezone bugs but doubles CI time. If included in every PR pipeline, it pushes total time past the "developers ignore CI" threshold.
+## Integration Gotchas
 
-**Prevention:** Run timezone dual-pass only nightly or on PRs that modify files matching `*timezone*`, `*tz*`, `db.ts` (which has timezone-dependent migrations), or `*schedule*`. Use path filtering in CI to skip it otherwise.
+Common mistakes when connecting services in this deployment lifecycle.
 
-**Detection:** CI duration monitoring. If the fast pipeline exceeds 3 minutes, investigate.
+| Integration | Common Mistake | Correct Approach |
+|-------------|----------------|------------------|
+| Release Please + version-bump.yml | Running both simultaneously. The `[skip version]` guard would prevent infinite loops, but the ambiguity is itself the problem -- two systems managing version state creates confusion about which is authoritative. | Clean cut: delete `version-bump.yml` BEFORE enabling Release Please. Release Please becomes the sole version authority. |
+| Neon + Vercel env vars | Setting `DATABASE_URL` at Preview scope, which applies to ALL preview deployments including random PR previews that should not touch the staging Neon branch. | Use branch-specific env var override: set `DATABASE_URL` for the `staging` branch only. PR previews get no `DATABASE_URL` (acceptable since user data is in IndexedDB and push notifications are not tested on ephemeral previews). |
+| Privy + Vercel domains | Adding staging domain to Privy allowed origins but forgetting Vercel's auto-generated preview URLs (`*.vercel.app`). | For this single-user app, only add the staging subdomain. The app gracefully falls back to no-auth mode when `NEXT_PUBLIC_PRIVY_APP_ID` is unset (verified in `providers.tsx` line 116-128). Do NOT set Privy env vars on random preview deployments. |
+| GitHub Actions + Vercel deploy | Using `vercel deploy --prod` in GitHub Actions while also having Vercel's Git Integration enabled, causing double deployments. | Pick one trigger. For this project: keep Vercel Git Integration for automatic deployments. Use GitHub Actions only for Release Please (creates PRs, tags releases) and Neon branch management. Do not deploy from Actions. |
+| NEXT_PUBLIC_APP_VERSION + Release Please | Release Please updates `package.json` version in the release PR. Vercel builds from the merged commit which has the updated version. But if a workflow step tries to read the version BEFORE the release PR merges, it gets the old version. | Do not read version in the Release Please workflow itself. Let Vercel's post-merge build pick up the updated `package.json` naturally through `next.config.js` line 58: `NEXT_PUBLIC_APP_VERSION: packageJson.version`. |
+| About dialog env label | `VERCEL_ENV` returns `"preview"` for both PR previews and staging deployments (unless using Vercel Pro custom environments). The existing `getEnvLabel()` in `about-dialog.tsx` shows "Preview" for staging. | Add a `NEXT_PUBLIC_ENVIRONMENT` override env var on the staging branch. Check it first: `process.env.NEXT_PUBLIC_ENVIRONMENT \|\| process.env.NEXT_PUBLIC_VERCEL_ENV`. Show "Staging" with a distinct badge color. |
 
----
+## Performance Traps
 
-### Pitfall 11: Playwright Dev Server Startup Timeout in CI
+Patterns that work initially but cause issues at scale.
 
-**What goes wrong:** The Playwright config starts a dev server with `NEXT_PUBLIC_LOCAL_AGENT_MODE=true pnpm run dev` and waits up to 120 seconds. On a slow CI runner or cold cache, the Next.js dev server may take 60-90 seconds to start. This adds dead time to every E2E run. Worse: if the timeout is exceeded, ALL E2E tests fail with a confusing "server not ready" error that looks like a test failure.
+| Trap | Symptoms | Prevention | When It Breaks |
+|------|----------|------------|----------------|
+| Neon staging branch left running indefinitely | Neon Free plan compute hours exhausted mid-month; staging queries start timing out | Use Neon's auto-suspend (default 5min idle). Consider resetting the branch (which recreates it from production snapshot) rather than keeping a long-lived branch accumulating drift. | When Neon free tier compute hours are exhausted (~100 hours/month) |
+| Release Please PR accumulates months of commits | Changelog becomes unwieldy (50+ entries), PR diff is enormous, reviewers cannot meaningfully review | Merge release PRs regularly -- at least per milestone boundary. Release Please PRs are low-risk (only changelog + version bump). | When the release PR has been open for > 4 weeks |
+| Every push to staging branch triggers a Vercel build | Staging branch gets frequent commits from merging main; each triggers a build that counts toward Vercel build minutes | Merge to staging less frequently (weekly, or per-milestone). Or use `vercel.json` with `"git": { "deploymentEnabled": false }` and deploy manually via CLI when needed. | When Vercel Hobby plan build queue gets saturated (100 deploys/day) |
 
-**Prevention:**
-1. **Use `next build && next start` instead of `next dev` for CI.** The production server starts faster and is more deterministic. The dev server compiles on-demand per route, adding latency to every page navigation.
-2. **Cache the Next.js build between CI runs** using `actions/cache` on `.next/cache`.
-3. **Increase the startup timeout to 180s** for CI to account for cold starts.
-4. **Use `webServer.reuseExistingServer: true`** (already configured) so local development can pre-start the server.
+## Security Mistakes
 
-**Detection:** Monitor E2E step duration. If >50% of the time is server startup, switch to production server.
+Domain-specific security issues for this deployment lifecycle.
 
----
+| Mistake | Risk | Prevention |
+|---------|------|------------|
+| Staging `ALLOWED_EMAILS` whitelist misconfigured | If staging has no whitelist (env var unset), `privy-server.ts` line 119 allows ALL authenticated users. Anyone with a Privy account could access the staging API routes. | Set identical `ALLOWED_EMAILS` for staging and production. Verify by calling `/api/version` on staging -- if it returns without auth, the whitelist is not enforced. |
+| `ANTHROPIC_API_KEY` shared between staging and production | Staging AI usage counts against production API quota; if staging key leaks, production key is compromised | Use separate Anthropic API keys. Create a second key in the Anthropic dashboard with staging-appropriate rate limits. |
+| Neon staging branch inherits production `push_subscriptions` data | Staging cron jobs could send real push notifications to production user's devices using the inherited subscription endpoints and VAPID keys | After resetting the staging branch, truncate `push_subscriptions` and `push_sent_log`. Also ensure push notification cron jobs check `VERCEL_ENV` and skip non-production environments. |
+| Release Please GitHub token permissions too broad | `contents: write` + excessive permissions could allow a compromised action to modify repo settings or deploy | Use minimum permissions: `contents: write` and `pull-requests: write` for Release Please. Use the default `GITHUB_TOKEN`, not a PAT. |
+| Staging `VAPID_PRIVATE_KEY` / `VAPID_PUBLIC_KEY` shared with production | Staging push notifications appear to come from production; users cannot distinguish staging test notifications from real ones | Use separate VAPID keys for staging, or disable push notification registration on staging entirely. |
 
-### Pitfall 12: CI Passes But Production Build Fails (Dev-Only Imports)
+## UX Pitfalls
 
-**What goes wrong:** CI runs lint + typecheck + tests using the development configuration. All pass. But `pnpm build` fails because a component imports something that is only available in development (e.g., `fake-indexeddb` leaking into production code, or a dev-only environment variable check). The build failure is only caught if CI includes a build step.
+Issues that affect the developer/operator experience.
 
-**This codebase's specific exposure:**
-- `fake-indexeddb/auto` is imported in `src/__tests__/setup.ts` -- safe. But if a test helper accidentally gets imported from a component file, it pulls fake-indexeddb into the production bundle.
-- The `LOCAL_AGENT_MODE` bypass in auth is controlled by a `NEXT_PUBLIC_` env var. If this check has a bug, production could be bypassed.
+| Pitfall | User Impact | Better Approach |
+|---------|-------------|-----------------|
+| About dialog shows "Preview" for staging | Confusing -- "Is this a PR preview or the stable staging?" The existing `getEnvLabel()` maps `preview` to an amber badge, but staging should be visually distinct. | Add `NEXT_PUBLIC_ENVIRONMENT=staging` env var on the staging branch. Update `getEnvLabel()` to check it. Use a purple or blue badge for staging. |
+| No visual indicator that staging is not production | User accidentally enters real health data into staging, thinking it is the production app | Show a persistent "STAGING" banner or watermark. Use a different favicon or header color on staging. |
+| Release Please PR description is generic | Hard to tell what is included in the release without reading the full changelog | This is Release Please's default behavior and acceptable. The changelog itself is the description. |
+| Neon branch name not visible anywhere in the app | When debugging staging database issues, no way to confirm which Neon branch is connected | Log the Neon branch name (from `DATABASE_URL` hostname) in the `/api/version` route response. Only expose in non-production environments. |
 
-**Prevention:**
-1. **Include `pnpm build` in the CI pipeline**, but only for PRs targeting main (not feature branches, to save time).
-2. **Use ESLint's `no-restricted-imports` rule** to prevent importing from `fake-indexeddb`, `vitest`, or `@playwright/test` in non-test files.
-3. **Verify `LOCAL_AGENT_MODE` is NOT set in production.** CI should have a step that checks the production environment variables.
+## "Looks Done But Isn't" Checklist
 
-**Detection:** Build failure in CI. Caught by including build step in the "slow" pipeline.
+Things that appear complete but are missing critical pieces.
 
----
+- [ ] **Release Please configured:** Version bumps on merge -- but did you verify the CHANGELOG.md is actually populated? Empty changelogs mean conventional commits are not being parsed. Check that merged commits use `feat:`, `fix:`, etc. prefixes. The main branch has older commits without conventional prefixes -- verify `bootstrap-sha` skips those.
+- [ ] **Version-bump.yml deleted:** File removed -- but did you verify no other workflow references it? Check that branch protection rules do not require a status check named "bump-version" or similar.
+- [ ] **Staging domain resolves:** DNS CNAME set up, page loads -- but did you check that the service worker is NOT caching? Open DevTools > Application > Service Workers on staging to verify none is registered. If one is registered from a previous deployment, unregister it manually.
+- [ ] **Neon staging branch exists:** Branch created, connection string set in Vercel -- but did you run the migration script (`push-migration.sql`)? If the branch was created from production and production already has the tables, they are inherited. But if you RESET the branch later, verify tables still exist.
+- [ ] **Privy works on staging:** Login modal appears -- but did you test the FULL flow? Login, whitelist check, PIN gate, API route authorization. The `privy-server.ts` whitelist check uses server-side env vars that may differ between environments.
+- [ ] **CI still passes after adding release.yml:** All 12 jobs green -- but did you verify `ci-pass` gate is unchanged? New workflow files should not affect `ci.yml`, but verify no accidental edits were made during the PR.
+- [ ] **E2E tests can run against staging:** Playwright configured -- but the existing E2E tests run against a local dev server (configured in `playwright.config.ts`). Running against staging requires a separate config or `baseURL` override. This is NOT the same as "E2E tests pass in CI."
+- [ ] **Staging push notifications isolated:** After branch creation/reset -- but did you verify staging cron is not sending to production devices? Query `SELECT count(*) FROM push_subscriptions` on the staging branch. If > 0 and endpoints match production, truncate the table.
+- [ ] **`package.json` version correct:** Updated to match manifest -- but did `NEXT_PUBLIC_APP_VERSION` update too? It is read from `package.json` at build time (`next.config.js` line 58). Trigger a rebuild after updating the version.
 
-### Pitfall 13: Dexie Schema Version Repetition Drift Between Versions
+## Recovery Strategies
 
-**What goes wrong:** Dexie requires repeating the FULL schema definition for every version. The codebase already has 6 versions with the same store definitions copied each time. A future PR adds an index to `intakeRecords` in v16 but forgets to also add it to the v17 declaration they add in the same PR. The index silently disappears from v17 onward.
+When pitfalls occur despite prevention, how to recover.
 
-**This codebase's specific exposure:** The schema definition for `doseLogs` alone is `"id, [prescriptionId+scheduledDate], prescriptionId, phaseId, scheduleId, scheduledDate, scheduledTime, status, updatedAt"` -- a long, dense string that is easy to copy-paste incorrectly. This is repeated verbatim in v10, v11, v12, v13, v14, and v15.
+| Pitfall | Recovery Cost | Recovery Steps |
+|---------|---------------|----------------|
+| Release Please created wrong version | LOW | Delete the GitHub release and tag via `gh release delete v1.3.0 --yes && git push origin :refs/tags/v1.3.0`. Update `.release-please-manifest.json` to correct version, commit to main. |
+| Service worker serving stale staging | MEDIUM | On desktop: DevTools > Application > Service Workers > Unregister. On phone: clear site data for `staging.intake-tracker.ryanjnoble.dev` in browser settings. Then deploy the fix (conditional PWA check) to prevent recurrence. |
+| Neon staging branch has drifted schema | LOW | Run `neonctl branches reset staging --parent` (Neon CLI) or use the Reset Branch GitHub Action. Re-run `psql $STAGING_DATABASE_URL -f scripts/push-migration.sql` if tables were dropped. |
+| Privy auth broken on staging | LOW | Add staging domain to Privy Dashboard > Settings > Allowed origins. No redeploy needed -- Privy checks origins at runtime, not build time. |
+| CI gate broken (new job not wired) | LOW | Update `ci-pass.needs` array and result-checking script in `ci.yml`. Re-run the failed CI check on the PR. |
+| Double deployment from Git Integration + Actions | LOW | Identify which trigger is unwanted. If Git Integration, the deployment auto-cancels if another starts. Check Vercel dashboard for duplicate deployments and cancel the stale one. |
+| Version-bump.yml ran alongside Release Please | MEDIUM | Check git log for bot commits that bumped version incorrectly. Revert the bot commit (`git revert <sha>`), update `.release-please-manifest.json`, delete any incorrect releases/tags. Then verify `version-bump.yml` is deleted. |
+| Staging push notifications sent to production devices | LOW | No permanent damage -- notifications are one-time events. Connect to staging Neon branch and run `TRUNCATE push_subscriptions, push_sent_log;` to prevent recurrence. |
 
-**Prevention:**
-1. **CI schema consistency check:** A script that parses `db.ts` and verifies that the latest version's store definitions are a superset of the previous version's definitions (no accidental index removal).
-2. **Extract store definitions into constants** (already recommended in previous research). This eliminates copy-paste as a failure mode.
-3. **Automated test:** Query each index declared in the latest version and verify it returns results (or at minimum does not throw). The existing v10 migration tests do this for compound indexes -- extend to all versions.
+## Pitfall-to-Phase Mapping
 
-**Detection:** CI script that parses Dexie version declarations and diffs them.
+How roadmap phases should address these pitfalls.
 
----
-
-## Phase-Specific Warnings
-
-| Phase Topic | Likely Pitfall | Mitigation |
-|-------------|---------------|------------|
-| Migration safety gates | Pitfall 1 (no rollback), Pitfall 2 (partial migration), Pitfall 3 (fake-indexeddb vs real browser) | CI must test migrations in both fake-indexeddb (fast) AND Playwright/Chromium (authoritative). Schema diff detection required. |
-| E2E test foundation | Pitfall 5 (flaky from day one), Pitfall 11 (dev server timeout) | Use `data-testid`, disable service workers, start with `retries: 0`, use production build for CI. |
-| Supply chain hardening | Pitfall 4 (minimumReleaseAge bypass) | Lockfile audit + lockfile diff detection + manual review of all dependency updates. minimumReleaseAge is necessary but not sufficient. |
-| Coverage tracking | Pitfall 7 (Goodhart's Law) | Track as metric, gate on coverage decrease only, never set an absolute threshold in v1. |
-| CI orchestration | Pitfall 6 (too slow) | Parallel jobs, path filtering, fast/slow pipeline split, cache everything. |
-| Backup integrity | Pitfall 8 (shallow validators) | Comprehensive field-by-field validation, schema-aware backup format version. |
-| Dynamic test selection | Pitfall 6 (too slow), Pitfall 10 (tz dual-pass) | Path-based filtering for E2E and timezone tests. Only run what changed files could affect. |
-| PWA deployment | Pitfall 9 (stale service worker) | Service worker update notification, defensive migration code, E2E test for update flow. |
-
----
+| Pitfall | Prevention Phase | Verification |
+|---------|------------------|--------------|
+| RP v4 `releases_created` trap | Phase 1: Release Please setup | Merge a non-release commit to main; verify no GitHub Release is created |
+| Package.json/tag version mismatch | Phase 1: Release Please setup | After bootstrap, verify `.release-please-manifest.json` shows `1.2.0` and first RP PR proposes `1.3.0` |
+| Version-bump.yml coexistence | Phase 1: Release Please setup | Verify `version-bump.yml` is deleted and no workflows reference it |
+| CI gate job wiring | Phase 1: Release Please setup | Add `release.yml` as separate file; verify `ci-pass` still passes on a test PR |
+| Service worker on staging | Phase 2: Staging environment | Open staging in browser, verify no service worker registered in DevTools > Application |
+| Preview vs staging confusion | Phase 2: Staging environment | Create a PR; verify preview URL is different from staging URL; verify env vars differ |
+| Privy origin mismatch | Phase 2: Staging environment | Complete a full login flow on staging subdomain including PIN gate |
+| About dialog env label | Phase 2: Staging environment | Check About dialog on staging shows "Staging" not "Preview" |
+| Neon schema drift | Phase 3: Neon branching | Reset staging branch, verify all 4 push tables exist with correct columns |
+| Staging push notification leakage | Phase 3: Neon branching | After staging branch reset, query `push_subscriptions` -- should be empty or contain only test data |
+| Neon free tier compute exhaustion | Phase 3: Neon branching | Monitor Neon dashboard compute hours after 2 weeks of staging usage |
+| Shared API keys (Anthropic, VAPID) | Phase 2: Staging environment | Verify staging uses separate API keys by checking Vercel env vars per environment |
 
 ## Sources
 
-### Dexie.js Migration & Version Management
-- [Dexie.js issue #1599: Version downgrade on rollback](https://github.com/dexie/Dexie.js/issues/1599) -- confirmed: IndexedDB cannot downgrade versions
-- [Dexie.js issue #2097: v4 VersionError relaxation](https://github.com/dexie/Dexie.js/issues/2097) -- confirmed: v4 silently opens newer DBs, creating inconsistent data
-- [Dexie.js issue #942: Upgrade function not running after crash](https://github.com/dfahlander/Dexie.js/issues/942) -- confirmed: partial migration recovery gap
-- [Dexie.js issue #921: Migration of existing IndexedDB](https://github.com/dexie/Dexie.js/issues/921) -- schema declaration requirements
-- [Dexie.js Migrating existing DB documentation](https://dexie.org/docs/Tutorial/Migrating-existing-DB-to-Dexie)
-- [Dexie.js UpgradeError documentation](https://dexie.org/docs/DexieErrors/Dexie.UpgradeError)
+- [Release Please Action (googleapis/release-please-action)](https://github.com/googleapis/release-please-action) -- v4 configuration, output variables
+- [Release Please v4 gotcha report](https://danwakeem.medium.com/beware-the-release-please-v4-github-action-ee71ff9de151) -- `releases_created` vs `release_created` bug
+- [Release Please manifest docs](https://github.com/googleapis/release-please/blob/main/docs/manifest-releaser.md) -- bootstrap-sha, initial version setup
+- [Release Please customizing docs](https://github.com/googleapis/release-please/blob/main/docs/customizing.md) -- release-type, version files
+- [Vercel Environments docs](https://vercel.com/docs/deployments/environments) -- preview vs production vs custom
+- [Vercel staging setup guide](https://vercel.com/kb/guide/set-up-a-staging-environment-on-vercel) -- branch-based domain assignment, environment variables
+- [Vercel environment variables docs](https://vercel.com/docs/environment-variables) -- branch-specific overrides, Preview scope
+- [Neon branching docs](https://neon.com/docs/introduction/branching) -- copy-on-write, branch lifecycle
+- [Neon: Why your staging DB never matches production](https://neon.com/blog/why-your-staging-database-never-matches-production) -- data/schema/transformation drift
+- [Neon: How to keep staging in sync](https://neon.com/blog/how-to-keep-staging-in-sync-with-production-in-postgres) -- reset branch strategy
+- [Neon GitHub Actions automation](https://neon.com/docs/guides/branching-github-actions) -- NEON_API_KEY, reset-branch-action
+- [Privy Settings docs](https://docs.privy.io/guide/dashboard/settings) -- allowed origins, cookie configuration
+- [Privy App Clients docs](https://docs.privy.io/guide/react/configuration/app-clients) -- multi-environment clientId, per-client origins
+- Existing codebase: `ci.yml` (12-job pipeline with gate), `version-bump.yml` (to be replaced), `next.config.js` (PWA conditional + version injection), `push-db.ts` (4 Neon tables), `providers.tsx` (Privy graceful fallback), `about-dialog.tsx` (env label display), `privy-server.ts` (whitelist + dev fallback)
 
-### Supply Chain Security
-- [pnpm supply chain security documentation](https://pnpm.io/supply-chain-security) -- minimumReleaseAge, blockExoticSubdeps, trustPolicy
-- [pnpm issue #10438: minimumReleaseAge lockfile bypass](https://github.com/pnpm/pnpm/issues/10438) -- confirmed: bypass when version in lockfile
-- [CISA: Widespread npm supply chain compromise (Sept 2025)](https://www.cisa.gov/news-events/alerts/2025/09/23/widespread-supply-chain-compromise-impacting-npm-ecosystem)
-- [Cline CLI supply chain attack (Feb 2026)](https://thehackernews.com/2026/02/cline-cli-230-supply-chain-attack.html)
-- [Brief history of npm supply chain attacks in 2025](https://emilyxiong.medium.com/brief-history-of-npm-supply-chain-attacks-in-year-2025-a887dd2e11a4)
-
-### CI & Testing Best Practices
-- [Playwright best practices](https://playwright.dev/docs/best-practices) -- selector strategy, waiting, auto-retrying assertions
-- [Playwright E2E Testing: 12 Best Practices (2026)](https://elionavarrete.com/blog/e2e-best-practices-playwright.html)
-- [BrowserStack: Playwright flaky tests detection (2026)](https://www.browserstack.com/guide/playwright-flaky-tests)
-- [Optimizing GitHub Actions for speed (2025)](https://marcusfelling.com/blog/2025/optimizing-github-actions-workflows-for-speed)
-- [Speed up CI and cut GitHub Actions costs](https://costops.dev/guides/speed-up-ci-pipelines)
-- [FSM1/cipher-box CI workflow](https://github.com/FSM1/cipher-box/tree/main/.github) -- reference for path filtering, parallel jobs, release gates
-
-### Coverage & Metrics
-- [Goodhart's Law in software engineering](https://codepulsehq.com/guides/goodharts-law-engineering-metrics)
-- [Code coverage as a metric](http://softwareascraft.com/posts/code-coverage-as-a-metric/)
-- [Keeping tests valuable: Are coverage metrics trustworthy?](https://chroniclesofapragmaticprogrammer.substack.com/p/keeping-tests-valuable-are-code-coverage)
-
-### Codebase Inspection
-- `src/lib/db.ts` -- 6 Dexie versions (v10-v15), 16 tables, 3 upgrade functions with data transforms
-- `src/lib/backup-service.ts` -- backup format v5, minimal validators, `isContentEqual` exclusion set
-- `src/__tests__/migration/` -- v10-v15 migration tests using fake-indexeddb
-- `src/__tests__/setup.ts` -- test harness: `db.delete()` + `db.open()` per test
-- `e2e/*.spec.ts` -- 3 existing E2E tests with text-based selectors
-- `playwright.config.ts` -- dev server startup, CI retries, chromium-only
-- `.github/workflows/version-bump.yml` -- only existing CI workflow
+---
+*Pitfalls research for: v1.3 Deployment Lifecycle (Release Please + Vercel staging + Neon branching)*
+*Researched: 2026-04-04*
