@@ -55,10 +55,10 @@ function extractJobBlock(jobName: string, yaml: string): string {
 }
 
 describe("CI workflow gates PRs with required checks (CIPL-01)", () => {
-  it("workflow triggers only on pull_request to main branch", () => {
-    // Requirement: every PR to main must be validated (not pushes to arbitrary branches)
+  it("workflow triggers only on pull_request to main and staging branches", () => {
+    // Requirement: every PR to main or staging must be validated (not pushes to arbitrary branches)
     expect(raw).toContain("pull_request:");
-    expect(raw).toContain("branches: [main]");
+    expect(raw).toContain("branches: [main, staging]");
   });
 
   it("required check jobs are all present in the workflow", () => {
