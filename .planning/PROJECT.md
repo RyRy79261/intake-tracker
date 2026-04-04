@@ -10,21 +10,10 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 
 ## Current State
 
-**Shipped:** v1.0 Engineering Overhaul + v1.1 UI Overhaul + v1.2 CI & Data Integrity (Phases 20-26)
-**Codebase:** ~44K LOC TypeScript, Next.js 14 App Router, Dexie.js v15 (IndexedDB)
-
-## Current Milestone: v1.2 CI & Data Integrity
-
-**Goal:** World-class CI pipeline that protects live data integrity above all else, catches regressions through automated UI and scenario testing, and hardens the supply chain against attacks.
-
-**Target features:**
-- Data integrity protection — migration safety gates, schema validation, backup verification in CI
-- E2E UI testing via Playwright — scenario-based, regression-catching, actively exercising the UI
-- Dynamic test selection — affected-path analysis to keep CI fast
-- Code coverage tracking and benchmarking
-- Supply chain security — lockfile audit, 24h package age minimum, no automatic dependency updates
-- CI workflow orchestration — GitHub Actions, parallel jobs, caching
-- Performance profiling (evaluate flame graphs for relevance)
+**Shipped:** v1.0 Engineering Overhaul + v1.1 UI Overhaul + v1.2 CI & Data Integrity
+**Codebase:** ~47K LOC TypeScript, Next.js 14 App Router, Dexie.js v15 (IndexedDB)
+**CI:** 12-job GitHub Actions pipeline — lint, typecheck, dual-TZ tests, build+security, data integrity, E2E (Playwright), supply chain audit, coverage, benchmarks
+**E2E:** 22 Playwright tests across 5 route-mirrored spec files with Privy test account integration
 
 ## Requirements
 
@@ -57,18 +46,17 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 - ✓ Food calculator removed, 13 dead code files deleted — v1.1
 - ✓ Timezone-aware dose log generation for SA/Germany travel — v1.1
 - ✓ Build stability and waterContentPercent for AI-sourced presets — v1.1
+- ✓ Data integrity gates in CI — schema consistency, backup round-trip, three-way table sync — v1.2
+- ✓ E2E scenario testing — Playwright tests exercising real user workflows — v1.2
+- ✓ Comprehensive E2E coverage — 22 tests across 5 route-mirrored spec files, auth lifecycle, analytics pipeline — v1.2
+- ✓ Coverage tracking — delta coverage reports per PR via vitest-coverage-report-action — v1.2
+- ✓ Benchmarking — migration chain + backup round-trip baselines with CI comparison — v1.2
+- ✓ Supply chain hardening — pnpm security config, 24h package age, automated audit in CI — v1.2
+- ✓ CI orchestration — 12-job GitHub Actions with path-based gating, build caching, skip-aware gate — v1.2
 
 ### Active
 
-- ✓ Data integrity gates in CI — schema consistency, backup round-trip deep equality, three-way table sync, unconditional CI job — Phase 21
-- ✓ E2E scenario testing — Playwright tests exercising real user workflows across intake, medications, settings — Phase 22
-- ✓ Coverage tracking — code coverage delta reported per PR via vitest-coverage-report-action — Phase 24
-- ✓ Benchmarking — migration chain + backup round-trip benchmarks with committed baselines and CI comparison — Phase 24
-- ✓ Supply chain hardening — lockfile audit, package age enforcement (24h minimum), no auto-updates — Phase 23
-- ✓ CI orchestration — 12-job GitHub Actions workflow with path-based gating, build caching, coverage, benchmarks, skip-aware gate — Phase 20+24
-- [ ] Dynamic test selection — only run tests affected by changed files to keep CI fast (descoped to path-filter gating)
-- ✓ Comprehensive E2E test coverage — route-mirrored spec files, all dashboard cards, auth lifecycle, analytics pipeline, Privy CI integration — Phase 26
-- [ ] Regression detection — UI visual/functional regression catching on every PR (partial: E2E covers functional)
+(No active requirements — next milestone not yet defined)
 
 ### Out of Scope
 
@@ -78,6 +66,9 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 - Intake page graph improvements — separate milestone (move to insights page)
 - Capacitor Android wrapper — future milestone, PWA-first for now
 - Multi-user support — single-user app
+- Dynamic test selection — descoped to path-filter gating in v1.2, sufficient for current scale
+- Visual regression testing (screenshots) — functional E2E covers regressions adequately for single-user app
+- Flame graph profiling — no server-side hot path; Chrome DevTools sufficient
 
 ## Context
 
@@ -108,6 +99,11 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 | Composable data entries via groupId | groupId on child records (no parent table), atomic transactions, cascading soft-delete | ✓ Good |
 | Perplexity → Anthropic Claude migration | Better medical query handling, tool_use for structured output | ✓ Good |
 | Multi-substance preset model | Per-100ml fields for caffeine/alcohol/salt + waterContentPercent enables accurate hydration tracking | ✓ Good |
+| Path-filter gating over dynamic test selection | dorny/paths-filter is simpler and sufficient at current scale; dynamic selection adds complexity for marginal gain | ✓ Good |
+| Dual-TZ CI testing (SA/Germany) | Catches timezone-sensitive bugs in dose logging and day-start-hour logic | ✓ Good |
+| pnpm security config over external audit tools | minimumReleaseAge + trustPolicy + blockExoticSubdeps built into pnpm, no extra deps | ✓ Good |
+| Privy iframe OTP for E2E auth | Works reliably in headless Chromium; server-side token approaches failed due to Privy Dashboard origin restrictions | ✓ Good |
+| Route-mirrored E2E spec files | One spec per app route makes test ownership clear and scales naturally | ✓ Good |
 
 ## Evolution
 
@@ -127,4 +123,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-04 after Phase 26 completion (v1.2 milestone — comprehensive E2E test coverage)*
+*Last updated: 2026-04-04 after v1.2 milestone completion*
