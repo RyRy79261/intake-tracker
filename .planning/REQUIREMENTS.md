@@ -87,7 +87,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DEP-02 | Phase 29 | Pending |
 | DEP-03 | Phase 29 | Pending |
 | OBS-01 | Phase 30 | Pending |
-| OBS-02 | Phase 30 | Pending |
+| OBS-02 | Phase 31 | Pending |
 
 **Coverage:**
 - v1.3 requirements: 17 total
