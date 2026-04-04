@@ -1,0 +1,55 @@
+name: Promote to Production
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+jobs:
+  pre-promote:
+    # Only run for staging-to-main promotions
+    if: github.head_ref == 'staging'
+    runs-on: ubuntu-latest
+    environment: Production
+    steps:
+      - name: Verify promotion source
+        run: |
+          echo "Promotion PR from staging to main"
+          echo "Source: ${{ github.head_ref }}"
+          echo "Target: ${{ github.base_ref }}"
+          echo "SHA: ${{ github.sha }}"
+
+      - name: Create Neon production snapshot
+        id: snapshot
+        continue-on-error: true
+        run: |
+          SNAPSHOT_NAME="pre-promote-$(echo ${{ github.sha }} | cut -c1-7)-$(date +%Y%m%d)"
+          echo "Creating snapshot: $SNAPSHOT_NAME"
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "https://console.neon.tech/api/v2/projects/${{ secrets.NEON_PROJECT_ID }}/branches/${{ secrets.NEON_PROD_BRANCH_ID }}/snapshots" \
+            -H "Authorization: Bearer ${{ secrets.NEON_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"name\": \"$SNAPSHOT_NAME\"}")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+
+          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+            echo "Snapshot created successfully"
+            echo "snapshot_name=$SNAPSHOT_NAME" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Snapshot creation failed (HTTP $HTTP_CODE): $BODY"
+            echo "::warning::Promotion will continue without snapshot. Check Neon API status."
+            exit 1
+          fi
+
+      - name: Report snapshot status
+        if: always()
+        run: |
+          if [ "${{ steps.snapshot.outcome }}" == "success" ]; then
+            echo "✓ Production snapshot created: ${{ steps.snapshot.outputs.snapshot_name }}"
+          else
+            echo "⚠ Snapshot creation failed — promotion continuing without backup"
+            echo "Consider manually creating a snapshot in the Neon dashboard before merging"
+          fi
