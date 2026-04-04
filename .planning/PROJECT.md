@@ -69,7 +69,7 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 
 <!-- Current scope — v1.3 Deployment Lifecycle -->
 
-- [ ] Automated release pipeline with changelogs, semver, and GitHub Releases
+- [x] Automated release pipeline with changelogs, semver, and GitHub Releases — v1.3 Phase 27
 - [ ] Stable staging environment with isolated Neon DB backend
 - [ ] Tagged promotion flow (staging → production) with approval gates
 - [ ] CI/CD extensibility for future security reviews and platform builds
@@ -120,6 +120,8 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 | pnpm security config over external audit tools | minimumReleaseAge + trustPolicy + blockExoticSubdeps built into pnpm, no extra deps | ✓ Good |
 | Privy iframe OTP for E2E auth | Works reliably in headless Chromium; server-side token approaches failed due to Privy Dashboard origin restrictions | ✓ Good |
 | Route-mirrored E2E spec files | One spec per app route makes test ownership clear and scales naturally | ✓ Good |
+| Release Please over custom version-bump.yml | PR-based version bumps are more visible and reliable than bot commits on main; conventional commits provide clean changelogs | ✓ Good |
+| Commitlint + husky for commit enforcement | Formalizes existing conventional commit practice; hook validates locally, Release Please validates server-side | ✓ Good |
 
 ## Evolution
 
@@ -139,4 +141,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-04 after v1.3 milestone start*
+*Last updated: 2026-04-04 after Phase 27 (Release Automation) completion*
