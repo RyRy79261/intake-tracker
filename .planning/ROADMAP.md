@@ -131,7 +131,7 @@ Phases execute in numeric order: 20 → 21 → 22 → 23 → 24 → 25 → 26
 | 23. Supply Chain Hardening | v1.2 | 3/3 | Complete    | 2026-03-28 |
 | 24. CI Optimization & Benchmarking | v1.2 | 2/2 | Complete    | 2026-03-28 |
 | 25. CI Integration Fixes | v1.2 | 1/1 | Complete    | 2026-03-28 |
-| 26. Comprehensive E2E Test Coverage | v1.2 | 3/3 | Complete   | 2026-04-03 |
+| 26. Comprehensive E2E Test Coverage | v1.2 | 3/4 | Gap Closure | 2026-04-03 |
 
 ### Phase 26: Comprehensive E2E Test Coverage
 
@@ -141,13 +141,14 @@ Phases execute in numeric order: 20 → 21 → 22 → 23 → 24 → 25 → 26
 **Success Criteria** (what must be TRUE):
   1. Five spec files exist mirroring app routes: auth.spec.ts, dashboard.spec.ts, medications.spec.ts, history.spec.ts, settings.spec.ts
   2. All dashboard cards have E2E tests: water, food-salt (AI), coffee preset, blood pressure, weight, urination, defecation
-  3. Auth lifecycle test exercises logout from settings, sees login prompt, re-authenticates via Privy E2E bridge, and reaches dashboard
+  3. Auth lifecycle test exercises logout from settings, sees login prompt, re-authenticates via Privy iframe OTP, and reaches dashboard
   4. Analytics page tests verify tab navigation, empty states, data pipeline (create via UI -> verify in records), and chart SVG container rendering
   5. Settings tests cover theme persistence, day-start persistence, backup export, and account section display
   6. Full E2E suite passes with Privy test account credentials (both locally and in CI)
-**Plans:** 3/3 plans complete
+**Plans:** 4 plans
 
 Plans:
 - [x] 26-01-PLAN.md — Rename spec files to mirror routes, expand dashboard.spec.ts with all card tests
 - [x] 26-02-PLAN.md — Create history.spec.ts for analytics page, expand settings.spec.ts with backup and account tests
 - [x] 26-03-PLAN.md — Expand auth.spec.ts with lifecycle tests, expand medications.spec.ts with daily notes
+- [ ] 26-04-PLAN.md — Gap closure: revert auth to iframe OTP flow, remove @privy-io/node
