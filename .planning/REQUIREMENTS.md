@@ -71,29 +71,29 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| REL-01 | — | Pending |
-| REL-02 | — | Pending |
-| REL-03 | — | Pending |
-| REL-04 | — | Pending |
-| REL-05 | — | Pending |
-| REL-06 | — | Pending |
-| STG-01 | — | Pending |
-| STG-02 | — | Pending |
-| STG-03 | — | Pending |
-| STG-04 | — | Pending |
-| STG-05 | — | Pending |
-| STG-06 | — | Pending |
-| DEP-01 | — | Pending |
-| DEP-02 | — | Pending |
-| DEP-03 | — | Pending |
-| OBS-01 | — | Pending |
-| OBS-02 | — | Pending |
+| REL-01 | Phase 27 | Pending |
+| REL-02 | Phase 27 | Pending |
+| REL-03 | Phase 27 | Pending |
+| REL-04 | Phase 27 | Pending |
+| REL-05 | Phase 27 | Pending |
+| REL-06 | Phase 27 | Pending |
+| STG-01 | Phase 28 | Pending |
+| STG-02 | Phase 28 | Pending |
+| STG-03 | Phase 28 | Pending |
+| STG-04 | Phase 28 | Pending |
+| STG-05 | Phase 28 | Pending |
+| STG-06 | Phase 28 | Pending |
+| DEP-01 | Phase 29 | Pending |
+| DEP-02 | Phase 29 | Pending |
+| DEP-03 | Phase 29 | Pending |
+| OBS-01 | Phase 30 | Pending |
+| OBS-02 | Phase 30 | Pending |
 
 **Coverage:**
 - v1.3 requirements: 17 total
-- Mapped to phases: 0
-- Unmapped: 17 ⚠️
+- Mapped to phases: 17
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-04*
-*Last updated: 2026-04-04 after initial definition*
+*Last updated: 2026-04-04 after roadmap creation*

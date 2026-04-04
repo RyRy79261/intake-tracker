@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Deployment Lifecycle
-status: defining_requirements
+status: ready_to_plan
 stopped_at: ~
 last_updated: "2026-04-04"
-last_activity: 2026-04-04 -- Milestone v1.3 started
+last_activity: 2026-04-04 -- v1.3 roadmap created (4 phases, 17 requirements)
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -21,93 +21,49 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-04)
 
 **Core value:** Accurate, queryable health data across intake, vitals, and medication adherence — structured for cross-domain analysis and future AI querying
-**Current focus:** v1.3 Deployment Lifecycle — defining requirements
+**Current focus:** Phase 27 — Release Automation
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-04-04 — Milestone v1.3 started
+Phase: 27 of 30 (Release Automation)
+Plan: 0 of ? in current phase
+Status: Ready to plan
+Last activity: 2026-04-04 — v1.3 roadmap created (4 phases, 17 requirements)
+
+Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
 **Velocity:**
+- Total plans completed: 76 (44 v1.0 + 16 v1.1 + 16 v1.2)
+- Average duration: ~6 min
+- Total execution time: ~10 hours
 
-- Total plans completed: 60 (44 v1.0 + 16 v1.1)
-- Average duration: ~8 min
-- Total execution time: ~8.5 hours
-
-**v1.1 Summary:**
+**v1.2 Summary:**
 
 | Phase | Plans | Avg/Plan |
 |-------|-------|----------|
-| 12 - Composable Foundation | 2 | 13.5 min |
-| 13 - AI Migration | 1 | 12 min |
-| 14 - Liquids Card | 2 | 9 min |
-| 15 - Food+Salt Card | 2 | 8 min |
-| 16 - Dashboard Modernization | 3 | 9 min |
-| 17 - Timezone Dose Logging | 2 | 6 min |
-| 18 - Settings & Polish | 1 | 6 min |
-| 19 - Build Stability | 1 | 22 min |
+| 20. Core CI Pipeline | 2 | 2 min |
+| 21. Data Integrity Gates | 2 | 2.5 min |
+| 22. E2E Testing in CI | 2 | — |
+| 23. Supply Chain Hardening | 3 | 6.3 min |
+| 24. CI Optimization & Benchmarking | 2 | 2.5 min |
+| 25. CI Integration Fixes | 1 | 6 min |
+| 26. Comprehensive E2E Test Coverage | 4 | 2.5 min |
 
 *Updated after each plan completion*
-| Phase 20 P02 | 2min | 1 tasks | 1 files |
-| Phase 21 P01 | 3min | 3 tasks | 3 files |
-| Phase 21 P02 | 2min | 2 tasks | 2 files |
-| Phase 23 P01 | 13min | 1 tasks | 4 files |
-| Phase 23 P02 | 1min | 1 tasks | 1 files |
-| Phase 23 P03 | 5min | 2 tasks | 2 files |
-| Phase 24 P01 | 3min | 2 tasks | 5 files |
-| Phase 24 P02 | 2min | 1 tasks | 1 files |
-| Phase 25 P01 | 6min | 2 tasks | 4 files |
-| Phase 26 P01 | 2min | 2 tasks | 3 files |
-| Phase 26 P02 | 3min | 2 tasks | 2 files |
-| Phase 26 P03 | 3min | 2 tasks | 2 files |
-| Phase 26 P04 | 2min | 2 tasks | 0 files |
 
 ## Accumulated Context
 
 ### Decisions
 
 Decisions are logged in PROJECT.md Key Decisions table.
-Key decisions carrying forward into v1.2:
+Recent decisions affecting current work:
 
-- [v1.0]: 203 unit tests + 6 migration tests + backup round-trip test already exist
-- [v1.0]: Bundle security scanner already implemented (checks for leaked secrets)
-- [v1.0]: Dual-timezone test pass (TZ=Africa/Johannesburg + TZ=Europe/Berlin) established
-- [v1.1]: Dexie schema at v15 with 16 tables — migration chain v10-v15 has known complexity
-- [v1.2-research]: Zero new npm packages needed — all from existing deps + pnpm config + free GitHub Actions
-- [v1.2-research]: fake-indexeddb does not replicate browser-specific migration behavior — acknowledged limitation
-
-- [v1.2-20-01]: Non-null assertion pattern for array index accesses in tests (concise + type-safe)
-- [v1.2-20-01]: ServiceResult narrowing with throw guard for readable test assertions
-- [Phase 20]: Node 20 for CI runners (Node 18 EOL); explicit per-job result checks in gate (avoids runner bug #1540)
-- [Phase 21]: Static file reading via fs.readFileSync for integrity tests (avoids Dexie init side effects)
-- [Phase 21]: Explicit TABLE_TO_FIXTURE mapping for three-way sync (handles naming inconsistencies safely)
-- [Phase 21]: JSON.stringify deep equality for backup round-trip field verification (matches existing isContentEqual pattern)
-- [Phase 21]: Unconditional data-integrity CI job (no path-filter) ensures db.ts changes always trigger integrity tests
-- [Phase 23]: trustPolicyExclude for 5 packages with legitimate trust regressions
-- [Phase 23]: GHSA-h25m-26qc-wcjf ignored: Next.js RSC DoS only affects 15+ RSC; app uses 14.x
-- [Phase 23]: pnpm 10.30 auditConfig.ignoreCves not read by CLI; CI must use --ignore flag
-- [Phase 23]: Rollup override removed: breaks next-pwa build; accepted for transitive-only usage
-- [Phase 23]: Dedicated supply-chain CI job for clear failure attribution; config drift checks pnpm-workspace.yaml (not .npmrc)
-- [Phase 23]: Overrides for minimatch/picomatch not honored by incremental pnpm install; added to ignoreCves instead of deleting lockfile
-- [Phase 23]: 6 --ignore flags in CI audit step mirror auditConfig.ignoreCves exactly (pnpm 10.30 workaround)
-- [Phase 24]: Bench files must import fake-indexeddb/auto directly (vitest bench skips setupFiles)
-- [Phase 24]: Baseline benchmark JSON committed to repo for vitest bench --compare in CI
-- [Phase 24]: Coverage job uses sequential dual-branch approach (base then PR) in single job for simplicity
-- [Phase 24]: Benchmark CI uses --compare (read-only) to avoid overwriting committed baselines
-- [Phase 24]: ci-pass gate splits unconditional (must succeed) from gated (success or skipped) job checks
-- [Phase 25]: ES2020 target chosen as minimum needed for TS1501/TS2802 fixes (not ESNext) since it only affects tsc --noEmit
-- [Phase 25]: Added .claude/** to vitest exclude and benchmark.exclude to prevent worktree bench file discovery
-- [Phase 26]: Route-mirrored spec file naming convention: spec files match app routes (dashboard.spec.ts for /, medications.spec.ts for /medications)
-- [Phase 26]: Section ID scoping pattern (#section-{name}) for card-specific E2E interactions
-- [Phase 26]: Navigate to /analytics not /history in E2E tests (redirect pitfall)
-- [Phase 26]: D-11 chart assertion: check SVG container presence only, never path values
-- [Phase 26]: D-12 data pipeline: create data via dashboard UI then verify in analytics
-- [Phase 26]: Used Privy iframe re-auth (not __privyE2E bridge) for logout/re-login E2E test — bridge doesn't exist in codebase
-- [Phase 26]: No code changes needed for Plan 04: committed auth.setup.ts and auth.spec.ts already use iframe OTP flow; UAT failures came from uncommitted working-directory modifications
+- [v1.3 roadmap]: 4 phases (27-30) derived from 17 requirements across Release Automation, Staging, Deployment Protection, and Observability
+- [v1.3 roadmap]: Phase 30 (Observability) depends on Phase 27 (not 29) — version display needs Release Please, not the promotion workflow
+- [v1.3 research]: All research HIGH confidence; no phases require additional research
+- [v1.3 research]: bootstrap-sha `a3a0b2d` identified as v1.2 completion commit — verify at Phase 27 execution time
 
 ### Pending Todos
 
@@ -115,7 +71,9 @@ None yet.
 
 ### Blockers/Concerns
 
-None.
+- REL-05 bootstrap-sha: Research identified `a3a0b2d` as v1.2 completion commit. Verify still correct when Phase 27 executes.
+- Neon free tier: ~100h/month compute with 5-min auto-suspend. Monitor after first two weeks of staging.
+- ALLOWED_EMAILS on staging: Must mirror production whitelist or auth allows all users.
 
 ### Quick Tasks Completed
 
@@ -128,12 +86,11 @@ None.
 
 - v1.0 shipped 2026-03-23 (Phases 1-11) — archived 2026-03-27
 - v1.1 shipped 2026-03-27 (Phases 12-19) — archived 2026-03-27
-- v1.2 roadmap created 2026-03-27 (Phases 20-24)
-- Phase 26 added: Comprehensive E2E Test Coverage
+- v1.2 shipped 2026-04-04 (Phases 20-26) — archived 2026-04-04
+- v1.3 roadmap created 2026-04-04 (Phases 27-30)
 
 ## Session Continuity
 
-Last activity: 2026-04-03 - Phase 26 Wave 1 complete (Plans 01+02)
-Last session: 2026-04-04T12:54:33.381Z
-Stopped at: Completed 26-04-PLAN.md
+Last session: 2026-04-04
+Stopped at: v1.3 roadmap created, ready to plan Phase 27
 Resume file: None
