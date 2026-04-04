@@ -37,7 +37,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 27: Release Automation** - Replace fragile version-bump with Release Please pipeline producing changelogs, semver tags, and GitHub Releases (completed 2026-04-04)
 - [x] **Phase 28: Staging Environment** - Stable staging URL with isolated Neon DB, disabled service worker, and configured auth (completed 2026-04-04)
 - [x] **Phase 29: Deployment Protection** - Branch protection, environment gates, and promotion workflow for production deployments (completed 2026-04-04)
-- [ ] **Phase 30: Observability & Rollback** - Version visibility in the app and documented recovery procedures
+- [x] **Phase 30: Observability & Rollback** - Version visibility in the app and documented recovery procedures (completed 2026-04-04)
 
 ## Phase Details
 
@@ -102,4 +102,4 @@ Phases execute in numeric order: 27 → 28 → 29 → 30
 | 27. Release Automation | v1.3 | 3/3 | Complete    | 2026-04-04 |
 | 28. Staging Environment | v1.3 | 4/4 | Complete    | 2026-04-04 |
 | 29. Deployment Protection | v1.3 | 2/2 | Complete    | 2026-04-04 |
-| 30. Observability & Rollback | v1.3 | 0/? | Not started | - |
+| 30. Observability & Rollback | v1.3 | 2/2 | Complete    | 2026-04-04 |
