@@ -22,7 +22,8 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "bench": "vitest bench",
-    "bench:ci": "vitest bench --outputJson benchmarks/results.json && node -e \"const f='benchmarks/results.json';const d=JSON.parse(require('fs').readFileSync(f,'utf8'));d.files.forEach(e=>{e.filepath=e.filepath.replace(process.cwd()+'/','')});require('fs').writeFileSync(f,JSON.stringify(d,null,2)+'\\n')\""
+    "bench:ci": "vitest bench --outputJson benchmarks/results.json && node -e \"const f='benchmarks/results.json';const d=JSON.parse(require('fs').readFileSync(f,'utf8'));d.files.forEach(e=>{e.filepath=e.filepath.replace(process.cwd()+'/','')});require('fs').writeFileSync(f,JSON.stringify(d,null,2)+'\\n')\"",
+    "prepare": "husky"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",
@@ -68,6 +69,8 @@
   },
   "devDependencies": {
     "@babel/core": "^7.28.6",
+    "@commitlint/cli": "^20.5.0",
+    "@commitlint/config-conventional": "^20.5.0",
     "@playwright/test": "^1.58.2",
     "@privy-io/node": "^0.12.0",
     "@types/node": "^22.8.1",
@@ -80,6 +83,7 @@
     "eslint": "^8.57.1",
     "eslint-config-next": "14.2.35",
     "fake-indexeddb": "^6.2.5",
+    "husky": "^9.1.7",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.14",
     "typescript": "^5.6.3",
