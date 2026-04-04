@@ -23,27 +23,35 @@ test.describe('Authentication', () => {
     // After logout, AuthGuard shows "Sign in Required" card
     await expect(page.locator('text=Sign in Required')).toBeVisible({ timeout: 15000 });
 
-    // Step 4: Re-authenticate via Privy modal (same approach as auth.setup.ts)
-    // Click the "Sign In" button rendered by AuthGuard
-    await page.locator('button', { hasText: 'Sign In' }).click();
+    // Step 4: Re-authenticate via __privyE2E bridge (same approach as auth.setup.ts)
+    // The E2EAuthBridge component re-exposes the bridge after PrivyProvider re-mounts
+    const email = process.env.PRIVY_TEST_EMAIL!;
+    const otp = process.env.PRIVY_TEST_OTP!;
 
-    // Privy opens a modal dialog (iframe from auth.privy.io)
-    const privyFrame = page.frameLocator('iframe[title*="privy"], iframe[src*="auth.privy.io"]');
+    // Wait for the E2E bridge to become available again after logout
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await page.waitForFunction(
+      () => (window as any).__privyE2E != null,
+      { timeout: 30000 },
+    );
 
-    // Enter test email
-    const emailInput = privyFrame.getByRole('textbox');
-    await emailInput.waitFor({ state: 'visible', timeout: 15000 });
-    await emailInput.fill(process.env.PRIVY_TEST_EMAIL ?? '');
-    await emailInput.press('Enter');
+    // Use Privy's headless login — no modal/iframe interaction needed
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await page.evaluate(async (e: string) => {
+      await (window as any).__privyE2E.sendCode(e);
+    }, email);
 
-    // Enter test OTP (Privy test accounts have a fixed OTP)
-    const otpInput = privyFrame.locator('input[type="text"], input[autocomplete="one-time-code"]').first();
-    await otpInput.waitFor({ state: 'visible', timeout: 10000 });
+    // Wait for Privy OTP state machine to reach 'awaiting-code-input'
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await page.waitForFunction(
+      () => (window as any).__privyE2E?.state?.status === 'awaiting-code-input',
+      { timeout: 15000 },
+    );
 
-    // Privy OTP uses individual digit inputs — type the full OTP
-    const otp = process.env.PRIVY_TEST_OTP ?? '';
-    await privyFrame.locator('input').first().focus();
-    await page.keyboard.type(otp);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await page.evaluate(async (code: string) => {
+      await (window as any).__privyE2E.loginWithCode(code);
+    }, otp);
 
     // Step 5: Verify dashboard returns after re-authentication
     await expect(page.locator('#section-water')).toBeVisible({ timeout: 15000 });

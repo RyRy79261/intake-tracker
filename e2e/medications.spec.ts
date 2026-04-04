@@ -195,7 +195,7 @@ test.describe('Medications', () => {
     await expect(page.locator('text=Add a prescription')).toBeVisible({ timeout: 10000 });
 
     // Navigate to the Meds tab (labeled "Meds" in MedTabBar)
-    await page.locator('button', { hasText: 'Meds' }).click();
+    await page.locator('button', { hasText: 'Meds' }).nth(1).click();
     // Meds tab should be visible (CompoundList renders)
 
     // Navigate to the Rx tab (labeled "Rx" in MedTabBar, shows PrescriptionsView)

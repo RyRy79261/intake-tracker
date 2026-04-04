@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PrivyProvider } from "@privy-io/react-auth";
 import { ThemeProvider, useTheme } from "next-themes";
@@ -72,6 +72,7 @@ function PrivyProviderWithTheme({
     </PrivyProvider>
   );
 }
+
 
 function TimezoneGuard({ children }: { children: React.ReactNode }) {
   const {

@@ -84,8 +84,12 @@ export function useAuth() {
     getAccessToken,
     // Helper to get auth header for API calls
     getAuthHeader: async () => {
-      const token = await getAccessToken();
-      return token ? { Authorization: `Bearer ${token}` } : {};
+      try {
+        const token = await getAccessToken();
+        return token ? { Authorization: `Bearer ${token}` } : {};
+      } catch {
+        return {};
+      }
     },
   };
 }

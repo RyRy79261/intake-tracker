@@ -1,4 +1,10 @@
 import { defineConfig, devices } from '@playwright/test';
+import { resolve } from 'node:path';
+import { existsSync } from 'node:fs';
+
+// Load .env.local so PRIVY_TEST_* vars are available to auth.setup.ts
+const envLocal = resolve(__dirname, '.env.local');
+if (existsSync(envLocal)) process.loadEnvFile(envLocal);
 
 /**
  * See https://playwright.dev/docs/test-configuration.
