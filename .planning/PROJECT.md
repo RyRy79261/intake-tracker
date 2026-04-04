@@ -8,6 +8,17 @@ A personal health tracking PWA for monitoring daily intake (water, salt, caffein
 
 Accurate, queryable health data across all domains — intake, vitals, bodily functions, and medication adherence — structured so that cross-domain analysis (e.g., correlating fluid intake with urination and weight) is reliable and future AI querying is possible.
 
+## Current Milestone: v1.3 Deployment Lifecycle
+
+**Goal:** Establish a production-grade release and deployment pipeline — automated versioning, GitHub Releases, stable staging environment with isolated backend, and extensible CI/CD foundations for future platform targets.
+
+**Target features:**
+- Automated release pipeline (Release Please or equivalent) with changelogs, semver, and GitHub Releases
+- Stable staging environment (`staging.intake-tracker.ryanjnoble.dev`) with its own Neon DB branch
+- Tagged promotion flow (staging → production) with approval gates
+- CI/CD extensibility points for future security reviews, platform builds, and DevOps additions
+- Replace current `version-bump.yml` with proper release automation
+
 ## Current State
 
 **Shipped:** v1.0 Engineering Overhaul + v1.1 UI Overhaul + v1.2 CI & Data Integrity
@@ -56,7 +67,12 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 
 ### Active
 
-(No active requirements — next milestone not yet defined)
+<!-- Current scope — v1.3 Deployment Lifecycle -->
+
+- [ ] Automated release pipeline with changelogs, semver, and GitHub Releases
+- [ ] Stable staging environment with isolated Neon DB backend
+- [ ] Tagged promotion flow (staging → production) with approval gates
+- [ ] CI/CD extensibility for future security reviews and platform builds
 
 ### Out of Scope
 
@@ -64,7 +80,7 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 - AI-powered data querying / natural language questions — future milestone
 - Doctor-ready report generation / PDF export — future milestone
 - Intake page graph improvements — separate milestone (move to insights page)
-- Capacitor Android wrapper — future milestone, PWA-first for now
+- Native/Android app (Capacitor, Tauri, or similar) — future milestone, PWA-first for now
 - Multi-user support — single-user app
 - Dynamic test selection — descoped to path-filter gating in v1.2, sufficient for current scale
 - Visual regression testing (screenshots) — functional E2E covers regressions adequately for single-user app
@@ -123,4 +139,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-04 after v1.2 milestone completion*
+*Last updated: 2026-04-04 after v1.3 milestone start*

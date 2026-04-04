@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.2
-milestone_name: CI & Data Integrity
-status: milestone_complete
-stopped_at: v1.2 milestone shipped
+milestone: v1.3
+milestone_name: Deployment Lifecycle
+status: defining_requirements
+stopped_at: ~
 last_updated: "2026-04-04"
-last_activity: 2026-04-04 -- v1.2 milestone complete
+last_activity: 2026-04-04 -- Milestone v1.3 started
 progress:
-  total_phases: 7
-  completed_phases: 7
-  total_plans: 16
-  completed_plans: 16
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -21,15 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-04)
 
 **Core value:** Accurate, queryable health data across intake, vitals, and medication adherence — structured for cross-domain analysis and future AI querying
-**Current focus:** Planning next milestone
+**Current focus:** v1.3 Deployment Lifecycle — defining requirements
 
 ## Current Position
 
-Milestone: v1.2 complete
-Status: Ready for next milestone
-Last activity: 2026-04-04
-
-Progress: [████████░░] 84%
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-04-04 — Milestone v1.3 started
 
 ## Performance Metrics
 
