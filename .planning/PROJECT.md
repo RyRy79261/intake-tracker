@@ -10,7 +10,7 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 
 ## Current State
 
-**Shipped:** v1.0 Engineering Overhaul + v1.1 UI Overhaul + v1.2 CI & Data Integrity (Phases 20-25)
+**Shipped:** v1.0 Engineering Overhaul + v1.1 UI Overhaul + v1.2 CI & Data Integrity (Phases 20-26)
 **Codebase:** ~44K LOC TypeScript, Next.js 14 App Router, Dexie.js v15 (IndexedDB)
 
 ## Current Milestone: v1.2 CI & Data Integrity
@@ -67,6 +67,7 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 - ✓ Supply chain hardening — lockfile audit, package age enforcement (24h minimum), no auto-updates — Phase 23
 - ✓ CI orchestration — 12-job GitHub Actions workflow with path-based gating, build caching, coverage, benchmarks, skip-aware gate — Phase 20+24
 - [ ] Dynamic test selection — only run tests affected by changed files to keep CI fast (descoped to path-filter gating)
+- ✓ Comprehensive E2E test coverage — route-mirrored spec files, all dashboard cards, auth lifecycle, analytics pipeline, Privy CI integration — Phase 26
 - [ ] Regression detection — UI visual/functional regression catching on every PR (partial: E2E covers functional)
 
 ### Out of Scope
@@ -126,4 +127,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-28 after Phase 25 completion (v1.2 milestone — all CI defects resolved)*
+*Last updated: 2026-04-04 after Phase 26 completion (v1.2 milestone — comprehensive E2E test coverage)*
