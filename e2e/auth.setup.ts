@@ -17,28 +17,17 @@ setup('authenticate via Privy test account', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: /sign in/i }).click();
 
-  // 2. Privy modal opens — enter test email
-  const dialog = page.locator('#privy-dialog');
-  await expect(dialog).toBeVisible({ timeout: 10000 });
-  const emailInput = dialog.locator('input[type="email"]');
+  // 2. Privy modal opens — wait for the email input inside the dialog
+  //    (the dialog container uses CSS transitions that Playwright sees as "hidden")
+  const emailInput = page.locator('#privy-modal-content input[type="email"]');
+  await emailInput.waitFor({ state: 'visible', timeout: 10000 });
   await emailInput.fill(testEmail);
-  await dialog.getByRole('button', { name: /submit|continue|log in/i }).click();
+  await emailInput.press('Enter');
 
-  // 3. Enter OTP code — Privy renders individual digit inputs
-  const otpInputs = dialog.locator('input[autocomplete="one-time-code"], input[inputmode="numeric"], input[data-index]');
-  const otpCount = await otpInputs.count();
-  if (otpCount > 1) {
-    // Individual digit inputs
-    for (let i = 0; i < otpCount && i < testOtp.length; i++) {
-      await otpInputs.nth(i).fill(testOtp[i]);
-    }
-  } else if (otpCount === 1) {
-    // Single OTP input
-    await otpInputs.first().fill(testOtp);
-  } else {
-    // Fallback: type into the focused element
-    await page.keyboard.type(testOtp);
-  }
+  // 3. Enter OTP code — type digits into the focused input
+  //    Wait for the OTP screen to appear
+  await page.locator('#privy-modal-content input').first().waitFor({ state: 'visible', timeout: 10000 });
+  await page.keyboard.type(testOtp);
 
   // 4. Wait for auth to complete — dashboard should appear
   await expect(page.locator('#section-water')).toBeVisible({ timeout: 30000 });
