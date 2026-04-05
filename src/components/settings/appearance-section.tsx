@@ -23,7 +23,7 @@ export function AppearanceSection() {
       <div className="space-y-3 pl-6">
         <div className="space-y-2">
           <Label htmlFor="theme">Theme</Label>
-          <Select value={theme} onValueChange={setTheme}>
+          <Select {...(theme !== undefined && { value: theme })} onValueChange={setTheme}>
             <SelectTrigger id="theme" className="w-full">
               <SelectValue placeholder="Select theme" />
             </SelectTrigger>

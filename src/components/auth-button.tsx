@@ -5,6 +5,12 @@ import { Button } from "@/components/ui/button";
 import { LogIn, LogOut, User } from "lucide-react";
 
 export function AuthButton() {
+  if (!process.env.NEXT_PUBLIC_PRIVY_APP_ID) return null;
+
+  return <PrivyAuthButton />;
+}
+
+function PrivyAuthButton() {
   const { ready, authenticated, login, logout, user } = usePrivy();
 
   // Show nothing while Privy is initializing

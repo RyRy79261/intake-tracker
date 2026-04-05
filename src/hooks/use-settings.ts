@@ -25,29 +25,3 @@ export function useSaltSettings() {
   return { increment, limit, setIncrement, setLimit };
 }
 
-export function usePerplexityKey() {
-  const obfuscatedKey = useSettingsStore((s) => s.perplexityApiKey);
-  const setApiKey = useSettingsStore((s) => s.setPerplexityApiKey);
-  const getDeobfuscatedApiKey = useSettingsStore((s) => s.getDeobfuscatedApiKey);
-
-  return { 
-    // For display purposes (shows obfuscated)
-    hasKey: !!obfuscatedKey,
-    // For setting the key
-    setApiKey, 
-    // For actual API calls - deobfuscates on demand
-    getApiKey: getDeobfuscatedApiKey,
-  };
-}
-
-export function useAiAuthSecret() {
-  const obfuscatedSecret = useSettingsStore((s) => s.aiAuthSecret);
-  const setAuthSecret = useSettingsStore((s) => s.setAiAuthSecret);
-  const getDeobfuscatedAuthSecret = useSettingsStore((s) => s.getDeobfuscatedAuthSecret);
-
-  return {
-    hasSecret: !!obfuscatedSecret,
-    setAuthSecret,
-    getAuthSecret: getDeobfuscatedAuthSecret,
-  };
-}

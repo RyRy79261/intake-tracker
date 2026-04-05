@@ -117,11 +117,12 @@ export async function verifyAndCheckWhitelist(
 
     // If no whitelist is configured, allow all authenticated users
     if (allowedEmails.length === 0 && allowedWallets.length === 0) {
+      const firstWallet = userWallets[0];
       return {
         success: true,
         userId,
-        email: userEmail,
-        wallet: userWallets[0],
+        ...(userEmail !== undefined && { email: userEmail }),
+        ...(firstWallet !== undefined && { wallet: firstWallet }),
       };
     }
 

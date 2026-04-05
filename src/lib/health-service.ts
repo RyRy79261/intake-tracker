@@ -1,5 +1,6 @@
 import { db, type WeightRecord, type BloodPressureRecord } from "./db";
-import { generateId } from "./utils";
+import { ok, err, type ServiceResult } from "./service-result";
+import { generateId, syncFields } from "./utils";
 
 // Weight Records
 
@@ -7,26 +8,27 @@ export async function addWeightRecord(
   weight: number,
   timestamp?: number,
   note?: string
-): Promise<WeightRecord> {
-  const record: WeightRecord = {
-    id: generateId(),
-    weight,
-    timestamp: timestamp ?? Date.now(),
-    note,
-  };
+): Promise<ServiceResult<WeightRecord>> {
+  try {
+    const trimmedNote = note?.trim();
+    const record: WeightRecord = {
+      id: generateId(),
+      weight,
+      timestamp: timestamp ?? Date.now(),
+      ...(trimmedNote !== undefined && trimmedNote !== "" && { note: trimmedNote }),
+      ...syncFields(),
+    };
 
-  await db.weightRecords.add(record);
-  return record;
+    await db.weightRecords.add(record);
+    return ok(record);
+  } catch (e) {
+    return err("Failed to add weight record", e);
+  }
 }
 
 export async function getWeightRecords(limit?: number): Promise<WeightRecord[]> {
-  let query = db.weightRecords.orderBy("timestamp").reverse();
-
-  if (limit) {
-    return query.limit(limit).toArray();
-  }
-
-  return query.toArray();
+  const query = db.weightRecords.orderBy("timestamp").reverse();
+  return limit ? query.limit(limit).toArray() : query.toArray();
 }
 
 export async function getWeightRecordsByDateRange(
@@ -40,19 +42,29 @@ export async function getWeightRecordsByDateRange(
 }
 
 export async function getLatestWeightRecord(): Promise<WeightRecord | undefined> {
-  const records = await getWeightRecords(1);
+  const records = await db.weightRecords.orderBy("timestamp").reverse().limit(1).toArray();
   return records[0];
 }
 
-export async function deleteWeightRecord(id: string): Promise<void> {
-  await db.weightRecords.delete(id);
+export async function deleteWeightRecord(id: string): Promise<ServiceResult<void>> {
+  try {
+    await db.weightRecords.delete(id);
+    return ok(undefined);
+  } catch (e) {
+    return err("Failed to delete weight record", e);
+  }
 }
 
 export async function updateWeightRecord(
   id: string,
   updates: { weight?: number; timestamp?: number; note?: string }
-): Promise<void> {
-  await db.weightRecords.update(id, updates);
+): Promise<ServiceResult<void>> {
+  try {
+    await db.weightRecords.update(id, updates);
+    return ok(undefined);
+  } catch (e) {
+    return err("Failed to update weight record", e);
+  }
 }
 
 // Blood Pressure Records
@@ -66,31 +78,32 @@ export async function addBloodPressureRecord(
   timestamp?: number,
   note?: string,
   irregularHeartbeat?: boolean
-): Promise<BloodPressureRecord> {
-  const record: BloodPressureRecord = {
-    id: generateId(),
-    systolic,
-    diastolic,
-    heartRate,
-    irregularHeartbeat: irregularHeartbeat ?? undefined,
-    position,
-    arm,
-    timestamp: timestamp ?? Date.now(),
-    note,
-  };
+): Promise<ServiceResult<BloodPressureRecord>> {
+  try {
+    const trimmedNote = note?.trim();
+    const record: BloodPressureRecord = {
+      id: generateId(),
+      systolic,
+      diastolic,
+      ...(heartRate !== undefined && { heartRate }),
+      ...(irregularHeartbeat !== undefined && { irregularHeartbeat }),
+      position,
+      arm,
+      timestamp: timestamp ?? Date.now(),
+      ...(trimmedNote !== undefined && trimmedNote !== "" && { note: trimmedNote }),
+      ...syncFields(),
+    };
 
-  await db.bloodPressureRecords.add(record);
-  return record;
+    await db.bloodPressureRecords.add(record);
+    return ok(record);
+  } catch (e) {
+    return err("Failed to add blood pressure record", e);
+  }
 }
 
 export async function getBloodPressureRecords(limit?: number): Promise<BloodPressureRecord[]> {
-  let query = db.bloodPressureRecords.orderBy("timestamp").reverse();
-
-  if (limit) {
-    return query.limit(limit).toArray();
-  }
-
-  return query.toArray();
+  const query = db.bloodPressureRecords.orderBy("timestamp").reverse();
+  return limit ? query.limit(limit).toArray() : query.toArray();
 }
 
 export async function getBloodPressureRecordsByDateRange(
@@ -104,12 +117,17 @@ export async function getBloodPressureRecordsByDateRange(
 }
 
 export async function getLatestBloodPressureRecord(): Promise<BloodPressureRecord | undefined> {
-  const records = await getBloodPressureRecords(1);
+  const records = await db.bloodPressureRecords.orderBy("timestamp").reverse().limit(1).toArray();
   return records[0];
 }
 
-export async function deleteBloodPressureRecord(id: string): Promise<void> {
-  await db.bloodPressureRecords.delete(id);
+export async function deleteBloodPressureRecord(id: string): Promise<ServiceResult<void>> {
+  try {
+    await db.bloodPressureRecords.delete(id);
+    return ok(undefined);
+  } catch (e) {
+    return err("Failed to delete blood pressure record", e);
+  }
 }
 
 export async function updateBloodPressureRecord(
@@ -124,8 +142,13 @@ export async function updateBloodPressureRecord(
     timestamp?: number;
     note?: string;
   }
-): Promise<void> {
-  await db.bloodPressureRecords.update(id, updates);
+): Promise<ServiceResult<void>> {
+  try {
+    await db.bloodPressureRecords.update(id, updates);
+    return ok(undefined);
+  } catch (e) {
+    return err("Failed to update blood pressure record", e);
+  }
 }
 
 // Pagination helpers
@@ -136,50 +159,32 @@ export interface PaginatedResult<T> {
   total: number;
 }
 
-/**
- * Get paginated weight records
- */
 export async function getWeightRecordsPaginated(
   page: number = 1,
   limit: number = 20
 ): Promise<PaginatedResult<WeightRecord>> {
   const offset = (page - 1) * limit;
   const total = await db.weightRecords.count();
-  
   const records = await db.weightRecords
     .orderBy("timestamp")
     .reverse()
     .offset(offset)
     .limit(limit)
     .toArray();
-  
-  return {
-    records,
-    hasMore: offset + records.length < total,
-    total,
-  };
+  return { records, hasMore: offset + records.length < total, total };
 }
 
-/**
- * Get paginated blood pressure records
- */
 export async function getBloodPressureRecordsPaginated(
   page: number = 1,
   limit: number = 20
 ): Promise<PaginatedResult<BloodPressureRecord>> {
   const offset = (page - 1) * limit;
   const total = await db.bloodPressureRecords.count();
-  
   const records = await db.bloodPressureRecords
     .orderBy("timestamp")
     .reverse()
     .offset(offset)
     .limit(limit)
     .toArray();
-  
-  return {
-    records,
-    hasMore: offset + records.length < total,
-    total,
-  };
+  return { records, hasMore: offset + records.length < total, total };
 }

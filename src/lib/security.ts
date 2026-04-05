@@ -1,12 +1,10 @@
 /**
  * Security utilities for the Intake Tracker app.
- * 
+ *
  * SECURITY NOTES:
  * - This app stores health data locally on the device using IndexedDB
- * - API keys are stored in localStorage (browser-level storage)
- * - For maximum security, consider using a password manager for API keys
- *   and only entering them when needed, rather than persisting them
- * 
+ * - API keys are stored server-side only (never in client storage)
+ *
  * LIMITATIONS:
  * - Browser storage (localStorage/IndexedDB) is NOT encrypted at rest
  * - Anyone with physical access to the device can access this data
@@ -20,12 +18,10 @@ const OBFUSCATION_KEY = 'intake-tracker-v1';
 export function obfuscateApiKey(key: string): string {
   if (!key) return '';
   try {
-    // Simple XOR obfuscation - NOT cryptographically secure
-    // This just prevents the key from being visible in plain text in storage
     const encoded = btoa(
       key
         .split('')
-        .map((char, i) => 
+        .map((char, i) =>
           String.fromCharCode(char.charCodeAt(0) ^ OBFUSCATION_KEY.charCodeAt(i % OBFUSCATION_KEY.length))
         )
         .join('')
@@ -38,8 +34,8 @@ export function obfuscateApiKey(key: string): string {
 
 export function deobfuscateApiKey(obfuscated: string): string {
   if (!obfuscated) return '';
-  if (!obfuscated.startsWith('obf:')) return obfuscated; // Legacy plain text
-  
+  if (!obfuscated.startsWith('obf:')) return obfuscated;
+
   try {
     const encoded = obfuscated.slice(4);
     const decoded = atob(encoded);
@@ -98,14 +94,26 @@ export function getSecurityWarnings(): string[] {
   return warnings;
 }
 
-// Data minimization helper for Perplexity API
+// Data minimization helper for AI API
 // Strips any potentially sensitive info before sending to AI
 export function sanitizeForAI(input: string): string {
-  // Remove potential PII patterns (emails, phone numbers, etc.)
+  // Remove potential PII patterns
   return input
+    // Email addresses
     .replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g, '[email]')
+    // International phone numbers: +27 12 345 6789, +49-123-4567890, etc.
+    .replace(/\+\d{1,3}[-.\s]?\d{1,4}[-.\s]?\d{3,10}/g, '[phone]')
+    // US phone numbers: 123-456-7890, 123.456.7890
     .replace(/\b\d{3}[-.]?\d{3}[-.]?\d{4}\b/g, '[phone]')
+    // SSN: 123-45-6789
     .replace(/\b\d{3}[-]?\d{2}[-]?\d{4}\b/g, '[ssn]')
+    // Credit card numbers: 1234 5678 9012 3456 or 1234-5678-9012-3456
+    .replace(/\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b/g, '[card]')
+    // Date of birth patterns: YYYY-MM-DD, DD/MM/YYYY, MM/DD/YYYY
+    .replace(/\b\d{4}-\d{2}-\d{2}\b/g, '[date]')
+    .replace(/\b\d{2}\/\d{2}\/\d{4}\b/g, '[date]')
+    // South African ID number: 13 consecutive digits
+    .replace(/\b\d{13}\b/g, '[id-number]')
     .trim()
     .slice(0, 500); // Limit input length
 }

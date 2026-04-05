@@ -56,6 +56,22 @@ export function RecordRow({ unified, onDelete, onEdit, isDeleting }: RecordRowPr
     iconColor = theme.iconColor;
     const parts = [unified.record.amountEstimate, unified.record.note].filter(Boolean);
     measurement = parts.length > 0 ? parts.join(" · ") : "—";
+  } else if (unified.type === "caffeine") {
+    const theme = CARD_THEMES.caffeine;
+    const Icon = theme.icon;
+    icon = <Icon className="w-4 h-4" />;
+    iconColor = theme.iconColor;
+    const amt = unified.record.amountMg ? `${unified.record.amountMg} mg` : "";
+    measurement = [unified.record.description, amt].filter(Boolean).join(" · ") || "Caffeine";
+  } else if (unified.type === "alcohol") {
+    const theme = CARD_THEMES.alcohol;
+    const Icon = theme.icon;
+    icon = <Icon className="w-4 h-4" />;
+    iconColor = theme.iconColor;
+    const amt = unified.record.amountStandardDrinks
+      ? `${unified.record.amountStandardDrinks} drink${unified.record.amountStandardDrinks !== 1 ? "s" : ""}`
+      : "";
+    measurement = [unified.record.description, amt].filter(Boolean).join(" · ") || "Alcohol";
   } else {
     const theme = CARD_THEMES.bp;
     const Icon = theme.icon;

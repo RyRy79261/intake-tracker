@@ -1,93 +1,92 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Download, Upload, Trash2 } from "lucide-react";
-import { clearAllData } from "@/lib/intake-service";
-import { downloadBackup, importBackup } from "@/lib/backup-service";
-import { useToast } from "@/hooks/use-toast";
+import { Download, Upload, Trash2, AlertTriangle } from "lucide-react";
+import {
+  useDownloadBackup,
+  useUploadBackup,
+  useClearAllData,
+  type ImportResult,
+} from "@/hooks/use-backup-queries";
+import { ConflictReviewDrawer } from "@/components/settings/conflict-review-drawer";
 
 export function DataManagementSection() {
-  const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isExporting, setIsExporting] = useState(false);
-  const [isImporting, setIsImporting] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [showImportConfirm, setShowImportConfirm] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [lastImportResult, setLastImportResult] = useState<ImportResult | null>(
+    null
+  );
+  const [showConflictDrawer, setShowConflictDrawer] = useState(false);
 
-  const handleExport = async () => {
-    setIsExporting(true);
-    try {
-      await downloadBackup();
-      toast({
-        title: "Export successful",
-        description: "Your data has been downloaded",
-        variant: "success",
-      });
-    } catch {
-      toast({
-        title: "Export failed",
-        description: "Could not export data",
-        variant: "destructive",
-      });
-    } finally {
-      setIsExporting(false);
-    }
+  const downloadMut = useDownloadBackup();
+  const uploadMut = useUploadBackup();
+  const clearMut = useClearAllData();
+
+  const handleExport = () => {
+    downloadMut.mutate();
   };
 
-  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setPendingFile(file);
+    setShowImportConfirm(true);
+  };
 
-    setIsImporting(true);
-    try {
-      const result = await importBackup(file, "merge");
-      if (result.success) {
-        const total =
-          result.intakeImported +
-          result.weightImported +
-          result.bpImported +
-          result.eatingImported +
-          result.urinationImported;
-        toast({
-          title: "Import successful",
-          description: `Imported ${total} records (${result.skipped} skipped)`,
-          variant: "success",
-        });
-      } else {
-        throw new Error(result.errors.join(", ") || "Import failed");
+  const handleConfirmImport = () => {
+    if (!pendingFile) return;
+    uploadMut.mutate(
+      { file: pendingFile, mode: "merge" },
+      {
+        onSuccess: (data: ImportResult) => {
+          setLastImportResult(data);
+        },
+        onSettled: () => {
+          if (fileInputRef.current) {
+            fileInputRef.current.value = "";
+          }
+          setShowImportConfirm(false);
+          setPendingFile(null);
+        },
       }
-    } catch (error) {
-      toast({
-        title: "Import failed",
-        description:
-          error instanceof Error ? error.message : "Could not import data",
-        variant: "destructive",
-      });
-    } finally {
-      setIsImporting(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
+    );
+  };
+
+  const handleCancelImport = () => {
+    setShowImportConfirm(false);
+    setPendingFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
     }
   };
 
-  const handleClearData = async () => {
-    try {
-      await clearAllData();
-      toast({
-        title: "Data cleared",
-        description: "All intake records have been deleted",
-        variant: "success",
-      });
-      setShowClearConfirm(false);
-    } catch {
-      toast({
-        title: "Error",
-        description: "Could not clear data",
-        variant: "destructive",
-      });
-    }
+  const handleClearData = () => {
+    clearMut.mutate(undefined, {
+      onSuccess: () => setShowClearConfirm(false),
+    });
   };
+
+  const importTotal = lastImportResult
+    ? lastImportResult.intakeImported +
+      lastImportResult.weightImported +
+      lastImportResult.bpImported +
+      lastImportResult.eatingImported +
+      lastImportResult.urinationImported +
+      lastImportResult.defecationImported +
+      lastImportResult.substanceImported +
+      lastImportResult.prescriptionsImported +
+      lastImportResult.phasesImported +
+      lastImportResult.schedulesImported +
+      lastImportResult.inventoryItemsImported +
+      lastImportResult.inventoryTransactionsImported +
+      lastImportResult.doseLogsImported +
+      lastImportResult.titrationPlansImported +
+      lastImportResult.dailyNotesImported +
+      lastImportResult.auditLogsImported
+    : 0;
 
   return (
     <div className="space-y-4">
@@ -97,10 +96,10 @@ export function DataManagementSection() {
           variant="outline"
           className="w-full justify-start gap-2"
           onClick={handleExport}
-          disabled={isExporting}
+          disabled={downloadMut.isPending}
         >
           <Download className="w-4 h-4" />
-          {isExporting ? "Exporting..." : "Export Data"}
+          {downloadMut.isPending ? "Exporting..." : "Export Data"}
         </Button>
 
         <input
@@ -108,17 +107,65 @@ export function DataManagementSection() {
           type="file"
           accept=".json"
           className="hidden"
-          onChange={handleImport}
+          onChange={handleFileSelected}
         />
         <Button
           variant="outline"
           className="w-full justify-start gap-2"
           onClick={() => fileInputRef.current?.click()}
-          disabled={isImporting}
+          disabled={uploadMut.isPending}
         >
           <Upload className="w-4 h-4" />
-          {isImporting ? "Importing..." : "Import Data"}
+          {uploadMut.isPending ? "Importing..." : "Import Data"}
         </Button>
+
+        {showImportConfirm && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30 p-3 space-y-2">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+              <p className="text-sm text-amber-800 dark:text-amber-200">
+                This will merge backup data with your existing data. New records
+                will be added, duplicates skipped.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1"
+                onClick={handleCancelImport}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                className="flex-1"
+                onClick={handleConfirmImport}
+                disabled={uploadMut.isPending}
+              >
+                {uploadMut.isPending ? "Importing..." : "Continue Import"}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {lastImportResult && (
+          <div className="rounded-lg border p-3 space-y-2">
+            <p className="text-sm text-muted-foreground">
+              Last import: {importTotal} new, {lastImportResult.skipped}{" "}
+              skipped, {lastImportResult.conflicts.length} conflicts
+            </p>
+            {lastImportResult.conflicts.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowConflictDrawer(true)}
+              >
+                Review {lastImportResult.conflicts.length} conflicts
+              </Button>
+            )}
+          </div>
+        )}
 
         {!showClearConfirm ? (
           <Button
@@ -148,6 +195,16 @@ export function DataManagementSection() {
           </div>
         )}
       </div>
+
+      <ConflictReviewDrawer
+        open={showConflictDrawer}
+        onOpenChange={setShowConflictDrawer}
+        conflicts={lastImportResult?.conflicts ?? []}
+        onResolved={() => {
+          setShowConflictDrawer(false);
+          setLastImportResult(null);
+        }}
+      />
     </div>
   );
 }

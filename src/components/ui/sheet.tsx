@@ -107,7 +107,7 @@ const SheetContent = React.forwardRef<
   if (isControlled) {
     return (
       <SheetPortal forceMount>
-        <AnimatePresence onExitComplete={onExitComplete}>
+        <AnimatePresence {...(onExitComplete !== undefined && { onExitComplete })}>
           {open && (
             <>
               <SheetPrimitive.Overlay asChild forceMount>

@@ -15,9 +15,17 @@ interface AuthGuardProps {
  * Shows login prompt if user is not authenticated.
  */
 export function AuthGuard({ children, fallback }: AuthGuardProps) {
+  // Skip auth entirely when Privy is not configured (dev / CI e2e)
+  if (!process.env.NEXT_PUBLIC_PRIVY_APP_ID) {
+    return <>{children}</>;
+  }
+
+  return <PrivyAuthGuard fallback={fallback}>{children}</PrivyAuthGuard>;
+}
+
+function PrivyAuthGuard({ children, fallback }: AuthGuardProps) {
   const { ready, authenticated, login } = usePrivy();
 
-  // Show loading while Privy initializes
   if (!ready) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
@@ -70,22 +78,36 @@ export function AuthGuard({ children, fallback }: AuthGuardProps) {
   );
 }
 
+const noopAuth = {
+  ready: true as const,
+  authenticated: false as const,
+  user: null,
+  getAccessToken: async () => null,
+  getAuthHeader: async () => ({} as Record<string, string>),
+};
+
 /**
  * Hook to check if user is authorized (authenticated + on whitelist)
  * The whitelist check happens server-side when making API calls.
  */
-export function useAuth() {
-  const { ready, authenticated, user, getAccessToken } = usePrivy();
-
-  return {
-    ready,
-    authenticated,
-    user,
-    getAccessToken,
-    // Helper to get auth header for API calls
-    getAuthHeader: async () => {
-      const token = await getAccessToken();
-      return token ? { Authorization: `Bearer ${token}` } : {};
-    },
-  };
-}
+export const useAuth = process.env.NEXT_PUBLIC_PRIVY_APP_ID
+  ? function useAuth() {
+      const { ready, authenticated, user, getAccessToken } = usePrivy();
+      return {
+        ready,
+        authenticated,
+        user,
+        getAccessToken,
+        getAuthHeader: async () => {
+          try {
+            const token = await getAccessToken();
+            return token ? { Authorization: `Bearer ${token}` } : {};
+          } catch {
+            return {};
+          }
+        },
+      };
+    }
+  : function useAuth() {
+      return noopAuth;
+    };

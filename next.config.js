@@ -1,10 +1,14 @@
-const withPWA = require('next-pwa')({
-  dest: 'public',
-  register: true,
-  skipWaiting: true,  // Auto-activate new service workers immediately
-  customWorkerDir: 'worker',  // Custom service worker extensions
-  disable: process.env.NODE_ENV === 'development'
-});
+// Only load next-pwa in production to avoid ajv@8 polluting the module cache
+// during lint/dev (which breaks ESLint's ajv@6)
+// Also skip on Vercel preview/staging deploys to prevent stale SW caching
+const withPWA = process.env.NODE_ENV === 'production' && process.env.VERCEL_ENV !== 'preview'
+  ? require('next-pwa')({
+      dest: 'public',
+      register: true,
+      skipWaiting: true,
+      customWorkerDir: 'worker',
+    })
+  : (config) => config;
 
 // Content Security Policy for production
 const securityHeaders = [
@@ -12,11 +16,12 @@ const securityHeaders = [
     key: 'Content-Security-Policy',
     value: [
       "default-src 'self'",
+      // 'unsafe-eval' is required for Next.js dev mode; could be conditionally removed for production in future
       "script-src 'self' 'unsafe-eval' 'unsafe-inline'", // Required for Next.js
       "style-src 'self' 'unsafe-inline'", // Required for Tailwind
       "img-src 'self' data: blob:",
       "font-src 'self' data:",
-      "connect-src 'self' https://api.perplexity.ai https://auth.privy.io https://*.walletconnect.com https://*.walletconnect.org wss://*.walletconnect.org", // Perplexity API + Privy Auth
+      "connect-src 'self' https://api.anthropic.com https://*.privy.io https://*.walletconnect.com https://*.walletconnect.org wss://*.walletconnect.org", // Anthropic Claude API + Privy Auth
       "frame-src 'self' https://auth.privy.io", // Privy login modal
       "frame-ancestors 'none'",
       "base-uri 'self'",
@@ -38,6 +43,10 @@ const securityHeaders = [
   {
     key: 'Permissions-Policy',
     value: 'camera=(), microphone=(self), geolocation=()'
+  },
+  {
+    key: 'Strict-Transport-Security',
+    value: 'max-age=63072000; includeSubDomains; preload'
   }
 ];
 
@@ -61,4 +70,4 @@ const nextConfig = {
   },
 };
 
-module.exports = process.env.NODE_ENV === 'development' ? nextConfig : withPWA(nextConfig);
+module.exports = withPWA(nextConfig);

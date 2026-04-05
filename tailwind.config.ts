@@ -53,6 +53,38 @@ const config: Config = {
           DEFAULT: "hsl(var(--salt))",
           foreground: "hsl(var(--salt-foreground))",
         },
+        weight: {
+          DEFAULT: "hsl(var(--weight))",
+          foreground: "hsl(var(--weight-foreground))",
+        },
+        bp: {
+          DEFAULT: "hsl(var(--bp))",
+          foreground: "hsl(var(--bp-foreground))",
+        },
+        eating: {
+          DEFAULT: "hsl(var(--eating))",
+          foreground: "hsl(var(--eating-foreground))",
+        },
+        urination: {
+          DEFAULT: "hsl(var(--urination))",
+          foreground: "hsl(var(--urination-foreground))",
+        },
+        defecation: {
+          DEFAULT: "hsl(var(--defecation))",
+          foreground: "hsl(var(--defecation-foreground))",
+        },
+        caffeine: {
+          DEFAULT: "hsl(var(--caffeine))",
+          foreground: "hsl(var(--caffeine-foreground))",
+        },
+        alcohol: {
+          DEFAULT: "hsl(var(--alcohol))",
+          foreground: "hsl(var(--alcohol-foreground))",
+        },
+        medication: {
+          DEFAULT: "hsl(var(--medication))",
+          foreground: "hsl(var(--medication-foreground))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",

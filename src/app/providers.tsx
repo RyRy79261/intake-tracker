@@ -1,11 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PrivyProvider } from "@privy-io/react-auth";
 import { ThemeProvider, useTheme } from "next-themes";
 import { PinGateProvider } from "@/hooks/use-pin-gate";
 import { ErrorBoundary } from "@/components/error-boundary";
+import { initStockRecalculation } from "@/lib/inventory-service";
+import { useTimezoneDetection } from "@/hooks/use-timezone-detection";
+import { TimezoneChangeDialog } from "@/components/medications/timezone-change-dialog";
 
 function makeQueryClient() {
   return new QueryClient({
@@ -46,7 +49,7 @@ function PrivyProviderWithTheme({
   return (
     <PrivyProvider
       appId={appId}
-      clientId={clientId}
+      {...(clientId !== undefined && { clientId })}
       config={{
         // Login methods to show in the modal
         loginMethods: ["email", "google"],
@@ -65,8 +68,34 @@ function PrivyProviderWithTheme({
         },
       }}
     >
-      <PinGateProvider>{children}</PinGateProvider>
+      <PinGateProvider><TimezoneGuard>{children}</TimezoneGuard></PinGateProvider>
     </PrivyProvider>
+  );
+}
+
+
+function TimezoneGuard({ children }: { children: React.ReactNode }) {
+  const {
+    dialogOpen,
+    oldTimezone,
+    newTimezone,
+    isRecalculating,
+    handleConfirm,
+    handleDismiss,
+  } = useTimezoneDetection();
+
+  return (
+    <>
+      {children}
+      <TimezoneChangeDialog
+        open={dialogOpen}
+        oldTimezone={oldTimezone}
+        newTimezone={newTimezone}
+        isRecalculating={isRecalculating}
+        onConfirm={handleConfirm}
+        onDismiss={handleDismiss}
+      />
+    </>
   );
 }
 
@@ -75,6 +104,15 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
   const clientId = process.env.NEXT_PUBLIC_PRIVY_CLIENT_ID;
 
+  // Recalculate stock on app launch (fire-and-forget)
+  const stockInitRef = useRef(false);
+  useEffect(() => {
+    if (!stockInitRef.current) {
+      stockInitRef.current = true;
+      initStockRecalculation();
+    }
+  }, []);
+
   if (!appId) {
     // If Privy is not configured, render children without auth
     // This allows the app to work in development without Privy setup
@@ -82,7 +120,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-            <PinGateProvider>{children}</PinGateProvider>
+            <PinGateProvider><TimezoneGuard>{children}</TimezoneGuard></PinGateProvider>
           </ThemeProvider>
         </QueryClientProvider>
       </ErrorBoundary>
@@ -93,7 +131,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <PrivyProviderWithTheme appId={appId} clientId={clientId}>
+          <PrivyProviderWithTheme appId={appId} {...(clientId !== undefined && { clientId })}>
             {children}
           </PrivyProviderWithTheme>
         </ThemeProvider>

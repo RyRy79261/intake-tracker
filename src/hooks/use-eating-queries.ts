@@ -1,15 +1,17 @@
 "use client";
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { type EatingRecord } from "@/lib/db";
+import { useLiveQuery } from "dexie-react-hooks";
+import { useMutation } from "@tanstack/react-query";
 import {
   addEatingRecord,
   getEatingRecords,
   getEatingRecordsByDateRange,
   updateEatingRecord,
   deleteEatingRecord,
+  undoDeleteEatingRecord,
 } from "@/lib/eating-service";
-import { graphKeys } from "@/hooks/use-graph-data";
+import { unwrap } from "@/lib/service-result";
+import { showUndoToast } from "@/components/medications/undo-toast";
 
 export type AddEatingParams = {
   timestamp?: number;
@@ -22,65 +24,47 @@ export type UpdateEatingParams = {
   updates: { timestamp?: number; note?: string; grams?: number };
 };
 
-export const eatingKeys = {
-  all: ["eating"] as const,
-  records: (limit?: number) => [...eatingKeys.all, "records", limit] as const,
-  byDateRange: (start: number, end: number) =>
-    [...eatingKeys.all, "dateRange", start, end] as const,
-};
-
 export function useEatingRecords(limit: number = 10) {
-  return useQuery({
-    queryKey: eatingKeys.records(limit),
-    queryFn: () => getEatingRecords(limit),
-  });
+  return useLiveQuery(() => getEatingRecords(limit), [limit], []);
 }
 
 export function useEatingRecordsByDateRange(
   startTime: number,
   endTime: number
 ) {
-  return useQuery({
-    queryKey: eatingKeys.byDateRange(startTime, endTime),
-    queryFn: () => getEatingRecordsByDateRange(startTime, endTime),
-    enabled: startTime < endTime,
-  });
+  return useLiveQuery(
+    () => startTime < endTime ? getEatingRecordsByDateRange(startTime, endTime) : Promise.resolve([]),
+    [startTime, endTime],
+    []
+  );
 }
 
 export function useAddEating() {
-  const queryClient = useQueryClient();
-
   return useMutation({
-    mutationFn: (params: AddEatingParams) =>
-      addEatingRecord(params.timestamp, params.note, params.grams),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: eatingKeys.all });
-      queryClient.invalidateQueries({ queryKey: graphKeys.all });
-    },
+    mutationFn: async (params: AddEatingParams) =>
+      unwrap(await addEatingRecord(params.timestamp, params.note, params.grams)),
   });
 }
 
 export function useUpdateEating() {
-  const queryClient = useQueryClient();
-
   return useMutation({
-    mutationFn: (params: UpdateEatingParams) =>
-      updateEatingRecord(params.id, params.updates),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: eatingKeys.all });
-      queryClient.invalidateQueries({ queryKey: graphKeys.all });
-    },
+    mutationFn: async (params: UpdateEatingParams) =>
+      unwrap(await updateEatingRecord(params.id, params.updates)),
   });
 }
 
+/**
+ * Hook to delete an eating record.
+ * Shows an undo toast with ~5 second window per D-08.
+ */
 export function useDeleteEating() {
-  const queryClient = useQueryClient();
-
   return useMutation({
-    mutationFn: (id: string) => deleteEatingRecord(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: eatingKeys.all });
-      queryClient.invalidateQueries({ queryKey: graphKeys.all });
+    mutationFn: async (id: string) => unwrap(await deleteEatingRecord(id)),
+    onSuccess: (_data, id) => {
+      showUndoToast({
+        title: "Record deleted",
+        onUndo: () => { undoDeleteEatingRecord(id); },
+      });
     },
   });
 }

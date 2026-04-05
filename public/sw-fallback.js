@@ -78,20 +78,24 @@ self.addEventListener('notificationclick', (event) => {
   console.log('[SW Fallback] Notification clicked');
   
   event.notification.close();
+
+  const tag = event.notification.tag || '';
+  const targetUrl = tag.startsWith('dose-reminder') || tag.startsWith('refill')
+    ? '/medications'
+    : '/';
   
   // Open the app or focus existing window
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true })
       .then((clientList) => {
-        // Check if app is already open
         for (const client of clientList) {
           if (client.url.includes(self.location.origin) && 'focus' in client) {
+            client.navigate(targetUrl);
             return client.focus();
           }
         }
-        // Open new window if not already open
         if (self.clients.openWindow) {
-          return self.clients.openWindow('/');
+          return self.clients.openWindow(targetUrl);
         }
       })
   );

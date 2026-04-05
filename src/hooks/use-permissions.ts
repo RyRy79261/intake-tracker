@@ -7,6 +7,7 @@ import {
   requestNotificationPermission,
   type NotificationPermissionState,
 } from "@/lib/push-notification-service";
+import { unwrap } from "@/lib/service-result";
 
 export type PermissionState = "granted" | "denied" | "prompt" | "unavailable";
 
@@ -118,9 +119,9 @@ export function usePermissions() {
       return false;
     }
 
-    const result = await requestNotificationPermission();
+    const result = unwrap(await requestNotificationPermission());
     const newState: PermissionState = result === "default" ? "prompt" : result;
-    
+
     setPermissions((prev) => ({
       ...prev,
       notifications: newState,

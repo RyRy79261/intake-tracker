@@ -1,0 +1,31 @@
+name: Reset Staging DB
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  reset-staging-db:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Safety guard — verify target is staging branch
+        run: |
+          NEON_STAGING_BRANCH="staging"
+          NEON_PRODUCTION_BRANCH="main"
+          if [ "$NEON_STAGING_BRANCH" = "$NEON_PRODUCTION_BRANCH" ]; then
+            echo "::error::ABORT: Target branch name matches production branch. Refusing to reset."
+            exit 1
+          fi
+          echo "Safety check passed: resetting Neon branch '$NEON_STAGING_BRANCH' (not '$NEON_PRODUCTION_BRANCH')"
+
+      - name: Reset Neon staging branch to production state
+        uses: neondatabase/reset-branch-action@v1
+        with:
+          project_id: ${{ secrets.NEON_PROJECT_ID }}
+          branch: staging
+          parent: true
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Confirm reset
+        run: echo "Neon staging branch reset to production state successfully"

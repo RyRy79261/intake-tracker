@@ -44,7 +44,7 @@ export function EditIntakeDialog({
     <Dialog open={record !== null} onOpenChange={(dialogOpen) => !dialogOpen && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Edit {record?.type === "water" ? "Water" : "Salt"} Entry</DialogTitle>
+          <DialogTitle>Edit {record?.type === "water" ? "Water" : "Sodium"} Entry</DialogTitle>
           <DialogDescription>Update the amount, time, or note for this entry</DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="space-y-4">

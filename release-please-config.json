@@ -1,0 +1,11 @@
+{
+  "release-type": "node",
+  "changelog-sections": [
+    { "type": "feat", "section": "Features" },
+    { "type": "fix", "section": "Bug Fixes" }
+  ],
+  "bootstrap-sha": "a3a0b2d0db39613fe964d7f58137f8063768ef77",
+  "packages": {
+    ".": {}
+  }
+}

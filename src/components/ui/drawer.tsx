@@ -7,13 +7,50 @@ import { cn } from "@/lib/utils"
 
 const Drawer = ({
   shouldScaleBackground = true,
+  open,
+  onOpenChange,
   ...props
-}: React.ComponentProps<typeof DrawerPrimitive.Root>) => (
-  <DrawerPrimitive.Root
-    shouldScaleBackground={shouldScaleBackground}
-    {...props}
-  />
-)
+}: React.ComponentProps<typeof DrawerPrimitive.Root>) => {
+  const id = React.useId();
+  const hasPushedState = React.useRef(false);
+
+  React.useEffect(() => {
+    if (open === undefined) return;
+    
+    if (open && !hasPushedState.current) {
+      window.history.pushState({ drawerId: id }, "");
+      hasPushedState.current = true;
+    } else if (!open && hasPushedState.current) {
+      if (window.history.state?.drawerId === id) {
+        window.history.back();
+      }
+      hasPushedState.current = false;
+    }
+  }, [open, id]);
+
+  React.useEffect(() => {
+    const handlePopState = () => {
+      if (open && onOpenChange && hasPushedState.current) {
+        if (window.history.state?.drawerId !== id) {
+          onOpenChange(false);
+          hasPushedState.current = false;
+        }
+      }
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [open, onOpenChange, id]);
+
+  return (
+    <DrawerPrimitive.Root
+      shouldScaleBackground={shouldScaleBackground}
+      {...(open !== undefined && { open })}
+      {...(onOpenChange !== undefined && { onOpenChange })}
+      {...props}
+    />
+  );
+}
 Drawer.displayName = "Drawer"
 
 const DrawerTrigger = DrawerPrimitive.Trigger
@@ -63,7 +100,7 @@ const DrawerContent = React.forwardRef<
       <DrawerPrimitive.Content
         ref={ref}
         className={cn(
-          "fixed z-50 bg-background",
+          "fixed z-50 bg-background outline-none",
           directionStyles[direction],
           className
         )}

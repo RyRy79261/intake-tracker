@@ -5,8 +5,9 @@ import {
   Heart,
   Utensils,
   Droplet,
-  Apple,
   CircleDot,
+  Coffee,
+  Wine,
   type LucideIcon,
 } from "lucide-react";
 
@@ -51,7 +52,7 @@ export const CARD_THEMES = {
     sectionId: "section-water",
   },
   salt: {
-    label: "Salt",
+    label: "Sodium",
     icon: Sparkles,
     gradient: "from-amber-50 to-orange-50 dark:from-amber-950/40 dark:to-orange-950/40",
     border: "border-amber-200 dark:border-amber-800",
@@ -164,23 +165,44 @@ export const CARD_THEMES = {
     activeToggle: "bg-stone-100 border-stone-300 dark:bg-stone-900/50 dark:border-stone-700",
     sectionId: "section-defecation",
   },
-} as const;
-
-/** Utility-only themes (Food Calculator, AI Input) for quick-nav-footer */
-export const UTILITY_THEMES = {
-  food: {
-    label: "Food",
-    icon: Apple,
-    iconBg: "bg-green-100 dark:bg-green-900/50",
-    iconColor: "text-green-600 dark:text-green-400",
+  caffeine: {
+    label: "Caffeine",
+    icon: Coffee,
+    gradient: "from-yellow-50 to-amber-50 dark:from-yellow-950/40 dark:to-amber-950/40",
+    border: "border-yellow-200 dark:border-yellow-800",
+    iconBg: "bg-yellow-100 dark:bg-yellow-900/50",
+    iconColor: "text-yellow-700 dark:text-yellow-400",
+    buttonBg: "bg-yellow-700 hover:bg-yellow-800",
+    outlineBorder: "border-yellow-200 dark:border-yellow-800",
+    outlineText: "text-yellow-700 dark:text-yellow-300",
+    progressGradient: "bg-gradient-to-r from-yellow-400 to-amber-500",
+    hoverBg: "hover:bg-yellow-100 hover:border-yellow-300 dark:hover:bg-yellow-900/50",
+    inputBg: "bg-yellow-100/80 hover:bg-yellow-200/80 dark:bg-yellow-900/50 dark:hover:bg-yellow-800/50",
+    inputText: "text-yellow-700 dark:text-yellow-300",
+    loadingBg: "bg-yellow-200 dark:bg-yellow-800",
+    latestValueColor: "text-yellow-700 dark:text-yellow-300",
+    activeToggle: "bg-yellow-100 border-yellow-300 dark:bg-yellow-900/50 dark:border-yellow-700",
+    sectionId: "section-caffeine",
   },
-  ai: {
-    label: "AI",
-    icon: Sparkles,
-    iconBg: "bg-violet-100 dark:bg-violet-900/50",
-    iconColor: "text-violet-600 dark:text-violet-400",
+  alcohol: {
+    label: "Alcohol",
+    icon: Wine,
+    gradient: "from-fuchsia-50 to-pink-50 dark:from-fuchsia-950/40 dark:to-pink-950/40",
+    border: "border-fuchsia-200 dark:border-fuchsia-800",
+    iconBg: "bg-fuchsia-100 dark:bg-fuchsia-900/50",
+    iconColor: "text-fuchsia-600 dark:text-fuchsia-400",
+    buttonBg: "bg-fuchsia-600 hover:bg-fuchsia-700",
+    outlineBorder: "border-fuchsia-200 dark:border-fuchsia-800",
+    outlineText: "text-fuchsia-700 dark:text-fuchsia-300",
+    progressGradient: "bg-gradient-to-r from-fuchsia-400 to-pink-500",
+    hoverBg: "hover:bg-fuchsia-100 hover:border-fuchsia-300 dark:hover:bg-fuchsia-900/50",
+    inputBg: "bg-fuchsia-100/80 hover:bg-fuchsia-200/80 dark:bg-fuchsia-900/50 dark:hover:bg-fuchsia-800/50",
+    inputText: "text-fuchsia-700 dark:text-fuchsia-300",
+    loadingBg: "bg-fuchsia-200 dark:bg-fuchsia-800",
+    latestValueColor: "text-fuchsia-700 dark:text-fuchsia-300",
+    activeToggle: "bg-fuchsia-100 border-fuchsia-300 dark:bg-fuchsia-900/50 dark:border-fuchsia-700",
+    sectionId: "section-alcohol",
   },
 } as const;
 
 export type CardThemeKey = keyof typeof CARD_THEMES;
-export type UtilityThemeKey = keyof typeof UTILITY_THEMES;

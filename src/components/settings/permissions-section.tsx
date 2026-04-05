@@ -6,14 +6,15 @@ import { ShieldCheck, Bell, Mic } from "lucide-react";
 import { PermissionBadge } from "@/components/permission-badge";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useToast } from "@/hooks/use-toast";
-import { sendTestNotification, getNotificationSettings, saveNotificationSettings } from "@/lib/push-notification-service";
+import { useNotificationSettings } from "@/hooks/use-notification-queries";
 
 export function PermissionsSection() {
   const { permissions, requestNotifications, requestMicrophone, resetMicrophonePermission } = usePermissions();
   const { toast } = useToast();
+  const { getSettings, saveSettings, sendTest } = useNotificationSettings();
   const [expiryNotificationsEnabled, setExpiryNotificationsEnabled] = useState(() => {
     if (typeof window === "undefined") return false;
-    return getNotificationSettings().enabled;
+    return getSettings().enabled;
   });
 
   return (
@@ -108,7 +109,7 @@ export function PermissionsSection() {
                   const newValue = !expiryNotificationsEnabled;
                   setExpiryNotificationsEnabled(newValue);
                   try {
-                    saveNotificationSettings({ enabled: newValue });
+                    saveSettings({ enabled: newValue });
                     toast({
                       title: newValue ? "Reminders enabled" : "Reminders disabled",
                       variant: "success",
@@ -131,7 +132,7 @@ export function PermissionsSection() {
                   size="sm"
                   onClick={async () => {
                     try {
-                      const sent = await sendTestNotification();
+                      const sent = await sendTest();
                       if (sent) {
                         toast({ title: "Test notification sent", variant: "success" });
                       } else {

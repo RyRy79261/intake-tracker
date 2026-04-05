@@ -13,14 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Loader2, Check, PlusCircle } from "lucide-react";
+import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { RecentEntriesList } from "@/components/recent-entries-list";
@@ -46,11 +39,13 @@ const Icon = theme.icon;
 export function DefecationCard() {
   const { toast } = useToast();
   const settings = useSettings();
-  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
   const [amount, setAmount] = useState<string>(settings.defecationDefaultAmount || "");
   const [note, setNote] = useState("");
   const [detailTime, setDetailTime] = useState(getCurrentDateTimeLocal());
-  const { data: recentRecords, isLoading } = useDefecationRecords(5);
+  const [submittingAmount, setSubmittingAmount] = useState<string | null>(null);
+  const recentRecords = useDefecationRecords(5);
+  const isLoading = !recentRecords;
   const addMutation = useAddDefecation();
   const deleteMutation = useDeleteDefecation();
   const updateMutation = useUpdateDefecation();
@@ -80,12 +75,13 @@ export function DefecationCard() {
 
   const latestRecord = recentRecords?.[0];
 
-  const handleLogNow = async () => {
+  const handleQuickLog = async (amountValue: string) => {
+    setSubmittingAmount(amountValue);
     try {
-      await addMutation.mutateAsync({});
+      await addMutation.mutateAsync({ amountEstimate: amountValue });
       toast({
         title: "Logged",
-        description: "Defecation recorded",
+        description: `Defecation (${amountValue}) recorded`,
         variant: "success",
       });
     } catch (error) {
@@ -94,14 +90,9 @@ export function DefecationCard() {
         description: "Failed to record",
         variant: "destructive",
       });
+    } finally {
+      setSubmittingAmount(null);
     }
-  };
-
-  const handleOpenDetails = () => {
-    setAmount(settings.defecationDefaultAmount || "");
-    setNote("");
-    setDetailTime(getCurrentDateTimeLocal());
-    setDetailsOpen(true);
   };
 
   const handleSubmitDetails = async () => {
@@ -110,15 +101,18 @@ export function DefecationCard() {
       const effectiveAmount = amount && amount !== "__none__" ? amount : undefined;
       await addMutation.mutateAsync({
         timestamp,
-        amountEstimate: effectiveAmount,
-        note: note || undefined,
+        ...(effectiveAmount !== undefined && { amountEstimate: effectiveAmount }),
+        ...(note && { note }),
       });
       toast({
         title: "Logged",
         description: "Defecation recorded",
         variant: "success",
       });
-      setDetailsOpen(false);
+      setShowDetails(false);
+      setAmount(settings.defecationDefaultAmount || "");
+      setNote("");
+      setDetailTime(getCurrentDateTimeLocal());
     } catch (error) {
       toast({
         title: "Error",
@@ -151,29 +145,86 @@ export function DefecationCard() {
           </div>
 
           <div className="flex flex-col gap-2">
+            <div className="grid grid-cols-3 gap-2">
+              {AMOUNT_OPTIONS.map((opt) => (
+                <Button
+                  key={opt.value}
+                  variant="outline"
+                  size="sm"
+                  disabled={submittingAmount !== null}
+                  className={cn("h-10", submittingAmount === opt.value && "opacity-70")}
+                  onClick={() => handleQuickLog(opt.value)}
+                >
+                  {submittingAmount === opt.value ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    opt.label
+                  )}
+                </Button>
+              ))}
+            </div>
+
             <Button
-              onClick={handleLogNow}
-              disabled={addMutation.isPending}
-              className={cn("w-full h-11", theme.buttonBg)}
-            >
-              {addMutation.isPending ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <>
-                  <Check className="w-4 h-4 mr-2" />
-                  I defecated
-                </>
-              )}
-            </Button>
-            <Button
-              variant="outline"
+              variant="ghost"
               size="sm"
-              className={cn("w-full", theme.outlineBorder, theme.outlineText)}
-              onClick={handleOpenDetails}
+              className="w-full justify-between text-muted-foreground"
+              onClick={() => setShowDetails(!showDetails)}
             >
-              <PlusCircle className="w-4 h-4 mr-2" />
-              Add details
+              <span>Add details</span>
+              {showDetails ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </Button>
+
+            {showDetails && (
+              <div className="p-3 rounded-lg bg-muted/50 border space-y-3">
+                <div className="space-y-2">
+                  <Label>Amount (optional)</Label>
+                  <Select value={amount} onValueChange={setAmount}>
+                    <SelectTrigger className="bg-background">
+                      <SelectValue placeholder="Select estimate" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">No estimate</SelectItem>
+                      {AMOUNT_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="defecation-note">Note (optional)</Label>
+                  <Textarea
+                    id="defecation-note"
+                    placeholder="e.g. consistency, urgency"
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    className="min-h-[60px]"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="defecation-time">When</Label>
+                  <Input
+                    id="defecation-time"
+                    type="datetime-local"
+                    value={detailTime}
+                    onChange={(e) => setDetailTime(e.target.value)}
+                    max={getCurrentDateTimeLocal()}
+                  />
+                </div>
+                <Button
+                  onClick={handleSubmitDetails}
+                  disabled={addMutation.isPending}
+                  className={cn("w-full", theme.buttonBg)}
+                >
+                  {addMutation.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    "Record with details"
+                  )}
+                </Button>
+              </div>
+            )}
           </div>
 
           {/* Recent History */}
@@ -211,66 +262,6 @@ export function DefecationCard() {
         note={editNote}
         onNoteChange={setEditNote}
       />
-
-      <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Log with details</DialogTitle>
-            <DialogDescription>
-              Optionally add amount, a note, and when it happened.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Amount (optional)</Label>
-              <Select value={amount} onValueChange={setAmount}>
-                <SelectTrigger className="bg-background">
-                  <SelectValue placeholder="Select estimate" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">No estimate</SelectItem>
-                  {AMOUNT_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="defecation-note">Note (optional)</Label>
-              <Textarea
-                id="defecation-note"
-                placeholder="e.g. consistency, urgency"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                className="min-h-[60px]"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="defecation-time">When</Label>
-              <Input
-                id="defecation-time"
-                type="datetime-local"
-                value={detailTime}
-                onChange={(e) => setDetailTime(e.target.value)}
-                max={getCurrentDateTimeLocal()}
-              />
-            </div>
-            <Button
-              onClick={handleSubmitDetails}
-              disabled={addMutation.isPending}
-              className={cn("w-full", theme.buttonBg)}
-            >
-              {addMutation.isPending ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                "Record"
-              )}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </>
   );
 }

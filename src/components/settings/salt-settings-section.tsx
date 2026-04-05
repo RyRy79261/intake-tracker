@@ -21,7 +21,7 @@ export function SaltSettingsSection() {
     <div className="space-y-4">
       <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
         <Sparkles className="w-4 h-4" />
-        <h3 className="font-semibold">Salt Settings</h3>
+        <h3 className="font-semibold">Sodium Settings</h3>
       </div>
       <div className="space-y-3 pl-6">
         <div className="space-y-2">
@@ -55,7 +55,7 @@ export function SaltSettingsSection() {
             onDecrement={() => decrementSetting(settings.saltLimit, 100, 100, settings.setSaltLimit, setLimitInput)}
           />
           <p className="text-xs text-muted-foreground">
-            Your daily salt intake limit (100-10000)
+            Your daily sodium intake limit (100-10000)
           </p>
         </div>
       </div>

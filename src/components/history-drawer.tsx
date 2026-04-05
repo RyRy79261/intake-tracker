@@ -32,12 +32,8 @@ import {
   filterRecords,
 } from "@/lib/history-types";
 import { CARD_THEMES } from "@/lib/card-themes";
-import { getRecordsByCursor } from "@/lib/intake-service";
-import { getWeightRecords, deleteWeightRecord, getBloodPressureRecords, deleteBloodPressureRecord } from "@/lib/health-service";
-import { getEatingRecords } from "@/lib/eating-service";
-import { getUrinationRecords } from "@/lib/urination-service";
-import { getDefecationRecords } from "@/lib/defecation-service";
 import { useUpdateIntake, useDeleteIntake } from "@/hooks/use-intake-queries";
+import { useHistoryData } from "@/hooks/use-history-queries";
 import { useUpdateWeight, useUpdateBloodPressure } from "@/hooks/use-health-queries";
 import { useUpdateEating, useDeleteEating } from "@/hooks/use-eating-queries";
 import { useUpdateUrination, useDeleteUrination } from "@/hooks/use-urination-queries";
@@ -64,6 +60,9 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
   const { requirePin } = usePinProtected();
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterType>("all");
+
+  // History data loader
+  const { data: historyData, deleteWeight: historyDeleteWeight, deleteBP: historyDeleteBP } = useHistoryData();
 
   // Mutations
   const updateMutation = useUpdateIntake();
@@ -105,60 +104,26 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
   const [editAmountUrination, setEditAmountUrination] = useState("");
   const [editAmountDefecation, setEditAmountDefecation] = useState("");
 
-  // Load all records
-  const loadAllRecords = useCallback(async (pageNum: number = 1) => {
-    const isInitial = pageNum === 1;
-    if (isInitial) setIsLoading(true);
-    else setIsLoadingMore(true);
-
-    try {
-      let intakeRecords: IntakeRecord[] = [];
-      let weightRecordsData: WeightRecord[] = [];
-      let bpRecordsData: BloodPressureRecord[] = [];
-      let eatingRecordsData: EatingRecord[] = [];
-      let urinationRecordsData: UrinationRecord[] = [];
-      let defecationRecordsData: DefecationRecord[] = [];
-
-      try { const result = await getRecordsByCursor(undefined, 100); intakeRecords = result.records; } catch (e) { console.error("Failed to load intake records:", e); }
-      try { weightRecordsData = await getWeightRecords(100); } catch (e) { console.error("Failed to load weight records:", e); }
-      try { bpRecordsData = await getBloodPressureRecords(100); } catch (e) { console.error("Failed to load BP records:", e); }
-      try { eatingRecordsData = await getEatingRecords(100); } catch (e) { console.error("Failed to load eating records:", e); }
-      try { urinationRecordsData = await getUrinationRecords(100); } catch (e) { console.error("Failed to load urination records:", e); }
-      try { defecationRecordsData = await getDefecationRecords(100); } catch (e) { console.error("Failed to load defecation records:", e); }
-
-      const unified: UnifiedRecord[] = [
-        ...intakeRecords.map((r) => ({ type: "intake" as const, record: r })),
-        ...weightRecordsData.map((r) => ({ type: "weight" as const, record: r })),
-        ...bpRecordsData.map((r) => ({ type: "bp" as const, record: r })),
-        ...eatingRecordsData.map((r) => ({ type: "eating" as const, record: r })),
-        ...urinationRecordsData.map((r) => ({ type: "urination" as const, record: r })),
-        ...defecationRecordsData.map((r) => ({ type: "defecation" as const, record: r })),
-      ];
-
-      unified.sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a));
-
-      const end = pageNum * PAGE_SIZE;
-
-      if (isInitial) {
-        setRecords(unified.slice(0, PAGE_SIZE));
-      } else {
-        const start = (pageNum - 1) * PAGE_SIZE;
-        setRecords(prev => [...prev, ...unified.slice(start, end)]);
-      }
-      setHasMore(end < unified.length);
-      setPage(pageNum);
-    } catch (error) {
-      console.error("Failed to load history:", error);
-      toast({ title: "Error", description: "Could not load history", variant: "destructive" });
-    } finally {
-      setIsLoading(false);
-      setIsLoadingMore(false);
-    }
-  }, [toast]);
-
+  // Derive unified records from reactive history data
   useEffect(() => {
-    if (open) loadAllRecords(1);
-  }, [open, loadAllRecords]);
+    if (!open || !historyData) return;
+
+    const unified: UnifiedRecord[] = [
+      ...historyData.intakeRecords.map((r) => ({ type: "intake" as const, record: r })),
+      ...historyData.weightRecords.map((r) => ({ type: "weight" as const, record: r })),
+      ...historyData.bpRecords.map((r) => ({ type: "bp" as const, record: r })),
+      ...historyData.eatingRecords.map((r) => ({ type: "eating" as const, record: r })),
+      ...historyData.urinationRecords.map((r) => ({ type: "urination" as const, record: r })),
+      ...historyData.defecationRecords.map((r) => ({ type: "defecation" as const, record: r })),
+    ];
+
+    unified.sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a));
+
+    const end = page * PAGE_SIZE;
+    setRecords(unified.slice(0, end));
+    setHasMore(end < unified.length);
+    setIsLoading(false);
+  }, [open, historyData, page]);
 
   // Handle open change with PIN protection
   const handleOpenChange = useCallback(async (newOpen: boolean) => {
@@ -172,8 +137,8 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
 
   const loadMoreRecords = useCallback(() => {
     if (!hasMore || isLoadingMore) return;
-    loadAllRecords(page + 1);
-  }, [hasMore, isLoadingMore, page, loadAllRecords]);
+    setPage(prev => prev + 1);
+  }, [hasMore, isLoadingMore]);
 
   // ── Delete handlers ──────────────────────────────────────────
   const handleDelete = useCallback(async (unified: UnifiedRecord) => {
@@ -181,8 +146,8 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
     setDeletingId(id);
     try {
       if (unified.type === "intake") await deleteMutation.mutateAsync(id);
-      else if (unified.type === "weight") await deleteWeightRecord(id);
-      else if (unified.type === "bp") await deleteBloodPressureRecord(id);
+      else if (unified.type === "weight") await historyDeleteWeight(id);
+      else if (unified.type === "bp") await historyDeleteBP(id);
       else if (unified.type === "eating") await deleteEatingMutation.mutateAsync(id);
       else if (unified.type === "urination") await deleteUrinationMutation.mutateAsync(id);
       else if (unified.type === "defecation") await deleteDefecationMutation.mutateAsync(id);
@@ -194,7 +159,7 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
     } finally {
       setDeletingId(null);
     }
-  }, [toast, deleteMutation, deleteEatingMutation, deleteUrinationMutation, deleteDefecationMutation]);
+  }, [toast, deleteMutation, historyDeleteWeight, historyDeleteBP, deleteEatingMutation, deleteUrinationMutation, deleteDefecationMutation]);
 
   // ── Edit openers ─────────────────────────────────────────────
   const openEdit = useCallback((unified: UnifiedRecord) => {
@@ -237,9 +202,10 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
     if (isNaN(newTimestamp)) { toast({ title: "Invalid date/time", variant: "destructive" }); return; }
     const rec = editingIntake;
     try {
-      await updateMutation.mutateAsync({ id: rec.id, updates: { amount: newAmount, timestamp: newTimestamp, note: newNote } });
+      await updateMutation.mutateAsync({ id: rec.id, updates: { amount: newAmount, timestamp: newTimestamp, ...(newNote !== undefined && { note: newNote }) } });
       setEditingIntake(null);
-      setRecords(prev => prev.map(r => r.type === "intake" && r.record.id === rec.id ? { ...r, record: { ...r.record, amount: newAmount, timestamp: newTimestamp, note: newNote } } : r).sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a)));
+      const updatedRecord = { ...rec, amount: newAmount, timestamp: newTimestamp, ...(newNote !== undefined && { note: newNote }) };
+      setRecords(prev => prev.map(r => r.type === "intake" && r.record.id === rec.id ? { ...r, record: updatedRecord } : r).sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a)));
       toast({ title: "Entry updated" });
     } catch { toast({ title: "Error", description: "Could not update the entry", variant: "destructive" }); }
   }, [editingIntake, editAmount, editTimestamp, editNote, toast, updateMutation]);
@@ -253,9 +219,11 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
     if (isNaN(newTimestamp)) { toast({ title: "Invalid date/time", variant: "destructive" }); return; }
     const rec = editingWeight;
     try {
-      await updateWeightMutation.mutateAsync({ id: rec.id, updates: { weight: newWeight, timestamp: newTimestamp, note: editNote || undefined } });
+      const noteVal = editNote || undefined;
+      await updateWeightMutation.mutateAsync({ id: rec.id, updates: { weight: newWeight, timestamp: newTimestamp, ...(noteVal !== undefined && { note: noteVal }) } });
       setEditingWeight(null);
-      setRecords(prev => prev.map(r => r.type === "weight" && r.record.id === rec.id ? { ...r, record: { ...r.record, weight: newWeight, timestamp: newTimestamp, note: editNote || undefined } } : r).sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a)));
+      const updatedWeight = { ...rec, weight: newWeight, timestamp: newTimestamp, ...(noteVal !== undefined && { note: noteVal }) };
+      setRecords(prev => prev.map(r => r.type === "weight" && r.record.id === rec.id ? { ...r, record: updatedWeight } : r).sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a)));
       toast({ title: "Entry updated" });
     } catch { toast({ title: "Error", description: "Could not update the entry", variant: "destructive" }); }
   }, [editingWeight, editWeight, editTimestamp, editNote, toast, updateWeightMutation]);
@@ -271,9 +239,11 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
     if (isNaN(newTimestamp)) { toast({ title: "Invalid date/time", variant: "destructive" }); return; }
     const rec = editingBP;
     try {
-      await updateBPMutation.mutateAsync({ id: rec.id, updates: { systolic: newSystolic, diastolic: newDiastolic, heartRate: newHeartRate, position: editPosition, arm: editArm, timestamp: newTimestamp, note: editNote || undefined } });
+      const bpNoteVal = editNote || undefined;
+      await updateBPMutation.mutateAsync({ id: rec.id, updates: { systolic: newSystolic, diastolic: newDiastolic, ...(newHeartRate !== undefined && { heartRate: newHeartRate }), position: editPosition, arm: editArm, timestamp: newTimestamp, ...(bpNoteVal !== undefined && { note: bpNoteVal }) } });
       setEditingBP(null);
-      setRecords(prev => prev.map(r => r.type === "bp" && r.record.id === rec.id ? { ...r, record: { ...r.record, systolic: newSystolic, diastolic: newDiastolic, heartRate: newHeartRate, position: editPosition, arm: editArm, timestamp: newTimestamp, note: editNote || undefined } } : r).sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a)));
+      const updatedBP = { ...rec, systolic: newSystolic, diastolic: newDiastolic, ...(newHeartRate !== undefined && { heartRate: newHeartRate }), position: editPosition, arm: editArm, timestamp: newTimestamp, ...(bpNoteVal !== undefined && { note: bpNoteVal }) };
+      setRecords(prev => prev.map(r => r.type === "bp" && r.record.id === rec.id ? { ...r, record: updatedBP } : r).sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a)));
       toast({ title: "Entry updated" });
     } catch { toast({ title: "Error", description: "Could not update the entry", variant: "destructive" }); }
   }, [editingBP, editSystolic, editDiastolic, editHeartRate, editPosition, editArm, editTimestamp, editNote, toast, updateBPMutation]);
@@ -285,9 +255,11 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
     if (isNaN(newTimestamp)) { toast({ title: "Invalid date/time", variant: "destructive" }); return; }
     const rec = editingEating;
     try {
-      await updateEatingMutation.mutateAsync({ id: rec.id, updates: { timestamp: newTimestamp, note: editNote.trim() || undefined } });
+      const eatingNote = editNote.trim() || undefined;
+      await updateEatingMutation.mutateAsync({ id: rec.id, updates: { timestamp: newTimestamp, ...(eatingNote !== undefined && { note: eatingNote }) } });
       setEditingEating(null);
-      setRecords(prev => prev.map(r => r.type === "eating" && r.record.id === rec.id ? { ...r, record: { ...r.record, timestamp: newTimestamp, note: editNote.trim() || undefined } } : r).sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a)));
+      const updatedEating = { ...rec, timestamp: newTimestamp, ...(eatingNote !== undefined && { note: eatingNote }) };
+      setRecords(prev => prev.map(r => r.type === "eating" && r.record.id === rec.id ? { ...r, record: updatedEating } : r).sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a)));
       toast({ title: "Entry updated" });
     } catch { toast({ title: "Error", description: "Could not update", variant: "destructive" }); }
   }, [editingEating, editTimestamp, editNote, toast, updateEatingMutation]);
@@ -299,9 +271,12 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
     if (isNaN(newTimestamp)) { toast({ title: "Invalid date/time", variant: "destructive" }); return; }
     const rec = editingUrination;
     try {
-      await updateUrinationMutation.mutateAsync({ id: rec.id, updates: { timestamp: newTimestamp, amountEstimate: editAmountUrination || undefined, note: editNote.trim() || undefined } });
+      const urinationAmt = editAmountUrination || undefined;
+      const urinationNote = editNote.trim() || undefined;
+      await updateUrinationMutation.mutateAsync({ id: rec.id, updates: { timestamp: newTimestamp, ...(urinationAmt !== undefined && { amountEstimate: urinationAmt }), ...(urinationNote !== undefined && { note: urinationNote }) } });
       setEditingUrination(null);
-      setRecords(prev => prev.map(r => r.type === "urination" && r.record.id === rec.id ? { ...r, record: { ...r.record, timestamp: newTimestamp, amountEstimate: editAmountUrination || undefined, note: editNote.trim() || undefined } } : r).sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a)));
+      const updatedUrination = { ...rec, timestamp: newTimestamp, ...(urinationAmt !== undefined && { amountEstimate: urinationAmt }), ...(urinationNote !== undefined && { note: urinationNote }) };
+      setRecords(prev => prev.map(r => r.type === "urination" && r.record.id === rec.id ? { ...r, record: updatedUrination } : r).sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a)));
       toast({ title: "Entry updated" });
     } catch { toast({ title: "Error", description: "Could not update", variant: "destructive" }); }
   }, [editingUrination, editTimestamp, editAmountUrination, editNote, toast, updateUrinationMutation]);
@@ -313,9 +288,12 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
     if (isNaN(newTimestamp)) { toast({ title: "Invalid date/time", variant: "destructive" }); return; }
     const rec = editingDefecation;
     try {
-      await updateDefecationMutation.mutateAsync({ id: rec.id, updates: { timestamp: newTimestamp, amountEstimate: editAmountDefecation || undefined, note: editNote.trim() || undefined } });
+      const defecationAmt = editAmountDefecation || undefined;
+      const defecationNote = editNote.trim() || undefined;
+      await updateDefecationMutation.mutateAsync({ id: rec.id, updates: { timestamp: newTimestamp, ...(defecationAmt !== undefined && { amountEstimate: defecationAmt }), ...(defecationNote !== undefined && { note: defecationNote }) } });
       setEditingDefecation(null);
-      setRecords(prev => prev.map(r => r.type === "defecation" && r.record.id === rec.id ? { ...r, record: { ...r.record, timestamp: newTimestamp, amountEstimate: editAmountDefecation || undefined, note: editNote.trim() || undefined } } : r).sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a)));
+      const updatedDefecation = { ...rec, timestamp: newTimestamp, ...(defecationAmt !== undefined && { amountEstimate: defecationAmt }), ...(defecationNote !== undefined && { note: defecationNote }) };
+      setRecords(prev => prev.map(r => r.type === "defecation" && r.record.id === rec.id ? { ...r, record: updatedDefecation } : r).sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a)));
       toast({ title: "Entry updated" });
     } catch { toast({ title: "Error", description: "Could not update", variant: "destructive" }); }
   }, [editingDefecation, editTimestamp, editAmountDefecation, editNote, toast, updateDefecationMutation]);

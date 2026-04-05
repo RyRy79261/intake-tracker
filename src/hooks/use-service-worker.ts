@@ -59,6 +59,12 @@ export function useServiceWorker() {
       return { success: false, error: "Service Worker not supported" };
     }
 
+    // Don't register on non-production Vercel environments (staging/preview)
+    const vercelEnv = process.env.NEXT_PUBLIC_VERCEL_ENV;
+    if (vercelEnv && vercelEnv !== "production") {
+      return { success: false, error: "Service worker disabled on non-production environments" };
+    }
+
     // First check if already registered
     try {
       const existingReg = await navigator.serviceWorker.getRegistration();
@@ -179,6 +185,16 @@ export function useServiceWorker() {
   useEffect(() => {
     // Only run in browser and if service workers are supported
     if (typeof window === "undefined" || !("serviceWorker" in navigator)) {
+      return;
+    }
+
+    // Skip SW registration on non-production Vercel environments (staging/preview)
+    const vercelEnv = process.env.NEXT_PUBLIC_VERCEL_ENV;
+    if (vercelEnv && vercelEnv !== "production") {
+      // Unregister any existing SW that may have been cached from a previous deployment
+      navigator.serviceWorker.getRegistrations().then(regs => {
+        regs.forEach(reg => reg.unregister());
+      });
       return;
     }
 
