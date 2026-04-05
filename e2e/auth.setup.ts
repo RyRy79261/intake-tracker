@@ -29,6 +29,7 @@ setup('authenticate via Privy test account', async ({ page }) => {
     Authorization: `Basic ${basicAuth}`,
     'privy-app-id': appId,
     'Content-Type': 'application/json',
+    Origin: 'http://localhost:3000',
   };
 
   const credRes = await fetch(`${PRIVY_API}/v1/apps/${appId}/test_credentials`, {
