@@ -1,10 +1,4 @@
 import { defineConfig, devices } from '@playwright/test';
-import { resolve } from 'node:path';
-import { existsSync } from 'node:fs';
-
-// Load .env.local so PRIVY_TEST_* vars are available to auth.setup.ts
-const envLocal = resolve(__dirname, '.env.local');
-if (existsSync(envLocal)) process.loadEnvFile(envLocal);
 
 /**
  * See https://playwright.dev/docs/test-configuration.
@@ -35,15 +29,11 @@ export default defineConfig({
 
   /* Configure projects for major browsers */
   projects: [
-    // Setup project: authenticates via Privy test account
-    { name: 'setup', testMatch: /auth\.setup\.ts/ },
     {
       name: 'chromium',
       use: {
         ...devices['Desktop Chrome'],
-        storageState: 'e2e/.auth/user.json',
       },
-      dependencies: ['setup'],
     },
   ],
 

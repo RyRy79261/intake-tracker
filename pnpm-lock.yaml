@@ -168,9 +168,6 @@ importers:
       '@playwright/test':
         specifier: ^1.58.2
         version: 1.58.2
-      '@privy-io/node':
-        specifier: ^0.12.0
-        version: 0.12.0(@solana/kit@5.5.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10))(viem@2.45.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))
       '@types/node':
         specifier: ^22.8.1
         version: 22.19.7
@@ -1435,26 +1432,6 @@ packages:
       viem: ^2.44.2
     peerDependenciesMeta:
       permissionless:
-        optional: true
-      viem:
-        optional: true
-
-  '@privy-io/node@0.12.0':
-    resolution: {integrity: sha512-s+zIXGQoaAahevWb5xj8NoFwfGJL2/N0rVaSoDTpSWfbzHNS8akZfkqE6iQME6yKCA4vaPZjy+TaGq8w7JaRLg==}
-    peerDependencies:
-      '@solana/kit': ^5.1.0
-      '@x402/evm': ^2.3.0
-      '@x402/fetch': ^2.3.0
-      '@x402/svm': ^2.3.0
-      viem: ^2.24.1
-    peerDependenciesMeta:
-      '@solana/kit':
-        optional: true
-      '@x402/evm':
-        optional: true
-      '@x402/fetch':
-        optional: true
-      '@x402/svm':
         optional: true
       viem:
         optional: true
@@ -8590,21 +8567,6 @@ snapshots:
       set-cookie-parser: 2.7.2
       uuid: 9.0.1
     optionalDependencies:
-      viem: 2.45.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)
-
-  '@privy-io/node@0.12.0(@solana/kit@5.5.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10))(viem@2.45.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))':
-    dependencies:
-      '@hpke/chacha20poly1305': 1.7.1
-      '@hpke/core': 1.7.5
-      '@noble/curves': 1.9.7
-      '@noble/hashes': 1.8.0
-      '@scure/base': 1.2.6
-      canonicalize: 2.1.0
-      jose: 6.1.3
-      lru-cache: 11.2.5
-      svix: 1.84.1
-    optionalDependencies:
-      '@solana/kit': 5.5.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)
       viem: 2.45.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)
 
   '@privy-io/popup@0.0.2': {}

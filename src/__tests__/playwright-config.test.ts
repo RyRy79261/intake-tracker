@@ -57,25 +57,6 @@ describe("Playwright config switches to production build in CI (E2E-01, E2E-03)"
     expect(raw).toContain("pnpm start");
   });
 
-  it("config defines a 'setup' project that runs auth.setup.ts", () => {
-    // The setup project authenticates via Privy test account before other
-    // tests run, so all tests start with a real authenticated session.
-    expect(raw).toContain("name: 'setup'");
-    expect(raw).toMatch(/testMatch:.*auth\\.setup\\.ts/);
-  });
-
-  it("chromium project uses authenticated storageState from setup", () => {
-    // After the setup project authenticates, all chromium tests receive
-    // the saved auth state so they start already logged in.
-    expect(raw).toContain("storageState: 'e2e/.auth/user.json'");
-  });
-
-  it("chromium project depends on the setup project", () => {
-    // This ensures Playwright runs auth.setup.ts before any other tests,
-    // so the storageState file exists when chromium tests start.
-    expect(raw).toContain("dependencies: ['setup']");
-  });
-
   it("CI branch sets reuseExistingServer to false so tests always build fresh", () => {
     // reuseExistingServer: false prevents a stale server from a previous CI run
     // from being reused, which would skip the production build step.

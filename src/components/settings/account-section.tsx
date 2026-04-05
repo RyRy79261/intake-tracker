@@ -5,6 +5,12 @@ import { Button } from "@/components/ui/button";
 import { User, LogOut } from "lucide-react";
 
 export function AccountSection() {
+  if (!process.env.NEXT_PUBLIC_PRIVY_APP_ID) return null;
+
+  return <PrivyAccountSection />;
+}
+
+function PrivyAccountSection() {
   const { authenticated, user, logout } = usePrivy();
 
   if (!authenticated) return null;

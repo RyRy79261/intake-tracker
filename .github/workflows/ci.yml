@@ -124,16 +124,11 @@ jobs:
         run: pnpm exec vitest run src/__tests__/integrity/
 
   e2e:
-    # Requires GitHub secrets: NEXT_PUBLIC_PRIVY_APP_ID, PRIVY_APP_SECRET, PRIVY_TEST_EMAIL, PRIVY_TEST_OTP
-    # Configure in repo Settings > Secrets and variables > Actions
+    # Runs without NEXT_PUBLIC_PRIVY_APP_ID so the app skips Privy auth
+    # (Privy modal is not testable in headless CI — to be removed in a future milestone)
     needs: [changes]
     if: needs.changes.outputs.src == 'true'
     runs-on: ubuntu-latest
-    env:
-      NEXT_PUBLIC_PRIVY_APP_ID: ${{ secrets.NEXT_PUBLIC_PRIVY_APP_ID }}
-      PRIVY_APP_SECRET: ${{ secrets.PRIVY_APP_SECRET }}
-      PRIVY_TEST_EMAIL: ${{ secrets.PRIVY_TEST_EMAIL }}
-      PRIVY_TEST_OTP: ${{ secrets.PRIVY_TEST_OTP }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v5
