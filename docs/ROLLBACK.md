@@ -32,24 +32,33 @@ Quick-reference guide for recovering from bad production deployments.
 
 ## 2. Git Revert
 
-**When:** You need to undo a specific commit and redeploy through the normal pipeline.
+**When:** You need to permanently remove a bad commit from the codebase and redeploy through the normal pipeline.
+
+> **Tip:** For fastest recovery from any production issue, use [Vercel Instant Rollback](#1-vercel-instant-rollback) first (30 seconds). Use git revert when you need the bad commit gone from the codebase permanently — this takes 2-3 minutes because CI must run on the revert PR.
 
 1. Identify the bad commit SHA:
    ```bash
    git log --oneline main -10
    ```
-2. Revert the commit:
+2. Create a revert branch:
    ```bash
-   git checkout main
+   git checkout main && git pull origin main
+   git checkout -b revert/<sha7>
+   ```
+3. Revert the commit:
+   ```bash
    git revert <bad-commit-sha>
    ```
-3. Push to trigger redeployment:
+4. Push the revert branch:
    ```bash
-   git push origin main
+   git push -u origin revert/<sha7>
    ```
-4. Vercel auto-deploys on push to `main`
+5. Open a PR from `revert/<sha7>` to `main`
+6. Wait for CI to pass (required — a revert is still a code change)
+7. Approve and merge the PR
+8. Vercel auto-deploys on merge to `main`
 
-**Time to recover:** ~2-3 minutes (build + deploy)
+**Time to recover:** ~2-3 minutes (CI + build + deploy)
 
 ---
 
@@ -59,15 +68,19 @@ Quick-reference guide for recovering from bad production deployments.
 
 The `promote-to-production.yml` workflow creates a snapshot named `pre-promote-{sha7}-{date}` before each production promotion.
 
+> **Note:** Snapshot SHAs come from the merge commit (`github.sha`), not the PR head SHA. When looking for a snapshot, use the merge commit SHA from the GitHub PR page (shown after merge), not the last commit SHA from `git log`.
+
 ### Via Neon Dashboard
 
 1. Open [Neon Console](https://console.neon.tech)
 2. Select the **intake-tracker** project
 3. Go to **Branches** → select the **production** branch
-4. Find the snapshot from before the bad deploy (named `pre-promote-{sha}-{YYYYMMDD}`)
+4. Find the snapshot from before the bad deploy (named `pre-promote-{sha7}-{YYYYMMDD}`)
 5. Click **Restore** to roll back the database to that point
 
 ### Via Neon API
+
+> **Prerequisites:** The Neon API commands below require three environment variables: `NEON_PROJECT_ID`, `NEON_API_KEY`, and `NEON_PROD_BRANCH_ID`. See [Staging Setup Guide, Section 7](staging-setup.md#7-github-add-neon-secrets) for how to configure these as GitHub secrets.
 
 ```bash
 # List available snapshots
