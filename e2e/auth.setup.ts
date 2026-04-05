@@ -25,7 +25,11 @@ setup('authenticate via Privy test account', async ({ page }) => {
 
   // --- Step 1: Get a real access token via Privy's server SDK ---
   // The SDK handles auth headers, origin, and test credential lookup internally.
-  const privy = new PrivyClient({ appId, appSecret });
+  const privy = new PrivyClient({
+    appId,
+    appSecret,
+    defaultHeaders: { Origin: 'http://localhost:3000' },
+  });
 
   const testEmail = process.env.PRIVY_TEST_EMAIL;
   const { access_token } = await privy
