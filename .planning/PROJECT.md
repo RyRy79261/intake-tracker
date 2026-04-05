@@ -74,6 +74,7 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 - [x] Stable staging environment with isolated Neon DB backend — v1.3 Phase 28
 - [x] Tagged promotion flow (staging → production) with approval gates — v1.3 Phase 29
 - [x] Version display and rollback runbook — v1.3 Phase 30
+- [x] Rollback documentation fixes (PR-based revert, missing secrets) — v1.3 Phase 31
 
 ### Out of Scope
 
@@ -129,7 +130,7 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 
 This document evolves at phase transitions and milestone boundaries.
 
-*Last updated: 2026-04-05 after Phase 30 completion*
+*Last updated: 2026-04-05 after Phase 31 completion*
 
 **After each phase transition:**
 1. Requirements invalidated? → Move to Out of Scope with reason
@@ -145,4 +146,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-04 after Phase 27 (Release Automation) completion*
+*Last updated: 2026-04-05 after Phase 31 (Rollback & Documentation Fixes) completion*
