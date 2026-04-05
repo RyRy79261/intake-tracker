@@ -102,11 +102,12 @@ For each variable:
 ## 7. GitHub: Add Neon secrets
 
 1. Go to your repo's **Settings > Secrets and variables > Actions**
-2. Add two repository secrets:
+2. Add three repository secrets:
    - `NEON_PROJECT_ID` — Your Neon project ID (found in Neon Console > Project Settings)
    - `NEON_API_KEY` — A Neon API key with branch management permissions (Neon Console > Account > API Keys)
+   - `NEON_PROD_BRANCH_ID` — Your Neon production branch ID (found in Neon Console > Branches > main branch > Branch ID)
 
-**Verify:** Both secrets appear in the Actions secrets list.
+**Verify:** All three secrets appear in the Actions secrets list.
 
 ---
 
