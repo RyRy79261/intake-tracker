@@ -1,5 +1,24 @@
 # Milestones
 
+## v1.3 Deployment Lifecycle (Shipped: 2026-04-05)
+
+**Phases completed:** 5 phases, 12 plans, 13 tasks
+
+**Key accomplishments:**
+
+- Reconciled package.json from 0.1.0 to 1.2.0 and established Release Please version anchor with annotated git tag
+- Installed commitlint + husky and enforced conventional commit format via commit-msg hook — bad messages are rejected before commit creation
+- Created Release Please pipeline and removed deprecated version-bump.yml — merges to main now trigger automated release PRs with changelogs
+- Status:
+- Status:
+- Status:
+- Status:
+- Status:
+- Status:
+- PR-based git revert workflow replacing blocked direct-push path, SHA naming consistency, and NEON_PROD_BRANCH_ID documented for operator setup
+
+---
+
 ## v1.2 CI & Data Integrity (Shipped: 2026-04-04)
 
 **Phases completed:** 7 phases, 16 plans, 30 tasks

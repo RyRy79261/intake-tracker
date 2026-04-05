@@ -8,16 +8,9 @@ A personal health tracking PWA for monitoring daily intake (water, salt, caffein
 
 Accurate, queryable health data across all domains — intake, vitals, bodily functions, and medication adherence — structured so that cross-domain analysis (e.g., correlating fluid intake with urination and weight) is reliable and future AI querying is possible.
 
-## Current Milestone: v1.3 Deployment Lifecycle
+## Current Milestone: None (planning next)
 
-**Goal:** Establish a production-grade release and deployment pipeline — automated versioning, GitHub Releases, stable staging environment with isolated backend, and extensible CI/CD foundations for future platform targets.
-
-**Target features:**
-- Automated release pipeline (Release Please or equivalent) with changelogs, semver, and GitHub Releases
-- Stable staging environment (`staging.intake-tracker.ryanjnoble.dev`) with its own Neon DB branch
-- Tagged promotion flow (staging → production) with approval gates
-- CI/CD extensibility points for future security reviews, platform builds, and DevOps additions
-- Replace current `version-bump.yml` with proper release automation
+**Last shipped:** v1.3 Deployment Lifecycle — automated release pipeline, staging environment, deployment protection, rollback runbook
 
 ## Current State
 
@@ -65,16 +58,15 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 - ✓ Benchmarking — migration chain + backup round-trip baselines with CI comparison — v1.2
 - ✓ Supply chain hardening — pnpm security config, 24h package age, automated audit in CI — v1.2
 - ✓ CI orchestration — 12-job GitHub Actions with path-based gating, build caching, skip-aware gate — v1.2
+- ✓ Automated release pipeline with changelogs, semver, and GitHub Releases — v1.3
+- ✓ Stable staging environment with isolated Neon DB backend — v1.3
+- ✓ Tagged promotion flow (staging → production) with approval gates — v1.3
+- ✓ Version display and rollback runbook — v1.3
+- ✓ Rollback documentation fixes (PR-based revert, missing secrets) — v1.3
 
 ### Active
 
-<!-- Current scope — v1.3 Deployment Lifecycle -->
-
-- [x] Automated release pipeline with changelogs, semver, and GitHub Releases — v1.3 Phase 27
-- [x] Stable staging environment with isolated Neon DB backend — v1.3 Phase 28
-- [x] Tagged promotion flow (staging → production) with approval gates — v1.3 Phase 29
-- [x] Version display and rollback runbook — v1.3 Phase 30
-- [x] Rollback documentation fixes (PR-based revert, missing secrets) — v1.3 Phase 31
+<!-- Next milestone scope goes here -->
 
 ### Out of Scope
 
@@ -130,7 +122,7 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 
 This document evolves at phase transitions and milestone boundaries.
 
-*Last updated: 2026-04-05 after Phase 31 completion*
+*Last updated: 2026-04-05 after v1.3 Deployment Lifecycle milestone*
 
 **After each phase transition:**
 1. Requirements invalidated? → Move to Out of Scope with reason
@@ -146,4 +138,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-05 after Phase 31 (Rollback & Documentation Fixes) completion*
+*Last updated: 2026-04-05 after v1.3 Deployment Lifecycle milestone*
