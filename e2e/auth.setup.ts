@@ -20,6 +20,7 @@ setup('authenticate via Privy test account', async ({ page }) => {
     Authorization: `Basic ${basicAuth}`,
     'privy-app-id': appId,
     'Content-Type': 'application/json',
+    Origin: 'https://intake-tracker.ryanjnoble.dev',
   };
 
   // 1. Fetch test account credentials from Privy dashboard
