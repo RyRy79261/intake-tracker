@@ -8,9 +8,17 @@ A personal health tracking PWA for monitoring daily intake (water, salt, caffein
 
 Accurate, queryable health data across all domains — intake, vitals, bodily functions, and medication adherence — structured so that cross-domain analysis (e.g., correlating fluid intake with urination and weight) is reliable and future AI querying is possible.
 
-## Current Milestone: None (planning next)
+## Current Milestone: v1.4 Post-Release Fixes
 
-**Last shipped:** v1.3 Deployment Lifecycle — automated release pipeline, staging environment, deployment protection, rollback runbook
+**Goal:** Fix bugs, UI inconsistencies, and missing functionality identified after the v1.3 production release.
+
+**Target features:**
+- Fix release-please GitHub Actions permissions (can't create PRs)
+- Weight tracking: enable direct number input
+- Configurable increments in Settings (default 0.05)
+- Food/sodium card UI: sodium top-right, description as entry title, single merged history
+- Coffee presets: AI-powered caffeine/alcohol content on add
+- Coffee preset deletion: fix stale UI after removal
 
 ## Current State
 
@@ -66,7 +74,14 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 
 ### Active
 
-<!-- Next milestone scope goes here -->
+- [ ] Fix release-please GitHub Actions PR creation permissions
+- [ ] Weight tracking allows direct keyboard number input
+- [ ] Configurable numeric increments in Settings (default 0.05)
+- [ ] Food/sodium card: sodium tracking positioned top-right for consistency
+- [ ] Food/sodium card: description field used as entry title/label
+- [ ] Food/sodium card: single history section with date, amount, truncated name
+- [ ] Coffee presets: AI auto-populates caffeine/alcohol content on add
+- [ ] Coffee preset deletion updates UI immediately
 
 ### Out of Scope
 
@@ -122,7 +137,7 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 
 This document evolves at phase transitions and milestone boundaries.
 
-*Last updated: 2026-04-05 after v1.3 Deployment Lifecycle milestone*
+*Last updated: 2026-04-05 after v1.4 Post-Release Fixes milestone started*
 
 **After each phase transition:**
 1. Requirements invalidated? → Move to Out of Scope with reason
@@ -138,4 +153,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-05 after v1.3 Deployment Lifecycle milestone*
+*Last updated: 2026-04-05 after v1.4 Post-Release Fixes milestone started*
