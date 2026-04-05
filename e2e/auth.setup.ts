@@ -28,7 +28,7 @@ setup('authenticate via Privy test account', async ({ page }) => {
   const privy = new PrivyClient({
     appId,
     appSecret,
-    defaultHeaders: { Origin: 'http://localhost:3000' },
+    defaultHeaders: { Origin: 'https://intake-tracker.ryanjnoble.dev' },
   });
 
   const testEmail = process.env.PRIVY_TEST_EMAIL;
