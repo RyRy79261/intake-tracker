@@ -38,7 +38,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 28: Staging Environment** - Stable staging URL with isolated Neon DB, disabled service worker, and configured auth (completed 2026-04-04)
 - [x] **Phase 29: Deployment Protection** - Branch protection, environment gates, and promotion workflow for production deployments (completed 2026-04-04)
 - [x] **Phase 30: Observability & Rollback** - Version visibility in the app and documented recovery procedures (completed 2026-04-04)
-- [ ] **Phase 31: Rollback & Documentation Fixes** - Fix rollback path blocked by branch protection, document missing secrets (gap closure)
+- [x] **Phase 31: Rollback & Documentation Fixes** - Fix rollback path blocked by branch protection, document missing secrets (gap closure) (completed 2026-04-05)
 
 ## Phase Details
 
@@ -115,4 +115,4 @@ Phases execute in numeric order: 27 → 28 → 29 → 30
 | 28. Staging Environment | v1.3 | 4/4 | Complete    | 2026-04-04 |
 | 29. Deployment Protection | v1.3 | 2/2 | Complete    | 2026-04-04 |
 | 30. Observability & Rollback | v1.3 | 2/2 | Complete    | 2026-04-04 |
-| 31. Rollback & Documentation Fixes | v1.3 | 0/0 | Not Started | — |
+| 31. Rollback & Documentation Fixes | v1.3 | 1/1 | Complete    | 2026-04-05 |
