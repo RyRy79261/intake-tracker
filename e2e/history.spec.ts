@@ -17,7 +17,7 @@ test.describe('History / Analytics', () => {
     // Click each tab and verify the panel renders
     for (const tabName of ['Insights', 'Correlations', 'Titration', 'Records']) {
       await page.locator('[role="tab"]', { hasText: tabName }).click();
-      await expect(page.locator('[role="tabpanel"]')).toBeVisible();
+      await expect(page.locator('[role="tabpanel"][data-state="active"]')).toBeVisible();
     }
   });
 
@@ -26,7 +26,7 @@ test.describe('History / Analytics', () => {
     await page.goto('/analytics');
     await expect(page.locator('[role="tab"]', { hasText: 'Records' })).toBeVisible();
     // Records tab should at least render its tab panel (even if empty)
-    await expect(page.locator('[role="tabpanel"]')).toBeVisible();
+    await expect(page.locator('[role="tabpanel"][data-state="active"]')).toBeVisible();
   });
 
   test('should show blood pressure data in Records after recording via dashboard (D-12)', async ({ page }) => {
@@ -65,7 +65,7 @@ test.describe('History / Analytics', () => {
     // Step 2: Navigate to analytics, switch to Insights tab
     await page.goto('/analytics');
     await page.locator('[role="tab"]', { hasText: 'Insights' }).click();
-    await expect(page.locator('[role="tabpanel"]')).toBeVisible();
+    await expect(page.locator('[role="tabpanel"][data-state="active"]')).toBeVisible();
 
     // Per D-11: verify chart containers render (SVG elements present)
     // Do NOT assert on SVG path values -- only check for container/SVG presence
