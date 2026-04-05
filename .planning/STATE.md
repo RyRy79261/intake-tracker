@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Post-Release Fixes
-status: defining
+status: ready_to_plan
 stopped_at: null
-last_updated: "2026-04-05T12:00:00.000Z"
+last_updated: "2026-04-05T14:00:00.000Z"
 last_activity: 2026-04-05
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,35 +20,35 @@ progress:
 
 See: .planning/PROJECT.md (updated 2026-04-05)
 
-**Core value:** Accurate, queryable health data across intake, vitals, and medication adherence — structured for cross-domain analysis and future AI querying
-**Current focus:** Defining requirements for v1.4 Post-Release Fixes
+**Core value:** Accurate, queryable health data across intake, vitals, and medication adherence -- structured for cross-domain analysis and future AI querying
+**Current focus:** Phase 32 - Release Pipeline + Weight Settings Infrastructure
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-04-05 — Milestone v1.4 started
+Phase: 32 of 35 (Release Pipeline + Weight Settings Infrastructure)
+Plan: 0 of 0 in current phase (not yet planned)
+Status: Ready to plan
+Last activity: 2026-04-05 -- v1.4 roadmap created (Phases 32-35)
+
+Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 88 (44 v1.0 + 16 v1.1 + 16 v1.2)
+- Total plans completed: 100 (44 v1.0 + 16 v1.1 + 16 v1.2 + 12 v1.3 + 12 v1.3-extra)
 - Average duration: ~6 min
 - Total execution time: ~10 hours
 
-**v1.2 Summary:**
+**v1.3 Summary:**
 
 | Phase | Plans | Avg/Plan |
 |-------|-------|----------|
-| 20. Core CI Pipeline | 2 | 2 min |
-| 21. Data Integrity Gates | 2 | 2.5 min |
-| 22. E2E Testing in CI | 2 | — |
-| 23. Supply Chain Hardening | 3 | 6.3 min |
-| 24. CI Optimization & Benchmarking | 2 | 2.5 min |
-| 25. CI Integration Fixes | 1 | 6 min |
-| 26. Comprehensive E2E Test Coverage | 4 | 2.5 min |
+| 27. Release Automation | 3 | ~5 min |
+| 28. Staging Environment | 4 | ~5 min |
+| 29. Deployment Protection | 2 | ~5 min |
+| 30. Observability & Rollback | 2 | ~5 min |
+| 31. Rollback & Documentation Fixes | 1 | ~5 min |
 
 *Updated after each plan completion*
 
@@ -59,10 +59,10 @@ Last activity: 2026-04-05 — Milestone v1.4 started
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
-- [v1.3 roadmap]: 4 phases (27-30) derived from 17 requirements across Release Automation, Staging, Deployment Protection, and Observability
-- [v1.3 roadmap]: Phase 30 (Observability) depends on Phase 27 (not 29) — version display needs Release Please, not the promotion workflow
-- [v1.3 research]: All research HIGH confidence; no phases require additional research
-- [v1.3 research]: bootstrap-sha `a3a0b2d` identified as v1.2 completion commit — verify at Phase 27 execution time
+- [v1.4 roadmap]: 4 phases (32-35) derived from 9 requirements across Release, Weight, Food/Sodium, and Presets
+- [v1.4 roadmap]: Phase 33 depends on Phase 32 -- weight direct input needs correct increment/rounding from settings fix
+- [v1.4 roadmap]: Phase 34 (Food/Sodium) is MEDIUM risk -- only structural component change in milestone
+- [v1.4 research]: parseInt in settings-helpers.ts silently destroys decimal values; must fix before weight settings UI
 
 ### Pending Todos
 
@@ -70,9 +70,8 @@ None yet.
 
 ### Blockers/Concerns
 
-- REL-05 bootstrap-sha: Research identified `a3a0b2d` as v1.2 completion commit. Verify still correct when Phase 27 executes.
-- Neon free tier: ~100h/month compute with 5-min auto-suspend. Monitor after first two weeks of staging.
-- ALLOWED_EMAILS on staging: Must mirror production whitelist or auth allows all users.
+- settings-helpers.ts uses parseInt which truncates decimal values like 0.05 to 0 -- must be fixed in Phase 32 before weight settings UI works
+- Food/sodium merged history needs careful mutation routing (eating records vs sodium records from different Dexie tables)
 
 ### Quick Tasks Completed
 
@@ -83,13 +82,14 @@ None yet.
 
 ### Roadmap Evolution
 
-- v1.0 shipped 2026-03-23 (Phases 1-11) — archived 2026-03-27
-- v1.1 shipped 2026-03-27 (Phases 12-19) — archived 2026-03-27
-- v1.2 shipped 2026-04-04 (Phases 20-26) — archived 2026-04-04
-- v1.3 roadmap created 2026-04-04 (Phases 27-30)
+- v1.0 shipped 2026-03-23 (Phases 1-11) -- archived 2026-03-27
+- v1.1 shipped 2026-03-27 (Phases 12-19) -- archived 2026-03-27
+- v1.2 shipped 2026-04-04 (Phases 20-26) -- archived 2026-04-04
+- v1.3 shipped 2026-04-05 (Phases 27-31) -- archived 2026-04-05
+- v1.4 roadmap created 2026-04-05 (Phases 32-35)
 
 ## Session Continuity
 
-Last session: 2026-04-05T11:19:28.416Z
-Stopped at: Phase 31 context gathered
-Resume file: .planning/phases/31-rollback-documentation-fixes/31-CONTEXT.md
+Last session: 2026-04-05
+Stopped at: v1.4 roadmap created, ready to plan Phase 32
+Resume file: None

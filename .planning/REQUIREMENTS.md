@@ -1,7 +1,7 @@
 # Requirements: Intake Tracker
 
 **Defined:** 2026-04-05
-**Core Value:** Accurate, queryable health data across intake, vitals, and medication adherence — structured for cross-domain analysis and future AI querying
+**Core Value:** Accurate, queryable health data across intake, vitals, and medication adherence -- structured for cross-domain analysis and future AI querying
 
 ## v1.4 Requirements
 
@@ -14,7 +14,7 @@ Requirements for Post-Release Fixes milestone. Each maps to roadmap phases.
 ### Weight Tracking
 
 - [ ] **WGT-01**: User can tap the weight value and type a number directly via keyboard
-- [ ] **WGT-02**: User can configure weight increment step size in Settings (default 0.05, fix parseInt→parseFloat in settings-helpers)
+- [ ] **WGT-02**: User can configure weight increment step size in Settings (default 0.05, fix parseInt->parseFloat in settings-helpers)
 - [ ] **WGT-03**: Weight rounding supports 0.05 precision (fix hardcoded *10/10 rounding to *100/100)
 
 ### Food/Sodium Card
@@ -55,21 +55,21 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| REL-01 | — | Pending |
-| WGT-01 | — | Pending |
-| WGT-02 | — | Pending |
-| WGT-03 | — | Pending |
-| FOOD-01 | — | Pending |
-| FOOD-02 | — | Pending |
-| FOOD-03 | — | Pending |
-| PRES-01 | — | Pending |
-| PRES-02 | — | Pending |
+| REL-01 | Phase 32 | Pending |
+| WGT-01 | Phase 33 | Pending |
+| WGT-02 | Phase 32 | Pending |
+| WGT-03 | Phase 32 | Pending |
+| FOOD-01 | Phase 34 | Pending |
+| FOOD-02 | Phase 34 | Pending |
+| FOOD-03 | Phase 34 | Pending |
+| PRES-01 | Phase 35 | Pending |
+| PRES-02 | Phase 35 | Pending |
 
 **Coverage:**
 - v1.4 requirements: 9 total
-- Mapped to phases: 0
-- Unmapped: 9
+- Mapped to phases: 9
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-05*
-*Last updated: 2026-04-05 after initial definition*
+*Last updated: 2026-04-05 after roadmap creation*
