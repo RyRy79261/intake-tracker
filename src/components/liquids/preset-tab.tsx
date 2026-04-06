@@ -447,19 +447,27 @@ export function PresetTab({ tab }: PresetTabProps) {
           {isSubmitting ? "Logging..." : "Log Entry"}
         </Button>
         {beverageName.trim() && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleSaveAndLog}
-            disabled={
-              isSubmitting ||
-              volumeMl <= 0 ||
-              !hasSubstance
-            }
-            className={cn("w-full text-xs text-muted-foreground border", theme.outlineBorder)}
-          >
-            {isSubmitting ? "Saving..." : "Save as preset & log"}
-          </Button>
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSaveAndLog}
+              disabled={
+                isSubmitting ||
+                volumeMl <= 0 ||
+                !hasSubstance ||
+                !aiLookupUsed
+              }
+              className={cn("w-full text-xs text-muted-foreground border", theme.outlineBorder)}
+            >
+              {isSubmitting ? "Saving..." : "Save as preset & log"}
+            </Button>
+            {!aiLookupUsed && (
+              <p className="text-xs text-muted-foreground text-center">
+                Use AI lookup to populate substance data
+              </p>
+            )}
+          </>
         )}
       </div>
     </>
