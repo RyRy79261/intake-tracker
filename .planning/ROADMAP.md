@@ -62,3 +62,13 @@ Decimal phases appear between their surrounding integers in numeric order.
 | 37. Water Entry Label Formatting Bug | v1.4 | 1/1 | Complete | 2026-04-06 |
 | 38. Weight Input Default Value Bug | v1.4 | 1/1 | Complete | 2026-04-06 |
 | 39. Preset Save-and-Log Label Fix | v1.4 | 1/1 | Complete | 2026-04-06 |
+
+### Phase 1: Cross-app bug fixes and UX improvements
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** None (new milestone cycle)
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 1 to break down)
