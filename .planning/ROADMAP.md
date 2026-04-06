@@ -40,6 +40,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 36: Neon DB + Vercel Integration Understanding** - Research how Vercel receives Neon branch DB connection details via the integration (completed 2026-04-06)
 - [x] **Phase 37: Water Entry Label Formatting Bug** - Fix labels showing "preset:manual" and "substance:{id}" instead of clean text (completed 2026-04-06)
 - [x] **Phase 38: Weight Input Default Value Bug** - Fix weight input defaulting to 70 instead of last recorded value (completed 2026-04-06)
+- [ ] **Phase 39: Preset Save-and-Log Label Fix** - Fix logged entry source to reference new preset UUID so history displays correctly (gap closure)
 
 ## Phase Details
 
@@ -90,7 +91,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 32 → 33 → 34 → 35 → 36 → 37 → 38
+Phases execute in numeric order: 32 → 33 → 34 → 35 → 36 → 37 → 38 → 39
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -106,6 +107,7 @@ Phases execute in numeric order: 32 → 33 → 34 → 35 → 36 → 37 → 38
 | 36. Neon DB + Vercel Integration Understanding | v1.4 | 3/3 | Complete    | 2026-04-06 |
 | 37. Water Entry Label Formatting Bug | v1.4 | 1/1 | Complete   | 2026-04-06 |
 | 38. Weight Input Default Value Bug | v1.4 | 1/1 | Complete    | 2026-04-06 |
+| 39. Preset Save-and-Log Label Fix | v1.4 | 0/0 | Not started | - |
 
 ### Phase 36: Neon DB + Vercel Integration Understanding
 
@@ -136,3 +138,14 @@ Plans:
 
 Plans:
 - [x] TBD (run /gsd-plan-phase 38 to break down) (completed 2026-04-06)
+
+### Phase 39: Preset Save-and-Log Label Fix
+**Goal**: When saving a new preset and logging an entry simultaneously, the logged entry's source references the new preset UUID so it displays correctly in history views
+**Depends on**: Phase 35 (preset save-and-log flow), Phase 37 (getLiquidTypeLabel preset:* handling)
+**Requirements**: PRES-01
+**Gap Closure**: Closes gaps from v1.4 milestone audit
+**Success Criteria** (what must be TRUE):
+  1. After AI lookup and "Save as preset & log", the water intake record's source field contains `preset:{newPresetUUID}` (not `preset:manual`)
+  2. The new entry appears in water-tab recent entries and history views with the preset name as label
+  3. Orphaned Zustand exports (sodiumPresets, addSodiumPreset, deleteSodiumPreset) removed from settings-store.ts
+**Plans**: TBD

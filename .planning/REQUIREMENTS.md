@@ -62,7 +62,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | FOOD-01 | Phase 34 | Pending |
 | FOOD-02 | Phase 34 | Pending |
 | FOOD-03 | Phase 34 | Pending |
-| PRES-01 | Phase 35 | Pending |
+| PRES-01 | Phase 35 → Phase 39 (gap closure) | Pending |
 | PRES-02 | Phase 35 | Pending |
 
 **Coverage:**
@@ -72,4 +72,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-04-05*
-*Last updated: 2026-04-05 after roadmap creation*
+*Last updated: 2026-04-06 after gap closure planning*
