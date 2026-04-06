@@ -50,3 +50,6 @@ next-env.d.ts
 e2e/.auth/
 .claude/worktrees/
 .entire/
+
+# GSD milestone phase archives (summaries kept, phase details recoverable from git history)
+.planning/milestones/*-phases/
