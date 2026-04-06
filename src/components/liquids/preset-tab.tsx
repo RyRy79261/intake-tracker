@@ -202,14 +202,14 @@ export function PresetTab({ tab }: PresetTabProps) {
     }
   };
 
-  const buildComposableEntry = (): ComposableEntryInput => {
+  const buildComposableEntry = (presetIdOverride?: string): ComposableEntryInput => {
     const description =
       beverageName ||
       searchText.trim() ||
       (tab === "coffee" ? "Coffee" : tab === "alcohol" ? "Drink" : "Beverage");
 
     const entry: ComposableEntryInput = {
-      groupSource: `preset:${selectedPresetId ?? "manual"}`,
+      groupSource: `preset:${presetIdOverride ?? selectedPresetId ?? "manual"}`,
     };
 
     // Water intake from waterContentPercent
@@ -221,7 +221,7 @@ export function PresetTab({ tab }: PresetTabProps) {
       intakes.push({
         type: "water",
         amount: waterAmount,
-        source: `preset:${selectedPresetId ?? "manual"}`,
+        source: `preset:${presetIdOverride ?? selectedPresetId ?? "manual"}`,
       });
     }
     // Salt intake
@@ -300,7 +300,7 @@ export function PresetTab({ tab }: PresetTabProps) {
     if (!beverageName.trim()) return;
     setIsSubmitting(true);
     try {
-      addPreset({
+      const newPresetId = addPreset({
         name: beverageName.trim(),
         tab,
         defaultVolumeMl: volumeMl,
@@ -311,7 +311,7 @@ export function PresetTab({ tab }: PresetTabProps) {
         isDefault: false,
         source: aiLookupUsed ? "ai" : "manual",
       });
-      const entry = buildComposableEntry();
+      const entry = buildComposableEntry(newPresetId);
       await addEntry(entry);
       toast({
         title: "Saved & Logged",
