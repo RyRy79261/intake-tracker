@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-04-05)
 Phase: 33 (weight-direct-input) — EXECUTING
 Plan: 1 of 4
 Status: Executing Phase 33
-Last activity: 2026-04-06 -- Phase 33 execution started
+Last activity: 2026-04-06 - Completed quick task 260406-mpb: Fix water entry name display and food entry sodium column
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -80,6 +80,7 @@ None yet.
 | 260327-rpe | Migrate AI endpoints from Perplexity to Anthropic Claude | 2026-03-27 | 570411d | [260327-rpe-migrate-ai-endpoints-from-perplexity-to-](./quick/260327-rpe-migrate-ai-endpoints-from-perplexity-to-/) |
 | 260330-131 | Replace LOCAL_AGENT_MODE bypass with Privy test credentials | 2026-03-30 | fe605aa | [260330-131-replace-local-agent-mode-bypass-with-pri](./quick/260330-131-replace-local-agent-mode-bypass-with-pri/) |
 | 260406-ku9 | Fix Food & Sodium UI layout - restructure inputs, add sodium source selector, add water content field | 2026-04-06 | ecd9912 | [260406-ku9-fix-food-sodium-ui-layout-restructure-in](./quick/260406-ku9-fix-food-sodium-ui-layout-restructure-in/) |
+| 260406-mpb | Fix water entry name display and food entry sodium column | 2026-04-06 | cbdfd41 | [260406-mpb-fix-water-entry-name-display-and-food-en](./quick/260406-mpb-fix-water-entry-name-display-and-food-en/) |
 
 ### Roadmap Evolution
 
