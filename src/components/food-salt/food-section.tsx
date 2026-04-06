@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
+import { useLiveQuery } from "dexie-react-hooks";
+import { db } from "@/lib/db";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -76,6 +78,33 @@ export function FoodSection() {
 
   // ─── Recent eating records ────────────────────────────────────────
   const recentRecords = useEatingRecords(5);
+
+  // ─── Sodium lookup for recent entries ─────────────────────────────
+  const groupIds = useMemo(
+    () => (recentRecords || []).map((r) => r.groupId).filter((id): id is string => !!id),
+    [recentRecords]
+  );
+
+  const groupSodiumMap = useLiveQuery(
+    async () => {
+      if (groupIds.length === 0) return new Map<string, number>();
+      const saltRecords = await db.intakeRecords
+        .where("groupId")
+        .anyOf(groupIds)
+        .and((r) => r.type === "salt" && r.deletedAt === null)
+        .toArray();
+      const map = new Map<string, number>();
+      for (const r of saltRecords) {
+        if (r.groupId) {
+          map.set(r.groupId, (map.get(r.groupId) || 0) + r.amount);
+        }
+      }
+      return map;
+    },
+    [groupIds.join(",")],
+    new Map<string, number>()
+  );
+
   const deleteMutation = useDeleteEating();
   const updateMutation = useUpdateEating();
   const { deletingId, handleDelete } = useDeleteWithToast(
@@ -372,6 +401,11 @@ export function FoodSection() {
             <span className="text-muted-foreground shrink-0">
               {formatDateTime(record.timestamp)}
             </span>
+            {record.groupId && groupSodiumMap.get(record.groupId) ? (
+              <span className="text-xs font-medium text-orange-600 dark:text-orange-400">
+                {groupSodiumMap.get(record.groupId)}mg
+              </span>
+            ) : null}
             {record.grams && (
               <span className="text-xs font-medium">{record.grams}g</span>
             )}
