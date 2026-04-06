@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { logAudit } from "@/lib/audit";
 import { InlineEdit } from "@/components/ui/inline-edit";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const WeightFormSchema = z.object({
   weight: z.number({ invalid_type_error: "Weight is required" })
@@ -41,27 +42,23 @@ export function WeightCard() {
   const [customTime, setCustomTime] = useState(getCurrentDateTimeLocal());
 
   const recentRecords = useWeightRecords(5);
-  const isLoading = !recentRecords || recentRecords.length === 0 && pendingWeight === null;
+  const isLoading = recentRecords === undefined;
   const addMutation = useAddWeight();
   const deleteMutation = useDeleteWeight();
   const updateMutation = useUpdateWeight();
   const { deletingId, handleDelete } = useDeleteWithToast(deleteMutation, "Weight record removed");
 
   // Pre-fill with latest weight when records load.
-  // useLiveQuery defaults to [] before Dexie resolves, so we delay the
-  // fallback to avoid setting 70 before real records arrive.
+  // recentRecords is undefined until Dexie resolves — no timing race.
   useEffect(() => {
-    if (pendingWeight !== null) return;
-    if (recentRecords && recentRecords.length > 0) {
+    if (pendingWeight !== null) return;           // D-14: keep current value
+    if (recentRecords === undefined) return;       // Still loading — wait
+    if (recentRecords.length > 0) {
       const latest = recentRecords[0];
-      if (latest) setPendingWeight(latest.weight);
-      return;
+      if (latest) setPendingWeight(latest.weight); // D-03: use last recorded
+    } else {
+      setPendingWeight(69);                        // D-04, D-12: first-time fallback
     }
-    // Delay fallback so live query has time to resolve with real data
-    const timer = setTimeout(() => {
-      setPendingWeight(prev => prev === null ? 70 : prev);
-    }, 200);
-    return () => clearTimeout(timer);
   }, [recentRecords, pendingWeight]);
 
   // Extra edit field
@@ -173,85 +170,98 @@ export function WeightCard() {
         </div>
 
         {/* Increment/Decrement Input Section */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            {/* Minus Button */}
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={handleDecrement}
-              disabled={pendingWeight === null || pendingWeight <= settings.weightIncrement}
-              className={cn("h-14 w-14 shrink-0 rounded-full transition-all", theme.hoverBg)}
-            >
-              <Minus className="w-6 h-6" />
-            </Button>
+        {isLoading ? (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <Skeleton className="h-14 w-14 rounded-full shrink-0" />
+              <div className="flex-1 text-center">
+                <Skeleton className="h-10 w-32 mx-auto rounded" />
+              </div>
+              <Skeleton className="h-14 w-14 rounded-full shrink-0" />
+            </div>
+            <Skeleton className="h-11 w-full rounded-md" />
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              {/* Minus Button */}
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={handleDecrement}
+                disabled={pendingWeight === null || pendingWeight <= settings.weightIncrement}
+                className={cn("h-14 w-14 shrink-0 rounded-full transition-all", theme.hoverBg)}
+              >
+                <Minus className="w-6 h-6" />
+              </Button>
 
-            {/* Center Display — tap to type (D-01, D-02) */}
-            <div className="flex-1 text-center">
-              <InlineEdit
-                value={pendingWeight}
-                onValueChange={setPendingWeight}
-                formatDisplay={(v) => v?.toFixed(2) ?? "--"}
-                suffix="kg"
-                displayClassName="text-4xl font-bold tabular-nums"
-                suffixClassName="text-lg text-muted-foreground ml-1"
-                roundOnBlur={(v) => {
-                  const increment = settings.weightIncrement;
-                  const rounded = Math.round(v / increment) * increment;
-                  return Math.round(rounded * 100) / 100;
-                }}
-                type="number"
-                inputMode="decimal"
-                step="any"
-                min={0.1}
-                max={1000}
-                aria-label="Weight in kilograms"
-                data-testid="weight-direct-input"
-              />
+              {/* Center Display — tap to type (D-01, D-02) */}
+              <div className="flex-1 text-center">
+                <InlineEdit
+                  value={pendingWeight}
+                  onValueChange={setPendingWeight}
+                  formatDisplay={(v) => v?.toFixed(2) ?? "--"}
+                  suffix="kg"
+                  displayClassName="text-4xl font-bold tabular-nums"
+                  suffixClassName="text-lg text-muted-foreground ml-1"
+                  roundOnBlur={(v) => {
+                    const increment = settings.weightIncrement;
+                    const rounded = Math.round(v / increment) * increment;
+                    return Math.round(rounded * 100) / 100;
+                  }}
+                  type="number"
+                  inputMode="decimal"
+                  step="any"
+                  min={0.1}
+                  max={1000}
+                  aria-label="Weight in kilograms"
+                  data-testid="weight-direct-input"
+                />
+              </div>
+
+              {/* Plus Button */}
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={handleIncrement}
+                disabled={pendingWeight === null}
+                className={cn("h-14 w-14 shrink-0 rounded-full transition-all", theme.hoverBg)}
+              >
+                <Plus className="w-6 h-6" />
+              </Button>
             </div>
 
-            {/* Plus Button */}
+            {fieldErrors.weight && (
+              <p className="text-sm text-destructive text-center">{fieldErrors.weight}</p>
+            )}
+
+            <CollapsibleTimeInputControlled
+              value={customTime}
+              onChange={setCustomTime}
+              expanded={showTimeInput}
+              onToggle={() => setShowTimeInput(!showTimeInput)}
+              id="weight-time"
+            />
+
             <Button
-              variant="outline"
-              size="icon"
-              onClick={handleIncrement}
-              disabled={pendingWeight === null}
-              className={cn("h-14 w-14 shrink-0 rounded-full transition-all", theme.hoverBg)}
+              onClick={handleSubmit}
+              disabled={addMutation.isPending || pendingWeight === null}
+              className={cn("w-full h-11", theme.buttonBg)}
             >
-              <Plus className="w-6 h-6" />
+              {addMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Recording...
+                </>
+              ) : (
+                <>
+                  <Check className="w-4 h-4 mr-2" />
+                  Record Weight
+                </>
+              )}
             </Button>
           </div>
-
-          {fieldErrors.weight && (
-            <p className="text-sm text-destructive text-center">{fieldErrors.weight}</p>
-          )}
-
-          <CollapsibleTimeInputControlled
-            value={customTime}
-            onChange={setCustomTime}
-            expanded={showTimeInput}
-            onToggle={() => setShowTimeInput(!showTimeInput)}
-            id="weight-time"
-          />
-
-          <Button
-            onClick={handleSubmit}
-            disabled={addMutation.isPending || pendingWeight === null}
-            className={cn("w-full h-11", theme.buttonBg)}
-          >
-            {addMutation.isPending ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Recording...
-              </>
-            ) : (
-              <>
-                <Check className="w-4 h-4 mr-2" />
-                Record Weight
-              </>
-            )}
-          </Button>
-        </div>
+        )}
 
         {/* Recent History */}
         <RecentEntriesList
