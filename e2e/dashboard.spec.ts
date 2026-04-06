@@ -128,6 +128,39 @@ test.describe('Dashboard', () => {
     await expect(page.getByText('Weight recorded', { exact: true })).toBeVisible();
   });
 
+  test('should allow direct keyboard entry for weight', async ({ page }) => {
+    await page.goto('/');
+    const weightCard = page.locator('#section-weight');
+    await weightCard.scrollIntoViewIfNeeded();
+    await expect(weightCard).toBeVisible();
+
+    // Wait for card to initialize
+    const recordBtn = weightCard.locator('button:has-text("Record Weight")');
+    await expect(recordBtn).toBeVisible();
+
+    // Find the hidden input via data-testid
+    const weightInput = weightCard.getByTestId('weight-direct-input');
+
+    // Focus the hidden input (simulates tapping the weight display)
+    await weightInput.focus();
+
+    // Clear and type a new value
+    await weightInput.fill('71.35');
+
+    // Blur to trigger rounding (focus the record button)
+    await recordBtn.focus();
+
+    // Wait for display to update with the value
+    // 71.35 is already aligned to 0.05 increments, so it stays 71.35
+    await expect(weightCard.getByText('71.35')).toBeVisible();
+
+    // Submit via existing Record Weight button
+    await recordBtn.click();
+
+    // Verify success toast
+    await expect(page.getByText('Weight recorded', { exact: true })).toBeVisible();
+  });
+
   test('should quick-log urination', async ({ page }) => {
     await page.goto('/');
     const urinationCard = page.locator('#section-urination');
