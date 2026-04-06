@@ -1,48 +1,36 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
-  Collapsible,
-  CollapsibleTrigger,
-  CollapsibleContent,
-} from "@/components/ui/collapsible";
-import {
-  Loader2,
-  ChevronDown,
-  ChevronUp,
-  Sparkles,
-} from "lucide-react";
-import { cn, formatAmount } from "@/lib/utils";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Loader2, Sparkles } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { RecentEntriesList } from "@/components/recent-entries-list";
 import { EditEatingDialog } from "@/components/edit-eating-dialog";
-import {
-  ComposablePreview,
-  type PreviewRecord,
-} from "@/components/food-salt/composable-preview";
 import { parseIntakeWithAI } from "@/lib/ai-client";
-import { useAddComposableEntry, type ComposableEntryInput } from "@/hooks/use-composable-entry";
+import {
+  useAddComposableEntry,
+  type ComposableEntryInput,
+} from "@/hooks/use-composable-entry";
 import {
   useEatingRecords,
   useAddEating,
   useDeleteEating,
   useUpdateEating,
 } from "@/hooks/use-eating-queries";
-import { EditIntakeDialog } from "@/components/edit-intake-dialog";
-import {
-  useRecentIntakeRecords,
-  useDeleteIntake,
-  useUpdateIntake,
-} from "@/hooks/use-intake-queries";
-import { useSettingsStore } from "@/stores/settings-store";
 import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
 import { useEditRecord } from "@/hooks/use-edit-record";
 import { useToast } from "@/hooks/use-toast";
-import { type EatingRecord, type IntakeRecord } from "@/lib/db";
+import { type EatingRecord } from "@/lib/db";
 import {
   getCurrentDateTimeLocal,
   dateTimeLocalToTimestamp,
@@ -51,85 +39,40 @@ import {
 
 const theme = CARD_THEMES.eating;
 
-// ─── Helper: build ComposableEntryInput from preview records ─────────
+// ─── Sodium conversion multipliers ─────────────────────────────────
 
-function buildComposableInput(
-  records: PreviewRecord[],
-  originalText: string
-): ComposableEntryInput {
-  const eating = records.find((r) => r.type === "eating");
-  const water = records.find((r) => r.type === "water");
-  const salt = records.find((r) => r.type === "salt");
-  const intakes: ComposableEntryInput["intakes"] = [];
+type SodiumSource = "sodium" | "salt" | "msg";
 
-  if (water && water.amountMl && water.amountMl > 0) {
-    intakes.push({
-      type: "water",
-      amount: water.amountMl,
-      source: "food:ai_parse",
-    });
-  }
-  if (salt && salt.amountMg && salt.amountMg > 0) {
-    intakes.push({
-      type: "salt",
-      amount: salt.amountMg,
-      source: "food:ai_parse",
-    });
-  }
-
-  return {
-    ...(eating && {
-      eating: {
-        ...(eating.description !== undefined && { note: eating.description }),
-        ...(eating.grams !== undefined &&
-          eating.grams > 0 && { grams: eating.grams }),
-      },
-    }),
-    ...(intakes.length > 0 && { intakes }),
-    originalInputText: originalText,
-    groupSource: "ai_food_parse",
-  };
-}
-
-interface MergedHistoryItem {
-  id: string;
-  kind: "eating" | "salt";
-  timestamp: number;
-  eating?: EatingRecord;
-  intake?: IntakeRecord;
-}
+const SODIUM_MULTIPLIERS: Record<SodiumSource, number> = {
+  sodium: 1.0, // direct sodium mg
+  salt: 0.39, // table salt is ~39% sodium
+  msg: 0.12, // MSG is ~12% sodium
+};
 
 export function FoodSection() {
   const { toast } = useToast();
   const addComposableEntry = useAddComposableEntry();
 
-  // ─── Quick log state ──────────────────────────────────────────────
+  // ─── Mutations ────────────────────────────────────────────────────
   const addEatingMutation = useAddEating();
 
-  // ─── Add details state ────────────────────────────────────────────
-  const [detailsOpen, setDetailsOpen] = useState(false);
-  const [detailNote, setDetailNote] = useState("");
-  const [detailGrams, setDetailGrams] = useState("");
-  const [detailTime, setDetailTime] = useState(getCurrentDateTimeLocal());
-
-  // ─── Sodium preset state (for manual details) ────────────────────
-  const sodiumPresets = useSettingsStore((s) => s.sodiumPresets);
-  const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
-  const selectedPreset = sodiumPresets.find((p) => p.id === selectedPresetId);
-  const detailGramsNum = detailGrams ? parseInt(detailGrams, 10) : 0;
-  const calculatedSodiumMg = selectedPreset && detailGramsNum > 0
-    ? Math.round(detailGramsNum * (selectedPreset.sodiumPercent / 100))
-    : 0;
-
-  // ─── AI food input state ──────────────────────────────────────────
+  // ─── Form state ───────────────────────────────────────────────────
   const [foodText, setFoodText] = useState("");
+  const [detailGrams, setDetailGrams] = useState("");
+  const [sodiumMg, setSodiumMg] = useState("");
+  const [sodiumSource, setSodiumSource] = useState<SodiumSource>("sodium");
+  const [waterMl, setWaterMl] = useState("");
   const [isParsing, setIsParsing] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  // Track whether AI populated form fields (determines composable vs plain submit)
+  const [aiPopulated, setAiPopulated] = useState(false);
 
-  // ─── Composable preview state ─────────────────────────────────────
-  const [previewRecords, setPreviewRecords] = useState<PreviewRecord[]>([]);
-  const [reasoning, setReasoning] = useState<string | null>(null);
-  const [originalInputText, setOriginalInputText] = useState("");
-  const [isConfirming, setIsConfirming] = useState(false);
+  // ─── Derived sodium calculation ───────────────────────────────────
+  const sodiumMgNum = sodiumMg ? parseFloat(sodiumMg) : 0;
+  const calculatedSodiumMg =
+    sodiumMgNum > 0
+      ? Math.round(sodiumMgNum * SODIUM_MULTIPLIERS[sodiumSource])
+      : 0;
 
   // ─── Recent eating records ────────────────────────────────────────
   const recentRecords = useEatingRecords(5);
@@ -161,169 +104,43 @@ export function FoodSection() {
     mutateAsync: updateMutation.mutateAsync,
   });
 
-  // ─── Recent salt records (for merged history) ───────────────────
-  const recentSaltRecords = useRecentIntakeRecords("salt");
-  const deleteSaltMutation = useDeleteIntake();
-  const updateSaltMutation = useUpdateIntake();
-  const [deletingSaltId, setDeletingSaltId] = useState<string | null>(null);
-
-  // Salt edit state
-  const [editingSaltRecord, setEditingSaltRecord] = useState<IntakeRecord | null>(null);
-  const [editSaltAmount, setEditSaltAmount] = useState("");
-  const [editSaltTimestamp, setEditSaltTimestamp] = useState("");
-  const [editSaltNote, setEditSaltNote] = useState("");
-
-  const openSaltEdit = useCallback((record: IntakeRecord) => {
-    setEditingSaltRecord(record);
-    setEditSaltAmount(record.amount.toString());
-    setEditSaltTimestamp(
-      new Date(record.timestamp).toISOString().slice(0, 16)
-    );
-    setEditSaltNote(record.note ?? "");
-  }, []);
-
-  const closeSaltEdit = useCallback(() => {
-    setEditingSaltRecord(null);
-  }, []);
-
-  const handleSaltEditSubmit = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingSaltRecord) return;
-    const newAmount = parseInt(editSaltAmount, 10);
-    if (isNaN(newAmount) || newAmount <= 0) return;
-    const timestamp = new Date(editSaltTimestamp).getTime();
-    await updateSaltMutation.mutateAsync({
-      id: editingSaltRecord.id,
-      updates: { amount: newAmount, timestamp, ...(editSaltNote ? { note: editSaltNote } : {}) },
-    });
-    closeSaltEdit();
-  }, [editingSaltRecord, editSaltAmount, editSaltTimestamp, editSaltNote, updateSaltMutation, closeSaltEdit]);
-
-  const handleSaltDelete = useCallback(async (id: string) => {
-    setDeletingSaltId(id);
-    try {
-      await deleteSaltMutation.mutateAsync(id);
-    } finally {
-      setDeletingSaltId(null);
-    }
-  }, [deleteSaltMutation]);
-
-  // ─── Merged history ───────────────────────────────────────────
-  const mergedHistory = useMemo<MergedHistoryItem[]>(() => {
-    const eatingItems: MergedHistoryItem[] = (recentRecords ?? []).map((r) => ({
-      id: r.id,
-      kind: "eating" as const,
-      timestamp: r.timestamp,
-      eating: r,
-    }));
-    const saltItems: MergedHistoryItem[] = (recentSaltRecords ?? []).map((r) => ({
-      id: r.id,
-      kind: "salt" as const,
-      timestamp: r.timestamp,
-      intake: r,
-    }));
-    return [...eatingItems, ...saltItems]
-      .sort((a, b) => b.timestamp - a.timestamp)
-      .slice(0, 5);
-  }, [recentRecords, recentSaltRecords]);
-
   // ─── Handlers ─────────────────────────────────────────────────────
 
-  const handleDetailSubmit = useCallback(async () => {
-    try {
-      const timestamp = dateTimeLocalToTimestamp(detailTime);
-      const grams = detailGrams ? parseInt(detailGrams, 10) : undefined;
-      const note = detailNote || undefined;
-
-      if (selectedPreset && calculatedSodiumMg > 0) {
-        // Composable entry: eating + sodium
-        const input: ComposableEntryInput = {
-          eating: {
-            ...(note !== undefined && { note }),
-            ...(grams !== undefined && grams > 0 && { grams }),
-          },
-          intakes: [{
-            type: "salt" as const,
-            amount: calculatedSodiumMg,
-            source: `manual:${selectedPreset.name}`,
-          }],
-          groupSource: "manual_food_details",
-        };
-        await addComposableEntry(input, timestamp);
-        toast({
-          title: "Logged",
-          description: `Meal with ${calculatedSodiumMg}mg sodium recorded`,
-          variant: "success",
-        });
-      } else {
-        // Plain eating record (no sodium)
-        await addEatingMutation.mutateAsync({
-          timestamp,
-          ...(note !== undefined && { note }),
-          ...(grams !== undefined && grams > 0 && { grams }),
-        });
-        toast({
-          title: "Logged",
-          description: detailNote
-            ? "Meal with details recorded"
-            : "Eating event recorded",
-          variant: "success",
-        });
-      }
-
-      // Reset form
-      setDetailNote("");
-      setDetailGrams("");
-      setDetailTime(getCurrentDateTimeLocal());
-      setSelectedPresetId(null);
-      setDetailsOpen(false);
-    } catch {
-      toast({
-        title: "Error",
-        description: "Failed to record",
-        variant: "destructive",
-      });
-    }
-  }, [addEatingMutation, addComposableEntry, detailNote, detailGrams, detailTime, selectedPreset, calculatedSodiumMg, toast]);
+  const resetForm = useCallback(() => {
+    setFoodText("");
+    setDetailGrams("");
+    setSodiumMg("");
+    setSodiumSource("sodium");
+    setWaterMl("");
+    setAiPopulated(false);
+  }, []);
 
   const handleParse = useCallback(async () => {
     const trimmed = foodText.trim();
     if (!trimmed || isParsing) return;
 
     setIsParsing(true);
-    // Collapse details when AI parse triggered (mutual exclusivity)
-    setDetailsOpen(false);
-
     try {
       const result = await parseIntakeWithAI(trimmed);
-      const records: PreviewRecord[] = [];
 
-      // Always create an eating record from the food description
-      records.push({
-        type: "eating",
-        description: trimmed,
-        expanded: false,
-      });
-
-      if (result.water && result.water > 0) {
-        records.push({
-          type: "water",
-          amountMl: result.water,
-          expanded: false,
-        });
-      }
-
+      // Populate form fields from AI result
       if (result.salt && result.salt > 0) {
-        records.push({
-          type: "salt",
-          amountMg: result.salt,
-          expanded: false,
+        setSodiumMg(result.salt.toString());
+        setSodiumSource("sodium"); // AI returns sodium mg directly
+      }
+      if (result.water && result.water > 0) {
+        setWaterMl(result.water.toString());
+      }
+      setAiPopulated(true);
+
+      // Show reasoning as a toast
+      if (result.reasoning) {
+        toast({
+          title: "AI estimate",
+          description: result.reasoning,
+          variant: "default",
         });
       }
-
-      setPreviewRecords(records);
-      setReasoning(result.reasoning ?? null);
-      setOriginalInputText(trimmed);
     } catch {
       toast({
         title: "AI parsing failed",
@@ -335,45 +152,83 @@ export function FoodSection() {
     }
   }, [foodText, isParsing, toast]);
 
-  const handleConfirmAll = useCallback(async () => {
-    if (previewRecords.length === 0 || isConfirming) return;
+  const handleDetailSubmit = useCallback(async () => {
+    if (isSubmitting) return;
 
-    setIsConfirming(true);
+    setIsSubmitting(true);
     try {
-      const input = buildComposableInput(previewRecords, originalInputText);
-      await addComposableEntry(input);
+      // Capture timestamp at moment of submission
+      const timestamp = dateTimeLocalToTimestamp(getCurrentDateTimeLocal());
+      const grams = detailGrams ? parseInt(detailGrams, 10) : undefined;
+      const note = foodText.trim() || undefined;
+
+      // Build intakes for composable entry
+      const intakes: ComposableEntryInput["intakes"] = [];
+      if (calculatedSodiumMg > 0) {
+        intakes.push({
+          type: "salt",
+          amount: calculatedSodiumMg,
+          source: `manual:${sodiumSource}`,
+        });
+      }
+      const waterMlNum = waterMl ? parseFloat(waterMl) : 0;
+      if (waterMlNum > 0) {
+        intakes.push({
+          type: "water",
+          amount: Math.round(waterMlNum),
+          source: "manual:food_water_content",
+        });
+      }
+
+      // Use composable entry if we have intakes or AI-populated data
+      if (intakes.length > 0 || aiPopulated) {
+        const input: ComposableEntryInput = {
+          eating: {
+            ...(note !== undefined && { note }),
+            ...(grams !== undefined && grams > 0 && { grams }),
+          },
+          ...(intakes.length > 0 && { intakes }),
+          ...(aiPopulated && { originalInputText: foodText.trim() }),
+          groupSource: aiPopulated ? "ai_food_parse" : "manual_food_entry",
+        };
+        await addComposableEntry(input, timestamp);
+      } else {
+        // Plain eating record (no sodium/water)
+        await addEatingMutation.mutateAsync({
+          timestamp,
+          ...(note !== undefined && { note }),
+          ...(grams !== undefined && grams > 0 && { grams }),
+        });
+      }
+
       toast({
-        title: "Food logged",
-        description: `${previewRecords.length} linked records created`,
+        title: "Logged",
+        description: note ? "Meal with details recorded" : "Eating event recorded",
         variant: "success",
       });
-      setPreviewRecords([]);
-      setFoodText("");
-      setReasoning(null);
-      setOriginalInputText("");
+      resetForm();
     } catch {
       toast({
         title: "Error",
-        description: "Failed to save food entry",
+        description: "Failed to record",
         variant: "destructive",
       });
     } finally {
-      setIsConfirming(false);
+      setIsSubmitting(false);
     }
   }, [
-    previewRecords,
-    isConfirming,
-    originalInputText,
+    isSubmitting,
+    foodText,
+    detailGrams,
+    calculatedSodiumMg,
+    sodiumSource,
+    waterMl,
+    aiPopulated,
     addComposableEntry,
+    addEatingMutation,
     toast,
+    resetForm,
   ]);
-
-  const handleTryAgain = useCallback(() => {
-    setPreviewRecords([]);
-    setFoodText("");
-    setReasoning(null);
-    setOriginalInputText("");
-  }, []);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -385,17 +240,15 @@ export function FoodSection() {
     [handleParse]
   );
 
-  const showPreview = previewRecords.length > 0;
-
   return (
     <>
-      {/* AI Food Input */}
+      {/* "What I ate" text input — doubles as AI parse input */}
       <div className="relative mt-3">
         <Input
           value={foodText}
           onChange={(e) => setFoodText(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Describe food for AI parsing..."
+          placeholder="What I ate..."
           aria-label="Describe food for AI nutritional parsing"
           className="h-10 pr-10"
           disabled={isParsing}
@@ -419,173 +272,110 @@ export function FoodSection() {
         </button>
       </div>
 
-      {/* Composable Preview */}
-      {showPreview && (
-        <ComposablePreview
-          records={previewRecords}
-          onRecordsChange={setPreviewRecords}
-          originalInputText={originalInputText}
-          reasoning={reasoning}
-          onConfirm={handleConfirmAll}
-          onTryAgain={handleTryAgain}
-          isConfirming={isConfirming}
-        />
-      )}
+      {/* Always-visible detail fields */}
+      <div className="space-y-3 mt-3">
+        {/* Weight in grams */}
+        <div className="space-y-1">
+          <Label htmlFor="eating-grams" className="text-sm">
+            Weight (g){" "}
+            <span className="text-muted-foreground font-normal">(optional)</span>
+          </Label>
+          <Input
+            id="eating-grams"
+            type="number"
+            min="1"
+            max="10000"
+            placeholder="e.g. 250"
+            value={detailGrams}
+            onChange={(e) => setDetailGrams(e.target.value)}
+          />
+        </div>
 
-      {/* "Add details" Expandable — hidden when AI preview is visible */}
-      {!showPreview && (
-        <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
-          <CollapsibleTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full justify-between text-muted-foreground"
+        {/* Sodium section */}
+        <div className="space-y-1">
+          <Label htmlFor="eating-sodium" className="text-sm">
+            Sodium{" "}
+            <span className="text-muted-foreground font-normal">(optional)</span>
+          </Label>
+          <div className="flex gap-2">
+            <Input
+              id="eating-sodium"
+              type="number"
+              min="0"
+              placeholder="mg"
+              value={sodiumMg}
+              onChange={(e) => setSodiumMg(e.target.value)}
+              className="flex-1"
+            />
+            <Select
+              value={sodiumSource}
+              onValueChange={(v) => setSodiumSource(v as SodiumSource)}
             >
-              <span>Add details</span>
-              {detailsOpen ? (
-                <ChevronUp className="w-4 h-4" />
-              ) : (
-                <ChevronDown className="w-4 h-4" />
-              )}
-            </Button>
-          </CollapsibleTrigger>
+              <SelectTrigger className="w-[120px]">
+                <SelectValue placeholder="Source" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="sodium">Sodium</SelectItem>
+                <SelectItem value="salt">Salt</SelectItem>
+                <SelectItem value="msg">MSG</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {calculatedSodiumMg > 0 && sodiumSource !== "sodium" && (
+            <p className="text-xs text-muted-foreground">
+              = {calculatedSodiumMg}mg sodium
+            </p>
+          )}
+        </div>
 
-          <CollapsibleContent>
-            <div className="p-3 rounded-lg bg-muted/50 border space-y-3">
-              <div className="space-y-1">
-                <Label htmlFor="eating-note" className="text-sm">
-                  What I ate (optional)
-                </Label>
-                <Textarea
-                  id="eating-note"
-                  placeholder="e.g. Sandwich, apple, water"
-                  value={detailNote}
-                  onChange={(e) => setDetailNote(e.target.value)}
-                  className="min-h-[80px]"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="eating-grams" className="text-sm">
-                  Weight in grams (optional)
-                </Label>
-                <Input
-                  id="eating-grams"
-                  type="number"
-                  min="1"
-                  max="10000"
-                  placeholder="e.g. 250"
-                  value={detailGrams}
-                  onChange={(e) => setDetailGrams(e.target.value)}
-                />
-              </div>
-              {/* Sodium source (optional) */}
-              {sodiumPresets.length > 0 && (
-                <div className="space-y-1">
-                  <Label className="text-sm">Sodium source (optional)</Label>
-                  <div className="flex flex-wrap gap-2">
-                    {sodiumPresets.map((preset) => (
-                      <Button
-                        key={preset.id}
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          setSelectedPresetId(
-                            selectedPresetId === preset.id ? null : preset.id
-                          )
-                        }
-                        className={cn(
-                          "text-xs transition-all",
-                          selectedPresetId === preset.id
-                            ? "bg-amber-100 border-amber-300 dark:bg-amber-900/50 dark:border-amber-700"
-                            : "opacity-70"
-                        )}
-                      >
-                        {preset.name}
-                        {preset.sodiumPercent < 100 && (
-                          <span className="ml-1 text-muted-foreground">
-                            {preset.sodiumPercent}%
-                          </span>
-                        )}
-                      </Button>
-                    ))}
-                  </div>
-                  {calculatedSodiumMg > 0 && (
-                    <p className="text-xs text-muted-foreground">
-                      = {calculatedSodiumMg}mg sodium
-                    </p>
-                  )}
-                </div>
-              )}
-              <div className="space-y-1">
-                <Label htmlFor="eating-time" className="text-sm">
-                  When
-                </Label>
-                <Input
-                  id="eating-time"
-                  type="datetime-local"
-                  value={detailTime}
-                  onChange={(e) => setDetailTime(e.target.value)}
-                  max={getCurrentDateTimeLocal()}
-                />
-              </div>
-              <Button
-                onClick={handleDetailSubmit}
-                disabled={addEatingMutation.isPending}
-                className={cn("w-full mt-2", theme.buttonBg)}
-              >
-                {addEatingMutation.isPending ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  "Record with details"
-                )}
-              </Button>
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
-      )}
+        {/* Water content */}
+        <div className="space-y-1">
+          <Label htmlFor="eating-water" className="text-sm">
+            Water content (ml){" "}
+            <span className="text-muted-foreground font-normal">(optional)</span>
+          </Label>
+          <Input
+            id="eating-water"
+            type="number"
+            min="0"
+            placeholder="ml"
+            value={waterMl}
+            onChange={(e) => setWaterMl(e.target.value)}
+          />
+        </div>
 
-      {/* Merged Food + Sodium History */}
+        {/* Record button — always visible */}
+        <Button
+          onClick={handleDetailSubmit}
+          disabled={addEatingMutation.isPending || isSubmitting}
+          className={cn("w-full mt-2", theme.buttonBg)}
+        >
+          {addEatingMutation.isPending || isSubmitting ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            "Record with details"
+          )}
+        </Button>
+      </div>
+
+      {/* Recent Eating Records */}
       <RecentEntriesList
-        records={mergedHistory}
-        deletingId={deletingId ?? deletingSaltId}
-        onDelete={(id) => {
-          const item = mergedHistory.find((m) => m.id === id);
-          if (item?.kind === "salt") {
-            handleSaltDelete(id);
-          } else {
-            handleDelete(id);
-          }
-        }}
-        onEdit={(record) => {
-          if (record.kind === "salt" && record.intake) {
-            openSaltEdit(record.intake);
-          } else if (record.eating) {
-            openEdit(record.eating);
-          }
-        }}
+        records={recentRecords}
+        deletingId={deletingId}
+        onDelete={handleDelete}
+        onEdit={openEdit}
         borderColor={theme.border}
         renderEntry={(record) => (
           <div className="flex items-center gap-2 min-w-0">
-            <span className="text-sm text-muted-foreground shrink-0">
+            <span className="text-muted-foreground shrink-0">
               {formatDateTime(record.timestamp)}
             </span>
-            {record.kind === "salt" && record.intake && (
-              <span className="text-xs font-medium">
-                {formatAmount(record.intake.amount, "mg")} Na
-              </span>
+            {record.grams && (
+              <span className="text-xs font-medium">{record.grams}g</span>
             )}
-            {record.kind === "eating" && record.eating?.grams && (
-              <span className="text-xs font-medium">{record.eating.grams}g</span>
-            )}
-            {record.kind === "eating" && record.eating?.note && (
+            {record.note && (
               <span className="text-xs text-muted-foreground/70 truncate">
-                {record.eating.note}
-              </span>
-            )}
-            {record.kind === "salt" && record.intake?.note && (
-              <span className="text-xs text-muted-foreground/70 truncate">
-                {record.intake.note}
+                {record.note}
               </span>
             )}
           </div>
@@ -602,18 +392,6 @@ export function FoodSection() {
         onNoteChange={setEditNote}
         grams={editGrams}
         onGramsChange={setEditGrams}
-      />
-
-      <EditIntakeDialog
-        record={editingSaltRecord}
-        onClose={closeSaltEdit}
-        onSubmit={handleSaltEditSubmit}
-        amount={editSaltAmount}
-        onAmountChange={setEditSaltAmount}
-        timestamp={editSaltTimestamp}
-        onTimestampChange={setEditSaltTimestamp}
-        note={editSaltNote}
-        onNoteChange={setEditSaltNote}
       />
     </>
   );
