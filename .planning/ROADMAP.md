@@ -38,7 +38,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 34: Food/Sodium Card Restructure** - Reposition sodium display, use descriptions as titles, merge history sections (completed 2026-04-06)
 - [ ] **Phase 35: Preset Fixes** - AI-powered substance content on preset creation and reliable preset deletion
 - [ ] **Phase 36: Neon DB + Vercel Integration Understanding** - Research how Vercel receives Neon branch DB connection details via the integration
-- [ ] **Phase 37: Water Entry Label Formatting Bug** - Fix labels showing "preset:manual" and "substance:{id}" instead of clean text
+- [x] **Phase 37: Water Entry Label Formatting Bug** - Fix labels showing "preset:manual" and "substance:{id}" instead of clean text (completed 2026-04-06)
 - [ ] **Phase 38: Weight Input Default Value Bug** - Fix weight input defaulting to 70 instead of last recorded value
 
 ## Phase Details
@@ -104,7 +104,7 @@ Phases execute in numeric order: 32 → 33 → 34 → 35 → 36 → 37 → 38
 | 34. Food/Sodium Card Restructure | v1.4 | 3/3 | Complete    | 2026-04-06 |
 | 35. Preset Fixes | v1.4 | 0/0 | Not started | - |
 | 36. Neon DB + Vercel Integration Understanding | v1.4 | 0/0 | Not started | - |
-| 37. Water Entry Label Formatting Bug | v1.4 | 0/0 | Not started | - |
+| 37. Water Entry Label Formatting Bug | v1.4 | 1/1 | Complete   | 2026-04-06 |
 | 38. Weight Input Default Value Bug | v1.4 | 0/0 | Not started | - |
 
 ### Phase 36: Neon DB + Vercel Integration Understanding
@@ -122,7 +122,7 @@ Plans:
 **Goal:** [To be planned]
 **Requirements**: TBD
 **Depends on:** Nothing (independent bug fix)
-**Plans:** 0 plans
+**Plans:** 1/1 plans complete
 
 Plans:
 - [ ] TBD (run /gsd-plan-phase 37 to break down)
