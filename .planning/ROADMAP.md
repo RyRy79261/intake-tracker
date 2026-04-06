@@ -2,14 +2,15 @@
 
 ## Overview
 
-Personal health tracking PWA. v1.0 rebuilt the engineering foundation (strict TypeScript, atomic transactions, analytics, security, tests, push notifications). v1.1 redesigned the intake UI with composable data entries, unified cards, AI substance lookup, and dashboard modernization. v1.2 added a world-class CI pipeline protecting data integrity, E2E testing, supply chain hardening, and performance benchmarking. v1.3 establishes the deployment lifecycle: automated releases with changelogs, a stable staging environment with isolated backend, protected production deployments, and version observability.
+Personal health tracking PWA. v1.0 rebuilt the engineering foundation (strict TypeScript, atomic transactions, analytics, security, tests, push notifications). v1.1 redesigned the intake UI with composable data entries, unified cards, AI substance lookup, and dashboard modernization. v1.2 added a world-class CI pipeline protecting data integrity, E2E testing, supply chain hardening, and performance benchmarking. v1.3 established the deployment lifecycle: automated releases with changelogs, a stable staging environment, protected production deployments, and version observability. v1.4 fixes bugs, UI inconsistencies, and missing functionality identified after the v1.3 production release.
 
 ## Milestones
 
 - ✅ **v1.0 Engineering Overhaul** — Phases 1–11, 44 plans (shipped 2026-03-23) — [archived](./milestones/v1.0-ROADMAP.md)
 - ✅ **v1.1 UI Overhaul** — Phases 12–19, 16 plans (shipped 2026-03-27) — [archived](./milestones/v1.1-ROADMAP.md)
 - ✅ **v1.2 CI & Data Integrity** — Phases 20–26, 16 plans (shipped 2026-04-04) — [archived](./milestones/v1.2-ROADMAP.md)
-- 🚧 **v1.3 Deployment Lifecycle** — Phases 27–30 (in progress)
+- ✅ **v1.3 Deployment Lifecycle** — Phases 27–31, 12 plans (shipped 2026-04-05) — [archived](./milestones/v1.3-ROADMAP.md)
+- 🚧 **v1.4 Post-Release Fixes** — Phases 32–38 (in progress)
 
 ## Phases
 
@@ -20,99 +21,118 @@ Personal health tracking PWA. v1.0 rebuilt the engineering foundation (strict Ty
 Decimal phases appear between their surrounding integers in numeric order.
 
 <details>
-<summary>✅ v1.2 CI & Data Integrity (Phases 20–26) — SHIPPED 2026-04-04</summary>
+<summary>✅ v1.3 Deployment Lifecycle (Phases 27–31) — SHIPPED 2026-04-05</summary>
 
-- [x] Phase 20: Core CI Pipeline (2/2 plans) — completed 2026-03-28
-- [x] Phase 21: Data Integrity Gates (2/2 plans) — completed 2026-03-28
-- [x] Phase 22: E2E Testing in CI (2/2 plans) — completed 2026-03-28
-- [x] Phase 23: Supply Chain Hardening (3/3 plans) — completed 2026-03-28
-- [x] Phase 24: CI Optimization & Benchmarking (2/2 plans) — completed 2026-03-28
-- [x] Phase 25: CI Integration Fixes (1/1 plan) — completed 2026-03-28
-- [x] Phase 26: Comprehensive E2E Test Coverage (4/4 plans) — completed 2026-04-04
+- [x] Phase 27: Release Automation (3/3 plans) — completed 2026-04-04
+- [x] Phase 28: Staging Environment (4/4 plans) — completed 2026-04-04
+- [x] Phase 29: Deployment Protection (2/2 plans) — completed 2026-04-04
+- [x] Phase 30: Observability & Rollback (2/2 plans) — completed 2026-04-04
+- [x] Phase 31: Rollback & Documentation Fixes (1/1 plan) — completed 2026-04-05
 
 </details>
 
-### 🚧 v1.3 Deployment Lifecycle (In Progress)
+### 🚧 v1.4 Post-Release Fixes (In Progress)
 
-- [x] **Phase 27: Release Automation** - Replace fragile version-bump with Release Please pipeline producing changelogs, semver tags, and GitHub Releases (completed 2026-04-04)
-- [x] **Phase 28: Staging Environment** - Stable staging URL with isolated Neon DB, disabled service worker, and configured auth (completed 2026-04-04)
-- [x] **Phase 29: Deployment Protection** - Branch protection, environment gates, and promotion workflow for production deployments (completed 2026-04-04)
-- [x] **Phase 30: Observability & Rollback** - Version visibility in the app and documented recovery procedures (completed 2026-04-04)
-- [x] **Phase 31: Rollback & Documentation Fixes** - Fix rollback path blocked by branch protection, document missing secrets (gap closure) (completed 2026-04-05)
+- [x] **Phase 32: Release Pipeline + Weight Settings Infrastructure** - Fix release-please PR permissions and establish correct weight increment/rounding foundations (completed 2026-04-06)
+- [x] **Phase 33: Weight Direct Input** - Enable tap-to-type keyboard entry for weight values (completed 2026-04-06)
+- [x] **Phase 34: Food/Sodium Card Restructure** - Reposition sodium display, use descriptions as titles, merge history sections (completed 2026-04-06)
+- [x] **Phase 35: Preset Fixes** - AI-powered substance content on preset creation and reliable preset deletion (completed 2026-04-06)
+- [x] **Phase 36: Neon DB + Vercel Integration Understanding** - Research how Vercel receives Neon branch DB connection details via the integration (completed 2026-04-06)
+- [x] **Phase 37: Water Entry Label Formatting Bug** - Fix labels showing "preset:manual" and "substance:{id}" instead of clean text (completed 2026-04-06)
+- [x] **Phase 38: Weight Input Default Value Bug** - Fix weight input defaulting to 70 instead of last recorded value (completed 2026-04-06)
 
 ## Phase Details
 
-### Phase 27: Release Automation
-**Goal**: Every merge to main produces a properly versioned release with an auto-generated changelog and GitHub Release
-**Depends on**: Nothing (first phase of v1.3; builds on existing CI from v1.2)
-**Requirements**: REL-01, REL-02, REL-03, REL-04, REL-05, REL-06
+### Phase 32: Release Pipeline + Weight Settings Infrastructure
+**Goal**: Release-please can create PRs again and weight tracking uses correct decimal precision throughout the settings and display pipeline
+**Depends on**: Nothing (first phase of v1.4; builds on v1.3 infrastructure)
+**Requirements**: REL-01, WGT-02, WGT-03
 **Success Criteria** (what must be TRUE):
-  1. Committing with a non-conventional message format is rejected by the commit-msg hook before the commit is created
-  2. Merging a `feat:` commit to main causes Release Please to open (or update) a release PR with a version bump and changelog entries
-  3. Merging the Release Please PR creates a GitHub Release with formatted release notes and a semver git tag (e.g., `v1.3.0`)
-  4. CHANGELOG.md exists in the repo root and contains entries grouped by type (Features, Bug Fixes, etc.) generated from conventional commits
-  5. The old `version-bump.yml` workflow no longer exists and `package.json` version reflects the project's actual version history (starting from `1.2.0`)
+  1. Running the release-please GitHub Action after a conventional commit merge to main successfully opens or updates a release PR (no permission errors)
+  2. User can navigate to Settings and see a weight increment control that defaults to 0.05 and persists the chosen value across app restarts
+  3. Adjusting weight via increment buttons produces values rounded to 0.05 precision (e.g., 70.00, 70.05, 70.10 -- not 70.0, 70.1)
+  4. The settings-helpers utility correctly stores and retrieves decimal values (parseFloat, not parseInt)
 **Plans**: TBD
 
-### Phase 28: Staging Environment
-**Goal**: A stable staging environment exists at a known URL with its own isolated backend, where service workers cannot cache stale content and auth works correctly
-**Depends on**: Phase 27 (staging branch inherits clean version state from Release Please)
-**Requirements**: STG-01, STG-02, STG-03, STG-04, STG-05, STG-06
+### Phase 33: Weight Direct Input
+**Goal**: Users can enter weight values directly via keyboard instead of only using increment/decrement buttons
+**Depends on**: Phase 32 (correct increment step and rounding precision must be in place)
+**Requirements**: WGT-01
 **Success Criteria** (what must be TRUE):
-  1. Pushing to the `staging` git branch automatically deploys to `staging.intake-tracker.ryanjnoble.dev` and the page loads successfully
-  2. Push notification data on staging is stored in an isolated Neon DB branch, not the production database
-  3. The service worker is not registered on the staging URL (no stale content caching between deployments)
-  4. A user can log in via Privy on the staging URL without auth errors
-  5. Triggering a Neon staging branch reset restores the staging database to a clean production-mirrored schema
-**Plans**: TBD
-
-### Phase 29: Deployment Protection
-**Goal**: Production deployments are gated by CI checks and human approval, with promotion managed through dedicated workflows separate from ci.yml
-**Depends on**: Phase 28 (promotion workflow requires a working staging environment to promote from)
-**Requirements**: DEP-01, DEP-02, DEP-03
-**Success Criteria** (what must be TRUE):
-  1. A PR to `staging` or `main` cannot be merged unless CI passes (branch protection rules enforced)
-  2. Production deployment via the promotion workflow requires at least one reviewer approval through GitHub environment protection
-  3. Deployment and promotion workflows exist as separate `.yml` files from `ci.yml`
-**Plans**: TBD
-
-### Phase 30: Observability & Rollback
-**Goal**: The running app version is visible to the user and there is a documented procedure for recovering from bad deployments
-**Depends on**: Phase 27 (version display requires Release Please to manage package.json version)
-**Requirements**: OBS-01, OBS-02
-**Success Criteria** (what must be TRUE):
-  1. The Settings page displays the current app version (matching the version in package.json at build time)
-  2. A rollback runbook exists documenting how to use Vercel Instant Rollback and git revert to recover from a bad production deployment
+  1. User can tap the weight value on the dashboard card and a numeric keyboard appears (mobile) or the field becomes editable (desktop)
+  2. Typing a decimal value (e.g., 71.35) and confirming saves the weight record with that exact value
+  3. The entered value is rounded to the configured increment precision (0.05 by default) before saving
 **Plans**: TBD
 **UI hint**: yes
 
-### Phase 31: Rollback & Documentation Fixes
-**Goal**: Fix rollback documentation that contradicts branch protection and document missing secrets for operator setup
-**Depends on**: Phase 29 (branch protection rules), Phase 30 (ROLLBACK.md)
-**Requirements**: OBS-02
-**Gap Closure**: Closes gaps from v1.3 milestone audit
+### Phase 34: Food/Sodium Card Restructure
+**Goal**: The food/sodium card displays information consistently with other dashboard cards and provides a single unified history view
+**Depends on**: Phase 32 (release pipeline functional for shipping fixes)
+**Requirements**: FOOD-01, FOOD-02, FOOD-03
 **Success Criteria** (what must be TRUE):
-  1. ROLLBACK.md git revert path uses a PR-based workflow (not direct push to main) so it works with enforce_admins branch protection
-  2. NEON_PROD_BRANCH_ID is documented in docs/staging-setup.md section 7 so operators know to configure it
-  3. Minor doc inconsistencies (snapshot SHA naming, `{sha}` vs `{sha7}`) are resolved
+  1. Sodium amount is displayed in the top-right area of the food card, matching the positioning pattern used by other intake cards (water, caffeine)
+  2. When a food entry has a description, that description appears as the primary title/label for the entry (not a generic "Food" or "Eating" label)
+  3. A single history section at the bottom of the card shows all food and sodium entries in chronological order, each displaying date, amount, and a truncated name/description
+  4. Editing or deleting an entry from the merged history correctly routes to the right mutation (eating record vs sodium record)
 **Plans**: TBD
+**UI hint**: yes
+
+### Phase 35: Preset Fixes
+**Goal**: Coffee presets are created with accurate substance data and can be reliably removed from the preset grid
+**Depends on**: Nothing (independent of other v1.4 phases)
+**Requirements**: PRES-01, PRES-02
+**Success Criteria** (what must be TRUE):
+  1. When user creates a new coffee preset and provides a name, the AI substance-lookup auto-populates caffeine and alcohol content per 100ml
+  2. User can delete a preset from the preset grid and the preset disappears from the UI immediately without requiring a page refresh or navigation
+**Plans**: TBD
+**UI hint**: yes
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 27 → 28 → 29 → 30
+Phases execute in numeric order: 32 → 33 → 34 → 35 → 36 → 37 → 38
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 20. Core CI Pipeline | v1.2 | 2/2 | Complete | 2026-03-28 |
-| 21. Data Integrity Gates | v1.2 | 2/2 | Complete | 2026-03-28 |
-| 22. E2E Testing in CI | v1.2 | 2/2 | Complete | 2026-03-28 |
-| 23. Supply Chain Hardening | v1.2 | 3/3 | Complete | 2026-03-28 |
-| 24. CI Optimization & Benchmarking | v1.2 | 2/2 | Complete | 2026-03-28 |
-| 25. CI Integration Fixes | v1.2 | 1/1 | Complete | 2026-03-28 |
-| 26. Comprehensive E2E Test Coverage | v1.2 | 4/4 | Complete | 2026-04-04 |
-| 27. Release Automation | v1.3 | 3/3 | Complete    | 2026-04-04 |
-| 28. Staging Environment | v1.3 | 4/4 | Complete    | 2026-04-04 |
-| 29. Deployment Protection | v1.3 | 2/2 | Complete    | 2026-04-04 |
-| 30. Observability & Rollback | v1.3 | 2/2 | Complete    | 2026-04-04 |
-| 31. Rollback & Documentation Fixes | v1.3 | 1/1 | Complete    | 2026-04-05 |
+| 27. Release Automation | v1.3 | 3/3 | Complete | 2026-04-04 |
+| 28. Staging Environment | v1.3 | 4/4 | Complete | 2026-04-04 |
+| 29. Deployment Protection | v1.3 | 2/2 | Complete | 2026-04-04 |
+| 30. Observability & Rollback | v1.3 | 2/2 | Complete | 2026-04-04 |
+| 31. Rollback & Documentation Fixes | v1.3 | 1/1 | Complete | 2026-04-05 |
+| 32. Release Pipeline + Weight Settings Infrastructure | v1.4 | 2/2 | Complete    | 2026-04-06 |
+| 33. Weight Direct Input | v1.4 | 2/2 | Complete    | 2026-04-06 |
+| 34. Food/Sodium Card Restructure | v1.4 | 3/3 | Complete    | 2026-04-06 |
+| 35. Preset Fixes | v1.4 | 2/2 | Complete    | 2026-04-06 |
+| 36. Neon DB + Vercel Integration Understanding | v1.4 | 3/3 | Complete    | 2026-04-06 |
+| 37. Water Entry Label Formatting Bug | v1.4 | 1/1 | Complete   | 2026-04-06 |
+| 38. Weight Input Default Value Bug | v1.4 | 1/1 | Complete    | 2026-04-06 |
+
+### Phase 36: Neon DB + Vercel Integration Understanding
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Nothing (independent research phase)
+**Plans:** 3/3 plans complete
+
+Plans:
+- [x] TBD (run /gsd-plan-phase 36 to break down) (completed 2026-04-06)
+
+### Phase 37: Water Entry Label Formatting Bug
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Nothing (independent bug fix)
+**Plans:** 1/1 plans complete
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 37 to break down)
+
+### Phase 38: Weight Input Default Value Bug
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Nothing (independent bug fix)
+**Plans:** 1/1 plans complete
+
+Plans:
+- [x] TBD (run /gsd-plan-phase 38 to break down) (completed 2026-04-06)
