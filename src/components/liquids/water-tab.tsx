@@ -28,6 +28,7 @@ export function WaterTab() {
   const settings = useSettings();
   const waterIncrement = settings.waterIncrement;
   const waterLimit = settings.waterLimit;
+  const liquidPresets = settings.liquidPresets;
 
   const waterIntake = useIntake("water");
   const recentRecords = useRecentIntakeRecords("water");
@@ -221,7 +222,7 @@ export function WaterTab() {
         onEdit={openEdit}
         borderColor={theme.border}
         renderEntry={(record) => {
-          const sourceLabel = getLiquidTypeLabel(record.source);
+          const sourceLabel = getLiquidTypeLabel(record.source, { presets: liquidPresets, note: record.note });
           return (
             <>
               <span className="text-muted-foreground">
