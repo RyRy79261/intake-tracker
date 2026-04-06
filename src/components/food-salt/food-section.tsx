@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,7 +16,7 @@ import {
   ChevronUp,
   Sparkles,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatAmount } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { RecentEntriesList } from "@/components/recent-entries-list";
 import { EditEatingDialog } from "@/components/edit-eating-dialog";
@@ -32,10 +32,16 @@ import {
   useDeleteEating,
   useUpdateEating,
 } from "@/hooks/use-eating-queries";
+import { EditIntakeDialog } from "@/components/edit-intake-dialog";
+import {
+  useRecentIntakeRecords,
+  useDeleteIntake,
+  useUpdateIntake,
+} from "@/hooks/use-intake-queries";
 import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
 import { useEditRecord } from "@/hooks/use-edit-record";
 import { useToast } from "@/hooks/use-toast";
-import { type EatingRecord } from "@/lib/db";
+import { type EatingRecord, type IntakeRecord } from "@/lib/db";
 import {
   getCurrentDateTimeLocal,
   dateTimeLocalToTimestamp,
@@ -82,6 +88,14 @@ function buildComposableInput(
     originalInputText: originalText,
     groupSource: "ai_food_parse",
   };
+}
+
+interface MergedHistoryItem {
+  id: string;
+  kind: "eating" | "salt";
+  timestamp: number;
+  eating?: EatingRecord;
+  intake?: IntakeRecord;
 }
 
 export function FoodSection() {
@@ -136,6 +150,72 @@ export function FoodSection() {
     },
     mutateAsync: updateMutation.mutateAsync,
   });
+
+  // ─── Recent salt records (for merged history) ───────────────────
+  const recentSaltRecords = useRecentIntakeRecords("salt");
+  const deleteSaltMutation = useDeleteIntake();
+  const updateSaltMutation = useUpdateIntake();
+  const [deletingSaltId, setDeletingSaltId] = useState<string | null>(null);
+
+  // Salt edit state
+  const [editingSaltRecord, setEditingSaltRecord] = useState<IntakeRecord | null>(null);
+  const [editSaltAmount, setEditSaltAmount] = useState("");
+  const [editSaltTimestamp, setEditSaltTimestamp] = useState("");
+  const [editSaltNote, setEditSaltNote] = useState("");
+
+  const openSaltEdit = useCallback((record: IntakeRecord) => {
+    setEditingSaltRecord(record);
+    setEditSaltAmount(record.amount.toString());
+    setEditSaltTimestamp(
+      new Date(record.timestamp).toISOString().slice(0, 16)
+    );
+    setEditSaltNote(record.note ?? "");
+  }, []);
+
+  const closeSaltEdit = useCallback(() => {
+    setEditingSaltRecord(null);
+  }, []);
+
+  const handleSaltEditSubmit = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingSaltRecord) return;
+    const newAmount = parseInt(editSaltAmount, 10);
+    if (isNaN(newAmount) || newAmount <= 0) return;
+    const timestamp = new Date(editSaltTimestamp).getTime();
+    await updateSaltMutation.mutateAsync({
+      id: editingSaltRecord.id,
+      updates: { amount: newAmount, timestamp, ...(editSaltNote ? { note: editSaltNote } : {}) },
+    });
+    closeSaltEdit();
+  }, [editingSaltRecord, editSaltAmount, editSaltTimestamp, editSaltNote, updateSaltMutation, closeSaltEdit]);
+
+  const handleSaltDelete = useCallback(async (id: string) => {
+    setDeletingSaltId(id);
+    try {
+      await deleteSaltMutation.mutateAsync(id);
+    } finally {
+      setDeletingSaltId(null);
+    }
+  }, [deleteSaltMutation]);
+
+  // ─── Merged history ───────────────────────────────────────────
+  const mergedHistory = useMemo<MergedHistoryItem[]>(() => {
+    const eatingItems: MergedHistoryItem[] = (recentRecords ?? []).map((r) => ({
+      id: r.id,
+      kind: "eating" as const,
+      timestamp: r.timestamp,
+      eating: r,
+    }));
+    const saltItems: MergedHistoryItem[] = (recentSaltRecords ?? []).map((r) => ({
+      id: r.id,
+      kind: "salt" as const,
+      timestamp: r.timestamp,
+      intake: r,
+    }));
+    return [...eatingItems, ...saltItems]
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, 5);
+  }, [recentRecords, recentSaltRecords]);
 
   // ─── Handlers ─────────────────────────────────────────────────────
 
@@ -389,24 +469,47 @@ export function FoodSection() {
         </Collapsible>
       )}
 
-      {/* Recent Eating Records */}
+      {/* Merged Food + Sodium History */}
       <RecentEntriesList
-        records={recentRecords}
-        deletingId={deletingId}
-        onDelete={handleDelete}
-        onEdit={openEdit}
+        records={mergedHistory}
+        deletingId={deletingId ?? deletingSaltId}
+        onDelete={(id) => {
+          const item = mergedHistory.find((m) => m.id === id);
+          if (item?.kind === "salt") {
+            handleSaltDelete(id);
+          } else {
+            handleDelete(id);
+          }
+        }}
+        onEdit={(record) => {
+          if (record.kind === "salt" && record.intake) {
+            openSaltEdit(record.intake);
+          } else if (record.eating) {
+            openEdit(record.eating);
+          }
+        }}
         borderColor={theme.border}
         renderEntry={(record) => (
           <div className="flex items-center gap-2 min-w-0">
-            <span className="text-muted-foreground shrink-0">
+            <span className="text-sm text-muted-foreground shrink-0">
               {formatDateTime(record.timestamp)}
             </span>
-            {record.grams && (
-              <span className="text-xs font-medium">{record.grams}g</span>
+            {record.kind === "salt" && record.intake && (
+              <span className="text-xs font-medium">
+                {formatAmount(record.intake.amount, "mg")} Na
+              </span>
             )}
-            {record.note && (
+            {record.kind === "eating" && record.eating?.grams && (
+              <span className="text-xs font-medium">{record.eating.grams}g</span>
+            )}
+            {record.kind === "eating" && record.eating?.note && (
               <span className="text-xs text-muted-foreground/70 truncate">
-                {record.note}
+                {record.eating.note}
+              </span>
+            )}
+            {record.kind === "salt" && record.intake?.note && (
+              <span className="text-xs text-muted-foreground/70 truncate">
+                {record.intake.note}
               </span>
             )}
           </div>
@@ -423,6 +526,18 @@ export function FoodSection() {
         onNoteChange={setEditNote}
         grams={editGrams}
         onGramsChange={setEditGrams}
+      />
+
+      <EditIntakeDialog
+        record={editingSaltRecord}
+        onClose={closeSaltEdit}
+        onSubmit={handleSaltEditSubmit}
+        amount={editSaltAmount}
+        onAmountChange={setEditSaltAmount}
+        timestamp={editSaltTimestamp}
+        onTimestampChange={setEditSaltTimestamp}
+        note={editSaltNote}
+        onNoteChange={setEditSaltNote}
       />
     </>
   );
