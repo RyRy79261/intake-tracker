@@ -38,6 +38,7 @@ import {
   useDeleteIntake,
   useUpdateIntake,
 } from "@/hooks/use-intake-queries";
+import { useSettingsStore } from "@/stores/settings-store";
 import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
 import { useEditRecord } from "@/hooks/use-edit-record";
 import { useToast } from "@/hooks/use-toast";
@@ -110,6 +111,15 @@ export function FoodSection() {
   const [detailNote, setDetailNote] = useState("");
   const [detailGrams, setDetailGrams] = useState("");
   const [detailTime, setDetailTime] = useState(getCurrentDateTimeLocal());
+
+  // ─── Sodium preset state (for manual details) ────────────────────
+  const sodiumPresets = useSettingsStore((s) => s.sodiumPresets);
+  const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
+  const selectedPreset = sodiumPresets.find((p) => p.id === selectedPresetId);
+  const detailGramsNum = detailGrams ? parseInt(detailGrams, 10) : 0;
+  const calculatedSodiumMg = selectedPreset && detailGramsNum > 0
+    ? Math.round(detailGramsNum * (selectedPreset.sodiumPercent / 100))
+    : 0;
 
   // ─── AI food input state ──────────────────────────────────────────
   const [foodText, setFoodText] = useState("");
@@ -224,21 +234,48 @@ export function FoodSection() {
       const timestamp = dateTimeLocalToTimestamp(detailTime);
       const grams = detailGrams ? parseInt(detailGrams, 10) : undefined;
       const note = detailNote || undefined;
-      await addEatingMutation.mutateAsync({
-        timestamp,
-        ...(note !== undefined && { note }),
-        ...(grams !== undefined && grams > 0 && { grams }),
-      });
-      toast({
-        title: "Logged",
-        description: detailNote
-          ? "Meal with details recorded"
-          : "Eating event recorded",
-        variant: "success",
-      });
+
+      if (selectedPreset && calculatedSodiumMg > 0) {
+        // Composable entry: eating + sodium
+        const input: ComposableEntryInput = {
+          eating: {
+            ...(note !== undefined && { note }),
+            ...(grams !== undefined && grams > 0 && { grams }),
+          },
+          intakes: [{
+            type: "salt" as const,
+            amount: calculatedSodiumMg,
+            source: `manual:${selectedPreset.name}`,
+          }],
+          groupSource: "manual_food_details",
+        };
+        await addComposableEntry(input, timestamp);
+        toast({
+          title: "Logged",
+          description: `Meal with ${calculatedSodiumMg}mg sodium recorded`,
+          variant: "success",
+        });
+      } else {
+        // Plain eating record (no sodium)
+        await addEatingMutation.mutateAsync({
+          timestamp,
+          ...(note !== undefined && { note }),
+          ...(grams !== undefined && grams > 0 && { grams }),
+        });
+        toast({
+          title: "Logged",
+          description: detailNote
+            ? "Meal with details recorded"
+            : "Eating event recorded",
+          variant: "success",
+        });
+      }
+
+      // Reset form
       setDetailNote("");
       setDetailGrams("");
       setDetailTime(getCurrentDateTimeLocal());
+      setSelectedPresetId(null);
       setDetailsOpen(false);
     } catch {
       toast({
@@ -247,7 +284,7 @@ export function FoodSection() {
         variant: "destructive",
       });
     }
-  }, [addEatingMutation, detailNote, detailGrams, detailTime, toast]);
+  }, [addEatingMutation, addComposableEntry, detailNote, detailGrams, detailTime, selectedPreset, calculatedSodiumMg, toast]);
 
   const handleParse = useCallback(async () => {
     const trimmed = foodText.trim();
@@ -441,6 +478,45 @@ export function FoodSection() {
                   onChange={(e) => setDetailGrams(e.target.value)}
                 />
               </div>
+              {/* Sodium source (optional) */}
+              {sodiumPresets.length > 0 && (
+                <div className="space-y-1">
+                  <Label className="text-sm">Sodium source (optional)</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {sodiumPresets.map((preset) => (
+                      <Button
+                        key={preset.id}
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          setSelectedPresetId(
+                            selectedPresetId === preset.id ? null : preset.id
+                          )
+                        }
+                        className={cn(
+                          "text-xs transition-all",
+                          selectedPresetId === preset.id
+                            ? "bg-amber-100 border-amber-300 dark:bg-amber-900/50 dark:border-amber-700"
+                            : "opacity-70"
+                        )}
+                      >
+                        {preset.name}
+                        {preset.sodiumPercent < 100 && (
+                          <span className="ml-1 text-muted-foreground">
+                            {preset.sodiumPercent}%
+                          </span>
+                        )}
+                      </Button>
+                    ))}
+                  </div>
+                  {calculatedSodiumMg > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      = {calculatedSodiumMg}mg sodium
+                    </p>
+                  )}
+                </div>
+              )}
               <div className="space-y-1">
                 <Label htmlFor="eating-time" className="text-sm">
                   When
