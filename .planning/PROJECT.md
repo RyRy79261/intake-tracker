@@ -27,6 +27,7 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 **CI:** 12-job GitHub Actions pipeline — lint, typecheck, dual-TZ tests, build+security, data integrity, E2E (Playwright), supply chain audit, coverage, benchmarks
 **Deployment:** Release Please automation, stable staging environment, promotion workflow with Neon snapshots, version display, rollback runbook
 **E2E:** 22 Playwright tests across 5 route-mirrored spec files with Privy test account integration
+**Architecture docs:** Neon+Vercel integration reference at docs/architecture/neon-vercel.md (Phase 36) -- branch lifecycle, env var audit, migration path
 
 ## Requirements
 
@@ -137,7 +138,7 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 
 This document evolves at phase transitions and milestone boundaries.
 
-*Last updated: 2026-04-05 after v1.4 Post-Release Fixes milestone started*
+*Last updated: 2026-04-06 after Phase 36 (Neon DB + Vercel Integration Understanding) completed*
 
 **After each phase transition:**
 1. Requirements invalidated? → Move to Out of Scope with reason
@@ -153,4 +154,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-05 after v1.4 Post-Release Fixes milestone started*
+*Last updated: 2026-04-06 after Phase 36 (Neon DB + Vercel Integration Understanding) completed*
