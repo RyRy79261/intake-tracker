@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.1.0](https://github.com/RyRy79261/intake-tracker/compare/v1.0.0...v1.1.0) (2026-04-06)
+
+
+### Features
+
+* v1.4 Post-Release Fixes ([59dbdb6](https://github.com/RyRy79261/intake-tracker/commit/59dbdb69779a2a9eddf4eae86252cb367bf80f77))
+
+
+### Bug Fixes
+
+* **e2e:** update dashboard tests for food section restructure ([c071cfb](https://github.com/RyRy79261/intake-tracker/commit/c071cfb47a94826781e6dbb122f200a2379a2e34))
+* **lint:** move db query from food-section to useSaltTotalsByGroupIds hook ([2a27932](https://github.com/RyRy79261/intake-tracker/commit/2a279324a8f8f914b9d6c74a1c775ce1698e7160))
+* **presets:** make addLiquidPreset return generated UUID ([7c03b74](https://github.com/RyRy79261/intake-tracker/commit/7c03b749a000b58e9a68c9e4f19af3a434164737))
+* **presets:** pass new preset ID to composable entry on save-and-log ([6b57b84](https://github.com/RyRy79261/intake-tracker/commit/6b57b840ac673c6a49c769b46a3b052298d189aa))
+* **release:** sync version to 1.4.0 in manifest and package.json ([5984ba7](https://github.com/RyRy79261/intake-tracker/commit/5984ba796cd449826bb3ab2e21826bb001b6ea49))
+
 ## 1.0.0 (2026-04-06)
 
 
