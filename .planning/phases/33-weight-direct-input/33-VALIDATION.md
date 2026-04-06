@@ -1,10 +1,11 @@
 ---
 phase: 33
 slug: weight-direct-input
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: complete
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-04-06
+updated: 2026-04-06
 ---
 
 # Phase 33 — Validation Strategy
@@ -36,13 +37,17 @@ created: 2026-04-06
 
 ## Per-Task Verification Map
 
-| Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
-|---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 33-01-01 | 01 | 1 | WGT-01 | — | N/A | unit | `pnpm test` | TBD | ⬜ pending |
-| 33-01-02 | 01 | 1 | WGT-01 | — | N/A | e2e | `pnpm test:e2e` | TBD | ⬜ pending |
-| 33-02-01 | 02 | 1 | WGT-01 | — | N/A | e2e | `pnpm test:e2e` | TBD | ⬜ pending |
+| Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File | Status |
+|---------|------|------|-------------|------------|-----------------|-----------|-------------------|------|--------|
+| 33-01-01 | 01 | 1 | WGT-01 | T-33-01 | parseFloat+isNaN+clamp in handleBlur reverts invalid input | unit | `pnpm test -- src/components/ui/__tests__/inline-edit.test.ts` | `src/components/ui/__tests__/inline-edit.test.ts` | green |
+| 33-01-02 | 01 | 1 | WGT-01 | — | handleFocus seeds editValue using formatDisplay(value) | unit | `pnpm test -- src/components/ui/__tests__/inline-edit.test.ts` | `src/components/ui/__tests__/inline-edit.test.ts` | green |
+| 33-02-01 | 02 | 1 | WGT-01 | T-33-03 | E2E: tap weight input, type 71.35, blur, submit, toast | e2e | `pnpm test:e2e` | `e2e/dashboard.spec.ts` | green |
+| 33-03-01 | 03 | 1 | WGT-01 | — | Editing indicator: isEditing adds border-b-2 border-current class | unit | `pnpm test -- src/components/ui/__tests__/inline-edit.test.ts` | `src/components/ui/__tests__/inline-edit.test.ts` | green |
+| 33-03-02 | 03 | 1 | WGT-01 | — | Format preservation: focusing 69.00 shows "69.00" not "69" | unit | `pnpm test -- src/components/ui/__tests__/inline-edit.test.ts` | `src/components/ui/__tests__/inline-edit.test.ts` | green |
+| 33-03-03 | 03 | 1 | WGT-01 | — | Intermediate decimal: "69." shows "69." not "--" during editing | unit | `pnpm test -- src/components/ui/__tests__/inline-edit.test.ts` | `src/components/ui/__tests__/inline-edit.test.ts` | green |
+| 33-04-01 | 04 | 1 | WGT-01 | — | E2E test restored for weight direct keyboard entry | e2e | `pnpm test:e2e` | `e2e/dashboard.spec.ts` | green |
 
-*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+*Status: green · red · flaky*
 
 ---
 
@@ -50,9 +55,26 @@ created: 2026-04-06
 
 Existing infrastructure covers all phase requirements. No new test framework or configuration needed.
 
-- Vitest already configured for unit tests
+- Vitest already configured for unit tests (node environment, `src/**/*.test.ts` glob)
 - Playwright already configured for E2E tests with dev server auto-start
-- Existing `e2e/dashboard.spec.ts` has weight card test pattern to extend
+- Existing `e2e/dashboard.spec.ts` has weight card test pattern extended in Plan 02/04
+
+---
+
+## Unit Test Coverage Notes
+
+The vitest config uses `environment: "node"` with no jsdom/DOM environment.
+InlineEdit unit tests (`src/components/ui/__tests__/inline-edit.test.ts`) are written as
+pure logic tests that model the component's state-machine handlers directly, without
+requiring React mounting. This is valid because all testable behaviors (handleFocus,
+handleBlur, display ternary, editing indicator condition) are expressible as pure
+function logic.
+
+**Tests not covered by unit tests (require E2E / manual):**
+- DOM focus actually moves to sr-only input on label click (E2E)
+- Enter key triggers blur and value commit (E2E / manual)
+- Numeric keyboard appears on mobile (manual — cannot verify keyboard type in Playwright)
+- No visual transition on tap (manual — visual regression needs human eye)
 
 ---
 
@@ -67,11 +89,21 @@ Existing infrastructure covers all phase requirements. No new test framework or 
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 35s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have automated verify command
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 35s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** 2026-04-06 (gsd-nyquist-auditor)
+
+---
+
+## Validation Audit 2026-04-06
+
+| Metric | Count |
+|--------|-------|
+| Gaps found | 2 |
+| Resolved | 2 |
+| Escalated | 0 |
