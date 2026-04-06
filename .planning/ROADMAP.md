@@ -34,7 +34,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 ### 🚧 v1.4 Post-Release Fixes (In Progress)
 
 - [x] **Phase 32: Release Pipeline + Weight Settings Infrastructure** - Fix release-please PR permissions and establish correct weight increment/rounding foundations (completed 2026-04-06)
-- [ ] **Phase 33: Weight Direct Input** - Enable tap-to-type keyboard entry for weight values
+- [x] **Phase 33: Weight Direct Input** - Enable tap-to-type keyboard entry for weight values (completed 2026-04-06)
 - [ ] **Phase 34: Food/Sodium Card Restructure** - Reposition sodium display, use descriptions as titles, merge history sections
 - [ ] **Phase 35: Preset Fixes** - AI-powered substance content on preset creation and reliable preset deletion
 
@@ -97,6 +97,6 @@ Phases execute in numeric order: 32 → 33 → 34 → 35
 | 30. Observability & Rollback | v1.3 | 2/2 | Complete | 2026-04-04 |
 | 31. Rollback & Documentation Fixes | v1.3 | 1/1 | Complete | 2026-04-05 |
 | 32. Release Pipeline + Weight Settings Infrastructure | v1.4 | 2/2 | Complete    | 2026-04-06 |
-| 33. Weight Direct Input | v1.4 | 0/0 | Not started | - |
+| 33. Weight Direct Input | v1.4 | 2/2 | Complete    | 2026-04-06 |
 | 34. Food/Sodium Card Restructure | v1.4 | 0/0 | Not started | - |
 | 35. Preset Fixes | v1.4 | 0/0 | Not started | - |
