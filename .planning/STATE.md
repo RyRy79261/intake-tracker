@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Post-Release Fixes
 status: executing
-stopped_at: Phase 32 context gathered
-last_updated: "2026-04-06T09:37:20.658Z"
+stopped_at: Phase 33 context gathered
+last_updated: "2026-04-06T09:58:44.741Z"
 last_activity: 2026-04-06
 progress:
   total_phases: 4
@@ -90,6 +90,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-06T00:12:05.471Z
-Stopped at: Phase 32 context gathered
-Resume file: .planning/phases/32-release-pipeline-weight-settings-infrastructure/32-CONTEXT.md
+Last session: 2026-04-06T09:58:44.737Z
+Stopped at: Phase 33 context gathered
+Resume file: .planning/phases/33-weight-direct-input/33-CONTEXT.md
