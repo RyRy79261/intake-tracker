@@ -331,6 +331,24 @@ export async function importData(
   }
 }
 
+export async function getSaltTotalsByGroupIds(
+  groupIds: string[]
+): Promise<Map<string, number>> {
+  if (groupIds.length === 0) return new Map();
+  const records = await db.intakeRecords
+    .where("groupId")
+    .anyOf(groupIds)
+    .and((r) => r.type === "salt" && r.deletedAt === null)
+    .toArray();
+  const map = new Map<string, number>();
+  for (const r of records) {
+    if (r.groupId) {
+      map.set(r.groupId, (map.get(r.groupId) || 0) + r.amount);
+    }
+  }
+  return map;
+}
+
 export async function clearAllData(): Promise<ServiceResult<void>> {
   try {
     await db.intakeRecords.clear();

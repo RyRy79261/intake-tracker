@@ -1,8 +1,6 @@
 "use client";
 
 import { useState, useCallback, useMemo } from "react";
-import { useLiveQuery } from "dexie-react-hooks";
-import { db } from "@/lib/db";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,6 +28,7 @@ import {
   useUpdateEating,
 } from "@/hooks/use-eating-queries";
 import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
+import { useSaltTotalsByGroupIds, useDeleteIntake, useUpdateIntake } from "@/hooks/use-intake-queries";
 import { useEditRecord } from "@/hooks/use-edit-record";
 import { useToast } from "@/hooks/use-toast";
 import { type EatingRecord } from "@/lib/db";
@@ -85,25 +84,7 @@ export function FoodSection() {
     [recentRecords]
   );
 
-  const groupSodiumMap = useLiveQuery(
-    async () => {
-      if (groupIds.length === 0) return new Map<string, number>();
-      const saltRecords = await db.intakeRecords
-        .where("groupId")
-        .anyOf(groupIds)
-        .and((r) => r.type === "salt" && r.deletedAt === null)
-        .toArray();
-      const map = new Map<string, number>();
-      for (const r of saltRecords) {
-        if (r.groupId) {
-          map.set(r.groupId, (map.get(r.groupId) || 0) + r.amount);
-        }
-      }
-      return map;
-    },
-    [groupIds.join(",")],
-    new Map<string, number>()
-  );
+  const groupSodiumMap = useSaltTotalsByGroupIds(groupIds);
 
   const deleteMutation = useDeleteEating();
   const updateMutation = useUpdateEating();

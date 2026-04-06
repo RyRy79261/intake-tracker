@@ -13,6 +13,7 @@ import {
   getDailyTotal,
   getRecentRecords,
   getRecordsByDateRange,
+  getSaltTotalsByGroupIds,
 } from "@/lib/intake-service";
 import { unwrap } from "@/lib/service-result";
 import { showUndoToast } from "@/components/medications/undo-toast";
@@ -196,6 +197,19 @@ export function useIntakeRecordsByDateRange(
     () => getRecordsByDateRange(startTime, endTime, type),
     [startTime, endTime, type, tick],
     []
+  );
+}
+
+/**
+ * Hook to get salt totals keyed by groupId.
+ * Used to display sodium amounts alongside eating records in merged history.
+ */
+export function useSaltTotalsByGroupIds(groupIds: string[]) {
+  const key = groupIds.join(",");
+  return useLiveQuery(
+    () => getSaltTotalsByGroupIds(groupIds),
+    [key],
+    new Map<string, number>()
   );
 }
 
