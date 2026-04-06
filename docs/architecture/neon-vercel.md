@@ -223,6 +223,151 @@ Use these steps to confirm the Neon+Vercel integration is correctly configured:
 
 ---
 
+## Migration Path: IndexedDB to Cloud-First
+
+### Current vs Target Architecture
+
+```mermaid
+graph LR
+    subgraph "Current Architecture"
+        B1["Browser"] --> IDB1["IndexedDB<br/>(16 Dexie tables)<br/>SOURCE OF TRUTH"]
+        S1["Server"] --> N1["NeonDB<br/>(4 push tables only)"]
+        B1 -.->|"no sync"| S1
+    end
+```
+
+```mermaid
+graph LR
+    subgraph "Target Architecture"
+        B2["Browser"] --> IDB2["IndexedDB<br/>(offline cache/buffer)"]
+        IDB2 <-->|"sync via API routes"| API["Next.js API Routes"]
+        API <--> N2["NeonDB<br/>(ALL tables)<br/>SOURCE OF TRUTH"]
+        AND["Android App"] -->|"HTTP"| API
+    end
+```
+
+### Phased Migration Strategy
+
+Migration is phased (not big-bang) to reduce risk and allow incremental validation.
+
+**Phase A: Schema Creation**
+
+Create server-side PostgreSQL schemas for all 16 Dexie tables: `intakeRecords`, `weightRecords`, `bloodPressureRecords`, `eatingRecords`, `urinationRecords`, `defecationRecords`, `substanceRecords`, `prescriptions`, `medicationPhases`, `phaseSchedules`, `inventoryItems`, `inventoryTransactions`, `doseLogs`, `titrationPlans`, `dailyNotes`, `auditLogs`.
+
+Use raw SQL via `@neondatabase/serverless` (matching existing pattern in `push-db.ts`), no ORM.
+
+**Phase B: Sync API Routes**
+
+Create Next.js API routes for sync:
+- `POST /api/sync/push` -- Client sends pending changes (created/updated/deleted since last sync)
+- `GET /api/sync/pull` -- Client fetches changes since last sync timestamp
+- `POST /api/sync/full` -- Full resync for initial setup or recovery
+- Auth required on all sync routes
+
+**Phase C: Dexie Schema Extension**
+
+Add sync metadata to each Dexie table:
+- `syncStatus`: `'pending'` | `'synced'` | `'failed'`
+- `lastModified`: ISO timestamp (for LWW conflict resolution)
+- `serverId`: UUID assigned by server on first sync
+- `isDeleted`: boolean soft-delete flag (tombstone for sync)
+
+**Phase D: Sync Engine**
+
+Client-side sync logic:
+- Background sync on connectivity change (`navigator.onLine`)
+- Periodic sync when app is active
+- Conflict resolution: Last-Write-Wins (LWW) using `lastModified` timestamp
+- Queue management: batch pending changes, retry on failure
+- Settings toggle: local-only mode vs cloud sync mode
+
+**Phase E: Migration Script**
+
+One-time migration for existing users:
+1. Read all IndexedDB data
+2. Push to NeonDB via `sync/full` endpoint
+3. Mark all records as synced
+4. Switch to cloud-first mode
+
+### Conflict Resolution Strategy
+
+| Strategy | Pros | Cons | Fit for This Project |
+|----------|------|------|---------------------|
+| **Last-Write-Wins (LWW)** | Simple, no merge logic | Can silently lose edits | Best fit -- single-user, append-mostly |
+| CRDT | No data loss, auto-merge | Complex, larger payloads | Overkill -- no concurrent multi-user |
+| Revision History | Manual conflict resolution | UX burden on user | Unnecessary for health tracking |
+| Server-Authoritative | Predictable, simple client | Requires connectivity | Too restrictive for offline use |
+
+**Recommendation: Last-Write-Wins (LWW)** with timestamp-based resolution.
+
+Rationale:
+- Single-user app -- no concurrent editing from different users
+- Primary conflict scenario: same user on phone vs desktop while offline
+- Health tracking records are append-mostly (new entries, not edits to existing)
+- Simplest implementation with existing `@neondatabase/serverless` pattern
+
+### Multi-Platform Access (PWA + Android)
+
+Both PWA and future Android app share the same backend:
+
+- **API routes** serve as the universal data layer
+- **PWA:** IndexedDB for offline, syncs via `fetch` to API routes
+- **Android:** Room/SQLite for offline, syncs via HTTP to same API routes
+- **NeonDB** is the single source of truth for both platforms
+- No platform-specific server logic needed
+
+### Settings Toggle
+
+User-facing setting in the app Settings page:
+
+- **Cloud sync** (default when configured): Data saved to IndexedDB + synced to NeonDB
+- **Local only**: Data stays in IndexedDB only, no server communication
+- Toggle does not affect push notification functionality (that always uses server)
+
+---
+
+## Neon Auth: Privy Replacement Path
+
+### Why Replace Privy
+
+- **E2E testing limitation:** Privy requires test account credentials (`PRIVY_TEST_EMAIL`/`PRIVY_TEST_OTP`), cannot create/destroy users in CI
+- **External dependency:** Privy is a third-party service with its own uptime and billing
+- **Branch-incompatible:** Privy auth state does not branch with Neon DB branches -- preview deploys share production auth
+- **Current workaround:** `NEXT_PUBLIC_PRIVY_APP_ID` check in `src/app/providers.tsx` -- Privy is skipped when the env var is unset
+
+### What Neon Auth Provides
+
+- Built on **Better Auth** (v1.4.18+), managed by Neon
+- Auth data stored in `neon_auth` schema in the Neon database
+- **Branch-compatible:** Auth state branches with the database (preview deploys get isolated auth)
+- Supports: email/password, Google OAuth (out-of-the-box test credentials), magic links, OTP
+- Next.js SDK: Server (`createNeonAuth()` + `auth.handler()`), Client (`createAuthClient()` + `NeonAuthUIProvider`)
+- Auto-injected env vars: `NEON_AUTH_BASE_URL`, `NEON_AUTH_COOKIE_SECRET`
+
+### Migration Steps
+
+1. Enable Neon Auth on the Neon project (Neon Console)
+2. Replace `PrivyProvider` with `NeonAuthUIProvider` in `src/app/providers.tsx`
+3. Replace `PinGateProvider` with Neon Auth session management
+4. Update API routes to use Neon Auth session verification instead of Privy token
+5. Migrate allowed-email whitelist to Neon Auth domain restriction or custom validation
+6. Remove Privy dependencies: `@privy-io/react-auth`, `@privy-io/server-auth`
+7. Remove Privy env vars: `NEXT_PUBLIC_PRIVY_APP_ID`, `NEXT_PUBLIC_PRIVY_CLIENT_ID`, `PRIVY_APP_SECRET`
+8. Update E2E tests: create test users directly in branch database (no Privy test OTP needed)
+9. Update bundle security test to verify `NEON_AUTH_COOKIE_SECRET` is not in client bundle
+
+### E2E Testing Improvement
+
+- **Current:** Tests use `PRIVY_TEST_EMAIL` + `PRIVY_TEST_OTP` from env vars, authenticate via Privy test account
+- **After:** Tests create a user in the `neon_auth` schema of the branch database, no external service needed
+- Branch isolation means parallel test runs cannot interfere with each other
+
+### Timeline Note
+
+This migration is a future milestone. Phase 36 documents the path only. The actual migration should be its own milestone with dedicated phases for auth replacement, data migration, and E2E test updates.
+
+---
+
 ## Verification Results
 
 **Date:** 2026-04-06
