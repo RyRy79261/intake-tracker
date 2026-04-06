@@ -110,7 +110,7 @@ interface SettingsActions {
   setWeightGraphShowUrination: (value: boolean) => void;
   setWeightGraphShowDefecation: (value: boolean) => void;
   setWeightGraphShowDrinking: (value: boolean) => void;
-  addLiquidPreset: (preset: Omit<LiquidPreset, "id">) => void;
+  addLiquidPreset: (preset: Omit<LiquidPreset, "id">) => string;
   updateLiquidPreset: (id: string, updates: Partial<Omit<LiquidPreset, "id">>) => void;
   deleteLiquidPreset: (id: string) => void;
   addSodiumPreset: (preset: Omit<SodiumPreset, "id" | "isDefault">) => void;
@@ -260,13 +260,16 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
       // Substance config
       setSubstanceConfig: (config) => set({ substanceConfig: config }),
 
-      addLiquidPreset: (preset) =>
+      addLiquidPreset: (preset) => {
+        const id = crypto.randomUUID();
         set((state) => ({
           liquidPresets: [
             ...state.liquidPresets,
-            { ...preset, id: crypto.randomUUID() },
+            { ...preset, id },
           ],
-        })),
+        }));
+        return id;
+      },
       updateLiquidPreset: (id, updates) =>
         set((state) => ({
           liquidPresets: state.liquidPresets.map((p) =>
