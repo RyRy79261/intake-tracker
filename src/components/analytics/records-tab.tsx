@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { RecordRow } from "@/components/history/record-row";
+import { useSettings } from "@/hooks/use-settings";
 import { EditIntakeDialog } from "@/components/edit-intake-dialog";
 import { EditWeightDialog } from "@/components/edit-weight-dialog";
 import { EditBloodPressureDialog } from "@/components/edit-blood-pressure-dialog";
@@ -78,6 +79,7 @@ const filterColorMap: Record<string, string> = {
 export function RecordsTab({ range }: RecordsTabProps) {
   const { toast } = useToast();
   const { onFocus: scrollOnFocus } = useKeyboardAwareScroll();
+  const settings = useSettings();
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterType>("all");
   const [page, setPage] = useState(1);
@@ -319,6 +321,7 @@ export function RecordsTab({ range }: RecordsTabProps) {
                       onDelete={() => handleDelete(unified)}
                       onEdit={() => openEdit(unified)}
                       isDeleting={deletingId === unified.record.id}
+                      liquidPresets={settings.liquidPresets}
                     />
                   ))}
                 </div>

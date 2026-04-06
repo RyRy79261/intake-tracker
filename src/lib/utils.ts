@@ -51,7 +51,7 @@ export function syncFields() {
  */
 export function getLiquidTypeLabel(
   source?: string,
-  options?: { presets?: LiquidPreset[]; note?: string }
+  options?: { presets?: LiquidPreset[] | undefined; note?: string | undefined }
 ): string | null {
   if (!source || source === "manual") return null;
 

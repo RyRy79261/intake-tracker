@@ -16,6 +16,7 @@ import { EditEatingDialog } from "@/components/edit-eating-dialog";
 import { EditUrinationDialog } from "@/components/edit-urination-dialog";
 import { EditDefecationDialog } from "@/components/edit-defecation-dialog";
 import { RecordRow } from "@/components/history/record-row";
+import { useSettings } from "@/hooks/use-settings";
 import {
   History,
   Loader2,
@@ -58,6 +59,7 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
   const { toast } = useToast();
   const { onFocus: scrollOnFocus } = useKeyboardAwareScroll();
   const { requirePin } = usePinProtected();
+  const settings = useSettings();
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterType>("all");
 
@@ -381,6 +383,7 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
                           onDelete={() => handleDelete(unified)}
                           onEdit={() => openEdit(unified)}
                           isDeleting={deletingId === unified.record.id}
+                          liquidPresets={settings.liquidPresets}
                         />
                       ))}
                     </div>
