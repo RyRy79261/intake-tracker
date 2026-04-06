@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
 import { Minus, Plus, Check } from "lucide-react";
 import { cn, formatAmount } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
@@ -18,7 +19,13 @@ export function BeverageTab() {
   const settings = useSettings();
   const waterIncrement = settings.waterIncrement;
 
+  const waterLimit = settings.waterLimit;
   const waterIntake = useIntake("water");
+
+  const { dailyTotal } = waterIntake;
+  const progressPercent =
+    waterLimit > 0 ? Math.min((dailyTotal / waterLimit) * 100, 100) : 0;
+  const isOverLimit = waterLimit > 0 && dailyTotal > waterLimit;
 
   const [pendingAmount, setPendingAmount] = useState(waterIncrement);
   const [beverageName, setBeverageName] = useState("");
@@ -93,6 +100,17 @@ export function BeverageTab() {
 
   return (
     <>
+      {/* Water Progress Bar */}
+      <div className="mb-4">
+        <Progress
+          value={progressPercent}
+          className="h-3"
+          indicatorClassName={cn(
+            isOverLimit ? theme.progressOverLimit : theme.progressGradient
+          )}
+        />
+      </div>
+
       {/* Name Input */}
       <Input
         placeholder="e.g. Juice, Smoothie"

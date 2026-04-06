@@ -58,26 +58,24 @@ export function LiquidsCard() {
             </span>
           </div>
 
-          {/* Right side header content - changes per tab */}
-          {activeTab === "water" && (
-            <div className="text-right">
-              <p
-                className={cn(
-                  "text-sm font-medium",
-                  isOverLimit
-                    ? "text-red-600 dark:text-red-400"
-                    : "text-foreground"
-                )}
-              >
-                {formatAmount(waterIntake.dailyTotal, "ml")} /{" "}
-                {formatAmount(settings.waterLimit, "ml")}
-              </p>
-              <p className="text-xs text-muted-foreground">today</p>
-              <p className="text-xs text-muted-foreground/70">
-                24h: {formatAmount(waterIntake.rollingTotal, "ml")}
-              </p>
-            </div>
-          )}
+          {/* Right side header content - water stats on all tabs */}
+          <div className="text-right">
+            <p
+              className={cn(
+                "text-sm font-medium",
+                isOverLimit
+                  ? "text-red-600 dark:text-red-400"
+                  : "text-foreground"
+              )}
+            >
+              {formatAmount(waterIntake.dailyTotal, "ml")} /{" "}
+              {formatAmount(settings.waterLimit, "ml")}
+            </p>
+            <p className="text-xs text-muted-foreground">today</p>
+            <p className="text-xs text-muted-foreground/70">
+              24h: {formatAmount(waterIntake.rollingTotal, "ml")}
+            </p>
+          </div>
         </div>
 
         {/* Tab Strip */}

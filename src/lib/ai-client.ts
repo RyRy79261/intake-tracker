@@ -18,7 +18,8 @@ export interface ParsedIntake {
 export async function parseIntakeWithAI(
   input: string,
   options?: {
-    authToken?: string; // Privy access token
+    authToken?: string; // Privy access token (legacy)
+    authHeaders?: Record<string, string>; // Auth headers from useAuth().getAuthHeader()
   }
 ): Promise<ParsedIntake> {
   logAudit("ai_parse_request");
@@ -29,8 +30,10 @@ export async function parseIntakeWithAI(
       "Content-Type": "application/json",
     };
 
-    // Add Privy auth token if available
-    if (options?.authToken) {
+    // Add auth headers (prefer authHeaders over legacy authToken)
+    if (options?.authHeaders) {
+      Object.assign(headers, options.authHeaders);
+    } else if (options?.authToken) {
       headers["Authorization"] = `Bearer ${options.authToken}`;
     }
 

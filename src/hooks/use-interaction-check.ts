@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from "react";
 import { getCached, setCache } from "@/lib/interaction-cache";
 import { useUpdatePrescription } from "@/hooks/use-medication-queries";
+import { useAuth } from "@/components/auth-guard";
 
 // --- Types ---
 
@@ -41,6 +42,7 @@ export function useInteractionCheck() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const { getAuthHeader } = useAuth();
 
   const reset = useCallback(() => {
     setData(null);
@@ -80,9 +82,10 @@ export function useInteractionCheck() {
     setData(null);
 
     try {
+      const authHeaders = await getAuthHeader();
       const response = await fetch("/api/ai/interaction-check", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify(params),
         signal: controller.signal,
       });
@@ -119,7 +122,7 @@ export function useInteractionCheck() {
       setIsLoading(false);
       return null;
     }
-  }, []);
+  }, [getAuthHeader]);
 
   return { check, data, isLoading, error, reset };
 }
@@ -129,6 +132,7 @@ export function useInteractionCheck() {
 export function useRefreshInteractions() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const updatePrescription = useUpdatePrescription();
+  const { getAuthHeader } = useAuth();
 
   const refresh = useCallback(
     async (
@@ -139,9 +143,10 @@ export function useRefreshInteractions() {
       setIsRefreshing(true);
 
       try {
+        const authHeaders = await getAuthHeader();
         const response = await fetch("/api/ai/interaction-check", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...authHeaders },
           body: JSON.stringify({
             mode: "conflict" as const,
             newMedication: genericName,
@@ -186,7 +191,7 @@ export function useRefreshInteractions() {
         return null;
       }
     },
-    [updatePrescription]
+    [updatePrescription, getAuthHeader]
   );
 
   return { refresh, isRefreshing };

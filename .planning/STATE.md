@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-04-06)
 Phase: —
 Plan: —
 Status: v1.4 complete, planning next milestone
-Last activity: 2026-04-06
+Last activity: 2026-04-06 - Completed quick task 260406-thr: Replace hardcoded bg-red-500 with progressOverLimit theme token
 
 Progress: [██████████] 100%
 
@@ -77,6 +77,7 @@ None — v1.4 complete.
 | 260330-131 | Replace LOCAL_AGENT_MODE bypass with Privy test credentials | 2026-03-30 | fe605aa | [260330-131-replace-local-agent-mode-bypass-with-pri](./quick/260330-131-replace-local-agent-mode-bypass-with-pri/) |
 | 260406-ku9 | Fix Food & Sodium UI layout - restructure inputs, add sodium source selector, add water content field | 2026-04-06 | ecd9912 | [260406-ku9-fix-food-sodium-ui-layout-restructure-in](./quick/260406-ku9-fix-food-sodium-ui-layout-restructure-in/) |
 | 260406-mpb | Fix water entry name display and food entry sodium column | 2026-04-06 | cbdfd41 | [260406-mpb-fix-water-entry-name-display-and-food-en](./quick/260406-mpb-fix-water-entry-name-display-and-food-en/) |
+| 260406-thr | Replace hardcoded bg-red-500 with progressOverLimit theme token in progress bars | 2026-04-06 | ab03cc7 | [260406-thr-replace-hardcoded-bg-red-500-with-progre](./quick/260406-thr-replace-hardcoded-bg-red-500-with-progre/) |
 
 ### Roadmap Evolution
 
