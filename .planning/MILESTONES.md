@@ -1,5 +1,26 @@
 # Milestones
 
+## v1.4 Post-Release Fixes (Shipped: 2026-04-06)
+
+**Phases completed:** 8 phases (32–39), 17 plans, 106 commits
+**Timeline:** 1 day (2026-04-06)
+**Scope:** 21 files changed, +1,213 / -718 lines
+
+**Key accomplishments:**
+
+- Fixed decimal precision pipeline — parseFloat replacing parseInt in settings-helpers, 0.05 weight rounding, configurable increments in Settings
+- Inline-edit tap-to-type for weight values with configurable precision rounding on blur
+- Restructured Food/Sodium card — sodium top-right, description as entry title, single merged history section
+- AI-powered substance lookup on preset creation with reliable preset deletion from grid
+- Documented Neon DB + Vercel integration architecture (branch lifecycle, env var audit, migration path)
+- Fixed water entry label formatting (preset:/substance: prefix resolution) and preset save-and-log UUID linkage
+
+### Known Gaps
+
+- **REL-01** (partial): Release-please code/docs shipped, but GitHub repo settings change still needed (enable write permissions + allow Actions to create PRs)
+
+---
+
 ## v1.3 Deployment Lifecycle (Shipped: 2026-04-05)
 
 **Phases completed:** 5 phases, 12 plans, 13 tasks

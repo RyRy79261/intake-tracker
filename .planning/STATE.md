@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Post-Release Fixes
-status: executing
-stopped_at: Phase 39 context gathered (assumptions mode)
-last_updated: "2026-04-06T15:57:26.315Z"
+status: complete
+stopped_at: Milestone complete
+last_updated: "2026-04-06T18:30:00.000Z"
 last_activity: 2026-04-06
 progress:
   total_phases: 8
-  completed_phases: 2
-  total_plans: 5
-  completed_plans: 5
+  completed_phases: 8
+  total_plans: 17
+  completed_plans: 17
   percent: 100
 ---
 
@@ -18,37 +18,40 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-05)
+See: .planning/PROJECT.md (updated 2026-04-06)
 
 **Core value:** Accurate, queryable health data across intake, vitals, and medication adherence -- structured for cross-domain analysis and future AI querying
-**Current focus:** Phase 39 — Preset Save-and-Log Label Fix
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Phase: 39
-Plan: Not started
-Status: Executing Phase 39
+Phase: —
+Plan: —
+Status: v1.4 complete, planning next milestone
 Last activity: 2026-04-06
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 114 (44 v1.0 + 16 v1.1 + 16 v1.2 + 12 v1.3 + 12 v1.3-extra)
-- Average duration: ~6 min
-- Total execution time: ~10 hours
+- Total plans completed: 131 (44 v1.0 + 16 v1.1 + 16 v1.2 + 12 v1.3 + 12 v1.3-extra + 17 v1.4)
+- Average duration: ~5 min
+- Total execution time: ~11 hours
 
-**v1.3 Summary:**
+**v1.4 Summary:**
 
 | Phase | Plans | Avg/Plan |
 |-------|-------|----------|
-| 27. Release Automation | 3 | ~5 min |
-| 28. Staging Environment | 4 | ~5 min |
-| 29. Deployment Protection | 2 | ~5 min |
-| 30. Observability & Rollback | 2 | ~5 min |
-| 31. Rollback & Documentation Fixes | 1 | ~5 min |
+| 32. Release Pipeline + Weight Settings | 2 | ~4 min |
+| 33. Weight Direct Input | 4 | ~5 min |
+| 34. Food/Sodium Card Restructure | 3 | ~3 min |
+| 35. Preset Fixes | 2 | ~3 min |
+| 36. Neon DB + Vercel Integration | 3 | ~5 min |
+| 37. Water Entry Label Formatting | 1 | ~5 min |
+| 38. Weight Input Default Value | 1 | ~3 min |
+| 39. Preset Save-and-Log Label Fix | 1 | ~3 min |
 
 *Updated after each plan completion*
 
@@ -57,21 +60,14 @@ Progress: [░░░░░░░░░░] 0%
 ### Decisions
 
 Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting current work:
-
-- [v1.4 roadmap]: 4 phases (32-35) derived from 9 requirements across Release, Weight, Food/Sodium, and Presets
-- [v1.4 roadmap]: Phase 33 depends on Phase 32 -- weight direct input needs correct increment/rounding from settings fix
-- [v1.4 roadmap]: Phase 34 (Food/Sodium) is MEDIUM risk -- only structural component change in milestone
-- [v1.4 research]: parseInt in settings-helpers.ts silently destroys decimal values; must fix before weight settings UI
 
 ### Pending Todos
 
-None yet.
+None.
 
 ### Blockers/Concerns
 
-- settings-helpers.ts uses parseInt which truncates decimal values like 0.05 to 0 -- must be fixed in Phase 32 before weight settings UI works
-- Food/sodium merged history needs careful mutation routing (eating records vs sodium records from different Dexie tables)
+None — v1.4 complete.
 
 ### Quick Tasks Completed
 
@@ -88,13 +84,10 @@ None yet.
 - v1.1 shipped 2026-03-27 (Phases 12-19) -- archived 2026-03-27
 - v1.2 shipped 2026-04-04 (Phases 20-26) -- archived 2026-04-04
 - v1.3 shipped 2026-04-05 (Phases 27-31) -- archived 2026-04-05
-- v1.4 roadmap created 2026-04-05 (Phases 32-35)
-- Phase 36 added: Neon DB + Vercel Integration Understanding
-- Phase 37 added: Water Entry Label Formatting Bug
-- Phase 38 added: Weight Input Default Value Bug
+- v1.4 shipped 2026-04-06 (Phases 32-39) -- archived 2026-04-06
 
 ## Session Continuity
 
-Last session: 2026-04-06T15:38:37.035Z
-Stopped at: Phase 39 context gathered (assumptions mode)
-Resume file: .planning/phases/39-preset-save-and-log-label-fix/39-CONTEXT.md
+Last session: 2026-04-06
+Stopped at: v1.4 milestone complete
+Resume: /gsd-new-milestone for next milestone
