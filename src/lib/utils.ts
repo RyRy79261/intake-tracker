@@ -68,11 +68,10 @@ export function getLiquidTypeLabel(
     return name ? name.charAt(0).toUpperCase() + name.slice(1) : "Juice";
   }
 
-  // Food prefix: "food" or "food:apple" -> "Food" or "Food (apple)"
-  if (source === "food") return "Food";
+  // Food prefix: "food" or "food:ai_parse" -> note or "Food"
+  if (source === "food") return options?.note || "Food";
   if (source.startsWith("food:")) {
-    const note = source.slice(5);
-    return note ? `Food (${note})` : "Food";
+    return options?.note || "Food";
   }
 
   // Preset prefix: "preset:manual" -> null, "preset:{id}" -> preset name or "Beverage"
@@ -89,6 +88,11 @@ export function getLiquidTypeLabel(
   // Substance prefix: "substance:{id}" -> note (description) or "Drink"
   if (source.startsWith("substance:")) {
     return options?.note || "Drink";
+  }
+
+  // Manual sub-sources: "manual:food_water_content" -> note or "Food"
+  if (source.startsWith("manual:")) {
+    return options?.note || "Food";
   }
 
   // Unknown source format — return null to prevent raw strings in UI

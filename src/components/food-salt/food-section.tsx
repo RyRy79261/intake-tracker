@@ -173,10 +173,12 @@ export function FoodSection() {
       }
       const waterMlNum = waterMl ? parseFloat(waterMl) : 0;
       if (waterMlNum > 0) {
+        const trimmedFood = foodText.trim();
         intakes.push({
           type: "water",
           amount: Math.round(waterMlNum),
           source: "manual:food_water_content",
+          ...(trimmedFood && { note: trimmedFood }),
         });
       }
 
