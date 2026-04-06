@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Minus, Plus, Check } from "lucide-react";
-import { cn, formatAmount, getLiquidTypeLabel } from "@/lib/utils";
+import { cn, formatAmount } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { RecentEntriesList } from "@/components/recent-entries-list";
 import { EditIntakeDialog } from "@/components/edit-intake-dialog";
@@ -19,29 +19,39 @@ import {
   useDeleteIntake,
   useUpdateIntake,
 } from "@/hooks/use-intake-queries";
+import { useSettingsStore } from "@/stores/settings-store";
 import { type IntakeRecord } from "@/lib/db";
 
-const theme = CARD_THEMES.water;
-const unit = "ml";
+const theme = CARD_THEMES.salt;
+const Icon = theme.icon;
 
-export function WaterTab() {
+export function SaltSection() {
   const settings = useSettings();
-  const waterIncrement = settings.waterIncrement;
-  const waterLimit = settings.waterLimit;
+  const sodiumPresets = useSettingsStore((s) => s.sodiumPresets);
+  const saltIntake = useIntake("salt");
+  const recentRecords = useRecentIntakeRecords("salt");
+  const { toast } = useToast();
 
-  const waterIntake = useIntake("water");
-  const recentRecords = useRecentIntakeRecords("water");
-
-  const [pendingAmount, setPendingAmount] = useState(waterIncrement);
+  const [selectedPresetId, setSelectedPresetId] = useState(
+    () => sodiumPresets[0]?.id ?? ""
+  );
+  const [pendingAmount, setPendingAmount] = useState(settings.saltIncrement);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showManualInput, setShowManualInput] = useState(false);
 
-  const { toast } = useToast();
+  const selectedPreset = useMemo(
+    () => sodiumPresets.find((p) => p.id === selectedPresetId) ?? sodiumPresets[0],
+    [sodiumPresets, selectedPresetId]
+  );
+
+  const sodiumPercent = selectedPreset?.sodiumPercent ?? 100;
+  const sodiumAmount = Math.round(pendingAmount * sodiumPercent / 100);
+
   const deleteMutation = useDeleteIntake();
   const updateMutation = useUpdateIntake();
   const { deletingId, handleDelete } = useDeleteWithToast(
     deleteMutation,
-    "Water entry removed"
+    "Sodium entry removed"
   );
 
   const [editAmount, setEditAmount] = useState("");
@@ -68,34 +78,38 @@ export function WaterTab() {
     mutateAsync: updateMutation.mutateAsync,
   });
 
-  const { dailyTotal, rollingTotal } = waterIntake;
+  const { dailyTotal, rollingTotal } = saltIntake;
+  const limit = settings.saltLimit;
+  const increment = settings.saltIncrement;
 
   const progressPercent =
-    waterLimit > 0 ? Math.min((dailyTotal / waterLimit) * 100, 100) : 0;
-  const isOverLimit = waterLimit > 0 && dailyTotal > waterLimit;
-  const wouldExceedLimit =
-    waterLimit > 0 && dailyTotal + pendingAmount > waterLimit;
+    limit > 0 ? Math.min((dailyTotal / limit) * 100, 100) : 0;
+  const isOverLimit = limit > 0 && dailyTotal > limit;
+  const wouldExceedLimit = limit > 0 && dailyTotal + sodiumAmount > limit;
 
   const handleIncrement = useCallback(() => {
-    setPendingAmount((prev) => prev + waterIncrement);
-  }, [waterIncrement]);
+    setPendingAmount((prev) => prev + increment);
+  }, [increment]);
 
   const handleDecrement = useCallback(() => {
-    setPendingAmount((prev) => Math.max(waterIncrement, prev - waterIncrement));
-  }, [waterIncrement]);
+    setPendingAmount((prev) => Math.max(increment, prev - increment));
+  }, [increment]);
 
   const handleConfirm = useCallback(async () => {
-    if (pendingAmount <= 0 || isSubmitting) return;
+    if (sodiumAmount <= 0 || isSubmitting) return;
 
     setIsSubmitting(true);
     try {
-      await waterIntake.addRecord(pendingAmount, "manual");
+      const sourceName = selectedPreset?.name ?? "manual";
+      await saltIntake.addRecord(sodiumAmount, `manual:${sourceName}`);
       toast({
-        title: `Added ${formatAmount(pendingAmount, unit)}`,
-        description: "Water intake recorded",
+        title: `Added ${formatAmount(sodiumAmount, "mg")} sodium`,
+        description: sodiumPercent < 100
+          ? `From ${formatAmount(pendingAmount, "mg")} ${selectedPreset?.name}`
+          : "Sodium intake recorded",
         variant: "success",
       });
-      setPendingAmount(waterIncrement);
+      setPendingAmount(increment);
     } catch {
       toast({
         title: "Error",
@@ -105,18 +119,19 @@ export function WaterTab() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [pendingAmount, isSubmitting, waterIntake, toast, waterIncrement]);
+  }, [sodiumAmount, isSubmitting, saltIntake, toast, increment, pendingAmount, sodiumPercent, selectedPreset]);
 
   const handleManualSubmit = useCallback(
     async (amount: number, timestamp?: number, note?: string) => {
       setIsSubmitting(true);
       try {
-        await waterIntake.addRecord(amount, "manual", timestamp, note);
+        // Manual input enters sodium directly (no conversion)
+        await saltIntake.addRecord(amount, "manual", timestamp, note);
         toast({
-          title: `Added ${formatAmount(amount, unit)}`,
+          title: `Added ${formatAmount(amount, "mg")} sodium`,
           description: timestamp
-            ? "Water intake recorded for earlier time"
-            : "Water intake recorded",
+            ? "Sodium intake recorded for earlier time"
+            : "Sodium intake recorded",
           variant: "success",
         });
         setShowManualInput(false);
@@ -130,7 +145,7 @@ export function WaterTab() {
         setIsSubmitting(false);
       }
     },
-    [waterIntake, toast]
+    [saltIntake, toast]
   );
 
   const formatTime = (timestamp: number): string => {
@@ -143,6 +158,31 @@ export function WaterTab() {
 
   return (
     <>
+      {/* Sodium sub-header */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <div className={cn("p-2 rounded-lg", theme.iconBg)}>
+            <Icon className={cn("w-5 h-5", theme.iconColor)} />
+          </div>
+        </div>
+        <div className="text-right">
+          <p
+            className={cn(
+              "text-sm font-medium",
+              isOverLimit
+                ? "text-red-600 dark:text-red-400"
+                : "text-foreground"
+            )}
+          >
+            {formatAmount(dailyTotal, "mg")} / {formatAmount(limit, "mg")}
+          </p>
+          <p className="text-xs text-muted-foreground">today (sodium)</p>
+          <p className="text-xs text-muted-foreground/70">
+            24h: {formatAmount(rollingTotal, "mg")}
+          </p>
+        </div>
+      </div>
+
       {/* Progress Bar */}
       <div className="mb-4">
         <Progress
@@ -154,20 +194,43 @@ export function WaterTab() {
         />
       </div>
 
-      {/* Input Controls */}
+      {/* Sodium Source Presets */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        {sodiumPresets.map((preset) => (
+          <Button
+            key={preset.id}
+            variant="outline"
+            size="sm"
+            onClick={() => setSelectedPresetId(preset.id)}
+            className={cn(
+              "text-xs transition-all",
+              selectedPresetId === preset.id
+                ? theme.activeToggle
+                : "opacity-70"
+            )}
+          >
+            {preset.name}
+            {preset.sodiumPercent < 100 && (
+              <span className="ml-1 text-muted-foreground">
+                {preset.sodiumPercent}%
+              </span>
+            )}
+          </Button>
+        ))}
+      </div>
+
+      {/* +/- Controls */}
       <div className="flex items-center justify-between gap-3">
-        {/* Decrement Button */}
         <Button
           variant="outline"
           size="icon-lg"
           onClick={handleDecrement}
-          disabled={pendingAmount <= waterIncrement || isSubmitting}
+          disabled={pendingAmount <= increment || isSubmitting}
           className={cn("shrink-0 rounded-full transition-all", theme.hoverBg)}
         >
           <Minus className="w-6 h-6" />
         </Button>
 
-        {/* Center Value - Clickable for manual input */}
         <button
           onClick={() => setShowManualInput(true)}
           disabled={isSubmitting}
@@ -186,12 +249,17 @@ export function WaterTab() {
                 : theme.inputText
             )}
           >
-            +{formatAmount(pendingAmount, unit)}
+            +{formatAmount(pendingAmount, "mg")}
           </span>
-          <span className="text-xs text-muted-foreground">tap to edit</span>
+          {sodiumPercent < 100 ? (
+            <span className="text-xs text-muted-foreground">
+              {selectedPreset?.name} → {formatAmount(sodiumAmount, "mg")} sodium
+            </span>
+          ) : (
+            <span className="text-xs text-muted-foreground">sodium · tap to edit</span>
+          )}
         </button>
 
-        {/* Increment Button */}
         <Button
           variant="outline"
           size="icon-lg"
@@ -203,10 +271,10 @@ export function WaterTab() {
         </Button>
       </div>
 
-      {/* Confirm Button */}
+      {/* Confirm Entry Button */}
       <Button
         onClick={handleConfirm}
-        disabled={isSubmitting || waterIntake.isLoading || pendingAmount <= 0}
+        disabled={isSubmitting || saltIntake.isLoading || sodiumAmount <= 0}
         className={cn("w-full mt-4 h-12 text-base font-semibold", theme.buttonBg)}
       >
         <Check className="w-5 h-5 mr-2" />
@@ -220,32 +288,22 @@ export function WaterTab() {
         onDelete={handleDelete}
         onEdit={openEdit}
         borderColor={theme.border}
-        renderEntry={(record) => {
-          const sourceLabel = getLiquidTypeLabel(record.source);
-          return (
-            <>
-              <span className="text-muted-foreground">
-                {formatTime(record.timestamp)}
-              </span>
-              <div className="flex items-center gap-2">
-                <span className="font-medium">
-                  {formatAmount(record.amount, unit)}
-                </span>
-                {sourceLabel && (
-                  <span className="text-xs text-muted-foreground/80 bg-muted/60 px-1.5 py-0.5 rounded">
-                    {sourceLabel}
-                  </span>
-                )}
-              </div>
-            </>
-          );
-        }}
+        renderEntry={(record) => (
+          <>
+            <span className="text-muted-foreground">
+              {formatTime(record.timestamp)}
+            </span>
+            <span className="font-medium">
+              {formatAmount(record.amount, "mg")} Na
+            </span>
+          </>
+        )}
       />
 
       <ManualInputDialog
         open={showManualInput}
         onOpenChange={setShowManualInput}
-        type="water"
+        type="salt"
         currentValue={pendingAmount}
         onSubmit={handleManualSubmit}
         isSubmitting={isSubmitting}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef, useCallback } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,16 +10,6 @@ import { CARD_THEMES } from "@/lib/card-themes";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useAddComposableEntry, type ComposableEntryInput } from "@/hooks/use-composable-entry";
 import { useToast } from "@/hooks/use-toast";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import type { LiquidPreset } from "@/lib/constants";
 
 interface PresetTabProps {
@@ -39,13 +29,9 @@ export function PresetTab({ tab }: PresetTabProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [aiLookupUsed, setAiLookupUsed] = useState(false);
   const [showAllPresets, setShowAllPresets] = useState(false);
-  const [deletePresetId, setDeletePresetId] = useState<string | null>(null);
-  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const longPressTriggeredRef = useRef(false);
 
   const allPresets = useSettingsStore((s) => s.liquidPresets);
   const addPreset = useSettingsStore((s) => s.addLiquidPreset);
-  const deletePreset = useSettingsStore((s) => s.deleteLiquidPreset);
   const addEntry = useAddComposableEntry();
   const { toast } = useToast();
 
@@ -98,7 +84,7 @@ export function PresetTab({ tab }: PresetTabProps) {
     return presets.slice(0, 6);
   }, [presets, showAllPresets]);
 
-  const selectPreset = useCallback((preset: LiquidPreset) => {
+  const selectPreset = (preset: LiquidPreset) => {
     setVolumeMl(preset.defaultVolumeMl);
     setCaffeinePer100ml(preset.caffeinePer100ml ?? 0);
     setAlcoholPer100ml(preset.alcoholPer100ml ?? 0);
@@ -106,9 +92,9 @@ export function PresetTab({ tab }: PresetTabProps) {
     setWaterContentPercent(preset.waterContentPercent);
     setBeverageName(preset.name);
     setSearchText("");
-  }, []);
+  };
 
-  const handlePresetTap = useCallback((presetId: string) => {
+  const handlePresetTap = (presetId: string) => {
     if (selectedPresetId === presetId) {
       // Deselect
       setSelectedPresetId(null);
@@ -124,45 +110,7 @@ export function PresetTab({ tab }: PresetTabProps) {
     if (!preset) return;
     setSelectedPresetId(presetId);
     selectPreset(preset);
-  }, [selectedPresetId, presets, selectPreset]);
-
-  const handlePointerDown = useCallback((presetId: string) => {
-    longPressTriggeredRef.current = false;
-    longPressTimerRef.current = setTimeout(() => {
-      longPressTriggeredRef.current = true;
-      setDeletePresetId(presetId);
-    }, 500);
-  }, []);
-
-  const handlePointerUpOrCancel = useCallback(() => {
-    if (longPressTimerRef.current) {
-      clearTimeout(longPressTimerRef.current);
-      longPressTimerRef.current = null;
-    }
-  }, []);
-
-  const handlePresetClick = useCallback((presetId: string) => {
-    if (longPressTriggeredRef.current) {
-      longPressTriggeredRef.current = false;
-      return;
-    }
-    handlePresetTap(presetId);
-  }, [handlePresetTap]);
-
-  const handleDeleteConfirm = useCallback(() => {
-    if (!deletePresetId) return;
-    const presetName = presets.find((p) => p.id === deletePresetId)?.name ?? "Preset";
-    deletePreset(deletePresetId);
-    // If the deleted preset was selected, clear selection
-    if (selectedPresetId === deletePresetId) {
-      resetFields();
-    }
-    toast({
-      title: "Deleted",
-      description: `${presetName} removed`,
-    });
-    setDeletePresetId(null);
-  }, [deletePresetId, deletePreset, presets, selectedPresetId, toast]);
+  };
 
   const handleAiLookup = async () => {
     if (!searchText.trim() || isLookingUp) return;
@@ -362,13 +310,9 @@ export function PresetTab({ tab }: PresetTabProps) {
               key={preset.id}
               variant="outline"
               size="sm"
-              onClick={() => handlePresetClick(preset.id)}
-              onPointerDown={() => handlePointerDown(preset.id)}
-              onPointerUp={handlePointerUpOrCancel}
-              onPointerCancel={handlePointerUpOrCancel}
-              onPointerLeave={handlePointerUpOrCancel}
+              onClick={() => handlePresetTap(preset.id)}
               className={cn(
-                "min-h-[40px] w-full touch-manipulation",
+                "min-h-[40px] w-full",
                 selectedPresetId === preset.id && theme.activeToggle
               )}
             >
@@ -503,52 +447,21 @@ export function PresetTab({ tab }: PresetTabProps) {
           {isSubmitting ? "Logging..." : "Log Entry"}
         </Button>
         {beverageName.trim() && (
-          <>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleSaveAndLog}
-              disabled={
-                isSubmitting ||
-                volumeMl <= 0 ||
-                !hasSubstance ||
-                !aiLookupUsed
-              }
-              className={cn("w-full text-xs text-muted-foreground border", theme.outlineBorder)}
-            >
-              {isSubmitting ? "Saving..." : "Save as preset & log"}
-            </Button>
-            {!aiLookupUsed && (
-              <p className="text-xs text-muted-foreground text-center">
-                Use AI lookup to populate substance data
-              </p>
-            )}
-          </>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSaveAndLog}
+            disabled={
+              isSubmitting ||
+              volumeMl <= 0 ||
+              !hasSubstance
+            }
+            className={cn("w-full text-xs text-muted-foreground border", theme.outlineBorder)}
+          >
+            {isSubmitting ? "Saving..." : "Save as preset & log"}
+          </Button>
         )}
       </div>
-
-      {/* Delete Preset Confirmation Dialog */}
-      <AlertDialog open={deletePresetId !== null} onOpenChange={(open) => { if (!open) setDeletePresetId(null); }}>
-        <AlertDialogContent className="max-w-lg">
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              Delete {presets.find((p) => p.id === deletePresetId)?.name ?? "preset"}?
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              This preset will be permanently removed.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteConfirm}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   );
 }

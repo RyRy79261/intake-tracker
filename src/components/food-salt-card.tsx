@@ -1,22 +1,17 @@
 "use client";
 
 import { Card, CardContent } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
 import { Utensils } from "lucide-react";
-import { cn, formatAmount } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
-import { useIntake } from "@/hooks/use-intake-queries";
-import { useSettings } from "@/hooks/use-settings";
+import { formatDateTime } from "@/lib/date-utils";
+import { useEatingRecords } from "@/hooks/use-eating-queries";
 import { FoodSection } from "@/components/food-salt/food-section";
+import { SaltSection } from "@/components/food-salt/salt-section";
 
 export function FoodSaltCard() {
-  const saltIntake = useIntake("salt");
-  const settings = useSettings();
-  const { dailyTotal, rollingTotal } = saltIntake;
-  const limit = settings.saltLimit;
-  const progressPercent =
-    limit > 0 ? Math.min((dailyTotal / limit) * 100, 100) : 0;
-  const isOverLimit = limit > 0 && dailyTotal > limit;
+  const recentEatings = useEatingRecords(5);
+  const latestEating = recentEatings?.[0];
 
   return (
     <Card
@@ -39,37 +34,21 @@ export function FoodSaltCard() {
               Food + Sodium
             </span>
           </div>
-          <div className="text-right">
-            <p
-              className={cn(
-                "text-sm font-medium",
-                isOverLimit
-                  ? "text-red-600 dark:text-red-400"
-                  : "text-foreground"
-              )}
-            >
-              {formatAmount(dailyTotal, "mg")} / {formatAmount(limit, "mg")}
+          {latestEating ? (
+            <p className="text-xs text-muted-foreground">
+              {formatDateTime(latestEating.timestamp)}
             </p>
-            <p className="text-xs text-muted-foreground">today (sodium)</p>
-            <p className="text-xs text-muted-foreground/70">
-              24h: {formatAmount(rollingTotal, "mg")}
-            </p>
-          </div>
-        </div>
-
-        {/* Sodium progress bar */}
-        <div className="mb-4">
-          <Progress
-            value={progressPercent}
-            className="h-3"
-            indicatorClassName={cn(
-              isOverLimit ? "bg-red-500" : CARD_THEMES.salt.progressGradient
-            )}
-          />
+          ) : null}
         </div>
 
         {/* Food section */}
         <FoodSection />
+
+        {/* Section divider */}
+        <div className="border-t border-border/50 my-4" />
+
+        {/* Salt section */}
+        <SaltSection />
       </CardContent>
     </Card>
   );

@@ -51,17 +51,10 @@ export function deobfuscateApiKey(obfuscated: string): string {
 }
 
 // Validate and sanitize numeric input
-// When precision is provided, rounds to that many decimal places (e.g., precision=2 for 0.05 steps).
-// Without precision, rounds to integer (backward-compatible with all existing callers).
-export function sanitizeNumericInput(value: string | number, min = 0, max = 100000, precision?: number): number {
-  const num = typeof value === 'string' ? parseFloat(value) : value;
+export function sanitizeNumericInput(value: string | number, min = 0, max = 100000): number {
+  const num = typeof value === 'string' ? parseInt(value, 10) : value;
   if (isNaN(num) || !isFinite(num)) return min;
-  const clamped = Math.max(min, Math.min(max, num));
-  if (precision !== undefined) {
-    const factor = Math.pow(10, precision);
-    return Math.round(clamped * factor) / factor;
-  }
-  return Math.round(clamped);
+  return Math.max(min, Math.min(max, Math.round(num)));
 }
 
 // Sanitize text input to prevent injection

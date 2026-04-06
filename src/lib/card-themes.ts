@@ -125,7 +125,7 @@ export const CARD_THEMES = {
     loadingBg: "bg-orange-200 dark:bg-orange-800",
     latestValueColor: "text-orange-700 dark:text-orange-300",
     activeToggle: "bg-orange-100 border-orange-300 dark:bg-orange-900/50 dark:border-orange-700",
-    sectionId: "section-food-salt",
+    sectionId: "section-eating",
   },
   urination: {
     label: "Urination",

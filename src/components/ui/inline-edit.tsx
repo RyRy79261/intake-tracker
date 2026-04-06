@@ -68,8 +68,8 @@ const InlineEdit = React.forwardRef<HTMLInputElement, InlineEditProps>(
 
     const handleFocus = React.useCallback(() => {
       setIsEditing(true);
-      setEditValue(value != null ? String(value) : "");
-    }, [value]);
+      setEditValue(value != null ? formatDisplay(value) : "");
+    }, [value, formatDisplay]);
 
     const handleBlur = React.useCallback(() => {
       setIsEditing(false);
@@ -112,8 +112,8 @@ const InlineEdit = React.forwardRef<HTMLInputElement, InlineEditProps>(
 
     return (
       <label className={cn("cursor-text inline-flex items-baseline", className)}>
-        <span className={displayClassName}>
-          {isEditing ? editValue || formatDisplay(null) : formatDisplay(value)}
+        <span className={cn(displayClassName, isEditing && "border-b-2 border-current")}>
+          {isEditing ? editValue : formatDisplay(value)}
         </span>
         {suffix && <span className={suffixClassName}>{suffix}</span>}
         <input

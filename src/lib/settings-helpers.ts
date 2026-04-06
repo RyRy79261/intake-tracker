@@ -11,7 +11,7 @@ export function validateAndSave(
   setter: (value: number) => void,
   inputSetter: (value: string) => void
 ) {
-  const parsed = parseFloat(inputValue);
+  const parsed = parseInt(inputValue, 10);
   if (!isNaN(parsed) && parsed >= min && parsed <= max) {
     setter(parsed);
     inputSetter(parsed.toString());

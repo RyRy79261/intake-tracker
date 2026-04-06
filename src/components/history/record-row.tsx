@@ -6,18 +6,16 @@ import { CARD_THEMES } from "@/lib/card-themes";
 import { type UnifiedRecord } from "@/lib/history-types";
 import { formatTimeOnly } from "@/lib/date-utils";
 import { getLiquidTypeLabel } from "@/lib/utils";
-import { type LiquidPreset } from "@/lib/constants";
 
 interface RecordRowProps {
   unified: UnifiedRecord;
   onDelete: () => void;
   onEdit: () => void;
   isDeleting: boolean;
-  liquidPresets?: LiquidPreset[];
 }
 
 /** A single record row in the history list */
-export function RecordRow({ unified, onDelete, onEdit, isDeleting, liquidPresets }: RecordRowProps) {
+export function RecordRow({ unified, onDelete, onEdit, isDeleting }: RecordRowProps) {
   let icon: React.ReactNode;
   let measurement: string;
   let iconColor: string;
@@ -30,9 +28,7 @@ export function RecordRow({ unified, onDelete, onEdit, isDeleting, liquidPresets
     icon = <Icon className="w-4 h-4" />;
     iconColor = theme.iconColor;
     const amountStr = `${record.amount} ${record.type === "water" ? "ml" : "mg"}`;
-    const sourceLabel = record.type === "water"
-      ? getLiquidTypeLabel(record.source, { presets: liquidPresets, note: record.note })
-      : null;
+    const sourceLabel = record.type === "water" ? getLiquidTypeLabel(record.source) : null;
     measurement = sourceLabel ? `${amountStr} · ${sourceLabel}` : amountStr;
   } else if (unified.type === "weight") {
     const theme = CARD_THEMES.weight;

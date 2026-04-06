@@ -66,7 +66,7 @@ export type UpdateBloodPressureParams = {
  * Hook to get recent weight records.
  */
 export function useWeightRecords(limit: number = 5) {
-  return useLiveQuery(() => getWeightRecords(limit), [limit]);
+  return useLiveQuery(() => getWeightRecords(limit), [limit], []);
 }
 
 /**
