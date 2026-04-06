@@ -156,7 +156,7 @@ const defaultSettings: Settings = {
   weightGraphShowDrinking: true,
   liquidPresets: DEFAULT_LIQUID_PRESETS,
   sodiumPresets: DEFAULT_SODIUM_PRESETS,
-  weightIncrement: 0.1,
+  weightIncrement: 0.05,
   dismissedInsights: {},
   primaryRegion: "",
   secondaryRegion: "",
@@ -255,7 +255,7 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
 
       // Weight increment
       setWeightIncrement: (value) =>
-        set({ weightIncrement: sanitizeNumericInput(value, 0.1, 10) }),
+        set({ weightIncrement: sanitizeNumericInput(value, 0.05, 1, 2) }),
 
       // Substance config
       setSubstanceConfig: (config) => set({ substanceConfig: config }),
