@@ -8,6 +8,7 @@ import { z } from "zod";
 import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { logAudit } from "@/lib/audit";
+import { InlineEdit } from "@/components/ui/inline-edit";
 
 const WeightFormSchema = z.object({
   weight: z.number({ invalid_type_error: "Weight is required" })
@@ -185,12 +186,28 @@ export function WeightCard() {
               <Minus className="w-6 h-6" />
             </Button>
 
-            {/* Center Display */}
+            {/* Center Display — tap to type (D-01, D-02) */}
             <div className="flex-1 text-center">
-              <span className="text-4xl font-bold tabular-nums">
-                {pendingWeight?.toFixed(2) ?? "--"}
-              </span>
-              <span className="text-lg text-muted-foreground ml-1">kg</span>
+              <InlineEdit
+                value={pendingWeight}
+                onValueChange={setPendingWeight}
+                formatDisplay={(v) => v?.toFixed(2) ?? "--"}
+                suffix="kg"
+                displayClassName="text-4xl font-bold tabular-nums"
+                suffixClassName="text-lg text-muted-foreground ml-1"
+                roundOnBlur={(v) => {
+                  const increment = settings.weightIncrement;
+                  const rounded = Math.round(v / increment) * increment;
+                  return Math.round(rounded * 100) / 100;
+                }}
+                type="number"
+                inputMode="decimal"
+                step="any"
+                min={0.1}
+                max={1000}
+                aria-label="Weight in kilograms"
+                data-testid="weight-direct-input"
+              />
             </div>
 
             {/* Plus Button */}
