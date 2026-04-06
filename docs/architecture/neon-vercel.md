@@ -223,6 +223,40 @@ Use these steps to confirm the Neon+Vercel integration is correctly configured:
 
 ---
 
+## Verification Results
+
+**Date:** 2026-04-06
+**Method:** Codebase analysis + automated test suite. Browser automation unavailable (Chrome extension not connected). Dashboard checks marked for manual verification.
+
+### Neon Console Findings
+
+- [ ] Main branch exists as default/production -- **Requires manual check:** Open [console.neon.tech](https://console.neon.tech), navigate to project, verify `main` branch is marked as default.
+- [ ] Staging branch is child of main -- **Requires manual check:** Open Branches tab, verify `staging` branch exists with parent = `main`.
+- [ ] Preview branches created for PRs -- **Requires manual check:** Check Branches tab when a PR is open. May show `preview/<branch-name>` entries.
+- [ ] Push notification tables exist -- **Requires manual check:** Open SQL Editor for `main` branch, run `\dt` or check Tables view for `push_subscriptions`, `push_dose_schedules`, `push_sent_log`, `push_settings`.
+
+### Vercel Dashboard Findings
+
+- [ ] DATABASE_URL scoped per environment -- **Requires manual check:** Open project Settings > Environment Variables, verify `DATABASE_URL` has different values for Production/Preview/Development.
+- [ ] Neon integration listed -- **Requires manual check:** Open project Settings > Integrations, verify Neon integration is present and active.
+- [ ] Preview deployments have unique DATABASE_URL -- **Requires manual check:** Open a recent preview deployment's environment details.
+
+### Codebase Verification (Automated)
+
+- [x] Bundle security test passes -- **Confirmed:** `pnpm test` runs `src/__tests__/bundle-security.test.ts` (2 tests) which verifies `DATABASE_URL` is not leaked to the client bundle. All 393 tests pass.
+- [x] Only DATABASE_URL consumed by code -- **Confirmed:** `src/lib/push-db.ts` is the sole consumer via `neon(process.env.DATABASE_URL!)`. No other file references Neon connection variables.
+- [x] GitHub Actions workflows correctly configured -- **Confirmed:** `staging-db-reset.yml` has safety guard preventing production reset, uses `neondatabase/reset-branch-action@v1`. `promote-to-production.yml` creates snapshots with `continue-on-error: true` fallback.
+- [x] PWA disabled on preview -- **Confirmed:** `next.config.js` checks `VERCEL_ENV !== 'preview'` to skip service worker registration on preview deploys.
+- [x] No secrets in architecture document -- **Confirmed:** Document contains only variable names, no actual connection strings or passwords.
+
+### Summary
+
+**Automated checks (5/5 passed):** All codebase-verifiable items confirmed. Bundle security, single-consumer pattern, workflow configuration, preview PWA handling, and secret hygiene all verified.
+
+**Manual checks (7 pending):** Dashboard inspections require browser access to Neon Console and Vercel Dashboard. Use the steps in the Verification Checklist section above to complete these manually.
+
+---
+
 ## Next.js Configuration Notes
 
 The `next.config.js` file has two Neon-relevant behaviors:
