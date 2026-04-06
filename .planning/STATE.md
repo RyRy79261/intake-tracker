@@ -4,14 +4,14 @@ milestone: v1.4
 milestone_name: Post-Release Fixes
 status: executing
 stopped_at: Phase 38 context gathered
-last_updated: "2026-04-06T12:35:47.706Z"
-last_activity: 2026-04-06
+last_updated: "2026-04-06T13:44:52.045Z"
+last_activity: 2026-04-06 -- Phase 33 execution started
 progress:
   total_phases: 7
-  completed_phases: 7
-  total_plans: 14
-  completed_plans: 14
-  percent: 100
+  completed_phases: 0
+  total_plans: 4
+  completed_plans: 3
+  percent: 75
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-05)
 
 **Core value:** Accurate, queryable health data across intake, vitals, and medication adherence -- structured for cross-domain analysis and future AI querying
-**Current focus:** Phase 36 — neon-db-vercel-integration-understanding
+**Current focus:** Phase 33 — weight-direct-input
 
 ## Current Position
 
-Phase: 37
-Plan: Not started
-Status: Executing Phase 36
-Last activity: 2026-04-06 - Completed quick task 260406-ku9: Fix Food & Sodium UI layout
+Phase: 33 (weight-direct-input) — EXECUTING
+Plan: 1 of 4
+Status: Executing Phase 33
+Last activity: 2026-04-06 -- Phase 33 execution started
 
 Progress: [░░░░░░░░░░] 0%
 

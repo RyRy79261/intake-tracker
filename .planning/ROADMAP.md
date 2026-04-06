@@ -100,7 +100,7 @@ Phases execute in numeric order: 32 → 33 → 34 → 35 → 36 → 37 → 38
 | 30. Observability & Rollback | v1.3 | 2/2 | Complete | 2026-04-04 |
 | 31. Rollback & Documentation Fixes | v1.3 | 1/1 | Complete | 2026-04-05 |
 | 32. Release Pipeline + Weight Settings Infrastructure | v1.4 | 2/2 | Complete    | 2026-04-06 |
-| 33. Weight Direct Input | v1.4 | 2/2 | Complete    | 2026-04-06 |
+| 33. Weight Direct Input | v1.4 | 4/4 | Complete   | 2026-04-06 |
 | 34. Food/Sodium Card Restructure | v1.4 | 3/3 | Complete    | 2026-04-06 |
 | 35. Preset Fixes | v1.4 | 2/2 | Complete    | 2026-04-06 |
 | 36. Neon DB + Vercel Integration Understanding | v1.4 | 3/3 | Complete    | 2026-04-06 |
@@ -112,7 +112,7 @@ Phases execute in numeric order: 32 → 33 → 34 → 35 → 36 → 37 → 38
 **Goal:** [To be planned]
 **Requirements**: TBD
 **Depends on:** Nothing (independent research phase)
-**Plans:** 3/3 plans complete
+**Plans:** 4/4 plans complete
 
 Plans:
 - [x] TBD (run /gsd-plan-phase 36 to break down) (completed 2026-04-06)
