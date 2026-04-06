@@ -16,13 +16,13 @@ test.describe('Dashboard', () => {
     // Wait for the success toast (use getByText with exact match to avoid aria-live duplication)
     await expect(page.getByText('Water intake recorded', { exact: true })).toBeVisible();
 
-    // Click "Confirm Entry" in the Food/Salt card
+    // Click "Record with details" in the Food/Salt card
     const foodSaltCard = page.locator('#section-food-salt');
     await expect(foodSaltCard).toBeVisible();
-    await foodSaltCard.locator('button', { hasText: 'Confirm Entry' }).click();
+    await foodSaltCard.locator('button', { hasText: 'Record with details' }).click();
 
     // Wait for the success toast
-    await expect(page.getByText('Sodium intake recorded', { exact: true })).toBeVisible();
+    await expect(page.getByText('Eating event recorded', { exact: true })).toBeVisible();
   });
 
   test('should create composable food entry via AI parse', async ({ page }) => {
@@ -45,20 +45,16 @@ test.describe('Dashboard', () => {
     await foodInput.fill('bowl of chicken soup');
     await foodInput.press('Enter');
 
-    // Wait for composable preview to appear with linked records
-    // The preview shows record type labels and amounts from composable-preview.tsx
-    // Scope to the food-salt card to avoid matching quick-nav footer labels
-    const preview = page.locator('#section-food-salt');
-    await expect(preview.getByText('Eating', { exact: true }).first()).toBeVisible();
-    await expect(preview.getByText('200 ml')).toBeVisible();
-    await expect(preview.getByText('Sodium', { exact: true }).first()).toBeVisible();
-    await expect(preview.getByText('450 mg')).toBeVisible();
+    // Wait for AI to populate the form fields
+    const foodSaltCard = page.locator('#section-food-salt');
+    await expect(foodSaltCard.locator('#eating-sodium')).toHaveValue('450');
+    await expect(foodSaltCard.locator('#eating-water')).toHaveValue('200');
 
-    // Confirm all linked records
-    await page.click('button:has-text("Confirm All")');
+    // Submit the form with populated fields
+    await foodSaltCard.locator('button', { hasText: 'Record with details' }).click();
 
     // Verify success toast
-    await expect(page.getByText('Food logged', { exact: true })).toBeVisible();
+    await expect(page.getByText('Meal with details recorded', { exact: true })).toBeVisible();
   });
 
   test('should log a liquid entry via coffee preset', async ({ page }) => {
