@@ -10,6 +10,7 @@ import { CARD_THEMES } from "@/lib/card-themes";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useAddComposableEntry, type ComposableEntryInput } from "@/hooks/use-composable-entry";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/components/auth-guard";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -48,6 +49,7 @@ export function PresetTab({ tab }: PresetTabProps) {
   const deletePreset = useSettingsStore((s) => s.deleteLiquidPreset);
   const addEntry = useAddComposableEntry();
   const { toast } = useToast();
+  const { getAuthHeader } = useAuth();
 
   // Filter presets by tab prop
   const presets = useMemo(
@@ -169,9 +171,10 @@ export function PresetTab({ tab }: PresetTabProps) {
     setIsLookingUp(true);
     setSelectedPresetId(null);
     try {
+      const authHeaders = await getAuthHeader();
       const res = await fetch("/api/ai/substance-lookup", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify({ query: searchText.trim(), type: aiLookupType }),
       });
       if (!res.ok) throw new Error("Lookup failed");
