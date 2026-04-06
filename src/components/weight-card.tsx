@@ -94,7 +94,7 @@ export function WeightCard() {
   const handleDecrement = () => {
     setPendingWeight((prev) => {
       if (prev === null) return null;
-      const next = Math.round((prev - settings.weightIncrement) * 10) / 10;
+      const next = Math.round((prev - settings.weightIncrement) * 100) / 100;
       return Math.max(0.1, next);
     });
   };
@@ -102,7 +102,7 @@ export function WeightCard() {
   const handleIncrement = () => {
     setPendingWeight((prev) => {
       if (prev === null) return null;
-      return Math.round((prev + settings.weightIncrement) * 10) / 10;
+      return Math.round((prev + settings.weightIncrement) * 100) / 100;
     });
   };
 
@@ -126,7 +126,7 @@ export function WeightCard() {
       await addMutation.mutateAsync({ weight: pendingWeight, ...(timestamp !== undefined && { timestamp }) });
       toast({
         title: "Weight recorded",
-        description: `${pendingWeight.toFixed(1)} kg logged successfully`,
+        description: `${pendingWeight.toFixed(2)} kg logged successfully`,
         variant: "success",
       });
       // Keep current value as starting point for next entry
@@ -162,7 +162,7 @@ export function WeightCard() {
           ) : latestWeight ? (
             <div className="text-right">
               <p className={cn("text-lg font-bold", theme.latestValueColor)}>
-                {latestWeight.weight} kg
+                {latestWeight.weight.toFixed(2)} kg
               </p>
               <p className="text-xs text-muted-foreground">
                 {formatDateTime(latestWeight.timestamp)}
@@ -188,7 +188,7 @@ export function WeightCard() {
             {/* Center Display */}
             <div className="flex-1 text-center">
               <span className="text-4xl font-bold tabular-nums">
-                {pendingWeight?.toFixed(1) ?? "--"}
+                {pendingWeight?.toFixed(2) ?? "--"}
               </span>
               <span className="text-lg text-muted-foreground ml-1">kg</span>
             </div>
@@ -247,7 +247,7 @@ export function WeightCard() {
             <>
               <span className="text-muted-foreground">{formatDateTime(record.timestamp)}</span>
               <div className="flex items-center gap-2">
-                <span className="font-medium">{record.weight} kg</span>
+                <span className="font-medium">{record.weight.toFixed(2)} kg</span>
               </div>
             </>
           )}
