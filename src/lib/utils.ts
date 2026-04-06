@@ -1,6 +1,7 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { getDeviceTimezone } from "@/lib/timezone";
+import { type LiquidPreset } from "@/lib/constants";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -43,22 +44,57 @@ export function syncFields() {
 /**
  * Derive a human-readable label from an IntakeRecord's `source` field.
  * Returns null for plain water ("manual") since it's the default/zero option.
+ *
+ * @param source - The record's source field (e.g., "manual", "coffee:latte", "preset:abc123", "substance:xyz")
+ * @param options.presets - Available liquid presets for name lookup (from settings store)
+ * @param options.note - The record's note field, used as fallback label for substance-sourced entries
  */
-export function getLiquidTypeLabel(source?: string): string | null {
+export function getLiquidTypeLabel(
+  source?: string,
+  options?: { presets?: LiquidPreset[] | undefined; note?: string | undefined }
+): string | null {
   if (!source || source === "manual") return null;
+
+  // Legacy coffee prefix: "coffee:latte" -> "Latte"
   if (source.startsWith("coffee:")) {
     const sub = source.split(":")[1];
     return sub ? sub.charAt(0).toUpperCase() + sub.slice(1) : "Coffee";
   }
+
+  // Juice prefix: "juice" or "juice:orange" -> "Juice" or "Orange"
   if (source === "juice") return "Juice";
   if (source.startsWith("juice:")) {
     const name = source.slice(6);
     return name ? name.charAt(0).toUpperCase() + name.slice(1) : "Juice";
   }
-  if (source === "food") return "Food";
+
+  // Food prefix: "food" or "food:ai_parse" -> note or "Food"
+  if (source === "food") return options?.note || "Food";
   if (source.startsWith("food:")) {
-    const note = source.slice(5);
-    return note ? `Food (${note})` : "Food";
+    return options?.note || "Food";
   }
-  return source;
+
+  // Preset prefix: "preset:manual" -> null, "preset:{id}" -> preset name or "Beverage"
+  if (source === "preset:manual") return null;
+  if (source.startsWith("preset:")) {
+    const presetId = source.slice(7);
+    if (options?.presets) {
+      const preset = options.presets.find((p) => p.id === presetId);
+      if (preset) return preset.name;
+    }
+    return "Beverage";
+  }
+
+  // Substance prefix: "substance:{id}" -> note (description) or "Drink"
+  if (source.startsWith("substance:")) {
+    return options?.note || "Drink";
+  }
+
+  // Manual sub-sources: "manual:food_water_content" -> note or "Food"
+  if (source.startsWith("manual:")) {
+    return options?.note || "Food";
+  }
+
+  // Unknown source format — return null to prevent raw strings in UI
+  return null;
 }

@@ -5,9 +5,9 @@ import {
   deobfuscateApiKey,
   sanitizeNumericInput
 } from "@/lib/security";
-import { DEFAULT_LIQUID_PRESETS, DEFAULT_SODIUM_PRESETS, type LiquidPreset, type SodiumPreset } from "@/lib/constants";
+import { DEFAULT_LIQUID_PRESETS, type LiquidPreset } from "@/lib/constants";
 
-export type { LiquidPreset, SodiumPreset } from "@/lib/constants";
+export type { LiquidPreset } from "@/lib/constants";
 
 export interface SubstanceConfig {
   caffeine: {
@@ -64,9 +64,6 @@ export interface Settings {
   // Liquid presets (beverage CRUD)
   liquidPresets: LiquidPreset[];
 
-  // Sodium source presets
-  sodiumPresets: SodiumPreset[];
-
   // Insight dismissal (maps insight id to the value at time of dismissal)
   dismissedInsights: Record<string, string | number>;
 
@@ -110,11 +107,9 @@ interface SettingsActions {
   setWeightGraphShowUrination: (value: boolean) => void;
   setWeightGraphShowDefecation: (value: boolean) => void;
   setWeightGraphShowDrinking: (value: boolean) => void;
-  addLiquidPreset: (preset: Omit<LiquidPreset, "id">) => void;
+  addLiquidPreset: (preset: Omit<LiquidPreset, "id">) => string;
   updateLiquidPreset: (id: string, updates: Partial<Omit<LiquidPreset, "id">>) => void;
   deleteLiquidPreset: (id: string) => void;
-  addSodiumPreset: (preset: Omit<SodiumPreset, "id" | "isDefault">) => void;
-  deleteSodiumPreset: (id: string) => void;
   // Insight dismissal
   dismissInsight: (id: string, value: string | number) => void;
   isDismissed: (id: string, currentValue: string | number) => boolean;
@@ -155,8 +150,7 @@ const defaultSettings: Settings = {
   weightGraphShowDefecation: true,
   weightGraphShowDrinking: true,
   liquidPresets: DEFAULT_LIQUID_PRESETS,
-  sodiumPresets: DEFAULT_SODIUM_PRESETS,
-  weightIncrement: 0.1,
+  weightIncrement: 0.05,
   dismissedInsights: {},
   primaryRegion: "",
   secondaryRegion: "",
@@ -255,18 +249,21 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
 
       // Weight increment
       setWeightIncrement: (value) =>
-        set({ weightIncrement: sanitizeNumericInput(value, 0.1, 10) }),
+        set({ weightIncrement: sanitizeNumericInput(value, 0.05, 1, 2) }),
 
       // Substance config
       setSubstanceConfig: (config) => set({ substanceConfig: config }),
 
-      addLiquidPreset: (preset) =>
+      addLiquidPreset: (preset) => {
+        const id = crypto.randomUUID();
         set((state) => ({
           liquidPresets: [
             ...state.liquidPresets,
-            { ...preset, id: crypto.randomUUID() },
+            { ...preset, id },
           ],
-        })),
+        }));
+        return id;
+      },
       updateLiquidPreset: (id, updates) =>
         set((state) => ({
           liquidPresets: state.liquidPresets.map((p) =>
@@ -276,18 +273,6 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
       deleteLiquidPreset: (id) =>
         set((state) => ({
           liquidPresets: state.liquidPresets.filter((p) => p.id !== id),
-        })),
-
-      addSodiumPreset: (preset) =>
-        set((state) => ({
-          sodiumPresets: [
-            ...state.sodiumPresets,
-            { ...preset, id: crypto.randomUUID(), isDefault: false },
-          ],
-        })),
-      deleteSodiumPreset: (id) =>
-        set((state) => ({
-          sodiumPresets: state.sodiumPresets.filter((p) => p.id !== id),
         })),
 
       resetToDefaults: () => set(defaultSettings),
@@ -329,9 +314,7 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
             });
           }
         }
-        if (version < 4) {
-          state.sodiumPresets = DEFAULT_SODIUM_PRESETS;
-        }
+        // version < 4 migration: sodiumPresets removed in Phase 39 (no longer needed)
         return state as unknown as Settings & SettingsActions;
       },
     }

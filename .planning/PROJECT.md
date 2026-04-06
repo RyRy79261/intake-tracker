@@ -8,17 +8,15 @@ A personal health tracking PWA for monitoring daily intake (water, salt, caffein
 
 Accurate, queryable health data across all domains — intake, vitals, bodily functions, and medication adherence — structured so that cross-domain analysis (e.g., correlating fluid intake with urination and weight) is reliable and future AI querying is possible.
 
-## Current Milestone: None (planning next)
-
-**Last shipped:** v1.3 Deployment Lifecycle — automated release pipeline, staging environment, deployment protection, rollback runbook
-
 ## Current State
 
-**Shipped:** v1.0 Engineering Overhaul + v1.1 UI Overhaul + v1.2 CI & Data Integrity + v1.3 Deployment Lifecycle
-**Codebase:** ~47K LOC TypeScript, Next.js 14 App Router, Dexie.js v15 (IndexedDB)
+**Shipped:** v1.0 Engineering Overhaul + v1.1 UI Overhaul + v1.2 CI & Data Integrity + v1.3 Deployment Lifecycle + v1.4 Post-Release Fixes
+**Codebase:** ~46.5K LOC TypeScript, Next.js 14 App Router, Dexie.js v15 (IndexedDB)
 **CI:** 12-job GitHub Actions pipeline — lint, typecheck, dual-TZ tests, build+security, data integrity, E2E (Playwright), supply chain audit, coverage, benchmarks
 **Deployment:** Release Please automation, stable staging environment, promotion workflow with Neon snapshots, version display, rollback runbook
 **E2E:** 22 Playwright tests across 5 route-mirrored spec files with Privy test account integration
+**Architecture docs:** Neon+Vercel integration reference at docs/architecture/neon-vercel.md (Phase 36) — branch lifecycle, env var audit, migration path
+**Known issue:** REL-01 partial — release-please YAML permissions correct, GitHub repo settings change still needed manually
 
 ## Requirements
 
@@ -63,10 +61,19 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 - ✓ Tagged promotion flow (staging → production) with approval gates — v1.3
 - ✓ Version display and rollback runbook — v1.3
 - ✓ Rollback documentation fixes (PR-based revert, missing secrets) — v1.3
+- ✓ Weight tracking allows direct keyboard number input — v1.4
+- ✓ Configurable weight increment step size in Settings (default 0.05, parseFloat fix) — v1.4
+- ✓ Weight rounding supports 0.05 precision (×100/100 replacing ×10/10) — v1.4
+- ✓ Food/sodium card: sodium top-right, description as entry title, single merged history — v1.4
+- ✓ Coffee presets: AI auto-populates caffeine/alcohol content on add with save-and-log UUID linkage — v1.4
+- ✓ Coffee preset deletion from grid with long-press gesture and confirmation dialog — v1.4
+- ✓ Neon DB + Vercel integration architecture documented (branch lifecycle, env vars, migration path) — v1.4
+- ✓ Water entry label formatting: preset:/substance: prefix resolution via getLiquidTypeLabel — v1.4
+- ✓ Weight input defaults to last recorded value instead of hardcoded 70 — v1.4
 
 ### Active
 
-<!-- Next milestone scope goes here -->
+(None — planning next milestone)
 
 ### Out of Scope
 
@@ -117,12 +124,17 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 | Release Please over custom version-bump.yml | PR-based version bumps are more visible and reliable than bot commits on main; conventional commits provide clean changelogs | ✓ Good |
 | Commitlint + husky for commit enforcement | Formalizes existing conventional commit practice; hook validates locally, Release Please validates server-side | ✓ Good |
 | Separate promotion workflow + setup script for protection | Branch protection and environment rules are repo settings (not code); setup script documents and automates configuration via gh CLI | ✓ Good |
+| parseFloat over parseInt in settings-helpers | parseInt silently destroys decimal values like 0.05 → 0; parseFloat preserves precision for weight increments | ✓ Good |
+| InlineEdit tap-to-type for weight | Lower friction than modal dialog; roundOnBlur ensures precision; type=text allows intermediate decimal states | ✓ Good |
+| Discriminated union for merged food/sodium history | `kind: "eating" \| "salt"` routes edit/delete to correct mutation without runtime type checking | ✓ Good |
+| Long-press gesture for preset deletion | Pointer events for cross-device compat; 500ms timer with ref-based click prevention avoids accidental deletes | ✓ Good |
+| AI lookup gate on save-as-preset | Prevents saving presets without substance data; aiLookupUsed flag gates button | ✓ Good |
 
 ## Evolution
 
 This document evolves at phase transitions and milestone boundaries.
 
-*Last updated: 2026-04-05 after v1.3 Deployment Lifecycle milestone*
+*Last updated: 2026-04-06 after v1.4 milestone*
 
 **After each phase transition:**
 1. Requirements invalidated? → Move to Out of Scope with reason
@@ -136,6 +148,3 @@ This document evolves at phase transitions and milestone boundaries.
 2. Core Value check — still the right priority?
 3. Audit Out of Scope — reasons still valid?
 4. Update Context with current state
-
----
-*Last updated: 2026-04-05 after v1.3 Deployment Lifecycle milestone*
