@@ -1,7 +1,7 @@
 ---
 phase: 33
 slug: weight-direct-input
-status: draft
+status: approved
 shadcn_initialized: true
 preset: default
 created: 2026-04-06
@@ -138,11 +138,11 @@ No third-party registries. No new shadcn components need to be installed — the
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
+- [x] Dimension 1 Copywriting: PASS — CTA, error, aria-label defined; empty states N/A with rationale
+- [x] Dimension 2 Visuals: PASS — interaction contract covers activation, real-time update, blur, edge cases
+- [x] Dimension 3 Color: PASS — no new tokens; uses existing weight theme; active state deliberately colorless
+- [x] Dimension 4 Typography: PASS — 4 roles declared; Display role preserves tabular-nums across modes
+- [x] Dimension 5 Spacing: PASS — standard 8-point scale; no exceptions; modifies existing card internals only
+- [x] Dimension 6 Registry Safety: PASS — no new shadcn blocks; custom component from native primitives
 
-**Approval:** pending
+**Approval:** approved 2026-04-06
