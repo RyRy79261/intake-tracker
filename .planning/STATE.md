@@ -3,11 +3,11 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Post-Release Fixes
 status: executing
-stopped_at: Phase 34 context gathered
-last_updated: "2026-04-06T10:34:19.583Z"
+stopped_at: Phase 35 context gathered
+last_updated: "2026-04-06T11:03:48.876Z"
 last_activity: 2026-04-06
 progress:
-  total_phases: 4
+  total_phases: 7
   completed_phases: 2
   total_plans: 4
   completed_plans: 4
@@ -87,9 +87,12 @@ None yet.
 - v1.2 shipped 2026-04-04 (Phases 20-26) -- archived 2026-04-04
 - v1.3 shipped 2026-04-05 (Phases 27-31) -- archived 2026-04-05
 - v1.4 roadmap created 2026-04-05 (Phases 32-35)
+- Phase 36 added: Neon DB + Vercel Integration Understanding
+- Phase 37 added: Water Entry Label Formatting Bug
+- Phase 38 added: Weight Input Default Value Bug
 
 ## Session Continuity
 
-Last session: 2026-04-06T10:34:19.579Z
-Stopped at: Phase 34 context gathered
-Resume file: .planning/phases/34-food-sodium-card-restructure/34-CONTEXT.md
+Last session: 2026-04-06T11:03:48.872Z
+Stopped at: Phase 35 context gathered
+Resume file: .planning/phases/35-preset-fixes/35-CONTEXT.md
