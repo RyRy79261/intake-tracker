@@ -63,7 +63,7 @@ export function FoodSaltCard() {
             value={progressPercent}
             className="h-3"
             indicatorClassName={cn(
-              isOverLimit ? "bg-red-500" : CARD_THEMES.salt.progressGradient
+              isOverLimit ? CARD_THEMES.salt.progressOverLimit : CARD_THEMES.salt.progressGradient
             )}
           />
         </div>

@@ -370,7 +370,7 @@ export function PresetTab({ tab }: PresetTabProps) {
           value={waterProgressPercent}
           className="h-3"
           indicatorClassName={cn(
-            isWaterOverLimit ? "bg-red-500" : theme.progressGradient
+            isWaterOverLimit ? theme.progressOverLimit : theme.progressGradient
           )}
         />
       </div>

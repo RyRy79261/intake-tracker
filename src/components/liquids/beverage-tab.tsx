@@ -106,7 +106,7 @@ export function BeverageTab() {
           value={progressPercent}
           className="h-3"
           indicatorClassName={cn(
-            isOverLimit ? "bg-red-500" : theme.progressGradient
+            isOverLimit ? theme.progressOverLimit : theme.progressGradient
           )}
         />
       </div>
