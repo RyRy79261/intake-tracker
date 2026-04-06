@@ -10,7 +10,7 @@ Personal health tracking PWA. v1.0 rebuilt the engineering foundation (strict Ty
 - ✅ **v1.1 UI Overhaul** — Phases 12–19, 16 plans (shipped 2026-03-27) — [archived](./milestones/v1.1-ROADMAP.md)
 - ✅ **v1.2 CI & Data Integrity** — Phases 20–26, 16 plans (shipped 2026-04-04) — [archived](./milestones/v1.2-ROADMAP.md)
 - ✅ **v1.3 Deployment Lifecycle** — Phases 27–31, 12 plans (shipped 2026-04-05) — [archived](./milestones/v1.3-ROADMAP.md)
-- 🚧 **v1.4 Post-Release Fixes** — Phases 32–35 (in progress)
+- 🚧 **v1.4 Post-Release Fixes** — Phases 32–38 (in progress)
 
 ## Phases
 
@@ -35,8 +35,11 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 32: Release Pipeline + Weight Settings Infrastructure** - Fix release-please PR permissions and establish correct weight increment/rounding foundations (completed 2026-04-06)
 - [x] **Phase 33: Weight Direct Input** - Enable tap-to-type keyboard entry for weight values (completed 2026-04-06)
-- [ ] **Phase 34: Food/Sodium Card Restructure** - Reposition sodium display, use descriptions as titles, merge history sections
+- [x] **Phase 34: Food/Sodium Card Restructure** - Reposition sodium display, use descriptions as titles, merge history sections (completed 2026-04-06)
 - [ ] **Phase 35: Preset Fixes** - AI-powered substance content on preset creation and reliable preset deletion
+- [ ] **Phase 36: Neon DB + Vercel Integration Understanding** - Research how Vercel receives Neon branch DB connection details via the integration
+- [ ] **Phase 37: Water Entry Label Formatting Bug** - Fix labels showing "preset:manual" and "substance:{id}" instead of clean text
+- [ ] **Phase 38: Weight Input Default Value Bug** - Fix weight input defaulting to 70 instead of last recorded value
 
 ## Phase Details
 
@@ -87,7 +90,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 32 → 33 → 34 → 35
+Phases execute in numeric order: 32 → 33 → 34 → 35 → 36 → 37 → 38
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -98,5 +101,38 @@ Phases execute in numeric order: 32 → 33 → 34 → 35
 | 31. Rollback & Documentation Fixes | v1.3 | 1/1 | Complete | 2026-04-05 |
 | 32. Release Pipeline + Weight Settings Infrastructure | v1.4 | 2/2 | Complete    | 2026-04-06 |
 | 33. Weight Direct Input | v1.4 | 2/2 | Complete    | 2026-04-06 |
-| 34. Food/Sodium Card Restructure | v1.4 | 0/0 | Not started | - |
+| 34. Food/Sodium Card Restructure | v1.4 | 3/3 | Complete   | 2026-04-06 |
 | 35. Preset Fixes | v1.4 | 0/0 | Not started | - |
+| 36. Neon DB + Vercel Integration Understanding | v1.4 | 0/0 | Not started | - |
+| 37. Water Entry Label Formatting Bug | v1.4 | 0/0 | Not started | - |
+| 38. Weight Input Default Value Bug | v1.4 | 0/0 | Not started | - |
+
+### Phase 36: Neon DB + Vercel Integration Understanding
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Nothing (independent research phase)
+**Plans:** 3/3 plans complete
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 36 to break down)
+
+### Phase 37: Water Entry Label Formatting Bug
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Nothing (independent bug fix)
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 37 to break down)
+
+### Phase 38: Weight Input Default Value Bug
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Nothing (independent bug fix)
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 38 to break down)
