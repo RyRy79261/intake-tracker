@@ -4,10 +4,13 @@ import { useState, useMemo, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
 import { Sparkles, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { useSettingsStore } from "@/stores/settings-store";
+import { useSettings } from "@/hooks/use-settings";
+import { useIntake } from "@/hooks/use-intake-queries";
 import { useAddComposableEntry, type ComposableEntryInput } from "@/hooks/use-composable-entry";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/components/auth-guard";
@@ -50,6 +53,15 @@ export function PresetTab({ tab }: PresetTabProps) {
   const addEntry = useAddComposableEntry();
   const { toast } = useToast();
   const { getAuthHeader } = useAuth();
+
+  // Water progress data
+  const settings = useSettings();
+  const waterIntake = useIntake("water");
+  const waterLimit = settings.waterLimit;
+  const { dailyTotal: waterDailyTotal } = waterIntake;
+  const waterProgressPercent =
+    waterLimit > 0 ? Math.min((waterDailyTotal / waterLimit) * 100, 100) : 0;
+  const isWaterOverLimit = waterLimit > 0 && waterDailyTotal > waterLimit;
 
   // Filter presets by tab prop
   const presets = useMemo(
@@ -352,6 +364,17 @@ export function PresetTab({ tab }: PresetTabProps) {
 
   return (
     <>
+      {/* Water Progress Bar */}
+      <div className="mb-4">
+        <Progress
+          value={waterProgressPercent}
+          className="h-3"
+          indicatorClassName={cn(
+            isWaterOverLimit ? "bg-red-500" : theme.progressGradient
+          )}
+        />
+      </div>
+
       {/* 1. Preset Grid */}
       {presets.length === 0 ? (
         <p className="text-sm text-muted-foreground mb-3">
