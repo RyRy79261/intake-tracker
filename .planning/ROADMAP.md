@@ -62,13 +62,21 @@ Decimal phases appear between their surrounding integers in numeric order.
 | 37. Water Entry Label Formatting Bug | v1.4 | 1/1 | Complete | 2026-04-06 |
 | 38. Weight Input Default Value Bug | v1.4 | 1/1 | Complete | 2026-04-06 |
 | 39. Preset Save-and-Log Label Fix | v1.4 | 1/1 | Complete | 2026-04-06 |
+| 1. Cross-app Bug Fixes & UX | — | 0/8 | Planning | — |
 
 ### Phase 1: Cross-app bug fixes and UX improvements
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** Fix medication bugs (inventory deduction, progress bar, dose formatting, adherence calculation), improve Rx view (compound details drawer, pill organizer format), restructure Settings (accordion presets replacing modal), and clean up Dashboard/Analytics UX.
+**Requirements**: [D-01, D-02, D-03, D-04, D-05, D-06, D-07, D-08, D-09, D-10, D-11, D-12, D-13, D-14, D-15, D-16, D-17, D-18, D-19, D-20, D-21, D-22, D-23]
 **Depends on:** None (new milestone cycle)
-**Plans:** 0 plans
+**Plans:** 8 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 1 to break down)
+- [ ] 01-01-PLAN.md — Dashboard quick-nav cleanup, medication tab wrap, export button stack (D-01, D-02, D-17)
+- [ ] 01-02-PLAN.md — Dexie v16 schema extension, AI medicine-search mechanismOfAction, wizard persistence (D-13, D-14, D-15)
+- [ ] 01-03-PLAN.md — Schedule bug fixes: inventory deduction, progress bar, Mark All time, creation-day filter (D-03, D-04, D-05, D-06)
+- [ ] 01-04-PLAN.md — Dose formatting fix and collapsed Rx card display (D-07, D-08, D-09, D-10)
+- [ ] 01-05-PLAN.md — Compound Details drawer with AI refresh diff, expandable indication (D-11, D-12)
+- [ ] 01-06-PLAN.md — Adherence calculation fix and insight threshold editing (D-16, D-18)
+- [ ] 01-07-PLAN.md — Settings restructure: remove dead sections, accordion presets with color coding (D-19, D-20, D-21, D-22, D-23)
+- [ ] 01-08-PLAN.md — Final verification checkpoint: build, E2E, human verify all 23 decisions
