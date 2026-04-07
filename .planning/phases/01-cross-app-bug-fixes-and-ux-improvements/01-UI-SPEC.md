@@ -104,6 +104,23 @@ Note: D-22 specifies "orange for mixed" items. Since this is a single-use color 
 
 ---
 
+## Visual Hierarchy
+
+This phase modifies existing screens rather than creating new ones. The most heavily changed screen is the Settings page (D-19 through D-23), which gains a new accordion-based layout replacing the modal customization panel.
+
+### Settings Page — Primary Focal Point
+
+| Property | Value |
+|----------|-------|
+| Primary anchor | The accordion section group (Water, Coffee, Alcohol, Food/Beverage) |
+| Placement | Below existing behavior settings (limits, increments, day-start-hour, theme) |
+| Visual weight | Domain-colored accordion triggers (--caffeine, --alcohol, orange-500, foreground) draw the eye to the preset management area as the primary interactive zone |
+| Supporting context | Existing behavior settings above the accordion use muted card backgrounds (--card), establishing visual subordination so the accordion stands out as the new content area |
+
+**Rationale:** The accordion is the only net-new structural UI element on any screen in this phase. Existing behavior settings retain their current styling; the accordion's domain-colored triggers create a natural focal point without modifying the surrounding layout.
+
+---
+
 ## Copywriting Contract
 
 ### Phase-Wide Patterns
@@ -186,7 +203,7 @@ This phase is bug fixes and UX improvements -- it modifies existing UI rather th
 | Loading state | Button shows spinner + "Fetching..." |
 | Diff display | Field-by-field comparison: old value (line-through, text-muted-foreground) vs new value (text-foreground, bg-green-50 dark:bg-green-950 highlight) |
 | Actions per field | Checkbox to accept/reject each changed field |
-| Footer | "Apply Changes" primary button (applies only checked fields) + "Cancel" ghost button |
+| Footer | "Apply Changes" primary button (applies only checked fields) + "Discard Changes" ghost button (dismisses all proposed AI changes, preserves existing compound data) |
 | No changes state | Toast: "Compound data is up to date." |
 
 ### Insight Thresholds (D-18)
