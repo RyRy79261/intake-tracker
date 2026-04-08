@@ -202,12 +202,12 @@ export function LiquidsCard() {
                 <span className="text-muted-foreground">
                   {formatTime(record.timestamp)}
                 </span>
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="font-medium shrink-0">
                     {formatAmount(record.amount, "ml")}
                   </span>
                   {sourceLabel && (
-                    <span className="text-xs text-muted-foreground/80 bg-muted/60 px-1.5 py-0.5 rounded">
+                    <span className="text-xs text-muted-foreground/80 bg-muted/60 px-1.5 py-0.5 rounded truncate">
                       {sourceLabel}
                     </span>
                   )}
