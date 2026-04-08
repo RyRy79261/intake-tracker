@@ -122,7 +122,9 @@ async function seedFullPrescription(overrides?: {
   const inv = makeInventoryItem(rx.id, {
     strength: overrides?.strength ?? 50,
     currentStock: overrides?.initialStock ?? 30,
-    isActive: true,
+    // Dexie indexes booleans as 0/1; the service queries isActive: 1
+    // fake-indexeddb needs the numeric value to match .where({ isActive: 1 })
+    isActive: 1 as unknown as boolean,
   });
   const txn = makeInventoryTransaction(inv.id, {
     amount: overrides?.initialStock ?? 30,

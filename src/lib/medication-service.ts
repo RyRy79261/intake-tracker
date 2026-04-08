@@ -15,10 +15,6 @@ export interface CreatePrescriptionInput {
   notes?: string;
   contraindications?: string[];
   warnings?: string[];
-  drugClass?: string;
-  mechanismOfAction?: string;
-  commonIndications?: string[];
-  dosageStrengths?: string[];
 
   // Phase level (initial maintenance phase)
   unit: string;
@@ -96,10 +92,6 @@ function buildPrescription(
     ...(input.notes !== undefined && { notes: input.notes }),
     ...(input.contraindications !== undefined && { contraindications: input.contraindications }),
     ...(input.warnings !== undefined && { warnings: input.warnings }),
-    ...('drugClass' in input && input.drugClass !== undefined && { drugClass: input.drugClass }),
-    ...('mechanismOfAction' in input && input.mechanismOfAction !== undefined && { mechanismOfAction: input.mechanismOfAction }),
-    ...('commonIndications' in input && input.commonIndications !== undefined && { commonIndications: input.commonIndications }),
-    ...('dosageStrengths' in input && input.dosageStrengths !== undefined && { dosageStrengths: input.dosageStrengths }),
     isActive: true,
     createdAt: now,
     updatedAt: now,

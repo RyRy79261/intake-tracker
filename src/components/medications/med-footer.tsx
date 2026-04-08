@@ -21,7 +21,7 @@ interface MedTabBarProps {
 
 export function MedTabBar({ activeTab, onTabChange }: MedTabBarProps) {
   return (
-    <div className="flex flex-wrap items-stretch border-b bg-background/95 backdrop-blur-sm -mx-4 mb-3">
+    <div className="flex items-stretch border-b bg-background/95 backdrop-blur-sm -mx-4 mb-3">
       {TABS.map((tab) => {
         const isActive = tab.id === activeTab;
         return (
@@ -29,7 +29,7 @@ export function MedTabBar({ activeTab, onTabChange }: MedTabBarProps) {
             key={tab.id}
             onClick={() => onTabChange(tab.id)}
             className={cn(
-              "flex items-center justify-center gap-1.5 py-2.5 px-3 text-sm font-medium min-w-fit transition-colors relative",
+              "flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors relative",
               "hover:text-foreground",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
               isActive ? "text-teal-600 dark:text-teal-400" : "text-muted-foreground"

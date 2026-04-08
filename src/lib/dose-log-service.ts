@@ -253,11 +253,9 @@ export async function takeDose(input: TakeDoseInput): Promise<ServiceResult<Dose
 
         if (!wasTaken) {
           // Find active inventory for this prescription
-          const allInventory = await db.inventoryItems
-            .where("prescriptionId")
-            .equals(prescriptionId)
-            .toArray();
-          const inventory = allInventory.find(i => i.isActive === true && !i.isArchived);
+          const inventory = await db.inventoryItems
+            .where({ prescriptionId, isActive: 1 })
+            .first();
 
           if (inventory) {
             inventoryItemId = inventory.id;

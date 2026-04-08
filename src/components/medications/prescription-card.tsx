@@ -79,16 +79,6 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
     ? formatPillCount(currentStock)
     : `${currentStock} pills`;
 
-  const uniqueTimes = new Set(prescriptionSlots.map(s => s.localTime));
-  const timesPerDay = uniqueTimes.size;
-  const pillLabel = firstSlot?.pillsPerDose != null
-    ? formatPillCount(firstSlot.pillsPerDose)
-    : dosageMg !== undefined ? `${dosageMg}${unit}` : null;
-
-  const frequencyLabel = timesPerDay > 0
-    ? `${timesPerDay}x per day`
-    : isAsNeeded ? "As needed" : "No schedule";
-
   const isNegativeStock = activeInventory && currentStock < 0;
   const isLowStock =
     activeInventory &&
@@ -127,13 +117,13 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
         </div>
 
         <div className="flex items-center gap-1.5 flex-wrap mt-1">
-          {pillLabel && (
+          {dosageMg !== undefined && (
             <span className="text-[10px] text-muted-foreground">
-              {pillLabel}
+              {dosageMg}{unit}
             </span>
           )}
           <span className="text-[10px] text-muted-foreground">
-            {frequencyLabel}
+            {nextDoseLabel}
           </span>
         </div>
 
@@ -174,7 +164,7 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
               </div>
               {firstSlot?.pillsPerDose != null && dosageMg != null && (
                 <p className="text-[9px] text-emerald-600 dark:text-emerald-400">
-                  {formatPillCount(firstSlot.pillsPerDose)} ({dosageMg}{unit})
+                  {formatPillCount(firstSlot.pillsPerDose)} of {dosageMg}{unit}
                   {activePhase?.foodInstruction && activePhase.foodInstruction !== "none" && ` · ${activePhase.foodInstruction} eating`}
                 </p>
               )}

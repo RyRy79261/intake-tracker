@@ -10,110 +10,88 @@ const config: Config = {
     "./src/hooks/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
-  	extend: {
-  		colors: {
-  			background: 'hsl(var(--background))',
-  			foreground: 'hsl(var(--foreground))',
-  			card: {
-  				DEFAULT: 'hsl(var(--card))',
-  				foreground: 'hsl(var(--card-foreground))'
-  			},
-  			popover: {
-  				DEFAULT: 'hsl(var(--popover))',
-  				foreground: 'hsl(var(--popover-foreground))'
-  			},
-  			primary: {
-  				DEFAULT: 'hsl(var(--primary))',
-  				foreground: 'hsl(var(--primary-foreground))'
-  			},
-  			secondary: {
-  				DEFAULT: 'hsl(var(--secondary))',
-  				foreground: 'hsl(var(--secondary-foreground))'
-  			},
-  			muted: {
-  				DEFAULT: 'hsl(var(--muted))',
-  				foreground: 'hsl(var(--muted-foreground))'
-  			},
-  			accent: {
-  				DEFAULT: 'hsl(var(--accent))',
-  				foreground: 'hsl(var(--accent-foreground))'
-  			},
-  			destructive: {
-  				DEFAULT: 'hsl(var(--destructive))',
-  				foreground: 'hsl(var(--destructive-foreground))'
-  			},
-  			border: 'hsl(var(--border))',
-  			input: 'hsl(var(--input))',
-  			ring: 'hsl(var(--ring))',
-  			water: {
-  				DEFAULT: 'hsl(var(--water))',
-  				foreground: 'hsl(var(--water-foreground))'
-  			},
-  			salt: {
-  				DEFAULT: 'hsl(var(--salt))',
-  				foreground: 'hsl(var(--salt-foreground))'
-  			},
-  			weight: {
-  				DEFAULT: 'hsl(var(--weight))',
-  				foreground: 'hsl(var(--weight-foreground))'
-  			},
-  			bp: {
-  				DEFAULT: 'hsl(var(--bp))',
-  				foreground: 'hsl(var(--bp-foreground))'
-  			},
-  			eating: {
-  				DEFAULT: 'hsl(var(--eating))',
-  				foreground: 'hsl(var(--eating-foreground))'
-  			},
-  			urination: {
-  				DEFAULT: 'hsl(var(--urination))',
-  				foreground: 'hsl(var(--urination-foreground))'
-  			},
-  			defecation: {
-  				DEFAULT: 'hsl(var(--defecation))',
-  				foreground: 'hsl(var(--defecation-foreground))'
-  			},
-  			caffeine: {
-  				DEFAULT: 'hsl(var(--caffeine))',
-  				foreground: 'hsl(var(--caffeine-foreground))'
-  			},
-  			alcohol: {
-  				DEFAULT: 'hsl(var(--alcohol))',
-  				foreground: 'hsl(var(--alcohol-foreground))'
-  			},
-  			medication: {
-  				DEFAULT: 'hsl(var(--medication))',
-  				foreground: 'hsl(var(--medication-foreground))'
-  			}
-  		},
-  		borderRadius: {
-  			lg: 'var(--radius)',
-  			md: 'calc(var(--radius) - 2px)',
-  			sm: 'calc(var(--radius) - 4px)'
-  		},
-  		keyframes: {
-  			'accordion-down': {
-  				from: {
-  					height: '0'
-  				},
-  				to: {
-  					height: 'var(--radix-accordion-content-height)'
-  				}
-  			},
-  			'accordion-up': {
-  				from: {
-  					height: 'var(--radix-accordion-content-height)'
-  				},
-  				to: {
-  					height: '0'
-  				}
-  			}
-  		},
-  		animation: {
-  			'accordion-down': 'accordion-down 0.2s ease-out',
-  			'accordion-up': 'accordion-up 0.2s ease-out'
-  		}
-  	}
+    extend: {
+      colors: {
+        background: "hsl(var(--background))",
+        foreground: "hsl(var(--foreground))",
+        card: {
+          DEFAULT: "hsl(var(--card))",
+          foreground: "hsl(var(--card-foreground))",
+        },
+        popover: {
+          DEFAULT: "hsl(var(--popover))",
+          foreground: "hsl(var(--popover-foreground))",
+        },
+        primary: {
+          DEFAULT: "hsl(var(--primary))",
+          foreground: "hsl(var(--primary-foreground))",
+        },
+        secondary: {
+          DEFAULT: "hsl(var(--secondary))",
+          foreground: "hsl(var(--secondary-foreground))",
+        },
+        muted: {
+          DEFAULT: "hsl(var(--muted))",
+          foreground: "hsl(var(--muted-foreground))",
+        },
+        accent: {
+          DEFAULT: "hsl(var(--accent))",
+          foreground: "hsl(var(--accent-foreground))",
+        },
+        destructive: {
+          DEFAULT: "hsl(var(--destructive))",
+          foreground: "hsl(var(--destructive-foreground))",
+        },
+        border: "hsl(var(--border))",
+        input: "hsl(var(--input))",
+        ring: "hsl(var(--ring))",
+        water: {
+          DEFAULT: "hsl(var(--water))",
+          foreground: "hsl(var(--water-foreground))",
+        },
+        salt: {
+          DEFAULT: "hsl(var(--salt))",
+          foreground: "hsl(var(--salt-foreground))",
+        },
+        weight: {
+          DEFAULT: "hsl(var(--weight))",
+          foreground: "hsl(var(--weight-foreground))",
+        },
+        bp: {
+          DEFAULT: "hsl(var(--bp))",
+          foreground: "hsl(var(--bp-foreground))",
+        },
+        eating: {
+          DEFAULT: "hsl(var(--eating))",
+          foreground: "hsl(var(--eating-foreground))",
+        },
+        urination: {
+          DEFAULT: "hsl(var(--urination))",
+          foreground: "hsl(var(--urination-foreground))",
+        },
+        defecation: {
+          DEFAULT: "hsl(var(--defecation))",
+          foreground: "hsl(var(--defecation-foreground))",
+        },
+        caffeine: {
+          DEFAULT: "hsl(var(--caffeine))",
+          foreground: "hsl(var(--caffeine-foreground))",
+        },
+        alcohol: {
+          DEFAULT: "hsl(var(--alcohol))",
+          foreground: "hsl(var(--alcohol-foreground))",
+        },
+        medication: {
+          DEFAULT: "hsl(var(--medication))",
+          foreground: "hsl(var(--medication-foreground))",
+        },
+      },
+      borderRadius: {
+        lg: "var(--radius)",
+        md: "calc(var(--radius) - 2px)",
+        sm: "calc(var(--radius) - 4px)",
+      },
+    },
   },
   plugins: [require("tailwindcss-animate")],
 };

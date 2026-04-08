@@ -168,7 +168,7 @@ describe("recalculateScheduleTimezones", () => {
     const { getDailyDoseSchedule } = await import("./dose-schedule-service");
     const { makeInventoryItem } = await import("@/__tests__/fixtures/db-fixtures");
 
-    const rx = makePrescription({ createdAt: 1699920000000 }); // 2023-11-14T00:00:00Z
+    const rx = makePrescription({ createdAt: 1700000000000 });
     const phase = makeMedicationPhase(rx.id);
     const schedule = makePhaseSchedule(phase.id, {
       scheduleTimeUTC: 390, // 08:30 SA = 06:30 UTC

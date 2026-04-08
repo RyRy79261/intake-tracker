@@ -4,7 +4,7 @@ import { db, type IntakeRecord, type WeightRecord, type BloodPressureRecord,
   type InventoryItem, type InventoryTransaction, type DoseLog,
   type DailyNote, type AuditLog, type SubstanceRecord, type TitrationPlan } from "@/lib/db";
 
-const BASE_TS = 1699920000000; // 2023-11-14T00:00:00Z — fixed base for determinism
+const BASE_TS = 1700000000000; // 2023-11-14 — fixed base for determinism
 
 export function makeIntakeRecord(overrides?: Partial<IntakeRecord>): IntakeRecord {
   return {

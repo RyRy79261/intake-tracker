@@ -178,9 +178,9 @@ export async function getDailyDoseSchedule(
     const prescription = prescriptionMap.get(phase.prescriptionId);
     if (!prescription) continue;
 
-    // Don't show doses for dates before the prescription was created (timezone-aware)
+    // Don't show doses for dates before the prescription was created
     const createdDate = prescription.createdAt
-      ? new Date(prescription.createdAt).toLocaleDateString("en-CA", { timeZone: tz })
+      ? new Date(prescription.createdAt).toISOString().split("T")[0]
       : undefined;
     if (createdDate && dateStr < createdDate) continue;
 
@@ -189,16 +189,6 @@ export async function getDailyDoseSchedule(
 
     const status = deriveStatus(existingLog, dateStr, todayStr);
     const localTime = formatLocalTime(schedule.scheduleTimeUTC, tz);
-
-    // D-03: On creation day, skip schedule times earlier than prescription creation time
-    if (createdDate && dateStr === createdDate && prescription.createdAt) {
-      const createdInTz = new Date(prescription.createdAt).toLocaleTimeString("en-GB", { timeZone: tz, hour12: false });
-      const createdParts = createdInTz.split(":").map(Number);
-      const createdMinutes = (createdParts[0] ?? 0) * 60 + (createdParts[1] ?? 0);
-      const parts = localTime.split(":").map(Number);
-      const scheduleMinutes = (parts[0] ?? 0) * 60 + (parts[1] ?? 0);
-      if (scheduleMinutes < createdMinutes) continue;
-    }
     const dosageMg = schedule.dosage;
 
     const inventory = inventoryByPrescription.get(prescription.id);

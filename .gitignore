@@ -51,5 +51,5 @@ e2e/.auth/
 .claude/worktrees/
 .entire/
 
-# GSD planning (local only — recoverable from git history)
-.planning/
+# GSD milestone phase archives (summaries kept, phase details recoverable from git history)
+.planning/milestones/*-phases/

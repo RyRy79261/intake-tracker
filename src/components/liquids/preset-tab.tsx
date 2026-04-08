@@ -263,7 +263,9 @@ export function PresetTab({ tab }: PresetTabProps) {
       substances.push({
         type: "caffeine",
         amountMg: Math.round((volumeMl / 100) * caffeinePer100ml),
-        volumeMl,
+        // Only include volumeMl when no explicit water intake exists,
+        // otherwise the service auto-creates a duplicate water record
+        ...(waterAmount <= 0 && { volumeMl }),
         description,
       });
     }
@@ -272,7 +274,7 @@ export function PresetTab({ tab }: PresetTabProps) {
       substances.push({
         type: "alcohol",
         amountStandardDrinks: parseFloat(stdDrinks.toFixed(1)),
-        volumeMl,
+        ...(waterAmount <= 0 && { volumeMl }),
         description,
       });
     }

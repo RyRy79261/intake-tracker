@@ -23,7 +23,6 @@ const MedicineSearchResponseSchema = z.object({
   pillShape: z.string().default(""),
   pillDescription: z.string().default(""),
   drugClass: z.string().default(""),
-  mechanismOfAction: z.string().default(""),
   visualIdentification: z.string().optional(),
   contraindications: z.array(z.string()).default([]),
   warnings: z.array(z.string()).default([]),
@@ -35,8 +34,6 @@ const MedicineSearchResponseSchema = z.object({
 const SYSTEM_PROMPT = `You are a pharmaceutical information assistant. When given a medication name or active ingredient, respond with information about the medication using the medicine_search_result tool. Pay special attention to looking up the physical appearance of the pill (its color and shape) and country specific brand names.
 
 If the user searches for a specific brand name, you MUST provide the physical description for that specific brand and include the searched brand name in the response. If you cannot find information for that exact brand and must fall back to generic information, explicitly mention that the physical description and details are for the generic equivalent.
-
-Always provide a clear, plain-English mechanism of action that explains how the drug works in the body.
 
 Be precise with medical information. If you're uncertain about food instructions, default to "none".
 For pill appearance, research the most common commercially available form of the medication.`;
@@ -60,10 +57,6 @@ const MEDICINE_SEARCH_TOOL = {
       pillShape: { type: "string" },
       pillDescription: { type: "string" },
       drugClass: { type: "string" },
-      mechanismOfAction: {
-        type: "string",
-        description: "Plain-English explanation of how this drug works biologically (mechanism of action)",
-      },
       visualIdentification: { type: "string", description: "Detailed notes on physical markings" },
       contraindications: { type: "array", items: { type: "string" } },
       warnings: { type: "array", items: { type: "string" } },
@@ -72,7 +65,7 @@ const MEDICINE_SEARCH_TOOL = {
     required: [
       "brandNames", "localAlternatives", "genericName", "dosageStrengths",
       "commonIndications", "foodInstruction", "foodNote", "pillColor",
-      "pillShape", "pillDescription", "drugClass", "mechanismOfAction", "visualIdentification",
+      "pillShape", "pillDescription", "drugClass", "visualIdentification",
       "contraindications", "warnings", "isGenericFallback",
     ],
     additionalProperties: false,

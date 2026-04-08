@@ -16,7 +16,6 @@ export interface MedicineSearchResult {
   pillShape: string;
   pillDescription: string;
   drugClass: string;
-  mechanismOfAction?: string;
   visualIdentification?: string;
   contraindications: string[];
   warnings: string[];

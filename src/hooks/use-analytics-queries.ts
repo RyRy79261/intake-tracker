@@ -14,7 +14,6 @@ import {
   getRecordsByDomain,
 } from "@/lib/analytics-service";
 import { detectAnomalies } from "@/lib/analytics-stats";
-import { useSettingsStore } from "@/stores/settings-store";
 import type {
   Domain,
   TimeScope,
@@ -213,11 +212,6 @@ export function useCorrelation(
  * Returns Insight[] with meaningful alerts based on thresholds.
  */
 export function useInsights(range: TimeRange) {
-  // Read thresholds from settings store (outside useLiveQuery callback)
-  const insightThresholds = useSettingsStore((s) => s.insightThresholds);
-  const adherenceThreshold = (insightThresholds?.adherence_drop ?? 80) / 100;
-  const fluidDeficitThreshold = (insightThresholds?.fluid_deficit ?? 50) / 100;
-
   return useLiveQuery(
     async () => {
       const [adherenceData, bpData, fluidData, weightPoints] =
@@ -231,19 +225,19 @@ export function useInsights(range: TimeRange) {
       const insights: Insight[] = [];
       const now = Date.now();
 
-      // Adherence drop: rate below user-configured threshold (default 80%)
+      // Adherence drop: rate below 80%
       if (
         adherenceData.value.total > 0 &&
-        adherenceData.value.rate < adherenceThreshold
+        adherenceData.value.rate < 0.8
       ) {
         insights.push({
           id: `adherence_drop_${range.start}`,
           type: "adherence_drop",
           title: "Medication Adherence Below Target",
-          description: `Adherence is ${Math.round(adherenceData.value.rate * 100)}% (target: ${Math.round(adherenceThreshold * 100)}%). ${adherenceData.value.taken} of ${adherenceData.value.total} doses taken.`,
+          description: `Adherence is ${Math.round(adherenceData.value.rate * 100)}% (target: 80%). ${adherenceData.value.taken} of ${adherenceData.value.total} doses taken.`,
           severity: adherenceData.value.rate < 0.5 ? "alert" : "warning",
           value: adherenceData.value.rate,
-          threshold: adherenceThreshold,
+          threshold: 0.8,
           timestamp: now,
         });
       }
@@ -268,11 +262,11 @@ export function useInsights(range: TimeRange) {
         });
       }
 
-      // Fluid deficit: more than threshold % of days below target (default 50%)
+      // Fluid deficit: more than half of days below target
       if (fluidData.value.daysTotal >= 3) {
         const deficitRatio =
           1 - fluidData.value.daysAboveTarget / fluidData.value.daysTotal;
-        if (deficitRatio > fluidDeficitThreshold) {
+        if (deficitRatio > 0.5) {
           insights.push({
             id: `fluid_deficit_${range.start}`,
             type: "fluid_deficit",
@@ -280,7 +274,7 @@ export function useInsights(range: TimeRange) {
             description: `Only ${fluidData.value.daysAboveTarget} of ${fluidData.value.daysTotal} days met fluid intake target. Average balance: ${Math.round(fluidData.value.avgBalance)} ml.`,
             severity: deficitRatio > 0.75 ? "alert" : "warning",
             value: deficitRatio,
-            threshold: fluidDeficitThreshold,
+            threshold: 0.5,
             timestamp: now,
           });
         }
@@ -303,7 +297,7 @@ export function useInsights(range: TimeRange) {
 
       return insights;
     },
-    [range.start, range.end, adherenceThreshold, fluidDeficitThreshold],
+    [range.start, range.end],
     [] as Insight[],
   );
 }

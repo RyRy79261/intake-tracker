@@ -14,8 +14,8 @@ import { parseDbSchema } from "./parse-schema";
 describe("schema parser self-test", () => {
   it("parses all version blocks from db.ts", () => {
     const versions = parseDbSchema();
-    expect(versions).toHaveLength(7);
-    expect(versions.map((v) => v.version)).toEqual([10, 11, 12, 13, 14, 15, 16]);
+    expect(versions).toHaveLength(6);
+    expect(versions.map((v) => v.version)).toEqual([10, 11, 12, 13, 14, 15]);
   });
 
   it("latest version has 16 tables", () => {
