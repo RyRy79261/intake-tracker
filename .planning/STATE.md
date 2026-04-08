@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-04-06)
 Phase: —
 Plan: —
 Status: v1.4 complete, planning next milestone
-Last activity: 2026-04-06 - Completed quick task 260406-thr: Replace hardcoded bg-red-500 with progressOverLimit theme token
+Last activity: 2026-04-08 - Completed quick task 260409-0l6: Minor bugs and UI tweaks in liquid tracker
 
 Progress: [██████████] 100%
 
@@ -78,6 +78,7 @@ None — v1.4 complete.
 | 260406-ku9 | Fix Food & Sodium UI layout - restructure inputs, add sodium source selector, add water content field | 2026-04-06 | ecd9912 | [260406-ku9-fix-food-sodium-ui-layout-restructure-in](./quick/260406-ku9-fix-food-sodium-ui-layout-restructure-in/) |
 | 260406-mpb | Fix water entry name display and food entry sodium column | 2026-04-06 | cbdfd41 | [260406-mpb-fix-water-entry-name-display-and-food-en](./quick/260406-mpb-fix-water-entry-name-display-and-food-en/) |
 | 260406-thr | Replace hardcoded bg-red-500 with progressOverLimit theme token in progress bars | 2026-04-06 | ab03cc7 | [260406-thr-replace-hardcoded-bg-red-500-with-progre](./quick/260406-thr-replace-hardcoded-bg-red-500-with-progre/) |
+| 260409-0l6 | Minor bugs and UI tweaks in liquid tracker | 2026-04-08 | e950009 | [260409-0l6-minor-bugs-and-ui-tweaks-in-liquid-track](./quick/260409-0l6-minor-bugs-and-ui-tweaks-in-liquid-track/) |
 
 ### Roadmap Evolution
 
