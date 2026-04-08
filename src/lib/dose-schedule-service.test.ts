@@ -34,7 +34,7 @@ async function seedPrescription(overrides?: {
 }) {
   const rx = makePrescription({
     isActive: overrides?.isActive ?? true,
-    createdAt: overrides?.createdAt ?? 1700000000000,
+    createdAt: overrides?.createdAt ?? 1699920000000, // 2023-11-14T00:00:00Z — matches BASE_TS
   });
   const phase = makeMedicationPhase(rx.id, {
     status: (overrides?.phaseStatus ?? "active") as "active" | "completed" | "pending",
@@ -374,7 +374,7 @@ describe("timezone behavior", () => {
     const { recalculateScheduleTimezones } = await import("./timezone-recalculation-service");
 
     // Seed schedule anchored at SA: 08:30 SA (UTC+2) = 06:30 UTC = 390 min
-    const rx = makePrescription({ createdAt: 1700000000000 });
+    const rx = makePrescription({ createdAt: 1699920000000 }); // 2023-11-14T00:00:00Z
     const phase = makeMedicationPhase(rx.id);
     const schedule = makePhaseSchedule(phase.id, {
       scheduleTimeUTC: 390,

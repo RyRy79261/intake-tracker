@@ -8,7 +8,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface RetroactiveTimePickerProps {
   open: boolean;
@@ -26,6 +26,11 @@ export function RetroactiveTimePicker({
   onConfirm,
 }: RetroactiveTimePickerProps) {
   const [selectedTime, setSelectedTime] = useState(defaultTime);
+
+  // D-04: Sync internal state when defaultTime prop changes
+  useEffect(() => {
+    setSelectedTime(defaultTime);
+  }, [defaultTime]);
 
   // Reset time when dialog opens with new default
   const handleOpenChange = (newOpen: boolean) => {
