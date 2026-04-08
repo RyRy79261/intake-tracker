@@ -143,6 +143,12 @@ export interface Prescription {
   notes?: string;
   contraindications?: string[];
   warnings?: string[];
+  drugClass?: string;
+  mechanismOfAction?: string;
+  commonIndications?: string[];
+  dosageStrengths?: string[];
+  foodInstruction?: FoodInstruction;
+  foodNote?: string;
   isActive: boolean;
   createdAt: number;
   updatedAt: number;
@@ -614,6 +620,27 @@ db.version(14).stores({
 // No .upgrade() needed — existing records have undefined groupId, which IndexedDB
 // excludes from index entries. Zero backfill required.
 db.version(15).stores({
+  intakeRecords:           "id, [type+timestamp], timestamp, source, groupId, updatedAt",
+  weightRecords:           "id, timestamp, updatedAt",
+  bloodPressureRecords:    "id, timestamp, position, arm, updatedAt",
+  eatingRecords:           "id, timestamp, groupId, updatedAt",
+  urinationRecords:        "id, timestamp, updatedAt",
+  defecationRecords:       "id, timestamp, updatedAt",
+  prescriptions:           "id, isActive, updatedAt, createdAt",
+  medicationPhases:        "id, prescriptionId, status, type, titrationPlanId, updatedAt",
+  phaseSchedules:          "id, phaseId, time, enabled, updatedAt",
+  inventoryItems:          "id, prescriptionId, isActive, updatedAt",
+  inventoryTransactions:   "id, [inventoryItemId+timestamp], inventoryItemId, timestamp, type, updatedAt",
+  doseLogs:                "id, [prescriptionId+scheduledDate], prescriptionId, phaseId, scheduleId, scheduledDate, scheduledTime, status, updatedAt",
+  dailyNotes:              "id, date, prescriptionId, doseLogId, updatedAt",
+  auditLogs:               "id, [action+timestamp], timestamp, action",
+  substanceRecords:        "id, [type+timestamp], type, timestamp, source, sourceRecordId, groupId, updatedAt",
+  titrationPlans:          "id, conditionLabel, status, updatedAt",
+});
+
+// Version 16: Add compound-level fields to Prescription (D-13)
+// No index changes needed -- fields accessed via prescription.id lookup
+db.version(16).stores({
   intakeRecords:           "id, [type+timestamp], timestamp, source, groupId, updatedAt",
   weightRecords:           "id, timestamp, updatedAt",
   bloodPressureRecords:    "id, timestamp, position, arm, updatedAt",
