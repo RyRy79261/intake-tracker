@@ -51,10 +51,11 @@ export function ExportControls({ range }: ExportControlsProps) {
   };
 
   return (
-    <div className="flex gap-2">
+    <div className="flex flex-col gap-2">
       <Button
         variant="outline"
         size="sm"
+        className="w-full"
         onClick={handlePDF}
         disabled={pdfLoading}
       >
@@ -64,6 +65,7 @@ export function ExportControls({ range }: ExportControlsProps) {
       <Button
         variant="outline"
         size="sm"
+        className="w-full"
         onClick={handleCSV}
         disabled={csvLoading}
       >

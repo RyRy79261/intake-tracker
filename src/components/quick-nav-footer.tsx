@@ -16,17 +16,21 @@ interface SectionNavItem {
   bgColor: string;
 }
 
+const NAV_EXCLUDED: CardThemeKey[] = ["caffeine", "alcohol"];
+
 function buildSectionItems(): SectionNavItem[] {
-  return (Object.keys(CARD_THEMES) as CardThemeKey[]).map((key) => {
-    const theme = CARD_THEMES[key];
-    return {
-      id: theme.sectionId,
-      icon: theme.icon,
-      label: theme.label,
-      iconColor: theme.iconColor,
-      bgColor: theme.iconBg,
-    };
-  });
+  return (Object.keys(CARD_THEMES) as CardThemeKey[])
+    .filter((key) => !NAV_EXCLUDED.includes(key))
+    .map((key) => {
+      const theme = CARD_THEMES[key];
+      return {
+        id: theme.sectionId,
+        icon: theme.icon,
+        label: theme.label,
+        iconColor: theme.iconColor,
+        bgColor: theme.iconBg,
+      };
+    });
 }
 
 const SECTION_ITEMS = buildSectionItems();
