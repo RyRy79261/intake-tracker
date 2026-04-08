@@ -8,9 +8,20 @@ import { Droplets, Coffee, Wine } from "lucide-react";
 import { WaterTab } from "@/components/liquids/water-tab";
 import { BeverageTab } from "@/components/liquids/beverage-tab";
 import { PresetTab } from "@/components/liquids/preset-tab";
-import { useIntake } from "@/hooks/use-intake-queries";
+import { RecentEntriesList } from "@/components/recent-entries-list";
+import { EditIntakeDialog } from "@/components/edit-intake-dialog";
+import {
+  useIntake,
+  useRecentIntakeRecords,
+  useDeleteIntake,
+  useUpdateIntake,
+} from "@/hooks/use-intake-queries";
 import { useSettings } from "@/hooks/use-settings";
-import { cn, formatAmount } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
+import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
+import { useEditRecord } from "@/hooks/use-edit-record";
+import { cn, formatAmount, getLiquidTypeLabel } from "@/lib/utils";
+import { type IntakeRecord } from "@/lib/db";
 
 const TAB_THEMES = {
   water: CARD_THEMES.water,
@@ -32,6 +43,47 @@ export function LiquidsCard() {
   const [activeTab, setActiveTab] = useState<string>("water");
   const waterIntake = useIntake("water");
   const settings = useSettings();
+  const recentRecords = useRecentIntakeRecords("water");
+
+  const { toast } = useToast();
+  const deleteMutation = useDeleteIntake();
+  const updateMutation = useUpdateIntake();
+  const { deletingId, handleDelete } = useDeleteWithToast(
+    deleteMutation,
+    "Water entry removed"
+  );
+
+  const [editAmount, setEditAmount] = useState("");
+
+  const {
+    editingRecord,
+    editTimestamp,
+    editNote,
+    setEditTimestamp,
+    setEditNote,
+    openEdit,
+    closeEdit,
+    handleEditSubmit,
+  } = useEditRecord<IntakeRecord>({
+    onOpen: (record) => setEditAmount(record.amount.toString()),
+    buildUpdates: (timestamp, note) => {
+      const newAmount = parseInt(editAmount, 10);
+      if (isNaN(newAmount) || newAmount <= 0) {
+        toast({ title: "Invalid amount", variant: "destructive" });
+        return null;
+      }
+      return { amount: newAmount, timestamp, note };
+    },
+    mutateAsync: updateMutation.mutateAsync,
+  });
+
+  const formatTime = (timestamp: number): string => {
+    return new Date(timestamp).toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+  };
 
   const theme = TAB_THEMES[activeTab as TabKey] ?? TAB_THEMES.water;
   const Icon = TAB_ICONS[activeTab as TabKey] ?? TAB_ICONS.water;
@@ -135,6 +187,47 @@ export function LiquidsCard() {
             <PresetTab tab="alcohol" />
           </TabsContent>
         </Tabs>
+
+        {/* Recent water entries - always visible regardless of active tab */}
+        <RecentEntriesList
+          records={recentRecords}
+          deletingId={deletingId}
+          onDelete={handleDelete}
+          onEdit={openEdit}
+          borderColor={CARD_THEMES.water.border}
+          renderEntry={(record) => {
+            const sourceLabel = getLiquidTypeLabel(record.source, { presets: settings.liquidPresets, note: record.note });
+            return (
+              <>
+                <span className="text-muted-foreground">
+                  {formatTime(record.timestamp)}
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">
+                    {formatAmount(record.amount, "ml")}
+                  </span>
+                  {sourceLabel && (
+                    <span className="text-xs text-muted-foreground/80 bg-muted/60 px-1.5 py-0.5 rounded">
+                      {sourceLabel}
+                    </span>
+                  )}
+                </div>
+              </>
+            );
+          }}
+        />
+
+        <EditIntakeDialog
+          record={editingRecord}
+          onClose={closeEdit}
+          onSubmit={handleEditSubmit}
+          amount={editAmount}
+          onAmountChange={setEditAmount}
+          timestamp={editTimestamp}
+          onTimestampChange={setEditTimestamp}
+          note={editNote}
+          onNoteChange={setEditNote}
+        />
       </CardContent>
     </Card>
   );

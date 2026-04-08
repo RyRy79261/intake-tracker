@@ -4,22 +4,12 @@ import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Minus, Plus, Check } from "lucide-react";
-import { cn, formatAmount, getLiquidTypeLabel } from "@/lib/utils";
+import { cn, formatAmount } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
-import { RecentEntriesList } from "@/components/recent-entries-list";
-import { EditIntakeDialog } from "@/components/edit-intake-dialog";
 import { ManualInputDialog } from "@/components/manual-input-dialog";
 import { useSettings } from "@/hooks/use-settings";
 import { useToast } from "@/hooks/use-toast";
-import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
-import { useEditRecord } from "@/hooks/use-edit-record";
-import {
-  useIntake,
-  useRecentIntakeRecords,
-  useDeleteIntake,
-  useUpdateIntake,
-} from "@/hooks/use-intake-queries";
-import { type IntakeRecord } from "@/lib/db";
+import { useIntake } from "@/hooks/use-intake-queries";
 
 const theme = CARD_THEMES.water;
 const unit = "ml";
@@ -28,48 +18,16 @@ export function WaterTab() {
   const settings = useSettings();
   const waterIncrement = settings.waterIncrement;
   const waterLimit = settings.waterLimit;
-  const liquidPresets = settings.liquidPresets;
 
   const waterIntake = useIntake("water");
-  const recentRecords = useRecentIntakeRecords("water");
 
   const [pendingAmount, setPendingAmount] = useState(waterIncrement);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showManualInput, setShowManualInput] = useState(false);
 
   const { toast } = useToast();
-  const deleteMutation = useDeleteIntake();
-  const updateMutation = useUpdateIntake();
-  const { deletingId, handleDelete } = useDeleteWithToast(
-    deleteMutation,
-    "Water entry removed"
-  );
 
-  const [editAmount, setEditAmount] = useState("");
-
-  const {
-    editingRecord,
-    editTimestamp,
-    editNote,
-    setEditTimestamp,
-    setEditNote,
-    openEdit,
-    closeEdit,
-    handleEditSubmit,
-  } = useEditRecord<IntakeRecord>({
-    onOpen: (record) => setEditAmount(record.amount.toString()),
-    buildUpdates: (timestamp, note) => {
-      const newAmount = parseInt(editAmount, 10);
-      if (isNaN(newAmount) || newAmount <= 0) {
-        toast({ title: "Invalid amount", variant: "destructive" });
-        return null;
-      }
-      return { amount: newAmount, timestamp, note };
-    },
-    mutateAsync: updateMutation.mutateAsync,
-  });
-
-  const { dailyTotal, rollingTotal } = waterIntake;
+  const { dailyTotal } = waterIntake;
 
   const progressPercent =
     waterLimit > 0 ? Math.min((dailyTotal / waterLimit) * 100, 100) : 0;
@@ -133,14 +91,6 @@ export function WaterTab() {
     },
     [waterIntake, toast]
   );
-
-  const formatTime = (timestamp: number): string => {
-    return new Date(timestamp).toLocaleTimeString("en-US", {
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-    });
-  };
 
   return (
     <>
@@ -214,35 +164,6 @@ export function WaterTab() {
         {isSubmitting ? "Recording..." : "Confirm Entry"}
       </Button>
 
-      {/* Recent Entries */}
-      <RecentEntriesList
-        records={recentRecords}
-        deletingId={deletingId}
-        onDelete={handleDelete}
-        onEdit={openEdit}
-        borderColor={theme.border}
-        renderEntry={(record) => {
-          const sourceLabel = getLiquidTypeLabel(record.source, { presets: liquidPresets, note: record.note });
-          return (
-            <>
-              <span className="text-muted-foreground">
-                {formatTime(record.timestamp)}
-              </span>
-              <div className="flex items-center gap-2">
-                <span className="font-medium">
-                  {formatAmount(record.amount, unit)}
-                </span>
-                {sourceLabel && (
-                  <span className="text-xs text-muted-foreground/80 bg-muted/60 px-1.5 py-0.5 rounded">
-                    {sourceLabel}
-                  </span>
-                )}
-              </div>
-            </>
-          );
-        }}
-      />
-
       <ManualInputDialog
         open={showManualInput}
         onOpenChange={setShowManualInput}
@@ -252,17 +173,6 @@ export function WaterTab() {
         isSubmitting={isSubmitting}
       />
 
-      <EditIntakeDialog
-        record={editingRecord}
-        onClose={closeEdit}
-        onSubmit={handleEditSubmit}
-        amount={editAmount}
-        onAmountChange={setEditAmount}
-        timestamp={editTimestamp}
-        onTimestampChange={setEditTimestamp}
-        note={editNote}
-        onNoteChange={setEditNote}
-      />
     </>
   );
 }
