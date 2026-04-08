@@ -8,7 +8,7 @@ import { useScrollHide } from "@/hooks/use-scroll-hide";
 import { AppHeader } from "@/components/app-header";
 import { AuthGuard } from "@/components/auth-guard";
 import { DebugPanel } from "@/components/debug-panel";
-import { CustomizationPanel } from "@/components/customization-panel";
+import { PresetAccordionSection } from "@/components/settings/preset-accordion-section";
 import { AboutDialog } from "@/components/about-dialog";
 import { AccountSection } from "@/components/settings/account-section";
 import { DaySettingsSection } from "@/components/settings/day-settings-section";
@@ -21,7 +21,6 @@ import { DataManagementSection } from "@/components/settings/data-management-sec
 import { PrivacySecuritySection } from "@/components/settings/privacy-security-section";
 import { PermissionsSection } from "@/components/settings/permissions-section";
 import { AppUpdatesSection } from "@/components/settings/app-updates-section";
-import { SubstanceSettingsSection } from "@/components/settings/substance-settings-section";
 
 function SettingsContent() {
   const settings = useSettings();
@@ -54,7 +53,6 @@ function SettingsContent() {
         <WaterSettingsSection />
         <SaltSettingsSection />
         <WeightSettingsSection />
-        <SubstanceSettingsSection />
         <AppearanceSection />
         <QuickNavSection />
         <DataManagementSection />
@@ -63,7 +61,8 @@ function SettingsContent() {
         <AppUpdatesSection />
 
         <div className="pt-4 border-t">
-          <CustomizationPanel />
+          <h3 className="text-sm font-semibold mb-3">Presets</h3>
+          <PresetAccordionSection />
         </div>
 
         <div className="pt-4 border-t">
