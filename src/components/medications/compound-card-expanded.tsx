@@ -15,8 +15,10 @@ import {
 import { BrandSwitchPicker } from "@/components/medications/brand-switch-picker";
 import { PrescriptionViewDrawer } from "@/components/medications/edit-medication-drawer";
 import { InventoryItemViewDrawer } from "@/components/medications/inventory-item-view-drawer";
+import { CompoundDetailsDrawer } from "@/components/medications/compound-details-drawer";
 import type { Prescription } from "@/lib/db";
-import { ArrowRightLeft, Edit2, Package, Clock, CheckCircle2, XCircle, MinusCircle } from "lucide-react";
+import { ArrowRightLeft, Info, Package, Clock, CheckCircle2, XCircle, MinusCircle } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface CompoundCardExpandedProps {
   prescription: Prescription;
@@ -34,7 +36,9 @@ function getTodayDateStr(): string {
 export function CompoundCardExpanded({ prescription, onClose }: CompoundCardExpandedProps) {
   const [brandPickerOpen, setBrandPickerOpen] = useState(false);
   const [editDrawerOpen, setEditDrawerOpen] = useState(false);
+  const [compoundDetailsOpen, setCompoundDetailsOpen] = useState(false);
   const [inventoryDrawerOpen, setInventoryDrawerOpen] = useState(false);
+  const [indicationExpanded, setIndicationExpanded] = useState(false);
 
   const inventoryItems = useInventoryForPrescription(prescription.id);
   const phases = usePhasesForPrescription(prescription.id);
@@ -65,6 +69,40 @@ export function CompoundCardExpanded({ prescription, onClose }: CompoundCardExpa
       onClick={(e) => e.stopPropagation()}
     >
       <div className="border-t" />
+
+      {/* Expandable Indication (D-11) */}
+      {prescription.indication && (
+        <div className="space-y-1">
+          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            Indication
+          </h4>
+          <p
+            className={cn(
+              "text-sm text-foreground cursor-pointer",
+              !indicationExpanded && "line-clamp-2"
+            )}
+            onClick={() => setIndicationExpanded(!indicationExpanded)}
+          >
+            {prescription.indication}
+          </p>
+          {!indicationExpanded && prescription.indication.length > 100 && (
+            <button
+              className="text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => setIndicationExpanded(true)}
+            >
+              Show more
+            </button>
+          )}
+          {indicationExpanded && (
+            <button
+              className="text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => setIndicationExpanded(false)}
+            >
+              Show less
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Section 1: Inventory Items */}
       <div className="space-y-2">
@@ -252,10 +290,10 @@ export function CompoundCardExpanded({ prescription, onClose }: CompoundCardExpa
           variant="outline"
           size="sm"
           className="h-7 text-xs gap-1"
-          onClick={(e) => { e.stopPropagation(); setEditDrawerOpen(true); }}
+          onClick={(e) => { e.stopPropagation(); setCompoundDetailsOpen(true); }}
         >
-          <Edit2 className="w-3 h-3" />
-          Edit
+          <Info className="w-3 h-3" />
+          Compound Details
         </Button>
         <Button
           variant="outline"
@@ -278,6 +316,11 @@ export function CompoundCardExpanded({ prescription, onClose }: CompoundCardExpa
         prescription={prescription}
         open={editDrawerOpen}
         onOpenChange={setEditDrawerOpen}
+      />
+      <CompoundDetailsDrawer
+        prescription={prescription}
+        open={compoundDetailsOpen}
+        onOpenChange={setCompoundDetailsOpen}
       />
       <InventoryItemViewDrawer
         prescription={prescription}
