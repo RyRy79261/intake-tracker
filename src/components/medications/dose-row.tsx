@@ -41,7 +41,7 @@ export function DoseRow({ slot, isToday, isFuture, onTake, onRetroactiveTake, on
   const isActionable = !isFuture && (status === "pending" || status === "missed");
 
   const doseLabel = pillsPerDose != null
-    ? `${formatPillCount(pillsPerDose)} of ${slot.dosageMg}${slot.unit}`
+    ? `${formatPillCount(pillsPerDose)} (${slot.dosageMg}${slot.unit})`
     : `${slot.dosageMg}${slot.unit}`;
 
   const foodInstruction = phase.foodInstruction !== "none" ? phase.foodInstruction : null;
@@ -94,6 +94,9 @@ export function DoseRow({ slot, isToday, isFuture, onTake, onRetroactiveTake, on
               status === "skipped" && "line-through"
             )}>
               {prescription.genericName}
+              {inventory?.brandName && (
+                <span className="font-normal text-muted-foreground"> ({inventory.brandName})</span>
+              )}
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">
               {doseLabel}
