@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -12,7 +12,8 @@ import {
   Tooltip,
   CartesianGrid,
 } from "recharts";
-import { Lightbulb } from "lucide-react";
+import { Lightbulb, Settings } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { InsightBanner } from "@/components/analytics/insight-banner";
 import {
   useInsights,
@@ -47,6 +48,9 @@ export function InsightsTab({ range }: InsightsTabProps) {
   const insights = useInsights(range);
   const dismissInsight = useSettingsStore((s) => s.dismissInsight);
   const isDismissed = useSettingsStore((s) => s.isDismissed);
+  const setInsightThreshold = useSettingsStore((s) => s.setInsightThreshold);
+  const insightThresholds = useSettingsStore((s) => s.insightThresholds);
+  const [editingThreshold, setEditingThreshold] = useState<string | null>(null);
 
   const activeInsights = useMemo(() => {
     return insights
@@ -98,14 +102,46 @@ export function InsightsTab({ range }: InsightsTabProps) {
         )}
       </div>
 
-      {/* Insight banners */}
+      {/* Insight banners with threshold editing */}
       <div className="space-y-3">
         {activeInsights.map((insight) => (
-          <InsightBanner
-            key={insight.id}
-            insight={insight}
-            onDismiss={handleDismiss}
-          />
+          <div key={insight.id}>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                {insight.type.replace(/_/g, " ")}
+              </span>
+              {(insight.type === "adherence_drop" || insight.type === "fluid_deficit") && (
+                <button
+                  onClick={() => setEditingThreshold(editingThreshold === insight.type ? null : insight.type)}
+                  className="p-1 rounded hover:bg-muted"
+                  title="Edit threshold"
+                >
+                  <Settings className="w-4 h-4 text-muted-foreground" />
+                </button>
+              )}
+            </div>
+            {editingThreshold === insight.type && (
+              <div className="flex items-center gap-2 py-2 mb-2">
+                <label className="text-xs text-muted-foreground whitespace-nowrap">
+                  Alert below
+                </label>
+                <Input
+                  type="number"
+                  className="w-20 h-8 text-sm"
+                  value={insightThresholds?.[insight.type] ?? ""}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value);
+                    if (!isNaN(val)) setInsightThreshold(insight.type, val);
+                  }}
+                />
+                <span className="text-xs text-muted-foreground">%</span>
+              </div>
+            )}
+            <InsightBanner
+              insight={insight}
+              onDismiss={handleDismiss}
+            />
+          </div>
         ))}
       </div>
 

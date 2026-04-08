@@ -262,13 +262,28 @@ export async function adherenceRate(
   let totalSlots = 0;
   const dailyEntries: AdherenceResult["daily"] = [];
 
+  // D-16: For today, exclude future pending doses from the denominator
+  const todayStr = format(new Date(), "yyyy-MM-dd");
+  const now = new Date();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
   scheduleMap.forEach((slots, date) => {
     const filteredSlots = prescriptionId
       ? slots.filter((s) => s.prescriptionId === prescriptionId)
       : slots;
 
-    const dayTotal = filteredSlots.length;
-    const dayTaken = filteredSlots.filter((s) => s.status === "taken").length;
+    // For today, only count past slots + already actioned future slots
+    const countableSlots = date === todayStr
+      ? filteredSlots.filter((s) => {
+          const parts = s.localTime.split(":").map(Number);
+          const slotMinutes = (parts[0] ?? 0) * 60 + (parts[1] ?? 0);
+          const isFuture = slotMinutes > nowMinutes;
+          return !isFuture || s.status === "taken" || s.status === "skipped";
+        })
+      : filteredSlots;
+
+    const dayTotal = countableSlots.length;
+    const dayTaken = countableSlots.filter((s) => s.status === "taken").length;
 
     totalSlots += dayTotal;
     totalTaken += dayTaken;

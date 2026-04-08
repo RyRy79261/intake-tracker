@@ -84,6 +84,9 @@ export interface Settings {
 
   // Substance tracking configuration
   substanceConfig: SubstanceConfig;
+
+  // Insight alert thresholds (D-18)
+  insightThresholds: Record<string, number>;
 }
 
 interface SettingsActions {
@@ -126,6 +129,9 @@ interface SettingsActions {
   setWeightIncrement: (value: number) => void;
   // Substance config
   setSubstanceConfig: (config: SubstanceConfig) => void;
+  // Insight thresholds (D-18)
+  setInsightThreshold: (insightType: string, value: number) => void;
+  getInsightThreshold: (insightType: string) => number | undefined;
   resetToDefaults: () => void;
 }
 
@@ -158,6 +164,10 @@ const defaultSettings: Settings = {
   doseRemindersEnabled: false,
   reminderFollowUpCount: 2,
   reminderFollowUpInterval: 10,
+  insightThresholds: {
+    adherence_drop: 80,
+    fluid_deficit: 50,
+  },
   substanceConfig: {
     caffeine: {
       enabled: true,
@@ -254,6 +264,13 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
       // Substance config
       setSubstanceConfig: (config) => set({ substanceConfig: config }),
 
+      // Insight thresholds (D-18)
+      setInsightThreshold: (insightType, value) =>
+        set((state) => ({
+          insightThresholds: { ...state.insightThresholds, [insightType]: value },
+        })),
+      getInsightThreshold: (insightType) => get().insightThresholds[insightType],
+
       addLiquidPreset: (preset) => {
         const id = crypto.randomUUID();
         set((state) => ({
@@ -280,7 +297,7 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
     {
       name: "intake-tracker-settings",
       storage: createJSONStorage(() => localStorage),
-      version: 4,
+      version: 5,
       migrate: (persisted, version) => {
         const state = persisted as Record<string, unknown>;
         if (version === 0) {
@@ -315,6 +332,12 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
           }
         }
         // version < 4 migration: sodiumPresets removed in Phase 39 (no longer needed)
+        if (version < 5) {
+          state.insightThresholds = {
+            adherence_drop: 80,
+            fluid_deficit: 50,
+          };
+        }
         return state as unknown as Settings & SettingsActions;
       },
     }
