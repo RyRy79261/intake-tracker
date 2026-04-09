@@ -6,8 +6,10 @@ import {
   sanitizeNumericInput
 } from "@/lib/security";
 import { DEFAULT_LIQUID_PRESETS, type LiquidPreset } from "@/lib/constants";
+import { DEFAULT_QUICK_NAV_ITEMS, type QuickNavItem } from "@/lib/quick-nav-defaults";
 
 export type { LiquidPreset } from "@/lib/constants";
+export type { QuickNavItem } from "@/lib/quick-nav-defaults";
 
 export interface SubstanceConfig {
   caffeine: {
@@ -46,6 +48,8 @@ export interface Settings {
   // Quick Nav footer
   showQuickNav: boolean;
   quickNavOrder: "ltr" | "rtl";
+  // Quick Nav configurable item list (order + enabled state per item)
+  quickNavItems: QuickNavItem[];
 
   // Animation timing settings (ms)
   scrollDurationMs: number;        // how fast page scrolls to section (100-1000)
@@ -98,6 +102,7 @@ interface SettingsActions {
   setDayStartHour: (hour: number) => void;
   setShowQuickNav: (value: boolean) => void;
   setQuickNavOrder: (order: "ltr" | "rtl") => void;
+  setQuickNavItems: (items: QuickNavItem[]) => void;
   setScrollDurationMs: (value: number) => void;
   setAutoHideDelayMs: (value: number) => void;
   setBarTransitionDurationMs: (value: number) => void;
@@ -140,6 +145,7 @@ const defaultSettings: Settings = {
   dayStartHour: 2, // Default: 2am - day starts at 2am for budget tracking
   showQuickNav: true,
   quickNavOrder: "rtl" as const,
+  quickNavItems: DEFAULT_QUICK_NAV_ITEMS,
   scrollDurationMs: 300,
   autoHideDelayMs: 500,
   barTransitionDurationMs: 200,
@@ -211,6 +217,7 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
 
       setShowQuickNav: (value) => set({ showQuickNav: value }),
       setQuickNavOrder: (order) => set({ quickNavOrder: order }),
+      setQuickNavItems: (items) => set({ quickNavItems: items }),
       setScrollDurationMs: (value) =>
         set({ scrollDurationMs: sanitizeNumericInput(value, 100, 1000) }),
       setAutoHideDelayMs: (value) =>
@@ -280,7 +287,7 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
     {
       name: "intake-tracker-settings",
       storage: createJSONStorage(() => localStorage),
-      version: 4,
+      version: 5,
       migrate: (persisted, version) => {
         const state = persisted as Record<string, unknown>;
         if (version === 0) {
@@ -315,6 +322,10 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
           }
         }
         // version < 4 migration: sodiumPresets removed in Phase 39 (no longer needed)
+        if (version < 5) {
+          // D-07: New quickNavItems field. Seed existing users with defaults.
+          state.quickNavItems = DEFAULT_QUICK_NAV_ITEMS;
+        }
         return state as unknown as Settings & SettingsActions;
       },
     }
