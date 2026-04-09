@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.2.0](https://github.com/RyRy79261/intake-tracker/compare/v1.1.0...v1.2.0) (2026-04-09)
+
+
+### Features
+
+* **01-02:** extend Prescription with compound fields, Dexie v16 ([6c8f88d](https://github.com/RyRy79261/intake-tracker/commit/6c8f88dbc0b63cf32f92ae59ba18dd88ef44fe95))
+* **01-05:** compound details drawer with AI refresh diff, expandable indication ([3209139](https://github.com/RyRy79261/intake-tracker/commit/3209139ab9c941407bbdb3540a29a18932fbc957))
+* **01-07:** settings restructure with accordion presets, remove dead sections ([23ab603](https://github.com/RyRy79261/intake-tracker/commit/23ab6036cabe28bbab9f5ec5dabce7332245d120))
+* **260409-0l6:** move recent entries to card level, add beverage quick-set sizes ([e950009](https://github.com/RyRy79261/intake-tracker/commit/e95000994afae46984a673d688f27e09044a836f))
+* liquid tracker bug fixes and UX improvements ([cac4350](https://github.com/RyRy79261/intake-tracker/commit/cac43507dac195088bc328a03097333e21514ad5))
+
+
+### Bug Fixes
+
+* **01-01:** remove caffeine/alcohol from quick-nav, wrap med tabs, stack export buttons ([12835d0](https://github.com/RyRy79261/intake-tracker/commit/12835d007d66cadf960b5367e9016f7b5a45d3b1))
+* **01-03:** inventory deduction, creation-day filter, Mark All time picker ([e6ce7c3](https://github.com/RyRy79261/intake-tracker/commit/e6ce7c3a3b1e8e1a524a11d3b339039c6e38c2c4))
+* **01-04:** dose formatting to parenthetical, brand name display, pill organizer collapsed view ([49b77fa](https://github.com/RyRy79261/intake-tracker/commit/49b77fa3e693f527b6be3f0f36b703d572615044))
+* **01-06:** adherence excludes future doses, editable insight thresholds ([b8907f8](https://github.com/RyRy79261/intake-tracker/commit/b8907f83deae7f66ca4c7ce47f2da234ee70da74))
+* **01:** revise plans based on checker feedback ([ee59284](https://github.com/RyRy79261/intake-tracker/commit/ee59284fce448bea71efc93bdbcc604b52ed3553))
+* **260409-0l6:** prevent double water record on preset tap ([8ca6a7d](https://github.com/RyRy79261/intake-tracker/commit/8ca6a7d1214c963e1846a99863eaf1d5a0f647f6))
+* truncate long labels in recent entries list ([05a74a7](https://github.com/RyRy79261/intake-tracker/commit/05a74a7ae50f341f5c2354833b0ab36edd4cc53b))
+
 ## [1.1.0](https://github.com/RyRy79261/intake-tracker/compare/v1.0.0...v1.1.0) (2026-04-06)
 
 
