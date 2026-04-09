@@ -227,10 +227,9 @@ export function PresetTab({ tab }: PresetTabProps) {
       groupSource: `preset:${presetIdOverride ?? selectedPresetId ?? "manual"}`,
     };
 
-    // Water intake from waterContentPercent
-    const waterAmount = Math.round(
-      (volumeMl * waterContentPercent) / 100
-    );
+    // Water intake: full drink volume counts as water
+    // (caffeine/alcohol content does not reduce the water volume)
+    const waterAmount = volumeMl;
     const intakes: ComposableEntryInput["intakes"] = [];
     if (waterAmount > 0) {
       intakes.push({

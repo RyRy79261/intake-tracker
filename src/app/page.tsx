@@ -97,6 +97,7 @@ function HomeContent() {
           hidden={isHidden}
           order={settings.quickNavOrder}
           transitionDuration={barTransitionSec}
+          quickNavItems={settings.quickNavItems}
           onScrollTo={handleQuickNav}
         />
       )}
