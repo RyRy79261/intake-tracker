@@ -21,6 +21,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
 import { useEditRecord } from "@/hooks/use-edit-record";
 import { cn, formatAmount, getLiquidTypeLabel } from "@/lib/utils";
+import { formatTimeOnly } from "@/lib/date-utils";
 import { type IntakeRecord } from "@/lib/db";
 
 const TAB_THEMES = {
@@ -76,14 +77,6 @@ export function LiquidsCard() {
     },
     mutateAsync: updateMutation.mutateAsync,
   });
-
-  const formatTime = (timestamp: number): string => {
-    return new Date(timestamp).toLocaleTimeString("en-US", {
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-    });
-  };
 
   const theme = TAB_THEMES[activeTab as TabKey] ?? TAB_THEMES.water;
   const Icon = TAB_ICONS[activeTab as TabKey] ?? TAB_ICONS.water;
@@ -200,7 +193,7 @@ export function LiquidsCard() {
             return (
               <>
                 <span className="text-muted-foreground">
-                  {formatTime(record.timestamp)}
+                  {formatTimeOnly(record.timestamp)}
                 </span>
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="font-medium shrink-0">
