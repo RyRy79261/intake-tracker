@@ -60,7 +60,9 @@ export function RecentEntriesList<T extends { id: string }>({
                 : undefined
             }
           >
-            {renderEntry(record)}
+            <div className="flex items-center justify-between min-w-0 flex-1 gap-2">
+              {renderEntry(record)}
+            </div>
             <Button
               variant="ghost"
               size="icon"
