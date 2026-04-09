@@ -3,33 +3,11 @@
 import { useMemo } from "react";
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
-import { CARD_THEMES, type CardThemeKey } from "@/lib/card-themes";
-import type { LucideIcon } from "lucide-react";
-
-// ── Section nav items (scrollable gallery) ──────────────────
-
-interface SectionNavItem {
-  id: string;
-  icon: LucideIcon;
-  label: string;
-  iconColor: string;
-  bgColor: string;
-}
-
-function buildSectionItems(): SectionNavItem[] {
-  return (Object.keys(CARD_THEMES) as CardThemeKey[]).map((key) => {
-    const theme = CARD_THEMES[key];
-    return {
-      id: theme.sectionId,
-      icon: theme.icon,
-      label: theme.label,
-      iconColor: theme.iconColor,
-      bgColor: theme.iconBg,
-    };
-  });
-}
-
-const SECTION_ITEMS = buildSectionItems();
+import { CARD_THEMES } from "@/lib/card-themes";
+import {
+  QUICK_NAV_LABEL_OVERRIDES,
+  type QuickNavItem,
+} from "@/lib/quick-nav-defaults";
 
 // ── Component ───────────────────────────────────────────────
 
@@ -37,6 +15,7 @@ interface QuickNavFooterProps {
   hidden: boolean;
   order: "ltr" | "rtl";
   transitionDuration?: number;
+  quickNavItems: QuickNavItem[];
   onScrollTo: (sectionId: string) => void;
 }
 
@@ -44,13 +23,30 @@ export function QuickNavFooter({
   hidden,
   order,
   transitionDuration = 0.2,
+  quickNavItems,
   onScrollTo,
 }: QuickNavFooterProps) {
-  // Order section items based on LTR/RTL preference
-  const orderedSections = useMemo(
-    () => (order === "rtl" ? [...SECTION_ITEMS].reverse() : SECTION_ITEMS),
-    [order]
-  );
+  // Build the render list from the configured items, filtering out disabled
+  // entries. RTL reversal is applied AFTER filtering so the user's configured
+  // order is preserved on both axes.
+  const orderedSections = useMemo(() => {
+    const enabled = quickNavItems
+      .filter((item) => item.enabled)
+      .map((item) => {
+        const theme = CARD_THEMES[item.id];
+        return {
+          id: theme.sectionId,
+          icon: theme.icon,
+          label: QUICK_NAV_LABEL_OVERRIDES[item.id] ?? theme.label,
+          iconColor: theme.iconColor,
+          bgColor: theme.iconBg,
+        };
+      });
+    return order === "rtl" ? enabled.reverse() : enabled;
+  }, [quickNavItems, order]);
+
+  // D-06: hide entirely when zero items are enabled
+  if (orderedSections.length === 0) return null;
 
   return (
     <motion.footer
