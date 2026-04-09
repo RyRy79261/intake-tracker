@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.3.0](https://github.com/RyRy79261/intake-tracker/compare/v1.2.0...v1.3.0) (2026-04-09)
+
+
+### Features
+
+* **260409-hqu:** add Footer Items drag-reorder list to Quick Nav settings ([7a15ffe](https://github.com/RyRy79261/intake-tracker/commit/7a15ffe2df7b76d243387373cb15aab3ed55b65f))
+* **260409-hqu:** add quickNavItems to settings store ([e61550d](https://github.com/RyRy79261/intake-tracker/commit/e61550d5f958edb7dfef82c6d8ad064411e5b1a6))
+* configurable quick-nav footer with drag-reorder ([393c896](https://github.com/RyRy79261/intake-tracker/commit/393c8964d7115b625b8ae4ebbf5bc40d27f1ef38))
+
+
+### Bug Fixes
+
+* **260409-hqu:** count full beverage volume as water intake ([6701286](https://github.com/RyRy79261/intake-tracker/commit/6701286076305ff0ee927adea0b5a9b3b22cf4d1))
+* **260409-hqu:** narrow quick-nav footer to 6 root-card items ([e8d0efe](https://github.com/RyRy79261/intake-tracker/commit/e8d0efe5f8c3b589591e6410b7b4cafbde4da9c0))
+
 ## [1.2.0](https://github.com/RyRy79261/intake-tracker/compare/v1.1.0...v1.2.0) (2026-04-09)
 
 
