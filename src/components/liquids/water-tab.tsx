@@ -105,6 +105,24 @@ export function WaterTab() {
         />
       </div>
 
+      {/* Quick-set size buttons */}
+      <div className="flex gap-2 mb-3">
+        {[70, 100, 150, 200].map((size) => (
+          <Button
+            key={size}
+            variant="outline"
+            size="sm"
+            onClick={() => setPendingAmount(size)}
+            className={cn(
+              "flex-1",
+              pendingAmount === size && theme.activeToggle
+            )}
+          >
+            {size}
+          </Button>
+        ))}
+      </div>
+
       {/* Input Controls */}
       <div className="flex items-center justify-between gap-3">
         {/* Decrement Button */}
