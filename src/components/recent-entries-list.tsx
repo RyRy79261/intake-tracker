@@ -2,8 +2,45 @@
 
 import { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Loader2, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+/**
+ * Shared shell for inline edit forms used by card components.
+ * Renders domain-specific children, then timestamp, note, and Save/Cancel.
+ */
+export function InlineEditFormShell({
+  children,
+  timestamp,
+  onTimestampChange,
+  note,
+  onNoteChange,
+  onSave,
+  onCancel,
+  buttonClassName,
+}: {
+  children?: ReactNode;
+  timestamp: string;
+  onTimestampChange: (value: string) => void;
+  note: string;
+  onNoteChange: (value: string) => void;
+  onSave: () => void;
+  onCancel: () => void;
+  buttonClassName?: string;
+}) {
+  return (
+    <div className="space-y-2">
+      {children}
+      <Input type="datetime-local" value={timestamp} onChange={(e) => onTimestampChange(e.target.value)} className="h-8 text-sm" />
+      <Input placeholder="Note (optional)" value={note} onChange={(e) => onNoteChange(e.target.value)} className="h-8 text-sm" />
+      <div className="flex gap-2">
+        <Button size="sm" className={cn("flex-1 h-8", buttonClassName)} onClick={onSave}>Save</Button>
+        <Button size="sm" variant="outline" className="flex-1 h-8" onClick={onCancel}>Cancel</Button>
+      </div>
+    </div>
+  );
+}
 
 interface RecentEntriesListProps<T extends { id: string }> {
   records: T[] | undefined;
@@ -17,8 +54,8 @@ interface RecentEntriesListProps<T extends { id: string }> {
   onEdit?: (record: T) => void;
   /** ID of the record currently being edited inline */
   editingId?: string | null;
-  /** Render an inline edit form for the given record */
-  renderEditForm?: (record: T) => ReactNode;
+  /** Render an inline edit form (record available via parent closure) */
+  renderEditForm?: () => ReactNode;
 }
 
 /**
@@ -53,7 +90,7 @@ export function RecentEntriesList<T extends { id: string }>({
                 key={record.id}
                 className="bg-muted/30 rounded-lg p-2 -mx-1.5"
               >
-                {renderEditForm(record)}
+                {renderEditForm()}
               </div>
             );
           }

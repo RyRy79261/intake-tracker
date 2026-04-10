@@ -210,8 +210,9 @@ export function useCorrelation(
  * Returns Insight[] with meaningful alerts based on thresholds.
  */
 // GH-32: Default auto-generated insights removed. Only user-created insights are supported.
+const EMPTY_INSIGHTS: Insight[] = [];
 export function useInsights(_range: TimeRange) {
-  return [] as Insight[];
+  return EMPTY_INSIGHTS;
 }
 
 // ---------------------------------------------------------------------------

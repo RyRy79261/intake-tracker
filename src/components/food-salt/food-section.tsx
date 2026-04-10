@@ -14,7 +14,7 @@ import {
 import { Loader2, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
-import { RecentEntriesList } from "@/components/recent-entries-list";
+import { RecentEntriesList, InlineEditFormShell } from "@/components/recent-entries-list";
 import { parseIntakeWithAI } from "@/lib/ai-client";
 import {
   useAddComposableEntry,
@@ -402,15 +402,9 @@ export function FoodSection() {
           </div>
         )}
         renderEditForm={() => (
-          <div className="space-y-2">
-            <Input type="datetime-local" value={editTimestamp} onChange={(e) => setEditTimestamp(e.target.value)} className="h-8 text-sm" />
-            <Input placeholder="Note (optional)" value={editNote} onChange={(e) => setEditNote(e.target.value)} className="h-8 text-sm" />
+          <InlineEditFormShell timestamp={editTimestamp} onTimestampChange={setEditTimestamp} note={editNote} onNoteChange={setEditNote} onSave={() => handleEditSubmit()} onCancel={closeEdit} buttonClassName={theme.buttonBg}>
             <Input type="number" placeholder="Grams (optional)" value={editGrams} onChange={(e) => setEditGrams(e.target.value)} className="h-8 text-sm" />
-            <div className="flex gap-2">
-              <Button size="sm" className={cn("flex-1 h-8", theme.buttonBg)} onClick={handleEditSubmit}>Save</Button>
-              <Button size="sm" variant="outline" className="flex-1 h-8" onClick={closeEdit}>Cancel</Button>
-            </div>
-          </div>
+          </InlineEditFormShell>
         )}
       />
     </>

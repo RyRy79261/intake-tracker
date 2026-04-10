@@ -10,7 +10,7 @@ import { Droplets, Coffee, Wine } from "lucide-react";
 import { WaterTab } from "@/components/liquids/water-tab";
 import { BeverageTab } from "@/components/liquids/beverage-tab";
 import { PresetTab } from "@/components/liquids/preset-tab";
-import { RecentEntriesList } from "@/components/recent-entries-list";
+import { RecentEntriesList, InlineEditFormShell } from "@/components/recent-entries-list";
 import {
   useIntake,
   useRecentIntakeRecords,
@@ -211,15 +211,9 @@ export function LiquidsCard() {
             );
           }}
           renderEditForm={() => (
-            <div className="space-y-2">
+            <InlineEditFormShell timestamp={editTimestamp} onTimestampChange={setEditTimestamp} note={editNote} onNoteChange={setEditNote} onSave={() => handleEditSubmit()} onCancel={closeEdit} buttonClassName={CARD_THEMES.water.buttonBg}>
               <Input type="number" placeholder="Amount (ml)" value={editAmount} onChange={(e) => setEditAmount(e.target.value)} className="h-8 text-sm" />
-              <Input type="datetime-local" value={editTimestamp} onChange={(e) => setEditTimestamp(e.target.value)} className="h-8 text-sm" />
-              <Input placeholder="Note (optional)" value={editNote} onChange={(e) => setEditNote(e.target.value)} className="h-8 text-sm" />
-              <div className="flex gap-2">
-                <Button size="sm" className={cn("flex-1 h-8", CARD_THEMES.water.buttonBg)} onClick={handleEditSubmit}>Save</Button>
-                <Button size="sm" variant="outline" className="flex-1 h-8" onClick={closeEdit}>Cancel</Button>
-              </div>
-            </div>
+            </InlineEditFormShell>
           )}
         />
       </CardContent>

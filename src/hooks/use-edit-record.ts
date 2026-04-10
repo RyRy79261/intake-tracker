@@ -53,8 +53,8 @@ interface UseEditRecordReturn<T> {
   openEdit: (record: T) => void;
   /** Close the edit dialog without saving. */
   closeEdit: () => void;
-  /** Form `onSubmit` handler — call with the form event. */
-  handleEditSubmit: (e: React.FormEvent) => Promise<void>;
+  /** Submit handler — call with optional form event. */
+  handleEditSubmit: (e?: React.FormEvent) => Promise<void>;
 }
 
 export function useEditRecord<
@@ -84,8 +84,8 @@ export function useEditRecord<
   }, []);
 
   const handleEditSubmit = useCallback(
-    async (e: React.FormEvent) => {
-      e.preventDefault();
+    async (e?: React.FormEvent) => {
+      e?.preventDefault();
       if (!editingRecord) return;
 
       const newTimestamp = dateTimeLocalToTimestamp(editTimestamp);
