@@ -24,6 +24,7 @@ const ParseRequestSchema = z.object({
 const AIParseResponseSchema = z.object({
   water: z.number().min(0).max(10000).nullable(),
   salt: z.number().min(0).max(50000).nullable(),
+  measurement_type: z.enum(["sodium", "salt"]).default("sodium"),
   reasoning: z.string().max(500).optional(),
 });
 
@@ -50,10 +51,12 @@ Guidelines for estimation:
   - Restaurant meals: typically 1000-2000mg sodium
   - Chips/snacks: ~150-200mg per serving
 
+IMPORTANT: You must indicate whether you are reporting sodium content or salt (NaCl) content. Most nutritional databases report sodium. Table salt, soy sauce labels in some countries, and UK food labels typically report salt. US labels report sodium. Always specify which one you are returning.
+
 Always respond with valid JSON only, no additional text.
 
 Example response:
-{"water": 250, "salt": 5, "reasoning": "A glass of water (250ml) contains 250ml water and negligible sodium"}`;
+{"water": 250, "salt": 5, "measurement_type": "sodium", "reasoning": "A glass of water (250ml) contains 250ml water and negligible sodium"}`;
 
 // --- Tool Definition ---
 
@@ -65,9 +68,10 @@ const PARSE_RESULT_TOOL = {
     properties: {
       water: { type: ["number", "null"], description: "Water content in ml, null if cannot estimate" },
       salt: { type: ["number", "null"], description: "Sodium content in mg, null if cannot estimate" },
+      measurement_type: { type: "string", enum: ["sodium", "salt"], description: "Whether the 'salt' value represents sodium (Na) or salt (NaCl). sodium x 2.5 = salt." },
       reasoning: { type: "string", description: "Brief explanation of the estimate" },
     },
-    required: ["water", "salt", "reasoning"],
+    required: ["water", "salt", "measurement_type", "reasoning"],
     additionalProperties: false,
   },
 };
@@ -177,6 +181,7 @@ export const POST = withAuth(async ({ request, auth }) => {
     return NextResponse.json({
       water: validated.data.water,
       salt: validated.data.salt,
+      measurement_type: validated.data.measurement_type,
       ...(validated.data.reasoning !== undefined && { reasoning: validated.data.reasoning }),
     });
   } catch (error) {

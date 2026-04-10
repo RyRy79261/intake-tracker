@@ -139,7 +139,8 @@ export function FoodSection() {
       // Populate form fields from AI result
       if (result.salt && result.salt > 0) {
         setSodiumMg(result.salt.toString());
-        setSodiumSource("sodium"); // AI returns sodium mg directly
+        // Auto-select sodium source based on what the AI reported
+        setSodiumSource(result.measurementType === "salt" ? "salt" : "sodium");
       }
       if (result.water && result.water > 0) {
         setWaterMl(result.water.toString());
