@@ -20,7 +20,6 @@ const BloodPressureFormSchema = z.object({
 });
 import { CollapsibleTimeInputControlled } from "@/components/collapsible-time-input";
 import { RecentEntriesList } from "@/components/recent-entries-list";
-import { EditBloodPressureDialog } from "@/components/edit-blood-pressure-dialog";
 import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
 import { useEditRecord } from "@/hooks/use-edit-record";
 import { useToast } from "@/hooks/use-toast";
@@ -436,6 +435,7 @@ export function BloodPressureCard() {
           deletingId={deletingId}
           onDelete={handleDelete}
           onEdit={openEdit}
+          editingId={editingRecord?.id ?? null}
           borderColor={theme.border}
           renderEntry={(record) => {
             const category = getBPCategory(record.systolic, record.diastolic);
@@ -460,31 +460,34 @@ export function BloodPressureCard() {
               </>
             );
           }}
+          renderEditForm={() => (
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <Input type="number" placeholder="Systolic" value={editSystolic} onChange={(e) => setEditSystolic(e.target.value)} className="h-8 text-sm" />
+                <Input type="number" placeholder="Diastolic" value={editDiastolic} onChange={(e) => setEditDiastolic(e.target.value)} className="h-8 text-sm" />
+              </div>
+              <Input type="number" placeholder="Heart rate (optional)" value={editHeartRate} onChange={(e) => setEditHeartRate(e.target.value)} className="h-8 text-sm" />
+              <div className="grid grid-cols-2 gap-2">
+                <select value={editPosition} onChange={(e) => setEditPosition(e.target.value as "sitting" | "standing")} className="h-8 text-sm rounded-md border bg-background px-2">
+                  <option value="sitting">Sitting</option>
+                  <option value="standing">Standing</option>
+                </select>
+                <select value={editArm} onChange={(e) => setEditArm(e.target.value as "left" | "right")} className="h-8 text-sm rounded-md border bg-background px-2">
+                  <option value="left">Left arm</option>
+                  <option value="right">Right arm</option>
+                </select>
+              </div>
+              <Input type="datetime-local" value={editTimestamp} onChange={(e) => setEditTimestamp(e.target.value)} className="h-8 text-sm" />
+              <Input placeholder="Note (optional)" value={editNote} onChange={(e) => setEditNote(e.target.value)} className="h-8 text-sm" />
+              <div className="flex gap-2">
+                <Button size="sm" className={cn("flex-1 h-8", theme.buttonBg)} onClick={handleEditSubmit}>Save</Button>
+                <Button size="sm" variant="outline" className="flex-1 h-8" onClick={closeEdit}>Cancel</Button>
+              </div>
+            </div>
+          )}
         />
       </CardContent>
     </Card>
-
-    <EditBloodPressureDialog
-      record={editingRecord}
-      onClose={closeEdit}
-      onSubmit={handleEditSubmit}
-      systolic={editSystolic}
-      onSystolicChange={setEditSystolic}
-      diastolic={editDiastolic}
-      onDiastolicChange={setEditDiastolic}
-      heartRate={editHeartRate}
-      onHeartRateChange={setEditHeartRate}
-      position={editPosition}
-      onPositionChange={setEditPosition}
-      arm={editArm}
-      onArmChange={setEditArm}
-      irregularHeartbeat={editIrregularHeartbeat}
-      onIrregularHeartbeatChange={setEditIrregularHeartbeat}
-      timestamp={editTimestamp}
-      onTimestampChange={setEditTimestamp}
-      note={editNote}
-      onNoteChange={setEditNote}
-    />
     </>
   );
 }

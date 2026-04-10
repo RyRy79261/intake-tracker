@@ -17,7 +17,6 @@ import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { RecentEntriesList } from "@/components/recent-entries-list";
-import { EditDefecationDialog } from "@/components/edit-defecation-dialog";
 import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
 import { useEditRecord } from "@/hooks/use-edit-record";
 import { useToast } from "@/hooks/use-toast";
@@ -233,6 +232,7 @@ export function DefecationCard() {
             deletingId={deletingId}
             onDelete={handleDelete}
             onEdit={openEdit}
+            editingId={editingRecord?.id ?? null}
             borderColor={theme.border}
             renderEntry={(record) => (
               <div className="flex items-center gap-2 min-w-0">
@@ -247,21 +247,30 @@ export function DefecationCard() {
                 )}
               </div>
             )}
+            renderEditForm={() => (
+              <div className="space-y-2">
+                <Select value={editAmountEstimate} onValueChange={setEditAmountEstimate}>
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue placeholder="Amount estimate" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">No estimate</SelectItem>
+                    {AMOUNT_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input type="datetime-local" value={editTimestamp} onChange={(e) => setEditTimestamp(e.target.value)} className="h-8 text-sm" />
+                <Input placeholder="Note (optional)" value={editNote} onChange={(e) => setEditNote(e.target.value)} className="h-8 text-sm" />
+                <div className="flex gap-2">
+                  <Button size="sm" className={cn("flex-1 h-8", theme.buttonBg)} onClick={handleEditSubmit}>Save</Button>
+                  <Button size="sm" variant="outline" className="flex-1 h-8" onClick={closeEdit}>Cancel</Button>
+                </div>
+              </div>
+            )}
           />
         </CardContent>
       </Card>
-
-      <EditDefecationDialog
-        record={editingRecord}
-        onClose={closeEdit}
-        onSubmit={handleEditSubmit}
-        timestamp={editTimestamp}
-        onTimestampChange={setEditTimestamp}
-        amount={editAmountEstimate}
-        onAmountChange={setEditAmountEstimate}
-        note={editNote}
-        onNoteChange={setEditNote}
-      />
     </>
   );
 }

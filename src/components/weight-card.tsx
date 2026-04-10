@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Minus, Plus, Check, Loader2 } from "lucide-react";
 import { z } from "zod";
 import { cn } from "@/lib/utils";
@@ -18,7 +19,6 @@ const WeightFormSchema = z.object({
 });
 import { CollapsibleTimeInputControlled } from "@/components/collapsible-time-input";
 import { RecentEntriesList } from "@/components/recent-entries-list";
-import { EditWeightDialog } from "@/components/edit-weight-dialog";
 import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
 import { useEditRecord } from "@/hooks/use-edit-record";
 import { useSettings } from "@/hooks/use-settings";
@@ -269,6 +269,7 @@ export function WeightCard() {
           deletingId={deletingId}
           onDelete={handleDelete}
           onEdit={openEdit}
+          editingId={editingRecord?.id ?? null}
           borderColor={theme.border}
           renderEntry={(record) => (
             <>
@@ -278,21 +279,20 @@ export function WeightCard() {
               </div>
             </>
           )}
+          renderEditForm={() => (
+            <div className="space-y-2">
+              <Input type="number" step="0.01" placeholder="Weight (kg)" value={editWeight} onChange={(e) => setEditWeight(e.target.value)} className="h-8 text-sm" />
+              <Input type="datetime-local" value={editTimestamp} onChange={(e) => setEditTimestamp(e.target.value)} className="h-8 text-sm" />
+              <Input placeholder="Note (optional)" value={editNote} onChange={(e) => setEditNote(e.target.value)} className="h-8 text-sm" />
+              <div className="flex gap-2">
+                <Button size="sm" className={cn("flex-1 h-8", theme.buttonBg)} onClick={handleEditSubmit}>Save</Button>
+                <Button size="sm" variant="outline" className="flex-1 h-8" onClick={closeEdit}>Cancel</Button>
+              </div>
+            </div>
+          )}
         />
       </CardContent>
     </Card>
-
-    <EditWeightDialog
-      record={editingRecord}
-      onClose={closeEdit}
-      onSubmit={handleEditSubmit}
-      weight={editWeight}
-      onWeightChange={setEditWeight}
-      timestamp={editTimestamp}
-      onTimestampChange={setEditTimestamp}
-      note={editNote}
-      onNoteChange={setEditNote}
-    />
     </>
   );
 }
