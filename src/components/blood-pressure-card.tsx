@@ -200,6 +200,29 @@ export function BloodPressureCard() {
                   {bpCategory.label}
                 </p>
               )}
+              {latestReading.heartRate && (
+                <p className="text-xs text-muted-foreground">{latestReading.heartRate} BPM</p>
+              )}
+              {(() => {
+                const prev = recentRecords?.[1];
+                if (!prev) return null;
+                const sysDelta = latestReading.systolic - prev.systolic;
+                const diaDelta = latestReading.diastolic - prev.diastolic;
+                const fmt = (d: number) => (d > 0 ? `+${d}` : `${d}`);
+                const clr = (d: number) =>
+                  d > 0
+                    ? "text-red-500 dark:text-red-400"
+                    : d < 0
+                      ? "text-green-600 dark:text-green-400"
+                      : "text-muted-foreground";
+                return (
+                  <p className="text-xs">
+                    <span className={clr(sysDelta)}>{fmt(sysDelta)}</span>
+                    <span className="text-muted-foreground"> / </span>
+                    <span className={clr(diaDelta)}>{fmt(diaDelta)}</span>
+                  </p>
+                );
+              })()}
             </div>
           ) : null}
         </div>
