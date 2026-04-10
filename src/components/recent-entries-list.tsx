@@ -32,8 +32,8 @@ export function InlineEditFormShell({
   return (
     <div className="space-y-2">
       {children}
-      <Input type="datetime-local" value={timestamp} onChange={(e) => onTimestampChange(e.target.value)} className="h-8 text-sm" />
-      <Input placeholder="Note (optional)" value={note} onChange={(e) => onNoteChange(e.target.value)} className="h-8 text-sm" />
+      <Input aria-label="Entry date and time" type="datetime-local" value={timestamp} onChange={(e) => onTimestampChange(e.target.value)} className="h-8 text-sm" />
+      <Input aria-label="Entry note" placeholder="Note (optional)" value={note} onChange={(e) => onNoteChange(e.target.value)} className="h-8 text-sm" />
       <div className="flex gap-2">
         <Button size="sm" className={cn("flex-1 h-8", buttonClassName)} onClick={onSave}>Save</Button>
         <Button size="sm" variant="outline" className="flex-1 h-8" onClick={onCancel}>Cancel</Button>
@@ -107,6 +107,7 @@ export function RecentEntriesList<T extends { id: string }>({
               onKeyDown={
                 onEdit
                   ? (e) => {
+                      if (e.target !== e.currentTarget) return;
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
                         onEdit(record);

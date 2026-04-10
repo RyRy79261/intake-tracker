@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { Fragment, useState, useEffect, useMemo } from "react";
 import {
   useDailyIntakeTotal,
   getDayStartTimestamp,
@@ -300,8 +300,8 @@ export function TextMetrics() {
             { key: "caf", label: "Caf", data: weeklyCaffeine, theme: CARD_THEMES.caffeine, limit: 0, fmt: (v: number) => formatValue(Math.round(v)) },
             { key: "alc", label: "Alc", data: weeklyAlcohol, theme: CARD_THEMES.alcohol, limit: 0, fmt: (v: number) => v.toFixed(1) },
           ].map((row) => (
-            <>{/* {row.label} row */}
-              <div key={`${row.key}-label`} className="text-xs text-muted-foreground">{row.label}</div>
+            <Fragment key={row.key}>
+              <div className="text-xs text-muted-foreground">{row.label}</div>
               {row.data.map((val, i) => {
                 const isFuture = i > todayIndex;
                 const isToday = i === todayIndex;
@@ -323,7 +323,7 @@ export function TextMetrics() {
                   </div>
                 );
               })}
-            </>
+            </Fragment>
           ))}
         </div>
       </div>

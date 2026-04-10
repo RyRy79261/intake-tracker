@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, type FormEvent } from "react";
 import { useToast } from "@/hooks/use-toast";
 import {
   timestampToDateTimeLocal,
@@ -54,7 +54,7 @@ interface UseEditRecordReturn<T> {
   /** Close the edit dialog without saving. */
   closeEdit: () => void;
   /** Submit handler — call with optional form event. */
-  handleEditSubmit: (e?: React.FormEvent) => Promise<void>;
+  handleEditSubmit: (e?: FormEvent) => Promise<void>;
 }
 
 export function useEditRecord<
@@ -84,7 +84,7 @@ export function useEditRecord<
   }, []);
 
   const handleEditSubmit = useCallback(
-    async (e?: React.FormEvent) => {
+    async (e?: FormEvent) => {
       e?.preventDefault();
       if (!editingRecord) return;
 
