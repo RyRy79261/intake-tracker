@@ -131,6 +131,17 @@ export function TextMetrics() {
     "salt"
   );
 
+  const weeklyCaffeineRecords = useSubstanceRecordsByDateRange(
+    weekStart,
+    weekEnd,
+    "caffeine"
+  );
+  const weeklyAlcoholRecords = useSubstanceRecordsByDateRange(
+    weekStart,
+    weekEnd,
+    "alcohol"
+  );
+
   // Bucket records into 7 days
   const weeklyWater = useMemo(() => {
     const buckets: number[] = [0, 0, 0, 0, 0, 0, 0];
@@ -157,6 +168,32 @@ export function TextMetrics() {
     }
     return buckets;
   }, [weeklySaltRecords, weekStart]);
+
+  const weeklyCaffeine = useMemo(() => {
+    const buckets: number[] = [0, 0, 0, 0, 0, 0, 0];
+    for (const record of weeklyCaffeineRecords) {
+      const dayOffset = Math.floor(
+        (record.timestamp - weekStart) / ONE_DAY_MS
+      );
+      if (dayOffset >= 0 && dayOffset < 7) {
+        buckets[dayOffset] = (buckets[dayOffset] ?? 0) + (record.amountMg ?? 0);
+      }
+    }
+    return buckets;
+  }, [weeklyCaffeineRecords, weekStart]);
+
+  const weeklyAlcohol = useMemo(() => {
+    const buckets: number[] = [0, 0, 0, 0, 0, 0, 0];
+    for (const record of weeklyAlcoholRecords) {
+      const dayOffset = Math.floor(
+        (record.timestamp - weekStart) / ONE_DAY_MS
+      );
+      if (dayOffset >= 0 && dayOffset < 7) {
+        buckets[dayOffset] = (buckets[dayOffset] ?? 0) + (record.amountStandardDrinks ?? 0);
+      }
+    }
+    return buckets;
+  }, [weeklyAlcoholRecords, weekStart]);
 
   // Over limit checks
   const waterOverLimit = waterLimit > 0 && waterTotal > waterLimit;
@@ -348,6 +385,50 @@ export function TextMetrics() {
                 )}
               >
                 {isFuture ? "---" : formatValue(val)}
+              </div>
+            );
+          })}
+
+          {/* Caffeine row */}
+          <div className="text-xs text-muted-foreground">Caf</div>
+          {weeklyCaffeine.map((val, i) => {
+            const isFuture = i > todayIndex;
+            const isToday = i === todayIndex;
+            const hasData = val > 0;
+            return (
+              <div
+                key={`caf-${i}`}
+                className={cn(
+                  "text-xs tabular-nums text-center",
+                  isFuture && "text-muted-foreground/50",
+                  isToday && "font-semibold",
+                  !isFuture && hasData && CARD_THEMES.caffeine.latestValueColor,
+                  !isFuture && !hasData && "text-muted-foreground/50"
+                )}
+              >
+                {isFuture ? "---" : formatValue(Math.round(val))}
+              </div>
+            );
+          })}
+
+          {/* Alcohol row */}
+          <div className="text-xs text-muted-foreground">Alc</div>
+          {weeklyAlcohol.map((val, i) => {
+            const isFuture = i > todayIndex;
+            const isToday = i === todayIndex;
+            const hasData = val > 0;
+            return (
+              <div
+                key={`alc-${i}`}
+                className={cn(
+                  "text-xs tabular-nums text-center",
+                  isFuture && "text-muted-foreground/50",
+                  isToday && "font-semibold",
+                  !isFuture && hasData && CARD_THEMES.alcohol.latestValueColor,
+                  !isFuture && !hasData && "text-muted-foreground/50"
+                )}
+              >
+                {isFuture ? "---" : val.toFixed(1)}
               </div>
             );
           })}
