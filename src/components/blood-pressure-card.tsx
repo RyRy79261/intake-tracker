@@ -27,6 +27,7 @@ const BloodPressureFormSchema = z.object({
 });
 import { CollapsibleTimeInputControlled } from "@/components/collapsible-time-input";
 import { RecentEntriesList, InlineEditFormShell } from "@/components/recent-entries-list";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
 import { useEditRecord } from "@/hooks/use-edit-record";
@@ -485,10 +486,10 @@ export function BloodPressureCard() {
                   </SelectContent>
                 </Select>
               </div>
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input type="checkbox" checked={editIrregularHeartbeat} onChange={(e) => setEditIrregularHeartbeat(e.target.checked)} className="rounded" />
-                Irregular heartbeat
-              </label>
+              <div className="flex items-center gap-2">
+                <Checkbox id="edit-irregular-heartbeat" checked={editIrregularHeartbeat} onCheckedChange={(checked) => setEditIrregularHeartbeat(checked === true)} />
+                <Label htmlFor="edit-irregular-heartbeat" className="text-sm cursor-pointer">Irregular heartbeat</Label>
+              </div>
             </InlineEditFormShell>
           )}
         />
