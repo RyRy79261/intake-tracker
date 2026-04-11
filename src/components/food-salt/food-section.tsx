@@ -14,8 +14,7 @@ import {
 import { Loader2, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
-import { RecentEntriesList } from "@/components/recent-entries-list";
-import { EditEatingDialog } from "@/components/edit-eating-dialog";
+import { RecentEntriesList, InlineEditFormShell } from "@/components/recent-entries-list";
 import { parseIntakeWithAI } from "@/lib/ai-client";
 import {
   useAddComposableEntry,
@@ -139,7 +138,8 @@ export function FoodSection() {
       // Populate form fields from AI result
       if (result.salt && result.salt > 0) {
         setSodiumMg(result.salt.toString());
-        setSodiumSource("sodium"); // AI returns sodium mg directly
+        // Auto-select sodium source based on what the AI reported
+        setSodiumSource(result.measurementType === "salt" ? "salt" : "sodium");
       }
       if (result.water && result.water > 0) {
         setWaterMl(result.water.toString());
@@ -379,6 +379,7 @@ export function FoodSection() {
         deletingId={deletingId}
         onDelete={handleDelete}
         onEdit={openEdit}
+        editingId={editingRecord?.id ?? null}
         borderColor={theme.border}
         renderEntry={(record) => (
           <div className="flex items-center gap-2 min-w-0">
@@ -400,18 +401,11 @@ export function FoodSection() {
             )}
           </div>
         )}
-      />
-
-      <EditEatingDialog
-        record={editingRecord}
-        onClose={closeEdit}
-        onSubmit={handleEditSubmit}
-        timestamp={editTimestamp}
-        onTimestampChange={setEditTimestamp}
-        note={editNote}
-        onNoteChange={setEditNote}
-        grams={editGrams}
-        onGramsChange={setEditGrams}
+        renderEditForm={() => (
+          <InlineEditFormShell timestamp={editTimestamp} onTimestampChange={setEditTimestamp} note={editNote} onNoteChange={setEditNote} onSave={() => handleEditSubmit()} onCancel={closeEdit} buttonClassName={theme.buttonBg}>
+            <Input type="number" placeholder="Grams (optional)" value={editGrams} onChange={(e) => setEditGrams(e.target.value)} className="h-8 text-sm" />
+          </InlineEditFormShell>
+        )}
       />
     </>
   );

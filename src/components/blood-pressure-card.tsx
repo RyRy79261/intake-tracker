@@ -11,6 +11,13 @@ import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { logAudit } from "@/lib/audit";
 
+function formatDelta(d: number) { return d > 0 ? `+${d}` : `${d}`; }
+function deltaColor(d: number) {
+  return d > 0 ? "text-red-500 dark:text-red-400"
+    : d < 0 ? "text-green-600 dark:text-green-400"
+    : "text-muted-foreground";
+}
+
 const BloodPressureFormSchema = z.object({
   systolic: z.number({ invalid_type_error: "Systolic is required" })
     .int("Must be a whole number").min(50, "Too low").max(300, "Too high"),
@@ -19,8 +26,9 @@ const BloodPressureFormSchema = z.object({
   heartRate: z.number().int("Must be a whole number").min(20, "Too low").max(250, "Too high").optional(),
 });
 import { CollapsibleTimeInputControlled } from "@/components/collapsible-time-input";
-import { RecentEntriesList } from "@/components/recent-entries-list";
-import { EditBloodPressureDialog } from "@/components/edit-blood-pressure-dialog";
+import { RecentEntriesList, InlineEditFormShell } from "@/components/recent-entries-list";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
 import { useEditRecord } from "@/hooks/use-edit-record";
 import { useToast } from "@/hooks/use-toast";
@@ -173,6 +181,13 @@ export function BloodPressureCard() {
     }
   };
 
+  // BP delta vs previous reading
+  const prevReading = recentRecords?.[1];
+  const bpDelta = latestReading && prevReading ? {
+    sys: latestReading.systolic - prevReading.systolic,
+    dia: latestReading.diastolic - prevReading.diastolic,
+  } : null;
+
   return (
     <>
     <Card className={cn("relative overflow-hidden transition-all duration-300 bg-gradient-to-br", theme.gradient, theme.border)}>
@@ -198,6 +213,16 @@ export function BloodPressureCard() {
               {bpCategory && (
                 <p className={cn("text-xs font-medium", bpCategory.color)}>
                   {bpCategory.label}
+                </p>
+              )}
+              {latestReading.heartRate && (
+                <p className="text-xs text-muted-foreground">{latestReading.heartRate} BPM</p>
+              )}
+              {bpDelta && (
+                <p className="text-xs">
+                  <span className={deltaColor(bpDelta.sys)}>{formatDelta(bpDelta.sys)}</span>
+                  <span className="text-muted-foreground"> / </span>
+                  <span className={deltaColor(bpDelta.dia)}>{formatDelta(bpDelta.dia)}</span>
                 </p>
               )}
             </div>
@@ -413,6 +438,7 @@ export function BloodPressureCard() {
           deletingId={deletingId}
           onDelete={handleDelete}
           onEdit={openEdit}
+          editingId={editingRecord?.id ?? null}
           borderColor={theme.border}
           renderEntry={(record) => {
             const category = getBPCategory(record.systolic, record.diastolic);
@@ -437,31 +463,38 @@ export function BloodPressureCard() {
               </>
             );
           }}
+          renderEditForm={() => (
+            <InlineEditFormShell timestamp={editTimestamp} onTimestampChange={setEditTimestamp} note={editNote} onNoteChange={setEditNote} onSave={() => handleEditSubmit()} onCancel={closeEdit} buttonClassName={theme.buttonBg}>
+              <div className="grid grid-cols-2 gap-2">
+                <Input aria-label="Systolic pressure" type="number" placeholder="Systolic" value={editSystolic} onChange={(e) => setEditSystolic(e.target.value)} className="h-8 text-sm" />
+                <Input aria-label="Diastolic pressure" type="number" placeholder="Diastolic" value={editDiastolic} onChange={(e) => setEditDiastolic(e.target.value)} className="h-8 text-sm" />
+              </div>
+              <Input aria-label="Heart rate" type="number" placeholder="Heart rate (optional)" value={editHeartRate} onChange={(e) => setEditHeartRate(e.target.value)} className="h-8 text-sm" />
+              <div className="grid grid-cols-2 gap-2">
+                <Select value={editPosition} onValueChange={(v) => setEditPosition(v as "sitting" | "standing")}>
+                  <SelectTrigger aria-label="Position" className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="sitting">Sitting</SelectItem>
+                    <SelectItem value="standing">Standing</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={editArm} onValueChange={(v) => setEditArm(v as "left" | "right")}>
+                  <SelectTrigger aria-label="Arm" className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="left">Left arm</SelectItem>
+                    <SelectItem value="right">Right arm</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox id="edit-irregular-heartbeat" checked={editIrregularHeartbeat} onCheckedChange={(checked) => setEditIrregularHeartbeat(checked === true)} />
+                <Label htmlFor="edit-irregular-heartbeat" className="text-sm cursor-pointer">Irregular heartbeat</Label>
+              </div>
+            </InlineEditFormShell>
+          )}
         />
       </CardContent>
     </Card>
-
-    <EditBloodPressureDialog
-      record={editingRecord}
-      onClose={closeEdit}
-      onSubmit={handleEditSubmit}
-      systolic={editSystolic}
-      onSystolicChange={setEditSystolic}
-      diastolic={editDiastolic}
-      onDiastolicChange={setEditDiastolic}
-      heartRate={editHeartRate}
-      onHeartRateChange={setEditHeartRate}
-      position={editPosition}
-      onPositionChange={setEditPosition}
-      arm={editArm}
-      onArmChange={setEditArm}
-      irregularHeartbeat={editIrregularHeartbeat}
-      onIrregularHeartbeatChange={setEditIrregularHeartbeat}
-      timestamp={editTimestamp}
-      onTimestampChange={setEditTimestamp}
-      note={editNote}
-      onNoteChange={setEditNote}
-    />
     </>
   );
 }

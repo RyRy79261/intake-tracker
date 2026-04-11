@@ -16,8 +16,7 @@ import {
 import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
-import { RecentEntriesList } from "@/components/recent-entries-list";
-import { EditDefecationDialog } from "@/components/edit-defecation-dialog";
+import { RecentEntriesList, InlineEditFormShell } from "@/components/recent-entries-list";
 import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
 import { useEditRecord } from "@/hooks/use-edit-record";
 import { useToast } from "@/hooks/use-toast";
@@ -233,6 +232,7 @@ export function DefecationCard() {
             deletingId={deletingId}
             onDelete={handleDelete}
             onEdit={openEdit}
+            editingId={editingRecord?.id ?? null}
             borderColor={theme.border}
             renderEntry={(record) => (
               <div className="flex items-center gap-2 min-w-0">
@@ -247,21 +247,24 @@ export function DefecationCard() {
                 )}
               </div>
             )}
+            renderEditForm={() => (
+              <InlineEditFormShell timestamp={editTimestamp} onTimestampChange={setEditTimestamp} note={editNote} onNoteChange={setEditNote} onSave={() => handleEditSubmit()} onCancel={closeEdit} buttonClassName={theme.buttonBg}>
+                <Select value={editAmountEstimate} onValueChange={setEditAmountEstimate}>
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue placeholder="Amount estimate" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">No estimate</SelectItem>
+                    {AMOUNT_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </InlineEditFormShell>
+            )}
           />
         </CardContent>
       </Card>
-
-      <EditDefecationDialog
-        record={editingRecord}
-        onClose={closeEdit}
-        onSubmit={handleEditSubmit}
-        timestamp={editTimestamp}
-        onTimestampChange={setEditTimestamp}
-        amount={editAmountEstimate}
-        onAmountChange={setEditAmountEstimate}
-        note={editNote}
-        onNoteChange={setEditNote}
-      />
     </>
   );
 }

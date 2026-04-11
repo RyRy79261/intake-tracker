@@ -72,7 +72,7 @@ test.describe('History / Analytics', () => {
     // Use generous timeout since Recharts renders asynchronously
     // If insights are available, we should see either SVG or "No notable insights" text
     const svgOrEmpty = page.locator('.recharts-responsive-container svg').first()
-      .or(page.locator('text=/No notable insights/i'));
+      .or(page.locator('text=/No insights for this period/i'));
     await expect(svgOrEmpty).toBeVisible({ timeout: 15000 });
   });
 });

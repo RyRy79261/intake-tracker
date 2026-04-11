@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Minus, Plus, Check, Loader2 } from "lucide-react";
 import { z } from "zod";
 import { cn } from "@/lib/utils";
@@ -17,8 +18,7 @@ const WeightFormSchema = z.object({
     .max(1000, "Weight seems too high"),
 });
 import { CollapsibleTimeInputControlled } from "@/components/collapsible-time-input";
-import { RecentEntriesList } from "@/components/recent-entries-list";
-import { EditWeightDialog } from "@/components/edit-weight-dialog";
+import { RecentEntriesList, InlineEditFormShell } from "@/components/recent-entries-list";
 import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
 import { useEditRecord } from "@/hooks/use-edit-record";
 import { useSettings } from "@/hooks/use-settings";
@@ -269,6 +269,7 @@ export function WeightCard() {
           deletingId={deletingId}
           onDelete={handleDelete}
           onEdit={openEdit}
+          editingId={editingRecord?.id ?? null}
           borderColor={theme.border}
           renderEntry={(record) => (
             <>
@@ -278,21 +279,14 @@ export function WeightCard() {
               </div>
             </>
           )}
+          renderEditForm={() => (
+            <InlineEditFormShell timestamp={editTimestamp} onTimestampChange={setEditTimestamp} note={editNote} onNoteChange={setEditNote} onSave={() => handleEditSubmit()} onCancel={closeEdit} buttonClassName={theme.buttonBg}>
+              <Input type="number" step="0.01" placeholder="Weight (kg)" value={editWeight} onChange={(e) => setEditWeight(e.target.value)} className="h-8 text-sm" />
+            </InlineEditFormShell>
+          )}
         />
       </CardContent>
     </Card>
-
-    <EditWeightDialog
-      record={editingRecord}
-      onClose={closeEdit}
-      onSubmit={handleEditSubmit}
-      weight={editWeight}
-      onWeightChange={setEditWeight}
-      timestamp={editTimestamp}
-      onTimestampChange={setEditTimestamp}
-      note={editNote}
-      onNoteChange={setEditNote}
-    />
     </>
   );
 }

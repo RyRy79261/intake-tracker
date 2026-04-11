@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { Fragment, useState, useEffect, useMemo } from "react";
 import {
   useDailyIntakeTotal,
   getDayStartTimestamp,
@@ -56,6 +56,17 @@ function formatValue(value: number): string {
 const DAY_HEADERS = ["M", "T", "W", "T", "F", "S", "S"] as const;
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
+function bucketByDay<T extends { timestamp: number }>(
+  records: T[], weekStart: number, accessor: (r: T) => number
+): number[] {
+  const buckets = [0, 0, 0, 0, 0, 0, 0];
+  for (const r of records) {
+    const i = Math.floor((r.timestamp - weekStart) / ONE_DAY_MS);
+    if (i >= 0 && i < 7) buckets[i] = (buckets[i] ?? 0) + accessor(r);
+  }
+  return buckets;
+}
+
 export function TextMetrics() {
   const dayStartHour = useSettingsStore((s) => s.dayStartHour);
   const waterLimit = useSettingsStore((s) => s.waterLimit);
@@ -78,7 +89,8 @@ export function TextMetrics() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [dayStartHour, tick]
   );
-  const now = Date.now();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const now = useMemo(() => Date.now(), [tick]);
 
   // Today's substance totals
   const caffeineRecords = useSubstanceRecordsByDateRange(
@@ -97,14 +109,8 @@ export function TextMetrics() {
     [caffeineRecords]
   );
   const alcoholTotal = useMemo(
-    () =>
-      caffeineRecords.length >= 0
-        ? alcoholRecords.reduce(
-            (sum, r) => sum + (r.amountStandardDrinks ?? 0),
-            0
-          )
-        : 0,
-    [alcoholRecords, caffeineRecords.length]
+    () => alcoholRecords.reduce((sum, r) => sum + (r.amountStandardDrinks ?? 0), 0),
+    [alcoholRecords]
   );
 
   // Weekly data
@@ -131,32 +137,22 @@ export function TextMetrics() {
     "salt"
   );
 
-  // Bucket records into 7 days
-  const weeklyWater = useMemo(() => {
-    const buckets: number[] = [0, 0, 0, 0, 0, 0, 0];
-    for (const record of weeklyWaterRecords) {
-      const dayOffset = Math.floor(
-        (record.timestamp - weekStart) / ONE_DAY_MS
-      );
-      if (dayOffset >= 0 && dayOffset < 7) {
-        buckets[dayOffset] = (buckets[dayOffset] ?? 0) + record.amount;
-      }
-    }
-    return buckets;
-  }, [weeklyWaterRecords, weekStart]);
+  const weeklyCaffeineRecords = useSubstanceRecordsByDateRange(
+    weekStart,
+    weekEnd,
+    "caffeine"
+  );
+  const weeklyAlcoholRecords = useSubstanceRecordsByDateRange(
+    weekStart,
+    weekEnd,
+    "alcohol"
+  );
 
-  const weeklySalt = useMemo(() => {
-    const buckets: number[] = [0, 0, 0, 0, 0, 0, 0];
-    for (const record of weeklySaltRecords) {
-      const dayOffset = Math.floor(
-        (record.timestamp - weekStart) / ONE_DAY_MS
-      );
-      if (dayOffset >= 0 && dayOffset < 7) {
-        buckets[dayOffset] = (buckets[dayOffset] ?? 0) + record.amount;
-      }
-    }
-    return buckets;
-  }, [weeklySaltRecords, weekStart]);
+  // Bucket records into 7 days
+  const weeklyWater = useMemo(() => bucketByDay(weeklyWaterRecords, weekStart, (r) => r.amount), [weeklyWaterRecords, weekStart]);
+  const weeklySalt = useMemo(() => bucketByDay(weeklySaltRecords, weekStart, (r) => r.amount), [weeklySaltRecords, weekStart]);
+  const weeklyCaffeine = useMemo(() => bucketByDay(weeklyCaffeineRecords, weekStart, (r) => r.amountMg ?? 0), [weeklyCaffeineRecords, weekStart]);
+  const weeklyAlcohol = useMemo(() => bucketByDay(weeklyAlcoholRecords, weekStart, (r) => r.amountStandardDrinks ?? 0), [weeklyAlcoholRecords, weekStart]);
 
   // Over limit checks
   const waterOverLimit = waterLimit > 0 && waterTotal > waterLimit;
@@ -298,59 +294,37 @@ export function TextMetrics() {
             </div>
           ))}
 
-          {/* Water row */}
-          <div className="text-xs text-muted-foreground">Water</div>
-          {weeklyWater.map((val, i) => {
-            const isFuture = i > todayIndex;
-            const isToday = i === todayIndex;
-            const isOverLimit = waterLimit > 0 && val > waterLimit;
-            const hasData = val > 0;
-            return (
-              <div
-                key={`water-${i}`}
-                className={cn(
-                  "text-xs tabular-nums text-center",
-                  isFuture && "text-muted-foreground/50",
-                  isToday && "font-semibold",
-                  !isFuture &&
-                    !isOverLimit &&
-                    hasData &&
-                    CARD_THEMES.water.latestValueColor,
-                  !isFuture && isOverLimit && "text-red-600 dark:text-red-400",
-                  !isFuture && !hasData && "text-muted-foreground/50"
-                )}
-              >
-                {isFuture ? "---" : formatValue(val)}
-              </div>
-            );
-          })}
-
-          {/* Sodium row */}
-          <div className="text-xs text-muted-foreground">Na</div>
-          {weeklySalt.map((val, i) => {
-            const isFuture = i > todayIndex;
-            const isToday = i === todayIndex;
-            const isOverLimit = saltLimit > 0 && val > saltLimit;
-            const hasData = val > 0;
-            return (
-              <div
-                key={`salt-${i}`}
-                className={cn(
-                  "text-xs tabular-nums text-center",
-                  isFuture && "text-muted-foreground/50",
-                  isToday && "font-semibold",
-                  !isFuture &&
-                    !isOverLimit &&
-                    hasData &&
-                    CARD_THEMES.salt.latestValueColor,
-                  !isFuture && isOverLimit && "text-red-600 dark:text-red-400",
-                  !isFuture && !hasData && "text-muted-foreground/50"
-                )}
-              >
-                {isFuture ? "---" : formatValue(val)}
-              </div>
-            );
-          })}
+          {[
+            { key: "water", label: "Water", data: weeklyWater, theme: CARD_THEMES.water, limit: waterLimit, fmt: formatValue },
+            { key: "salt", label: "Na", data: weeklySalt, theme: CARD_THEMES.salt, limit: saltLimit, fmt: formatValue },
+            { key: "caf", label: "Caf", data: weeklyCaffeine, theme: CARD_THEMES.caffeine, limit: 0, fmt: (v: number) => formatValue(Math.round(v)) },
+            { key: "alc", label: "Alc", data: weeklyAlcohol, theme: CARD_THEMES.alcohol, limit: 0, fmt: (v: number) => v.toFixed(1) },
+          ].map((row) => (
+            <Fragment key={row.key}>
+              <div className="text-xs text-muted-foreground">{row.label}</div>
+              {row.data.map((val, i) => {
+                const isFuture = i > todayIndex;
+                const isToday = i === todayIndex;
+                const isOverLimit = row.limit > 0 && val > row.limit;
+                const hasData = val > 0;
+                return (
+                  <div
+                    key={`${row.key}-${i}`}
+                    className={cn(
+                      "text-xs tabular-nums text-center",
+                      isFuture && "text-muted-foreground/50",
+                      isToday && "font-semibold",
+                      !isFuture && !isOverLimit && hasData && row.theme.latestValueColor,
+                      !isFuture && isOverLimit && "text-red-600 dark:text-red-400",
+                      !isFuture && !hasData && "text-muted-foreground/50"
+                    )}
+                  >
+                    {isFuture ? "---" : row.fmt(val)}
+                  </div>
+                );
+              })}
+            </Fragment>
+          ))}
         </div>
       </div>
     </section>

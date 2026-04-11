@@ -3,13 +3,14 @@
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { Droplets, Coffee, Wine } from "lucide-react";
 import { WaterTab } from "@/components/liquids/water-tab";
 import { BeverageTab } from "@/components/liquids/beverage-tab";
 import { PresetTab } from "@/components/liquids/preset-tab";
-import { RecentEntriesList } from "@/components/recent-entries-list";
-import { EditIntakeDialog } from "@/components/edit-intake-dialog";
+import { RecentEntriesList, InlineEditFormShell } from "@/components/recent-entries-list";
 import {
   useIntake,
   useRecentIntakeRecords,
@@ -187,6 +188,7 @@ export function LiquidsCard() {
           deletingId={deletingId}
           onDelete={handleDelete}
           onEdit={openEdit}
+          editingId={editingRecord?.id ?? null}
           borderColor={CARD_THEMES.water.border}
           renderEntry={(record) => {
             const sourceLabel = getLiquidTypeLabel(record.source, { presets: settings.liquidPresets, note: record.note });
@@ -208,18 +210,11 @@ export function LiquidsCard() {
               </>
             );
           }}
-        />
-
-        <EditIntakeDialog
-          record={editingRecord}
-          onClose={closeEdit}
-          onSubmit={handleEditSubmit}
-          amount={editAmount}
-          onAmountChange={setEditAmount}
-          timestamp={editTimestamp}
-          onTimestampChange={setEditTimestamp}
-          note={editNote}
-          onNoteChange={setEditNote}
+          renderEditForm={() => (
+            <InlineEditFormShell timestamp={editTimestamp} onTimestampChange={setEditTimestamp} note={editNote} onNoteChange={setEditNote} onSave={() => handleEditSubmit()} onCancel={closeEdit} buttonClassName={CARD_THEMES.water.buttonBg}>
+              <Input type="number" placeholder="Amount (ml)" value={editAmount} onChange={(e) => setEditAmount(e.target.value)} className="h-8 text-sm" />
+            </InlineEditFormShell>
+          )}
         />
       </CardContent>
     </Card>

@@ -76,10 +76,9 @@ export function InsightsTab({ range }: InsightsTabProps) {
     return (
       <div className="py-12 text-center text-muted-foreground">
         <Lightbulb className="w-8 h-8 mx-auto mb-3 opacity-50" />
-        <p className="text-lg font-medium">No notable insights for this period</p>
+        <p className="text-lg font-medium">No insights for this period</p>
         <p className="text-sm mt-1 max-w-xs mx-auto">
-          Insights automatically surface when your health metrics show notable
-          trends, anomalies, or changes in adherence.
+          Custom insights will appear here when configured.
         </p>
       </div>
     );

@@ -61,6 +61,13 @@ export function getLiquidTypeLabel(
     return sub ? sub.charAt(0).toUpperCase() + sub.slice(1) : "Coffee";
   }
 
+  // Beverage prefix: "beverage" or "beverage:Juice" -> "Beverage" or "Juice"
+  if (source === "beverage") return "Beverage";
+  if (source.startsWith("beverage:")) {
+    const name = source.slice(9);
+    return name || "Beverage";
+  }
+
   // Juice prefix: "juice" or "juice:orange" -> "Juice" or "Orange"
   if (source === "juice") return "Juice";
   if (source.startsWith("juice:")) {

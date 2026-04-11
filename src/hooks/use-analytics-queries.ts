@@ -11,9 +11,7 @@ import {
   caffeineVsBP,
   alcoholVsBP,
   correlate,
-  getRecordsByDomain,
 } from "@/lib/analytics-service";
-import { detectAnomalies } from "@/lib/analytics-stats";
 import type {
   Domain,
   TimeScope,
@@ -211,95 +209,10 @@ export function useCorrelation(
  * Derive cross-domain insights from multiple analytics queries.
  * Returns Insight[] with meaningful alerts based on thresholds.
  */
-export function useInsights(range: TimeRange) {
-  return useLiveQuery(
-    async () => {
-      const [adherenceData, bpData, fluidData, weightPoints] =
-        await Promise.all([
-          adherenceRate(range),
-          bpTrend(range),
-          fluidBalance(range),
-          getRecordsByDomain("weight", range),
-        ]);
-
-      const insights: Insight[] = [];
-      const now = Date.now();
-
-      // Adherence drop: rate below 80%
-      if (
-        adherenceData.value.total > 0 &&
-        adherenceData.value.rate < 0.8
-      ) {
-        insights.push({
-          id: `adherence_drop_${range.start}`,
-          type: "adherence_drop",
-          title: "Medication Adherence Below Target",
-          description: `Adherence is ${Math.round(adherenceData.value.rate * 100)}% (target: 80%). ${adherenceData.value.taken} of ${adherenceData.value.total} doses taken.`,
-          severity: adherenceData.value.rate < 0.5 ? "alert" : "warning",
-          value: adherenceData.value.rate,
-          threshold: 0.8,
-          timestamp: now,
-        });
-      }
-
-      // BP trend: significant systolic trend
-      const systolicTrend = bpData.value.trend.systolic;
-      if (
-        bpData.value.readings.length >= 3 &&
-        systolicTrend.confidence > 0.3 &&
-        systolicTrend.direction !== "stable"
-      ) {
-        const rising = systolicTrend.direction === "rising";
-        insights.push({
-          id: `bp_trend_${range.start}`,
-          type: "bp_trend",
-          title: `Blood Pressure ${rising ? "Rising" : "Falling"}`,
-          description: `Systolic BP is trending ${systolicTrend.direction} with ${Math.round(systolicTrend.confidence * 100)}% confidence. Average: ${Math.round(bpData.value.avg.systolic)}/${Math.round(bpData.value.avg.diastolic)} mmHg.`,
-          severity: rising ? "warning" : "info",
-          value: systolicTrend.slope,
-          threshold: 0.01,
-          timestamp: now,
-        });
-      }
-
-      // Fluid deficit: more than half of days below target
-      if (fluidData.value.daysTotal >= 3) {
-        const deficitRatio =
-          1 - fluidData.value.daysAboveTarget / fluidData.value.daysTotal;
-        if (deficitRatio > 0.5) {
-          insights.push({
-            id: `fluid_deficit_${range.start}`,
-            type: "fluid_deficit",
-            title: "Frequent Fluid Deficit",
-            description: `Only ${fluidData.value.daysAboveTarget} of ${fluidData.value.daysTotal} days met fluid intake target. Average balance: ${Math.round(fluidData.value.avgBalance)} ml.`,
-            severity: deficitRatio > 0.75 ? "alert" : "warning",
-            value: deficitRatio,
-            threshold: 0.5,
-            timestamp: now,
-          });
-        }
-      }
-
-      // Weight anomalies via z-score detection
-      const anomalies = detectAnomalies(weightPoints);
-      if (anomalies.length > 0) {
-        insights.push({
-          id: `anomaly_weight_${range.start}`,
-          type: "anomaly",
-          title: "Unusual Weight Reading Detected",
-          description: `${anomalies.length} weight reading(s) deviate significantly from the norm during this period.`,
-          severity: "info",
-          value: anomalies.length,
-          threshold: 1,
-          timestamp: now,
-        });
-      }
-
-      return insights;
-    },
-    [range.start, range.end],
-    [] as Insight[],
-  );
+// GH-32: Default auto-generated insights removed. Only user-created insights are supported.
+const EMPTY_INSIGHTS: Insight[] = [];
+export function useInsights(_range: TimeRange) {
+  return EMPTY_INSIGHTS;
 }
 
 // ---------------------------------------------------------------------------
