@@ -89,6 +89,7 @@ None — v1.4 complete.
 - v1.2 shipped 2026-04-04 (Phases 20-26) -- archived 2026-04-04
 - v1.3 shipped 2026-04-05 (Phases 27-31) -- archived 2026-04-05
 - v1.4 shipped 2026-04-06 (Phases 32-39) -- archived 2026-04-06
+- Phase 1 added: Release pipeline alignment
 
 ## Session Continuity
 
