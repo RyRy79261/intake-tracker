@@ -73,12 +73,33 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 
 ### Active
 
-(None — planning next milestone)
+- [ ] Settings page restructure: expandable color-coded sections, modals eliminated (except Debug), UI/UX section for animation settings
+- [ ] Storage & Security settings section with sync status and storage controls
+- [ ] Neon Auth replacing Privy (email/password via @neondatabase/auth, Better Auth)
+- [ ] PIN gate removal
+- [ ] Neon DB reset and fresh schema design
+- [ ] NeonDB sync engine: IndexedDB as offline mirror, local-first writes, background sync
+- [ ] Per-field timestamp merge conflict resolution
+- [ ] One-time data migration from IndexedDB to NeonDB
+- [ ] Server-side push notifications via Vercel Cron
+- [ ] E2E test updates for new auth flow
+
+## Current Milestone: v2.0 Cloud Sync & Settings Overhaul
+
+**Goal:** Move from fully-local IndexedDB storage to NeonDB as source of truth with offline-capable local mirror, replace Privy auth with Neon Auth, and restructure the settings page into organized expandable sections.
+
+**Target features:**
+- Settings restructure — expandable accordions by color code, Customization modal contents moved inline, new UI/UX section, orphaned medication settings surfaced
+- Storage & Security section — sync status, storage controls
+- Neon Auth — replace Privy + remove PIN gate
+- NeonDB sync engine — local-first writes, full offline mirror, per-field timestamp merge
+- Data migration — one-time IndexedDB → NeonDB upload
+- Server-side push notifications — Vercel Cron, remove client-side polling
 
 ### Out of Scope
 
-- Cloud sync (NeonDB/Dexie Cloud) — future milestone
 - AI-powered data querying / natural language questions — future milestone
+- Server-side insights (queries on NeonDB instead of client-side) — future milestone
 - Doctor-ready report generation / PDF export — future milestone
 - Intake page graph improvements — separate milestone (move to insights page)
 - Native/Android app (Capacitor, Tauri, or similar) — future milestone, PWA-first for now
@@ -86,6 +107,7 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 - Dynamic test selection — descoped to path-filter gating in v1.2, sufficient for current scale
 - Visual regression testing (screenshots) — functional E2E covers regressions adequately for single-user app
 - Flame graph profiling — no server-side hot path; Chrome DevTools sufficient
+- Toggle between local-only and remote-sync modes — end state is always remote sync with offline support
 
 ## Context
 
@@ -97,12 +119,11 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 
 ## Constraints
 
-- **Tech stack**: Next.js 14 App Router, Dexie.js (IndexedDB), Zustand, React Query, shadcn/ui, Tailwind — established, not changing
-- **Single user**: No multi-tenancy concerns, but auth/PIN still required
-- **Offline-first**: All data in IndexedDB, no server-side database for user data
+- **Tech stack**: Next.js 14 App Router, Dexie.js (IndexedDB) + NeonDB (Postgres), Zustand, React Query, shadcn/ui, Tailwind
+- **Single user**: No multi-tenancy concerns, Neon Auth for identity
+- **Offline-first**: IndexedDB as full offline mirror, NeonDB as source of truth, local-first writes
 - **Package manager**: pnpm (enforced)
 - **Mobile-focused**: max-w-lg container, touch-friendly UI
-- **Sync-friendly schema**: Data model decisions must not block future cloud sync
 - **Queryable schema**: Indexing and relationships must support future cross-domain AI analysis
 
 ## Key Decisions
@@ -134,7 +155,7 @@ Accurate, queryable health data across all domains — intake, vitals, bodily fu
 
 This document evolves at phase transitions and milestone boundaries.
 
-*Last updated: 2026-04-06 after v1.4 milestone*
+*Last updated: 2026-04-11 after v2.0 milestone start*
 
 **After each phase transition:**
 1. Requirements invalidated? → Move to Out of Scope with reason

@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.4
-milestone_name: Post-Release Fixes
-status: complete
-stopped_at: Milestone complete
-last_updated: "2026-04-06T18:30:00.000Z"
-last_activity: 2026-04-06
+milestone: v2.0
+milestone_name: Cloud Sync & Settings Overhaul
+status: active
+stopped_at: null
+last_updated: "2026-04-11T00:00:00.000Z"
+last_activity: 2026-04-11
 progress:
-  total_phases: 8
-  completed_phases: 8
-  total_plans: 17
-  completed_plans: 17
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-04-06)
 
 ## Current Position
 
-Phase: —
+Phase: Not started (defining requirements)
 Plan: —
-Status: v1.4 complete, planning next milestone
-Last activity: 2026-04-10 - Completed quick task 260410-ho9: Fix GitHub issues #31-#35
+Status: Defining requirements for v2.0
+Last activity: 2026-04-11 — Milestone v2.0 started
 
-Progress: [██████████] 100%
+Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
