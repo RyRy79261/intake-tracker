@@ -13,6 +13,8 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   /* Opt out of parallel tests on CI. */
   ...(process.env.CI ? { workers: 1 } : {}),
+  /* Dev server compiles routes on first hit (~20s each); allow headroom */
+  timeout: process.env.CI ? 30_000 : 60_000,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   reporter: 'html',
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
@@ -44,6 +46,7 @@ export default defineConfig({
         url: 'http://localhost:3000',
         reuseExistingServer: false,
         timeout: 120 * 1000,
+        env: { NEXT_PUBLIC_PRIVY_APP_ID: '' },
       }
     : {
         command: 'pnpm run dev',
@@ -52,5 +55,6 @@ export default defineConfig({
         stdout: 'pipe',
         stderr: 'pipe',
         timeout: 120 * 1000,
+        env: { NEXT_PUBLIC_PRIVY_APP_ID: '' },
       },
 });

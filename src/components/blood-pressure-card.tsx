@@ -466,20 +466,20 @@ export function BloodPressureCard() {
           renderEditForm={() => (
             <InlineEditFormShell timestamp={editTimestamp} onTimestampChange={setEditTimestamp} note={editNote} onNoteChange={setEditNote} onSave={() => handleEditSubmit()} onCancel={closeEdit} buttonClassName={theme.buttonBg}>
               <div className="grid grid-cols-2 gap-2">
-                <Input type="number" placeholder="Systolic" value={editSystolic} onChange={(e) => setEditSystolic(e.target.value)} className="h-8 text-sm" />
-                <Input type="number" placeholder="Diastolic" value={editDiastolic} onChange={(e) => setEditDiastolic(e.target.value)} className="h-8 text-sm" />
+                <Input aria-label="Systolic pressure" type="number" placeholder="Systolic" value={editSystolic} onChange={(e) => setEditSystolic(e.target.value)} className="h-8 text-sm" />
+                <Input aria-label="Diastolic pressure" type="number" placeholder="Diastolic" value={editDiastolic} onChange={(e) => setEditDiastolic(e.target.value)} className="h-8 text-sm" />
               </div>
-              <Input type="number" placeholder="Heart rate (optional)" value={editHeartRate} onChange={(e) => setEditHeartRate(e.target.value)} className="h-8 text-sm" />
+              <Input aria-label="Heart rate" type="number" placeholder="Heart rate (optional)" value={editHeartRate} onChange={(e) => setEditHeartRate(e.target.value)} className="h-8 text-sm" />
               <div className="grid grid-cols-2 gap-2">
                 <Select value={editPosition} onValueChange={(v) => setEditPosition(v as "sitting" | "standing")}>
-                  <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label="Position" className="h-8 text-sm"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="sitting">Sitting</SelectItem>
                     <SelectItem value="standing">Standing</SelectItem>
                   </SelectContent>
                 </Select>
                 <Select value={editArm} onValueChange={(v) => setEditArm(v as "left" | "right")}>
-                  <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label="Arm" className="h-8 text-sm"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="left">Left arm</SelectItem>
                     <SelectItem value="right">Right arm</SelectItem>
