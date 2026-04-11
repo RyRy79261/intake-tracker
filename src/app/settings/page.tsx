@@ -1,15 +1,16 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { RotateCcw } from "lucide-react";
+import { Accordion } from "@/components/ui/accordion";
+import { RotateCcw, Activity, Palette, Pill, Database, Shield, Bug } from "lucide-react";
 import { useSettings } from "@/hooks/use-settings";
 import { useToast } from "@/hooks/use-toast";
 import { useScrollHide } from "@/hooks/use-scroll-hide";
 import { AppHeader } from "@/components/app-header";
 import { AuthGuard } from "@/components/auth-guard";
 import { DebugPanel } from "@/components/debug-panel";
-import { CustomizationPanel } from "@/components/customization-panel";
 import { AboutDialog } from "@/components/about-dialog";
+import { SettingsAccordionGroup } from "@/components/settings/settings-accordion-group";
 import { AccountSection } from "@/components/settings/account-section";
 import { DaySettingsSection } from "@/components/settings/day-settings-section";
 import { WaterSettingsSection } from "@/components/settings/water-settings-section";
@@ -22,6 +23,7 @@ import { PrivacySecuritySection } from "@/components/settings/privacy-security-s
 import { PermissionsSection } from "@/components/settings/permissions-section";
 import { AppUpdatesSection } from "@/components/settings/app-updates-section";
 import { SubstanceSettingsSection } from "@/components/settings/substance-settings-section";
+import { MedicationSettingsSection } from "@/components/settings/medication-settings-section";
 
 function SettingsContent() {
   const settings = useSettings();
@@ -48,39 +50,50 @@ function SettingsContent() {
         transitionDuration={barTransitionSec}
       />
 
-      <div className="space-y-6 pb-8">
-        <AccountSection />
-        <DaySettingsSection />
-        <WaterSettingsSection />
-        <SaltSettingsSection />
-        <WeightSettingsSection />
-        <SubstanceSettingsSection />
-        <AppearanceSection />
-        <QuickNavSection />
-        <DataManagementSection />
-        <PrivacySecuritySection />
-        <PermissionsSection />
-        <AppUpdatesSection />
+      <Accordion type="single" collapsible defaultValue="tracking" className="pb-8">
+        <SettingsAccordionGroup value="tracking" icon={Activity} label="Tracking" iconColorClass="text-indigo-600 dark:text-indigo-400">
+          <DaySettingsSection />
+          <WaterSettingsSection />
+          <SaltSettingsSection />
+          <WeightSettingsSection />
+          <SubstanceSettingsSection />
+        </SettingsAccordionGroup>
 
-        <div className="pt-4 border-t">
-          <CustomizationPanel />
-        </div>
+        <SettingsAccordionGroup value="customization" icon={Palette} label="Customization" iconColorClass="text-cyan-600 dark:text-cyan-400">
+          <AppearanceSection />
+          <QuickNavSection />
+        </SettingsAccordionGroup>
 
-        <div className="pt-4 border-t">
+        <SettingsAccordionGroup value="medication" icon={Pill} label="Medication" iconColorClass="text-teal-600 dark:text-teal-400">
+          <MedicationSettingsSection />
+        </SettingsAccordionGroup>
+
+        <SettingsAccordionGroup value="data-storage" icon={Database} label="Data & Storage" iconColorClass="text-amber-600 dark:text-amber-400">
+          <DataManagementSection />
+        </SettingsAccordionGroup>
+
+        <SettingsAccordionGroup value="privacy-security" icon={Shield} label="Privacy & Security" iconColorClass="text-emerald-600 dark:text-emerald-400">
+          <AccountSection />
+          <PrivacySecuritySection />
+          <PermissionsSection />
+        </SettingsAccordionGroup>
+
+        <SettingsAccordionGroup value="debug" icon={Bug} label="Debug" iconColorClass="text-slate-600 dark:text-slate-400">
           <DebugPanel />
-        </div>
+          <AppUpdatesSection />
+        </SettingsAccordionGroup>
+      </Accordion>
 
-        <div className="pt-4 border-t space-y-2">
-          <Button
-            variant="ghost"
-            className="w-full justify-start gap-2 text-muted-foreground"
-            onClick={handleResetToDefaults}
-          >
-            <RotateCcw className="w-4 h-4" />
-            Reset to Defaults
-          </Button>
-          <AboutDialog />
-        </div>
+      <div className="pt-4 border-t space-y-2">
+        <Button
+          variant="ghost"
+          className="w-full justify-start gap-2 text-muted-foreground"
+          onClick={handleResetToDefaults}
+        >
+          <RotateCcw className="w-4 h-4" />
+          Reset to Defaults
+        </Button>
+        <AboutDialog />
       </div>
     </>
   );
