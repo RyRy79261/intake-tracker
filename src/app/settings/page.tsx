@@ -23,6 +23,7 @@ import { PrivacySecuritySection } from "@/components/settings/privacy-security-s
 import { PermissionsSection } from "@/components/settings/permissions-section";
 import { AppUpdatesSection } from "@/components/settings/app-updates-section";
 import { SubstanceSettingsSection } from "@/components/settings/substance-settings-section";
+import { UrinationDefecationDefaults } from "@/components/settings/urination-defecation-defaults";
 import { MedicationSettingsSection } from "@/components/settings/medication-settings-section";
 
 function SettingsContent() {
@@ -57,6 +58,7 @@ function SettingsContent() {
           <SaltSettingsSection />
           <WeightSettingsSection />
           <SubstanceSettingsSection />
+          <UrinationDefecationDefaults />
         </SettingsAccordionGroup>
 
         <SettingsAccordionGroup value="customization" icon={Palette} label="Customization" iconColorClass="text-cyan-600 dark:text-cyan-400">
