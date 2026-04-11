@@ -93,39 +93,39 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SET-01 | — | Pending |
-| SET-02 | — | Pending |
-| SET-03 | — | Pending |
-| SET-04 | — | Pending |
-| SET-05 | — | Pending |
-| SET-06 | — | Pending |
-| AUTH-01 | — | Pending |
-| AUTH-02 | — | Pending |
-| AUTH-03 | — | Pending |
-| AUTH-04 | — | Pending |
-| AUTH-05 | — | Pending |
-| SCHEMA-01 | — | Pending |
-| SCHEMA-02 | — | Pending |
-| SCHEMA-03 | — | Pending |
-| SCHEMA-04 | — | Pending |
-| SYNC-01 | — | Pending |
-| SYNC-02 | — | Pending |
-| SYNC-03 | — | Pending |
-| SYNC-04 | — | Pending |
-| SYNC-05 | — | Pending |
-| SYNC-06 | — | Pending |
-| MIG-01 | — | Pending |
-| MIG-02 | — | Pending |
-| MIG-03 | — | Pending |
-| MIG-04 | — | Pending |
-| PUSH-01 | — | Pending |
-| PUSH-02 | — | Pending |
+| SET-01 | Phase 40 | Pending |
+| SET-02 | Phase 40 | Pending |
+| SET-03 | Phase 40 | Pending |
+| SET-04 | Phase 40 | Pending |
+| SET-05 | Phase 40 | Pending |
+| SET-06 | Phase 40 | Pending |
+| AUTH-01 | Phase 41 | Pending |
+| AUTH-02 | Phase 41 | Pending |
+| AUTH-03 | Phase 41 | Pending |
+| AUTH-04 | Phase 41 | Pending |
+| AUTH-05 | Phase 41 | Pending |
+| PUSH-02 | Phase 41 | Pending |
+| SCHEMA-01 | Phase 42 | Pending |
+| SCHEMA-02 | Phase 42 | Pending |
+| SCHEMA-03 | Phase 42 | Pending |
+| SCHEMA-04 | Phase 42 | Pending |
+| SYNC-01 | Phase 43 | Pending |
+| SYNC-02 | Phase 43 | Pending |
+| SYNC-03 | Phase 43 | Pending |
+| SYNC-04 | Phase 43 | Pending |
+| SYNC-05 | Phase 43 | Pending |
+| SYNC-06 | Phase 44 | Pending |
+| MIG-01 | Phase 45 | Pending |
+| MIG-02 | Phase 45 | Pending |
+| MIG-03 | Phase 45 | Pending |
+| MIG-04 | Phase 45 | Pending |
+| PUSH-01 | Phase 46 | Pending |
 
 **Coverage:**
 - v2.0 requirements: 27 total
-- Mapped to phases: 0
-- Unmapped: 27
+- Mapped to phases: 27
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-11*
-*Last updated: 2026-04-11 after initial definition*
+*Last updated: 2026-04-11 after roadmap creation*

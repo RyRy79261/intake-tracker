@@ -7,7 +7,7 @@ stopped_at: null
 last_updated: "2026-04-11T00:00:00.000Z"
 last_activity: 2026-04-11
 progress:
-  total_phases: 0
+  total_phases: 7
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -18,17 +18,17 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-06)
+See: .planning/PROJECT.md (updated 2026-04-11)
 
 **Core value:** Accurate, queryable health data across intake, vitals, and medication adherence -- structured for cross-domain analysis and future AI querying
-**Current focus:** Planning next milestone
+**Current focus:** Phase 40 - Settings Accordion Restructure
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements for v2.0
-Last activity: 2026-04-11 — Milestone v2.0 started
+Phase: 40 of 46 (Settings Accordion Restructure)
+Plan: 0 of TBD in current phase
+Status: Ready to plan
+Last activity: 2026-04-11 -- Roadmap created for v2.0 (7 phases, 27 requirements)
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -40,19 +40,6 @@ Progress: [░░░░░░░░░░] 0%
 - Average duration: ~5 min
 - Total execution time: ~11 hours
 
-**v1.4 Summary:**
-
-| Phase | Plans | Avg/Plan |
-|-------|-------|----------|
-| 32. Release Pipeline + Weight Settings | 2 | ~4 min |
-| 33. Weight Direct Input | 4 | ~5 min |
-| 34. Food/Sodium Card Restructure | 3 | ~3 min |
-| 35. Preset Fixes | 2 | ~3 min |
-| 36. Neon DB + Vercel Integration | 3 | ~5 min |
-| 37. Water Entry Label Formatting | 1 | ~5 min |
-| 38. Weight Input Default Value | 1 | ~3 min |
-| 39. Preset Save-and-Log Label Fix | 1 | ~3 min |
-
 *Updated after each plan completion*
 
 ## Accumulated Context
@@ -60,6 +47,11 @@ Progress: [░░░░░░░░░░] 0%
 ### Decisions
 
 Decisions are logged in PROJECT.md Key Decisions table.
+Recent decisions affecting current work:
+
+- [v2.0 Roadmap]: Record-level LWW for v2.0, per-field LWW deferred to v2.x (SYNC-F01)
+- [v2.0 Roadmap]: Custom sync engine over managed solutions (Dexie Cloud, PowerSync) -- full control, no vendor lock-in
+- [v2.0 Roadmap]: Neon Auth over Auth.js -- colocated with DB, cookie-based sessions, no separate auth infra
 
 ### Pending Todos
 
@@ -67,7 +59,8 @@ None.
 
 ### Blockers/Concerns
 
-None — v1.4 complete.
+- Neon Auth is beta (v0.1.0-beta.20) -- validate capabilities in Phase 41 branch spike before committing
+- Vercel Pro plan ($20/mo) required for per-minute cron -- confirm before Phase 46
 
 ### Quick Tasks Completed
 
@@ -89,9 +82,10 @@ None — v1.4 complete.
 - v1.2 shipped 2026-04-04 (Phases 20-26) -- archived 2026-04-04
 - v1.3 shipped 2026-04-05 (Phases 27-31) -- archived 2026-04-05
 - v1.4 shipped 2026-04-06 (Phases 32-39) -- archived 2026-04-06
+- v2.0 roadmap created 2026-04-11 (Phases 40-46) -- 7 phases, 27 requirements
 
 ## Session Continuity
 
-Last session: 2026-04-06
-Stopped at: v1.4 milestone complete
-Resume: /gsd-new-milestone for next milestone
+Last session: 2026-04-11
+Stopped at: v2.0 roadmap created
+Resume: /gsd-plan-phase 40
