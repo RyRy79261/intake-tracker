@@ -25,6 +25,8 @@ import { AppUpdatesSection } from "@/components/settings/app-updates-section";
 import { SubstanceSettingsSection } from "@/components/settings/substance-settings-section";
 import { UrinationDefecationDefaults } from "@/components/settings/urination-defecation-defaults";
 import { MedicationSettingsSection } from "@/components/settings/medication-settings-section";
+import { AnimationTimingSection } from "@/components/settings/animation-timing-section";
+import { StorageInfoSection } from "@/components/settings/storage-info-section";
 
 function SettingsContent() {
   const settings = useSettings();
@@ -64,6 +66,7 @@ function SettingsContent() {
         <SettingsAccordionGroup value="customization" icon={Palette} label="Customization" iconColorClass="text-cyan-600 dark:text-cyan-400">
           <AppearanceSection />
           <QuickNavSection />
+          <AnimationTimingSection />
         </SettingsAccordionGroup>
 
         <SettingsAccordionGroup value="medication" icon={Pill} label="Medication" iconColorClass="text-teal-600 dark:text-teal-400">
@@ -71,6 +74,7 @@ function SettingsContent() {
         </SettingsAccordionGroup>
 
         <SettingsAccordionGroup value="data-storage" icon={Database} label="Data & Storage" iconColorClass="text-amber-600 dark:text-amber-400">
+          <StorageInfoSection />
           <DataManagementSection />
         </SettingsAccordionGroup>
 
