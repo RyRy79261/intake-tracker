@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.4.0](https://github.com/RyRy79261/intake-tracker/compare/v1.3.0...v1.4.0) (2026-04-11)
+
+
+### Features
+
+* **quick-260410-ho9:** add caffeine and alcohol rows to weekly summary grid (GH-35) ([c3386d5](https://github.com/RyRy79261/intake-tracker/commit/c3386d5f766e5c03308a646217b37cdb444951a1))
+* **quick-260410-ho9:** ai parse returns explicit salt vs sodium indicator (GH-33) ([761a320](https://github.com/RyRy79261/intake-tracker/commit/761a32083a1d9ab7cd755b17f78bcb3e21dc0ef3))
+* **quick-260410-ho9:** display heart rate and BP delta in quick view header ([287e9ef](https://github.com/RyRy79261/intake-tracker/commit/287e9ef4fafeaaeb038399db504a2ae4b1464dd7))
+* **quick-260410-ho9:** inline editing replaces modal dialogs in card components (GH-34) ([08bdf96](https://github.com/RyRy79261/intake-tracker/commit/08bdf96abae34f1c0508f33915b3be1810cf68f4))
+* show beverage labels in recent entries and add water tab presets ([1900d1e](https://github.com/RyRy79261/intake-tracker/commit/1900d1ee7d7c918f31430daab7c228aea1ce21c7))
+
+
+### Bug Fixes
+
+* address CodeRabbit review findings (a11y, types, keys) ([6c8d5f7](https://github.com/RyRy79261/intake-tracker/commit/6c8d5f7b81b342e8f18eeea2d1c63056e2d674c9))
+* address CodeRabbit review findings (a11y, types, keys) ([9fd7e52](https://github.com/RyRy79261/intake-tracker/commit/9fd7e5294d7d676e6ac7a651eb7da2f67b1247f3))
+* **quick-260410-ho9:** remove default auto-generated insights (GH-32) ([7491f97](https://github.com/RyRy79261/intake-tracker/commit/7491f97269e9d2c81c0680f79852c920660a9fc0))
+* resolve issues [#31](https://github.com/RyRy79261/intake-tracker/issues/31)-[#35](https://github.com/RyRy79261/intake-tracker/issues/35) (BP view, insights, AI salt, inline edit, weekly summary) ([81eaf78](https://github.com/RyRy79261/intake-tracker/commit/81eaf78ec192fffee799ae6c58fff93000e556b6))
+* use shadcn Checkbox component in BP inline edit form ([5378d5f](https://github.com/RyRy79261/intake-tracker/commit/5378d5f9e2d7c33096ebde8b032df909b5bff6c1))
+
 ## [1.3.0](https://github.com/RyRy79261/intake-tracker/compare/v1.2.0...v1.3.0) (2026-04-09)
 
 
