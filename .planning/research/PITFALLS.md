@@ -1,204 +1,250 @@
 # Pitfalls Research
 
-**Domain:** Deployment lifecycle for existing Next.js 14 PWA (release automation, staging, CI/CD)
-**Researched:** 2026-04-04
-**Confidence:** HIGH (verified against official docs, existing codebase, and real-world migration reports)
+**Domain:** Cloud sync, auth migration, and offline-first patterns for existing IndexedDB-based health tracking PWA
+**Researched:** 2026-04-11
+**Confidence:** HIGH (verified against codebase analysis, official docs, and multiple community sources)
 
 ## Critical Pitfalls
 
-### Pitfall 1: Release Please v4 `releases_created` vs `release_created` Output Trap
+### Pitfall 1: Data Loss During One-Time IndexedDB to NeonDB Migration
 
 **What goes wrong:**
-Release Please v4 has an output called `releases_created` (plural) that returns `true` regardless of whether a release was actually created. If you use this in a conditional step to trigger deployments, every merge to main triggers a production deployment -- even when no release PR was merged.
+The one-time upload of existing IndexedDB data to NeonDB fails silently, partially, or corrupts data. The user has months of health data (water/salt intake, medications, vitals, dose logs across 16 tables) stored only on their phone's browser. A failed migration means permanent data loss with no recovery path.
 
 **Why it happens:**
-The v4 action changed the semantics of this output from v3. The plural `releases_created` is a string representation of an array and JavaScript/YAML truthiness evaluates any non-empty string as true. The correct output for single-package repos is `release_created` (singular).
+- IndexedDB `toArray()` on large tables can exceed browser memory limits (especially on mobile Safari which caps at ~1GB)
+- Network interruption during a multi-table upload leaves some tables synced and others not
+- No transactional guarantee across the full upload -- Postgres commits table by table but IndexedDB reads are separate transactions
+- Type mismatches between IndexedDB's loosely-typed records and Postgres's strict schema go undetected until insert failures
+- The user has ~16 tables with interrelated records (groupId composable entries, prescriptionId references, inventoryItemId links) -- partial upload breaks referential integrity
 
 **How to avoid:**
-Use `release_created` (singular) for non-monorepo projects. In the workflow:
-```yaml
-if: ${{ steps.release.outputs.release_created }}
-```
-Never use `releases_created` in conditionals. This is especially dangerous because the version-bump.yml replacement workflow will likely include a post-release step (tag push, Vercel production promote, etc.).
+- Take a full encrypted backup (existing `backup-service.ts` already supports this) BEFORE starting migration -- make it mandatory, not optional
+- Upload in dependency order: prescriptions before medicationPhases before phaseSchedules before doseLogs before inventoryTransactions
+- Use cursor-based iteration over IndexedDB tables instead of `toArray()` for tables that could grow large
+- Batch uploads in chunks of 100-500 records per API call to prevent timeout and memory issues
+- Implement a migration state machine: NOT_STARTED -> BACKING_UP -> UPLOADING(table, progress) -> VERIFYING -> COMPLETE
+- After upload, verify row counts per table match between IndexedDB and NeonDB before marking migration complete
+- Keep IndexedDB data intact for 30 days after successful migration as a safety net
 
 **Warning signs:**
-- Production deployments happening on every merge to main, not just release PR merges
-- GitHub releases created with empty changelogs
-- Version not actually bumping between deployments
+- Migration progress bar stalls on a specific table
+- Browser memory usage spikes during migration (check via `performance.memory` if available)
+- Network errors in console during upload
+- Post-migration dashboard shows different totals than pre-migration
 
 **Phase to address:**
-Phase 1 (Release Please setup) -- must be correct from first implementation. Add a smoke test: merge a non-release commit and verify no deployment triggers.
-
-**Confidence:** HIGH -- documented in [Release Please Action repo](https://github.com/googleapis/release-please-action), confirmed by [real-world report](https://danwakeem.medium.com/beware-the-release-please-v4-github-action-ee71ff9de151).
+Data Migration phase -- this should be its own dedicated phase, not bundled with sync engine work
 
 ---
 
-### Pitfall 2: Package.json Version vs Git Tag Mismatch on Bootstrap
+### Pitfall 2: Auth Session Gap During Privy to Neon Auth Cutover
 
 **What goes wrong:**
-The current `package.json` shows version `"0.1.0"` but the repo has git tags `v1.0` and `v1.1`. Release Please uses `.release-please-manifest.json` as its source of truth for the current version. If the manifest is initialized with the wrong version -- either `0.1.0` from package.json or failing to account for `v1.1` -- Release Please will either try to create a release for a version that already exists, or skip the changelog for commits between `v1.1` and now.
+During the transition from Privy to Neon Auth, users experience either: (a) being locked out of their app entirely, (b) losing their session and needing to re-authenticate at an inconvenient time (medication tracking is time-sensitive), or (c) API routes rejecting valid requests because the auth verification layer doesn't recognize the new token format.
 
 **Why it happens:**
-The existing `version-bump.yml` runs `npm version` (updating package.json) on every push to main, but the version never actually advanced past `0.1.0` because the workflow has a guard that skips bot-authored commits -- and most merges to main come from PRs where the version bump was the last commit. The tags `v1.0` and `v1.1` were created manually for milestones, not by the version-bump workflow. Release Please expects a clean version history where the manifest version matches the latest release.
+- Privy uses JWT tokens verified via `@privy-io/server-auth` with `verifyAuthToken()` + `getUser()` -- completely different from Better Auth's cookie-based session system
+- The current `auth-middleware.ts` wraps all API routes with `withAuth()` which calls `verifyAndCheckWhitelist()` from `privy-server.ts` -- every API route breaks simultaneously when Privy is removed
+- The current `AuthGuard` component and `useAuth` hook are tightly coupled to Privy's `usePrivy()` hook -- conditional export based on `NEXT_PUBLIC_PRIVY_APP_ID` env var
+- E2E tests authenticate via Privy test account (PRIVY_TEST_EMAIL/PRIVY_TEST_OTP) -- all 22 tests break
+- Push notification system uses Privy userId for push subscription storage (`push_subscriptions.user_id`) -- new auth system generates different user IDs
+- Service worker may cache stale auth-related responses, serving old Privy auth pages after migration
 
 **How to avoid:**
-1. Before enabling Release Please, update `package.json` version to match the last meaningful release tag (should be `1.2.0` since v1.2 CI & Data Integrity milestone is complete).
-2. Create `.release-please-manifest.json` with `{ ".": "1.2.0" }`.
-3. Create `release-please-config.json` with `release-type: node` and set `bootstrap-sha` to the commit that completed v1.2 (commit `a3a0b2d`).
-4. Create the `v1.2.0` git tag on commit `a3a0b2d` if one does not already exist.
-5. Delete `version-bump.yml` BEFORE enabling Release Please -- do not run them in parallel.
+- Build a unified auth abstraction layer FIRST: `AuthProvider` interface with `getSession()`, `getUserId()`, `getAuthHeader()`, `isAuthenticated()` methods
+- Implement Neon Auth adapter behind the same interface before removing Privy
+- Map Privy user IDs to Neon Auth user IDs in the push_subscriptions table (the user's email is the stable identifier across both systems)
+- Update `withAuth()` middleware to accept both Privy tokens AND Neon Auth sessions during a transition window
+- For this single-user app: the cutover can be atomic (deploy once, old session invalidated, user logs in with new system) because there's only one user to coordinate with
+- Update E2E test auth flow to use Neon Auth email/password instead of Privy OTP iframe
 
 **Warning signs:**
-- Release Please PR proposing version `0.2.0` or `1.0.0` instead of `1.3.0`
-- Changelog containing every commit since the beginning of the repo
-- Duplicate GitHub releases for the same version
+- API routes returning 401 after deployment
+- Push notifications stopping (user_id mismatch in push_subscriptions)
+- Auth-guard showing login screen on pages that were previously accessible
+- E2E test suite failing 100% on auth-related flows
 
 **Phase to address:**
-Phase 1 (Release Please setup) -- the very first step should be version alignment before Release Please is activated.
-
-**Confidence:** HIGH -- verified by inspecting existing repo state (tags: `v1.0`, `v1.1`; `package.json` version: `0.1.0`; last milestone commit: `a3a0b2d`).
+Auth Migration phase -- must complete BEFORE sync engine work begins, since sync requires authenticated API calls
 
 ---
 
-### Pitfall 3: Service Worker Caching Stale Content on Staging
+### Pitfall 3: Sync Conflicts with Timezone-Sensitive Health Data
 
 **What goes wrong:**
-next-pwa generates a service worker that precaches the entire Next.js build output using workbox. The service worker uses a stale-while-revalidate or cache-first strategy for static assets. On a persistent staging environment (`staging.intake-tracker.ryanjnoble.dev`), the service worker from a previous deployment continues to serve cached assets even after a new staging deployment. The user (you, testing on your phone) sees stale UI/behavior and thinks the deployment is broken.
+Per-field timestamp merge resolution produces incorrect data when the user travels between South Africa (UTC+2) and Germany (UTC+1/UTC+2 DST). Medication dose times shift, daily budget windows miscalculate, and "today's" data blurs across timezone boundaries during sync.
 
 **Why it happens:**
-Service workers are scoped to the origin (domain). The staging subdomain is a persistent origin, so the service worker installs once and persists. next-pwa's `skipWaiting: true` config helps but only when the NEW service worker is fetched -- if the browser is serving the old HTML from cache, it never fetches the new SW. The existing `worker/index.js` listens for `SKIP_WAITING` messages, but this requires the app code to send that message, which itself might be cached.
-
-The current `next.config.js` conditionally loads next-pwa based on `process.env.NODE_ENV === 'production'`. But Vercel ALWAYS builds in production mode, even for preview and staging deployments. So the service worker is generated for every Vercel deployment, including staging.
+- The current schema stores `timestamp` as Unix ms (timezone-agnostic) but `timezone` as a separate IANA string -- sync must preserve BOTH or lose the user's intent
+- `dayStartHour` (currently 2am in Zustand settings) is used to calculate "today" for budget tracking -- if settings sync changes this while offline entries used the old value, budget totals are wrong
+- PhaseSchedule stores `scheduleTimeUTC` (minutes from midnight UTC) with `anchorTimezone` -- if a sync conflict resolves to the wrong `scheduleTimeUTC`, medication reminders fire at wrong local times
+- DoseLog has both `scheduledDate` (YYYY-MM-DD string) and `scheduledTime` (HH:MM string) plus `timezone` -- these three fields must be atomically consistent, but per-field merge could update one without the others
+- PostgreSQL `timestamptz` stores UTC internally but `timestamp without time zone` does not -- using the wrong column type corrupts timezone data
 
 **How to avoid:**
-Disable the service worker on staging by adding a `VERCEL_ENV` check at build time:
-```js
-const withPWA = process.env.NODE_ENV === 'production' && process.env.VERCEL_ENV === 'production'
-  ? require('next-pwa')({ dest: 'public', register: true, skipWaiting: true, customWorkerDir: 'worker' })
-  : (config) => config;
-```
-This ensures the service worker only generates for the production domain. Staging gets a standard SPA experience without caching complications.
+- Store all timestamps in Postgres as `BIGINT` (Unix ms) matching the existing IndexedDB format -- do NOT convert to `timestamptz` because the app already handles timezone via separate `timezone` column
+- Define "atomic field groups" that must merge together: `{scheduledDate, scheduledTime, timezone}` on DoseLog, `{scheduleTimeUTC, anchorTimezone}` on PhaseSchedule
+- For settings that affect data interpretation (dayStartHour), version them -- include the dayStartHour that was active when a record was created
+- Add timezone to every sync conflict resolution comparison -- two records created at the "same time" in different timezones are NOT the same event
+- In Postgres schema, add a CHECK constraint ensuring timezone is a valid IANA string, not empty
 
 **Warning signs:**
-- Staging shows old version number in About dialog after deployment
-- UI changes not appearing on staging despite Vercel dashboard showing successful deployment
-- "Works in incognito but not regular browser" reports
+- Dashboard showing different totals after sync than before
+- Medication reminders firing 1 hour off (DST boundary error)
+- DoseLog entries appearing on wrong dates after sync
+- Budget reset happening at unexpected times
 
 **Phase to address:**
-Phase 2 (Staging environment setup) -- configure before the first staging deployment. Retrofitting after the SW is already installed requires manual cache clearing on every test device.
-
-**Confidence:** HIGH -- the codebase already conditionally loads next-pwa (`process.env.NODE_ENV === 'production'`), but this fires for both Vercel production and preview/staging since Vercel always builds in production mode. Verified in `next.config.js` line 3.
+Sync Engine phase -- timezone handling must be designed into the conflict resolution strategy from day one, not patched later
 
 ---
 
-### Pitfall 4: Vercel Preview Deployments Are Not Staging
+### Pitfall 4: IndexedDB Schema and Postgres Schema Drifting Apart
 
 **What goes wrong:**
-Developers conflate Vercel's automatic preview deployments (one per PR, ephemeral URL like `intake-tracker-abc123.vercel.app`) with a stable staging environment. They set up environment variables on "Preview" scope thinking it creates a staging environment, but every PR deployment shares those variables. Preview env vars bleed across branches. There is no persistent URL to bookmark or test against.
+Over time, the Dexie schema (which defines IndexedDB object stores and indexes) and the Postgres schema (which defines tables, columns, types, and constraints) diverge. New fields get added to one but not the other. A Dexie migration runs client-side but the corresponding Postgres migration doesn't exist, or vice versa. The sync engine silently drops fields it doesn't recognize.
 
 **Why it happens:**
-Vercel's environment scoping has three built-in targets: Production, Preview, and Development. "Preview" applies to ALL non-production deployments unless you use branch-specific overrides or custom environments (Pro plan). The Hobby plan does not have custom environments, but does support branch-based domain assignment.
+- Dexie migrations are client-side JavaScript (in `db.ts`, currently v10-v15) while Postgres migrations are server-side SQL (Drizzle Kit) -- they're developed independently with no validation that they match
+- IndexedDB is schema-less for non-indexed fields -- you can store any properties on a record without declaring them. Postgres requires explicit column definitions. This asymmetry means IndexedDB naturally accumulates undeclared fields (like `originalInputText`, `groupSource`) that may not exist in Postgres
+- The codebase has 16 tables with ~150+ fields total -- manual tracking of schema parity is error-prone
+- Dexie `db.version(N)` only declares indexes, not the full field set -- there's no Dexie-side enforcement that a record matches a TypeScript interface
 
 **How to avoid:**
-1. Determine Vercel plan -- custom environments require Pro ($20/month). On Hobby, use branch-based domain assignment as a workaround.
-2. For the staging URL (`staging.intake-tracker.ryanjnoble.dev`):
-   - Add the domain in Vercel project settings
-   - Assign it to the `staging` git branch (not the default branch)
-   - Set branch-specific preview environment variables that override defaults for that branch
-3. Keep preview deployments separate -- they are for PR review, not for staging validation.
-4. Environment variables scoped to Preview branch `staging` will override general Preview variables. You only need to set the variables that DIFFER from production (e.g., `DATABASE_URL` for Neon staging branch, `NEXT_PUBLIC_ENVIRONMENT=staging`).
+- Create a SINGLE TypeScript source of truth for all record shapes -- the existing interfaces in `db.ts` (IntakeRecord, WeightRecord, etc.) should generate BOTH Dexie store definitions AND Drizzle/Postgres schema
+- Add a CI test (extending the existing `schema-consistency.test.ts`) that compares Dexie store field lists against Postgres column definitions and fails on mismatch
+- When adding a field: always add to TypeScript interface -> regenerate both schemas -> write both migrations
+- The sync engine should have a schema version handshake: client sends its schema version, server rejects if incompatible, forcing app update
 
 **Warning signs:**
-- `DATABASE_URL` on staging pointing to production Neon
-- Privy auth failing on preview URLs because allowed origins only list production + staging domains
-- E2E tests passing against preview but failing on staging due to different env vars
+- Sync engine logs "unknown field" warnings
+- Records synced from server missing fields when displayed in UI
+- Records synced from client causing Postgres INSERT errors (column does not exist)
+- TypeScript compiles clean but runtime data has mismatched shapes
 
 **Phase to address:**
-Phase 2 (Staging environment setup) -- design the environment strategy before creating any configuration.
-
-**Confidence:** HIGH -- verified against [Vercel environments docs](https://vercel.com/docs/deployments/environments) and [staging setup guide](https://vercel.com/kb/guide/set-up-a-staging-environment-on-vercel).
+Database Schema Design phase (Neon DB reset and fresh schema design) -- establish the single source of truth before building the sync engine
 
 ---
 
-### Pitfall 5: Neon Staging Branch Schema Drift After Migration Changes
+### Pitfall 5: useLiveQuery Reactivity Breaking During Sync Engine Migration
 
 **What goes wrong:**
-A Neon branch is created from the production database for staging. New code is deployed to staging that expects a schema change (e.g., a new column on `push_settings`). But the branch was created before the migration ran, so it still has the old schema. The staging deployment crashes with a SQL error. Alternatively, a migration runs on the staging branch but never makes it to production, creating forward drift.
+The app currently uses Dexie's `useLiveQuery` (71 occurrences across 15 files) for reactive data binding -- IndexedDB changes automatically re-render components. When introducing a sync layer that writes to IndexedDB from background sync responses, `useLiveQuery` either fires too frequently (causing performance issues from constant re-renders during bulk sync) or doesn't fire at all (because writes bypass Dexie's observable transaction tracking).
 
 **Why it happens:**
-Neon branches use copy-on-write -- they snapshot the parent at creation time. Schema changes on one branch do not propagate to other branches. Unlike Dexie.js (which handles migrations in client code), the Neon tables use raw SQL migrations (`scripts/push-migration.sql`). There is no automated migration runner for the Neon tables in this project -- the migration script is run manually via `psql`.
+- `useLiveQuery` subscribes to Dexie transactions that touch specific tables -- a background sync writing 500 records to `intakeRecords` triggers 500 re-renders of every component watching that table
+- If the sync engine writes directly to IndexedDB (bypassing Dexie), `useLiveQuery` won't detect the changes at all
+- React Query (used alongside useLiveQuery for some operations) has its own cache that won't invalidate when background sync writes to IndexedDB
+- The existing `staleTime: 1000 * 60` (1 minute) in QueryClient config means React Query cache can be stale relative to a sync that just completed
 
 **How to avoid:**
-1. Use Neon's "Reset branch" action to periodically sync the staging branch back to production state. Automate this with `neondatabase/reset-branch-action` in a scheduled workflow or as part of the staging deployment pipeline.
-2. For the 4 push notification tables, create a proper migration strategy:
-   - Track applied migrations (even a simple version table)
-   - Run migrations as part of deployment, not manually
-   - Or: since the schema is simple (4 tables, all use `CREATE TABLE IF NOT EXISTS`), re-run the migration script on every staging reset -- it is idempotent for table creation but NOT for column additions
-3. Never apply schema changes to the staging branch that have not been committed to the repo. Schema changes go through PR, land in the migration script, then get applied after reset.
+- All writes to IndexedDB MUST go through Dexie's API (never raw IndexedDB transactions) to maintain observable chain
+- Batch sync writes inside a single Dexie transaction: `db.transaction('rw', [db.intakeRecords, ...], async () => { /* bulk put */ })` -- this triggers ONE useLiveQuery update instead of N
+- Add a "syncing" state that components can check to debounce renders during bulk sync
+- After sync completes, invalidate all React Query caches: `queryClient.invalidateQueries()` as a single flush
+- Consider migrating from `useLiveQuery` to React Query exclusively (reading from Dexie inside query functions) -- this gives you cache control and prevents the double-reactivity problem
 
 **Warning signs:**
-- API routes returning 500 errors on staging but working in production
-- `push_subscriptions` table missing columns that exist in the migration script
-- Staging working fine after reset but breaking again after a week
+- UI freezing or janking during background sync
+- Dashboard showing stale data until manual refresh after sync
+- React DevTools showing excessive re-renders on components watching synced tables
+- Memory usage climbing during sync as React processes a queue of pending re-renders
 
 **Phase to address:**
-Phase 2 or 3 (Neon branching setup) -- establish the reset cadence and migration strategy before relying on staging for testing.
-
-**Confidence:** HIGH -- verified against [Neon branching docs](https://neon.com/docs/introduction/branching) and [staging sync guide](https://neon.com/blog/how-to-keep-staging-in-sync-with-production-in-postgres).
+Sync Engine phase -- the data access pattern change should be designed alongside the sync protocol
 
 ---
 
-### Pitfall 6: Privy Auth Failing on Staging Due to Origin Mismatch
+### Pitfall 6: Offline Queue Growing Unbounded When Connection is Unreliable
 
 **What goes wrong:**
-Privy enforces allowed origins for authentication. The staging subdomain (`staging.intake-tracker.ryanjnoble.dev`) is not listed in Privy's allowed origins, causing auth to fail silently or with cryptic CORS errors. Users see a blank screen or the Privy modal refuses to load. The E2E tests, which use the Privy test account, also fail on staging.
+The user is on a flight, in a tunnel, or on South African mobile data with intermittent connectivity. They continue using the app normally -- logging water, salt, medication doses, meals. The offline queue of pending mutations grows. When connectivity returns, the sync engine tries to flush everything at once, either: (a) exceeding the Vercel function timeout (10s hobby, 60s pro), (b) triggering rate limits on Neon's connection pooler, or (c) creating a thundering herd of conflict resolution computations.
 
 **Why it happens:**
-Privy validates the requesting origin against the app's configured allowed origins list. Production (`intake-tracker.ryanjnoble.dev`) is configured, but the staging subdomain is a different origin. The code in `providers.tsx` passes `appId` directly to `PrivyProvider`, meaning the same Privy app is used everywhere -- but Privy's dashboard controls which origins can use that app.
+- Health tracking apps have continuous small writes (water +250ml, log dose, record BP) -- 50+ writes per day is normal
+- Multi-day offline periods during travel are realistic for this user (SA <-> Germany flights are 11+ hours)
+- Vercel serverless functions have hard timeout limits -- a sync flush of 500+ pending mutations cannot complete in one request
+- Neon's serverless driver (`@neondatabase/serverless`) uses HTTP-based connections which have per-request overhead -- batching matters
+- No backpressure mechanism means the queue keeps growing without user awareness
 
 **How to avoid:**
-For this single-user app, use the single Privy App approach:
-1. Add `staging.intake-tracker.ryanjnoble.dev` to the allowed origins list in the Privy Dashboard (Configuration > App settings).
-2. Optionally create a staging-specific App Client with its own `clientId` if cookie behavior needs to differ. Set `NEXT_PUBLIC_PRIVY_CLIENT_ID` per-environment in Vercel.
-3. The E2E test credentials (`PRIVY_TEST_EMAIL`, `PRIVY_TEST_OTP`) work against the same Privy app regardless of origin, so they need no changes.
-
-Do NOT create a separate Privy app for staging -- that doubles configuration overhead and requires maintaining two sets of test accounts for a single-user app.
+- Cap offline queue at a reasonable maximum (e.g., 2000 mutations) with user notification when approaching limit
+- Flush in batches: 50-100 mutations per sync request, with exponential backoff on failures
+- Show sync status in the UI (pending count, last synced timestamp) -- the planned "Storage & Security" settings section is the right place
+- Prioritize mutation types: dose logs and medication changes first (time-critical), water/salt entries second
+- Implement a "sync in progress" lock to prevent concurrent flush attempts from multiple tabs or service worker wake-ups
+- Use optimistic UI: show local data immediately, sync in background, show success/failure indicators per-record
 
 **Warning signs:**
-- Privy login modal not appearing on staging
-- CORS errors in browser console mentioning `auth.privy.io`
-- E2E tests timing out on staging waiting for Privy iframe
-- Login works in incognito (no cached cookies from production) but fails in regular browser
+- Sync status showing "pending: 500+" after a period offline
+- Vercel function logs showing timeout errors on sync endpoint
+- Neon connection pooler returning "too many connections" errors
+- Client-side IndexedDB storage growing unusually large
 
 **Phase to address:**
-Phase 2 (Staging environment setup) -- configure Privy origins before deploying to the staging subdomain.
-
-**Confidence:** HIGH -- verified against [Privy settings docs](https://docs.privy.io/guide/dashboard/settings) and [app clients docs](https://docs.privy.io/guide/react/configuration/app-clients).
+Sync Engine phase -- queue management and batch flushing are core sync engine concerns
 
 ---
 
-### Pitfall 7: CI Gate Job Failing After Adding New Workflow Jobs
+### Pitfall 7: Service Worker Caching Stale Auth State and API Responses
 
 **What goes wrong:**
-The existing `ci-pass` gate job in `ci.yml` explicitly lists all 11 dependent jobs in its `needs` array and checks each result by name. Adding a new job to `ci.yml` without updating `ci-pass` means the gate does not wait for or validate the new job. Conversely, adding a reference to a job that runs in a different workflow file causes a workflow syntax error because cross-workflow job dependencies are not supported in GitHub Actions.
+The existing Workbox-based service worker (`sw.js`) caches API responses, HTML pages, and static assets aggressively. After switching from Privy to Neon Auth: (a) cached auth-related pages serve stale Privy login UI, (b) cached API responses include old auth tokens in headers, (c) the service worker intercepts auth redirects and serves cached 200 responses instead, (d) the user sees a blank screen or "authenticated as wrong user" after clearing cookies but not the SW cache.
 
 **Why it happens:**
-The `ci-pass` job is a branch protection mechanism -- GitHub branch protection rules require `ci-pass` to succeed before merging. The job uses a hand-maintained list of job names in both the `needs` array AND the result-checking bash script. Both must be updated in sync when jobs change.
+- The current SW configuration caches "others" (non-API pages) with NetworkFirst + 32 entry cache and "apis" (GET API routes) with NetworkFirst + 16 entry cache
+- Auth-related redirects (3xx) are converted to 200 by the SW: `cacheWillUpdate: s && "opaqueredirect" === s.type ? new Response(s.body, {status: 200, ...})` -- this masks auth redirects
+- The SW caches `/api/*` routes except `/api/auth/` -- but Neon Auth may use a different path pattern (e.g., `/api/auth/[...path]`) that needs explicit exclusion
+- Stale JS bundles cached by the SW may contain old Privy SDK code that throws errors when Privy env vars are removed
 
 **How to avoid:**
-1. Release Please and staging deployment workflows should be SEPARATE workflow files (e.g., `release.yml`, `deploy-staging.yml`), not additional jobs in `ci.yml`. CI validates code quality; deployment is a separate concern triggered by different events (push to main vs PR).
-2. If any new quality gate jobs ARE added to `ci.yml` (e.g., schema diff check), update BOTH the `ci-pass.needs` array AND the result-checking script, including deciding whether the new job is "unconditional" (must succeed) or "gated" (success or skipped).
-3. Document the pattern: CI jobs go in `ci.yml` with gate wiring; deployment jobs go in separate workflows triggered by different events (`push` to `main`, `workflow_dispatch`).
+- Add explicit SW cache exclusion for ALL auth-related paths (both old Privy paths and new Neon Auth paths): `/api/auth/*`, `/auth/*`
+- On auth state change (login/logout), clear the SW cache programmatically: `caches.keys().then(keys => keys.forEach(key => caches.delete(key)))`
+- Remove the `opaqueredirect` -> 200 conversion from the start-url cache plugin -- it masks critical auth redirects
+- Version the SW on every auth-system change deployment to force SW update and cache invalidation
+- Add `skipWaiting()` + `clientsClaim()` (already present) but ALSO send a `postMessage` to all clients when SW activates, triggering a page reload to clear stale React state
 
 **Warning signs:**
-- PRs merging without new quality checks running
-- `ci-pass` succeeding but a required job actually failed (it was not in the needs list)
-- Workflow file validation errors after adding jobs
+- User sees old login page after deployment
+- Browser DevTools > Application > Cache Storage shows auth-related entries
+- Service Worker scope includes auth routes
+- "Network error" in console when auth redirect is intercepted by SW
 
 **Phase to address:**
-Phase 1 (Release Please setup) -- establish the workflow file boundaries before adding any new workflows.
+Auth Migration phase -- SW cache strategy must be updated BEFORE the auth switch, not after
 
-**Confidence:** HIGH -- verified by reading the existing `ci.yml` gate implementation (line 243-287).
+---
+
+### Pitfall 8: Neon Auth Beta Limitations Blocking Required Features
+
+**What goes wrong:**
+Neon Auth is currently in beta and missing features the app may need. Development proceeds assuming features are available, then hits a wall mid-implementation when discovering a limitation that requires architectural rework.
+
+**Why it happens:**
+- Neon Auth does not yet support separate frontend/backend architectures -- "Architectures where frontend and backend are separate deployments are not yet supported" because HTTP-only cookies cannot share across domains
+- MFA is "in development" but not available yet -- if the PIN gate removal relies on MFA as a replacement security layer, that plan fails
+- Magic link auth is "coming soon" -- if the migration plan assumes magic link for password-free onboarding, it won't work yet
+- The Organization plugin is only partially supported
+- Neon Auth requires AWS regions only -- Azure not yet available
+- Neon Auth doesn't support projects with IP Allow or Private Networking enabled
+- Better Auth parity gaps: custom plugins, hooks, and advanced configuration not available in the managed Neon Auth service
+
+**How to avoid:**
+- Verify EVERY Neon Auth feature you plan to use is currently available (not just on the roadmap) before committing to the architecture
+- For this app: email/password login + Google OAuth are both supported today -- these cover the current Privy login methods (email, Google)
+- Accept that PIN gate removal means losing that security layer entirely (no MFA replacement available yet) -- assess if this is acceptable for a single-user health app
+- Test Neon Auth integration in a branch deployment EARLY in the milestone, before building the sync engine on top of it
+- Have a fallback plan: if Neon Auth limitations are blocking, self-hosted Better Auth is an alternative (more work but full feature access)
+
+**Warning signs:**
+- Neon Auth docs page shows "Coming soon" for a feature you assumed was available
+- Auth-related API calls failing with unexpected errors not covered in docs
+- Cookie-based sessions not persisting across page loads (potential framework compatibility issue)
+
+**Phase to address:**
+Auth Migration phase -- validate Neon Auth capabilities as the FIRST task, before writing any auth migration code
 
 ---
 
@@ -208,72 +254,92 @@ Shortcuts that seem reasonable but create long-term problems.
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Running version-bump.yml alongside Release Please "just temporarily" | Avoids immediate workflow change | Double version bumps, Release Please confused by bot commits, manifest drift, possible infinite commit loop | Never -- delete version-bump.yml before first Release Please merge |
-| Using production Neon database for staging | No branch setup needed | Staging push notification tests corrupt production data via `push_sent_log`, risk of sending real notifications from staging cron | Never -- the 4 push notification tables are small but contain real device endpoints |
-| Hardcoding staging DATABASE_URL in repo/workflow files | Quick to set up | Connection string rotated by Neon = broken staging, credentials in git history | Never -- use Vercel environment variables or GitHub secrets |
-| Skipping conventional commit linting | No new tooling to add | Release Please generates empty changelogs or wrong version bumps because non-conforming commits are invisible to it | Acceptable for v1.3 MVP if commit discipline is manual; the existing codebase already uses conventional commits on the feature branch. Add commitlint enforcement in a later milestone. |
-| Using `ALLOW_DEV_FALLBACK=true` on staging to bypass Privy | Auth works immediately without configuring Privy origins | Security bypass in a production-like environment; does not test real auth flow; masks auth bugs that will appear in production | Never for staging -- staging must mirror production auth behavior |
-| Manually promoting staging to production via Vercel dashboard | Works without any automation | Human error risk (wrong deployment promoted), no audit trail, no CI gate before promotion | Acceptable initially; automate in later phase |
+| Keep both Privy and Neon Auth code paths permanently | Avoids big-bang migration | Doubles auth maintenance surface, two sets of env vars, confusing for future development | Never -- single-user app should do atomic cutover |
+| Store settings in both Zustand/localStorage AND NeonDB | Works offline and online | Two sources of truth for settings means conflicts (dayStartHour changed offline vs online) | During transition only -- migrate settings to NeonDB within one release cycle |
+| Skip schema validation CI test | Faster to ship features | Schema drift accumulates silently until a sync failure in production | Never -- this test is cheap to write and prevents expensive production bugs |
+| Use `toArray()` for migration instead of cursors | Simpler code, works for small datasets | Memory crash on mobile with large datasets | Only if migration is guaranteed <1000 records per table |
+| Write sync engine without batch transaction support | Simpler initial implementation | Performance degrades linearly with offline duration, useLiveQuery thrashing | Never -- batch from the start, retrofitting is painful |
+| Skip offline queue size monitoring | Less UI to build | User discovers queue overflow only when sync fails catastrophically | Never -- even a simple "last synced: 5 min ago" is sufficient |
 
 ## Integration Gotchas
 
-Common mistakes when connecting services in this deployment lifecycle.
+Common mistakes when connecting to external services.
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| Release Please + version-bump.yml | Running both simultaneously. The `[skip version]` guard would prevent infinite loops, but the ambiguity is itself the problem -- two systems managing version state creates confusion about which is authoritative. | Clean cut: delete `version-bump.yml` BEFORE enabling Release Please. Release Please becomes the sole version authority. |
-| Neon + Vercel env vars | Setting `DATABASE_URL` at Preview scope, which applies to ALL preview deployments including random PR previews that should not touch the staging Neon branch. | Use branch-specific env var override: set `DATABASE_URL` for the `staging` branch only. PR previews get no `DATABASE_URL` (acceptable since user data is in IndexedDB and push notifications are not tested on ephemeral previews). |
-| Privy + Vercel domains | Adding staging domain to Privy allowed origins but forgetting Vercel's auto-generated preview URLs (`*.vercel.app`). | For this single-user app, only add the staging subdomain. The app gracefully falls back to no-auth mode when `NEXT_PUBLIC_PRIVY_APP_ID` is unset (verified in `providers.tsx` line 116-128). Do NOT set Privy env vars on random preview deployments. |
-| GitHub Actions + Vercel deploy | Using `vercel deploy --prod` in GitHub Actions while also having Vercel's Git Integration enabled, causing double deployments. | Pick one trigger. For this project: keep Vercel Git Integration for automatic deployments. Use GitHub Actions only for Release Please (creates PRs, tags releases) and Neon branch management. Do not deploy from Actions. |
-| NEXT_PUBLIC_APP_VERSION + Release Please | Release Please updates `package.json` version in the release PR. Vercel builds from the merged commit which has the updated version. But if a workflow step tries to read the version BEFORE the release PR merges, it gets the old version. | Do not read version in the Release Please workflow itself. Let Vercel's post-merge build pick up the updated `package.json` naturally through `next.config.js` line 58: `NEXT_PUBLIC_APP_VERSION: packageJson.version`. |
-| About dialog env label | `VERCEL_ENV` returns `"preview"` for both PR previews and staging deployments (unless using Vercel Pro custom environments). The existing `getEnvLabel()` in `about-dialog.tsx` shows "Preview" for staging. | Add a `NEXT_PUBLIC_ENVIRONMENT` override env var on the staging branch. Check it first: `process.env.NEXT_PUBLIC_ENVIRONMENT \|\| process.env.NEXT_PUBLIC_VERCEL_ENV`. Show "Staging" with a distinct badge color. |
+| Neon Auth + Next.js 14 | Relying solely on middleware for auth protection (CVE-2025-29927 bypass via `x-middleware-subrequest` header) | Verify auth in every server action AND middleware. Use Data Access Layer pattern. Upgrade Next.js to 14.2.25+ |
+| Neon Auth + Drizzle | Not including `neon_auth` in drizzle.config `schemaFilter` -- foreign key references to auth tables fail | Always set `schemaFilter: ['public', 'neon_auth']` in drizzle.config |
+| Neon Auth + Drizzle | `drizzle-kit pull` generates migration wrapped in block comments causing `unterminated /* comment` error | Manually fix generated migration files -- replace block comments with line comments |
+| Neon Auth + Production | Forgetting to add production URLs to "Trusted domains" in Neon Auth settings | Add ALL deployment URLs (production + staging + preview) to trusted domains before deploying auth changes |
+| Vercel Cron + Hobby plan | Configuring cron more frequently than daily -- deployment fails silently | Verify plan supports desired frequency. For push notifications (needs minute-level), Pro plan required |
+| Vercel Cron + Concurrency | Cron job running longer than interval between invocations causing duplicate processing | Implement Redis lock or idempotency keys. Push notification sent_log already has unique constraint -- good |
+| Vercel Cron + Timezone | Cron expressions are ALWAYS UTC -- forgetting this when scheduling SA/Germany notifications | Calculate cron times in UTC. The existing push_dose_schedules already stores time_slot in local time -- the cron endpoint needs to convert |
+| Vercel Cron + Idempotency | Vercel can deliver the same cron event more than once, causing duplicate notifications | Design all cron handlers to be idempotent. The existing `push_sent_log` with unique constraint on `(user_id, time_slot, sent_date, follow_up_index)` already handles this |
+| Vercel Cron + No retry | Vercel does NOT retry failed cron invocations | Build retry logic into the cron handler itself, or accept that a single missed poll is acceptable for push notifications (next cron interval catches it) |
+| Neon serverless driver | Creating new `neon()` connection on every request instead of reusing | Current `push-db.ts` already does this (new connection per call) -- acceptable for serverless, but sync endpoint with batched writes should pool within a single request |
+| Dexie + background sync writes | Writing to IndexedDB via raw IDB API instead of Dexie, breaking `useLiveQuery` reactivity | ALL writes must go through Dexie's API. Even sync-from-server writes must use `db.table.bulkPut()` |
 
 ## Performance Traps
 
-Patterns that work initially but cause issues at scale.
+Patterns that work at small scale but fail as usage grows.
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| Neon staging branch left running indefinitely | Neon Free plan compute hours exhausted mid-month; staging queries start timing out | Use Neon's auto-suspend (default 5min idle). Consider resetting the branch (which recreates it from production snapshot) rather than keeping a long-lived branch accumulating drift. | When Neon free tier compute hours are exhausted (~100 hours/month) |
-| Release Please PR accumulates months of commits | Changelog becomes unwieldy (50+ entries), PR diff is enormous, reviewers cannot meaningfully review | Merge release PRs regularly -- at least per milestone boundary. Release Please PRs are low-risk (only changelog + version bump). | When the release PR has been open for > 4 weeks |
-| Every push to staging branch triggers a Vercel build | Staging branch gets frequent commits from merging main; each triggers a build that counts toward Vercel build minutes | Merge to staging less frequently (weekly, or per-milestone). Or use `vercel.json` with `"git": { "deploymentEnabled": false }` and deploy manually via CLI when needed. | When Vercel Hobby plan build queue gets saturated (100 deploys/day) |
+| Syncing all 16 tables on every sync cycle | Sync takes 10+ seconds, blocks UI | Sync only tables with changes since last sync (use `updatedAt` index) | >500 total records |
+| Per-record API calls during sync | N+1 query problem, Vercel function timeout | Batch upserts: single API call with array of records per table | >50 pending mutations |
+| Full table scan for conflict detection | Sync latency grows linearly with data volume | Use `updatedAt > lastSyncTimestamp` index on both IndexedDB and Postgres | >1000 records per table |
+| useLiveQuery re-renders during bulk sync writes | UI freezes, high CPU usage | Wrap sync writes in single Dexie transaction per table, debounce React renders | >20 records written in <1 second |
+| Storing all audit logs in sync scope | Audit log table grows fastest (every action logged), bloats sync | Exclude audit logs from bidirectional sync -- push-only to server, never pull back | >5000 audit log entries |
+| Fetching full records for conflict check when only timestamps needed | Excessive data transfer on mobile | First pass: compare (id, updatedAt) tuples. Second pass: fetch full records only for conflicts | >200 records needing comparison |
 
 ## Security Mistakes
 
-Domain-specific security issues for this deployment lifecycle.
+Domain-specific security issues beyond general web security.
 
 | Mistake | Risk | Prevention |
 |---------|------|------------|
-| Staging `ALLOWED_EMAILS` whitelist misconfigured | If staging has no whitelist (env var unset), `privy-server.ts` line 119 allows ALL authenticated users. Anyone with a Privy account could access the staging API routes. | Set identical `ALLOWED_EMAILS` for staging and production. Verify by calling `/api/version` on staging -- if it returns without auth, the whitelist is not enforced. |
-| `ANTHROPIC_API_KEY` shared between staging and production | Staging AI usage counts against production API quota; if staging key leaks, production key is compromised | Use separate Anthropic API keys. Create a second key in the Anthropic dashboard with staging-appropriate rate limits. |
-| Neon staging branch inherits production `push_subscriptions` data | Staging cron jobs could send real push notifications to production user's devices using the inherited subscription endpoints and VAPID keys | After resetting the staging branch, truncate `push_subscriptions` and `push_sent_log`. Also ensure push notification cron jobs check `VERCEL_ENV` and skip non-production environments. |
-| Release Please GitHub token permissions too broad | `contents: write` + excessive permissions could allow a compromised action to modify repo settings or deploy | Use minimum permissions: `contents: write` and `pull-requests: write` for Release Please. Use the default `GITHUB_TOKEN`, not a PAT. |
-| Staging `VAPID_PRIVATE_KEY` / `VAPID_PUBLIC_KEY` shared with production | Staging push notifications appear to come from production; users cannot distinguish staging test notifications from real ones | Use separate VAPID keys for staging, or disable push notification registration on staging entirely. |
+| Sending health data (medication names, dosages, conditions) in plaintext sync payloads | PHI exposure if HTTPS is somehow compromised or logged by intermediaries | Use TLS (already guaranteed by Vercel/Neon) + do NOT log sync payloads in Vercel function logs. The existing PII stripping pattern from AI routes should extend to sync endpoints |
+| Neon Auth cookie secret too short or predictable | Session hijacking -- attacker forges auth cookies | Use `openssl rand -base64 32` (minimum 32 chars). Store in Vercel env vars, not in code |
+| Not rotating CRON_SECRET when credentials are exposed | Anyone can trigger push notification cron endpoint, spamming the user | Use Vercel's built-in CRON_SECRET verification. Rotate on any suspected exposure |
+| Keeping Privy env vars after migration | Stale API keys sitting in Vercel env vars, potential billing if Privy charges for API calls | Remove ALL Privy env vars (NEXT_PUBLIC_PRIVY_APP_ID, PRIVY_APP_SECRET, NEXT_PUBLIC_PRIVY_CLIENT_ID, ALLOWED_EMAILS, ALLOWED_WALLETS) after successful migration |
+| IndexedDB data remaining unencrypted after cloud sync is live | Device theft exposes all health data locally even though cloud data is protected by auth | Consider encrypting IndexedDB at rest (the app already has `crypto.ts` with encrypt/decrypt) -- or accept the risk since the phone itself should have device encryption |
+| push_subscriptions.user_id not migrated to new auth system | Push notifications stop working because user_id from Privy doesn't match Neon Auth user_id | Migrate push_subscriptions.user_id as part of auth cutover. Use email as the stable lookup key |
+| Sync API endpoint not requiring authentication | Anyone who discovers the endpoint could read/write health data | Every sync endpoint must use the new `withAuth()` middleware wrapping Neon Auth session verification |
 
 ## UX Pitfalls
 
-Issues that affect the developer/operator experience.
+Common user experience mistakes in this domain.
 
 | Pitfall | User Impact | Better Approach |
 |---------|-------------|-----------------|
-| About dialog shows "Preview" for staging | Confusing -- "Is this a PR preview or the stable staging?" The existing `getEnvLabel()` maps `preview` to an amber badge, but staging should be visually distinct. | Add `NEXT_PUBLIC_ENVIRONMENT=staging` env var on the staging branch. Update `getEnvLabel()` to check it. Use a purple or blue badge for staging. |
-| No visual indicator that staging is not production | User accidentally enters real health data into staging, thinking it is the production app | Show a persistent "STAGING" banner or watermark. Use a different favicon or header color on staging. |
-| Release Please PR description is generic | Hard to tell what is included in the release without reading the full changelog | This is Release Please's default behavior and acceptable. The changelog itself is the description. |
-| Neon branch name not visible anywhere in the app | When debugging staging database issues, no way to confirm which Neon branch is connected | Log the Neon branch name (from `DATABASE_URL` hostname) in the `/api/version` route response. Only expose in non-production environments. |
+| Blocking UI during sync | User can't log a dose while waiting for sync -- medication timing is critical | Local-first writes with background sync. NEVER block the UI for sync operations |
+| No sync status indicator | User doesn't know if their data is backed up, anxiety about data loss | Show subtle sync indicator: green checkmark (synced), orange spinner (syncing), red warning (sync failed) |
+| Forced re-authentication during medication logging | User is logging a time-sensitive dose and gets bounced to login screen | Ensure auth session lasts at least 30 days for this single-user app. Use refresh tokens aggressively |
+| Migration wizard that can't be resumed | User's phone dies mid-migration, must start over -- and original data may be corrupted | Save migration progress to localStorage. Resume from last successful table on next app open |
+| Settings changes not syncing obviously | User changes dayStartHour on phone, sees old value elsewhere | Show "syncing settings..." indicator when settings change. Confirm sync before navigating away |
+| Conflict resolution UI for single-user app | Showing merge dialogs for conflicts that the single user created themselves is confusing | Use last-write-wins for most fields. Only surface conflicts for critical data: medication changes, dose log status changes |
+| Offline mode indistinguishable from online mode | User doesn't know if they're working with fresh or stale data | Show subtle offline indicator. Clearly communicate when viewing potentially stale data |
 
 ## "Looks Done But Isn't" Checklist
 
 Things that appear complete but are missing critical pieces.
 
-- [ ] **Release Please configured:** Version bumps on merge -- but did you verify the CHANGELOG.md is actually populated? Empty changelogs mean conventional commits are not being parsed. Check that merged commits use `feat:`, `fix:`, etc. prefixes. The main branch has older commits without conventional prefixes -- verify `bootstrap-sha` skips those.
-- [ ] **Version-bump.yml deleted:** File removed -- but did you verify no other workflow references it? Check that branch protection rules do not require a status check named "bump-version" or similar.
-- [ ] **Staging domain resolves:** DNS CNAME set up, page loads -- but did you check that the service worker is NOT caching? Open DevTools > Application > Service Workers on staging to verify none is registered. If one is registered from a previous deployment, unregister it manually.
-- [ ] **Neon staging branch exists:** Branch created, connection string set in Vercel -- but did you run the migration script (`push-migration.sql`)? If the branch was created from production and production already has the tables, they are inherited. But if you RESET the branch later, verify tables still exist.
-- [ ] **Privy works on staging:** Login modal appears -- but did you test the FULL flow? Login, whitelist check, PIN gate, API route authorization. The `privy-server.ts` whitelist check uses server-side env vars that may differ between environments.
-- [ ] **CI still passes after adding release.yml:** All 12 jobs green -- but did you verify `ci-pass` gate is unchanged? New workflow files should not affect `ci.yml`, but verify no accidental edits were made during the PR.
-- [ ] **E2E tests can run against staging:** Playwright configured -- but the existing E2E tests run against a local dev server (configured in `playwright.config.ts`). Running against staging requires a separate config or `baseURL` override. This is NOT the same as "E2E tests pass in CI."
-- [ ] **Staging push notifications isolated:** After branch creation/reset -- but did you verify staging cron is not sending to production devices? Query `SELECT count(*) FROM push_subscriptions` on the staging branch. If > 0 and endpoints match production, truncate the table.
-- [ ] **`package.json` version correct:** Updated to match manifest -- but did `NEXT_PUBLIC_APP_VERSION` update too? It is read from `package.json` at build time (`next.config.js` line 58). Trigger a rebuild after updating the version.
+- [ ] **Sync Engine:** Records sync correctly -- verify that soft-deleted records (`deletedAt !== null`) also sync and remain deleted on both sides
+- [ ] **Sync Engine:** Basic sync works -- verify that composable entry groups (records sharing a `groupId`) sync atomically, not partially
+- [ ] **Auth Migration:** Login works -- verify that the `useAuth` hook export in `auth-guard.tsx` (which has a compile-time conditional) is updated for Neon Auth
+- [ ] **Auth Migration:** Auth works in browser -- verify service worker doesn't cache stale auth pages (test: clear cookies, reload, should see login not cached dashboard)
+- [ ] **Auth Migration:** Server-side auth works -- verify EVERY API route's `withAuth()` wrapper works with Neon Auth sessions, not just one test route
+- [ ] **Data Migration:** Records uploaded -- verify that `inventoryTransactions` with `doseLogId` references still point to valid `doseLogs` entries in Postgres
+- [ ] **Data Migration:** Migration complete -- verify that `phaseSchedules.scheduleTimeUTC` and `phaseSchedules.anchorTimezone` are consistent in Postgres (these were backfilled in Dexie v11 migration)
+- [ ] **Data Migration:** All fields present -- verify non-indexed fields like `originalInputText`, `groupSource`, `visualIdentification` made it to Postgres (these exist in IDB but are not declared in Dexie store definitions)
+- [ ] **Push Notifications:** Cron fires -- verify that `push_subscriptions.user_id` uses the NEW Neon Auth user ID, not the old Privy DID
+- [ ] **Push Notifications:** Notifications arrive -- verify Vercel cron is on Pro plan (Hobby only allows daily, push notifications need per-minute)
+- [ ] **Settings Sync:** Settings page works -- verify that Zustand localStorage settings are migrated to NeonDB and localStorage is cleaned up
+- [ ] **Settings Sync:** Theme persists -- verify that `theme` preference works during offline periods (needs to remain in localStorage or equivalent for instant apply)
+- [ ] **Offline Mode:** App works offline -- verify that the new Neon Auth flow gracefully handles offline state (no auth redirect when offline, use cached session)
+- [ ] **Offline Mode:** Offline writes sync -- verify mutations made while offline actually upload when connectivity returns (not just display locally)
+- [ ] **E2E Tests:** All 22 tests pass -- verify Privy OTP iframe auth flow in tests is replaced with Neon Auth email/password flow
+- [ ] **Schema Parity:** CI test validates -- verify Dexie store definitions match Postgres table definitions for all 16 tables
 
 ## Recovery Strategies
 
@@ -281,14 +347,15 @@ When pitfalls occur despite prevention, how to recover.
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| Release Please created wrong version | LOW | Delete the GitHub release and tag via `gh release delete v1.3.0 --yes && git push origin :refs/tags/v1.3.0`. Update `.release-please-manifest.json` to correct version, commit to main. |
-| Service worker serving stale staging | MEDIUM | On desktop: DevTools > Application > Service Workers > Unregister. On phone: clear site data for `staging.intake-tracker.ryanjnoble.dev` in browser settings. Then deploy the fix (conditional PWA check) to prevent recurrence. |
-| Neon staging branch has drifted schema | LOW | Run `neonctl branches reset staging --parent` (Neon CLI) or use the Reset Branch GitHub Action. Re-run `psql $STAGING_DATABASE_URL -f scripts/push-migration.sql` if tables were dropped. |
-| Privy auth broken on staging | LOW | Add staging domain to Privy Dashboard > Settings > Allowed origins. No redeploy needed -- Privy checks origins at runtime, not build time. |
-| CI gate broken (new job not wired) | LOW | Update `ci-pass.needs` array and result-checking script in `ci.yml`. Re-run the failed CI check on the PR. |
-| Double deployment from Git Integration + Actions | LOW | Identify which trigger is unwanted. If Git Integration, the deployment auto-cancels if another starts. Check Vercel dashboard for duplicate deployments and cancel the stale one. |
-| Version-bump.yml ran alongside Release Please | MEDIUM | Check git log for bot commits that bumped version incorrectly. Revert the bot commit (`git revert <sha>`), update `.release-please-manifest.json`, delete any incorrect releases/tags. Then verify `version-bump.yml` is deleted. |
-| Staging push notifications sent to production devices | LOW | No permanent damage -- notifications are one-time events. Connect to staging Neon branch and run `TRUNCATE push_subscriptions, push_sent_log;` to prevent recurrence. |
+| Data loss during migration | HIGH | Restore from pre-migration backup (encrypted JSON). Re-run migration. If backup was not taken, IndexedDB data may still exist if browser wasn't cleared -- attempt manual export via DevTools console |
+| Auth session gap causing lockout | LOW | Deploy fix, user clears browser cache and re-authenticates. Single-user app means no other users affected |
+| Schema drift between IDB and Postgres | MEDIUM | Add missing columns to Postgres via migration. Re-sync affected records. Add CI test to prevent recurrence |
+| Sync conflict corrupting timezone data | MEDIUM | Query Postgres for records where timezone is empty/null. Backfill using the same `getTimezoneForTimestamp()` logic from Dexie v11 migration. Rewrite affected doseLogs |
+| Offline queue overflow | LOW | Flush queue in batches. If queue exceeds IndexedDB quota, oldest non-critical entries (audit logs) can be dropped. Critical entries (dose logs) should never be dropped |
+| Service worker serving stale UI | LOW | Force SW update via version bump. User can manually clear site data in browser settings. Consider adding "force refresh" button in settings |
+| Push notifications stopping after auth migration | LOW | Update push_subscriptions.user_id in Postgres to new Neon Auth user ID. Re-register push subscription from client |
+| useLiveQuery thrashing during sync | MEDIUM | Add transaction batching to sync engine. If already deployed, hotfix by wrapping sync writes in `db.transaction()`. Longer term: migrate to React Query-only reads |
+| Neon Auth beta feature missing | MEDIUM | Fall back to self-hosted Better Auth (same API, full feature set). Requires running Better Auth server-side in the Next.js app instead of delegating to Neon's managed service |
 
 ## Pitfall-to-Phase Mapping
 
@@ -296,36 +363,38 @@ How roadmap phases should address these pitfalls.
 
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| RP v4 `releases_created` trap | Phase 1: Release Please setup | Merge a non-release commit to main; verify no GitHub Release is created |
-| Package.json/tag version mismatch | Phase 1: Release Please setup | After bootstrap, verify `.release-please-manifest.json` shows `1.2.0` and first RP PR proposes `1.3.0` |
-| Version-bump.yml coexistence | Phase 1: Release Please setup | Verify `version-bump.yml` is deleted and no workflows reference it |
-| CI gate job wiring | Phase 1: Release Please setup | Add `release.yml` as separate file; verify `ci-pass` still passes on a test PR |
-| Service worker on staging | Phase 2: Staging environment | Open staging in browser, verify no service worker registered in DevTools > Application |
-| Preview vs staging confusion | Phase 2: Staging environment | Create a PR; verify preview URL is different from staging URL; verify env vars differ |
-| Privy origin mismatch | Phase 2: Staging environment | Complete a full login flow on staging subdomain including PIN gate |
-| About dialog env label | Phase 2: Staging environment | Check About dialog on staging shows "Staging" not "Preview" |
-| Neon schema drift | Phase 3: Neon branching | Reset staging branch, verify all 4 push tables exist with correct columns |
-| Staging push notification leakage | Phase 3: Neon branching | After staging branch reset, query `push_subscriptions` -- should be empty or contain only test data |
-| Neon free tier compute exhaustion | Phase 3: Neon branching | Monitor Neon dashboard compute hours after 2 weeks of staging usage |
-| Shared API keys (Anthropic, VAPID) | Phase 2: Staging environment | Verify staging uses separate API keys by checking Vercel env vars per environment |
+| Data loss during migration | Data Migration | Row count comparison test: IDB table count === Postgres table count for all 16 tables. Full backup taken before migration starts |
+| Auth session gap | Auth Migration (Neon Auth) | E2E test: full login -> API call -> logout cycle with Neon Auth. Push notification still works after auth switch |
+| Timezone sync conflicts | Sync Engine Design | Unit test: create records in Africa/Johannesburg, sync, verify they display correctly when read from Europe/Berlin context |
+| Schema drift IDB vs Postgres | Database Schema Design | CI test: TypeScript interfaces match both Dexie store definitions AND Drizzle Postgres schema. Fails on any mismatch |
+| useLiveQuery reactivity | Sync Engine | Performance test: sync 200 records, measure re-render count. Should be O(1) per table, not O(N) per record |
+| Offline queue overflow | Sync Engine | Integration test: queue 1000 mutations offline, reconnect, verify all sync within 60 seconds in batches without timeout |
+| Service worker stale auth | Auth Migration | Manual test: deploy auth change, verify SW updates, verify no cached Privy pages. Automated: E2E test checks no Privy script tags in DOM |
+| Settings dual source of truth | Settings Restructure + Sync Engine | Integration test: change dayStartHour, verify it persists after sync cycle. Verify offline changes sync when online |
+| Push notification user_id mismatch | Auth Migration | Query test: push_subscriptions.user_id matches Neon Auth user ID. Push notification arrives after auth migration |
+| Vercel cron frequency limits | Push Notifications | Deployment test: verify vercel.json cron expression is valid for the deployment plan (Pro required for per-minute) |
+| Neon Auth beta limitations | Auth Migration (first task) | Spike: create branch, install Neon Auth, verify email/password + Google OAuth + session persistence all work before committing to full migration |
 
 ## Sources
 
-- [Release Please Action (googleapis/release-please-action)](https://github.com/googleapis/release-please-action) -- v4 configuration, output variables
-- [Release Please v4 gotcha report](https://danwakeem.medium.com/beware-the-release-please-v4-github-action-ee71ff9de151) -- `releases_created` vs `release_created` bug
-- [Release Please manifest docs](https://github.com/googleapis/release-please/blob/main/docs/manifest-releaser.md) -- bootstrap-sha, initial version setup
-- [Release Please customizing docs](https://github.com/googleapis/release-please/blob/main/docs/customizing.md) -- release-type, version files
-- [Vercel Environments docs](https://vercel.com/docs/deployments/environments) -- preview vs production vs custom
-- [Vercel staging setup guide](https://vercel.com/kb/guide/set-up-a-staging-environment-on-vercel) -- branch-based domain assignment, environment variables
-- [Vercel environment variables docs](https://vercel.com/docs/environment-variables) -- branch-specific overrides, Preview scope
-- [Neon branching docs](https://neon.com/docs/introduction/branching) -- copy-on-write, branch lifecycle
-- [Neon: Why your staging DB never matches production](https://neon.com/blog/why-your-staging-database-never-matches-production) -- data/schema/transformation drift
-- [Neon: How to keep staging in sync](https://neon.com/blog/how-to-keep-staging-in-sync-with-production-in-postgres) -- reset branch strategy
-- [Neon GitHub Actions automation](https://neon.com/docs/guides/branching-github-actions) -- NEON_API_KEY, reset-branch-action
-- [Privy Settings docs](https://docs.privy.io/guide/dashboard/settings) -- allowed origins, cookie configuration
-- [Privy App Clients docs](https://docs.privy.io/guide/react/configuration/app-clients) -- multi-environment clientId, per-client origins
-- Existing codebase: `ci.yml` (12-job pipeline with gate), `version-bump.yml` (to be replaced), `next.config.js` (PWA conditional + version injection), `push-db.ts` (4 Neon tables), `providers.tsx` (Privy graceful fallback), `about-dialog.tsx` (env label display), `privy-server.ts` (whitelist + dev fallback)
+- [Neon Auth Overview](https://neon.com/docs/auth/overview) -- Neon Auth architecture, Better Auth integration, limitations (HIGH confidence)
+- [Neon Auth Roadmap](https://neon.com/docs/auth/roadmap) -- Current beta status, missing features: MFA, magic link, separate frontend/backend (HIGH confidence)
+- [Neon Auth + Next.js Guide](https://neon.com/guides/neon-auth-nextjs) -- Setup steps, Drizzle migration comment bug, trusted domains requirement (HIGH confidence)
+- [Neon Auth Migration Guide](https://neon.com/docs/auth/migrate/from-legacy-auth) -- Schema changes from Stack Auth to Better Auth (MEDIUM confidence)
+- [Better Auth + Next.js Integration](https://better-auth.com/docs/integrations/next) -- Session management, middleware pitfalls (MEDIUM confidence)
+- [CVE-2025-29927 Next.js Middleware Bypass](https://workos.com/blog/nextjs-app-router-authentication-guide-2026) -- Critical auth middleware bypass (HIGH confidence)
+- [Vercel Cron Jobs Docs](https://vercel.com/docs/cron-jobs) -- UTC timezone, no retry on failure, concurrency issues (HIGH confidence)
+- [Vercel Cron Usage & Pricing](https://vercel.com/docs/cron-jobs/usage-and-pricing) -- Hobby: daily only with hourly precision, Pro: per-minute (HIGH confidence)
+- [Vercel Cron Management](https://vercel.com/docs/cron-jobs/manage-cron-jobs) -- No retry, duplicate delivery possible, idempotency required (HIGH confidence)
+- [RxDB Downsides of Offline-First](https://rxdb.info/downsides-of-offline-first.html) -- Storage limits, conflict complexity, schema migration risks, Safari 7-day deletion (HIGH confidence)
+- [Dexie.js Sync Discussion #1168](https://github.com/dfahlander/Dexie.js/issues/1168) -- Custom sync protocol challenges with PostgreSQL (MEDIUM confidence)
+- [PWA Service Worker Auth Issues](https://github.com/OHIF/Viewers/issues/1691) -- Cache messing with authentication (MEDIUM confidence)
+- [Offline Sync Conflict Resolution Patterns](https://www.sachith.co.uk/offline-sync-conflict-resolution-patterns-crash-course-practical-guide-apr-8-2026/) -- Per-field timestamp merge tradeoffs (MEDIUM confidence)
+- [PostgreSQL Timestamp Best Practices](https://wiki.postgresql.org/wiki/Don't_Do_This) -- timestamptz vs timestamp without time zone (HIGH confidence)
+- [Zustand Persist Migration](https://dev.to/diballesteros/how-to-migrate-zustand-local-storage-store-to-a-new-version-njp) -- Version-based localStorage store migration (MEDIUM confidence)
+- [Offline-first Frontend Apps in 2025](https://blog.logrocket.com/offline-first-frontend-apps-2025-indexeddb-sqlite/) -- IndexedDB limitations, sync patterns (MEDIUM confidence)
+- Codebase analysis: `src/lib/db.ts` (16 tables, v10-v15 migrations, 296 lines of schema), `src/lib/privy-server.ts` (Privy auth with whitelist and dev fallback), `src/components/auth-guard.tsx` (conditional useAuth hook export based on env var), `src/lib/auth-middleware.ts` (withAuth wrapper for API routes), `src/lib/push-db.ts` (push subscription schema using user_id), `public/sw.js` (Workbox caching with opaqueredirect conversion), `src/stores/settings-store.ts` (30+ Zustand settings in localStorage), `src/app/providers.tsx` (Privy provider with graceful fallback)
 
 ---
-*Pitfalls research for: v1.3 Deployment Lifecycle (Release Please + Vercel staging + Neon branching)*
-*Researched: 2026-04-04*
+*Pitfalls research for: Cloud sync, auth migration, and offline-first patterns for intake-tracker v2.0*
+*Researched: 2026-04-11*

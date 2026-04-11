@@ -1,210 +1,308 @@
-# Stack Research: v1.3 Deployment Lifecycle
+# Stack Research: v2.0 Cloud Sync & Auth Migration
 
-**Domain:** Release automation, staging environments, CI/CD extensibility for health tracking PWA
-**Researched:** 2026-04-04
-**Confidence:** HIGH
+**Domain:** NeonDB cloud sync, auth migration, offline-first sync engine, Vercel Cron push notifications
+**Researched:** 2026-04-11
+**Confidence:** MEDIUM (Neon Auth is beta; sync engine is custom build)
 
 ## Recommended Stack
 
-### Core Technologies
+### Authentication: Neon Auth (replacing Privy)
 
 | Technology | Version | Purpose | Why Recommended |
 |------------|---------|---------|-----------------|
-| Release Please Action | v4.4.0 (`googleapis/release-please-action@v4`) | Automated releases with changelogs, semver, GitHub Releases | PR-based workflow gives human review of version bumps before they land. Maintains a living release PR that accumulates conventional commits. Directly replaces the current `version-bump.yml`. Google-maintained, 17+ language strategies. Better fit than semantic-release for a web app (not publishing to npm). |
-| Vercel branch-to-domain mapping | N/A (platform feature) | Stable staging URL at `staging.intake-tracker.ryanjnoble.dev` | Works on all Vercel plans including Hobby. Assign a custom subdomain to a `staging` git branch in project Settings > Domains. Every push to that branch auto-deploys to the stable URL. No Vercel CLI or custom environments needed. |
-| Neon Create Branch Action | v6.3.1 (`neondatabase/create-branch-action@v6`) | Create isolated Neon DB branch for staging | Copy-on-write branching means zero-cost clones of production data. The staging branch gets its own connection string, isolated from production push_subscriptions. |
-| Neon Delete Branch Action | v3.2.1 (`neondatabase/delete-branch-action@v3`) | Clean up ephemeral DB branches (PR previews, future use) | Prevents branch accumulation. Not needed for the persistent staging branch, but essential infrastructure for future PR-preview DB branches. |
-| Neon Reset Branch Action | v1.3.2 (`neondatabase/reset-branch-action@v1`) | Reset staging DB branch to match production parent | Keeps staging data fresh. One-command reset via `parent: true` input. Useful before promoting staging to production. |
+| `@neondatabase/auth` | 0.1.0-beta.20 | Server-side auth (session, middleware, handlers) | Wrapper around Better Auth 1.4.18 managed by Neon. Auth state branches with DB -- isolated preview environments. No separate auth infra to manage. Email/password + Google OAuth out of the box. |
+| `@neondatabase/auth` (client export) | 0.1.0-beta.20 | Client-side auth (`createAuthClient`) | Same package, client entrypoint at `@neondatabase/auth/next`. Provides `signIn`, `signUp`, `signOut`, `getSession` on client. |
 
-### Supporting Libraries
+**Key integration points:**
+- Server: `createNeonAuth()` from `@neondatabase/auth/next/server` -- creates `auth` instance with `.handler()`, `.middleware()`, `.getSession()`
+- Client: `createAuthClient()` from `@neondatabase/auth/next` -- browser-side auth operations
+- API route: `app/api/auth/[...path]/route.ts` -- catch-all handler proxying to Neon Auth service
+- Middleware: `middleware.ts` at project root -- `auth.middleware({ loginUrl: '/auth/sign-in' })`
+- Env vars: `NEON_AUTH_BASE_URL`, `NEON_AUTH_COOKIE_SECRET` (32+ chars via `openssl rand -base64 32`)
+
+**What this replaces:**
+- `@privy-io/react-auth` -- client-side auth provider, login modal, usePrivy hook
+- `@privy-io/server-auth` -- server-side token verification
+- `src/lib/privy-server.ts` -- entire file replaced
+- `src/lib/auth-middleware.ts` -- replaced with Neon Auth middleware
+- `src/hooks/use-pin-gate.tsx` -- PIN gate removed entirely
+- CSP rules for `*.privy.io`, `auth.privy.io` -- replaced with Neon Auth base URL domain
+
+**NOT recommended:**
+- `@neondatabase/auth-ui` (0.1.0-alpha.11) -- Pre-built auth UI components. Skip this. The app has shadcn/ui and existing form patterns. Build custom sign-in/sign-up forms matching the existing design system. The alpha-stage UI package adds a dependency for minimal value in a single-user app.
+
+**Confidence: MEDIUM** -- Neon Auth is in beta. Better Auth 1.4.18 is the pinned version. The SDK API surface is stable enough for this use case (email/password + Google), but expect minor breaking changes before GA. The core patterns (handler, middleware, getSession) are well-documented.
+
+### Database ORM: Drizzle ORM
+
+| Technology | Version | Purpose | Why Recommended |
+|------------|---------|---------|-----------------|
+| `drizzle-orm` | 0.45.2 | Type-safe SQL query builder for NeonDB | Native Neon HTTP driver support (`drizzle-orm/neon-http`). SQL-like API maps cleanly to existing raw SQL in `push-db.ts`. Schema-as-code with TypeScript. Zero runtime overhead -- compiles to SQL. |
+| `drizzle-kit` | latest (dev dep) | Schema migrations, push, generate | CLI for generating SQL migration files from schema changes. `drizzle-kit push` for rapid prototyping; `drizzle-kit generate` + `drizzle-kit migrate` for production. |
+
+**Why Drizzle over raw SQL (current approach):**
+- Current `push-db.ts` uses raw tagged template SQL via `neon()`. This works but provides no type safety, no schema validation, and no migration tooling.
+- With 16 tables migrating to Postgres, raw SQL becomes unmaintainable. Drizzle provides type-safe schema definitions that serve as both documentation and runtime validation.
+- Drizzle's Neon HTTP driver (`drizzle-orm/neon-http`) uses the same `@neondatabase/serverless` package already installed.
+
+**Why Drizzle over Prisma:**
+- Prisma requires a query engine binary -- heavier for serverless. Drizzle compiles to direct SQL.
+- Drizzle schema is TypeScript code, not a separate DSL. Better IDE integration.
+- Drizzle has first-class Neon HTTP driver support. Prisma's Neon adapter is less mature.
+- The existing codebase already has raw SQL patterns; Drizzle is closer to SQL than Prisma's abstraction.
+
+**Driver choice:** Use `drizzle-orm/neon-http` (not WebSocket). All server-side operations are single-query transactions in serverless functions -- HTTP is faster and simpler. WebSocket driver is only needed for interactive transactions or session-based connections, which this app does not require.
+
+**Configuration:**
+```typescript
+// src/lib/drizzle.ts
+import { drizzle } from 'drizzle-orm/neon-http';
+import { neon } from '@neondatabase/serverless';
+
+const sql = neon(process.env.DATABASE_URL!);
+export const db = drizzle({ client: sql });
+```
+
+```typescript
+// drizzle.config.ts
+import { defineConfig } from 'drizzle-kit';
+
+export default defineConfig({
+  schema: './src/db/schema.ts',
+  out: './drizzle',
+  dialect: 'postgresql',
+  dbCredentials: {
+    url: process.env.DATABASE_URL!,
+  },
+});
+```
+
+**Confidence: HIGH** -- Drizzle ORM 0.45.x is stable, widely used, and has excellent Neon integration. The Neon HTTP driver is the officially recommended approach in both Drizzle and Neon docs.
+
+### Sync Engine: Custom Build (not Dexie Cloud, not dexie-syncable)
+
+| Technology | Version | Purpose | Why Recommended |
+|------------|---------|---------|-----------------|
+| Custom sync module | N/A | Bidirectional sync between Dexie (IndexedDB) and NeonDB (Postgres) | Full control over per-field timestamp merge resolution. No vendor lock-in. Fits the existing architecture. |
+| `navigator.onLine` + `online`/`offline` events | Web API | Detect connectivity changes | Trigger sync on reconnection. Already available in browsers. |
+| React Query mutations | Existing | Queue and retry sync operations | Already in the stack. `useMutation` with `onSettled` for sync triggers. |
+
+**Why NOT Dexie Cloud:**
+- Dexie Cloud is a managed SaaS service with its own auth system and Postgres backend. This project already has NeonDB and wants Neon Auth. Using Dexie Cloud would mean two separate Postgres databases and two auth systems.
+- Dexie Cloud's conflict resolution is CRDT-based at the record level, not per-field timestamp merge. The project specifically requires per-field LWW.
+- Self-hosting Dexie Cloud Server requires a Silver/Gold license. Over-engineered for a single-user app.
+
+**Why NOT dexie-syncable:**
+- Beta for years, never stabilized. The maintainer (David Fahlander) has shifted focus to Dexie Cloud.
+- ISyncProtocol requires implementing a complex bidirectional change-tracking protocol. For a single-user app, this complexity is unnecessary.
+- The app already has `updatedAt`, `createdAt`, `deletedAt`, `deviceId` on every record -- custom sync is straightforward.
+
+**Sync engine design approach:**
+1. **Local-first writes**: All mutations write to Dexie first, then queue for server sync.
+2. **Sync queue**: A `_syncQueue` table in Dexie tracks pending changes (table name, record ID, operation type, timestamp).
+3. **Background sync**: On connectivity restore or periodic timer, batch-push pending changes to server API routes.
+4. **Server merge**: API routes accept batched changes. For each field, compare `fieldUpdatedAt` timestamps. Server wins ties (server timestamp is authoritative).
+5. **Pull changes**: After pushing, pull any server-side changes newer than last sync timestamp. Apply to Dexie.
+6. **Per-field timestamps**: Add a `_fieldTimestamps` JSON column to Postgres (or a separate metadata table) storing `{ fieldName: updatedAtMs }` for each record. On merge, compare per-field, not per-record.
+
+**Confidence: MEDIUM** -- Custom sync is the right approach for this specific use case, but it is the highest-risk component of the milestone. Per-field timestamp merge is well-understood in theory but has edge cases (clock skew, batch atomicity, soft-delete propagation). This phase will need the most careful design.
+
+### Push Notifications: Vercel Cron
+
+| Technology | Version | Purpose | Why Recommended |
+|------------|---------|---------|-----------------|
+| Vercel Cron | Vercel platform | Trigger push notification checks on schedule | Already using CRON_SECRET auth pattern. Replaces client-side polling. Reliable server-triggered approach. |
+| `vercel.json` | N/A | Cron schedule configuration | Standard Vercel project configuration. |
+
+**CRITICAL: Vercel Plan Requirement**
+
+| Plan | Min Interval | Precision | Sufficient? |
+|------|-------------|-----------|-------------|
+| Hobby | Once/day | +/- 59 min | NO -- medication reminders need multiple daily triggers |
+| Pro ($20/mo) | Once/minute | Per-minute | YES -- can check every minute for due doses |
+| Enterprise | Once/minute | Per-minute | YES |
+
+The existing `POST /api/push/send` endpoint already handles the logic (check due notifications, send follow-ups). It currently authenticates via `CRON_SECRET` bearer token. The change is:
+
+1. **Add `vercel.json`** with cron configuration pointing to the existing endpoint (change from POST to GET or add GET handler)
+2. **Vercel Cron sends GET requests** -- the existing endpoint uses POST. Need to add a GET handler or create a new `/api/cron/push` GET route that calls the same logic.
+3. **Pro plan required** for per-minute scheduling.
+
+**Configuration:**
+```json
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/cron/push",
+      "schedule": "* * * * *"
+    }
+  ]
+}
+```
+
+**Security:** Vercel automatically sends `CRON_SECRET` env var as `Authorization: Bearer <secret>` header. The existing auth pattern in `push/send/route.ts` already validates this. Reuse the same pattern.
+
+**Confidence: HIGH** -- Vercel Cron is well-documented, the existing push infrastructure just needs a thin GET wrapper and vercel.json config. The Pro plan requirement is the only cost consideration.
+
+### Existing Packages: Retained
+
+| Package | Current Version | Role in v2.0 | Changes |
+|---------|----------------|--------------|---------|
+| `@neondatabase/serverless` | ^1.0.2 | Neon HTTP driver for Drizzle + raw queries | No change. Drizzle wraps this. |
+| `dexie` | ^4.0.8 | IndexedDB client-side storage | Remains as offline mirror. Add `_syncQueue` and `_syncMeta` tables. |
+| `dexie-react-hooks` | ^1.1.7 | `useLiveQuery` for reactive reads | No change. Reads still come from Dexie. |
+| `@tanstack/react-query` | ^5.90.20 | Async data + sync mutations | Add sync-specific mutations and query invalidation on sync complete. |
+| `zustand` | ^5.0.0 | Settings persistence | Add sync status state (lastSyncAt, syncInProgress, syncError). Settings may also sync to server. |
+| `web-push` | ^3.6.7 | Server-side push notification sending | No change. Used by cron endpoint. |
+| `zod` | 3 | Request validation | Use for sync API request/response validation. |
+| `next-pwa` | ^5.6.0 | Service worker generation | No change to SW generation. Push handler already in `worker/index.js`. |
+
+## Supporting Libraries
 
 | Library | Version | Purpose | When to Use |
 |---------|---------|---------|-------------|
-| Vercel CLI | >=39.x (latest) | `vercel promote` for CLI-based promotion, `vercel env pull` for local dev | Only needed in CI if implementing CLI-based promotion flow. Not a project dependency -- install globally in workflow runners via `pnpm i -g vercel@latest`. Current latest is 50.39.0 but pin to `@latest` since Vercel CLI is backwards-compatible. |
-| neonctl | latest | Local branch management, schema inspection, manual resets | Developer convenience tool only. Not a project dependency. Install via `npm i -g neonctl` when needed locally. |
-
-### GitHub Actions (New Workflows)
-
-| Action | Reference | Purpose | Notes |
-|--------|-----------|---------|-------|
-| `googleapis/release-please-action` | `@v4` | Release PR creation + GitHub Release publishing | Replaces `version-bump.yml`. Runs on push to `main`. |
-| `neondatabase/create-branch-action` | `@v6` | One-time staging branch setup (or in workflow) | Required inputs: `project_id`, `api_key`, `branch_name`, `parent_branch` |
-| `neondatabase/delete-branch-action` | `@v3` | Branch cleanup | Required inputs: `project_id`, `api_key`, `branch` |
-| `neondatabase/reset-branch-action` | `@v1` | Reset staging to production data | Required inputs: `project_id`, `api_key`, `branch`, `parent: true` |
-| `actions/checkout` | `@v4` | Already in use | No change |
-| `pnpm/action-setup` | `@v5` | Already in use | No change |
-
-### Development Tools
-
-| Tool | Purpose | Notes |
-|------|---------|-------|
-| Conventional Commits | Commit message format for Release Please | `feat:` = minor, `fix:` = patch, `feat!:` / `BREAKING CHANGE:` = major. Already partially in use (commit messages show `chore:`, `docs:`, `fix:` patterns). |
-| `release-please-config.json` | Release Please configuration | Lives in repo root. Defines release-type, changelog sections, package path. |
-| `.release-please-manifest.json` | Version tracking for Release Please | Lives in repo root. Tracks current version per package. Must exist (can be empty `{}` initially). |
-
-## Configuration Files
-
-### release-please-config.json
-
-```json
-{
-  "release-type": "node",
-  "packages": {
-    ".": {
-      "changelog-path": "CHANGELOG.md",
-      "bump-minor-pre-major": true,
-      "bump-patch-for-minor-pre-major": true
-    }
-  },
-  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json"
-}
-```
-
-**Key decisions:**
-- `release-type: "node"` -- automatically reads/writes `package.json` version
-- `bump-minor-pre-major: true` -- while version is < 1.0.0, `feat:` commits bump patch instead of minor (current version is 0.1.0)
-- `bump-patch-for-minor-pre-major: true` -- keeps pre-1.0 versioning predictable
-- Single package (not monorepo) so `.` path is sufficient
-
-### .release-please-manifest.json
-
-```json
-{
-  ".": "0.1.0"
-}
-```
-
-**Note:** Must match current `package.json` version. Release Please will update this file on each release.
-
-### New GitHub Secrets Required
-
-| Secret | Purpose | Where to Get |
-|--------|---------|-------------|
-| `NEON_API_KEY` | Authenticate Neon GitHub Actions | Neon Console > Account Settings > API Keys |
-| `VERCEL_TOKEN` | Vercel CLI auth in CI (if using CLI promotion) | Vercel Dashboard > Settings > Tokens |
-| `VERCEL_ORG_ID` | Vercel project identification | `.vercel/project.json` after `vercel link` |
-| `VERCEL_PROJECT_ID` | Vercel project identification | `.vercel/project.json` after `vercel link` |
-
-### New GitHub Variables Required
-
-| Variable | Purpose | Where to Get |
-|----------|---------|-------------|
-| `NEON_PROJECT_ID` | Neon project identifier for branch actions | Neon Console > Project Settings |
-
-### Vercel Environment Variables (Staging)
-
-The staging branch deployment needs its own `DATABASE_URL` pointing to the Neon staging branch. Configure in Vercel Dashboard under the staging domain's environment variables (or branch-specific env vars).
+| `drizzle-zod` | latest | Auto-generate Zod schemas from Drizzle table definitions | Use for validating sync payloads match DB schema. Avoids duplicating types. |
+| `better-auth` | (transitive via @neondatabase/auth) | Auth framework | Do NOT install directly. Neon Auth wraps it. Only interact via `@neondatabase/auth` API. |
 
 ## Installation
 
 ```bash
-# No new project dependencies needed.
-# All tools are GitHub Actions or platform features.
+# New dependencies
+pnpm add @neondatabase/auth@latest drizzle-orm
 
-# Local developer convenience (optional):
-npm i -g neonctl        # Neon CLI for local branch management
-npm i -g vercel@latest  # Vercel CLI for local promotion testing
-```
+# New dev dependencies
+pnpm add -D drizzle-kit
 
-```bash
-# Configuration files to create in repo root:
-# 1. release-please-config.json   (see above)
-# 2. .release-please-manifest.json (see above)
+# Optional (recommended for sync payload validation)
+pnpm add drizzle-zod
+
+# Remove after migration
+pnpm remove @privy-io/react-auth @privy-io/server-auth
 ```
 
 ## Alternatives Considered
 
-| Recommended | Alternative | Why Not |
-|-------------|-------------|---------|
-| Release Please (`googleapis/release-please-action@v4`) | semantic-release | semantic-release is fully automated with no human review step. Release Please creates a PR that accumulates changes, giving a review gate before version bump. Better for a single-dev app where you want to batch releases. semantic-release also requires npm publishing config even when you don't publish to npm. |
-| Release Please | Changesets (`@changesets/cli`) | Changesets is designed for monorepo library publishing. Overkill for a single-package web app that doesn't publish to npm. Requires manual changeset files per PR. |
-| Release Please | Keep existing `version-bump.yml` | Current workflow is fragile: keyword-based (`[major]`/`[minor]` in commit message), no changelog, no GitHub Releases, no PR review step. Release Please is strictly better. |
-| Vercel branch-to-domain (Hobby) | Vercel Custom Environments (Pro, $20/mo) | Custom Environments require Pro plan at $20/seat/month. Branch-to-domain mapping achieves the same stable staging URL on Hobby plan. Upgrade to Pro only if you need separate env var scoping per environment (branch-specific env vars work on Hobby too). |
-| Vercel branch-to-domain | Vercel CLI `--target=staging` | CLI deployment is an alternative but adds complexity. The Git-integrated auto-deploy on branch push is simpler and already works. CLI approach is better for promotion flow (see below). |
-| Neon branch via GitHub Action | Manual Neon branch via dashboard | GitHub Action is automatable and reproducible. Dashboard is fine for one-time setup but doesn't integrate into CI. Use Action for the workflow, dashboard for initial setup. |
-| Neon branching | Separate Neon project for staging | Separate project wastes the free tier limit. Branching is copy-on-write (free, instant) and shares compute with the parent project. |
+| Recommended | Alternative | When to Use Alternative |
+|-------------|-------------|-------------------------|
+| `@neondatabase/auth` (Neon Auth) | Auth.js (NextAuth) with Neon adapter | If Neon Auth stays in beta too long or lacks needed features. Auth.js is more mature but requires self-managing auth tables and session logic. |
+| `@neondatabase/auth` (Neon Auth) | Clerk | If you want a fully managed auth UI + backend with no beta risk. But Clerk is a separate service ($$$) and doesn't branch with Neon DB. |
+| Drizzle ORM | Raw SQL via `@neondatabase/serverless` | If schema is very simple (fewer than 5 tables). With 16 tables, raw SQL is unmaintainable. |
+| Drizzle ORM | Prisma | If you prefer a higher-level abstraction with auto-generated client. But Prisma's query engine binary adds cold-start latency in serverless. |
+| Custom sync engine | Dexie Cloud (self-hosted) | If building for multi-user with shared data and CRDT conflict resolution. This is single-user with per-field LWW. |
+| Custom sync engine | PowerSync | If you want a managed sync service with Postgres. But PowerSync uses SQLite on client, not IndexedDB/Dexie. Would require rewriting entire client data layer. |
+| Custom sync engine | ElectricSQL | If CRDTs + Postgres sync appeals. But ElectricSQL is still maturing and would replace Dexie entirely. |
+| Vercel Cron | Upstash QStash | If staying on Hobby plan. QStash can schedule HTTP calls to your endpoint on a cron schedule without Vercel Pro. $1/mo for 500 messages/day. |
+| Vercel Cron | External cron service (cron-job.org) | If budget is zero. Free external cron hits your endpoint. But adds external dependency and less reliable. |
 
 ## What NOT to Use
 
 | Avoid | Why | Use Instead |
 |-------|-----|-------------|
-| Docker / container builds | App runs on Vercel (serverless). Docker adds build complexity with zero benefit. No self-hosted infra. | Vercel's built-in Next.js builder |
-| Terraform / Pulumi for infra | Single Vercel project + single Neon project. Infrastructure-as-code is overkill for this scale. | Manual Vercel/Neon dashboard setup + GitHub Actions for branch automation |
-| `vercel-action` (`amondnet/vercel-action`) | Third-party wrapper around Vercel CLI. Adds an unnecessary dependency. Use Vercel CLI directly in workflows if CLI deployment is needed. | Direct `vercel` CLI commands in workflow steps |
-| GitHub Environments for approval gates | GitHub Environments with required reviewers could gate production deploys, but for a single-user app this adds friction without value. | Simple promotion via Vercel dashboard or CLI `vercel promote` |
-| Neon GitHub Integration (app) | Full GitHub App integration auto-creates branches per PR. Overkill for this project which only needs a single persistent staging branch. Consider later if PR-preview DBs become valuable. | Individual Neon GitHub Actions for targeted branch operations |
-| Separate CI workflow for staging deploy | Vercel auto-deploys on branch push via Git integration. A separate deploy workflow would duplicate what Vercel already does. | Vercel's built-in Git integration (push to `staging` branch = auto-deploy) |
+| `@neondatabase/auth-ui` | Alpha (0.1.0-alpha.11), re-exports third-party components that don't match shadcn/ui design system | Build custom auth forms with existing shadcn/ui components |
+| `@neondatabase/neon-auth` | Deprecated package name. Renamed to `@neondatabase/auth` | `@neondatabase/auth` |
+| `dexie-syncable` | Perpetual beta, maintainer moved to Dexie Cloud, complex ISyncProtocol | Custom sync module using existing Dexie hooks |
+| `dexie-cloud-addon` | Requires Dexie Cloud service, own auth, own Postgres | Custom sync to NeonDB |
+| `better-auth` (direct install) | Neon Auth wraps this. Installing directly creates version conflicts and bypasses Neon's managed session/cookie handling | Use via `@neondatabase/auth` only |
+| `prisma` | Query engine binary, cold-start penalty, separate schema DSL | Drizzle ORM (lighter, TypeScript-native, Neon HTTP driver) |
+| `rxdb` | Full replacement for Dexie with its own sync protocol. Massive migration effort for no clear benefit | Keep Dexie + custom sync |
+| Any WebSocket library for sync | Unnecessary for single-user. Polling-based sync (on app focus, on connectivity restore, periodic) is simpler and sufficient | `navigator.onLine` events + periodic sync |
 
-## Integration with Existing CI Pipeline
+## Stack Patterns by Variant
 
-### What Changes
+**If staying on Vercel Hobby plan:**
+- Use Upstash QStash ($1/mo) instead of Vercel Cron for per-minute push notification scheduling
+- Or accept once-daily push notifications (insufficient for medication reminders)
 
-| Current | After v1.3 |
-|---------|-----------|
-| `version-bump.yml` runs on push to `main`, bumps package.json | **Deleted.** Release Please handles versioning via release PRs. |
-| `ci.yml` runs on PR to `main` (12 jobs) | **No changes.** CI pipeline remains identical. Release Please runs separately on push to `main`. |
-| No staging environment | `staging` branch with domain `staging.intake-tracker.ryanjnoble.dev` and isolated Neon DB branch |
-| No GitHub Releases | Release Please creates tagged GitHub Releases with auto-generated changelogs |
+**If Neon Auth beta proves too unstable:**
+- Fall back to Auth.js (NextAuth v5) with `@auth/neon-adapter`
+- Auth.js is mature, has Neon adapter, supports email/password + Google
+- Requires managing auth tables yourself (not auto-managed in neon_auth schema)
 
-### New Workflow Files
-
-1. **`release-please.yml`** -- Replaces `version-bump.yml`. Triggers on push to `main`. Creates/updates release PR. On release PR merge, creates GitHub Release + tag.
-
-2. **`staging-db-reset.yml`** (optional) -- Manual dispatch workflow to reset staging Neon branch to production parent. Useful before promotion testing.
-
-### What Does NOT Change
-
-- `ci.yml` -- The 12-job pipeline is untouched. It runs on PRs to `main` exactly as before.
-- Vercel Git integration -- Production deploys still trigger on merge to `main`. No custom deploy workflow needed.
-- Environment variables in existing `.env.template` -- No changes to existing vars.
-- `package.json` scripts -- No new scripts needed.
-
-## Promotion Flow (Staging to Production)
-
-Two viable approaches, recommend **Option A** for simplicity:
-
-**Option A: Git merge flow (recommended)**
-1. Develop on feature branches, PR to `main`
-2. CI runs on PR. On merge to `main`, Vercel auto-deploys to production.
-3. Release Please opens/updates a release PR tracking changes.
-4. Separately, cherry-pick or merge to `staging` branch for pre-production testing.
-5. Staging auto-deploys to `staging.intake-tracker.ryanjnoble.dev` with isolated Neon DB.
-
-**Option B: Vercel promotion flow (future consideration)**
-1. Disable auto-domain-assignment for production in Vercel settings.
-2. Merges to `main` create "staged" production deployments (built but not serving traffic).
-3. Manually promote via `vercel promote <deployment-url>` or Vercel dashboard.
-4. Requires Vercel CLI + token in CI for automation.
-
-Option A is simpler and sufficient. Option B adds value if production incidents become frequent enough to warrant a staging gate.
+**If per-field merge proves too complex:**
+- Simplify to record-level LWW initially (compare `updatedAt` per record, not per field)
+- Add per-field merge later as an enhancement
+- Record-level LWW risks overwriting concurrent field changes, but single-user app makes true conflicts unlikely
 
 ## Version Compatibility
 
 | Package A | Compatible With | Notes |
 |-----------|-----------------|-------|
-| Release Please Action v4 | Node.js 18+ | Action runs on ubuntu-latest (Node 22 in CI) |
-| Release Please Action v4 | `release-type: node` | Reads/writes `package.json` version field directly |
-| Neon Actions (v6/v3/v1) | `@neondatabase/serverless` ^1.0.2 | Actions create branches; app connects via same driver package already installed |
-| Neon branch | Existing `push-db.ts` schema | Branch inherits schema from parent. No migrations needed for copy-on-write clone. |
-| Vercel branch domains | Hobby plan | Branch-to-domain assignment works on all plans. No upgrade needed. |
-| Conventional Commits | Existing commit style | Project already uses `chore:`, `docs:`, `fix:` prefixes. Add `feat:` for features. |
+| `@neondatabase/auth@0.1.0-beta.20` | `@neondatabase/serverless@^1.0.2` | Both from Neon ecosystem. Auth uses serverless driver internally. |
+| `drizzle-orm@0.45.2` | `@neondatabase/serverless@^1.0.2` | Drizzle's `neon-http` driver wraps `@neondatabase/serverless`. |
+| `drizzle-orm@0.45.2` | `drizzle-kit@latest` | Always use matching major versions. Kit generates migrations for ORM schema. |
+| `@neondatabase/auth@0.1.0-beta.20` | Better Auth 1.4.18 | Neon Auth pins this version internally. Do not install better-auth separately. |
+| `dexie@^4.0.8` | Custom sync module | Dexie's hooks/middleware API is stable. Sync module uses `db.table().toArray()`, `.put()`, `.bulkPut()`. |
+| Next.js 14.2.35 | `@neondatabase/auth` | Auth uses Next.js middleware and App Router conventions. Compatible with 14.x. |
+| `drizzle-zod` | `drizzle-orm@0.45.x` + `zod@3` | Generates Zod schemas from Drizzle tables. Both already in stack. |
+
+## Environment Variables: New
+
+| Variable | Where Set | Purpose |
+|----------|-----------|---------|
+| `NEON_AUTH_BASE_URL` | Vercel env vars | Neon Auth service endpoint (from Neon console > Branch > Auth) |
+| `NEON_AUTH_COOKIE_SECRET` | Vercel env vars | Session cookie signing secret (32+ chars) |
+| `DATABASE_URL` | Already exists | Neon Postgres connection string (used by Drizzle + existing push-db) |
+| `CRON_SECRET` | Already exists | Vercel Cron authentication token |
+
+**Remove after migration:**
+- `NEXT_PUBLIC_PRIVY_APP_ID`
+- `NEXT_PUBLIC_PRIVY_CLIENT_ID`
+- `PRIVY_APP_SECRET`
+- `ALLOWED_EMAILS` (replace with Neon Auth allowlist or single-user check)
+- `ALLOWED_WALLETS` (crypto wallet auth not needed)
+
+## CSP Changes
+
+The Content Security Policy in `next.config.js` needs updating:
+
+**Remove:**
+- `connect-src`: `https://*.privy.io`, `https://*.walletconnect.com`, `https://*.walletconnect.org`, `wss://*.walletconnect.org`
+- `frame-src`: `https://auth.privy.io`
+
+**Add:**
+- `connect-src`: Neon Auth base URL domain (e.g., `https://*.neonauth.us-east-1.aws.neon.tech`)
+
+## File Changes Summary
+
+| Current File | Action | Replacement |
+|-------------|--------|-------------|
+| `src/lib/privy-server.ts` | DELETE | `src/lib/auth/server.ts` (Neon Auth) |
+| `src/lib/auth-middleware.ts` | DELETE | `middleware.ts` (root, Neon Auth middleware) |
+| `src/hooks/use-pin-gate.tsx` | DELETE | N/A (PIN gate removed) |
+| `src/app/providers.tsx` | MODIFY | Remove PrivyProvider, PinGateProvider. Add NeonAuth client context if needed. |
+| `src/lib/push-db.ts` | MODIFY | Migrate to Drizzle ORM queries |
+| `scripts/push-migration.sql` | REPLACE | Drizzle schema definition + drizzle-kit migrations |
+| `next.config.js` | MODIFY | Update CSP headers |
+| N/A | CREATE | `vercel.json` (cron configuration) |
+| N/A | CREATE | `src/db/schema.ts` (Drizzle schema for all 16 tables + push tables) |
+| N/A | CREATE | `src/lib/drizzle.ts` (Drizzle client instance) |
+| N/A | CREATE | `drizzle.config.ts` (Drizzle Kit configuration) |
+| N/A | CREATE | `src/lib/sync/` directory (sync engine module) |
+| N/A | CREATE | `src/app/api/auth/[...path]/route.ts` (Neon Auth handler) |
+| N/A | CREATE | `src/app/api/cron/push/route.ts` (GET handler for Vercel Cron) |
+| N/A | CREATE | `src/app/api/sync/push/route.ts` (receive client changes) |
+| N/A | CREATE | `src/app/api/sync/pull/route.ts` (send server changes to client) |
+| N/A | CREATE | `src/app/auth/sign-in/page.tsx` + `actions.ts` |
+| N/A | CREATE | `src/app/auth/sign-up/page.tsx` + `actions.ts` |
 
 ## Sources
 
-- [googleapis/release-please-action](https://github.com/googleapis/release-please-action) -- v4.4.0 (Oct 2025), action inputs/outputs, configuration (HIGH confidence)
-- [googleapis/release-please manifest docs](https://github.com/googleapis/release-please/blob/main/docs/manifest-releaser.md) -- Config file format, node release-type behavior (HIGH confidence)
-- [neondatabase/create-branch-action](https://github.com/neondatabase/create-branch-action) -- v6.3.1 (Mar 2026), inputs/outputs verified (HIGH confidence)
-- [neondatabase/delete-branch-action](https://github.com/neondatabase/delete-branch-action) -- v3.2.1 (Mar 2026), inputs verified (HIGH confidence)
-- [neondatabase/reset-branch-action](https://github.com/neondatabase/reset-branch-action) -- v1.3.2 (Mar 2026), inputs verified (HIGH confidence)
-- [Neon branching with GitHub Actions](https://neon.com/docs/guides/branching-github-actions) -- Official guide for CI/CD integration (HIGH confidence)
-- [Vercel Environments docs](https://vercel.com/docs/deployments/environments) -- Custom environments require Pro; Preview branch domains work on all plans (HIGH confidence)
-- [Vercel branch-to-domain assignment](https://vercel.com/docs/domains/working-with-domains/assign-domain-to-a-git-branch) -- Confirmed available on Hobby plan (HIGH confidence)
-- [Vercel promoting deployments](https://vercel.com/docs/deployments/promoting-a-deployment) -- `vercel promote` CLI command, staged production flow (HIGH confidence)
-- [Vercel staging setup guide](https://vercel.com/kb/guide/set-up-a-staging-environment-on-vercel) -- Branch-specific env vars, domain configuration (HIGH confidence)
-- [Vercel CLI](https://vercel.com/docs/cli) -- v50.39.0 latest (MEDIUM confidence, version changes frequently)
-- [Release Please vs semantic-release comparison](https://www.hamzak.xyz/blog-posts/release-please-vs-semantic-release) -- PR-based vs fully automated tradeoffs (MEDIUM confidence, blog post)
-- [NPM release automation comparison](https://oleksiipopov.com/blog/npm-release-automation/) -- Release Please vs semantic-release vs Changesets (MEDIUM confidence, blog post)
+- [Neon Auth Overview](https://neon.com/docs/auth/overview) -- feature set, Better Auth 1.4.18, beta status
+- [Neon Auth Next.js Quick Start](https://neon.com/docs/auth/quick-start/nextjs) -- setup guide, packages, code patterns
+- [Neon Auth Next.js Server SDK Reference](https://neon.com/docs/auth/reference/nextjs-server) -- createNeonAuth config, API methods, middleware
+- [Neon Auth API-only Quick Start](https://neon.com/docs/auth/quick-start/nextjs-api-only) -- custom forms approach (recommended over UI kit)
+- [@neondatabase/auth npm](https://www.npmjs.com/package/@neondatabase/auth) -- version 0.1.0-beta.20
+- [@neondatabase/auth-ui npm](https://www.npmjs.com/package/@neondatabase/auth-ui) -- version 0.1.0-alpha.11 (not recommended)
+- [Drizzle ORM Neon Connection](https://orm.drizzle.team/docs/connect-neon) -- HTTP vs WebSocket drivers, setup code
+- [Drizzle ORM npm](https://www.npmjs.com/package/drizzle-orm) -- version 0.45.2
+- [Neon Drizzle Migrations Guide](https://neon.com/docs/guides/drizzle-migrations) -- drizzle-kit workflow
+- [Vercel Cron Quickstart](https://vercel.com/docs/cron-jobs/quickstart) -- vercel.json format, GET requirement, CRON_SECRET
+- [Vercel Cron Usage & Pricing](https://vercel.com/docs/cron-jobs/usage-and-pricing) -- Hobby (once/day), Pro (once/minute)
+- [Dexie.js Issue #1168](https://github.com/dfahlander/Dexie.js/issues/1168) -- Dexie maintainer on SQL sync approaches
+- [Offline Sync Patterns Guide](https://www.sachith.co.uk/offline-sync-conflict-resolution-patterns-crash-course-practical-guide-apr-8-2026/) -- per-field LWW strategy
+- [Better Auth Documentation](https://better-auth.com/) -- email/password, Google OAuth, session management
 
 ---
-*Stack research for: v1.3 Deployment Lifecycle*
-*Researched: 2026-04-04*
+*Stack research for: v2.0 Cloud Sync & Auth Migration*
+*Researched: 2026-04-11*

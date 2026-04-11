@@ -1,467 +1,651 @@
-# Architecture Patterns: Deployment Lifecycle
+# Architecture Patterns: v2.0 Cloud Sync & Auth Migration
 
-**Domain:** Release automation, staging environments, database branching, CI/CD pipeline integration
-**Project:** Intake Tracker v1.3
-**Researched:** 2026-04-04
+**Domain:** Offline-first sync engine, auth migration, data layer restructuring for health tracking PWA
+**Project:** Intake Tracker v2.0
+**Researched:** 2026-04-11
 
-## Recommended Architecture
+## Current Architecture (Baseline)
 
-Three systems integrate with the existing 12-job CI pipeline to form a release-and-deploy pipeline:
+Before detailing changes, here is the exact current state of the system:
 
 ```
-Developer PR ──> CI (existing 12 jobs) ──> merge to main
-                                               │
-                                    ┌──────────┴──────────┐
-                                    │                     │
-                              Release Please          Vercel auto-deploy
-                              (on push to main)       (production)
-                                    │
-                              Creates/updates
-                              release PR
-                                    │
-                              Merge release PR
-                                    │
-                         ┌──────────┴──────────┐
-                         │                     │
-                    GitHub Release         Tag v1.x.y
-                    + CHANGELOG.md         triggers Vercel
-                                           production deploy
++--------------------------+
+|       React UI           |
+|  (shadcn/ui + Tailwind)  |
++---------+----------------+
+          |
++---------v----------------+     +--------------------+
+|  useLiveQuery hooks      |     | useMutation hooks  |
+|  (dexie-react-hooks)     |     | (React Query)      |
++---------+----------------+     +--------+-----------+
+          |                               |
++---------v-------------------------------v-----------+
+|            Service Layer (src/lib/*-service.ts)      |
+|  intake-service, health-service, medication-service  |
+|  eating-service, substance-service, dose-log-service |
+|  composable-entry-service, etc.                      |
++---------+-------------------------------------------+
+          |
++---------v----------------+
+|     Dexie.js (db.ts)     |
+|   16 tables, schema v15  |
+|   IndexedDB              |
++--------------------------+
 
-Developer PR ──> push to `staging` branch ──> Vercel preview deploy
-                                               │
-                                    staging.intake-tracker.ryanjnoble.dev
-                                               │
-                                    Neon staging branch (DATABASE_URL)
+Server-side (separate):
++--------------------------+     +------------------+
+|  API Routes (Next.js)    |     | Neon Postgres    |
+|  /api/ai/*               |---->| (push tables     |
+|  /api/push/*             |     |  only: 4 tables) |
+|  /api/version            |     +------------------+
++---------+----------------+
+          |
++---------v----------------+
+|   Privy Auth             |
+|   (withAuth middleware)  |
++--------------------------+
 ```
 
-### Component Boundaries
+### Key Current Patterns
 
-| Component | Responsibility | Communicates With |
-|-----------|---------------|-------------------|
-| `release-please.yml` (NEW) | Automated versioning, changelogs, GitHub Releases | Replaces `version-bump.yml`; runs on push to main |
-| `release-please-config.json` (NEW) | Release Please configuration | Read by `release-please.yml` |
-| `.release-please-manifest.json` (NEW) | Tracks current version | Updated by Release Please PRs |
-| Vercel staging environment | Branch-based deploy at `staging.intake-tracker.ryanjnoble.dev` | Triggered by push to `staging` branch |
-| Neon staging branch | Isolated Postgres for staging push notifications | Used by staging Vercel deployment via `DATABASE_URL` |
-| `staging-reset.yml` (NEW) | Resets Neon staging branch to match production | Manual trigger (`workflow_dispatch`) |
-| `promote.yml` (NEW) | Promotes staging to production with approval gate | Manual trigger with GitHub environment protection |
-| `ci.yml` (MODIFIED) | Existing CI adds staging branch trigger | Adds `staging` to PR branch triggers |
-| `next.config.js` (MODIFIED) | Exposes staging-aware env vars | Reads `VERCEL_GIT_COMMIT_REF` for staging detection |
-| `about-dialog.tsx` (MODIFIED) | Shows staging environment label | Reads new `NEXT_PUBLIC_IS_STAGING` env var |
+| Pattern | Implementation | Location |
+|---------|---------------|----------|
+| Reads | `useLiveQuery()` from dexie-react-hooks -- auto-reactive | `src/hooks/use-*-queries.ts` (15 files) |
+| Writes | `useMutation()` from React Query -- calls service layer | Same hook files |
+| Service CRUD | Direct `db.tableName.add/update/get` on Dexie | `src/lib/*-service.ts` (15+ files) |
+| Soft deletes | `deletedAt: number \| null` on every record | All 16 tables |
+| Sync metadata | `createdAt`, `updatedAt`, `deletedAt`, `deviceId`, `timezone` | All records since v10 |
+| Auth (server) | `withAuth()` HOF -- verifies Privy JWT, checks email whitelist | `src/lib/auth-middleware.ts` |
+| Auth (client) | `PrivyProvider` + `PinGateProvider` in provider stack | `src/app/providers.tsx` |
+| Settings | Zustand store persisted to localStorage (v5 migration chain) | `src/stores/settings-store.ts` |
+| Composable entries | `groupId` links records across tables atomically | `composable-entry-service.ts` |
+| IDs | `Date.now()-random` format (not UUID) | `src/lib/utils.ts` |
 
-### Data Flow
+---
 
-**Release flow (main branch):**
-1. PR merges to `main` --> existing CI runs on PR, Vercel auto-deploys production
-2. Release Please action runs on push to `main`, scans conventional commits since last release
-3. If releasable commits found: creates/updates a release PR with CHANGELOG.md + version bump
-4. When release PR merges: creates GitHub Release with tag `v1.x.y`, bumps `package.json`, generates CHANGELOG
-5. Vercel picks up the merge and deploys production with the new version in `NEXT_PUBLIC_APP_VERSION`
+## Recommended Architecture (Target)
 
-**Staging flow:**
-1. Developer pushes to `staging` branch (typically: `git merge main && git push origin staging`)
-2. Vercel auto-deploys preview for `staging` branch at `staging.intake-tracker.ryanjnoble.dev`
-3. Staging deployment uses staging-specific env vars including Neon staging branch `DATABASE_URL`
-4. `VERCEL_ENV` = `preview`, but `VERCEL_GIT_COMMIT_REF` = `staging` (used to detect staging)
-5. Manual promotion: verify staging, then either merge to main (new deploy) or use Vercel "Promote to Production"
+```
++--------------------------+
+|       React UI           |
+|  (shadcn/ui + Tailwind)  |
++---------+----------------+
+          |
++---------v----------------+     +--------------------+
+|  useLiveQuery hooks      |     | useMutation hooks  |
+|  (dexie-react-hooks)     |     | (React Query)      |
+|  (reads still from IDB)  |     | (writes still to   |
+|                          |     |  service layer)    |
++---------+----------------+     +--------+-----------+
+          |                               |
++---------v-------------------------------v-----------+
+|        Service Layer (src/lib/*-service.ts)          |
+|  MODIFIED: writes to Dexie AND marks dirty          |
+|  Adds updatedAt per-field timestamps on mutations   |
++----+------------------------------------------+-----+
+     |                                          |
++----v------------------+    +---------NEW------v-----+
+| Dexie.js (db.ts)      |    | Sync Engine            |
+| 16 tables, schema v16 |<-->| (src/lib/sync-engine.ts|
+| IndexedDB             |    |  + sync-queue)         |
+| + _syncMeta table     |    +----------+-------------+
++------------------------+               |
+                                         |
+                          +--------------v------------+
+                          |  Sync API Routes          |
+                          |  /api/sync/push           |
+                          |  /api/sync/pull           |
+                          |  /api/sync/status         |
+                          +----------+----------------+
+                                     |
+                          +----------v----------------+
+                          | Neon Postgres             |
+                          | (ALL data tables +        |
+                          |  push tables +            |
+                          |  neon_auth schema)        |
+                          +---------------------------+
 
-**Neon staging branch:**
-1. One-time setup: create persistent `staging` branch from production in Neon Console
-2. Staging Vercel deployment uses staging branch connection string (set as branch-specific env var)
-3. Reset when needed: `staging-reset.yml` runs `neondatabase/reset-branch-action` to sync from parent
-4. Connection string is preserved after reset (branch identity unchanged, data refreshed)
-
-## Patterns to Follow
-
-### Pattern 1: Release Please with Manifest Config
-
-**What:** Use manifest-based Release Please configuration rather than inline action config.
-**Why:** Separates release config from workflow YAML, supports future monorepo expansion, tracks version in a dedicated manifest file.
-**Confidence:** HIGH (official docs, widely adopted pattern)
-
-**Configuration files:**
-
-`release-please-config.json`:
-```json
-{
-  "packages": {
-    ".": {
-      "release-type": "node",
-      "changelog-path": "CHANGELOG.md",
-      "bump-minor-pre-major": true,
-      "bump-patch-for-minor-pre-major": true
-    }
-  }
-}
+Auth (replaces Privy):
++--------------------------+
+| Neon Auth (Better Auth)  |
+| /api/auth/[...path]     |
+| NeonAuthProvider         |
+| auth.getSession()        |
++--------------------------+
 ```
 
-`.release-please-manifest.json`:
-```json
-{
-  ".": "0.1.0"
-}
-```
+---
 
-**Workflow (`.github/workflows/release-please.yml`):**
-```yaml
-name: Release Please
+## Component-by-Component Change Analysis
 
-on:
-  push:
-    branches: [main]
+### Components That Stay Unchanged
 
-permissions:
-  contents: write
-  pull-requests: write
+| Component | Why It Stays |
+|-----------|-------------|
+| React UI components (`src/components/`) | UI reads from hooks, writes through hooks. Data source is abstracted. |
+| `useLiveQuery` pattern in hook files | Dexie remains the local read source. Reactivity pattern is unaffected. |
+| Service worker (push notifications) | Push event handling stays. SW does not interact with data sync. |
+| Zustand settings store | Stays in localStorage. Settings are UI preferences, not health data. Settings sync is a separate concern (can sync a `user_settings` table later). |
+| shadcn/ui + Tailwind styling | Zero data layer coupling. |
+| AI API routes (`/api/ai/*`) | Already server-side. Auth middleware swap is the only change. |
 
-jobs:
-  release-please:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: googleapis/release-please-action@v4
-        id: release
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-    outputs:
-      release_created: ${{ steps.release.outputs.release_created }}
-      tag_name: ${{ steps.release.outputs.tag_name }}
-      version: ${{ steps.release.outputs.version }}
-```
+### Components That Get Modified
 
-**Key details:**
-- Action is at `googleapis/release-please-action@v4` (NOT `google-github-actions/` which is archived)
-- `bump-minor-pre-major: true` means breaking changes only bump minor while version < 1.0.0 (appropriate for current `0.1.0`)
-- Release Please auto-updates `package.json` version for `release-type: node`
-- The manifest `.release-please-manifest.json` must be set to current version (`0.1.0`) on first setup
-- `bootstrap-sha` can be set in config to prevent scanning entire git history on first run
+#### 1. Service Layer (`src/lib/*-service.ts`) -- CRITICAL CHANGE
 
-### Pattern 2: Branch-Based Staging on Vercel (All Plans)
+**Current:** Services write directly to Dexie and return.
+**Target:** Services write to Dexie, then enqueue a sync operation.
 
-**What:** Assign a custom subdomain to a `staging` git branch in Vercel project settings.
-**Why:** Works on Hobby plan (no Pro required), provides stable URL, auto-deploys on push to branch.
-**Confidence:** HIGH (official Vercel KB article, well-documented approach)
+The key insight: **services remain the write entry point**. The change is minimal -- after every Dexie write, the sync queue is notified.
 
-**Setup steps:**
-1. In Vercel Dashboard > Project > Settings > Domains
-2. Add `staging.intake-tracker.ryanjnoble.dev`
-3. Edit the domain assignment: set to Preview environment, Git Branch = `staging`
-4. Add CNAME record for `staging.intake-tracker.ryanjnoble.dev` pointing to `cname.vercel-dns.com` (same as production)
-
-**Environment variable configuration:**
-- In Vercel Dashboard > Project > Settings > Environment Variables
-- Add staging-specific overrides with "Preview" environment + branch filter `staging`:
-  - `DATABASE_URL` = Neon staging branch connection string
-  - `DATABASE_URL_UNPOOLED` = Neon staging branch unpooled connection string
-  - `NEXT_PUBLIC_IS_STAGING` = `true` (custom flag for UI)
-
-**Critical detail on `VERCEL_ENV`:**
-- `VERCEL_ENV` = `preview` for all non-production deployments (including staging on Hobby plan)
-- `VERCEL_TARGET_ENV` = custom environment name ONLY on Pro/Enterprise with custom environments
-- On Hobby plan: use `VERCEL_GIT_COMMIT_REF` (= `staging`) or a custom env var to distinguish staging from other preview deploys
-- Current `next.config.js` sets `NEXT_PUBLIC_VERCEL_ENV: process.env.VERCEL_ENV || 'development'` -- this will show `preview` for staging. Add `NEXT_PUBLIC_IS_STAGING` check for proper labeling.
-
-### Pattern 3: Persistent Neon Staging Branch
-
-**What:** Create a long-lived Neon branch named `staging` as child of the production (main) branch.
-**Why:** Preserves connection string across resets, isolates staging push notification data from production, enables testing push notification flows without affecting real dose schedules.
-**Confidence:** HIGH (official Neon docs, designed for this use case)
-
-**One-time setup:**
-1. In Neon Console or via CLI: create branch `staging` from the primary/main branch
-2. Note the connection string (it persists through resets)
-3. Store in Vercel as staging-specific `DATABASE_URL` env var
-4. Store `NEON_API_KEY` and `NEON_PROJECT_ID` in GitHub repository secrets/variables
-
-**Reset workflow (`.github/workflows/staging-reset.yml`):**
-```yaml
-name: Reset Staging Database
-
-on:
-  workflow_dispatch:
-
-jobs:
-  reset:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: neondatabase/reset-branch-action@v1
-        with:
-          project_id: ${{ vars.NEON_PROJECT_ID }}
-          branch: staging
-          parent: true
-          api_key: ${{ secrets.NEON_API_KEY }}
-```
-
-**Neon action versions (current as of April 2026):**
-- `neondatabase/create-branch-action@v6` -- creates branches, returns `db_url`, `db_url_pooled`, `branch_id`, `password`
-- `neondatabase/reset-branch-action@v1` (v1.3.2) -- resets branch to parent state, preserves connection string
-- `neondatabase/delete-branch-action@v3` -- cleanup (not needed for persistent staging)
-
-### Pattern 4: Conventional Commits for Release Please
-
-**What:** Adopt conventional commit message format so Release Please can parse intent.
-**Why:** Release Please determines version bumps from commit prefixes. Without conventional commits, no releases are created.
-**Confidence:** HIGH (hard requirement of Release Please)
-
-**Commit prefixes that matter:**
-- `feat:` -- triggers minor version bump
-- `fix:` -- triggers patch version bump
-- `feat!:` or `fix!:` or `BREAKING CHANGE:` footer -- triggers major version bump (or minor while < 1.0.0)
-- `chore:`, `docs:`, `style:`, `refactor:`, `perf:`, `test:` -- appear in changelog but do NOT trigger release by default
-
-**Migration from current style:**
-The project currently uses prefixed messages like `chore: bump version`, `docs(phase-26): complete phase`, `feat/ui-fixes` branch names. The existing style partially aligns with conventional commits but needs consistency enforcement. No linting tool is required immediately (commitlint is optional and adds complexity) -- just team discipline.
-
-### Pattern 5: GitHub Environment Protection Rules for Promotion
-
-**What:** Use GitHub's environment protection rules to gate production promotions.
-**Why:** Prevents accidental production deploys, creates audit trail, works with manual `workflow_dispatch`.
-**Confidence:** HIGH (native GitHub feature, no third-party deps)
-
-**Setup:**
-1. In GitHub repo > Settings > Environments > Create `production` environment
-2. Add required reviewers (the repo owner)
-3. Create promotion workflow that references this environment
-
-**Promotion workflow (`.github/workflows/promote.yml`):**
-```yaml
-name: Promote Staging to Production
-
-on:
-  workflow_dispatch:
-    inputs:
-      confirm:
-        description: 'Type "promote" to confirm'
-        required: true
-
-jobs:
-  promote:
-    runs-on: ubuntu-latest
-    environment: production  # triggers approval gate
-    if: github.event.inputs.confirm == 'promote'
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: staging
-      - name: Merge staging into main
-        run: |
-          git fetch origin main
-          git checkout main
-          git merge origin/staging --no-edit
-          git push origin main
-```
-
-**Note:** This is a lightweight approach. Vercel also supports staged production deployments (disable auto-assign domains, then manually promote), but that requires more Vercel Dashboard interaction and is less auditable than a GitHub-native workflow.
-
-## Integration Points with Existing CI
-
-### Existing `ci.yml` -- Modifications Required
-
-The current CI triggers on `pull_request` to `main` only. Two changes needed:
-
-**1. Add staging branch to CI triggers (OPTIONAL but recommended):**
-```yaml
-on:
-  pull_request:
-    branches: [main, staging]
-```
-This ensures PRs targeting staging also pass CI. However, if staging is always updated by merging main (which already passed CI), this may be unnecessary. Recommend adding it for safety -- someone might push directly to staging.
-
-**2. No changes needed to the 12 existing jobs.** The `ci-pass` gate job, path filters, E2E tests, supply chain audit, etc. all work as-is. The CI pipeline is purely a quality gate on PRs and does not interact with release or deployment logic.
-
-### Existing `version-bump.yml` -- DELETE
-
-Release Please completely replaces `version-bump.yml`. The current workflow:
-- Triggers on push to main
-- Parses commit messages for `[major]`/`[minor]` markers
-- Bumps `package.json` and pushes a commit
-
-Release Please does all of this better:
-- Uses conventional commit parsing (industry standard vs custom markers)
-- Creates a release PR instead of auto-committing (reviewable)
-- Generates CHANGELOG.md
-- Creates GitHub Releases with tags
-- Manifest tracks version separately from package.json
-
-**Migration path:** Delete `version-bump.yml` and add `release-please.yml` in the same PR. Set `.release-please-manifest.json` to current version `"0.1.0"` and optionally set `bootstrap-sha` in config to the current HEAD of main.
-
-### New Workflows Summary
-
-| Workflow | Trigger | Purpose | GitHub Secrets/Vars Needed |
-|----------|---------|---------|---------------------------|
-| `release-please.yml` | `push: branches: [main]` | Create release PRs, GitHub Releases | `GITHUB_TOKEN` (built-in) |
-| `staging-reset.yml` | `workflow_dispatch` | Reset Neon staging branch to production data | `NEON_API_KEY` (secret), `NEON_PROJECT_ID` (var) |
-| `promote.yml` | `workflow_dispatch` | Merge staging to main with approval gate | `GITHUB_TOKEN` (built-in) |
-
-### New GitHub Repository Configuration
-
-| Setting | Location | Value |
-|---------|----------|-------|
-| `NEON_API_KEY` | Repo Secrets | Neon API key from Neon Console > Account Settings |
-| `NEON_PROJECT_ID` | Repo Variables | Neon project ID from Neon Console > Project Settings |
-| `production` environment | Repo Settings > Environments | Required reviewer: repo owner |
-
-### New Vercel Project Configuration
-
-| Setting | Location | Value |
-|---------|----------|-------|
-| Domain `staging.intake-tracker.ryanjnoble.dev` | Project > Settings > Domains | Assigned to Preview env, branch `staging` |
-| DNS CNAME | DNS provider | `staging.intake-tracker.ryanjnoble.dev` -> `cname.vercel-dns.com` |
-| `DATABASE_URL` (staging override) | Project > Settings > Env Vars | Preview + branch `staging`, Neon staging branch URL |
-| `DATABASE_URL_UNPOOLED` (staging override) | Project > Settings > Env Vars | Preview + branch `staging`, Neon staging branch URL |
-| `NEXT_PUBLIC_IS_STAGING` | Project > Settings > Env Vars | Preview + branch `staging`, value `true` |
-
-### Code Changes Required
-
-**`next.config.js`** -- Add staging detection:
-```javascript
-env: {
-  NEXT_PUBLIC_APP_VERSION: packageJson.version,
-  NEXT_PUBLIC_GIT_SHA: process.env.VERCEL_GIT_COMMIT_SHA || 'local',
-  NEXT_PUBLIC_VERCEL_ENV: process.env.VERCEL_ENV || 'development',
-  // NEW: staging detection via branch name (Hobby plan compatible)
-  NEXT_PUBLIC_IS_STAGING: process.env.VERCEL_GIT_COMMIT_REF === 'staging' ? 'true' : '',
-},
-```
-
-**`about-dialog.tsx`** -- Add staging label:
 ```typescript
-const isStaging = process.env.NEXT_PUBLIC_IS_STAGING === 'true';
+// BEFORE (intake-service.ts)
+export async function addIntakeRecord(...): Promise<ServiceResult<IntakeRecord>> {
+  const record: IntakeRecord = { id: generateId(), ...syncFields() };
+  await db.intakeRecords.add(record);
+  return ok(record);
+}
 
-function getEnvLabel(env: string): { label: string; className: string } {
-  if (isStaging) {
-    return { label: "Staging", className: "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300" };
-  }
-  switch (env) {
-    case "production":
-      return { label: "Production", className: "..." };
-    // ...
-  }
+// AFTER (intake-service.ts)
+export async function addIntakeRecord(...): Promise<ServiceResult<IntakeRecord>> {
+  const record: IntakeRecord = { id: generateId(), ...syncFields() };
+  await db.intakeRecords.add(record);
+  syncQueue.enqueue('intakeRecords', record.id, 'create');
+  return ok(record);
 }
 ```
 
-**`/api/version` route** -- Add staging flag:
+**Impact:** Every `*-service.ts` file gains a `syncQueue.enqueue()` call after write operations. The number of affected service files: ~15.
+
+**Field-level timestamps:** For per-field merge conflict resolution, the `updatedAt` on the record level is insufficient. Each mutable field needs its own timestamp. This is handled at the Postgres schema level (not in Dexie -- Dexie keeps current `updatedAt` for simplicity). The sync engine compares field timestamps during merge.
+
+#### 2. Database Schema (`src/lib/db.ts`) -- MODERATE CHANGE
+
+**New Dexie version (v16):**
+- Add `_syncMeta` table to track per-record sync status
+- Add `syncVersion` field for vector clock / sequence tracking
+- **No structural changes to existing 16 tables** -- the current `createdAt`/`updatedAt`/`deletedAt`/`deviceId` fields are already sync-ready (this was designed from v10)
+
 ```typescript
-return NextResponse.json({
-  version: process.env.NEXT_PUBLIC_APP_VERSION || "0.0.0",
-  gitSha: process.env.NEXT_PUBLIC_GIT_SHA || "local",
-  environment: process.env.NEXT_PUBLIC_VERCEL_ENV || "development",
-  isStaging: process.env.NEXT_PUBLIC_IS_STAGING === 'true',
+// New table in Dexie v16
+interface SyncMeta {
+  id: string;           // composite: "tableName:recordId"
+  tableName: string;
+  recordId: string;
+  status: 'clean' | 'dirty' | 'pending' | 'conflict';
+  lastSyncedAt: number; // timestamp of last successful sync
+  syncVersion: number;  // monotonic sequence for ordering
+}
+
+db.version(16).stores({
+  // ... all existing v15 stores unchanged ...
+  _syncMeta: "id, tableName, status, lastSyncedAt",
 });
 ```
 
+#### 3. Provider Stack (`src/app/providers.tsx`) -- SIGNIFICANT CHANGE
+
+**Current:** `ErrorBoundary > QueryClientProvider > ThemeProvider > PrivyProvider > PinGateProvider > TimezoneGuard`
+
+**Target:** `ErrorBoundary > QueryClientProvider > ThemeProvider > NeonAuthProvider > SyncProvider > TimezoneGuard`
+
+Changes:
+- **Remove:** `PrivyProvider`, `PrivyProviderWithTheme`, `PinGateProvider`
+- **Add:** `NeonAuthProvider` (wraps Neon Auth client context)
+- **Add:** `SyncProvider` (manages sync engine lifecycle, online/offline state)
+- **PinGateProvider removal:** PIN gate is eliminated entirely (Neon Auth handles access control)
+
+```typescript
+// Target providers.tsx
+export function Providers({ children }: { children: React.ReactNode }) {
+  return (
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <NeonAuthProvider>
+            <SyncProvider>
+              <TimezoneGuard>{children}</TimezoneGuard>
+            </SyncProvider>
+          </NeonAuthProvider>
+        </ThemeProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
+  );
+}
+```
+
+#### 4. Auth Middleware (`src/lib/auth-middleware.ts` + `src/lib/privy-server.ts`) -- REPLACE
+
+**Current:** `withAuth()` verifies Privy JWT via `@privy-io/server-auth`, checks email whitelist.
+
+**Target:** `withAuth()` calls `auth.getSession()` from `@neondatabase/auth/next/server`. Session is cookie-based (not Bearer token).
+
+```typescript
+// New auth-middleware.ts
+import { auth } from '@/lib/auth/server';
+
+export function withAuth(handler: AuthenticatedHandler) {
+  return async (request: NextRequest): Promise<NextResponse> => {
+    const { data: session } = await auth.getSession({
+      headers: request.headers,
+    });
+
+    if (!session?.user) {
+      return NextResponse.json(
+        { error: "Unauthorized", requiresAuth: true },
+        { status: 401 }
+      );
+    }
+
+    return handler({ request, auth: {
+      success: true,
+      userId: session.user.id,
+      email: session.user.email,
+    }});
+  };
+}
+```
+
+**Files affected:**
+- `src/lib/auth-middleware.ts` -- rewrite
+- `src/lib/privy-server.ts` -- delete entirely
+- `src/hooks/use-pin-gate.tsx` -- delete entirely
+- `src/lib/pin-service.ts` -- delete entirely
+- `src/components/pin-dialog.tsx` -- delete entirely
+
+#### 5. Push Notification DB (`src/lib/push-db.ts`) -- MODERATE CHANGE
+
+**Current:** Uses `@neondatabase/serverless` with raw SQL against 4 push tables.
+
+**Target:** Same 4 push tables stay, but `user_id` column values change from Privy user IDs to Neon Auth user IDs. Needs a one-time migration of `user_id` values.
+
+The push-db.ts code itself needs minimal changes -- the SQL queries are parameterized by `userId` already. The change is the ID format flowing in from the new auth middleware.
+
+#### 6. ID Generation (`src/lib/utils.ts`) -- CONSIDER CHANGING
+
+**Current:** `Date.now()-random7chars` format (e.g., `1712345678901-abc1234`).
+
+**Decision needed:** These IDs work fine for sync (they are unique per-device). However, for the Postgres schema, UUIDs are conventional. Two options:
+- **Option A (recommended):** Keep existing IDs as-is. They are already unique, sortable, and embedded in all production data. The Postgres `id` column is `TEXT PRIMARY KEY`.
+- **Option B:** Switch to `crypto.randomUUID()` for new records going forward. Old records keep their format. Postgres accepts both.
+
+**Recommendation:** Option A. Changing ID format mid-stream creates unnecessary complexity. The current format is functionally equivalent to a ULID (time-sortable + random suffix).
+
+---
+
+## New Components
+
+### 1. Sync Engine (`src/lib/sync-engine.ts`) -- CORE NEW COMPONENT
+
+The sync engine is the most architecturally significant new piece. It sits between the service layer and the server.
+
+**Responsibilities:**
+- Track dirty records via `_syncMeta` table
+- Batch push dirty records to server
+- Pull remote changes and apply to Dexie
+- Handle per-field timestamp merge on conflicts
+- Manage online/offline state transitions
+- Retry failed syncs with exponential backoff
+
+**Architecture:**
+
+```
++------------------+
+| SyncEngine       |
+|                  |
+| - syncQueue      |  <-- Enqueued by service layer after writes
+| - pushWorker     |  <-- Batches dirty records, POSTs to /api/sync/push
+| - pullWorker     |  <-- Periodically GETs /api/sync/pull?since=<cursor>
+| - conflictMerger |  <-- Per-field LWW merge
+| - stateManager   |  <-- online/offline/syncing/error states
++------------------+
+```
+
+**Sync protocol (pull):**
+```
+Client: GET /api/sync/pull?since=1712345678901&tables=intakeRecords,weightRecords,...
+Server: { changes: [...], cursor: 1712345999000, hasMore: false }
+```
+
+**Sync protocol (push):**
+```
+Client: POST /api/sync/push
+Body: { changes: [{ table, id, data, updatedAt, fieldTimestamps }] }
+Server: { accepted: [...], conflicts: [...], rejected: [...] }
+```
+
+**Per-field timestamp merge:**
+
+For conflict resolution, the server maintains a JSONB column `field_timestamps` on each row. When client and server both modified the same record, the merge function compares timestamps per-field:
+
+```typescript
+// Server-side merge (in /api/sync/push handler)
+function mergeRecord(
+  serverRow: Record<string, unknown>,
+  serverFieldTs: Record<string, number>,
+  clientData: Record<string, unknown>,
+  clientFieldTs: Record<string, number>
+): Record<string, unknown> {
+  const merged: Record<string, unknown> = { ...serverRow };
+  for (const [field, clientTs] of Object.entries(clientFieldTs)) {
+    const serverTs = serverFieldTs[field] ?? 0;
+    if (clientTs > serverTs) {
+      merged[field] = clientData[field];
+    }
+  }
+  return merged;
+}
+```
+
+### 2. Neon Auth Client (`src/lib/auth/server.ts` + `src/lib/auth/client.ts`)
+
+**Server (`src/lib/auth/server.ts`):**
+```typescript
+import { createNeonAuth } from '@neondatabase/auth/next/server';
+
+export const auth = createNeonAuth({
+  baseUrl: process.env.NEON_AUTH_BASE_URL!,
+  cookies: { secret: process.env.NEON_AUTH_COOKIE_SECRET! },
+});
+```
+
+**Client (`src/lib/auth/client.ts`):**
+```typescript
+'use client';
+import { createAuthClient } from '@neondatabase/auth/next';
+export const authClient = createAuthClient();
+```
+
+**Auth API route (`src/app/api/auth/[...path]/route.ts`):**
+```typescript
+import { auth } from '@/lib/auth/server';
+export const { GET, POST } = auth.handler();
+```
+
+### 3. Sync API Routes
+
+Three new API routes handle the sync protocol:
+
+**`/api/sync/push` (POST)** -- Receives batched changes from client
+- Authenticates via `auth.getSession()`
+- Validates payload (table name, record structure)
+- For each change: check server `updatedAt` vs client `updatedAt`
+  - No conflict: upsert to Postgres
+  - Conflict: per-field merge, return merged result
+- Returns accepted/conflict/rejected arrays
+
+**`/api/sync/pull` (GET)** -- Returns changes since cursor
+- Authenticates via `auth.getSession()`
+- Queries Postgres for records where `updated_at > cursor`
+- Returns paginated results with next cursor
+- Single-user app means no row-level security needed beyond auth check
+
+**`/api/sync/status` (GET)** -- Health check
+- Returns sync state, last sync time, pending changes count
+
+### 4. NeonDB Schema (`src/db/schema.ts` -- NEW, Drizzle ORM)
+
+The Postgres schema mirrors all 16 Dexie tables. Each table gets:
+- Same columns as the Dexie interface
+- `id TEXT PRIMARY KEY` (keeps existing ID format)
+- `field_timestamps JSONB` -- per-field update timestamps for merge
+- `user_id TEXT NOT NULL REFERENCES neon_auth.user(id)` -- ties data to auth user
+- Standard Postgres indexes mirroring Dexie compound indexes
+
+```typescript
+// Example: intake_records table in Drizzle
+export const intakeRecords = pgTable('intake_records', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => neonAuthUser.id),
+  type: text('type').notNull(),           // "water" | "salt"
+  amount: integer('amount').notNull(),
+  timestamp: bigint('timestamp', { mode: 'number' }).notNull(),
+  source: text('source'),
+  note: text('note'),
+  groupId: text('group_id'),
+  originalInputText: text('original_input_text'),
+  groupSource: text('group_source'),
+  createdAt: bigint('created_at', { mode: 'number' }).notNull(),
+  updatedAt: bigint('updated_at', { mode: 'number' }).notNull(),
+  deletedAt: bigint('deleted_at', { mode: 'number' }),
+  deviceId: text('device_id').notNull(),
+  timezone: text('timezone').notNull(),
+  fieldTimestamps: jsonb('field_timestamps').$type<Record<string, number>>(),
+});
+```
+
+### 5. Data Migration Service (`src/lib/migration-service.ts`)
+
+One-time upload of all IndexedDB data to NeonDB after the user authenticates with Neon Auth for the first time.
+
+**Flow:**
+1. User signs in with Neon Auth
+2. App checks: does the server have data for this user?
+3. If empty: read all 16 Dexie tables, batch-upload to `/api/sync/push`
+4. Mark migration as complete in `_syncMeta`
+5. Normal bidirectional sync begins
+
+### 6. SyncProvider (`src/providers/sync-provider.tsx`)
+
+React context provider that:
+- Initializes the sync engine on mount
+- Exposes sync state to UI (`syncing`, `online`, `lastSyncAt`, `pendingCount`)
+- Listens to `navigator.onLine` events
+- Triggers pull on app focus / online transition
+- Provides `forceSync()` for manual trigger from Settings
+
+---
+
+## Data Flow Changes
+
+### Write Path (Before)
+
+```
+UI action -> useMutation -> service.add() -> db.table.add() -> Dexie -> done
+                                                                  |
+                                                          useLiveQuery re-fires
+```
+
+### Write Path (After)
+
+```
+UI action -> useMutation -> service.add() -> db.table.add() -> Dexie -> done
+                                                |                  |
+                                                |          useLiveQuery re-fires
+                                                v
+                                        syncQueue.enqueue()
+                                                |
+                                    [background, debounced]
+                                                |
+                                        syncEngine.push()
+                                                |
+                                        POST /api/sync/push
+                                                |
+                                        Neon Postgres
+```
+
+### Read Path (Unchanged)
+
+```
+UI component -> useLiveQuery(service.getX()) -> Dexie -> result
+```
+
+Reads always come from Dexie. The sync engine keeps Dexie up-to-date with remote changes via periodic pulls.
+
+### Offline Behavior
+
+```
+Online:  write -> Dexie + syncQueue -> push to server (immediate or debounced)
+Offline: write -> Dexie + syncQueue -> queued (status: 'dirty')
+Reconnect: syncEngine detects online -> flush dirty queue -> pull remote changes
+```
+
+---
+
+## Patterns to Follow
+
+### Pattern 1: Local-First Writes with Async Sync
+
+**What:** Every write hits Dexie first, then syncs in the background.
+**When:** Always -- this is the fundamental pattern.
+**Why:** Zero-latency UI updates. Offline works. Sync failures do not block the user.
+
+### Pattern 2: Per-Field Last-Write-Wins Merge
+
+**What:** When both client and server modified the same record, merge by comparing timestamps on individual fields rather than rejecting the entire record.
+**When:** Conflict detected during push.
+**Why:** Record-level LWW would lose data (e.g., user edits `note` on phone, `amount` on desktop -- record-level LWW discards one). Field-level LWW preserves both. For a single-user app, conflicts are rare (only phone-while-offline vs desktop), making this the sweet spot between simplicity and correctness.
+
+### Pattern 3: Cursor-Based Pull Sync
+
+**What:** Client stores a cursor (last `updatedAt` timestamp seen from server). Pulls only changes after that cursor.
+**When:** Every pull sync (periodic + on-reconnect + on-focus).
+**Why:** Efficient -- avoids full table scans. The cursor is a simple `bigint` (Unix ms timestamp), already the format used by all records.
+
+### Pattern 4: Sync-Transparent Hook Layer
+
+**What:** Hooks (`use-*-queries.ts`) do NOT know about sync. They call services, which handle sync enqueuing internally.
+**When:** Always.
+**Why:** 15 hook files do not need modification. The sync concern is encapsulated in the service layer.
+
+---
+
 ## Anti-Patterns to Avoid
 
-### Anti-Pattern 1: Ephemeral Per-PR Neon Branches
-**What:** Creating a new Neon branch for every PR and deleting on close.
-**Why bad:** This project has exactly one server-side database use (push notifications). Per-PR branches add workflow complexity for negligible benefit. The push notification tables contain schedule metadata, not user-facing content that varies per feature.
-**Instead:** Single persistent `staging` branch, reset manually when needed.
+### Anti-Pattern 1: Dual-Write at the Hook Layer
 
-### Anti-Pattern 2: Vercel CLI Deploys from GitHub Actions
-**What:** Using `vercel deploy --prod` or `vercel deploy --target=staging` from CI.
-**Why bad:** Duplicates Vercel's built-in Git integration, requires managing Vercel tokens in GitHub, creates two deployment paths (Git push vs CLI), harder to debug.
-**Instead:** Let Vercel's Git integration handle deployments. Push to branch = deploy. The only CLI interaction needed is initial domain/env var setup.
+**What:** Having hooks write to both Dexie and call a remote API directly.
+**Why bad:** 15 hook files each handling online/offline branching. Error-prone, unmaintainable.
+**Instead:** Services handle Dexie write + sync enqueue. Hooks call services only.
 
-### Anti-Pattern 3: Release Please with PAT Instead of GITHUB_TOKEN
-**What:** Creating a Personal Access Token for Release Please to trigger other workflows.
-**Why bad:** Security risk, token management overhead. Release Please PRs created with `GITHUB_TOKEN` intentionally don't trigger other workflows (prevents infinite loops).
-**Instead:** Use `GITHUB_TOKEN`. If you later need the release to trigger another workflow (e.g., Capacitor build), use `on: release` trigger in that workflow, which fires on the GitHub Release event regardless of token type.
+### Anti-Pattern 2: Server as Source of Truth for Reads
 
-### Anti-Pattern 4: Custom `VERCEL_ENV` Overrides
-**What:** Overriding `VERCEL_ENV` system variable via project env vars to make staging show as custom value.
-**Why bad:** `VERCEL_ENV` is a system variable, overriding it can break Vercel's internal behavior and Next.js conditional logic that depends on it.
-**Instead:** Use a custom `NEXT_PUBLIC_IS_STAGING` variable and detect via `VERCEL_GIT_COMMIT_REF`.
+**What:** Fetching from Postgres for UI rendering.
+**Why bad:** Requires network for every read. Breaks offline. Adds latency. Negates the local-first architecture.
+**Instead:** Always read from Dexie. Sync engine keeps Dexie fresh.
 
-### Anti-Pattern 5: Automatic Staging Reset on Every Push
-**What:** Resetting the Neon staging branch automatically whenever staging deploys.
-**Why bad:** Destroys any test data in staging that you're actively verifying. The staging DB should be stable during testing, only reset deliberately.
-**Instead:** Manual `workflow_dispatch` for staging reset. Developer decides when fresh data is needed.
+### Anti-Pattern 3: Full Table Sync
+
+**What:** Dumping entire tables on each sync cycle.
+**Why bad:** 16 tables x potentially thousands of records. Wasteful bandwidth. Slow.
+**Instead:** Cursor-based delta sync with dirty tracking.
+
+### Anti-Pattern 4: Sync in the Service Worker
+
+**What:** Running the sync engine inside the service worker.
+**Why bad:** Dexie access from SW is possible but complex (different context, no React state, error handling is harder). The SW currently handles push notifications only.
+**Instead:** Sync engine runs in the main thread via SyncProvider. Uses `navigator.onLine` and visibility API for triggers.
+
+---
+
+## Integration Points Summary
+
+| Integration Point | Current | Target | Complexity |
+|-------------------|---------|--------|-----------|
+| Service layer writes | Direct Dexie | Dexie + sync enqueue | LOW -- add one line per write |
+| Hook reads | useLiveQuery | useLiveQuery (unchanged) | NONE |
+| Provider stack | Privy + PIN | Neon Auth + Sync | MEDIUM -- structural |
+| Auth middleware | Privy JWT | Neon Auth session | MEDIUM -- rewrite |
+| Push notifications | Privy userId | Neon Auth userId | LOW -- ID swap |
+| Neon Postgres | 4 push tables | ALL tables (16 data + 4 push + 1 sync meta) | HIGH -- schema design |
+| Settings sync | N/A (localStorage only) | Consider future `user_settings` table | DEFERRED |
+| Backup service | Export/import all 16 tables to JSON | Still works, but becomes secondary to sync | LOW -- keep as-is |
+
+---
 
 ## Suggested Build Order
 
-Dependencies between features determine implementation order:
+Build order is constrained by dependencies. Each phase should be independently deployable.
 
-```
-Phase 1: Release Please (no external deps)
-   └──> Phase 2: Neon Staging Branch (independent, but needed before Phase 3)
-          └──> Phase 3: Vercel Staging Environment (needs Neon branch URL for env vars)
-                 └──> Phase 4: Promotion Workflow (needs staging to exist)
-                        └──> Phase 5: Code Changes (staging detection, UI labels)
-```
+### Phase 1: Settings Restructure (No data layer changes)
+**Rationale:** Pure UI work with zero risk to data. Ships value independently.
+- Expandable accordion sections
+- Modals eliminated
+- New UI/UX section
+- Storage & Security section (placeholder for sync status)
 
-### Phase 1: Release Please (~1-2 plans)
-- Create `release-please-config.json` and `.release-please-manifest.json`
-- Create `.github/workflows/release-please.yml`
-- Delete `.github/workflows/version-bump.yml`
-- Set `bootstrap-sha` to current HEAD of main
-- First release PR will appear after next conventional commit to main
-- **No CI changes needed.** Release Please runs independently of CI.
+### Phase 2: Neon Auth + Remove Privy
+**Rationale:** Auth must be in place before sync API routes can be protected.
+- Install `@neondatabase/auth`
+- Create `lib/auth/server.ts` + `lib/auth/client.ts`
+- Create `/api/auth/[...path]/route.ts`
+- Rewrite `auth-middleware.ts`
+- Replace PrivyProvider in providers.tsx
+- Remove PIN gate entirely
+- Delete `privy-server.ts`, `pin-service.ts`, `use-pin-gate.tsx`, `pin-dialog.tsx`
+- Remove `@privy-io/react-auth`, `@privy-io/server-auth` from dependencies
+- Update E2E tests for new auth flow
+- Migrate push `user_id` values
 
-### Phase 2: Neon Staging Branch (~1 plan)
-- Create `staging` branch in Neon Console from primary branch
-- Note connection strings (pooled and unpooled)
-- Add `NEON_API_KEY` to GitHub repo secrets
-- Add `NEON_PROJECT_ID` to GitHub repo variables
-- Create `.github/workflows/staging-reset.yml`
-- **No CI changes needed.** This is infrastructure setup.
+### Phase 3: Postgres Schema + Drizzle Setup
+**Rationale:** Schema must exist before sync engine can push to it.
+- Install Drizzle ORM + drizzle-kit
+- Define all 16 data tables in `src/db/schema.ts`
+- Define `field_timestamps` JSONB column
+- Define `user_id` foreign key to neon_auth.user
+- Run migrations on Neon staging branch
+- Keep existing push tables (move under managed migrations)
 
-### Phase 3: Vercel Staging Environment (~1 plan)
-- Create `staging` git branch from `main`
-- Add `staging.intake-tracker.ryanjnoble.dev` domain in Vercel, assign to `staging` branch
-- Add DNS CNAME record
-- Add staging-specific env vars in Vercel (DATABASE_URL overrides, NEXT_PUBLIC_IS_STAGING)
-- Push to `staging` branch to trigger first staging deploy
-- Verify staging deploys and uses staging Neon branch
-- **Optional CI change:** Add `staging` to `ci.yml` PR branch targets
+### Phase 4: Sync Engine Core
+**Rationale:** Core sync plumbing -- dirty tracking, push, pull, merge.
+- Dexie v16 with `_syncMeta` table
+- `sync-engine.ts` -- queue, push worker, pull worker
+- `sync-queue.ts` -- enqueue/dequeue with debounce
+- `/api/sync/push` and `/api/sync/pull` routes
+- Per-field LWW merge on server
+- SyncProvider for lifecycle management
+- Online/offline state handling
 
-### Phase 4: Promotion Workflow (~1 plan)
-- Create `production` GitHub environment with approval gate
-- Create `.github/workflows/promote.yml`
-- Test promotion flow: staging -> approve -> merge to main -> production deploy
+### Phase 5: Service Layer Integration
+**Rationale:** Wire sync into existing writes.
+- Add `syncQueue.enqueue()` to all service write operations
+- Test: write offline, reconnect, verify sync
+- Test: concurrent edits, verify per-field merge
 
-### Phase 5: Code Changes (~1 plan)
-- Update `next.config.js` with staging detection
-- Update `about-dialog.tsx` with staging environment label
-- Update `/api/version` route with staging flag
-- Update any other environment-aware UI components
-- Add/update tests for environment detection logic
+### Phase 6: One-Time Data Migration
+**Rationale:** Ship last -- the migration only runs once per user.
+- `migration-service.ts` -- reads all Dexie data, batch-pushes to server
+- Migration status tracking in `_syncMeta`
+- Progress UI in Settings
+- Rollback capability (can re-run migration)
 
-### Phase ordering rationale:
-1. **Release Please first** because it is fully independent, replaces the broken `version-bump.yml`, and every subsequent merge to main will generate proper releases
-2. **Neon before Vercel** because the staging Vercel environment needs the Neon staging connection string as an env var
-3. **Vercel staging before promotion** because there is nothing to promote until staging exists
-4. **Code changes last** because they are purely cosmetic (staging label) and the staging environment functions correctly without them
+---
 
 ## Scalability Considerations
 
-| Concern | Current (1 user) | Future (multi-env) | Future (multi-platform) |
-|---------|-------------------|---------------------|------------------------|
-| Release automation | Release Please, single package | Release Please manifest supports monorepo packages | Release Please can trigger platform-specific builds via `on: release` |
-| Staging environments | Single `staging` branch + Neon branch | Could add `qa` environment on Pro plan | Each platform build could have its own staging |
-| Database branches | 1 production + 1 staging | Neon supports many branches, per-PR if needed | Same pattern, more branches |
-| CI pipeline | 12 jobs, PR-only | Add staging branch targets | Add platform-specific build jobs |
-| Promotion gates | Manual workflow_dispatch | Could add automated smoke tests pre-promotion | Same pattern, more approval steps |
+| Concern | Current (single device) | After sync (phone + desktop) | Future (if multi-user ever) |
+|---------|------------------------|------------------------------|---------------------------|
+| Data volume | ~1K records typical | Same total, split across devices | Would need RLS policies |
+| Conflict frequency | Zero | Very low (single user, sequential usage pattern) | Would need CRDT or OT |
+| Sync latency | N/A | Acceptable at 1-5s debounce + pull interval | Would need WebSocket/SSE |
+| Storage | IndexedDB only | IndexedDB + Neon Postgres | Same |
+| Auth | Privy JWT | Neon Auth session cookies | Neon Auth scales to multi-user |
+
+## Environment Variables (New)
+
+| Variable | Purpose | Where |
+|----------|---------|-------|
+| `NEON_AUTH_BASE_URL` | Neon Auth API endpoint | `.env.local`, Vercel |
+| `NEON_AUTH_COOKIE_SECRET` | Session cookie encryption | `.env.local`, Vercel |
+| `DATABASE_URL` | Neon pooled connection (already exists for push) | Already configured |
+
+**Removed:**
+| Variable | Reason |
+|----------|--------|
+| `NEXT_PUBLIC_PRIVY_APP_ID` | Privy removed |
+| `NEXT_PUBLIC_PRIVY_CLIENT_ID` | Privy removed |
+| `PRIVY_APP_SECRET` | Privy removed |
+| `ALLOWED_EMAILS` | Replaced by Neon Auth user management |
+| `ALLOWED_WALLETS` | Privy wallet feature removed |
 
 ## Sources
 
-### Release Please
-- [googleapis/release-please-action (GitHub)](https://github.com/googleapis/release-please-action) -- HIGH confidence (official repo)
-- [Release Please manifest docs](https://github.com/googleapis/release-please/blob/main/docs/manifest-releaser.md) -- HIGH confidence (official docs)
-- [Release Please customization docs](https://github.com/googleapis/release-please/blob/main/docs/customizing.md) -- HIGH confidence (official docs)
-
-### Vercel Staging
-- [Vercel Environments docs](https://vercel.com/docs/deployments/environments) -- HIGH confidence (official docs)
-- [Vercel staging environment KB](https://vercel.com/kb/guide/set-up-a-staging-environment-on-vercel) -- HIGH confidence (official KB)
-- [Vercel assign domain to git branch](https://vercel.com/docs/domains/working-with-domains/assign-domain-to-a-git-branch) -- HIGH confidence (official docs)
-- [Vercel system environment variables](https://vercel.com/docs/environment-variables/system-environment-variables) -- HIGH confidence (official docs, critical for VERCEL_ENV vs VERCEL_TARGET_ENV distinction)
-- [Vercel promoting deployments](https://vercel.com/docs/deployments/promoting-a-deployment) -- HIGH confidence (official docs)
-
-### Neon Database Branching
-- [Neon GitHub Actions branching guide](https://neon.com/docs/guides/branching-github-actions) -- HIGH confidence (official docs)
-- [neondatabase/create-branch-action (GitHub)](https://github.com/neondatabase/create-branch-action) -- HIGH confidence (official action, v6)
-- [neondatabase/reset-branch-action (GitHub)](https://github.com/neondatabase/reset-branch-action) -- HIGH confidence (official action, v1.3.2)
-- [Neon branching with preview environments](https://neon.com/blog/branching-with-preview-environments) -- MEDIUM confidence (blog post, but official)
-- [Neon practical guide to database branching](https://neon.com/blog/practical-guide-to-database-branching) -- MEDIUM confidence (blog post, but official)
-
-### GitHub Actions
-- [GitHub environments for deployment](https://docs.github.com/actions/deployment/targeting-different-environments/using-environments-for-deployment) -- HIGH confidence (official docs)
-- [GitHub reviewing deployments (approval gates)](https://docs.github.com/actions/managing-workflow-runs/reviewing-deployments) -- HIGH confidence (official docs)
+- [Neon Auth Overview](https://neon.com/docs/auth/overview) -- Architecture, neon_auth schema, RLS integration
+- [Neon Auth + Next.js Quick Start](https://neon.com/docs/auth/quick-start/nextjs) -- Setup guide, session access
+- [Neon Auth Next.js API-Only](https://neon.com/docs/auth/quick-start/nextjs-api-only) -- API route protection
+- [Neon Auth + Next.js Guide](https://neon.com/guides/neon-auth-nextjs) -- Full file structure, Drizzle integration
+- [Drizzle ORM + Neon Postgres](https://orm.drizzle.team/docs/tutorials/drizzle-with-neon) -- Schema setup, migrations
+- [Neon Schema Migrations with Drizzle](https://neon.com/docs/guides/drizzle-migrations) -- Migration workflow
+- [Offline Sync & Conflict Resolution Patterns (Apr 2026)](https://www.sachith.co.uk/offline-sync-conflict-resolution-patterns-crash-course-practical-guide-apr-8-2026/) -- Per-field LWW patterns
+- [Building Offline-First Sync Engine (DEV Community)](https://dev.to/daliskafroyan/builing-an-offline-first-app-with-build-from-scratch-sync-engine-4a5e) -- Custom sync architecture
+- [Dexie.Syncable Documentation](https://dexie.org/docs/Syncable/db.syncable.connect()) -- Dexie sync protocol concepts
