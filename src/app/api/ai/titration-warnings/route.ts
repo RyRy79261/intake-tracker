@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
-import { getClaudeClient, CLAUDE_MODELS } from "../_shared/claude-client";
+import { getClaudeClient, CLAUDE_MODELS, WEB_SEARCH_TOOL } from "../_shared/claude-client";
 
 const RequestSchema = z.object({
   prescriptions: z
@@ -60,7 +60,9 @@ Focus on:
 - Symptoms requiring immediate medical attention
 
 Use the titration_warnings_result tool to return the warnings.
-Keep each warning to one short sentence. Aim for 4-8 warnings. Be practical and patient-friendly, not overly clinical.`;
+Keep each warning to one short sentence. Aim for 4-8 warnings. Be practical and patient-friendly, not overly clinical.
+
+Use web_search to verify current clinical guidance, side-effect profiles, and interaction concerns for the specific medications involved. Prefer web-verified information over your internal knowledge, especially for less common medications or recent dosing updates.`;
 
 export const POST = withAuth(async ({ request, auth }) => {
   try {
@@ -116,15 +118,18 @@ export const POST = withAuth(async ({ request, auth }) => {
 
     const response = await client.messages.create({
       model: CLAUDE_MODELS.quality,
-      max_tokens: 1536,
+      max_tokens: 2560,
       system: SYSTEM_PROMPT,
-      tools: [TITRATION_WARNINGS_TOOL],
+      tools: [WEB_SEARCH_TOOL, TITRATION_WARNINGS_TOOL],
       tool_choice: { type: "tool", name: "titration_warnings_result" },
       messages: [{ role: "user", content: prompt }],
     });
 
-    const toolBlock = response.content.find(b => b.type === "tool_use");
-    if (!toolBlock || toolBlock.type !== "tool_use") {
+    const toolBlock = response.content.find(
+      (b): b is Extract<typeof b, { type: "tool_use" }> =>
+        b.type === "tool_use" && b.name === "titration_warnings_result"
+    );
+    if (!toolBlock) {
       return NextResponse.json(
         { error: "AI service unavailable" },
         { status: 502 },

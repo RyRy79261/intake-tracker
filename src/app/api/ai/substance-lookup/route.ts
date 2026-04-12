@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
-import { getClaudeClient, CLAUDE_MODELS } from "../_shared/claude-client";
+import { getClaudeClient, CLAUDE_MODELS, WEB_SEARCH_TOOL } from "../_shared/claude-client";
 import { SubstanceLookupResponseSchema, SUBSTANCE_LOOKUP_TOOL } from "./schema";
 
 const RequestSchema = z.object({
@@ -64,20 +64,27 @@ export const POST = withAuth(async ({ request, auth }) => {
     }
 
     const systemPrompt = type === "caffeine"
-      ? "You are a beverage nutrition expert. Given a beverage name, estimate its caffeine content per 100ml and typical serving size. Be as accurate as possible based on known beverage data. Also estimate the beverage's water content as a percentage (0-100). Reference points: black coffee ~99%, beer ~93%, wine ~87%, spirits ~60%."
-      : "You are a beverage nutrition expert. Given a beverage name, estimate its ABV (alcohol by volume) percentage and typical serving size. Return the ABV as a percentage (e.g. 5 for beer, 12 for wine, 40 for spirits). Also estimate the beverage's water content as a percentage (0-100). Reference points: black coffee ~99%, beer ~93%, wine ~87%, spirits ~60%.";
+      ? `You are a beverage nutrition expert. Given a beverage name, estimate its caffeine content per 100ml and typical serving size. Also estimate the beverage's water content as a percentage (0-100). Reference points: black coffee ~99%, beer ~93%, wine ~87%, spirits ~60%.
+
+When to use web_search: if the item is a specific brand/product (e.g. "Mio Mio Mate Original", "Monster Energy", "Coca-Cola 330ml") where the actual label value matters, call web_search to look it up. For generic items ("black coffee", "green tea") you can estimate directly.`
+      : `You are a beverage nutrition expert. Given a beverage name, estimate its ABV (alcohol by volume) percentage and typical serving size. Return the ABV as a percentage (e.g. 5 for beer, 12 for wine, 40 for spirits). Also estimate the beverage's water content as a percentage (0-100). Reference points: black coffee ~99%, beer ~93%, wine ~87%, spirits ~60%.
+
+When to use web_search: if the item is a specific brand/product (e.g. "Heineken 0.0", "Jack Daniel's", "Aperol Spritz") where the actual label value matters, call web_search to look it up. For generic items ("light beer", "red wine") you can estimate directly.`;
 
     const response = await client.messages.create({
-      model: CLAUDE_MODELS.fast,
-      max_tokens: 512,
+      model: CLAUDE_MODELS.quality,
+      max_tokens: 1024,
       system: systemPrompt,
-      tools: [SUBSTANCE_LOOKUP_TOOL],
+      tools: [WEB_SEARCH_TOOL, SUBSTANCE_LOOKUP_TOOL],
       tool_choice: { type: "tool", name: SUBSTANCE_LOOKUP_TOOL.name },
       messages: [{ role: "user", content: `Estimate ${type} content per 100ml for: "${sanitized}"` }],
     });
 
-    const toolBlock = response.content.find(b => b.type === "tool_use");
-    if (!toolBlock || toolBlock.type !== "tool_use") {
+    const toolBlock = response.content.find(
+      (b): b is Extract<typeof b, { type: "tool_use" }> =>
+        b.type === "tool_use" && b.name === SUBSTANCE_LOOKUP_TOOL.name
+    );
+    if (!toolBlock) {
       return NextResponse.json({ error: "AI response format invalid" }, { status: 422 });
     }
 

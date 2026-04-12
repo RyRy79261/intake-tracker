@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
-import { getClaudeClient, CLAUDE_MODELS } from "../_shared/claude-client";
+import { getClaudeClient, CLAUDE_MODELS, WEB_SEARCH_TOOL } from "../_shared/claude-client";
 
 // --- Zod Schemas (co-located per user decision) ---
 
@@ -36,7 +36,9 @@ const SYSTEM_PROMPT = `You are a pharmaceutical information assistant. When give
 If the user searches for a specific brand name, you MUST provide the physical description for that specific brand and include the searched brand name in the response. If you cannot find information for that exact brand and must fall back to generic information, explicitly mention that the physical description and details are for the generic equivalent.
 
 Be precise with medical information. If you're uncertain about food instructions, default to "none".
-For pill appearance, research the most common commercially available form of the medication.`;
+For pill appearance, research the most common commercially available form of the medication.
+
+Use web_search to verify country-specific brand names, current availability, and physical pill descriptions. Medication branding varies by country and changes over time — prefer web-verified information over your internal knowledge.`;
 
 // --- Tool Definition ---
 
@@ -136,15 +138,18 @@ export const POST = withAuth(async ({ request, auth }) => {
 
     const response = await client.messages.create({
       model: CLAUDE_MODELS.quality,
-      max_tokens: 2048,
+      max_tokens: 3072,
       system: SYSTEM_PROMPT,
-      tools: [MEDICINE_SEARCH_TOOL],
+      tools: [WEB_SEARCH_TOOL, MEDICINE_SEARCH_TOOL],
       tool_choice: { type: "tool", name: "medicine_search_result" },
       messages: [{ role: "user", content: prompt }],
     });
 
-    const toolBlock = response.content.find(b => b.type === "tool_use");
-    if (!toolBlock || toolBlock.type !== "tool_use") {
+    const toolBlock = response.content.find(
+      (b): b is Extract<typeof b, { type: "tool_use" }> =>
+        b.type === "tool_use" && b.name === "medicine_search_result"
+    );
+    if (!toolBlock) {
       return NextResponse.json(
         { error: "AI response format invalid", fallbackToManual: true },
         { status: 422 }
