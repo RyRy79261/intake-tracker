@@ -59,8 +59,8 @@ pnpm start
 
 # Neon Auth (Postgres) — auth + user store
 DATABASE_URL=postgres://user:pass@host/dbname
-BETTER_AUTH_SECRET=generate-with-openssl-rand-base64-32
-BETTER_AUTH_URL=http://localhost:3000
+NEON_AUTH_URL=https://your-branch.neon-auth.neon.tech
+NEON_AUTH_COOKIE_SECRET=generate-with-openssl-rand-base64-32
 
 # Anthropic Claude AI (for natural language parsing)
 ANTHROPIC_API_KEY=sk-ant-your-api-key-here
@@ -74,10 +74,10 @@ ALLOWED_EMAILS=you@example.com,friend@example.com
 
 ### Neon Auth Setup
 
-1. Provision a Postgres database on [Neon](https://neon.tech)
+1. Provision a Postgres database on [Neon](https://neon.tech) and enable Neon Auth on the branch
 2. Copy the connection string into `DATABASE_URL`
-3. Generate a session secret: `openssl rand -base64 32` → `BETTER_AUTH_SECRET`
-4. Set `BETTER_AUTH_URL` to your deployed app URL
+3. Copy the Neon Auth endpoint URL (Neon console → Branch → Auth) into `NEON_AUTH_URL`
+4. Generate a cookie signing secret: `openssl rand -base64 32` → `NEON_AUTH_COOKIE_SECRET`
 5. Add your email to `ALLOWED_EMAILS`
 
 ### How Authentication Works

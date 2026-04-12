@@ -171,8 +171,6 @@ jobs:
       - name: Run E2E tests
         env:
           DATABASE_URL: ${{ steps.neon-branch.outputs.db_url }}
-          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
-          BETTER_AUTH_URL: http://localhost:3000
           NEON_AUTH_URL: http://localhost:3000
           NEON_AUTH_COOKIE_SECRET: ${{ secrets.NEON_AUTH_COOKIE_SECRET }}
           NEON_AUTH_TEST_EMAIL: ${{ secrets.NEON_AUTH_TEST_EMAIL }}

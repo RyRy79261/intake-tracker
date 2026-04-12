@@ -10,14 +10,14 @@ Single-user health tracking PWA. All user data lives client-side in IndexedDB. T
 
 ### Neon Auth
 
-- **Provider:** Neon Auth (email/password) backed by Neon Postgres via Better Auth
+- **Provider:** Neon Auth (email/password) backed by Neon Postgres
 - **Whitelist enforcement:** `ALLOWED_EMAILS` env var checked server-side in `src/lib/auth-middleware.ts`
 - **Session verification:** HttpOnly session cookie validated on every API request via `withAuth()` in `src/lib/auth-middleware.ts`
 - **Client guard:** `src/components/auth-guard.tsx` wraps protected routes
 
 ### E2E Test Authentication
 
-E2E tests use a seeded Neon Auth user (email + password) for automated authentication. Playwright's `globalSetup` (`e2e/global-setup.ts`) authenticates against Neon Auth, captures the session cookie via the Better Auth client, and persists `playwright/.auth/user.json` for all test projects to reuse.
+E2E tests use a seeded Neon Auth user (email + password) for automated authentication. Playwright's `globalSetup` (`e2e/global-setup.ts`) authenticates against Neon Auth, captures the session cookie, and persists `playwright/.auth/user.json` for all test projects to reuse.
 
 ## API Security
 
@@ -26,7 +26,8 @@ E2E tests use a seeded Neon Auth user (email + password) for automated authentic
 All API keys are server-side only. No secrets are exposed via `NEXT_PUBLIC_` environment variables.
 
 - `ANTHROPIC_API_KEY` -- used in API routes only (`src/app/api/ai/_shared/claude-client.ts` shared by all AI routes)
-- `BETTER_AUTH_SECRET` -- used by Neon Auth (Better Auth) to sign session cookies
+- `NEON_AUTH_COOKIE_SECRET` -- used by Neon Auth to sign session cookies
+- `NEON_AUTH_URL` -- Neon Auth service endpoint (proxied via `/api/auth/[...path]`)
 - `DATABASE_URL` -- Neon Postgres connection string (Neon Auth user store + push notification tables)
 
 ### Auth Middleware
@@ -99,8 +100,8 @@ The auth patterns are designed for future server-side sync:
 
 | Variable | Secret | Location | Purpose |
 |----------|--------|----------|---------|
-| `BETTER_AUTH_SECRET` | **Secret** | Server only | Neon Auth session cookie signing |
-| `BETTER_AUTH_URL` | Safe | Server only | Public URL of the deployed app |
+| `NEON_AUTH_COOKIE_SECRET` | **Secret** | Server only | Neon Auth session cookie signing (≥32 chars) |
+| `NEON_AUTH_URL` | Safe | Server only | Neon Auth service endpoint (proxied via `/api/auth/[...path]`) |
 | `DATABASE_URL` | **Secret** | Server only | Neon Postgres connection (Neon Auth + push tables) |
 | `ANTHROPIC_API_KEY` | **Secret** | Server only | AI parse/search/enrich API |
 | `ALLOWED_EMAILS` | Safe | Server only | Email whitelist for auth |

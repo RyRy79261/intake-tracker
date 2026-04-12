@@ -17,9 +17,8 @@ signed in — no per-test login flow.
 
    ```bash
    DATABASE_URL=postgres://...               # your Neon branch
-   BETTER_AUTH_SECRET=$(openssl rand -base64 32)
-   BETTER_AUTH_URL=http://localhost:3000
-   NEON_AUTH_URL=http://localhost:3000
+   NEON_AUTH_URL=<Neon console → Branch → Auth endpoint URL>
+   NEON_AUTH_COOKIE_SECRET=$(openssl rand -base64 32)
    NEON_AUTH_TEST_EMAIL=e2e@example.com
    NEON_AUTH_TEST_PASSWORD=correct-horse-battery-staple
    ALLOWED_EMAILS=e2e@example.com,you@example.com
@@ -73,8 +72,7 @@ Add these via Settings -> Secrets and variables -> Actions:
 | `NEON_PROJECT_ID`            | The Neon project that hosts the test branches       |
 | `NEON_AUTH_TEST_EMAIL`       | Seeded as the E2E user email + doubles as ALLOWED_EMAILS |
 | `NEON_AUTH_TEST_PASSWORD`    | Seeded as the E2E user password                     |
-| `BETTER_AUTH_SECRET`         | Cookie signing secret (Neon Auth / Better Auth)     |
-| `NEON_AUTH_COOKIE_SECRET`    | Same role as BETTER_AUTH_SECRET — kept for backwards naming |
+| `NEON_AUTH_COOKIE_SECRET`    | Cookie signing secret (≥32 chars; `openssl rand -base64 32`) |
 
 If any of these secrets are missing, the e2e job fails fast with a
 clear error from the action that needs them. The job is gated on
@@ -96,7 +94,7 @@ entirely.
   `NEON_AUTH_TEST_EMAIL` / `NEON_AUTH_TEST_PASSWORD`. Check `.env.local`
   for local runs or repo secrets for CI.
 - **`Seed failed: 401`:** the auth handler is up but
-  `BETTER_AUTH_SECRET` differs between the seeding step and the
+  `NEON_AUTH_COOKIE_SECRET` differs between the seeding step and the
   webServer that the specs hit. They must match — pass the secret
   from a single source.
 - **`waitForURL timed out`:** the `/auth` page redirected somewhere

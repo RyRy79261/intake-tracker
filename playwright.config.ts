@@ -53,8 +53,6 @@ export default defineConfig({
         timeout: 120 * 1000,
         env: {
           DATABASE_URL: process.env.DATABASE_URL ?? '',
-          BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET ?? '',
-          BETTER_AUTH_URL: process.env.BETTER_AUTH_URL ?? '',
           NEON_AUTH_URL: process.env.NEON_AUTH_URL ?? '',
           NEON_AUTH_COOKIE_SECRET: process.env.NEON_AUTH_COOKIE_SECRET ?? '',
           NEON_AUTH_TEST_EMAIL: process.env.NEON_AUTH_TEST_EMAIL ?? '',
@@ -71,8 +69,6 @@ export default defineConfig({
         timeout: 120 * 1000,
         env: {
           DATABASE_URL: process.env.DATABASE_URL ?? '',
-          BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET ?? '',
-          BETTER_AUTH_URL: process.env.BETTER_AUTH_URL ?? '',
           NEON_AUTH_URL: process.env.NEON_AUTH_URL ?? '',
           NEON_AUTH_COOKIE_SECRET: process.env.NEON_AUTH_COOKIE_SECRET ?? '',
           NEON_AUTH_TEST_EMAIL: process.env.NEON_AUTH_TEST_EMAIL ?? '',
