@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Loader2, LogOut } from "lucide-react";
 import { signOut, useSession } from "@/lib/auth-client";
@@ -14,6 +15,7 @@ import { signOut, useSession } from "@/lib/auth-client";
  * is unchanged — only the content of this file is rewritten.
  */
 export function AccountSection() {
+  const router = useRouter();
   const { data: session, isPending } = useSession();
 
   if (isPending) {
@@ -43,7 +45,8 @@ export function AccountSection() {
             signOut({
               fetchOptions: {
                 onSuccess: () => {
-                  window.location.href = "/auth";
+                  router.replace("/auth");
+                  router.refresh();
                 },
               },
             })

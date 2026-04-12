@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +16,7 @@ import { signUp } from "@/lib/auth-client";
  * string. Visual layout matches the login-04 shadcn block.
  */
 export function SignUpForm() {
+  const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -61,11 +63,14 @@ export function SignUpForm() {
       });
       if (result && "error" in result && result.error) {
         setError(mapServerError(result.error.message ?? "Sign up failed"));
+        setLoading(false);
+        return;
       }
+      router.replace("/");
+      router.refresh();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Sign up failed";
       setError(mapServerError(msg));
-    } finally {
       setLoading(false);
     }
   }

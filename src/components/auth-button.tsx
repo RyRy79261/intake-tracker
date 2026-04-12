@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { LogOut, User } from "lucide-react";
 import { signOut, useSession } from "@/lib/auth-client";
@@ -13,6 +14,7 @@ import { signOut, useSession } from "@/lib/auth-client";
  * no-session branch is defensive only.
  */
 export function AuthButton() {
+  const router = useRouter();
   const { data: session, isPending } = useSession();
 
   if (isPending) {
@@ -41,7 +43,8 @@ export function AuthButton() {
           signOut({
             fetchOptions: {
               onSuccess: () => {
-                window.location.href = "/auth";
+                router.replace("/auth");
+                router.refresh();
               },
             },
           })
