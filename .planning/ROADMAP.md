@@ -86,8 +86,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 6 plans
 Plans:
 - [x] 41-01-PLAN.md — Neon Auth server foundation (helper, catch-all handler, middleware.ts, withAuth rewrite)
-- [ ] 41-02-PLAN.md — Client auth surface (/auth page + Tabs, useAuth hook, auth-button, account-section, providers.tsx)
-- [ ] 41-03-PLAN.md — Push identity migration (truncation script + drop authToken from push client)
+- [x] 41-02-PLAN.md — Client auth surface (/auth page + Tabs, useAuth hook, auth-button, account-section, providers.tsx)
+- [x] 41-03-PLAN.md — Push identity migration (truncation script + drop authToken from push client)
 - [ ] 41-04-PLAN.md — Privy + PIN sweep (delete files, remove packages, update CSP, scrub env vars, consumer cleanup)
 - [ ] 41-05-PLAN.md — E2E rework (globalSetup + storageState, Neon test branch in CI, seed script)
 - [ ] 41-06-PLAN.md — Human UAT checkpoint (full Neon Auth migration verification)
@@ -156,7 +156,7 @@ Phases execute in numeric order: 40 → 41 → 42 → 43 → 44 → 45 → 46
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 40. Settings Accordion Restructure | v2.0 | 0/TBD | Not started | - |
-| 41. Neon Auth + Privy Removal | v2.0 | 1/6 | In Progress|  |
+| 41. Neon Auth + Privy Removal | v2.0 | 3/6 | In Progress|  |
 | 42. Postgres Schema + Drizzle Setup | v2.0 | 0/TBD | Not started | - |
 | 43. Sync Engine Core | v2.0 | 0/TBD | Not started | - |
 | 44. Sync Service Integration | v2.0 | 0/TBD | Not started | - |

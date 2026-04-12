@@ -50,7 +50,7 @@ Requirements for cloud sync and settings overhaul milestone. Each maps to roadma
 ### Push Notifications
 
 - [ ] **PUSH-01**: Server-side cron triggers push notification delivery (client-side polling removed)
-- [ ] **PUSH-02**: Push subscriptions use Neon Auth user identity
+- [x] **PUSH-02**: Push subscriptions use Neon Auth user identity
 
 ## Future Requirements
 
@@ -104,7 +104,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | AUTH-03 | Phase 41 | Pending |
 | AUTH-04 | Phase 41 | Pending |
 | AUTH-05 | Phase 41 | Pending |
-| PUSH-02 | Phase 41 | Pending |
+| PUSH-02 | Phase 41 | Complete |
 | SCHEMA-01 | Phase 42 | Pending |
 | SCHEMA-02 | Phase 42 | Pending |
 | SCHEMA-03 | Phase 42 | Pending |
