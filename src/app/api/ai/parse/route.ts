@@ -128,7 +128,7 @@ export const POST = withAuth(async ({ request, auth }) => {
     const { input } = parsed.data;
 
     // User is authenticated and on whitelist (handled by withAuth)
-    console.log(`[AUDIT] AI request from user: ${auth.userId} (${auth.email || auth.wallet})`);
+    console.log(`[AUDIT] AI request from user: ${auth.userId} (${auth.email ?? "unknown"})`);
 
     let client;
     try {
