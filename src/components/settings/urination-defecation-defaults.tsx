@@ -10,17 +10,18 @@ import {
 } from "@/components/ui/select";
 import { Droplets } from "lucide-react";
 import { useSettings } from "@/hooks/use-settings";
+import { ExpandableSettingsSection } from "@/components/settings/expandable-settings-section";
 
 export function UrinationDefecationDefaults() {
   const settings = useSettings();
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400">
-        <Droplets className="w-4 h-4" />
-        <h3 className="font-semibold">Bathroom Defaults</h3>
-      </div>
-      <div className="space-y-3 pl-6">
+    <ExpandableSettingsSection
+      icon={Droplets}
+      label="Bathroom Defaults"
+      iconColorClass="text-rose-600 dark:text-rose-400"
+    >
+      <div className="space-y-3">
         <div className="space-y-2">
           <Label>Urination default amount</Label>
           <Select
@@ -64,6 +65,6 @@ export function UrinationDefecationDefaults() {
           </p>
         </div>
       </div>
-    </div>
+    </ExpandableSettingsSection>
   );
 }

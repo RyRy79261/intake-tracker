@@ -21,7 +21,7 @@ import { QuickNavSection } from "@/components/settings/quick-nav-section";
 import { DataManagementSection } from "@/components/settings/data-management-section";
 import { PermissionsSection } from "@/components/settings/permissions-section";
 import { AppUpdatesSection } from "@/components/settings/app-updates-section";
-import { SubstanceSettingsSection } from "@/components/settings/substance-settings-section";
+import { LiquidPresetsSection } from "@/components/settings/liquid-presets-section";
 import { UrinationDefecationDefaults } from "@/components/settings/urination-defecation-defaults";
 import { MedicationSettingsSection } from "@/components/settings/medication-settings-section";
 import { AnimationTimingSection } from "@/components/settings/animation-timing-section";
@@ -52,13 +52,17 @@ function SettingsContent() {
         transitionDuration={barTransitionSec}
       />
 
-      <Accordion type="single" collapsible defaultValue="tracking" className="pb-8">
+      <div className="pb-6">
+        <AccountSection />
+      </div>
+
+      <Accordion type="single" collapsible className="pb-8">
         <SettingsAccordionGroup value="tracking" icon={Activity} label="Tracking" iconColorClass="text-indigo-600 dark:text-indigo-400">
           <DaySettingsSection />
           <WaterSettingsSection />
           <SaltSettingsSection />
           <WeightSettingsSection />
-          <SubstanceSettingsSection />
+          <LiquidPresetsSection />
           <UrinationDefecationDefaults />
         </SettingsAccordionGroup>
 
@@ -78,7 +82,6 @@ function SettingsContent() {
         </SettingsAccordionGroup>
 
         <SettingsAccordionGroup value="privacy-security" icon={Shield} label="Privacy & Security" iconColorClass="text-emerald-600 dark:text-emerald-400">
-          <AccountSection />
           <PermissionsSection />
         </SettingsAccordionGroup>
 

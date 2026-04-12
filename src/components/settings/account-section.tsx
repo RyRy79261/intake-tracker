@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { User, LogOut } from "lucide-react";
+import { Loader2, LogOut } from "lucide-react";
 import { signOut, useSession } from "@/lib/auth-client";
 
 /**
@@ -16,18 +16,21 @@ import { signOut, useSession } from "@/lib/auth-client";
 export function AccountSection() {
   const { data: session, isPending } = useSession();
 
-  if (isPending || !session?.user) return null;
+  if (isPending) {
+    return (
+      <div className="flex items-center justify-center p-6 rounded-lg bg-slate-50 dark:bg-slate-900 border">
+        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!session?.user) return null;
 
   const email = session.user.email ?? "Signed in";
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
-        <User className="w-4 h-4" />
-        <h3 className="font-semibold">Account</h3>
-      </div>
-      <div className="space-y-3">
-        <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-900 border">
+    <div className="space-y-3">
+      <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-900 border">
           <p className="text-sm font-medium">{email}</p>
           <p className="text-xs text-muted-foreground">
             Signed in via Neon Auth
@@ -46,10 +49,9 @@ export function AccountSection() {
             })
           }
         >
-          <LogOut className="w-4 h-4" />
-          Sign Out
-        </Button>
-      </div>
+        <LogOut className="w-4 h-4" />
+        Sign Out
+      </Button>
     </div>
   );
 }

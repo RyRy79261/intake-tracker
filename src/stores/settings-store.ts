@@ -11,17 +11,6 @@ import { DEFAULT_QUICK_NAV_ITEMS, type QuickNavItem } from "@/lib/quick-nav-defa
 export type { LiquidPreset } from "@/lib/constants";
 export type { QuickNavItem } from "@/lib/quick-nav-defaults";
 
-export interface SubstanceConfig {
-  caffeine: {
-    enabled: boolean;
-    types: Array<{ name: string; defaultMg: number; defaultVolumeMl: number }>;
-  };
-  alcohol: {
-    enabled: boolean;
-    types: Array<{ name: string; defaultDrinks: number; defaultVolumeMl: number }>;
-  };
-}
-
 export interface Settings {
   // Increment values for +/- buttons
   waterIncrement: number; // ml
@@ -85,9 +74,6 @@ export interface Settings {
 
   // Weight increment for +/- buttons (kg)
   weightIncrement: number;
-
-  // Substance tracking configuration
-  substanceConfig: SubstanceConfig;
 }
 
 interface SettingsActions {
@@ -129,8 +115,6 @@ interface SettingsActions {
   setReminderFollowUpInterval: (value: number) => void;
   // Weight increment
   setWeightIncrement: (value: number) => void;
-  // Substance config
-  setSubstanceConfig: (config: SubstanceConfig) => void;
   resetToDefaults: () => void;
 }
 
@@ -164,26 +148,6 @@ const defaultSettings: Settings = {
   doseRemindersEnabled: false,
   reminderFollowUpCount: 2,
   reminderFollowUpInterval: 10,
-  substanceConfig: {
-    caffeine: {
-      enabled: true,
-      types: [
-        { name: "Coffee", defaultMg: 95, defaultVolumeMl: 250 },
-        { name: "Espresso", defaultMg: 63, defaultVolumeMl: 30 },
-        { name: "Tea", defaultMg: 47, defaultVolumeMl: 250 },
-        { name: "Other", defaultMg: 80, defaultVolumeMl: 250 },
-      ],
-    },
-    alcohol: {
-      enabled: true,
-      types: [
-        { name: "Beer", defaultDrinks: 1, defaultVolumeMl: 330 },
-        { name: "Wine", defaultDrinks: 1, defaultVolumeMl: 150 },
-        { name: "Spirits", defaultDrinks: 1, defaultVolumeMl: 45 },
-        { name: "Other", defaultDrinks: 1, defaultVolumeMl: 250 },
-      ],
-    },
-  },
 };
 
 export const useSettingsStore = create<Settings & SettingsActions>()(
@@ -258,9 +222,6 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
       setWeightIncrement: (value) =>
         set({ weightIncrement: sanitizeNumericInput(value, 0.05, 1, 2) }),
 
-      // Substance config
-      setSubstanceConfig: (config) => set({ substanceConfig: config }),
-
       addLiquidPreset: (preset) => {
         const id = crypto.randomUUID();
         set((state) => ({
@@ -287,7 +248,7 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
     {
       name: "intake-tracker-settings",
       storage: createJSONStorage(() => localStorage),
-      version: 5,
+      version: 6,
       migrate: (persisted, version) => {
         const state = persisted as Record<string, unknown>;
         if (version === 0) {
@@ -325,6 +286,10 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
         if (version < 5) {
           // D-07: New quickNavItems field. Seed existing users with defaults.
           state.quickNavItems = DEFAULT_QUICK_NAV_ITEMS;
+        }
+        if (version < 6) {
+          // Phase 41 cleanup: substanceConfig was dead code (orphaned UI), removed.
+          delete state.substanceConfig;
         }
         return state as unknown as Settings & SettingsActions;
       },

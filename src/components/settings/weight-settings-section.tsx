@@ -7,6 +7,7 @@ import { NumericInput } from "@/components/ui/numeric-input";
 import { useSettings } from "@/hooks/use-settings";
 import { validateAndSave, incrementSetting, decrementSetting } from "@/lib/settings-helpers";
 import { cn } from "@/lib/utils";
+import { ExpandableSettingsSection } from "@/components/settings/expandable-settings-section";
 
 function GraphToggle({
   label,
@@ -61,12 +62,12 @@ export function WeightSettingsSection() {
   }, [settings.weightIncrement]);
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
-        <Scale className="w-4 h-4" />
-        <h3 className="font-semibold">Weight Settings</h3>
-      </div>
-      <div className="space-y-3 pl-6">
+    <ExpandableSettingsSection
+      icon={Scale}
+      label="Weight Settings"
+      iconColorClass="text-emerald-600 dark:text-emerald-400"
+    >
+      <div className="space-y-3">
         <div className="space-y-2">
           <Label htmlFor="weight-increment">Increment (kg)</Label>
           <NumericInput
@@ -125,6 +126,6 @@ export function WeightSettingsSection() {
           </div>
         </div>
       </div>
-    </div>
+    </ExpandableSettingsSection>
   );
 }

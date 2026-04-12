@@ -6,6 +6,7 @@ import { Sparkles } from "lucide-react";
 import { NumericInput } from "@/components/ui/numeric-input";
 import { useSettings } from "@/hooks/use-settings";
 import { validateAndSave, incrementSetting, decrementSetting } from "@/lib/settings-helpers";
+import { ExpandableSettingsSection } from "@/components/settings/expandable-settings-section";
 
 export function SaltSettingsSection() {
   const settings = useSettings();
@@ -18,12 +19,12 @@ export function SaltSettingsSection() {
   }, [settings.saltIncrement, settings.saltLimit]);
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
-        <Sparkles className="w-4 h-4" />
-        <h3 className="font-semibold">Sodium Settings</h3>
-      </div>
-      <div className="space-y-3 pl-6">
+    <ExpandableSettingsSection
+      icon={Sparkles}
+      label="Sodium Settings"
+      iconColorClass="text-amber-600 dark:text-amber-400"
+    >
+      <div className="space-y-3">
         <div className="space-y-2">
           <Label htmlFor="salt-increment">Increment (mg)</Label>
           <NumericInput
@@ -59,6 +60,6 @@ export function SaltSettingsSection() {
           </p>
         </div>
       </div>
-    </div>
+    </ExpandableSettingsSection>
   );
 }
