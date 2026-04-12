@@ -1,17 +1,51 @@
 {
-  "timestamp": "2026-04-12T12:39:25.079Z",
-  "phase": "41-neon-auth-privy-removal",
+  "version": "1.0",
+  "timestamp": "2026-04-12T20:39:43.980Z",
+  "phase": "41",
+  "phase_name": "neon-auth-privy-removal",
   "phase_dir": ".planning/phases/41-neon-auth-privy-removal",
+  "plan": "41-06",
+  "task": 8,
+  "total_tasks": 10,
+  "status": "paused-at-uat",
   "branch": "feat/android-release",
   "pr": "#39 (draft)",
-  "status": "paused-at-uat",
-  "current_plan": "41-06-PLAN.md",
-  "current_position": "UAT Scenarios 1-10 not yet started; middleware + auth UI now fixed and committed",
-  "last_commits": [
-    "96055b2 refactor(settings): expandable tracking sub-items, drop dead substance config",
-    "b0e7c51 feat(41): redesign /auth with login-04 layout and move middleware to src/"
+  "last_commit": "f909a16 fix(ai): upgrade remaining AI routes to Sonnet + web_search",
+  "completed_tasks": [
+    {"id": 1, "name": "UAT Scenario 1 — Email sign-in", "status": "done"},
+    {"id": 2, "name": "UAT Scenario 2 — Google OAuth", "status": "done"},
+    {"id": 3, "name": "UAT Scenario 3 — Sign-up with non-whitelisted email", "status": "done", "note": "bug fixed mid-scenario: sign-up didn't redirect"},
+    {"id": 4, "name": "UAT Scenario 4 — Sign-up with whitelisted email", "status": "done"},
+    {"id": 5, "name": "UAT Scenario 5 — Sign-out from settings", "status": "done"},
+    {"id": 6, "name": "UAT Scenario 6 — PIN gate absence", "status": "done"},
+    {"id": 7, "name": "UAT Scenario 7 — Push re-subscription", "status": "skipped", "note": "desktop session, needs mobile device re-verification before merge"},
+    {"id": 8, "name": "UAT Scenario 8 — API authentication (AI endpoints)", "status": "in_progress", "progress": "auth dimension tentative-pass (no 401s, cookies work); AI-quality bug surfaced (Mio Mio Mate returned 1.9 mg/100ml vs ~20 mg/100ml actual); all 6 AI routes now upgraded to Sonnet + web_search (parse in 9a86c9d, remaining 5 in f909a16); awaiting user re-test"}
   ],
-  "tests": "451 passing",
-  "next_action": "Resume Phase 41 UAT walkthrough starting with Scenario 1 (email sign-in) from 41-06-PLAN.md",
-  "blockers": []
+  "remaining_tasks": [
+    {"id": 8, "name": "UAT Scenario 8 re-test — Mio Mio Mate caffeine lookup + salt-labelled food parse + medicine-search with country", "status": "pending_human_action"},
+    {"id": 9, "name": "UAT Scenario 9 — pnpm test:e2e against live Neon branch", "status": "not_started", "prerequisites": ["pnpm db:truncate-push on dev Neon branch (rollout step D-10)", "repo secrets: NEON_API_KEY, NEON_PROJECT_ID, NEON_AUTH_TEST_EMAIL, NEON_AUTH_TEST_PASSWORD, BETTER_AUTH_SECRET, NEON_AUTH_COOKIE_SECRET"]},
+    {"id": 10, "name": "UAT Scenario 10 — pnpm build + pnpm lint (vitest already green)", "status": "not_started"}
+  ],
+  "blockers": [
+    {"description": "Scenario 9 blocked on repo secrets and pnpm db:truncate-push against dev Neon branch", "type": "human_action", "workaround": "none"},
+    {"description": "Scenario 7 blocked on mobile device — skipped for now, flag for post-merge hotfix if it breaks", "type": "human_action", "workaround": "defer"}
+  ],
+  "human_actions_pending": [
+    {"action": "Re-test Scenario 8 with upgraded AI routes", "context": "Specifically: (1) add a caffeine substance for \"Mio Mio Mate Original\" — expect ~20 mg/100ml, not 1.9; (2) parse a food with a salt-labelled nutrition fact and verify the sodium-source dropdown flips to \"salt\" vs \"sodium\"; (3) look up a medication with country-specific branding (e.g. Tylenol/US, Panadol/UK) to exercise medicine-search web_search", "blocking": true},
+    {"action": "Run pnpm db:truncate-push against dev Neon branch", "context": "Rollout step D-10 from Phase 41 plan. Now idempotent per commit 89c5e8c.", "blocking": true},
+    {"action": "Add GitHub repo secrets", "context": "NEON_API_KEY, NEON_PROJECT_ID, NEON_AUTH_TEST_EMAIL, NEON_AUTH_TEST_PASSWORD, BETTER_AUTH_SECRET, NEON_AUTH_COOKIE_SECRET — required for CI E2E workflow per rollout", "blocking": true},
+    {"action": "Run pnpm test:e2e locally against live Neon branch", "context": "Scenario 9 — cannot be automated without the secrets above", "blocking": true},
+    {"action": "Run pnpm build + pnpm lint explicitly", "context": "Scenario 10 — vitest suite is already green as of last commit", "blocking": false}
+  ],
+  "decisions": [
+    {"decision": "Sonnet + web_search everywhere for user-facing AI routes", "rationale": "User guardrail: Haiku's world-knowledge gaps produced wrong estimates on niche beverages (Mio Mio Mate 1.9 vs 20 mg/100ml). Every user-facing AI route must use Sonnet at minimum and have web_search available.", "phase": "41"},
+    {"decision": "Parse route field rename salt → value_mg + explicit measurement_type", "rationale": "Previous schema conflated sodium (Na) and salt (NaCl) units. Rename makes API contract unambiguous; client does the conversion.", "phase": "41"},
+    {"decision": "Set sodiumSource BEFORE sodiumMg in food-section.tsx", "rationale": "React state updates are queued; dropdown must reflect correct unit before user sees the number next to it.", "phase": "41"},
+    {"decision": "Sign-up redirect via router.replace + refresh", "rationale": "callbackURL on signUp.email is server-flow metadata, not a client redirect. Explicit navigation required.", "phase": "41"},
+    {"decision": "window.location is banned for in-app navigation", "rationale": "Converted all sign-out callers to router.replace/refresh. Legitimate uses (reload() for SW/version updates, .origin/.protocol reads) still allowed.", "phase": "41"},
+    {"decision": "max_tokens bump strategy for web_search routes", "rationale": "web_search server tool adds tool_use/tool_result blocks that count toward output. Bumped each route with headroom: substance-lookup/enrich 512→1024, medicine-search 2048→3072, titration-warnings 1536→2560, interaction-check 2048→3072.", "phase": "41"}
+  ],
+  "uncommitted_files": [],
+  "next_action": "User re-tests Scenario 8 (Mio Mio Mate caffeine lookup + salt-labelled food parse + medicine-search with country). Then proceed to Scenario 9 (pnpm test:e2e) and Scenario 10 (build + lint).",
+  "context_notes": "All 6 AI routes (parse + substance-lookup + substance-enrich + medicine-search + titration-warnings + interaction-check) now use the same pattern: Sonnet quality model, WEB_SEARCH_TOOL prepended to tools array, forced tool_choice to app tool (web_search runs transparently as server tool), tool_use content blocks filtered by name with type predicate (defensive against server-tool blocks), system prompts have web_search guidance. Typecheck clean, vitest 451/451 passing. Only human UAT (Scenarios 8 retest, 9, 10) remains before Phase 41 can close. Phase 41 is the last non-human plan in the phase."
 }
