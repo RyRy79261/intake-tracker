@@ -4,7 +4,7 @@
  * These are smoke tests — no real network calls are made. They validate:
  *   1. `auth` export exposes the required surface (handler/middleware/getSession)
  *   2. The catch-all route exports GET and POST that are functions
- *   3. Importing `src/lib/neon-auth.ts` without NEON_AUTH_BASE_URL is safe
+ *   3. Importing `src/lib/neon-auth.ts` without NEON_AUTH_URL is safe
  *      at module load (the module must not throw at import time)
  *
  * We mock `@neondatabase/auth/next/server` at the vitest level so the test
@@ -35,20 +35,20 @@ vi.mock("@neondatabase/auth/next/server", () => {
   };
 });
 
-const ORIGINAL_BASE_URL = process.env.NEON_AUTH_BASE_URL;
+const ORIGINAL_URL = process.env.NEON_AUTH_URL;
 const ORIGINAL_COOKIE_SECRET = process.env.NEON_AUTH_COOKIE_SECRET;
 
 describe("neon-auth server helper", () => {
   beforeAll(() => {
     // Ensure tests don't fall back to real production env at module init.
     // The helper has a placeholder fallback so module load is always safe.
-    delete process.env.NEON_AUTH_BASE_URL;
+    delete process.env.NEON_AUTH_URL;
     delete process.env.NEON_AUTH_COOKIE_SECRET;
   });
 
   afterAll(() => {
-    if (ORIGINAL_BASE_URL !== undefined) {
-      process.env.NEON_AUTH_BASE_URL = ORIGINAL_BASE_URL;
+    if (ORIGINAL_URL !== undefined) {
+      process.env.NEON_AUTH_URL = ORIGINAL_URL;
     }
     if (ORIGINAL_COOKIE_SECRET !== undefined) {
       process.env.NEON_AUTH_COOKIE_SECRET = ORIGINAL_COOKIE_SECRET;
@@ -62,8 +62,8 @@ describe("neon-auth server helper", () => {
     expect(typeof auth.getSession).toBe("function");
   });
 
-  it("module loads cleanly with NEON_AUTH_BASE_URL unset (lazy init)", async () => {
-    // The helper uses a placeholder fallback for both NEON_AUTH_BASE_URL and
+  it("module loads cleanly with NEON_AUTH_URL unset (lazy init)", async () => {
+    // The helper uses a placeholder fallback for both NEON_AUTH_URL and
     // NEON_AUTH_COOKIE_SECRET so `import` never throws. Real failures occur
     // only on first live call (e.g., auth.getSession() against a real request).
     await expect(import("@/lib/neon-auth")).resolves.toBeDefined();

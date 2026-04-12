@@ -15,7 +15,10 @@
  *
  * NOT wired into any automated pipeline — operator-invoked only.
  */
+import { loadEnvConfig } from "@next/env";
 import { neon } from "@neondatabase/serverless";
+
+loadEnvConfig(process.cwd());
 
 export async function main(): Promise<void> {
   const url = process.env.DATABASE_URL;

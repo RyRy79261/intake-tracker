@@ -19,7 +19,7 @@ signed in — no per-test login flow.
    DATABASE_URL=postgres://...               # your Neon branch
    BETTER_AUTH_SECRET=$(openssl rand -base64 32)
    BETTER_AUTH_URL=http://localhost:3000
-   NEON_AUTH_BASE_URL=http://localhost:3000
+   NEON_AUTH_URL=http://localhost:3000
    NEON_AUTH_TEST_EMAIL=e2e@example.com
    NEON_AUTH_TEST_PASSWORD=correct-horse-battery-staple
    ALLOWED_EMAILS=e2e@example.com,you@example.com

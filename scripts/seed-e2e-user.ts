@@ -19,6 +19,10 @@
  * Usage:
  *   pnpm tsx scripts/seed-e2e-user.ts
  */
+import { loadEnvConfig } from "@next/env";
+
+loadEnvConfig(process.cwd());
+
 export async function main() {
   const baseUrl =
     process.env.NEON_AUTH_URL ?? "http://localhost:3000";

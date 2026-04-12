@@ -162,7 +162,7 @@ jobs:
           branch_name: ci-e2e-${{ github.run_id }}
       - name: Seed Neon Auth test user
         env:
-          NEON_AUTH_BASE_URL: http://localhost:3000
+          NEON_AUTH_URL: http://localhost:3000
           NEON_AUTH_TEST_EMAIL: ${{ secrets.NEON_AUTH_TEST_EMAIL }}
           NEON_AUTH_TEST_PASSWORD: ${{ secrets.NEON_AUTH_TEST_PASSWORD }}
           DATABASE_URL: ${{ steps.neon-branch.outputs.db_url }}
@@ -173,7 +173,7 @@ jobs:
           DATABASE_URL: ${{ steps.neon-branch.outputs.db_url }}
           BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
           BETTER_AUTH_URL: http://localhost:3000
-          NEON_AUTH_BASE_URL: http://localhost:3000
+          NEON_AUTH_URL: http://localhost:3000
           NEON_AUTH_COOKIE_SECRET: ${{ secrets.NEON_AUTH_COOKIE_SECRET }}
           NEON_AUTH_TEST_EMAIL: ${{ secrets.NEON_AUTH_TEST_EMAIL }}
           NEON_AUTH_TEST_PASSWORD: ${{ secrets.NEON_AUTH_TEST_PASSWORD }}
