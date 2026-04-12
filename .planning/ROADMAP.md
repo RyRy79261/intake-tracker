@@ -83,7 +83,14 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. All API routes reject unauthenticated requests using Neon Auth sessions (no Privy middleware remains)
   4. No Privy provider, dependencies, env vars, or imports exist anywhere in the codebase
   5. E2E tests authenticate via Neon Auth login flow (Privy OTP iframe flow removed)
-**Plans**: TBD
+**Plans**: 6 plans
+Plans:
+- [ ] 41-01-PLAN.md — Neon Auth server foundation (helper, catch-all handler, middleware.ts, withAuth rewrite)
+- [ ] 41-02-PLAN.md — Client auth surface (/auth page + Tabs, useAuth hook, auth-button, account-section, providers.tsx)
+- [ ] 41-03-PLAN.md — Push identity migration (truncation script + drop authToken from push client)
+- [ ] 41-04-PLAN.md — Privy + PIN sweep (delete files, remove packages, update CSP, scrub env vars, consumer cleanup)
+- [ ] 41-05-PLAN.md — E2E rework (globalSetup + storageState, Neon test branch in CI, seed script)
+- [ ] 41-06-PLAN.md — Human UAT checkpoint (full Neon Auth migration verification)
 **UI hint**: yes
 
 ### Phase 42: Postgres Schema + Drizzle Setup
