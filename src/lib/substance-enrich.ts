@@ -15,9 +15,7 @@ import { getUnenrichedSubstanceRecords, updateSubstanceRecord } from "./substanc
  * }, []);
  * ```
  */
-export async function runSubstanceEnrichment(
-  authHeaders?: Record<string, string>
-): Promise<{
+export async function runSubstanceEnrichment(): Promise<{
   enriched: number;
   failed: number;
   total: number;
@@ -41,7 +39,7 @@ export async function runSubstanceEnrichment(
         try {
           const response = await fetch("/api/ai/substance-enrich", {
             method: "POST",
-            headers: { "Content-Type": "application/json", ...authHeaders },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               description: record.description,
               type: record.type,
