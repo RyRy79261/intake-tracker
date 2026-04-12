@@ -149,8 +149,43 @@ jobs:
       - name: Install Playwright system deps
         if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: npx playwright install-deps chromium
+      # Phase 41 (D-15): per-run isolated Neon test branch so each E2E run
+      # gets a fresh database. The seed step creates the test user, the
+      # run step exercises the real auth flow via globalSetup, and the
+      # delete step always runs to keep branch usage bounded.
+      - name: Create Neon test branch
+        id: neon-branch
+        uses: neondatabase/create-branch-action@v5
+        with:
+          api_key: ${{ secrets.NEON_API_KEY }}
+          project_id: ${{ secrets.NEON_PROJECT_ID }}
+          branch_name: ci-e2e-${{ github.run_id }}
+      - name: Seed Neon Auth test user
+        env:
+          NEON_AUTH_BASE_URL: http://localhost:3000
+          NEON_AUTH_TEST_EMAIL: ${{ secrets.NEON_AUTH_TEST_EMAIL }}
+          NEON_AUTH_TEST_PASSWORD: ${{ secrets.NEON_AUTH_TEST_PASSWORD }}
+          DATABASE_URL: ${{ steps.neon-branch.outputs.db_url }}
+          ALLOWED_EMAILS: ${{ secrets.NEON_AUTH_TEST_EMAIL }}
+        run: pnpm tsx scripts/seed-e2e-user.ts
       - name: Run E2E tests
+        env:
+          DATABASE_URL: ${{ steps.neon-branch.outputs.db_url }}
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          BETTER_AUTH_URL: http://localhost:3000
+          NEON_AUTH_BASE_URL: http://localhost:3000
+          NEON_AUTH_COOKIE_SECRET: ${{ secrets.NEON_AUTH_COOKIE_SECRET }}
+          NEON_AUTH_TEST_EMAIL: ${{ secrets.NEON_AUTH_TEST_EMAIL }}
+          NEON_AUTH_TEST_PASSWORD: ${{ secrets.NEON_AUTH_TEST_PASSWORD }}
+          ALLOWED_EMAILS: ${{ secrets.NEON_AUTH_TEST_EMAIL }}
         run: pnpm test:e2e
+      - name: Delete Neon test branch
+        if: always()
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          api_key: ${{ secrets.NEON_API_KEY }}
+          project_id: ${{ secrets.NEON_PROJECT_ID }}
+          branch: ci-e2e-${{ github.run_id }}
       - name: Upload test traces
         uses: actions/upload-artifact@v4
         if: failure()

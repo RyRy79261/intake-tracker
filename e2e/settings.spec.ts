@@ -65,11 +65,10 @@ test.describe('Settings', () => {
     expect(download.suggestedFilename()).toMatch(/\.json$/);
   });
 
-  // Skipped: AccountSection is hidden when Privy is not configured (CI runs without auth)
-  test.skip('account section displays email and sign out option', async ({ page }) => {
+  test('account section displays email and sign out option', async ({ page }) => {
     await page.goto('/settings');
     await expect(page.locator('h3', { hasText: 'Account' })).toBeVisible();
-    await expect(page.locator('text=Signed in')).toBeVisible();
+    await expect(page.locator('text=Signed in via Neon Auth')).toBeVisible();
     await expect(page.locator('button', { hasText: 'Sign Out' })).toBeVisible();
   });
 });
