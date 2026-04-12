@@ -19,7 +19,6 @@ import { WeightSettingsSection } from "@/components/settings/weight-settings-sec
 import { AppearanceSection } from "@/components/settings/appearance-section";
 import { QuickNavSection } from "@/components/settings/quick-nav-section";
 import { DataManagementSection } from "@/components/settings/data-management-section";
-import { PrivacySecuritySection } from "@/components/settings/privacy-security-section";
 import { PermissionsSection } from "@/components/settings/permissions-section";
 import { AppUpdatesSection } from "@/components/settings/app-updates-section";
 import { SubstanceSettingsSection } from "@/components/settings/substance-settings-section";
@@ -80,7 +79,6 @@ function SettingsContent() {
 
         <SettingsAccordionGroup value="privacy-security" icon={Shield} label="Privacy & Security" iconColorClass="text-emerald-600 dark:text-emerald-400">
           <AccountSection />
-          <PrivacySecuritySection />
           <PermissionsSection />
         </SettingsAccordionGroup>
 

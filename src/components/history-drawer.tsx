@@ -41,7 +41,6 @@ import { useUpdateUrination, useDeleteUrination } from "@/hooks/use-urination-qu
 import { useUpdateDefecation, useDeleteDefecation } from "@/hooks/use-defecation-queries";
 import { useToast } from "@/hooks/use-toast";
 import { useKeyboardAwareScroll } from "@/hooks/use-keyboard-scroll";
-import { usePinProtected } from "@/hooks/use-pin-gate";
 import { cn } from "@/lib/utils";
 import {
   timestampToDateTimeLocal,
@@ -58,7 +57,6 @@ interface HistoryDrawerProps {
 export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
   const { toast } = useToast();
   const { onFocus: scrollOnFocus } = useKeyboardAwareScroll();
-  const { requirePin } = usePinProtected();
   const settings = useSettings();
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterType>("all");
@@ -127,15 +125,10 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
     setIsLoading(false);
   }, [open, historyData, page]);
 
-  // Handle open change with PIN protection
-  const handleOpenChange = useCallback(async (newOpen: boolean) => {
-    if (newOpen) {
-      const unlocked = await requirePin();
-      if (unlocked) onOpenChange(true);
-    } else {
-      onOpenChange(false);
-    }
-  }, [requirePin, onOpenChange]);
+  // Handle open change (PIN protection removed in phase 41)
+  const handleOpenChange = useCallback((newOpen: boolean) => {
+    onOpenChange(newOpen);
+  }, [onOpenChange]);
 
   const loadMoreRecords = useCallback(() => {
     if (!hasMore || isLoadingMore) return;
