@@ -1,16 +1,16 @@
 {
   "version": "1.0",
-  "timestamp": "2026-04-12T20:39:43.980Z",
+  "timestamp": "2026-04-12T22:01:02.507Z",
   "phase": "41",
   "phase_name": "neon-auth-privy-removal",
   "phase_dir": ".planning/phases/41-neon-auth-privy-removal",
   "plan": "41-06",
-  "task": 8,
+  "task": 9,
   "total_tasks": 10,
   "status": "paused-at-uat",
   "branch": "feat/android-release",
   "pr": "#39 (draft)",
-  "last_commit": "f909a16 fix(ai): upgrade remaining AI routes to Sonnet + web_search",
+  "last_commit": "1f22b7d fix(e2e): hardcode localhost in seed script, drop CI seed step",
   "completed_tasks": [
     {"id": 1, "name": "UAT Scenario 1 — Email sign-in", "status": "done"},
     {"id": 2, "name": "UAT Scenario 2 — Google OAuth", "status": "done"},
@@ -19,33 +19,28 @@
     {"id": 5, "name": "UAT Scenario 5 — Sign-out from settings", "status": "done"},
     {"id": 6, "name": "UAT Scenario 6 — PIN gate absence", "status": "done"},
     {"id": 7, "name": "UAT Scenario 7 — Push re-subscription", "status": "skipped", "note": "desktop session, needs mobile device re-verification before merge"},
-    {"id": 8, "name": "UAT Scenario 8 — API authentication (AI endpoints)", "status": "in_progress", "progress": "auth dimension tentative-pass (no 401s, cookies work); AI-quality bug surfaced (Mio Mio Mate returned 1.9 mg/100ml vs ~20 mg/100ml actual); all 6 AI routes now upgraded to Sonnet + web_search (parse in 9a86c9d, remaining 5 in f909a16); awaiting user re-test"}
+    {"id": 8, "name": "UAT Scenario 8 — API authentication (AI endpoints)", "status": "done", "note": "re-tested after Sonnet+web_search refactor, user confirmed passing"}
   ],
   "remaining_tasks": [
-    {"id": 8, "name": "UAT Scenario 8 re-test — Mio Mio Mate caffeine lookup + salt-labelled food parse + medicine-search with country", "status": "pending_human_action"},
-    {"id": 9, "name": "UAT Scenario 9 — pnpm test:e2e against live Neon branch", "status": "not_started", "prerequisites": ["pnpm db:truncate-push on dev Neon branch (rollout step D-10)", "repo secrets: NEON_API_KEY, NEON_PROJECT_ID, NEON_AUTH_TEST_EMAIL, NEON_AUTH_TEST_PASSWORD, BETTER_AUTH_SECRET, NEON_AUTH_COOKIE_SECRET"]},
-    {"id": 10, "name": "UAT Scenario 10 — pnpm build + pnpm lint (vitest already green)", "status": "not_started"}
+    {"id": 9, "name": "UAT Scenario 9 — pnpm test:e2e against dev Neon branch", "status": "prerequisites_met_ready_to_run", "prerequisites_done": ["GitHub repo secrets (NEON_PROJECT_ID, NEON_AUTH_TEST_EMAIL, NEON_AUTH_TEST_PASSWORD) added", ".env.local DATABASE_URL swapped to dev Neon branch (manually created in Neon console)", "db:truncate-push ran (no-op: tables don't exist on fresh branch, which is correct)", "Test user confirmed existing in shared Neon Auth store from Scenario 4"], "next_step": "Run pnpm test:e2e directly — Playwright webServer config auto-starts dev server"},
+    {"id": 10, "name": "UAT Scenario 10 — pnpm build + pnpm lint", "status": "not_started"}
   ],
   "blockers": [
-    {"description": "Scenario 9 blocked on repo secrets and pnpm db:truncate-push against dev Neon branch", "type": "human_action", "workaround": "none"},
-    {"description": "Scenario 7 blocked on mobile device — skipped for now, flag for post-merge hotfix if it breaks", "type": "human_action", "workaround": "defer"}
+    {"description": "Scenario 9 requires human to run pnpm test:e2e and triage any failures", "type": "human_action", "workaround": "none"},
+    {"description": "Scenario 7 push re-subscription blocked on mobile device re-verification", "type": "human_action", "workaround": "defer to post-merge hotfix if it breaks"}
   ],
   "human_actions_pending": [
-    {"action": "Re-test Scenario 8 with upgraded AI routes", "context": "Specifically: (1) add a caffeine substance for \"Mio Mio Mate Original\" — expect ~20 mg/100ml, not 1.9; (2) parse a food with a salt-labelled nutrition fact and verify the sodium-source dropdown flips to \"salt\" vs \"sodium\"; (3) look up a medication with country-specific branding (e.g. Tylenol/US, Panadol/UK) to exercise medicine-search web_search", "blocking": true},
-    {"action": "Run pnpm db:truncate-push against dev Neon branch", "context": "Rollout step D-10 from Phase 41 plan. Now idempotent per commit 89c5e8c.", "blocking": true},
-    {"action": "Add GitHub repo secrets", "context": "NEON_API_KEY, NEON_PROJECT_ID, NEON_AUTH_TEST_EMAIL, NEON_AUTH_TEST_PASSWORD, BETTER_AUTH_SECRET, NEON_AUTH_COOKIE_SECRET — required for CI E2E workflow per rollout", "blocking": true},
-    {"action": "Run pnpm test:e2e locally against live Neon branch", "context": "Scenario 9 — cannot be automated without the secrets above", "blocking": true},
-    {"action": "Run pnpm build + pnpm lint explicitly", "context": "Scenario 10 — vitest suite is already green as of last commit", "blocking": false}
+    {"action": "Run pnpm test:e2e locally with .env.local pointed at dev Neon branch", "context": "Playwright's webServer config auto-starts pnpm dev. global-setup.ts signs in via /auth UI using NEON_AUTH_TEST_EMAIL/PASSWORD, persists storageState. Specs run authenticated. Dev Neon branch has no push_* tables but e2e suite doesn't touch them (Scenario 7 deferred).", "blocking": true},
+    {"action": "Run pnpm build + pnpm lint explicitly for Scenario 10", "context": "vitest suite already green as of commit 1f22b7d (451/451)", "blocking": false},
+    {"action": "Mobile device re-verification for Scenario 7 push re-subscription", "context": "Cannot be done from desktop session", "blocking": false}
   ],
   "decisions": [
-    {"decision": "Sonnet + web_search everywhere for user-facing AI routes", "rationale": "User guardrail: Haiku's world-knowledge gaps produced wrong estimates on niche beverages (Mio Mio Mate 1.9 vs 20 mg/100ml). Every user-facing AI route must use Sonnet at minimum and have web_search available.", "phase": "41"},
-    {"decision": "Parse route field rename salt → value_mg + explicit measurement_type", "rationale": "Previous schema conflated sodium (Na) and salt (NaCl) units. Rename makes API contract unambiguous; client does the conversion.", "phase": "41"},
-    {"decision": "Set sodiumSource BEFORE sodiumMg in food-section.tsx", "rationale": "React state updates are queued; dropdown must reflect correct unit before user sees the number next to it.", "phase": "41"},
-    {"decision": "Sign-up redirect via router.replace + refresh", "rationale": "callbackURL on signUp.email is server-flow metadata, not a client redirect. Explicit navigation required.", "phase": "41"},
-    {"decision": "window.location is banned for in-app navigation", "rationale": "Converted all sign-out callers to router.replace/refresh. Legitimate uses (reload() for SW/version updates, .origin/.protocol reads) still allowed.", "phase": "41"},
-    {"decision": "max_tokens bump strategy for web_search routes", "rationale": "web_search server tool adds tool_use/tool_result blocks that count toward output. Bumped each route with headroom: substance-lookup/enrich 512→1024, medicine-search 2048→3072, titration-warnings 1536→2560, interaction-check 2048→3072.", "phase": "41"}
+    {"decision": "Create dev Neon branch manually in Neon console, point .env.local DATABASE_URL at it", "rationale": "Vercel-Neon integration only auto-provisions Production + per-PR Preview branches, no persistent Development branch. Manual branch isolates UAT from prod Neon without coupling to a PR.", "phase": "41"},
+    {"decision": "Accept Neon Auth beta limitation: one instance per project, not per branch", "rationale": "Tried to activate Neon Auth on dev branch — console rejected it. The test user lives in the shared project-wide Neon Auth user store. Test user persists across all branches and CI runs, making the seed step a one-time bootstrap rather than per-run.", "phase": "41"},
+    {"decision": "Hardcode localhost:3000 in seed-e2e-user.ts, drop seed step from ci.yml entirely", "rationale": "Script was using NEON_AUTH_URL as base which 404s (Neon hosted endpoint doesn't expose Next.js proxy paths). Additionally, CI seed step ran BEFORE Playwright started dev server via webServer config, meaning it would ECONNREFUSED even with the bug fixed. And the seed is unnecessary anyway because Neon Auth is project-wide — user persists across runs. Committed as 1f22b7d.", "phase": "41"},
+    {"decision": "truncate-push no-op on dev branch is correct, not a bug", "rationale": "This PR is the first time the app actually uses a Neon DB — prior phases had the push tables on prod via one-shot manual migration (scripts/push-migration.sql). The fresh dev branch has no push tables because rollout step D-10 (apply migration) hasn't been run on it. E2E suite doesn't exercise push subscription flows (Scenario 7 deferred), so missing tables don't block Scenario 9.", "phase": "41"}
   ],
   "uncommitted_files": [],
-  "next_action": "User re-tests Scenario 8 (Mio Mio Mate caffeine lookup + salt-labelled food parse + medicine-search with country). Then proceed to Scenario 9 (pnpm test:e2e) and Scenario 10 (build + lint).",
-  "context_notes": "All 6 AI routes (parse + substance-lookup + substance-enrich + medicine-search + titration-warnings + interaction-check) now use the same pattern: Sonnet quality model, WEB_SEARCH_TOOL prepended to tools array, forced tool_choice to app tool (web_search runs transparently as server tool), tool_use content blocks filtered by name with type predicate (defensive against server-tool blocks), system prompts have web_search guidance. Typecheck clean, vitest 451/451 passing. Only human UAT (Scenarios 8 retest, 9, 10) remains before Phase 41 can close. Phase 41 is the last non-human plan in the phase."
+  "next_action": "Run `pnpm test:e2e` locally. Watch for (1) global-setup success log '[e2e-global-setup] Authenticated state saved to ...' confirming auth proxy + shared Neon Auth + .env.local all wired correctly, (2) any spec failures — triage by pasting output. If green, mark Scenario 9 done and proceed to Scenario 10 (pnpm build + pnpm lint). If any scenario fails Phase 41 cannot close.",
+  "context_notes": "Session focused on Scenario 9 prerequisites. Major discoveries: (1) Neon Auth is one-instance-per-project in beta, (2) Vercel-Neon integration doesn't provision persistent dev branch, (3) seed-e2e-user.ts had a real bug masked by CI env override that also happened to not work in CI. Fixed the script and removed the CI seed step in a single commit (1f22b7d). Tasks 1-4 of this session's todo list all done; Task 5 (pnpm test:e2e) is the next action and requires human execution. Only 2 human-verifiable scenarios remain before Phase 41 closes: Scenario 9 (e2e) and Scenario 10 (build+lint). Scenario 7 stays deferred."
 }
