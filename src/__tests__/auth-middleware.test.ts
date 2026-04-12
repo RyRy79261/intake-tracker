@@ -143,7 +143,7 @@ describe("withAuth HOF (Neon Auth cookie sessions)", () => {
 
 describe("root middleware.ts", () => {
   it("exports a default middleware function and a matcher config", async () => {
-    const mod = await import("../../middleware");
+    const mod = await import("../middleware");
     expect(typeof mod.default).toBe("function");
     expect(mod.config).toBeDefined();
     expect(Array.isArray(mod.config.matcher)).toBe(true);

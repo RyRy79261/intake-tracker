@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,14 +10,9 @@ import { signUp } from "@/lib/auth-client";
 /**
  * Email/password sign-up form with whitelist-aware error handling (D-04).
  *
- * When Neon Auth returns an error indicating the user is not authorized
- * (whitelist rejection surfaces via the withAuth HOF on the first protected
- * call, but we also catch server-side messages containing "not authorized"
- * / "whitelist"), we map it to a friendly contact-admin message instead of
- * the raw server string.
- *
- * Password rules are left to Neon Auth defaults (Better Auth ≥ 8 chars). The
- * local form only validates presence + confirm-password match.
+ * When Neon Auth returns an error indicating the user is not authorized,
+ * we map it to a friendly contact-admin message instead of the raw server
+ * string. Visual layout matches the login-04 shadcn block.
  */
 export function SignUpForm() {
   const [name, setName] = useState("");
@@ -75,8 +71,15 @@ export function SignUpForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="space-y-2">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+      <div className="flex flex-col items-center gap-2 text-center">
+        <h1 className="text-2xl font-bold">Create an account</h1>
+        <p className="text-balance text-sm text-muted-foreground">
+          Start tracking your health data on Intake Tracker
+        </p>
+      </div>
+
+      <div className="grid gap-2">
         <Label htmlFor="signup-name">Name (optional)</Label>
         <Input
           id="signup-name"
@@ -87,11 +90,13 @@ export function SignUpForm() {
           disabled={loading}
         />
       </div>
-      <div className="space-y-2">
+
+      <div className="grid gap-2">
         <Label htmlFor="signup-email">Email</Label>
         <Input
           id="signup-email"
           type="email"
+          placeholder="you@example.com"
           autoComplete="email"
           required
           value={email}
@@ -99,7 +104,8 @@ export function SignUpForm() {
           disabled={loading}
         />
       </div>
-      <div className="space-y-2">
+
+      <div className="grid gap-2">
         <Label htmlFor="signup-password">Password</Label>
         <Input
           id="signup-password"
@@ -111,7 +117,8 @@ export function SignUpForm() {
           disabled={loading}
         />
       </div>
-      <div className="space-y-2">
+
+      <div className="grid gap-2">
         <Label htmlFor="signup-confirm-password">Confirm password</Label>
         <Input
           id="signup-confirm-password"
@@ -123,14 +130,23 @@ export function SignUpForm() {
           disabled={loading}
         />
       </div>
+
       {error && (
         <p className="text-sm text-destructive" role="alert">
           {error}
         </p>
       )}
+
       <Button type="submit" className="w-full" disabled={loading}>
         {loading ? "Creating account..." : "Create account"}
       </Button>
+
+      <p className="text-center text-sm text-muted-foreground">
+        Already have an account?{" "}
+        <Link href="/auth" className="underline underline-offset-4">
+          Sign in
+        </Link>
+      </p>
     </form>
   );
 }
