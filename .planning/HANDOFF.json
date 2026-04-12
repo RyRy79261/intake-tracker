@@ -1,0 +1,17 @@
+{
+  "timestamp": "2026-04-12T12:39:25.079Z",
+  "phase": "41-neon-auth-privy-removal",
+  "phase_dir": ".planning/phases/41-neon-auth-privy-removal",
+  "branch": "feat/android-release",
+  "pr": "#39 (draft)",
+  "status": "paused-at-uat",
+  "current_plan": "41-06-PLAN.md",
+  "current_position": "UAT Scenarios 1-10 not yet started; middleware + auth UI now fixed and committed",
+  "last_commits": [
+    "96055b2 refactor(settings): expandable tracking sub-items, drop dead substance config",
+    "b0e7c51 feat(41): redesign /auth with login-04 layout and move middleware to src/"
+  ],
+  "tests": "451 passing",
+  "next_action": "Resume Phase 41 UAT walkthrough starting with Scenario 1 (email sign-in) from 41-06-PLAN.md",
+  "blockers": []
+}
