@@ -2,8 +2,8 @@ import { logAudit } from "./audit";
 
 export interface ParsedIntake {
   water: number | null; // ml
-  salt: number | null; // mg
-  measurementType?: "sodium" | "salt"; // whether salt field is sodium (Na) or salt (NaCl)
+  valueMg: number | null; // mg of sodium OR salt — measurementType says which
+  measurementType: "sodium" | "salt";
   reasoning?: string;
 }
 
@@ -42,7 +42,7 @@ export async function parseIntakeWithAI(input: string): Promise<ParsedIntake> {
     
     return {
       water: result.water,
-      salt: result.salt,
+      valueMg: result.value_mg,
       measurementType: result.measurement_type,
       reasoning: result.reasoning,
     };

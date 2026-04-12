@@ -132,11 +132,13 @@ export function FoodSection() {
     try {
       const result = await parseIntakeWithAI(trimmed);
 
-      // Populate form fields from AI result
-      if (result.salt && result.salt > 0) {
-        setSodiumMg(result.salt.toString());
-        // Auto-select sodium source based on what the AI reported
-        setSodiumSource(result.measurementType === "salt" ? "salt" : "sodium");
+      // Populate form fields from AI result. The AI returns a raw mg value
+      // plus a measurementType flag saying whether it's sodium (Na) or salt
+      // (NaCl) mass. We must set the dropdown BEFORE the input so the user
+      // sees the correct unit next to the number.
+      if (result.valueMg && result.valueMg > 0) {
+        setSodiumSource(result.measurementType);
+        setSodiumMg(result.valueMg.toString());
       }
       if (result.water && result.water > 0) {
         setWaterMl(result.water.toString());
