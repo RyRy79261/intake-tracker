@@ -150,9 +150,9 @@ jobs:
         if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: npx playwright install-deps chromium
       # Phase 41 (D-15): per-run isolated Neon test branch so each E2E run
-      # gets a fresh database. The seed step creates the test user, the
-      # run step exercises the real auth flow via globalSetup, and the
-      # delete step always runs to keep branch usage bounded.
+      # gets a fresh database for push_* tables (Neon Auth users live in a
+      # separate project-wide hosted store, unrelated to this branch).
+      # The delete step always runs to keep branch usage bounded.
       - name: Create Neon test branch
         id: neon-branch
         uses: neondatabase/create-branch-action@v5
@@ -160,14 +160,10 @@ jobs:
           api_key: ${{ secrets.NEON_API_KEY }}
           project_id: ${{ secrets.NEON_PROJECT_ID }}
           branch_name: ci-e2e-${{ github.run_id }}
-      - name: Seed Neon Auth test user
-        env:
-          NEON_AUTH_URL: http://localhost:3000
-          NEON_AUTH_TEST_EMAIL: ${{ secrets.NEON_AUTH_TEST_EMAIL }}
-          NEON_AUTH_TEST_PASSWORD: ${{ secrets.NEON_AUTH_TEST_PASSWORD }}
-          DATABASE_URL: ${{ steps.neon-branch.outputs.db_url }}
-          ALLOWED_EMAILS: ${{ secrets.NEON_AUTH_TEST_EMAIL }}
-        run: pnpm tsx scripts/seed-e2e-user.ts
+      # Note: no per-run user seed. Neon Auth is a project-wide hosted service
+      # (one instance shared across all Neon branches), so the E2E test user is
+      # a one-time manual bootstrap via `pnpm tsx scripts/seed-e2e-user.ts` and
+      # persists across CI runs. See the script header for details.
       - name: Run E2E tests
         env:
           DATABASE_URL: ${{ steps.neon-branch.outputs.db_url }}

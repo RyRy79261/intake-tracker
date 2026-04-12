@@ -1,20 +1,23 @@
 /**
- * Phase 41 — seeds the Neon Auth test user for E2E.
+ * Local-only bootstrap: create the Neon Auth test user on a fresh Neon Auth
+ * instance by driving the app's own proxy handler.
  *
- * Run during CI just after creating the Neon branch and after the
- * Playwright webServer is running, before launching the E2E suite.
- * Calls /api/auth/sign-up/email to create the user if they do not yet
- * exist on the branch. A 409 (already exists) is treated as success so
- * the script is idempotent for local development.
+ * Neon Auth is a hosted service. `src/app/api/auth/[...path]/route.ts` is a
+ * catch-all proxy that forwards everything under `/api/auth/...` to Neon via
+ * the createNeonAuth handler. That means the ONLY correct target for a raw
+ * sign-up POST is the running Next.js dev server on localhost — hitting
+ * NEON_AUTH_URL directly bypasses the proxy and 404s because Neon's hosted
+ * API doesn't expose `/api/auth/sign-up/email` under that path.
  *
- * Required env vars:
- *   NEON_AUTH_URL         — where the auth handler lives (default: http://localhost:3000)
- *   NEON_AUTH_TEST_EMAIL  — credential to seed
- *   NEON_AUTH_TEST_PASSWORD — credential to seed
+ * Prerequisites:
+ *   1. `pnpm dev` is already running on http://localhost:3000
+ *   2. .env.local has NEON_AUTH_URL + NEON_AUTH_COOKIE_SECRET so the proxy
+ *      can talk to Neon upstream
+ *   3. ALLOWED_EMAILS includes NEON_AUTH_TEST_EMAIL (whitelist enforcement)
  *
- * Recommended:
- *   ALLOWED_EMAILS — must include NEON_AUTH_TEST_EMAIL so the whitelist
- *                    check in withAuth() lets the seeded user through.
+ * Why this isn't in CI: Neon Auth is project-wide (one instance shared across
+ * all Neon branches), so the test user is a one-time manual bootstrap, not a
+ * per-run CI step. Once created, it persists across CI runs and branches.
  *
  * Usage:
  *   pnpm tsx scripts/seed-e2e-user.ts
@@ -23,9 +26,9 @@ import { loadEnvConfig } from "@next/env";
 
 loadEnvConfig(process.cwd());
 
+const LOCAL_DEV_SERVER = "http://localhost:3000";
+
 export async function main() {
-  const baseUrl =
-    process.env.NEON_AUTH_URL ?? "http://localhost:3000";
   const email = process.env.NEON_AUTH_TEST_EMAIL;
   const password = process.env.NEON_AUTH_TEST_PASSWORD;
 
@@ -35,7 +38,7 @@ export async function main() {
     );
   }
 
-  const url = `${baseUrl}/api/auth/sign-up/email`;
+  const url = `${LOCAL_DEV_SERVER}/api/auth/sign-up/email`;
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
