@@ -8,7 +8,7 @@
  * the script is idempotent for local development.
  *
  * Required env vars:
- *   NEON_AUTH_BASE_URL    — where the auth handler lives (default: http://localhost:3000)
+ *   NEON_AUTH_URL         — where the auth handler lives (default: http://localhost:3000)
  *   NEON_AUTH_TEST_EMAIL  — credential to seed
  *   NEON_AUTH_TEST_PASSWORD — credential to seed
  *
@@ -21,7 +21,7 @@
  */
 export async function main() {
   const baseUrl =
-    process.env.NEON_AUTH_BASE_URL ?? "http://localhost:3000";
+    process.env.NEON_AUTH_URL ?? "http://localhost:3000";
   const email = process.env.NEON_AUTH_TEST_EMAIL;
   const password = process.env.NEON_AUTH_TEST_PASSWORD;
 

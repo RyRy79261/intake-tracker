@@ -10,7 +10,7 @@ import { createNeonAuth } from "@neondatabase/auth/next/server";
  *   - middleware.ts (page-level redirect)
  *
  * Env vars (set in .env.local + Vercel):
- *   - NEON_AUTH_BASE_URL: Neon Auth service endpoint (Neon console > Branch > Auth)
+ *   - NEON_AUTH_URL: Neon Auth service endpoint (Neon console > Branch > Auth)
  *   - NEON_AUTH_COOKIE_SECRET: 32+ char signing secret (openssl rand -base64 32)
  *   - ALLOWED_EMAILS: comma-separated whitelist (enforced in withAuth, not here)
  *
@@ -28,7 +28,7 @@ const FALLBACK_COOKIE_SECRET =
 const cookieSecret =
   process.env.NEON_AUTH_COOKIE_SECRET ?? FALLBACK_COOKIE_SECRET;
 
-const baseUrl = process.env.NEON_AUTH_BASE_URL ?? "http://localhost:0";
+const baseUrl = process.env.NEON_AUTH_URL ?? "http://localhost:0";
 
 export const auth = createNeonAuth({
   baseUrl,
