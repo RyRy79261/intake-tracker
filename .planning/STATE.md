@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Cloud Sync & Settings Overhaul
 status: executing
-stopped_at: Phase 41 plan 04 complete (commits 4a0ba45, 72fe5cb, a3ce0ea); 41-05 (E2E rewrite) and 41-06 (Human UAT) remain
-last_updated: "2026-04-12T11:45:00.000Z"
+stopped_at: Phase 41 plan 05 complete (commit c4ef51d — Playwright globalSetup + Neon branch CI); 41-06 (Human UAT) is the only remaining plan and requires human execution
+last_updated: "2026-04-12T12:00:00.000Z"
 last_activity: 2026-04-12
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 12
-  completed_plans: 9
-  percent: 75
+  completed_plans: 10
+  percent: 83
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-04-11)
 ## Current Position
 
 Phase: 41 (neon-auth-privy-removal) — EXECUTING
-Plan: 4 of 6 complete (41-05 next; 41-06 is human UAT)
-Status: 41-04 landed cleanly
+Plan: 5 of 6 complete (41-06 is human UAT — cannot be completed autonomously)
+Status: 41-05 landed cleanly (commit c4ef51d). Playwright E2E is now rewired to Neon Auth via globalSetup + storageState, and the CI e2e job provisions/deletes a per-run Neon branch around the suite. Human UAT is blocked on repo secrets (NEON_API_KEY, NEON_PROJECT_ID, NEON_AUTH_TEST_EMAIL, NEON_AUTH_TEST_PASSWORD, BETTER_AUTH_SECRET, NEON_AUTH_COOKIE_SECRET) and on a local `pnpm test:e2e` run against a real Neon branch.
 Last activity: 2026-04-12
 
-Progress: [██████░░░░] 67%
+Progress: [████████░░] 83%
 
 ## Performance Metrics
 
@@ -55,12 +55,15 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-None.
+- **Phase 41 plan 06 (Human UAT)** — blocking checkpoint. Requires the user to walk through 10 UAT scenarios in a live dev environment (email sign-in, Google OAuth, sign-up rejection, sign-out, PIN absence, push re-subscription, AI API, full `pnpm test:e2e`, and `pnpm build`/`lint`/`vitest`). Cannot be executed autonomously. See `.planning/phases/41-neon-auth-privy-removal/41-06-PLAN.md`.
+- Before the UAT: run `pnpm db:truncate-push` against the dev Neon branch once (Phase 41 rollout step D-10).
+- Before CI-triggered E2E works: add repo secrets `NEON_API_KEY`, `NEON_PROJECT_ID`, `NEON_AUTH_TEST_EMAIL`, `NEON_AUTH_TEST_PASSWORD`, `BETTER_AUTH_SECRET`, `NEON_AUTH_COOKIE_SECRET`.
 
 ### Blockers/Concerns
 
 - Neon Auth is beta (v0.1.0-beta.20) -- validate capabilities in Phase 41 branch spike before committing
 - Vercel Pro plan ($20/mo) required for per-minute cron -- confirm before Phase 46
+- Phase 41 cannot close until human UAT (plan 41-06) is executed against a live Neon dev branch with real credentials.
 
 ### Quick Tasks Completed
 

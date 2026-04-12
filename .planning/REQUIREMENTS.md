@@ -22,7 +22,7 @@ Requirements for cloud sync and settings overhaul milestone. Each maps to roadma
 - [x] **AUTH-02**: PIN gate fully removed (pin-service, pin-dialog, use-pin-gate deleted)
 - [ ] **AUTH-03**: All API routes authenticate via Neon Auth sessions (Privy middleware replaced)
 - [x] **AUTH-04**: Privy provider, dependencies, and env vars fully removed from codebase
-- [ ] **AUTH-05**: E2E tests use Neon Auth login flow instead of Privy OTP iframe
+- [x] **AUTH-05**: E2E tests use Neon Auth login flow instead of Privy OTP iframe
 
 ### NeonDB Schema
 
@@ -103,7 +103,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | AUTH-02 | Phase 41 | Complete |
 | AUTH-03 | Phase 41 | Pending |
 | AUTH-04 | Phase 41 | Complete |
-| AUTH-05 | Phase 41 | Pending |
+| AUTH-05 | Phase 41 | Complete |
 | PUSH-02 | Phase 41 | Complete |
 | SCHEMA-01 | Phase 42 | Pending |
 | SCHEMA-02 | Phase 42 | Pending |
