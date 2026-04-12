@@ -29,29 +29,35 @@ export async function main(): Promise<void> {
 
   const sql = neon(url);
 
-  console.log("[truncate-push] Starting atomic truncate of 3 push tables...");
+  const tables = [
+    "push_subscriptions",
+    "push_dose_schedules",
+    "push_sent_log",
+    "push_settings",
+  ];
 
-  // Neon HTTP driver supports multi-statement transactions via sql.transaction([...]).
-  // If the installed driver version does not support transactions, fall back to
-  // sequential TRUNCATE ... CASCADE calls — NOT atomic, but acceptable for a
-  // one-shot migration on a single-user system with no concurrent writers.
-  try {
-    await sql.transaction([
-      sql`TRUNCATE TABLE push_subscriptions RESTART IDENTITY CASCADE`,
-      sql`TRUNCATE TABLE push_schedules RESTART IDENTITY CASCADE`,
-      sql`TRUNCATE TABLE push_sent_log RESTART IDENTITY CASCADE`,
-    ]);
-  } catch (err) {
-    console.warn(
-      "[truncate-push] sql.transaction unavailable, running sequentially:",
-      err
-    );
-    await sql`TRUNCATE TABLE push_subscriptions RESTART IDENTITY CASCADE`;
-    await sql`TRUNCATE TABLE push_schedules RESTART IDENTITY CASCADE`;
-    await sql`TRUNCATE TABLE push_sent_log RESTART IDENTITY CASCADE`;
+  console.log(`[truncate-push] Starting truncate of ${tables.length} push tables...`);
+
+  const existing = await sql`
+    SELECT tablename FROM pg_tables
+    WHERE schemaname = 'public' AND tablename = ANY(${tables})
+  ` as Array<{ tablename: string }>;
+  const present = new Set(existing.map((r) => r.tablename));
+
+  const missing = tables.filter((t) => !present.has(t));
+  if (missing.length > 0) {
+    console.log(`[truncate-push] Skipping missing tables (fresh branch?): ${missing.join(", ")}`);
   }
 
-  console.log("[truncate-push] Done. 3 tables cleared.");
+  let cleared = 0;
+  for (const table of tables) {
+    if (!present.has(table)) continue;
+    // Table name comes from a static allowlist above, not user input — safe to interpolate.
+    await sql.query(`TRUNCATE TABLE ${table} RESTART IDENTITY CASCADE`);
+    cleared++;
+  }
+
+  console.log(`[truncate-push] Done. ${cleared} table(s) cleared, ${missing.length} skipped.`);
 }
 
 main().catch((err) => {
