@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Cloud Sync & Settings Overhaul
-status: completed
+status: executing
 stopped_at: Phase 42 context gathered; Phase 41 planned (6 plans, 4 waves, commit b566148)
-last_updated: "2026-04-12T08:30:49.178Z"
-last_activity: 2026-04-12 -- Phase 40 completed (3/3 plans)
+last_updated: "2026-04-12T08:50:03.150Z"
+last_activity: 2026-04-12 -- Phase 41 execution started
 progress:
   total_phases: 7
   completed_phases: 1
-  total_plans: 9
-  completed_plans: 3
-  percent: 33
+  total_plans: 11
+  completed_plans: 4
+  percent: 36
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-11)
 
 **Core value:** Accurate, queryable health data across intake, vitals, and medication adherence -- structured for cross-domain analysis and future AI querying
-**Current focus:** Phase 40 — Settings Accordion Restructure
+**Current focus:** Phase 41 — neon-auth-privy-removal
 
 ## Current Position
 
-Phase: 40 (Settings Accordion Restructure) — COMPLETE
-Plan: 3 of 3
-Status: Phase 40 complete, ready for Phase 41
-Last activity: 2026-04-12 -- Phase 40 completed (3/3 plans)
+Phase: 41 (neon-auth-privy-removal) — EXECUTING
+Plan: 1 of 6
+Status: Executing Phase 41
+Last activity: 2026-04-12 -- Phase 41 execution started
 
 Progress: [█░░░░░░░░░] 14%
 
