@@ -8,24 +8,16 @@ Single-user health tracking PWA. All user data lives client-side in IndexedDB. T
 
 ## Access Control Model
 
-### Privy Authentication
+### Neon Auth
 
-- **Provider:** Privy (email and Google OAuth)
-- **Whitelist enforcement:** `ALLOWED_EMAILS` env var checked server-side in `src/lib/privy-server.ts`
-- **Token verification:** Privy JWT verified on every API request via `src/lib/auth-middleware.ts`
+- **Provider:** Neon Auth (email/password) backed by Neon Postgres via Better Auth
+- **Whitelist enforcement:** `ALLOWED_EMAILS` env var checked server-side in `src/lib/auth-middleware.ts`
+- **Session verification:** HttpOnly session cookie validated on every API request via `withAuth()` in `src/lib/auth-middleware.ts`
 - **Client guard:** `src/components/auth-guard.tsx` wraps protected routes
-
-### PIN Gate
-
-- **Purpose:** Quick local access without full re-authentication
-- **Implementation:** `src/hooks/use-pin-gate.tsx` (React Context)
-- **Storage:** PIN hash in localStorage, session token in sessionStorage
-- **Expiry:** 24-hour session timeout
-- **Hashing:** PBKDF2 with 100,000 iterations via `hashPin()` in `src/lib/crypto.ts`
 
 ### E2E Test Authentication
 
-E2E tests use Privy dashboard-provisioned test credentials (fixed email + OTP) for automated authentication. The Playwright setup project (`e2e/auth.setup.ts`) authenticates through the real Privy login flow and saves the session state for all test projects.
+E2E tests use a seeded Neon Auth user (email + password) for automated authentication. Playwright's `globalSetup` (`e2e/global-setup.ts`) authenticates against Neon Auth, captures the session cookie via the Better Auth client, and persists `playwright/.auth/user.json` for all test projects to reuse.
 
 ## API Security
 
@@ -34,11 +26,12 @@ E2E tests use Privy dashboard-provisioned test credentials (fixed email + OTP) f
 All API keys are server-side only. No secrets are exposed via `NEXT_PUBLIC_` environment variables.
 
 - `ANTHROPIC_API_KEY` -- used in API routes only (`src/app/api/ai/_shared/claude-client.ts` shared by all AI routes)
-- `PRIVY_APP_SECRET` -- used in `src/lib/privy-server.ts` for JWT verification
+- `BETTER_AUTH_SECRET` -- used by Neon Auth (Better Auth) to sign session cookies
+- `DATABASE_URL` -- Neon Postgres connection string (Neon Auth user store + push notification tables)
 
 ### Auth Middleware
 
-API routes use auth middleware from `src/lib/auth-middleware.ts` to verify Privy JWT tokens and check the email whitelist before processing requests.
+API routes use auth middleware from `src/lib/auth-middleware.ts` to validate the Neon Auth session cookie and check the email whitelist before processing requests.
 
 ### PII Sanitization
 
@@ -73,7 +66,7 @@ The encrypted backup format wraps the payload in an `EncryptedBackup` envelope: 
 ## Data at Rest
 
 - **IndexedDB is NOT encrypted.** All record data is stored in plaintext in the browser's IndexedDB. This is a deliberate tradeoff: `useLiveQuery` requires direct IndexedDB queries, which are incompatible with transparent encryption.
-- **Access control is the primary protection.** PIN gate + Privy authentication prevent unauthorized access to the app.
+- **Access control is the primary protection.** Neon Auth prevents unauthorized access to the app.
 - **Field-level encryption is available but not wired.** The `useEncryptedField` hook and `crypto.ts` primitives exist for future use on specific sensitive fields, but no fields are currently encrypted.
 
 ## Content Security Policy
@@ -87,8 +80,8 @@ Defined in `next.config.js` and applied to all routes via response headers:
 | `style-src` | `'self' 'unsafe-inline'` | Required for Tailwind CSS |
 | `img-src` | `'self' data: blob:` | App-generated images |
 | `font-src` | `'self' data:` | Outfit font via next/font |
-| `connect-src` | `'self' https://api.anthropic.com https://auth.privy.io https://*.walletconnect.com https://*.walletconnect.org wss://*.walletconnect.org` | Anthropic Claude API + Privy Auth |
-| `frame-src` | `'self' https://auth.privy.io` | Privy login modal |
+| `connect-src` | `'self' https://api.anthropic.com https://*.neon.tech` | Anthropic Claude API + Neon Auth |
+| `frame-src` | `'self'` | No third-party iframes |
 | `frame-ancestors` | `'none'` | Prevent embedding (clickjacking) |
 
 Additional headers: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy: camera=(), microphone=(self), geolocation=()`.
@@ -97,7 +90,7 @@ Additional headers: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, 
 
 The auth patterns are designed for future server-side sync:
 
-- **JWT verification:** Already implemented server-side via Privy, ready for API-based sync endpoints
+- **Cookie session verification:** Already implemented server-side via Neon Auth, ready for API-based sync endpoints
 - **No Dexie Cloud dependency:** The app uses plain Dexie.js, not Dexie Cloud, so sync can be implemented via any backend
 - **Schema has realmId fields:** Database records include `realmId` for future multi-tenant partitioning when server-side sync is added
 - **Device tracking:** Records include `deviceId` for conflict resolution across devices
@@ -106,8 +99,9 @@ The auth patterns are designed for future server-side sync:
 
 | Variable | Secret | Location | Purpose |
 |----------|--------|----------|---------|
-| `NEXT_PUBLIC_PRIVY_APP_ID` | Safe | Client + Server | Privy app identifier |
-| `PRIVY_APP_SECRET` | **Secret** | Server only | Privy JWT verification |
+| `BETTER_AUTH_SECRET` | **Secret** | Server only | Neon Auth session cookie signing |
+| `BETTER_AUTH_URL` | Safe | Server only | Public URL of the deployed app |
+| `DATABASE_URL` | **Secret** | Server only | Neon Postgres connection (Neon Auth + push tables) |
 | `ANTHROPIC_API_KEY` | **Secret** | Server only | AI parse/search/enrich API |
 | `ALLOWED_EMAILS` | Safe | Server only | Email whitelist for auth |
 | `NEXT_PUBLIC_APP_VERSION` | Safe | Client | Display version (from package.json) |

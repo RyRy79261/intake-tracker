@@ -46,7 +46,7 @@ export default defineConfig({
         url: 'http://localhost:3000',
         reuseExistingServer: false,
         timeout: 120 * 1000,
-        env: { NEXT_PUBLIC_PRIVY_APP_ID: '' },
+        env: {},
       }
     : {
         command: 'pnpm run dev',
@@ -55,6 +55,6 @@ export default defineConfig({
         stdout: 'pipe',
         stderr: 'pipe',
         timeout: 120 * 1000,
-        env: { NEXT_PUBLIC_PRIVY_APP_ID: '' },
+        env: {},
       },
 });

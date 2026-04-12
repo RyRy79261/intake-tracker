@@ -8,7 +8,7 @@ import { getClaudeClient, CLAUDE_MODELS } from "../_shared/claude-client";
  * Server-side API route for AI parsing via Anthropic Claude.
  *
  * SECURITY:
- * - Centralized auth middleware (withAuth) handles Privy verification + whitelist
+ * - Centralized auth middleware (withAuth) handles Neon Auth cookie verification + whitelist
  * - API key stored in server environment only (never sent to client)
  * - Rate limiting applied per IP
  * - Input validation and PII stripping via sanitizeForAI

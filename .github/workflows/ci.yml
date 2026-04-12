@@ -124,8 +124,8 @@ jobs:
         run: pnpm exec vitest run src/__tests__/integrity/
 
   e2e:
-    # Runs without NEXT_PUBLIC_PRIVY_APP_ID so the app skips Privy auth
-    # (Privy modal is not testable in headless CI — to be removed in a future milestone)
+    # Phase 41: Privy is fully removed. Auth is Neon Auth (cookie session).
+    # E2E tests use Playwright globalSetup to seed a session via Neon Auth.
     needs: [changes]
     if: needs.changes.outputs.src == 'true'
     runs-on: ubuntu-latest

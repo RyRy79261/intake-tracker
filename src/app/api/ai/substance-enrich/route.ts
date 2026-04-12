@@ -8,7 +8,7 @@ import { getClaudeClient, CLAUDE_MODELS } from "../_shared/claude-client";
  * Server-side API route for substance (caffeine/alcohol) AI enrichment via Anthropic Claude.
  *
  * SECURITY:
- * - Centralized auth middleware (withAuth) handles Privy verification + whitelist
+ * - Centralized auth middleware (withAuth) handles Neon Auth cookie verification + whitelist
  * - API key stored in server environment only
  * - Rate limiting applied per IP
  * - Input validation and PII stripping via sanitizeForAI
