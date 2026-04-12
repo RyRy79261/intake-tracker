@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Cloud Sync & Settings Overhaul
 status: executing
-stopped_at: Phase 42 context gathered; Phase 41 planned (6 plans, 4 waves, commit b566148)
-last_updated: "2026-04-12T09:27:11.798Z"
+stopped_at: Phase 41 plan 04 complete (commits 4a0ba45, 72fe5cb, a3ce0ea); 41-05 (E2E rewrite) and 41-06 (Human UAT) remain
+last_updated: "2026-04-12T11:45:00.000Z"
 last_activity: 2026-04-12
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 12
-  completed_plans: 6
-  percent: 50
+  completed_plans: 9
+  percent: 75
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-04-11)
 ## Current Position
 
 Phase: 41 (neon-auth-privy-removal) — EXECUTING
-Plan: 2 of 6
-Status: Ready to execute
+Plan: 4 of 6 complete (41-05 next; 41-06 is human UAT)
+Status: 41-04 landed cleanly
 Last activity: 2026-04-12
 
-Progress: [█░░░░░░░░░] 14%
+Progress: [██████░░░░] 67%
 
 ## Performance Metrics
 
