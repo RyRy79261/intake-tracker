@@ -1,4 +1,12 @@
+import { loadEnvConfig } from '@next/env';
 import { defineConfig, devices } from '@playwright/test';
+
+// Populate Playwright's own process.env from .env.development.local / .env.local
+// using Next.js' loader (same priority order). Required so:
+//   1. globalSetup can read NEON_AUTH_TEST_EMAIL / NEON_AUTH_TEST_PASSWORD.
+//   2. webServer.env below resolves to real values instead of "", which would
+//      otherwise override Next.js' own dotenv load in the child `pnpm dev`.
+loadEnvConfig(process.cwd());
 
 /**
  * See https://playwright.dev/docs/test-configuration.

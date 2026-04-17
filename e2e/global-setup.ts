@@ -44,12 +44,28 @@ async function globalSetup(config: FullConfig) {
   const page = await context.newPage();
 
   try {
-    await page.goto(`${baseURL}/auth`, { waitUntil: "domcontentloaded" });
+    await page.goto(`${baseURL}/auth`);
+    // Dev-mode route compiles are slow and React hydrates after network quiets.
+    // Clicking Sign In before the onSubmit handler attaches causes a native
+    // GET form submission and no POST to /api/auth/sign-in/email — the wait
+    // below would then hang until timeout. Block until hydration is done.
+    await page.waitForLoadState("networkidle");
+
     await page.getByLabel(/email/i).fill(email);
     await page.getByLabel(/password/i).fill(password);
-    await page.getByRole("button", { name: /sign in/i }).click();
 
-    // Wait for successful redirect away from /auth
+    // Fail fast if the click didn't trigger React's handler (hydration race):
+    // the Better Auth client POSTs to /api/auth/sign-in/email when it runs.
+    const signInResponse = page.waitForResponse(
+      (r) =>
+        r.url().includes("/api/auth/sign-in/email") &&
+        r.request().method() === "POST",
+      { timeout: 15_000 }
+    );
+    await page.getByRole("button", { name: /sign in/i }).click();
+    await signInResponse;
+
+    // Wait for Better Auth's callbackURL redirect to leave /auth
     await page.waitForURL(
       (url) => !url.pathname.startsWith("/auth"),
       { timeout: 30_000 }
