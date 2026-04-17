@@ -294,6 +294,24 @@ export interface SubstanceRecord {
   groupSource?: string; // "ai_food_parse" | "ai_substance_lookup" | "manual"
 }
 
+/** Sync queue op-log row (Dexie v16+, Phase 43 D-01).
+ *  `id` is auto-increment (++id). `op: 'delete'` exists for future hard-delete paths
+ *  but is unused in the P43 pilot (soft-deletes go through upsert with deletedAt set). */
+export interface SyncQueueRow {
+  id?: number;
+  tableName: string;
+  recordId: string;
+  op: "upsert" | "delete";
+  enqueuedAt: number;
+  attempts: number;
+}
+
+/** Per-table pull cursor (Dexie v16+, Phase 43 D-07). Singleton per tableName. */
+export interface SyncMetaRow {
+  tableName: string;
+  lastPulledUpdatedAt: number;
+}
+
 const db = new Dexie("IntakeTrackerDB") as Dexie & {
   intakeRecords: EntityTable<IntakeRecord, "id">;
   auditLogs: EntityTable<AuditLog, "id">;
@@ -311,6 +329,8 @@ const db = new Dexie("IntakeTrackerDB") as Dexie & {
   doseLogs: EntityTable<DoseLog, "id">;
   substanceRecords: EntityTable<SubstanceRecord, "id">;
   titrationPlans: EntityTable<TitrationPlan, "id">;
+  _syncQueue: EntityTable<SyncQueueRow, "id">;
+  _syncMeta: EntityTable<SyncMetaRow, "tableName">;
 };
 
 // Version 10: Consolidated schema with sync-readiness fields, compound indexes,
