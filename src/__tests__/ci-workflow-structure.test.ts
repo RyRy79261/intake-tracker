@@ -463,6 +463,97 @@ describe("Supply-chain job verifies config drift and audits dependencies (SCHN-0
 });
 
 // ---------------------------------------------------------------------------
+// Phase 42 additions: schema-migration dynamic gate (D-17)
+// ---------------------------------------------------------------------------
+
+describe("schema-migration job applies Drizzle migrations to an ephemeral Neon branch (Phase 42 D-17)", () => {
+  it("schema-migration job is defined in the workflow", () => {
+    // D-17 requires a dynamic migration-applyability gate. If this job is
+    // removed, PRs can merge schema changes that fail against a real Postgres.
+    expect(raw, "schema-migration job must be defined").toMatch(
+      /^  schema-migration:/m
+    );
+  });
+
+  it("schema-migration job creates and deletes a Neon test branch", () => {
+    // Mirrors the e2e job's ephemeral-branch pattern. Missing either action
+    // would either skip the migration or orphan the branch.
+    const block = extractJobBlock("schema-migration", raw);
+    expect(
+      block,
+      "schema-migration must use neondatabase/create-branch-action@v5"
+    ).toContain("neondatabase/create-branch-action@v5");
+    expect(
+      block,
+      "schema-migration must use neondatabase/delete-branch-action@v3"
+    ).toContain("neondatabase/delete-branch-action@v3");
+  });
+
+  it("schema-migration job applies Drizzle migrations via pnpm db:migrate", () => {
+    // D-17: actually run the migration SQL. A verify-only step without a
+    // migrate step would pass trivially on an already-empty branch.
+    const block = extractJobBlock("schema-migration", raw);
+    expect(
+      block,
+      "schema-migration must invoke pnpm db:migrate"
+    ).toContain("pnpm db:migrate");
+  });
+
+  it("schema-migration job verifies schema via pnpm tsx scripts/verify-schema.ts", () => {
+    // Uses @neondatabase/serverless (project dep) — catches the mistake of
+    // shelling out to psql, which is not installed reliably on the runner.
+    const block = extractJobBlock("schema-migration", raw);
+    expect(
+      block,
+      "schema-migration must invoke the TS verify script"
+    ).toContain("pnpm tsx scripts/verify-schema.ts");
+  });
+
+  it("schema-migration job does NOT shell out to psql", () => {
+    // Defensive: prevents a future edit from reintroducing the psql
+    // dependency that this plan deliberately removed. `\bpsql\b` matches
+    // psql as a standalone word, not inside identifiers like "PostgreSQL".
+    const block = extractJobBlock("schema-migration", raw);
+    expect(
+      block,
+      "schema-migration must not use psql (use @neondatabase/serverless via scripts/verify-schema.ts)"
+    ).not.toMatch(/\bpsql\b/);
+  });
+
+  it("schema-migration job runs unconditionally (no needs: [changes] gate)", () => {
+    // D-17: must run on every PR because schema-affecting changes can
+    // sneak in via package.json / pnpm-lock.yaml updates, which the
+    // `src` path filter does cover but the job is kept unconditional
+    // for defense-in-depth.
+    const block = extractJobBlock("schema-migration", raw);
+    expect(
+      block,
+      "schema-migration must not gate on needs.changes.outputs"
+    ).not.toContain("needs.changes.outputs");
+  });
+
+  it("ci-pass gate includes schema-migration in its needs array", () => {
+    // Without this, ci-pass can complete before the migration job finishes
+    // and let a failing migration slip through.
+    const ciPassBlock = extractJobBlock("ci-pass", raw);
+    expect(
+      ciPassBlock,
+      "ci-pass needs array must include schema-migration"
+    ).toContain("schema-migration");
+  });
+
+  it("ci-pass gate treats schema-migration as UNCONDITIONAL (must succeed)", () => {
+    // schema-migration lives in the unconditional block, not the gated one —
+    // so failure always blocks the PR, and "skipped" is not accepted.
+    const ciPassBlock = extractJobBlock("ci-pass", raw);
+    expect(
+      ciPassBlock,
+      "ci-pass must explicitly check needs.schema-migration.result"
+    ).toContain("needs.schema-migration.result");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Phase 24 additions: path filtering, coverage, build caching, benchmarks
 // ---------------------------------------------------------------------------
 
