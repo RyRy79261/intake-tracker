@@ -23,6 +23,9 @@
     "test:e2e": "playwright test",
     "bench": "vitest bench",
     "bench:ci": "vitest bench --outputJson benchmarks/results.json && node -e \"const f='benchmarks/results.json';const d=JSON.parse(require('fs').readFileSync(f,'utf8'));d.files.forEach(e=>{e.filepath=e.filepath.replace(process.cwd()+'/','')});require('fs').writeFileSync(f,JSON.stringify(d,null,2)+'\\n')\"",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:reset": "tsx scripts/reset-neon-db.ts",
     "db:truncate-push": "tsx scripts/truncate-push-tables.ts",
     "prepare": "husky"
   },
