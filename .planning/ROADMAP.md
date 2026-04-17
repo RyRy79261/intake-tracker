@@ -52,7 +52,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [ ] **Phase 40: Settings Accordion Restructure** - Reorganize settings into expandable color-coded sections, eliminate modals, surface orphaned settings
 - [x] **Phase 41: Neon Auth + Privy Removal** (6/6 plans) — completed 2026-04-17 (Scenario 7 mobile push re-subscription deferred to post-merge device verification)
-- [ ] **Phase 42: Postgres Schema + Drizzle Setup** - Mirror all 16 Dexie tables to Postgres via Drizzle ORM with user_id FK and CI parity validation
+- [x] **Phase 42: Postgres Schema + Drizzle Setup** - Mirror all 16 Dexie tables to Postgres via Drizzle ORM with user_id FK and CI parity validation (completed 2026-04-17)
 - [ ] **Phase 43: Sync Engine Core** - Build local-first sync engine with dirty queue, batch push/pull, conflict resolution, and offline handling
 - [ ] **Phase 44: Sync Service Integration** - Wire sync into all service files, surface sync status in Storage & Security section
 - [ ] **Phase 45: Data Migration** - One-time guided migration wizard uploading IndexedDB data to NeonDB with safety guarantees
@@ -157,7 +157,7 @@ Phases execute in numeric order: 40 → 41 → 42 → 43 → 44 → 45 → 46
 |-------|-----------|----------------|--------|-----------|
 | 40. Settings Accordion Restructure | v2.0 | 0/TBD | Not started | - |
 | 41. Neon Auth + Privy Removal | v2.0 | 3/6 | In Progress|  |
-| 42. Postgres Schema + Drizzle Setup | v2.0 | 3/4 | In Progress|  |
+| 42. Postgres Schema + Drizzle Setup | v2.0 | 4/4 | Complete   | 2026-04-17 |
 | 43. Sync Engine Core | v2.0 | 0/TBD | Not started | - |
 | 44. Sync Service Integration | v2.0 | 0/TBD | Not started | - |
 | 45. Data Migration | v2.0 | 0/TBD | Not started | - |
