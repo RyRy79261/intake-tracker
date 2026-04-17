@@ -55,3 +55,6 @@ e2e/.auth/
 
 # GSD milestone phase archives (summaries kept, phase details recoverable from git history)
 .planning/milestones/*-phases/
+
+# Local-only dev/test fixtures (real user exports, never commit)
+.private-fixtures/
