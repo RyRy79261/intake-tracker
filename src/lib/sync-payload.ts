@@ -220,3 +220,94 @@ export const schemaByTableName = {
   substanceRecords: schema.substanceRecords,
   titrationPlans: schema.titrationPlans,
 } as const;
+
+// --- Pull side (D-07, D-08) ---
+//
+// The pull route returns changes newer than per-table `updatedAt` cursors.
+// Responses are soft-capped per table with a `hasMore` flag so the client can
+// re-call until every table reports `hasMore: false`. `serverTime` is the
+// anchor the client uses to clamp its next cursor (Pattern 7 in
+// 43-RESEARCH.md: `cursor = min(maxRowUpdatedAt, serverTime - skewMargin)`).
+//
+// Co-located with the push exports above so reviewers can audit the full
+// sync payload contract in one file.
+
+/**
+ * Soft cap on rows returned per table per pull request.
+ *
+ * Rationale (43-RESEARCH.md Pattern 7 + Pitfall 6):
+ *   - Keeps memory bounded on first-login bulk pulls and week-offline
+ *     reconnects. Client re-calls pull until `hasMore` is false for every
+ *     table.
+ *   - Chosen to fit comfortably in a single Neon HTTP response while still
+ *     making forward progress on large tables.
+ *   - Detection idiom in the route: `limit(PULL_SOFT_CAP + 1)` — if the DB
+ *     returned the extra row, `hasMore = true` and we slice the response
+ *     back to the cap.
+ */
+export const PULL_SOFT_CAP = 500;
+
+/**
+ * Enum of every syncable table name — derived from the push discriminated
+ * union above so the pull-side schema and the push-side schema always agree
+ * on what "a valid table" means.
+ */
+const tableNameSchema = z.enum([
+  "intakeRecords",
+  "weightRecords",
+  "bloodPressureRecords",
+  "eatingRecords",
+  "urinationRecords",
+  "defecationRecords",
+  "prescriptions",
+  "medicationPhases",
+  "phaseSchedules",
+  "inventoryItems",
+  "inventoryTransactions",
+  "doseLogs",
+  "dailyNotes",
+  "auditLogs",
+  "substanceRecords",
+  "titrationPlans",
+]);
+
+/**
+ * Pull request body shape.
+ *
+ * Shape (D-07): `{ cursors: { tableName: lastSeenUpdatedAtMs, ... } }`.
+ *   - Keys MUST be known tableName literals (enum validation blocks typos
+ *     or cross-user fingerprinting via arbitrary keys).
+ *   - Values MUST be non-negative integers (milliseconds epoch). Negative
+ *     or non-integer cursors are rejected at the 400 boundary so the route
+ *     never issues a WHERE clause with a suspect cursor.
+ *   - Missing tableName keys default to cursor=0 server-side (= full pull
+ *     for that table). That default lives in the route, not the schema.
+ */
+export const pullBodySchema = z.object({
+  cursors: z.record(tableNameSchema, z.number().int().min(0)),
+});
+
+export type PullBody = z.infer<typeof pullBodySchema>;
+
+/**
+ * Pull response shape — plain TS type, not a Zod schema. The route constructs
+ * these objects directly; clients decode them as `PullResponse` for type
+ * safety in the engine loop (Plan 06).
+ *
+ * Contract:
+ *   - `result[tableName].rows`: rows with `updatedAt > cursor`, ordered ASC.
+ *     Tombstones (rows with non-null `deletedAt`) ARE included — the client
+ *     applies them as soft-delete writes.
+ *   - `result[tableName].hasMore`: true iff the server had to cap the page.
+ *     Clients keep calling pull until every entry reports `hasMore: false`.
+ *   - `serverTime`: `Date.now()` captured BEFORE any SELECT runs. Clients
+ *     clamp their next cursor to `min(maxRowUpdatedAt, serverTime - 30s)` so
+ *     rows that were written during the query window aren't skipped.
+ */
+export type PullResponse = {
+  result: Record<
+    TableName,
+    { rows: Record<string, unknown>[]; hasMore: boolean }
+  >;
+  serverTime: number;
+};
