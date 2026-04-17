@@ -50,6 +50,44 @@ pnpm start
 - **PWA**: next-pwa
 - **Encryption**: Web Crypto API (AES-GCM)
 
+## Postgres Schema (Neon + Drizzle)
+
+The Postgres schema is managed via Drizzle ORM. The source of truth is
+[`src/db/schema.ts`](./src/db/schema.ts). Migration SQL files are committed
+under [`/drizzle/`](./drizzle/) for reviewability.
+
+### Commands
+
+| Command | Purpose |
+|---|---|
+| `pnpm db:generate` | Diff `src/db/schema.ts` against the last snapshot and emit a new `/drizzle/NNNN_<name>.sql` + updated snapshot JSON |
+| `pnpm db:migrate`  | Apply pending migrations to the DB at `$DATABASE_URL` (uses drizzle-kit's `__drizzle_migrations` tracker) |
+| `pnpm db:reset`    | Drop every app table in the `public` schema — preserves the auth schema (neon_auth). Destructive. Refuses to run if `DATABASE_URL` looks like production. |
+
+### First-time setup for a new Neon branch
+
+1. Create the branch in the [Neon console](https://console.neon.tech) or via `neonctl`.
+2. Export the branch connection string: `export DATABASE_URL="postgres://..."`.
+3. `pnpm db:reset`    — wipes any pre-existing `public` tables.
+4. `pnpm db:migrate`  — creates all 20 tables + FKs + CHECK constraints.
+5. Verify: `psql "$DATABASE_URL" -c '\dt public.*'` should list 20 tables.
+
+The Neon Auth schema (which owns `users_sync`) must already be provisioned
+on the branch — this happens automatically once Neon Auth is enabled (Phase 41).
+
+### Editing the schema
+
+1. Edit `src/db/schema.ts`.
+2. `pnpm db:generate` — emits a new file under `/drizzle/`.
+3. Review the generated SQL diff in your PR.
+4. Commit everything under `/drizzle/` (the SQL file, `meta/_journal.json`, and
+   the updated snapshot JSON).
+5. `pnpm db:migrate` — apply locally.
+
+**Never run `pnpm db:reset` against production.** The script includes a
+heuristic that refuses to run if `DATABASE_URL` contains the substring `prod`,
+but you can override it with `ALLOW_PROD_RESET=1`. Don't.
+
 ## Configuration
 
 ### Environment Variables
