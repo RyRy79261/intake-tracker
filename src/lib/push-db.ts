@@ -48,7 +48,7 @@ export async function getDueNotifications(
       d.time_slot,
       d.medications_json
     FROM push_subscriptions s
-    JOIN push_dose_schedules d ON d.user_id = s.user_id
+    JOIN push_schedules d ON d.user_id = s.user_id
     JOIN push_settings ps ON ps.user_id = s.user_id
     WHERE d.time_slot = ${currentTime}
       AND d.day_of_week = ${dayOfWeek}
@@ -86,7 +86,7 @@ export async function getFollowUpNotifications(
       d.medications_json
     FROM push_sent_log l
     JOIN push_subscriptions s ON s.user_id = l.user_id
-    JOIN push_dose_schedules d ON d.user_id = l.user_id AND d.time_slot = l.time_slot
+    JOIN push_schedules d ON d.user_id = l.user_id AND d.time_slot = l.time_slot
     JOIN push_settings ps ON ps.user_id = l.user_id
     WHERE l.sent_date = ${today}
       AND l.follow_up_index = ${followUpIndex - 1}
@@ -133,11 +133,11 @@ export async function syncDoseSchedules(
   }>
 ): Promise<void> {
   const sql = getSQL();
-  await sql`DELETE FROM push_dose_schedules WHERE user_id = ${userId}`;
+  await sql`DELETE FROM push_schedules WHERE user_id = ${userId}`;
 
   for (const schedule of schedules) {
     await sql`
-      INSERT INTO push_dose_schedules (user_id, time_slot, day_of_week, medications_json)
+      INSERT INTO push_schedules (user_id, time_slot, day_of_week, medications_json)
       VALUES (${userId}, ${schedule.timeSlot}, ${schedule.dayOfWeek}, ${schedule.medicationsJson})
     `;
   }
