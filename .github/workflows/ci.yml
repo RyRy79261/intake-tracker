@@ -198,6 +198,48 @@ jobs:
           path: test-results/
           retention-days: 7
 
+  schema-migration:
+    # Phase 42 (D-17): apply the committed Drizzle migration SQL to a fresh
+    # ephemeral Neon branch per PR run. Catches schema-vs-Postgres drift
+    # that static parity + freshness checks cannot (bad CHECK syntax,
+    # cross-schema FK permissions, unreachable neon_auth.users_sync target).
+    # Uses the same branch lifecycle pattern as the e2e job above.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      # Each run gets its own branch so concurrent PRs do not collide with
+      # the e2e job's ci-e2e-<run_id> branch or with each other.
+      - name: Create Neon test branch
+        id: neon-branch
+        uses: neondatabase/create-branch-action@v5
+        with:
+          api_key: ${{ secrets.NEON_API_KEY }}
+          project_id: ${{ secrets.NEON_PROJECT_ID }}
+          branch_name: ci-schema-${{ github.run_id }}
+      - name: Apply Drizzle migrations
+        env:
+          DATABASE_URL: ${{ steps.neon-branch.outputs.db_url }}
+        run: pnpm db:migrate
+      - name: Verify schema shape
+        env:
+          DATABASE_URL: ${{ steps.neon-branch.outputs.db_url }}
+        # Uses @neondatabase/serverless (already a project dep) — no
+        # postgresql-client install needed on the runner.
+        run: pnpm tsx scripts/verify-schema.ts
+      - name: Delete Neon test branch
+        if: always()
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          api_key: ${{ secrets.NEON_API_KEY }}
+          project_id: ${{ secrets.NEON_PROJECT_ID }}
+          branch: ci-schema-${{ github.run_id }}
+
   supply-chain:
     runs-on: ubuntu-latest
     steps:
@@ -274,7 +316,7 @@ jobs:
 
   ci-pass:
     if: always()
-    needs: [changes, lint, typecheck, test-tz-sa, test-tz-de, build, data-integrity, e2e, supply-chain, coverage, benchmark]
+    needs: [changes, lint, typecheck, test-tz-sa, test-tz-de, build, data-integrity, e2e, schema-migration, supply-chain, coverage, benchmark]
     runs-on: ubuntu-latest
     steps:
       - name: Check all jobs passed
@@ -286,6 +328,7 @@ jobs:
           echo "build: ${{ needs.build.result }}"
           echo "data-integrity: ${{ needs.data-integrity.result }}"
           echo "supply-chain: ${{ needs.supply-chain.result }}"
+          echo "schema-migration: ${{ needs.schema-migration.result }}"
 
           # Unconditional jobs: must succeed
           if [[ "${{ needs.changes.result }}" != "success" ||
@@ -293,7 +336,8 @@ jobs:
                 "${{ needs.typecheck.result }}" != "success" ||
                 "${{ needs.build.result }}" != "success" ||
                 "${{ needs.data-integrity.result }}" != "success" ||
-                "${{ needs.supply-chain.result }}" != "success" ]]; then
+                "${{ needs.supply-chain.result }}" != "success" ||
+                "${{ needs.schema-migration.result }}" != "success" ]]; then
             echo "::error::Unconditional job failed"
             exit 1
           fi
