@@ -37,11 +37,16 @@ decisions:
   - "Drizzle generated 21 CREATE TABLE statements (20 app tables + usersSync cross-schema stub)"
 metrics:
   duration_minutes: 4
-  tasks_completed: 4
+  tasks_completed: 5
   tasks_total: 5
-  files_created: 4
+  files_created: 5
   files_modified: 2
   completed: "2026-04-17"
+uat:
+  file: 42-HUMAN-UAT.md
+  result: PASS
+  executed_by: orchestrator (authorized by user — prod still on local storage)
+  notes: "Orphan user_settings table found from pre-phase experiment — dropped; logged as low-severity design follow-up (reset-neon-db.ts allowlist)"
 ---
 
 # Phase 42 Plan 02: Migration Pipeline + Reset Script Summary
