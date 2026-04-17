@@ -57,6 +57,16 @@ jobs:
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
+      - name: Verify drizzle migrations are up-to-date with src/db/schema.ts
+        run: |
+          pnpm exec drizzle-kit generate
+          if [ -n "$(git status --porcelain drizzle/)" ]; then
+            echo "::error::Drizzle migrations are out of date. Run 'pnpm db:generate' locally and commit the result."
+            git status --porcelain drizzle/
+            git diff drizzle/ | head -100
+            exit 1
+          fi
+          echo "drizzle/ is up-to-date with src/db/schema.ts"
 
   test-tz-sa:
     needs: [changes]
