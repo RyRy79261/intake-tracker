@@ -29,8 +29,12 @@ export async function main(): Promise<void> {
 
   const sql = neon(url);
 
+  // Phase 42 renamed push_dose_schedules → push_schedules. Keep the old name
+  // in the list so re-runs on a pre-Phase-42 prod branch still clear it, but
+  // list the new name first so fresh Drizzle-migrated branches also truncate.
   const tables = [
     "push_subscriptions",
+    "push_schedules",
     "push_dose_schedules",
     "push_sent_log",
     "push_settings",
