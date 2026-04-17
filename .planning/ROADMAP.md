@@ -51,7 +51,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Milestone Goal:** Move from fully-local IndexedDB storage to NeonDB as source of truth with offline-capable local mirror, replace Privy auth with Neon Auth, and restructure the settings page into organized expandable sections.
 
 - [ ] **Phase 40: Settings Accordion Restructure** - Reorganize settings into expandable color-coded sections, eliminate modals, surface orphaned settings
-- [ ] **Phase 41: Neon Auth + Privy Removal** - Replace Privy with Neon Auth email/password, remove PIN gate, update push subscriptions to new identity
+- [x] **Phase 41: Neon Auth + Privy Removal** (6/6 plans) — completed 2026-04-17 (Scenario 7 mobile push re-subscription deferred to post-merge device verification)
 - [ ] **Phase 42: Postgres Schema + Drizzle Setup** - Mirror all 16 Dexie tables to Postgres via Drizzle ORM with user_id FK and CI parity validation
 - [ ] **Phase 43: Sync Engine Core** - Build local-first sync engine with dirty queue, batch push/pull, conflict resolution, and offline handling
 - [ ] **Phase 44: Sync Service Integration** - Wire sync into all service files, surface sync status in Storage & Security section

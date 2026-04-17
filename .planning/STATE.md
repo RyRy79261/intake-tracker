@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Cloud Sync & Settings Overhaul
 status: executing
-stopped_at: Phase 41 plan 05 complete (commit c4ef51d — Playwright globalSetup + Neon branch CI); 41-06 (Human UAT) is the only remaining plan and requires human execution
-last_updated: "2026-04-12T12:00:00.000Z"
-last_activity: 2026-04-12
+stopped_at: Phase 41 complete (UAT 9/10 green, Scenario 7 push re-subscription deferred to post-merge mobile verification); PR #39 ready to promote from draft
+last_updated: "2026-04-17T11:45:00.000Z"
+last_activity: 2026-04-17
 progress:
   total_phases: 7
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 12
-  completed_plans: 10
-  percent: 83
+  completed_plans: 12
+  percent: 29
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-11)
 
 **Core value:** Accurate, queryable health data across intake, vitals, and medication adherence -- structured for cross-domain analysis and future AI querying
-**Current focus:** Phase 41 — neon-auth-privy-removal
+**Current focus:** Phase 42 — Postgres Schema + Drizzle Setup (next to plan)
 
 ## Current Position
 
-Phase: 41 (neon-auth-privy-removal) — EXECUTING
-Plan: 5 of 6 complete (41-06 is human UAT — cannot be completed autonomously)
-Status: 41-05 landed cleanly (commit c4ef51d). Playwright E2E is now rewired to Neon Auth via globalSetup + storageState, and the CI e2e job provisions/deletes a per-run Neon branch around the suite. Human UAT is blocked on repo secrets (NEON_API_KEY, NEON_PROJECT_ID, NEON_AUTH_TEST_EMAIL, NEON_AUTH_TEST_PASSWORD, BETTER_AUTH_SECRET, NEON_AUTH_COOKIE_SECRET) and on a local `pnpm test:e2e` run against a real Neon branch.
-Last activity: 2026-04-12
+Phase: 41 (neon-auth-privy-removal) — COMPLETE (2026-04-17)
+Plan: 6 of 6 complete. Scenario 7 (mobile push re-subscription) deferred to post-merge device verification.
+Next: Promote PR #39 from draft and merge, then `/gsd-plan-phase 42` (context already gathered).
+Last activity: 2026-04-17 (e2e pipeline repair + plan 41-06 summary)
 
-Progress: [████████░░] 83%
+Progress: [██░░░░░░░░] 29% (2 of 7 phases in v2.0)
 
 ## Performance Metrics
 
@@ -55,15 +55,15 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-- **Phase 41 plan 06 (Human UAT)** — blocking checkpoint. Requires the user to walk through 10 UAT scenarios in a live dev environment (email sign-in, Google OAuth, sign-up rejection, sign-out, PIN absence, push re-subscription, AI API, full `pnpm test:e2e`, and `pnpm build`/`lint`/`vitest`). Cannot be executed autonomously. See `.planning/phases/41-neon-auth-privy-removal/41-06-PLAN.md`.
-- Before the UAT: run `pnpm db:truncate-push` against the dev Neon branch once (Phase 41 rollout step D-10).
-- Before CI-triggered E2E works: add repo secrets `NEON_API_KEY`, `NEON_PROJECT_ID`, `NEON_AUTH_TEST_EMAIL`, `NEON_AUTH_TEST_PASSWORD`, `BETTER_AUTH_SECRET`, `NEON_AUTH_COOKIE_SECRET`.
+- **Promote PR #39** from draft and merge Phase 41 to main.
+- **Prod cutover step D-10** (post-merge, release-day only): apply `scripts/push-migration.sql` to the prod Neon branch. Not part of Phase 41 plans; release-day task.
+- **Post-merge Scenario 7** (deferred from 41-06): verify push re-subscription on a real mobile device once the merged build is installed.
+- **Plan Phase 42** — Postgres Schema + Drizzle Setup. Context already gathered on 2026-04-12; run `/gsd-plan-phase 42` next.
 
 ### Blockers/Concerns
 
-- Neon Auth is beta (v0.1.0-beta.20) -- validate capabilities in Phase 41 branch spike before committing
-- Vercel Pro plan ($20/mo) required for per-minute cron -- confirm before Phase 46
-- Phase 41 cannot close until human UAT (plan 41-06) is executed against a live Neon dev branch with real credentials.
+- Neon Auth is beta (v0.1.0-beta.20) -- one-instance-per-project limitation accepted; test user persists project-wide. Monitor the library for GA.
+- Vercel Pro plan ($20/mo) required for per-minute cron -- confirm before Phase 46.
 
 ### Quick Tasks Completed
 
@@ -89,6 +89,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-12T08:30:49.173Z
-Stopped at: Phase 42 context gathered; Phase 41 planned (6 plans, 4 waves, commit b566148)
-Resume: /gsd-plan-phase 41
+Last session: 2026-04-17T11:45:00.000Z
+Stopped at: Phase 41 closed (e2e pipeline repaired: commit badd3b8; plan 41-06 SUMMARY written; HANDOFF.json + .continue-here.md cleared). PR #39 ready to promote from draft.
+Resume: /gsd-plan-phase 42
