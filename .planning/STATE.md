@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Cloud Sync & Settings Overhaul
-status: executing
-stopped_at: Phase 41 complete (UAT 9/10 green, Scenario 7 push re-subscription deferred to post-merge mobile verification); PR #39 ready to promote from draft
-last_updated: "2026-04-17T11:45:00.000Z"
-last_activity: 2026-04-17
+status: Executing Phase 42
+stopped_at: "Phase 41 closed (e2e pipeline repaired: commit badd3b8; plan 41-06 SUMMARY written; HANDOFF.json + .continue-here.md cleared). PR #39 ready to promote from draft."
+last_updated: "2026-04-17T10:25:00.889Z"
+last_activity: 2026-04-17 -- Phase 42 execution started
 progress:
   total_phases: 7
   completed_phases: 2
-  total_plans: 12
-  completed_plans: 12
-  percent: 29
+  total_plans: 13
+  completed_plans: 9
+  percent: 69
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-11)
 
 **Core value:** Accurate, queryable health data across intake, vitals, and medication adherence -- structured for cross-domain analysis and future AI querying
-**Current focus:** Phase 42 — Postgres Schema + Drizzle Setup (next to plan)
+**Current focus:** Phase 42 — postgres-schema-drizzle-setup
 
 ## Current Position
 
-Phase: 41 (neon-auth-privy-removal) — COMPLETE (2026-04-17)
-Plan: 6 of 6 complete. Scenario 7 (mobile push re-subscription) deferred to post-merge device verification.
+Phase: 42 (postgres-schema-drizzle-setup) — EXECUTING
+Plan: 1 of 4
 Next: Promote PR #39 from draft and merge, then `/gsd-plan-phase 42` (context already gathered).
-Last activity: 2026-04-17 (e2e pipeline repair + plan 41-06 summary)
+Last activity: 2026-04-17 -- Phase 42 execution started
 
 Progress: [██░░░░░░░░] 29% (2 of 7 phases in v2.0)
 
