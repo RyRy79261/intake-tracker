@@ -56,8 +56,10 @@ describe("sync-queue", () => {
 
     const rows = await db._syncQueue.toArray();
     expect(rows).toHaveLength(1);
-    expect(rows[0].op).toBe("upsert");
-    expect(rows[0].enqueuedAt).toBe(2000);
+    const [row] = rows;
+    expect(row).toBeDefined();
+    expect(row!.op).toBe("upsert");
+    expect(row!.enqueuedAt).toBe(2000);
   });
 
   it("coalesce delete supersedes queued upsert for same recordId", async () => {
@@ -66,8 +68,10 @@ describe("sync-queue", () => {
 
     const rows = await db._syncQueue.toArray();
     expect(rows).toHaveLength(1);
-    expect(rows[0].op).toBe("delete");
-    expect(rows[0].attempts).toBe(0);
+    const [row] = rows;
+    expect(row).toBeDefined();
+    expect(row!.op).toBe("delete");
+    expect(row!.attempts).toBe(0);
   });
 
   it("coalesce upsert after delete replaces delete (un-delete path)", async () => {
@@ -76,8 +80,10 @@ describe("sync-queue", () => {
 
     const rows = await db._syncQueue.toArray();
     expect(rows).toHaveLength(1);
-    expect(rows[0].op).toBe("upsert");
-    expect(rows[0].attempts).toBe(0);
+    const [row] = rows;
+    expect(row).toBeDefined();
+    expect(row!.op).toBe("upsert");
+    expect(row!.attempts).toBe(0);
   });
 
   it("ack deletes only specified queueIds and leaves others untouched", async () => {
@@ -96,6 +102,7 @@ describe("sync-queue", () => {
 
     expect(await getQueueDepth()).toBe(1);
     const remaining = await db._syncQueue.toArray();
-    expect(remaining[0].recordId).toBe("r3");
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]!.recordId).toBe("r3");
   });
 });
