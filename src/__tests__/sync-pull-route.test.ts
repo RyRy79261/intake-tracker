@@ -117,22 +117,56 @@ describe("sync-pull-route", () => {
     const tableCount = Object.keys(schemaByTableName).length;
     expect(whereCalls).toHaveLength(tableCount);
 
-    // Each recorded condition must stringify to something that references
-    // user_id AND carries the "user-test" param. drizzle-orm's `and(eq(),
-    // eq())` AST exposes both the column reference and the parameter value
-    // via its internal queryChunks — stringifying the whole object is the
-    // simplest portable assertion.
+    // Each recorded condition is a drizzle SQL AST node (an `SQL` instance
+    // from `and(eq(), eq())`). Walk it recursively collecting column `.name`
+    // strings and parameter `.value` strings; assert both "user_id" (column)
+    // and "user-test" (session userId param) appear in every WHERE.
+    //
+    // Using a visited-set guard avoids drizzle's circular
+    // column.table → table.columns.<col> → column reference.
+    function collect(
+      node: unknown,
+      out: Set<string>,
+      seen: WeakSet<object>,
+    ): void {
+      if (node === null || node === undefined) return;
+      if (typeof node === "string") {
+        out.add(node);
+        return;
+      }
+      if (typeof node === "number" || typeof node === "boolean") {
+        out.add(String(node));
+        return;
+      }
+      if (typeof node !== "object") return;
+      if (seen.has(node as object)) return;
+      seen.add(node as object);
+
+      // Skip PgTable handles — they have a `columns` object with circular
+      // refs back to the table. The column name we care about is already
+      // carried on the individual `PgColumn` nodes inside queryChunks.
+      if ("columns" in (node as object) && "schema" in (node as object)) {
+        return;
+      }
+
+      if (Array.isArray(node)) {
+        for (const child of node) collect(child, out, seen);
+        return;
+      }
+      for (const [key, value] of Object.entries(node as object)) {
+        // Column reference: `.name` is the physical column name (e.g. "user_id").
+        if (key === "name" && typeof value === "string") out.add(value);
+        // Parameter value: drizzle wraps literals in `{ value: X, encoder: ... }`.
+        if (key === "value") collect(value, out, seen);
+        if (key === "queryChunks" || key === "chunks") collect(value, out, seen);
+      }
+    }
+
     for (const { condition } of whereCalls) {
-      const serialized = JSON.stringify(condition, (_k, v) => {
-        // Drop circular refs / drizzle internal table handles to keep the
-        // serializer from blowing up; keep plain values and columns.
-        if (v && typeof v === "object" && "schema" in v && "columns" in v) {
-          return "[table]";
-        }
-        return v;
-      });
-      expect(serialized).toContain("user_id");
-      expect(serialized).toContain("user-test");
+      const tokens = new Set<string>();
+      collect(condition, tokens, new WeakSet());
+      expect(Array.from(tokens)).toContain("user_id");
+      expect(Array.from(tokens)).toContain("user-test");
     }
   });
 

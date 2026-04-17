@@ -284,7 +284,14 @@ const tableNameSchema = z.enum([
  *     for that table). That default lives in the route, not the schema.
  */
 export const pullBodySchema = z.object({
-  cursors: z.record(tableNameSchema, z.number().int().min(0)),
+  // `partialRecord` (zod/v4) allows missing tableName keys — per D-07, a
+  // missing entry means "cursor = 0 for that table" (full pull). A plain
+  // `z.record(enum, value)` in zod/v4 requires every enum member to be
+  // present, which would break the common case of a client that only
+  // tracks a subset of the 16 tables. `invalid_key` errors still fire on
+  // unknown keys (T-43-04-05 cursor injection), and `min(0)` still rejects
+  // negative / non-integer cursors.
+  cursors: z.partialRecord(tableNameSchema, z.number().int().min(0)),
 });
 
 export type PullBody = z.infer<typeof pullBodySchema>;
