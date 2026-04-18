@@ -104,6 +104,8 @@ export function usePushScheduleSync(): void {
     }
   }, []);
 
+  const lastSettingsHashRef = useRef<string>("");
+
   useEffect(() => {
     if (!doseRemindersEnabled) return;
     if (!slots || slots.length === 0) return;
@@ -117,6 +119,41 @@ export function usePushScheduleSync(): void {
 
     syncSchedule(entries);
   }, [slots, doseRemindersEnabled, followUpCount, followUpInterval, syncSchedule]);
+
+  // Periodic ping to /api/push/check every 60s
+  useEffect(() => {
+    if (!doseRemindersEnabled) return;
+
+    const ping = () => {
+      fetch("/api/push/check", { method: "POST" }).catch((err) =>
+        console.warn("[push/check] ping failed:", err)
+      );
+    };
+
+    ping();
+    const id = setInterval(ping, 60_000);
+    return () => clearInterval(id);
+  }, [doseRemindersEnabled]);
+
+  // Sync follow-up settings to server when they change
+  useEffect(() => {
+    if (!doseRemindersEnabled) return;
+
+    const hash = JSON.stringify({ followUpCount, followUpInterval });
+    if (hash === lastSettingsHashRef.current) return;
+    lastSettingsHashRef.current = hash;
+
+    fetch("/api/push/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        followUpCount,
+        followUpIntervalMinutes: followUpInterval,
+      }),
+    }).catch((err) =>
+      console.warn("[push/settings] sync failed:", err)
+    );
+  }, [doseRemindersEnabled, followUpCount, followUpInterval]);
 }
 
 /**
