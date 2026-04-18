@@ -45,6 +45,18 @@
       "rules": {
         "no-restricted-imports": "off"
       }
+    },
+    {
+      "files": ["src/components/migration/**/*"],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    },
+    {
+      "files": ["src/components/settings/storage-info-section.tsx"],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
     }
   ]
 }

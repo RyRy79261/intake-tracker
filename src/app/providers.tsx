@@ -9,6 +9,7 @@ import { useTimezoneDetection } from "@/hooks/use-timezone-detection";
 import { TimezoneChangeDialog } from "@/components/medications/timezone-change-dialog";
 import { queryClient } from "@/lib/query-client";
 import { SyncLifecycleMount } from "@/components/sync/sync-lifecycle-mount";
+import { MigrationGuard } from "@/components/migration/migration-guard";
 
 /**
  * Simplified provider stack (D-27). Privy wrappers and the PIN gate
@@ -61,6 +62,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           <TimezoneGuard>
             {children}
             <SyncLifecycleMount />
+            <MigrationGuard />
           </TimezoneGuard>
         </ThemeProvider>
       </QueryClientProvider>
