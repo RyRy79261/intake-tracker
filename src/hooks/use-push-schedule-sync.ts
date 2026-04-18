@@ -97,7 +97,7 @@ export function usePushScheduleSync(): void {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ schedules: entries }),
+        body: JSON.stringify({ schedules: entries, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
       });
     } catch (error) {
       console.warn("[push-schedule-sync] Failed to sync schedule:", error);
