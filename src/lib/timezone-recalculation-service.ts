@@ -8,6 +8,8 @@
 import { db } from "./db";
 import { utcMinutesToLocalTime, localTimeToUTCMinutes } from "./timezone";
 import { buildAuditEntry } from "./audit-service";
+import { enqueueInsideTx } from "./sync-queue";
+import { schedulePush } from "./sync-engine";
 
 /**
  * Recalculate scheduleTimeUTC for all active (enabled) PhaseSchedule records
@@ -25,45 +27,46 @@ export async function recalculateScheduleTimezones(
 ): Promise<number> {
   let updatedCount = 0;
 
-  await db.transaction("rw", [db.phaseSchedules, db.auditLogs], async () => {
+  await db.transaction("rw", [db.phaseSchedules, db.auditLogs, db._syncQueue], async () => {
     const allSchedules = await db.phaseSchedules.toArray();
     const activeSchedules = allSchedules.filter(
       (s) => s.enabled === true && s.anchorTimezone !== newTimezone,
     );
 
     for (const schedule of activeSchedules) {
-      // Step 1: Convert stored UTC minutes back to local HH:MM using OLD timezone
       const { hours, minutes } = utcMinutesToLocalTime(
         schedule.scheduleTimeUTC,
         schedule.anchorTimezone,
       );
 
-      // Step 2: Convert that same local HH:MM to UTC minutes using NEW timezone
       const newUTC = localTimeToUTCMinutes(hours, minutes, newTimezone);
 
-      // Step 3: Build the local time string for the deprecated `time` field
       const timeStr = `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
 
-      // Step 4: Update the schedule
       await db.phaseSchedules.update(schedule.id, {
         scheduleTimeUTC: newUTC,
         anchorTimezone: newTimezone,
         time: timeStr,
         updatedAt: Date.now(),
       });
+      await enqueueInsideTx("phaseSchedules", schedule.id, "upsert");
 
       updatedCount++;
     }
 
     if (updatedCount > 0) {
-      await db.auditLogs.add(
-        buildAuditEntry("timezone_adjusted", {
-          newTimezone,
-          schedulesUpdated: updatedCount,
-        }),
-      );
+      const auditEntry = buildAuditEntry("timezone_adjusted", {
+        newTimezone,
+        schedulesUpdated: updatedCount,
+      });
+      await db.auditLogs.add(auditEntry);
+      await enqueueInsideTx("auditLogs", auditEntry.id, "upsert");
     }
   });
+
+  if (updatedCount > 0) {
+    schedulePush();
+  }
 
   return updatedCount;
 }

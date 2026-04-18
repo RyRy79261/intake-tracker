@@ -8,6 +8,8 @@
 
 import { db } from "@/lib/db";
 import { writeAuditLog } from "@/lib/audit-service";
+import { enqueueInsideTx } from "@/lib/sync-queue";
+import { schedulePush } from "@/lib/sync-engine";
 
 /**
  * Derive current stock for an inventory item by summing all its transactions.
@@ -29,10 +31,14 @@ export async function getCurrentStock(inventoryItemId: string): Promise<number> 
  */
 export async function recalculateStockForItem(inventoryItemId: string): Promise<number> {
   const derivedValue = await getCurrentStock(inventoryItemId);
-  await db.inventoryItems.update(inventoryItemId, {
-    currentStock: derivedValue,
-    updatedAt: Date.now(),
+  await db.transaction("rw", [db.inventoryItems, db._syncQueue], async () => {
+    await db.inventoryItems.update(inventoryItemId, {
+      currentStock: derivedValue,
+      updatedAt: Date.now(),
+    });
+    await enqueueInsideTx("inventoryItems", inventoryItemId, "upsert");
   });
+  schedulePush();
   return derivedValue;
 }
 
@@ -53,13 +59,15 @@ export async function recalculateAllStock(): Promise<{
     const newStock = await getCurrentStock(item.id);
     const oldStock = item.currentStock ?? 0;
 
-    await db.inventoryItems.update(item.id, {
-      currentStock: newStock,
-      updatedAt: Date.now(),
+    await db.transaction("rw", [db.inventoryItems, db._syncQueue], async () => {
+      await db.inventoryItems.update(item.id, {
+        currentStock: newStock,
+        updatedAt: Date.now(),
+      });
+      await enqueueInsideTx("inventoryItems", item.id, "upsert");
     });
     updated++;
 
-    // Track drift: oldStock !== newStock within 0.001 tolerance
     if (Math.abs(oldStock - newStock) > 0.001) {
       driftedItems.push({
         id: item.id,
@@ -69,6 +77,8 @@ export async function recalculateAllStock(): Promise<{
       });
     }
   }
+
+  schedulePush();
 
   await writeAuditLog("stock_recalculated", {
     totalItems: updated,

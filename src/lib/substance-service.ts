@@ -1,6 +1,8 @@
 import { db, type SubstanceRecord } from "./db";
 import { ok, err, type ServiceResult } from "./service-result";
 import { syncFields } from "./utils";
+import { enqueueInsideTx } from "./sync-queue";
+import { schedulePush } from "./sync-engine";
 
 export type AddSubstanceInput = {
   type: 'caffeine' | 'alcohol';
@@ -35,11 +37,11 @@ export async function addSubstanceRecord(
     };
 
     if (input.volumeMl) {
-      // Create substance + linked intake record atomically
-      await db.transaction("rw", [db.substanceRecords, db.intakeRecords], async () => {
+      const intakeId = crypto.randomUUID();
+      await db.transaction("rw", [db.substanceRecords, db.intakeRecords, db._syncQueue], async () => {
         await db.substanceRecords.add(record);
         await db.intakeRecords.add({
-          id: crypto.randomUUID(),
+          id: intakeId,
           type: "water",
           amount: input.volumeMl!,
           timestamp,
@@ -47,11 +49,17 @@ export async function addSubstanceRecord(
           note: input.description,
           ...fields,
         });
+        await enqueueInsideTx("substanceRecords", substanceId, "upsert");
+        await enqueueInsideTx("intakeRecords", intakeId, "upsert");
       });
     } else {
-      await db.substanceRecords.add(record);
+      await db.transaction("rw", [db.substanceRecords, db._syncQueue], async () => {
+        await db.substanceRecords.add(record);
+        await enqueueInsideTx("substanceRecords", substanceId, "upsert");
+      });
     }
 
+    schedulePush();
     return ok(record);
   } catch (e) {
     return err("Failed to add substance record", e);
@@ -113,11 +121,10 @@ export async function deleteSubstanceRecord(
   try {
     const now = Date.now();
 
-    await db.transaction("rw", [db.substanceRecords, db.intakeRecords], async () => {
-      // Soft-delete the substance record
+    await db.transaction("rw", [db.substanceRecords, db.intakeRecords, db._syncQueue], async () => {
       await db.substanceRecords.update(id, { deletedAt: now, updatedAt: now });
+      await enqueueInsideTx("substanceRecords", id, "upsert");
 
-      // Soft-delete linked intake record if exists
       const linkedIntakes = await db.intakeRecords
         .where("source")
         .equals(`substance:${id}`)
@@ -125,9 +132,11 @@ export async function deleteSubstanceRecord(
 
       for (const intake of linkedIntakes) {
         await db.intakeRecords.update(intake.id, { deletedAt: now, updatedAt: now });
+        await enqueueInsideTx("intakeRecords", intake.id, "upsert");
       }
     });
 
+    schedulePush();
     return ok(undefined);
   } catch (e) {
     return err("Failed to delete substance record", e);
@@ -139,10 +148,14 @@ export async function updateSubstanceRecord(
   updates: Partial<SubstanceRecord>
 ): Promise<ServiceResult<void>> {
   try {
-    await db.substanceRecords.update(id, {
-      ...updates,
-      updatedAt: Date.now(),
+    await db.transaction("rw", [db.substanceRecords, db._syncQueue], async () => {
+      await db.substanceRecords.update(id, {
+        ...updates,
+        updatedAt: Date.now(),
+      });
+      await enqueueInsideTx("substanceRecords", id, "upsert");
     });
+    schedulePush();
     return ok(undefined);
   } catch (e) {
     return err("Failed to update substance record", e);
