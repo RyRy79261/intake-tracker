@@ -2,6 +2,8 @@ import { z } from "zod";
 import { db, type IntakeRecord } from "./db";
 import { ok, err, type ServiceResult } from "./service-result";
 import { generateId, syncFields } from "./utils";
+import { writeWithSync } from "./sync-queue";
+import { schedulePush } from "./sync-engine";
 
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 
@@ -45,7 +47,11 @@ export async function addIntakeRecord(
       ...syncFields(),
     };
 
-    await db.intakeRecords.add(record);
+    await writeWithSync("intakeRecords", "upsert", async () => {
+      await db.intakeRecords.add(record);
+      return record;
+    });
+    schedulePush();
     return ok(record);
   } catch (e) {
     return err("Failed to add intake record", e);
@@ -55,7 +61,11 @@ export async function addIntakeRecord(
 export async function deleteIntakeRecord(id: string): Promise<ServiceResult<void>> {
   try {
     const now = Date.now();
-    await db.intakeRecords.update(id, { deletedAt: now, updatedAt: now });
+    await writeWithSync("intakeRecords", "delete", async () => {
+      await db.intakeRecords.update(id, { deletedAt: now, updatedAt: now });
+      return { id };
+    });
+    schedulePush();
     return ok(undefined);
   } catch (e) {
     return err("Failed to delete intake record", e);
@@ -65,7 +75,11 @@ export async function deleteIntakeRecord(id: string): Promise<ServiceResult<void
 export async function undoDeleteIntakeRecord(id: string): Promise<ServiceResult<void>> {
   try {
     const now = Date.now();
-    await db.intakeRecords.update(id, { deletedAt: null, updatedAt: now });
+    await writeWithSync("intakeRecords", "upsert", async () => {
+      await db.intakeRecords.update(id, { deletedAt: null, updatedAt: now });
+      return { id };
+    });
+    schedulePush();
     return ok(undefined);
   } catch (e) {
     return err("Failed to undo delete intake record", e);
@@ -79,7 +93,11 @@ export async function updateIntakeRecord(
   try {
     const existing = await db.intakeRecords.get(id);
     if (!existing) return err("Record not found");
-    await db.intakeRecords.update(id, updates);
+    await writeWithSync("intakeRecords", "upsert", async () => {
+      await db.intakeRecords.update(id, { ...updates, updatedAt: Date.now() });
+      return { id };
+    });
+    schedulePush();
     return ok(undefined);
   } catch (e) {
     return err("Failed to update intake record", e);
@@ -306,7 +324,7 @@ export async function importData(
       }
 
       try {
-        await db.intakeRecords.add({
+        const newRecord: IntakeRecord = {
           id: record.id,
           type: record.type,
           amount: record.amount,
@@ -314,6 +332,10 @@ export async function importData(
           ...(record.source !== undefined && { source: record.source }),
           ...(record.note !== undefined && { note: record.note }),
           ...syncFields(),
+        };
+        await writeWithSync("intakeRecords", "upsert", async () => {
+          await db.intakeRecords.add(newRecord);
+          return newRecord;
         });
         imported++;
       } catch (error) {
@@ -325,6 +347,7 @@ export async function importData(
       }
     }
 
+    if (imported > 0) schedulePush();
     return ok({ imported, skipped, errors });
   } catch (e) {
     return err("Failed to import data", e);
