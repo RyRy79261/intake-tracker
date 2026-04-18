@@ -66,6 +66,7 @@ export default defineConfig({
           NEON_AUTH_TEST_EMAIL: process.env.NEON_AUTH_TEST_EMAIL ?? '',
           NEON_AUTH_TEST_PASSWORD: process.env.NEON_AUTH_TEST_PASSWORD ?? '',
           ALLOWED_EMAILS: process.env.ALLOWED_EMAILS ?? '',
+          ENABLE_E2E_TEST_ROUTES: process.env.ENABLE_E2E_TEST_ROUTES ?? '',
         },
       }
     : {
@@ -82,6 +83,7 @@ export default defineConfig({
           NEON_AUTH_TEST_EMAIL: process.env.NEON_AUTH_TEST_EMAIL ?? '',
           NEON_AUTH_TEST_PASSWORD: process.env.NEON_AUTH_TEST_PASSWORD ?? '',
           ALLOWED_EMAILS: process.env.ALLOWED_EMAILS ?? '',
+          ENABLE_E2E_TEST_ROUTES: process.env.ENABLE_E2E_TEST_ROUTES ?? '',
         },
       },
 });
