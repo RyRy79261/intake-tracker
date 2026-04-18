@@ -37,7 +37,7 @@ export type SyncOp = "upsert" | "delete";
  *   delete + upsert      → switch op to upsert, reset attempts (un-delete)
  *   delete + delete      → update enqueuedAt only
  */
-async function coalesceInsideTx(
+export async function enqueueInsideTx(
   tableName: TableName,
   recordId: string,
   op: SyncOp,
@@ -86,7 +86,7 @@ export async function enqueue(
   op: SyncOp,
 ): Promise<void> {
   await db.transaction("rw", db._syncQueue, async () => {
-    await coalesceInsideTx(tableName, recordId, op);
+    await enqueueInsideTx(tableName, recordId, op);
   });
 }
 
@@ -122,7 +122,7 @@ export async function writeWithSync<T extends { id: string }>(
     db._syncQueue,
     async () => {
       const record = await action();
-      await coalesceInsideTx(tableName, record.id, op);
+      await enqueueInsideTx(tableName, record.id, op);
       return record;
     },
   );

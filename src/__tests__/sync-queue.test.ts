@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { db, type IntakeRecord } from "@/lib/db";
 import {
   enqueue,
+  enqueueInsideTx,
   ack,
   getQueueDepth,
   writeWithSync,
@@ -84,6 +85,18 @@ describe("sync-queue", () => {
     expect(row).toBeDefined();
     expect(row!.op).toBe("upsert");
     expect(row!.attempts).toBe(0);
+  });
+
+  it("enqueueInsideTx coalesces inside an externally-opened transaction", async () => {
+    await db.transaction("rw", db._syncQueue, async () => {
+      await enqueueInsideTx("intakeRecords", "tx-1", "upsert");
+      await enqueueInsideTx("intakeRecords", "tx-1", "delete");
+    });
+
+    const rows = await db._syncQueue.toArray();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.op).toBe("delete");
+    expect(rows[0]!.attempts).toBe(0);
   });
 
   it("ack deletes only specified queueIds and leaves others untouched", async () => {
