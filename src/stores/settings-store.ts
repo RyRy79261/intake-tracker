@@ -74,6 +74,9 @@ export interface Settings {
 
   // Weight increment for +/- buttons (kg)
   weightIncrement: number;
+
+  // Storage mode: local-only or cloud-sync
+  storageMode: "local" | "cloud-sync";
 }
 
 interface SettingsActions {
@@ -115,6 +118,8 @@ interface SettingsActions {
   setReminderFollowUpInterval: (value: number) => void;
   // Weight increment
   setWeightIncrement: (value: number) => void;
+  // Storage mode
+  setStorageMode: (mode: "local" | "cloud-sync") => void;
   resetToDefaults: () => void;
 }
 
@@ -141,6 +146,7 @@ const defaultSettings: Settings = {
   weightGraphShowDrinking: true,
   liquidPresets: DEFAULT_LIQUID_PRESETS,
   weightIncrement: 0.05,
+  storageMode: "local" as const,
   dismissedInsights: {},
   primaryRegion: "",
   secondaryRegion: "",
@@ -222,6 +228,9 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
       setWeightIncrement: (value) =>
         set({ weightIncrement: sanitizeNumericInput(value, 0.05, 1, 2) }),
 
+      // Storage mode
+      setStorageMode: (mode) => set({ storageMode: mode }),
+
       addLiquidPreset: (preset) => {
         const id = crypto.randomUUID();
         set((state) => ({
@@ -248,7 +257,7 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
     {
       name: "intake-tracker-settings",
       storage: createJSONStorage(() => localStorage),
-      version: 6,
+      version: 7,
       migrate: (persisted, version) => {
         const state = persisted as Record<string, unknown>;
         if (version === 0) {
@@ -290,6 +299,9 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
         if (version < 6) {
           // Phase 41 cleanup: substanceConfig was dead code (orphaned UI), removed.
           delete state.substanceConfig;
+        }
+        if (version < 7) {
+          state.storageMode = "local";
         }
         return state as unknown as Settings & SettingsActions;
       },
