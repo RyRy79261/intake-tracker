@@ -400,9 +400,7 @@ export async function runPullCycle(): Promise<void> {
           body.serverTime - SKEW_MARGIN_MS,
         );
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await db.transaction("rw", [db.table(tn), db._syncMeta] as any, async () => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await (db.table(tn) as any).bulkPut(rows);
           await db._syncMeta.put({
             tableName: tn,
@@ -508,7 +506,6 @@ export function startEngine(): void {
 
   if (process.env.NODE_ENV !== "production") {
     if (typeof window !== "undefined") {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (window as any).__syncEngine = {
         pushNow: () => runPushCycle(),
         pullNow: () => runPullCycle(),

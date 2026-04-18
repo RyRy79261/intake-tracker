@@ -87,9 +87,11 @@ const TABLE_TO_FIXTURE: Record<string, string> = {
   auditLogs: "makeAuditLog",
 };
 
+const INTERNAL_TABLES = ["_syncQueue", "_syncMeta"];
+
 describe("db.ts <-> BackupData sync", () => {
   it("every db.ts table has a BackupData key", () => {
-    const tables = getLatestTables();
+    const tables = getLatestTables().filter((t) => !INTERNAL_TABLES.includes(t));
     const backupKeys = new Set(parseBackupDataKeys());
 
     const missing = tables.filter((t) => !backupKeys.has(t));
@@ -108,7 +110,7 @@ describe("db.ts <-> BackupData sync", () => {
   });
 
   it("every BackupData data key has a db.ts table", () => {
-    const tables = new Set(getLatestTables());
+    const tables = new Set(getLatestTables().filter((t) => !INTERNAL_TABLES.includes(t)));
     const backupKeys = parseBackupDataKeys();
 
     const orphans = backupKeys.filter((k) => !tables.has(k));
@@ -129,7 +131,7 @@ describe("db.ts <-> BackupData sync", () => {
 
 describe("db.ts <-> fixture sync", () => {
   it("every db.ts table has a fixture maker function", () => {
-    const tables = getLatestTables();
+    const tables = getLatestTables().filter((t) => !INTERNAL_TABLES.includes(t));
     const fixtureFns = parseFixtureMakers();
 
     const missing: Array<{ table: string; expectedFn: string }> = [];
@@ -155,7 +157,7 @@ describe("db.ts <-> fixture sync", () => {
   });
 
   it("TABLE_TO_FIXTURE mapping covers all db.ts tables", () => {
-    const tables = new Set(getLatestTables());
+    const tables = new Set(getLatestTables().filter((t) => !INTERNAL_TABLES.includes(t)));
     const mappedTables = new Set(Object.keys(TABLE_TO_FIXTURE));
 
     // Tables in db.ts not in mapping

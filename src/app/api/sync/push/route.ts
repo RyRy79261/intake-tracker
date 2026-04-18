@@ -69,7 +69,6 @@ export const POST = withAuth(async ({ request, auth }) => {
       const existing = await drizzleDb
         .select()
         .from(table)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .where(and(eq((table as any).id, op.row.id), eq((table as any).userId, auth.userId!)))
         .limit(1);
       const serverRow = existing[0] as
@@ -96,7 +95,6 @@ export const POST = withAuth(async ({ request, auth }) => {
         // drizzle-zod schema already omits it at parse time, but belt-and-
         // suspenders here prevents any future regression where the schema
         // might re-admit it.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const rowWithoutUserId: Record<string, any> = { ...op.row };
         delete rowWithoutUserId.userId;
 
@@ -113,12 +111,10 @@ export const POST = withAuth(async ({ request, auth }) => {
         // passed in, so we cast to `any` for the insert call. Safety is
         // preserved by pushBodySchema — drizzle-zod guarantees the row
         // matches the real table schema before this branch is reached.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (drizzleDb as any)
           .insert(table)
           .values(writeValues)
           .onConflictDoUpdate({
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             target: (table as any).id,
             set: writeValues,
           });

@@ -35,9 +35,7 @@ type ServerRow = {
   deletedAt: number | null;
 } | undefined;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let existingRows: Record<string, any> = {};
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const insertCalls: { table: unknown; values: any; set: any }[] = [];
 
 function resetDbState() {
@@ -82,9 +80,7 @@ vi.mock("@/lib/drizzle", () => {
       }),
     }),
     insert: (table: unknown) => ({
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       values: (v: any) => ({
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         onConflictDoUpdate: async ({ set }: { target: unknown; set: any }) => {
           insertCalls.push({ table, values: v, set });
           // Simulate write: stash for subsequent selects in the same op loop.

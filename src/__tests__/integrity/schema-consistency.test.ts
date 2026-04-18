@@ -14,14 +14,14 @@ import { parseDbSchema } from "./parse-schema";
 describe("schema parser self-test", () => {
   it("parses all version blocks from db.ts", () => {
     const versions = parseDbSchema();
-    expect(versions).toHaveLength(6);
-    expect(versions.map((v) => v.version)).toEqual([10, 11, 12, 13, 14, 15]);
+    expect(versions).toHaveLength(7);
+    expect(versions.map((v) => v.version)).toEqual([10, 11, 12, 13, 14, 15, 16]);
   });
 
   it("latest version has 16 tables", () => {
     const versions = parseDbSchema();
     const latest = versions[versions.length - 1]!;
-    expect(latest.tables).toHaveLength(16);
+    expect(latest.tables).toHaveLength(18);
   });
 });
 

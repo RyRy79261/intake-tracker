@@ -72,7 +72,6 @@ export const POST = withAuth(async ({ request, auth }) => {
     const tableNames = Object.keys(schemaByTableName) as TableName[];
     for (const tableName of tableNames) {
       const cursor = parsed.data.cursors[tableName] ?? 0;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const table = schemaByTableName[tableName] as any;
 
       const rows = (await drizzleDb

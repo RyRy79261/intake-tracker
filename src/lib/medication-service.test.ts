@@ -210,23 +210,24 @@ describe("prescription CRUD", () => {
     const deleteResult = await deletePrescription(prescriptionId);
     expect(deleteResult.success).toBe(true);
 
-    // Prescription gone
+    // Prescription soft-deleted
     const afterRx = await db.prescriptions.get(prescriptionId);
-    expect(afterRx).toBeUndefined();
+    expect(afterRx).toBeDefined();
+    expect(afterRx!.deletedAt).toBeGreaterThan(0);
 
-    // Child phases gone
+    // Child phases soft-deleted
     const phasesAfter = await db.medicationPhases
       .where("prescriptionId")
       .equals(prescriptionId)
       .toArray();
-    expect(phasesAfter.length).toBe(0);
+    expect(phasesAfter.every((p) => p.deletedAt != null && p.deletedAt > 0)).toBe(true);
 
-    // Inventory gone
+    // Inventory soft-deleted
     const invAfter = await db.inventoryItems
       .where("prescriptionId")
       .equals(prescriptionId)
       .toArray();
-    expect(invAfter.length).toBe(0);
+    expect(invAfter.every((i) => i.deletedAt != null && i.deletedAt > 0)).toBe(true);
   });
 });
 
@@ -369,16 +370,17 @@ describe("phase lifecycle", () => {
     const result = await deletePhase(phaseId);
     expect(result.success).toBe(true);
 
-    // Phase gone
+    // Phase soft-deleted
     const phaseAfter = await db.medicationPhases.get(phaseId);
-    expect(phaseAfter).toBeUndefined();
+    expect(phaseAfter).toBeDefined();
+    expect(phaseAfter!.deletedAt).toBeGreaterThan(0);
 
-    // Schedules gone
+    // Schedules soft-deleted
     const schedulesAfter = await db.phaseSchedules
       .where("phaseId")
       .equals(phaseId)
       .toArray();
-    expect(schedulesAfter.length).toBe(0);
+    expect(schedulesAfter.every((s) => s.deletedAt != null && s.deletedAt > 0)).toBe(true);
   });
 });
 
