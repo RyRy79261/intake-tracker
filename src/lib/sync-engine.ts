@@ -245,6 +245,7 @@ export async function runPushCycle(): Promise<void> {
     }
 
     if (!res.ok) {
+      if (res.status === 401) return;
       let detail = `HTTP ${res.status}`;
       try {
         const body = (await res.json()) as { error?: string };
@@ -371,6 +372,7 @@ export async function runPullCycle(): Promise<void> {
       }
 
       if (!res.ok) {
+        if (res.status === 401) return;
         let detail = `HTTP ${res.status}`;
         try {
           const body = (await res.json()) as { error?: string };
@@ -492,6 +494,18 @@ export function detachLifecycleListeners(): void {
   onOnlineHandler = null;
   onOfflineHandler = null;
   onVisibleHandler = null;
+}
+
+/**
+ * Stop the engine so it can be restarted (e.g. on logout → login transition).
+ * Cancels any pending push timer and resets the started flag. Callers should
+ * also call `detachLifecycleListeners()` to clean up DOM listeners.
+ */
+export function stopEngine(): void {
+  if (pushTimer) clearTimeout(pushTimer);
+  pushTimer = null;
+  engineStarted = false;
+  useSyncStatusStore.setState({ lastError: null, isSyncing: false });
 }
 
 /**
