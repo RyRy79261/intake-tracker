@@ -11,25 +11,33 @@ export const POST = withAuth(async ({ request, auth }) => {
     return NextResponse.json({ error: "Not available" }, { status: 404 });
   }
 
-  const body = await request.json();
-  const now = Date.now();
-  const id = body.id ?? crypto.randomUUID();
+  try {
+    const body = await request.json();
+    const now = Date.now();
+    const id = body.id ?? crypto.randomUUID();
 
-  const record = {
-    id,
-    userId: auth.userId!,
-    type: body.type ?? "water",
-    amount: body.amount ?? 250,
-    timestamp: body.timestamp ?? now,
-    source: body.source ?? "e2e-server-insert",
-    createdAt: body.createdAt ?? now,
-    updatedAt: body.updatedAt ?? now,
-    deletedAt: body.deletedAt ?? null,
-    deviceId: body.deviceId ?? "server-e2e",
-    timezone: body.timezone ?? "UTC",
-  };
+    const record = {
+      id,
+      userId: auth.userId!,
+      type: body.type ?? "water",
+      amount: body.amount ?? 250,
+      timestamp: body.timestamp ?? now,
+      source: body.source ?? "e2e-server-insert",
+      createdAt: body.createdAt ?? now,
+      updatedAt: body.updatedAt ?? now,
+      deletedAt: body.deletedAt ?? null,
+      deviceId: body.deviceId ?? "server-e2e",
+      timezone: body.timezone ?? "UTC",
+    };
 
-  await drizzleDb.insert(intakeRecords).values(record);
+    await drizzleDb.insert(intakeRecords).values(record);
 
-  return NextResponse.json({ ok: true, id, updatedAt: record.updatedAt });
+    return NextResponse.json({ ok: true, id, updatedAt: record.updatedAt });
+  } catch (error) {
+    console.error("[e2e-test/insert-intake] Error:", error);
+    return NextResponse.json(
+      { error: "Insert failed", detail: String(error) },
+      { status: 500 },
+    );
+  }
 });

@@ -1,6 +1,7 @@
 import { chromium, type FullConfig } from "@playwright/test";
 import * as fs from "fs";
 import * as path from "path";
+import { neon } from "@neondatabase/serverless";
 
 /**
  * Phase 41 E2E auth setup.
@@ -73,6 +74,35 @@ async function globalSetup(config: FullConfig) {
 
     await context.storageState({ path: authFile });
     console.log("[e2e-global-setup] Authenticated state saved to", authFile);
+
+    // Neon Auth replicates users to neon_auth.users_sync only on the primary
+    // branch. Ephemeral CI branches may have an empty copy. Seed the
+    // authenticated user's ID so FK constraints on app tables don't break.
+    const dbUrl = process.env.DATABASE_URL;
+    if (dbUrl) {
+      const session = await page.evaluate(() =>
+        fetch("/api/auth/get-session", { credentials: "include" }).then((r) =>
+          r.json(),
+        ),
+      );
+      const userId = session?.user?.id;
+      if (userId) {
+        const sql = neon(dbUrl);
+        await sql`
+          INSERT INTO neon_auth.users_sync (id)
+          VALUES (${userId})
+          ON CONFLICT (id) DO NOTHING
+        `;
+        console.log(
+          "[e2e-global-setup] Seeded neon_auth.users_sync with userId",
+          userId,
+        );
+      } else {
+        console.warn(
+          "[e2e-global-setup] Could not extract userId from session — sync tests may fail",
+        );
+      }
+    }
   } finally {
     await browser.close();
   }
