@@ -99,6 +99,7 @@ export function nextBackoff(attempts: number): number {
  * single flush that fires `delayMs` after the *last* call (D-09).
  */
 export function schedulePush(delayMs: number = DEBOUNCE_MS): void {
+  if (!engineStarted) return;
   if (pushTimer) clearTimeout(pushTimer);
   pushTimer = setTimeout(() => {
     pushTimer = null;
@@ -563,4 +564,8 @@ export function __resetEngineForTests(): void {
   pullInFlight = false;
   engineStarted = false;
   detachLifecycleListeners();
+}
+
+export function __startEngineForTests(): void {
+  engineStarted = true;
 }

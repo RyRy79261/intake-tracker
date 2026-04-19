@@ -24,6 +24,7 @@ import { db, type IntakeRecord } from "@/lib/db";
 import { enqueue, writeWithSync } from "@/lib/sync-queue";
 import {
   __resetEngineForTests,
+  __startEngineForTests,
   attachLifecycleListeners,
   runPullCycle,
   runPushCycle,
@@ -123,6 +124,7 @@ describe("sync-engine", () => {
 
   it("debounced push fires ~3s after last write when online", async () => {
     installDom();
+    __startEngineForTests();
 
     const record = makeIntake({ id: "debounce-1" });
     await db.intakeRecords.add(record);
@@ -157,6 +159,7 @@ describe("sync-engine", () => {
 
   it("online triggers push", async () => {
     const { win } = installDom({ onLine: true });
+    __startEngineForTests();
     const record = makeIntake({ id: "online-1" });
     await db.intakeRecords.add(record);
     await enqueue("intakeRecords", "online-1", "upsert");
@@ -186,6 +189,7 @@ describe("sync-engine", () => {
 
   it("visibility triggers push", async () => {
     const { doc } = installDom({ onLine: true, visibilityState: "visible" });
+    __startEngineForTests();
     const record = makeIntake({ id: "vis-1" });
     await db.intakeRecords.add(record);
     await enqueue("intakeRecords", "vis-1", "upsert");
