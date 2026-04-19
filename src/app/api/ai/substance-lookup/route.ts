@@ -5,6 +5,8 @@ import { sanitizeForAI } from "@/lib/security";
 import { getClaudeClient, CLAUDE_MODELS, WEB_SEARCH_TOOL } from "../_shared/claude-client";
 import { SubstanceLookupResponseSchema, SUBSTANCE_LOOKUP_TOOL } from "./schema";
 
+export const maxDuration = 60;
+
 const RequestSchema = z.object({
   query: z.string().min(1).max(200),
   type: z.enum(["caffeine", "alcohol"]),
@@ -94,8 +96,13 @@ When to use web_search: if the item is a specific brand/product (e.g. "Heineken 
     }
 
     return NextResponse.json(validated.data);
-  } catch (error) {
-    console.error("Substance lookup error:", error);
-    return NextResponse.json({ error: "Failed to process request" }, { status: 500 });
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    const status = (error as { status?: number }).status;
+    console.error("Substance lookup error:", msg, status ? `(HTTP ${status})` : "");
+    return NextResponse.json(
+      { error: "Failed to process request", detail: msg },
+      { status: status === 401 ? 503 : 500 }
+    );
   }
 });

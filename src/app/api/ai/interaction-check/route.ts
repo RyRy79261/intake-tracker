@@ -6,6 +6,8 @@ import { getClaudeClient, CLAUDE_MODELS, WEB_SEARCH_TOOL } from "../_shared/clau
 
 // --- Zod Schemas (co-located per project convention) ---
 
+export const maxDuration = 60;
+
 const ActivePrescriptionSchema = z.object({
   genericName: z.string(),
   drugClass: z.string().optional(),
@@ -187,11 +189,13 @@ export const POST = withAuth(async ({ request, auth }) => {
     }
 
     return NextResponse.json(validated.data);
-  } catch (error) {
-    console.error("Interaction check error:", error);
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    const status = (error as { status?: number }).status;
+    console.error("Interaction check error:", msg, status ? `(HTTP ${status})` : "");
     return NextResponse.json(
-      { error: "Failed to check interactions" },
-      { status: 500 }
+      { error: "Failed to check interactions", detail: msg },
+      { status: status === 401 ? 503 : 500 }
     );
   }
 });

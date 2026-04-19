@@ -16,6 +16,8 @@ import { getClaudeClient, CLAUDE_MODELS, WEB_SEARCH_TOOL } from "../_shared/clau
 
 // --- Zod Schemas ---
 
+export const maxDuration = 60;
+
 const SubstanceEnrichRequestSchema = z.object({
   description: z.string().min(1, "Description is required").max(500, "Description too long"),
   type: z.enum(["caffeine", "alcohol"]),
@@ -188,11 +190,13 @@ export const POST = withAuth(async ({ request, auth }) => {
     }
 
     return NextResponse.json(validated.data);
-  } catch (error) {
-    console.error("Substance enrich error:", error);
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    const status = (error as { status?: number }).status;
+    console.error("Substance enrich error:", msg, status ? `(HTTP ${status})` : "");
     return NextResponse.json(
-      { error: "Failed to process request" },
-      { status: 502 }
+      { error: "Failed to process request", detail: msg },
+      { status: status === 401 ? 503 : 502 }
     );
   }
 });

@@ -4,6 +4,8 @@ import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
 import { getClaudeClient, CLAUDE_MODELS, WEB_SEARCH_TOOL } from "../_shared/claude-client";
 
+export const maxDuration = 60;
+
 const RequestSchema = z.object({
   prescriptions: z
     .array(
@@ -146,11 +148,13 @@ export const POST = withAuth(async ({ request, auth }) => {
     }
 
     return NextResponse.json(validated.data);
-  } catch (error) {
-    console.error("Titration warnings error:", error);
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    const status = (error as { status?: number }).status;
+    console.error("Titration warnings error:", msg, status ? `(HTTP ${status})` : "");
     return NextResponse.json(
-      { error: "Failed to generate warnings" },
-      { status: 500 },
+      { error: "Failed to generate warnings", detail: msg },
+      { status: status === 401 ? 503 : 500 },
     );
   }
 });

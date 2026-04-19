@@ -60,6 +60,8 @@ Example for "1 tsp of table salt":
 
 // --- Tool Definition ---
 
+export const maxDuration = 60;
+
 const PARSE_RESULT_TOOL = {
   name: "parse_result" as const,
   description: "Return parsed water and sodium/salt content from a food/drink description",
@@ -187,11 +189,13 @@ export const POST = withAuth(async ({ request, auth }) => {
       measurement_type: validated.data.measurement_type,
       ...(validated.data.reasoning !== undefined && { reasoning: validated.data.reasoning }),
     });
-  } catch (error) {
-    console.error("AI parse error:", error);
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    const status = (error as { status?: number }).status;
+    console.error("AI parse error:", msg, status ? `(HTTP ${status})` : "");
     return NextResponse.json(
-      { error: "Failed to process request" },
-      { status: 502 }
+      { error: "Failed to process request", detail: msg },
+      { status: status === 401 ? 503 : 502 }
     );
   }
 });
