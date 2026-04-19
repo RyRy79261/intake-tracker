@@ -17,10 +17,9 @@
  */
 import { neon } from "@neondatabase/serverless";
 
-// Pinned expected count: 20 app+push tables + 1 drizzle-kit bookkeeping
-// table (__drizzle_migrations) = 21. If this number changes in a future
-// drizzle-kit release, update it here after re-running locally to confirm.
-const EXPECTED_TABLE_COUNT = 21;
+// Pinned expected count: 20 app+push tables. drizzle-kit 0.31.x stores its
+// __drizzle_migrations journal in the "drizzle" schema, not "public".
+const EXPECTED_TABLE_COUNT = 20;
 
 // Representative tables spot-checked by name. Three is enough to catch
 // a schema that happened to have the right COUNT but the wrong shape

@@ -74,6 +74,6 @@ describe.skipIf(!hasBuildArtifacts)("client bundle security", () => {
     expect(content).not.toContain("__syncEngine");
 
     // Dev-only test API routes must not appear in client bundle
-    expect(content).not.toContain("/api/__test__/");
+    expect(content).not.toContain("/api/e2e-test/");
   });
 });

@@ -84,7 +84,7 @@ async function getServerIntakeCount(
   page: import("@playwright/test").Page,
 ): Promise<number> {
   return page.evaluate(async () => {
-    const res = await fetch("/api/__test__/count-intake", { method: "POST" });
+    const res = await fetch("/api/e2e-test/count-intake", { method: "POST" });
     const data = await res.json();
     return data.count;
   });
@@ -123,7 +123,7 @@ test.describe("sync-engine", () => {
     const testId = `e2e-pull-${crypto.randomUUID()}`;
     const insertRes = await page.evaluate(
       async ({ id }) => {
-        const res = await fetch("/api/__test__/insert-intake", {
+        const res = await fetch("/api/e2e-test/insert-intake", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
