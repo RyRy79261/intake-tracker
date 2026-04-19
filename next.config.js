@@ -1,7 +1,8 @@
-// Only load next-pwa in production to avoid ajv@8 polluting the module cache
-// during lint/dev (which breaks ESLint's ajv@6)
-// Also skip on Vercel preview/staging deploys to prevent stale SW caching
-const withPWA = process.env.NODE_ENV === 'production' && process.env.VERCEL_ENV !== 'preview'
+// PWA (service-worker generation) is production-only.
+// Dev and preview deploys get a self-destructing SW via rewrite (see rewrites()).
+const isPWAEnabled = process.env.NODE_ENV === 'production' && process.env.VERCEL_ENV !== 'preview';
+
+const withPWA = isPWAEnabled
   ? require('next-pwa')({
       dest: 'public',
       register: true,
@@ -65,6 +66,15 @@ const nextConfig = {
     NEXT_PUBLIC_APP_VERSION: packageJson.version,
     NEXT_PUBLIC_GIT_SHA: process.env.VERCEL_GIT_COMMIT_SHA || 'local',
     NEXT_PUBLIC_VERCEL_ENV: process.env.VERCEL_ENV || 'development',
+  },
+  async rewrites() {
+    // On non-production deploys, rewrite /sw.js to a self-destructing SW that
+    // clears Workbox caches and unregisters itself — breaks stale-cache loops
+    // where a previously-cached SW serves old HTML before client JS can run.
+    if (!isPWAEnabled) {
+      return [{ source: '/sw.js', destination: '/sw-kill.js' }];
+    }
+    return [];
   },
   async headers() {
     return [
