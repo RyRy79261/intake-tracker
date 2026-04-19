@@ -111,7 +111,7 @@ test.describe("sync-engine", () => {
       } else {
         localStorage.setItem(
           key,
-          JSON.stringify({ state: { storageMode: "cloud-sync" }, version: 0 }),
+          JSON.stringify({ state: { storageMode: "cloud-sync" }, version: 7 }),
         );
       }
     });
