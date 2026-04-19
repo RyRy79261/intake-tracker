@@ -280,6 +280,13 @@ export async function runPushCycle(): Promise<void> {
     // Chain a pull so the client sees server-authoritative state for any
     // records other devices may have written (D-10).
     schedulePull();
+
+    // Re-drain: if records arrived while the push was in flight, flush them
+    // immediately instead of waiting for the next debounce window.
+    const remaining = await getQueueDepth();
+    if (remaining > 0) {
+      schedulePush(0);
+    }
   } finally {
     pushInFlight = false;
     useSyncStatusStore.setState({ isSyncing: false });

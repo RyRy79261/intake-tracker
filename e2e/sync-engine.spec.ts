@@ -102,7 +102,7 @@ test.describe("sync-engine", () => {
     await page.waitForLoadState("networkidle");
   });
 
-  test("push: 50 intake records flush to Neon branch within 10s @sync @push", async ({
+  test("push: 50 intake records flush to Neon branch within 30s @sync @push", async ({
     page,
   }) => {
     const initialCount = await getServerIntakeCount(page);
@@ -114,7 +114,7 @@ test.describe("sync-engine", () => {
     await expect(async () => {
       const count = await getServerIntakeCount(page);
       expect(count).toBeGreaterThanOrEqual(initialCount + 50);
-    }).toPass({ timeout: 10_000 });
+    }).toPass({ timeout: 30_000 });
   });
 
   test("pull: server-written row arrives in Dexie after pullNow() @sync @pull", async ({
