@@ -245,7 +245,10 @@ export async function runPushCycle(): Promise<void> {
     }
 
     if (!res.ok) {
-      if (res.status === 401) return;
+      if (res.status === 401) {
+        useSyncStatusStore.setState({ lastError: null });
+        return;
+      }
       let detail = `HTTP ${res.status}`;
       try {
         const body = (await res.json()) as { error?: string };
@@ -372,7 +375,10 @@ export async function runPullCycle(): Promise<void> {
       }
 
       if (!res.ok) {
-        if (res.status === 401) return;
+        if (res.status === 401) {
+          useSyncStatusStore.setState({ lastError: null });
+          return;
+        }
         let detail = `HTTP ${res.status}`;
         try {
           const body = (await res.json()) as { error?: string };

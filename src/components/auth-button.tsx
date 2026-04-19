@@ -46,6 +46,10 @@ export function AuthButton() {
                 router.replace("/auth");
                 router.refresh();
               },
+              onError: () => {
+                router.replace("/auth");
+                router.refresh();
+              },
             },
           })
         }

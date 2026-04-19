@@ -48,6 +48,10 @@ export function AccountSection() {
                   router.replace("/auth");
                   router.refresh();
                 },
+                onError: () => {
+                  router.replace("/auth");
+                  router.refresh();
+                },
               },
             })
           }
