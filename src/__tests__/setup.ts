@@ -6,18 +6,18 @@ import { beforeEach, afterAll } from "vitest";
 // pending engine timers when the DB closes, producing harmless uncaught
 // exceptions that make vitest exit non-zero.
 let suppressDbClosed = false;
-for (const event of ["unhandledRejection", "uncaughtException"] as const) {
-  process.on(event, (reason) => {
+process.prependListener(
+  "unhandledRejection",
+  (reason: unknown, promise: Promise<unknown>) => {
     if (
       suppressDbClosed &&
       reason instanceof Error &&
       reason.name === "DatabaseClosedError"
     ) {
-      return;
+      promise.catch(() => {});
     }
-    throw reason;
-  });
-}
+  },
+);
 
 // Reset database between every test to prevent state bleed
 beforeEach(async () => {

@@ -1,17 +1,21 @@
 import { neon } from '@neondatabase/serverless';
 
-const sql = neon(process.env.DATABASE_URL!);
+async function main() {
+  const sql = neon(process.env.DATABASE_URL!);
 
-// CI Neon branches inherit tables from parent but lack __drizzle_migrations,
-// so drizzle-kit migrate would fail on CREATE TABLE for existing tables.
-// Drop everything so migrations run from scratch on the ephemeral branch.
-await sql`
-  DO $$ DECLARE r RECORD; BEGIN
-    FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP
-      EXECUTE 'DROP TABLE IF EXISTS public.' || quote_ident(r.tablename) || ' CASCADE';
-    END LOOP;
-    DROP TABLE IF EXISTS neon_auth.users_sync CASCADE;
+  await sql`
+    DO $$ DECLARE r RECORD; BEGIN
+      FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP
+        EXECUTE 'DROP TABLE IF EXISTS public.' || quote_ident(r.tablename) || ' CASCADE';
+      END LOOP;
+      DROP TABLE IF EXISTS neon_auth.users_sync CASCADE;
   END $$;
-`;
+  `;
 
-console.log('Schema reset for clean migration test');
+  console.log('Schema reset for clean migration test');
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
