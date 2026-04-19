@@ -281,11 +281,14 @@ export async function runPushCycle(): Promise<void> {
     // records other devices may have written (D-10).
     schedulePull();
 
-    // Re-drain: if records arrived while the push was in flight, flush them
-    // immediately instead of waiting for the next debounce window.
-    const remaining = await getQueueDepth();
-    if (remaining > 0) {
-      schedulePush(0);
+    // Re-drain: if new records arrived while the push was in flight, flush
+    // them immediately. Only re-drain when this cycle actually acked items —
+    // otherwise the same un-acked ops would loop forever.
+    if (accepted.length > 0) {
+      const remaining = await getQueueDepth();
+      if (remaining > 0) {
+        schedulePush(0);
+      }
     }
   } finally {
     pushInFlight = false;
