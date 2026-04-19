@@ -32,7 +32,7 @@
  * (contains PHI — timestamps, food descriptions, medication names).
  */
 import { NextResponse } from "next/server";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { withAuth } from "@/lib/auth-middleware";
 import { db as drizzleDb } from "@/lib/drizzle";
 import {
@@ -40,6 +40,8 @@ import {
   schemaByTableName,
   type TableName,
 } from "@/lib/sync-payload";
+
+export const maxDuration = 60;
 
 const MAX_FUTURE_MS = 60_000;
 
@@ -62,27 +64,64 @@ export const POST = withAuth(async ({ request, auth }) => {
       error: string;
     }> = [];
 
+    const opsByTable = new Map<
+      TableName,
+      typeof parsed.data.ops
+    >();
     for (const op of parsed.data.ops) {
-      try {
-        const table = schemaByTableName[op.tableName as TableName];
-        const clampedUpdatedAt = Math.min(
-          op.row.updatedAt,
-          serverNow + MAX_FUTURE_MS,
-        );
+      const tn = op.tableName as TableName;
+      const bucket = opsByTable.get(tn) ?? [];
+      bucket.push(op);
+      opsByTable.set(tn, bucket);
+    }
 
-        const existing = await drizzleDb
+    for (const [tableName, tableOps] of opsByTable) {
+      const table = schemaByTableName[tableName];
+      const ids = tableOps.map((op) => op.row.id as string);
+
+      let existingById: Map<
+        string,
+        { updatedAt: number; deletedAt: number | null }
+      >;
+      try {
+        const existingRows = await drizzleDb
           .select()
           .from(table)
           .where(
             and(
-              eq((table as any).id, op.row.id),
+              inArray((table as any).id, ids),
               eq((table as any).userId, auth.userId!),
             ),
-          )
-          .limit(1);
-        const serverRow = existing[0] as
-          | { updatedAt: number; deletedAt: number | null }
-          | undefined;
+          );
+        existingById = new Map(
+          existingRows.map((r: any) => [r.id as string, r]),
+        );
+      } catch (selectErr) {
+        console.error(
+          `[sync/push] Batch SELECT failed: table=${tableName}`,
+          selectErr,
+        );
+        for (const op of tableOps) {
+          rejected.push({
+            queueId: op.queueId,
+            tableName,
+            error:
+              selectErr instanceof Error
+                ? selectErr.message
+                : String(selectErr),
+          });
+        }
+        continue;
+      }
+
+      const upsertPromises: Promise<void>[] = [];
+
+      for (const op of tableOps) {
+        const clampedUpdatedAt = Math.min(
+          op.row.updatedAt,
+          serverNow + MAX_FUTURE_MS,
+        );
+        const serverRow = existingById.get(op.row.id as string);
 
         if (
           serverRow &&
@@ -107,18 +146,31 @@ export const POST = withAuth(async ({ request, auth }) => {
           };
 
           const { id: _id, ...setValues } = writeValues;
-          await (drizzleDb as any)
+          const p = (drizzleDb as any)
             .insert(table)
             .values(writeValues)
             .onConflictDoUpdate({
               target: (table as any).id,
               set: setValues,
+            })
+            .then(() => {
+              accepted.push({
+                queueId: op.queueId,
+                serverUpdatedAt: clampedUpdatedAt,
+              });
+            })
+            .catch((err: unknown) => {
+              console.error(
+                `[sync/push] Op failed: table=${tableName} id=${op.row.id}`,
+                err,
+              );
+              rejected.push({
+                queueId: op.queueId,
+                tableName,
+                error: err instanceof Error ? err.message : String(err),
+              });
             });
-
-          accepted.push({
-            queueId: op.queueId,
-            serverUpdatedAt: clampedUpdatedAt,
-          });
+          upsertPromises.push(p);
           continue;
         }
 
@@ -126,18 +178,9 @@ export const POST = withAuth(async ({ request, auth }) => {
           queueId: op.queueId,
           serverUpdatedAt: serverRow.updatedAt,
         });
-      } catch (opError) {
-        console.error(
-          `[sync/push] Op failed: table=${op.tableName} id=${op.row.id}`,
-          opError,
-        );
-        rejected.push({
-          queueId: op.queueId,
-          tableName: op.tableName,
-          error:
-            opError instanceof Error ? opError.message : String(opError),
-        });
       }
+
+      await Promise.all(upsertPromises);
     }
 
     return NextResponse.json({ accepted, rejected });

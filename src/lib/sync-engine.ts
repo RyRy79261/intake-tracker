@@ -45,7 +45,7 @@ import { queryClient } from "@/lib/query-client";
 /** Debounce window for after-write push (D-09: 2-5s range, picked 3s). */
 export const DEBOUNCE_MS = 3000;
 /** Max ops per /api/sync/push call (Pitfall 6 — block Vercel timeouts). */
-export const PUSH_BATCH_CAP = 200;
+export const PUSH_BATCH_CAP = 50;
 /** Backoff base (D-11: 2s). */
 export const BACKOFF_BASE_MS = 2000;
 /** Backoff cap (D-11: 60s). */

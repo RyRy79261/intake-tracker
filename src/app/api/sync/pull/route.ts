@@ -49,6 +49,8 @@ import {
   type TableName,
 } from "@/lib/sync-payload";
 
+export const maxDuration = 60;
+
 export const POST = withAuth(async ({ request, auth }) => {
   try {
     const body = await request.json();
@@ -64,38 +66,39 @@ export const POST = withAuth(async ({ request, auth }) => {
     // note at the top of the file.
     const serverTime = Date.now();
 
+    const tableNames = Object.keys(schemaByTableName) as TableName[];
+    const entries = await Promise.all(
+      tableNames.map(async (tableName) => {
+        const cursor = parsed.data.cursors[tableName] ?? 0;
+        const table = schemaByTableName[tableName] as any;
+
+        const rows = (await drizzleDb
+          .select()
+          .from(table)
+          .where(
+            and(
+              eq(table.userId, auth.userId!),
+              gt(table.updatedAt, cursor),
+            ),
+          )
+          .orderBy(asc(table.updatedAt))
+          .limit(PULL_SOFT_CAP + 1)) as Record<string, unknown>[];
+
+        const hasMore = rows.length > PULL_SOFT_CAP;
+        return [
+          tableName,
+          { rows: rows.slice(0, PULL_SOFT_CAP), hasMore },
+        ] as const;
+      }),
+    );
+
     const result: Record<
       string,
       { rows: Record<string, unknown>[]; hasMore: boolean }
-    > = {};
-
-    const tableNames = Object.keys(schemaByTableName) as TableName[];
-    for (const tableName of tableNames) {
-      const cursor = parsed.data.cursors[tableName] ?? 0;
-      const table = schemaByTableName[tableName] as any;
-
-      const rows = (await drizzleDb
-        .select()
-        .from(table)
-        .where(
-          and(
-            eq(table.userId, auth.userId!),
-            gt(table.updatedAt, cursor),
-          ),
-        )
-        .orderBy(asc(table.updatedAt))
-        .limit(PULL_SOFT_CAP + 1)) as Record<string, unknown>[];
-
-      const hasMore = rows.length > PULL_SOFT_CAP;
-      result[tableName] = {
-        rows: rows.slice(0, PULL_SOFT_CAP),
-        hasMore,
-      };
-    }
+    > = Object.fromEntries(entries);
 
     return NextResponse.json({ result, serverTime });
   } catch (error) {
-    // PHI-safe log: error object only, no request body.
     console.error("[sync/pull] Error:", error);
     return NextResponse.json(
       { error: "Failed to pull changes" },

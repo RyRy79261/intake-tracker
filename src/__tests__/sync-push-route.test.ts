@@ -65,25 +65,17 @@ vi.mock("@/lib/auth-middleware", () => ({
 vi.mock("@/lib/drizzle", () => {
   const db = {
     select: () => ({
-      from: (table: unknown) => ({
-        where: (_cond: unknown) => ({
-          limit: async (_n: number) => {
-            // The WHERE condition is an `and(eq(id, ?), eq(userId, ?))` object
-            // built by drizzle-orm. We can't easily introspect it here, so
-            // tests stash a single "currently-expected" row by id in
-            // `existingRows[id]`. The route fetches by id+userId, so for
-            // unit purposes we return whatever the test pre-seeded.
-            const rows = Object.values(existingRows);
-            return rows.length > 0 ? [rows[0]] : [];
-          },
-        }),
+      from: (_table: unknown) => ({
+        where: (_cond: unknown) => {
+          const rows = Object.values(existingRows);
+          return Promise.resolve(rows);
+        },
       }),
     }),
     insert: (table: unknown) => ({
       values: (v: any) => ({
         onConflictDoUpdate: async ({ set }: { target: unknown; set: any }) => {
           insertCalls.push({ table, values: v, set });
-          // Simulate write: stash for subsequent selects in the same op loop.
           existingRows[v.id] = { ...v };
           return undefined;
         },
