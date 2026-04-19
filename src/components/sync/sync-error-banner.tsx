@@ -20,7 +20,7 @@ export function SyncErrorBanner() {
         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
         <div className="flex-1 min-w-0">
           <p className="font-medium">Sync failed</p>
-          <p className="mt-0.5 text-xs opacity-80 truncate">{lastError}</p>
+          <p className="mt-0.5 text-xs opacity-80 break-words">{lastError}</p>
         </div>
         <button
           onClick={() => setDismissed(true)}

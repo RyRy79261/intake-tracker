@@ -253,8 +253,12 @@ export async function runPushCycle(): Promise<void> {
       }
       let detail = `HTTP ${res.status}`;
       try {
-        const body = (await res.json()) as { error?: string };
-        if (body?.error) detail = body.error;
+        const body = (await res.json()) as {
+          error?: string;
+          detail?: string;
+        };
+        if (body?.detail) detail = body.detail;
+        else if (body?.error) detail = body.error;
       } catch {
         // non-JSON body, keep the status-code detail
       }
@@ -262,13 +266,16 @@ export async function runPushCycle(): Promise<void> {
       return;
     }
 
-    // Success — parse ack, delete acked queue rows, apply server updatedAt
-    // to local rows (subject to Pitfall 3), then kick a pull so we see any
-    // concurrent updates written by other devices.
     const body = (await res.json()) as {
       accepted?: Array<{ queueId: number; serverUpdatedAt: number }>;
+      rejected?: Array<{
+        queueId: number;
+        tableName: string;
+        error: string;
+      }>;
     };
     const accepted = body.accepted ?? [];
+    const rejected = body.rejected ?? [];
     const queueRowsById = new Map<number, SyncQueueRow>();
     for (const q of queueRows) {
       if (q.id != null) queueRowsById.set(q.id, q);
@@ -277,11 +284,33 @@ export async function runPushCycle(): Promise<void> {
     await applyServerAck(accepted, queueRowsById);
     await ack(accepted.map((a) => a.queueId));
 
-    useSyncStatusStore.setState({
-      lastPushedAt: Date.now(),
-      lastError: null,
-      queueDepth: await getQueueDepth(),
-    });
+    if (rejected.length > 0) {
+      const firstErr = rejected[0]!;
+      const detail = `${firstErr.tableName}: ${firstErr.error}`;
+      console.error(
+        `[sync] ${rejected.length} op(s) rejected:`,
+        rejected.map((r) => `${r.tableName}: ${r.error}`),
+      );
+      for (const r of rejected) {
+        const q = queueRowsById.get(r.queueId);
+        if (q?.id != null) {
+          await db._syncQueue.update(q.id, {
+            attempts: (q.attempts ?? 0) + 1,
+          });
+        }
+      }
+      useSyncStatusStore.setState({
+        lastError: `${rejected.length} record(s) failed: ${detail}`,
+        lastPushedAt: Date.now(),
+        queueDepth: await getQueueDepth(),
+      });
+    } else {
+      useSyncStatusStore.setState({
+        lastPushedAt: Date.now(),
+        lastError: null,
+        queueDepth: await getQueueDepth(),
+      });
+    }
 
     // Chain a pull so the client sees server-authoritative state for any
     // records other devices may have written (D-10).
