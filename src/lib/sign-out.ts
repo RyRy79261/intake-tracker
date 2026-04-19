@@ -1,5 +1,6 @@
 import { stopEngine, detachLifecycleListeners } from "@/lib/sync-engine";
 import { useSyncStatusStore } from "@/stores/sync-status-store";
+import { signOut } from "@/lib/auth-client";
 
 export async function handleSignOut(): Promise<void> {
   stopEngine();
@@ -7,10 +8,14 @@ export async function handleSignOut(): Promise<void> {
   useSyncStatusStore.setState({ lastError: null, isSyncing: false });
 
   try {
-    await fetch("/api/auth/sign-out", { method: "POST" });
+    await Promise.race([
+      signOut(),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("timeout")), 3000)
+      ),
+    ]);
   } catch {
-    // Server call failed — cookie may not be cleared, but the hard
-    // redirect below will hit the middleware which re-validates.
+    // Timeout or network failure — redirect anyway.
   }
 
   window.location.href = "/auth";

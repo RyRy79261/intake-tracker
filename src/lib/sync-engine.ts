@@ -233,6 +233,7 @@ export async function runPushCycle(): Promise<void> {
       res = await fetch("/api/sync/push", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        cache: "no-store",
         body: JSON.stringify({ ops }),
       });
     } catch (err) {
@@ -365,6 +366,7 @@ export async function runPullCycle(): Promise<void> {
         res = await fetch("/api/sync/pull", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          cache: "no-store",
           body: JSON.stringify({ cursors }),
         });
       } catch (err) {

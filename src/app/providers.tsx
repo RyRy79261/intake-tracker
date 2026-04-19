@@ -9,6 +9,7 @@ import { useTimezoneDetection } from "@/hooks/use-timezone-detection";
 import { TimezoneChangeDialog } from "@/components/medications/timezone-change-dialog";
 import { queryClient } from "@/lib/query-client";
 import { SyncLifecycleMount } from "@/components/sync/sync-lifecycle-mount";
+import { SyncErrorBanner } from "@/components/sync/sync-error-banner";
 import { MigrationGuard } from "@/components/migration/migration-guard";
 
 /**
@@ -55,6 +56,17 @@ export function Providers({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  // Unregister stale service workers on non-production deploys to prevent
+  // Workbox from serving cached JS/HTML that masks new code.
+  useEffect(() => {
+    const env = process.env.NEXT_PUBLIC_VERCEL_ENV;
+    if (env && env !== "production" && "serviceWorker" in navigator) {
+      navigator.serviceWorker.getRegistrations().then((regs) => {
+        for (const reg of regs) reg.unregister();
+      });
+    }
+  }, []);
+
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
@@ -62,6 +74,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           <TimezoneGuard>
             {children}
             <SyncLifecycleMount />
+            <SyncErrorBanner />
             <MigrationGuard />
           </TimezoneGuard>
         </ThemeProvider>

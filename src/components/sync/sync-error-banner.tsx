@@ -2,15 +2,17 @@
 
 import { useSyncStatusStore } from "@/stores/sync-status-store";
 import { useSession } from "@/lib/auth-client";
+import { usePathname } from "next/navigation";
 import { AlertTriangle, X } from "lucide-react";
 import { useState } from "react";
 
 export function SyncErrorBanner() {
   const lastError = useSyncStatusStore((s) => s.lastError);
   const { data: session } = useSession();
+  const pathname = usePathname();
   const [dismissed, setDismissed] = useState(false);
 
-  if (!lastError || dismissed || !session?.user) return null;
+  if (!lastError || dismissed || !session?.user || pathname?.startsWith("/auth")) return null;
 
   return (
     <div className="fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-md animate-in slide-in-from-bottom-4 duration-300">

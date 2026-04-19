@@ -5,7 +5,6 @@ import { Toaster } from "@/components/ui/toaster";
 import { Providers } from "./providers";
 import { UpdateNotification } from "@/components/update-notification";
 import { OfflineChip } from "@/components/sync/offline-chip";
-import { SyncErrorBanner } from "@/components/sync/sync-error-banner";
 
 const outfit = Outfit({ 
   subsets: ["latin"],
@@ -55,7 +54,6 @@ export default function RootLayout({
           </main>
         </Providers>
         <UpdateNotification />
-        <SyncErrorBanner />
         <Toaster />
       </body>
     </html>
