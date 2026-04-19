@@ -307,7 +307,7 @@ CREATE TABLE "urination_records" (
 	"timezone" text NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "neon_auth"."users_sync" (
+CREATE TABLE IF NOT EXISTS "neon_auth"."users_sync" (
 	"id" text PRIMARY KEY NOT NULL
 );
 --> statement-breakpoint

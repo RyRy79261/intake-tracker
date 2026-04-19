@@ -8,7 +8,6 @@ async function main() {
       FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP
         EXECUTE 'DROP TABLE IF EXISTS public.' || quote_ident(r.tablename) || ' CASCADE';
       END LOOP;
-      DROP TABLE IF EXISTS neon_auth.users_sync CASCADE;
       DROP SCHEMA IF EXISTS drizzle CASCADE;
   END $$;
   `;
