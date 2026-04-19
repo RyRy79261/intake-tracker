@@ -10,23 +10,29 @@ const withPWA = process.env.NODE_ENV === 'production' && process.env.VERCEL_ENV 
     })
   : (config) => config;
 
-// Content Security Policy for production
+// Content Security Policy — relaxed on preview deploys to allow Vercel's
+// toolbar (vercel.live injects server-side HTML that needs its client script).
+const isVercelPreview = process.env.VERCEL_ENV === 'preview';
+
+const cspDirectives = [
+  "default-src 'self'",
+  isVercelPreview
+    ? "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://vercel.live https://vercel.com"
+    : "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:" + (isVercelPreview ? " https://vercel.live https://vercel.com" : ""),
+  "font-src 'self' data:" + (isVercelPreview ? " https://vercel.live" : ""),
+  "connect-src 'self' https://api.anthropic.com https://*.neon.tech" + (isVercelPreview ? " https://vercel.live https://vercel.com wss://ws-us3.pusher.com" : ""),
+  "frame-src 'self'" + (isVercelPreview ? " https://vercel.live" : ""),
+  "frame-ancestors 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+];
+
 const securityHeaders = [
   {
     key: 'Content-Security-Policy',
-    value: [
-      "default-src 'self'",
-      // 'unsafe-eval' is required for Next.js dev mode; could be conditionally removed for production in future
-      "script-src 'self' 'unsafe-eval' 'unsafe-inline'", // Required for Next.js
-      "style-src 'self' 'unsafe-inline'", // Required for Tailwind
-      "img-src 'self' data: blob:",
-      "font-src 'self' data:",
-      "connect-src 'self' https://api.anthropic.com https://*.neon.tech", // Anthropic Claude API + Neon Auth
-      "frame-src 'self'",
-      "frame-ancestors 'none'",
-      "base-uri 'self'",
-      "form-action 'self'",
-    ].join('; ')
+    value: cspDirectives.join('; ')
   },
   {
     key: 'X-Frame-Options',

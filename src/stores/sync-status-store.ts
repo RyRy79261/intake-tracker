@@ -38,8 +38,7 @@ export interface SyncStatusActions {
 const defaultState: SyncStatus = {
   lastPushedAt: null,
   lastPulledAt: null,
-  // SSR-safe default: navigator is unavailable on the server — assume online.
-  isOnline: typeof navigator !== "undefined" ? navigator.onLine : true,
+  isOnline: true,
   isSyncing: false,
   queueDepth: 0,
   lastError: null,
