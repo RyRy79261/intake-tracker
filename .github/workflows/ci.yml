@@ -170,6 +170,10 @@ jobs:
           api_key: ${{ secrets.NEON_API_KEY }}
           project_id: ${{ secrets.NEON_PROJECT_ID }}
           branch_name: ci-e2e-${{ github.run_id }}
+      - name: Reset inherited schema on ephemeral branch
+        env:
+          DATABASE_URL: ${{ steps.neon-branch.outputs.db_url }}
+        run: pnpm tsx scripts/reset-ci-schema.ts
       - name: Apply Drizzle migrations to E2E branch
         env:
           DATABASE_URL: ${{ steps.neon-branch.outputs.db_url }}
@@ -227,6 +231,10 @@ jobs:
           api_key: ${{ secrets.NEON_API_KEY }}
           project_id: ${{ secrets.NEON_PROJECT_ID }}
           branch_name: ci-schema-${{ github.run_id }}
+      - name: Reset inherited schema on ephemeral branch
+        env:
+          DATABASE_URL: ${{ steps.neon-branch.outputs.db_url }}
+        run: pnpm tsx scripts/reset-ci-schema.ts
       - name: Apply Drizzle migrations
         env:
           DATABASE_URL: ${{ steps.neon-branch.outputs.db_url }}
