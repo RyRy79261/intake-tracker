@@ -98,6 +98,23 @@ async function triggerSyncViaOnlineEvent(
 
 test.describe("sync-engine", () => {
   test.beforeEach(async ({ page }) => {
+    // Enable cloud-sync storage mode so the sync engine starts
+    await page.addInitScript(() => {
+      const key = "intake-tracker-settings";
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          if (parsed.state) parsed.state.storageMode = "cloud-sync";
+          localStorage.setItem(key, JSON.stringify(parsed));
+        } catch {}
+      } else {
+        localStorage.setItem(
+          key,
+          JSON.stringify({ state: { storageMode: "cloud-sync" }, version: 0 }),
+        );
+      }
+    });
     await page.goto("/");
     await page.waitForLoadState("networkidle");
   });
