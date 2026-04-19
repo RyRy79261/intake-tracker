@@ -53,8 +53,8 @@ e2e/.auth/
 .claude/worktrees/
 .entire/
 
-# GSD milestone phase archives (summaries kept, phase details recoverable from git history)
-.planning/milestones/*-phases/
+# Planning artifacts (old .planning/ and current .gsd/ — recoverable from git history)
+.planning/
 
 # Local-only dev/test fixtures (real user exports, never commit)
 .private-fixtures/
@@ -62,6 +62,7 @@ e2e/.auth/
 # ── GSD baseline (auto-generated) ──
 .gsd
 .gsd-id
+.mcp.json
 .bg-shell/
 Thumbs.db
 *.swp
