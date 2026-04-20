@@ -147,6 +147,14 @@ async function uploadTable(
   }
 }
 
+async function preCountTables(): Promise<void> {
+  const store = useMigrationStore.getState();
+  for (const tableName of TABLE_PUSH_ORDER) {
+    const count = await db.table(tableName).count();
+    store.setTableProgress(tableName, { total: count, uploaded: 0, lastBatchIndex: -1 });
+  }
+}
+
 export async function startMigration(): Promise<void> {
   const store = useMigrationStore.getState();
   store.setPhase("uploading");
@@ -155,13 +163,15 @@ export async function startMigration(): Promise<void> {
   const queueIdRef = { value: 0 };
 
   try {
+    await preCountTables();
+
     for (let i = 0; i < TABLE_PUSH_ORDER.length; i++) {
       const tableName = TABLE_PUSH_ORDER[i] as TableName;
       await uploadTable(tableName, i, 0, queueIdRef);
     }
 
-    console.log("[migration] upload phase complete, moving to verification");
-    store.setPhase("verifying");
+    console.log("[migration] upload complete");
+    store.setPhase("complete");
   } catch (error) {
     store.setPhase("error");
     store.setError(error instanceof Error ? error.message : String(error));
@@ -242,8 +252,13 @@ export async function resumeMigration(): Promise<void> {
   store.setPhase("uploading");
   store.setError(null);
 
+  await preCountTables();
+
   for (const [table, progress] of Object.entries(saved.tableProgress)) {
-    store.setTableProgress(table, progress);
+    const current = store.tableProgress[table];
+    if (current) {
+      store.setTableProgress(table, { ...current, uploaded: progress.uploaded, lastBatchIndex: progress.lastBatchIndex });
+    }
   }
 
   const queueIdRef = {
@@ -265,8 +280,8 @@ export async function resumeMigration(): Promise<void> {
       await uploadTable(tableName, i, startBatch, queueIdRef);
     }
 
-    console.log("[migration] resume upload complete, moving to verification");
-    store.setPhase("verifying");
+    console.log("[migration] resume upload complete");
+    store.setPhase("complete");
   } catch (error) {
     store.setPhase("error");
     store.setError(error instanceof Error ? error.message : String(error));

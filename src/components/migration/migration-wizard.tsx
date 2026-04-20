@@ -5,14 +5,12 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { useMigrationStore } from "@/stores/migration-store";
 import {
   startMigration,
-  verifyMigration,
   cancelMigration,
   resumeMigration,
   completeMigration,
 } from "@/lib/migration-service";
 import { BackupGateStep } from "./backup-gate-step";
 import { UploadProgressStep } from "./upload-progress-step";
-import { VerificationStep } from "./verification-step";
 import { CompletionSummaryStep } from "./completion-summary-step";
 import { CancelConfirmDialog } from "./cancel-confirm-dialog";
 
@@ -29,7 +27,6 @@ export function MigrationWizard({
 }: MigrationWizardProps) {
   const { phase, error, reset } = useMigrationStore();
   const [cancelOpen, setCancelOpen] = useState(false);
-  const [verifying, setVerifying] = useState(false);
   const startTimeRef = useRef(Date.now());
 
   useEffect(() => {
@@ -45,13 +42,6 @@ export function MigrationWizard({
       }
     }
   }, [open, resume, reset]);
-
-  useEffect(() => {
-    if (phase === "verifying" && !verifying) {
-      setVerifying(true);
-      verifyMigration().finally(() => setVerifying(false));
-    }
-  }, [phase, verifying]);
 
   const handleProceedFromBackup = useCallback(async () => {
     useMigrationStore.getState().setPhase("uploading");
@@ -69,7 +59,7 @@ export function MigrationWizard({
     onOpenChange(false);
   }, [onOpenChange]);
 
-  const isBlocking = phase === "uploading" || phase === "verifying";
+  const isBlocking = phase === "uploading";
 
   return (
     <>
@@ -95,15 +85,6 @@ export function MigrationWizard({
 
           {phase === "uploading" && (
             <UploadProgressStep onCancel={() => setCancelOpen(true)} />
-          )}
-
-          {phase === "verifying" && (
-            <VerificationStep
-              onContinue={() =>
-                useMigrationStore.getState().setPhase("complete")
-              }
-              verifying={verifying}
-            />
           )}
 
           {phase === "complete" && (

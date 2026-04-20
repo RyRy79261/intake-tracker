@@ -48,8 +48,10 @@ export function UploadProgressStep({ onCancel }: UploadProgressStepProps) {
       <div className="space-y-2 text-center">
         <h2 className="text-xl font-semibold">Uploading data</h2>
         <p className="text-sm text-muted-foreground">
-          {currentTable ? `Uploading ${tableLabel(currentTable)}…` : "Preparing…"}{" "}
-          {percentage}%
+          {currentTable ? `Uploading ${tableLabel(currentTable)}…` : "Counting records…"}
+        </p>
+        <p className="text-sm font-medium tabular-nums">
+          {uploadedRecords.toLocaleString()} / {totalRecords.toLocaleString()} records ({percentage}%)
         </p>
       </div>
 
