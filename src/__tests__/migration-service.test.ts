@@ -104,7 +104,7 @@ afterEach(() => {
 
 describe("migration-service", () => {
   describe("batch chunking", () => {
-    it("produces ceil(N/500) batches, each ≤500 ops", async () => {
+    it("produces ceil(N/100) batches, each ≤100 ops", async () => {
       const { startMigration } = await import("@/lib/migration-service");
 
       const records = Array.from({ length: 1100 }, (_, i) =>
@@ -121,10 +121,10 @@ describe("migration-service", () => {
         ),
       );
 
-      expect(intakePushes.length).toBe(Math.ceil(1100 / 500));
+      expect(intakePushes.length).toBe(Math.ceil(1100 / 100));
       for (const call of intakePushes) {
         const ops = (call.body as { ops: unknown[] }).ops;
-        expect(ops.length).toBeLessThanOrEqual(500);
+        expect(ops.length).toBeLessThanOrEqual(100);
       }
     });
   });
