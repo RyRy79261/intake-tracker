@@ -6,14 +6,19 @@ const DB_NAME = "IntakeTrackerDB";
  * Helper: add intake records + corresponding _syncQueue entries via raw
  * IndexedDB. Works in both dev and production builds since it bypasses
  * the module system entirely.
+ *
+ * When `sparse` is true, optional fields (source, note, groupId,
+ * originalInputText, groupSource) are omitted entirely — simulating
+ * real Dexie records where those fields were never set.
  */
 async function seedRecordsAndQueue(
   page: import("@playwright/test").Page,
   count: number,
   prefix: string,
+  options?: { sparse?: boolean },
 ): Promise<string[]> {
   return page.evaluate(
-    async ({ count, prefix, dbName }) => {
+    async ({ count, prefix, dbName, sparse }) => {
       return new Promise<string[]>((resolve, reject) => {
         const req = indexedDB.open(dbName);
         req.onsuccess = () => {
@@ -30,18 +35,26 @@ async function seedRecordsAndQueue(
           for (let i = 0; i < count; i++) {
             const id = `${prefix}-${crypto.randomUUID()}`;
             ids.push(id);
-            intakeStore.add({
+
+            const record: Record<string, unknown> = {
               id,
               type: "water",
               amount: 250,
               timestamp: now - i * 1000,
-              source: prefix,
               createdAt: now,
               updatedAt: now,
               deletedAt: null,
               deviceId: "e2e-test",
               timezone: "UTC",
-            });
+            };
+
+            if (!sparse) {
+              record.source = prefix;
+            }
+            // When sparse, source/note/groupId/originalInputText/groupSource
+            // are absent — matching real Dexie records with unset optional fields
+
+            intakeStore.add(record);
             queueStore.add({
               tableName: "intakeRecords",
               recordId: id,
@@ -57,7 +70,7 @@ async function seedRecordsAndQueue(
         req.onerror = () => reject(req.error);
       });
     },
-    { count, prefix, dbName: DB_NAME },
+    { count, prefix, dbName: DB_NAME, sparse: options?.sparse ?? false },
   );
 }
 
@@ -179,6 +192,47 @@ test.describe("sync-engine", () => {
       );
       expect(record).not.toBeNull();
       expect((record as Record<string, unknown>).amount).toBe(999);
+    }).toPass({ timeout: 10_000 });
+  });
+
+  test("push: records with missing optional fields flush without DEFAULT errors @sync @push @sparse", async ({
+    page,
+  }) => {
+    const initialCount = await getServerIntakeCount(page);
+
+    await seedRecordsAndQueue(page, 10, "e2e-sparse", { sparse: true });
+
+    await triggerSyncViaOnlineEvent(page);
+
+    await expect(async () => {
+      const count = await getServerIntakeCount(page);
+      expect(count).toBeGreaterThanOrEqual(initialCount + 10);
+    }).toPass({ timeout: 30_000 });
+  });
+
+  test("push: 120 records exercise SELECT chunking (chunk size 100) @sync @push @chunking", async ({
+    page,
+  }) => {
+    const initialCount = await getServerIntakeCount(page);
+
+    // Seed 120 records — exceeds SELECT_CHUNK_SIZE=100, forcing the push
+    // route to chunk the existence-check SELECT into two queries.
+    // Also uses sparse mode to compound the undefined-field risk.
+    await seedRecordsAndQueue(page, 120, "e2e-chunk", { sparse: true });
+
+    await triggerSyncViaOnlineEvent(page);
+
+    // The sync engine caps at PUSH_BATCH_CAP=50 per cycle, so 120 records
+    // will require multiple push cycles. Give it enough time.
+    await expect(async () => {
+      const count = await getServerIntakeCount(page);
+      expect(count).toBeGreaterThanOrEqual(initialCount + 120);
+    }).toPass({ timeout: 60_000 });
+
+    // Verify queue fully drained
+    await expect(async () => {
+      const depth = await getQueueDepth(page);
+      expect(depth).toBe(0);
     }).toPass({ timeout: 10_000 });
   });
 

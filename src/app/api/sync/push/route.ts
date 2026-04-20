@@ -44,12 +44,23 @@ import {
 export const maxDuration = 60;
 
 const MAX_FUTURE_MS = 60_000;
+const SELECT_CHUNK_SIZE = 100;
+
+function nullifyUndefined(obj: Record<string, any>): Record<string, any> {
+  for (const key of Object.keys(obj)) {
+    if (obj[key] === undefined) {
+      obj[key] = null;
+    }
+  }
+  return obj;
+}
 
 export const POST = withAuth(async ({ request, auth }) => {
   try {
     const body = await request.json();
     const parsed = pushBodySchema.safeParse(body);
     if (!parsed.success) {
+      console.error("[sync/push] Zod validation failed:", JSON.stringify(parsed.error.flatten(), null, 2));
       return NextResponse.json(
         { error: "Invalid request", details: parsed.error.flatten() },
         { status: 400 },
@@ -79,23 +90,28 @@ export const POST = withAuth(async ({ request, auth }) => {
       const table = schemaByTableName[tableName];
       const ids = tableOps.map((op) => op.row.id as string);
 
+      // Chunked SELECT to avoid exceeding Neon HTTP parameter limits
       let existingById: Map<
         string,
         { updatedAt: number; deletedAt: number | null }
       >;
       try {
-        const existingRows = await drizzleDb
-          .select()
-          .from(table)
-          .where(
-            and(
-              inArray((table as any).id, ids),
-              eq((table as any).userId, auth.userId!),
-            ),
-          );
-        existingById = new Map(
-          existingRows.map((r: any) => [r.id as string, r]),
-        );
+        existingById = new Map();
+        for (let i = 0; i < ids.length; i += SELECT_CHUNK_SIZE) {
+          const chunk = ids.slice(i, i + SELECT_CHUNK_SIZE);
+          const rows = await drizzleDb
+            .select()
+            .from(table)
+            .where(
+              and(
+                inArray((table as any).id, chunk),
+                eq((table as any).userId, auth.userId!),
+              ),
+            );
+          for (const r of rows) {
+            existingById.set((r as any).id as string, r as any);
+          }
+        }
       } catch (selectErr) {
         console.error(
           `[sync/push] Batch SELECT failed: table=${tableName}`,
@@ -113,8 +129,6 @@ export const POST = withAuth(async ({ request, auth }) => {
         }
         continue;
       }
-
-      const upsertPromises: Promise<void>[] = [];
 
       for (const op of tableOps) {
         const clampedUpdatedAt = Math.min(
@@ -138,6 +152,7 @@ export const POST = withAuth(async ({ request, auth }) => {
         if (!serverRow || clampedUpdatedAt > serverRow.updatedAt) {
           const rowWithoutUserId: Record<string, any> = { ...op.row };
           delete rowWithoutUserId.userId;
+          nullifyUndefined(rowWithoutUserId);
 
           const writeValues: Record<string, any> = {
             ...rowWithoutUserId,
@@ -146,31 +161,29 @@ export const POST = withAuth(async ({ request, auth }) => {
           };
 
           const { id: _id, ...setValues } = writeValues;
-          const p = (drizzleDb as any)
-            .insert(table)
-            .values(writeValues)
-            .onConflictDoUpdate({
-              target: (table as any).id,
-              set: setValues,
-            })
-            .then(() => {
-              accepted.push({
-                queueId: op.queueId,
-                serverUpdatedAt: clampedUpdatedAt,
+          try {
+            await (drizzleDb as any)
+              .insert(table)
+              .values(writeValues)
+              .onConflictDoUpdate({
+                target: (table as any).id,
+                set: setValues,
               });
-            })
-            .catch((err: unknown) => {
-              console.error(
-                `[sync/push] Op failed: table=${tableName} id=${op.row.id}`,
-                err,
-              );
-              rejected.push({
-                queueId: op.queueId,
-                tableName,
-                error: err instanceof Error ? err.message : String(err),
-              });
+            accepted.push({
+              queueId: op.queueId,
+              serverUpdatedAt: clampedUpdatedAt,
             });
-          upsertPromises.push(p);
+          } catch (err: unknown) {
+            console.error(
+              `[sync/push] Op failed: table=${tableName} id=${op.row.id}`,
+              err,
+            );
+            rejected.push({
+              queueId: op.queueId,
+              tableName,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
           continue;
         }
 
@@ -179,8 +192,6 @@ export const POST = withAuth(async ({ request, auth }) => {
           serverUpdatedAt: serverRow.updatedAt,
         });
       }
-
-      await Promise.all(upsertPromises);
     }
 
     return NextResponse.json({ accepted, rejected });

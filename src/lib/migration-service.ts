@@ -4,7 +4,7 @@ import type { PushOp } from "@/lib/sync-payload";
 import { useMigrationStore } from "@/stores/migration-store";
 import { useSettingsStore } from "@/stores/settings-store";
 
-const BATCH_SIZE = 500;
+const BATCH_SIZE = 100;
 const PROGRESS_KEY = "intake-tracker-migration-progress";
 const MAX_RETRIES = 3;
 

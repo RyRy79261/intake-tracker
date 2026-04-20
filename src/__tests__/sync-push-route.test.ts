@@ -295,6 +295,122 @@ describe("sync-push-route", () => {
     expect(insertCalls).toHaveLength(0);
   });
 
+  it("nullifies undefined optional fields before DB write", async () => {
+    const { POST } = await import("@/app/api/sync/push/route");
+    const row = validIntakeRow({ updatedAt: 2000 });
+    // Simulate Dexie records where optional fields are present but undefined
+    (row as Record<string, unknown>).source = undefined;
+    (row as Record<string, unknown>).note = undefined;
+    (row as Record<string, unknown>).groupId = undefined;
+    (row as Record<string, unknown>).originalInputText = undefined;
+    (row as Record<string, unknown>).groupSource = undefined;
+
+    const req = makePushRequest({
+      ops: [{ queueId: 100, tableName: "intakeRecords", op: "upsert", row }],
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      accepted: { queueId: number; serverUpdatedAt: number }[];
+      rejected: unknown[];
+    };
+    expect(body.accepted).toHaveLength(1);
+    expect(body.rejected ?? []).toHaveLength(0);
+
+    expect(insertCalls).toHaveLength(1);
+    const written = insertCalls[0]!.values;
+    // After Zod parse + nullifyUndefined, no property on the DB write
+    // payload should have value `undefined`. Drizzle converts undefined
+    // values to the SQL DEFAULT keyword, which Neon HTTP cannot handle.
+    // Properties either: exist with a non-undefined value (null is fine),
+    // or are absent entirely (Drizzle skips them, DB uses column default).
+    for (const [key, value] of Object.entries(written)) {
+      expect(value, `property "${key}" must not be undefined`).not.toBe(undefined);
+    }
+    // Non-optional fields remain as-is
+    expect(written.type).toBe("water");
+    expect(written.amount).toBe(250);
+    expect(written.deviceId).toBe("dev-A");
+  });
+
+  it("handles fully omitted optional fields (not present on row)", async () => {
+    const { POST } = await import("@/app/api/sync/push/route");
+    // Minimal intake row with only required fields
+    const now = 1_000_000_000;
+    const minimalRow: Record<string, unknown> = {
+      id: "row-minimal",
+      type: "water",
+      amount: 250,
+      timestamp: now,
+      createdAt: now,
+      updatedAt: now + 1000,
+      deletedAt: null,
+      deviceId: "dev-A",
+      timezone: "UTC",
+    };
+
+    const req = makePushRequest({
+      ops: [
+        { queueId: 101, tableName: "intakeRecords", op: "upsert", row: minimalRow },
+      ],
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      accepted: { queueId: number; serverUpdatedAt: number }[];
+      rejected: unknown[];
+    };
+    expect(body.accepted).toHaveLength(1);
+    expect(body.rejected ?? []).toHaveLength(0);
+    expect(insertCalls).toHaveLength(1);
+  });
+
+  it("processes multi-table batch with mixed optional fields", async () => {
+    const { POST } = await import("@/app/api/sync/push/route");
+    const now = 1_000_000_000;
+
+    const intakeRow = validIntakeRow({ id: "intake-1", updatedAt: now + 1000 });
+    (intakeRow as Record<string, unknown>).source = undefined;
+
+    const eatingRow: Record<string, unknown> = {
+      id: "eating-1",
+      timestamp: now,
+      createdAt: now,
+      updatedAt: now + 1000,
+      deletedAt: null,
+      deviceId: "dev-A",
+      timezone: "UTC",
+      // grams, note, groupId, originalInputText, groupSource are all optional
+    };
+
+    const req = makePushRequest({
+      ops: [
+        { queueId: 200, tableName: "intakeRecords", op: "upsert", row: intakeRow },
+        { queueId: 201, tableName: "eatingRecords", op: "upsert", row: eatingRow },
+      ],
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      accepted: { queueId: number; serverUpdatedAt: number }[];
+      rejected: unknown[];
+    };
+    expect(body.accepted).toHaveLength(2);
+    expect(body.rejected ?? []).toHaveLength(0);
+
+    // Verify both tables were written
+    expect(insertCalls).toHaveLength(2);
+    // No property on either write should be undefined
+    for (const call of insertCalls) {
+      for (const [key, value] of Object.entries(call.values)) {
+        expect(value, `property "${key}" must not be undefined`).not.toBe(undefined);
+      }
+    }
+  });
+
   it("returns accepted array with serverUpdatedAt per queueId", async () => {
     const { POST } = await import("@/app/api/sync/push/route");
     const req = makePushRequest({
