@@ -320,7 +320,7 @@ describe("sync-push-route", () => {
 
     expect(insertCalls).toHaveLength(1);
     const written = insertCalls[0]!.values;
-    // After Zod parse + nullifyUndefined, no property on the DB write
+    // After Zod parse + sanitizeRow, no property on the DB write
     // payload should have value `undefined`. Drizzle converts undefined
     // values to the SQL DEFAULT keyword, which Neon HTTP cannot handle.
     // Properties either: exist with a non-undefined value (null is fine),

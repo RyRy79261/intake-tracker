@@ -46,13 +46,30 @@ export const maxDuration = 60;
 const MAX_FUTURE_MS = 60_000;
 const SELECT_CHUNK_SIZE = 100;
 
-function nullifyUndefined(obj: Record<string, any>): Record<string, any> {
+function sanitizeRow(obj: Record<string, any>): Record<string, any> {
   for (const key of Object.keys(obj)) {
-    if (obj[key] === undefined) {
+    if (obj[key] === undefined || obj[key] === "") {
       obj[key] = null;
     }
   }
   return obj;
+}
+
+function extractDbError(err: unknown): string {
+  if (!(err instanceof Error)) return String(err);
+  const cause = (err as any).cause;
+  if (cause instanceof Error) {
+    const code = (cause as any).code ?? "";
+    const detail = (cause as any).detail ?? "";
+    return [cause.message, code && `code=${code}`, detail && `detail=${detail}`]
+      .filter(Boolean)
+      .join(" | ");
+  }
+  const msg = err.message;
+  const pgMatch = msg.match(/ERROR:\s*(.+?)(?:\n|$)/);
+  if (pgMatch) return pgMatch[1]!;
+  if (msg.length > 300) return msg.slice(0, 300) + "…";
+  return msg;
 }
 
 export const POST = withAuth(async ({ request, auth }) => {
@@ -113,18 +130,15 @@ export const POST = withAuth(async ({ request, auth }) => {
           }
         }
       } catch (selectErr) {
+        const dbErr = extractDbError(selectErr);
         console.error(
-          `[sync/push] Batch SELECT failed: table=${tableName}`,
-          selectErr,
+          `[sync/push] Batch SELECT failed: table=${tableName} — ${dbErr}`,
         );
         for (const op of tableOps) {
           rejected.push({
             queueId: op.queueId,
             tableName,
-            error:
-              selectErr instanceof Error
-                ? selectErr.message
-                : String(selectErr),
+            error: dbErr,
           });
         }
         continue;
@@ -152,7 +166,7 @@ export const POST = withAuth(async ({ request, auth }) => {
         if (!serverRow || clampedUpdatedAt > serverRow.updatedAt) {
           const rowWithoutUserId: Record<string, any> = { ...op.row };
           delete rowWithoutUserId.userId;
-          nullifyUndefined(rowWithoutUserId);
+          sanitizeRow(rowWithoutUserId);
 
           const writeValues: Record<string, any> = {
             ...rowWithoutUserId,
@@ -174,14 +188,14 @@ export const POST = withAuth(async ({ request, auth }) => {
               serverUpdatedAt: clampedUpdatedAt,
             });
           } catch (err: unknown) {
+            const dbErr = extractDbError(err);
             console.error(
-              `[sync/push] Op failed: table=${tableName} id=${op.row.id}`,
-              err,
+              `[sync/push] Op failed: table=${tableName} id=${op.row.id} — ${dbErr}`,
             );
             rejected.push({
               queueId: op.queueId,
               tableName,
-              error: err instanceof Error ? err.message : String(err),
+              error: dbErr,
             });
           }
           continue;
