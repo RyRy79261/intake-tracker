@@ -4,11 +4,13 @@ on:
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened]
+  push:
+    branches: [main]
 
 jobs:
   pre-promote:
-    # Only run for staging-to-main promotions
-    if: github.head_ref == 'staging'
+    # Only run for staging-to-main PRs, not on push
+    if: github.event_name == 'pull_request' && github.head_ref == 'staging'
     runs-on: ubuntu-latest
     environment: Production
     steps:
@@ -53,3 +55,21 @@ jobs:
             echo "⚠ Snapshot creation failed — promotion continuing without backup"
             echo "Consider manually creating a snapshot in the Neon dashboard before merging"
           fi
+
+  migrate:
+    # Run migrations after merge to main
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: Production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - name: Run database migrations
+        run: pnpm db:migrate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
