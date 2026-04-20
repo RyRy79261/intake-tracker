@@ -4,6 +4,8 @@ import { withAuth } from "@/lib/auth-middleware";
 import { db } from "@/lib/drizzle";
 import { schemaByTableName, type TableName } from "@/lib/sync-payload";
 
+export const maxDuration = 60;
+
 const DELETION_ORDER: TableName[] = [
   "doseLogs",
   "inventoryTransactions",
@@ -37,7 +39,7 @@ export const POST = withAuth(async ({ auth }) => {
     }
 
     console.log(
-      "[migration/cleanup] Deleted user rows: %s",
+      "[sync/cleanup] Deleted user rows: %s",
       Object.entries(deleted)
         .map(([t, n]) => `${t}=${n}`)
         .join(", "),
@@ -45,9 +47,11 @@ export const POST = withAuth(async ({ auth }) => {
 
     return NextResponse.json({ deleted });
   } catch (error) {
-    console.error("[migration/cleanup] Error:", error);
+    console.error("[sync/cleanup] Error:", error);
+    const message =
+      error instanceof Error ? error.message : "Unknown server error";
     return NextResponse.json(
-      { error: "Failed to clean up user data" },
+      { error: "Failed to clean up user data", detail: message },
       { status: 500 },
     );
   }
