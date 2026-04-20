@@ -51,7 +51,11 @@ vi.mock("@/lib/drizzle", () => {
         innerChain.where = vi.fn(() => {
           const whereChain: Record<string, unknown> = {};
           whereChain.orderBy = vi.fn(() => {
-            return Promise.resolve(mockRows[tableName] ?? []);
+            const orderChain: Record<string, unknown> = {};
+            orderChain.limit = vi.fn(() => {
+              return Promise.resolve(mockRows[tableName] ?? []);
+            });
+            return orderChain;
           });
           return whereChain;
         });
@@ -91,6 +95,8 @@ vi.mock("@/lib/sync-payload", async () => {
 
 vi.mock("drizzle-orm", () => ({
   eq: vi.fn((_col: unknown, _val: unknown) => ({ type: "eq" })),
+  gt: vi.fn((_col: unknown, _val: unknown) => ({ type: "gt" })),
+  and: vi.fn((..._conditions: unknown[]) => ({ type: "and" })),
 }));
 
 beforeEach(() => {
