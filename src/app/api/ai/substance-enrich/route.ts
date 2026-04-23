@@ -2,19 +2,21 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
-import { getClaudeClient, CLAUDE_MODELS } from "../_shared/claude-client";
+import { getClaudeClient, CLAUDE_MODELS, WEB_SEARCH_TOOL } from "../_shared/claude-client";
 
 /**
  * Server-side API route for substance (caffeine/alcohol) AI enrichment via Anthropic Claude.
  *
  * SECURITY:
- * - Centralized auth middleware (withAuth) handles Privy verification + whitelist
+ * - Centralized auth middleware (withAuth) handles Neon Auth cookie verification + whitelist
  * - API key stored in server environment only
  * - Rate limiting applied per IP
  * - Input validation and PII stripping via sanitizeForAI
  */
 
 // --- Zod Schemas ---
+
+export const maxDuration = 60;
 
 const SubstanceEnrichRequestSchema = z.object({
   description: z.string().min(1, "Description is required").max(500, "Description too long"),
@@ -69,12 +71,16 @@ const ALCOHOL_ENRICH_TOOL = {
 
 const CAFFEINE_SYSTEM_PROMPT = `You are a nutritional analysis assistant specializing in caffeine content estimation.
 Given a description of a caffeinated beverage or food, estimate the caffeine content.
-Respond using the caffeine_enrichment tool with caffeineMg, volumeMl, and reasoning.`;
+Respond using the caffeine_enrichment tool with caffeineMg, volumeMl, and reasoning.
+
+When to use web_search: if the item is a specific brand/product (e.g. "Mio Mio Mate Original", "Monster Energy", "Starbucks Grande Latte") where the actual label value matters, call web_search to look it up. For generic items ("black coffee", "green tea") you can estimate directly.`;
 
 const ALCOHOL_SYSTEM_PROMPT = `You are a nutritional analysis assistant specializing in alcohol content estimation.
 Given a description of an alcoholic beverage, estimate the number of standard drinks and volume.
 A standard drink contains approximately 14g (0.6 oz) of pure alcohol.
-Respond using the alcohol_enrichment tool with standardDrinks, volumeMl, and reasoning.`;
+Respond using the alcohol_enrichment tool with standardDrinks, volumeMl, and reasoning.
+
+When to use web_search: if the item is a specific brand/product (e.g. "Heineken 0.0", "Jack Daniel's", "Aperol Spritz") where the actual label value matters, call web_search to look it up. For generic items ("light beer", "red wine") you can estimate directly.`;
 
 // Simple in-memory rate limiting (per IP, resets on server restart)
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
@@ -155,16 +161,19 @@ export const POST = withAuth(async ({ request, auth }) => {
       : `Estimate standard drinks and volume for: "${sanitized}". Return standardDrinks, volumeMl, and reasoning.`;
 
     const response = await client.messages.create({
-      model: CLAUDE_MODELS.fast,
-      max_tokens: 512,
+      model: CLAUDE_MODELS.quality,
+      max_tokens: 1024,
       system: systemPrompt,
-      tools: [tool],
+      tools: [WEB_SEARCH_TOOL, tool],
       tool_choice: { type: "tool", name: tool.name },
       messages: [{ role: "user", content: userPrompt }],
     });
 
-    const toolBlock = response.content.find(b => b.type === "tool_use");
-    if (!toolBlock || toolBlock.type !== "tool_use") {
+    const toolBlock = response.content.find(
+      (b): b is Extract<typeof b, { type: "tool_use" }> =>
+        b.type === "tool_use" && b.name === tool.name
+    );
+    if (!toolBlock) {
       return NextResponse.json(
         { error: "AI response format invalid", fallbackToManual: true },
         { status: 422 }
@@ -181,11 +190,13 @@ export const POST = withAuth(async ({ request, auth }) => {
     }
 
     return NextResponse.json(validated.data);
-  } catch (error) {
-    console.error("Substance enrich error:", error);
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    const status = (error as { status?: number }).status;
+    console.error("Substance enrich error:", msg, status ? `(HTTP ${status})` : "");
     return NextResponse.json(
-      { error: "Failed to process request" },
-      { status: 502 }
+      { error: "Failed to process request", detail: msg },
+      { status: status === 401 ? 503 : 502 }
     );
   }
 });

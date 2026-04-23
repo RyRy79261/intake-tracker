@@ -2,6 +2,8 @@ import { db } from "./db";
 import type { IntakeRecord, EatingRecord, SubstanceRecord } from "./db";
 import { ok, err, type ServiceResult } from "./service-result";
 import { syncFields } from "./utils";
+import { enqueueInsideTx } from "./sync-queue";
+import { schedulePush } from "./sync-engine";
 
 const COMPOSABLE_TABLES = [db.intakeRecords, db.eatingRecords, db.substanceRecords] as const;
 
@@ -60,7 +62,7 @@ export async function addComposableEntry(
     let eatingId: string | undefined;
     let substanceId: string | undefined;
 
-    await db.transaction("rw", [...COMPOSABLE_TABLES], async () => {
+    await db.transaction("rw", [...COMPOSABLE_TABLES, db._syncQueue], async () => {
       // ── Eating record ──
       if (input.eating) {
         const id = crypto.randomUUID();
@@ -76,6 +78,7 @@ export async function addComposableEntry(
           ...fields,
         };
         await db.eatingRecords.add(record);
+        await enqueueInsideTx("eatingRecords", id, "upsert");
       }
 
       // ── Intake records ──
@@ -95,6 +98,7 @@ export async function addComposableEntry(
             ...fields,
           };
           await db.intakeRecords.add(record);
+          await enqueueInsideTx("intakeRecords", id, "upsert");
         }
       }
 
@@ -114,14 +118,13 @@ export async function addComposableEntry(
           aiEnriched: false,
           timestamp: ts,
           groupId,
-          // originalInputText goes on substance if no eating record
           ...(!input.eating && input.originalInputText !== undefined && { originalInputText: input.originalInputText }),
           ...(input.groupSource !== undefined && { groupSource: input.groupSource }),
           ...fields,
         };
         await db.substanceRecords.add(record);
+        await enqueueInsideTx("substanceRecords", id, "upsert");
 
-        // If substance has volumeMl, create a linked water intake record
         if (input.substance.volumeMl) {
           const waterId = crypto.randomUUID();
           intakeIds.push(waterId);
@@ -137,12 +140,11 @@ export async function addComposableEntry(
             ...fields,
           };
           await db.intakeRecords.add(waterRecord);
+          await enqueueInsideTx("intakeRecords", waterId, "upsert");
         }
       }
 
       // ── Substance records (plural — multi-substance presets, per D-11) ──
-      // NOTE: substances path does NOT auto-create water intake.
-      // Water is handled explicitly via intakes[] when using multi-substance presets.
       if (input.substances) {
         for (const sub of input.substances) {
           const id = crypto.randomUUID();
@@ -162,10 +164,12 @@ export async function addComposableEntry(
             ...fields,
           };
           await db.substanceRecords.add(record);
+          await enqueueInsideTx("substanceRecords", id, "upsert");
         }
       }
     });
 
+    schedulePush();
     const result: ComposableEntryResult = { groupId, intakeIds, substanceIds };
     if (eatingId !== undefined) result.eatingId = eatingId;
     if (substanceId !== undefined) result.substanceId = substanceId;
@@ -184,18 +188,26 @@ export async function deleteEntryGroup(
     let deletedCount = 0;
     const now = Date.now();
 
-    await db.transaction("rw", [...COMPOSABLE_TABLES], async () => {
+    const tableNameMap = {
+      intakeRecords: "intakeRecords" as const,
+      eatingRecords: "eatingRecords" as const,
+      substanceRecords: "substanceRecords" as const,
+    };
+
+    await db.transaction("rw", [...COMPOSABLE_TABLES, db._syncQueue], async () => {
       for (const table of COMPOSABLE_TABLES) {
         const records = await table.where("groupId").equals(groupId).toArray();
         for (const record of records) {
           if (record.deletedAt === null) {
             await table.update(record.id, { deletedAt: now, updatedAt: now });
+            await enqueueInsideTx(tableNameMap[table.name as keyof typeof tableNameMap], record.id, "upsert");
             deletedCount++;
           }
         }
       }
     });
 
+    schedulePush();
     return ok({ deletedCount });
   } catch (e) {
     return err("Failed to delete entry group", e);
@@ -211,18 +223,26 @@ export async function undoDeleteEntryGroup(
     let restoredCount = 0;
     const now = Date.now();
 
-    await db.transaction("rw", [...COMPOSABLE_TABLES], async () => {
+    const tableNameMap = {
+      intakeRecords: "intakeRecords" as const,
+      eatingRecords: "eatingRecords" as const,
+      substanceRecords: "substanceRecords" as const,
+    };
+
+    await db.transaction("rw", [...COMPOSABLE_TABLES, db._syncQueue], async () => {
       for (const table of COMPOSABLE_TABLES) {
         const records = await table.where("groupId").equals(groupId).toArray();
         for (const record of records) {
           if (record.deletedAt !== null) {
             await table.update(record.id, { deletedAt: null, updatedAt: now });
+            await enqueueInsideTx(tableNameMap[table.name as keyof typeof tableNameMap], record.id, "upsert");
             restoredCount++;
           }
         }
       }
     });
 
+    schedulePush();
     return ok({ restoredCount });
   } catch (e) {
     return err("Failed to undo delete entry group", e);
@@ -259,7 +279,11 @@ export async function deleteSingleGroupRecord(
   try {
     const now = Date.now();
     const dexieTable = db[table];
-    await dexieTable.update(id, { deletedAt: now, updatedAt: now });
+    await db.transaction("rw", [dexieTable, db._syncQueue], async () => {
+      await dexieTable.update(id, { deletedAt: now, updatedAt: now });
+      await enqueueInsideTx(table, id, "upsert");
+    });
+    schedulePush();
     return ok({ table, id });
   } catch (e) {
     return err("Failed to delete single group record", e);
@@ -275,7 +299,11 @@ export async function undoDeleteSingleRecord(
   try {
     const now = Date.now();
     const dexieTable = db[table];
-    await dexieTable.update(id, { deletedAt: null, updatedAt: now });
+    await db.transaction("rw", [dexieTable, db._syncQueue], async () => {
+      await dexieTable.update(id, { deletedAt: null, updatedAt: now });
+      await enqueueInsideTx(table, id, "upsert");
+    });
+    schedulePush();
     return ok({ table, id });
   } catch (e) {
     return err("Failed to undo delete single record", e);

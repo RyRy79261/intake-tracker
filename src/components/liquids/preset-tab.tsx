@@ -13,7 +13,6 @@ import { useSettings } from "@/hooks/use-settings";
 import { useIntake } from "@/hooks/use-intake-queries";
 import { useAddComposableEntry, type ComposableEntryInput } from "@/hooks/use-composable-entry";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/components/auth-guard";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -52,7 +51,6 @@ export function PresetTab({ tab }: PresetTabProps) {
   const deletePreset = useSettingsStore((s) => s.deleteLiquidPreset);
   const addEntry = useAddComposableEntry();
   const { toast } = useToast();
-  const { getAuthHeader } = useAuth();
 
   // Water progress data
   const settings = useSettings();
@@ -183,10 +181,9 @@ export function PresetTab({ tab }: PresetTabProps) {
     setIsLookingUp(true);
     setSelectedPresetId(null);
     try {
-      const authHeaders = await getAuthHeader();
       const res = await fetch("/api/ai/substance-lookup", {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: searchText.trim(), type: aiLookupType }),
       });
       if (!res.ok) throw new Error("Lookup failed");

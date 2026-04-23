@@ -2,13 +2,13 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
-import { getClaudeClient, CLAUDE_MODELS } from "../_shared/claude-client";
+import { getClaudeClient, CLAUDE_MODELS, WEB_SEARCH_TOOL } from "../_shared/claude-client";
 
 /**
  * Server-side API route for AI parsing via Anthropic Claude.
  *
  * SECURITY:
- * - Centralized auth middleware (withAuth) handles Privy verification + whitelist
+ * - Centralized auth middleware (withAuth) handles Neon Auth cookie verification + whitelist
  * - API key stored in server environment only (never sent to client)
  * - Rate limiting applied per IP
  * - Input validation and PII stripping via sanitizeForAI
@@ -23,55 +23,57 @@ const ParseRequestSchema = z.object({
 
 const AIParseResponseSchema = z.object({
   water: z.number().min(0).max(10000).nullable(),
-  salt: z.number().min(0).max(50000).nullable(),
-  measurement_type: z.enum(["sodium", "salt"]).default("sodium"),
+  value_mg: z.number().min(0).max(50000).nullable(),
+  measurement_type: z.enum(["sodium", "salt"]),
   reasoning: z.string().max(500).optional(),
 });
 
 // --- System Prompt ---
 
-const SYSTEM_PROMPT = `You are a nutrition parsing assistant. Your job is to analyze food and drink descriptions and estimate their water and sodium (salt) content.
+const SYSTEM_PROMPT = `You are a nutrition parsing assistant. Given a food or drink description, estimate its water content and its sodium/salt content.
 
-When given a description of food or drink, respond with a JSON object containing:
+You must return two numeric fields and one unit flag:
 - water: estimated water content in milliliters (ml)
-- salt: estimated sodium content in milligrams (mg)
-- reasoning: brief explanation of your estimation
+- value_mg: the numeric content in milligrams, EITHER of sodium (Na) OR of salt (NaCl) — pick one
+- measurement_type: "sodium" if value_mg is sodium (Na) mass, "salt" if value_mg is salt (NaCl) mass
 
-Guidelines for estimation:
-- Plain water, tea, coffee (without additions): 100% of stated volume is water
-- Milk: ~87% water content
-- Juice: ~85-90% water content
-- Soft drinks: ~90% water content
-- Fresh fruits/vegetables: refer to their typical water content (e.g., watermelon 92%, cucumber 96%, apple 86%)
-- Cooked foods: estimate based on typical recipes
-- For salt/sodium, use typical nutritional data:
-  - Fresh fruits/vegetables: very low sodium (1-10mg per 100g)
-  - Processed foods: check typical sodium content
-  - A "pinch of salt": ~300-400mg
-  - Restaurant meals: typically 1000-2000mg sodium
-  - Chips/snacks: ~150-200mg per serving
+CRITICAL: sodium and salt are NOT the same. Salt (NaCl) is ~2.5× heavier than the sodium it contains. Never conflate them. If a nutrition label gives sodium, return that number with measurement_type="sodium". If it gives salt, return that with measurement_type="salt". Do not silently convert — the app does the conversion client-side.
 
-IMPORTANT: You must indicate whether you are reporting sodium content or salt (NaCl) content. Most nutritional databases report sodium. Table salt, soy sauce labels in some countries, and UK food labels typically report salt. US labels report sodium. Always specify which one you are returning.
+When to use web_search: if the item is a specific brand/product (e.g. "Mio Mio Mate Original", "Coca-Cola 330ml", "McDonald's Big Mac") where the actual label value matters, call web_search to look it up. For generic items ("glass of water", "pinch of salt") you can estimate directly.
 
-Always respond with valid JSON only, no additional text.
+Guidelines for water content:
+- Plain water, tea, coffee (no additions): 100% of stated volume
+- Milk: ~87% · Juice: ~85-90% · Soft drinks: ~90%
+- Fresh produce: watermelon ~92%, cucumber ~96%, apple ~86%
 
-Example response:
-{"water": 250, "salt": 5, "measurement_type": "sodium", "reasoning": "A glass of water (250ml) contains 250ml water and negligible sodium"}`;
+Guidelines for sodium content (when estimating, not looking up):
+- Fresh produce: 1-10 mg sodium per 100 g
+- A "pinch of salt": ~100-150 mg sodium (~300-400 mg salt)
+- Restaurant meals: typically 800-2000 mg sodium
+- Chips/snacks: 150-200 mg sodium per serving
+
+Example response for "a glass of water":
+{"water": 250, "value_mg": 5, "measurement_type": "sodium", "reasoning": "250 ml of tap water, ~5 mg sodium"}
+
+Example for "1 tsp of table salt":
+{"water": 0, "value_mg": 5700, "measurement_type": "salt", "reasoning": "1 tsp = ~5.7 g of salt (NaCl), contains ~2250 mg sodium"}`;
 
 // --- Tool Definition ---
 
+export const maxDuration = 60;
+
 const PARSE_RESULT_TOOL = {
   name: "parse_result" as const,
-  description: "Return parsed water and salt content from a food/drink description",
+  description: "Return parsed water and sodium/salt content from a food/drink description",
   input_schema: {
     type: "object" as const,
     properties: {
       water: { type: ["number", "null"], description: "Water content in ml, null if cannot estimate" },
-      salt: { type: ["number", "null"], description: "Sodium content in mg, null if cannot estimate" },
-      measurement_type: { type: "string", enum: ["sodium", "salt"], description: "Whether the 'salt' value represents sodium (Na) or salt (NaCl). sodium x 2.5 = salt." },
-      reasoning: { type: "string", description: "Brief explanation of the estimate" },
+      value_mg: { type: ["number", "null"], description: "Sodium OR salt content in mg, null if cannot estimate. The measurement_type field says which." },
+      measurement_type: { type: "string", enum: ["sodium", "salt"], description: "'sodium' if value_mg is sodium (Na) mass; 'salt' if value_mg is salt (NaCl) mass. Do not silently convert between them — salt ≈ 2.5× sodium by mass." },
+      reasoning: { type: "string", description: "Brief explanation of the estimate and which unit was used" },
     },
-    required: ["water", "salt", "measurement_type", "reasoning"],
+    required: ["water", "value_mg", "measurement_type", "reasoning"],
     additionalProperties: false,
   },
 };
@@ -128,7 +130,7 @@ export const POST = withAuth(async ({ request, auth }) => {
     const { input } = parsed.data;
 
     // User is authenticated and on whitelist (handled by withAuth)
-    console.log(`[AUDIT] AI request from user: ${auth.userId} (${auth.email || auth.wallet})`);
+    console.log(`[AUDIT] AI request from user: ${auth.userId} (${auth.email ?? "unknown"})`);
 
     let client;
     try {
@@ -153,16 +155,19 @@ export const POST = withAuth(async ({ request, auth }) => {
     console.log(`[AUDIT] AI parse request at ${new Date().toISOString()}`);
 
     const response = await client.messages.create({
-      model: CLAUDE_MODELS.fast,
-      max_tokens: 512,
+      model: CLAUDE_MODELS.quality,
+      max_tokens: 1024,
       system: SYSTEM_PROMPT,
-      tools: [PARSE_RESULT_TOOL],
+      tools: [WEB_SEARCH_TOOL, PARSE_RESULT_TOOL],
       tool_choice: { type: "tool", name: "parse_result" },
-      messages: [{ role: "user", content: `Parse the following food/drink description and estimate water and salt content:\n\n"${sanitizedInput}"` }],
+      messages: [{ role: "user", content: `Parse the following food/drink description and estimate water and sodium/salt content:\n\n"${sanitizedInput}"` }],
     });
 
-    const toolBlock = response.content.find(b => b.type === "tool_use");
-    if (!toolBlock || toolBlock.type !== "tool_use") {
+    const toolBlock = response.content.find(
+      (b): b is Extract<typeof b, { type: "tool_use" }> =>
+        b.type === "tool_use" && b.name === "parse_result"
+    );
+    if (!toolBlock) {
       return NextResponse.json(
         { error: "AI response format invalid", fallbackToManual: true },
         { status: 422 }
@@ -180,15 +185,17 @@ export const POST = withAuth(async ({ request, auth }) => {
 
     return NextResponse.json({
       water: validated.data.water,
-      salt: validated.data.salt,
+      value_mg: validated.data.value_mg,
       measurement_type: validated.data.measurement_type,
       ...(validated.data.reasoning !== undefined && { reasoning: validated.data.reasoning }),
     });
-  } catch (error) {
-    console.error("AI parse error:", error);
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    const status = (error as { status?: number }).status;
+    console.error("AI parse error:", msg, status ? `(HTTP ${status})` : "");
     return NextResponse.json(
-      { error: "Failed to process request" },
-      { status: 502 }
+      { error: "Failed to process request", detail: msg },
+      { status: status === 401 ? 503 : 502 }
     );
   }
 });

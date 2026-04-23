@@ -26,12 +26,17 @@ test.describe('Dashboard', () => {
   });
 
   test('should create composable food entry via AI parse', async ({ page }) => {
-    // Mock the AI parse endpoint to return water and salt estimates
+    // Mock the AI parse endpoint. Response schema is
+    // { water, value_mg, measurement_type, reasoning }; client does the
+    // salt→sodium conversion when measurement_type === "salt" (see
+    // src/app/api/ai/parse/route.ts). Returning measurement_type: "sodium"
+    // means value_mg lands in #eating-sodium unchanged.
     await page.route('/api/ai/parse', async route => {
       const json = {
         water: 200,
-        salt: 450,
-        reasoning: 'Bowl of soup estimated at 200ml water, 450mg sodium'
+        value_mg: 450,
+        measurement_type: 'sodium',
+        reasoning: 'Bowl of soup estimated at 200ml water, 450mg sodium',
       };
       await route.fulfill({ json });
     });

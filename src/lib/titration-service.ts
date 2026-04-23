@@ -9,6 +9,8 @@ import { ok, err, type ServiceResult } from "./service-result";
 import { syncFields } from "./utils";
 import { getDeviceTimezone, localHHMMStringToUTCMinutes } from "./timezone";
 import { buildAuditEntry } from "./audit-service";
+import { enqueueInsideTx } from "./sync-queue";
+import { schedulePush } from "./sync-engine";
 
 // ---------------------------------------------------------------------------
 // Input types
@@ -36,7 +38,8 @@ export interface TitrationEntryInput {
 // ---------------------------------------------------------------------------
 
 export async function getTitrationPlans(): Promise<TitrationPlan[]> {
-  return db.titrationPlans.orderBy("updatedAt").reverse().toArray();
+  const all = await db.titrationPlans.orderBy("updatedAt").reverse().toArray();
+  return all.filter(p => p.deletedAt === null);
 }
 
 export async function getTitrationPlanById(id: string): Promise<TitrationPlan | undefined> {
@@ -45,12 +48,12 @@ export async function getTitrationPlanById(id: string): Promise<TitrationPlan | 
 
 export async function getActiveTitrationPlans(): Promise<TitrationPlan[]> {
   const all = await db.titrationPlans.toArray();
-  return all.filter((p) => p.status === "active");
+  return all.filter((p) => p.status === "active" && p.deletedAt === null);
 }
 
 export async function getPhasesForTitrationPlan(planId: string): Promise<MedicationPhase[]> {
   const all = await db.medicationPhases.toArray();
-  return all.filter((p) => p.titrationPlanId === planId);
+  return all.filter((p) => p.titrationPlanId === planId && p.deletedAt === null);
 }
 
 export async function getConditionLabels(): Promise<string[]> {
@@ -79,7 +82,7 @@ export async function getActiveTitrationPhaseForPrescription(
     .equals(prescriptionId)
     .toArray();
   return phases.find(
-    (p) => p.type === "titration" && p.status === "active" && p.titrationPlanId,
+    (p) => p.type === "titration" && p.status === "active" && p.titrationPlanId && p.deletedAt === null,
   );
 }
 
@@ -151,21 +154,29 @@ export async function createTitrationPlan(
 
     await db.transaction(
       "rw",
-      [db.titrationPlans, db.medicationPhases, db.phaseSchedules, db.auditLogs],
+      [db.titrationPlans, db.medicationPhases, db.phaseSchedules, db.auditLogs, db._syncQueue],
       async () => {
         await db.titrationPlans.add(plan);
+        await enqueueInsideTx("titrationPlans", plan.id, "upsert");
         await db.medicationPhases.bulkAdd(phases);
+        for (const p of phases) {
+          await enqueueInsideTx("medicationPhases", p.id, "upsert");
+        }
         await db.phaseSchedules.bulkAdd(schedules);
+        for (const s of schedules) {
+          await enqueueInsideTx("phaseSchedules", s.id, "upsert");
+        }
 
-        await db.auditLogs.add(
-          buildAuditEntry("phase_started", {
-            titrationPlanId: plan.id,
-            title: plan.title,
-            prescriptionCount: input.entries.length,
-          }),
-        );
+        const auditEntry = buildAuditEntry("phase_started", {
+          titrationPlanId: plan.id,
+          title: plan.title,
+          prescriptionCount: input.entries.length,
+        });
+        await db.auditLogs.add(auditEntry);
+        await enqueueInsideTx("auditLogs", auditEntry.id, "upsert");
       },
     );
+    schedulePush();
 
     return ok(plan);
   } catch (e) {
@@ -204,9 +215,10 @@ export async function updateTitrationPlan(
 
     await db.transaction(
       "rw",
-      [db.titrationPlans, db.medicationPhases, db.phaseSchedules, db.doseLogs, db.auditLogs],
+      [db.titrationPlans, db.medicationPhases, db.phaseSchedules, db.doseLogs, db.auditLogs, db._syncQueue],
       async () => {
         await db.titrationPlans.update(plan.id, planUpdates);
+        await enqueueInsideTx("titrationPlans", plan.id, "upsert");
 
         // If entries provided, replace all phases and schedules
         if (input.entries) {
@@ -222,11 +234,18 @@ export async function updateTitrationPlan(
             oldPhaseToRx.set(phase.id, phase.prescriptionId);
           }
 
-          // Delete existing schedules and phases
+          // Soft-delete existing schedules and phases
           for (const phase of existingPhases) {
-            await db.phaseSchedules.where({ phaseId: phase.id }).delete();
+            const scheds = await db.phaseSchedules.where({ phaseId: phase.id }).toArray();
+            for (const s of scheds) {
+              await db.phaseSchedules.update(s.id, { deletedAt: now, updatedAt: now });
+              await enqueueInsideTx("phaseSchedules", s.id, "upsert");
+            }
           }
-          await db.medicationPhases.bulkDelete(existingPhases.map((p) => p.id));
+          for (const phase of existingPhases) {
+            await db.medicationPhases.update(phase.id, { deletedAt: now, updatedAt: now });
+            await enqueueInsideTx("medicationPhases", phase.id, "upsert");
+          }
 
           // Create new phases and schedules, tracking rx → new phaseId mapping
           const rxToNewPhase = new Map<string, string>();
@@ -248,10 +267,12 @@ export async function updateTitrationPlan(
               deletedAt: null,
               deviceId: sf.deviceId,
             });
+            await enqueueInsideTx("medicationPhases", phaseId, "upsert");
 
             for (const s of entry.schedules) {
+              const schedId = crypto.randomUUID();
               await db.phaseSchedules.add({
-                id: crypto.randomUUID(),
+                id: schedId,
                 phaseId,
                 time: s.time,
                 scheduleTimeUTC: localHHMMStringToUTCMinutes(s.time, tz),
@@ -264,6 +285,7 @@ export async function updateTitrationPlan(
                 deletedAt: null,
                 deviceId: sf.deviceId,
               });
+              await enqueueInsideTx("phaseSchedules", schedId, "upsert");
             }
           }
 
@@ -275,22 +297,27 @@ export async function updateTitrationPlan(
             const rxId = entry[1];
             const newPhaseId = rxToNewPhase.get(rxId);
             if (newPhaseId) {
-              await db.doseLogs
+              const logsToRemap = await db.doseLogs
                 .where("phaseId")
                 .equals(oldPhaseId)
-                .modify({ phaseId: newPhaseId, updatedAt: now });
+                .toArray();
+              for (const dl of logsToRemap) {
+                await db.doseLogs.update(dl.id, { phaseId: newPhaseId, updatedAt: now });
+                await enqueueInsideTx("doseLogs", dl.id, "upsert");
+              }
             }
           }
         }
 
-        await db.auditLogs.add(
-          buildAuditEntry("titration_plan_updated", {
-            titrationPlanId: plan.id,
-            title: input.title ?? plan.title,
-          }),
-        );
+        const auditEntry = buildAuditEntry("titration_plan_updated", {
+          titrationPlanId: plan.id,
+          title: input.title ?? plan.title,
+        });
+        await db.auditLogs.add(auditEntry);
+        await enqueueInsideTx("auditLogs", auditEntry.id, "upsert");
       },
     );
+    schedulePush();
 
     const updated = await db.titrationPlans.get(plan.id);
     return ok(updated!);
@@ -307,7 +334,7 @@ export async function activateTitrationPlan(
 
     await db.transaction(
       "rw",
-      [db.titrationPlans, db.medicationPhases, db.auditLogs],
+      [db.titrationPlans, db.medicationPhases, db.auditLogs, db._syncQueue],
       async () => {
         const plan = await db.titrationPlans.get(planId);
         if (!plan) throw new Error("Titration plan not found");
@@ -317,6 +344,7 @@ export async function activateTitrationPlan(
           status: "active",
           updatedAt: now,
         });
+        await enqueueInsideTx("titrationPlans", planId, "upsert");
 
         // Activate all pending phases for this plan
         const planPhases = await db.medicationPhases.toArray();
@@ -330,17 +358,19 @@ export async function activateTitrationPlan(
             startDate: now,
             updatedAt: now,
           });
+          await enqueueInsideTx("medicationPhases", phase.id, "upsert");
         }
 
-        await db.auditLogs.add(
-          buildAuditEntry("phase_activated", {
-            titrationPlanId: planId,
-            title: plan.title,
-            phasesActivated: titrationPhases.length,
-          }),
-        );
+        const auditEntry = buildAuditEntry("phase_activated", {
+          titrationPlanId: planId,
+          title: plan.title,
+          phasesActivated: titrationPhases.length,
+        });
+        await db.auditLogs.add(auditEntry);
+        await enqueueInsideTx("auditLogs", auditEntry.id, "upsert");
       },
     );
+    schedulePush();
 
     return ok(undefined);
   } catch (e) {
@@ -356,7 +386,7 @@ export async function completeTitrationPlan(
 
     await db.transaction(
       "rw",
-      [db.titrationPlans, db.medicationPhases, db.phaseSchedules, db.auditLogs],
+      [db.titrationPlans, db.medicationPhases, db.phaseSchedules, db.auditLogs, db._syncQueue],
       async () => {
         const plan = await db.titrationPlans.get(planId);
         if (!plan) throw new Error("Titration plan not found");
@@ -386,15 +416,19 @@ export async function completeTitrationPlan(
           ) ?? maintenancePhases[0];
 
           if (maintenancePhase) {
-            // Delete old maintenance schedules and replace with titration's
+            // Soft-delete old maintenance schedules and replace with titration's
             const oldSchedules = await db.phaseSchedules
               .where("phaseId")
               .equals(maintenancePhase.id)
               .toArray();
-            await db.phaseSchedules.bulkDelete(oldSchedules.map((s) => s.id));
+            for (const os of oldSchedules) {
+              await db.phaseSchedules.update(os.id, { deletedAt: now, updatedAt: now });
+              await enqueueInsideTx("phaseSchedules", os.id, "upsert");
+            }
 
             // Copy titration schedules to maintenance
             const tz = getDeviceTimezone();
+            const sf = syncFields();
             const newSchedules: PhaseSchedule[] = titSchedules.map((s) => ({
               id: crypto.randomUUID(),
               phaseId: maintenancePhase.id,
@@ -407,9 +441,12 @@ export async function completeTitrationPlan(
               createdAt: now,
               updatedAt: now,
               deletedAt: null,
-              deviceId: syncFields().deviceId,
+              deviceId: sf.deviceId,
             }));
             await db.phaseSchedules.bulkAdd(newSchedules);
+            for (const ns of newSchedules) {
+              await enqueueInsideTx("phaseSchedules", ns.id, "upsert");
+            }
 
             // Re-activate maintenance if it was completed
             await db.medicationPhases.update(maintenancePhase.id, {
@@ -418,6 +455,7 @@ export async function completeTitrationPlan(
               foodInstruction: titPhase.foodInstruction,
               updatedAt: now,
             });
+            await enqueueInsideTx("medicationPhases", maintenancePhase.id, "upsert");
           }
 
           // Mark titration phase as completed
@@ -426,6 +464,7 @@ export async function completeTitrationPlan(
             endDate: now,
             updatedAt: now,
           });
+          await enqueueInsideTx("medicationPhases", titPhase.id, "upsert");
         }
 
         // Mark the plan as completed
@@ -433,16 +472,18 @@ export async function completeTitrationPlan(
           status: "completed",
           updatedAt: now,
         });
+        await enqueueInsideTx("titrationPlans", planId, "upsert");
 
-        await db.auditLogs.add(
-          buildAuditEntry("phase_completed", {
-            titrationPlanId: planId,
-            title: plan.title,
-            action: "titration_completed_and_promoted",
-          }),
-        );
+        const auditEntry = buildAuditEntry("phase_completed", {
+          titrationPlanId: planId,
+          title: plan.title,
+          action: "titration_completed_and_promoted",
+        });
+        await db.auditLogs.add(auditEntry);
+        await enqueueInsideTx("auditLogs", auditEntry.id, "upsert");
       },
     );
+    schedulePush();
 
     return ok(undefined);
   } catch (e) {
@@ -458,7 +499,7 @@ export async function cancelTitrationPlan(
 
     await db.transaction(
       "rw",
-      [db.titrationPlans, db.medicationPhases, db.auditLogs],
+      [db.titrationPlans, db.medicationPhases, db.auditLogs, db._syncQueue],
       async () => {
         const plan = await db.titrationPlans.get(planId);
         if (!plan) throw new Error("Titration plan not found");
@@ -476,6 +517,7 @@ export async function cancelTitrationPlan(
               endDate: now,
               updatedAt: now,
             });
+            await enqueueInsideTx("medicationPhases", phase.id, "upsert");
           }
         }
 
@@ -499,6 +541,7 @@ export async function cancelTitrationPlan(
               status: "active",
               updatedAt: now,
             });
+            await enqueueInsideTx("medicationPhases", latest.id, "upsert");
           }
         }
 
@@ -506,16 +549,18 @@ export async function cancelTitrationPlan(
           status: "cancelled",
           updatedAt: now,
         });
+        await enqueueInsideTx("titrationPlans", planId, "upsert");
 
-        await db.auditLogs.add(
-          buildAuditEntry("phase_completed", {
-            titrationPlanId: planId,
-            title: plan.title,
-            action: "titration_cancelled",
-          }),
-        );
+        const auditEntry = buildAuditEntry("phase_completed", {
+          titrationPlanId: planId,
+          title: plan.title,
+          action: "titration_cancelled",
+        });
+        await db.auditLogs.add(auditEntry);
+        await enqueueInsideTx("auditLogs", auditEntry.id, "upsert");
       },
     );
+    schedulePush();
 
     return ok(undefined);
   } catch (e) {
@@ -527,9 +572,10 @@ export async function deleteTitrationPlan(
   planId: string,
 ): Promise<ServiceResult<void>> {
   try {
+    const now = Date.now();
     await db.transaction(
       "rw",
-      [db.titrationPlans, db.medicationPhases, db.phaseSchedules, db.auditLogs],
+      [db.titrationPlans, db.medicationPhases, db.phaseSchedules, db.auditLogs, db._syncQueue],
       async () => {
         const allPhases = await db.medicationPhases.toArray();
         const planPhases = allPhases.filter(
@@ -537,19 +583,28 @@ export async function deleteTitrationPlan(
         );
 
         for (const phase of planPhases) {
-          await db.phaseSchedules.where("phaseId").equals(phase.id).delete();
+          const scheds = await db.phaseSchedules.where("phaseId").equals(phase.id).toArray();
+          for (const s of scheds) {
+            await db.phaseSchedules.update(s.id, { deletedAt: now, updatedAt: now });
+            await enqueueInsideTx("phaseSchedules", s.id, "upsert");
+          }
         }
-        await db.medicationPhases.bulkDelete(planPhases.map((p) => p.id));
-        await db.titrationPlans.delete(planId);
+        for (const phase of planPhases) {
+          await db.medicationPhases.update(phase.id, { deletedAt: now, updatedAt: now });
+          await enqueueInsideTx("medicationPhases", phase.id, "upsert");
+        }
+        await db.titrationPlans.update(planId, { deletedAt: now, updatedAt: now });
+        await enqueueInsideTx("titrationPlans", planId, "upsert");
 
-        await db.auditLogs.add(
-          buildAuditEntry("phase_completed", {
-            titrationPlanId: planId,
-            action: "titration_deleted",
-          }),
-        );
+        const auditEntry = buildAuditEntry("phase_completed", {
+          titrationPlanId: planId,
+          action: "titration_deleted",
+        });
+        await db.auditLogs.add(auditEntry);
+        await enqueueInsideTx("auditLogs", auditEntry.id, "upsert");
       },
     );
+    schedulePush();
 
     return ok(undefined);
   } catch (e) {

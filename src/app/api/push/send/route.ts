@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  getDueNotifications,
+  getAllSubscribedUserIds,
+  getUserTimezone,
+  getDueNotificationsForUser,
   getFollowUpNotifications,
   logSentNotification,
   deletePushSubscription,
@@ -31,67 +33,64 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     const sendPush = await getSendPush();
     const now = new Date();
-    const currentTime = now.toLocaleTimeString("en-GB", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-      timeZone: "UTC",
-    });
-    const today = now.toISOString().split("T")[0]!;
-    const dayOfWeek = now.getUTCDay();
+    const userIds = await getAllSubscribedUserIds();
 
     let totalSent = 0;
     let totalFollowUps = 0;
 
-    // --- Initial notifications ---
-    const dueRows = await getDueNotifications(currentTime, dayOfWeek, today);
+    for (const userId of userIds) {
+      const tz = await getUserTimezone(userId);
+      const localTime = now.toLocaleTimeString("en-GB", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+        timeZone: tz,
+      });
+      const localDay = new Date(
+        now.toLocaleString("en-US", { timeZone: tz })
+      ).getDay();
+      const localToday = now.toLocaleDateString("en-CA", { timeZone: tz });
 
-    for (const row of dueRows) {
-      const result = await sendPush(
-        {
-          endpoint: row.endpoint as string,
-          keys: {
-            p256dh: row.p256dh as string,
-            auth: row.auth_key as string,
-          },
-        },
-        JSON.stringify({
-          title: `Time for your ${row.time_slot} medications`,
-          body: row.medications_json as string,
-          tag: `dose-${row.time_slot}`,
-          url: "/medications?tab=schedule",
-        })
+      // --- Initial notifications ---
+      const dueRows = await getDueNotificationsForUser(
+        userId,
+        localTime,
+        localDay,
+        localToday
       );
 
-      if (result.success) {
-        await logSentNotification(
-          row.user_id as string,
-          row.time_slot as string,
-          today,
-          0
+      for (const row of dueRows) {
+        const result = await sendPush(
+          {
+            endpoint: row.endpoint as string,
+            keys: {
+              p256dh: row.p256dh as string,
+              auth: row.auth_key as string,
+            },
+          },
+          JSON.stringify({
+            title: `Time for your ${row.time_slot} medications`,
+            body: row.medications_json as string,
+            tag: `dose-${row.time_slot}`,
+            url: "/medications?tab=schedule",
+          })
         );
-        totalSent++;
-      } else if (result.statusCode === 410) {
-        await deletePushSubscription(row.user_id as string);
+
+        if (result.success) {
+          await logSentNotification(userId, row.time_slot as string, localToday, 0);
+          totalSent++;
+        } else if (result.statusCode === 410) {
+          await deletePushSubscription(userId);
+        }
       }
-    }
 
-    // --- Follow-up reminders ---
-    // Collect unique user IDs from due rows for settings lookup
-    const userIdMap: Record<string, boolean> = {};
-    for (const row of dueRows) {
-      userIdMap[row.user_id as string] = true;
-    }
-    const userIds = Object.keys(userIdMap);
-
-    // Process follow-ups per user based on their settings
-    for (const userId of userIds) {
+      // --- Follow-up reminders ---
       const settings = await getSettings(userId);
       if (!settings.enabled) continue;
 
       for (let i = 1; i <= settings.followUpCount; i++) {
         const followUpRows = await getFollowUpNotifications(
-          today,
+          localToday,
           i,
           settings.followUpIntervalMinutes
         );
@@ -116,15 +115,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           );
 
           if (result.success) {
-            await logSentNotification(
-              row.user_id as string,
-              row.time_slot as string,
-              today,
-              i
-            );
+            await logSentNotification(userId, row.time_slot as string, localToday, i);
             totalFollowUps++;
           } else if (result.statusCode === 410) {
-            await deletePushSubscription(row.user_id as string);
+            await deletePushSubscription(userId);
           }
         }
       }

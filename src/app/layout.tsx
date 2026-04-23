@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { Providers } from "./providers";
 import { UpdateNotification } from "@/components/update-notification";
+import { OfflineChip } from "@/components/sync/offline-chip";
 
 const outfit = Outfit({ 
   subsets: ["latin"],
@@ -47,6 +48,7 @@ export default function RootLayout({
         <Providers>
           <main className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
             <div className="container mx-auto px-4 py-6 max-w-lg">
+              <OfflineChip />
               {children}
             </div>
           </main>

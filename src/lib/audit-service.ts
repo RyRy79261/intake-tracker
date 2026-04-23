@@ -9,6 +9,8 @@
 
 import { db, type AuditAction, type AuditLog } from "@/lib/db";
 import { syncFields } from "@/lib/utils";
+import { writeWithSync } from "@/lib/sync-queue";
+import { schedulePush } from "@/lib/sync-engine";
 
 export type { AuditAction } from "@/lib/db";
 
@@ -40,5 +42,9 @@ export async function writeAuditLog(
   details: Record<string, unknown>,
 ): Promise<void> {
   const entry = buildAuditEntry(action, details);
-  await db.auditLogs.add(entry);
+  await writeWithSync("auditLogs", "upsert", async () => {
+    await db.auditLogs.add(entry);
+    return entry;
+  });
+  schedulePush();
 }

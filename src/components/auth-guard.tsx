@@ -1,113 +1,56 @@
 "use client";
 
-import { usePrivy } from "@privy-io/react-auth";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { LogIn, Shield, Loader2 } from "lucide-react";
+import { useSession } from "@/lib/auth-client";
 
-interface AuthGuardProps {
+/**
+ * Hook to check if the user is authenticated via Neon Auth.
+ *
+ * NOTE: Since Phase 41 D-03 (middleware hard gate), AuthGuard is nearly
+ * always redundant — unauthenticated users never reach the app shell.
+ * The hook is kept primarily for components that want to display the
+ * user's email or branch behavior on authenticated state.
+ *
+ * Per D-06, this hook NO LONGER exposes `getAuthHeader` / `getAccessToken`.
+ * Cookies carry auth automatically on same-origin fetch calls, so
+ * consumers should just call `fetch(...)` without attaching any
+ * Authorization header. Consumer call-sites are updated in plan 41-04;
+ * until then they will fail to typecheck — that breakage is documented
+ * in plan 41-02 and resolved by plan 41-04.
+ */
+export function useAuth() {
+  const { data: session, isPending } = useSession();
+
+  if (isPending) {
+    return { ready: false, authenticated: false, user: null } as const;
+  }
+
+  if (!session?.user) {
+    return { ready: true, authenticated: false, user: null } as const;
+  }
+
+  return {
+    ready: true,
+    authenticated: true,
+    user: {
+      id: session.user.id,
+      email: session.user.email,
+      name: session.user.name,
+    },
+  } as const;
+}
+
+/**
+ * AuthGuard is now a thin passthrough. The middleware.ts hard gate (D-03)
+ * handles all redirects for unauthenticated users, so any wrapping tree
+ * already sits inside an authenticated context. This component exists
+ * purely for backwards compatibility with existing call-sites; they
+ * become no-ops until they are removed in a future cleanup phase.
+ */
+export function AuthGuard({
+  children,
+}: {
   children: React.ReactNode;
   fallback?: React.ReactNode;
+}) {
+  return <>{children}</>;
 }
-
-/**
- * Protects content behind Privy authentication.
- * Shows login prompt if user is not authenticated.
- */
-export function AuthGuard({ children, fallback }: AuthGuardProps) {
-  // Skip auth entirely when Privy is not configured (dev / CI e2e)
-  if (!process.env.NEXT_PUBLIC_PRIVY_APP_ID) {
-    return <>{children}</>;
-  }
-
-  return <PrivyAuthGuard fallback={fallback}>{children}</PrivyAuthGuard>;
-}
-
-function PrivyAuthGuard({ children, fallback }: AuthGuardProps) {
-  const { ready, authenticated, login } = usePrivy();
-
-  if (!ready) {
-    return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <div className="flex items-center gap-3 text-muted-foreground">
-          <Loader2 className="w-6 h-6 animate-spin" />
-          <span>Loading...</span>
-        </div>
-      </div>
-    );
-  }
-
-  // User is authenticated - show protected content
-  if (authenticated) {
-    return <>{children}</>;
-  }
-
-  // User is not authenticated - show login prompt or fallback
-  if (fallback) {
-    return <>{fallback}</>;
-  }
-
-  return (
-    <div className="flex items-center justify-center min-h-[60vh] p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <div className="mx-auto mb-4 p-3 rounded-full bg-primary/10 w-fit">
-            <Shield className="w-8 h-8 text-primary" />
-          </div>
-          <CardTitle>Sign in Required</CardTitle>
-          <CardDescription>
-            This app requires authentication to protect your health data and API access.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Button
-            onClick={login}
-            className="w-full gap-2"
-            size="lg"
-          >
-            <LogIn className="w-5 h-5" />
-            Sign In
-          </Button>
-          <p className="text-xs text-center text-muted-foreground">
-            Only authorized accounts can access this app.
-            Contact the administrator if you need access.
-          </p>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-const noopAuth = {
-  ready: true as const,
-  authenticated: false as const,
-  user: null,
-  getAccessToken: async () => null,
-  getAuthHeader: async () => ({} as Record<string, string>),
-};
-
-/**
- * Hook to check if user is authorized (authenticated + on whitelist)
- * The whitelist check happens server-side when making API calls.
- */
-export const useAuth = process.env.NEXT_PUBLIC_PRIVY_APP_ID
-  ? function useAuth() {
-      const { ready, authenticated, user, getAccessToken } = usePrivy();
-      return {
-        ready,
-        authenticated,
-        user,
-        getAccessToken,
-        getAuthHeader: async () => {
-          try {
-            const token = await getAccessToken();
-            return token ? { Authorization: `Bearer ${token}` } : {};
-          } catch {
-            return {};
-          }
-        },
-      };
-    }
-  : function useAuth() {
-      return noopAuth;
-    };

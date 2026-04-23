@@ -7,7 +7,7 @@ export default defineConfig({
     environment: "node",
     setupFiles: ["src/__tests__/setup.ts"],
     include: ["src/**/*.test.ts"],
-    exclude: ["e2e/**", "node_modules/**", ".claude/**"],
+    exclude: ["e2e/**", "node_modules/**", ".claude/**", "src/__tests__/integration/**"],
     benchmark: {
       exclude: ["node_modules/**", ".claude/**"],
     },

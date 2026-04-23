@@ -5,6 +5,7 @@ import { motion } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { Droplets, Pill, BarChart3, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SyncStatusBadge } from "@/components/sync/sync-status-badge";
 
 const NAV_ITEMS = [
   { path: "/", icon: Droplets, label: "Intake", title: "Intake Tracker", subtitle: "Daily budget tracking" },
@@ -36,6 +37,7 @@ export function AppHeader({
       <div>
         <h1 className="text-2xl font-bold tracking-tight">{current.title}</h1>
         <p className="text-sm text-muted-foreground">{current.subtitle}</p>
+        <SyncStatusBadge />
       </div>
       <div className="flex items-center gap-1">
         {NAV_ITEMS.map((item) => {

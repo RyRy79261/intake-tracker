@@ -1,7 +1,8 @@
-// Only load next-pwa in production to avoid ajv@8 polluting the module cache
-// during lint/dev (which breaks ESLint's ajv@6)
-// Also skip on Vercel preview/staging deploys to prevent stale SW caching
-const withPWA = process.env.NODE_ENV === 'production' && process.env.VERCEL_ENV !== 'preview'
+// PWA (service-worker generation) is production-only.
+// Dev and preview deploys get a self-destructing SW via rewrite (see rewrites()).
+const isPWAEnabled = process.env.NODE_ENV === 'production' && process.env.VERCEL_ENV !== 'preview';
+
+const withPWA = isPWAEnabled
   ? require('next-pwa')({
       dest: 'public',
       register: true,
@@ -10,23 +11,29 @@ const withPWA = process.env.NODE_ENV === 'production' && process.env.VERCEL_ENV 
     })
   : (config) => config;
 
-// Content Security Policy for production
+// Content Security Policy — relaxed on preview deploys to allow Vercel's
+// toolbar (vercel.live injects server-side HTML that needs its client script).
+const isVercelPreview = process.env.VERCEL_ENV === 'preview';
+
+const cspDirectives = [
+  "default-src 'self'",
+  isVercelPreview
+    ? "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://vercel.live https://vercel.com"
+    : "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:" + (isVercelPreview ? " https://vercel.live https://vercel.com" : ""),
+  "font-src 'self' data:" + (isVercelPreview ? " https://vercel.live" : ""),
+  "connect-src 'self' https://api.anthropic.com https://*.neon.tech" + (isVercelPreview ? " https://vercel.live https://vercel.com wss://ws-us3.pusher.com" : ""),
+  "frame-src 'self'" + (isVercelPreview ? " https://vercel.live" : ""),
+  "frame-ancestors 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+];
+
 const securityHeaders = [
   {
     key: 'Content-Security-Policy',
-    value: [
-      "default-src 'self'",
-      // 'unsafe-eval' is required for Next.js dev mode; could be conditionally removed for production in future
-      "script-src 'self' 'unsafe-eval' 'unsafe-inline'", // Required for Next.js
-      "style-src 'self' 'unsafe-inline'", // Required for Tailwind
-      "img-src 'self' data: blob:",
-      "font-src 'self' data:",
-      "connect-src 'self' https://api.anthropic.com https://*.privy.io https://*.walletconnect.com https://*.walletconnect.org wss://*.walletconnect.org", // Anthropic Claude API + Privy Auth
-      "frame-src 'self' https://auth.privy.io", // Privy login modal
-      "frame-ancestors 'none'",
-      "base-uri 'self'",
-      "form-action 'self'",
-    ].join('; ')
+    value: cspDirectives.join('; ')
   },
   {
     key: 'X-Frame-Options',
@@ -59,6 +66,15 @@ const nextConfig = {
     NEXT_PUBLIC_APP_VERSION: packageJson.version,
     NEXT_PUBLIC_GIT_SHA: process.env.VERCEL_GIT_COMMIT_SHA || 'local',
     NEXT_PUBLIC_VERCEL_ENV: process.env.VERCEL_ENV || 'development',
+  },
+  async rewrites() {
+    // On non-production deploys, rewrite /sw.js to a self-destructing SW that
+    // clears Workbox caches and unregisters itself — breaks stale-cache loops
+    // where a previously-cached SW serves old HTML before client JS can run.
+    if (!isPWAEnabled) {
+      return [{ source: '/sw.js', destination: '/sw-kill.js' }];
+    }
+    return [];
   },
   async headers() {
     return [

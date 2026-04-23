@@ -1,20 +1,14 @@
 "use client";
 
-import { usePrivy } from "@privy-io/react-auth";
 import { Button } from "@/components/ui/button";
-import { LogIn, LogOut, User } from "lucide-react";
+import { LogOut, User } from "lucide-react";
+import { useSession } from "@/lib/auth-client";
+import { handleSignOut } from "@/lib/sign-out";
 
 export function AuthButton() {
-  if (!process.env.NEXT_PUBLIC_PRIVY_APP_ID) return null;
+  const { data: session, isPending } = useSession();
 
-  return <PrivyAuthButton />;
-}
-
-function PrivyAuthButton() {
-  const { ready, authenticated, login, logout, user } = usePrivy();
-
-  // Show nothing while Privy is initializing
-  if (!ready) {
+  if (isPending) {
     return (
       <Button variant="ghost" size="sm" disabled>
         <User className="w-4 h-4" />
@@ -22,35 +16,25 @@ function PrivyAuthButton() {
     );
   }
 
-  if (authenticated) {
-    const displayName = user?.email?.address || user?.wallet?.address?.slice(0, 8) || "User";
-    
-    return (
-      <div className="flex items-center gap-2">
-        <span className="text-sm text-muted-foreground hidden sm:inline">
-          {displayName}
-        </span>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={logout}
-          title="Sign out"
-        >
-          <LogOut className="w-4 h-4" />
-        </Button>
-      </div>
-    );
+  if (!session?.user) {
+    return null;
   }
 
+  const displayName = session.user.email ?? session.user.name ?? "User";
+
   return (
-    <Button
-      variant="outline"
-      size="sm"
-      onClick={login}
-      className="gap-2"
-    >
-      <LogIn className="w-4 h-4" />
-      <span className="hidden sm:inline">Sign In</span>
-    </Button>
+    <div className="flex items-center gap-2">
+      <span className="text-sm text-muted-foreground hidden sm:inline">
+        {displayName}
+      </span>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={handleSignOut}
+        title="Sign out"
+      >
+        <LogOut className="w-4 h-4" />
+      </Button>
+    </div>
   );
 }

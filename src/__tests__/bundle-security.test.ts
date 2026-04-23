@@ -66,4 +66,14 @@ describe.skipIf(!hasBuildArtifacts)("client bundle security", () => {
     expect(content).not.toContain("NEON_DATABASE_URL");
     expect(content).not.toContain("NEON_API_KEY");
   });
+
+  it("client bundle should not contain dev-only sync engine surfaces", () => {
+    const content = readBundleContents(staticDir);
+
+    // window.__syncEngine dev hook must be tree-shaken in production
+    expect(content).not.toContain("__syncEngine");
+
+    // Dev-only test API routes must not appear in client bundle
+    expect(content).not.toContain("/api/e2e-test/");
+  });
 });

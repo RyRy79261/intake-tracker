@@ -180,7 +180,7 @@ describe("updateSchedule", () => {
 });
 
 describe("deleteSchedule", () => {
-  it("hard-deletes the schedule record", async () => {
+  it("soft-deletes the schedule record", async () => {
     const rx = makePrescription({ id: "rx-del-sched" });
     const phase = makeMedicationPhase(rx.id, { id: "phase-del-sched" });
     const schedule = makePhaseSchedule(phase.id, { id: "sched-del-1" });
@@ -192,6 +192,7 @@ describe("deleteSchedule", () => {
     expect(result.success).toBe(true);
 
     const deleted = await db.phaseSchedules.get("sched-del-1");
-    expect(deleted).toBeUndefined();
+    expect(deleted).toBeDefined();
+    expect(deleted!.deletedAt).toBeGreaterThan(0);
   });
 });

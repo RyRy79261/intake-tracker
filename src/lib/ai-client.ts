@@ -2,46 +2,32 @@ import { logAudit } from "./audit";
 
 export interface ParsedIntake {
   water: number | null; // ml
-  salt: number | null; // mg
-  measurementType?: "sodium" | "salt"; // whether salt field is sodium (Na) or salt (NaCl)
+  valueMg: number | null; // mg of sodium OR salt — measurementType says which
+  measurementType: "sodium" | "salt";
   reasoning?: string;
 }
 
 /**
  * PRIVACY & SECURITY:
- * - Uses Privy authentication to verify user identity
- * - Server verifies user is on whitelist before processing
+ * - Uses Neon Auth cookie session (attached automatically by the browser on
+ *   same-origin fetch) to verify user identity server-side via withAuth().
+ * - Server verifies user is on the whitelist before processing.
  * - API key stored in server environment only
  * - PII patterns are stripped before AI processing
  * - All requests are audit logged
  */
 
-export async function parseIntakeWithAI(
-  input: string,
-  options?: {
-    authToken?: string; // Privy access token (legacy)
-    authHeaders?: Record<string, string>; // Auth headers from useAuth().getAuthHeader()
-  }
-): Promise<ParsedIntake> {
+export async function parseIntakeWithAI(input: string): Promise<ParsedIntake> {
   logAudit("ai_parse_request");
 
   try {
-    // Build headers with auth token
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-    };
-
-    // Add auth headers (prefer authHeaders over legacy authToken)
-    if (options?.authHeaders) {
-      Object.assign(headers, options.authHeaders);
-    } else if (options?.authToken) {
-      headers["Authorization"] = `Bearer ${options.authToken}`;
-    }
-
-    // Use server-side route (API key in env only)
+    // Use server-side route (API key in env only). Auth travels as a same-origin
+    // cookie set by Neon Auth — no manual Authorization header.
     const response = await fetch("/api/ai/parse", {
       method: "POST",
-      headers,
+      headers: {
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({ input }),
     });
 
@@ -56,7 +42,7 @@ export async function parseIntakeWithAI(
     
     return {
       water: result.water,
-      salt: result.salt,
+      valueMg: result.value_mg,
       measurementType: result.measurement_type,
       reasoning: result.reasoning,
     };

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { withAuth } from "@/lib/auth-middleware";
-import { syncDoseSchedules } from "@/lib/push-db";
+import { syncDoseSchedules, updateTimezone } from "@/lib/push-db";
 
 const SyncScheduleSchema = z.object({
   schedules: z.array(
@@ -11,6 +11,7 @@ const SyncScheduleSchema = z.object({
       medicationsJson: z.string().min(1),
     })
   ),
+  timezone: z.string().min(1).optional(),
 });
 
 export const POST = withAuth(async ({ request, auth }) => {
@@ -26,6 +27,10 @@ export const POST = withAuth(async ({ request, auth }) => {
     }
 
     await syncDoseSchedules(auth.userId!, parsed.data.schedules);
+
+    if (parsed.data.timezone) {
+      await updateTimezone(auth.userId!, parsed.data.timezone);
+    }
 
     return NextResponse.json({ ok: true, count: parsed.data.schedules.length });
   } catch (error) {

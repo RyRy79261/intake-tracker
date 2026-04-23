@@ -294,6 +294,24 @@ export interface SubstanceRecord {
   groupSource?: string; // "ai_food_parse" | "ai_substance_lookup" | "manual"
 }
 
+/** Sync queue op-log row (Dexie v16+, Phase 43 D-01).
+ *  `id` is auto-increment (++id). `op: 'delete'` exists for future hard-delete paths
+ *  but is unused in the P43 pilot (soft-deletes go through upsert with deletedAt set). */
+export interface SyncQueueRow {
+  id?: number;
+  tableName: string;
+  recordId: string;
+  op: "upsert" | "delete";
+  enqueuedAt: number;
+  attempts: number;
+}
+
+/** Per-table pull cursor (Dexie v16+, Phase 43 D-07). Singleton per tableName. */
+export interface SyncMetaRow {
+  tableName: string;
+  lastPulledUpdatedAt: number;
+}
+
 const db = new Dexie("IntakeTrackerDB") as Dexie & {
   intakeRecords: EntityTable<IntakeRecord, "id">;
   auditLogs: EntityTable<AuditLog, "id">;
@@ -311,6 +329,8 @@ const db = new Dexie("IntakeTrackerDB") as Dexie & {
   doseLogs: EntityTable<DoseLog, "id">;
   substanceRecords: EntityTable<SubstanceRecord, "id">;
   titrationPlans: EntityTable<TitrationPlan, "id">;
+  _syncQueue: EntityTable<SyncQueueRow, "id">;
+  _syncMeta: EntityTable<SyncMetaRow, "tableName">;
 };
 
 // Version 10: Consolidated schema with sync-readiness fields, compound indexes,
@@ -630,6 +650,35 @@ db.version(15).stores({
   auditLogs:               "id, [action+timestamp], timestamp, action",
   substanceRecords:        "id, [type+timestamp], type, timestamp, source, sourceRecordId, groupId, updatedAt",
   titrationPlans:          "id, conditionLabel, status, updatedAt",
+});
+
+// Version 16: Add _syncQueue (op-log) and _syncMeta (cursor map) tables
+// to support the bidirectional sync engine (Phase 43, D-15).
+// No changes to the 16 data tables — their createdAt/updatedAt/deletedAt/
+// deviceId sync scaffolding (Dexie v10) is already sufficient.
+// Dexie requires the FULL schema per version; omission drops a store.
+db.version(16).stores({
+  // --- REPEAT all v15 stores verbatim (PITFALL 5: omission drops data) ---
+  intakeRecords:           "id, [type+timestamp], timestamp, source, groupId, updatedAt",
+  weightRecords:           "id, timestamp, updatedAt",
+  bloodPressureRecords:    "id, timestamp, position, arm, updatedAt",
+  eatingRecords:           "id, timestamp, groupId, updatedAt",
+  urinationRecords:        "id, timestamp, updatedAt",
+  defecationRecords:       "id, timestamp, updatedAt",
+  prescriptions:           "id, isActive, updatedAt, createdAt",
+  medicationPhases:        "id, prescriptionId, status, type, titrationPlanId, updatedAt",
+  phaseSchedules:          "id, phaseId, time, enabled, updatedAt",
+  inventoryItems:          "id, prescriptionId, isActive, updatedAt",
+  inventoryTransactions:   "id, [inventoryItemId+timestamp], inventoryItemId, timestamp, type, updatedAt",
+  doseLogs:                "id, [prescriptionId+scheduledDate], prescriptionId, phaseId, scheduleId, scheduledDate, scheduledTime, status, updatedAt",
+  dailyNotes:              "id, date, prescriptionId, doseLogId, updatedAt",
+  auditLogs:               "id, [action+timestamp], timestamp, action",
+  substanceRecords:        "id, [type+timestamp], type, timestamp, source, sourceRecordId, groupId, updatedAt",
+  titrationPlans:          "id, conditionLabel, status, updatedAt",
+  // --- NEW in v16 ---
+  // `++id` = auto-increment; `[tableName+recordId]` = compound index for coalesce (D-04)
+  _syncQueue:              "++id, [tableName+recordId], tableName, enqueuedAt",
+  _syncMeta:               "tableName",
 });
 
 export { db };

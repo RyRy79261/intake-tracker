@@ -1,7 +1,6 @@
 "use client";
 
 import { useMutation } from "@tanstack/react-query";
-import { useAuth } from "@/components/auth-guard";
 import { useSettingsStore } from "@/stores/settings-store";
 
 export interface MedicineSearchResult {
@@ -23,14 +22,12 @@ export interface MedicineSearchResult {
 }
 
 export function useMedicineSearch() {
-  const { getAuthHeader } = useAuth();
-
   return useMutation({
     mutationFn: async (query: string): Promise<MedicineSearchResult> => {
       const state = useSettingsStore.getState();
       const primary = state.primaryRegion;
       const secondary = state.secondaryRegion;
-      
+
       let countryContext: string | undefined = undefined;
       if (primary && primary !== "none") {
         countryContext = primary;
@@ -39,18 +36,11 @@ export function useMedicineSearch() {
         }
       }
 
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      };
-
-      const authHeader = await getAuthHeader();
-      if (authHeader.Authorization) {
-        headers.Authorization = authHeader.Authorization;
-      }
-
       const response = await fetch("/api/ai/medicine-search", {
         method: "POST",
-        headers,
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
           query,
           country: countryContext,

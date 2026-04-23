@@ -1,6 +1,8 @@
 import { db, type EatingRecord } from "./db";
 import { ok, err, type ServiceResult } from "./service-result";
 import { generateId, syncFields } from "./utils";
+import { writeWithSync } from "./sync-queue";
+import { schedulePush } from "./sync-engine";
 
 export async function addEatingRecord(
   timestamp?: number,
@@ -17,7 +19,11 @@ export async function addEatingRecord(
       ...syncFields(),
     };
 
-    await db.eatingRecords.add(record);
+    await writeWithSync("eatingRecords", "upsert", async () => {
+      await db.eatingRecords.add(record);
+      return record;
+    });
+    schedulePush();
     return ok(record);
   } catch (e) {
     return err("Failed to add eating record", e);
@@ -44,7 +50,11 @@ export async function getEatingRecordsByDateRange(
 export async function deleteEatingRecord(id: string): Promise<ServiceResult<void>> {
   try {
     const now = Date.now();
-    await db.eatingRecords.update(id, { deletedAt: now, updatedAt: now });
+    await writeWithSync("eatingRecords", "delete", async () => {
+      await db.eatingRecords.update(id, { deletedAt: now, updatedAt: now });
+      return { id };
+    });
+    schedulePush();
     return ok(undefined);
   } catch (e) {
     return err("Failed to delete eating record", e);
@@ -54,7 +64,11 @@ export async function deleteEatingRecord(id: string): Promise<ServiceResult<void
 export async function undoDeleteEatingRecord(id: string): Promise<ServiceResult<void>> {
   try {
     const now = Date.now();
-    await db.eatingRecords.update(id, { deletedAt: null, updatedAt: now });
+    await writeWithSync("eatingRecords", "upsert", async () => {
+      await db.eatingRecords.update(id, { deletedAt: null, updatedAt: now });
+      return { id };
+    });
+    schedulePush();
     return ok(undefined);
   } catch (e) {
     return err("Failed to undo delete eating record", e);
@@ -66,7 +80,11 @@ export async function updateEatingRecord(
   updates: { timestamp?: number; note?: string; grams?: number }
 ): Promise<ServiceResult<void>> {
   try {
-    await db.eatingRecords.update(id, updates);
+    await writeWithSync("eatingRecords", "upsert", async () => {
+      await db.eatingRecords.update(id, { ...updates, updatedAt: Date.now() });
+      return { id };
+    });
+    schedulePush();
     return ok(undefined);
   } catch (e) {
     return err("Failed to update eating record", e);

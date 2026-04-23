@@ -2,9 +2,11 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
-import { getClaudeClient, CLAUDE_MODELS } from "../_shared/claude-client";
+import { getClaudeClient, CLAUDE_MODELS, WEB_SEARCH_TOOL } from "../_shared/claude-client";
 
 // --- Zod Schemas (co-located per project convention) ---
+
+export const maxDuration = 60;
 
 const ActivePrescriptionSchema = z.object({
   genericName: z.string(),
@@ -52,7 +54,9 @@ Severity levels:
 
 Be precise and evidence-based. Err on the side of CAUTION when uncertain.
 
-Check the queried substance against EACH active medication. Include an entry for every medication, even if the severity is OK.`;
+Check the queried substance against EACH active medication. Include an entry for every medication, even if the severity is OK.
+
+Use web_search to verify current interaction data and contraindications. Prefer web-verified sources (drug interaction databases, FDA/EMA labels, pharmacology references) over your internal knowledge, especially for newer medications and substances.`;
 
 // --- Tool Definition ---
 
@@ -157,15 +161,18 @@ export const POST = withAuth(async ({ request, auth }) => {
 
     const response = await client.messages.create({
       model: CLAUDE_MODELS.quality,
-      max_tokens: 2048,
+      max_tokens: 3072,
       system: SYSTEM_PROMPT,
-      tools: [INTERACTION_CHECK_TOOL],
+      tools: [WEB_SEARCH_TOOL, INTERACTION_CHECK_TOOL],
       tool_choice: { type: "tool", name: "interaction_check_result" },
       messages: [{ role: "user", content: prompt }],
     });
 
-    const toolBlock = response.content.find(b => b.type === "tool_use");
-    if (!toolBlock || toolBlock.type !== "tool_use") {
+    const toolBlock = response.content.find(
+      (b): b is Extract<typeof b, { type: "tool_use" }> =>
+        b.type === "tool_use" && b.name === "interaction_check_result"
+    );
+    if (!toolBlock) {
       return NextResponse.json(
         { error: "AI service unavailable" },
         { status: 502 }
@@ -182,11 +189,13 @@ export const POST = withAuth(async ({ request, auth }) => {
     }
 
     return NextResponse.json(validated.data);
-  } catch (error) {
-    console.error("Interaction check error:", error);
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    const status = (error as { status?: number }).status;
+    console.error("Interaction check error:", msg, status ? `(HTTP ${status})` : "");
     return NextResponse.json(
-      { error: "Failed to check interactions" },
-      { status: 500 }
+      { error: "Failed to check interactions", detail: msg },
+      { status: status === 401 ? 503 : 500 }
     );
   }
 });

@@ -6,6 +6,7 @@ import { Droplets } from "lucide-react";
 import { NumericInput } from "@/components/ui/numeric-input";
 import { useSettings } from "@/hooks/use-settings";
 import { validateAndSave, incrementSetting, decrementSetting } from "@/lib/settings-helpers";
+import { ExpandableSettingsSection } from "@/components/settings/expandable-settings-section";
 
 export function WaterSettingsSection() {
   const settings = useSettings();
@@ -18,12 +19,12 @@ export function WaterSettingsSection() {
   }, [settings.waterIncrement, settings.waterLimit]);
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2 text-sky-600 dark:text-sky-400">
-        <Droplets className="w-4 h-4" />
-        <h3 className="font-semibold">Water Settings</h3>
-      </div>
-      <div className="space-y-3 pl-6">
+    <ExpandableSettingsSection
+      icon={Droplets}
+      label="Water Settings"
+      iconColorClass="text-sky-600 dark:text-sky-400"
+    >
+      <div className="space-y-3">
         <div className="space-y-2">
           <Label htmlFor="water-increment">Increment (ml)</Label>
           <NumericInput
@@ -59,6 +60,6 @@ export function WaterSettingsSection() {
           </p>
         </div>
       </div>
-    </div>
+    </ExpandableSettingsSection>
   );
 }
