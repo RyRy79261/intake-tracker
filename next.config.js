@@ -59,8 +59,11 @@ const securityHeaders = [
 
 const packageJson = require('./package.json');
 
+const isCapacitorBuild = !!process.env.CAPACITOR_BUILD;
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: isCapacitorBuild ? 'export' : undefined,
   reactStrictMode: true,
   env: {
     NEXT_PUBLIC_APP_VERSION: packageJson.version,
