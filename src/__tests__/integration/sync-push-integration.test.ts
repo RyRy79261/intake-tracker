@@ -852,4 +852,68 @@ describe("sync-push integration (real Postgres)", () => {
       expect(allRows[0]!.amount).toBe(999);
     });
   });
+
+  describe("users_sync auto-seeding (FK violation fix)", () => {
+    it("succeeds even when user is not yet in users_sync", async () => {
+      // Remove the pre-seeded test user from users_sync to simulate a fresh
+      // Neon Auth user whose replication hasn't completed yet.
+      await ctx.pool.query(
+        `DELETE FROM neon_auth.users_sync WHERE id = $1`,
+        ["test-user-integration"],
+      );
+
+      const rowId = crypto.randomUUID();
+      const req = makePushRequest({
+        ops: [
+          {
+            queueId: 1,
+            tableName: "intakeRecords",
+            op: "upsert",
+            row: validIntakeRow({ id: rowId }),
+          },
+        ],
+      });
+
+      const res = await POST(req);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as PushResponse;
+      expect(body.accepted).toHaveLength(1);
+      expect(body.rejected).toHaveLength(0);
+
+      // Verify the user was auto-seeded into users_sync
+      const userRows = await ctx.pool.query(
+        `SELECT id FROM neon_auth.users_sync WHERE id = $1`,
+        ["test-user-integration"],
+      );
+      expect(userRows.rows).toHaveLength(1);
+
+      // Verify the data row landed
+      const rows = await ctx.db
+        .select()
+        .from(schema.intakeRecords)
+        .where(eq(schema.intakeRecords.id, rowId));
+      expect(rows).toHaveLength(1);
+    });
+
+    it("is idempotent when user already exists in users_sync", async () => {
+      // User is already seeded by beforeAll — second upsert should be a no-op
+      const rowId = crypto.randomUUID();
+      const req = makePushRequest({
+        ops: [
+          {
+            queueId: 1,
+            tableName: "intakeRecords",
+            op: "upsert",
+            row: validIntakeRow({ id: rowId }),
+          },
+        ],
+      });
+
+      const res = await POST(req);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as PushResponse;
+      expect(body.accepted).toHaveLength(1);
+      expect(body.rejected).toHaveLength(0);
+    });
+  });
 });

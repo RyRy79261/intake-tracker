@@ -113,8 +113,8 @@ describe("sync-pull-route", () => {
     const res = await POST(makePullRequest({ cursors: {} }));
     expect(res.status).toBe(200);
 
-    // One WHERE call per table (16 tables).
-    const tableCount = Object.keys(schemaByTableName).length;
+    // One WHERE call per table (auditLogs excluded per D021).
+    const tableCount = Object.keys(schemaByTableName).length - 1;
     expect(whereCalls).toHaveLength(tableCount);
 
     // Each recorded condition is a drizzle SQL AST node (an `SQL` instance
@@ -168,6 +168,14 @@ describe("sync-pull-route", () => {
       expect(Array.from(tokens)).toContain("user_id");
       expect(Array.from(tokens)).toContain("user-test");
     }
+  });
+
+  it("excludes auditLogs from pull per D021 (push-only table)", async () => {
+    const { POST } = await import("@/app/api/sync/pull/route");
+    const res = await POST(makePullRequest({ cursors: {} }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.result).not.toHaveProperty("auditLogs");
   });
 
   it("returns rows with updated_at > cursor, ordered ASC", async () => {

@@ -348,6 +348,27 @@ describe("migration-service", () => {
     });
   });
 
+  describe("completeMigration", () => {
+    it("sets storageMode to cloud-sync, clears progress, and marks push timestamp", async () => {
+      const { completeMigration } = await import("@/lib/migration-service");
+      const { useSyncStatusStore } = await import("@/stores/sync-status-store");
+
+      expect(useSyncStatusStore.getState().lastPushedAt).toBeNull();
+
+      const before = Date.now();
+      await completeMigration();
+      const after = Date.now();
+
+      expect(useSettingsStore.getState().storageMode).toBe("cloud-sync");
+      expect(useMigrationStore.getState().phase).toBe("complete");
+
+      const pushed = useSyncStatusStore.getState().lastPushedAt;
+      expect(pushed).not.toBeNull();
+      expect(pushed).toBeGreaterThanOrEqual(before);
+      expect(pushed).toBeLessThanOrEqual(after);
+    });
+  });
+
   describe("D015 PHI compliance", () => {
     it("console.log calls never contain record content", async () => {
       const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});

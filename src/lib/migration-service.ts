@@ -3,6 +3,7 @@ import { TABLE_PUSH_ORDER, type TableName } from "@/lib/sync-topology";
 import type { PushOp } from "@/lib/sync-payload";
 import { useMigrationStore } from "@/stores/migration-store";
 import { useSettingsStore } from "@/stores/settings-store";
+import { useSyncStatusStore } from "@/stores/sync-status-store";
 
 const BATCH_SIZE = 100;
 const PROGRESS_KEY = "intake-tracker-migration-progress";
@@ -291,6 +292,7 @@ export async function resumeMigration(): Promise<void> {
 
 export async function completeMigration(): Promise<void> {
   useSettingsStore.getState().setStorageMode("cloud-sync");
+  useSyncStatusStore.getState().markPushed();
   clearProgress();
   useMigrationStore.getState().setPhase("complete");
   console.log("[migration] migration complete, storageMode set to cloud-sync");

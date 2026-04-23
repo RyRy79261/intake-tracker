@@ -79,6 +79,7 @@ vi.mock("@/lib/drizzle", () => {
           existingRows[v.id] = { ...v };
           return undefined;
         },
+        onConflictDoNothing: async () => undefined,
       }),
     }),
   };

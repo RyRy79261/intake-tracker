@@ -66,7 +66,7 @@ export const POST = withAuth(async ({ request, auth }) => {
     // note at the top of the file.
     const serverTime = Date.now();
 
-    const tableNames = Object.keys(schemaByTableName) as TableName[];
+    const tableNames = (Object.keys(schemaByTableName) as TableName[]).filter(t => t !== 'auditLogs');
     const entries = await Promise.all(
       tableNames.map(async (tableName) => {
         const cursor = parsed.data.cursors[tableName] ?? 0;

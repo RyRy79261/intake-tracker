@@ -35,6 +35,7 @@ import { NextResponse } from "next/server";
 import { eq, and, inArray } from "drizzle-orm";
 import { withAuth } from "@/lib/auth-middleware";
 import { db as drizzleDb } from "@/lib/drizzle";
+import { usersSync } from "@/db/schema";
 import {
   pushBodySchema,
   schemaByTableName,
@@ -83,6 +84,14 @@ export const POST = withAuth(async ({ request, auth }) => {
         { status: 400 },
       );
     }
+
+    // Ensure the user exists in neon_auth.users_sync before any FK-dependent
+    // inserts. Neon Auth replicates users asynchronously — on preview branches
+    // or during race conditions the row may not exist yet.
+    await drizzleDb
+      .insert(usersSync)
+      .values({ id: auth.userId! })
+      .onConflictDoNothing();
 
     const serverNow = Date.now();
     const accepted: Array<{ queueId: number; serverUpdatedAt: number }> = [];
