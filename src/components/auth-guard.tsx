@@ -16,7 +16,7 @@ interface AuthGuardProps {
 // authentication we'll keep granting access while the device is offline.
 // Lets users stay in the PWA on extended offline trips without Privy
 // access tokens silently locking them out when they refresh.
-const REMEMBERED_AUTH_KEY = "intake-tracker-last-auth";
+export const REMEMBERED_AUTH_KEY = "intake-tracker-last-auth";
 const REMEMBERED_AUTH_WINDOW_MS = 18 * 24 * 60 * 60 * 1000;
 const PRIVY_READY_OFFLINE_TIMEOUT_MS = 5000;
 
@@ -24,8 +24,14 @@ const PRIVY_READY_OFFLINE_TIMEOUT_MS = 5000;
 // screen they get the same 18-day grace as a remembered Privy auth. Intended
 // for offline trips when Privy can't reach its servers; remove once a more
 // permanent offline-auth story is in place.
-const BYPASS_KEY = "intake-tracker-bypass-auth";
+export const BYPASS_KEY = "intake-tracker-bypass-auth";
 const DEFAULT_BYPASS_CODE = "meowmeowmeow";
+
+// URL escape hatch: visiting any page with `?bypass=CODE` activates the
+// bypass and strips the query param. Works when every other button in the
+// UI is dead (e.g. offline + expired Privy session + disabled logout), so
+// users can always recover without clearing site data.
+const BYPASS_QUERY_PARAM = "bypass";
 
 function getBypassCode(): string {
   return process.env.NEXT_PUBLIC_BYPASS_CODE || DEFAULT_BYPASS_CODE;
@@ -43,6 +49,18 @@ function isBypassActive(): boolean {
 function activateBypass(): void {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(BYPASS_KEY, String(Date.now()));
+}
+
+/**
+ * Clears local auth state (remembered Privy timestamp + bypass flag) so the
+ * next render of AuthGuard falls through to the sign-in card. Callable from
+ * logout flows — lets users reach the bypass form offline, since Privy's
+ * own logout() can't complete without the network.
+ */
+export function clearLocalAuthState(): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(REMEMBERED_AUTH_KEY);
+  window.localStorage.removeItem(BYPASS_KEY);
 }
 
 function readRememberedAuthTimestamp(): number | null {
@@ -93,8 +111,26 @@ function PrivyAuthGuard({ children, fallback }: AuthGuardProps) {
     }
   }, [authenticated]);
 
-  // Re-renders the guard when the bypass is activated from the sign-in card.
+  // Re-renders the guard when the bypass is activated from the sign-in card
+  // or from the `?bypass=CODE` URL escape hatch.
   const [bypassTick, setBypassTick] = useState(0);
+
+  // URL escape hatch: `?bypass=CODE` activates bypass on any page load.
+  // Strips the param from the URL so the code doesn't stick around in
+  // history/share targets after activation.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    const code = url.searchParams.get(BYPASS_QUERY_PARAM);
+    if (!code) return;
+    if (code === getBypassCode()) {
+      activateBypass();
+      setBypassTick((n) => n + 1);
+    }
+    url.searchParams.delete(BYPASS_QUERY_PARAM);
+    const cleaned = url.pathname + (url.search ? url.search : "") + url.hash;
+    window.history.replaceState(null, "", cleaned);
+  }, []);
 
   const effectivelyReady = ready || readyTimedOut;
 
