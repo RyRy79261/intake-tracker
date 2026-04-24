@@ -1,6 +1,7 @@
 // Only load next-pwa in production to avoid ajv@8 polluting the module cache
 // during lint/dev (which breaks ESLint's ajv@6)
 // Also skip on Vercel preview/staging deploys to prevent stale SW caching
+const packageJson = require('./package.json');
 const defaultRuntimeCaching = require('next-pwa/cache');
 
 // Default next-pwa cache TTLs are 24h for HTML/JS/CSS/images, which would
@@ -60,6 +61,21 @@ const runtimeCaching = defaultRuntimeCaching.map((entry) => {
   return options === entry.options ? entry : { ...entry, options };
 });
 
+// Static App Router pages whose HTML we precache so a fresh PWA install can
+// load them offline immediately, without first having to refresh each page
+// over the network. Keep this list aligned with the static (○) routes in
+// `pnpm build` output; dynamic routes can't be precached here.
+const PRECACHED_PAGES = ['/', '/medications', '/history', '/analytics', '/settings'];
+
+// Bust the precache when the deployed commit changes so users pick up new
+// HTML on each release; falls back to the package version for local builds.
+const precacheRevision = process.env.VERCEL_GIT_COMMIT_SHA || packageJson.version;
+
+const additionalManifestEntries = PRECACHED_PAGES.map((url) => ({
+  url,
+  revision: precacheRevision,
+}));
+
 const withPWA = process.env.NODE_ENV === 'production' && process.env.VERCEL_ENV !== 'preview'
   ? require('next-pwa')({
       dest: 'public',
@@ -67,6 +83,13 @@ const withPWA = process.env.NODE_ENV === 'production' && process.env.VERCEL_ENV 
       skipWaiting: true,
       customWorkerDir: 'worker',
       runtimeCaching,
+      // Backfill the runtime "others" cache on App Router link navigations so
+      // a later refresh of that page hits the cache. Without this, tapping a
+      // link only stores the RSC payload, leaving the bare URL uncached.
+      cacheOnFrontEndNav: true,
+      // Precache the static page HTML so the PWA works offline on first launch
+      // even before the user has visited each page online.
+      additionalManifestEntries,
       // Precaches /offline and serves it when navigation requests fail and
       // nothing matched in the runtime cache (e.g. first offline visit to a
       // page the user hasn't opened before).
@@ -115,8 +138,6 @@ const securityHeaders = [
     value: 'max-age=63072000; includeSubDomains; preload'
   }
 ];
-
-const packageJson = require('./package.json');
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
