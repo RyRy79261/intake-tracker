@@ -10,56 +10,78 @@ function getBypassCode(): string {
   return process.env.NEXT_PUBLIC_BYPASS_CODE || DEFAULT_BYPASS_CODE;
 }
 
+function activateBypass(): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(BYPASS_KEY, String(Date.now()));
+}
+
 /**
- * Belt-and-suspenders SW registration + early-boot URL bypass trigger.
+ * Belt-and-suspenders SW registration + offline survival.
  *
- * Two jobs bundled here because both need to run as early as possible on
- * the client, before AuthGuard, Privy, or anything else:
+ * Runs as early as possible on every client boot, before AuthGuard or
+ * anything else that might hang:
  *
- * 1) Register `/sw.js`. next-pwa normally injects its own register script
- *    into main.js, but that has silently failed in some builds. Re-register
- *    is idempotent, so this is safe either way. Guarded to production
- *    Vercel env to match the build-time gate in next.config.js.
+ * 1) Register `/sw.js`. next-pwa injects its own register into main.js,
+ *    but that has silently failed on some builds. Idempotent if
+ *    next-pwa's auto-register is already working.
  *
- * 2) Detect `?bypass=CODE` in the URL and activate the emergency bypass
- *    grace before any AuthGuard renders. Previously this ran inside
- *    AuthGuard, but that meant a URL like `/medications?bypass=xxx`
- *    wouldn't activate it until AuthGuard mounted, and offline users who
- *    were locked out of AuthGuard couldn't reach it at all. Now it runs
- *    unconditionally on every page boot. Strips the param from the URL
- *    after activation so the code doesn't stick in history or share URLs.
+ * 2) Handle `?bypass=CODE` URL escape hatch. Previously this lived in
+ *    AuthGuard, which meant users locked out by AuthGuard couldn't
+ *    reach it. Now fires on every page, including /offline.
+ *
+ * 3) Auto-activate bypass when the device is offline. `navigator.onLine`
+ *    is imperfect but when it reports `false` we're definitely offline,
+ *    and in that case Privy absolutely cannot validate a session — so
+ *    unconditionally extending the bypass grace is strictly better than
+ *    locking the user into a dead sign-in card with nothing they can do.
  */
 export function ServiceWorkerBootstrap() {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    // URL bypass trigger — runs before SW registration side-effects matter.
+    // 1. URL bypass trigger
     const url = new URL(window.location.href);
     const code = url.searchParams.get(BYPASS_QUERY_PARAM);
     if (code) {
       if (code === getBypassCode()) {
-        window.localStorage.setItem(BYPASS_KEY, String(Date.now()));
+        activateBypass();
       }
       url.searchParams.delete(BYPASS_QUERY_PARAM);
       const cleaned = url.pathname + (url.search ? url.search : "") + url.hash;
       window.history.replaceState(null, "", cleaned);
     }
 
-    if (!("serviceWorker" in navigator)) return;
+    // 2. Auto-activate bypass when offline. `navigator.onLine === false`
+    // is the one case where we know with certainty Privy can't reach its
+    // servers; no reason to leave the user staring at a disabled login.
+    const maybeBypassOffline = () => {
+      if (typeof navigator !== "undefined" && navigator.onLine === false) {
+        activateBypass();
+      }
+    };
+    maybeBypassOffline();
+    window.addEventListener("offline", maybeBypassOffline);
 
-    const env = process.env.NEXT_PUBLIC_VERCEL_ENV;
-    if (env && env !== "production") return;
+    // 3. SW registration
+    if ("serviceWorker" in navigator) {
+      const env = process.env.NEXT_PUBLIC_VERCEL_ENV;
+      if (!env || env === "production") {
+        navigator.serviceWorker
+          .register("/sw.js", { scope: "/" })
+          .then((reg) => {
+            reg.update().catch(() => {
+              /* offline or transient — fine, next load will retry */
+            });
+          })
+          .catch((err) => {
+            console.error("[SW] Registration failed:", err);
+          });
+      }
+    }
 
-    navigator.serviceWorker
-      .register("/sw.js", { scope: "/" })
-      .then((reg) => {
-        reg.update().catch(() => {
-          /* offline or transient — fine, next load will retry */
-        });
-      })
-      .catch((err) => {
-        console.error("[SW] Registration failed:", err);
-      });
+    return () => {
+      window.removeEventListener("offline", maybeBypassOffline);
+    };
   }, []);
 
   return null;

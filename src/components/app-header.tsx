@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { motion } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { Droplets, Pill, BarChart3, Settings } from "lucide-react";
@@ -24,6 +24,7 @@ export function AppHeader({
   transitionDuration = 0.2,
 }: AppHeaderProps) {
   const pathname = usePathname();
+  const router = useRouter();
 
   const current = NAV_ITEMS.find((item) => item.path === pathname) ?? NAV_ITEMS[0];
 
@@ -50,7 +51,7 @@ export function AppHeader({
                 isActive && "bg-primary/10 text-primary"
               )}
               onClick={() => {
-                if (!isActive) navigateTo(item.path);
+                if (!isActive) navigateTo(item.path, router);
               }}
             >
               <item.icon className={cn("w-5 h-5", isActive && "text-primary")} />
