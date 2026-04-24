@@ -1,12 +1,78 @@
 // Only load next-pwa in production to avoid ajv@8 polluting the module cache
 // during lint/dev (which breaks ESLint's ajv@6)
 // Also skip on Vercel preview/staging deploys to prevent stale SW caching
+const defaultRuntimeCaching = require('next-pwa/cache');
+
+// Default next-pwa cache TTLs are 24h for HTML/JS/CSS/images, which would
+// expire mid-trip during extended offline use. Hold runtime caches for 30
+// days so the app keeps working offline for at least ~2.5 weeks. Precached
+// build assets (chunks under /_next/static) are revision-based and don't
+// expire — these overrides only affect runtime-cached entries.
+const OFFLINE_MAX_AGE_SECONDS = 30 * 24 * 60 * 60; // 30 days
+const CROSS_ORIGIN_MAX_AGE_SECONDS = 7 * 24 * 60 * 60; // 7 days
+
+// Caches whose freshness we extend for offline use. Excludes the API cache
+// because stale API responses are usually wrong (we'd rather fail clearly).
+const EXTENDED_CACHES = new Set([
+  'google-fonts-stylesheets',
+  'static-font-assets',
+  'static-image-assets',
+  'next-image',
+  'static-audio-assets',
+  'static-video-assets',
+  'static-js-assets',
+  'static-style-assets',
+  'next-data',
+  'static-data-assets',
+  'others',
+]);
+
+const runtimeCaching = defaultRuntimeCaching.map((entry) => {
+  const cacheName = entry.options && entry.options.cacheName;
+  let options = entry.options;
+
+  if (EXTENDED_CACHES.has(cacheName)) {
+    options = {
+      ...options,
+      expiration: {
+        ...(options.expiration || {}),
+        maxAgeSeconds: OFFLINE_MAX_AGE_SECONDS,
+      },
+    };
+  } else if (cacheName === 'cross-origin') {
+    options = {
+      ...options,
+      expiration: {
+        ...(options.expiration || {}),
+        maxAgeSeconds: CROSS_ORIGIN_MAX_AGE_SECONDS,
+      },
+    };
+  }
+
+  // Trim the navigation network-first timeout from the default 10s to 3s so
+  // offline launches surface the cached page (or fallback) quickly instead
+  // of hanging on a doomed fetch. Targets the same-origin "others" rule
+  // that matches HTML page navigations.
+  if (cacheName === 'others') {
+    options = { ...options, networkTimeoutSeconds: 3 };
+  }
+
+  return options === entry.options ? entry : { ...entry, options };
+});
+
 const withPWA = process.env.NODE_ENV === 'production' && process.env.VERCEL_ENV !== 'preview'
   ? require('next-pwa')({
       dest: 'public',
       register: true,
       skipWaiting: true,
       customWorkerDir: 'worker',
+      runtimeCaching,
+      // Precaches /offline and serves it when navigation requests fail and
+      // nothing matched in the runtime cache (e.g. first offline visit to a
+      // page the user hasn't opened before).
+      fallbacks: {
+        document: '/offline',
+      },
     })
   : (config) => config;
 

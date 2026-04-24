@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +9,35 @@ import { LogIn, Shield, Loader2 } from "lucide-react";
 interface AuthGuardProps {
   children: React.ReactNode;
   fallback?: React.ReactNode;
+}
+
+// Remembered-auth window: how long after the last successful Privy
+// authentication we'll keep granting access while the device is offline.
+// Lets users stay in the PWA on extended offline trips without Privy
+// access tokens silently locking them out when they refresh.
+const REMEMBERED_AUTH_KEY = "intake-tracker-last-auth";
+const REMEMBERED_AUTH_WINDOW_MS = 18 * 24 * 60 * 60 * 1000;
+const PRIVY_READY_OFFLINE_TIMEOUT_MS = 5000;
+
+function readRememberedAuthTimestamp(): number | null {
+  if (typeof window === "undefined") return null;
+  const raw = window.localStorage.getItem(REMEMBERED_AUTH_KEY);
+  if (!raw) return null;
+  const ts = Number(raw);
+  return Number.isFinite(ts) ? ts : null;
+}
+
+function isRememberedAuthValid(): boolean {
+  const ts = readRememberedAuthTimestamp();
+  if (ts === null) return false;
+  return Date.now() - ts < REMEMBERED_AUTH_WINDOW_MS;
+}
+
+function isOffline(): boolean {
+  if (typeof navigator === "undefined") return false;
+  // navigator.onLine is `false` only when the device has no network at all,
+  // which is exactly when we want to honor the remembered session.
+  return navigator.onLine === false;
 }
 
 /**
@@ -26,7 +56,27 @@ export function AuthGuard({ children, fallback }: AuthGuardProps) {
 function PrivyAuthGuard({ children, fallback }: AuthGuardProps) {
   const { ready, authenticated, login } = usePrivy();
 
-  if (!ready) {
+  // Privy can hang on `ready === false` when offline because its init calls
+  // never resolve. Treat the SDK as "ready enough" after a short delay so we
+  // can fall through to the remembered-auth check instead of spinning forever.
+  const [readyTimedOut, setReadyTimedOut] = useState(false);
+  useEffect(() => {
+    if (ready) return;
+    const t = setTimeout(() => setReadyTimedOut(true), PRIVY_READY_OFFLINE_TIMEOUT_MS);
+    return () => clearTimeout(t);
+  }, [ready]);
+
+  // Persist a timestamp on every successful authentication so an offline
+  // session knows when the user last logged in via Privy.
+  useEffect(() => {
+    if (authenticated && typeof window !== "undefined") {
+      window.localStorage.setItem(REMEMBERED_AUTH_KEY, String(Date.now()));
+    }
+  }, [authenticated]);
+
+  const effectivelyReady = ready || readyTimedOut;
+
+  if (!effectivelyReady) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
         <div className="flex items-center gap-3 text-muted-foreground">
@@ -39,6 +89,12 @@ function PrivyAuthGuard({ children, fallback }: AuthGuardProps) {
 
   // User is authenticated - show protected content
   if (authenticated) {
+    return <>{children}</>;
+  }
+
+  // Offline grace: if Privy can't validate (or hasn't become ready) but the
+  // device is offline and we recently authenticated, keep the user in.
+  if (isOffline() && isRememberedAuthValid()) {
     return <>{children}</>;
   }
 
