@@ -6,6 +6,7 @@ import { PrivyProvider } from "@privy-io/react-auth";
 import { ThemeProvider, useTheme } from "next-themes";
 import { PinGateProvider } from "@/hooks/use-pin-gate";
 import { ErrorBoundary } from "@/components/error-boundary";
+import { ServiceWorkerBootstrap } from "@/components/service-worker-bootstrap";
 import { initStockRecalculation } from "@/lib/inventory-service";
 import { useTimezoneDetection } from "@/hooks/use-timezone-detection";
 import { TimezoneChangeDialog } from "@/components/medications/timezone-change-dialog";
@@ -118,6 +119,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     // This allows the app to work in development without Privy setup
     return (
       <ErrorBoundary>
+        <ServiceWorkerBootstrap />
         <QueryClientProvider client={queryClient}>
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
             <PinGateProvider><TimezoneGuard>{children}</TimezoneGuard></PinGateProvider>
@@ -129,6 +131,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <ErrorBoundary>
+      <ServiceWorkerBootstrap />
       <QueryClientProvider client={queryClient}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <PrivyProviderWithTheme appId={appId} {...(clientId !== undefined && { clientId })}>
