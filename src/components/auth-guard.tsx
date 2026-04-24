@@ -59,13 +59,6 @@ function isRememberedAuthValid(): boolean {
   return Date.now() - ts < REMEMBERED_AUTH_WINDOW_MS;
 }
 
-function isOffline(): boolean {
-  if (typeof navigator === "undefined") return false;
-  // navigator.onLine is `false` only when the device has no network at all,
-  // which is exactly when we want to honor the remembered session.
-  return navigator.onLine === false;
-}
-
 /**
  * Protects content behind Privy authentication.
  * Shows login prompt if user is not authenticated.
@@ -121,9 +114,15 @@ function PrivyAuthGuard({ children, fallback }: AuthGuardProps) {
     return <>{children}</>;
   }
 
-  // Offline grace: if Privy can't validate (or hasn't become ready) but the
-  // device is offline and we recently authenticated, keep the user in.
-  if (isOffline() && isRememberedAuthValid()) {
+  // Offline / network-failure grace: if Privy never became ready within the
+  // timeout, we couldn't reach its auth servers — honor the last successful
+  // Privy login for up to REMEMBERED_AUTH_WINDOW_MS so the PWA stays usable
+  // on flaky or absent networks. We intentionally do NOT use navigator.onLine
+  // here because mobile devices routinely report online === true while the
+  // radio can't actually reach the internet (captive portals, poor signal,
+  // backgrounded PWAs), which was silently locking users out. "Privy didn't
+  // become ready in 5s" is a much more reliable signal of network trouble.
+  if (readyTimedOut && isRememberedAuthValid()) {
     return <>{children}</>;
   }
 
