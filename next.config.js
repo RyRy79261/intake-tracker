@@ -28,6 +28,21 @@ const EXTENDED_CACHES = new Set([
   'others',
 ]);
 
+// Caches where a request's query string should NOT be part of the cache key.
+// Without this, `/` and `/?bypass=foo` map to different cache entries, so the
+// emergency `?bypass=CODE` URL trigger hits a cache miss and falls through
+// to the /offline fallback — never reaching the AuthGuard effect that would
+// activate the bypass. Stripping the search string collapses both to `/`.
+const IGNORE_SEARCH_CACHES = new Set(['start-url', 'others']);
+
+const stripSearchCacheKeyPlugin = {
+  cacheKeyWillBeUsed: async ({ request }) => {
+    const url = new URL(request.url);
+    url.search = '';
+    return url.toString();
+  },
+};
+
 const runtimeCaching = defaultRuntimeCaching.map((entry) => {
   const cacheName = entry.options && entry.options.cacheName;
   let options = entry.options;
@@ -56,6 +71,15 @@ const runtimeCaching = defaultRuntimeCaching.map((entry) => {
   // that matches HTML page navigations.
   if (cacheName === 'others') {
     options = { ...options, networkTimeoutSeconds: 3 };
+  }
+
+  // Collapse query-string variants onto the same cache key so things like
+  // `/?bypass=xxx` hit the cached `/`.
+  if (IGNORE_SEARCH_CACHES.has(cacheName)) {
+    options = {
+      ...options,
+      plugins: [...(options.plugins || []), stripSearchCacheKeyPlugin],
+    };
   }
 
   return options === entry.options ? entry : { ...entry, options };

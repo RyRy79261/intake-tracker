@@ -1,11 +1,11 @@
 "use client";
 
 import { useMemo } from "react";
-import { useRouter } from "next/navigation";
 import { Lightbulb } from "lucide-react";
 import { useInsights, useTimeScopeRange } from "@/hooks/use-analytics-queries";
 import { useSettingsStore } from "@/stores/settings-store";
 import { cn } from "@/lib/utils";
+import { navigateTo } from "@/lib/navigation";
 
 const severityColors = {
   alert: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400",
@@ -14,7 +14,6 @@ const severityColors = {
 } as const;
 
 export function InsightBadge() {
-  const router = useRouter();
   const range = useTimeScopeRange("7d");
   const insights = useInsights(range);
   const isDismissed = useSettingsStore((s) => s.isDismissed);
@@ -39,7 +38,7 @@ export function InsightBadge() {
 
   return (
     <button
-      onClick={() => router.push("/analytics?tab=insights")}
+      onClick={() => navigateTo("/analytics?tab=insights")}
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors",
         severityColors[highestSeverity],
