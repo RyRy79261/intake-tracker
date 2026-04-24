@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.5.0](https://github.com/RyRy79261/intake-tracker/compare/v1.4.0...v1.5.0) (2026-04-24)
+
+
+### Features
+
+* **auth:** add temporary emergency bypass code ([1fe4419](https://github.com/RyRy79261/intake-tracker/commit/1fe4419d5f8728e51875f25e379d7f1cd570fb7c))
+
+
+### Bug Fixes
+
+* **auth:** trust Privy-timeout not navigator.onLine for offline grace ([7d8a74f](https://github.com/RyRy79261/intake-tracker/commit/7d8a74f70c4b02aed964b4bb1750869397e5c208))
+* **auth:** trust Privy-timeout not navigator.onLine for offline grace ([1b1b14c](https://github.com/RyRy79261/intake-tracker/commit/1b1b14c54a5294667f3654579fdabc8d8975bea8))
+* **auth:** unstick offline users who can't reach the bypass form ([c6c7cff](https://github.com/RyRy79261/intake-tracker/commit/c6c7cffccaecd3d2ff6240ae92d516d69721599f))
+* **auth:** unstick offline users who can't reach the bypass form ([4ed8af9](https://github.com/RyRy79261/intake-tracker/commit/4ed8af9b3ede99ab96a5808288a03f5bdd8d37a1))
+* **pwa:** auto-bypass when offline + SPA nav online ([588c420](https://github.com/RyRy79261/intake-tracker/commit/588c420bc4f5353e20229a68f822226418011a68))
+* **pwa:** auto-bypass when offline + SPA nav online ([f856082](https://github.com/RyRy79261/intake-tracker/commit/f856082aa72c80f853749ade6506ddf93e640ea2))
+* **pwa:** cache pages on link nav and precache static routes ([c98b0ae](https://github.com/RyRy79261/intake-tracker/commit/c98b0ae344c34b6535fe703640714200e8ac22d5))
+* **pwa:** cache pages on link nav and precache static routes ([d94e2c1](https://github.com/RyRy79261/intake-tracker/commit/d94e2c113a00b15f2a013a4388c2c5569ad0df63))
+* **pwa:** explicitly register /sw.js so offline actually works ([84dc82f](https://github.com/RyRy79261/intake-tracker/commit/84dc82ff4872e43d432f9efa391bfe1d948514f1))
+* **pwa:** make app usable offline for extended trips ([83e1c97](https://github.com/RyRy79261/intake-tracker/commit/83e1c97553b54e05f319d7314ae5e0b33bd55d45))
+* **pwa:** make app usable offline for extended trips ([647af1c](https://github.com/RyRy79261/intake-tracker/commit/647af1c9e26021260027ce8ddc95d6f74391781d))
+* **pwa:** make offline actually usable (SW register + nav + bypass URL) ([6c5f0cb](https://github.com/RyRy79261/intake-tracker/commit/6c5f0cb44aa8f9a7a678b1311b3e87622da618df))
+* **pwa:** nav + bypass work offline ([ad59c72](https://github.com/RyRy79261/intake-tracker/commit/ad59c72b335378e2cecc6c0c469d5daff3f66e58))
+
 ## [1.4.0](https://github.com/RyRy79261/intake-tracker/compare/v1.3.0...v1.4.0) (2026-04-11)
 
 
