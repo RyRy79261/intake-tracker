@@ -9,6 +9,7 @@ import {
   requestNotificationPermission,
   isNotificationSupported,
 } from "@/lib/push-notification-service";
+import { apiUrl } from "@/lib/api-url";
 
 function getTodayDateStr(): string {
   const now = new Date();
@@ -108,7 +109,7 @@ export function usePushScheduleSync(getAuthToken?: () => Promise<string | null>)
         }
       }
 
-      await fetch("/api/push/sync-schedule", {
+      await fetch(apiUrl("/api/push/sync-schedule"), {
         method: "POST",
         headers,
         body: JSON.stringify({ schedules: entries }),

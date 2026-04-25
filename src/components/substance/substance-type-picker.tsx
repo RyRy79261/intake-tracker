@@ -14,6 +14,7 @@ import {
 import { Loader2, Sparkles, Edit3 } from "lucide-react";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useAuth } from "@/components/auth-guard";
+import { apiUrl } from "@/lib/api-url";
 
 export interface SubstanceTypeSelection {
   name: string;
@@ -115,7 +116,7 @@ export function SubstanceTypePicker({
 
     try {
       const authHeaders = await getAuthHeader();
-      const response = await fetch("/api/ai/substance-enrich", {
+      const response = await fetch(apiUrl("/api/ai/substance-enrich"), {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify({

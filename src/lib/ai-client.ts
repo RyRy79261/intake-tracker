@@ -1,4 +1,5 @@
 import { logAudit } from "./audit";
+import { apiUrl } from "./api-url";
 
 export interface ParsedIntake {
   water: number | null; // ml
@@ -39,7 +40,7 @@ export async function parseIntakeWithAI(
     }
 
     // Use server-side route (API key in env only)
-    const response = await fetch("/api/ai/parse", {
+    const response = await fetch(apiUrl("/api/ai/parse"), {
       method: "POST",
       headers,
       body: JSON.stringify({ input }),

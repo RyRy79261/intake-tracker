@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Intake Tracker</string>
+    <string name="title_activity_main">Intake Tracker</string>
+    <string name="package_name">com.intaketracker.app</string>
+    <string name="custom_url_scheme">com.intaketracker.app</string>
+</resources>

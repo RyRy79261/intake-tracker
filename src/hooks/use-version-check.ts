@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { apiUrl } from "@/lib/api-url";
 
 const CLIENT_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || "0.0.0";
 const CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
@@ -25,7 +26,7 @@ export function useVersionCheck() {
   const checkForUpdates = useCallback(async (): Promise<boolean> => {
     setState((prev) => ({ ...prev, isChecking: true }));
     try {
-      const res = await fetch("/api/version", { cache: "no-store" });
+      const res = await fetch(apiUrl("/api/version"), { cache: "no-store" });
       if (!res.ok) return false;
 
       const data = await res.json();

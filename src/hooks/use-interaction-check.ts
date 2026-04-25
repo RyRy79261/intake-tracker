@@ -2,6 +2,7 @@ import { useState, useCallback, useRef } from "react";
 import { getCached, setCache } from "@/lib/interaction-cache";
 import { useUpdatePrescription } from "@/hooks/use-medication-queries";
 import { useAuth } from "@/components/auth-guard";
+import { apiUrl } from "@/lib/api-url";
 
 // --- Types ---
 
@@ -83,7 +84,7 @@ export function useInteractionCheck() {
 
     try {
       const authHeaders = await getAuthHeader();
-      const response = await fetch("/api/ai/interaction-check", {
+      const response = await fetch(apiUrl("/api/ai/interaction-check"), {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify(params),
@@ -144,7 +145,7 @@ export function useRefreshInteractions() {
 
       try {
         const authHeaders = await getAuthHeader();
-        const response = await fetch("/api/ai/interaction-check", {
+        const response = await fetch(apiUrl("/api/ai/interaction-check"), {
           method: "POST",
           headers: { "Content-Type": "application/json", ...authHeaders },
           body: JSON.stringify({

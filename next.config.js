@@ -100,7 +100,12 @@ const additionalManifestEntries = PRECACHED_PAGES.map((url) => ({
   revision: precacheRevision,
 }));
 
-const withPWA = process.env.NODE_ENV === 'production' && process.env.VERCEL_ENV !== 'preview'
+// Static export for the Android (Capacitor) build. Skips next-pwa (Capacitor
+// serves files from the local APK so the runtime SW caching is not needed)
+// and skips headers() (not supported with output: 'export').
+const IS_ANDROID_BUILD = process.env.BUILD_TARGET === 'android';
+
+const withPWA = (process.env.NODE_ENV === 'production' && process.env.VERCEL_ENV !== 'preview' && !IS_ANDROID_BUILD)
   ? require('next-pwa')({
       dest: 'public',
       register: true,
@@ -171,14 +176,22 @@ const nextConfig = {
     NEXT_PUBLIC_GIT_SHA: process.env.VERCEL_GIT_COMMIT_SHA || 'local',
     NEXT_PUBLIC_VERCEL_ENV: process.env.VERCEL_ENV || 'development',
   },
-  async headers() {
-    return [
-      {
-        source: '/:path*',
-        headers: securityHeaders,
-      },
-    ];
-  },
+  ...(IS_ANDROID_BUILD
+    ? {
+        output: 'export',
+        images: { unoptimized: true },
+        trailingSlash: true,
+      }
+    : {
+        async headers() {
+          return [
+            {
+              source: '/:path*',
+              headers: securityHeaders,
+            },
+          ];
+        },
+      }),
 };
 
 module.exports = withPWA(nextConfig);
