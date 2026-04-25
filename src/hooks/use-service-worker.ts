@@ -259,11 +259,23 @@ export function useServiceWorker() {
   // Function to apply the update. Returns a status object so callers can
   // distinguish "activated a waiting worker" from "nothing to apply" or
   // "underlying SW call threw" instead of swallowing the outcome silently.
+  // Reads the registration directly from the SW container so the callback
+  // identity stays stable across unrelated state changes.
   const applyUpdate = useCallback(async (): Promise<{
     activated: boolean;
     error?: string;
   }> => {
-    const { registration } = state;
+    if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) {
+      return { activated: false, error: "Service Worker not supported" };
+    }
+
+    let registration: ServiceWorkerRegistration | undefined;
+    try {
+      registration = await navigator.serviceWorker.getRegistration();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      return { activated: false, error: message };
+    }
 
     if (!registration?.waiting) {
       // No waiting worker. Best-effort: check for one in case the consumer
@@ -283,7 +295,7 @@ export function useServiceWorker() {
     // Tell the waiting service worker to skip waiting and take control
     registration.waiting.postMessage({ type: "SKIP_WAITING" });
     return { activated: true };
-  }, [state]);
+  }, []);
 
   // Function to manually check for updates
   const checkForUpdates = useCallback(async () => {

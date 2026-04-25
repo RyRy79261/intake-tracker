@@ -111,6 +111,7 @@ export function SubstanceTypePicker({
 
   const populateOtherDefaults = () => {
     setAiResult(null);
+    setReasoning(null);
     const otherType =
       type === "caffeine"
         ? substanceConfig.caffeine.types.find((t) => t.name === "Other")

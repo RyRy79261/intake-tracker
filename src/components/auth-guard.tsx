@@ -6,26 +6,23 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { LogIn, Shield, Loader2, AlertTriangle } from "lucide-react";
+import {
+  BYPASS_KEY,
+  BYPASS_TTL_MS,
+  REMEMBERED_AUTH_KEY,
+  getBypassCode,
+} from "@/lib/auth-bypass";
 
 interface AuthGuardProps {
   children: React.ReactNode;
   fallback?: React.ReactNode;
 }
 
-// Remembered-auth window: how long after the last successful Privy
-// authentication we'll keep granting access while the device is offline.
-// Lets users stay in the PWA on extended offline trips without Privy
-// access tokens silently locking them out when they refresh.
-export const REMEMBERED_AUTH_KEY = "intake-tracker-last-auth";
-const REMEMBERED_AUTH_WINDOW_MS = 18 * 24 * 60 * 60 * 1000;
-const PRIVY_READY_OFFLINE_TIMEOUT_MS = 5000;
+// Re-exported for backwards compatibility — the canonical source is
+// `@/lib/auth-bypass`.
+export { BYPASS_KEY, REMEMBERED_AUTH_KEY };
 
-// TEMPORARY emergency bypass: if the user enters this code on the sign-in
-// screen they get the same 18-day grace as a remembered Privy auth. Intended
-// for offline trips when Privy can't reach its servers; remove once a more
-// permanent offline-auth story is in place.
-export const BYPASS_KEY = "intake-tracker-bypass-auth";
-const DEFAULT_BYPASS_CODE = "meowmeowmeow";
+const PRIVY_READY_OFFLINE_TIMEOUT_MS = 5000;
 
 // URL escape hatch: visiting any page with `?bypass=CODE` activates the
 // bypass and strips the query param. Works when every other button in the
@@ -33,17 +30,13 @@ const DEFAULT_BYPASS_CODE = "meowmeowmeow";
 // users can always recover without clearing site data.
 const BYPASS_QUERY_PARAM = "bypass";
 
-function getBypassCode(): string {
-  return process.env.NEXT_PUBLIC_BYPASS_CODE || DEFAULT_BYPASS_CODE;
-}
-
 function isBypassActive(): boolean {
   if (typeof window === "undefined") return false;
   const raw = window.localStorage.getItem(BYPASS_KEY);
   if (!raw) return false;
   const ts = Number(raw);
   if (!Number.isFinite(ts)) return false;
-  return Date.now() - ts < REMEMBERED_AUTH_WINDOW_MS;
+  return Date.now() - ts < BYPASS_TTL_MS;
 }
 
 function activateBypass(): void {
@@ -74,7 +67,7 @@ function readRememberedAuthTimestamp(): number | null {
 function isRememberedAuthValid(): boolean {
   const ts = readRememberedAuthTimestamp();
   if (ts === null) return false;
-  return Date.now() - ts < REMEMBERED_AUTH_WINDOW_MS;
+  return Date.now() - ts < BYPASS_TTL_MS;
 }
 
 /**
@@ -105,7 +98,10 @@ function PrivyAuthGuard({ children, fallback }: AuthGuardProps) {
   useEffect(() => {
     if (ready) return;
     if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      // Already explicitly offline — skip the timer and "offline" listener
+      // entirely. The next render falls through to remembered-auth/bypass.
       setReadyTimedOut(true);
+      return;
     }
     const t = setTimeout(() => setReadyTimedOut(true), PRIVY_READY_OFFLINE_TIMEOUT_MS);
     const handleOffline = () => setReadyTimedOut(true);
@@ -165,7 +161,7 @@ function PrivyAuthGuard({ children, fallback }: AuthGuardProps) {
 
   // Offline / network-failure grace: if Privy never became ready within the
   // timeout, we couldn't reach its auth servers — honor the last successful
-  // Privy login for up to REMEMBERED_AUTH_WINDOW_MS so the PWA stays usable
+  // Privy login for up to BYPASS_TTL_MS so the PWA stays usable
   // on flaky or absent networks. We intentionally do NOT use navigator.onLine
   // here because mobile devices routinely report online === true while the
   // radio can't actually reach the internet (captive portals, poor signal,

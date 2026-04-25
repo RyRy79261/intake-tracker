@@ -1,14 +1,9 @@
 "use client";
 
 import { useEffect } from "react";
+import { BYPASS_KEY, getBypassCode } from "@/lib/auth-bypass";
 
 const BYPASS_QUERY_PARAM = "bypass";
-const BYPASS_KEY = "intake-tracker-bypass-auth";
-const DEFAULT_BYPASS_CODE = "meowmeowmeow";
-
-function getBypassCode(): string {
-  return process.env.NEXT_PUBLIC_BYPASS_CODE || DEFAULT_BYPASS_CODE;
-}
 
 function activateBypass(): void {
   if (typeof window === "undefined") return;

@@ -17,14 +17,12 @@ import {
 } from "lucide-react";
 import { useServiceWorker } from "@/hooks/use-service-worker";
 import { useOnlineStatus } from "@/hooks/use-online-status";
+import { BYPASS_KEY, REMEMBERED_AUTH_KEY } from "@/lib/auth-bypass";
 
 interface CacheEntry {
   name: string;
   size: number;
 }
-
-const BYPASS_KEY = "intake-tracker-bypass-auth";
-const REMEMBERED_AUTH_KEY = "intake-tracker-last-auth";
 
 function formatTimestamp(ts: number | null): string {
   if (!ts) return "never";
@@ -66,16 +64,17 @@ export function ServiceWorkerPanel() {
     }
     try {
       const names = await window.caches.keys();
-      const entries: CacheEntry[] = [];
-      for (const name of names) {
-        try {
-          const cache = await window.caches.open(name);
-          const keys = await cache.keys();
-          entries.push({ name, size: keys.length });
-        } catch {
-          entries.push({ name, size: 0 });
-        }
-      }
+      const entries = await Promise.all(
+        names.map(async (name): Promise<CacheEntry> => {
+          try {
+            const cache = await window.caches.open(name);
+            const keys = await cache.keys();
+            return { name, size: keys.length };
+          } catch {
+            return { name, size: 0 };
+          }
+        }),
+      );
       entries.sort((a, b) => a.name.localeCompare(b.name));
       setCaches(entries);
     } catch {
@@ -112,9 +111,13 @@ export function ServiceWorkerPanel() {
     refreshCacheList();
     refreshRegistration();
     refreshAuthState();
+  }, [refreshCacheList, refreshRegistration, refreshAuthState, registration, isRegistered]);
 
-    // Cross-tab sync: another tab activating/clearing the bypass should be
-    // reflected here without requiring the user to reopen the panel.
+  // Cross-tab sync: another tab activating/clearing the bypass should be
+  // reflected here without requiring the user to reopen the panel. Mounted
+  // once for the lifetime of the component so it isn't re-attached on every
+  // SW state change.
+  useEffect(() => {
     if (typeof window === "undefined") return;
     const handleStorage = (e: StorageEvent) => {
       if (e.key === BYPASS_KEY || e.key === REMEMBERED_AUTH_KEY || e.key === null) {
@@ -125,7 +128,10 @@ export function ServiceWorkerPanel() {
     return () => {
       window.removeEventListener("storage", handleStorage);
     };
-  }, [refreshCacheList, refreshRegistration, refreshAuthState, registration, isRegistered]);
+    // refreshAuthState is a stable useCallback (no deps), so an empty array
+    // is correct here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const runAction = useCallback(
     async (key: string, fn: () => Promise<{ success: boolean; message: string }>) => {
