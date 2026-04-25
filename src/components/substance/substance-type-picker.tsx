@@ -14,6 +14,7 @@ import {
 import { Loader2, Sparkles, Edit3 } from "lucide-react";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useAuth } from "@/components/auth-guard";
+import { isOffline } from "@/lib/ai-client";
 
 export interface SubstanceTypeSelection {
   name: string;
@@ -112,6 +113,26 @@ export function SubstanceTypePicker({
     if (!customDescription.trim()) return;
 
     setIsEnriching(true);
+
+    // Offline: skip the network call entirely and fall through to defaults.
+    if (isOffline()) {
+      setAiResult(null);
+      const otherType =
+        type === "caffeine"
+          ? substanceConfig.caffeine.types.find((t) => t.name === "Other")
+          : substanceConfig.alcohol.types.find((t) => t.name === "Other");
+
+      if (type === "caffeine" && otherType && "defaultMg" in otherType) {
+        setOverrideAmount(String(otherType.defaultMg));
+        setOverrideVolume(String(otherType.defaultVolumeMl));
+      } else if (type === "alcohol" && otherType && "defaultDrinks" in otherType) {
+        setOverrideAmount(String(otherType.defaultDrinks));
+        setOverrideVolume(String(otherType.defaultVolumeMl));
+      }
+      setIsEnriching(false);
+      setStep("other-result");
+      return;
+    }
 
     try {
       const authHeaders = await getAuthHeader();

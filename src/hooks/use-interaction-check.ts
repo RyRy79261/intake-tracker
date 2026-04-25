@@ -2,6 +2,7 @@ import { useState, useCallback, useRef } from "react";
 import { getCached, setCache } from "@/lib/interaction-cache";
 import { useUpdatePrescription } from "@/hooks/use-medication-queries";
 import { useAuth } from "@/components/auth-guard";
+import { isOffline } from "@/lib/ai-client";
 
 // --- Types ---
 
@@ -64,6 +65,13 @@ export function useInteractionCheck() {
         setIsLoading(false);
         return cached;
       }
+    }
+
+    // Offline: skip the network call. Cached lookups (above) still work.
+    if (isOffline()) {
+      setError("Offline — interaction check unavailable.");
+      setIsLoading(false);
+      return null;
     }
 
     // Abort any in-flight request
@@ -140,6 +148,7 @@ export function useRefreshInteractions() {
       genericName: string,
       activePrescriptions: ActivePrescription[]
     ) => {
+      if (isOffline()) return null;
       setIsRefreshing(true);
 
       try {

@@ -31,6 +31,7 @@ import { useSaltTotalsByGroupIds, useDeleteIntake, useUpdateIntake } from "@/hoo
 import { useEditRecord } from "@/hooks/use-edit-record";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/components/auth-guard";
+import { useOnlineStatus } from "@/hooks/use-online-status";
 import { type EatingRecord } from "@/lib/db";
 import {
   getCurrentDateTimeLocal,
@@ -53,6 +54,7 @@ const SODIUM_MULTIPLIERS: Record<SodiumSource, number> = {
 export function FoodSection() {
   const { toast } = useToast();
   const { getAuthHeader } = useAuth();
+  const isOnline = useOnlineStatus();
   const addComposableEntry = useAddComposableEntry();
 
   // ─── Mutations ────────────────────────────────────────────────────
@@ -130,6 +132,15 @@ export function FoodSection() {
     const trimmed = foodText.trim();
     if (!trimmed || isParsing) return;
 
+    if (!isOnline) {
+      toast({
+        title: "AI offline",
+        description: "Connect to the internet to parse food, or fill the fields manually.",
+        variant: "default",
+      });
+      return;
+    }
+
     setIsParsing(true);
     try {
       const authHeaders = await getAuthHeader();
@@ -163,7 +174,7 @@ export function FoodSection() {
     } finally {
       setIsParsing(false);
     }
-  }, [foodText, isParsing, toast, getAuthHeader]);
+  }, [foodText, isParsing, isOnline, toast, getAuthHeader]);
 
   const handleDetailSubmit = useCallback(async () => {
     if (isSubmitting) return;
@@ -271,8 +282,9 @@ export function FoodSection() {
         <button
           type="button"
           onClick={handleParse}
-          disabled={!foodText.trim() || isParsing}
-          aria-label="Parse food with AI"
+          disabled={!foodText.trim() || isParsing || !isOnline}
+          aria-label={isOnline ? "Parse food with AI" : "AI parse unavailable while offline"}
+          title={isOnline ? "Parse food with AI" : "AI parse unavailable while offline"}
           className={cn(
             "absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md transition-colors",
             "text-muted-foreground hover:text-orange-600 dark:hover:text-orange-400",

@@ -14,6 +14,7 @@ import { useIntake } from "@/hooks/use-intake-queries";
 import { useAddComposableEntry, type ComposableEntryInput } from "@/hooks/use-composable-entry";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/components/auth-guard";
+import { useOnlineStatus } from "@/hooks/use-online-status";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -53,6 +54,7 @@ export function PresetTab({ tab }: PresetTabProps) {
   const addEntry = useAddComposableEntry();
   const { toast } = useToast();
   const { getAuthHeader } = useAuth();
+  const isOnline = useOnlineStatus();
 
   // Water progress data
   const settings = useSettings();
@@ -180,6 +182,14 @@ export function PresetTab({ tab }: PresetTabProps) {
 
   const handleAiLookup = async () => {
     if (!searchText.trim() || isLookingUp) return;
+    if (!isOnline) {
+      toast({
+        title: "AI offline",
+        description: "Connect to the internet to look up beverages, or fill the fields manually.",
+        variant: "default",
+      });
+      return;
+    }
     setIsLookingUp(true);
     setSelectedPresetId(null);
     try {
@@ -445,9 +455,10 @@ export function PresetTab({ tab }: PresetTabProps) {
         <button
           type="button"
           onClick={handleAiLookup}
-          disabled={!searchText.trim() || isLookingUp}
+          disabled={!searchText.trim() || isLookingUp || !isOnline}
           className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-muted-foreground hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
-          aria-label="Look up substance content"
+          aria-label={isOnline ? "Look up substance content" : "AI lookup unavailable while offline"}
+          title={isOnline ? "Look up substance content" : "AI lookup unavailable while offline"}
         >
           {isLookingUp ? (
             <Loader2 className="w-4 h-4 animate-spin" />

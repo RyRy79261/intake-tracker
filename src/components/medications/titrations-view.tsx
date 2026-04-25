@@ -50,6 +50,7 @@ import {
 } from "@/hooks/use-medication-queries";
 import type { TitrationPlan, MedicationPhase, Prescription } from "@/lib/db";
 import { useAuth } from "@/components/auth-guard";
+import { isOffline } from "@/lib/ai-client";
 import {
   Plus,
   Play,
@@ -642,6 +643,7 @@ function TitrationDrawer({
       }));
 
     if (changingRx.length === 0) return;
+    if (isOffline()) return;
 
     setAiLoading(true);
     try {

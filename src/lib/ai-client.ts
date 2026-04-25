@@ -16,6 +16,17 @@ export interface ParsedIntake {
  * - All requests are audit logged
  */
 
+export class OfflineError extends Error {
+  constructor(message = "AI features require an internet connection.") {
+    super(message);
+    this.name = "OfflineError";
+  }
+}
+
+export function isOffline(): boolean {
+  return typeof navigator !== "undefined" && navigator.onLine === false;
+}
+
 export async function parseIntakeWithAI(
   input: string,
   options?: {
@@ -24,6 +35,11 @@ export async function parseIntakeWithAI(
   }
 ): Promise<ParsedIntake> {
   logAudit("ai_parse_request");
+
+  if (isOffline()) {
+    logAudit("ai_parse_error", "offline");
+    throw new OfflineError();
+  }
 
   try {
     // Build headers with auth token

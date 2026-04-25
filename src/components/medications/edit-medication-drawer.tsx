@@ -25,6 +25,7 @@ import type { Prescription, MedicationPhase } from "@/lib/db";
 import { Loader2, Plus, Clock, Pill, Edit2, Check, X, Trash2, Play } from "lucide-react";
 import { format } from "date-fns";
 import { useMedicineSearch } from "@/hooks/use-medicine-search";
+import { useOnlineStatus } from "@/hooks/use-online-status";
 
 interface PrescriptionViewDrawerProps {
   prescription: Prescription | null;
@@ -233,6 +234,7 @@ function InfoTab({ prescription }: { prescription: Prescription }) {
   const [isEditingAiData, setIsEditingAiData] = useState(false);
   const [editContraindications, setEditContraindications] = useState("");
   const [editWarnings, setEditWarnings] = useState("");
+  const isOnline = useOnlineStatus();
 
   const updatePrescription = useUpdatePrescription();
   const searchMutation = useMedicineSearch();
@@ -381,7 +383,14 @@ function InfoTab({ prescription }: { prescription: Prescription }) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h3 className="font-semibold text-sm">AI Information</h3>
-        <Button size="sm" variant="outline" className="gap-1 h-8 text-xs" onClick={handleRefresh} disabled={isRefreshing || updatePrescription.isPending}>
+        <Button
+          size="sm"
+          variant="outline"
+          className="gap-1 h-8 text-xs"
+          onClick={handleRefresh}
+          disabled={isRefreshing || updatePrescription.isPending || !isOnline}
+          title={isOnline ? "Refresh AI data" : "Offline — AI refresh unavailable"}
+        >
           {isRefreshing || updatePrescription.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Clock className="w-3 h-3" />}
           Refresh AI Data
         </Button>

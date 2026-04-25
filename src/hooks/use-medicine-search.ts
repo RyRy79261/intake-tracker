@@ -3,6 +3,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/components/auth-guard";
 import { useSettingsStore } from "@/stores/settings-store";
+import { isOffline, OfflineError } from "@/lib/ai-client";
 
 export interface MedicineSearchResult {
   brandNames: string[];
@@ -27,6 +28,9 @@ export function useMedicineSearch() {
 
   return useMutation({
     mutationFn: async (query: string): Promise<MedicineSearchResult> => {
+      if (isOffline()) {
+        throw new OfflineError("Medication search requires an internet connection.");
+      }
       const state = useSettingsStore.getState();
       const primary = state.primaryRegion;
       const secondary = state.secondaryRegion;

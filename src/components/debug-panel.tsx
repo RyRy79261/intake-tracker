@@ -39,7 +39,9 @@ import {
   Database,
   FileText,
   Package,
+  HardDriveDownload,
 } from "lucide-react";
+import { ServiceWorkerPanel } from "@/components/debug/service-worker-panel";
 
 // ---------------------------------------------------------------------------
 // Audit action options for filter
@@ -520,11 +522,39 @@ export function DebugPanel() {
         <DialogHeader>
           <DialogTitle>Debug Panel</DialogTitle>
           <DialogDescription>
-            Audit logs, stock management, and raw database records.
+            Service worker, audit logs, stock management, and raw database records.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
+          {/* Section 0: Service Worker / Offline */}
+          <Collapsible
+            open={activeSection === "sw"}
+            onOpenChange={(open) =>
+              setActiveSection(open ? "sw" : null)
+            }
+          >
+            <CollapsibleTrigger asChild>
+              <Button
+                variant="ghost"
+                className="w-full justify-between h-9 text-sm"
+              >
+                <span className="flex items-center gap-2">
+                  <HardDriveDownload className="h-4 w-4" />
+                  Service Worker &amp; Offline
+                </span>
+                {activeSection === "sw" ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-2">
+              <ServiceWorkerPanel />
+            </CollapsibleContent>
+          </Collapsible>
+
           {/* Section 1: Audit Log Viewer */}
           <Collapsible
             open={activeSection === "audit"}

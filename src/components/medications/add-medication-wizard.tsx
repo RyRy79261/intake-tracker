@@ -14,6 +14,7 @@ import { PillIcon } from "./pill-icon";
 import { useMedicineSearch, type MedicineSearchResult } from "@/hooks/use-medicine-search";
 import { useAddPrescription, usePrescriptions, useAddMedicationToPrescription, usePhasesForPrescription } from "@/hooks/use-medication-queries";
 import { useToast } from "@/hooks/use-toast";
+import { useOnlineStatus } from "@/hooks/use-online-status";
 import { Switch } from "@/components/ui/switch";
 import type { PillShape, FoodInstruction, Prescription, MedicationPhase } from "@/lib/db";
 import { ArrowLeft, ArrowRight, Search, Loader2, Check, Plus, X, AlertTriangle } from "lucide-react";
@@ -112,6 +113,7 @@ function capitalizeWords(str: string) {
 
 export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardProps) {
   const { toast } = useToast();
+  const isOnline = useOnlineStatus();
   const [step, setStep] = useState<WizardStep>("search");
   const searchMutation = useMedicineSearch();
   const addPrescriptionMutation = useAddPrescription();
@@ -538,6 +540,7 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
                 onQueryChange={setSearchQuery}
                 onSearch={handleSearch}
                 isSearching={searchMutation.isPending}
+                isOnline={isOnline}
                 result={searchResult}
                 {...(searchMutation.error?.message && { error: searchMutation.error.message })}
                 brandName={brandName}
@@ -649,14 +652,14 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
 // ── Step Components ──────────────────────────────────────────
 
 function SearchStep({
-  query, onQueryChange, onSearch, isSearching, result, error,
+  query, onQueryChange, onSearch, isSearching, isOnline, result, error,
   brandName, onBrandNameChange, genericName, onGenericNameChange,
   dosageStrength, onDosageStrengthChange,
   selectedPrescriptionId, onSelectedPrescriptionIdChange,
   existingPrescriptions, fieldErrors = {},
 }: {
   query: string; onQueryChange: (v: string) => void;
-  onSearch: () => void; isSearching: boolean;
+  onSearch: () => void; isSearching: boolean; isOnline: boolean;
   result: MedicineSearchResult | null; error?: string;
   brandName: string; onBrandNameChange: (v: string) => void;
   genericName: string; onGenericNameChange: (v: string) => void;
@@ -701,13 +704,19 @@ function SearchStep({
           />
           <Button
             onClick={onSearch}
-            disabled={isSearching || !query.trim()}
+            disabled={isSearching || !query.trim() || !isOnline}
             size="icon"
+            title={isOnline ? "Search with AI" : "AI search unavailable while offline"}
             className="shrink-0 bg-teal-600 hover:bg-teal-700"
           >
             {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
           </Button>
         </div>
+        {!isOnline && (
+          <p className="text-xs text-muted-foreground mt-1">
+            Offline — fill the fields below manually.
+          </p>
+        )}
         {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
       </div>
 

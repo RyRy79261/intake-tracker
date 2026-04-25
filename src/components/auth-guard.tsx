@@ -96,11 +96,23 @@ function PrivyAuthGuard({ children, fallback }: AuthGuardProps) {
   // Privy can hang on `ready === false` when offline because its init calls
   // never resolve. Treat the SDK as "ready enough" after a short delay so we
   // can fall through to the remembered-auth check instead of spinning forever.
-  const [readyTimedOut, setReadyTimedOut] = useState(false);
+  // When the device is explicitly offline (navigator.onLine === false — a
+  // reliable false-positive-free signal), we don't wait for the timer at all
+  // because Privy definitely cannot reach its servers and the bootstrap has
+  // already activated the bypass.
+  const [readyTimedOut, setReadyTimedOut] = useState(() => {
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return true;
+    return false;
+  });
   useEffect(() => {
     if (ready) return;
     const t = setTimeout(() => setReadyTimedOut(true), PRIVY_READY_OFFLINE_TIMEOUT_MS);
-    return () => clearTimeout(t);
+    const handleOffline = () => setReadyTimedOut(true);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener("offline", handleOffline);
+    };
   }, [ready]);
 
   // Persist a timestamp on every successful authentication so an offline
