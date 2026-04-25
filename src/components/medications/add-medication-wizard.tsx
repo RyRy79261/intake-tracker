@@ -582,6 +582,7 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
                 isExistingPrescription={selectedPrescriptionId !== "new"}
                 onRefreshAI={handleSearch}
                 isRefreshing={searchMutation.isPending}
+                isOnline={isOnline}
               />
             )}
 
@@ -871,6 +872,7 @@ function IndicationStep({
   notes, onNotesChange,
   isExistingPrescription = false,
   onRefreshAI, isRefreshing = false,
+  isOnline = true,
 }: {
   indication: string; onIndicationChange: (v: string) => void;
   contraindications: string[]; warnings: string[];
@@ -880,6 +882,7 @@ function IndicationStep({
   isExistingPrescription?: boolean;
   onRefreshAI?: () => void;
   isRefreshing?: boolean;
+  isOnline?: boolean;
 }) {
   const foodOptions: { value: FoodInstruction; label: string }[] = [
     { value: "before", label: "Before eating" },
@@ -899,7 +902,8 @@ function IndicationStep({
                   variant="ghost"
                   size="sm"
                   onClick={onRefreshAI}
-                  disabled={isRefreshing}
+                  disabled={isRefreshing || !isOnline}
+                  title={isOnline ? "AI Suggest" : "AI offline — suggestions unavailable"}
                   className="h-7 text-xs gap-1 text-teal-600"
                 >
                   {isRefreshing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Search className="w-3 h-3" />}

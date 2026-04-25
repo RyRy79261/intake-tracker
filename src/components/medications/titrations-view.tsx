@@ -51,6 +51,8 @@ import {
 import type { TitrationPlan, MedicationPhase, Prescription } from "@/lib/db";
 import { useAuth } from "@/components/auth-guard";
 import { isOffline } from "@/lib/ai-client";
+import { useToast } from "@/hooks/use-toast";
+import { useOnlineStatus } from "@/hooks/use-online-status";
 import {
   Plus,
   Play,
@@ -495,6 +497,8 @@ function TitrationDrawer({
   const createMutation = useCreateTitrationPlan();
   const updateMutation = useUpdateTitrationPlan();
   const { getAuthHeader } = useAuth();
+  const { toast } = useToast();
+  const isOnline = useOnlineStatus();
   const isEditing = editingPlan !== null;
 
   // Load existing phases for editing
@@ -643,7 +647,14 @@ function TitrationDrawer({
       }));
 
     if (changingRx.length === 0) return;
-    if (isOffline()) return;
+    if (isOffline()) {
+      toast({
+        title: "AI offline",
+        description: "Connect to the internet to generate suggestions, or write warnings manually.",
+        variant: "default",
+      });
+      return;
+    }
 
     setAiLoading(true);
     try {
@@ -847,7 +858,13 @@ function TitrationDrawer({
                 size="sm"
                 className="h-7 text-xs gap-1"
                 onClick={handleGenerateWarnings}
-                disabled={aiLoading || entries.filter((e) => e.prescriptionId).length === 0}
+                disabled={
+                  aiLoading ||
+                  !isOnline ||
+                  entries.filter((e) => e.prescriptionId).length === 0
+                }
+                aria-label={isOnline ? "AI Suggest" : "AI offline — suggestions unavailable"}
+                title={isOnline ? "AI Suggest" : "AI offline — suggestions unavailable"}
               >
                 {aiLoading ? (
                   <Loader2 className="w-3 h-3 animate-spin" />

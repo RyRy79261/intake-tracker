@@ -109,30 +109,34 @@ export function SubstanceTypePicker({
     }
   };
 
+  const populateOtherDefaults = () => {
+    setAiResult(null);
+    const otherType =
+      type === "caffeine"
+        ? substanceConfig.caffeine.types.find((t) => t.name === "Other")
+        : substanceConfig.alcohol.types.find((t) => t.name === "Other");
+
+    if (type === "caffeine" && otherType && "defaultMg" in otherType) {
+      setOverrideAmount(String(otherType.defaultMg));
+      setOverrideVolume(String(otherType.defaultVolumeMl));
+    } else if (type === "alcohol" && otherType && "defaultDrinks" in otherType) {
+      setOverrideAmount(String(otherType.defaultDrinks));
+      setOverrideVolume(String(otherType.defaultVolumeMl));
+    }
+    setStep("other-result");
+  };
+
   const handleOtherSubmit = async () => {
     if (!customDescription.trim()) return;
 
-    setIsEnriching(true);
-
-    // Offline: skip the network call entirely and fall through to defaults.
+    // Offline: skip the network call entirely (and the loading state) and
+    // fall through to defaults.
     if (isOffline()) {
-      setAiResult(null);
-      const otherType =
-        type === "caffeine"
-          ? substanceConfig.caffeine.types.find((t) => t.name === "Other")
-          : substanceConfig.alcohol.types.find((t) => t.name === "Other");
-
-      if (type === "caffeine" && otherType && "defaultMg" in otherType) {
-        setOverrideAmount(String(otherType.defaultMg));
-        setOverrideVolume(String(otherType.defaultVolumeMl));
-      } else if (type === "alcohol" && otherType && "defaultDrinks" in otherType) {
-        setOverrideAmount(String(otherType.defaultDrinks));
-        setOverrideVolume(String(otherType.defaultVolumeMl));
-      }
-      setIsEnriching(false);
-      setStep("other-result");
+      populateOtherDefaults();
       return;
     }
+
+    setIsEnriching(true);
 
     try {
       const authHeaders = await getAuthHeader();
@@ -157,40 +161,15 @@ export function SubstanceTypePicker({
           setOverrideAmount(String(data.standardDrinks ?? ""));
           setOverrideVolume(String(data.volumeMl ?? ""));
         }
+        setStep("other-result");
       } else {
-        // Fallback to defaults on error
-        setAiResult(null);
-        const otherType =
-          type === "caffeine"
-            ? substanceConfig.caffeine.types.find((t) => t.name === "Other")
-            : substanceConfig.alcohol.types.find((t) => t.name === "Other");
-
-        if (type === "caffeine" && otherType && "defaultMg" in otherType) {
-          setOverrideAmount(String(otherType.defaultMg));
-          setOverrideVolume(String(otherType.defaultVolumeMl));
-        } else if (type === "alcohol" && otherType && "defaultDrinks" in otherType) {
-          setOverrideAmount(String(otherType.defaultDrinks));
-          setOverrideVolume(String(otherType.defaultVolumeMl));
-        }
+        populateOtherDefaults();
       }
     } catch {
-      // Offline or network error -- fallback to defaults
-      setAiResult(null);
-      const otherType =
-        type === "caffeine"
-          ? substanceConfig.caffeine.types.find((t) => t.name === "Other")
-          : substanceConfig.alcohol.types.find((t) => t.name === "Other");
-
-      if (type === "caffeine" && otherType && "defaultMg" in otherType) {
-        setOverrideAmount(String(otherType.defaultMg));
-        setOverrideVolume(String(otherType.defaultVolumeMl));
-      } else if (type === "alcohol" && otherType && "defaultDrinks" in otherType) {
-        setOverrideAmount(String(otherType.defaultDrinks));
-        setOverrideVolume(String(otherType.defaultVolumeMl));
-      }
+      // Network error -- fallback to defaults
+      populateOtherDefaults();
     } finally {
       setIsEnriching(false);
-      setStep("other-result");
     }
   };
 

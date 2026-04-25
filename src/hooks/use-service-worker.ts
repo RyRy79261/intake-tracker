@@ -256,24 +256,33 @@ export function useServiceWorker() {
     };
   }, [checkForWaitingWorker, setupRegistrationListeners, registerServiceWorker]);
 
-  // Function to apply the update
-  const applyUpdate = useCallback(async () => {
+  // Function to apply the update. Returns a status object so callers can
+  // distinguish "activated a waiting worker" from "nothing to apply" or
+  // "underlying SW call threw" instead of swallowing the outcome silently.
+  const applyUpdate = useCallback(async (): Promise<{
+    activated: boolean;
+    error?: string;
+  }> => {
     const { registration } = state;
-    
+
     if (!registration?.waiting) {
-      // No waiting worker, try to check for updates
+      // No waiting worker. Best-effort: check for one in case the consumer
+      // wants to refresh state. Surface any thrown error to the caller.
       try {
         await registration?.update();
       } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown error";
         console.error("Failed to check for updates:", error);
+        return { activated: false, error: message };
       }
-      return;
+      return { activated: false };
     }
 
     setState((prev) => ({ ...prev, isUpdating: true }));
 
     // Tell the waiting service worker to skip waiting and take control
     registration.waiting.postMessage({ type: "SKIP_WAITING" });
+    return { activated: true };
   }, [state]);
 
   // Function to manually check for updates

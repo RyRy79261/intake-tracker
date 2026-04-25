@@ -112,6 +112,19 @@ export function ServiceWorkerPanel() {
     refreshCacheList();
     refreshRegistration();
     refreshAuthState();
+
+    // Cross-tab sync: another tab activating/clearing the bypass should be
+    // reflected here without requiring the user to reopen the panel.
+    if (typeof window === "undefined") return;
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === BYPASS_KEY || e.key === REMEMBERED_AUTH_KEY || e.key === null) {
+        refreshAuthState();
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+    };
   }, [refreshCacheList, refreshRegistration, refreshAuthState, registration, isRegistered]);
 
   const runAction = useCallback(
@@ -174,7 +187,16 @@ export function ServiceWorkerPanel() {
 
   const handleApplyUpdate = () =>
     runAction("apply-update", async () => {
-      await applyUpdate();
+      const result = await applyUpdate();
+      if (result.error) {
+        return { success: false, message: `Failed to apply update: ${result.error}` };
+      }
+      if (!result.activated) {
+        return {
+          success: false,
+          message: "No waiting worker to activate — already up to date.",
+        };
+      }
       return {
         success: true,
         message: "Update applied. The page will reload when the new worker takes control.",
@@ -253,6 +275,12 @@ export function ServiceWorkerPanel() {
     typeof navigator !== "undefined" && "serviceWorker" in navigator;
   const cacheSupported = typeof window !== "undefined" && "caches" in window;
   const totalCacheEntries = caches.reduce((acc, c) => acc + c.size, 0);
+  const safeOrigin = typeof window !== "undefined" ? window.location.origin : "";
+  const displayedScriptUrl = scriptUrl
+    ? safeOrigin
+      ? scriptUrl.replace(safeOrigin, "")
+      : scriptUrl
+    : "—";
 
   return (
     <div className="space-y-3">
@@ -304,9 +332,7 @@ export function ServiceWorkerPanel() {
           <span className="text-muted-foreground">Scope:</span>
           <span className="truncate">{scope || "—"}</span>
           <span className="text-muted-foreground">Script:</span>
-          <span className="truncate">
-            {scriptUrl ? scriptUrl.replace(window.location.origin, "") : "—"}
-          </span>
+          <span className="truncate">{displayedScriptUrl}</span>
           <span className="text-muted-foreground">Caches:</span>
           <span>
             {caches.length} ({totalCacheEntries} entries)

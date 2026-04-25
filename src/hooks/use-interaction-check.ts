@@ -68,7 +68,10 @@ export function useInteractionCheck() {
     }
 
     // Offline: skip the network call. Cached lookups (above) still work.
+    // Clear any previous result so consumers don't render stale `data`
+    // alongside the offline error.
     if (isOffline()) {
+      setData(null);
       setError("Offline — interaction check unavailable.");
       setIsLoading(false);
       return null;
