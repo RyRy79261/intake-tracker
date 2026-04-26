@@ -256,25 +256,74 @@ export function useServiceWorker() {
     };
   }, [checkForWaitingWorker, setupRegistrationListeners, registerServiceWorker]);
 
-  // Function to apply the update
-  const applyUpdate = useCallback(async () => {
-    const { registration } = state;
-    
-    if (!registration?.waiting) {
-      // No waiting worker, try to check for updates
+  // Function to apply the update. Returns a status object so callers can
+  // distinguish "activated a waiting worker" from "nothing to apply" or
+  // "underlying SW call threw" instead of swallowing the outcome silently.
+  // Reads the registration directly from the SW container so the callback
+  // identity stays stable across unrelated state changes.
+  const applyUpdate = useCallback(async (): Promise<{
+    activated: boolean;
+    noRegistration?: boolean;
+    updateInProgress?: boolean;
+    error?: string;
+  }> => {
+    if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) {
+      return { activated: false, error: "Service Worker not supported" };
+    }
+
+    let registration: ServiceWorkerRegistration | undefined;
+    try {
+      registration = await navigator.serviceWorker.getRegistration();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      return { activated: false, error: message };
+    }
+
+    // Distinguish "we don't even have a registration" from "registered but
+    // nothing waiting". Without this, calling registration?.update() on
+    // undefined silently does nothing and we'd lie that the check
+    // succeeded.
+    if (!registration) {
+      return { activated: false, noRegistration: true };
+    }
+
+    if (!registration.waiting) {
+      // No waiting worker. Best-effort: check for one in case the consumer
+      // wants to refresh state. Surface any thrown error to the caller.
       try {
-        await registration?.update();
+        await registration.update();
       } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown error";
         console.error("Failed to check for updates:", error);
+        return { activated: false, error: message };
       }
-      return;
+
+      // Re-read after update() so the caller can tell "nothing on the
+      // server" from "found something, install in progress".
+      if (registration.waiting) {
+        // The update finished installing while we waited; nudge the UI to
+        // surface the now-waiting worker.
+        setState((prev) => ({
+          ...prev,
+          isUpdateAvailable: true,
+          registration,
+        }));
+        return { activated: false, updateInProgress: true };
+      }
+      if (registration.installing) {
+        // Still installing — caller can show "update pending" instead of
+        // "already up to date".
+        return { activated: false, updateInProgress: true };
+      }
+      return { activated: false };
     }
 
     setState((prev) => ({ ...prev, isUpdating: true }));
 
     // Tell the waiting service worker to skip waiting and take control
     registration.waiting.postMessage({ type: "SKIP_WAITING" });
-  }, [state]);
+    return { activated: true };
+  }, []);
 
   // Function to manually check for updates
   const checkForUpdates = useCallback(async () => {

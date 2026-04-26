@@ -2,6 +2,7 @@ import { useState, useCallback, useRef } from "react";
 import { getCached, setCache } from "@/lib/interaction-cache";
 import { useUpdatePrescription } from "@/hooks/use-medication-queries";
 import { useAuth } from "@/components/auth-guard";
+import { isOffline } from "@/lib/ai-client";
 
 // --- Types ---
 
@@ -64,6 +65,16 @@ export function useInteractionCheck() {
         setIsLoading(false);
         return cached;
       }
+    }
+
+    // Offline: skip the network call. Cached lookups (above) still work.
+    // Clear any previous result so consumers don't render stale `data`
+    // alongside the offline error.
+    if (isOffline()) {
+      setData(null);
+      setError("Offline — interaction check unavailable.");
+      setIsLoading(false);
+      return null;
     }
 
     // Abort any in-flight request
@@ -139,7 +150,11 @@ export function useRefreshInteractions() {
       prescriptionId: string,
       genericName: string,
       activePrescriptions: ActivePrescription[]
-    ) => {
+    ): Promise<InteractionResult | { error: "offline" } | null> => {
+      // Return a distinct sentinel for offline so callers can show
+      // "Offline — try again when connected" instead of treating it as a
+      // generic "refresh failed".
+      if (isOffline()) return { error: "offline" };
       setIsRefreshing(true);
 
       try {

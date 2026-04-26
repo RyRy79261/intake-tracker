@@ -14,6 +14,7 @@ import {
 import { Loader2, Sparkles, Edit3 } from "lucide-react";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useAuth } from "@/components/auth-guard";
+import { isOffline } from "@/lib/ai-client";
 
 export interface SubstanceTypeSelection {
   name: string;
@@ -53,6 +54,10 @@ export function SubstanceTypePicker({
   const [isEnriching, setIsEnriching] = useState(false);
   const [aiResult, setAiResult] = useState<AiResult | null>(null);
   const [reasoning, setReasoning] = useState<string | null>(null);
+  // Why we're showing default values instead of an AI result. Lets the
+  // banner explain "you're offline" vs. "the AI failed" rather than a
+  // single generic message.
+  const [fallbackReason, setFallbackReason] = useState<"offline" | "error" | null>(null);
 
   // Manual override fields
   const [overrideAmount, setOverrideAmount] = useState("");
@@ -64,6 +69,7 @@ export function SubstanceTypePicker({
     setIsEnriching(false);
     setAiResult(null);
     setReasoning(null);
+    setFallbackReason(null);
     setOverrideAmount("");
     setOverrideVolume("");
   };
@@ -108,8 +114,34 @@ export function SubstanceTypePicker({
     }
   };
 
+  const populateOtherDefaults = (reason: "offline" | "error") => {
+    setAiResult(null);
+    setReasoning(null);
+    setFallbackReason(reason);
+    const otherType =
+      type === "caffeine"
+        ? substanceConfig.caffeine.types.find((t) => t.name === "Other")
+        : substanceConfig.alcohol.types.find((t) => t.name === "Other");
+
+    if (type === "caffeine" && otherType && "defaultMg" in otherType) {
+      setOverrideAmount(String(otherType.defaultMg));
+      setOverrideVolume(String(otherType.defaultVolumeMl));
+    } else if (type === "alcohol" && otherType && "defaultDrinks" in otherType) {
+      setOverrideAmount(String(otherType.defaultDrinks));
+      setOverrideVolume(String(otherType.defaultVolumeMl));
+    }
+    setStep("other-result");
+  };
+
   const handleOtherSubmit = async () => {
     if (!customDescription.trim()) return;
+
+    // Offline: skip the network call entirely (and the loading state) and
+    // fall through to defaults.
+    if (isOffline()) {
+      populateOtherDefaults("offline");
+      return;
+    }
 
     setIsEnriching(true);
 
@@ -128,6 +160,7 @@ export function SubstanceTypePicker({
         const data = await response.json();
         setAiResult(data);
         setReasoning(data.reasoning || null);
+        setFallbackReason(null);
 
         if (type === "caffeine") {
           setOverrideAmount(String(data.caffeineMg ?? ""));
@@ -136,40 +169,18 @@ export function SubstanceTypePicker({
           setOverrideAmount(String(data.standardDrinks ?? ""));
           setOverrideVolume(String(data.volumeMl ?? ""));
         }
+        setStep("other-result");
       } else {
-        // Fallback to defaults on error
-        setAiResult(null);
-        const otherType =
-          type === "caffeine"
-            ? substanceConfig.caffeine.types.find((t) => t.name === "Other")
-            : substanceConfig.alcohol.types.find((t) => t.name === "Other");
-
-        if (type === "caffeine" && otherType && "defaultMg" in otherType) {
-          setOverrideAmount(String(otherType.defaultMg));
-          setOverrideVolume(String(otherType.defaultVolumeMl));
-        } else if (type === "alcohol" && otherType && "defaultDrinks" in otherType) {
-          setOverrideAmount(String(otherType.defaultDrinks));
-          setOverrideVolume(String(otherType.defaultVolumeMl));
-        }
+        populateOtherDefaults("error");
       }
     } catch {
-      // Offline or network error -- fallback to defaults
-      setAiResult(null);
-      const otherType =
-        type === "caffeine"
-          ? substanceConfig.caffeine.types.find((t) => t.name === "Other")
-          : substanceConfig.alcohol.types.find((t) => t.name === "Other");
-
-      if (type === "caffeine" && otherType && "defaultMg" in otherType) {
-        setOverrideAmount(String(otherType.defaultMg));
-        setOverrideVolume(String(otherType.defaultVolumeMl));
-      } else if (type === "alcohol" && otherType && "defaultDrinks" in otherType) {
-        setOverrideAmount(String(otherType.defaultDrinks));
-        setOverrideVolume(String(otherType.defaultVolumeMl));
-      }
+      // Network error -- fallback to defaults. If the device dropped
+      // connection mid-request, surface that to the user instead of a
+      // generic "AI estimation unavailable" so the banner copy matches
+      // the pre-flight offline path.
+      populateOtherDefaults(isOffline() ? "offline" : "error");
     } finally {
       setIsEnriching(false);
-      setStep("other-result");
     }
   };
 
@@ -314,9 +325,11 @@ export function SubstanceTypePicker({
                   </div>
                 )}
 
-                {!aiResult && (
+                {!aiResult && fallbackReason && (
                   <div className="rounded-md bg-yellow-50 dark:bg-yellow-950/30 p-3 text-xs text-yellow-700 dark:text-yellow-400">
-                    AI estimation unavailable. Using default values -- you can adjust below.
+                    {fallbackReason === "offline"
+                      ? "You're offline — using default values. Adjust below."
+                      : "AI estimation unavailable. Using default values -- you can adjust below."}
                   </div>
                 )}
 

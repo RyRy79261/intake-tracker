@@ -1,19 +1,9 @@
 "use client";
 
 import { useEffect } from "react";
+import { activateBypass, getBypassCode } from "@/lib/auth-bypass";
 
 const BYPASS_QUERY_PARAM = "bypass";
-const BYPASS_KEY = "intake-tracker-bypass-auth";
-const DEFAULT_BYPASS_CODE = "meowmeowmeow";
-
-function getBypassCode(): string {
-  return process.env.NEXT_PUBLIC_BYPASS_CODE || DEFAULT_BYPASS_CODE;
-}
-
-function activateBypass(): void {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(BYPASS_KEY, String(Date.now()));
-}
 
 /**
  * Belt-and-suspenders SW registration + offline survival.
@@ -43,7 +33,8 @@ export function ServiceWorkerBootstrap() {
     const url = new URL(window.location.href);
     const code = url.searchParams.get(BYPASS_QUERY_PARAM);
     if (code) {
-      if (code === getBypassCode()) {
+      const expected = getBypassCode();
+      if (expected !== null && code === expected) {
         activateBypass();
       }
       url.searchParams.delete(BYPASS_QUERY_PARAM);
