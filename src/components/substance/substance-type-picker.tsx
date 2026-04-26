@@ -174,8 +174,11 @@ export function SubstanceTypePicker({
         populateOtherDefaults("error");
       }
     } catch {
-      // Network error -- fallback to defaults
-      populateOtherDefaults("error");
+      // Network error -- fallback to defaults. If the device dropped
+      // connection mid-request, surface that to the user instead of a
+      // generic "AI estimation unavailable" so the banner copy matches
+      // the pre-flight offline path.
+      populateOtherDefaults(isOffline() ? "offline" : "error");
     } finally {
       setIsEnriching(false);
     }

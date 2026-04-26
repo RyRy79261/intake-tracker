@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { LogIn, Shield, Loader2, AlertTriangle } from "lucide-react";
 import {
   BYPASS_KEY,
+  BYPASS_TTL_DAYS,
   BYPASS_TTL_MS,
   REMEMBERED_AUTH_KEY,
   activateBypass,
@@ -270,7 +271,7 @@ function EmergencyBypassForm({ onUnlock }: { onUnlock: () => void }) {
         Unlock
       </Button>
       <p className="text-[11px] leading-snug text-muted-foreground">
-        Grants access for 18 days without verifying with the auth server.
+        Grants access for {BYPASS_TTL_DAYS} {BYPASS_TTL_DAYS === 1 ? "day" : "days"} without verifying with the auth server.
         Remove this bypass once normal sign-in works again.
       </p>
     </form>

@@ -916,6 +916,7 @@ function IndicationStep({
                   size="sm"
                   onClick={onRefreshAI}
                   disabled={isRefreshing || !isOnline}
+                  aria-label={isOnline ? "AI Suggest" : "AI offline — suggestions unavailable"}
                   title={isOnline ? "AI Suggest" : "AI offline — suggestions unavailable"}
                   className="h-7 text-xs gap-1 text-teal-600"
                 >

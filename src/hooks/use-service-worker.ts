@@ -264,6 +264,7 @@ export function useServiceWorker() {
   const applyUpdate = useCallback(async (): Promise<{
     activated: boolean;
     noRegistration?: boolean;
+    updateInProgress?: boolean;
     error?: string;
   }> => {
     if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) {
@@ -295,6 +296,24 @@ export function useServiceWorker() {
         const message = error instanceof Error ? error.message : "Unknown error";
         console.error("Failed to check for updates:", error);
         return { activated: false, error: message };
+      }
+
+      // Re-read after update() so the caller can tell "nothing on the
+      // server" from "found something, install in progress".
+      if (registration.waiting) {
+        // The update finished installing while we waited; nudge the UI to
+        // surface the now-waiting worker.
+        setState((prev) => ({
+          ...prev,
+          isUpdateAvailable: true,
+          registration,
+        }));
+        return { activated: false, updateInProgress: true };
+      }
+      if (registration.installing) {
+        // Still installing — caller can show "update pending" instead of
+        // "already up to date".
+        return { activated: false, updateInProgress: true };
       }
       return { activated: false };
     }

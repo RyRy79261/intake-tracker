@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useRefreshInteractions } from "@/hooks/use-interaction-check";
 import { usePrescriptions } from "@/hooks/use-medication-queries";
 import { useToast } from "@/hooks/use-toast";
+import { useOnlineStatus } from "@/hooks/use-online-status";
 import type { Prescription } from "@/lib/db";
 
 interface InteractionsSectionProps {
@@ -16,12 +17,18 @@ export function InteractionsSection({ prescription }: InteractionsSectionProps) 
   const { refresh, isRefreshing } = useRefreshInteractions();
   const prescriptions = usePrescriptions();
   const { toast } = useToast();
+  const isOnline = useOnlineStatus();
 
   const hasData =
     (prescription.contraindications?.length ?? 0) > 0 ||
     (prescription.warnings?.length ?? 0) > 0;
 
   const handleRefresh = async () => {
+    if (!isOnline) {
+      // Disabled state should prevent this; belt-and-braces in case the
+      // device drops connection between render and click.
+      return;
+    }
     const activePrescriptions = prescriptions.filter(
       (p) => p.id !== prescription.id && p.isActive
     );
@@ -107,7 +114,15 @@ export function InteractionsSection({ prescription }: InteractionsSectionProps) 
             size="sm"
             className="text-xs mt-2 w-full"
             onClick={handleRefresh}
-            disabled={isRefreshing || otherActiveCount === 0}
+            disabled={isRefreshing || otherActiveCount === 0 || !isOnline}
+            aria-label={
+              !isOnline
+                ? "Offline — refresh unavailable"
+                : otherActiveCount === 0
+                  ? "Add more prescriptions to check interactions"
+                  : "Refresh interactions"
+            }
+            title={!isOnline ? "Offline — refresh unavailable" : undefined}
           >
             {isRefreshing ? (
               <Loader2 className="w-3 h-3 animate-spin mr-1" />
@@ -116,7 +131,9 @@ export function InteractionsSection({ prescription }: InteractionsSectionProps) 
             )}
             {otherActiveCount === 0
               ? "Add more prescriptions to check interactions"
-              : "Refresh interactions"}
+              : !isOnline
+                ? "Offline — refresh unavailable"
+                : "Refresh interactions"}
           </Button>
         </div>
       ) : (
@@ -128,7 +145,15 @@ export function InteractionsSection({ prescription }: InteractionsSectionProps) 
               size="sm"
               className="text-xs"
               onClick={handleRefresh}
-              disabled={isRefreshing || otherActiveCount === 0}
+              disabled={isRefreshing || otherActiveCount === 0 || !isOnline}
+              aria-label={
+                !isOnline
+                  ? "Offline — refresh unavailable"
+                  : otherActiveCount === 0
+                    ? "Add more prescriptions to check interactions"
+                    : "Refresh interactions"
+              }
+              title={!isOnline ? "Offline — refresh unavailable" : undefined}
             >
               {isRefreshing ? (
                 <Loader2 className="w-3 h-3 animate-spin mr-1" />
@@ -137,7 +162,9 @@ export function InteractionsSection({ prescription }: InteractionsSectionProps) 
               )}
               {otherActiveCount === 0
                 ? "Add more prescriptions to check interactions"
-                : "Refresh interactions"}
+                : !isOnline
+                  ? "Offline — refresh unavailable"
+                  : "Refresh interactions"}
             </Button>
           </div>
         </div>

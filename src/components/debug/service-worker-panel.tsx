@@ -19,6 +19,7 @@ import { useServiceWorker } from "@/hooks/use-service-worker";
 import { useOnlineStatus } from "@/hooks/use-online-status";
 import {
   BYPASS_KEY,
+  BYPASS_TTL_DAYS,
   REMEMBERED_AUTH_KEY,
   activateBypass,
   clearBypass,
@@ -208,6 +209,12 @@ export function ServiceWorkerPanel() {
           message: "No service worker registered — register first.",
         };
       }
+      if (result.updateInProgress) {
+        return {
+          success: true,
+          message: "Update is installing — try 'Apply update' again once it's ready.",
+        };
+      }
       if (!result.activated) {
         return {
           success: false,
@@ -275,7 +282,7 @@ export function ServiceWorkerPanel() {
       activateBypass();
       return {
         success: true,
-        message: "Auth bypass activated for 18 days.",
+        message: `Auth bypass activated for ${BYPASS_TTL_DAYS} ${BYPASS_TTL_DAYS === 1 ? "day" : "days"}.`,
       };
     });
 
@@ -491,7 +498,7 @@ export function ServiceWorkerPanel() {
               onClick={handleActivateBypass}
               disabled={busyAction !== null}
             >
-              Activate bypass (18 days)
+              Activate bypass ({BYPASS_TTL_DAYS} {BYPASS_TTL_DAYS === 1 ? "day" : "days"})
             </Button>
             <Button
               size="sm"
@@ -504,7 +511,7 @@ export function ServiceWorkerPanel() {
             </Button>
           </div>
           <p className="text-[10px] text-muted-foreground leading-snug">
-            The bypass code grants 18 days of offline access. The bootstrap
+            The bypass code grants {BYPASS_TTL_DAYS} {BYPASS_TTL_DAYS === 1 ? "day" : "days"} of offline access. The bootstrap
             activates it automatically when the device is offline so the
             sign-in screen never traps the user.
           </p>
