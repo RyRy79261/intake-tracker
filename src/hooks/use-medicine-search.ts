@@ -3,6 +3,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/components/auth-guard";
 import { useSettingsStore } from "@/stores/settings-store";
+import { apiUrl } from "@/lib/api-url";
 
 export interface MedicineSearchResult {
   brandNames: string[];
@@ -48,7 +49,7 @@ export function useMedicineSearch() {
         headers.Authorization = authHeader.Authorization;
       }
 
-      const response = await fetch("/api/ai/medicine-search", {
+      const response = await fetch(apiUrl("/api/ai/medicine-search"), {
         method: "POST",
         headers,
         body: JSON.stringify({

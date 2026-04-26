@@ -50,6 +50,7 @@ import {
 } from "@/hooks/use-medication-queries";
 import type { TitrationPlan, MedicationPhase, Prescription } from "@/lib/db";
 import { useAuth } from "@/components/auth-guard";
+import { apiUrl } from "@/lib/api-url";
 import {
   Plus,
   Play,
@@ -646,7 +647,7 @@ function TitrationDrawer({
     setAiLoading(true);
     try {
       const authHeaders = await getAuthHeader();
-      const res = await fetch("/api/ai/titration-warnings", {
+      const res = await fetch(apiUrl("/api/ai/titration-warnings"), {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify({

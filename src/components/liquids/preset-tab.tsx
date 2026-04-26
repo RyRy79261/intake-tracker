@@ -25,6 +25,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import type { LiquidPreset } from "@/lib/constants";
+import { apiUrl } from "@/lib/api-url";
 
 interface PresetTabProps {
   tab: "coffee" | "alcohol" | "beverage";
@@ -184,7 +185,7 @@ export function PresetTab({ tab }: PresetTabProps) {
     setSelectedPresetId(null);
     try {
       const authHeaders = await getAuthHeader();
-      const res = await fetch("/api/ai/substance-lookup", {
+      const res = await fetch(apiUrl("/api/ai/substance-lookup"), {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify({ query: searchText.trim(), type: aiLookupType }),

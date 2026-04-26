@@ -10,6 +10,7 @@ pnpm build            # Production build
 pnpm lint             # ESLint
 pnpm test:e2e         # Playwright E2E tests (auto-starts dev server; authenticates via Privy test account)
 npx playwright test e2e/intake-logs.spec.ts  # Run a single test file
+pnpm build:android    # Build sideloadable Android APK via Capacitor (see "Android build" below)
 ```
 
 Package manager is **pnpm** (enforced via `preinstall` hook; npm/yarn will fail).
@@ -70,3 +71,15 @@ API routes handle server-side Claude API calls (key never exposed to client). PI
 ### Medication Data Model
 
 Prescriptions → MedicationPhases (maintenance/titration) → PhaseSchedules (time + dosage per day-of-week). Separate InventoryItems track pill stock per prescription. DoseLogs record individual dose events.
+
+### Android build (Capacitor)
+
+The app ships as a sideloadable Android APK alongside the web build, for offline use on a personal device. Capacitor wraps a Next.js static export in a WebView; IndexedDB data stays on-device, and `/api/*` calls reach a deployed backend (e.g. the Vercel deploy) when online via `NEXT_PUBLIC_API_BASE_URL`.
+
+- `capacitor.config.ts` — appId `com.intaketracker.app`, `webDir: out`, `CapacitorHttp` plugin enabled so native HTTP bypasses CORS.
+- `next.config.js` switches to `output: 'export'` and skips `next-pwa` + `headers()` when `BUILD_TARGET=android`.
+- `scripts/build-android.sh` stashes `src/app/api` to a `mktemp` dir outside the repo (Next.js refuses route handlers under static export, and `tsconfig.json` includes `**/*.ts` so the stash must live outside the project), runs `next build`, runs `cap sync android`, then `gradlew assembleDebug`. A `trap` restores `src/app/api` on exit.
+- Per-fetch site routing happens via `src/lib/api-url.ts` (`apiUrl()`); call sites under `src/lib`, `src/hooks`, `src/components` were updated. On the web build `NEXT_PUBLIC_API_BASE_URL` is empty so paths stay relative.
+- Configure the APK build via `.env.android.local` at the repo root (gitignored). Leave `NEXT_PUBLIC_PRIVY_APP_ID` UNSET — Privy's auth iframe doesn't whitelist the `capacitor://` origin, and `providers.tsx` falls back to a no-auth path when the appId is missing.
+- Requires Android Studio (or `cmdline-tools` + `platform-tools`) with `ANDROID_HOME` set. Output: `android/app/build/outputs/apk/debug/app-debug.apk`. Install via `adb install -r <path>`.
+- `pnpm build:android:web` runs everything except gradle (useful in CI / sandboxes without the Android SDK).
