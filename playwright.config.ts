@@ -45,7 +45,9 @@ export default defineConfig({
         command: 'pnpm build && pnpm start',
         url: 'http://localhost:3000',
         reuseExistingServer: false,
-        timeout: 120 * 1000,
+        // Cold .next/cache (after pnpm-lock.yaml or next.config.* changes)
+        // produces ~3m builds on the runner; 120s wasn't enough headroom.
+        timeout: 300 * 1000,
         env: { NEXT_PUBLIC_PRIVY_APP_ID: '' },
       }
     : {
