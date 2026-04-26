@@ -54,6 +54,10 @@ export function SubstanceTypePicker({
   const [isEnriching, setIsEnriching] = useState(false);
   const [aiResult, setAiResult] = useState<AiResult | null>(null);
   const [reasoning, setReasoning] = useState<string | null>(null);
+  // Why we're showing default values instead of an AI result. Lets the
+  // banner explain "you're offline" vs. "the AI failed" rather than a
+  // single generic message.
+  const [fallbackReason, setFallbackReason] = useState<"offline" | "error" | null>(null);
 
   // Manual override fields
   const [overrideAmount, setOverrideAmount] = useState("");
@@ -65,6 +69,7 @@ export function SubstanceTypePicker({
     setIsEnriching(false);
     setAiResult(null);
     setReasoning(null);
+    setFallbackReason(null);
     setOverrideAmount("");
     setOverrideVolume("");
   };
@@ -109,9 +114,10 @@ export function SubstanceTypePicker({
     }
   };
 
-  const populateOtherDefaults = () => {
+  const populateOtherDefaults = (reason: "offline" | "error") => {
     setAiResult(null);
     setReasoning(null);
+    setFallbackReason(reason);
     const otherType =
       type === "caffeine"
         ? substanceConfig.caffeine.types.find((t) => t.name === "Other")
@@ -133,7 +139,7 @@ export function SubstanceTypePicker({
     // Offline: skip the network call entirely (and the loading state) and
     // fall through to defaults.
     if (isOffline()) {
-      populateOtherDefaults();
+      populateOtherDefaults("offline");
       return;
     }
 
@@ -154,6 +160,7 @@ export function SubstanceTypePicker({
         const data = await response.json();
         setAiResult(data);
         setReasoning(data.reasoning || null);
+        setFallbackReason(null);
 
         if (type === "caffeine") {
           setOverrideAmount(String(data.caffeineMg ?? ""));
@@ -164,11 +171,11 @@ export function SubstanceTypePicker({
         }
         setStep("other-result");
       } else {
-        populateOtherDefaults();
+        populateOtherDefaults("error");
       }
     } catch {
       // Network error -- fallback to defaults
-      populateOtherDefaults();
+      populateOtherDefaults("error");
     } finally {
       setIsEnriching(false);
     }
@@ -315,9 +322,11 @@ export function SubstanceTypePicker({
                   </div>
                 )}
 
-                {!aiResult && (
+                {!aiResult && fallbackReason && (
                   <div className="rounded-md bg-yellow-50 dark:bg-yellow-950/30 p-3 text-xs text-yellow-700 dark:text-yellow-400">
-                    AI estimation unavailable. Using default values -- you can adjust below.
+                    {fallbackReason === "offline"
+                      ? "You're offline — using default values. Adjust below."
+                      : "AI estimation unavailable. Using default values -- you can adjust below."}
                   </div>
                 )}
 

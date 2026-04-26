@@ -15,6 +15,7 @@ import { useMedicineSearch, type MedicineSearchResult } from "@/hooks/use-medici
 import { useAddPrescription, usePrescriptions, useAddMedicationToPrescription, usePhasesForPrescription } from "@/hooks/use-medication-queries";
 import { useToast } from "@/hooks/use-toast";
 import { useOnlineStatus } from "@/hooks/use-online-status";
+import { OfflineError } from "@/lib/ai-client";
 import { Switch } from "@/components/ui/switch";
 import type { PillShape, FoodInstruction, Prescription, MedicationPhase } from "@/lib/db";
 import { ArrowLeft, ArrowRight, Search, Loader2, Check, Plus, X, AlertTriangle } from "lucide-react";
@@ -254,8 +255,19 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
         const shape = result.pillShape.toLowerCase() as PillShape;
         if (PILL_SHAPES.some((s) => s.value === shape)) setPillShape(shape);
       }
-    } catch {
-      // error is in searchMutation.error
+    } catch (err) {
+      // searchMutation.error already drives the inline message under the
+      // search input; add a toast for the offline case so the reason is
+      // hard to miss when the device drops connection mid-request.
+      if (err instanceof OfflineError) {
+        toast({
+          title: "AI offline",
+          description: "Medication search needs an internet connection. Fill the fields below manually.",
+          variant: "default",
+        });
+      } else {
+        console.error("Medicine search failed:", err);
+      }
     }
   };
 
@@ -707,6 +719,7 @@ function SearchStep({
             onClick={onSearch}
             disabled={isSearching || !query.trim() || !isOnline}
             size="icon"
+            aria-label={isOnline ? "Search with AI" : "AI search unavailable while offline"}
             title={isOnline ? "Search with AI" : "AI search unavailable while offline"}
             className="shrink-0 bg-teal-600 hover:bg-teal-700"
           >

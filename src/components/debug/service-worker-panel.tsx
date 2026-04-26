@@ -17,7 +17,12 @@ import {
 } from "lucide-react";
 import { useServiceWorker } from "@/hooks/use-service-worker";
 import { useOnlineStatus } from "@/hooks/use-online-status";
-import { BYPASS_KEY, REMEMBERED_AUTH_KEY } from "@/lib/auth-bypass";
+import {
+  BYPASS_KEY,
+  REMEMBERED_AUTH_KEY,
+  activateBypass,
+  clearBypass,
+} from "@/lib/auth-bypass";
 
 interface CacheEntry {
   name: string;
@@ -197,6 +202,12 @@ export function ServiceWorkerPanel() {
       if (result.error) {
         return { success: false, message: `Failed to apply update: ${result.error}` };
       }
+      if (result.noRegistration) {
+        return {
+          success: false,
+          message: "No service worker registered — register first.",
+        };
+      }
       if (!result.activated) {
         return {
           success: false,
@@ -261,7 +272,7 @@ export function ServiceWorkerPanel() {
 
   const handleActivateBypass = () =>
     runAction("activate-bypass", async () => {
-      window.localStorage.setItem(BYPASS_KEY, String(Date.now()));
+      activateBypass();
       return {
         success: true,
         message: "Auth bypass activated for 18 days.",
@@ -270,7 +281,7 @@ export function ServiceWorkerPanel() {
 
   const handleClearBypass = () =>
     runAction("clear-bypass", async () => {
-      window.localStorage.removeItem(BYPASS_KEY);
+      clearBypass();
       return {
         success: true,
         message: "Auth bypass cleared.",

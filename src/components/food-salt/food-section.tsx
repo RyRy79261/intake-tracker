@@ -15,7 +15,7 @@ import { Loader2, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { RecentEntriesList, InlineEditFormShell } from "@/components/recent-entries-list";
-import { parseIntakeWithAI } from "@/lib/ai-client";
+import { parseIntakeWithAI, OfflineError } from "@/lib/ai-client";
 import {
   useAddComposableEntry,
   type ComposableEntryInput,
@@ -165,12 +165,20 @@ export function FoodSection() {
           variant: "default",
         });
       }
-    } catch {
-      toast({
-        title: "AI parsing failed",
-        description: "Try again or add details manually.",
-        variant: "destructive",
-      });
+    } catch (err) {
+      if (err instanceof OfflineError) {
+        toast({
+          title: "AI offline",
+          description: "You're offline — fill the fields manually.",
+          variant: "default",
+        });
+      } else {
+        toast({
+          title: "AI parsing failed",
+          description: "Try again or add details manually.",
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsParsing(false);
     }

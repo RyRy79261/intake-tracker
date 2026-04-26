@@ -10,6 +10,7 @@ import {
   BYPASS_KEY,
   BYPASS_TTL_MS,
   REMEMBERED_AUTH_KEY,
+  activateBypass,
   getBypassCode,
 } from "@/lib/auth-bypass";
 
@@ -37,11 +38,6 @@ function isBypassActive(): boolean {
   const ts = Number(raw);
   if (!Number.isFinite(ts)) return false;
   return Date.now() - ts < BYPASS_TTL_MS;
-}
-
-function activateBypass(): void {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(BYPASS_KEY, String(Date.now()));
 }
 
 /**
@@ -132,7 +128,8 @@ function PrivyAuthGuard({ children, fallback }: AuthGuardProps) {
     const url = new URL(window.location.href);
     const code = url.searchParams.get(BYPASS_QUERY_PARAM);
     if (!code) return;
-    if (code === getBypassCode()) {
+    const expected = getBypassCode();
+    if (expected !== null && code === expected) {
       activateBypass();
       setBypassTick((n) => n + 1);
     }
@@ -219,9 +216,16 @@ function EmergencyBypassForm({ onUnlock }: { onUnlock: () => void }) {
   const [code, setCode] = useState("");
   const [error, setError] = useState(false);
 
+  // Bypass is disabled when no code is configured. Hide the entry point
+  // entirely so users don't see a dead form.
+  if (getBypassCode() === null) {
+    return null;
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (code.trim() === getBypassCode()) {
+    const expected = getBypassCode();
+    if (expected !== null && code.trim() === expected) {
       activateBypass();
       onUnlock();
     } else {

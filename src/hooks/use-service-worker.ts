@@ -263,6 +263,7 @@ export function useServiceWorker() {
   // identity stays stable across unrelated state changes.
   const applyUpdate = useCallback(async (): Promise<{
     activated: boolean;
+    noRegistration?: boolean;
     error?: string;
   }> => {
     if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) {
@@ -277,11 +278,19 @@ export function useServiceWorker() {
       return { activated: false, error: message };
     }
 
-    if (!registration?.waiting) {
+    // Distinguish "we don't even have a registration" from "registered but
+    // nothing waiting". Without this, calling registration?.update() on
+    // undefined silently does nothing and we'd lie that the check
+    // succeeded.
+    if (!registration) {
+      return { activated: false, noRegistration: true };
+    }
+
+    if (!registration.waiting) {
       // No waiting worker. Best-effort: check for one in case the consumer
       // wants to refresh state. Surface any thrown error to the caller.
       try {
-        await registration?.update();
+        await registration.update();
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown error";
         console.error("Failed to check for updates:", error);

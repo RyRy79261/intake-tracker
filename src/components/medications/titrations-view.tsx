@@ -50,7 +50,6 @@ import {
 } from "@/hooks/use-medication-queries";
 import type { TitrationPlan, MedicationPhase, Prescription } from "@/lib/db";
 import { useAuth } from "@/components/auth-guard";
-import { isOffline } from "@/lib/ai-client";
 import { useToast } from "@/hooks/use-toast";
 import { useOnlineStatus } from "@/hooks/use-online-status";
 import {
@@ -647,7 +646,7 @@ function TitrationDrawer({
       }));
 
     if (changingRx.length === 0) return;
-    if (isOffline()) {
+    if (!isOnline) {
       toast({
         title: "AI offline",
         description: "Connect to the internet to generate suggestions, or write warnings manually.",

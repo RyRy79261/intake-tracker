@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useRefreshInteractions } from "@/hooks/use-interaction-check";
 import { usePrescriptions } from "@/hooks/use-medication-queries";
+import { useToast } from "@/hooks/use-toast";
 import type { Prescription } from "@/lib/db";
 
 interface InteractionsSectionProps {
@@ -14,12 +15,13 @@ interface InteractionsSectionProps {
 export function InteractionsSection({ prescription }: InteractionsSectionProps) {
   const { refresh, isRefreshing } = useRefreshInteractions();
   const prescriptions = usePrescriptions();
+  const { toast } = useToast();
 
   const hasData =
     (prescription.contraindications?.length ?? 0) > 0 ||
     (prescription.warnings?.length ?? 0) > 0;
 
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     const activePrescriptions = prescriptions.filter(
       (p) => p.id !== prescription.id && p.isActive
     );
@@ -29,11 +31,25 @@ export function InteractionsSection({ prescription }: InteractionsSectionProps) 
       return;
     }
 
-    refresh(
+    const result = await refresh(
       prescription.id,
       prescription.genericName,
       activePrescriptions.map((p) => ({ genericName: p.genericName }))
     );
+
+    if (result && "error" in result && result.error === "offline") {
+      toast({
+        title: "AI offline",
+        description: "Connect to the internet to refresh interactions.",
+        variant: "default",
+      });
+    } else if (result === null) {
+      toast({
+        title: "Refresh failed",
+        description: "Couldn't refresh interactions. Try again later.",
+        variant: "destructive",
+      });
+    }
   };
 
   const otherActiveCount = prescriptions.filter(
