@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation } from "@tanstack/react-query";
+import { apiFetch } from "@/lib/api-fetch";
 import { useSettingsStore } from "@/stores/settings-store";
 
 export interface MedicineSearchResult {
@@ -36,7 +37,7 @@ export function useMedicineSearch() {
         }
       }
 
-      const response = await fetch("/api/ai/medicine-search", {
+      const response = await apiFetch("/api/ai/medicine-search", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

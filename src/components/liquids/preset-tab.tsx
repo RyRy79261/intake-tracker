@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Sparkles, Loader2 } from "lucide-react";
+import { apiFetch } from "@/lib/api-fetch";
 import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -181,7 +182,7 @@ export function PresetTab({ tab }: PresetTabProps) {
     setIsLookingUp(true);
     setSelectedPresetId(null);
     try {
-      const res = await fetch("/api/ai/substance-lookup", {
+      const res = await apiFetch("/api/ai/substance-lookup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: searchText.trim(), type: aiLookupType }),

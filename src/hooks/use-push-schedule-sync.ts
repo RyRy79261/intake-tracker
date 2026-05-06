@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useSettingsStore } from "@/stores/settings-store";
+import { apiFetch } from "@/lib/api-fetch";
 import { useDailyDoseSchedule } from "@/hooks/use-medication-queries";
 import {
   subscribeToPush,
@@ -92,7 +93,7 @@ export function usePushScheduleSync(): void {
 
   const syncSchedule = useCallback(async (entries: ScheduleEntry[]) => {
     try {
-      await fetch("/api/push/sync-schedule", {
+      await apiFetch("/api/push/sync-schedule", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -125,7 +126,7 @@ export function usePushScheduleSync(): void {
     if (!doseRemindersEnabled) return;
 
     const ping = () => {
-      fetch("/api/push/check", { method: "POST" }).catch((err) =>
+      apiFetch("/api/push/check", { method: "POST" }).catch((err) =>
         console.warn("[push/check] ping failed:", err)
       );
     };
@@ -143,7 +144,7 @@ export function usePushScheduleSync(): void {
     if (hash === lastSettingsHashRef.current) return;
     lastSettingsHashRef.current = hash;
 
-    fetch("/api/push/settings", {
+    apiFetch("/api/push/settings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

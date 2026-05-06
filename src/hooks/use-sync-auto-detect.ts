@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { apiFetch } from "@/lib/api-fetch";
 import { useSettingsStore } from "@/stores/settings-store";
 
 /**
@@ -18,7 +19,7 @@ export function useSyncAutoDetect(authenticated: boolean): void {
     if (!authenticated || storageMode !== "local" || checked.current) return;
     checked.current = true;
 
-    fetch("/api/sync/status")
+    apiFetch("/api/sync/status")
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data?.hasSyncedData) {

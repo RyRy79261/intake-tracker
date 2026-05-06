@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from "react";
+import { apiFetch } from "@/lib/api-fetch";
 import { getCached, setCache } from "@/lib/interaction-cache";
 import { useUpdatePrescription } from "@/hooks/use-medication-queries";
 
@@ -80,7 +81,7 @@ export function useInteractionCheck() {
     setData(null);
 
     try {
-      const response = await fetch("/api/ai/interaction-check", {
+      const response = await apiFetch("/api/ai/interaction-check", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(params),
@@ -139,7 +140,7 @@ export function useRefreshInteractions() {
       setIsRefreshing(true);
 
       try {
-        const response = await fetch("/api/ai/interaction-check", {
+        const response = await apiFetch("/api/ai/interaction-check", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

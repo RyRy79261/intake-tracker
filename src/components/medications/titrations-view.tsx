@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Card } from "@/components/ui/card";
+import { apiFetch } from "@/lib/api-fetch";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -643,7 +644,7 @@ function TitrationDrawer({
 
     setAiLoading(true);
     try {
-      const res = await fetch("/api/ai/titration-warnings", {
+      const res = await apiFetch("/api/ai/titration-warnings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
