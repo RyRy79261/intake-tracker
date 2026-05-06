@@ -1,4 +1,5 @@
 import { logAudit } from "./audit";
+import { apiFetch } from "@/lib/api-fetch";
 
 export interface ParsedIntake {
   water: number | null; // ml
@@ -23,7 +24,7 @@ export async function parseIntakeWithAI(input: string): Promise<ParsedIntake> {
   try {
     // Use server-side route (API key in env only). Auth travels as a same-origin
     // cookie set by Neon Auth — no manual Authorization header.
-    const response = await fetch("/api/ai/parse", {
+    const response = await apiFetch("/api/ai/parse", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

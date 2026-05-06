@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { TABLE_PUSH_ORDER, type TableName } from "@/lib/sync-topology";
 import type { PushOp } from "@/lib/sync-payload";
+import { apiFetch } from "@/lib/api-fetch";
 import { useMigrationStore } from "@/stores/migration-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useSyncStatusStore } from "@/stores/sync-status-store";
@@ -64,7 +65,7 @@ async function postWithRetry(
   retries = MAX_RETRIES,
 ): Promise<Response> {
   for (let attempt = 0; attempt <= retries; attempt++) {
-    const res = await fetch(url, {
+    const res = await apiFetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -184,7 +185,7 @@ export async function verifyMigration(): Promise<boolean> {
   const store = useMigrationStore.getState();
 
   try {
-    const res = await fetch("/api/sync/verify-hash", { method: "POST" });
+    const res = await apiFetch("/api/sync/verify-hash", { method: "POST" });
     if (!res.ok) {
       throw new Error(`Verify-hash request failed: ${res.status}`);
     }
@@ -230,7 +231,7 @@ export async function cancelMigration(): Promise<void> {
   const store = useMigrationStore.getState();
 
   try {
-    await fetch("/api/sync/cleanup", { method: "POST" });
+    await apiFetch("/api/sync/cleanup", { method: "POST" });
     clearProgress();
     useSettingsStore.getState().setStorageMode("local");
     store.setPhase("cancelled");

@@ -35,6 +35,7 @@
 import { db, type SyncQueueRow } from "@/lib/db";
 import { ack, getQueueDepth } from "@/lib/sync-queue";
 import { TABLE_PUSH_ORDER, type TableName } from "@/lib/sync-topology";
+import { apiFetch } from "@/lib/api-fetch";
 import { useSyncStatusStore } from "@/stores/sync-status-store";
 import { queryClient } from "@/lib/query-client";
 
@@ -231,7 +232,7 @@ export async function runPushCycle(): Promise<void> {
 
     let res: Response;
     try {
-      res = await fetch("/api/sync/push", {
+      res = await apiFetch("/api/sync/push", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         cache: "no-store",
@@ -393,7 +394,7 @@ export async function runPullCycle(): Promise<void> {
 
       let res: Response;
       try {
-        res = await fetch("/api/sync/pull", {
+        res = await apiFetch("/api/sync/pull", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           cache: "no-store",

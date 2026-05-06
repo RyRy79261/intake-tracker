@@ -5,6 +5,7 @@
 
 import { db } from "./db";
 import { ok, err, type ServiceResult } from "./service-result";
+import { apiFetch } from "@/lib/api-fetch";
 
 export type NotificationPermissionState = "granted" | "denied" | "default";
 
@@ -286,7 +287,7 @@ export async function subscribeToPush(): Promise<PushSubscription | null> {
     }
 
     const subJson = subscription.toJSON();
-    await fetch("/api/push/subscribe", {
+    await apiFetch("/api/push/subscribe", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -323,7 +324,7 @@ export async function unsubscribeFromPush(): Promise<boolean> {
       }
     }
 
-    await fetch("/api/push/unsubscribe", {
+    await apiFetch("/api/push/unsubscribe", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
