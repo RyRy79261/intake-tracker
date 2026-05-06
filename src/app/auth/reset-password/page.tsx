@@ -1,15 +1,22 @@
+"use client";
+
+import { Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { AuthShell } from "../auth-shell";
 import { ResetPasswordForm } from "../reset-password-form";
 
-export default function ResetPasswordPage({
-  searchParams,
-}: {
-  searchParams: { token?: string };
-}) {
-  const token = searchParams.token ?? null;
+function ResetPasswordContent() {
+  const searchParams = useSearchParams();
+  const token = searchParams.get("token") ?? null;
+  return <ResetPasswordForm token={token} />;
+}
+
+export default function ResetPasswordPage() {
   return (
     <AuthShell>
-      <ResetPasswordForm token={token} />
+      <Suspense>
+        <ResetPasswordContent />
+      </Suspense>
     </AuthShell>
   );
 }

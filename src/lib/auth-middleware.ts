@@ -1,13 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "./neon-auth";
 
-/**
- * Result of authenticating a request via Neon Auth.
- *
- * Shape preserved from the pre-Phase-41 Privy-based withAuth contract so the
- * 9 existing API routes that destructure `auth.userId!` and `auth.email` need
- * zero changes.
- */
 export interface VerificationResult {
   success: boolean;
   userId?: string;
@@ -24,13 +17,6 @@ type AuthenticatedHandler = (
   ctx: AuthenticatedRequest
 ) => Promise<NextResponse> | NextResponse;
 
-/**
- * Parse the ALLOWED_EMAILS whitelist from env.
- *
- * Empty whitelist intentionally allows any authenticated email (preserves the
- * Privy dev-mode behavior from the old privy-server.ts lines 118-127 so local
- * dev branches without a whitelist configured keep working).
- */
 function getAllowedEmails(): string[] {
   return (process.env.ALLOWED_EMAILS || "")
     .split(",")
@@ -38,25 +24,87 @@ function getAllowedEmails(): string[] {
     .filter(Boolean);
 }
 
-/**
- * Higher-order function that wraps an API route handler with Neon Auth session
- * verification + ALLOWED_EMAILS whitelist enforcement.
- *
- * Session is read from the signed Neon Auth cookie set during sign-in. There
- * is no Bearer token plumbing anywhere in the request path — clients simply
- * make same-origin fetch calls and cookies travel automatically.
- *
- * Usage (unchanged from the pre-Phase-41 Privy contract):
- * ```ts
- * export const POST = withAuth(async ({ request, auth }) => {
- *   // auth.userId! is guaranteed on success
- *   // auth.email is defined if the user signed in with email
- *   return NextResponse.json({ ok: true });
- * });
- * ```
- */
+function extractBearerToken(request: NextRequest): string | null {
+  const header = request.headers.get("authorization");
+  if (!header) return null;
+  if (!header.startsWith("Bearer ")) return null;
+  const token = header.slice(7).trim();
+  return token.length > 0 ? token : null;
+}
+
+async function validateBearerToken(
+  token: string
+): Promise<{ userId: string; email: string } | null> {
+  const baseUrl = process.env.NEON_AUTH_URL;
+  if (!baseUrl) return null;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+
+  try {
+    const res = await fetch(`${baseUrl}/api/auth/get-session`, {
+      headers: {
+        cookie: `__Secure-neon-auth.session_token=${token}`,
+      },
+      signal: controller.signal,
+    });
+
+    if (!res.ok) return null;
+
+    const body = await res.json();
+    const user = body?.session?.user ?? body?.user;
+    if (!user?.id || !user?.email) {
+      console.warn("Bearer auth: upstream returned unexpected session shape");
+      return null;
+    }
+
+    return { userId: user.id, email: user.email };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export function withAuth(handler: AuthenticatedHandler) {
   return async (request: NextRequest): Promise<NextResponse> => {
+    const bearerToken = extractBearerToken(request);
+
+    if (bearerToken) {
+      const result = await validateBearerToken(bearerToken);
+      if (!result) {
+        return NextResponse.json(
+          { error: "Invalid or expired token", requiresAuth: true },
+          { status: 401 }
+        );
+      }
+
+      const userEmail = result.email.toLowerCase();
+      const allowedEmails = getAllowedEmails();
+
+      if (
+        allowedEmails.length > 0 &&
+        !allowedEmails.includes(userEmail)
+      ) {
+        return NextResponse.json(
+          {
+            error: "Your account is not authorized to use this app",
+            requiresAuth: true,
+          },
+          { status: 401 }
+        );
+      }
+
+      return handler({
+        request,
+        auth: {
+          success: true,
+          userId: result.userId,
+          email: userEmail,
+        },
+      });
+    }
+
     const { data: session } = await auth.getSession();
 
     if (!session?.user) {
@@ -70,8 +118,6 @@ export function withAuth(handler: AuthenticatedHandler) {
     const userId = session.user.id;
     const allowedEmails = getAllowedEmails();
 
-    // Whitelist check — empty whitelist allows any authenticated email
-    // (preserves current Privy behavior from privy-server.ts lines 118-127).
     if (
       allowedEmails.length > 0 &&
       (!userEmail || !allowedEmails.includes(userEmail))

@@ -1,25 +1,56 @@
+import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/neon-auth";
 
-/**
- * Root Next.js middleware — page-level route protection via Neon Auth.
- *
- * Unauthenticated page requests are redirected to `/auth`. API routes are NOT
- * routed through this middleware because they are already protected by
- * `withAuth()` at the handler level (D-08: single centralized enforcement
- * point, and middleware-level protection would force us to special-case JSON
- * 401 responses vs page redirects).
- *
- * The matcher intentionally excludes:
- *   - /api/*        — protected by withAuth() in each route
- *   - /auth         — the sign-in page itself, else infinite redirect
- *   - /_next/*      — Next.js build assets
- *   - /icons/*      — PWA icon files
- *   - Files with extensions (favicon.ico, manifest.json, sw.js, etc.)
- */
-export default auth.middleware({ loginUrl: "/auth" });
+const ALLOWED_ORIGINS = new Set([
+  "https://localhost",
+  "http://localhost",
+  "capacitor://localhost",
+]);
+
+const CORS_HEADERS = {
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  "Access-Control-Allow-Credentials": "true",
+  "Access-Control-Max-Age": "86400",
+} as const;
+
+const authHandler = auth.middleware({ loginUrl: "/auth" });
+
+function corsHeaders(origin: string): Record<string, string> {
+  return {
+    "Access-Control-Allow-Origin": origin,
+    ...CORS_HEADERS,
+  };
+}
+
+export default async function middleware(request: NextRequest) {
+  if (request.nextUrl.pathname.startsWith("/api/")) {
+    const origin = request.headers.get("origin");
+
+    if (origin && ALLOWED_ORIGINS.has(origin)) {
+      if (request.method === "OPTIONS") {
+        return new NextResponse(null, {
+          status: 204,
+          headers: corsHeaders(origin),
+        });
+      }
+
+      const response = NextResponse.next();
+      for (const [key, value] of Object.entries(corsHeaders(origin))) {
+        response.headers.set(key, value);
+      }
+      return response;
+    }
+
+    return NextResponse.next();
+  }
+
+  return authHandler(request);
+}
 
 export const config = {
   matcher: [
-    "/((?!api|auth|_next/static|_next/image|favicon\\.ico|manifest\\.json|icons|.*\\..*).*)",
+    "/api/:path*",
+    "/((?!auth|_next/static|_next/image|favicon\\.ico|manifest\\.json|icons|.*\\..*).*)",
   ],
 };

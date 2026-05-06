@@ -10,7 +10,10 @@
   "scripts": {
     "preinstall": "npx only-allow pnpm",
     "dev": "next dev",
-    "build": "next build",
+    "build": "if [ -n \"$CAPACITOR_BUILD\" ]; then node scripts/cap-build.js; else next build; fi",
+    "build:cap": "CAPACITOR_BUILD=1 node scripts/cap-build.js",
+    "cap:sync": "npx cap sync android",
+    "cap:open": "npx cap open android",
     "vercel-build": "pnpm db:migrate && next build",
     "start": "next start",
     "lint": "next lint",
@@ -34,6 +37,9 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",
+    "@capacitor/android": "^8.3.1",
+    "@capacitor/cli": "^8.3.1",
+    "@capacitor/core": "^8.3.1",
     "@neondatabase/auth": "0.2.0-beta.1",
     "@neondatabase/serverless": "^1.0.2",
     "@radix-ui/react-accordion": "^1.2.12",

@@ -148,12 +148,9 @@ describe("root middleware.ts", () => {
     expect(mod.config).toBeDefined();
     expect(Array.isArray(mod.config.matcher)).toBe(true);
     const matcher = mod.config.matcher as string[];
-    // Matcher must leave /api, /auth, /_next, static assets alone.
-    // We spot-check the regex-fragment patterns are present.
-    expect(matcher.length).toBeGreaterThan(0);
-    const first = matcher[0]!;
-    expect(first).toContain("api");
-    expect(first).toContain("auth");
-    expect(first).toContain("_next");
+    expect(matcher.length).toBe(2);
+    expect(matcher).toContain("/api/:path*");
+    const pagePattern = matcher.find((m) => m.includes("auth") && m.includes("_next"));
+    expect(pagePattern).toBeDefined();
   });
 });
