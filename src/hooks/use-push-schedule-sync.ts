@@ -154,9 +154,27 @@ export function useDoseReminderToggle() {
         }
         setDoseRemindersEnabled(true);
       } else {
-        const token = (await getAccessToken()) ?? "";
-        await unsubscribeFromPush(token);
-        setDoseRemindersEnabled(false);
+        // Disable: always perform the browser-side unsubscribe so reminders
+        // actually stop on this device. If we have a token, also tell the
+        // server; otherwise skip the server call (a stale row will be cleaned
+        // up by /api/push/send when the dead endpoint 410s).
+        const token = await getAccessToken();
+        let unsubscribed = false;
+        if (token) {
+          unsubscribed = await unsubscribeFromPush(token);
+        } else if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+          try {
+            const reg = await navigator.serviceWorker.ready;
+            const sub = await reg.pushManager.getSubscription();
+            if (sub) await sub.unsubscribe();
+            unsubscribed = true;
+          } catch {
+            unsubscribed = false;
+          }
+        }
+        if (unsubscribed) {
+          setDoseRemindersEnabled(false);
+        }
       }
     } catch (error) {
       console.error("[dose-reminders] Toggle failed:", error);

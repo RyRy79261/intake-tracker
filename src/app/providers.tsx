@@ -69,9 +69,11 @@ function PrivyProviderWithTheme({
         },
       }}
     >
-      <AuthRequiredProvider>
-        <PinGateProvider><TimezoneGuard>{children}</TimezoneGuard></PinGateProvider>
-      </AuthRequiredProvider>
+      <PinGateProvider>
+        <AuthRequiredProvider>
+          <TimezoneGuard>{children}</TimezoneGuard>
+        </AuthRequiredProvider>
+      </PinGateProvider>
     </PrivyProvider>
   );
 }
@@ -123,9 +125,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-            <AuthRequiredProvider>
-              <PinGateProvider><TimezoneGuard>{children}</TimezoneGuard></PinGateProvider>
-            </AuthRequiredProvider>
+            <PinGateProvider>
+              <AuthRequiredProvider>
+                <TimezoneGuard>{children}</TimezoneGuard>
+              </AuthRequiredProvider>
+            </PinGateProvider>
           </ThemeProvider>
         </QueryClientProvider>
       </ErrorBoundary>
