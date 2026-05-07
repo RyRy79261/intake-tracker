@@ -82,7 +82,7 @@ describe("withAuth Bearer token validation", () => {
     expect(res.status).toBe(200);
     expect(handler).toHaveBeenCalledTimes(1);
 
-    const ctx = handler.mock.calls[0]![0] as {
+    const ctx = (handler.mock.calls as unknown[][])[0]![0] as {
       auth: { success: boolean; userId: string; email: string };
     };
     expect(ctx.auth.success).toBe(true);
@@ -192,7 +192,7 @@ describe("withAuth Bearer token validation", () => {
     const res = await wrapped(makeRequest({ bearer: "my-bearer" }));
     expect(res.status).toBe(200);
 
-    const ctx = handler.mock.calls[0]![0] as {
+    const ctx = (handler.mock.calls as unknown[][])[0]![0] as {
       auth: { userId: string; email: string };
     };
     expect(ctx.auth.userId).toBe("bearer-user");

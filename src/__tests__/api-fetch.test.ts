@@ -63,9 +63,9 @@ describe("api-fetch", () => {
       await apiFetch("/api/foo");
 
       expect(mockFetch).toHaveBeenCalledTimes(1);
-      const [url, init] = mockFetch.mock.calls[0];
+      const [url, init] = mockFetch.mock.calls[0]!;
       expect(url).toBe(`${BASE}/api/foo`);
-      const headers = init.headers as Headers;
+      const headers = init!.headers as Headers;
       expect(headers.get("Authorization")).toBe("Bearer test-session-token");
     });
 
@@ -73,9 +73,9 @@ describe("api-fetch", () => {
       const { apiFetch } = await loadModule();
       await apiFetch("/api/foo");
 
-      const [url, init] = mockFetch.mock.calls[0];
+      const [url, init] = mockFetch.mock.calls[0]!;
       expect(url).toBe(`${BASE}/api/foo`);
-      const headers = init.headers as Headers;
+      const headers = init!.headers as Headers;
       expect(headers.has("Authorization")).toBe(false);
     });
 
@@ -86,7 +86,7 @@ describe("api-fetch", () => {
         headers: { "Content-Type": "application/json", "X-Custom": "val" },
       });
 
-      const headers = mockFetch.mock.calls[0][1].headers as Headers;
+      const headers = mockFetch.mock.calls[0]![1]!.headers as Headers;
       expect(headers.get("Authorization")).toBe("Bearer tok");
       expect(headers.get("Content-Type")).toBe("application/json");
       expect(headers.get("X-Custom")).toBe("val");
@@ -99,7 +99,7 @@ describe("api-fetch", () => {
         headers: { Authorization: "Bearer explicit-tok" },
       });
 
-      const headers = mockFetch.mock.calls[0][1].headers as Headers;
+      const headers = mockFetch.mock.calls[0]![1]!.headers as Headers;
       expect(headers.get("Authorization")).toBe("Bearer explicit-tok");
     });
 
