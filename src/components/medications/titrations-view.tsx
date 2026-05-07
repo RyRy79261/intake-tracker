@@ -49,7 +49,7 @@ import {
   useDeleteTitrationPlan,
 } from "@/hooks/use-medication-queries";
 import type { TitrationPlan, MedicationPhase, Prescription } from "@/lib/db";
-import { useAuth } from "@/components/auth-guard";
+import { useAiFetch } from "@/hooks/use-ai-fetch";
 import {
   Plus,
   Play,
@@ -493,7 +493,7 @@ function TitrationDrawer({
 }) {
   const createMutation = useCreateTitrationPlan();
   const updateMutation = useUpdateTitrationPlan();
-  const { getAuthHeader } = useAuth();
+  const aiFetch = useAiFetch();
   const isEditing = editingPlan !== null;
 
   // Load existing phases for editing
@@ -645,10 +645,9 @@ function TitrationDrawer({
 
     setAiLoading(true);
     try {
-      const authHeaders = await getAuthHeader();
-      const res = await fetch("/api/ai/titration-warnings", {
+      const res = await aiFetch("/api/ai/titration-warnings", {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           prescriptions: changingRx,
           otherMedications: otherRx.length > 0 ? otherRx : undefined,
@@ -656,7 +655,7 @@ function TitrationDrawer({
         }),
       });
 
-      if (res.ok) {
+      if (res && res.ok) {
         const data = await res.json();
         if (data.warnings && Array.isArray(data.warnings)) {
           const existing = warnings.trim();
