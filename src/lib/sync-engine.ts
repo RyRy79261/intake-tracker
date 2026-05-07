@@ -36,6 +36,7 @@ import { db, type SyncQueueRow } from "@/lib/db";
 import { ack, getQueueDepth } from "@/lib/sync-queue";
 import { TABLE_PUSH_ORDER, type TableName } from "@/lib/sync-topology";
 import { apiFetch } from "@/lib/api-fetch";
+import { isOnline, initNetworkListener } from "@/lib/network-status";
 import { useSyncStatusStore } from "@/stores/sync-status-store";
 import { queryClient } from "@/lib/query-client";
 
@@ -68,8 +69,7 @@ let engineStarted = false;
 let listenersAttached = false;
 
 // Cached handler references so detach removes the exact functions we added.
-let onOnlineHandler: (() => void) | null = null;
-let onOfflineHandler: (() => void) | null = null;
+let networkCleanup: (() => void) | null = null;
 let onVisibleHandler: (() => void) | null = null;
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -218,7 +218,7 @@ async function applyServerAck(
  */
 export async function runPushCycle(): Promise<void> {
   if (pushInFlight) return;
-  if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+  if (!isOnline()) return;
 
   pushInFlight = true;
   useSyncStatusStore.setState({ isSyncing: true });
@@ -378,7 +378,7 @@ export function schedulePull(): void {
  */
 export async function runPullCycle(): Promise<void> {
   if (pullInFlight) return;
-  if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+  if (!isOnline()) return;
 
   pullInFlight = true;
   useSyncStatusStore.setState({ isSyncing: true });
@@ -494,27 +494,24 @@ export function attachLifecycleListeners(): void {
   if (typeof window === "undefined") return;
   listenersAttached = true;
 
-  onOnlineHandler = () => {
-    useSyncStatusStore.setState({ isOnline: true });
-    schedulePush(0);
-    schedulePull();
-  };
-  onOfflineHandler = () => {
-    useSyncStatusStore.setState({ isOnline: false });
-  };
+  networkCleanup = initNetworkListener((online) => {
+    useSyncStatusStore.setState({ isOnline: online });
+    if (online) {
+      schedulePush(0);
+      schedulePull();
+    }
+  });
+
   onVisibleHandler = () => {
     if (
       typeof document !== "undefined" &&
       document.visibilityState === "visible" &&
-      typeof navigator !== "undefined" &&
-      navigator.onLine
+      isOnline()
     ) {
       schedulePush(0);
     }
   };
 
-  window.addEventListener("online", onOnlineHandler);
-  window.addEventListener("offline", onOfflineHandler);
   document.addEventListener("visibilitychange", onVisibleHandler);
 }
 
@@ -524,14 +521,11 @@ export function detachLifecycleListeners(): void {
   listenersAttached = false;
   if (typeof window === "undefined") return;
 
-  if (onOnlineHandler) window.removeEventListener("online", onOnlineHandler);
-  if (onOfflineHandler)
-    window.removeEventListener("offline", onOfflineHandler);
+  networkCleanup?.();
+  networkCleanup = null;
+
   if (onVisibleHandler)
     document.removeEventListener("visibilitychange", onVisibleHandler);
-
-  onOnlineHandler = null;
-  onOfflineHandler = null;
   onVisibleHandler = null;
 }
 
@@ -560,9 +554,7 @@ export function startEngine(): void {
 
   attachLifecycleListeners();
 
-  if (typeof navigator !== "undefined") {
-    useSyncStatusStore.setState({ isOnline: navigator.onLine });
-  }
+  useSyncStatusStore.setState({ isOnline: isOnline() });
 
   // Startup pull (D-10).
   schedulePull();

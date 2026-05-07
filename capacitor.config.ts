@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.bio.intaketracker',
+  appId: 'dev.ryanjnoble.intaketracker',
   appName: 'Intake Tracker',
   webDir: 'out',
   server: {
