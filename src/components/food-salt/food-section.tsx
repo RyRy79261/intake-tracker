@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { RecentEntriesList, InlineEditFormShell } from "@/components/recent-entries-list";
 import { parseIntakeWithAI } from "@/lib/ai-client";
+import { useAiFetch } from "@/hooks/use-ai-fetch";
 import {
   useAddComposableEntry,
   useSyncEatingGroup,
@@ -32,7 +33,6 @@ import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
 import { useSaltTotalsByGroupIds } from "@/hooks/use-intake-queries";
 import { useEditRecord } from "@/hooks/use-edit-record";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/components/auth-guard";
 import { type EatingRecord } from "@/lib/db";
 import {
   getCurrentDateTimeLocal,
@@ -54,7 +54,7 @@ const SODIUM_MULTIPLIERS: Record<SodiumSource, number> = {
 
 export function FoodSection() {
   const { toast } = useToast();
-  const { getAuthHeader } = useAuth();
+  const aiFetch = useAiFetch();
   const addComposableEntry = useAddComposableEntry();
 
   // ─── Mutations ────────────────────────────────────────────────────
@@ -184,8 +184,10 @@ export function FoodSection() {
 
     setIsParsing(true);
     try {
-      const authHeaders = await getAuthHeader();
-      const result = await parseIntakeWithAI(trimmed, { authHeaders });
+      const result = await parseIntakeWithAI(trimmed, aiFetch);
+
+      // User dismissed the sign-in prompt
+      if (!result) return;
 
       // Populate form fields from AI result. The /api/ai/parse route now always
       // returns sodium in mg, so the source is always "sodium".
@@ -215,7 +217,7 @@ export function FoodSection() {
     } finally {
       setIsParsing(false);
     }
-  }, [foodText, isParsing, toast, getAuthHeader]);
+  }, [foodText, isParsing, toast, aiFetch]);
 
   const handleDetailSubmit = useCallback(async () => {
     if (isSubmitting) return;

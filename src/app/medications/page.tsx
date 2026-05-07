@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { AuthGuard } from "@/components/auth-guard";
 import { AppHeader } from "@/components/app-header";
 import { WeekDaySelector } from "@/components/medications/week-day-selector";
 import { MedTabBar, type MedTab } from "@/components/medications/med-footer";
@@ -94,9 +93,5 @@ function MedicationsContent() {
 }
 
 export default function MedicationsPage() {
-  return (
-    <AuthGuard>
-      <MedicationsContent />
-    </AuthGuard>
-  );
+  return <MedicationsContent />;
 }

@@ -13,7 +13,7 @@ import { useSettings } from "@/hooks/use-settings";
 import { useIntake } from "@/hooks/use-intake-queries";
 import { useAddComposableEntry, type ComposableEntryInput } from "@/hooks/use-composable-entry";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/components/auth-guard";
+import { useAiFetch } from "@/hooks/use-ai-fetch";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -53,7 +53,7 @@ export function PresetTab({ tab }: PresetTabProps) {
   const deletePreset = useSettingsStore((s) => s.deleteLiquidPreset);
   const addEntry = useAddComposableEntry();
   const { toast } = useToast();
-  const { getAuthHeader } = useAuth();
+  const aiFetch = useAiFetch();
 
   // Water progress data
   const settings = useSettings();
@@ -184,12 +184,15 @@ export function PresetTab({ tab }: PresetTabProps) {
     setIsLookingUp(true);
     setSelectedPresetId(null);
     try {
-      const authHeaders = await getAuthHeader();
-      const res = await fetch("/api/ai/substance-lookup", {
+      const res = await aiFetch("/api/ai/substance-lookup", {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: searchText.trim(), type: aiLookupType }),
       });
+      if (!res) {
+        // User dismissed sign-in
+        return;
+      }
       if (!res.ok) throw new Error("Lookup failed");
       const data = await res.json();
       // Map AI response substancePer100ml to correct per-100ml field based on tab

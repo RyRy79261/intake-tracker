@@ -12,7 +12,6 @@ import { CorrelationsTab } from "@/components/analytics/correlations-tab";
 import { TitrationTab } from "@/components/analytics/titration-tab";
 import { ExportControls } from "@/components/analytics/export-controls";
 import { AppHeader } from "@/components/app-header";
-import { AuthGuard } from "@/components/auth-guard";
 import { useTimeScopeRange } from "@/hooks/use-analytics-queries";
 import { useScrollHide } from "@/hooks/use-scroll-hide";
 import { useSettings } from "@/hooks/use-settings";
@@ -106,10 +105,8 @@ function AnalyticsContent() {
 
 export default function AnalyticsPage() {
   return (
-    <AuthGuard>
-      <Suspense>
-        <AnalyticsContent />
-      </Suspense>
-    </AuthGuard>
+    <Suspense>
+      <AnalyticsContent />
+    </Suspense>
   );
 }

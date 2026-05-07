@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/drawer";
 import { Loader2, Sparkles, Edit3 } from "lucide-react";
 import { useSettingsStore } from "@/stores/settings-store";
-import { useAuth } from "@/components/auth-guard";
+import { useAiFetch } from "@/hooks/use-ai-fetch";
 
 export interface SubstanceTypeSelection {
   name: string;
@@ -46,7 +46,7 @@ export function SubstanceTypePicker({
   onSelect,
 }: SubstanceTypePickerProps) {
   const substanceConfig = useSettingsStore((s) => s.substanceConfig);
-  const { getAuthHeader } = useAuth();
+  const aiFetch = useAiFetch();
 
   const [step, setStep] = useState<PickerStep>("select");
   const [customDescription, setCustomDescription] = useState("");
@@ -114,15 +114,20 @@ export function SubstanceTypePicker({
     setIsEnriching(true);
 
     try {
-      const authHeaders = await getAuthHeader();
-      const response = await fetch("/api/ai/substance-enrich", {
+      const response = await aiFetch("/api/ai/substance-enrich", {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           description: customDescription.trim(),
           type,
         }),
       });
+
+      if (!response) {
+        // User dismissed sign-in
+        setIsEnriching(false);
+        return;
+      }
 
       if (response.ok) {
         const data = await response.json();

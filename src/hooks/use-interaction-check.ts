@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from "react";
 import { getCached, setCache } from "@/lib/interaction-cache";
 import { useUpdatePrescription } from "@/hooks/use-medication-queries";
-import { useAuth } from "@/components/auth-guard";
+import { useAiFetch } from "@/hooks/use-ai-fetch";
 
 // --- Types ---
 
@@ -42,7 +42,7 @@ export function useInteractionCheck() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const { getAuthHeader } = useAuth();
+  const aiFetch = useAiFetch();
 
   const reset = useCallback(() => {
     setData(null);
@@ -82,15 +82,20 @@ export function useInteractionCheck() {
     setData(null);
 
     try {
-      const authHeaders = await getAuthHeader();
-      const response = await fetch("/api/ai/interaction-check", {
+      const response = await aiFetch("/api/ai/interaction-check", {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(params),
         signal: controller.signal,
       });
 
       clearTimeout(timeoutId);
+
+      if (!response) {
+        // User dismissed sign-in
+        setIsLoading(false);
+        return null;
+      }
 
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
@@ -122,7 +127,7 @@ export function useInteractionCheck() {
       setIsLoading(false);
       return null;
     }
-  }, [getAuthHeader]);
+  }, [aiFetch]);
 
   return { check, data, isLoading, error, reset };
 }
@@ -132,7 +137,7 @@ export function useInteractionCheck() {
 export function useRefreshInteractions() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const updatePrescription = useUpdatePrescription();
-  const { getAuthHeader } = useAuth();
+  const aiFetch = useAiFetch();
 
   const refresh = useCallback(
     async (
@@ -143,10 +148,9 @@ export function useRefreshInteractions() {
       setIsRefreshing(true);
 
       try {
-        const authHeaders = await getAuthHeader();
-        const response = await fetch("/api/ai/interaction-check", {
+        const response = await aiFetch("/api/ai/interaction-check", {
           method: "POST",
-          headers: { "Content-Type": "application/json", ...authHeaders },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             mode: "conflict" as const,
             newMedication: genericName,
@@ -154,7 +158,7 @@ export function useRefreshInteractions() {
           }),
         });
 
-        if (!response.ok) {
+        if (!response || !response.ok) {
           setIsRefreshing(false);
           return null;
         }
@@ -191,7 +195,7 @@ export function useRefreshInteractions() {
         return null;
       }
     },
-    [updatePrescription, getAuthHeader]
+    [updatePrescription, aiFetch]
   );
 
   return { refresh, isRefreshing };

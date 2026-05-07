@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { PillIcon } from "./pill-icon";
-import { useMedicineSearch, type MedicineSearchResult } from "@/hooks/use-medicine-search";
+import { useMedicineSearch, MedicineSearchCancelledError, type MedicineSearchResult } from "@/hooks/use-medicine-search";
 import { useAddPrescription, usePrescriptions, useAddMedicationToPrescription, usePhasesForPrescription } from "@/hooks/use-medication-queries";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
@@ -539,7 +539,9 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
                 onSearch={handleSearch}
                 isSearching={searchMutation.isPending}
                 result={searchResult}
-                {...(searchMutation.error?.message && { error: searchMutation.error.message })}
+                {...(searchMutation.error &&
+                  !(searchMutation.error instanceof MedicineSearchCancelledError) &&
+                  searchMutation.error.message && { error: searchMutation.error.message })}
                 brandName={brandName}
                 onBrandNameChange={(v) => setBrandName(capitalizeWords(v))}
                 genericName={genericName}

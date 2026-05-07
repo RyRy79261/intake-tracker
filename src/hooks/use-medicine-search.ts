@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation } from "@tanstack/react-query";
-import { useAuth } from "@/components/auth-guard";
+import { useAiFetch } from "@/hooks/use-ai-fetch";
 import { useSettingsStore } from "@/stores/settings-store";
 
 export interface MedicineSearchResult {
@@ -22,15 +22,22 @@ export interface MedicineSearchResult {
   isGenericFallback: boolean;
 }
 
+export class MedicineSearchCancelledError extends Error {
+  constructor() {
+    super("Medicine search cancelled");
+    this.name = "MedicineSearchCancelledError";
+  }
+}
+
 export function useMedicineSearch() {
-  const { getAuthHeader } = useAuth();
+  const aiFetch = useAiFetch();
 
   return useMutation({
     mutationFn: async (query: string): Promise<MedicineSearchResult> => {
       const state = useSettingsStore.getState();
       const primary = state.primaryRegion;
       const secondary = state.secondaryRegion;
-      
+
       let countryContext: string | undefined = undefined;
       if (primary && primary !== "none") {
         countryContext = primary;
@@ -39,23 +46,18 @@ export function useMedicineSearch() {
         }
       }
 
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      };
-
-      const authHeader = await getAuthHeader();
-      if (authHeader.Authorization) {
-        headers.Authorization = authHeader.Authorization;
-      }
-
-      const response = await fetch("/api/ai/medicine-search", {
+      const response = await aiFetch("/api/ai/medicine-search", {
         method: "POST",
-        headers,
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           query,
           country: countryContext,
         }),
       });
+
+      if (!response) {
+        throw new MedicineSearchCancelledError();
+      }
 
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));

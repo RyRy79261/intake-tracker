@@ -6,7 +6,6 @@ import { useSettings } from "@/hooks/use-settings";
 import { useToast } from "@/hooks/use-toast";
 import { useScrollHide } from "@/hooks/use-scroll-hide";
 import { AppHeader } from "@/components/app-header";
-import { AuthGuard } from "@/components/auth-guard";
 import { DebugPanel } from "@/components/debug-panel";
 import { CustomizationPanel } from "@/components/customization-panel";
 import { AboutDialog } from "@/components/about-dialog";
@@ -89,9 +88,5 @@ function SettingsContent() {
 }
 
 export default function SettingsPage() {
-  return (
-    <AuthGuard>
-      <SettingsContent />
-    </AuthGuard>
-  );
+  return <SettingsContent />;
 }

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AuthGuard } from "@/components/auth-guard";
 import { WeightCard } from "@/components/weight-card";
 import { BloodPressureCard } from "@/components/blood-pressure-card";
 import { AppHeader } from "@/components/app-header";
@@ -115,9 +114,5 @@ function HomeContent() {
 }
 
 export default function Home() {
-  return (
-    <AuthGuard>
-      <HomeContent />
-    </AuthGuard>
-  );
+  return <HomeContent />;
 }
