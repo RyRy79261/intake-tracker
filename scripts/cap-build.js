@@ -18,6 +18,9 @@ function restore() {
 }
 
 process.env.CAPACITOR_BUILD = '1';
+if (!process.env.NEXT_PUBLIC_API_BASE_URL) {
+  process.env.NEXT_PUBLIC_API_BASE_URL = 'https://intake-tracker.ryanjnoble.dev';
+}
 stash();
 try {
   execSync('npx next build', { stdio: 'inherit', env: process.env });

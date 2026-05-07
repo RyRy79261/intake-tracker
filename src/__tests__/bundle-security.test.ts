@@ -10,7 +10,9 @@ import * as fs from "fs";
 import * as path from "path";
 
 const staticDir = path.resolve(process.cwd(), ".next/static");
-const hasBuildArtifacts = fs.existsSync(staticDir);
+const devMarker = path.join(staticDir, "development");
+const hasBuildArtifacts =
+  fs.existsSync(staticDir) && !fs.existsSync(devMarker);
 
 function getAllFilesRecursive(dir: string): string[] {
   const files: string[] = [];
@@ -30,7 +32,10 @@ function getAllFilesRecursive(dir: string): string[] {
 
 function readBundleContents(staticDir: string): string {
   const files = getAllFilesRecursive(staticDir).filter(
-    (f) => f.endsWith(".js") || f.endsWith(".css")
+    (f) =>
+      (f.endsWith(".js") || f.endsWith(".css")) &&
+      !f.includes("/webpack/") &&
+      !f.includes("/development/")
   );
   return files.map((f) => fs.readFileSync(f, "utf-8")).join("\n");
 }
