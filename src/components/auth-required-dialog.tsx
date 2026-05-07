@@ -58,17 +58,27 @@ function PrivyAuthRequiredProvider({ children }: { children: React.ReactNode }) 
   const { authenticated, login, logout } = usePrivy();
   const [state, setState] = useState<DialogState>({ open: false, variant: "general" });
   const resolverRef = useRef<((success: boolean) => void) | null>(null);
+  // Tracks whether we've observed `authenticated === false` since the resolver
+  // was attached. Without this, the auto-resolve effect can fire on a stale
+  // `authenticated === true` render right after notifyExpired() opens the
+  // dialog (Privy's logout() does not synchronously flip the hook state).
+  const seenUnauthenticatedRef = useRef(false);
 
   const closeWith = useCallback((success: boolean) => {
     const resolve = resolverRef.current;
     resolverRef.current = null;
+    seenUnauthenticatedRef.current = false;
     setState((prev) => ({ ...prev, open: false }));
     resolve?.(success);
   }, []);
 
-  // Auto-resolve any pending request once Privy reports authenticated.
   useEffect(() => {
-    if (authenticated && resolverRef.current) {
+    if (!resolverRef.current) return;
+    if (!authenticated) {
+      seenUnauthenticatedRef.current = true;
+      return;
+    }
+    if (seenUnauthenticatedRef.current) {
       closeWith(true);
     }
   }, [authenticated, closeWith]);
@@ -78,6 +88,8 @@ function PrivyAuthRequiredProvider({ children }: { children: React.ReactNode }) 
       if (authenticated) return Promise.resolve(true);
       return new Promise<boolean>((resolve) => {
         resolverRef.current?.(false);
+        // We've already verified authenticated is false; the gate is open.
+        seenUnauthenticatedRef.current = true;
         resolverRef.current = resolve;
         setState({ open: true, variant });
       });
@@ -93,6 +105,8 @@ function PrivyAuthRequiredProvider({ children }: { children: React.ReactNode }) 
     }
     return new Promise<boolean>((resolve) => {
       resolverRef.current?.(false);
+      // Wait for an actual flip to unauthenticated before allowing auto-resolve.
+      seenUnauthenticatedRef.current = false;
       resolverRef.current = resolve;
       setState({ open: true, variant: "expired" });
     });

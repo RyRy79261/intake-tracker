@@ -124,7 +124,7 @@ export function SubstanceTypePicker({
       });
 
       if (!response) {
-        // User dismissed sign-in
+        // User dismissed sign-in — stay on the input step.
         setIsEnriching(false);
         return;
       }
@@ -141,6 +141,7 @@ export function SubstanceTypePicker({
           setOverrideAmount(String(data.standardDrinks ?? ""));
           setOverrideVolume(String(data.volumeMl ?? ""));
         }
+        setStep("other-result");
       } else {
         // Fallback to defaults on error
         setAiResult(null);
@@ -156,6 +157,7 @@ export function SubstanceTypePicker({
           setOverrideAmount(String(otherType.defaultDrinks));
           setOverrideVolume(String(otherType.defaultVolumeMl));
         }
+        setStep("other-result");
       }
     } catch {
       // Offline or network error -- fallback to defaults
@@ -172,9 +174,9 @@ export function SubstanceTypePicker({
         setOverrideAmount(String(otherType.defaultDrinks));
         setOverrideVolume(String(otherType.defaultVolumeMl));
       }
+      setStep("other-result");
     } finally {
       setIsEnriching(false);
-      setStep("other-result");
     }
   };
 
