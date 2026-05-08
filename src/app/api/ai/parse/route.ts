@@ -128,7 +128,7 @@ export const POST = withAuth(async ({ request, auth }) => {
     }
 
     const { input } = parsed.data;
-    console.log(`[AUDIT] AI parse from user: ${auth.userId} (${auth.email || auth.wallet})`);
+    console.log(`[AUDIT] AI parse from user: ${auth.userId}`);
 
     let client;
     try {
@@ -169,7 +169,10 @@ export const POST = withAuth(async ({ request, auth }) => {
         max_tokens: 1024,
         temperature: 0,
         system: SYSTEM_PROMPT,
-        tools: [PARSE_RESULT_TOOL],
+        // WEB_SEARCH_TOOL must stay declared because the prior assistant turn
+        // may contain server_tool_use blocks; tool_choice still forces the
+        // structured tool.
+        tools: [WEB_SEARCH_TOOL, PARSE_RESULT_TOOL],
         tool_choice: { type: "tool", name: PARSE_RESULT_TOOL.name },
         messages: [
           { role: "user", content: userMessage },
@@ -190,10 +193,11 @@ export const POST = withAuth(async ({ request, auth }) => {
       );
     }
 
+    const toolInput = toolBlock.input as Record<string, unknown>;
     const validated = AIParseResponseSchema.safeParse({
-      water: (toolBlock.input as Record<string, unknown>).water_ml,
-      sodiumMg: (toolBlock.input as Record<string, unknown>).sodium_mg,
-      reasoning: (toolBlock.input as Record<string, unknown>).reasoning,
+      water: toolInput.water_ml,
+      sodiumMg: toolInput.sodium_mg,
+      reasoning: toolInput.reasoning,
     });
     if (!validated.success) {
       console.error("[VALIDATION] AI response validation failed:", JSON.stringify(validated.error.flatten()));

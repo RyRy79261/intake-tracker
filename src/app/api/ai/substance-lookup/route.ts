@@ -147,7 +147,10 @@ export const POST = withAuth(async ({ request, auth }) => {
         max_tokens: 1024,
         temperature: 0,
         system: systemPrompt,
-        tools: [SUBSTANCE_LOOKUP_TOOL],
+        // WEB_SEARCH_TOOL must stay declared because the prior assistant turn
+        // may contain server_tool_use blocks; tool_choice still forces the
+        // structured tool.
+        tools: [WEB_SEARCH_TOOL, SUBSTANCE_LOOKUP_TOOL],
         tool_choice: { type: "tool", name: SUBSTANCE_LOOKUP_TOOL.name },
         messages: [
           { role: "user", content: userPrompt },

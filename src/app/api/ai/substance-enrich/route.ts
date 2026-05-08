@@ -3,13 +3,8 @@ import { z } from "zod";
 import type Anthropic from "@anthropic-ai/sdk";
 import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
-import {
-  getClaudeClient,
-  CLAUDE_MODELS,
-  WEB_SEARCH_TOOL,
-  GRAMS_PER_STANDARD_DRINK,
-  ETHANOL_DENSITY_G_PER_ML,
-} from "../_shared/claude-client";
+import { getClaudeClient, CLAUDE_MODELS, WEB_SEARCH_TOOL } from "../_shared/claude-client";
+import { ethanolGrams, standardDrinksFromAbv } from "@/lib/alcohol-units";
 
 /**
  * AI enrichment for caffeine / alcohol "Other" entries. Uses Opus + web_search
@@ -205,7 +200,10 @@ export const POST = withAuth(async ({ request, auth }) => {
         max_tokens: 1024,
         temperature: 0,
         system: systemPrompt,
-        tools: [tool],
+        // WEB_SEARCH_TOOL must stay declared because the prior assistant turn
+        // may contain server_tool_use blocks; tool_choice still forces the
+        // structured tool.
+        tools: [WEB_SEARCH_TOOL, tool],
         tool_choice: { type: "tool", name: tool.name },
         messages: [
           { role: "user", content: userPrompt },
@@ -253,17 +251,15 @@ export const POST = withAuth(async ({ request, auth }) => {
       );
     }
 
-    // Compute grams of ethanol and convert to metric standard drinks (10 g).
-    const ethanolGrams =
-      validated.data.volumeMl * (validated.data.abvPercent / 100) * ETHANOL_DENSITY_G_PER_ML;
+    const grams = ethanolGrams(validated.data.abvPercent, validated.data.volumeMl);
     const standardDrinks =
-      Math.round((ethanolGrams / GRAMS_PER_STANDARD_DRINK) * 10) / 10;
+      Math.round(standardDrinksFromAbv(validated.data.abvPercent, validated.data.volumeMl) * 10) / 10;
 
     return NextResponse.json({
       standardDrinks,
       volumeMl: validated.data.volumeMl,
       abvPercent: validated.data.abvPercent,
-      ethanolGrams: Math.round(ethanolGrams * 10) / 10,
+      ethanolGrams: Math.round(grams * 10) / 10,
       ...(validated.data.reasoning !== undefined && { reasoning: validated.data.reasoning }),
     });
   } catch (error) {
