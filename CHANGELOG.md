@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.1](https://github.com/RyRy79261/intake-tracker/compare/v1.5.0...v1.5.1) (2026-05-08)
+
+
+### Bug Fixes
+
+* address PR review feedback on inline edit forms ([d6bd7e5](https://github.com/RyRy79261/intake-tracker/commit/d6bd7e5b68b77adb14715bf26c9f437ebdb83dbe))
+* expose missing fields in inline edit forms ([63feb85](https://github.com/RyRy79261/intake-tracker/commit/63feb855c8cf67a8669948e4fb6f996b768d7c77))
+
 ## [1.5.0](https://github.com/RyRy79261/intake-tracker/compare/v1.4.0...v1.5.0) (2026-05-08)
 
 
