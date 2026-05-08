@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -101,6 +101,8 @@ export function FoodSection() {
   const [editSodiumMg, setEditSodiumMg] = useState("");
   const [editSodiumSource, setEditSodiumSource] = useState<SodiumSource>("sodium");
   const [editWaterMl, setEditWaterMl] = useState("");
+  // Token to discard stale fetchEntryGroup results when opening another record
+  const openTokenRef = useRef(0);
 
   const {
     editingRecord,
@@ -113,12 +115,14 @@ export function FoodSection() {
     handleEditSubmit,
   } = useEditRecord<EatingRecord>({
     onOpen: (record) => {
+      const token = ++openTokenRef.current;
       setEditGrams(record.grams?.toString() || "");
       setEditSodiumMg("");
       setEditSodiumSource("sodium");
       setEditWaterMl("");
       if (record.groupId) {
         void fetchEntryGroup(record.groupId).then((group) => {
+          if (token !== openTokenRef.current) return;
           if (!group) return;
           const salt = group.intakes.find((r) => r.type === "salt");
           const water = group.intakes.find(

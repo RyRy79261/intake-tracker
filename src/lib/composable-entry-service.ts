@@ -347,12 +347,17 @@ export async function syncEatingGroup(
         .equals(groupId)
         .toArray();
 
-      const existingSalt = groupIntakes.find(
+      // Some legacy data may have multiple linked salt/water rows in one
+      // group. Reconcile the first match with the new value, soft-delete
+      // the rest so duplicates don't keep contributing to totals.
+      const existingSalts = groupIntakes.filter(
         (r) => r.type === "salt" && r.deletedAt === null && isSodiumKindSource(r.source),
       );
-      const existingWater = groupIntakes.find(
+      const existingWaters = groupIntakes.filter(
         (r) => r.type === "water" && r.deletedAt === null && r.source === FOOD_WATER_SOURCE,
       );
+      const [existingSalt, ...extraSalts] = existingSalts;
+      const [existingWater, ...extraWaters] = existingWaters;
 
       const sodiumSource = `manual:${patch.sodiumKind}`;
       const groupSource = eating.groupSource ?? "manual_food_entry";
@@ -385,16 +390,23 @@ export async function syncEatingGroup(
           updatedAt: now,
         });
       }
+      for (const dup of extraSalts) {
+        await db.intakeRecords.update(dup.id, {
+          deletedAt: now,
+          updatedAt: now,
+        });
+      }
 
       // ── Water content intake ──
       if (patch.waterMl > 0) {
         const waterNote = patch.note;
         if (existingWater) {
+          // Don't clear an existing note when the patch doesn't carry one.
           const waterUpdates: Record<string, unknown> = {
             amount: patch.waterMl,
             timestamp: patch.timestamp,
-            note: waterNote,
             updatedAt: now,
+            ...(waterNote !== undefined && { note: waterNote }),
           };
           await db.intakeRecords.update(existingWater.id, waterUpdates);
         } else {
@@ -413,6 +425,12 @@ export async function syncEatingGroup(
         }
       } else if (existingWater) {
         await db.intakeRecords.update(existingWater.id, {
+          deletedAt: now,
+          updatedAt: now,
+        });
+      }
+      for (const dup of extraWaters) {
+        await db.intakeRecords.update(dup.id, {
           deletedAt: now,
           updatedAt: now,
         });

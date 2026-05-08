@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -24,7 +24,7 @@ import { useEditRecord } from "@/hooks/use-edit-record";
 import { useSyncLiquidGroup, fetchEntryGroup } from "@/hooks/use-composable-entry";
 import { cn, formatAmount, getLiquidTypeLabel } from "@/lib/utils";
 import { formatTimeOnly } from "@/lib/date-utils";
-import { type IntakeRecord, type SubstanceRecord } from "@/lib/db";
+import { type IntakeRecord } from "@/lib/db";
 
 const TAB_THEMES = {
   water: CARD_THEMES.water,
@@ -65,6 +65,8 @@ export function LiquidsCard() {
     description: string;
   } | null>(null);
   const [editSubstanceAmount, setEditSubstanceAmount] = useState("");
+  // Token to discard stale fetchEntryGroup results when opening another record
+  const openTokenRef = useRef(0);
 
   const {
     editingRecord,
@@ -77,6 +79,7 @@ export function LiquidsCard() {
     handleEditSubmit,
   } = useEditRecord<IntakeRecord>({
     onOpen: (record) => {
+      const token = ++openTokenRef.current;
       setEditAmount(record.amount.toString());
       setEditBeverageName("");
       setShowBeverageNameField(false);
@@ -93,10 +96,10 @@ export function LiquidsCard() {
 
       if (record.groupId) {
         void fetchEntryGroup(record.groupId).then((group) => {
+          if (token !== openTokenRef.current) return;
           if (!group) return;
           const substance = group.substances.find(
-            (s): s is SubstanceRecord =>
-              s.type === "caffeine" || s.type === "alcohol",
+            (s) => s.type === "caffeine" || s.type === "alcohol",
           );
           if (!substance) return;
           setEditSubstance({
@@ -127,7 +130,10 @@ export function LiquidsCard() {
         timestamp,
         note,
       };
-      // Update source for beverage rename (only when no substance group is involved)
+      // Update IntakeRecord.source for plain beverage entries so the
+      // displayed name stays in sync. For coffee/alcohol entries the source
+      // is a `preset:<id>` / `substance:<id>` reference and the user-facing
+      // name lives on SubstanceRecord.description (synced separately below).
       if (showBeverageNameField && !editSubstance) {
         const trimmed = editBeverageName.trim();
         updates.source = trimmed ? `beverage:${trimmed}` : "beverage";
@@ -139,20 +145,28 @@ export function LiquidsCard() {
       // Sync linked substance records when editing a coffee/alcohol entry
       if (editingRecord?.groupId && editSubstance) {
         const u = updates as { amount: number; timestamp: number };
-        const substanceAmount = editSubstanceAmount
-          ? parseFloat(editSubstanceAmount)
-          : 0;
+        const rawSubstanceAmount = editSubstanceAmount.trim();
+        const parsedSubstanceAmount = rawSubstanceAmount
+          ? parseFloat(rawSubstanceAmount)
+          : NaN;
+        const hasSubstanceAmount =
+          rawSubstanceAmount !== "" &&
+          !isNaN(parsedSubstanceAmount) &&
+          parsedSubstanceAmount >= 0;
         await syncLiquidGroupMutation(editingRecord.groupId, {
           timestamp: u.timestamp,
           description: editBeverageName.trim() || editSubstance.description,
           volumeMl: u.amount,
-          ...(editSubstance.type === "caffeine" && {
-            amountMg: substanceAmount > 0 ? Math.round(substanceAmount) : 0,
-          }),
-          ...(editSubstance.type === "alcohol" && {
-            amountStandardDrinks:
-              substanceAmount > 0 ? parseFloat(substanceAmount.toFixed(2)) : 0,
-          }),
+          // Only include the typed amount when the user supplied a value;
+          // otherwise leave the existing linked-record value intact.
+          ...(hasSubstanceAmount &&
+            editSubstance.type === "caffeine" && {
+              amountMg: Math.round(parsedSubstanceAmount),
+            }),
+          ...(hasSubstanceAmount &&
+            editSubstance.type === "alcohol" && {
+              amountStandardDrinks: parseFloat(parsedSubstanceAmount.toFixed(2)),
+            }),
         });
       }
     },

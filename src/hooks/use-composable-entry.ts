@@ -18,6 +18,8 @@ import {
   type RecordTable,
   type SodiumKind,
 } from "@/lib/composable-entry-service";
+import { unwrap } from "@/lib/service-result";
+import { showUndoToast } from "@/components/medications/undo-toast";
 
 export type { ComposableEntryInput, ComposableEntryResult, EntryGroup, RecordTable, SodiumKind };
 
@@ -27,8 +29,6 @@ export type { ComposableEntryInput, ComposableEntryResult, EntryGroup, RecordTab
  */
 export const fetchEntryGroup = getEntryGroup;
 export const sodiumKindFromSource = parseSodiumKindFromSource;
-import { unwrap } from "@/lib/service-result";
-import { showUndoToast } from "@/components/medications/undo-toast";
 
 /**
  * Reactive hook for reading all records in a composable entry group.
