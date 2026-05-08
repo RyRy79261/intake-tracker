@@ -25,6 +25,7 @@ import { useSyncLiquidGroup, fetchEntryGroup } from "@/hooks/use-composable-entr
 import { cn, formatAmount, getLiquidTypeLabel } from "@/lib/utils";
 import { formatTimeOnly } from "@/lib/date-utils";
 import { type IntakeRecord } from "@/lib/db";
+import { standardDrinksFromAbv } from "@/lib/alcohol-units";
 
 const TAB_THEMES = {
   water: CARD_THEMES.water,
@@ -92,6 +93,27 @@ export function LiquidsCard() {
         setEditBeverageName(source.slice("beverage:".length));
       } else if (source === "beverage") {
         setShowBeverageNameField(true);
+      } else if (source.startsWith("preset:")) {
+        // Coffee/alcohol entries reference a preset by id. Look up the preset
+        // synchronously so the substance input shows even if the entry has no
+        // groupId (older records pre-v15) or fetchEntryGroup is slow.
+        const presetId = source.slice("preset:".length);
+        const preset = settings.liquidPresets.find((p) => p.id === presetId);
+        if (preset && (preset.tab === "coffee" || preset.tab === "alcohol")) {
+          const type = preset.tab === "coffee" ? "caffeine" : "alcohol";
+          setEditSubstance({ type, description: preset.name });
+          setEditBeverageName(preset.name);
+          setShowBeverageNameField(true);
+          // Pre-fill from preset's defaults; fetchEntryGroup will override
+          // with the actual logged amount if a SubstanceRecord exists.
+          if (type === "caffeine" && preset.caffeinePer100ml !== undefined) {
+            const mg = Math.round((record.amount / 100) * preset.caffeinePer100ml);
+            setEditSubstanceAmount(mg.toString());
+          } else if (type === "alcohol" && preset.alcoholPer100ml !== undefined) {
+            const stdDrinks = standardDrinksFromAbv(preset.alcoholPer100ml, record.amount);
+            setEditSubstanceAmount(parseFloat(stdDrinks.toFixed(2)).toString());
+          }
+        }
       }
 
       if (record.groupId) {
