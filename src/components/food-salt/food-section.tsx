@@ -135,11 +135,11 @@ export function FoodSection() {
       const authHeaders = await getAuthHeader();
       const result = await parseIntakeWithAI(trimmed, { authHeaders });
 
-      // Populate form fields from AI result
+      // Populate form fields from AI result. The /api/ai/parse route now always
+      // returns sodium in mg, so the source is always "sodium".
       if (result.salt && result.salt > 0) {
         setSodiumMg(result.salt.toString());
-        // Auto-select sodium source based on what the AI reported
-        setSodiumSource(result.measurementType === "salt" ? "salt" : "sodium");
+        setSodiumSource("sodium");
       }
       if (result.water && result.water > 0) {
         setWaterMl(result.water.toString());
