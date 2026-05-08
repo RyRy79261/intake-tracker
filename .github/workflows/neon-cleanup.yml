@@ -1,0 +1,92 @@
+name: Neon Branch Cleanup
+
+# Backstop for orphaned preview branches that the per-PR workflow missed
+# (e.g. PR closed while the workflow was disabled, fork PRs without secrets,
+# transient API errors). Conservative: only deletes branches whose name
+# matches `preview/pr-<number>-*` AND whose PR is closed or merged. Leaves
+# everything else (main, staging, production, native-integration branches,
+# manually-created branches) untouched.
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    name: Delete closed-PR preview branches
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    steps:
+      - name: Delete orphaned Neon preview branches
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${NEON_API_KEY:-}" ] || [ -z "${NEON_PROJECT_ID:-}" ]; then
+            echo "::error::NEON_API_KEY or NEON_PROJECT_ID is not set"
+            exit 1
+          fi
+
+          api="https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches"
+
+          branches_json=$(curl -fsS \
+            -H "Authorization: Bearer $NEON_API_KEY" \
+            -H "Accept: application/json" \
+            "$api")
+
+          mapfile -t entries < <(
+            echo "$branches_json" |
+              jq -r '.branches[] | select(.name | startswith("preview/pr-")) | "\(.id)\t\(.name)"'
+          )
+
+          if [ "${#entries[@]}" -eq 0 ]; then
+            echo "No preview/pr-* branches found."
+            exit 0
+          fi
+
+          deleted=0
+          kept=0
+          failed=0
+          for entry in "${entries[@]}"; do
+            id="${entry%%$'\t'*}"
+            name="${entry#*$'\t'}"
+
+            pr_num=$(printf '%s' "$name" | sed -nE 's|^preview/pr-([0-9]+)-.*$|\1|p')
+            if [ -z "$pr_num" ]; then
+              echo "skip (unparseable): $name"
+              kept=$((kept + 1))
+              continue
+            fi
+
+            state=$(gh pr view "$pr_num" --repo "$REPO" --json state -q .state 2>/dev/null || echo "UNKNOWN")
+            echo "branch=$name id=$id pr=#$pr_num state=$state"
+
+            case "$state" in
+              CLOSED|MERGED)
+                http_status=$(curl -sS -o /dev/null -w "%{http_code}" -X DELETE \
+                  -H "Authorization: Bearer $NEON_API_KEY" \
+                  "$api/$id")
+                if [ "$http_status" = "200" ] || [ "$http_status" = "204" ]; then
+                  echo "  deleted"
+                  deleted=$((deleted + 1))
+                else
+                  echo "::warning::delete failed for $name ($id), HTTP $http_status"
+                  failed=$((failed + 1))
+                fi
+                ;;
+              *)
+                kept=$((kept + 1))
+                ;;
+            esac
+          done
+
+          echo "Summary: deleted=$deleted kept=$kept failed=$failed"
+          if [ "$failed" -gt 0 ]; then
+            exit 1
+          fi
