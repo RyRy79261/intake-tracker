@@ -282,6 +282,210 @@ export async function undoDeleteSingleRecord(
   }
 }
 
+// ─── syncEatingGroup ──────────────────────────────────────────────────
+
+export type SodiumKind = "sodium" | "salt" | "msg";
+
+const FOOD_WATER_SOURCE = "manual:food_water_content";
+const SODIUM_KINDS: ReadonlyArray<SodiumKind> = ["sodium", "salt", "msg"];
+
+function isSodiumKindSource(source: string | undefined): boolean {
+  if (!source) return false;
+  return SODIUM_KINDS.some((k) => source === `manual:${k}`);
+}
+
+/**
+ * Apply edits to an eating record and its linked sodium / water-content
+ * intake records (linked by groupId). Creates/updates/soft-deletes the
+ * linked intake records to match the requested values.
+ *
+ * - If the eating record has no groupId, one is generated and assigned.
+ * - sodiumMg / waterMl of 0 (or undefined) soft-deletes any existing
+ *   linked record of that kind.
+ */
+export async function syncEatingGroup(
+  eatingId: string,
+  patch: {
+    timestamp: number;
+    note: string | undefined;
+    grams: number | undefined;
+    sodiumMg: number;
+    sodiumKind: SodiumKind;
+    waterMl: number;
+  },
+): Promise<ServiceResult<void>> {
+  try {
+    const fields = syncFields();
+    const now = fields.updatedAt;
+
+    await db.transaction("rw", [...COMPOSABLE_TABLES], async () => {
+      const eating = await db.eatingRecords.get(eatingId);
+      if (!eating) throw new Error("Eating record not found");
+
+      let groupId = eating.groupId;
+      if (!groupId && (patch.sodiumMg > 0 || patch.waterMl > 0)) {
+        groupId = crypto.randomUUID();
+      }
+
+      // ── Update the eating record itself ──
+      // Note: Dexie's update accepts undefined to clear optional fields,
+      // but exactOptionalPropertyTypes rejects that on Partial<EatingRecord>.
+      const eatingUpdates: Record<string, unknown> = {
+        timestamp: patch.timestamp,
+        note: patch.note,
+        grams: patch.grams,
+        updatedAt: now,
+      };
+      if (!eating.groupId && groupId) eatingUpdates.groupId = groupId;
+      await db.eatingRecords.update(eatingId, eatingUpdates);
+
+      if (!groupId) return; // Nothing else to sync
+
+      // ── Find existing linked records ──
+      const groupIntakes = await db.intakeRecords
+        .where("groupId")
+        .equals(groupId)
+        .toArray();
+
+      const existingSalt = groupIntakes.find(
+        (r) => r.type === "salt" && r.deletedAt === null && isSodiumKindSource(r.source),
+      );
+      const existingWater = groupIntakes.find(
+        (r) => r.type === "water" && r.deletedAt === null && r.source === FOOD_WATER_SOURCE,
+      );
+
+      const sodiumSource = `manual:${patch.sodiumKind}`;
+      const groupSource = eating.groupSource ?? "manual_food_entry";
+
+      // ── Sodium intake ──
+      if (patch.sodiumMg > 0) {
+        if (existingSalt) {
+          await db.intakeRecords.update(existingSalt.id, {
+            amount: patch.sodiumMg,
+            source: sodiumSource,
+            timestamp: patch.timestamp,
+            updatedAt: now,
+          });
+        } else {
+          const record: IntakeRecord = {
+            id: crypto.randomUUID(),
+            type: "salt",
+            amount: patch.sodiumMg,
+            timestamp: patch.timestamp,
+            source: sodiumSource,
+            groupId,
+            groupSource,
+            ...fields,
+          };
+          await db.intakeRecords.add(record);
+        }
+      } else if (existingSalt) {
+        await db.intakeRecords.update(existingSalt.id, {
+          deletedAt: now,
+          updatedAt: now,
+        });
+      }
+
+      // ── Water content intake ──
+      if (patch.waterMl > 0) {
+        const waterNote = patch.note;
+        if (existingWater) {
+          const waterUpdates: Record<string, unknown> = {
+            amount: patch.waterMl,
+            timestamp: patch.timestamp,
+            note: waterNote,
+            updatedAt: now,
+          };
+          await db.intakeRecords.update(existingWater.id, waterUpdates);
+        } else {
+          const record: IntakeRecord = {
+            id: crypto.randomUUID(),
+            type: "water",
+            amount: patch.waterMl,
+            timestamp: patch.timestamp,
+            source: FOOD_WATER_SOURCE,
+            groupId,
+            groupSource,
+            ...(waterNote !== undefined && { note: waterNote }),
+            ...fields,
+          };
+          await db.intakeRecords.add(record);
+        }
+      } else if (existingWater) {
+        await db.intakeRecords.update(existingWater.id, {
+          deletedAt: now,
+          updatedAt: now,
+        });
+      }
+    });
+
+    return ok(undefined);
+  } catch (e) {
+    return err("Failed to sync eating group", e);
+  }
+}
+
+/** Sodium kind embedded in the source tag of a linked salt intake record. */
+export function parseSodiumKindFromSource(source: string | undefined): SodiumKind {
+  if (source === "manual:salt") return "salt";
+  if (source === "manual:msg") return "msg";
+  return "sodium";
+}
+
+// ─── syncLiquidGroup ──────────────────────────────────────────────────
+
+/**
+ * Apply edits to the linked substance records of a liquid intake entry.
+ * Used when editing a coffee/alcohol/preset entry inline — keeps the
+ * substance amount (mg / std drinks) and description in sync with the
+ * water IntakeRecord.
+ *
+ * Pass `volumeMl` so any substance record that tracks liquid volume
+ * stays consistent with the edited IntakeRecord amount.
+ */
+export async function syncLiquidGroup(
+  groupId: string,
+  patch: {
+    timestamp: number;
+    description?: string;
+    volumeMl: number;
+    amountMg?: number;
+    amountStandardDrinks?: number;
+  },
+): Promise<ServiceResult<void>> {
+  try {
+    const now = Date.now();
+
+    await db.transaction("rw", [db.substanceRecords], async () => {
+      const substances = await db.substanceRecords
+        .where("groupId")
+        .equals(groupId)
+        .toArray();
+
+      for (const sub of substances) {
+        if (sub.deletedAt !== null) continue;
+        const updates: Partial<SubstanceRecord> = {
+          timestamp: patch.timestamp,
+          updatedAt: now,
+        };
+        if (patch.description !== undefined) updates.description = patch.description;
+        if (sub.volumeMl !== undefined) updates.volumeMl = patch.volumeMl;
+        if (sub.type === "caffeine" && patch.amountMg !== undefined) {
+          updates.amountMg = patch.amountMg;
+        }
+        if (sub.type === "alcohol" && patch.amountStandardDrinks !== undefined) {
+          updates.amountStandardDrinks = patch.amountStandardDrinks;
+        }
+        await db.substanceRecords.update(sub.id, updates);
+      }
+    });
+
+    return ok(undefined);
+  } catch (e) {
+    return err("Failed to sync liquid group", e);
+  }
+}
+
 // ─── recalculateFromCurrentValues (stub) ──────────────────────────────
 
 export async function recalculateFromCurrentValues(

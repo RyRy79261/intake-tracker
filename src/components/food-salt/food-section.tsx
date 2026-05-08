@@ -18,16 +18,18 @@ import { RecentEntriesList, InlineEditFormShell } from "@/components/recent-entr
 import { parseIntakeWithAI } from "@/lib/ai-client";
 import {
   useAddComposableEntry,
+  useSyncEatingGroup,
+  fetchEntryGroup,
+  sodiumKindFromSource,
   type ComposableEntryInput,
 } from "@/hooks/use-composable-entry";
 import {
   useEatingRecords,
   useAddEating,
   useDeleteEating,
-  useUpdateEating,
 } from "@/hooks/use-eating-queries";
 import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
-import { useSaltTotalsByGroupIds, useDeleteIntake, useUpdateIntake } from "@/hooks/use-intake-queries";
+import { useSaltTotalsByGroupIds } from "@/hooks/use-intake-queries";
 import { useEditRecord } from "@/hooks/use-edit-record";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/components/auth-guard";
@@ -88,14 +90,17 @@ export function FoodSection() {
   const groupSodiumMap = useSaltTotalsByGroupIds(groupIds);
 
   const deleteMutation = useDeleteEating();
-  const updateMutation = useUpdateEating();
+  const syncEatingGroupMutation = useSyncEatingGroup();
   const { deletingId, handleDelete } = useDeleteWithToast(
     deleteMutation,
     "Eating record removed"
   );
 
-  // Extra edit field for grams
+  // Extra edit fields
   const [editGrams, setEditGrams] = useState("");
+  const [editSodiumMg, setEditSodiumMg] = useState("");
+  const [editSodiumSource, setEditSodiumSource] = useState<SodiumSource>("sodium");
+  const [editWaterMl, setEditWaterMl] = useState("");
 
   const {
     editingRecord,
@@ -107,12 +112,55 @@ export function FoodSection() {
     closeEdit,
     handleEditSubmit,
   } = useEditRecord<EatingRecord>({
-    onOpen: (record) => setEditGrams(record.grams?.toString() || ""),
+    onOpen: (record) => {
+      setEditGrams(record.grams?.toString() || "");
+      setEditSodiumMg("");
+      setEditSodiumSource("sodium");
+      setEditWaterMl("");
+      if (record.groupId) {
+        void fetchEntryGroup(record.groupId).then((group) => {
+          if (!group) return;
+          const salt = group.intakes.find((r) => r.type === "salt");
+          const water = group.intakes.find(
+            (r) => r.type === "water" && r.source === "manual:food_water_content",
+          );
+          if (salt) {
+            const kind = sodiumKindFromSource(salt.source);
+            // back-convert stored sodium-mg to the user's input units
+            const multiplier = SODIUM_MULTIPLIERS[kind];
+            const inputValue = Math.round(salt.amount / multiplier);
+            setEditSodiumMg(inputValue.toString());
+            setEditSodiumSource(kind);
+          }
+          if (water) {
+            setEditWaterMl(water.amount.toString());
+          }
+        });
+      }
+    },
     buildUpdates: (timestamp, note) => {
       const g = editGrams ? parseInt(editGrams, 10) : undefined;
-      return { timestamp, note, grams: g && g > 0 ? g : undefined };
+      const sodiumInput = editSodiumMg ? parseFloat(editSodiumMg) : 0;
+      const calculatedSodiumMg =
+        sodiumInput > 0
+          ? Math.round(sodiumInput * SODIUM_MULTIPLIERS[editSodiumSource])
+          : 0;
+      const waterInput = editWaterMl ? parseFloat(editWaterMl) : 0;
+      return {
+        timestamp,
+        note,
+        grams: g && g > 0 ? g : undefined,
+        sodiumMg: calculatedSodiumMg,
+        sodiumKind: editSodiumSource,
+        waterMl: waterInput > 0 ? Math.round(waterInput) : 0,
+      };
     },
-    mutateAsync: updateMutation.mutateAsync,
+    mutateAsync: async ({ id, updates }) => {
+      await syncEatingGroupMutation(
+        id,
+        updates as Parameters<typeof syncEatingGroupMutation>[1],
+      );
+    },
   });
 
   // ─── Handlers ─────────────────────────────────────────────────────
@@ -403,7 +451,44 @@ export function FoodSection() {
         )}
         renderEditForm={() => (
           <InlineEditFormShell timestamp={editTimestamp} onTimestampChange={setEditTimestamp} note={editNote} onNoteChange={setEditNote} onSave={() => handleEditSubmit()} onCancel={closeEdit} buttonClassName={theme.buttonBg}>
-            <Input type="number" placeholder="Grams (optional)" value={editGrams} onChange={(e) => setEditGrams(e.target.value)} className="h-8 text-sm" />
+            <Input
+              type="number"
+              placeholder="Grams (optional)"
+              value={editGrams}
+              onChange={(e) => setEditGrams(e.target.value)}
+              className="h-8 text-sm"
+            />
+            <div className="flex gap-2">
+              <Input
+                type="number"
+                min="0"
+                placeholder="Sodium (optional)"
+                value={editSodiumMg}
+                onChange={(e) => setEditSodiumMg(e.target.value)}
+                className="h-8 text-sm flex-1"
+              />
+              <Select
+                value={editSodiumSource}
+                onValueChange={(v) => setEditSodiumSource(v as SodiumSource)}
+              >
+                <SelectTrigger className="h-8 text-sm w-[100px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="sodium">Sodium</SelectItem>
+                  <SelectItem value="salt">Salt</SelectItem>
+                  <SelectItem value="msg">MSG</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Input
+              type="number"
+              min="0"
+              placeholder="Water content (ml, optional)"
+              value={editWaterMl}
+              onChange={(e) => setEditWaterMl(e.target.value)}
+              className="h-8 text-sm"
+            />
           </InlineEditFormShell>
         )}
       />
