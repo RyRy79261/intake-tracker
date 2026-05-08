@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.2](https://github.com/RyRy79261/intake-tracker/compare/v1.5.1...v1.5.2) (2026-05-08)
+
+
+### Bug Fixes
+
+* **ai+ui:** downgrade Opus model + show substance input for coffee/alcohol edits ([32c8380](https://github.com/RyRy79261/intake-tracker/commit/32c838098a226782186f77acf755a89532dea376))
+
 ## [1.5.1](https://github.com/RyRy79261/intake-tracker/compare/v1.5.0...v1.5.1) (2026-05-08)
 
 
