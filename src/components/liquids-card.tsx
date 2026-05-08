@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,7 @@ import { useSettings } from "@/hooks/use-settings";
 import { useToast } from "@/hooks/use-toast";
 import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
 import { useEditRecord } from "@/hooks/use-edit-record";
+import { useSyncLiquidGroup, fetchEntryGroup } from "@/hooks/use-composable-entry";
 import { cn, formatAmount, getLiquidTypeLabel } from "@/lib/utils";
 import { formatTimeOnly } from "@/lib/date-utils";
 import { type IntakeRecord } from "@/lib/db";
@@ -50,12 +51,22 @@ export function LiquidsCard() {
   const { toast } = useToast();
   const deleteMutation = useDeleteIntake();
   const updateMutation = useUpdateIntake();
+  const syncLiquidGroupMutation = useSyncLiquidGroup();
   const { deletingId, handleDelete } = useDeleteWithToast(
     deleteMutation,
     "Water entry removed"
   );
 
   const [editAmount, setEditAmount] = useState("");
+  const [editBeverageName, setEditBeverageName] = useState("");
+  const [showBeverageNameField, setShowBeverageNameField] = useState(false);
+  const [editSubstance, setEditSubstance] = useState<{
+    type: "caffeine" | "alcohol";
+    description: string;
+  } | null>(null);
+  const [editSubstanceAmount, setEditSubstanceAmount] = useState("");
+  // Token to discard stale fetchEntryGroup results when opening another record
+  const openTokenRef = useRef(0);
 
   const {
     editingRecord,
@@ -67,16 +78,98 @@ export function LiquidsCard() {
     closeEdit,
     handleEditSubmit,
   } = useEditRecord<IntakeRecord>({
-    onOpen: (record) => setEditAmount(record.amount.toString()),
+    onOpen: (record) => {
+      const token = ++openTokenRef.current;
+      setEditAmount(record.amount.toString());
+      setEditBeverageName("");
+      setShowBeverageNameField(false);
+      setEditSubstance(null);
+      setEditSubstanceAmount("");
+
+      const source = record.source ?? "";
+      if (source.startsWith("beverage:")) {
+        setShowBeverageNameField(true);
+        setEditBeverageName(source.slice("beverage:".length));
+      } else if (source === "beverage") {
+        setShowBeverageNameField(true);
+      }
+
+      if (record.groupId) {
+        void fetchEntryGroup(record.groupId).then((group) => {
+          if (token !== openTokenRef.current) return;
+          if (!group) return;
+          const substance = group.substances.find(
+            (s) => s.type === "caffeine" || s.type === "alcohol",
+          );
+          if (!substance) return;
+          setEditSubstance({
+            type: substance.type,
+            description: substance.description,
+          });
+          setEditBeverageName(substance.description);
+          setShowBeverageNameField(true);
+          if (substance.type === "caffeine" && substance.amountMg !== undefined) {
+            setEditSubstanceAmount(substance.amountMg.toString());
+          } else if (
+            substance.type === "alcohol" &&
+            substance.amountStandardDrinks !== undefined
+          ) {
+            setEditSubstanceAmount(substance.amountStandardDrinks.toString());
+          }
+        });
+      }
+    },
     buildUpdates: (timestamp, note) => {
       const newAmount = parseInt(editAmount, 10);
       if (isNaN(newAmount) || newAmount <= 0) {
         toast({ title: "Invalid amount", variant: "destructive" });
         return null;
       }
-      return { amount: newAmount, timestamp, note };
+      const updates: { amount: number; timestamp: number; note: string | undefined; source?: string } = {
+        amount: newAmount,
+        timestamp,
+        note,
+      };
+      // Update IntakeRecord.source for plain beverage entries so the
+      // displayed name stays in sync. For coffee/alcohol entries the source
+      // is a `preset:<id>` / `substance:<id>` reference and the user-facing
+      // name lives on SubstanceRecord.description (synced separately below).
+      if (showBeverageNameField && !editSubstance) {
+        const trimmed = editBeverageName.trim();
+        updates.source = trimmed ? `beverage:${trimmed}` : "beverage";
+      }
+      return updates;
     },
-    mutateAsync: updateMutation.mutateAsync,
+    mutateAsync: async ({ id, updates }) => {
+      await updateMutation.mutateAsync({ id, updates });
+      // Sync linked substance records when editing a coffee/alcohol entry
+      if (editingRecord?.groupId && editSubstance) {
+        const u = updates as { amount: number; timestamp: number };
+        const rawSubstanceAmount = editSubstanceAmount.trim();
+        const parsedSubstanceAmount = rawSubstanceAmount
+          ? parseFloat(rawSubstanceAmount)
+          : NaN;
+        const hasSubstanceAmount =
+          rawSubstanceAmount !== "" &&
+          !isNaN(parsedSubstanceAmount) &&
+          parsedSubstanceAmount >= 0;
+        await syncLiquidGroupMutation(editingRecord.groupId, {
+          timestamp: u.timestamp,
+          description: editBeverageName.trim() || editSubstance.description,
+          volumeMl: u.amount,
+          // Only include the typed amount when the user supplied a value;
+          // otherwise leave the existing linked-record value intact.
+          ...(hasSubstanceAmount &&
+            editSubstance.type === "caffeine" && {
+              amountMg: Math.round(parsedSubstanceAmount),
+            }),
+          ...(hasSubstanceAmount &&
+            editSubstance.type === "alcohol" && {
+              amountStandardDrinks: parseFloat(parsedSubstanceAmount.toFixed(2)),
+            }),
+        });
+      }
+    },
   });
 
   const theme = TAB_THEMES[activeTab as TabKey] ?? TAB_THEMES.water;
@@ -213,6 +306,30 @@ export function LiquidsCard() {
           renderEditForm={() => (
             <InlineEditFormShell timestamp={editTimestamp} onTimestampChange={setEditTimestamp} note={editNote} onNoteChange={setEditNote} onSave={() => handleEditSubmit()} onCancel={closeEdit} buttonClassName={CARD_THEMES.water.buttonBg}>
               <Input type="number" placeholder="Amount (ml)" value={editAmount} onChange={(e) => setEditAmount(e.target.value)} className="h-8 text-sm" />
+              {showBeverageNameField && (
+                <Input
+                  type="text"
+                  placeholder="Beverage name"
+                  value={editBeverageName}
+                  onChange={(e) => setEditBeverageName(e.target.value)}
+                  className="h-8 text-sm"
+                />
+              )}
+              {editSubstance && (
+                <Input
+                  type="number"
+                  min="0"
+                  step={editSubstance.type === "alcohol" ? "0.1" : "1"}
+                  placeholder={
+                    editSubstance.type === "caffeine"
+                      ? "Caffeine (mg)"
+                      : "Alcohol (std drinks)"
+                  }
+                  value={editSubstanceAmount}
+                  onChange={(e) => setEditSubstanceAmount(e.target.value)}
+                  className="h-8 text-sm"
+                />
+              )}
             </InlineEditFormShell>
           )}
         />

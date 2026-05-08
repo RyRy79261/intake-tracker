@@ -74,7 +74,7 @@ export async function undoDeleteIntakeRecord(id: string): Promise<ServiceResult<
 
 export async function updateIntakeRecord(
   id: string,
-  updates: { amount?: number; timestamp?: number; note?: string }
+  updates: { amount?: number; timestamp?: number; note?: string; source?: string }
 ): Promise<ServiceResult<void>> {
   try {
     const existing = await db.intakeRecords.get(id);
