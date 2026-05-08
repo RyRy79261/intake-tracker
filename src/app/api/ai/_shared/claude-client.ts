@@ -17,4 +17,16 @@ export function getClaudeClient(): Anthropic {
 export const CLAUDE_MODELS = {
   fast: "claude-haiku-4-5-20251001" as const,
   quality: "claude-sonnet-4-6" as const,
+  premium: "claude-opus-4-7" as const,
 } as const;
+
+export const WEB_SEARCH_TOOL = {
+  type: "web_search_20250305" as const,
+  name: "web_search" as const,
+  max_uses: 5,
+};
+
+export {
+  GRAMS_PER_STANDARD_DRINK,
+  ETHANOL_DENSITY_G_PER_ML,
+} from "@/lib/alcohol-units";
