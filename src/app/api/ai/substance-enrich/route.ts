@@ -184,7 +184,7 @@ export const POST = withAuth(async ({ request, auth }) => {
         : `Estimate ABV (%) and volume (ml) for: "${sanitized}". Use web_search if branded or unfamiliar, then call alcohol_enrichment. Return ABV as a percentage, NOT grams.`;
 
     const response = await client.messages.create({
-      model: CLAUDE_MODELS.premium,
+      model: CLAUDE_MODELS.quality,
       max_tokens: 4096,
       temperature: 0,
       system: systemPrompt,
@@ -196,7 +196,7 @@ export const POST = withAuth(async ({ request, auth }) => {
 
     if (!toolBlock) {
       const followup = await client.messages.create({
-        model: CLAUDE_MODELS.premium,
+        model: CLAUDE_MODELS.quality,
         max_tokens: 1024,
         temperature: 0,
         system: systemPrompt,

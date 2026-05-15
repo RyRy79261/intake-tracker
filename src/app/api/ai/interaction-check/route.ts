@@ -156,8 +156,9 @@ export const POST = withAuth(async ({ request, auth }) => {
     console.log(`[AUDIT] Interaction check request from user: ${auth.userId}, mode: ${parsed.data.mode}`);
 
     const response = await client.messages.create({
-      model: CLAUDE_MODELS.quality,
+      model: CLAUDE_MODELS.premium,
       max_tokens: 2048,
+      temperature: 0,
       system: SYSTEM_PROMPT,
       tools: [INTERACTION_CHECK_TOOL],
       tool_choice: { type: "tool", name: "interaction_check_result" },

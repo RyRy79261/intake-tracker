@@ -135,8 +135,9 @@ export const POST = withAuth(async ({ request, auth }) => {
       : `Look up this medication and provide detailed pharmaceutical information: "${sanitized}"`;
 
     const response = await client.messages.create({
-      model: CLAUDE_MODELS.quality,
+      model: CLAUDE_MODELS.premium,
       max_tokens: 2048,
+      temperature: 0,
       system: SYSTEM_PROMPT,
       tools: [MEDICINE_SEARCH_TOOL],
       tool_choice: { type: "tool", name: "medicine_search_result" },

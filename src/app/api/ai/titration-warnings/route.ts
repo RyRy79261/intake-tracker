@@ -115,8 +115,9 @@ export const POST = withAuth(async ({ request, auth }) => {
     console.log(`[AUDIT] Titration warnings request from user: ${auth.userId}`);
 
     const response = await client.messages.create({
-      model: CLAUDE_MODELS.quality,
+      model: CLAUDE_MODELS.premium,
       max_tokens: 1536,
+      temperature: 0,
       system: SYSTEM_PROMPT,
       tools: [TITRATION_WARNINGS_TOOL],
       tool_choice: { type: "tool", name: "titration_warnings_result" },
