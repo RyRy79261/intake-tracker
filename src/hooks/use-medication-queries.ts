@@ -157,9 +157,14 @@ export function useDeletePrescription() {
   });
 }
 
+function resyncNotifications() {
+  import("@/lib/local-notifications").then((m) => m.syncMedicationNotifications());
+}
+
 export function useAddSchedule() {
   return useMutation({
     mutationFn: async (input: Omit<PhaseSchedule, "id" | "createdAt" | "enabled">) => unwrap(await addSchedule(input)),
+    onSuccess: resyncNotifications,
   });
 }
 
@@ -167,12 +172,14 @@ export function useUpdateSchedule() {
   return useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Partial<Omit<PhaseSchedule, "id" | "createdAt" | "phaseId">> }) =>
       unwrap(await updateSchedule(id, updates)),
+    onSuccess: resyncNotifications,
   });
 }
 
 export function useDeleteSchedule() {
   return useMutation({
     mutationFn: async (id: string) => unwrap(await deleteSchedule(id)),
+    onSuccess: resyncNotifications,
   });
 }
 

@@ -695,3 +695,4 @@ export const pushSettings = pgTable("push_settings", {
     .default(10),
   dayStartHour: integer("day_start_hour").notNull().default(2),
 });
+

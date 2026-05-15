@@ -215,8 +215,10 @@ export async function getUserTimezone(userId: string): Promise<string> {
   const rows = await sql`
     SELECT timezone FROM push_subscriptions WHERE user_id = ${userId}
   `;
-  if (rows.length === 0) return "UTC";
-  return (rows[0]!.timezone as string) ?? "UTC";
+  if (rows.length > 0) {
+    return (rows[0]!.timezone as string) ?? "UTC";
+  }
+  return "UTC";
 }
 
 // ----- Per-user due notifications -----

@@ -8,18 +8,13 @@ import {
   deletePushSubscription,
   getSettings,
 } from "@/lib/push-db";
-// Dynamic import to avoid top-level webpush.setVapidDetails() at build time
+
 async function getSendPush() {
   const { sendPush } = await import("@/lib/push-sender");
   return sendPush;
 }
 
-/**
- * Cron-triggered endpoint to send push notifications for due medication doses.
- * Authenticated via CRON_SECRET bearer token (not user auth).
- */
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  // Auth: CRON_SECRET bearer token required
   const authHeader = request.headers.get("Authorization");
   const token = authHeader?.startsWith("Bearer ")
     ? authHeader.slice(7)
@@ -51,7 +46,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       ).getDay();
       const localToday = now.toLocaleDateString("en-CA", { timeZone: tz });
 
-      // --- Initial notifications ---
       const dueRows = await getDueNotificationsForUser(
         userId,
         localTime,
@@ -84,7 +78,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         }
       }
 
-      // --- Follow-up reminders ---
       const settings = await getSettings(userId);
       if (!settings.enabled) continue;
 

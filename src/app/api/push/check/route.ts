@@ -35,7 +35,6 @@ export const POST = withAuth(async ({ auth }) => {
     let totalSent = 0;
     let totalFollowUps = 0;
 
-    // --- Initial notifications ---
     const dueRows = await getDueNotificationsForUser(
       userId,
       localTime,

@@ -56,8 +56,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // Unregister stale service workers on non-production deploys to prevent
-  // Workbox from serving cached JS/HTML that masks new code.
+  useEffect(() => {
+    import("@/lib/local-notifications").then((m) => m.initLocalNotifications());
+  }, []);
+
   useEffect(() => {
     const env = process.env.NEXT_PUBLIC_VERCEL_ENV;
     if (env && env !== "production" && "serviceWorker" in navigator) {

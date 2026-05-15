@@ -1,19 +1,11 @@
-/**
- * Tests for /api/push/check endpoint.
- *
- * Mocks: auth-middleware (withAuth), push-db (all query functions), push-sender (sendPush).
- * The endpoint uses dynamic import for push-sender, so we mock the module directly.
- */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 
-// --- Mock push-sender ---
 const mockSendPush = vi.fn();
 vi.mock("@/lib/push-sender", () => ({
   sendPush: (...args: unknown[]) => mockSendPush(...args),
 }));
 
-// --- Mock push-db ---
 const mockGetUserTimezone = vi.fn();
 const mockGetDueNotificationsForUser = vi.fn();
 const mockGetFollowUpNotifications = vi.fn();
@@ -34,9 +26,6 @@ vi.mock("@/lib/push-db", () => ({
   getSettings: (...args: unknown[]) => mockGetSettings(...args),
 }));
 
-// --- Mock auth-middleware ---
-// withAuth wraps a handler: withAuth(fn) returns (request) => fn({ request, auth })
-// We need the mock to pass through auth context with a test userId.
 vi.mock("@/lib/auth-middleware", () => ({
   withAuth: (handler: Function) => {
     return async (request: NextRequest) => {
@@ -80,7 +69,6 @@ describe("/api/push/check endpoint", () => {
   });
 
   async function callCheck() {
-    // Re-import to get the mocked version each time
     const { POST } = await import("@/app/api/push/check/route");
     const request = new NextRequest("http://localhost/api/push/check", {
       method: "POST",
@@ -120,14 +108,11 @@ describe("/api/push/check endpoint", () => {
     const body = await response.json();
 
     expect(mockDeletePushSubscription).toHaveBeenCalledWith("test-user");
-    // 410 means the notification wasn't successfully sent
     expect(body).toEqual({ nothingDue: true });
   });
 
   it("includes follow-up notifications in response count", async () => {
     mockGetDueNotificationsForUser.mockResolvedValue([]);
-    // The endpoint loops followUpCount times (default 2). Return a row only
-    // for the first follow-up index, empty for the second.
     mockGetFollowUpNotifications
       .mockResolvedValueOnce([makeDueRow()])
       .mockResolvedValueOnce([]);
@@ -147,7 +132,6 @@ describe("/api/push/check endpoint", () => {
 
   it("filters follow-up notifications to only the authenticated user", async () => {
     mockGetDueNotificationsForUser.mockResolvedValue([]);
-    // Return rows for both users on first follow-up, empty on second
     mockGetFollowUpNotifications
       .mockResolvedValueOnce([
         makeDueRow({ user_id: "other-user" }),
@@ -158,14 +142,11 @@ describe("/api/push/check endpoint", () => {
     const response = await callCheck();
     const body = await response.json();
 
-    // Only the test-user row should trigger sendPush
     expect(mockSendPush).toHaveBeenCalledTimes(1);
     expect(body).toEqual({ sent: 0, followUps: 1 });
   });
 
   it("uses withAuth — handler receives auth context", async () => {
-    // The mock withAuth passes { userId: 'test-user' } — if withAuth wasn't
-    // used, getUserTimezone would be called without a valid userId.
     await callCheck();
     expect(mockGetUserTimezone).toHaveBeenCalledWith("test-user");
   });
@@ -193,7 +174,6 @@ describe("/api/push/check endpoint", () => {
     const body = await response.json();
 
     expect(body).toEqual({ sent: 1, followUps: 0 });
-    // getFollowUpNotifications should not be called when disabled
     expect(mockGetFollowUpNotifications).not.toHaveBeenCalled();
   });
 });
