@@ -131,7 +131,7 @@ export const POST = withAuth(async ({ request, auth }) => {
         : `Look up the ABV (% alcohol by volume) for: "${sanitized}". Use web_search if it is a branded product, then call substance_lookup_result. Return the ABV as a percentage (e.g. 5, 13, 40), NOT grams of ethanol.`;
 
     const response = await client.messages.create({
-      model: CLAUDE_MODELS.premium,
+      model: CLAUDE_MODELS.quality,
       max_tokens: 4096,
       temperature: 0,
       system: systemPrompt,
@@ -143,7 +143,7 @@ export const POST = withAuth(async ({ request, auth }) => {
 
     if (!toolBlock) {
       const followup = await client.messages.create({
-        model: CLAUDE_MODELS.premium,
+        model: CLAUDE_MODELS.quality,
         max_tokens: 1024,
         temperature: 0,
         system: systemPrompt,

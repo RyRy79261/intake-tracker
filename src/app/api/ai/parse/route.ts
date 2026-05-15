@@ -151,7 +151,7 @@ export const POST = withAuth(async ({ request, auth }) => {
     const userMessage = `Estimate water (ml) and sodium (mg) for: "${sanitizedInput}". Use web_search for branded or regional items, then call parse_food_result.`;
 
     const response = await client.messages.create({
-      model: CLAUDE_MODELS.premium,
+      model: CLAUDE_MODELS.quality,
       max_tokens: 4096,
       temperature: 0,
       system: SYSTEM_PROMPT,
@@ -165,7 +165,7 @@ export const POST = withAuth(async ({ request, auth }) => {
     // run a second turn that forces the tool with the prior context.
     if (!toolBlock) {
       const followup = await client.messages.create({
-        model: CLAUDE_MODELS.premium,
+        model: CLAUDE_MODELS.quality,
         max_tokens: 1024,
         temperature: 0,
         system: SYSTEM_PROMPT,
