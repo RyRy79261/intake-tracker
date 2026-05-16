@@ -32,7 +32,6 @@ import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
 import { useSaltTotalsByGroupIds } from "@/hooks/use-intake-queries";
 import { useEditRecord } from "@/hooks/use-edit-record";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/components/auth-guard";
 import { type EatingRecord } from "@/lib/db";
 import {
   getCurrentDateTimeLocal,
@@ -54,7 +53,6 @@ const SODIUM_MULTIPLIERS: Record<SodiumSource, number> = {
 
 export function FoodSection() {
   const { toast } = useToast();
-  const { getAuthHeader } = useAuth();
   const addComposableEntry = useAddComposableEntry();
 
   // ─── Mutations ────────────────────────────────────────────────────
@@ -184,13 +182,10 @@ export function FoodSection() {
 
     setIsParsing(true);
     try {
-      const authHeaders = await getAuthHeader();
-      const result = await parseIntakeWithAI(trimmed, { authHeaders });
+      const result = await parseIntakeWithAI(trimmed);
 
-      // Populate form fields from AI result. The /api/ai/parse route now always
-      // returns sodium in mg, so the source is always "sodium".
-      if (result.salt && result.salt > 0) {
-        setSodiumMg(result.salt.toString());
+      if (result.valueMg && result.valueMg > 0) {
+        setSodiumMg(result.valueMg.toString());
         setSodiumSource("sodium");
       }
       if (result.water && result.water > 0) {
@@ -215,7 +210,7 @@ export function FoodSection() {
     } finally {
       setIsParsing(false);
     }
-  }, [foodText, isParsing, toast, getAuthHeader]);
+  }, [foodText, isParsing, toast]);
 
   const handleDetailSubmit = useCallback(async () => {
     if (isSubmitting) return;
