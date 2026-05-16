@@ -1,51 +1,47 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import type Anthropic from "@anthropic-ai/sdk";
 import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
 import { getClaudeClient, CLAUDE_MODELS, WEB_SEARCH_TOOL } from "../_shared/claude-client";
+import { ethanolGrams, standardDrinksFromAbv } from "@/lib/alcohol-units";
 
 /**
- * Server-side API route for substance (caffeine/alcohol) AI enrichment via Anthropic Claude.
- *
- * SECURITY:
- * - Centralized auth middleware (withAuth) handles Neon Auth cookie verification + whitelist
- * - API key stored in server environment only
- * - Rate limiting applied per IP
- * - Input validation and PII stripping via sanitizeForAI
+ * AI enrichment for caffeine / alcohol "Other" entries. Uses Opus + web_search
+ * with temperature 0. Alcohol is reasoned in metric (ABV %, ml, grams of pure
+ * ethanol) and converted to standard drinks at the route boundary using the
+ * WHO / metric definition of 10 g ethanol per standard drink.
  */
-
-// --- Zod Schemas ---
-
-export const maxDuration = 60;
 
 const SubstanceEnrichRequestSchema = z.object({
   description: z.string().min(1, "Description is required").max(500, "Description too long"),
   type: z.enum(["caffeine", "alcohol"]),
 });
 
-const CaffeineResponseSchema = z.object({
+// --- Tool inputs (raw, from the model) ---
+
+const CaffeineToolInputSchema = z.object({
   caffeineMg: z.number().min(0).max(2000),
   volumeMl: z.number().min(0).max(5000),
-  reasoning: z.string().max(500).optional(),
+  reasoning: z.string().max(1000).optional(),
 });
 
-const AlcoholResponseSchema = z.object({
-  standardDrinks: z.number().min(0).max(20),
+const AlcoholToolInputSchema = z.object({
+  abvPercent: z.number().min(0).max(95),
   volumeMl: z.number().min(0).max(5000),
-  reasoning: z.string().max(500).optional(),
+  ethanolGrams: z.number().min(0).max(500).optional(),
+  reasoning: z.string().max(1000).optional(),
 });
-
-// --- Tool Definitions ---
 
 const CAFFEINE_ENRICH_TOOL = {
   name: "caffeine_enrichment" as const,
-  description: "Return caffeine content estimate for a beverage",
+  description: "Return caffeine content estimate for a beverage.",
   input_schema: {
     type: "object" as const,
     properties: {
-      caffeineMg: { type: "number", description: "Estimated caffeine in mg" },
-      volumeMl: { type: "number", description: "Estimated volume in ml" },
-      reasoning: { type: "string", description: "Brief explanation" },
+      caffeineMg: { type: "number", description: "Estimated caffeine in milligrams." },
+      volumeMl: { type: "number", description: "Estimated volume in millilitres." },
+      reasoning: { type: "string", description: "Brief explanation citing any sources used." },
     },
     required: ["caffeineMg", "volumeMl", "reasoning"],
     additionalProperties: false,
@@ -54,61 +50,90 @@ const CAFFEINE_ENRICH_TOOL = {
 
 const ALCOHOL_ENRICH_TOOL = {
   name: "alcohol_enrichment" as const,
-  description: "Return alcohol content estimate for a beverage",
+  description:
+    "Return alcohol content for a beverage in metric units. Reason from ABV % and volume in ml.",
   input_schema: {
     type: "object" as const,
     properties: {
-      standardDrinks: { type: "number", description: "Estimated standard drinks" },
-      volumeMl: { type: "number", description: "Estimated volume in ml" },
-      reasoning: { type: "string", description: "Brief explanation" },
+      abvPercent: {
+        type: "number",
+        description:
+          "Alcohol by volume as a percentage -- the same number printed on the bottle label (e.g. 5 for typical lager, 13 for wine, 40 for vodka). NOT grams.",
+      },
+      volumeMl: {
+        type: "number",
+        description: "Volume of the drink consumed, in millilitres.",
+      },
+      ethanolGrams: {
+        type: "number",
+        description:
+          "Optional. Grams of pure ethanol = volumeMl * (abvPercent / 100) * 0.789. Provide it as a sanity check.",
+      },
+      reasoning: {
+        type: "string",
+        description: "Brief explanation citing any sources used.",
+      },
     },
-    required: ["standardDrinks", "volumeMl", "reasoning"],
+    required: ["abvPercent", "volumeMl", "reasoning"],
     additionalProperties: false,
   },
 };
 
-// --- System Prompts ---
+const CAFFEINE_SYSTEM_PROMPT = `You are a caffeine lookup assistant. Given a description of a caffeinated drink or food, return total caffeine in milligrams and total volume in millilitres.
 
-const CAFFEINE_SYSTEM_PROMPT = `You are a nutritional analysis assistant specializing in caffeine content estimation.
-Given a description of a caffeinated beverage or food, estimate the caffeine content.
-Respond using the caffeine_enrichment tool with caffeineMg, volumeMl, and reasoning.
+Units: metric only (mg, ml). Never ounces, never cups.
 
-When to use web_search: if the item is a specific brand/product (e.g. "Mio Mio Mate Original", "Monster Energy", "Starbucks Grande Latte") where the actual label value matters, call web_search to look it up. For generic items ("black coffee", "green tea") you can estimate directly.`;
+Process:
+1. For branded items (Starbucks drinks, Red Bull variants, energy shots, named teas) USE THE web_search TOOL to find the manufacturer's published value or a reputable source.
+2. For generic items (drip coffee, espresso, black tea) you may answer from your own knowledge.
+3. Always finish by calling the caffeine_enrichment tool with the structured output.`;
 
-const ALCOHOL_SYSTEM_PROMPT = `You are a nutritional analysis assistant specializing in alcohol content estimation.
-Given a description of an alcoholic beverage, estimate the number of standard drinks and volume.
-A standard drink contains approximately 14g (0.6 oz) of pure alcohol.
-Respond using the alcohol_enrichment tool with standardDrinks, volumeMl, and reasoning.
+const ALCOHOL_SYSTEM_PROMPT = `You are an alcohol lookup assistant. Given a description of an alcoholic drink, return its ABV (% alcohol by volume) and the volume in millilitres consumed.
 
-When to use web_search: if the item is a specific brand/product (e.g. "Heineken 0.0", "Jack Daniel's", "Aperol Spritz") where the actual label value matters, call web_search to look it up. For generic items ("light beer", "red wine") you can estimate directly.`;
+CRITICAL UNIT RULES:
+- abvPercent is a PERCENTAGE BY VOLUME -- the number printed on the bottle label. Examples: lager 5, IPA 6-7, red wine 13, vodka 40, cask whisky 60.
+- volumeMl is the volume of the drink in millilitres. Pint = 568, half pint = 284, wine glass = 125-175, single spirit measure = 25 (UK) / 30 (most of EU), double = 50.
+- Do NOT convert to "standard drinks" or "units" -- the server does that conversion. Return ABV % and volume only.
+- Never use ounces, never use US fluid ounces, never use US "standard drinks".
 
-// Simple in-memory rate limiting (per IP, resets on server restart)
+Process:
+1. For branded products, craft beers, named cocktails, or anything you are not 100% sure of, USE THE web_search TOOL to confirm ABV.
+2. For generic items (lager, red wine, vodka) you may answer from your own knowledge using typical ABV.
+3. Always finish by calling the alcohol_enrichment tool with the structured output.`;
+
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
-const RATE_LIMIT = 30; // requests per window
-const RATE_WINDOW = 60 * 1000; // 1 minute
+const RATE_LIMIT = 30;
+const RATE_WINDOW = 60 * 1000;
 
 function checkRateLimit(ip: string): boolean {
   const now = Date.now();
   const record = rateLimitMap.get(ip);
-
   if (!record || now > record.resetTime) {
     rateLimitMap.set(ip, { count: 1, resetTime: now + RATE_WINDOW });
     return true;
   }
-
-  if (record.count >= RATE_LIMIT) {
-    return false;
-  }
-
+  if (record.count >= RATE_LIMIT) return false;
   record.count++;
   return true;
 }
 
+type ToolUseBlock = Extract<Anthropic.Messages.ContentBlock, { type: "tool_use" }>;
+
+function findToolUse(
+  content: Anthropic.Messages.ContentBlock[],
+  toolName: string
+): ToolUseBlock | undefined {
+  return content.find(
+    (b): b is ToolUseBlock => b.type === "tool_use" && b.name === toolName
+  );
+}
+
 export const POST = withAuth(async ({ request, auth }) => {
   try {
-    const ip = request.headers.get("x-forwarded-for")?.split(",")[0] ||
-               request.headers.get("x-real-ip") ||
-               "unknown";
+    const ip =
+      request.headers.get("x-forwarded-for")?.split(",")[0] ||
+      request.headers.get("x-real-ip") ||
+      "unknown";
 
     if (!checkRateLimit(ip)) {
       return NextResponse.json(
@@ -118,10 +143,12 @@ export const POST = withAuth(async ({ request, auth }) => {
     }
 
     const body = await request.json();
-
     const parsed = SubstanceEnrichRequestSchema.safeParse(body);
     if (!parsed.success) {
-      console.error("[VALIDATION] Substance enrich request validation failed:", JSON.stringify(parsed.error.flatten()));
+      console.error(
+        "[VALIDATION] Substance enrich request failed:",
+        JSON.stringify(parsed.error.flatten())
+      );
       return NextResponse.json(
         { error: "Invalid request", details: parsed.error.flatten() },
         { status: 400 }
@@ -129,8 +156,7 @@ export const POST = withAuth(async ({ request, auth }) => {
     }
 
     const { description, type } = parsed.data;
-
-    console.log(`[AUDIT] Substance enrich request from user: ${auth.userId}`);
+    console.log(`[AUDIT] Substance enrich from user: ${auth.userId}, type: ${type}`);
 
     let client;
     try {
@@ -150,29 +176,47 @@ export const POST = withAuth(async ({ request, auth }) => {
       );
     }
 
-    console.log(`[AUDIT] Substance enrich request at ${new Date().toISOString()}`);
-
     const systemPrompt = type === "caffeine" ? CAFFEINE_SYSTEM_PROMPT : ALCOHOL_SYSTEM_PROMPT;
     const tool = type === "caffeine" ? CAFFEINE_ENRICH_TOOL : ALCOHOL_ENRICH_TOOL;
-    const schema = type === "caffeine" ? CaffeineResponseSchema : AlcoholResponseSchema;
-
-    const userPrompt = type === "caffeine"
-      ? `Estimate caffeine content in mg for: "${sanitized}". Return caffeineMg, volumeMl, and reasoning.`
-      : `Estimate standard drinks and volume for: "${sanitized}". Return standardDrinks, volumeMl, and reasoning.`;
+    const userPrompt =
+      type === "caffeine"
+        ? `Estimate caffeine (mg) and volume (ml) for: "${sanitized}". Use web_search for branded items, then call caffeine_enrichment.`
+        : `Estimate ABV (%) and volume (ml) for: "${sanitized}". Use web_search if branded or unfamiliar, then call alcohol_enrichment. Return ABV as a percentage, NOT grams.`;
 
     const response = await client.messages.create({
       model: CLAUDE_MODELS.quality,
-      max_tokens: 1024,
+      max_tokens: 4096,
+      temperature: 0,
       system: systemPrompt,
       tools: [WEB_SEARCH_TOOL, tool],
-      tool_choice: { type: "tool", name: tool.name },
       messages: [{ role: "user", content: userPrompt }],
     });
 
-    const toolBlock = response.content.find(
-      (b): b is Extract<typeof b, { type: "tool_use" }> =>
-        b.type === "tool_use" && b.name === tool.name
-    );
+    let toolBlock = findToolUse(response.content, tool.name);
+
+    if (!toolBlock) {
+      const followup = await client.messages.create({
+        model: CLAUDE_MODELS.quality,
+        max_tokens: 1024,
+        temperature: 0,
+        system: systemPrompt,
+        // WEB_SEARCH_TOOL must stay declared because the prior assistant turn
+        // may contain server_tool_use blocks; tool_choice still forces the
+        // structured tool.
+        tools: [WEB_SEARCH_TOOL, tool],
+        tool_choice: { type: "tool", name: tool.name },
+        messages: [
+          { role: "user", content: userPrompt },
+          { role: "assistant", content: response.content },
+          {
+            role: "user",
+            content: `Now return the final answer via the ${tool.name} tool.`,
+          },
+        ],
+      });
+      toolBlock = findToolUse(followup.content, tool.name);
+    }
+
     if (!toolBlock) {
       return NextResponse.json(
         { error: "AI response format invalid", fallbackToManual: true },
@@ -180,23 +224,49 @@ export const POST = withAuth(async ({ request, auth }) => {
       );
     }
 
-    const validated = schema.safeParse(toolBlock.input);
+    if (type === "caffeine") {
+      const validated = CaffeineToolInputSchema.safeParse(toolBlock.input);
+      if (!validated.success) {
+        console.error(
+          "[VALIDATION] Caffeine enrichment validation failed:",
+          JSON.stringify(validated.error.flatten())
+        );
+        return NextResponse.json(
+          { error: "AI response format invalid", fallbackToManual: true },
+          { status: 422 }
+        );
+      }
+      return NextResponse.json(validated.data);
+    }
+
+    const validated = AlcoholToolInputSchema.safeParse(toolBlock.input);
     if (!validated.success) {
-      console.error("[VALIDATION] AI enrichment response validation failed:", JSON.stringify(validated.error.flatten()));
+      console.error(
+        "[VALIDATION] Alcohol enrichment validation failed:",
+        JSON.stringify(validated.error.flatten())
+      );
       return NextResponse.json(
         { error: "AI response format invalid", fallbackToManual: true },
         { status: 422 }
       );
     }
 
-    return NextResponse.json(validated.data);
-  } catch (error: unknown) {
-    const msg = error instanceof Error ? error.message : String(error);
-    const status = (error as { status?: number }).status;
-    console.error("Substance enrich error:", msg, status ? `(HTTP ${status})` : "");
+    const grams = ethanolGrams(validated.data.abvPercent, validated.data.volumeMl);
+    const standardDrinks =
+      Math.round(standardDrinksFromAbv(validated.data.abvPercent, validated.data.volumeMl) * 10) / 10;
+
+    return NextResponse.json({
+      standardDrinks,
+      volumeMl: validated.data.volumeMl,
+      abvPercent: validated.data.abvPercent,
+      ethanolGrams: Math.round(grams * 10) / 10,
+      ...(validated.data.reasoning !== undefined && { reasoning: validated.data.reasoning }),
+    });
+  } catch (error) {
+    console.error("Substance enrich error:", error);
     return NextResponse.json(
-      { error: "Failed to process request", detail: msg },
-      { status: status === 401 ? 503 : 502 }
+      { error: "Failed to process request" },
+      { status: 502 }
     );
   }
 });

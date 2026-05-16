@@ -9,15 +9,26 @@ import {
   getEntryGroup,
   deleteSingleGroupRecord,
   undoDeleteSingleRecord,
+  syncEatingGroup,
+  syncLiquidGroup,
+  parseSodiumKindFromSource,
   type ComposableEntryInput,
   type ComposableEntryResult,
   type EntryGroup,
   type RecordTable,
+  type SodiumKind,
 } from "@/lib/composable-entry-service";
-
-export type { ComposableEntryInput, ComposableEntryResult, EntryGroup, RecordTable };
 import { unwrap } from "@/lib/service-result";
 import { showUndoToast } from "@/components/medications/undo-toast";
+
+export type { ComposableEntryInput, ComposableEntryResult, EntryGroup, RecordTable, SodiumKind };
+
+/**
+ * Re-exports for component-side use (services may not be imported directly
+ * from components per the no-restricted-imports rule).
+ */
+export const fetchEntryGroup = getEntryGroup;
+export const sodiumKindFromSource = parseSodiumKindFromSource;
 
 /**
  * Reactive hook for reading all records in a composable entry group.
@@ -42,6 +53,39 @@ export function useAddComposableEntry() {
   return useCallback(
     async (input: ComposableEntryInput, timestamp?: number): Promise<ComposableEntryResult> => {
       return unwrap(await addComposableEntry(input, timestamp));
+    },
+    [],
+  );
+}
+
+/**
+ * Mutation hook for syncing an eating record's linked sodium / water-content
+ * intake records (used by the inline edit form on the Food card).
+ */
+export function useSyncEatingGroup() {
+  return useCallback(
+    async (
+      eatingId: string,
+      patch: Parameters<typeof syncEatingGroup>[1],
+    ): Promise<void> => {
+      unwrap(await syncEatingGroup(eatingId, patch));
+    },
+    [],
+  );
+}
+
+/**
+ * Mutation hook for syncing a liquid entry's linked substance records
+ * (used by the inline edit form on the Liquids card for coffee/alcohol/preset
+ * entries).
+ */
+export function useSyncLiquidGroup() {
+  return useCallback(
+    async (
+      groupId: string,
+      patch: Parameters<typeof syncLiquidGroup>[1],
+    ): Promise<void> => {
+      unwrap(await syncLiquidGroup(groupId, patch));
     },
     [],
   );

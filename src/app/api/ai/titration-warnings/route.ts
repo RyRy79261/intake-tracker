@@ -2,9 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
-import { getClaudeClient, CLAUDE_MODELS, WEB_SEARCH_TOOL } from "../_shared/claude-client";
-
-export const maxDuration = 60;
+import { getClaudeClient, CLAUDE_MODELS } from "../_shared/claude-client";
 
 const RequestSchema = z.object({
   prescriptions: z
@@ -62,9 +60,7 @@ Focus on:
 - Symptoms requiring immediate medical attention
 
 Use the titration_warnings_result tool to return the warnings.
-Keep each warning to one short sentence. Aim for 4-8 warnings. Be practical and patient-friendly, not overly clinical.
-
-Use web_search to verify current clinical guidance, side-effect profiles, and interaction concerns for the specific medications involved. Prefer web-verified information over your internal knowledge, especially for less common medications or recent dosing updates.`;
+Keep each warning to one short sentence. Aim for 4-8 warnings. Be practical and patient-friendly, not overly clinical.`;
 
 export const POST = withAuth(async ({ request, auth }) => {
   try {
@@ -119,19 +115,17 @@ export const POST = withAuth(async ({ request, auth }) => {
     console.log(`[AUDIT] Titration warnings request from user: ${auth.userId}`);
 
     const response = await client.messages.create({
-      model: CLAUDE_MODELS.quality,
-      max_tokens: 2560,
+      model: CLAUDE_MODELS.premium,
+      max_tokens: 1536,
+      temperature: 0,
       system: SYSTEM_PROMPT,
-      tools: [WEB_SEARCH_TOOL, TITRATION_WARNINGS_TOOL],
+      tools: [TITRATION_WARNINGS_TOOL],
       tool_choice: { type: "tool", name: "titration_warnings_result" },
       messages: [{ role: "user", content: prompt }],
     });
 
-    const toolBlock = response.content.find(
-      (b): b is Extract<typeof b, { type: "tool_use" }> =>
-        b.type === "tool_use" && b.name === "titration_warnings_result"
-    );
-    if (!toolBlock) {
+    const toolBlock = response.content.find(b => b.type === "tool_use");
+    if (!toolBlock || toolBlock.type !== "tool_use") {
       return NextResponse.json(
         { error: "AI service unavailable" },
         { status: 502 },
@@ -148,13 +142,11 @@ export const POST = withAuth(async ({ request, auth }) => {
     }
 
     return NextResponse.json(validated.data);
-  } catch (error: unknown) {
-    const msg = error instanceof Error ? error.message : String(error);
-    const status = (error as { status?: number }).status;
-    console.error("Titration warnings error:", msg, status ? `(HTTP ${status})` : "");
+  } catch (error) {
+    console.error("Titration warnings error:", error);
     return NextResponse.json(
-      { error: "Failed to generate warnings", detail: msg },
-      { status: status === 401 ? 503 : 500 },
+      { error: "Failed to generate warnings" },
+      { status: 500 },
     );
   }
 });

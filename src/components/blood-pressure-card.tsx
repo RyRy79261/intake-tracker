@@ -11,10 +11,10 @@ import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { logAudit } from "@/lib/audit";
 
-function formatDelta(d: number) { return d > 0 ? `+${d}` : `${d}`; }
-function deltaColor(d: number) {
-  return d > 0 ? "text-red-500 dark:text-red-400"
-    : d < 0 ? "text-green-600 dark:text-green-400"
+function pulsePressureColor(pp: number) {
+  // Normal pulse pressure is roughly 40 mmHg; >60 elevated, <30 narrow.
+  return pp > 60 || pp < 30
+    ? "text-red-500 dark:text-red-400"
     : "text-muted-foreground";
 }
 
@@ -181,12 +181,9 @@ export function BloodPressureCard() {
     }
   };
 
-  // BP delta vs previous reading
-  const prevReading = recentRecords?.[1];
-  const bpDelta = latestReading && prevReading ? {
-    sys: latestReading.systolic - prevReading.systolic,
-    dia: latestReading.diastolic - prevReading.diastolic,
-  } : null;
+  const pulsePressure = latestReading
+    ? latestReading.systolic - latestReading.diastolic
+    : null;
 
   return (
     <>
@@ -218,11 +215,11 @@ export function BloodPressureCard() {
               {latestReading.heartRate && (
                 <p className="text-xs text-muted-foreground">{latestReading.heartRate} BPM</p>
               )}
-              {bpDelta && (
+              {pulsePressure !== null && (
                 <p className="text-xs">
-                  <span className={deltaColor(bpDelta.sys)}>{formatDelta(bpDelta.sys)}</span>
-                  <span className="text-muted-foreground"> / </span>
-                  <span className={deltaColor(bpDelta.dia)}>{formatDelta(bpDelta.dia)}</span>
+                  <span className="text-muted-foreground">Pulse pressure </span>
+                  <span className={pulsePressureColor(pulsePressure)}>{pulsePressure}</span>
+                  <span className="text-muted-foreground"> mmHg</span>
                 </p>
               )}
             </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,18 +18,21 @@ import { RecentEntriesList, InlineEditFormShell } from "@/components/recent-entr
 import { parseIntakeWithAI } from "@/lib/ai-client";
 import {
   useAddComposableEntry,
+  useSyncEatingGroup,
+  fetchEntryGroup,
+  sodiumKindFromSource,
   type ComposableEntryInput,
 } from "@/hooks/use-composable-entry";
 import {
   useEatingRecords,
   useAddEating,
   useDeleteEating,
-  useUpdateEating,
 } from "@/hooks/use-eating-queries";
 import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
-import { useSaltTotalsByGroupIds, useDeleteIntake, useUpdateIntake } from "@/hooks/use-intake-queries";
+import { useSaltTotalsByGroupIds } from "@/hooks/use-intake-queries";
 import { useEditRecord } from "@/hooks/use-edit-record";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/components/auth-guard";
 import { type EatingRecord } from "@/lib/db";
 import {
   getCurrentDateTimeLocal,
@@ -51,6 +54,7 @@ const SODIUM_MULTIPLIERS: Record<SodiumSource, number> = {
 
 export function FoodSection() {
   const { toast } = useToast();
+  const { getAuthHeader } = useAuth();
   const addComposableEntry = useAddComposableEntry();
 
   // ─── Mutations ────────────────────────────────────────────────────
@@ -86,14 +90,19 @@ export function FoodSection() {
   const groupSodiumMap = useSaltTotalsByGroupIds(groupIds);
 
   const deleteMutation = useDeleteEating();
-  const updateMutation = useUpdateEating();
+  const syncEatingGroupMutation = useSyncEatingGroup();
   const { deletingId, handleDelete } = useDeleteWithToast(
     deleteMutation,
     "Eating record removed"
   );
 
-  // Extra edit field for grams
+  // Extra edit fields
   const [editGrams, setEditGrams] = useState("");
+  const [editSodiumMg, setEditSodiumMg] = useState("");
+  const [editSodiumSource, setEditSodiumSource] = useState<SodiumSource>("sodium");
+  const [editWaterMl, setEditWaterMl] = useState("");
+  // Token to discard stale fetchEntryGroup results when opening another record
+  const openTokenRef = useRef(0);
 
   const {
     editingRecord,
@@ -105,12 +114,57 @@ export function FoodSection() {
     closeEdit,
     handleEditSubmit,
   } = useEditRecord<EatingRecord>({
-    onOpen: (record) => setEditGrams(record.grams?.toString() || ""),
+    onOpen: (record) => {
+      const token = ++openTokenRef.current;
+      setEditGrams(record.grams?.toString() || "");
+      setEditSodiumMg("");
+      setEditSodiumSource("sodium");
+      setEditWaterMl("");
+      if (record.groupId) {
+        void fetchEntryGroup(record.groupId).then((group) => {
+          if (token !== openTokenRef.current) return;
+          if (!group) return;
+          const salt = group.intakes.find((r) => r.type === "salt");
+          const water = group.intakes.find(
+            (r) => r.type === "water" && r.source === "manual:food_water_content",
+          );
+          if (salt) {
+            const kind = sodiumKindFromSource(salt.source);
+            // back-convert stored sodium-mg to the user's input units
+            const multiplier = SODIUM_MULTIPLIERS[kind];
+            const inputValue = Math.round(salt.amount / multiplier);
+            setEditSodiumMg(inputValue.toString());
+            setEditSodiumSource(kind);
+          }
+          if (water) {
+            setEditWaterMl(water.amount.toString());
+          }
+        });
+      }
+    },
     buildUpdates: (timestamp, note) => {
       const g = editGrams ? parseInt(editGrams, 10) : undefined;
-      return { timestamp, note, grams: g && g > 0 ? g : undefined };
+      const sodiumInput = editSodiumMg ? parseFloat(editSodiumMg) : 0;
+      const calculatedSodiumMg =
+        sodiumInput > 0
+          ? Math.round(sodiumInput * SODIUM_MULTIPLIERS[editSodiumSource])
+          : 0;
+      const waterInput = editWaterMl ? parseFloat(editWaterMl) : 0;
+      return {
+        timestamp,
+        note,
+        grams: g && g > 0 ? g : undefined,
+        sodiumMg: calculatedSodiumMg,
+        sodiumKind: editSodiumSource,
+        waterMl: waterInput > 0 ? Math.round(waterInput) : 0,
+      };
     },
-    mutateAsync: updateMutation.mutateAsync,
+    mutateAsync: async ({ id, updates }) => {
+      await syncEatingGroupMutation(
+        id,
+        updates as Parameters<typeof syncEatingGroupMutation>[1],
+      );
+    },
   });
 
   // ─── Handlers ─────────────────────────────────────────────────────
@@ -130,15 +184,14 @@ export function FoodSection() {
 
     setIsParsing(true);
     try {
-      const result = await parseIntakeWithAI(trimmed);
+      const authHeaders = await getAuthHeader();
+      const result = await parseIntakeWithAI(trimmed, { authHeaders });
 
-      // Populate form fields from AI result. The AI returns a raw mg value
-      // plus a measurementType flag saying whether it's sodium (Na) or salt
-      // (NaCl) mass. We must set the dropdown BEFORE the input so the user
-      // sees the correct unit next to the number.
-      if (result.valueMg && result.valueMg > 0) {
-        setSodiumSource(result.measurementType);
-        setSodiumMg(result.valueMg.toString());
+      // Populate form fields from AI result. The /api/ai/parse route now always
+      // returns sodium in mg, so the source is always "sodium".
+      if (result.salt && result.salt > 0) {
+        setSodiumMg(result.salt.toString());
+        setSodiumSource("sodium");
       }
       if (result.water && result.water > 0) {
         setWaterMl(result.water.toString());
@@ -162,7 +215,7 @@ export function FoodSection() {
     } finally {
       setIsParsing(false);
     }
-  }, [foodText, isParsing, toast]);
+  }, [foodText, isParsing, toast, getAuthHeader]);
 
   const handleDetailSubmit = useCallback(async () => {
     if (isSubmitting) return;
@@ -402,7 +455,44 @@ export function FoodSection() {
         )}
         renderEditForm={() => (
           <InlineEditFormShell timestamp={editTimestamp} onTimestampChange={setEditTimestamp} note={editNote} onNoteChange={setEditNote} onSave={() => handleEditSubmit()} onCancel={closeEdit} buttonClassName={theme.buttonBg}>
-            <Input type="number" placeholder="Grams (optional)" value={editGrams} onChange={(e) => setEditGrams(e.target.value)} className="h-8 text-sm" />
+            <Input
+              type="number"
+              placeholder="Grams (optional)"
+              value={editGrams}
+              onChange={(e) => setEditGrams(e.target.value)}
+              className="h-8 text-sm"
+            />
+            <div className="flex gap-2">
+              <Input
+                type="number"
+                min="0"
+                placeholder="Sodium (optional)"
+                value={editSodiumMg}
+                onChange={(e) => setEditSodiumMg(e.target.value)}
+                className="h-8 text-sm flex-1"
+              />
+              <Select
+                value={editSodiumSource}
+                onValueChange={(v) => setEditSodiumSource(v as SodiumSource)}
+              >
+                <SelectTrigger className="h-8 text-sm w-[100px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="sodium">Sodium</SelectItem>
+                  <SelectItem value="salt">Salt</SelectItem>
+                  <SelectItem value="msg">MSG</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Input
+              type="number"
+              min="0"
+              placeholder="Water content (ml, optional)"
+              value={editWaterMl}
+              onChange={(e) => setEditWaterMl(e.target.value)}
+              className="h-8 text-sm"
+            />
           </InlineEditFormShell>
         )}
       />

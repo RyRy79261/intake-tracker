@@ -1,5 +1,73 @@
 # Changelog
 
+## [1.5.2](https://github.com/RyRy79261/intake-tracker/compare/v1.5.1...v1.5.2) (2026-05-08)
+
+
+### Bug Fixes
+
+* **ai+ui:** downgrade Opus model + show substance input for coffee/alcohol edits ([32c8380](https://github.com/RyRy79261/intake-tracker/commit/32c838098a226782186f77acf755a89532dea376))
+
+## [1.5.1](https://github.com/RyRy79261/intake-tracker/compare/v1.5.0...v1.5.1) (2026-05-08)
+
+
+### Bug Fixes
+
+* address PR review feedback on inline edit forms ([d6bd7e5](https://github.com/RyRy79261/intake-tracker/commit/d6bd7e5b68b77adb14715bf26c9f437ebdb83dbe))
+* expose missing fields in inline edit forms ([63feb85](https://github.com/RyRy79261/intake-tracker/commit/63feb855c8cf67a8669948e4fb6f996b768d7c77))
+
+## [1.5.0](https://github.com/RyRy79261/intake-tracker/compare/v1.4.0...v1.5.0) (2026-05-08)
+
+
+### Features
+
+* **auth:** add temporary emergency bypass code ([1fe4419](https://github.com/RyRy79261/intake-tracker/commit/1fe4419d5f8728e51875f25e379d7f1cd570fb7c))
+
+
+### Bug Fixes
+
+* **ai:** address PR review on food/drink lookup routes ([79be01e](https://github.com/RyRy79261/intake-tracker/commit/79be01e68e64ac9ac9ce12a0aca391f1597db016))
+* **ai:** use Opus + web search + metric units for food/drink lookups ([857f945](https://github.com/RyRy79261/intake-tracker/commit/857f94514c3f75da6e94a08057653c6d86d16809))
+* **ai:** use Opus + web search + metric units for food/drink lookups ([2dfc4ed](https://github.com/RyRy79261/intake-tracker/commit/2dfc4ed7b7d48abf366122632a37b5278e151317))
+* **auth:** trust Privy-timeout not navigator.onLine for offline grace ([7d8a74f](https://github.com/RyRy79261/intake-tracker/commit/7d8a74f70c4b02aed964b4bb1750869397e5c208))
+* **auth:** trust Privy-timeout not navigator.onLine for offline grace ([1b1b14c](https://github.com/RyRy79261/intake-tracker/commit/1b1b14c54a5294667f3654579fdabc8d8975bea8))
+* **auth:** unstick offline users who can't reach the bypass form ([c6c7cff](https://github.com/RyRy79261/intake-tracker/commit/c6c7cffccaecd3d2ff6240ae92d516d69721599f))
+* **auth:** unstick offline users who can't reach the bypass form ([4ed8af9](https://github.com/RyRy79261/intake-tracker/commit/4ed8af9b3ede99ab96a5808288a03f5bdd8d37a1))
+* **pwa:** auto-bypass when offline + SPA nav online ([588c420](https://github.com/RyRy79261/intake-tracker/commit/588c420bc4f5353e20229a68f822226418011a68))
+* **pwa:** auto-bypass when offline + SPA nav online ([f856082](https://github.com/RyRy79261/intake-tracker/commit/f856082aa72c80f853749ade6506ddf93e640ea2))
+* **pwa:** cache pages on link nav and precache static routes ([c98b0ae](https://github.com/RyRy79261/intake-tracker/commit/c98b0ae344c34b6535fe703640714200e8ac22d5))
+* **pwa:** cache pages on link nav and precache static routes ([d94e2c1](https://github.com/RyRy79261/intake-tracker/commit/d94e2c113a00b15f2a013a4388c2c5569ad0df63))
+* **pwa:** explicitly register /sw.js so offline actually works ([84dc82f](https://github.com/RyRy79261/intake-tracker/commit/84dc82ff4872e43d432f9efa391bfe1d948514f1))
+* **pwa:** make app usable offline for extended trips ([83e1c97](https://github.com/RyRy79261/intake-tracker/commit/83e1c97553b54e05f319d7314ae5e0b33bd55d45))
+* **pwa:** make app usable offline for extended trips ([647af1c](https://github.com/RyRy79261/intake-tracker/commit/647af1c9e26021260027ce8ddc95d6f74391781d))
+* **pwa:** make offline actually usable (SW register + nav + bypass URL) ([6c5f0cb](https://github.com/RyRy79261/intake-tracker/commit/6c5f0cb44aa8f9a7a678b1311b3e87622da618df))
+* **pwa:** nav + bypass work offline ([ad59c72](https://github.com/RyRy79261/intake-tracker/commit/ad59c72b335378e2cecc6c0c469d5daff3f66e58))
+
+
+### Reverts
+
+* remove offline auth bypass and follow-up PWA patches ([8d3304d](https://github.com/RyRy79261/intake-tracker/commit/8d3304da3a73b6cd8ab1275937451ba93d1c60a7))
+* remove offline auth bypass and follow-up PWA patches ([85da990](https://github.com/RyRy79261/intake-tracker/commit/85da990fee224090306616e3493cb80e8abd14aa))
+
+## [1.4.0](https://github.com/RyRy79261/intake-tracker/compare/v1.3.0...v1.4.0) (2026-04-11)
+
+
+### Features
+
+* **quick-260410-ho9:** add caffeine and alcohol rows to weekly summary grid (GH-35) ([c3386d5](https://github.com/RyRy79261/intake-tracker/commit/c3386d5f766e5c03308a646217b37cdb444951a1))
+* **quick-260410-ho9:** ai parse returns explicit salt vs sodium indicator (GH-33) ([761a320](https://github.com/RyRy79261/intake-tracker/commit/761a32083a1d9ab7cd755b17f78bcb3e21dc0ef3))
+* **quick-260410-ho9:** display heart rate and BP delta in quick view header ([287e9ef](https://github.com/RyRy79261/intake-tracker/commit/287e9ef4fafeaaeb038399db504a2ae4b1464dd7))
+* **quick-260410-ho9:** inline editing replaces modal dialogs in card components (GH-34) ([08bdf96](https://github.com/RyRy79261/intake-tracker/commit/08bdf96abae34f1c0508f33915b3be1810cf68f4))
+* show beverage labels in recent entries and add water tab presets ([1900d1e](https://github.com/RyRy79261/intake-tracker/commit/1900d1ee7d7c918f31430daab7c228aea1ce21c7))
+
+
+### Bug Fixes
+
+* address CodeRabbit review findings (a11y, types, keys) ([6c8d5f7](https://github.com/RyRy79261/intake-tracker/commit/6c8d5f7b81b342e8f18eeea2d1c63056e2d674c9))
+* address CodeRabbit review findings (a11y, types, keys) ([9fd7e52](https://github.com/RyRy79261/intake-tracker/commit/9fd7e5294d7d676e6ac7a651eb7da2f67b1247f3))
+* **quick-260410-ho9:** remove default auto-generated insights (GH-32) ([7491f97](https://github.com/RyRy79261/intake-tracker/commit/7491f97269e9d2c81c0680f79852c920660a9fc0))
+* resolve issues [#31](https://github.com/RyRy79261/intake-tracker/issues/31)-[#35](https://github.com/RyRy79261/intake-tracker/issues/35) (BP view, insights, AI salt, inline edit, weekly summary) ([81eaf78](https://github.com/RyRy79261/intake-tracker/commit/81eaf78ec192fffee799ae6c58fff93000e556b6))
+* use shadcn Checkbox component in BP inline edit form ([5378d5f](https://github.com/RyRy79261/intake-tracker/commit/5378d5f9e2d7c33096ebde8b032df909b5bff6c1))
+
 ## [1.3.0](https://github.com/RyRy79261/intake-tracker/compare/v1.2.0...v1.3.0) (2026-04-09)
 
 

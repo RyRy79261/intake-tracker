@@ -25,6 +25,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import type { LiquidPreset } from "@/lib/constants";
+import { standardDrinksFromAbv } from "@/lib/alcohol-units";
 
 interface PresetTabProps {
   tab: "coffee" | "alcohol" | "beverage";
@@ -89,7 +90,7 @@ export function PresetTab({ tab }: PresetTabProps) {
       );
     }
     if (alcoholPer100ml > 0) {
-      const stdDrinks = volumeMl * (alcoholPer100ml / 100) * 0.789 / 14;
+      const stdDrinks = standardDrinksFromAbv(alcoholPer100ml, volumeMl);
       parts.push(
         `${alcoholPer100ml}% ABV (${parseFloat(stdDrinks.toFixed(1))} std drinks)`
       );
@@ -267,7 +268,7 @@ export function PresetTab({ tab }: PresetTabProps) {
       });
     }
     if (alcoholPer100ml > 0) {
-      const stdDrinks = volumeMl * (alcoholPer100ml / 100) * 0.789 / 14;
+      const stdDrinks = standardDrinksFromAbv(alcoholPer100ml, volumeMl);
       substances.push({
         type: "alcohol",
         amountStandardDrinks: parseFloat(stdDrinks.toFixed(1)),

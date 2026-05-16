@@ -120,7 +120,7 @@ export function useUpdateIntake() {
       updates,
     }: {
       id: string;
-      updates: { amount?: number; timestamp?: number; note?: string };
+      updates: { amount?: number; timestamp?: number; note?: string; source?: string };
     }) => unwrap(await updateIntakeRecord(id, updates)),
   });
 }
