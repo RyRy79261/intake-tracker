@@ -231,34 +231,61 @@ export const POST = withAuth(async ({ request, auth }) => {
 
     const userMessage = `Voice transcript:\n"""\n${sanitized}\n"""\n\nExtract every distinct health log item and return them via the parse_voice_log tool.`;
 
-    const response = await client.messages.create({
-      model: CLAUDE_MODELS.quality,
-      max_tokens: 2048,
-      temperature: 0,
-      system: SYSTEM_PROMPT,
-      tools: [PARSE_TOOL],
-      messages: [{ role: "user", content: userMessage }],
-    });
+    // Per-call timeout — the SDK's 10 min default is poor UX for a user
+    // actively waiting after speaking. 30s per call gives ample headroom
+    // for Sonnet without web_search.
+    const REQUEST_TIMEOUT_MS = 30_000;
+
+    let response: Anthropic.Messages.Message;
+    try {
+      response = await client.messages.create(
+        {
+          model: CLAUDE_MODELS.quality,
+          max_tokens: 2048,
+          temperature: 0,
+          system: SYSTEM_PROMPT,
+          tools: [PARSE_TOOL],
+          messages: [{ role: "user", content: userMessage }],
+        },
+        { timeout: REQUEST_TIMEOUT_MS }
+      );
+    } catch (e) {
+      if (e instanceof Error && (e.name === "APIConnectionTimeoutError" || e.name === "AbortError")) {
+        return NextResponse.json({ error: "AI request timed out" }, { status: 504 });
+      }
+      throw e;
+    }
 
     let toolBlock = findToolUse(response.content, PARSE_TOOL.name);
 
     if (!toolBlock) {
-      const followup = await client.messages.create({
-        model: CLAUDE_MODELS.quality,
-        max_tokens: 2048,
-        temperature: 0,
-        system: SYSTEM_PROMPT,
-        tools: [PARSE_TOOL],
-        tool_choice: { type: "tool", name: PARSE_TOOL.name },
-        messages: [
-          { role: "user", content: userMessage },
-          { role: "assistant", content: response.content },
+      let followup: Anthropic.Messages.Message;
+      try {
+        followup = await client.messages.create(
           {
-            role: "user",
-            content: "Return the structured items via the parse_voice_log tool now.",
+            model: CLAUDE_MODELS.quality,
+            max_tokens: 2048,
+            temperature: 0,
+            system: SYSTEM_PROMPT,
+            tools: [PARSE_TOOL],
+            tool_choice: { type: "tool", name: PARSE_TOOL.name },
+            messages: [
+              { role: "user", content: userMessage },
+              { role: "assistant", content: response.content },
+              {
+                role: "user",
+                content: "Return the structured items via the parse_voice_log tool now.",
+              },
+            ],
           },
-        ],
-      });
+          { timeout: REQUEST_TIMEOUT_MS }
+        );
+      } catch (e) {
+        if (e instanceof Error && (e.name === "APIConnectionTimeoutError" || e.name === "AbortError")) {
+          return NextResponse.json({ error: "AI request timed out" }, { status: 504 });
+        }
+        throw e;
+      }
       toolBlock = findToolUse(followup.content, PARSE_TOOL.name);
     }
 
