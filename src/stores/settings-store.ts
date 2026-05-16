@@ -88,6 +88,11 @@ export interface Settings {
 
   // Substance tracking configuration
   substanceConfig: SubstanceConfig;
+
+  // Experimental feature flags
+  experimentalFeatures: {
+    voiceHealthMetrics: boolean;
+  };
 }
 
 interface SettingsActions {
@@ -131,6 +136,11 @@ interface SettingsActions {
   setWeightIncrement: (value: number) => void;
   // Substance config
   setSubstanceConfig: (config: SubstanceConfig) => void;
+  // Experimental features
+  setExperimentalFeature: (
+    key: keyof Settings["experimentalFeatures"],
+    value: boolean
+  ) => void;
   resetToDefaults: () => void;
 }
 
@@ -183,6 +193,9 @@ const defaultSettings: Settings = {
         { name: "Other", defaultDrinks: 1, defaultVolumeMl: 250 },
       ],
     },
+  },
+  experimentalFeatures: {
+    voiceHealthMetrics: false,
   },
 };
 
@@ -261,6 +274,12 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
       // Substance config
       setSubstanceConfig: (config) => set({ substanceConfig: config }),
 
+      // Experimental features
+      setExperimentalFeature: (key, value) =>
+        set((state) => ({
+          experimentalFeatures: { ...state.experimentalFeatures, [key]: value },
+        })),
+
       addLiquidPreset: (preset) => {
         const id = crypto.randomUUID();
         set((state) => ({
@@ -287,7 +306,7 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
     {
       name: "intake-tracker-settings",
       storage: createJSONStorage(() => localStorage),
-      version: 5,
+      version: 6,
       migrate: (persisted, version) => {
         const state = persisted as Record<string, unknown>;
         if (version === 0) {
@@ -325,6 +344,9 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
         if (version < 5) {
           // D-07: New quickNavItems field. Seed existing users with defaults.
           state.quickNavItems = DEFAULT_QUICK_NAV_ITEMS;
+        }
+        if (version < 6) {
+          state.experimentalFeatures = { voiceHealthMetrics: false };
         }
         return state as unknown as Settings & SettingsActions;
       },
