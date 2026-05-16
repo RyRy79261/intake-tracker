@@ -256,8 +256,14 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
       }),
     });
 
-    reset();
-    onCommitted?.();
+    // Only close + clear on a clean save. If anything failed, keep the
+    // review state so the user can see what didn't get written and retry.
+    if (failures.length === 0) {
+      reset();
+      onCommitted?.();
+    } else {
+      setStage("ready");
+    }
   }, [
     rows,
     toast,

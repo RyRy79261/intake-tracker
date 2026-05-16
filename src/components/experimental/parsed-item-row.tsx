@@ -4,6 +4,13 @@ import { Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import {
   VOICE_ITEM_COLOR,
@@ -330,29 +337,37 @@ function ItemEditor({
     case "defecation":
       return (
         <Field label="Amount">
-          <select
-            disabled={disabled}
-            value={item.amountEstimate ?? ""}
-            onChange={(e) =>
+          <Select
+            disabled={disabled ?? false}
+            value={item.amountEstimate ?? AMOUNT_NONE}
+            onValueChange={(v) =>
               onChange(
                 setOptionalEnum<typeof item, "amountEstimate", "small" | "medium" | "large">(
                   item,
                   "amountEstimate",
-                  e.target.value
+                  v === AMOUNT_NONE ? "" : v
                 )
               )
             }
-            className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
           >
-            <option value="">—</option>
-            <option value="small">Small</option>
-            <option value="medium">Medium</option>
-            <option value="large">Large</option>
-          </select>
+            <SelectTrigger className="h-9">
+              <SelectValue placeholder="—" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={AMOUNT_NONE}>—</SelectItem>
+              <SelectItem value="small">Small</SelectItem>
+              <SelectItem value="medium">Medium</SelectItem>
+              <SelectItem value="large">Large</SelectItem>
+            </SelectContent>
+          </Select>
         </Field>
       );
   }
 }
+
+// Radix Select disallows empty-string values, so we use a sentinel for the
+// "unset" option and translate it back to "" at the boundary.
+const AMOUNT_NONE = "__none__";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (

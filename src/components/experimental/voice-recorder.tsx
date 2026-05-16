@@ -55,11 +55,19 @@ export function VoiceRecorder({ onRecorded, busy, disabled }: VoiceRecorderProps
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
-    if (recorderRef.current && recorderRef.current.state !== "inactive") {
-      try {
-        recorderRef.current.stop();
-      } catch {
-        /* ignore */
+    const rec = recorderRef.current;
+    if (rec) {
+      // Detach callbacks before stop() so the queued onstop doesn't fire
+      // after unmount and call onRecorded / setState on a dead component.
+      rec.ondataavailable = null;
+      rec.onstop = null;
+      rec.onerror = null;
+      if (rec.state !== "inactive") {
+        try {
+          rec.stop();
+        } catch {
+          /* ignore */
+        }
       }
     }
     recorderRef.current = null;

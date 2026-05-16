@@ -98,11 +98,28 @@ export const POST = withAuth(async ({ request, auth }) => {
     upstream.append("response_format", "json");
     upstream.append("temperature", "0");
 
-    const response = await fetch(GROQ_ENDPOINT, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}` },
-      body: upstream,
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30_000);
+
+    let response: Response;
+    try {
+      response = await fetch(GROQ_ENDPOINT, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}` },
+        body: upstream,
+        signal: controller.signal,
+      });
+    } catch (e) {
+      if (e instanceof Error && e.name === "AbortError") {
+        return NextResponse.json(
+          { error: "Transcription timed out" },
+          { status: 504 }
+        );
+      }
+      throw e;
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     if (!response.ok) {
       const detail = await response.text().catch(() => "");
