@@ -1,15 +1,12 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { Mic, Sparkles, ChevronRight } from "lucide-react";
+import { Mic, Sparkles } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
 import { useSettings } from "@/hooks/use-settings";
 
 export function ExperimentalSection() {
-  const router = useRouter();
   const settings = useSettings();
   const voiceEnabled = settings.experimentalFeatures?.voiceHealthMetrics ?? false;
 
@@ -30,11 +27,12 @@ export function ExperimentalSection() {
           <div className="space-y-1">
             <Label htmlFor="voice-health-toggle" className="flex items-center gap-2">
               <Mic className="h-4 w-4" />
-              Voice health metrics
+              Voice log
             </Label>
             <p className="text-xs text-muted-foreground">
-              Dictate multiple metrics in one go. Uses Groq Whisper + Claude to
-              extract a reviewable list of items.
+              Dictate multiple metrics in one go. When on, a{" "}
+              <span className="font-medium">Voice log</span> bar appears above the
+              quick-nav on the home screen.
             </p>
           </div>
           <Switch
@@ -43,20 +41,6 @@ export function ExperimentalSection() {
             onCheckedChange={(v) => settings.setExperimentalFeature("voiceHealthMetrics", v)}
           />
         </div>
-
-        {voiceEnabled && (
-          <Button
-            variant="outline"
-            className="w-full justify-between"
-            onClick={() => router.push("/experimental/voice")}
-          >
-            <span className="flex items-center gap-2">
-              <Mic className="h-4 w-4" />
-              Open voice panel
-            </span>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        )}
       </CardContent>
     </Card>
   );

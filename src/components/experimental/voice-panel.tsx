@@ -1,14 +1,10 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { AlertTriangle, ArrowLeft, Check, X, Sparkles } from "lucide-react";
-import { AuthGuard, useAuth } from "@/components/auth-guard";
-import { AppHeader } from "@/components/app-header";
+import { Check, Mic, Sparkles, X } from "lucide-react";
+import { useAuth } from "@/components/auth-guard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useScrollHide } from "@/hooks/use-scroll-hide";
-import { useSettings } from "@/hooks/use-settings";
 import { useToast } from "@/hooks/use-toast";
 import { VoiceRecorder } from "@/components/experimental/voice-recorder";
 import { ParsedItemRow } from "@/components/experimental/parsed-item-row";
@@ -23,10 +19,13 @@ import { useQueryClient } from "@tanstack/react-query";
 
 type RowState = { item: VoiceParsedItem; approved: boolean | null };
 
-function ExperimentalVoiceContent() {
-  const router = useRouter();
+interface VoicePanelProps {
+  /** Called once a save commit succeeds so the host can close the modal. */
+  onCommitted?: () => void;
+}
+
+export function VoicePanel({ onCommitted }: VoicePanelProps) {
   const { toast } = useToast();
-  const settings = useSettings();
   const { getAuthHeader } = useAuth();
   const queryClient = useQueryClient();
 
@@ -37,14 +36,6 @@ function ExperimentalVoiceContent() {
   const addUrination = useAddUrination();
   const addDefecation = useAddDefecation();
   const addSubstance = useAddSubstance();
-
-  const barTransitionSec = settings.barTransitionDurationMs / 1000;
-  const { isHidden } = useScrollHide({
-    scrollDurationMs: settings.scrollDurationMs,
-    autoHideDelayMs: settings.autoHideDelayMs,
-  });
-
-  const enabled = settings.experimentalFeatures?.voiceHealthMetrics ?? false;
 
   const [transcript, setTranscript] = useState<string>("");
   const [rows, setRows] = useState<RowState[]>([]);
@@ -155,7 +146,6 @@ function ExperimentalVoiceContent() {
     if (approved.length === 0) return;
 
     setStage("saving");
-    const groupId = crypto.randomUUID();
     let successCount = 0;
     const failures: string[] = [];
 
@@ -256,19 +246,18 @@ function ExperimentalVoiceContent() {
       }
     }
 
-    // Invalidate everything that may have changed; cheap because all reads
-    // are local Dexie queries.
     void queryClient.invalidateQueries();
 
     toast({
       title: `Saved ${successCount} of ${approved.length}`,
-      description: failures.length
-        ? `Failures: ${failures.slice(0, 3).join("; ")}`
-        : `Group ${groupId.slice(0, 8)}`,
-      variant: failures.length ? "destructive" : "default",
+      ...(failures.length > 0 && {
+        description: `Failures: ${failures.slice(0, 3).join("; ")}`,
+        variant: "destructive" as const,
+      }),
     });
 
     reset();
+    onCommitted?.();
   }, [
     rows,
     toast,
@@ -281,139 +270,114 @@ function ExperimentalVoiceContent() {
     addUrination,
     addDefecation,
     addSubstance,
+    onCommitted,
   ]);
 
-  if (!enabled) {
-    return (
-      <>
-        <AppHeader headerHidden={isHidden} transitionDuration={barTransitionSec} />
-        <Card className="mt-4">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-muted-foreground" />
-              Experimental feature disabled
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Voice health metrics is an experimental feature. Enable it in
-              Settings → Experimental.
-            </p>
-            <Button onClick={() => router.push("/settings")} className="w-full">
-              Open Settings
-            </Button>
-          </CardContent>
-        </Card>
-      </>
-    );
-  }
+  const hasItems = rows.length > 0;
 
   return (
-    <>
-      <AppHeader headerHidden={isHidden} transitionDuration={barTransitionSec} />
-
-      <div className="space-y-4 pb-24">
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => router.push("/settings")}
-            className="gap-1"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Settings
-          </Button>
-          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+    <div className="flex h-full flex-col">
+      {/* Header */}
+      <div className="flex shrink-0 items-center gap-2 border-b pb-3">
+        <Mic className="h-5 w-5 text-primary" />
+        <div className="flex-1">
+          <h2 className="text-lg font-semibold leading-tight">Voice log</h2>
+          <p className="flex items-center gap-1 text-xs text-muted-foreground">
             <Sparkles className="h-3 w-3" />
             Experimental
-          </span>
+          </p>
         </div>
+      </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Voice health metrics</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-xs text-muted-foreground">
-              Tap record and describe everything in one go — blood pressure, heart rate,
-              food, drinks, weight, anything. Stop, review the extracted items, then
-              approve or reject each one.
-            </p>
-            <VoiceRecorder
-              onRecorded={handleRecorded}
-              busy={stage === "transcribing" || stage === "parsing" || stage === "saving"}
-            />
-            {stage === "transcribing" && (
-              <p className="text-center text-xs text-muted-foreground">
-                Transcribing with Groq Whisper…
-              </p>
-            )}
-            {stage === "parsing" && (
-              <p className="text-center text-xs text-muted-foreground">
-                Extracting items with Claude…
-              </p>
-            )}
-            {error && (
-              <p className="text-center text-xs text-destructive">{error}</p>
-            )}
-          </CardContent>
-        </Card>
-
-        {transcript && (
+      {/* Scrollable content */}
+      <div className="-mx-6 flex-1 overflow-y-auto px-6 pt-4">
+        <div className={hasItems ? "space-y-4 pb-32" : "space-y-4"}>
           <Card>
-            <CardHeader>
-              <CardTitle className="text-sm">Transcript</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm italic text-muted-foreground">
-                &ldquo;{transcript}&rdquo;
+            <CardContent className="space-y-4 pt-6">
+              <p className="text-xs text-muted-foreground">
+                Tap record and describe everything in one go — blood pressure, heart rate,
+                food, drinks, weight, anything. Stop, review the extracted items, then
+                approve or reject each one.
               </p>
-            </CardContent>
-          </Card>
-        )}
-
-        {rows.length > 0 && (
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0">
-              <CardTitle className="text-sm">
-                Items ({approvedCount} approved · {pendingCount} pending)
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {rows.map((row, i) => (
-                <ParsedItemRow
-                  key={i}
-                  index={i}
-                  item={row.item}
-                  approved={row.approved}
-                  disabled={stage === "saving"}
-                  onChange={(next) => updateRow(i, { item: next })}
-                  onApprove={() =>
-                    updateRow(i, {
-                      approved: row.approved === true ? null : true,
-                    })
-                  }
-                  onReject={() =>
-                    updateRow(i, {
-                      approved: row.approved === false ? null : false,
-                    })
-                  }
-                />
-              ))}
-
-              {reasoning && (
-                <p className="rounded border-l-2 border-muted-foreground/30 bg-muted/30 p-2 text-[11px] leading-relaxed text-muted-foreground">
-                  {reasoning}
+              <VoiceRecorder
+                onRecorded={handleRecorded}
+                busy={stage === "transcribing" || stage === "parsing" || stage === "saving"}
+              />
+              {stage === "transcribing" && (
+                <p className="text-center text-xs text-muted-foreground">
+                  Transcribing with Groq Whisper…
                 </p>
+              )}
+              {stage === "parsing" && (
+                <p className="text-center text-xs text-muted-foreground">
+                  Extracting items with Claude…
+                </p>
+              )}
+              {error && (
+                <p className="text-center text-xs text-destructive">{error}</p>
               )}
             </CardContent>
           </Card>
-        )}
+
+          {transcript && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">Transcript</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm italic text-muted-foreground">
+                  &ldquo;{transcript}&rdquo;
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {hasItems && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">
+                  Items ({approvedCount} approved · {pendingCount} pending)
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {rows.map((row, i) => (
+                  <ParsedItemRow
+                    key={i}
+                    index={i}
+                    item={row.item}
+                    approved={row.approved}
+                    disabled={stage === "saving"}
+                    onChange={(next) => updateRow(i, { item: next })}
+                    onApprove={() =>
+                      updateRow(i, {
+                        approved: row.approved === true ? null : true,
+                      })
+                    }
+                    onReject={() =>
+                      updateRow(i, {
+                        approved: row.approved === false ? null : false,
+                      })
+                    }
+                  />
+                ))}
+
+                {reasoning && (
+                  <p className="rounded border-l-2 border-muted-foreground/30 bg-muted/30 p-2 text-[11px] leading-relaxed text-muted-foreground">
+                    {reasoning}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </div>
       </div>
 
-      {rows.length > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 backdrop-blur">
-          <div className="mx-auto flex max-w-lg gap-2 p-3">
+      {/* Action bar — pinned to bottom of the sheet body */}
+      {hasItems && (
+        <div className="-mx-6 -mb-6 shrink-0 border-t bg-background/95 px-3 pt-3 backdrop-blur"
+          style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom, 0px))" }}
+        >
+          <div className="flex gap-2">
             <Button
               variant="outline"
               size="lg"
@@ -446,14 +410,6 @@ function ExperimentalVoiceContent() {
           </div>
         </div>
       )}
-    </>
-  );
-}
-
-export default function ExperimentalVoicePage() {
-  return (
-    <AuthGuard>
-      <ExperimentalVoiceContent />
-    </AuthGuard>
+    </div>
   );
 }
