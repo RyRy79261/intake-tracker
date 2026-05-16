@@ -232,9 +232,10 @@ export const POST = withAuth(async ({ request, auth }) => {
     const userMessage = `Voice transcript:\n"""\n${sanitized}\n"""\n\nExtract every distinct health log item and return them via the parse_voice_log tool.`;
 
     // Per-call timeout — the SDK's 10 min default is poor UX for a user
-    // actively waiting after speaking. 30s per call gives ample headroom
-    // for Sonnet without web_search.
-    const REQUEST_TIMEOUT_MS = 30_000;
+    // actively waiting after speaking. Sonnet outputs ~75 tok/s; a full
+    // 2048-token response is ~28s before TTFT and peak-hour jitter, so
+    // 60s gives ~2x margin over the worst legitimate case.
+    const REQUEST_TIMEOUT_MS = 60_000;
 
     let response: Anthropic.Messages.Message;
     try {
