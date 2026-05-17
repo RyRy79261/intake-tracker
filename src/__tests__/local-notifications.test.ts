@@ -191,7 +191,7 @@ describe("local-notifications", () => {
       await syncMedicationNotifications();
 
       expect(mockSchedule).toHaveBeenCalledOnce();
-      const scheduled = mockSchedule.mock.calls[0][0].notifications;
+      const scheduled = mockSchedule.mock.calls[0]![0].notifications;
       expect(scheduled).toHaveLength(7);
 
       const weekdays = scheduled.map(
@@ -319,7 +319,7 @@ describe("local-notifications", () => {
       );
       await syncMedicationNotifications();
 
-      const scheduled = mockSchedule.mock.calls[0][0].notifications;
+      const scheduled = mockSchedule.mock.calls[0]![0].notifications;
       expect(scheduled[0].title).toBe("Time for Lisinopril");
       expect(scheduled[0].body).toBe("Take 25mg of Lisinopril");
     });
@@ -360,7 +360,7 @@ describe("local-notifications", () => {
       );
       await syncMedicationNotifications();
 
-      const scheduled = mockSchedule.mock.calls[0][0].notifications;
+      const scheduled = mockSchedule.mock.calls[0]![0].notifications;
       expect(scheduled[0].schedule.allowWhileIdle).toBe(true);
     });
   });
