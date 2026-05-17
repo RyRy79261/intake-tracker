@@ -247,7 +247,21 @@ AI features require Privy authentication and a server-side `ANTHROPIC_API_KEY`. 
 
 ## License
 
-This work is licensed under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/).
+This project is licensed under the [Functional Source License, Version 1.1, with Apache 2.0 Future License (FSL-1.1-ALv2)](https://fsl.software/). See [LICENSE](LICENSE) for the full text.
 
-You are free to share and adapt this work for non-commercial purposes with attribution.
-For commercial use, please contact the author for permission.
+**In plain language:**
+
+- You can use, copy, modify, fork, and redistribute the code for **any purpose** — personal use, self-hosting, internal use at your organization, education, research, or as part of professional services you provide — **except a Competing Use**.
+- A **Competing Use** is offering the Software (or something substantially similar) as a commercial product or service that competes with what we offer. In practice: don't take this code and launch a hosted/managed health-tracking SaaS that competes with our own offering.
+- **Every release auto-converts to Apache 2.0 on the second anniversary of its publication.** Each version carries its own clock, so older versions become fully open source on a rolling basis.
+
+**Examples:**
+
+- A patient self-hosting their own copy to track a chronic condition: allowed.
+- A clinician deploying it internally for their patients: allowed.
+- A developer forking it, wiring up their own AI provider, and sharing it with a community: allowed.
+- A company launching "HealthTrackerCloud" as a paid SaaS competing with the original: **not allowed** without a commercial license.
+
+### Commercial licensing
+
+If your intended use is a Competing Use, or you're unsure whether it qualifies, please get in touch before deploying: **meowzit.eth@gmail.com**.
