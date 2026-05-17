@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { Check, Mic, X } from "lucide-react";
-import { useAuth } from "@/components/auth-guard";
+import { useAiFetch } from "@/hooks/use-ai-fetch";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
@@ -26,7 +26,7 @@ interface VoicePanelProps {
 
 export function VoicePanel({ onCommitted }: VoicePanelProps) {
   const { toast } = useToast();
-  const { getAuthHeader } = useAuth();
+  const aiFetch = useAiFetch();
   const queryClient = useQueryClient();
 
   const addIntake = useAddIntake();
@@ -63,7 +63,6 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
       setStage("transcribing");
 
       try {
-        const auth = await getAuthHeader();
         const ext =
           mimeType.includes("mp4") || mimeType.includes("aac")
             ? "m4a"
@@ -74,11 +73,14 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
         const form = new FormData();
         form.append("audio", blob, `clip.${ext}`);
 
-        const transcribeRes = await fetch("/api/ai/voice-transcribe", {
+        const transcribeRes = await aiFetch("/api/ai/voice-transcribe", {
           method: "POST",
-          headers: auth,
           body: form,
         });
+        if (!transcribeRes) {
+          setStage("idle");
+          return;
+        }
         if (!transcribeRes.ok) {
           const j = await transcribeRes.json().catch(() => ({}));
           throw new Error(j.error || `Transcribe failed (${transcribeRes.status})`);
@@ -87,11 +89,15 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
         setTranscript(text);
 
         setStage("parsing");
-        const parseRes = await fetch("/api/ai/voice-parse", {
+        const parseRes = await aiFetch("/api/ai/voice-parse", {
           method: "POST",
-          headers: { "Content-Type": "application/json", ...auth },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ transcript: text }),
         });
+        if (!parseRes) {
+          setStage("idle");
+          return;
+        }
         if (!parseRes.ok) {
           const j = await parseRes.json().catch(() => ({}));
           throw new Error(j.error || `Parse failed (${parseRes.status})`);
@@ -118,7 +124,7 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
         });
       }
     },
-    [getAuthHeader, toast]
+    [aiFetch, toast]
   );
 
   const updateRow = useCallback((index: number, next: Partial<RowState>) => {
