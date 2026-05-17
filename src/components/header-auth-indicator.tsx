@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/popover";
 import { LogIn, LogOut, User } from "lucide-react";
 import { useRequireAuth } from "@/components/auth-required-dialog";
+import { useAiAccess } from "@/hooks/use-ai-access";
 
 export function HeaderAuthIndicator() {
   if (!process.env.NEXT_PUBLIC_PRIVY_APP_ID) return null;
@@ -18,6 +19,7 @@ export function HeaderAuthIndicator() {
 function PrivyHeaderAuthIndicator() {
   const { ready, authenticated, user, logout } = usePrivy();
   const { requireAuth } = useRequireAuth();
+  const access = useAiAccess();
 
   if (!ready) {
     return (
@@ -68,7 +70,19 @@ function PrivyHeaderAuthIndicator() {
       <PopoverContent align="end" className="w-56 p-2">
         <div className="px-2 py-1.5 text-sm">
           <p className="font-medium truncate">{email ?? "Signed in"}</p>
-          <p className="text-xs text-muted-foreground">AI & reminders enabled</p>
+          {access.status === "approved" && (
+            <p className="text-xs text-emerald-600 dark:text-emerald-400">
+              AI &amp; reminders enabled
+            </p>
+          )}
+          {access.status === "denied" && (
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              Contact admin for AI access
+            </p>
+          )}
+          {access.status === "loading" && (
+            <p className="text-xs text-muted-foreground">Checking AI access…</p>
+          )}
         </div>
         <Button
           variant="ghost"

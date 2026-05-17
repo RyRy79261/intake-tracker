@@ -4,6 +4,7 @@ import { usePrivy } from "@privy-io/react-auth";
 import { Button } from "@/components/ui/button";
 import { Bell, Cloud, LogOut, Pill, Sparkles, TestTube, User, type LucideIcon } from "lucide-react";
 import { useRequireAuth } from "@/components/auth-required-dialog";
+import { useAiAccess } from "@/hooks/use-ai-access";
 
 export function AccountSection() {
   if (!process.env.NEXT_PUBLIC_PRIVY_APP_ID) return null;
@@ -22,6 +23,7 @@ const FEATURES: { icon: LucideIcon; label: string; comingSoon?: boolean }[] = [
 function PrivyAccountSection() {
   const { ready, authenticated, user, logout } = usePrivy();
   const { requireAuth } = useRequireAuth();
+  const access = useAiAccess();
 
   return (
     <div className="space-y-4">
@@ -40,9 +42,21 @@ function PrivyAccountSection() {
             <p className="text-sm font-medium truncate">
               {user?.email?.address ?? "Authenticated user"}
             </p>
-            <p className="text-xs text-emerald-600 dark:text-emerald-400">
-              Signed in — AI & reminders enabled
-            </p>
+            {access.status === "approved" && (
+              <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                Signed in — AI &amp; reminders enabled
+              </p>
+            )}
+            {access.status === "denied" && (
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                Signed in. Contact admin for AI access.
+              </p>
+            )}
+            {access.status === "loading" && (
+              <p className="text-xs text-muted-foreground">
+                Checking AI access…
+              </p>
+            )}
           </div>
           <Button
             variant="outline"
