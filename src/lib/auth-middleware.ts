@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAndCheckWhitelist, type VerificationResult } from "./privy-server";
+import { verificationToErrorResponse } from "./auth-response";
 
 export interface AuthenticatedRequest {
   request: NextRequest;
@@ -13,6 +14,12 @@ type AuthenticatedHandler = (
 /**
  * Higher-order function that wraps an API route handler with authentication.
  *
+ * On failure, returns:
+ *   - 401 + { requiresAuth: true } for missing/expired tokens (client
+ *     should reopen the sign-in modal)
+ *   - 403 + { accountUnapproved: true } for whitelist denials (client
+ *     should surface "contact admin" — re-auth won't help)
+ *
  * Usage:
  * ```ts
  * export const POST = withAuth(async ({ request, auth }) => {
@@ -23,7 +30,6 @@ type AuthenticatedHandler = (
  */
 export function withAuth(handler: AuthenticatedHandler) {
   return async (request: NextRequest): Promise<NextResponse> => {
-    // Extract Bearer token from Authorization header
     const authHeader = request.headers.get("Authorization");
     const authToken = authHeader?.startsWith("Bearer ")
       ? authHeader.slice(7)
@@ -32,10 +38,8 @@ export function withAuth(handler: AuthenticatedHandler) {
     const result = await verifyAndCheckWhitelist(authToken);
 
     if (!result.success) {
-      return NextResponse.json(
-        { error: result.error ?? "Unauthorized", requiresAuth: true },
-        { status: 401 }
-      );
+      const { status, body } = verificationToErrorResponse(result);
+      return NextResponse.json(body, { status });
     }
 
     return handler({ request, auth: result });

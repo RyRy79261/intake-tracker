@@ -43,12 +43,65 @@ function getAllowedWallets(): string[] {
     .filter(Boolean);
 }
 
+/**
+ * Why a verification attempt failed. Drives how the response is shaped
+ * (whether the client should be told to re-auth, prompted to contact an
+ * admin, etc.).
+ */
+export type AuthFailureReason =
+  | "no-token"
+  | "invalid-token"
+  | "not-whitelisted"
+  | "not-configured";
+
 export interface VerificationResult {
   success: boolean;
   userId?: string;
   email?: string;
   wallet?: string;
   error?: string;
+  reason?: AuthFailureReason;
+}
+
+/**
+ * Pure helper: classify a Privy-resolved user against the allow-list.
+ * Extracted so it can be tested without mocking the Privy SDK.
+ *
+ * Empty allow-lists mean "no gate configured" — every authenticated user
+ * is approved.
+ */
+export function classifyUser(
+  userId: string,
+  userEmail: string | undefined,
+  userWallets: string[],
+  allowedEmails: string[],
+  allowedWallets: string[]
+): VerificationResult {
+  if (allowedEmails.length === 0 && allowedWallets.length === 0) {
+    const firstWallet = userWallets[0];
+    return {
+      success: true,
+      userId,
+      ...(userEmail !== undefined && { email: userEmail }),
+      ...(firstWallet !== undefined && { wallet: firstWallet }),
+    };
+  }
+
+  if (userEmail && allowedEmails.includes(userEmail)) {
+    return { success: true, userId, email: userEmail };
+  }
+
+  for (const wallet of userWallets) {
+    if (allowedWallets.includes(wallet)) {
+      return { success: true, userId, wallet };
+    }
+  }
+
+  return {
+    success: false,
+    reason: "not-whitelisted",
+    error: "Your account is not authorized to use this app",
+  };
 }
 
 /**
@@ -72,38 +125,36 @@ export async function verifyAndCheckWhitelist(
   authToken: string | null
 ): Promise<VerificationResult> {
   if (!authToken) {
-    return { success: false, error: "No auth token provided" };
+    return {
+      success: false,
+      reason: "no-token",
+      error: "No auth token provided",
+    };
   }
 
   const client = getPrivyClient();
   if (!client) {
-    // Privy not configured
     if (isDevFallbackAllowed()) {
-      // Allow in development or when explicitly permitted
       console.warn(
         "Privy not configured - allowing dev fallback. " +
         "Set ALLOW_DEV_FALLBACK=true in production if this is intentional."
       );
       return { success: true, userId: "dev-user" };
-    } else {
-      // Fail closed in production when not explicitly allowed
-      console.error(
-        "Privy not configured in production. " +
-        "Either configure Privy or set ALLOW_DEV_FALLBACK=true."
-      );
-      return { 
-        success: false, 
-        error: "Authentication service not configured" 
-      };
     }
+    console.error(
+      "Privy not configured in production. " +
+      "Either configure Privy or set ALLOW_DEV_FALLBACK=true."
+    );
+    return {
+      success: false,
+      reason: "not-configured",
+      error: "Authentication service not configured",
+    };
   }
 
   try {
-    // Verify the token with Privy
     const verifiedClaims = await client.verifyAuthToken(authToken);
     const userId = verifiedClaims.userId;
-
-    // Get user details to check email/wallet
     const user = await client.getUser(userId);
 
     const userEmail = user.email?.address?.toLowerCase();
@@ -111,50 +162,18 @@ export async function verifyAndCheckWhitelist(
       .filter((a) => a.type === "wallet" && "address" in a)
       .map((w) => (w as { address: string }).address.toLowerCase());
 
-    // Check whitelist
-    const allowedEmails = getAllowedEmails();
-    const allowedWallets = getAllowedWallets();
-
-    // If no whitelist is configured, allow all authenticated users
-    if (allowedEmails.length === 0 && allowedWallets.length === 0) {
-      const firstWallet = userWallets[0];
-      return {
-        success: true,
-        userId,
-        ...(userEmail !== undefined && { email: userEmail }),
-        ...(firstWallet !== undefined && { wallet: firstWallet }),
-      };
-    }
-
-    // Check if user's email is in whitelist
-    if (userEmail && allowedEmails.includes(userEmail)) {
-      return {
-        success: true,
-        userId,
-        email: userEmail,
-      };
-    }
-
-    // Check if any of user's wallets are in whitelist
-    for (const wallet of userWallets) {
-      if (allowedWallets.includes(wallet)) {
-        return {
-          success: true,
-          userId,
-          wallet,
-        };
-      }
-    }
-
-    // User authenticated but not on whitelist
-    return {
-      success: false,
-      error: "Your account is not authorized to use this app",
-    };
+    return classifyUser(
+      userId,
+      userEmail,
+      userWallets,
+      getAllowedEmails(),
+      getAllowedWallets()
+    );
   } catch (error) {
     console.error("Privy verification error:", error);
     return {
       success: false,
+      reason: "invalid-token",
       error: "Invalid or expired auth token",
     };
   }
