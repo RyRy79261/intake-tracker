@@ -4,7 +4,7 @@ import { useState } from "react";
 import { motion } from "motion/react";
 import { Mic } from "lucide-react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { VoicePanel } from "@/components/experimental/voice-panel";
+import { VoicePanel } from "@/components/voice/voice-panel";
 import { useAuthGate } from "@/components/auth-guard";
 import { cn } from "@/lib/utils";
 

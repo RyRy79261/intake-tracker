@@ -8,7 +8,7 @@ vi.mock("@/components/auth-guard", () => ({
 }));
 // VoicePanel is only rendered inside the Sheet when open=true, so we
 // don't need to drive it here — stub to keep the test focused.
-vi.mock("@/components/experimental/voice-panel", () => ({
+vi.mock("@/components/voice/voice-panel", () => ({
   VoicePanel: () => null,
 }));
 
