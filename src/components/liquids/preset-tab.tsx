@@ -451,19 +451,21 @@ export function PresetTab({ tab }: PresetTabProps) {
               }
             }}
           />
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon"
             onClick={handleAiLookup}
             disabled={!searchText.trim() || isLookingUp}
-            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-muted-foreground hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
             aria-label="Look up substance content"
+            className="absolute right-2 top-1/2 -translate-y-1/2 h-auto w-auto p-1 rounded-md text-muted-foreground hover:bg-transparent hover:text-foreground disabled:cursor-not-allowed"
           >
             {isLookingUp ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
               <Sparkles className="w-4 h-4" />
             )}
-          </button>
+          </Button>
         </div>
       )}
 
