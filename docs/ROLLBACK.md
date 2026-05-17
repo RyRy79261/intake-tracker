@@ -66,33 +66,21 @@ Quick-reference guide for recovering from bad production deployments.
 
 **When:** Push notification data is corrupted or lost after a bad deployment.
 
-The `promote-to-production.yml` workflow creates a snapshot named `pre-promote-{sha7}-{date}` before each production promotion.
-
-> **Note:** Snapshot SHAs come from the merge commit (`github.sha`), not the PR head SHA. When looking for a snapshot, use the merge commit SHA from the GitHub PR page (shown after merge), not the last commit SHA from `git log`.
+Neon provides point-in-time restore on all branches. Use the Neon Console to restore the production branch to a known-good point.
 
 ### Via Neon Dashboard
 
 1. Open [Neon Console](https://console.neon.tech)
 2. Select the **intake-tracker** project
-3. Go to **Branches** → select the **production** branch
-4. Find the snapshot from before the bad deploy (named `pre-promote-{sha7}-{YYYYMMDD}`)
-5. Click **Restore** to roll back the database to that point
+3. Go to **Branches** → select the **main** (production) branch
+4. Use **Restore** to roll back the database to a point before the bad deploy
 
 ### Via Neon API
 
-> **Prerequisites:** The Neon API commands below require three environment variables: `NEON_PROJECT_ID`, `NEON_API_KEY`, and `NEON_PROD_BRANCH_ID`. See [Staging Setup Guide, Section 7](staging-setup.md#7-github-add-neon-secrets) for how to configure these as GitHub secrets.
-
 ```bash
-# List available snapshots
-curl -s "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches/$NEON_PROD_BRANCH_ID/snapshots" \
-  -H "Authorization: Bearer $NEON_API_KEY" | jq '.snapshots[] | {name, created_at}'
-
-# Restore a specific snapshot
-curl -s -X POST \
-  "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches/$NEON_PROD_BRANCH_ID/restore" \
-  -H "Authorization: Bearer $NEON_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"source_branch_id": "<snapshot-branch-id>"}'
+# List available restore points
+curl -s "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches" \
+  -H "Authorization: Bearer $NEON_API_KEY" | jq '.branches[] | {name, created_at}'
 ```
 
 **Time to recover:** ~1-2 minutes
@@ -119,4 +107,4 @@ After any recovery action, verify:
 - [ ] Settings → About App shows expected version
 - [ ] Push notifications are functional (if DB was restored)
 - [ ] AI features respond (API keys valid)
-- [ ] Authentication works (Privy configured correctly)
+- [ ] Authentication works (Neon Auth configured correctly)

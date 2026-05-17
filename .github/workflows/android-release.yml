@@ -19,8 +19,29 @@ jobs:
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
 
+      - name: Extract version from package.json
+        id: version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          # Generate versionCode from semver: major*10000 + minor*100 + patch
+          MAJOR=$(echo "$VERSION" | cut -d. -f1)
+          MINOR=$(echo "$VERSION" | cut -d. -f2)
+          PATCH=$(echo "$VERSION" | cut -d. -f3)
+          VERSION_CODE=$((MAJOR * 10000 + MINOR * 100 + PATCH))
+          echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+
+      - name: Write version.properties for Gradle
+        run: |
+          cat > android/app/version.properties <<EOF
+          VERSION_CODE=${{ steps.version.outputs.version_code }}
+          VERSION_NAME=${{ steps.version.outputs.version }}
+          EOF
+
       - name: Build Capacitor static export
         run: node scripts/cap-build.js
+        env:
+          NEXT_PUBLIC_API_BASE_URL: https://intake-tracker.ryanjnoble.dev
 
       - name: Sync web assets to Android
         run: npx cap sync android
@@ -37,8 +58,13 @@ jobs:
         working-directory: android
         run: ./gradlew assembleDebug
 
+      - name: Rename APK
+        run: |
+          mv android/app/build/outputs/apk/debug/app-debug.apk \
+             android/app/build/outputs/apk/debug/intake-tracker-v${{ steps.version.outputs.version }}.apk
+
       - name: Attach APK to release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.release.tag_name }}
-          files: android/app/build/outputs/apk/debug/app-debug.apk
+          files: android/app/build/outputs/apk/debug/intake-tracker-v${{ steps.version.outputs.version }}.apk

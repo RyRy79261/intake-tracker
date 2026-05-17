@@ -1,5 +1,15 @@
 apply plugin: 'com.android.application'
 
+def versionPropsFile = file('version.properties')
+def appVersionCode = 1
+def appVersionName = "1.0.0"
+if (versionPropsFile.canRead()) {
+    def versionProps = new Properties()
+    versionProps.load(new FileInputStream(versionPropsFile))
+    appVersionCode = versionProps['VERSION_CODE']?.toInteger() ?: 1
+    appVersionName = versionProps['VERSION_NAME'] ?: "1.0.0"
+}
+
 android {
     namespace = "dev.ryanjnoble.intaketracker"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,8 +17,8 @@ android {
         applicationId "dev.ryanjnoble.intaketracker"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode appVersionCode
+        versionName appVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
