@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Smartphone, RefreshCw, Loader2 } from "lucide-react";
 import { useVersionCheck } from "@/hooks/use-version-check";
 import { useToast } from "@/hooks/use-toast";
+import { isCapacitorMode } from "@/lib/api-fetch";
 
 export function AppUpdatesSection() {
   const { toast } = useToast();
@@ -15,6 +16,8 @@ export function AppUpdatesSection() {
     checkForUpdates,
     applyUpdate,
   } = useVersionCheck();
+
+  if (isCapacitorMode()) return null;
 
   return (
     <div className="space-y-4">

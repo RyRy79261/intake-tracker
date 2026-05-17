@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { apiFetch } from "@/lib/api-fetch";
+import { apiFetch, isCapacitorMode } from "@/lib/api-fetch";
 
 const CLIENT_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || "0.0.0";
 const CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
@@ -57,12 +57,12 @@ export function useVersionCheck() {
   }, []);
 
   useEffect(() => {
-    // Initial check after a short delay to avoid blocking page load
+    if (isCapacitorMode()) return;
+
     const timeout = setTimeout(() => {
       checkForUpdates();
     }, 3000);
 
-    // Periodic checks
     intervalRef.current = setInterval(() => {
       checkForUpdates();
     }, CHECK_INTERVAL_MS);
