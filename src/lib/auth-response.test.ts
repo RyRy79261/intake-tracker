@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   verificationToErrorResponse,
   verificationToAccessResponse,
-} from "./auth-response";
-import type { VerificationResult } from "./privy-server";
+} from "@/lib/auth-response";
+import type { VerificationResult } from "@/lib/privy-server";
 
 describe("verificationToErrorResponse", () => {
   it("throws if called with a successful result (caller bug)", () => {

@@ -1,4 +1,4 @@
-import type { VerificationResult } from "./privy-server";
+import type { VerificationResult } from "@/lib/privy-server";
 
 /**
  * Body shape returned by withAuth on rejection.

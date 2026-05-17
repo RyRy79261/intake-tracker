@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { interpretAccessResponse } from "./use-ai-access";
+import { interpretAccessResponse } from "@/hooks/use-ai-access";
 
 describe("interpretAccessResponse", () => {
   it("returns loading while Privy is still hydrating", () => {
@@ -66,23 +66,54 @@ describe("interpretAccessResponse", () => {
     });
   });
 
-  it("returns denied without reason field when none provided", () => {
+  it("returns denied without reason field when none provided (server-confirmed denial)", () => {
+    const result = interpretAccessResponse({
+      ready: true,
+      authenticated: true,
+      data: { signedIn: true, approved: false },
+    });
+    expect(result).toEqual({ status: "denied" });
+  });
+
+  it("server signedIn:false collapses to signed-out, not denied (don't conflate token failure with whitelist denial)", () => {
+    // The client thinks it's authenticated but the server rejected the
+    // token. "Contact admin" would be the wrong message — re-auth is.
     const result = interpretAccessResponse({
       ready: true,
       authenticated: true,
       data: { signedIn: false, approved: false },
     });
-    expect(result).toEqual({ status: "denied" });
+    expect(result).toEqual({ status: "signed-out" });
   });
 
-  it("client trusts the server's approved flag over its own auth state", () => {
-    // Defensive: if the server says approved, that's the source of truth
-    // even in odd states. (No real scenario triggers this; just contract.)
+  it("server signedIn:false collapses to signed-out even if approved is somehow true", () => {
+    // Defensive: trust signedIn first. Without a valid session we can't
+    // claim approval, regardless of what the approved flag says.
     const result = interpretAccessResponse({
       ready: true,
       authenticated: true,
       data: { signedIn: false, approved: true },
     });
-    expect(result.status).toBe("approved");
+    expect(result).toEqual({ status: "signed-out" });
+  });
+
+  it("network/fetch error collapses to signed-out (don't show stale or wrong state)", () => {
+    const result = interpretAccessResponse({
+      ready: true,
+      authenticated: true,
+      data: undefined,
+      isError: true,
+    });
+    expect(result).toEqual({ status: "signed-out" });
+  });
+
+  it("error takes precedence over data — surface the failure rather than stale data", () => {
+    const result = interpretAccessResponse({
+      ready: true,
+      authenticated: true,
+      data: { signedIn: true, approved: true },
+      isError: true,
+    });
+    expect(result).toEqual({ status: "signed-out" });
   });
 });

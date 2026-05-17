@@ -43,6 +43,7 @@ describe("useAiAccess (integration)", () => {
     mockUseAuth.mockReturnValue({
       ready: false,
       authenticated: false,
+      user: { id: "did:privy:test-user" },
       getAuthHeader: async () => ({}),
     });
 
@@ -58,6 +59,7 @@ describe("useAiAccess (integration)", () => {
     mockUseAuth.mockReturnValue({
       ready: true,
       authenticated: false,
+      user: { id: "did:privy:test-user" },
       getAuthHeader: async () => ({}),
     });
 
@@ -73,6 +75,7 @@ describe("useAiAccess (integration)", () => {
     mockUseAuth.mockReturnValue({
       ready: true,
       authenticated: true,
+      user: { id: "did:privy:test-user" },
       getAuthHeader: async () => ({ Authorization: "Bearer test-token" }),
     });
     fetchSpy.mockResolvedValue(
@@ -111,6 +114,7 @@ describe("useAiAccess (integration)", () => {
     mockUseAuth.mockReturnValue({
       ready: true,
       authenticated: true,
+      user: { id: "did:privy:test-user" },
       getAuthHeader: async () => ({}),
     });
     fetchSpy.mockResolvedValue(
@@ -140,6 +144,7 @@ describe("useAiAccess (integration)", () => {
     mockUseAuth.mockReturnValue({
       ready: true,
       authenticated: true,
+      user: { id: "did:privy:test-user" },
       getAuthHeader: async () => ({}),
     });
     fetchSpy
@@ -167,8 +172,72 @@ describe("useAiAccess (integration)", () => {
 
     await waitFor(() => expect(result.current.status).toBe("approved"));
 
-    // Simulate useAiFetch's behavior on a 403 response.
+    // Simulate useAiFetch's behavior on a 403 response. The queryKey
+    // prefix is what invalidateQueries matches on.
     client.invalidateQueries({ queryKey: ["ai-access"] });
+
+    await waitFor(() => expect(result.current.status).toBe("denied"));
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("on fetch failure: surfaces signed-out (not denied — don't show 'contact admin' for a network blip)", async () => {
+    mockUseAuth.mockReturnValue({
+      ready: true,
+      authenticated: true,
+      user: { id: "did:privy:test-user" },
+      getAuthHeader: async () => ({}),
+    });
+    fetchSpy.mockResolvedValue(
+      new Response(JSON.stringify({ error: "boom" }), { status: 500 })
+    );
+
+    const { result } = renderHook(() => useAiAccess(), {
+      wrapper: wrapper(makeClient()),
+    });
+
+    await waitFor(() => expect(result.current.status).toBe("signed-out"));
+  });
+
+  it("queryKey is scoped per-user, so caches don't leak between accounts", async () => {
+    // User A signs in and is approved.
+    mockUseAuth.mockReturnValue({
+      ready: true,
+      authenticated: true,
+      user: { id: "did:privy:user-a" },
+      getAuthHeader: async () => ({}),
+    });
+    fetchSpy.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ signedIn: true, approved: true, email: "a@x.com" }),
+        { status: 200 }
+      )
+    );
+    const client = makeClient();
+    const { result, rerender } = renderHook(() => useAiAccess(), {
+      wrapper: wrapper(client),
+    });
+    await waitFor(() => expect(result.current.status).toBe("approved"));
+
+    // Now user B logs in on the same device. With a global queryKey, B
+    // would briefly see A's approval. With per-user scoping, B gets its
+    // own fetch.
+    mockUseAuth.mockReturnValue({
+      ready: true,
+      authenticated: true,
+      user: { id: "did:privy:user-b" },
+      getAuthHeader: async () => ({}),
+    });
+    fetchSpy.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          signedIn: true,
+          approved: false,
+          reason: "not on the list",
+        }),
+        { status: 200 }
+      )
+    );
+    rerender();
 
     await waitFor(() => expect(result.current.status).toBe("denied"));
     expect(fetchSpy).toHaveBeenCalledTimes(2);

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { classifyUser } from "./privy-server";
+import { classifyUser } from "@/lib/privy-server";
 
 describe("classifyUser", () => {
   describe("no allow-list configured", () => {
