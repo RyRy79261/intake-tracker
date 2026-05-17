@@ -34,7 +34,7 @@ export function VoiceLaunchBar({
   return (
     <>
       <motion.div
-        className="pointer-events-none fixed inset-x-0 z-30 px-3"
+        className="pointer-events-none fixed inset-x-0 z-30"
         style={{ bottom: bottomOffset }}
         animate={{ y: hidden ? "150%" : 0, opacity: hidden ? 0 : 1 }}
         transition={{ duration: transitionDuration, ease: "easeInOut" }}
@@ -44,15 +44,17 @@ export function VoiceLaunchBar({
           onClick={() => setOpen(true)}
           className={cn(
             "pointer-events-auto flex w-full items-center justify-center gap-2",
-            "rounded-full border border-primary/30 bg-primary/90 px-4 py-2.5",
-            "text-sm font-medium text-primary-foreground shadow-lg shadow-primary/20",
-            "backdrop-blur transition-all",
-            "hover:bg-primary active:scale-[0.98]",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            "border-t bg-gradient-to-t from-slate-50 to-slate-50/95 dark:from-slate-950 dark:to-slate-950/95",
+            "backdrop-blur-sm px-4 py-2.5",
+            "text-sm font-medium text-muted-foreground transition-colors",
+            "hover:bg-muted/40 active:bg-muted/60",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
           )}
           aria-label="Open voice log"
         >
-          <Mic className="h-4 w-4" />
+          <span className="p-1.5 rounded-lg bg-sky-100 dark:bg-sky-900/50">
+            <Mic className="h-4 w-4 text-sky-600 dark:text-sky-400" />
+          </span>
           <span>Voice log</span>
         </button>
       </motion.div>
