@@ -62,8 +62,7 @@ describe("withAuth", () => {
     const res = await withAuth(handler)(makeRequest("Bearer t"));
 
     expect(handler).toHaveBeenCalledOnce();
-    const ctx = handler.mock.calls[0]?.[0];
-    expect(ctx?.auth).toEqual(auth);
+    expect(handler).toHaveBeenCalledWith(expect.objectContaining({ auth }));
     expect(res.status).toBe(200);
   });
 

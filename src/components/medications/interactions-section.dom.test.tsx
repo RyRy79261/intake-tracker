@@ -21,12 +21,13 @@ import type { Prescription } from "@/lib/db";
 
 const baseRx: Prescription = {
   id: "p_1",
-  brandName: "Brand",
   genericName: "Generic",
   indication: "test",
   isActive: true,
   createdAt: Date.now(),
   updatedAt: Date.now(),
+  deletedAt: null,
+  deviceId: "test-device",
 };
 
 describe("InteractionsSection — gating", () => {
