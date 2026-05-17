@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useDoseReminderToggle } from "@/hooks/use-push-schedule-sync";
-import { useAuth } from "@/components/auth-guard";
+import { useAuth, useAuthGate } from "@/components/auth-guard";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -307,6 +307,7 @@ export function MedicationSettingsView() {
 
   const { handleToggle: handleToggleReminders, toggling: togglingReminders, supported: notificationsSupported } = useDoseReminderToggle();
   const { authenticated: isSignedIn } = useAuth();
+  const showRemindersSection = useAuthGate();
 
   return (
     <div className="space-y-6 pb-24">
@@ -317,7 +318,8 @@ export function MedicationSettingsView() {
         </p>
       </div>
 
-      {/* Dose Reminders Section */}
+      {/* Dose Reminders Section — hidden when signed out (push needs auth) */}
+      {showRemindersSection && (
       <div className="space-y-4 rounded-xl border bg-card p-4">
         <div className="flex items-center gap-2 mb-2">
           <Bell className="w-5 h-5 text-teal-600 dark:text-teal-400" />
@@ -389,6 +391,7 @@ export function MedicationSettingsView() {
           </>
         )}
       </div>
+      )}
 
       <div className="space-y-4 rounded-xl border bg-card p-4">
         <div className="flex items-center gap-2 mb-2">

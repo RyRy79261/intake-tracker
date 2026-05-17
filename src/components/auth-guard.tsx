@@ -36,3 +36,16 @@ export const useAuth = process.env.NEXT_PUBLIC_PRIVY_APP_ID
   : function useAuth() {
       return noopAuth;
     };
+
+/**
+ * Whether auth-gated features (AI buttons, push toggle) should be visible
+ * in the UI. True when Privy is unconfigured (dev mode — no gate), while
+ * Privy is still hydrating (avoids a flicker on first paint), or when the
+ * user is authenticated.
+ */
+export function useAuthGate(): boolean {
+  const { ready, authenticated } = useAuth();
+  if (!process.env.NEXT_PUBLIC_PRIVY_APP_ID) return true;
+  if (!ready) return true;
+  return authenticated;
+}

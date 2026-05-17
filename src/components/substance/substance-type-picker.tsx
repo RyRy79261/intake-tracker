@@ -14,6 +14,7 @@ import {
 import { Loader2, Sparkles, Edit3 } from "lucide-react";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useAiFetch } from "@/hooks/use-ai-fetch";
+import { useAuthGate } from "@/components/auth-guard";
 
 export interface SubstanceTypeSelection {
   name: string;
@@ -47,6 +48,14 @@ export function SubstanceTypePicker({
 }: SubstanceTypePickerProps) {
   const substanceConfig = useSettingsStore((s) => s.substanceConfig);
   const aiFetch = useAiFetch();
+  const showAi = useAuthGate();
+
+  const caffeineTypes = showAi
+    ? substanceConfig.caffeine.types
+    : substanceConfig.caffeine.types.filter((t) => t.name !== "Other");
+  const alcoholTypes = showAi
+    ? substanceConfig.alcohol.types
+    : substanceConfig.alcohol.types.filter((t) => t.name !== "Other");
 
   const [step, setStep] = useState<PickerStep>("select");
   const [customDescription, setCustomDescription] = useState("");
@@ -224,7 +233,7 @@ export function SubstanceTypePicker({
             {step === "select" && (
               <div className="grid grid-cols-2 gap-3">
                 {type === "caffeine" &&
-                  substanceConfig.caffeine.types.map((t) => (
+                  caffeineTypes.map((t) => (
                     <Button
                       key={t.name}
                       variant="outline"
@@ -238,7 +247,7 @@ export function SubstanceTypePicker({
                     </Button>
                   ))}
                 {type === "alcohol" &&
-                  substanceConfig.alcohol.types.map((t) => (
+                  alcoholTypes.map((t) => (
                     <Button
                       key={t.name}
                       variant="outline"

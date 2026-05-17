@@ -50,6 +50,7 @@ import {
 } from "@/hooks/use-medication-queries";
 import type { TitrationPlan, MedicationPhase, Prescription } from "@/lib/db";
 import { useAiFetch } from "@/hooks/use-ai-fetch";
+import { useAuthGate } from "@/components/auth-guard";
 import {
   Plus,
   Play,
@@ -494,6 +495,7 @@ function TitrationDrawer({
   const createMutation = useCreateTitrationPlan();
   const updateMutation = useUpdateTitrationPlan();
   const aiFetch = useAiFetch();
+  const showAi = useAuthGate();
   const isEditing = editingPlan !== null;
 
   // Load existing phases for editing
@@ -839,20 +841,22 @@ function TitrationDrawer({
                 <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
                 Warning Signs
               </Label>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs gap-1"
-                onClick={handleGenerateWarnings}
-                disabled={aiLoading || entries.filter((e) => e.prescriptionId).length === 0}
-              >
-                {aiLoading ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                ) : (
-                  <TrendingUp className="w-3 h-3" />
-                )}
-                {aiLoading ? "Generating..." : "AI Suggest"}
-              </Button>
+              {showAi && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs gap-1"
+                  onClick={handleGenerateWarnings}
+                  disabled={aiLoading || entries.filter((e) => e.prescriptionId).length === 0}
+                >
+                  {aiLoading ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <TrendingUp className="w-3 h-3" />
+                  )}
+                  {aiLoading ? "Generating..." : "AI Suggest"}
+                </Button>
+              )}
             </div>
             <Textarea
               placeholder={"Warning signs will appear here.\nYou can also type your own, one per line."}
