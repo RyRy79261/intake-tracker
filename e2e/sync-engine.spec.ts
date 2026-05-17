@@ -119,12 +119,13 @@ test.describe("sync-engine", () => {
         try {
           const parsed = JSON.parse(raw);
           if (parsed.state) parsed.state.storageMode = "cloud-sync";
+          parsed.version = 8;
           localStorage.setItem(key, JSON.stringify(parsed));
         } catch {}
       } else {
         localStorage.setItem(
           key,
-          JSON.stringify({ state: { storageMode: "cloud-sync" }, version: 7 }),
+          JSON.stringify({ state: { storageMode: "cloud-sync" }, version: 8 }),
         );
       }
     });
