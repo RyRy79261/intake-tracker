@@ -63,6 +63,11 @@ function PrivyAuthRequiredProvider({ children }: { children: React.ReactNode }) 
   // `authenticated === true` render right after notifyExpired() opens the
   // dialog (Privy's logout() does not synchronously flip the hook state).
   const seenUnauthenticatedRef = useRef(false);
+  // When Sign In is tapped we close our dialog ourselves so its focus trap
+  // and pointer-events lock don't block the Privy modal opening on top.
+  // This flag tells handleOpenChange that the close was internal and the
+  // pending promise should stay attached until auth actually completes.
+  const loginPendingRef = useRef(false);
 
   const closeWith = useCallback((success: boolean) => {
     const resolve = resolverRef.current;
@@ -118,8 +123,22 @@ function PrivyAuthRequiredProvider({ children }: { children: React.ReactNode }) 
   );
 
   const handleOpenChange = (open: boolean) => {
-    if (!open) closeWith(false);
+    if (open) return;
+    if (loginPendingRef.current) {
+      // We closed the dialog ourselves to hand off to Privy; the resolver
+      // stays attached and the authenticated-watching useEffect will fire
+      // once login completes.
+      loginPendingRef.current = false;
+      return;
+    }
+    closeWith(false);
   };
+
+  const handleSignIn = useCallback(() => {
+    loginPendingRef.current = true;
+    setState((prev) => ({ ...prev, open: false }));
+    login();
+  }, [login]);
 
   return (
     <RequireAuthContext.Provider value={value}>
@@ -128,7 +147,7 @@ function PrivyAuthRequiredProvider({ children }: { children: React.ReactNode }) 
         open={state.open}
         variant={state.variant}
         onOpenChange={handleOpenChange}
-        onSignIn={login}
+        onSignIn={handleSignIn}
       />
     </RequireAuthContext.Provider>
   );
