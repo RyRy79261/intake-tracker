@@ -26,6 +26,7 @@ import { UrinationDefecationDefaults } from "@/components/settings/urination-def
 import { MedicationSettingsSection } from "@/components/settings/medication-settings-section";
 import { AnimationTimingSection } from "@/components/settings/animation-timing-section";
 import { StorageInfoSection } from "@/components/settings/storage-info-section";
+import { ExperimentalSection } from "@/components/settings/experimental-section";
 
 function SettingsContent() {
   const settings = useSettings();
@@ -86,6 +87,7 @@ function SettingsContent() {
         </SettingsAccordionGroup>
 
         <SettingsAccordionGroup value="debug" icon={Bug} label="Debug" iconColorClass="text-slate-600 dark:text-slate-400">
+          <ExperimentalSection />
           <DebugPanel />
           <AppUpdatesSection />
         </SettingsAccordionGroup>

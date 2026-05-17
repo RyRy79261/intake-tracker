@@ -77,6 +77,11 @@ export interface Settings {
 
   // Storage mode: local-only or cloud-sync
   storageMode: "local" | "cloud-sync";
+
+  // Experimental feature flags
+  experimentalFeatures: {
+    voiceHealthMetrics: boolean;
+  };
 }
 
 interface SettingsActions {
@@ -120,6 +125,11 @@ interface SettingsActions {
   setWeightIncrement: (value: number) => void;
   // Storage mode
   setStorageMode: (mode: "local" | "cloud-sync") => void;
+  // Experimental features
+  setExperimentalFeature: (
+    key: keyof Settings["experimentalFeatures"],
+    value: boolean
+  ) => void;
   resetToDefaults: () => void;
 }
 
@@ -154,6 +164,9 @@ const defaultSettings: Settings = {
   doseRemindersEnabled: false,
   reminderFollowUpCount: 2,
   reminderFollowUpInterval: 10,
+  experimentalFeatures: {
+    voiceHealthMetrics: false,
+  },
 };
 
 export const useSettingsStore = create<Settings & SettingsActions>()(
@@ -231,6 +244,12 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
       // Storage mode
       setStorageMode: (mode) => set({ storageMode: mode }),
 
+      // Experimental features
+      setExperimentalFeature: (key, value) =>
+        set((state) => ({
+          experimentalFeatures: { ...state.experimentalFeatures, [key]: value },
+        })),
+
       addLiquidPreset: (preset) => {
         const id = crypto.randomUUID();
         set((state) => ({
@@ -257,7 +276,7 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
     {
       name: "intake-tracker-settings",
       storage: createJSONStorage(() => localStorage),
-      version: 7,
+      version: 8,
       migrate: (persisted, version) => {
         const state = persisted as Record<string, unknown>;
         if (version === 0) {
@@ -297,10 +316,12 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
           state.quickNavItems = DEFAULT_QUICK_NAV_ITEMS;
         }
         if (version < 6) {
-          // Phase 41 cleanup: substanceConfig was dead code (orphaned UI), removed.
-          delete state.substanceConfig;
+          state.experimentalFeatures = { voiceHealthMetrics: false };
         }
         if (version < 7) {
+          delete state.substanceConfig;
+        }
+        if (version < 8) {
           state.storageMode = "local";
         }
         return state as unknown as Settings & SettingsActions;
