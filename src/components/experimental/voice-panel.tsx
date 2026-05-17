@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { Check, Mic, Sparkles, X } from "lucide-react";
+import { Check, Mic, X } from "lucide-react";
 import { useAuth } from "@/components/auth-guard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -288,10 +288,6 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
         <Mic className="h-5 w-5 text-primary" />
         <div className="flex-1">
           <h2 className="text-lg font-semibold leading-tight">Voice log</h2>
-          <p className="flex items-center gap-1 text-xs text-muted-foreground">
-            <Sparkles className="h-3 w-3" />
-            Experimental
-          </p>
         </div>
       </div>
 
@@ -383,11 +379,10 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
         <div className="-mx-6 -mb-6 shrink-0 border-t bg-background/95 px-3 pt-3 backdrop-blur"
           style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom, 0px))" }}
         >
-          <div className="flex gap-2">
+          <div className="flex">
             <Button
-              variant="outline"
               size="lg"
-              className="flex-1 gap-2"
+              className="flex-1 gap-2 rounded-r-none bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-600"
               disabled={stage === "saving"}
               onClick={rejectAll}
             >
@@ -395,25 +390,24 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
               Reject all
             </Button>
             <Button
-              variant="outline"
               size="lg"
-              className="flex-1 gap-2"
+              className="flex-1 gap-2 rounded-l-none bg-emerald-600 text-white hover:bg-emerald-700 focus-visible:ring-emerald-600"
               disabled={stage === "saving" || pendingCount === 0}
               onClick={approveAll}
             >
               <Check className="h-5 w-5" />
               Approve all
             </Button>
-            <Button
-              size="lg"
-              className="flex-1 gap-2"
-              disabled={stage === "saving" || approvedCount === 0}
-              onClick={commit}
-            >
-              <Check className="h-5 w-5" />
-              Save {approvedCount > 0 ? approvedCount : ""}
-            </Button>
           </div>
+          <Button
+            size="lg"
+            className="mt-3 w-full gap-2"
+            disabled={stage === "saving" || approvedCount === 0}
+            onClick={commit}
+          >
+            <Check className="h-5 w-5" />
+            Save {approvedCount > 0 ? approvedCount : ""}
+          </Button>
         </div>
       )}
     </div>
