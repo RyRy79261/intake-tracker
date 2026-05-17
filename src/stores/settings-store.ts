@@ -11,6 +11,17 @@ import { DEFAULT_QUICK_NAV_ITEMS, type QuickNavItem } from "@/lib/quick-nav-defa
 export type { LiquidPreset } from "@/lib/constants";
 export type { QuickNavItem } from "@/lib/quick-nav-defaults";
 
+export interface SubstanceConfig {
+  caffeine: {
+    enabled: boolean;
+    types: Array<{ name: string; defaultMg: number; defaultVolumeMl: number }>;
+  };
+  alcohol: {
+    enabled: boolean;
+    types: Array<{ name: string; defaultDrinks: number; defaultVolumeMl: number }>;
+  };
+}
+
 export interface Settings {
   // Increment values for +/- buttons
   waterIncrement: number; // ml
@@ -78,10 +89,8 @@ export interface Settings {
   // Storage mode: local-only or cloud-sync
   storageMode: "local" | "cloud-sync";
 
-  // Experimental feature flags
-  experimentalFeatures: {
-    voiceHealthMetrics: boolean;
-  };
+  // Substance tracking configuration
+  substanceConfig: SubstanceConfig;
 }
 
 interface SettingsActions {
@@ -125,11 +134,8 @@ interface SettingsActions {
   setWeightIncrement: (value: number) => void;
   // Storage mode
   setStorageMode: (mode: "local" | "cloud-sync") => void;
-  // Experimental features
-  setExperimentalFeature: (
-    key: keyof Settings["experimentalFeatures"],
-    value: boolean
-  ) => void;
+  // Substance config
+  setSubstanceConfig: (config: SubstanceConfig) => void;
   resetToDefaults: () => void;
 }
 
@@ -164,8 +170,25 @@ const defaultSettings: Settings = {
   doseRemindersEnabled: false,
   reminderFollowUpCount: 2,
   reminderFollowUpInterval: 10,
-  experimentalFeatures: {
-    voiceHealthMetrics: false,
+  substanceConfig: {
+    caffeine: {
+      enabled: true,
+      types: [
+        { name: "Coffee", defaultMg: 95, defaultVolumeMl: 250 },
+        { name: "Espresso", defaultMg: 63, defaultVolumeMl: 30 },
+        { name: "Tea", defaultMg: 47, defaultVolumeMl: 250 },
+        { name: "Other", defaultMg: 80, defaultVolumeMl: 250 },
+      ],
+    },
+    alcohol: {
+      enabled: true,
+      types: [
+        { name: "Beer", defaultDrinks: 1, defaultVolumeMl: 330 },
+        { name: "Wine", defaultDrinks: 1, defaultVolumeMl: 150 },
+        { name: "Spirits", defaultDrinks: 1, defaultVolumeMl: 45 },
+        { name: "Other", defaultDrinks: 1, defaultVolumeMl: 250 },
+      ],
+    },
   },
 };
 
@@ -244,11 +267,8 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
       // Storage mode
       setStorageMode: (mode) => set({ storageMode: mode }),
 
-      // Experimental features
-      setExperimentalFeature: (key, value) =>
-        set((state) => ({
-          experimentalFeatures: { ...state.experimentalFeatures, [key]: value },
-        })),
+      // Substance config
+      setSubstanceConfig: (config) => set({ substanceConfig: config }),
 
       addLiquidPreset: (preset) => {
         const id = crypto.randomUUID();
@@ -315,11 +335,11 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
           // D-07: New quickNavItems field. Seed existing users with defaults.
           state.quickNavItems = DEFAULT_QUICK_NAV_ITEMS;
         }
-        if (version < 6) {
-          state.experimentalFeatures = { voiceHealthMetrics: false };
-        }
+        // version < 6 migration: experimentalFeatures.voiceHealthMetrics
+        // removed when voice graduated. Old persisted state may still have
+        // the key — it's now ignored, so no cleanup is needed.
         if (version < 7) {
-          delete state.substanceConfig;
+          delete state.experimentalFeatures;
         }
         if (version < 8) {
           state.storageMode = "local";

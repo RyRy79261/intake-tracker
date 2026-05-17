@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useDoseReminderToggle } from "@/hooks/use-push-schedule-sync";
+import { useAuth, useAuthGate } from "@/components/auth-guard";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -305,6 +306,8 @@ export function MedicationSettingsView() {
   const setReminderFollowUpInterval = useSettingsStore((s) => s.setReminderFollowUpInterval);
 
   const { handleToggle: handleToggleReminders, toggling: togglingReminders, supported: notificationsSupported } = useDoseReminderToggle();
+  const { authenticated: isSignedIn } = useAuth();
+  const showRemindersSection = useAuthGate();
 
   return (
     <div className="space-y-6 pb-24">
@@ -315,7 +318,8 @@ export function MedicationSettingsView() {
         </p>
       </div>
 
-      {/* Dose Reminders Section */}
+      {/* Dose Reminders Section — hidden when signed out (push needs auth) */}
+      {showRemindersSection && (
       <div className="space-y-4 rounded-xl border bg-card p-4">
         <div className="flex items-center gap-2 mb-2">
           <Bell className="w-5 h-5 text-teal-600 dark:text-teal-400" />
@@ -326,9 +330,11 @@ export function MedicationSettingsView() {
           <div className="space-y-0.5">
             <Label htmlFor="dose-reminders-toggle">Enable Reminders</Label>
             <p className="text-[13px] text-muted-foreground">
-              {notificationsSupported
-                ? "Get push notifications when medications are due"
-                : "Notifications not supported in this browser"}
+              {!notificationsSupported
+                ? "Notifications not supported in this browser"
+                : !isSignedIn && !doseRemindersEnabled
+                  ? "Sign in to enable push reminders across devices"
+                  : "Get push notifications when medications are due"}
             </p>
           </div>
           <Switch
@@ -385,6 +391,7 @@ export function MedicationSettingsView() {
           </>
         )}
       </div>
+      )}
 
       <div className="space-y-4 rounded-xl border bg-card p-4">
         <div className="flex items-center gap-2 mb-2">

@@ -16,9 +16,11 @@ export interface ParsedIntake {
  * - API key stored in server environment only
  * - PII patterns are stripped before AI processing
  * - All requests are audit logged
+ *
+ * Returns null if the user dismisses the auth prompt.
  */
 
-export async function parseIntakeWithAI(input: string): Promise<ParsedIntake> {
+export async function parseIntakeWithAI(input: string): Promise<ParsedIntake | null> {
   logAudit("ai_parse_request");
 
   try {
@@ -32,15 +34,19 @@ export async function parseIntakeWithAI(input: string): Promise<ParsedIntake> {
       body: JSON.stringify({ input }),
     });
 
+    if (!response) {
+      return null;
+    }
+
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.error || `Request failed: ${response.status}`);
     }
 
     const result = await response.json();
-    
+
     logAudit("ai_parse_success");
-    
+
     return {
       water: result.water,
       valueMg: result.value_mg,

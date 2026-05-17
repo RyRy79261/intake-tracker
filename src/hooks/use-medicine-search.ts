@@ -22,6 +22,13 @@ export interface MedicineSearchResult {
   isGenericFallback: boolean;
 }
 
+export class MedicineSearchCancelledError extends Error {
+  constructor() {
+    super("Medicine search cancelled");
+    this.name = "MedicineSearchCancelledError";
+  }
+}
+
 export function useMedicineSearch() {
   return useMutation({
     mutationFn: async (query: string): Promise<MedicineSearchResult> => {
@@ -39,14 +46,16 @@ export function useMedicineSearch() {
 
       const response = await apiFetch("/api/ai/medicine-search", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           query,
           country: countryContext,
         }),
       });
+
+      if (!response) {
+        throw new MedicineSearchCancelledError();
+      }
 
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));

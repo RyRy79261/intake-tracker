@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useSettingsStore } from "@/stores/settings-store";
 import { apiFetch } from "@/lib/api-fetch";
 import { useDailyDoseSchedule } from "@/hooks/use-medication-queries";
+import { useAuth } from "@/components/auth-guard";
 import {
   subscribeToPush,
   unsubscribeFromPush,
@@ -80,11 +81,13 @@ function buildScheduleEntries(
 /**
  * Hook that syncs dose schedule to server when push reminders are enabled.
  * Runs on mount and when schedule data changes. Debounced via schedule hash.
+ * No-ops when the user is not signed in (push subscriptions require auth).
  */
 export function usePushScheduleSync(): void {
   const doseRemindersEnabled = useSettingsStore((s) => s.doseRemindersEnabled);
   const followUpCount = useSettingsStore((s) => s.reminderFollowUpCount);
   const followUpInterval = useSettingsStore((s) => s.reminderFollowUpInterval);
+  const { authenticated } = useAuth();
 
   const todayStr = getTodayDateStr();
   const slots = useDailyDoseSchedule(todayStr);
@@ -108,6 +111,7 @@ export function usePushScheduleSync(): void {
   const lastSettingsHashRef = useRef<string>("");
 
   useEffect(() => {
+    if (!authenticated) return;
     if (!doseRemindersEnabled) return;
     if (!slots || slots.length === 0) return;
 
@@ -119,7 +123,7 @@ export function usePushScheduleSync(): void {
     lastHashRef.current = hash;
 
     syncSchedule(entries);
-  }, [slots, doseRemindersEnabled, followUpCount, followUpInterval, syncSchedule]);
+  }, [authenticated, slots, doseRemindersEnabled, followUpCount, followUpInterval, syncSchedule]);
 
   // Periodic ping to /api/push/check every 60s
   useEffect(() => {

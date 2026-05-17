@@ -1,5 +1,5 @@
 /**
- * Shared types for the experimental voice health metrics pipeline.
+ * Shared types for the voice health metrics pipeline.
  *
  * The voice-parse API extracts a heterogeneous list of items from a single
  * transcript; each item maps to one of the existing record domains. The UI

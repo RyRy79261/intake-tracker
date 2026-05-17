@@ -1,6 +1,8 @@
 import "fake-indexeddb/auto";
+import "@testing-library/jest-dom/vitest";
 import { db } from "@/lib/db";
-import { beforeEach, afterAll } from "vitest";
+import { beforeEach, afterEach, afterAll } from "vitest";
+import { cleanup } from "@testing-library/react";
 
 // Suppress DatabaseClosedError during teardown — fake-indexeddb races with
 // pending engine timers when the DB closes, producing harmless uncaught
@@ -24,6 +26,12 @@ beforeEach(async () => {
   suppressDbClosed = false;
   await db.delete();
   await db.open();
+});
+
+// Unmount React trees rendered during the test. The project sets
+// `globals: false` so RTL's auto-cleanup doesn't register itself.
+afterEach(() => {
+  cleanup();
 });
 
 afterAll(async () => {

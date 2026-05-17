@@ -73,8 +73,9 @@ export function useInteractionCheck() {
     const controller = new AbortController();
     abortRef.current = controller;
 
-    // 15-second timeout
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    // The 15s abort timer must not start while the sign-in modal is open;
+    // arm it only once aiFetch resolves with an actual Response.
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
     setIsLoading(true);
     setError(null);
@@ -88,7 +89,13 @@ export function useInteractionCheck() {
         signal: controller.signal,
       });
 
-      clearTimeout(timeoutId);
+      if (!response) {
+        // User dismissed sign-in
+        setIsLoading(false);
+        return null;
+      }
+
+      timeoutId = setTimeout(() => controller.abort(), 15000);
 
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
@@ -109,8 +116,6 @@ export function useInteractionCheck() {
 
       return result;
     } catch (err) {
-      clearTimeout(timeoutId);
-
       if (err instanceof DOMException && err.name === "AbortError") {
         setError("Interaction check timed out");
       } else {
@@ -119,6 +124,8 @@ export function useInteractionCheck() {
 
       setIsLoading(false);
       return null;
+    } finally {
+      if (timeoutId !== null) clearTimeout(timeoutId);
     }
   }, []);
 
@@ -150,7 +157,7 @@ export function useRefreshInteractions() {
           }),
         });
 
-        if (!response.ok) {
+        if (!response || !response.ok) {
           setIsRefreshing(false);
           return null;
         }

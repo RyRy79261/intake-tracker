@@ -14,6 +14,7 @@ import { useSettings } from "@/hooks/use-settings";
 import { useIntake } from "@/hooks/use-intake-queries";
 import { useAddComposableEntry, type ComposableEntryInput } from "@/hooks/use-composable-entry";
 import { useToast } from "@/hooks/use-toast";
+import { useAuthGate } from "@/components/auth-guard";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -53,6 +54,7 @@ export function PresetTab({ tab }: PresetTabProps) {
   const deletePreset = useSettingsStore((s) => s.deleteLiquidPreset);
   const addEntry = useAddComposableEntry();
   const { toast } = useToast();
+  const showAi = useAuthGate();
 
   // Water progress data
   const settings = useSettings();
@@ -378,8 +380,10 @@ export function PresetTab({ tab }: PresetTabProps) {
       {/* 1. Preset Grid */}
       {presets.length === 0 ? (
         <p className="text-sm text-muted-foreground mb-3">
-          No {tab} presets yet. Use AI lookup or enter values manually to
-          create one.
+          No {tab} presets yet.{" "}
+          {showAi
+            ? "Use AI lookup or enter values manually to create one."
+            : "Enter values manually to create one."}
         </p>
       ) : (
         <div className="grid grid-cols-2 gap-2 mb-3">
@@ -419,42 +423,46 @@ export function PresetTab({ tab }: PresetTabProps) {
         </div>
       )}
 
-      {/* 2. AI Text Input */}
-      <div className="relative mb-3">
-        <Input
-          value={searchText}
-          onChange={(e) => setSearchText(e.target.value)}
-          placeholder={
-            tab === "coffee"
-              ? "Search beverage..."
-              : tab === "alcohol"
-                ? "Search drink..."
-                : "Search beverage..."
-          }
-          aria-label="Search beverages for AI lookup"
-          disabled={isLookingUp}
-          className="h-10 pr-10"
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              handleAiLookup();
+      {/* 2. AI Text Input — only when signed in */}
+      {showAi && (
+        <div className="relative mb-3">
+          <Input
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            placeholder={
+              tab === "coffee"
+                ? "Search beverage..."
+                : tab === "alcohol"
+                  ? "Search drink..."
+                  : "Search beverage..."
             }
-          }}
-        />
-        <button
-          type="button"
-          onClick={handleAiLookup}
-          disabled={!searchText.trim() || isLookingUp}
-          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-muted-foreground hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
-          aria-label="Look up substance content"
-        >
-          {isLookingUp ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <Sparkles className="w-4 h-4" />
-          )}
-        </button>
-      </div>
+            aria-label="Search beverages for AI lookup"
+            disabled={isLookingUp}
+            className="h-10 pr-10"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                handleAiLookup();
+              }
+            }}
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={handleAiLookup}
+            disabled={!searchText.trim() || isLookingUp}
+            aria-label="Look up substance content"
+            className="absolute right-2 top-1/2 -translate-y-1/2 h-auto w-auto p-1 rounded-md text-muted-foreground hover:bg-transparent hover:text-foreground disabled:cursor-not-allowed"
+          >
+            {isLookingUp ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Sparkles className="w-4 h-4" />
+            )}
+          </Button>
+        </div>
+      )}
 
       {/* 3. Volume and Substance Fields */}
       <div className="grid grid-cols-2 gap-3 mb-2">
@@ -528,7 +536,7 @@ export function PresetTab({ tab }: PresetTabProps) {
         >
           {isSubmitting ? "Logging..." : "Log Entry"}
         </Button>
-        {beverageName.trim() && (
+        {showAi && beverageName.trim() && (
           <>
             <Button
               variant="outline"

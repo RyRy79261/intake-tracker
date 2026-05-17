@@ -98,7 +98,7 @@ export function DataManagementSection() {
           onClick={handleExport}
           disabled={downloadMut.isPending}
         >
-          <Download className="w-4 h-4" />
+          <Upload className="w-4 h-4" />
           {downloadMut.isPending ? "Exporting..." : "Export Data"}
         </Button>
 
@@ -115,7 +115,7 @@ export function DataManagementSection() {
           onClick={() => fileInputRef.current?.click()}
           disabled={uploadMut.isPending}
         >
-          <Upload className="w-4 h-4" />
+          <Download className="w-4 h-4" />
           {uploadMut.isPending ? "Importing..." : "Import Data"}
         </Button>
 

@@ -5,8 +5,8 @@ import { Check, Mic, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { VoiceRecorder } from "@/components/experimental/voice-recorder";
-import { ParsedItemRow } from "@/components/experimental/parsed-item-row";
+import { VoiceRecorder } from "@/components/voice/voice-recorder";
+import { ParsedItemRow } from "@/components/voice/parsed-item-row";
 import { useAddIntake } from "@/hooks/use-intake-queries";
 import { useAddEating } from "@/hooks/use-eating-queries";
 import { useAddWeight, useAddBloodPressure } from "@/hooks/use-health-queries";
@@ -76,6 +76,10 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
           method: "POST",
           body: form,
         });
+        if (!transcribeRes) {
+          setStage("idle");
+          return;
+        }
         if (!transcribeRes.ok) {
           const j = await transcribeRes.json().catch(() => ({}));
           throw new Error(j.error || `Transcribe failed (${transcribeRes.status})`);
@@ -89,6 +93,10 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ transcript: text }),
         });
+        if (!parseRes) {
+          setStage("idle");
+          return;
+        }
         if (!parseRes.ok) {
           const j = await parseRes.json().catch(() => ({}));
           throw new Error(j.error || `Parse failed (${parseRes.status})`);

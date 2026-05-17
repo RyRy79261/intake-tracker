@@ -40,6 +40,18 @@ export function useAuth() {
 }
 
 /**
+ * Whether auth-gated features (AI buttons, push toggle) should be visible
+ * in the UI. Returns true when the session is loading (avoids flicker on
+ * first paint) or when the user is authenticated. Since Neon Auth uses
+ * middleware hard-gating, authenticated users are assumed to be approved.
+ */
+export function useAuthGate(): boolean {
+  const { ready, authenticated } = useAuth();
+  // Show AI features while loading (to avoid flicker) or when authenticated
+  return !ready || authenticated;
+}
+
+/**
  * AuthGuard is now a thin passthrough. The middleware.ts hard gate (D-03)
  * handles all redirects for unauthenticated users, so any wrapping tree
  * already sits inside an authenticated context. This component exists
