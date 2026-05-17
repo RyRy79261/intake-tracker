@@ -22,6 +22,7 @@ import { PrivacySecuritySection } from "@/components/settings/privacy-security-s
 import { PermissionsSection } from "@/components/settings/permissions-section";
 import { AppUpdatesSection } from "@/components/settings/app-updates-section";
 import { SubstanceSettingsSection } from "@/components/settings/substance-settings-section";
+import { ExperimentalSection } from "@/components/settings/experimental-section";
 
 function SettingsContent() {
   const settings = useSettings();
@@ -61,6 +62,7 @@ function SettingsContent() {
         <PrivacySecuritySection />
         <PermissionsSection />
         <AppUpdatesSection />
+        <ExperimentalSection />
 
         <div className="pt-4 border-t">
           <CustomizationPanel />

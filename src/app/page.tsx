@@ -13,6 +13,7 @@ import { useSettings } from "@/hooks/use-settings";
 import { LiquidsCard } from "@/components/liquids-card";
 import { FoodSaltCard } from "@/components/food-salt-card";
 import { InsightBadge } from "@/components/insight-badge";
+import { VoiceLaunchBar } from "@/components/experimental/voice-launch-bar";
 import { useScrollHide } from "@/hooks/use-scroll-hide";
 import { cn } from "@/lib/utils";
 import { Droplets } from "lucide-react";
@@ -91,6 +92,14 @@ function HomeContent() {
           Water: max 1L/day · Sodium: max 1500mg/day
         </p>
       </footer>
+
+      {settings.experimentalFeatures?.voiceHealthMetrics && (
+        <VoiceLaunchBar
+          hidden={isHidden}
+          hasQuickNav={settings.showQuickNav}
+          transitionDuration={barTransitionSec}
+        />
+      )}
 
       {settings.showQuickNav && (
         <QuickNavFooter
