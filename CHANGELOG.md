@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.7.0](https://github.com/RyRy79261/intake-tracker/compare/v1.6.0...v1.7.0) (2026-05-17)
+
+
+### Features
+
+* **voice:** restyle launch bar and review action buttons ([1f0cf41](https://github.com/RyRy79261/intake-tracker/commit/1f0cf410f3b4f05e73d77da30a28f6c2dd422f27))
+* **voice:** restyle launch bar and review action buttons ([6f1c787](https://github.com/RyRy79261/intake-tracker/commit/6f1c787c7755e96451bc0a0aa94496a954758cc9))
+
+
+### Bug Fixes
+
+* **voice:** disable Reject all when no pending rows ([06e75fc](https://github.com/RyRy79261/intake-tracker/commit/06e75fcf6a5fb6233fc3353275583ac846bda804))
+
 ## [1.6.0](https://github.com/RyRy79261/intake-tracker/compare/v1.5.2...v1.6.0) (2026-05-17)
 
 
