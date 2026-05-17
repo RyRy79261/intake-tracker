@@ -383,7 +383,7 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
             <Button
               size="lg"
               className="flex-1 gap-2 rounded-r-none bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-600"
-              disabled={stage === "saving"}
+              disabled={stage === "saving" || pendingCount === 0}
               onClick={rejectAll}
             >
               <X className="h-5 w-5" />
