@@ -146,7 +146,11 @@ export function useDoseReminderToggle() {
         if (!permResult.success || permResult.data !== "granted") {
           return;
         }
-        const token = (await getAccessToken()) ?? "";
+        const token = await getAccessToken();
+        if (!token) {
+          console.warn("[dose-reminders] No access token after auth");
+          return;
+        }
         const subscription = await subscribeToPush(token);
         if (!subscription) {
           console.warn("[dose-reminders] Push subscription failed");
