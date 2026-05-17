@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.6.0](https://github.com/RyRy79261/intake-tracker/compare/v1.5.2...v1.6.0) (2026-05-17)
+
+
+### Features
+
+* **experimental:** voice health metrics dictation panel ([ca280ec](https://github.com/RyRy79261/intake-tracker/commit/ca280ec41b40d6b020822693193556f56e27c58a))
+* **experimental:** voice health metrics dictation panel ([81b5200](https://github.com/RyRy79261/intake-tracker/commit/81b5200441917d60e2142dbcf05377e9254c50bd))
+
+
+### Bug Fixes
+
+* **voice-parse:** raise Claude per-call timeout to 60s ([41a485f](https://github.com/RyRy79261/intake-tracker/commit/41a485f62a0281c99c6c53e2873092ec0ba2e757))
+* **voice-parse:** scope Anthropic SDK 10-min default timeout to 30s per call ([5dcf75d](https://github.com/RyRy79261/intake-tracker/commit/5dcf75d9d99c170fb653bbccc3a7953382b293bb))
+* **voice:** address review findings — timeout, retry-on-failure, shadcn select, recorder leak ([21bdb20](https://github.com/RyRy79261/intake-tracker/commit/21bdb2087bdfbc093ec71e43726626fdecd13cbc))
+
 ## [1.5.2](https://github.com/RyRy79261/intake-tracker/compare/v1.5.1...v1.5.2) (2026-05-08)
 
 
