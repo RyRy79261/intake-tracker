@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.8.0](https://github.com/RyRy79261/intake-tracker/compare/v1.7.0...v1.8.0) (2026-05-17)
+
+
+### Features
+
+* **auth:** hide AI- and push-gated UI when signed out ([60b2cc9](https://github.com/RyRy79261/intake-tracker/commit/60b2cc99d60dbd2870862c78a5694dd6d963e428))
+* **auth:** make landing offline-first; gate AI & push behind a sign-in modal ([a7dfc4d](https://github.com/RyRy79261/intake-tracker/commit/a7dfc4d878451cc9a77545a36e2656be88f5dcd7))
+* **auth:** make landing offline-first; gate AI & push behind a sign-in modal ([dcb6bfc](https://github.com/RyRy79261/intake-tracker/commit/dcb6bfc7025a398a01ed2b506600e45be9cc62f9))
+* **auth:** surface AI approval status separately from sign-in ([b2d964d](https://github.com/RyRy79261/intake-tracker/commit/b2d964d9d54cd7b96f52f1a4720ef7846acf54e9))
+* graduate voice from experimental + swap export/import icons ([f488da5](https://github.com/RyRy79261/intake-tracker/commit/f488da5a79e327ed4345b42ae0f42305f77502c1))
+
+
+### Bug Fixes
+
+* **auth:** address review findings on auth modal flow ([2e76fc3](https://github.com/RyRy79261/intake-tracker/commit/2e76fc3e9c47185564c80df5bb993854b3d530a1))
+* **auth:** close local dialog before opening Privy modal ([bdb172a](https://github.com/RyRy79261/intake-tracker/commit/bdb172a127a9fec5848726ba4ec0ccb7d367f9f3))
+* **auth:** split whitelist denial from token failure end-to-end ([34c9bf2](https://github.com/RyRy79261/intake-tracker/commit/34c9bf227d6e54ffb4f591bab7e2daf75721449a))
+* **auth:** tighten useAiAccess against token failures and cache leaks ([7430b42](https://github.com/RyRy79261/intake-tracker/commit/7430b42c44db204fbb21c32d25abfb4b23c01716))
+* **push:** guard against null access token after auth ([ca424be](https://github.com/RyRy79261/intake-tracker/commit/ca424bed02c76869150ee405f862a8ea23ea3500))
+* **voice:** route through useAiFetch so logged-out users see sign-in modal ([b512e78](https://github.com/RyRy79261/intake-tracker/commit/b512e7832eb54d19afd08e76897c7b3240a4201d))
+
 ## [1.7.0](https://github.com/RyRy79261/intake-tracker/compare/v1.6.0...v1.7.0) (2026-05-17)
 
 
