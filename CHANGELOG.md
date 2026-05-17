@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.1](https://github.com/RyRy79261/intake-tracker/compare/v1.8.0...v1.8.1) (2026-05-17)
+
+
+### Reverts
+
+* **icons:** restore custom droplet glyph ([99b8cf0](https://github.com/RyRy79261/intake-tracker/commit/99b8cf086c13ddf235256c5be290b7b50f4f4607))
+
 ## [1.8.0](https://github.com/RyRy79261/intake-tracker/compare/v1.7.0...v1.8.0) (2026-05-17)
 
 
