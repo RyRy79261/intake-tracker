@@ -8,7 +8,7 @@
   <rect width="512" height="512" rx="96" fill="url(#bgGrad)"/>
   <g transform="translate(256, 256)">
     <!-- Water droplet -->
-    <path d="M0,-128 C64,-64 96,24 96,72 C96,136 48,160 0,160 C-48,160 -96,136 -96,72 C-96,24 -64,-64 0,-128 Z" 
+    <path d="M0,-128 C64,-64 96,24 96,72 C96,136 48,160 0,160 C-48,160 -96,136 -96,72 C-96,24 -64,-64 0,-128 Z"
           fill="white" opacity="0.95"/>
     <!-- Inner shine -->
     <ellipse cx="-24" cy="48" rx="24" ry="36" fill="white" opacity="0.4"/>

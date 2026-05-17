@@ -12,7 +12,8 @@ const outfit = Outfit({
 
 export const metadata: Metadata = {
   title: "Intake Tracker",
-  description: "Track your daily water and salt intake",
+  description:
+    "A comprehensive personal medical tracker for logging hydration, nutrition, vitals, and medications.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,

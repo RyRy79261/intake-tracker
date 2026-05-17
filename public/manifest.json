@@ -1,7 +1,7 @@
 {
   "name": "Intake Tracker",
   "short_name": "Intake",
-  "description": "Track your daily water and salt intake with a rolling 24-hour window",
+  "description": "A comprehensive personal medical tracker for logging hydration, nutrition, vitals, and medications.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f5f7fa",

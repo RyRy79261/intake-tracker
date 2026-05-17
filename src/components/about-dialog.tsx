@@ -51,7 +51,7 @@ export function AboutDialog() {
           </div>
           <DialogTitle className="text-xl">Intake Tracker</DialogTitle>
           <DialogDescription>
-            Track your daily water and salt intake
+            A comprehensive personal medical tracker for hydration, nutrition, vitals, and medications.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 pt-2">
