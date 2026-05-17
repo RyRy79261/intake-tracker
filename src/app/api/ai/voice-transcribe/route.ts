@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { withAuth } from "@/lib/auth-middleware";
 
 /**
- * Experimental: transcribe a short audio clip using Groq's hosted
+ * Transcribe a short audio clip using Groq's hosted
  * whisper-large-v3-turbo. The OpenAI-compatible endpoint accepts multipart
  * form-data with the field name `file`. The `prompt` parameter is a Whisper
  * convention that biases recognition toward domain vocabulary — for health

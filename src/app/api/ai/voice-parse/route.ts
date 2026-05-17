@@ -6,11 +6,11 @@ import { sanitizeForAI } from "@/lib/security";
 import { getClaudeClient, CLAUDE_MODELS } from "../_shared/claude-client";
 
 /**
- * Experimental: parse a voice transcript into a heterogeneous list of health
- * record items (BP, HR, weight, water, sodium, food, caffeine, alcohol,
- * urination, defecation). Mirrors the pattern in /api/ai/parse — structured
- * tool output, two-turn fallback when the model returns prose instead of
- * calling the tool, and Zod validation on the response.
+ * Parse a voice transcript into a heterogeneous list of health record items
+ * (BP, HR, weight, water, sodium, food, caffeine, alcohol, urination,
+ * defecation). Mirrors the pattern in /api/ai/parse — structured tool output,
+ * two-turn fallback when the model returns prose instead of calling the
+ * tool, and Zod validation on the response.
  */
 
 const ParseRequestSchema = z.object({

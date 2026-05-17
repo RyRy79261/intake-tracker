@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useRefreshInteractions } from "@/hooks/use-interaction-check";
 import { usePrescriptions } from "@/hooks/use-medication-queries";
+import { useAuthGate } from "@/components/auth-guard";
 import type { Prescription } from "@/lib/db";
 
 interface InteractionsSectionProps {
@@ -14,6 +15,7 @@ interface InteractionsSectionProps {
 export function InteractionsSection({ prescription }: InteractionsSectionProps) {
   const { refresh, isRefreshing } = useRefreshInteractions();
   const prescriptions = usePrescriptions();
+  const showAi = useAuthGate();
 
   const hasData =
     (prescription.contraindications?.length ?? 0) > 0 ||
@@ -39,6 +41,10 @@ export function InteractionsSection({ prescription }: InteractionsSectionProps) 
   const otherActiveCount = prescriptions.filter(
     (p) => p.id !== prescription.id && p.isActive
   ).length;
+
+  // When signed out, hide the section entirely if there's no stored data
+  // — there's no way to populate it without AI.
+  if (!showAi && !hasData) return null;
 
   return (
     <section className="mb-6">
@@ -86,22 +92,24 @@ export function InteractionsSection({ prescription }: InteractionsSectionProps) 
             );
           })}
 
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-xs mt-2 w-full"
-            onClick={handleRefresh}
-            disabled={isRefreshing || otherActiveCount === 0}
-          >
-            {isRefreshing ? (
-              <Loader2 className="w-3 h-3 animate-spin mr-1" />
-            ) : (
-              <RefreshCw className="w-3 h-3 mr-1" />
-            )}
-            {otherActiveCount === 0
-              ? "Add more prescriptions to check interactions"
-              : "Refresh interactions"}
-          </Button>
+          {showAi && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs mt-2 w-full"
+              onClick={handleRefresh}
+              disabled={isRefreshing || otherActiveCount === 0}
+            >
+              {isRefreshing ? (
+                <Loader2 className="w-3 h-3 animate-spin mr-1" />
+              ) : (
+                <RefreshCw className="w-3 h-3 mr-1" />
+              )}
+              {otherActiveCount === 0
+                ? "Add more prescriptions to check interactions"
+                : "Refresh interactions"}
+            </Button>
+          )}
         </div>
       ) : (
         <div className="text-xs text-muted-foreground p-3 border border-dashed rounded-md text-center">

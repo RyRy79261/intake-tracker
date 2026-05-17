@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { MedicationCard } from "@/components/medications/compound-card";
 import { InteractionSearch } from "@/components/medications/interaction-search";
+import { useAuthGate } from "@/components/auth-guard";
 import { usePrescriptions, useAllInventoryItems } from "@/hooks/use-medication-queries";
 import type { InventoryItem, Prescription } from "@/lib/db";
 
@@ -16,6 +17,7 @@ interface CompoundListProps {
 export function CompoundList({ onAddMed }: CompoundListProps) {
   const prescriptions = usePrescriptions();
   const inventoryItems = useAllInventoryItems();
+  const showAi = useAuthGate();
   const [outOfStockOpen, setOutOfStockOpen] = useState(false);
 
   const prescriptionMap = new Map(
@@ -65,7 +67,7 @@ export function CompoundList({ onAddMed }: CompoundListProps) {
 
   return (
     <div className="space-y-4 pb-24 px-4">
-      <InteractionSearch />
+      {showAi && <InteractionSearch />}
 
       {/* Active medications — always expanded */}
       {active.length > 0 && (

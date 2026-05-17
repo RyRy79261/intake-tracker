@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AuthGuard } from "@/components/auth-guard";
 import { WeightCard } from "@/components/weight-card";
 import { BloodPressureCard } from "@/components/blood-pressure-card";
 import { AppHeader } from "@/components/app-header";
@@ -13,7 +12,7 @@ import { useSettings } from "@/hooks/use-settings";
 import { LiquidsCard } from "@/components/liquids-card";
 import { FoodSaltCard } from "@/components/food-salt-card";
 import { InsightBadge } from "@/components/insight-badge";
-import { VoiceLaunchBar } from "@/components/experimental/voice-launch-bar";
+import { VoiceLaunchBar } from "@/components/voice/voice-launch-bar";
 import { useScrollHide } from "@/hooks/use-scroll-hide";
 import { cn } from "@/lib/utils";
 import { Droplets } from "lucide-react";
@@ -93,13 +92,12 @@ function HomeContent() {
         </p>
       </footer>
 
-      {settings.experimentalFeatures?.voiceHealthMetrics && (
-        <VoiceLaunchBar
-          hidden={isHidden}
-          hasQuickNav={settings.showQuickNav}
-          transitionDuration={barTransitionSec}
-        />
-      )}
+      <VoiceLaunchBar
+        hidden={isHidden}
+        hasQuickNav={settings.showQuickNav}
+        transitionDuration={barTransitionSec}
+      />
+
 
       {settings.showQuickNav && (
         <QuickNavFooter
@@ -115,9 +113,5 @@ function HomeContent() {
 }
 
 export default function Home() {
-  return (
-    <AuthGuard>
-      <HomeContent />
-    </AuthGuard>
-  );
+  return <HomeContent />;
 }

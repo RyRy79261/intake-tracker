@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PrivyProvider } from "@privy-io/react-auth";
 import { ThemeProvider, useTheme } from "next-themes";
 import { PinGateProvider } from "@/hooks/use-pin-gate";
+import { AuthRequiredProvider } from "@/components/auth-required-dialog";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { initStockRecalculation } from "@/lib/inventory-service";
 import { useTimezoneDetection } from "@/hooks/use-timezone-detection";
@@ -68,7 +69,11 @@ function PrivyProviderWithTheme({
         },
       }}
     >
-      <PinGateProvider><TimezoneGuard>{children}</TimezoneGuard></PinGateProvider>
+      <PinGateProvider>
+        <AuthRequiredProvider>
+          <TimezoneGuard>{children}</TimezoneGuard>
+        </AuthRequiredProvider>
+      </PinGateProvider>
     </PrivyProvider>
   );
 }
@@ -120,7 +125,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-            <PinGateProvider><TimezoneGuard>{children}</TimezoneGuard></PinGateProvider>
+            <PinGateProvider>
+              <AuthRequiredProvider>
+                <TimezoneGuard>{children}</TimezoneGuard>
+              </AuthRequiredProvider>
+            </PinGateProvider>
           </ThemeProvider>
         </QueryClientProvider>
       </ErrorBoundary>

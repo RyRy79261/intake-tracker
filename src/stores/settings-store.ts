@@ -88,11 +88,6 @@ export interface Settings {
 
   // Substance tracking configuration
   substanceConfig: SubstanceConfig;
-
-  // Experimental feature flags
-  experimentalFeatures: {
-    voiceHealthMetrics: boolean;
-  };
 }
 
 interface SettingsActions {
@@ -136,11 +131,6 @@ interface SettingsActions {
   setWeightIncrement: (value: number) => void;
   // Substance config
   setSubstanceConfig: (config: SubstanceConfig) => void;
-  // Experimental features
-  setExperimentalFeature: (
-    key: keyof Settings["experimentalFeatures"],
-    value: boolean
-  ) => void;
   resetToDefaults: () => void;
 }
 
@@ -193,9 +183,6 @@ const defaultSettings: Settings = {
         { name: "Other", defaultDrinks: 1, defaultVolumeMl: 250 },
       ],
     },
-  },
-  experimentalFeatures: {
-    voiceHealthMetrics: false,
   },
 };
 
@@ -274,12 +261,6 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
       // Substance config
       setSubstanceConfig: (config) => set({ substanceConfig: config }),
 
-      // Experimental features
-      setExperimentalFeature: (key, value) =>
-        set((state) => ({
-          experimentalFeatures: { ...state.experimentalFeatures, [key]: value },
-        })),
-
       addLiquidPreset: (preset) => {
         const id = crypto.randomUUID();
         set((state) => ({
@@ -345,9 +326,9 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
           // D-07: New quickNavItems field. Seed existing users with defaults.
           state.quickNavItems = DEFAULT_QUICK_NAV_ITEMS;
         }
-        if (version < 6) {
-          state.experimentalFeatures = { voiceHealthMetrics: false };
-        }
+        // version < 6 migration: experimentalFeatures.voiceHealthMetrics
+        // removed when voice graduated. Old persisted state may still have
+        // the key — it's now ignored, so no cleanup is needed.
         return state as unknown as Settings & SettingsActions;
       },
     }

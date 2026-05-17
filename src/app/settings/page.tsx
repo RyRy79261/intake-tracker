@@ -6,7 +6,6 @@ import { useSettings } from "@/hooks/use-settings";
 import { useToast } from "@/hooks/use-toast";
 import { useScrollHide } from "@/hooks/use-scroll-hide";
 import { AppHeader } from "@/components/app-header";
-import { AuthGuard } from "@/components/auth-guard";
 import { DebugPanel } from "@/components/debug-panel";
 import { CustomizationPanel } from "@/components/customization-panel";
 import { AboutDialog } from "@/components/about-dialog";
@@ -22,7 +21,6 @@ import { PrivacySecuritySection } from "@/components/settings/privacy-security-s
 import { PermissionsSection } from "@/components/settings/permissions-section";
 import { AppUpdatesSection } from "@/components/settings/app-updates-section";
 import { SubstanceSettingsSection } from "@/components/settings/substance-settings-section";
-import { ExperimentalSection } from "@/components/settings/experimental-section";
 
 function SettingsContent() {
   const settings = useSettings();
@@ -62,7 +60,6 @@ function SettingsContent() {
         <PrivacySecuritySection />
         <PermissionsSection />
         <AppUpdatesSection />
-        <ExperimentalSection />
 
         <div className="pt-4 border-t">
           <CustomizationPanel />
@@ -89,9 +86,5 @@ function SettingsContent() {
 }
 
 export default function SettingsPage() {
-  return (
-    <AuthGuard>
-      <SettingsContent />
-    </AuthGuard>
-  );
+  return <SettingsContent />;
 }

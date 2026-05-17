@@ -11,7 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { PillIcon } from "./pill-icon";
-import { useMedicineSearch, type MedicineSearchResult } from "@/hooks/use-medicine-search";
+import { useMedicineSearch, MedicineSearchCancelledError, type MedicineSearchResult } from "@/hooks/use-medicine-search";
+import { useAuthGate } from "@/components/auth-guard";
 import { useAddPrescription, usePrescriptions, useAddMedicationToPrescription, usePhasesForPrescription } from "@/hooks/use-medication-queries";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
@@ -113,6 +114,7 @@ function capitalizeWords(str: string) {
 export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardProps) {
   const { toast } = useToast();
   const [step, setStep] = useState<WizardStep>("search");
+  const showAi = useAuthGate();
   const searchMutation = useMedicineSearch();
   const addPrescriptionMutation = useAddPrescription();
   const addMedicationToPrescriptionMutation = useAddMedicationToPrescription();
@@ -331,8 +333,8 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
   const handleSave = async () => {
     if (!validateCurrentStep()) return;
 
-    // Conflict check for new prescriptions
-    if (conflictCheckState === "idle" && selectedPrescriptionId === "new") {
+    // Conflict check for new prescriptions (AI-driven; skip when signed out)
+    if (showAi && conflictCheckState === "idle" && selectedPrescriptionId === "new") {
       const activeMeds = existingPrescriptions.filter((p) => p.isActive);
       if (activeMeds.length > 0) {
         setConflictCheckState("checking");
@@ -539,7 +541,9 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
                 onSearch={handleSearch}
                 isSearching={searchMutation.isPending}
                 result={searchResult}
-                {...(searchMutation.error?.message && { error: searchMutation.error.message })}
+                {...(searchMutation.error &&
+                  !(searchMutation.error instanceof MedicineSearchCancelledError) &&
+                  searchMutation.error.message && { error: searchMutation.error.message })}
                 brandName={brandName}
                 onBrandNameChange={(v) => setBrandName(capitalizeWords(v))}
                 genericName={genericName}
@@ -665,6 +669,7 @@ function SearchStep({
   existingPrescriptions: Prescription[];
   fieldErrors?: Record<string, string>;
 }) {
+  const showAi = useAuthGate();
   return (
     <div className="space-y-4">
       {existingPrescriptions.length > 0 && (
@@ -685,33 +690,35 @@ function SearchStep({
         </div>
       )}
 
-      <div>
-        <Label className="text-sm font-medium mb-1.5 block">Search medication</Label>
-        <div className="flex gap-2">
-          <Input
-            placeholder="e.g. Aviolix, Clopidogrel..."
-            value={query}
-            onChange={(e) => onQueryChange(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                (e.target as HTMLElement).blur();
-                onSearch();
-              }
-            }}
-          />
-          <Button
-            onClick={onSearch}
-            disabled={isSearching || !query.trim()}
-            size="icon"
-            className="shrink-0 bg-teal-600 hover:bg-teal-700"
-          >
-            {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-          </Button>
+      {showAi && (
+        <div>
+          <Label className="text-sm font-medium mb-1.5 block">Search medication</Label>
+          <div className="flex gap-2">
+            <Input
+              placeholder="e.g. Aviolix, Clopidogrel..."
+              value={query}
+              onChange={(e) => onQueryChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  (e.target as HTMLElement).blur();
+                  onSearch();
+                }
+              }}
+            />
+            <Button
+              onClick={onSearch}
+              disabled={isSearching || !query.trim()}
+              size="icon"
+              className="shrink-0 bg-teal-600 hover:bg-teal-700"
+            >
+              {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+            </Button>
+          </div>
+          {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
         </div>
-        {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
-      </div>
+      )}
 
-      {result && (
+      {showAi && result && (
         <div className="rounded-lg bg-teal-50 dark:bg-teal-950/30 p-3 text-sm space-y-1">
           <p className="font-medium text-teal-700 dark:text-teal-300">Found: {result.genericName}</p>
           {result.isGenericFallback && (
@@ -872,6 +879,7 @@ function IndicationStep({
   onRefreshAI?: () => void;
   isRefreshing?: boolean;
 }) {
+  const showAi = useAuthGate();
   const foodOptions: { value: FoodInstruction; label: string }[] = [
     { value: "before", label: "Before eating" },
     { value: "after", label: "After eating" },
@@ -885,7 +893,7 @@ function IndicationStep({
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <Label className="text-sm font-medium">What is this medication for?</Label>
-              {onRefreshAI && (
+              {showAi && onRefreshAI && (
                 <Button
                   variant="ghost"
                   size="sm"

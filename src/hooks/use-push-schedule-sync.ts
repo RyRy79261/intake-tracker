@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useDailyDoseSchedule } from "@/hooks/use-medication-queries";
+import { useAuth } from "@/components/auth-guard";
+import { useRequireAuth } from "@/components/auth-required-dialog";
 import {
   subscribeToPush,
   unsubscribeFromPush,
@@ -75,50 +77,37 @@ function buildScheduleEntries(
 /**
  * Hook that syncs dose schedule to server when push reminders are enabled.
  * Runs on mount and when schedule data changes. Debounced via schedule hash.
- *
- * @param getAuthToken - Optional function to get auth token (e.g., from usePrivy)
+ * No-ops when the user is not signed in (push subscriptions require auth).
  */
-export function usePushScheduleSync(getAuthToken?: () => Promise<string | null>): void {
+export function usePushScheduleSync(): void {
   const doseRemindersEnabled = useSettingsStore((s) => s.doseRemindersEnabled);
   const followUpCount = useSettingsStore((s) => s.reminderFollowUpCount);
   const followUpInterval = useSettingsStore((s) => s.reminderFollowUpInterval);
+  const { authenticated, getAuthHeader } = useAuth();
 
   const todayStr = getTodayDateStr();
   const slots = useDailyDoseSchedule(todayStr);
 
   const lastHashRef = useRef<string>("");
-  const getAuthTokenRef = useRef(getAuthToken);
-  getAuthTokenRef.current = getAuthToken;
 
   const syncSchedule = useCallback(async (entries: ScheduleEntry[]) => {
     try {
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      };
-
-      // Add auth token if available
-      if (getAuthTokenRef.current) {
-        try {
-          const token = await getAuthTokenRef.current();
-          if (token) {
-            headers["Authorization"] = `Bearer ${token}`;
-          }
-        } catch {
-          // Auth not available -- continue without token (server falls back to dev user if Privy not configured)
-        }
-      }
-
+      const authHeaders = await getAuthHeader();
       await fetch("/api/push/sync-schedule", {
         method: "POST",
-        headers,
+        headers: {
+          "Content-Type": "application/json",
+          ...authHeaders,
+        },
         body: JSON.stringify({ schedules: entries }),
       });
     } catch (error) {
       console.warn("[push-schedule-sync] Failed to sync schedule:", error);
     }
-  }, []);
+  }, [getAuthHeader]);
 
   useEffect(() => {
+    if (!authenticated) return;
     if (!doseRemindersEnabled) return;
     if (!slots || slots.length === 0) return;
 
@@ -130,7 +119,7 @@ export function usePushScheduleSync(getAuthToken?: () => Promise<string | null>)
     lastHashRef.current = hash;
 
     syncSchedule(entries);
-  }, [slots, doseRemindersEnabled, followUpCount, followUpInterval, syncSchedule]);
+  }, [authenticated, slots, doseRemindersEnabled, followUpCount, followUpInterval, syncSchedule]);
 }
 
 /**
@@ -142,31 +131,61 @@ export function useDoseReminderToggle() {
   const setDoseRemindersEnabled = useSettingsStore((s) => s.setDoseRemindersEnabled);
   const [toggling, setToggling] = useState(false);
   const supported = typeof window !== "undefined" && isNotificationSupported();
+  const { getAccessToken } = useAuth();
+  const { requireAuth } = useRequireAuth();
 
   const handleToggle = useCallback(async (enabled: boolean) => {
     setToggling(true);
     try {
       if (enabled) {
+        // Push subscriptions are stored server-side keyed by Privy user ID.
+        const ok = await requireAuth("push");
+        if (!ok) return;
+
         const permResult = await requestNotificationPermission();
         if (!permResult.success || permResult.data !== "granted") {
           return;
         }
-        const subscription = await subscribeToPush("");
+        const token = await getAccessToken();
+        if (!token) {
+          console.warn("[dose-reminders] No access token after auth");
+          return;
+        }
+        const subscription = await subscribeToPush(token);
         if (!subscription) {
           console.warn("[dose-reminders] Push subscription failed");
           return;
         }
         setDoseRemindersEnabled(true);
       } else {
-        await unsubscribeFromPush("");
-        setDoseRemindersEnabled(false);
+        // Disable: always perform the browser-side unsubscribe so reminders
+        // actually stop on this device. If we have a token, also tell the
+        // server; otherwise skip the server call (a stale row will be cleaned
+        // up by /api/push/send when the dead endpoint 410s).
+        const token = await getAccessToken();
+        let unsubscribed = false;
+        if (token) {
+          unsubscribed = await unsubscribeFromPush(token);
+        } else if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+          try {
+            const reg = await navigator.serviceWorker.ready;
+            const sub = await reg.pushManager.getSubscription();
+            if (sub) await sub.unsubscribe();
+            unsubscribed = true;
+          } catch {
+            unsubscribed = false;
+          }
+        }
+        if (unsubscribed) {
+          setDoseRemindersEnabled(false);
+        }
       }
     } catch (error) {
       console.error("[dose-reminders] Toggle failed:", error);
     } finally {
       setToggling(false);
     }
-  }, [setDoseRemindersEnabled]);
+  }, [setDoseRemindersEnabled, requireAuth, getAccessToken]);
 
   return { handleToggle, toggling, supported };
 }

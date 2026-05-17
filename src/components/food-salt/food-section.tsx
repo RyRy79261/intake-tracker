@@ -16,6 +16,8 @@ import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { RecentEntriesList, InlineEditFormShell } from "@/components/recent-entries-list";
 import { parseIntakeWithAI } from "@/lib/ai-client";
+import { useAiFetch } from "@/hooks/use-ai-fetch";
+import { useAuthGate } from "@/components/auth-guard";
 import {
   useAddComposableEntry,
   useSyncEatingGroup,
@@ -32,7 +34,6 @@ import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
 import { useSaltTotalsByGroupIds } from "@/hooks/use-intake-queries";
 import { useEditRecord } from "@/hooks/use-edit-record";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/components/auth-guard";
 import { type EatingRecord } from "@/lib/db";
 import {
   getCurrentDateTimeLocal,
@@ -54,7 +55,8 @@ const SODIUM_MULTIPLIERS: Record<SodiumSource, number> = {
 
 export function FoodSection() {
   const { toast } = useToast();
-  const { getAuthHeader } = useAuth();
+  const aiFetch = useAiFetch();
+  const showAi = useAuthGate();
   const addComposableEntry = useAddComposableEntry();
 
   // ─── Mutations ────────────────────────────────────────────────────
@@ -184,8 +186,10 @@ export function FoodSection() {
 
     setIsParsing(true);
     try {
-      const authHeaders = await getAuthHeader();
-      const result = await parseIntakeWithAI(trimmed, { authHeaders });
+      const result = await parseIntakeWithAI(trimmed, aiFetch);
+
+      // User dismissed the sign-in prompt
+      if (!result) return;
 
       // Populate form fields from AI result. The /api/ai/parse route now always
       // returns sodium in mg, so the source is always "sodium".
@@ -215,7 +219,7 @@ export function FoodSection() {
     } finally {
       setIsParsing(false);
     }
-  }, [foodText, isParsing, toast, getAuthHeader]);
+  }, [foodText, isParsing, toast, aiFetch]);
 
   const handleDetailSubmit = useCallback(async () => {
     if (isSubmitting) return;
@@ -309,34 +313,36 @@ export function FoodSection() {
 
   return (
     <>
-      {/* "What I ate" text input — doubles as AI parse input */}
+      {/* "What I ate" text input — doubles as AI parse input when signed in */}
       <div className="relative mt-3">
         <Input
           value={foodText}
           onChange={(e) => setFoodText(e.target.value)}
-          onKeyDown={handleKeyDown}
+          onKeyDown={showAi ? handleKeyDown : undefined}
           placeholder="What I ate..."
-          aria-label="Describe food for AI nutritional parsing"
-          className="h-10 pr-10"
+          aria-label={showAi ? "Describe food for AI nutritional parsing" : "Describe what you ate"}
+          className={cn("h-10", showAi && "pr-10")}
           disabled={isParsing}
         />
-        <button
-          type="button"
-          onClick={handleParse}
-          disabled={!foodText.trim() || isParsing}
-          aria-label="Parse food with AI"
-          className={cn(
-            "absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md transition-colors",
-            "text-muted-foreground hover:text-orange-600 dark:hover:text-orange-400",
-            "disabled:opacity-50 disabled:cursor-not-allowed"
-          )}
-        >
-          {isParsing ? (
-            <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-          ) : (
-            <Sparkles className="w-4 h-4" />
-          )}
-        </button>
+        {showAi && (
+          <button
+            type="button"
+            onClick={handleParse}
+            disabled={!foodText.trim() || isParsing}
+            aria-label="Parse food with AI"
+            className={cn(
+              "absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md transition-colors",
+              "text-muted-foreground hover:text-orange-600 dark:hover:text-orange-400",
+              "disabled:opacity-50 disabled:cursor-not-allowed"
+            )}
+          >
+            {isParsing ? (
+              <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Sparkles className="w-4 h-4" />
+            )}
+          </button>
+        )}
       </div>
 
       {/* Always-visible detail fields */}

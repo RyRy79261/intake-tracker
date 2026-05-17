@@ -4,7 +4,8 @@ import { useState } from "react";
 import { motion } from "motion/react";
 import { Mic } from "lucide-react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { VoicePanel } from "@/components/experimental/voice-panel";
+import { VoicePanel } from "@/components/voice/voice-panel";
+import { useAuthGate } from "@/components/auth-guard";
 import { cn } from "@/lib/utils";
 
 interface VoiceLaunchBarProps {
@@ -26,6 +27,9 @@ export function VoiceLaunchBar({
   transitionDuration = 0.2,
 }: VoiceLaunchBarProps) {
   const [open, setOpen] = useState(false);
+  const showAi = useAuthGate();
+
+  if (!showAi) return null;
 
   const bottomOffset = hasQuickNav
     ? `calc(${QUICK_NAV_HEIGHT_PX}px + env(safe-area-inset-bottom, 0px))`
