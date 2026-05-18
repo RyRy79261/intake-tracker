@@ -85,7 +85,7 @@ function SettingsContent() {
           <PermissionsSection />
         </SettingsAccordionGroup>
 
-        <SettingsAccordionGroup value="app-updates" icon={Download} label="App Updates" iconColorClass="text-sky-600 dark:text-sky-400">
+        <SettingsAccordionGroup value="system" icon={Download} label="System" iconColorClass="text-sky-600 dark:text-sky-400">
           <AppUpdatesSection />
         </SettingsAccordionGroup>
 
