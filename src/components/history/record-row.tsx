@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { Button } from "@/components/ui/button";
 import { Trash2, Loader2, Pencil } from "lucide-react";
 import { CARD_THEMES } from "@/lib/card-themes";
@@ -17,7 +18,7 @@ interface RecordRowProps {
 }
 
 /** A single record row in the history list */
-export function RecordRow({ unified, onDelete, onEdit, isDeleting, liquidPresets }: RecordRowProps) {
+function RecordRowImpl({ unified, onDelete, onEdit, isDeleting, liquidPresets }: RecordRowProps) {
   let icon: React.ReactNode;
   let measurement: string;
   let iconColor: string;
@@ -131,3 +132,5 @@ export function RecordRow({ unified, onDelete, onEdit, isDeleting, liquidPresets
     </div>
   );
 }
+
+export const RecordRow = memo(RecordRowImpl);
