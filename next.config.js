@@ -1,6 +1,6 @@
 // PWA (service-worker generation) is production-only.
 // Dev and preview deploys get a self-destructing SW via rewrite (see rewrites()).
-const isPWAEnabled = process.env.NODE_ENV === 'production' && process.env.VERCEL_ENV !== 'preview';
+const isPWAEnabled = process.env.NODE_ENV === 'production' && process.env.VERCEL_ENV !== 'preview' && !process.env.CAPACITOR_BUILD;
 
 const withPWA = isPWAEnabled
   ? require('next-pwa')({

@@ -19,25 +19,11 @@ export function AppUpdatesSection() {
 
   const capacitor = isCapacitorMode();
 
-  if (capacitor) {
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
-          <Smartphone className="w-4 h-4" />
-          <h3 className="font-semibold">App Version</h3>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Running v{clientVersion}
-        </p>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
         <Smartphone className="w-4 h-4" />
-        <h3 className="font-semibold">App Updates</h3>
+        <h3 className="font-semibold">{capacitor ? "App Version" : "App Updates"}</h3>
       </div>
       <div className="space-y-3 pl-0">
         {isUpdateAvailable ? (
@@ -48,17 +34,21 @@ export function AppUpdatesSection() {
                   Update available
                 </p>
                 <p className="text-xs text-sky-600 dark:text-sky-500 mt-0.5">
-                  v{serverVersion} available (you have v{clientVersion})
+                  {capacitor
+                    ? `v${serverVersion} available — update from Play Store`
+                    : `v${serverVersion} available (you have v${clientVersion})`}
                 </p>
               </div>
-              <Button
-                size="sm"
-                className="bg-sky-600 hover:bg-sky-700"
-                onClick={applyUpdate}
-              >
-                <RefreshCw className="w-4 h-4 mr-1" />
-                Update
-              </Button>
+              {!capacitor && (
+                <Button
+                  size="sm"
+                  className="bg-sky-600 hover:bg-sky-700"
+                  onClick={applyUpdate}
+                >
+                  <RefreshCw className="w-4 h-4 mr-1" />
+                  Update
+                </Button>
+              )}
             </div>
           </div>
         ) : (
@@ -71,7 +61,9 @@ export function AppUpdatesSection() {
                 if (hasUpdate) {
                   toast({
                     title: "Update available",
-                    description: "A new version is ready to install",
+                    description: capacitor
+                      ? "A new version is available on Play Store"
+                      : "A new version is ready to install",
                   });
                 } else {
                   toast({

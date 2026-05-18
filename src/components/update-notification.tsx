@@ -1,12 +1,14 @@
 "use client";
 
 import { useVersionCheck } from "@/hooks/use-version-check";
+import { isCapacitorMode } from "@/lib/api-fetch";
 import { Button } from "@/components/ui/button";
 import { RefreshCw, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function UpdateNotification() {
   const { isUpdateAvailable, serverVersion, applyUpdate, dismissUpdate } = useVersionCheck();
+  const capacitor = isCapacitorMode();
 
   if (!isUpdateAvailable) {
     return null;
@@ -31,20 +33,24 @@ export function UpdateNotification() {
           <div className="min-w-0">
             <p className="font-medium text-sm">Update available</p>
             <p className="text-xs text-sky-100 truncate">
-              v{serverVersion} is available — tap to refresh
+              {capacitor
+                ? `v${serverVersion} available — update from Play Store`
+                : `v${serverVersion} is available — tap to refresh`}
             </p>
           </div>
         </div>
-        
+
         <div className="flex items-center gap-2 shrink-0">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 px-3 text-white hover:bg-white/20 hover:text-white"
-            onClick={applyUpdate}
-          >
-            Update
-          </Button>
+          {!capacitor && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 px-3 text-white hover:bg-white/20 hover:text-white"
+              onClick={applyUpdate}
+            >
+              Update
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon"

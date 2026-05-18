@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Droplets, Pill, BarChart3, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SyncStatusBadge } from "@/components/sync/sync-status-badge";
+import { AuthButton } from "@/components/auth-button";
 
 const NAV_ITEMS = [
   { path: "/", icon: Droplets, label: "Intake", title: "Intake Tracker", subtitle: "Daily budget tracking" },
@@ -60,6 +61,7 @@ export function AppHeader({
             </Button>
           );
         })}
+        <AuthButton />
       </div>
     </motion.header>
   );

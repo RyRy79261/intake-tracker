@@ -49,7 +49,9 @@ export function useVersionCheck() {
   }, []);
 
   const applyUpdate = useCallback(() => {
-    window.location.reload();
+    if (!isCapacitorMode()) {
+      window.location.reload();
+    }
   }, []);
 
   const dismissUpdate = useCallback(() => {
@@ -57,8 +59,6 @@ export function useVersionCheck() {
   }, []);
 
   useEffect(() => {
-    if (isCapacitorMode()) return;
-
     const timeout = setTimeout(() => {
       checkForUpdates();
     }, 3000);
