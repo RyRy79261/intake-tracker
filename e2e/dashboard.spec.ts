@@ -22,8 +22,10 @@ test.describe('Dashboard', () => {
     await foodSaltCard.locator('#eating-sodium').fill('250');
     await foodSaltCard.locator('button', { hasText: 'Record with details' }).click();
 
-    // Wait for the success toast (composable path: emits "Meal with details recorded")
-    await expect(page.getByText('Meal with details recorded', { exact: true })).toBeVisible();
+    // Toast description depends on whether a food note was entered, not the
+    // composable-vs-plain path. We didn't fill a note here, so the description
+    // is "Eating event recorded".
+    await expect(page.getByText('Eating event recorded', { exact: true })).toBeVisible();
   });
 
   test('should create composable food entry via AI parse', async ({ page }) => {
