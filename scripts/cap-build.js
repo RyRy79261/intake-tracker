@@ -21,6 +21,13 @@ process.env.CAPACITOR_BUILD = '1';
 if (!process.env.NEXT_PUBLIC_API_BASE_URL) {
   process.env.NEXT_PUBLIC_API_BASE_URL = 'https://intake-tracker.ryanjnoble.dev';
 }
+
+const pkg = require(path.join(__dirname, '..', 'package.json'));
+const versionParts = pkg.version.split('.');
+const versionCode = parseInt(versionParts[0]) * 10000 + parseInt(versionParts[1]) * 100 + parseInt(versionParts[2]);
+const versionPropsPath = path.join(__dirname, '..', 'android', 'app', 'version.properties');
+fs.writeFileSync(versionPropsPath, `VERSION_NAME=${pkg.version}\nVERSION_CODE=${versionCode}\n`);
+
 stash();
 try {
   execSync('npx next build', { stdio: 'inherit', env: process.env });
