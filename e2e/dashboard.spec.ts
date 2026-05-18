@@ -16,12 +16,15 @@ test.describe('Dashboard', () => {
     // Wait for the success toast (use getByText with exact match to avoid aria-live duplication)
     await expect(page.getByText('Water intake recorded', { exact: true })).toBeVisible();
 
-    // Click "Record with details" in the Food/Salt card
+    // Fill in sodium (required) and click "Record with details" in the Food/Salt card
     const foodSaltCard = page.locator('#section-food-salt');
     await expect(foodSaltCard).toBeVisible();
+    await foodSaltCard.locator('#eating-sodium').fill('250');
     await foodSaltCard.locator('button', { hasText: 'Record with details' }).click();
 
-    // Wait for the success toast
+    // Toast description depends on whether a food note was entered, not the
+    // composable-vs-plain path. We didn't fill a note here, so the description
+    // is "Eating event recorded".
     await expect(page.getByText('Eating event recorded', { exact: true })).toBeVisible();
   });
 
