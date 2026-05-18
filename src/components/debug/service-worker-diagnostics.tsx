@@ -177,13 +177,21 @@ export function ServiceWorkerDiagnostics() {
   }, [refresh, toast]);
 
   const handleTestNotification = useCallback(async () => {
-    const mod = await import("@/lib/push-notification-service");
-    const ok = await mod.sendTestNotification();
-    toast({
-      title: ok ? "Test notification sent" : "Notification failed",
-      description: ok ? undefined : "Check permission and service worker",
-      variant: ok ? undefined : "destructive",
-    });
+    try {
+      const mod = await import("@/lib/push-notification-service");
+      const ok = await mod.sendTestNotification();
+      toast({
+        title: ok ? "Test notification sent" : "Notification failed",
+        description: ok ? undefined : "Check permission and service worker",
+        variant: ok ? undefined : "destructive",
+      });
+    } catch (e) {
+      toast({
+        title: "Notification failed",
+        description: e instanceof Error ? e.message : "Unknown error",
+        variant: "destructive",
+      });
+    }
   }, [toast]);
 
   return (

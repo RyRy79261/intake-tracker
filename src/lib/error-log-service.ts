@@ -52,7 +52,9 @@ function safeFormat(args: unknown[]): string {
 
 function currentRoute(): string | undefined {
   if (typeof window === "undefined") return undefined;
-  return window.location.pathname + window.location.search;
+  // Pathname only — query strings can contain tokens or other sensitive
+  // params that should not be persisted into exported debug logs.
+  return window.location.pathname;
 }
 
 export async function logError(

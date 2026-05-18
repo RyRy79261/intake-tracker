@@ -6,6 +6,7 @@ import { Info, Clipboard, ClipboardCheck } from "lucide-react";
 import { isCapacitorMode } from "@/lib/api-fetch";
 import { getDeviceId } from "@/lib/utils";
 import { getDeviceTimezone } from "@/lib/timezone";
+import { DB_SCHEMA_VERSION } from "@/lib/db";
 import { useSettings } from "@/hooks/use-settings";
 
 const CLIENT_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || "0.0.0";
@@ -57,7 +58,7 @@ export function EnvironmentInfo() {
     { label: "Build env", value: VERCEL_ENV },
     { label: "Mode", value: isCapacitorMode() ? "Capacitor (native)" : "Web" },
     { label: "Node env", value: process.env.NODE_ENV ?? "unknown" },
-    { label: "DB version", value: "17" },
+    { label: "DB version", value: String(DB_SCHEMA_VERSION) },
     { label: "Device ID", value: getDeviceId() },
     { label: "Timezone", value: getDeviceTimezone() },
     { label: "Day-start hour", value: String(settings.dayStartHour) },

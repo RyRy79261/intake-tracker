@@ -679,4 +679,11 @@ db.version(17).stores({
   _errorLogs:              "id, timestamp, source",
 });
 
+/**
+ * Current Dexie schema version. Bump this constant in lockstep with each new
+ * `db.version(N)` block above so diagnostic surfaces (Debug → Environment)
+ * always reflect the real schema.
+ */
+export const DB_SCHEMA_VERSION = 17;
+
 export { db };
