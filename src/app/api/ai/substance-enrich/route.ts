@@ -5,7 +5,7 @@ import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
 import { getClaudeClient, CLAUDE_MODELS, WEB_SEARCH_TOOL } from "../_shared/claude-client";
 import { ethanolGrams, standardDrinksFromAbv } from "@/lib/alcohol-units";
-import { zodErrorResponse } from "@/app/api/_shared/validation";
+import { parseJsonBody, zodErrorResponse } from "@/app/api/_shared/validation";
 import { createRateLimiter, getClientIp } from "@/app/api/_shared/rate-limit";
 
 /**
@@ -127,8 +127,9 @@ export const POST = withAuth(async ({ request, auth }) => {
       );
     }
 
-    const body = await request.json();
-    const parsed = SubstanceEnrichRequestSchema.safeParse(body);
+    const json = await parseJsonBody(request);
+    if (!json.ok) return json.response;
+    const parsed = SubstanceEnrichRequestSchema.safeParse(json.body);
     if (!parsed.success) {
       return zodErrorResponse("Substance enrich request failed", parsed.error);
     }
