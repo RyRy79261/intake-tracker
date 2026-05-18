@@ -1,6 +1,8 @@
 import { db, type UrinationRecord } from "./db";
 import { ok, err, type ServiceResult } from "./service-result";
 import { generateId, syncFields } from "./utils";
+import { writeWithSync } from "./sync-queue";
+import { schedulePush } from "./sync-engine";
 
 export async function addUrinationRecord(
   timestamp?: number,
@@ -18,7 +20,11 @@ export async function addUrinationRecord(
       ...syncFields(),
     };
 
-    await db.urinationRecords.add(record);
+    await writeWithSync("urinationRecords", "upsert", async () => {
+      await db.urinationRecords.add(record);
+      return record;
+    });
+    schedulePush();
     return ok(record);
   } catch (e) {
     return err("Failed to add urination record", e);
@@ -47,7 +53,11 @@ export async function getUrinationRecordsByDateRange(
 export async function deleteUrinationRecord(id: string): Promise<ServiceResult<void>> {
   try {
     const now = Date.now();
-    await db.urinationRecords.update(id, { deletedAt: now, updatedAt: now });
+    await writeWithSync("urinationRecords", "delete", async () => {
+      await db.urinationRecords.update(id, { deletedAt: now, updatedAt: now });
+      return { id };
+    });
+    schedulePush();
     return ok(undefined);
   } catch (e) {
     return err("Failed to delete urination record", e);
@@ -57,7 +67,11 @@ export async function deleteUrinationRecord(id: string): Promise<ServiceResult<v
 export async function undoDeleteUrinationRecord(id: string): Promise<ServiceResult<void>> {
   try {
     const now = Date.now();
-    await db.urinationRecords.update(id, { deletedAt: null, updatedAt: now });
+    await writeWithSync("urinationRecords", "upsert", async () => {
+      await db.urinationRecords.update(id, { deletedAt: null, updatedAt: now });
+      return { id };
+    });
+    schedulePush();
     return ok(undefined);
   } catch (e) {
     return err("Failed to undo delete urination record", e);
@@ -69,7 +83,11 @@ export async function updateUrinationRecord(
   updates: { timestamp?: number; amountEstimate?: string; note?: string }
 ): Promise<ServiceResult<void>> {
   try {
-    await db.urinationRecords.update(id, updates);
+    await writeWithSync("urinationRecords", "upsert", async () => {
+      await db.urinationRecords.update(id, { ...updates, updatedAt: Date.now() });
+      return { id };
+    });
+    schedulePush();
     return ok(undefined);
   } catch (e) {
     return err("Failed to update urination record", e);

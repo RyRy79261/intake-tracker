@@ -4,6 +4,8 @@ import { syncFields } from "./utils";
 import { getDeviceTimezone, localHHMMStringToUTCMinutes } from "./timezone";
 import { buildAuditEntry } from "./audit-service";
 import { buildPhase, buildInventory, buildSchedules, buildTransaction } from "./medication-builders";
+import { enqueueInsideTx } from "./sync-queue";
+import { schedulePush } from "./sync-engine";
 
 export interface AddMedicationToPrescriptionInput {
   prescriptionId: string;
@@ -282,14 +284,25 @@ export async function updatePhase(input: UpdatePhaseInput): Promise<ServiceResul
 
 export async function deletePhase(id: string): Promise<ServiceResult<void>> {
   try {
-    await db.transaction("rw", [db.medicationPhases, db.phaseSchedules, db.auditLogs], async () => {
-      await db.phaseSchedules.where("phaseId").equals(id).delete();
-      await db.medicationPhases.delete(id);
-      await db.auditLogs.add(buildAuditEntry("phase_completed", {
+    const now = Date.now();
+    await db.transaction("rw", [db.medicationPhases, db.phaseSchedules, db.auditLogs, db._syncQueue], async () => {
+      const schedules = await db.phaseSchedules.where("phaseId").equals(id).toArray();
+      for (const s of schedules) {
+        await db.phaseSchedules.update(s.id, { deletedAt: now, updatedAt: now });
+        await enqueueInsideTx("phaseSchedules", s.id, "delete");
+      }
+
+      await db.medicationPhases.update(id, { deletedAt: now, updatedAt: now });
+      await enqueueInsideTx("medicationPhases", id, "delete");
+
+      const audit = buildAuditEntry("phase_completed", {
         phaseId: id,
         action: "phase_deleted",
-      }));
+      });
+      await db.auditLogs.add(audit);
+      await enqueueInsideTx("auditLogs", audit.id, "upsert");
     });
+    schedulePush();
     return ok(undefined);
   } catch (e) {
     return err("Failed to delete phase", e);

@@ -2,7 +2,6 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { Check, Mic, X } from "lucide-react";
-import { useAiFetch } from "@/hooks/use-ai-fetch";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
@@ -15,6 +14,7 @@ import { useAddUrination } from "@/hooks/use-urination-queries";
 import { useAddDefecation } from "@/hooks/use-defecation-queries";
 import { useAddSubstance } from "@/hooks/use-substance-queries";
 import type { VoiceParsedItem, VoiceParseResponse } from "@/lib/voice-types";
+import { apiFetch } from "@/lib/api-fetch";
 import { useQueryClient } from "@tanstack/react-query";
 
 type RowState = { item: VoiceParsedItem; approved: boolean | null };
@@ -26,7 +26,6 @@ interface VoicePanelProps {
 
 export function VoicePanel({ onCommitted }: VoicePanelProps) {
   const { toast } = useToast();
-  const aiFetch = useAiFetch();
   const queryClient = useQueryClient();
 
   const addIntake = useAddIntake();
@@ -73,7 +72,7 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
         const form = new FormData();
         form.append("audio", blob, `clip.${ext}`);
 
-        const transcribeRes = await aiFetch("/api/ai/voice-transcribe", {
+        const transcribeRes = await apiFetch("/api/ai/voice-transcribe", {
           method: "POST",
           body: form,
         });
@@ -89,7 +88,7 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
         setTranscript(text);
 
         setStage("parsing");
-        const parseRes = await aiFetch("/api/ai/voice-parse", {
+        const parseRes = await apiFetch("/api/ai/voice-parse", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ transcript: text }),
@@ -124,7 +123,7 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
         });
       }
     },
-    [aiFetch, toast]
+    [toast]
   );
 
   const updateRow = useCallback((index: number, next: Partial<RowState>) => {

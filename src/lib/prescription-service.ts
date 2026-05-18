@@ -2,6 +2,8 @@ import { db, type Prescription, type MedicationPhase, type InventoryItem, type P
 import { ok, err, type ServiceResult } from "./service-result";
 import { buildAuditEntry } from "./audit-service";
 import { buildPrescription, buildPhase, buildInventory, buildSchedules, buildTransaction } from "./medication-builders";
+import { enqueueInsideTx } from "./sync-queue";
+import { schedulePush } from "./sync-engine";
 
 export interface CreatePrescriptionInput {
   // Prescription level
@@ -35,7 +37,8 @@ export interface CreatePrescriptionInput {
 // ---------------------------------------------------------------------------
 
 export async function getPrescriptions(): Promise<Prescription[]> {
-  return db.prescriptions.orderBy("createdAt").reverse().toArray();
+  const all = await db.prescriptions.orderBy("createdAt").reverse().toArray();
+  return all.filter(p => p.deletedAt === null || p.deletedAt === undefined);
 }
 
 export async function getPrescriptionById(id: string): Promise<Prescription | undefined> {
@@ -73,23 +76,36 @@ export async function addPrescription(input: CreatePrescriptionInput): Promise<S
     const phase = hasSchedules ? buildPhase(prescription.id, input, now) : null;
     const schedules = phase ? buildSchedules(phase.id, input.schedules, now) : [];
 
-    await db.transaction("rw", [db.prescriptions, db.medicationPhases, db.inventoryItems, db.phaseSchedules, db.inventoryTransactions, db.auditLogs], async () => {
+    await db.transaction("rw", [db.prescriptions, db.medicationPhases, db.inventoryItems, db.phaseSchedules, db.inventoryTransactions, db.auditLogs, db._syncQueue], async () => {
       await db.prescriptions.add(prescription);
+      await enqueueInsideTx("prescriptions", prescription.id, "upsert");
+
       if (phase) {
         await db.medicationPhases.add(phase);
-        if (schedules.length > 0) await db.phaseSchedules.bulkAdd(schedules);
+        await enqueueInsideTx("medicationPhases", phase.id, "upsert");
+        for (const s of schedules) {
+          await db.phaseSchedules.add(s);
+          await enqueueInsideTx("phaseSchedules", s.id, "upsert");
+        }
       }
+
       await db.inventoryItems.add(inventory);
+      await enqueueInsideTx("inventoryItems", inventory.id, "upsert");
 
       if (input.currentStock > 0) {
-        await db.inventoryTransactions.add(buildTransaction(inventory.id, input.currentStock, "refill", now, "Initial stock"));
+        const tx = buildTransaction(inventory.id, input.currentStock, "refill", now, "Initial stock");
+        await db.inventoryTransactions.add(tx);
+        await enqueueInsideTx("inventoryTransactions", tx.id, "upsert");
       }
 
-      await db.auditLogs.add(buildAuditEntry("prescription_added", {
+      const audit = buildAuditEntry("prescription_added", {
         prescriptionId: prescription.id,
         genericName: input.genericName,
-      }));
+      });
+      await db.auditLogs.add(audit);
+      await enqueueInsideTx("auditLogs", audit.id, "upsert");
     });
+    schedulePush();
 
     return ok({ prescription, phase, inventory, schedules });
   } catch (e) {
@@ -102,13 +118,18 @@ export async function updatePrescription(
   updates: Partial<Omit<Prescription, "id" | "createdAt">>,
 ): Promise<ServiceResult<void>> {
   try {
-    await db.transaction("rw", [db.prescriptions, db.auditLogs], async () => {
+    await db.transaction("rw", [db.prescriptions, db.auditLogs, db._syncQueue], async () => {
       await db.prescriptions.update(id, { ...updates, updatedAt: Date.now() });
-      await db.auditLogs.add(buildAuditEntry("prescription_updated", {
+      await enqueueInsideTx("prescriptions", id, "upsert");
+
+      const audit = buildAuditEntry("prescription_updated", {
         prescriptionId: id,
         updatedFields: Object.keys(updates),
-      }));
+      });
+      await db.auditLogs.add(audit);
+      await enqueueInsideTx("auditLogs", audit.id, "upsert");
     });
+    schedulePush();
     return ok(undefined);
   } catch (e) {
     return err("Failed to update prescription", e);
@@ -117,29 +138,38 @@ export async function updatePrescription(
 
 export async function deletePrescription(id: string): Promise<ServiceResult<void>> {
   try {
-    await db.transaction("rw", [db.prescriptions, db.medicationPhases, db.phaseSchedules, db.inventoryItems, db.inventoryTransactions, db.doseLogs, db.auditLogs], async () => {
+    const now = Date.now();
+    await db.transaction("rw", [db.prescriptions, db.medicationPhases, db.phaseSchedules, db.inventoryItems, db.inventoryTransactions, db.doseLogs, db.auditLogs, db._syncQueue], async () => {
       await db.doseLogs.where("prescriptionId").equals(id).delete();
 
-      // Cascade-delete inventory transactions for each inventory item before
-      // removing the items themselves, otherwise the transactions are orphaned.
       const inventoryItems = await db.inventoryItems.where("prescriptionId").equals(id).toArray();
-      const inventoryItemIds = inventoryItems.map((item) => item.id);
-      if (inventoryItemIds.length > 0) {
-        await db.inventoryTransactions.where("inventoryItemId").anyOf(inventoryItemIds).delete();
+      for (const item of inventoryItems) {
+        await db.inventoryTransactions.where("inventoryItemId").equals(item.id).delete();
+        await db.inventoryItems.update(item.id, { deletedAt: now, updatedAt: now });
+        await enqueueInsideTx("inventoryItems", item.id, "delete");
       }
-      await db.inventoryItems.where("prescriptionId").equals(id).delete();
 
       const phases = await db.medicationPhases.where("prescriptionId").equals(id).toArray();
       for (const p of phases) {
-        await db.phaseSchedules.where("phaseId").equals(p.id).delete();
+        const schedules = await db.phaseSchedules.where("phaseId").equals(p.id).toArray();
+        for (const s of schedules) {
+          await db.phaseSchedules.update(s.id, { deletedAt: now, updatedAt: now });
+          await enqueueInsideTx("phaseSchedules", s.id, "delete");
+        }
+        await db.medicationPhases.update(p.id, { deletedAt: now, updatedAt: now });
+        await enqueueInsideTx("medicationPhases", p.id, "delete");
       }
-      await db.medicationPhases.where("prescriptionId").equals(id).delete();
-      await db.prescriptions.delete(id);
 
-      await db.auditLogs.add(buildAuditEntry("prescription_deleted", {
+      await db.prescriptions.update(id, { deletedAt: now, updatedAt: now });
+      await enqueueInsideTx("prescriptions", id, "delete");
+
+      const audit = buildAuditEntry("prescription_deleted", {
         prescriptionId: id,
-      }));
+      });
+      await db.auditLogs.add(audit);
+      await enqueueInsideTx("auditLogs", audit.id, "upsert");
     });
+    schedulePush();
     return ok(undefined);
   } catch (e) {
     return err("Failed to delete prescription", e);

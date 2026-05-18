@@ -9,7 +9,7 @@ A Progressive Web App (PWA) for tracking daily water and salt intake with a roll
 - **Salt intake tracking**: Keep sodium under control (target: <1500mg/day)
 - **Food water calculator**: Calculate water content from fruits and vegetables
 - **AI-powered input**: Use natural language to log intake via Anthropic Claude API
-- **Privy authentication**: Whitelist-based access control
+- **Neon Auth**: Email/password authentication with whitelist-based access control
 - **Offline support**: Works without internet connection as a PWA
 - **Data export/import**: Backup and restore your data
 
@@ -46,9 +46,47 @@ pnpm start
 - **Styling**: Tailwind CSS
 - **Database**: IndexedDB via Dexie.js
 - **State**: Zustand
-- **Auth**: Privy (email, social, wallet)
+- **Auth**: Neon Auth (cookie session, email/password)
 - **PWA**: next-pwa
 - **Encryption**: Web Crypto API (AES-GCM)
+
+## Postgres Schema (Neon + Drizzle)
+
+The Postgres schema is managed via Drizzle ORM. The source of truth is
+[`src/db/schema.ts`](./src/db/schema.ts). Migration SQL files are committed
+under [`/drizzle/`](./drizzle/) for reviewability.
+
+### Commands
+
+| Command | Purpose |
+|---|---|
+| `pnpm db:generate` | Diff `src/db/schema.ts` against the last snapshot and emit a new `/drizzle/NNNN_<name>.sql` + updated snapshot JSON |
+| `pnpm db:migrate`  | Apply pending migrations to the DB at `$DATABASE_URL` (uses drizzle-kit's `__drizzle_migrations` tracker) |
+| `pnpm db:reset`    | Drop every app table in the `public` schema — preserves the auth schema (neon_auth). Destructive. Refuses to run if `DATABASE_URL` looks like production. |
+
+### First-time setup for a new Neon branch
+
+1. Create the branch in the [Neon console](https://console.neon.tech) or via `neonctl`.
+2. Export the branch connection string: `export DATABASE_URL="postgres://..."`.
+3. `pnpm db:reset`    — wipes any pre-existing `public` tables.
+4. `pnpm db:migrate`  — creates all 20 tables + FKs + CHECK constraints.
+5. Verify: `psql "$DATABASE_URL" -c '\dt public.*'` should list 20 tables.
+
+The Neon Auth schema (which owns `users_sync`) must already be provisioned
+on the branch — this happens automatically once Neon Auth is enabled (Phase 41).
+
+### Editing the schema
+
+1. Edit `src/db/schema.ts`.
+2. `pnpm db:generate` — emits a new file under `/drizzle/`.
+3. Review the generated SQL diff in your PR.
+4. Commit everything under `/drizzle/` (the SQL file, `meta/_journal.json`, and
+   the updated snapshot JSON).
+5. `pnpm db:migrate` — apply locally.
+
+**Never run `pnpm db:reset` against production.** The script includes a
+heuristic that refuses to run if `DATABASE_URL` contains the substring `prod`,
+but you can override it with `ALLOW_PROD_RESET=1`. Don't.
 
 ## Configuration
 
@@ -57,9 +95,10 @@ pnpm start
 ```bash
 # .env.local
 
-# Privy Authentication (from dashboard.privy.io)
-NEXT_PUBLIC_PRIVY_APP_ID=your-privy-app-id
-PRIVY_APP_SECRET=your-privy-app-secret
+# Neon Auth (Postgres) — auth + user store
+DATABASE_URL=postgres://user:pass@host/dbname
+NEON_AUTH_URL=https://your-branch.neon-auth.neon.tech
+NEON_AUTH_COOKIE_SECRET=generate-with-openssl-rand-base64-32
 
 # Anthropic Claude AI (for natural language parsing)
 ANTHROPIC_API_KEY=sk-ant-your-api-key-here
@@ -71,12 +110,12 @@ ALLOWED_EMAILS=you@example.com,friend@example.com
 # ALLOWED_WALLETS=0x123...,0x456...
 ```
 
-### Privy Setup
+### Neon Auth Setup
 
-1. Create an account at [dashboard.privy.io](https://dashboard.privy.io)
-2. Create a new app
-3. Copy your App ID and App Secret
-4. Add them to `.env.local`
+1. Provision a Postgres database on [Neon](https://neon.tech) and enable Neon Auth on the branch
+2. Copy the connection string into `DATABASE_URL`
+3. Copy the Neon Auth endpoint URL (Neon console → Branch → Auth) into `NEON_AUTH_URL`
+4. Generate a cookie signing secret: `openssl rand -base64 32` → `NEON_AUTH_COOKIE_SECRET`
 5. Add your email to `ALLOWED_EMAILS`
 
 ### How Authentication Works
@@ -85,13 +124,13 @@ ALLOWED_EMAILS=you@example.com,friend@example.com
 ┌─────────────────────────────────────────────────────────────┐
 │                        YOUR APP                              │
 ├─────────────────────────────────────────────────────────────┤
-│  1. User clicks "Sign In"                                    │
-│  2. Privy modal opens (email/Google/wallet)                  │
-│  3. User authenticates → Privy returns token                 │
-│  4. App sends token to API                                   │
-│  5. Server verifies token + checks whitelist                 │
-│  6. If on whitelist → AI features enabled                    │
-│  7. If not → "Not authorized" error                          │
+│  1. User visits /auth and signs in (email + password)        │
+│  2. Neon Auth issues an HttpOnly session cookie              │
+│  3. Each API call sends the cookie automatically             │
+│  4. withAuth() middleware reads the cookie + checks          │
+│     whitelist                                                │
+│  5. If on whitelist → AI features enabled                    │
+│  6. If not → "Not authorized" error                          │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -131,28 +170,28 @@ Access settings via the gear icon to configure:
 ┌─────────────────────────────────────────────────────────────┐
 │                      CLIENT (Browser)                        │
 ├─────────────────────────────────────────────────────────────┤
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐ │
-│  │ PrivyProvider│ │  IndexedDB  │  │   Web Crypto API    │ │
-│  │ (Auth state) │ │  (Dexie.js) │  │  (AES-GCM ready)    │ │
-│  └─────────────┘  └─────────────┘  └─────────────────────┘ │
+│  ┌──────────────┐ ┌─────────────┐  ┌─────────────────────┐ │
+│  │  Neon Auth   │ │  IndexedDB  │  │   Web Crypto API    │ │
+│  │ (cookie sess)│ │  (Dexie.js) │  │  (AES-GCM ready)    │ │
+│  └──────────────┘ └─────────────┘  └─────────────────────┘ │
 │         │                │                    │             │
 │         └────────────────┴────────────────────┘             │
 │                          │                                   │
 │              ┌───────────┴───────────┐                      │
-│              │  getAccessToken()     │                      │
-│              │  (Privy JWT token)    │                      │
+│              │  HttpOnly cookie      │                      │
+│              │  (Neon Auth session)  │                      │
 │              └───────────────────────┘                      │
 └─────────────────────────────────────────────────────────────┘
                            │
-                           │ HTTPS + Bearer Token
+                           │ HTTPS + cookie
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                     SERVER (Next.js API)                     │
 ├─────────────────────────────────────────────────────────────┤
 │  ┌─────────────────┐  ┌─────────────────────────────────┐  │
-│  │  /api/ai/parse  │  │  Privy Server Auth              │  │
-│  │  - Verify token │  │  - Validate JWT signature       │  │
-│  │  - Check whitelist│ │  - Get user email/wallet       │  │
+│  │  /api/ai/parse  │  │  withAuth() (Neon Auth)         │  │
+│  │  - Read cookie  │  │  - Validate session             │  │
+│  │  - Check whitelist│ │  - Resolve user email          │  │
 │  │  - Rate limited │  │  - Check against ALLOWED_EMAILS │  │
 │  │  - PII stripped │  └─────────────────────────────────┘  │
 │  └─────────────────┘                                        │
@@ -177,17 +216,17 @@ Access settings via the gear icon to configure:
 |-----------|---------|------------|
 | Intake records | IndexedDB | Device-level |
 | Settings | localStorage | Device-level |
-| Auth session | Privy (managed) | Cryptographic tokens |
+| Auth session | Neon Auth cookie (HttpOnly) | Server-validated session |
 | API keys | Server env | Never reaches browser |
 
 ### Security Features
 
 | Feature | Implementation |
 |---------|----------------|
-| **Privy Authentication** | Email, Google, or wallet login |
-| **Whitelist Enforcement** | Server checks email/wallet against ALLOWED_EMAILS/WALLETS |
+| **Neon Auth** | Email/password login backed by Neon Postgres |
+| **Whitelist Enforcement** | Server checks email against ALLOWED_EMAILS |
 | **Server-side API proxy** | Anthropic key stored in env, never sent to client |
-| **JWT Verification** | Privy tokens cryptographically verified server-side |
+| **Cookie session** | HttpOnly session cookie validated server-side per request |
 | **Rate limiting** | 20 requests/minute per IP |
 | **PII stripping** | Emails, phones, SSNs removed before AI processing |
 | **CSP headers** | Strict Content Security Policy |
@@ -238,7 +277,7 @@ When using the "AI Input" feature:
 
 ### AI Features
 
-AI features require Privy authentication and a server-side `ANTHROPIC_API_KEY`. The API key is stored in the server environment only and never exposed to the client.
+AI features require an authenticated Neon Auth session and a server-side `ANTHROPIC_API_KEY`. The API key is stored in the server environment only and never exposed to the client.
 
 ## Documentation
 

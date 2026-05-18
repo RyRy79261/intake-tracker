@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Sparkles, Loader2 } from "lucide-react";
+import { apiFetch } from "@/lib/api-fetch";
 import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -13,7 +14,6 @@ import { useSettings } from "@/hooks/use-settings";
 import { useIntake } from "@/hooks/use-intake-queries";
 import { useAddComposableEntry, type ComposableEntryInput } from "@/hooks/use-composable-entry";
 import { useToast } from "@/hooks/use-toast";
-import { useAiFetch } from "@/hooks/use-ai-fetch";
 import { useAuthGate } from "@/components/auth-guard";
 import {
   AlertDialog,
@@ -54,7 +54,6 @@ export function PresetTab({ tab }: PresetTabProps) {
   const deletePreset = useSettingsStore((s) => s.deleteLiquidPreset);
   const addEntry = useAddComposableEntry();
   const { toast } = useToast();
-  const aiFetch = useAiFetch();
   const showAi = useAuthGate();
 
   // Water progress data
@@ -186,15 +185,11 @@ export function PresetTab({ tab }: PresetTabProps) {
     setIsLookingUp(true);
     setSelectedPresetId(null);
     try {
-      const res = await aiFetch("/api/ai/substance-lookup", {
+      const res = await apiFetch("/api/ai/substance-lookup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: searchText.trim(), type: aiLookupType }),
       });
-      if (!res) {
-        // User dismissed sign-in
-        return;
-      }
       if (!res.ok) throw new Error("Lookup failed");
       const data = await res.json();
       // Map AI response substancePer100ml to correct per-100ml field based on tab

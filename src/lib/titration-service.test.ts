@@ -405,17 +405,18 @@ describe("deleteTitrationPlan", () => {
     const deleteResult = await deleteTitrationPlan(planId);
     expect(deleteResult.success).toBe(true);
 
-    // Plan gone
+    // Plan soft-deleted
     const plan = await db.titrationPlans.get(planId);
-    expect(plan).toBeUndefined();
+    expect(plan).toBeDefined();
+    expect(plan!.deletedAt).toBeGreaterThan(0);
 
-    // Phases gone
+    // Phases soft-deleted
     const phases = await db.medicationPhases.toArray();
     const planPhases = phases.filter((p) => p.titrationPlanId === planId);
-    expect(planPhases.length).toBe(0);
+    expect(planPhases.every((p) => p.deletedAt != null && p.deletedAt > 0)).toBe(true);
 
-    // Schedules gone (no orphaned schedules)
+    // Schedules soft-deleted
     const schedules = await db.phaseSchedules.toArray();
-    expect(schedules.length).toBe(0);
+    expect(schedules.every((s) => s.deletedAt != null && s.deletedAt > 0)).toBe(true);
   });
 });

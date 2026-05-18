@@ -16,7 +16,6 @@ import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { RecentEntriesList, InlineEditFormShell } from "@/components/recent-entries-list";
 import { parseIntakeWithAI } from "@/lib/ai-client";
-import { useAiFetch } from "@/hooks/use-ai-fetch";
 import { useAuthGate } from "@/components/auth-guard";
 import {
   useAddComposableEntry,
@@ -55,7 +54,6 @@ const SODIUM_MULTIPLIERS: Record<SodiumSource, number> = {
 
 export function FoodSection() {
   const { toast } = useToast();
-  const aiFetch = useAiFetch();
   const showAi = useAuthGate();
   const addComposableEntry = useAddComposableEntry();
 
@@ -187,15 +185,13 @@ export function FoodSection() {
 
     setIsParsing(true);
     try {
-      const result = await parseIntakeWithAI(trimmed, aiFetch);
+      const result = await parseIntakeWithAI(trimmed);
 
       // User dismissed the sign-in prompt
       if (!result) return;
 
-      // Populate form fields from AI result. The /api/ai/parse route now always
-      // returns sodium in mg, so the source is always "sodium".
-      if (result.salt && result.salt > 0) {
-        setSodiumMg(result.salt.toString());
+      if (result.valueMg && result.valueMg > 0) {
+        setSodiumMg(result.valueMg.toString());
         setSodiumSource("sodium");
       }
       if (result.water && result.water > 0) {
@@ -220,7 +216,7 @@ export function FoodSection() {
     } finally {
       setIsParsing(false);
     }
-  }, [foodText, isParsing, toast, aiFetch]);
+  }, [foodText, isParsing, toast]);
 
   const handleDetailSubmit = useCallback(async () => {
     if (isSubmitting) return;

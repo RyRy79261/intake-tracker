@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { withAuth } from "@/lib/auth-middleware";
 import { deletePushSubscription } from "@/lib/push-db";
 
-export const POST = withAuth(async ({ request: _request, auth }) => {
+export const POST = withAuth(async ({ auth }) => {
   try {
     await deletePushSubscription(auth.userId!);
 

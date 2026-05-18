@@ -5,6 +5,7 @@
 
 import { db } from "./db";
 import { ok, err, type ServiceResult } from "./service-result";
+import { apiFetch } from "@/lib/api-fetch";
 
 export type NotificationPermissionState = "granted" | "denied" | "default";
 
@@ -260,10 +261,11 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 /**
  * Register for push notifications via PushManager and sync subscription to server.
  * Re-sends existing subscriptions in case the server lost them.
+ *
+ * Auth note: cookie session (set by Neon Auth, read by withAuth() server-side)
+ * is attached automatically on same-origin fetch — no Bearer token needed.
  */
-export async function subscribeToPush(
-  authToken: string
-): Promise<PushSubscription | null> {
+export async function subscribeToPush(): Promise<PushSubscription | null> {
   if (
     !("serviceWorker" in navigator) ||
     !("PushManager" in window)
@@ -285,11 +287,10 @@ export async function subscribeToPush(
     }
 
     const subJson = subscription.toJSON();
-    await fetch("/api/push/subscribe", {
+    await apiFetch("/api/push/subscribe", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${authToken}`,
       },
       body: JSON.stringify({
         endpoint: subscription.endpoint,
@@ -309,10 +310,10 @@ export async function subscribeToPush(
 
 /**
  * Unsubscribe from push notifications and notify the server.
+ *
+ * Auth note: cookie session is attached automatically on same-origin fetch.
  */
-export async function unsubscribeFromPush(
-  authToken: string
-): Promise<boolean> {
+export async function unsubscribeFromPush(): Promise<boolean> {
   try {
     if ("serviceWorker" in navigator) {
       const registration = await navigator.serviceWorker.ready;
@@ -323,11 +324,10 @@ export async function unsubscribeFromPush(
       }
     }
 
-    await fetch("/api/push/unsubscribe", {
+    await apiFetch("/api/push/unsubscribe", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${authToken}`,
       },
     });
 

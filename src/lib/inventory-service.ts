@@ -10,6 +10,8 @@ import { ok, err, type ServiceResult } from "@/lib/service-result";
 import { syncFields } from "@/lib/utils";
 import { buildAuditEntry, writeAuditLog } from "@/lib/audit-service";
 import { buildTransaction } from "@/lib/medication-builders";
+import { enqueueInsideTx } from "@/lib/sync-queue";
+import { schedulePush } from "@/lib/sync-engine";
 
 // ---------------------------------------------------------------------------
 // Reads
@@ -89,12 +91,18 @@ export async function updateInventoryItem(
 
 export async function deleteInventoryItem(id: string): Promise<ServiceResult<void>> {
   try {
-    await db.transaction("rw", [db.inventoryItems, db.auditLogs], async () => {
-      await db.inventoryItems.delete(id);
-      await db.auditLogs.add(buildAuditEntry("inventory_deleted", {
+    const now = Date.now();
+    await db.transaction("rw", [db.inventoryItems, db.auditLogs, db._syncQueue], async () => {
+      await db.inventoryItems.update(id, { deletedAt: now, updatedAt: now });
+      await enqueueInsideTx("inventoryItems", id, "delete");
+
+      const audit = buildAuditEntry("inventory_deleted", {
         inventoryItemId: id,
-      }));
+      });
+      await db.auditLogs.add(audit);
+      await enqueueInsideTx("auditLogs", audit.id, "upsert");
     });
+    schedulePush();
     return ok(undefined);
   } catch (e) {
     return err("Failed to delete inventory item", e);
@@ -244,10 +252,14 @@ export async function getCurrentStock(inventoryItemId: string): Promise<number> 
  */
 export async function recalculateStockForItem(inventoryItemId: string): Promise<number> {
   const derivedValue = await getCurrentStock(inventoryItemId);
-  await db.inventoryItems.update(inventoryItemId, {
-    currentStock: derivedValue,
-    updatedAt: Date.now(),
+  await db.transaction("rw", [db.inventoryItems, db._syncQueue], async () => {
+    await db.inventoryItems.update(inventoryItemId, {
+      currentStock: derivedValue,
+      updatedAt: Date.now(),
+    });
+    await enqueueInsideTx("inventoryItems", inventoryItemId, "upsert");
   });
+  schedulePush();
   return derivedValue;
 }
 
@@ -268,13 +280,15 @@ export async function recalculateAllStock(): Promise<{
     const newStock = await getCurrentStock(item.id);
     const oldStock = item.currentStock ?? 0;
 
-    await db.inventoryItems.update(item.id, {
-      currentStock: newStock,
-      updatedAt: Date.now(),
+    await db.transaction("rw", [db.inventoryItems, db._syncQueue], async () => {
+      await db.inventoryItems.update(item.id, {
+        currentStock: newStock,
+        updatedAt: Date.now(),
+      });
+      await enqueueInsideTx("inventoryItems", item.id, "upsert");
     });
     updated++;
 
-    // Track drift: oldStock !== newStock within 0.001 tolerance
     if (Math.abs(oldStock - newStock) > 0.001) {
       driftedItems.push({
         id: item.id,
@@ -284,6 +298,8 @@ export async function recalculateAllStock(): Promise<{
       });
     }
   }
+
+  schedulePush();
 
   await writeAuditLog("stock_recalculated", {
     totalItems: updated,

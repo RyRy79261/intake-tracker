@@ -3,6 +3,8 @@ import { ok, err, type ServiceResult } from "./service-result";
 import { syncFields } from "./utils";
 import { getDeviceTimezone } from "./timezone";
 import { buildAuditEntry } from "./audit-service";
+import { enqueueInsideTx } from "./sync-queue";
+import { schedulePush } from "./sync-engine";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -100,7 +102,8 @@ async function getDoseLogRaw(
         l.prescriptionId === prescriptionId &&
         l.phaseId === phaseId &&
         l.scheduledDate === date &&
-        l.scheduledTime === time,
+        l.scheduledTime === time &&
+        l.deletedAt === null,
     )
     .first();
 }
@@ -166,7 +169,8 @@ async function upsertDoseLog(
 // ---------------------------------------------------------------------------
 
 export async function getDoseLogsForDate(date: string): Promise<DoseLog[]> {
-  return db.doseLogs.where("scheduledDate").equals(date).toArray();
+  const all = await db.doseLogs.where("scheduledDate").equals(date).toArray();
+  return all.filter(l => l.deletedAt === null);
 }
 
 export async function getDoseLog(
@@ -180,7 +184,8 @@ export async function getDoseLog(
 }
 
 export async function getDoseLogsWithDetailsForDate(date: string): Promise<DoseLogWithDetails[]> {
-  const logs = await db.doseLogs.where("scheduledDate").equals(date).toArray();
+  const allLogs = await db.doseLogs.where("scheduledDate").equals(date).toArray();
+  const logs = allLogs.filter(l => l.deletedAt === null);
 
   const activePrescriptions = await db.prescriptions.toArray();
   const prescriptionMap = new Map(activePrescriptions.map(p => [p.id, p]));
@@ -243,7 +248,7 @@ export async function takeDose(input: TakeDoseInput): Promise<ServiceResult<Dose
 
     const log = await db.transaction(
       "rw",
-      [db.doseLogs, db.inventoryItems, db.inventoryTransactions, db.auditLogs],
+      [db.doseLogs, db.inventoryItems, db.inventoryTransactions, db.auditLogs, db._syncQueue],
       async () => {
         const prev = await getDoseLogRaw(prescriptionId, phaseId, scheduleId, date, time);
         const wasTaken = prev?.status === "taken";
@@ -267,11 +272,13 @@ export async function takeDose(input: TakeDoseInput): Promise<ServiceResult<Dose
               currentStock: Math.round(newStock * 10000) / 10000,
               updatedAt: Date.now(),
             });
+            await enqueueInsideTx("inventoryItems", inventory.id, "upsert");
 
             // Record inventory transaction
             const sf = syncFields();
+            const invTxId = crypto.randomUUID();
             await db.inventoryTransactions.add({
-              id: crypto.randomUUID(),
+              id: invTxId,
               inventoryItemId: inventory.id,
               timestamp: Date.now(),
               amount: -pillsConsumed,
@@ -283,6 +290,7 @@ export async function takeDose(input: TakeDoseInput): Promise<ServiceResult<Dose
               deviceId: sf.deviceId,
               timezone: sf.timezone,
             });
+            await enqueueInsideTx("inventoryTransactions", invTxId, "upsert");
           }
         }
 
@@ -295,6 +303,7 @@ export async function takeDose(input: TakeDoseInput): Promise<ServiceResult<Dose
           prescriptionId, phaseId, scheduleId, date, time, "taken",
           Object.keys(extra).length > 0 ? extra : undefined,
         );
+        await enqueueInsideTx("doseLogs", doseLog.id, "upsert");
 
         // Audit log
         const auditDetails: Record<string, unknown> = {
@@ -303,11 +312,14 @@ export async function takeDose(input: TakeDoseInput): Promise<ServiceResult<Dose
         if (pillsConsumed > 0 && !isCleanFraction(pillsConsumed)) {
           auditDetails.warning = "odd_fraction";
         }
-        await db.auditLogs.add(buildAuditEntry("dose_taken", auditDetails));
+        const auditEntry = buildAuditEntry("dose_taken", auditDetails);
+        await db.auditLogs.add(auditEntry);
+        await enqueueInsideTx("auditLogs", auditEntry.id, "upsert");
 
         return doseLog;
       },
     );
+    schedulePush();
 
     return ok(log);
   } catch (e) {
@@ -324,7 +336,7 @@ export async function untakeDose(input: UntakeDoseInput): Promise<ServiceResult<
 
     const log = await db.transaction(
       "rw",
-      [db.doseLogs, db.inventoryItems, db.inventoryTransactions, db.auditLogs],
+      [db.doseLogs, db.inventoryItems, db.inventoryTransactions, db.auditLogs, db._syncQueue],
       async () => {
         const prev = await getDoseLogRaw(prescriptionId, phaseId, scheduleId, date, time);
         const wasTaken = prev?.status === "taken";
@@ -340,10 +352,12 @@ export async function untakeDose(input: UntakeDoseInput): Promise<ServiceResult<
               currentStock: Math.round(newStock * 10000) / 10000,
               updatedAt: Date.now(),
             });
+            await enqueueInsideTx("inventoryItems", inventory.id, "upsert");
 
             const sf = syncFields();
+            const invTxId = crypto.randomUUID();
             await db.inventoryTransactions.add({
-              id: crypto.randomUUID(),
+              id: invTxId,
               inventoryItemId: inventory.id,
               timestamp: Date.now(),
               amount: pillsConsumed,
@@ -355,21 +369,26 @@ export async function untakeDose(input: UntakeDoseInput): Promise<ServiceResult<
               deviceId: sf.deviceId,
               timezone: sf.timezone,
             });
+            await enqueueInsideTx("inventoryTransactions", invTxId, "upsert");
           }
         }
 
         const doseLog = await upsertDoseLog(
           prescriptionId, phaseId, scheduleId, date, time, "pending",
         );
+        await enqueueInsideTx("doseLogs", doseLog.id, "upsert");
 
-        await db.auditLogs.add(buildAuditEntry("dose_untaken", {
+        const auditEntry = buildAuditEntry("dose_untaken", {
           prescriptionId, date, time, dosageMg, pillsConsumed,
           inventoryItemId: prev?.inventoryItemId,
-        }));
+        });
+        await db.auditLogs.add(auditEntry);
+        await enqueueInsideTx("auditLogs", auditEntry.id, "upsert");
 
         return doseLog;
       },
     );
+    schedulePush();
 
     return ok(log);
   } catch (e) {
@@ -386,7 +405,7 @@ export async function skipDose(input: SkipDoseInput): Promise<ServiceResult<Dose
 
     const log = await db.transaction(
       "rw",
-      [db.doseLogs, db.inventoryItems, db.inventoryTransactions, db.auditLogs],
+      [db.doseLogs, db.inventoryItems, db.inventoryTransactions, db.auditLogs, db._syncQueue],
       async () => {
         const prev = await getDoseLogRaw(prescriptionId, phaseId, scheduleId, date, time);
         let pillsConsumed = 0;
@@ -402,10 +421,12 @@ export async function skipDose(input: SkipDoseInput): Promise<ServiceResult<Dose
               currentStock: Math.round(newStock * 10000) / 10000,
               updatedAt: Date.now(),
             });
+            await enqueueInsideTx("inventoryItems", inventory.id, "upsert");
 
             const sf = syncFields();
+            const invTxId = crypto.randomUUID();
             await db.inventoryTransactions.add({
-              id: crypto.randomUUID(),
+              id: invTxId,
               inventoryItemId: inventory.id,
               timestamp: Date.now(),
               amount: pillsConsumed,
@@ -417,6 +438,7 @@ export async function skipDose(input: SkipDoseInput): Promise<ServiceResult<Dose
               deviceId: sf.deviceId,
               timezone: sf.timezone,
             });
+            await enqueueInsideTx("inventoryTransactions", invTxId, "upsert");
           }
         }
 
@@ -424,15 +446,19 @@ export async function skipDose(input: SkipDoseInput): Promise<ServiceResult<Dose
           prescriptionId, phaseId, scheduleId, date, time, "skipped",
           reason !== undefined ? { skipReason: reason } : undefined,
         );
+        await enqueueInsideTx("doseLogs", doseLog.id, "upsert");
 
-        await db.auditLogs.add(buildAuditEntry("dose_skipped", {
+        const auditEntry = buildAuditEntry("dose_skipped", {
           prescriptionId, date, time, dosageMg, pillsConsumed, reason,
           inventoryItemId: prev?.inventoryItemId,
-        }));
+        });
+        await db.auditLogs.add(auditEntry);
+        await enqueueInsideTx("auditLogs", auditEntry.id, "upsert");
 
         return doseLog;
       },
     );
+    schedulePush();
 
     return ok(log);
   } catch (e) {
@@ -450,7 +476,7 @@ export async function rescheduleDose(input: RescheduleDoseInput): Promise<Servic
 
     const log = await db.transaction(
       "rw",
-      [db.doseLogs, db.inventoryItems, db.inventoryTransactions, db.auditLogs],
+      [db.doseLogs, db.inventoryItems, db.inventoryTransactions, db.auditLogs, db._syncQueue],
       async () => {
         const prev = await getDoseLogRaw(prescriptionId, phaseId, scheduleId, date, time);
         let pillsConsumed = 0;
@@ -466,10 +492,12 @@ export async function rescheduleDose(input: RescheduleDoseInput): Promise<Servic
               currentStock: Math.round(newStock * 10000) / 10000,
               updatedAt: Date.now(),
             });
+            await enqueueInsideTx("inventoryItems", inventory.id, "upsert");
 
             const sf = syncFields();
+            const invTxId = crypto.randomUUID();
             await db.inventoryTransactions.add({
-              id: crypto.randomUUID(),
+              id: invTxId,
               inventoryItemId: inventory.id,
               timestamp: Date.now(),
               amount: pillsConsumed,
@@ -481,28 +509,34 @@ export async function rescheduleDose(input: RescheduleDoseInput): Promise<Servic
               deviceId: sf.deviceId,
               timezone: sf.timezone,
             });
+            await enqueueInsideTx("inventoryTransactions", invTxId, "upsert");
           }
         }
 
         // Mark old slot as rescheduled
-        await upsertDoseLog(
+        const oldDoseLog = await upsertDoseLog(
           prescriptionId, phaseId, scheduleId, date, time, "rescheduled",
           { rescheduledTo: newTime },
         );
+        await enqueueInsideTx("doseLogs", oldDoseLog.id, "upsert");
 
         // Create new slot as pending
         const doseLog = await upsertDoseLog(
           prescriptionId, phaseId, scheduleId, date, newTime, "pending",
         );
+        await enqueueInsideTx("doseLogs", doseLog.id, "upsert");
 
-        await db.auditLogs.add(buildAuditEntry("dose_rescheduled", {
+        const auditEntry = buildAuditEntry("dose_rescheduled", {
           prescriptionId, date, time, newTime, dosageMg, pillsConsumed,
           inventoryItemId: prev?.inventoryItemId,
-        }));
+        });
+        await db.auditLogs.add(auditEntry);
+        await enqueueInsideTx("auditLogs", auditEntry.id, "upsert");
 
         return doseLog;
       },
     );
+    schedulePush();
 
     return ok(log);
   } catch (e) {

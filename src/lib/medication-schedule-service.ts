@@ -3,6 +3,8 @@ import { ok, err, type ServiceResult } from "./service-result";
 import { syncFields } from "./utils";
 import { getDeviceTimezone, localHHMMStringToUTCMinutes } from "./timezone";
 import { buildAuditEntry } from "./audit-service";
+import { enqueueInsideTx } from "./sync-queue";
+import { schedulePush } from "./sync-engine";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -43,7 +45,7 @@ export async function getDailySchedule(dayOfWeek: number): Promise<Map<string, S
   const phaseIds = activePhases.map(p => p.id);
   // Filter on boolean enabled field; filter by phaseId + dayOfWeek in JS
   const allSchedules = await db.phaseSchedules.toArray();
-  const enabledSchedules = allSchedules.filter(s => s.enabled === true);
+  const enabledSchedules = allSchedules.filter(s => s.enabled === true && s.deletedAt === null);
   const activeSchedules = enabledSchedules.filter(
     s => phaseIds.includes(s.phaseId) && s.daysOfWeek.includes(dayOfWeek),
   );
@@ -75,7 +77,8 @@ export async function getDailySchedule(dayOfWeek: number): Promise<Map<string, S
 }
 
 export async function getSchedulesForPhase(phaseId: string): Promise<PhaseSchedule[]> {
-  return db.phaseSchedules.where("phaseId").equals(phaseId).toArray();
+  const records = await db.phaseSchedules.where("phaseId").equals(phaseId).toArray();
+  return records.filter(r => r.deletedAt === null);
 }
 
 // ---------------------------------------------------------------------------
@@ -95,16 +98,20 @@ export async function addSchedule(
       anchorTimezone: tz,
       ...syncFields(),
     };
-    await db.transaction("rw", [db.phaseSchedules, db.auditLogs], async () => {
+    await db.transaction("rw", [db.phaseSchedules, db.auditLogs, db._syncQueue], async () => {
       await db.phaseSchedules.add(schedule);
-      await db.auditLogs.add(buildAuditEntry("prescription_updated", {
+      const auditEntry = buildAuditEntry("prescription_updated", {
         action: "schedule_added",
         scheduleId: schedule.id,
         phaseId: input.phaseId,
         time: input.time,
         dosage: input.dosage,
-      }));
+      });
+      await db.auditLogs.add(auditEntry);
+      await enqueueInsideTx("phaseSchedules", schedule.id, "upsert");
+      await enqueueInsideTx("auditLogs", auditEntry.id, "upsert");
     });
+    schedulePush();
     return ok(schedule);
   } catch (e) {
     return err("Failed to add schedule", e);
@@ -125,14 +132,18 @@ export async function updateSchedule(
       finalUpdates.anchorTimezone = tz;
     }
 
-    await db.transaction("rw", [db.phaseSchedules, db.auditLogs], async () => {
+    await db.transaction("rw", [db.phaseSchedules, db.auditLogs, db._syncQueue], async () => {
       await db.phaseSchedules.update(id, finalUpdates);
-      await db.auditLogs.add(buildAuditEntry("prescription_updated", {
+      const auditEntry = buildAuditEntry("prescription_updated", {
         action: "schedule_updated",
         scheduleId: id,
         updatedFields: Object.keys(updates),
-      }));
+      });
+      await db.auditLogs.add(auditEntry);
+      await enqueueInsideTx("phaseSchedules", id, "upsert");
+      await enqueueInsideTx("auditLogs", auditEntry.id, "upsert");
     });
+    schedulePush();
     return ok(undefined);
   } catch (e) {
     return err("Failed to update schedule", e);
@@ -141,13 +152,18 @@ export async function updateSchedule(
 
 export async function deleteSchedule(id: string): Promise<ServiceResult<void>> {
   try {
-    await db.transaction("rw", [db.phaseSchedules, db.auditLogs], async () => {
-      await db.phaseSchedules.delete(id);
-      await db.auditLogs.add(buildAuditEntry("prescription_updated", {
+    const now = Date.now();
+    await db.transaction("rw", [db.phaseSchedules, db.auditLogs, db._syncQueue], async () => {
+      await db.phaseSchedules.update(id, { deletedAt: now, updatedAt: now });
+      const auditEntry = buildAuditEntry("prescription_updated", {
         action: "schedule_deleted",
         scheduleId: id,
-      }));
+      });
+      await db.auditLogs.add(auditEntry);
+      await enqueueInsideTx("phaseSchedules", id, "upsert");
+      await enqueueInsideTx("auditLogs", auditEntry.id, "upsert");
     });
+    schedulePush();
     return ok(undefined);
   } catch (e) {
     return err("Failed to delete schedule", e);

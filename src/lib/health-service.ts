@@ -1,6 +1,8 @@
 import { db, type WeightRecord, type BloodPressureRecord } from "./db";
 import { ok, err, type ServiceResult } from "./service-result";
 import { generateId, syncFields } from "./utils";
+import { writeWithSync } from "./sync-queue";
+import { schedulePush } from "./sync-engine";
 
 // Weight Records
 
@@ -19,7 +21,11 @@ export async function addWeightRecord(
       ...syncFields(),
     };
 
-    await db.weightRecords.add(record);
+    await writeWithSync("weightRecords", "upsert", async () => {
+      await db.weightRecords.add(record);
+      return record;
+    });
+    schedulePush();
     return ok(record);
   } catch (e) {
     return err("Failed to add weight record", e);
@@ -27,31 +33,52 @@ export async function addWeightRecord(
 }
 
 export async function getWeightRecords(limit?: number): Promise<WeightRecord[]> {
-  const query = db.weightRecords.orderBy("timestamp").reverse();
-  return limit ? query.limit(limit).toArray() : query.toArray();
+  const records = await db.weightRecords.orderBy("timestamp").reverse().toArray();
+  const active = records.filter((r) => r.deletedAt === null);
+  return limit ? active.slice(0, limit) : active;
 }
 
 export async function getWeightRecordsByDateRange(
   startTime: number,
   endTime: number
 ): Promise<WeightRecord[]> {
-  return db.weightRecords
+  const records = await db.weightRecords
     .where("timestamp")
     .between(startTime, endTime)
     .toArray();
+  return records.filter((r) => r.deletedAt === null);
 }
 
 export async function getLatestWeightRecord(): Promise<WeightRecord | undefined> {
-  const records = await db.weightRecords.orderBy("timestamp").reverse().limit(1).toArray();
-  return records[0];
+  const records = await db.weightRecords.orderBy("timestamp").reverse().toArray();
+  return records.find((r) => r.deletedAt === null);
 }
 
 export async function deleteWeightRecord(id: string): Promise<ServiceResult<void>> {
   try {
-    await db.weightRecords.delete(id);
+    const now = Date.now();
+    await writeWithSync("weightRecords", "delete", async () => {
+      await db.weightRecords.update(id, { deletedAt: now, updatedAt: now });
+      return { id };
+    });
+    schedulePush();
     return ok(undefined);
   } catch (e) {
     return err("Failed to delete weight record", e);
+  }
+}
+
+export async function undoDeleteWeightRecord(id: string): Promise<ServiceResult<void>> {
+  try {
+    const now = Date.now();
+    await writeWithSync("weightRecords", "upsert", async () => {
+      await db.weightRecords.update(id, { deletedAt: null, updatedAt: now });
+      return { id };
+    });
+    schedulePush();
+    return ok(undefined);
+  } catch (e) {
+    return err("Failed to undo delete weight record", e);
   }
 }
 
@@ -60,7 +87,11 @@ export async function updateWeightRecord(
   updates: { weight?: number; timestamp?: number; note?: string }
 ): Promise<ServiceResult<void>> {
   try {
-    await db.weightRecords.update(id, updates);
+    await writeWithSync("weightRecords", "upsert", async () => {
+      await db.weightRecords.update(id, { ...updates, updatedAt: Date.now() });
+      return { id };
+    });
+    schedulePush();
     return ok(undefined);
   } catch (e) {
     return err("Failed to update weight record", e);
@@ -94,7 +125,11 @@ export async function addBloodPressureRecord(
       ...syncFields(),
     };
 
-    await db.bloodPressureRecords.add(record);
+    await writeWithSync("bloodPressureRecords", "upsert", async () => {
+      await db.bloodPressureRecords.add(record);
+      return record;
+    });
+    schedulePush();
     return ok(record);
   } catch (e) {
     return err("Failed to add blood pressure record", e);
@@ -102,31 +137,52 @@ export async function addBloodPressureRecord(
 }
 
 export async function getBloodPressureRecords(limit?: number): Promise<BloodPressureRecord[]> {
-  const query = db.bloodPressureRecords.orderBy("timestamp").reverse();
-  return limit ? query.limit(limit).toArray() : query.toArray();
+  const records = await db.bloodPressureRecords.orderBy("timestamp").reverse().toArray();
+  const active = records.filter((r) => r.deletedAt === null);
+  return limit ? active.slice(0, limit) : active;
 }
 
 export async function getBloodPressureRecordsByDateRange(
   startTime: number,
   endTime: number
 ): Promise<BloodPressureRecord[]> {
-  return db.bloodPressureRecords
+  const records = await db.bloodPressureRecords
     .where("timestamp")
     .between(startTime, endTime)
     .toArray();
+  return records.filter((r) => r.deletedAt === null);
 }
 
 export async function getLatestBloodPressureRecord(): Promise<BloodPressureRecord | undefined> {
-  const records = await db.bloodPressureRecords.orderBy("timestamp").reverse().limit(1).toArray();
-  return records[0];
+  const records = await db.bloodPressureRecords.orderBy("timestamp").reverse().toArray();
+  return records.find((r) => r.deletedAt === null);
 }
 
 export async function deleteBloodPressureRecord(id: string): Promise<ServiceResult<void>> {
   try {
-    await db.bloodPressureRecords.delete(id);
+    const now = Date.now();
+    await writeWithSync("bloodPressureRecords", "delete", async () => {
+      await db.bloodPressureRecords.update(id, { deletedAt: now, updatedAt: now });
+      return { id };
+    });
+    schedulePush();
     return ok(undefined);
   } catch (e) {
     return err("Failed to delete blood pressure record", e);
+  }
+}
+
+export async function undoDeleteBloodPressureRecord(id: string): Promise<ServiceResult<void>> {
+  try {
+    const now = Date.now();
+    await writeWithSync("bloodPressureRecords", "upsert", async () => {
+      await db.bloodPressureRecords.update(id, { deletedAt: null, updatedAt: now });
+      return { id };
+    });
+    schedulePush();
+    return ok(undefined);
+  } catch (e) {
+    return err("Failed to undo delete blood pressure record", e);
   }
 }
 
@@ -144,7 +200,11 @@ export async function updateBloodPressureRecord(
   }
 ): Promise<ServiceResult<void>> {
   try {
-    await db.bloodPressureRecords.update(id, updates);
+    await writeWithSync("bloodPressureRecords", "upsert", async () => {
+      await db.bloodPressureRecords.update(id, { ...updates, updatedAt: Date.now() });
+      return { id };
+    });
+    schedulePush();
     return ok(undefined);
   } catch (e) {
     return err("Failed to update blood pressure record", e);
@@ -164,13 +224,10 @@ export async function getWeightRecordsPaginated(
   limit: number = 20
 ): Promise<PaginatedResult<WeightRecord>> {
   const offset = (page - 1) * limit;
-  const total = await db.weightRecords.count();
-  const records = await db.weightRecords
-    .orderBy("timestamp")
-    .reverse()
-    .offset(offset)
-    .limit(limit)
-    .toArray();
+  const allRecords = await db.weightRecords.orderBy("timestamp").reverse().toArray();
+  const activeRecords = allRecords.filter((r) => r.deletedAt === null);
+  const total = activeRecords.length;
+  const records = activeRecords.slice(offset, offset + limit);
   return { records, hasMore: offset + records.length < total, total };
 }
 
@@ -179,12 +236,9 @@ export async function getBloodPressureRecordsPaginated(
   limit: number = 20
 ): Promise<PaginatedResult<BloodPressureRecord>> {
   const offset = (page - 1) * limit;
-  const total = await db.bloodPressureRecords.count();
-  const records = await db.bloodPressureRecords
-    .orderBy("timestamp")
-    .reverse()
-    .offset(offset)
-    .limit(limit)
-    .toArray();
+  const allRecords = await db.bloodPressureRecords.orderBy("timestamp").reverse().toArray();
+  const activeRecords = allRecords.filter((r) => r.deletedAt === null);
+  const total = activeRecords.length;
+  const records = activeRecords.slice(offset, offset + limit);
   return { records, hasMore: offset + records.length < total, total };
 }

@@ -211,32 +211,6 @@ export function ScheduleView({ selectedDate, onDoseClick, onAddMed }: ScheduleVi
     [skipTarget, skipDoseMut],
   );
 
-  // Handle Mark All (take all at a time slot)
-  const handleMarkAll = useCallback(
-    (time: string, pendingSlots: DoseSlot[]) => {
-      if (isToday) {
-        const now = new Date();
-        const nowMinutes = now.getHours() * 60 + now.getMinutes();
-        const parts = time.split(":").map(Number);
-        const schedMinutes = (parts[0] ?? 0) * 60 + (parts[1] ?? 0);
-        if (nowMinutes - schedMinutes > 30) {
-          // Late — ask what time they took them
-          setMarkAllTarget({ time, slots: pendingSlots });
-          setMarkAllPickerOpen(true);
-          return;
-        }
-      } else {
-        // Past date — ask what time
-        setMarkAllTarget({ time, slots: pendingSlots });
-        setMarkAllPickerOpen(true);
-        return;
-      }
-      // On time — take immediately
-      executeMarkAll(time, pendingSlots);
-    },
-    [isToday],
-  );
-
   const executeMarkAll = useCallback(
     async (time: string, pendingSlots: DoseSlot[], takenAtTime?: string) => {
       hapticTake();
@@ -269,6 +243,32 @@ export function ScheduleView({ selectedDate, onDoseClick, onAddMed }: ScheduleVi
       });
     },
     [takeAllDosesMut, untakeDoseMut, dateStr],
+  );
+
+  // Handle Mark All (take all at a time slot)
+  const handleMarkAll = useCallback(
+    (time: string, pendingSlots: DoseSlot[]) => {
+      if (isToday) {
+        const now = new Date();
+        const nowMinutes = now.getHours() * 60 + now.getMinutes();
+        const parts = time.split(":").map(Number);
+        const schedMinutes = (parts[0] ?? 0) * 60 + (parts[1] ?? 0);
+        if (nowMinutes - schedMinutes > 30) {
+          // Late — ask what time they took them
+          setMarkAllTarget({ time, slots: pendingSlots });
+          setMarkAllPickerOpen(true);
+          return;
+        }
+      } else {
+        // Past date — ask what time
+        setMarkAllTarget({ time, slots: pendingSlots });
+        setMarkAllPickerOpen(true);
+        return;
+      }
+      // On time — take immediately
+      executeMarkAll(time, pendingSlots);
+    },
+    [isToday, executeMarkAll],
   );
 
   const handleMarkAllTimeConfirm = useCallback(

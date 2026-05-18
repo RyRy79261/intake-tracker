@@ -86,6 +86,9 @@ export interface Settings {
   // Weight increment for +/- buttons (kg)
   weightIncrement: number;
 
+  // Storage mode: local-only or cloud-sync
+  storageMode: "local" | "cloud-sync";
+
   // Substance tracking configuration
   substanceConfig: SubstanceConfig;
 }
@@ -129,6 +132,8 @@ interface SettingsActions {
   setReminderFollowUpInterval: (value: number) => void;
   // Weight increment
   setWeightIncrement: (value: number) => void;
+  // Storage mode
+  setStorageMode: (mode: "local" | "cloud-sync") => void;
   // Substance config
   setSubstanceConfig: (config: SubstanceConfig) => void;
   resetToDefaults: () => void;
@@ -157,6 +162,7 @@ const defaultSettings: Settings = {
   weightGraphShowDrinking: true,
   liquidPresets: DEFAULT_LIQUID_PRESETS,
   weightIncrement: 0.05,
+  storageMode: "local" as const,
   dismissedInsights: {},
   primaryRegion: "",
   secondaryRegion: "",
@@ -258,6 +264,9 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
       setWeightIncrement: (value) =>
         set({ weightIncrement: sanitizeNumericInput(value, 0.05, 1, 2) }),
 
+      // Storage mode
+      setStorageMode: (mode) => set({ storageMode: mode }),
+
       // Substance config
       setSubstanceConfig: (config) => set({ substanceConfig: config }),
 
@@ -287,7 +296,7 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
     {
       name: "intake-tracker-settings",
       storage: createJSONStorage(() => localStorage),
-      version: 6,
+      version: 8,
       migrate: (persisted, version) => {
         const state = persisted as Record<string, unknown>;
         if (version === 0) {
@@ -329,6 +338,12 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
         // version < 6 migration: experimentalFeatures.voiceHealthMetrics
         // removed when voice graduated. Old persisted state may still have
         // the key — it's now ignored, so no cleanup is needed.
+        if (version < 7) {
+          delete state.experimentalFeatures;
+        }
+        if (version < 8) {
+          state.storageMode = "local";
+        }
         return state as unknown as Settings & SettingsActions;
       },
     }

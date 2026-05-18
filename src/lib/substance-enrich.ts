@@ -1,4 +1,5 @@
 import { getUnenrichedSubstanceRecords, updateSubstanceRecord } from "./substance-service";
+import { apiFetch } from "@/lib/api-fetch";
 
 /**
  * Background AI enrichment runner (Pass 2) for historical substance records.
@@ -15,9 +16,7 @@ import { getUnenrichedSubstanceRecords, updateSubstanceRecord } from "./substanc
  * }, []);
  * ```
  */
-export async function runSubstanceEnrichment(
-  authHeaders?: Record<string, string>
-): Promise<{
+export async function runSubstanceEnrichment(): Promise<{
   enriched: number;
   failed: number;
   total: number;
@@ -39,9 +38,9 @@ export async function runSubstanceEnrichment(
     const results = await Promise.allSettled(
       batch.map(async (record) => {
         try {
-          const response = await fetch("/api/ai/substance-enrich", {
+          const response = await apiFetch("/api/ai/substance-enrich", {
             method: "POST",
-            headers: { "Content-Type": "application/json", ...authHeaders },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               description: record.description,
               type: record.type,

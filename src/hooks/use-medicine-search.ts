@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation } from "@tanstack/react-query";
-import { useAiFetch } from "@/hooks/use-ai-fetch";
+import { apiFetch } from "@/lib/api-fetch";
 import { useSettingsStore } from "@/stores/settings-store";
 
 export interface MedicineSearchResult {
@@ -30,8 +30,6 @@ export class MedicineSearchCancelledError extends Error {
 }
 
 export function useMedicineSearch() {
-  const aiFetch = useAiFetch();
-
   return useMutation({
     mutationFn: async (query: string): Promise<MedicineSearchResult> => {
       const state = useSettingsStore.getState();
@@ -46,7 +44,7 @@ export function useMedicineSearch() {
         }
       }
 
-      const response = await aiFetch("/api/ai/medicine-search", {
+      const response = await apiFetch("/api/ai/medicine-search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 pnpm dev              # Start dev server (localhost:3000)
 pnpm build            # Production build
 pnpm lint             # ESLint
-pnpm test:e2e         # Playwright E2E tests (auto-starts dev server; authenticates via Privy test account)
+pnpm test:e2e         # Playwright E2E tests (auto-starts dev server; seeds Neon Auth session via globalSetup)
 npx playwright test e2e/intake-logs.spec.ts  # Run a single test file
 ```
 
@@ -34,11 +34,11 @@ Each data domain has a service file in `src/lib/` (e.g., `intake-service.ts`, `m
 
 - **Zustand** (`src/stores/settings-store.ts`) — persisted to localStorage for user preferences (increments, limits, theme, day-start-hour, UI animation timing, etc.)
 - **React Query** — async data fetching/caching for all Dexie operations
-- **React Context** — Privy auth + PIN gate (`src/hooks/use-pin-gate.tsx`)
+- **Neon Auth** — cookie session managed by Better Auth, no React Context required
 
 ### Provider Stack
 
-`src/app/providers.tsx` wraps: ErrorBoundary → QueryClientProvider → ThemeProvider → PrivyProvider → PinGateProvider. If `NEXT_PUBLIC_PRIVY_APP_ID` is unset, Privy is skipped (app works without auth in dev).
+`src/app/providers.tsx` wraps: ErrorBoundary → QueryClientProvider → ThemeProvider → TimezoneGuard → children. Auth state is read on demand by `useAuth()` (Neon Auth client) and the server-side `withAuth()` middleware.
 
 ### Routes
 
@@ -58,7 +58,7 @@ API routes handle server-side Claude API calls (key never exposed to client). PI
 
 ### Auth
 
-**Privy** for authentication (email/Google). Whitelist enforcement via `ALLOWED_EMAILS` env var. E2E tests authenticate via Privy test account credentials (PRIVY_TEST_EMAIL/PRIVY_TEST_OTP in .env.local).
+**Neon Auth** (Better Auth on Neon Postgres) for authentication (email/password). Whitelist enforcement via `ALLOWED_EMAILS` env var checked in `src/lib/auth-middleware.ts`. E2E tests seed a session via `e2e/global-setup.ts` using `E2E_TEST_EMAIL` / `E2E_TEST_PASSWORD` and persist `playwright/.auth/user.json`.
 
 ### UI
 

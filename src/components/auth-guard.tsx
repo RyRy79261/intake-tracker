@@ -1,20 +1,77 @@
 "use client";
 
-import { useAuth } from "@/hooks/use-auth";
-import { useAiAccess } from "@/hooks/use-ai-access";
+import { useEffect, useRef, useState } from "react";
+import { useSession } from "@/lib/auth-client";
+import {
+  isCapacitorMode,
+  getAuthToken,
+  clearAuthToken,
+  apiFetch,
+} from "@/lib/api-fetch";
 
-export { useAuth };
+interface CapUser {
+  id: string;
+  email: string;
+}
 
-/**
- * Whether auth-gated features (AI buttons, push toggle) should be visible
- * in the UI. True when Privy is unconfigured (dev mode — no gate), while
- * we're still determining access (avoids a flicker on first paint), or
- * when the user is approved by the server-side whitelist. Signed-in but
- * not whitelisted hides the same UI as signed-out — being authenticated
- * doesn't mean AI is permitted.
- */
+export function useAuth() {
+  const { data: session, isPending } = useSession();
+  const [capUser, setCapUser] = useState<CapUser | null>(null);
+  const [capPending, setCapPending] = useState(false);
+  const validated = useRef(false);
+
+  useEffect(() => {
+    if (!isCapacitorMode() || session?.user || validated.current) return;
+    const token = getAuthToken();
+    if (!token) return;
+
+    validated.current = true;
+    setCapPending(true);
+    apiFetch("/api/auth/validate")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.user) {
+          setCapUser({ id: data.user.id, email: data.user.email });
+        } else {
+          clearAuthToken();
+        }
+      })
+      .catch(() => {})
+      .finally(() => setCapPending(false));
+  }, [session]);
+
+  const loading = isPending || capPending;
+  const user = session?.user ?? capUser;
+
+  if (loading) {
+    return { ready: false, authenticated: false, user: null } as const;
+  }
+
+  if (!user) {
+    return { ready: true, authenticated: false, user: null } as const;
+  }
+
+  return {
+    ready: true,
+    authenticated: true,
+    user: {
+      id: user.id,
+      email: user.email,
+      name: "name" in user ? (user.name as string) : user.email,
+    },
+  } as const;
+}
+
 export function useAuthGate(): boolean {
-  const access = useAiAccess();
-  if (!process.env.NEXT_PUBLIC_PRIVY_APP_ID) return true;
-  return access.status === "loading" || access.status === "approved";
+  const { ready, authenticated } = useAuth();
+  return !ready || authenticated;
+}
+
+export function AuthGuard({
+  children,
+}: {
+  children: React.ReactNode;
+  fallback?: React.ReactNode;
+}) {
+  return <>{children}</>;
 }

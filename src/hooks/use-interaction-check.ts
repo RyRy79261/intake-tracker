@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from "react";
+import { apiFetch } from "@/lib/api-fetch";
 import { getCached, setCache } from "@/lib/interaction-cache";
 import { useUpdatePrescription } from "@/hooks/use-medication-queries";
-import { useAiFetch } from "@/hooks/use-ai-fetch";
 
 // --- Types ---
 
@@ -42,7 +42,6 @@ export function useInteractionCheck() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const aiFetch = useAiFetch();
 
   const reset = useCallback(() => {
     setData(null);
@@ -83,7 +82,7 @@ export function useInteractionCheck() {
     setData(null);
 
     try {
-      const response = await aiFetch("/api/ai/interaction-check", {
+      const response = await apiFetch("/api/ai/interaction-check", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(params),
@@ -128,7 +127,7 @@ export function useInteractionCheck() {
     } finally {
       if (timeoutId !== null) clearTimeout(timeoutId);
     }
-  }, [aiFetch]);
+  }, []);
 
   return { check, data, isLoading, error, reset };
 }
@@ -138,7 +137,6 @@ export function useInteractionCheck() {
 export function useRefreshInteractions() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const updatePrescription = useUpdatePrescription();
-  const aiFetch = useAiFetch();
 
   const refresh = useCallback(
     async (
@@ -149,7 +147,7 @@ export function useRefreshInteractions() {
       setIsRefreshing(true);
 
       try {
-        const response = await aiFetch("/api/ai/interaction-check", {
+        const response = await apiFetch("/api/ai/interaction-check", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -196,7 +194,7 @@ export function useRefreshInteractions() {
         return null;
       }
     },
-    [updatePrescription, aiFetch]
+    [updatePrescription]
   );
 
   return { refresh, isRefreshing };
