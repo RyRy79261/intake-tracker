@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Providers } from "./providers";
 import { UpdateNotification } from "@/components/update-notification";
 import { OfflineChip } from "@/components/sync/offline-chip";
+import { SwipeNav } from "@/components/swipe-nav";
 
 const outfit = Outfit({ 
   subsets: ["latin"],
@@ -47,11 +48,13 @@ export default function RootLayout({
       </head>
       <body className={`${outfit.variable} font-sans antialiased`}>
         <Providers>
-          <main className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
-            <div className="container mx-auto px-4 py-6 max-w-lg">
-              <OfflineChip />
-              {children}
-            </div>
+          <main className="min-h-screen overflow-x-hidden bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
+            <SwipeNav>
+              <div className="container mx-auto px-4 py-6 max-w-lg">
+                <OfflineChip />
+                {children}
+              </div>
+            </SwipeNav>
           </main>
         </Providers>
         <UpdateNotification />

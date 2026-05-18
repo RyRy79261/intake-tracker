@@ -3,17 +3,12 @@
 import { usePathname, useRouter } from "next/navigation";
 import { motion } from "motion/react";
 import { Button } from "@/components/ui/button";
-import { Droplets, Pill, BarChart3, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SyncStatusBadge } from "@/components/sync/sync-status-badge";
 import { AuthButton } from "@/components/auth-button";
+import { NAV_ROUTES } from "@/lib/nav-routes";
 
-const NAV_ITEMS = [
-  { path: "/", icon: Droplets, label: "Intake", title: "Intake Tracker", subtitle: "Daily budget tracking" },
-  { path: "/medications", icon: Pill, label: "Meds", title: "Medications", subtitle: "Medicine schedule & tracking" },
-  { path: "/analytics", icon: BarChart3, label: "Analytics", title: "Analytics", subtitle: "Insights & record browsing" },
-  { path: "/settings", icon: Settings, label: "Settings", title: "Settings", subtitle: "Configure preferences" },
-] as const;
+const NAV_ITEMS = NAV_ROUTES;
 
 interface AppHeaderProps {
   headerHidden: boolean;
