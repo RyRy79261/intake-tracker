@@ -7,7 +7,9 @@ import { AlertTriangle, Loader2 } from "lucide-react";
 export type ConflictCheckState = "idle" | "checking" | "warning" | "unavailable";
 
 interface ConflictItem {
-  severity: "AVOID" | "CAUTION" | string;
+  // Upstream useInteractionCheck returns "OK" too; the overlay filters
+  // it out so it never renders, but the type must accept it.
+  severity: "AVOID" | "CAUTION" | "OK";
   medication: string;
   description: string;
 }

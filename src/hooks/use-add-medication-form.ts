@@ -177,7 +177,7 @@ export function useAddMedicationForm(): UseAddMedicationFormReturn {
             JSON.stringify({
               form: "medication_wizard_search",
               errors: parsed.error.flatten(),
-            }).slice(0, 100),
+            }).slice(0, 1000),
           );
           return false;
         }
@@ -202,7 +202,7 @@ export function useAddMedicationForm(): UseAddMedicationFormReturn {
               JSON.stringify({
                 form: "medication_wizard_schedule",
                 errors: parsed.error.flatten(),
-              }).slice(0, 100),
+              }).slice(0, 1000),
             );
             return false;
           }
@@ -224,7 +224,7 @@ export function useAddMedicationForm(): UseAddMedicationFormReturn {
             JSON.stringify({
               form: "medication_wizard_inventory",
               errors: parsed.error.flatten(),
-            }).slice(0, 100),
+            }).slice(0, 1000),
           );
           return false;
         }

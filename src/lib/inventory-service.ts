@@ -34,11 +34,13 @@ export async function getAllActiveInventoryItems(): Promise<InventoryItem[]> {
 }
 
 export async function getInventoryTransactions(inventoryItemId: string): Promise<InventoryTransaction[]> {
-  return db.inventoryTransactions
+  // Dexie's sortBy() materialises and overrides any prior reverse(),
+  // so reverse the resulting array instead to get newest-first.
+  const transactions = await db.inventoryTransactions
     .where("inventoryItemId")
     .equals(inventoryItemId)
-    .reverse()
     .sortBy("timestamp");
+  return transactions.reverse();
 }
 
 // ---------------------------------------------------------------------------

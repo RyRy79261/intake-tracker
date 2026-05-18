@@ -20,10 +20,12 @@ import {
   addMedicationToPrescription,
   type CreatePrescriptionInput,
 } from "@/lib/medication-service";
+import { getInventoryTransactions } from "@/lib/inventory-service";
 import {
   makePrescription,
   makeMedicationPhase,
   makeInventoryItem,
+  makeInventoryTransaction,
 } from "@/__tests__/fixtures/db-fixtures";
 
 // ---------------------------------------------------------------------------
@@ -228,6 +230,33 @@ describe("prescription CRUD", () => {
       .toArray();
     expect(invAfter.length).toBe(0);
   });
+
+  it("deletePrescription cascades to inventoryTransactions (no orphans)", async () => {
+    const result = await addPrescription(
+      validPrescriptionInput({ currentStock: 30 }),
+    );
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+
+    const prescriptionId = result.data.prescription.id;
+    const inventoryItemId = result.data.inventory.id;
+
+    // The initial-stock transaction should exist.
+    const txBefore = await db.inventoryTransactions
+      .where("inventoryItemId")
+      .equals(inventoryItemId)
+      .toArray();
+    expect(txBefore.length).toBeGreaterThan(0);
+
+    const deleteResult = await deletePrescription(prescriptionId);
+    expect(deleteResult.success).toBe(true);
+
+    const txAfter = await db.inventoryTransactions
+      .where("inventoryItemId")
+      .equals(inventoryItemId)
+      .toArray();
+    expect(txAfter.length).toBe(0);
+  });
 });
 
 // ===================================================================
@@ -352,6 +381,20 @@ describe("phase lifecycle", () => {
     expect(phases.every((p) => p.prescriptionId === rx.id)).toBe(true);
   });
 
+  it("getPhasesForPrescription returns phases in descending createdAt order", async () => {
+    const rx = makePrescription();
+    await db.prescriptions.add(rx);
+
+    const older = makeMedicationPhase(rx.id, { createdAt: 1_000 });
+    const middle = makeMedicationPhase(rx.id, { createdAt: 2_000 });
+    const newer = makeMedicationPhase(rx.id, { createdAt: 3_000 });
+    // Insert out of order to make sure we're actually sorting.
+    await db.medicationPhases.bulkAdd([middle, older, newer]);
+
+    const phases = await getPhasesForPrescription(rx.id);
+    expect(phases.map((p) => p.createdAt)).toEqual([3_000, 2_000, 1_000]);
+  });
+
   it("deletePhase removes the phase and its schedules", async () => {
     const rxResult = await addPrescription(validPrescriptionInput());
     expect(rxResult.success).toBe(true);
@@ -457,6 +500,23 @@ describe("inventory management", () => {
       .toArray();
     expect(txs.length).toBe(1);
     expect(txs[0]!.amount).toBe(-2);
+  });
+
+  it("getInventoryTransactions returns transactions in descending timestamp order", async () => {
+    const rx = makePrescription();
+    await db.prescriptions.add(rx);
+    const inv = makeInventoryItem(rx.id);
+    await db.inventoryItems.add(inv);
+
+    // Insert out of order to make sure we're actually sorting.
+    await db.inventoryTransactions.bulkAdd([
+      makeInventoryTransaction(inv.id, { timestamp: 2_000 }),
+      makeInventoryTransaction(inv.id, { timestamp: 1_000 }),
+      makeInventoryTransaction(inv.id, { timestamp: 3_000 }),
+    ]);
+
+    const txs = await getInventoryTransactions(inv.id);
+    expect(txs.map((t) => t.timestamp)).toEqual([3_000, 2_000, 1_000]);
   });
 
   it("addMedicationToPrescription archives existing inventory and deactivates active phase", async () => {

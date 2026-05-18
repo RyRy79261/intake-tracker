@@ -108,6 +108,7 @@ export function useTitrationDrawerForm(): TitrationDrawerForm {
     setWarnings("");
     setEntries([]);
     setStartNow(false);
+    setStartDate(todayLocalDateString());
   };
 
   const canSubmit = Boolean(

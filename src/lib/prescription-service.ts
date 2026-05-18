@@ -117,9 +117,18 @@ export async function updatePrescription(
 
 export async function deletePrescription(id: string): Promise<ServiceResult<void>> {
   try {
-    await db.transaction("rw", [db.prescriptions, db.medicationPhases, db.phaseSchedules, db.inventoryItems, db.doseLogs, db.auditLogs], async () => {
+    await db.transaction("rw", [db.prescriptions, db.medicationPhases, db.phaseSchedules, db.inventoryItems, db.inventoryTransactions, db.doseLogs, db.auditLogs], async () => {
       await db.doseLogs.where("prescriptionId").equals(id).delete();
+
+      // Cascade-delete inventory transactions for each inventory item before
+      // removing the items themselves, otherwise the transactions are orphaned.
+      const inventoryItems = await db.inventoryItems.where("prescriptionId").equals(id).toArray();
+      const inventoryItemIds = inventoryItems.map((item) => item.id);
+      if (inventoryItemIds.length > 0) {
+        await db.inventoryTransactions.where("inventoryItemId").anyOf(inventoryItemIds).delete();
+      }
       await db.inventoryItems.where("prescriptionId").equals(id).delete();
+
       const phases = await db.medicationPhases.where("prescriptionId").equals(id).toArray();
       for (const p of phases) {
         await db.phaseSchedules.where("phaseId").equals(p.id).delete();

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -61,14 +61,17 @@ export function TitrationDrawer({
   const [aiLoading, setAiLoading] = useState(false);
   const phasesReady = editingPhases.length > 0;
 
-  if (open && isEditing && !initialized && phasesReady) {
-    prefillFromPlan(editingPlan, editingPhases.map((p) => p.prescriptionId));
-    setInitialized(true);
-  }
-
-  if (!open && initialized) {
-    setInitialized(false);
-  }
+  useEffect(() => {
+    if (open && isEditing && !initialized && phasesReady) {
+      prefillFromPlan(editingPlan, editingPhases.map((p) => p.prescriptionId));
+      setInitialized(true);
+    } else if (!open && initialized) {
+      setInitialized(false);
+    }
+    // editingPlan / editingPhases / prefillFromPlan / setInitialized intentionally omitted —
+    // we only want to react to drawer open/close + the phases-ready transition.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, isEditing, initialized, phasesReady]);
 
   const handleGenerateWarnings = async () => {
     const titrationRxIds = new Set(entries.filter((e) => e.prescriptionId).map((e) => e.prescriptionId));
@@ -153,15 +156,20 @@ export function TitrationDrawer({
       onOpenChange(false);
     };
 
+    // Guard against empty/invalid startDate producing NaN timestamps.
+    const parsedStart = startDate ? new Date(startDate + "T00:00:00").getTime() : NaN;
+    const startDateField =
+      !startNow && Number.isFinite(parsedStart)
+        ? { recommendedStartDate: parsedStart }
+        : {};
+
     if (isEditing) {
       updateMutation.mutate(
         {
           planId: editingPlan.id,
           title: title.trim(),
           conditionLabel,
-          ...(!startNow && {
-            recommendedStartDate: new Date(startDate + "T00:00:00").getTime(),
-          }),
+          ...startDateField,
           ...(notes.trim() ? { notes: notes.trim() } : {}),
           ...(warningsList.length > 0 ? { warnings: warningsList } : {}),
           entries: entryData,
@@ -174,9 +182,7 @@ export function TitrationDrawer({
           title: title.trim(),
           conditionLabel,
           startImmediately: startNow,
-          ...(!startNow && {
-            recommendedStartDate: new Date(startDate + "T00:00:00").getTime(),
-          }),
+          ...startDateField,
           ...(notes.trim() && { notes: notes.trim() }),
           ...(warningsList.length > 0 && { warnings: warningsList }),
           entries: entryData,

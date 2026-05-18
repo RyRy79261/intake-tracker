@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -202,7 +202,8 @@ export function EditPhaseScheduleLoader({
   const schedules = useSchedulesForPhase(phaseId);
   const [loaded, setLoaded] = useState(false);
 
-  if (schedules.length > 0 && !loaded) {
+  useEffect(() => {
+    if (schedules.length === 0 || loaded) return;
     onLoad(
       schedules.map((s) => ({
         time: s.time,
@@ -211,7 +212,10 @@ export function EditPhaseScheduleLoader({
       })),
     );
     setLoaded(true);
-  }
+    // onLoad is an inline callback from the parent — including it in deps
+    // would re-run on every parent render. We only need to react to data.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [schedules, loaded]);
 
   return null;
 }

@@ -56,7 +56,10 @@ export async function getActivePhaseForPrescription(prescriptionId: string): Pro
 }
 
 export async function getPhasesForPrescription(prescriptionId: string): Promise<MedicationPhase[]> {
-  return db.medicationPhases.where("prescriptionId").equals(prescriptionId).reverse().sortBy("createdAt");
+  // Dexie's sortBy() materialises and overrides any prior reverse(),
+  // so reverse the resulting array instead to get newest-first.
+  const phases = await db.medicationPhases.where("prescriptionId").equals(prescriptionId).sortBy("createdAt");
+  return phases.reverse();
 }
 
 // ---------------------------------------------------------------------------
