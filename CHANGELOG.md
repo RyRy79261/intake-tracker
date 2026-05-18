@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.1](https://github.com/RyRy79261/intake-tracker/compare/v1.9.0...v1.9.1) (2026-05-18)
+
+
+### Bug Fixes
+
+* remove auth middleware gate and restore optional auth behavior ([142689b](https://github.com/RyRy79261/intake-tracker/commit/142689b59a85d6a0cf98a90b9bb341d45a2e9507))
+
 ## [1.9.0](https://github.com/RyRy79261/intake-tracker/compare/v1.8.1...v1.9.0) (2026-05-18)
 
 
