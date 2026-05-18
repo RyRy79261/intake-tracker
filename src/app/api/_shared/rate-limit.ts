@@ -33,11 +33,24 @@ interface Bucket {
  * @param limit  Max requests within `windowMs` per IP.
  * @param windowMs  Rolling window length in ms (defaults to 60s).
  */
+// How often to sweep expired buckets. Every Nth check we walk the map once
+// and drop entries whose window has elapsed, keeping growth bounded under
+// high-cardinality IP traffic without burning cycles on every request.
+const SWEEP_EVERY = 100;
+
 export function createRateLimiter(limit: number, windowMs: number = 60_000): RateLimiter {
   const buckets = new Map<string, Bucket>();
+  let checks = 0;
   return {
     check(ip: string): boolean {
       const now = Date.now();
+
+      if (++checks % SWEEP_EVERY === 0) {
+        for (const [key, value] of buckets) {
+          if (now > value.resetTime) buckets.delete(key);
+        }
+      }
+
       const bucket = buckets.get(ip);
       if (!bucket || now > bucket.resetTime) {
         buckets.set(ip, { count: 1, resetTime: now + windowMs });
