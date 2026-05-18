@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { withAuth } from "@/lib/auth-middleware";
 import { syncDoseSchedules } from "@/lib/push-db";
+import { zodErrorResponse } from "../../_shared/validation";
 
 const SyncScheduleSchema = z.object({
   schedules: z.array(
@@ -19,10 +20,7 @@ export const POST = withAuth(async ({ request, auth }) => {
 
     const parsed = SyncScheduleSchema.safeParse(body);
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: "Invalid request", details: parsed.error.flatten() },
-        { status: 400 }
-      );
+      return zodErrorResponse("Push sync-schedule request failed", parsed.error);
     }
 
     await syncDoseSchedules(auth.userId!, parsed.data.schedules);

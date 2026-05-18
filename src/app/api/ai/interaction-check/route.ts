@@ -3,6 +3,7 @@ import { z } from "zod";
 import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
 import { getClaudeClient, CLAUDE_MODELS } from "../_shared/claude-client";
+import { zodErrorResponse } from "../../_shared/validation";
 
 // --- Zod Schemas (co-located per project convention) ---
 
@@ -121,10 +122,7 @@ export const POST = withAuth(async ({ request, auth }) => {
     const body = await request.json();
     const parsed = RequestSchema.safeParse(body);
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: "Invalid request", details: parsed.error.flatten() },
-        { status: 400 }
-      );
+      return zodErrorResponse("Interaction check request failed", parsed.error);
     }
 
     let client;

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
 import { getClaudeClient, CLAUDE_MODELS } from "../_shared/claude-client";
+import { zodErrorResponse } from "../../_shared/validation";
 
 // --- Zod Schemas (co-located per user decision) ---
 
@@ -107,11 +108,7 @@ export const POST = withAuth(async ({ request, auth }) => {
     // Validate request body with Zod
     const parsed = MedicineSearchRequestSchema.safeParse(body);
     if (!parsed.success) {
-      console.error("[VALIDATION] Medicine search request validation failed:", JSON.stringify(parsed.error.flatten()));
-      return NextResponse.json(
-        { error: "Invalid request", details: parsed.error.flatten() },
-        { status: 400 }
-      );
+      return zodErrorResponse("Medicine search request validation failed", parsed.error);
     }
 
     const { query, country } = parsed.data;

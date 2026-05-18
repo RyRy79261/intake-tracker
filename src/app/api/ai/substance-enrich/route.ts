@@ -5,6 +5,7 @@ import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
 import { getClaudeClient, CLAUDE_MODELS, WEB_SEARCH_TOOL } from "../_shared/claude-client";
 import { ethanolGrams, standardDrinksFromAbv } from "@/lib/alcohol-units";
+import { zodErrorResponse } from "../../_shared/validation";
 
 /**
  * AI enrichment for caffeine / alcohol "Other" entries. Uses Opus + web_search
@@ -145,14 +146,7 @@ export const POST = withAuth(async ({ request, auth }) => {
     const body = await request.json();
     const parsed = SubstanceEnrichRequestSchema.safeParse(body);
     if (!parsed.success) {
-      console.error(
-        "[VALIDATION] Substance enrich request failed:",
-        JSON.stringify(parsed.error.flatten())
-      );
-      return NextResponse.json(
-        { error: "Invalid request", details: parsed.error.flatten() },
-        { status: 400 }
-      );
+      return zodErrorResponse("Substance enrich request failed", parsed.error);
     }
 
     const { description, type } = parsed.data;

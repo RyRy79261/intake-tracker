@@ -4,6 +4,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
 import { getClaudeClient, CLAUDE_MODELS } from "../_shared/claude-client";
+import { zodErrorResponse } from "../../_shared/validation";
 
 /**
  * Parse a voice transcript into a heterogeneous list of health record items
@@ -206,10 +207,7 @@ export const POST = withAuth(async ({ request, auth }) => {
     const body = await request.json();
     const parsed = ParseRequestSchema.safeParse(body);
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: "Invalid request", details: parsed.error.flatten() },
-        { status: 400 }
-      );
+      return zodErrorResponse("voice-parse request invalid", parsed.error);
     }
 
     let client;
@@ -304,7 +302,7 @@ export const POST = withAuth(async ({ request, auth }) => {
         JSON.stringify(validated.error.flatten())
       );
       return NextResponse.json(
-        { error: "AI response format invalid", details: validated.error.flatten() },
+        { error: "AI response format invalid" },
         { status: 422 }
       );
     }

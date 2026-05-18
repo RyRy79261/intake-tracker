@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { withAuth } from "@/lib/auth-middleware";
 import { savePushSubscription } from "@/lib/push-db";
+import { zodErrorResponse } from "../../_shared/validation";
 
 const SubscribeSchema = z.object({
   endpoint: z.string().url(),
@@ -17,10 +18,7 @@ export const POST = withAuth(async ({ request, auth }) => {
 
     const parsed = SubscribeSchema.safeParse(body);
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: "Invalid request", details: parsed.error.flatten() },
-        { status: 400 }
-      );
+      return zodErrorResponse("Push subscribe request failed", parsed.error);
     }
 
     await savePushSubscription(auth.userId!, parsed.data);

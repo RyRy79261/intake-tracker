@@ -4,6 +4,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
 import { getClaudeClient, CLAUDE_MODELS, WEB_SEARCH_TOOL } from "../_shared/claude-client";
+import { zodErrorResponse } from "../../_shared/validation";
 
 /**
  * Server-side AI parsing for food / drink descriptions.
@@ -120,11 +121,7 @@ export const POST = withAuth(async ({ request, auth }) => {
     const body = await request.json();
     const parsed = ParseRequestSchema.safeParse(body);
     if (!parsed.success) {
-      console.error("[VALIDATION] Parse request failed:", JSON.stringify(parsed.error.flatten()));
-      return NextResponse.json(
-        { error: "Invalid request", details: parsed.error.flatten() },
-        { status: 400 }
-      );
+      return zodErrorResponse("Parse request failed", parsed.error);
     }
 
     const { input } = parsed.data;
