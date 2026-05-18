@@ -5,7 +5,7 @@ import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
 import { getClaudeClient, CLAUDE_MODELS, WEB_SEARCH_TOOL } from "../_shared/claude-client";
 import { SubstanceLookupResponseSchema, SUBSTANCE_LOOKUP_TOOL } from "./schema";
-import { zodErrorResponse } from "@/app/api/_shared/validation";
+import { parseJsonBody, zodErrorResponse } from "@/app/api/_shared/validation";
 import { createRateLimiter, getClientIp } from "@/app/api/_shared/rate-limit";
 
 const RequestSchema = z.object({
@@ -79,8 +79,9 @@ export const POST = withAuth(async ({ request, auth }) => {
       );
     }
 
-    const body = await request.json();
-    const parsed = RequestSchema.safeParse(body);
+    const json = await parseJsonBody(request);
+    if (!json.ok) return json.response;
+    const parsed = RequestSchema.safeParse(json.body);
     if (!parsed.success) {
       return zodErrorResponse("Substance lookup request failed", parsed.error);
     }

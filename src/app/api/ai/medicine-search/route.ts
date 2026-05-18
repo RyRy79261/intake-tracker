@@ -3,7 +3,7 @@ import { z } from "zod";
 import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
 import { getClaudeClient, CLAUDE_MODELS } from "../_shared/claude-client";
-import { zodErrorResponse } from "@/app/api/_shared/validation";
+import { parseJsonBody, zodErrorResponse } from "@/app/api/_shared/validation";
 import { createRateLimiter, getClientIp } from "@/app/api/_shared/rate-limit";
 
 // --- Zod Schemas (co-located per user decision) ---
@@ -87,10 +87,11 @@ export const POST = withAuth(async ({ request, auth }) => {
       );
     }
 
-    const body = await request.json();
+    const json = await parseJsonBody(request);
+    if (!json.ok) return json.response;
 
     // Validate request body with Zod
-    const parsed = MedicineSearchRequestSchema.safeParse(body);
+    const parsed = MedicineSearchRequestSchema.safeParse(json.body);
     if (!parsed.success) {
       return zodErrorResponse("Medicine search request validation failed", parsed.error);
     }

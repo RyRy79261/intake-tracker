@@ -3,7 +3,7 @@ import { z } from "zod";
 import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
 import { getClaudeClient, CLAUDE_MODELS } from "../_shared/claude-client";
-import { zodErrorResponse } from "@/app/api/_shared/validation";
+import { parseJsonBody, zodErrorResponse } from "@/app/api/_shared/validation";
 import { createRateLimiter, getClientIp } from "@/app/api/_shared/rate-limit";
 
 // --- Zod Schemas (co-located per project convention) ---
@@ -103,8 +103,9 @@ export const POST = withAuth(async ({ request, auth }) => {
       );
     }
 
-    const body = await request.json();
-    const parsed = RequestSchema.safeParse(body);
+    const json = await parseJsonBody(request);
+    if (!json.ok) return json.response;
+    const parsed = RequestSchema.safeParse(json.body);
     if (!parsed.success) {
       return zodErrorResponse("Interaction check request failed", parsed.error);
     }
