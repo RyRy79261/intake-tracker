@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   BACKUP_SCHEMAS,
+  BACKUP_VALIDATORS,
   syncFieldsSchema,
   intakeRecordSchema,
   weightRecordSchema,
@@ -38,157 +39,6 @@ import {
   makeDailyNote,
   makeAuditLog,
 } from "@/__tests__/fixtures/db-fixtures";
-
-// --- Legacy reference validators (copied verbatim from backup-service.ts) ---
-// Used to prove the Zod schemas accept the same inputs.
-
-type Pred = (r: unknown) => boolean;
-
-const legacyValidators: Record<BackupTableName, Pred> = {
-  intakeRecords: (record) => {
-    if (!record || typeof record !== "object") return false;
-    const r = record as Record<string, unknown>;
-    return (
-      typeof r.id === "string" &&
-      (r.type === "water" || r.type === "salt") &&
-      typeof r.amount === "number" &&
-      typeof r.timestamp === "number"
-    );
-  },
-  weightRecords: (record) => {
-    if (!record || typeof record !== "object") return false;
-    const r = record as Record<string, unknown>;
-    return (
-      typeof r.id === "string" &&
-      typeof r.weight === "number" &&
-      typeof r.timestamp === "number"
-    );
-  },
-  bloodPressureRecords: (record) => {
-    if (!record || typeof record !== "object") return false;
-    const r = record as Record<string, unknown>;
-    return (
-      typeof r.id === "string" &&
-      typeof r.systolic === "number" &&
-      typeof r.diastolic === "number" &&
-      typeof r.timestamp === "number" &&
-      (r.position === "sitting" || r.position === "standing") &&
-      (r.arm === "left" || r.arm === "right")
-    );
-  },
-  eatingRecords: (record) => {
-    if (!record || typeof record !== "object") return false;
-    const r = record as Record<string, unknown>;
-    return typeof r.id === "string" && typeof r.timestamp === "number";
-  },
-  urinationRecords: (record) => {
-    if (!record || typeof record !== "object") return false;
-    const r = record as Record<string, unknown>;
-    return typeof r.id === "string" && typeof r.timestamp === "number";
-  },
-  defecationRecords: (record) => {
-    if (!record || typeof record !== "object") return false;
-    const r = record as Record<string, unknown>;
-    return typeof r.id === "string" && typeof r.timestamp === "number";
-  },
-  substanceRecords: (record) => {
-    if (!record || typeof record !== "object") return false;
-    const r = record as Record<string, unknown>;
-    return (
-      typeof r.id === "string" &&
-      (r.type === "caffeine" || r.type === "alcohol") &&
-      typeof r.timestamp === "number"
-    );
-  },
-  prescriptions: (record) => {
-    if (!record || typeof record !== "object") return false;
-    const r = record as Record<string, unknown>;
-    return (
-      typeof r.id === "string" &&
-      typeof r.genericName === "string" &&
-      typeof r.indication === "string" &&
-      typeof r.isActive === "boolean"
-    );
-  },
-  medicationPhases: (record) => {
-    if (!record || typeof record !== "object") return false;
-    const r = record as Record<string, unknown>;
-    return (
-      typeof r.id === "string" &&
-      typeof r.prescriptionId === "string" &&
-      typeof r.type === "string" &&
-      typeof r.unit === "string"
-    );
-  },
-  phaseSchedules: (record) => {
-    if (!record || typeof record !== "object") return false;
-    const r = record as Record<string, unknown>;
-    return (
-      typeof r.id === "string" &&
-      typeof r.phaseId === "string" &&
-      typeof r.dosage === "number"
-    );
-  },
-  inventoryItems: (record) => {
-    if (!record || typeof record !== "object") return false;
-    const r = record as Record<string, unknown>;
-    return (
-      typeof r.id === "string" &&
-      typeof r.prescriptionId === "string" &&
-      typeof r.brandName === "string"
-    );
-  },
-  inventoryTransactions: (record) => {
-    if (!record || typeof record !== "object") return false;
-    const r = record as Record<string, unknown>;
-    return (
-      typeof r.id === "string" &&
-      typeof r.inventoryItemId === "string" &&
-      typeof r.amount === "number"
-    );
-  },
-  doseLogs: (record) => {
-    if (!record || typeof record !== "object") return false;
-    const r = record as Record<string, unknown>;
-    return (
-      typeof r.id === "string" &&
-      typeof r.prescriptionId === "string" &&
-      typeof r.phaseId === "string" &&
-      typeof r.scheduledDate === "string"
-    );
-  },
-  titrationPlans: (record) => {
-    if (!record || typeof record !== "object") return false;
-    const r = record as Record<string, unknown>;
-    return (
-      typeof r.id === "string" &&
-      typeof r.title === "string" &&
-      typeof r.status === "string"
-    );
-  },
-  dailyNotes: (record) => {
-    if (!record || typeof record !== "object") return false;
-    const r = record as Record<string, unknown>;
-    return (
-      typeof r.id === "string" &&
-      typeof r.date === "string" &&
-      typeof r.note === "string"
-    );
-  },
-  auditLogs: (record) => {
-    if (!record || typeof record !== "object") return false;
-    const r = record as Record<string, unknown>;
-    return (
-      typeof r.id === "string" &&
-      typeof r.timestamp === "number" &&
-      typeof r.action === "string"
-    );
-  },
-};
-
-function zodAccepts(table: BackupTableName, record: unknown): boolean {
-  return BACKUP_SCHEMAS[table].safeParse(record).success;
-}
 
 /** Fixtures stripped of any undefined-valued keys, mirroring JSON round-trip. */
 function stripUndefined<T extends Record<string, unknown>>(obj: T): T {
@@ -286,36 +136,32 @@ const fixturesByTable: Record<BackupTableName, () => Array<Record<string, unknow
 
 const tableNames = Object.keys(BACKUP_SCHEMAS) as BackupTableName[];
 
-describe("backup-schemas: legacy compatibility", () => {
+describe("backup-schemas: real-world fixtures", () => {
   for (const table of tableNames) {
     describe(table, () => {
       const fixtures = fixturesByTable[table]();
+      const accepts = BACKUP_VALIDATORS[table];
 
-      it("accepts every fixture the legacy validator accepts", () => {
+      it("accepts every db-fixture record", () => {
         for (const fixture of fixtures) {
-          expect(legacyValidators[table](fixture), `legacy rejected fixture for ${table}`).toBe(true);
-          expect(zodAccepts(table, fixture), `zod rejected fixture for ${table}`).toBe(true);
+          expect(accepts(fixture), `rejected fixture for ${table}`).toBe(true);
         }
       });
 
       it("accepts fixtures with undefined keys stripped (JSON round-trip)", () => {
         for (const fixture of fixtures) {
-          const stripped = stripUndefined(fixture);
-          expect(legacyValidators[table](stripped)).toBe(true);
-          expect(zodAccepts(table, stripped)).toBe(true);
+          expect(accepts(stripUndefined(fixture))).toBe(true);
         }
       });
 
       it("accepts fixtures with arbitrary extra unknown keys (passthrough)", () => {
-        const augmented = { ...fixtures[0], _futureField: "abc", _another: 42 };
-        expect(legacyValidators[table](augmented)).toBe(true);
-        expect(zodAccepts(table, augmented)).toBe(true);
+        const augmented = { ...fixtures[0]!, _futureField: "abc", _another: 42 };
+        expect(accepts(augmented)).toBe(true);
       });
 
       it("rejects null and non-objects", () => {
         for (const bad of [null, undefined, 42, "string", true, []]) {
-          expect(legacyValidators[table](bad)).toBe(false);
-          expect(zodAccepts(table, bad)).toBe(false);
+          expect(accepts(bad)).toBe(false);
         }
       });
 
@@ -323,42 +169,50 @@ describe("backup-schemas: legacy compatibility", () => {
         const first = fixtures[0]!;
         const { id: _drop, ...rest } = first;
         void _drop;
-        expect(legacyValidators[table](rest)).toBe(false);
-        expect(zodAccepts(table, rest)).toBe(false);
+        expect(accepts(rest)).toBe(false);
       });
     });
   }
 });
 
-describe("backup-schemas: legacy lenience (must remain in compat mode)", () => {
-  // The legacy code uses typeof === "number", which accepts NaN/Infinity.
-  // Zod 3's z.number() also accepts them. Verified here so any future tightening
-  // is an intentional, reviewed change.
+describe("backup-schemas: tightening over the legacy isValid* checks", () => {
+  // The legacy hand-rolled validators used `typeof x === "number"`, which
+  // silently accepted NaN and +/-Infinity. The Zod schemas in this file
+  // tighten that -- z.number().finite() rejects both. If a real-world backup
+  // ever hits this we'll need a migration; the equivalence tests above
+  // protect against accidental regressions in the common path.
 
-  it("accepts NaN for required number fields", () => {
-    const r = { ...makeIntakeRecord(), amount: Number.NaN };
-    expect(legacyValidators.intakeRecords(r)).toBe(true);
-    expect(zodAccepts("intakeRecords", r)).toBe(true);
+  it("rejects NaN in required number fields", () => {
+    expect(BACKUP_VALIDATORS.intakeRecords({ ...makeIntakeRecord(), amount: Number.NaN })).toBe(false);
+    expect(BACKUP_VALIDATORS.weightRecords({ ...makeWeightRecord(), weight: Number.NaN })).toBe(false);
+    expect(BACKUP_VALIDATORS.intakeRecords({ ...makeIntakeRecord(), timestamp: Number.NaN })).toBe(false);
   });
 
-  it("accepts Infinity for required number fields", () => {
-    const r = { ...makeIntakeRecord(), amount: Number.POSITIVE_INFINITY };
-    expect(legacyValidators.intakeRecords(r)).toBe(true);
-    expect(zodAccepts("intakeRecords", r)).toBe(true);
+  it("rejects +Infinity in required number fields", () => {
+    expect(BACKUP_VALIDATORS.intakeRecords({ ...makeIntakeRecord(), amount: Number.POSITIVE_INFINITY })).toBe(false);
+    expect(BACKUP_VALIDATORS.weightRecords({ ...makeWeightRecord(), weight: Number.POSITIVE_INFINITY })).toBe(false);
+  });
+
+  it("rejects -Infinity in required number fields", () => {
+    expect(BACKUP_VALIDATORS.intakeRecords({ ...makeIntakeRecord(), amount: Number.NEGATIVE_INFINITY })).toBe(false);
   });
 
   it("treats missing sync metadata the same as present sync metadata", () => {
     const minimal = { id: "x", type: "water" as const, amount: 250, timestamp: 1 };
-    expect(legacyValidators.intakeRecords(minimal)).toBe(true);
-    expect(zodAccepts("intakeRecords", minimal)).toBe(true);
+    expect(BACKUP_VALIDATORS.intakeRecords(minimal)).toBe(true);
   });
 
   it("accepts deletedAt: null", () => {
-    expect(zodAccepts("intakeRecords", { ...makeIntakeRecord(), deletedAt: null })).toBe(true);
+    expect(BACKUP_VALIDATORS.intakeRecords({ ...makeIntakeRecord(), deletedAt: null })).toBe(true);
   });
 
-  it("accepts deletedAt as a number", () => {
-    expect(zodAccepts("intakeRecords", { ...makeIntakeRecord(), deletedAt: 123456 })).toBe(true);
+  it("accepts deletedAt as a finite number", () => {
+    expect(BACKUP_VALIDATORS.intakeRecords({ ...makeIntakeRecord(), deletedAt: 123456 })).toBe(true);
+  });
+
+  it("rejects deletedAt with a non-number, non-null value", () => {
+    expect(BACKUP_VALIDATORS.intakeRecords({ ...makeIntakeRecord(), deletedAt: "yes" })).toBe(false);
+    expect(BACKUP_VALIDATORS.intakeRecords({ ...makeIntakeRecord(), deletedAt: Number.NaN })).toBe(false);
   });
 });
 
@@ -384,6 +238,10 @@ describe("backup-schemas: invariants", () => {
         "weightRecords",
       ].sort()
     );
+  });
+
+  it("BACKUP_VALIDATORS has the same keys as BACKUP_SCHEMAS", () => {
+    expect(Object.keys(BACKUP_VALIDATORS).sort()).toEqual(Object.keys(BACKUP_SCHEMAS).sort());
   });
 
   it("each named export matches its slot in BACKUP_SCHEMAS", () => {

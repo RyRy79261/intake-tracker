@@ -1,40 +1,38 @@
 /**
- * Zod schemas for backup data validation, mirroring the legacy isValid*
- * checks in backup-service.ts.
+ * Zod schemas for backup data validation. Used by backup-service.ts to
+ * decide whether each record in an imported backup is acceptable, and
+ * reusable by any other service that needs to validate the same shapes.
  *
- * COMPATIBILITY MODE: schemas here are intentionally lenient and use
- * .passthrough() so they accept every record the legacy hand-rolled
- * validators accept. They also leave sync metadata (createdAt, updatedAt,
- * deletedAt, deviceId, timezone) optional, because the legacy checks never
- * inspected those fields. Tighten in the cutover PR -- not here.
+ * Compared to the hand-rolled isValid* checks they replaced, these
+ * schemas tighten the legacy `typeof === "number"` test by rejecting NaN
+ * and +/-Infinity (a real bug in the old code), and require deletedAt to
+ * be number | null when present. Sync metadata (createdAt, updatedAt,
+ * deletedAt, deviceId, timezone) remains optional because real backups
+ * from older app versions can omit any of them.
+ *
+ * Unknown keys are preserved via .passthrough() so forward-compatible
+ * fields survive a round-trip.
  */
 
 import { z } from "zod";
 
-/**
- * Number primitive matching the legacy `typeof x === "number"` check.
- * Crucially, this accepts NaN and +/-Infinity -- Zod's built-in z.number()
- * rejects NaN, which would tighten compat. Use this everywhere the legacy
- * validators accepted any numeric value.
- */
-const numberLike = z.custom<number>((val) => typeof val === "number", {
-  message: "Expected number",
-});
+/** A real, finite JS number -- rejects NaN and +/-Infinity. */
+const finiteNumber = z.number().finite();
 
 /**
- * Sync metadata fields shared by every record. All optional in compat mode
- * because the legacy validators did not require any of them.
+ * Sync metadata fields shared by every record. All optional, since
+ * historical backups predate some of these fields.
  */
 export const syncFieldsSchema = z.object({
-  createdAt: numberLike.optional(),
-  updatedAt: numberLike.optional(),
-  deletedAt: z.union([numberLike, z.null()]).optional(),
+  createdAt: finiteNumber.optional(),
+  updatedAt: finiteNumber.optional(),
+  deletedAt: z.union([finiteNumber, z.null()]).optional(),
   deviceId: z.string().optional(),
   timezone: z.string().optional(),
 });
 
-/** Unix-ms timestamp. Matches `typeof === "number"` (accepts NaN/Infinity). */
-export const timestampSchema = numberLike;
+/** Unix-ms timestamp. Finite number; rejects NaN/Infinity. */
+export const timestampSchema = finiteNumber;
 
 const baseRecord = syncFieldsSchema.extend({
   id: z.string(),
@@ -43,22 +41,22 @@ const baseRecord = syncFieldsSchema.extend({
 export const intakeRecordSchema = baseRecord
   .extend({
     type: z.union([z.literal("water"), z.literal("salt")]),
-    amount: numberLike,
+    amount: finiteNumber,
     timestamp: timestampSchema,
   })
   .passthrough();
 
 export const weightRecordSchema = baseRecord
   .extend({
-    weight: numberLike,
+    weight: finiteNumber,
     timestamp: timestampSchema,
   })
   .passthrough();
 
 export const bloodPressureRecordSchema = baseRecord
   .extend({
-    systolic: numberLike,
-    diastolic: numberLike,
+    systolic: finiteNumber,
+    diastolic: finiteNumber,
     timestamp: timestampSchema,
     position: z.union([z.literal("sitting"), z.literal("standing")]),
     arm: z.union([z.literal("left"), z.literal("right")]),
@@ -103,7 +101,7 @@ export const medicationPhaseSchema = baseRecord
 export const phaseScheduleSchema = baseRecord
   .extend({
     phaseId: z.string(),
-    dosage: numberLike,
+    dosage: finiteNumber,
   })
   .passthrough();
 
@@ -117,7 +115,7 @@ export const inventoryItemSchema = baseRecord
 export const inventoryTransactionSchema = baseRecord
   .extend({
     inventoryItemId: z.string(),
-    amount: numberLike,
+    amount: finiteNumber,
   })
   .passthrough();
 
@@ -187,7 +185,27 @@ export const BACKUP_SCHEMAS: Record<BackupTableName, z.ZodTypeAny> = {
   auditLogs: auditLogSchema,
 };
 
-/** Convenience: returns a boolean type guard backed by a Zod schema. */
+/** Boolean type guard backed by a Zod schema. */
 export function makeZodValidator(schema: z.ZodTypeAny): (record: unknown) => boolean {
   return (record) => schema.safeParse(record).success;
 }
+
+/** Per-table validator map -- one safeParse-backed predicate per table. */
+export const BACKUP_VALIDATORS: Record<BackupTableName, (record: unknown) => boolean> = {
+  intakeRecords: makeZodValidator(intakeRecordSchema),
+  weightRecords: makeZodValidator(weightRecordSchema),
+  bloodPressureRecords: makeZodValidator(bloodPressureRecordSchema),
+  eatingRecords: makeZodValidator(eatingRecordSchema),
+  urinationRecords: makeZodValidator(urinationRecordSchema),
+  defecationRecords: makeZodValidator(defecationRecordSchema),
+  substanceRecords: makeZodValidator(substanceRecordSchema),
+  prescriptions: makeZodValidator(prescriptionSchema),
+  medicationPhases: makeZodValidator(medicationPhaseSchema),
+  phaseSchedules: makeZodValidator(phaseScheduleSchema),
+  inventoryItems: makeZodValidator(inventoryItemSchema),
+  inventoryTransactions: makeZodValidator(inventoryTransactionSchema),
+  doseLogs: makeZodValidator(doseLogSchema),
+  titrationPlans: makeZodValidator(titrationPlanSchema),
+  dailyNotes: makeZodValidator(dailyNoteSchema),
+  auditLogs: makeZodValidator(auditLogSchema),
+};
