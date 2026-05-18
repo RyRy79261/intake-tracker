@@ -5,8 +5,8 @@ import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
 import { getClaudeClient, CLAUDE_MODELS, WEB_SEARCH_TOOL } from "../_shared/claude-client";
 import { ethanolGrams, standardDrinksFromAbv } from "@/lib/alcohol-units";
-import { zodErrorResponse } from "../../_shared/validation";
-import { createRateLimiter, getClientIp } from "../../_shared/rate-limit";
+import { zodErrorResponse } from "@/app/api/_shared/validation";
+import { createRateLimiter, getClientIp } from "@/app/api/_shared/rate-limit";
 
 /**
  * AI enrichment for caffeine / alcohol "Other" entries. Uses Opus + web_search

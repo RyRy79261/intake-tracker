@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { withAuth } from "@/lib/auth-middleware";
-import { createRateLimiter, getClientIp } from "../../_shared/rate-limit";
+import { createRateLimiter, getClientIp } from "@/app/api/_shared/rate-limit";
 
 /**
  * Transcribe a short audio clip using Groq's hosted

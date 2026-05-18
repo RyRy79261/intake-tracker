@@ -3,7 +3,7 @@ import { z } from "zod";
 import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
 import { getClaudeClient, CLAUDE_MODELS } from "../_shared/claude-client";
-import { zodErrorResponse } from "../../_shared/validation";
+import { zodErrorResponse } from "@/app/api/_shared/validation";
 
 const RequestSchema = z.object({
   prescriptions: z

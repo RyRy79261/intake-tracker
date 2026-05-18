@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { withAuth } from "@/lib/auth-middleware";
 import { savePushSubscription } from "@/lib/push-db";
-import { parseJsonBody, zodErrorResponse } from "../../_shared/validation";
+import { parseJsonBody, zodErrorResponse } from "@/app/api/_shared/validation";
 
 const SubscribeSchema = z.object({
   endpoint: z.string().url(),

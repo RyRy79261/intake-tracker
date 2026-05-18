@@ -3,8 +3,8 @@ import { z } from "zod";
 import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
 import { getClaudeClient, CLAUDE_MODELS } from "../_shared/claude-client";
-import { zodErrorResponse } from "../../_shared/validation";
-import { createRateLimiter, getClientIp } from "../../_shared/rate-limit";
+import { zodErrorResponse } from "@/app/api/_shared/validation";
+import { createRateLimiter, getClientIp } from "@/app/api/_shared/rate-limit";
 
 // --- Zod Schemas (co-located per project convention) ---
 

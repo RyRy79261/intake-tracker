@@ -5,8 +5,8 @@ import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
 import { getClaudeClient, CLAUDE_MODELS, WEB_SEARCH_TOOL } from "../_shared/claude-client";
 import { SubstanceLookupResponseSchema, SUBSTANCE_LOOKUP_TOOL } from "./schema";
-import { zodErrorResponse } from "../../_shared/validation";
-import { createRateLimiter, getClientIp } from "../../_shared/rate-limit";
+import { zodErrorResponse } from "@/app/api/_shared/validation";
+import { createRateLimiter, getClientIp } from "@/app/api/_shared/rate-limit";
 
 const RequestSchema = z.object({
   query: z.string().min(1).max(200),
