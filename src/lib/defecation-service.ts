@@ -28,26 +28,39 @@ export async function addDefecationRecord(
 export async function getDefecationRecords(
   limit?: number
 ): Promise<DefecationRecord[]> {
-  const query = db.defecationRecords.orderBy("timestamp").reverse();
-  return limit ? query.limit(limit).toArray() : query.toArray();
+  const records = await db.defecationRecords.orderBy("timestamp").reverse().toArray();
+  const active = records.filter((r) => r.deletedAt === null);
+  return limit ? active.slice(0, limit) : active;
 }
 
 export async function getDefecationRecordsByDateRange(
   startTime: number,
   endTime: number
 ): Promise<DefecationRecord[]> {
-  return db.defecationRecords
+  const records = await db.defecationRecords
     .where("timestamp")
     .between(startTime, endTime)
     .toArray();
+  return records.filter((r) => r.deletedAt === null);
 }
 
 export async function deleteDefecationRecord(id: string): Promise<ServiceResult<void>> {
   try {
-    await db.defecationRecords.delete(id);
+    const now = Date.now();
+    await db.defecationRecords.update(id, { deletedAt: now, updatedAt: now });
     return ok(undefined);
   } catch (e) {
     return err("Failed to delete defecation record", e);
+  }
+}
+
+export async function undoDeleteDefecationRecord(id: string): Promise<ServiceResult<void>> {
+  try {
+    const now = Date.now();
+    await db.defecationRecords.update(id, { deletedAt: null, updatedAt: now });
+    return ok(undefined);
+  } catch (e) {
+    return err("Failed to undo delete defecation record", e);
   }
 }
 
