@@ -1,21 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { signIn } from "@/lib/auth-client";
+import { isCapacitorMode } from "@/lib/api-fetch";
 
-/**
- * Email/password + Google sign-in form. Submits to Neon Auth via the browser
- * client; Better Auth handles the redirect to `callbackURL` on success.
- *
- * Layout is based on shadcn's login-04 block: header, email/password fields,
- * inline "Forgot your password?" link, primary submit, separator, Google SSO,
- * then a footer link to sign-up.
- */
 export function SignInForm() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -43,6 +38,8 @@ export function SignInForm() {
       });
       if (result && "error" in result && result.error) {
         setError(result.error.message ?? "Sign in failed");
+      } else if (isCapacitorMode()) {
+        router.replace("/");
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign in failed");

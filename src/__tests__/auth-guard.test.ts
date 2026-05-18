@@ -45,6 +45,24 @@ vi.mock("@/lib/auth-client", () => ({
   authClient: {},
 }));
 
+vi.mock("react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("react")>();
+  return {
+    ...actual,
+    useState: (init: unknown) => [init, vi.fn()],
+    useRef: (init: unknown) => ({ current: init }),
+    useEffect: vi.fn(),
+  };
+});
+
+vi.mock("@/lib/api-fetch", () => ({
+  isCapacitorMode: () => false,
+  getAuthToken: () => null,
+  clearAuthToken: vi.fn(),
+  apiFetch: vi.fn(),
+  saveAuthToken: vi.fn(),
+}));
+
 // Prevent actual next-themes / react-query etc. from blowing up when
 // providers.tsx is imported — they are pure client modules but we only
 // verify the export shape, not execute them.

@@ -3,14 +3,14 @@
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Loader2, LogIn, LogOut, Sparkles, Bell, CloudUpload } from "lucide-react";
-import { useSession } from "@/lib/auth-client";
+import { useAuth } from "@/components/auth-guard";
 import { handleSignOut } from "@/lib/sign-out";
 
 export function AccountSection() {
-  const { data: session, isPending } = useSession();
+  const { ready, authenticated, user } = useAuth();
   const router = useRouter();
 
-  if (isPending) {
+  if (!ready) {
     return (
       <div className="flex items-center justify-center p-6 rounded-lg bg-slate-50 dark:bg-slate-900 border">
         <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
@@ -18,7 +18,7 @@ export function AccountSection() {
     );
   }
 
-  if (!session?.user) {
+  if (!authenticated) {
     return (
       <div className="space-y-3">
         <div className="p-4 rounded-lg bg-slate-50 dark:bg-slate-900 border">
@@ -52,7 +52,7 @@ export function AccountSection() {
     );
   }
 
-  const email = session.user.email ?? "Signed in";
+  const email = user?.email ?? "Signed in";
 
   return (
     <div className="space-y-3">

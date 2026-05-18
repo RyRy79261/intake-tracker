@@ -1,12 +1,11 @@
 "use client";
 
-import { useSession } from "@/lib/auth-client";
+import { useAuth } from "@/components/auth-guard";
 import { useSyncLifecycle } from "@/hooks/use-sync-lifecycle";
 import { useSyncAutoDetect } from "@/hooks/use-sync-auto-detect";
 
 export function SyncLifecycleMount() {
-  const { data: session } = useSession();
-  const authenticated = !!session?.user;
+  const { authenticated } = useAuth();
   useSyncAutoDetect(authenticated);
   useSyncLifecycle(authenticated);
   return null;

@@ -1,18 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { NextRequest } from "next/server";
 
-const middlewareMock = vi.fn(async () => new Response(null, { status: 204 }));
-
-vi.mock("@/lib/neon-auth", () => ({
-  auth: {
-    getSession: vi.fn(async () => ({ data: null, error: null })),
-    handler: () => ({
-      GET: async () => new Response(null, { status: 204 }),
-      POST: async () => new Response(null, { status: 204 }),
-    }),
-    middleware: () => middlewareMock,
-  },
-}));
 
 function makeApiRequest(
   path: string,
@@ -89,20 +77,19 @@ describe("CORS middleware for /api/* routes", () => {
     expect(res.headers.get("Access-Control-Allow-Origin")).toBeNull();
   });
 
-  it("delegates non-API paths to auth handler", async () => {
-    middlewareMock.mockClear();
+  it("passes through non-API paths without CORS headers", async () => {
     const { default: middleware } = await import("../../src/middleware");
     const req = new NextRequest("https://example.test/medications", {
       method: "GET",
     });
 
-    await middleware(req);
-    expect(middlewareMock).toHaveBeenCalledWith(req);
+    const res = await middleware(req);
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBeNull();
   });
 
-  it("matcher config includes /api/:path* and page pattern", async () => {
+  it("matcher config includes only /api/:path*", async () => {
     const { config } = await import("../../src/middleware");
     expect(config.matcher).toContain("/api/:path*");
-    expect(config.matcher.length).toBe(2);
+    expect(config.matcher.length).toBe(1);
   });
 });

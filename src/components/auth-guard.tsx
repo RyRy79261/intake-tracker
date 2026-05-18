@@ -1,30 +1,53 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { useSession } from "@/lib/auth-client";
+import {
+  isCapacitorMode,
+  getAuthToken,
+  clearAuthToken,
+  apiFetch,
+} from "@/lib/api-fetch";
 
-/**
- * Hook to check if the user is authenticated via Neon Auth.
- *
- * NOTE: Since Phase 41 D-03 (middleware hard gate), AuthGuard is nearly
- * always redundant — unauthenticated users never reach the app shell.
- * The hook is kept primarily for components that want to display the
- * user's email or branch behavior on authenticated state.
- *
- * Per D-06, this hook NO LONGER exposes `getAuthHeader` / `getAccessToken`.
- * Cookies carry auth automatically on same-origin fetch calls, so
- * consumers should just call `fetch(...)` without attaching any
- * Authorization header. Consumer call-sites are updated in plan 41-04;
- * until then they will fail to typecheck — that breakage is documented
- * in plan 41-02 and resolved by plan 41-04.
- */
+interface CapUser {
+  id: string;
+  email: string;
+}
+
 export function useAuth() {
   const { data: session, isPending } = useSession();
+  const [capUser, setCapUser] = useState<CapUser | null>(null);
+  const [capPending, setCapPending] = useState(false);
+  const validated = useRef(false);
 
-  if (isPending) {
+  useEffect(() => {
+    if (!isCapacitorMode() || session?.user || validated.current) return;
+    const token = getAuthToken();
+    if (!token) return;
+
+    validated.current = true;
+    setCapPending(true);
+    apiFetch("/api/auth/validate")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.user) {
+          setCapUser({ id: data.user.id, email: data.user.email });
+        } else {
+          clearAuthToken();
+        }
+      })
+      .catch(() => {})
+      .finally(() => setCapPending(false));
+  }, [session]);
+
+  const loading = isPending || capPending;
+  const user = session?.user ?? capUser;
+
+  if (loading) {
     return { ready: false, authenticated: false, user: null } as const;
   }
 
-  if (!session?.user) {
+  if (!user) {
     return { ready: true, authenticated: false, user: null } as const;
   }
 
@@ -32,32 +55,18 @@ export function useAuth() {
     ready: true,
     authenticated: true,
     user: {
-      id: session.user.id,
-      email: session.user.email,
-      name: session.user.name,
+      id: user.id,
+      email: user.email,
+      name: "name" in user ? (user.name as string) : user.email,
     },
   } as const;
 }
 
-/**
- * Whether auth-gated features (AI buttons, push toggle) should be visible
- * in the UI. Returns true when the session is loading (avoids flicker on
- * first paint) or when the user is authenticated. Since Neon Auth uses
- * middleware hard-gating, authenticated users are assumed to be approved.
- */
 export function useAuthGate(): boolean {
   const { ready, authenticated } = useAuth();
-  // Show AI features while loading (to avoid flicker) or when authenticated
   return !ready || authenticated;
 }
 
-/**
- * AuthGuard is now a thin passthrough. The middleware.ts hard gate (D-03)
- * handles all redirects for unauthenticated users, so any wrapping tree
- * already sits inside an authenticated context. This component exists
- * purely for backwards compatibility with existing call-sites; they
- * become no-ops until they are removed in a future cleanup phase.
- */
 export function AuthGuard({
   children,
 }: {

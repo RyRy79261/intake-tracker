@@ -18,8 +18,17 @@ export const signIn = new Proxy(_signIn, {
     const original = Reflect.get(target, prop, receiver);
     if (typeof original !== "function") return original;
     if (prop === "email") {
-      return async (...args: Parameters<typeof _signIn.email>) => {
-        const result = await original(...args);
+      return async (
+        opts: Parameters<typeof _signIn.email>[0],
+        ...rest: unknown[]
+      ) => {
+        const callOpts = isCapacitorMode()
+          ? { ...opts, callbackURL: undefined }
+          : opts;
+        const result = await (original as typeof _signIn.email)(
+          callOpts as Parameters<typeof _signIn.email>[0],
+          ...(rest as [])
+        );
         if (isCapacitorMode() && result?.data?.token) {
           saveAuthToken(result.data.token);
         }

@@ -148,9 +148,7 @@ describe("root middleware.ts", () => {
     expect(mod.config).toBeDefined();
     expect(Array.isArray(mod.config.matcher)).toBe(true);
     const matcher = mod.config.matcher as string[];
-    expect(matcher.length).toBe(2);
+    expect(matcher.length).toBe(1);
     expect(matcher).toContain("/api/:path*");
-    const pagePattern = matcher.find((m) => m.includes("auth") && m.includes("_next"));
-    expect(pagePattern).toBeDefined();
   });
 });

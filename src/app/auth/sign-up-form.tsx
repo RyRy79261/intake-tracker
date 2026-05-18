@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { signUp } from "@/lib/auth-client";
+import { isCapacitorMode, saveAuthToken } from "@/lib/api-fetch";
 
 /**
  * Email/password sign-up form with whitelist-aware error handling (D-04).
@@ -59,12 +60,15 @@ export function SignUpForm() {
         email: email.trim(),
         password,
         name: name.trim() || email.trim(),
-        callbackURL: "/",
+        ...(isCapacitorMode() ? {} : { callbackURL: "/" }),
       });
       if (result && "error" in result && result.error) {
         setError(mapServerError(result.error.message ?? "Sign up failed"));
         setLoading(false);
         return;
+      }
+      if (isCapacitorMode() && result?.data?.token) {
+        saveAuthToken(result.data.token);
       }
       router.replace("/");
       router.refresh();

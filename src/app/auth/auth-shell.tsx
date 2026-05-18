@@ -1,5 +1,10 @@
+"use client";
+
 import type { ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function AuthShell({
@@ -9,9 +14,22 @@ export function AuthShell({
   children: ReactNode;
   className?: string;
 }) {
+  const router = useRouter();
+
   return (
     <div className="flex min-h-svh flex-col items-center justify-center bg-muted p-6 md:p-10">
       <div className={cn("w-full max-w-sm", className)}>
+        <div className="mb-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1.5 text-muted-foreground"
+            onClick={() => router.back()}
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back
+          </Button>
+        </div>
         <Card className="overflow-hidden p-0">
           <CardContent className="p-6 md:p-8">{children}</CardContent>
         </Card>

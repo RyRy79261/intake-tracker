@@ -8,14 +8,14 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { LogIn, LogOut, User } from "lucide-react";
-import { useSession } from "@/lib/auth-client";
+import { useAuth } from "@/components/auth-guard";
 import { handleSignOut } from "@/lib/sign-out";
 
 export function AuthButton() {
-  const { data: session, isPending } = useSession();
+  const { ready, authenticated, user } = useAuth();
   const router = useRouter();
 
-  if (isPending) {
+  if (!ready) {
     return (
       <Button
         variant="ghost"
@@ -29,7 +29,7 @@ export function AuthButton() {
     );
   }
 
-  if (!session?.user) {
+  if (!authenticated) {
     return (
       <Button
         variant="ghost"
@@ -44,7 +44,7 @@ export function AuthButton() {
     );
   }
 
-  const email = session.user.email;
+  const email = user?.email;
   const initial = (email?.[0] ?? "U").toUpperCase();
 
   return (
