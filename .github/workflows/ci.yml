@@ -239,6 +239,22 @@ jobs:
       - run: pnpm install --frozen-lockfile
       # Each run gets its own branch so concurrent PRs do not collide with
       # the e2e job's ci-e2e-<run_id> branch or with each other.
+      - name: Diagnose Neon secret presence
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+        run: |
+          # Print only lengths, never values — GitHub masks any exact match
+          # of a secret value, but length is safe and tells us whether the
+          # interpolation is producing an empty string.
+          echo "NEON_API_KEY length:    ${#NEON_API_KEY}"
+          echo "NEON_PROJECT_ID length: ${#NEON_PROJECT_ID}"
+          if [ -z "$NEON_API_KEY" ]; then
+            echo "::error::NEON_API_KEY is empty in this workflow context"
+          fi
+          if [ -z "$NEON_PROJECT_ID" ]; then
+            echo "::error::NEON_PROJECT_ID is empty in this workflow context"
+          fi
       - name: Create Neon test branch
         id: neon-branch
         uses: neondatabase/create-branch-action@v5
