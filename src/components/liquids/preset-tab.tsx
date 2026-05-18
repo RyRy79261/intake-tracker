@@ -469,6 +469,21 @@ export function PresetTab({ tab }: PresetTabProps) {
         </div>
       )}
 
+      {/* Name Input — always visible so signed-out users can label entries */}
+      <Input
+        value={beverageName}
+        onChange={(e) => setBeverageName(e.target.value)}
+        placeholder={
+          tab === "coffee"
+            ? "e.g. Espresso, Latte"
+            : tab === "alcohol"
+              ? "e.g. Beer, Whisky"
+              : "e.g. Juice, Smoothie"
+        }
+        aria-label={`${tab} name`}
+        className="h-10 mb-3"
+      />
+
       {/* 3. Volume and Substance Fields */}
       <div className="grid grid-cols-2 gap-3 mb-2">
         <div>

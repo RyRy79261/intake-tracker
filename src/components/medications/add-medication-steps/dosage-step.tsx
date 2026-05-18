@@ -1,0 +1,102 @@
+"use client";
+
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
+import type { AddMedicationFormState } from "@/hooks/use-add-medication-form";
+import { type FieldChange, DOSE_MULTIPLIERS } from "./types";
+
+export function DosageStep({
+  formState, onFieldChange,
+}: {
+  formState: AddMedicationFormState;
+  onFieldChange: FieldChange;
+}) {
+  const { dosageAmount, customDosage, dosageStrength, asNeeded } = formState;
+  const parseStrengthNum = (str: string): number => {
+    const match = str.match(/(\d+(?:\.\d+)?)/);
+    return match?.[1] ? parseFloat(match[1]) : 1;
+  };
+  const parseStrengthUnit = (str: string): string => {
+    const match = str.match(/\d+(?:\.\d+)?\s*([a-zA-Z]+)/);
+    return match?.[1] ?? "mg";
+  };
+
+  const strengthNum = parseStrengthNum(dosageStrength);
+  const unit = parseStrengthUnit(dosageStrength);
+  const activeDosage = customDosage ? parseFloat(customDosage) || 1 : dosageAmount;
+  const prescribedAmount = activeDosage * strengthNum;
+  const pillsNeeded = activeDosage;
+
+  return (
+    <div className="space-y-4">
+      {dosageStrength && (
+        <p className="text-sm text-muted-foreground">
+          Each pill contains <span className="font-medium text-foreground">{dosageStrength}</span>
+        </p>
+      )}
+
+      <div>
+        <Label className="text-sm font-medium mb-2 block">Prescribed dose amount</Label>
+        <div className="grid grid-cols-3 gap-2">
+          {DOSE_MULTIPLIERS.map((mult) => {
+            const amount = mult * strengthNum;
+            return (
+              <button
+                key={mult}
+                onClick={() => { onFieldChange("dosageAmount", mult); onFieldChange("customDosage", ""); }}
+                className={cn(
+                  "py-3 rounded-lg border text-sm font-medium transition-colors",
+                  dosageAmount === mult && !customDosage
+                    ? "bg-teal-50 border-teal-300 text-teal-700 dark:bg-teal-950/40 dark:border-teal-700 dark:text-teal-300"
+                    : "border-border hover:bg-muted"
+                )}
+              >
+                {amount}{unit}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div>
+        <Label className="text-sm mb-1.5 block">Custom dose ({unit})</Label>
+        <Input
+          type="number"
+          step="any"
+          min="0"
+          value={customDosage ? String(parseFloat(customDosage) * strengthNum || "") : ""}
+          onChange={(e) => {
+            const mgVal = parseFloat(e.target.value);
+            if (!isNaN(mgVal) && strengthNum > 0) {
+              onFieldChange("customDosage", String(mgVal / strengthNum));
+            } else {
+              onFieldChange("customDosage", "");
+            }
+          }}
+          placeholder={`e.g. ${strengthNum * 2}${unit}`}
+        />
+      </div>
+
+      <div className="rounded-lg bg-muted/50 p-3 text-sm">
+        <p className="text-muted-foreground">
+          <span className="font-medium text-foreground">{prescribedAmount}{unit}</span> per dose
+          {" = "}
+          <span className="font-medium text-foreground">
+            {pillsNeeded === 1 ? "1 pill" : `${pillsNeeded} pills`}
+          </span>
+          {pillsNeeded < 1 && " (partial pill)"}
+        </p>
+      </div>
+
+      <div className="flex items-center justify-between rounded-lg border p-3">
+        <div>
+          <p className="text-sm font-medium">As needed (PRN)</p>
+          <p className="text-xs text-muted-foreground">No fixed schedule — take when needed</p>
+        </div>
+        <Switch checked={asNeeded} onCheckedChange={(v) => onFieldChange("asNeeded", v)} />
+      </div>
+    </div>
+  );
+}
