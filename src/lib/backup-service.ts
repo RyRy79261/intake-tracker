@@ -25,6 +25,7 @@ import {
 import { ok, err, type ServiceResult } from "./service-result";
 import { logAudit } from "./audit";
 import { encrypt, decrypt, type EncryptedData } from "./crypto";
+import { BACKUP_VALIDATORS } from "./backup-schemas";
 
 export interface BackupData {
   version: number;
@@ -380,163 +381,6 @@ function validateBackupData(data: unknown): data is BackupData {
   return true;
 }
 
-// --- Record validators ---
-
-function isValidIntakeRecord(record: unknown): record is IntakeRecord {
-  if (!record || typeof record !== "object") return false;
-  const r = record as Record<string, unknown>;
-  return (
-    typeof r.id === "string" &&
-    (r.type === "water" || r.type === "salt") &&
-    typeof r.amount === "number" &&
-    typeof r.timestamp === "number"
-  );
-}
-
-function isValidWeightRecord(record: unknown): record is WeightRecord {
-  if (!record || typeof record !== "object") return false;
-  const r = record as Record<string, unknown>;
-  return (
-    typeof r.id === "string" &&
-    typeof r.weight === "number" &&
-    typeof r.timestamp === "number"
-  );
-}
-
-function isValidBPRecord(record: unknown): record is BloodPressureRecord {
-  if (!record || typeof record !== "object") return false;
-  const r = record as Record<string, unknown>;
-  return (
-    typeof r.id === "string" &&
-    typeof r.systolic === "number" &&
-    typeof r.diastolic === "number" &&
-    typeof r.timestamp === "number" &&
-    (r.position === "sitting" || r.position === "standing") &&
-    (r.arm === "left" || r.arm === "right")
-  );
-}
-
-function isValidEatingRecord(record: unknown): record is EatingRecord {
-  if (!record || typeof record !== "object") return false;
-  const r = record as Record<string, unknown>;
-  return typeof r.id === "string" && typeof r.timestamp === "number";
-}
-
-function isValidUrinationRecord(record: unknown): record is UrinationRecord {
-  if (!record || typeof record !== "object") return false;
-  const r = record as Record<string, unknown>;
-  return typeof r.id === "string" && typeof r.timestamp === "number";
-}
-
-function isValidDefecationRecord(record: unknown): record is DefecationRecord {
-  if (!record || typeof record !== "object") return false;
-  const r = record as Record<string, unknown>;
-  return typeof r.id === "string" && typeof r.timestamp === "number";
-}
-
-function isValidSubstanceRecord(record: unknown): record is SubstanceRecord {
-  if (!record || typeof record !== "object") return false;
-  const r = record as Record<string, unknown>;
-  return (
-    typeof r.id === "string" &&
-    (r.type === "caffeine" || r.type === "alcohol") &&
-    typeof r.timestamp === "number"
-  );
-}
-
-function isValidPrescription(record: unknown): record is Prescription {
-  if (!record || typeof record !== "object") return false;
-  const r = record as Record<string, unknown>;
-  return (
-    typeof r.id === "string" &&
-    typeof r.genericName === "string" &&
-    typeof r.indication === "string" &&
-    typeof r.isActive === "boolean"
-  );
-}
-
-function isValidMedicationPhase(record: unknown): record is MedicationPhase {
-  if (!record || typeof record !== "object") return false;
-  const r = record as Record<string, unknown>;
-  return (
-    typeof r.id === "string" &&
-    typeof r.prescriptionId === "string" &&
-    typeof r.type === "string" &&
-    typeof r.unit === "string"
-  );
-}
-
-function isValidPhaseSchedule(record: unknown): record is PhaseSchedule {
-  if (!record || typeof record !== "object") return false;
-  const r = record as Record<string, unknown>;
-  return (
-    typeof r.id === "string" &&
-    typeof r.phaseId === "string" &&
-    typeof r.dosage === "number"
-  );
-}
-
-function isValidInventoryItem(record: unknown): record is InventoryItem {
-  if (!record || typeof record !== "object") return false;
-  const r = record as Record<string, unknown>;
-  return (
-    typeof r.id === "string" &&
-    typeof r.prescriptionId === "string" &&
-    typeof r.brandName === "string"
-  );
-}
-
-function isValidInventoryTransaction(record: unknown): record is InventoryTransaction {
-  if (!record || typeof record !== "object") return false;
-  const r = record as Record<string, unknown>;
-  return (
-    typeof r.id === "string" &&
-    typeof r.inventoryItemId === "string" &&
-    typeof r.amount === "number"
-  );
-}
-
-function isValidDoseLog(record: unknown): record is DoseLog {
-  if (!record || typeof record !== "object") return false;
-  const r = record as Record<string, unknown>;
-  return (
-    typeof r.id === "string" &&
-    typeof r.prescriptionId === "string" &&
-    typeof r.phaseId === "string" &&
-    typeof r.scheduledDate === "string"
-  );
-}
-
-function isValidTitrationPlan(record: unknown): record is TitrationPlan {
-  if (!record || typeof record !== "object") return false;
-  const r = record as Record<string, unknown>;
-  return (
-    typeof r.id === "string" &&
-    typeof r.title === "string" &&
-    typeof r.status === "string"
-  );
-}
-
-function isValidDailyNote(record: unknown): record is DailyNote {
-  if (!record || typeof record !== "object") return false;
-  const r = record as Record<string, unknown>;
-  return (
-    typeof r.id === "string" &&
-    typeof r.date === "string" &&
-    typeof r.note === "string"
-  );
-}
-
-function isValidAuditLog(record: unknown): record is AuditLog {
-  if (!record || typeof record !== "object") return false;
-  const r = record as Record<string, unknown>;
-  return (
-    typeof r.id === "string" &&
-    typeof r.timestamp === "number" &&
-    typeof r.action === "string"
-  );
-}
-
 /**
  * Conflict-aware merge for a single medication/system table.
  * Returns the number of new records imported.
@@ -675,44 +519,44 @@ export async function importBackup(
         substance: new Set(substanceIds),
       };
 
-      result.intakeImported = await importHealthTable(data.intakeRecords || [], isValidIntakeRecord, healthIdSets.intake, db.intakeRecords, result);
-      result.weightImported = await importHealthTable(data.weightRecords || [], isValidWeightRecord, healthIdSets.weight, db.weightRecords, result);
-      result.bpImported = await importHealthTable(data.bloodPressureRecords || [], isValidBPRecord, healthIdSets.bp, db.bloodPressureRecords, result);
-      result.eatingImported = await importHealthTable(data.eatingRecords || [], isValidEatingRecord, healthIdSets.eating, db.eatingRecords, result);
-      result.urinationImported = await importHealthTable(data.urinationRecords || [], isValidUrinationRecord, healthIdSets.urination, db.urinationRecords, result);
-      result.defecationImported = await importHealthTable(data.defecationRecords || [], isValidDefecationRecord, healthIdSets.defecation, db.defecationRecords, result);
-      result.substanceImported = await importHealthTable(data.substanceRecords || [], isValidSubstanceRecord, healthIdSets.substance, db.substanceRecords, result);
+      result.intakeImported = await importHealthTable(data.intakeRecords || [], BACKUP_VALIDATORS.intakeRecords, healthIdSets.intake, db.intakeRecords, result);
+      result.weightImported = await importHealthTable(data.weightRecords || [], BACKUP_VALIDATORS.weightRecords, healthIdSets.weight, db.weightRecords, result);
+      result.bpImported = await importHealthTable(data.bloodPressureRecords || [], BACKUP_VALIDATORS.bloodPressureRecords, healthIdSets.bp, db.bloodPressureRecords, result);
+      result.eatingImported = await importHealthTable(data.eatingRecords || [], BACKUP_VALIDATORS.eatingRecords, healthIdSets.eating, db.eatingRecords, result);
+      result.urinationImported = await importHealthTable(data.urinationRecords || [], BACKUP_VALIDATORS.urinationRecords, healthIdSets.urination, db.urinationRecords, result);
+      result.defecationImported = await importHealthTable(data.defecationRecords || [], BACKUP_VALIDATORS.defecationRecords, healthIdSets.defecation, db.defecationRecords, result);
+      result.substanceImported = await importHealthTable(data.substanceRecords || [], BACKUP_VALIDATORS.substanceRecords, healthIdSets.substance, db.substanceRecords, result);
 
       // --- Medication/system tables: conflict-aware merge ---
-      result.prescriptionsImported = await mergeTableWithConflicts("prescriptions", data.prescriptions || [], isValidPrescription, result);
-      result.phasesImported = await mergeTableWithConflicts("medicationPhases", data.medicationPhases || [], isValidMedicationPhase, result);
-      result.schedulesImported = await mergeTableWithConflicts("phaseSchedules", data.phaseSchedules || [], isValidPhaseSchedule, result);
-      result.inventoryItemsImported = await mergeTableWithConflicts("inventoryItems", data.inventoryItems || [], isValidInventoryItem, result);
-      result.inventoryTransactionsImported = await mergeTableWithConflicts("inventoryTransactions", data.inventoryTransactions || [], isValidInventoryTransaction, result);
-      result.doseLogsImported = await mergeTableWithConflicts("doseLogs", data.doseLogs || [], isValidDoseLog, result);
-      result.titrationPlansImported = await mergeTableWithConflicts("titrationPlans", data.titrationPlans || [], isValidTitrationPlan, result);
-      result.dailyNotesImported = await mergeTableWithConflicts("dailyNotes", data.dailyNotes || [], isValidDailyNote, result);
-      result.auditLogsImported = await mergeTableWithConflicts("auditLogs", data.auditLogs || [], isValidAuditLog, result);
+      result.prescriptionsImported = await mergeTableWithConflicts("prescriptions", data.prescriptions || [], BACKUP_VALIDATORS.prescriptions, result);
+      result.phasesImported = await mergeTableWithConflicts("medicationPhases", data.medicationPhases || [], BACKUP_VALIDATORS.medicationPhases, result);
+      result.schedulesImported = await mergeTableWithConflicts("phaseSchedules", data.phaseSchedules || [], BACKUP_VALIDATORS.phaseSchedules, result);
+      result.inventoryItemsImported = await mergeTableWithConflicts("inventoryItems", data.inventoryItems || [], BACKUP_VALIDATORS.inventoryItems, result);
+      result.inventoryTransactionsImported = await mergeTableWithConflicts("inventoryTransactions", data.inventoryTransactions || [], BACKUP_VALIDATORS.inventoryTransactions, result);
+      result.doseLogsImported = await mergeTableWithConflicts("doseLogs", data.doseLogs || [], BACKUP_VALIDATORS.doseLogs, result);
+      result.titrationPlansImported = await mergeTableWithConflicts("titrationPlans", data.titrationPlans || [], BACKUP_VALIDATORS.titrationPlans, result);
+      result.dailyNotesImported = await mergeTableWithConflicts("dailyNotes", data.dailyNotes || [], BACKUP_VALIDATORS.dailyNotes, result);
+      result.auditLogsImported = await mergeTableWithConflicts("auditLogs", data.auditLogs || [], BACKUP_VALIDATORS.auditLogs, result);
     } else {
       // Replace mode: import everything without ID checks
-      result.intakeImported = await importHealthTable(data.intakeRecords || [], isValidIntakeRecord, new Set(), db.intakeRecords, result);
-      result.weightImported = await importHealthTable(data.weightRecords || [], isValidWeightRecord, new Set(), db.weightRecords, result);
-      result.bpImported = await importHealthTable(data.bloodPressureRecords || [], isValidBPRecord, new Set(), db.bloodPressureRecords, result);
-      result.eatingImported = await importHealthTable(data.eatingRecords || [], isValidEatingRecord, new Set(), db.eatingRecords, result);
-      result.urinationImported = await importHealthTable(data.urinationRecords || [], isValidUrinationRecord, new Set(), db.urinationRecords, result);
-      result.defecationImported = await importHealthTable(data.defecationRecords || [], isValidDefecationRecord, new Set(), db.defecationRecords, result);
-      result.substanceImported = await importHealthTable(data.substanceRecords || [], isValidSubstanceRecord, new Set(), db.substanceRecords, result);
+      result.intakeImported = await importHealthTable(data.intakeRecords || [], BACKUP_VALIDATORS.intakeRecords, new Set(), db.intakeRecords, result);
+      result.weightImported = await importHealthTable(data.weightRecords || [], BACKUP_VALIDATORS.weightRecords, new Set(), db.weightRecords, result);
+      result.bpImported = await importHealthTable(data.bloodPressureRecords || [], BACKUP_VALIDATORS.bloodPressureRecords, new Set(), db.bloodPressureRecords, result);
+      result.eatingImported = await importHealthTable(data.eatingRecords || [], BACKUP_VALIDATORS.eatingRecords, new Set(), db.eatingRecords, result);
+      result.urinationImported = await importHealthTable(data.urinationRecords || [], BACKUP_VALIDATORS.urinationRecords, new Set(), db.urinationRecords, result);
+      result.defecationImported = await importHealthTable(data.defecationRecords || [], BACKUP_VALIDATORS.defecationRecords, new Set(), db.defecationRecords, result);
+      result.substanceImported = await importHealthTable(data.substanceRecords || [], BACKUP_VALIDATORS.substanceRecords, new Set(), db.substanceRecords, result);
 
       // Medication tables in replace mode: no conflict detection, just import
-      result.prescriptionsImported = await importHealthTable(data.prescriptions || [], isValidPrescription, new Set(), db.prescriptions, result);
-      result.phasesImported = await importHealthTable(data.medicationPhases || [], isValidMedicationPhase, new Set(), db.medicationPhases, result);
-      result.schedulesImported = await importHealthTable(data.phaseSchedules || [], isValidPhaseSchedule, new Set(), db.phaseSchedules, result);
-      result.inventoryItemsImported = await importHealthTable(data.inventoryItems || [], isValidInventoryItem, new Set(), db.inventoryItems, result);
-      result.inventoryTransactionsImported = await importHealthTable(data.inventoryTransactions || [], isValidInventoryTransaction, new Set(), db.inventoryTransactions, result);
-      result.doseLogsImported = await importHealthTable(data.doseLogs || [], isValidDoseLog, new Set(), db.doseLogs, result);
-      result.titrationPlansImported = await importHealthTable(data.titrationPlans || [], isValidTitrationPlan, new Set(), db.titrationPlans, result);
-      result.dailyNotesImported = await importHealthTable(data.dailyNotes || [], isValidDailyNote, new Set(), db.dailyNotes, result);
-      result.auditLogsImported = await importHealthTable(data.auditLogs || [], isValidAuditLog, new Set(), db.auditLogs, result);
+      result.prescriptionsImported = await importHealthTable(data.prescriptions || [], BACKUP_VALIDATORS.prescriptions, new Set(), db.prescriptions, result);
+      result.phasesImported = await importHealthTable(data.medicationPhases || [], BACKUP_VALIDATORS.medicationPhases, new Set(), db.medicationPhases, result);
+      result.schedulesImported = await importHealthTable(data.phaseSchedules || [], BACKUP_VALIDATORS.phaseSchedules, new Set(), db.phaseSchedules, result);
+      result.inventoryItemsImported = await importHealthTable(data.inventoryItems || [], BACKUP_VALIDATORS.inventoryItems, new Set(), db.inventoryItems, result);
+      result.inventoryTransactionsImported = await importHealthTable(data.inventoryTransactions || [], BACKUP_VALIDATORS.inventoryTransactions, new Set(), db.inventoryTransactions, result);
+      result.doseLogsImported = await importHealthTable(data.doseLogs || [], BACKUP_VALIDATORS.doseLogs, new Set(), db.doseLogs, result);
+      result.titrationPlansImported = await importHealthTable(data.titrationPlans || [], BACKUP_VALIDATORS.titrationPlans, new Set(), db.titrationPlans, result);
+      result.dailyNotesImported = await importHealthTable(data.dailyNotes || [], BACKUP_VALIDATORS.dailyNotes, new Set(), db.dailyNotes, result);
+      result.auditLogsImported = await importHealthTable(data.auditLogs || [], BACKUP_VALIDATORS.auditLogs, new Set(), db.auditLogs, result);
     }
 
     result.success = true;

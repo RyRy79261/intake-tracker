@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { useMigrationStore } from "@/stores/migration-store";
+// eslint-disable-next-line no-restricted-imports
 import {
   startMigration,
   cancelMigration,

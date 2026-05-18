@@ -1,5 +1,57 @@
 # Changelog
 
+## [1.9.0](https://github.com/RyRy79261/intake-tracker/compare/v1.8.1...v1.9.0) (2026-05-18)
+
+
+### Features
+
+* throttle PIN unlock attempts with exponential backoff ([8e0e418](https://github.com/RyRy79261/intake-tracker/commit/8e0e4180dfbbae205337f138c3145bcee14eddad))
+
+
+### Bug Fixes
+
+* **e2e:** correct expected toast for food entry without note ([3217a7b](https://github.com/RyRy79261/intake-tracker/commit/3217a7be90f5baf442bdd0bb7eae6ffcf6720064))
+* **eating:** treat limit=0 as empty result, matching urination/defecation ([34178e7](https://github.com/RyRy79261/intake-tracker/commit/34178e7a67ac1eddcdd92442c8471d5cf66666a5))
+* **food:** require sodium before enabling save in food entry form ([bb93f65](https://github.com/RyRy79261/intake-tracker/commit/bb93f655d187fcaca41588bb08eaf77372783e61))
+* guard useNowTick against non-positive intervalMs ([840d6be](https://github.com/RyRy79261/intake-tracker/commit/840d6be20a7b85a90848063e97d5ca11c78a711b))
+* **liquids:** show name input on Coffee/Alcohol tabs when signed out ([7b78265](https://github.com/RyRy79261/intake-tracker/commit/7b78265ed55fd199bf1afe1f659e2350dee1b7d7))
+* **medications:** address CodeRabbit quick-win findings ([fcb8f14](https://github.com/RyRy79261/intake-tracker/commit/fcb8f1499a7b866fb19118192057af7165f55445))
+* **pin:** apply lockout throttle to changePin and removePin ([d6ef356](https://github.com/RyRy79261/intake-tracker/commit/d6ef3561a5de0de7e17283581dfd4fbded9ff851))
+* prune expired buckets in the rate limiter ([373205d](https://github.com/RyRy79261/intake-tracker/commit/373205d6a83c7f6fdcdcbde457ee2c22ef1ba9ad))
+* return 400 instead of 500/502 on malformed JSON ([7ee88be](https://github.com/RyRy79261/intake-tracker/commit/7ee88be226f915ea89b8a12efbef44bd70b64e07))
+* route remaining AI handlers through parseJsonBody ([3bd9936](https://github.com/RyRy79261/intake-tracker/commit/3bd9936cb97edc16b4aeb8e2de7497a018e8a7d6))
+* route substance-enrich through parseJsonBody for 400 on bad JSON ([94cf87d](https://github.com/RyRy79261/intake-tracker/commit/94cf87d89282396525a76d98e97a3fde71928e67))
+* soft-delete urination and defecation records ([d6903b9](https://github.com/RyRy79261/intake-tracker/commit/d6903b9b8c0156f89b9ad282b011087bbe37f860))
+* treat limit=0 as empty result in urination/defecation reads ([b7e6860](https://github.com/RyRy79261/intake-tracker/commit/b7e6860d0f7155d382f730611859c47988cffa63))
+
+## [1.8.1](https://github.com/RyRy79261/intake-tracker/compare/v1.8.0...v1.8.1) (2026-05-17)
+
+
+### Reverts
+
+* **icons:** restore custom droplet glyph ([99b8cf0](https://github.com/RyRy79261/intake-tracker/commit/99b8cf086c13ddf235256c5be290b7b50f4f4607))
+
+## [1.8.0](https://github.com/RyRy79261/intake-tracker/compare/v1.7.0...v1.8.0) (2026-05-17)
+
+
+### Features
+
+* **auth:** hide AI- and push-gated UI when signed out ([60b2cc9](https://github.com/RyRy79261/intake-tracker/commit/60b2cc99d60dbd2870862c78a5694dd6d963e428))
+* **auth:** make landing offline-first; gate AI & push behind a sign-in modal ([a7dfc4d](https://github.com/RyRy79261/intake-tracker/commit/a7dfc4d878451cc9a77545a36e2656be88f5dcd7))
+* **auth:** make landing offline-first; gate AI & push behind a sign-in modal ([dcb6bfc](https://github.com/RyRy79261/intake-tracker/commit/dcb6bfc7025a398a01ed2b506600e45be9cc62f9))
+* **auth:** surface AI approval status separately from sign-in ([b2d964d](https://github.com/RyRy79261/intake-tracker/commit/b2d964d9d54cd7b96f52f1a4720ef7846acf54e9))
+* graduate voice from experimental + swap export/import icons ([f488da5](https://github.com/RyRy79261/intake-tracker/commit/f488da5a79e327ed4345b42ae0f42305f77502c1))
+
+
+### Bug Fixes
+
+* **auth:** address review findings on auth modal flow ([2e76fc3](https://github.com/RyRy79261/intake-tracker/commit/2e76fc3e9c47185564c80df5bb993854b3d530a1))
+* **auth:** close local dialog before opening Privy modal ([bdb172a](https://github.com/RyRy79261/intake-tracker/commit/bdb172a127a9fec5848726ba4ec0ccb7d367f9f3))
+* **auth:** split whitelist denial from token failure end-to-end ([34c9bf2](https://github.com/RyRy79261/intake-tracker/commit/34c9bf227d6e54ffb4f591bab7e2daf75721449a))
+* **auth:** tighten useAiAccess against token failures and cache leaks ([7430b42](https://github.com/RyRy79261/intake-tracker/commit/7430b42c44db204fbb21c32d25abfb4b23c01716))
+* **push:** guard against null access token after auth ([ca424be](https://github.com/RyRy79261/intake-tracker/commit/ca424bed02c76869150ee405f862a8ea23ea3500))
+* **voice:** route through useAiFetch so logged-out users see sign-in modal ([b512e78](https://github.com/RyRy79261/intake-tracker/commit/b512e7832eb54d19afd08e76897c7b3240a4201d))
+
 ## [1.7.0](https://github.com/RyRy79261/intake-tracker/compare/v1.6.0...v1.7.0) (2026-05-17)
 
 

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useStorageInfo } from "@/hooks/use-storage-info";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useSyncStatusStore } from "@/stores/sync-status-store";
+// eslint-disable-next-line no-restricted-imports
 import { checkInterruptedMigration } from "@/lib/migration-service";
 import { MigrationWizard } from "@/components/migration/migration-wizard";
 

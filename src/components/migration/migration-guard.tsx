@@ -1,6 +1,7 @@
 "use client";
 
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
+// eslint-disable-next-line no-restricted-imports
 import { checkInterruptedMigration } from "@/lib/migration-service";
 
 const MigrationWizard = lazy(() =>

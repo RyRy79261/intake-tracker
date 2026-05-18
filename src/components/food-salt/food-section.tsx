@@ -77,6 +77,7 @@ export function FoodSection() {
     sodiumMgNum > 0
       ? Math.round(sodiumMgNum * SODIUM_MULTIPLIERS[sodiumSource])
       : 0;
+  const hasSodium = calculatedSodiumMg > 0;
 
   // ─── Recent eating records ────────────────────────────────────────
   const recentRecords = useEatingRecords(5);
@@ -219,6 +220,14 @@ export function FoodSection() {
 
   const handleDetailSubmit = useCallback(async () => {
     if (isSubmitting) return;
+    if (!hasSodium) {
+      toast({
+        title: "Sodium required",
+        description: "Enter a sodium amount before saving.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -285,6 +294,7 @@ export function FoodSection() {
     }
   }, [
     isSubmitting,
+    hasSodium,
     foodText,
     detailGrams,
     calculatedSodiumMg,
@@ -363,8 +373,7 @@ export function FoodSection() {
         {/* Sodium section */}
         <div className="space-y-1">
           <Label htmlFor="eating-sodium" className="text-sm">
-            Sodium{" "}
-            <span className="text-muted-foreground font-normal">(optional)</span>
+            Sodium <span className="text-red-600 dark:text-red-400">*</span>
           </Label>
           <div className="flex gap-2">
             <Input
@@ -374,6 +383,8 @@ export function FoodSection() {
               placeholder="mg"
               value={sodiumMg}
               onChange={(e) => setSodiumMg(e.target.value)}
+              required
+              aria-required="true"
               className="flex-1"
             />
             <Select
@@ -416,7 +427,7 @@ export function FoodSection() {
         {/* Record button — always visible */}
         <Button
           onClick={handleDetailSubmit}
-          disabled={addEatingMutation.isPending || isSubmitting}
+          disabled={addEatingMutation.isPending || isSubmitting || !hasSodium}
           className={cn("w-full mt-2", theme.buttonBg)}
         >
           {addEatingMutation.isPending || isSubmitting ? (
@@ -425,6 +436,11 @@ export function FoodSection() {
             "Record with details"
           )}
         </Button>
+        {!hasSodium && (
+          <p className="text-xs text-muted-foreground -mt-1">
+            Enter a sodium amount to enable saving.
+          </p>
+        )}
       </div>
 
       {/* Recent Eating Records */}

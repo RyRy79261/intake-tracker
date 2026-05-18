@@ -33,7 +33,7 @@ export async function addEatingRecord(
 export async function getEatingRecords(limit?: number): Promise<EatingRecord[]> {
   const records = await db.eatingRecords.orderBy("timestamp").reverse().toArray();
   const active = records.filter((r) => r.deletedAt === null);
-  return limit ? active.slice(0, limit) : active;
+  return limit !== undefined ? active.slice(0, limit) : active;
 }
 
 export async function getEatingRecordsByDateRange(

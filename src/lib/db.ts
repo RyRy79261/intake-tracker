@@ -333,11 +333,12 @@ const db = new Dexie("IntakeTrackerDB") as Dexie & {
   _syncMeta: EntityTable<SyncMetaRow, "tableName">;
 };
 
-// Version 10: Consolidated schema with sync-readiness fields, compound indexes,
-// and event-sourced inventory. Replaces v4-v9 (all prior migrations ran on
-// production data and are no longer needed in code). Legacy `medications` and
-// `medicationSchedules` tables intentionally omitted — Dexie will delete them.
-db.version(10).stores({
+// Schema is declared cumulatively: each version is the previous version's
+// schema with the additions/changes for that version spread in. Dexie still
+// needs the full schema per version, but we no longer copy-paste 13 lines
+// across 6 versions when only one or two changed.
+
+const V10_STORES = {
   // Health records — compound indexes for date-range correlation queries
   intakeRecords:           "id, [type+timestamp], timestamp, source, updatedAt",
   weightRecords:           "id, timestamp, updatedAt",
@@ -357,7 +358,38 @@ db.version(10).stores({
 
   // Audit and system
   auditLogs:               "id, [action+timestamp], timestamp, action",
-}).upgrade(async (trans) => {
+} as const;
+
+const V11_STORES = V10_STORES;
+
+const V12_STORES = {
+  ...V11_STORES,
+  substanceRecords:        "id, [type+timestamp], type, timestamp, source, sourceRecordId, updatedAt",
+} as const;
+
+const V13_STORES = {
+  ...V12_STORES,
+  prescriptions:           "id, isActive, updatedAt, createdAt",
+} as const;
+
+const V14_STORES = {
+  ...V13_STORES,
+  medicationPhases:        "id, prescriptionId, status, type, titrationPlanId, updatedAt",
+  titrationPlans:          "id, conditionLabel, status, updatedAt",
+} as const;
+
+const V15_STORES = {
+  ...V14_STORES,
+  intakeRecords:           "id, [type+timestamp], timestamp, source, groupId, updatedAt",
+  eatingRecords:           "id, timestamp, groupId, updatedAt",
+  substanceRecords:        "id, [type+timestamp], type, timestamp, source, sourceRecordId, groupId, updatedAt",
+} as const;
+
+// Version 10: Consolidated schema with sync-readiness fields, compound indexes,
+// and event-sourced inventory. Replaces v4-v9 (all prior migrations ran on
+// production data and are no longer needed in code). Legacy `medications` and
+// `medicationSchedules` tables intentionally omitted — Dexie will delete them.
+db.version(10).stores(V10_STORES).upgrade(async (trans) => {
   const now = Date.now();
   const deviceId = "migrated-v10";
 
@@ -427,23 +459,8 @@ db.version(10).stores({
 // Backfill timezone using date-based rules:
 //   - Before 2026-02-12 → "Africa/Johannesburg"
 //   - From 2026-02-12 onward → "Europe/Berlin"
-db.version(11).stores({
-  // Same store definitions as v10 — no index changes needed
-  intakeRecords:           "id, [type+timestamp], timestamp, source, updatedAt",
-  weightRecords:           "id, timestamp, updatedAt",
-  bloodPressureRecords:    "id, timestamp, position, arm, updatedAt",
-  eatingRecords:           "id, timestamp, updatedAt",
-  urinationRecords:        "id, timestamp, updatedAt",
-  defecationRecords:       "id, timestamp, updatedAt",
-  prescriptions:           "id, isActive, updatedAt",
-  medicationPhases:        "id, prescriptionId, status, type, updatedAt",
-  phaseSchedules:          "id, phaseId, time, enabled, updatedAt",
-  inventoryItems:          "id, prescriptionId, isActive, updatedAt",
-  inventoryTransactions:   "id, [inventoryItemId+timestamp], inventoryItemId, timestamp, type, updatedAt",
-  doseLogs:                "id, [prescriptionId+scheduledDate], prescriptionId, phaseId, scheduleId, scheduledDate, scheduledTime, status, updatedAt",
-  dailyNotes:              "id, date, prescriptionId, doseLogId, updatedAt",
-  auditLogs:               "id, [action+timestamp], timestamp, action",
-}).upgrade(async (trans) => {
+// No index changes vs v10 — V11_STORES === V10_STORES.
+db.version(11).stores(V11_STORES).upgrade(async (trans) => {
   const now = Date.now();
 
   // Helper: backfill timezone on a table using its primary timestamp field
@@ -515,25 +532,7 @@ const DEFAULT_ALCOHOL_DRINKS: Record<string, number> = {
   beer: 1, wine: 1, cocktail: 1.5,
 };
 
-db.version(12).stores({
-  // Repeat all v11 store definitions
-  intakeRecords:           "id, [type+timestamp], timestamp, source, updatedAt",
-  weightRecords:           "id, timestamp, updatedAt",
-  bloodPressureRecords:    "id, timestamp, position, arm, updatedAt",
-  eatingRecords:           "id, timestamp, updatedAt",
-  urinationRecords:        "id, timestamp, updatedAt",
-  defecationRecords:       "id, timestamp, updatedAt",
-  prescriptions:           "id, isActive, updatedAt",
-  medicationPhases:        "id, prescriptionId, status, type, updatedAt",
-  phaseSchedules:          "id, phaseId, time, enabled, updatedAt",
-  inventoryItems:          "id, prescriptionId, isActive, updatedAt",
-  inventoryTransactions:   "id, [inventoryItemId+timestamp], inventoryItemId, timestamp, type, updatedAt",
-  doseLogs:                "id, [prescriptionId+scheduledDate], prescriptionId, phaseId, scheduleId, scheduledDate, scheduledTime, status, updatedAt",
-  dailyNotes:              "id, date, prescriptionId, doseLogId, updatedAt",
-  auditLogs:               "id, [action+timestamp], timestamp, action",
-  // New table
-  substanceRecords:        "id, [type+timestamp], type, timestamp, source, sourceRecordId, updatedAt",
-}).upgrade(async (trans) => {
+db.version(12).stores(V12_STORES).upgrade(async (trans) => {
   const intakeRecords = await trans.table("intakeRecords").toArray();
   const substanceTable = trans.table("substanceRecords");
 
@@ -589,68 +588,18 @@ db.version(12).stores({
 // Fixes "KeyPath createdAt on object store prescriptions is not indexed" error
 // when getPrescriptions() calls orderBy('createdAt'). No upgrade function needed —
 // Dexie auto-creates the index from existing data.
-db.version(13).stores({
-  intakeRecords:           "id, [type+timestamp], timestamp, source, updatedAt",
-  weightRecords:           "id, timestamp, updatedAt",
-  bloodPressureRecords:    "id, timestamp, position, arm, updatedAt",
-  eatingRecords:           "id, timestamp, updatedAt",
-  urinationRecords:        "id, timestamp, updatedAt",
-  defecationRecords:       "id, timestamp, updatedAt",
-  prescriptions:           "id, isActive, updatedAt, createdAt",
-  medicationPhases:        "id, prescriptionId, status, type, updatedAt",
-  phaseSchedules:          "id, phaseId, time, enabled, updatedAt",
-  inventoryItems:          "id, prescriptionId, isActive, updatedAt",
-  inventoryTransactions:   "id, [inventoryItemId+timestamp], inventoryItemId, timestamp, type, updatedAt",
-  doseLogs:                "id, [prescriptionId+scheduledDate], prescriptionId, phaseId, scheduleId, scheduledDate, scheduledTime, status, updatedAt",
-  dailyNotes:              "id, date, prescriptionId, doseLogId, updatedAt",
-  auditLogs:               "id, [action+timestamp], timestamp, action",
-  substanceRecords:        "id, [type+timestamp], type, timestamp, source, sourceRecordId, updatedAt",
-});
+db.version(13).stores(V13_STORES);
 
 // Version 14: Add titrationPlans table and titrationPlanId index on medicationPhases.
 // Titration plans group cross-prescription dosage adjustments for a condition.
 // No data migration needed — new tables only.
-db.version(14).stores({
-  intakeRecords:           "id, [type+timestamp], timestamp, source, updatedAt",
-  weightRecords:           "id, timestamp, updatedAt",
-  bloodPressureRecords:    "id, timestamp, position, arm, updatedAt",
-  eatingRecords:           "id, timestamp, updatedAt",
-  urinationRecords:        "id, timestamp, updatedAt",
-  defecationRecords:       "id, timestamp, updatedAt",
-  prescriptions:           "id, isActive, updatedAt, createdAt",
-  medicationPhases:        "id, prescriptionId, status, type, titrationPlanId, updatedAt",
-  phaseSchedules:          "id, phaseId, time, enabled, updatedAt",
-  inventoryItems:          "id, prescriptionId, isActive, updatedAt",
-  inventoryTransactions:   "id, [inventoryItemId+timestamp], inventoryItemId, timestamp, type, updatedAt",
-  doseLogs:                "id, [prescriptionId+scheduledDate], prescriptionId, phaseId, scheduleId, scheduledDate, scheduledTime, status, updatedAt",
-  dailyNotes:              "id, date, prescriptionId, doseLogId, updatedAt",
-  auditLogs:               "id, [action+timestamp], timestamp, action",
-  substanceRecords:        "id, [type+timestamp], type, timestamp, source, sourceRecordId, updatedAt",
-  titrationPlans:          "id, conditionLabel, status, updatedAt",
-});
+db.version(14).stores(V14_STORES);
 
 // Version 15: Add groupId index to intakeRecords, eatingRecords, substanceRecords.
 // Enables composable entry queries — records sharing a groupId form an atomic group.
 // No .upgrade() needed — existing records have undefined groupId, which IndexedDB
 // excludes from index entries. Zero backfill required.
-db.version(15).stores({
-  intakeRecords:           "id, [type+timestamp], timestamp, source, groupId, updatedAt",
-  weightRecords:           "id, timestamp, updatedAt",
-  bloodPressureRecords:    "id, timestamp, position, arm, updatedAt",
-  eatingRecords:           "id, timestamp, groupId, updatedAt",
-  urinationRecords:        "id, timestamp, updatedAt",
-  defecationRecords:       "id, timestamp, updatedAt",
-  prescriptions:           "id, isActive, updatedAt, createdAt",
-  medicationPhases:        "id, prescriptionId, status, type, titrationPlanId, updatedAt",
-  phaseSchedules:          "id, phaseId, time, enabled, updatedAt",
-  inventoryItems:          "id, prescriptionId, isActive, updatedAt",
-  inventoryTransactions:   "id, [inventoryItemId+timestamp], inventoryItemId, timestamp, type, updatedAt",
-  doseLogs:                "id, [prescriptionId+scheduledDate], prescriptionId, phaseId, scheduleId, scheduledDate, scheduledTime, status, updatedAt",
-  dailyNotes:              "id, date, prescriptionId, doseLogId, updatedAt",
-  auditLogs:               "id, [action+timestamp], timestamp, action",
-  substanceRecords:        "id, [type+timestamp], type, timestamp, source, sourceRecordId, groupId, updatedAt",
-  titrationPlans:          "id, conditionLabel, status, updatedAt",
-});
+db.version(15).stores(V15_STORES);
 
 // Version 16: Add _syncQueue (op-log) and _syncMeta (cursor map) tables
 // to support the bidirectional sync engine (Phase 43, D-15).

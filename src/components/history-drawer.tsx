@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useMemo } from "react";
 import {
   Drawer,
   DrawerContent,
@@ -17,13 +17,7 @@ import { EditUrinationDialog } from "@/components/edit-urination-dialog";
 import { EditDefecationDialog } from "@/components/edit-defecation-dialog";
 import { RecordRow } from "@/components/history/record-row";
 import { useSettings } from "@/hooks/use-settings";
-import {
-  History,
-  Loader2,
-  ChevronDown,
-  Calendar,
-} from "lucide-react";
-import { type IntakeRecord, type WeightRecord, type BloodPressureRecord, type EatingRecord, type UrinationRecord, type DefecationRecord } from "@/lib/db";
+import { History, Loader2, ChevronDown, Calendar } from "lucide-react";
 import {
   type UnifiedRecord,
   type FilterType,
@@ -33,19 +27,22 @@ import {
   filterRecords,
 } from "@/lib/history-types";
 import { CARD_THEMES } from "@/lib/card-themes";
-import { useUpdateIntake, useDeleteIntake } from "@/hooks/use-intake-queries";
+import { useDeleteIntake } from "@/hooks/use-intake-queries";
 import { useHistoryData } from "@/hooks/use-history-queries";
-import { useUpdateWeight, useUpdateBloodPressure } from "@/hooks/use-health-queries";
-import { useUpdateEating, useDeleteEating } from "@/hooks/use-eating-queries";
-import { useUpdateUrination, useDeleteUrination } from "@/hooks/use-urination-queries";
-import { useUpdateDefecation, useDeleteDefecation } from "@/hooks/use-defecation-queries";
+import { useDeleteEating } from "@/hooks/use-eating-queries";
+import { useDeleteUrination } from "@/hooks/use-urination-queries";
+import { useDeleteDefecation } from "@/hooks/use-defecation-queries";
 import { useToast } from "@/hooks/use-toast";
 import { useKeyboardAwareScroll } from "@/hooks/use-keyboard-scroll";
 import { cn } from "@/lib/utils";
 import {
-  timestampToDateTimeLocal,
-  dateTimeLocalToTimestamp,
-} from "@/lib/date-utils";
+  type EditableType,
+  type EditingState,
+  type FieldMap,
+  initEditingState,
+  useRecordAdapters,
+  ValidationError,
+} from "@/hooks/use-record-adapters";
 
 const PAGE_SIZE = 30;
 
@@ -61,53 +58,24 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterType>("all");
 
-  // History data loader
-  const { data: historyData, deleteWeight: historyDeleteWeight, deleteBP: historyDeleteBP } = useHistoryData();
+  const {
+    data: historyData,
+    deleteWeight: historyDeleteWeight,
+    deleteBP: historyDeleteBP,
+  } = useHistoryData();
 
-  // Mutations
-  const updateMutation = useUpdateIntake();
-  const deleteMutation = useDeleteIntake();
-  const updateWeightMutation = useUpdateWeight();
-  const updateBPMutation = useUpdateBloodPressure();
-  const updateEatingMutation = useUpdateEating();
+  const deleteIntakeMutation = useDeleteIntake();
   const deleteEatingMutation = useDeleteEating();
-  const updateUrinationMutation = useUpdateUrination();
   const deleteUrinationMutation = useDeleteUrination();
-  const updateDefecationMutation = useUpdateDefecation();
   const deleteDefecationMutation = useDeleteDefecation();
 
-  // Unified records state
-  const [records, setRecords] = useState<UnifiedRecord[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
+  const adapters = useRecordAdapters();
+
   const [page, setPage] = useState(1);
+  const [editingRecord, setEditingRecord] = useState<EditingState | null>(null);
 
-  // Edit dialog states
-  const [editingIntake, setEditingIntake] = useState<IntakeRecord | null>(null);
-  const [editingWeight, setEditingWeight] = useState<WeightRecord | null>(null);
-  const [editingBP, setEditingBP] = useState<BloodPressureRecord | null>(null);
-  const [editingEating, setEditingEating] = useState<EatingRecord | null>(null);
-  const [editingUrination, setEditingUrination] = useState<UrinationRecord | null>(null);
-  const [editingDefecation, setEditingDefecation] = useState<DefecationRecord | null>(null);
-
-  // Edit form states
-  const [editAmount, setEditAmount] = useState("");
-  const [editTimestamp, setEditTimestamp] = useState("");
-  const [editWeight, setEditWeight] = useState("");
-  const [editNote, setEditNote] = useState("");
-  const [editSystolic, setEditSystolic] = useState("");
-  const [editDiastolic, setEditDiastolic] = useState("");
-  const [editHeartRate, setEditHeartRate] = useState("");
-  const [editPosition, setEditPosition] = useState<"sitting" | "standing">("sitting");
-  const [editArm, setEditArm] = useState<"left" | "right">("left");
-  const [editAmountUrination, setEditAmountUrination] = useState("");
-  const [editAmountDefecation, setEditAmountDefecation] = useState("");
-
-  // Derive unified records from reactive history data
-  useEffect(() => {
-    if (!open || !historyData) return;
-
+  const allRecords = useMemo<UnifiedRecord[]>(() => {
+    if (!open || !historyData) return [];
     const unified: UnifiedRecord[] = [
       ...historyData.intakeRecords.map((r) => ({ type: "intake" as const, record: r })),
       ...historyData.weightRecords.map((r) => ({ type: "weight" as const, record: r })),
@@ -116,14 +84,16 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
       ...historyData.urinationRecords.map((r) => ({ type: "urination" as const, record: r })),
       ...historyData.defecationRecords.map((r) => ({ type: "defecation" as const, record: r })),
     ];
-
     unified.sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a));
+    return unified;
+  }, [open, historyData]);
 
-    const end = page * PAGE_SIZE;
-    setRecords(unified.slice(0, end));
-    setHasMore(end < unified.length);
-    setIsLoading(false);
-  }, [open, historyData, page]);
+  const records = useMemo(
+    () => allRecords.slice(0, page * PAGE_SIZE),
+    [allRecords, page],
+  );
+  const hasMore = allRecords.length > page * PAGE_SIZE;
+  const isLoading = open && !historyData;
 
   // Handle open change (PIN protection removed in phase 41)
   const handleOpenChange = useCallback((newOpen: boolean) => {
@@ -131,169 +101,86 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
   }, [onOpenChange]);
 
   const loadMoreRecords = useCallback(() => {
-    if (!hasMore || isLoadingMore) return;
-    setPage(prev => prev + 1);
-  }, [hasMore, isLoadingMore]);
+    if (!hasMore) return;
+    setPage((prev) => prev + 1);
+  }, [hasMore]);
 
-  // ── Delete handlers ──────────────────────────────────────────
-  const handleDelete = useCallback(async (unified: UnifiedRecord) => {
-    const id = getRecordId(unified);
-    setDeletingId(id);
-    try {
-      if (unified.type === "intake") await deleteMutation.mutateAsync(id);
-      else if (unified.type === "weight") await historyDeleteWeight(id);
-      else if (unified.type === "bp") await historyDeleteBP(id);
-      else if (unified.type === "eating") await deleteEatingMutation.mutateAsync(id);
-      else if (unified.type === "urination") await deleteUrinationMutation.mutateAsync(id);
-      else if (unified.type === "defecation") await deleteDefecationMutation.mutateAsync(id);
+  const handleDelete = useCallback(
+    async (unified: UnifiedRecord) => {
+      const id = getRecordId(unified);
+      setDeletingId(id);
+      try {
+        if (unified.type === "intake") await deleteIntakeMutation.mutateAsync(id);
+        else if (unified.type === "weight") await historyDeleteWeight(id);
+        else if (unified.type === "bp") await historyDeleteBP(id);
+        else if (unified.type === "eating") await deleteEatingMutation.mutateAsync(id);
+        else if (unified.type === "urination") await deleteUrinationMutation.mutateAsync(id);
+        else if (unified.type === "defecation") await deleteDefecationMutation.mutateAsync(id);
+        toast({ title: "Entry deleted", description: "Record removed" });
+      } catch {
+        toast({
+          title: "Error",
+          description: "Could not delete the entry",
+          variant: "destructive",
+        });
+      } finally {
+        setDeletingId(null);
+      }
+    },
+    [
+      toast,
+      deleteIntakeMutation,
+      historyDeleteWeight,
+      historyDeleteBP,
+      deleteEatingMutation,
+      deleteUrinationMutation,
+      deleteDefecationMutation,
+    ],
+  );
 
-      setRecords((prev) => prev.filter((r) => getRecordId(r) !== id));
-      toast({ title: "Entry deleted", description: "Record removed" });
-    } catch {
-      toast({ title: "Error", description: "Could not delete the entry", variant: "destructive" });
-    } finally {
-      setDeletingId(null);
-    }
-  }, [toast, deleteMutation, historyDeleteWeight, historyDeleteBP, deleteEatingMutation, deleteUrinationMutation, deleteDefecationMutation]);
-
-  // ── Edit openers ─────────────────────────────────────────────
   const openEdit = useCallback((unified: UnifiedRecord) => {
-    setEditTimestamp(timestampToDateTimeLocal(unified.record.timestamp));
-    setEditNote((unified.record as { note?: string }).note || "");
-
-    if (unified.type === "intake") {
-      setEditingIntake(unified.record);
-      setEditAmount(unified.record.amount.toString());
-    } else if (unified.type === "weight") {
-      setEditingWeight(unified.record);
-      setEditWeight(unified.record.weight.toString());
-    } else if (unified.type === "bp") {
-      const r = unified.record;
-      setEditingBP(r);
-      setEditSystolic(r.systolic.toString());
-      setEditDiastolic(r.diastolic.toString());
-      setEditHeartRate(r.heartRate?.toString() || "");
-      setEditPosition(r.position);
-      setEditArm(r.arm);
-    } else if (unified.type === "eating") {
-      setEditingEating(unified.record);
-    } else if (unified.type === "urination") {
-      setEditingUrination(unified.record);
-      setEditAmountUrination(unified.record.amountEstimate || "");
-    } else if (unified.type === "defecation") {
-      setEditingDefecation(unified.record);
-      setEditAmountDefecation(unified.record.amountEstimate || "");
-    }
+    if (unified.type === "caffeine" || unified.type === "alcohol") return;
+    setEditingRecord(initEditingState(unified.type, unified.record));
   }, []);
 
-  // ── Edit submit handlers ─────────────────────────────────────
-  const handleEditIntakeSubmit = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingIntake) return;
-    const newAmount = parseInt(editAmount, 10);
-    const newTimestamp = dateTimeLocalToTimestamp(editTimestamp);
-    const newNote = editNote.trim() || undefined;
-    if (isNaN(newAmount) || newAmount <= 0) { toast({ title: "Invalid amount", variant: "destructive" }); return; }
-    if (isNaN(newTimestamp)) { toast({ title: "Invalid date/time", variant: "destructive" }); return; }
-    const rec = editingIntake;
-    try {
-      await updateMutation.mutateAsync({ id: rec.id, updates: { amount: newAmount, timestamp: newTimestamp, ...(newNote !== undefined && { note: newNote }) } });
-      setEditingIntake(null);
-      const updatedRecord = { ...rec, amount: newAmount, timestamp: newTimestamp, ...(newNote !== undefined && { note: newNote }) };
-      setRecords(prev => prev.map(r => r.type === "intake" && r.record.id === rec.id ? { ...r, record: updatedRecord } : r).sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a)));
-      toast({ title: "Entry updated" });
-    } catch { toast({ title: "Error", description: "Could not update the entry", variant: "destructive" }); }
-  }, [editingIntake, editAmount, editTimestamp, editNote, toast, updateMutation]);
+  const closeEdit = useCallback(() => setEditingRecord(null), []);
 
-  const handleEditWeightSubmit = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingWeight) return;
-    const newWeight = parseFloat(editWeight);
-    const newTimestamp = dateTimeLocalToTimestamp(editTimestamp);
-    if (isNaN(newWeight) || newWeight <= 0) { toast({ title: "Invalid weight", variant: "destructive" }); return; }
-    if (isNaN(newTimestamp)) { toast({ title: "Invalid date/time", variant: "destructive" }); return; }
-    const rec = editingWeight;
-    try {
-      const noteVal = editNote || undefined;
-      await updateWeightMutation.mutateAsync({ id: rec.id, updates: { weight: newWeight, timestamp: newTimestamp, ...(noteVal !== undefined && { note: noteVal }) } });
-      setEditingWeight(null);
-      const updatedWeight = { ...rec, weight: newWeight, timestamp: newTimestamp, ...(noteVal !== undefined && { note: noteVal }) };
-      setRecords(prev => prev.map(r => r.type === "weight" && r.record.id === rec.id ? { ...r, record: updatedWeight } : r).sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a)));
-      toast({ title: "Entry updated" });
-    } catch { toast({ title: "Error", description: "Could not update the entry", variant: "destructive" }); }
-  }, [editingWeight, editWeight, editTimestamp, editNote, toast, updateWeightMutation]);
+  const patchFields = useCallback(<K extends EditableType>(patch: Partial<FieldMap[K]>) => {
+    setEditingRecord((current) => {
+      if (!current) return null;
+      return {
+        ...current,
+        fields: { ...current.fields, ...patch },
+      } as EditingState;
+    });
+  }, []);
 
-  const handleEditBPSubmit = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingBP) return;
-    const newSystolic = parseInt(editSystolic, 10);
-    const newDiastolic = parseInt(editDiastolic, 10);
-    const newHeartRate = editHeartRate ? parseInt(editHeartRate, 10) : undefined;
-    const newTimestamp = dateTimeLocalToTimestamp(editTimestamp);
-    if (isNaN(newSystolic) || isNaN(newDiastolic) || newSystolic <= 0 || newDiastolic <= 0) { toast({ title: "Invalid values", variant: "destructive" }); return; }
-    if (isNaN(newTimestamp)) { toast({ title: "Invalid date/time", variant: "destructive" }); return; }
-    const rec = editingBP;
-    try {
-      const bpNoteVal = editNote || undefined;
-      await updateBPMutation.mutateAsync({ id: rec.id, updates: { systolic: newSystolic, diastolic: newDiastolic, ...(newHeartRate !== undefined && { heartRate: newHeartRate }), position: editPosition, arm: editArm, timestamp: newTimestamp, ...(bpNoteVal !== undefined && { note: bpNoteVal }) } });
-      setEditingBP(null);
-      const updatedBP = { ...rec, systolic: newSystolic, diastolic: newDiastolic, ...(newHeartRate !== undefined && { heartRate: newHeartRate }), position: editPosition, arm: editArm, timestamp: newTimestamp, ...(bpNoteVal !== undefined && { note: bpNoteVal }) };
-      setRecords(prev => prev.map(r => r.type === "bp" && r.record.id === rec.id ? { ...r, record: updatedBP } : r).sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a)));
-      toast({ title: "Entry updated" });
-    } catch { toast({ title: "Error", description: "Could not update the entry", variant: "destructive" }); }
-  }, [editingBP, editSystolic, editDiastolic, editHeartRate, editPosition, editArm, editTimestamp, editNote, toast, updateBPMutation]);
+  const handleEditSubmit = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!editingRecord) return;
+      const adapter = adapters[editingRecord.type] as {
+        submit: (id: string, fields: FieldMap[EditableType]) => Promise<void>;
+      };
+      try {
+        await adapter.submit(editingRecord.record.id, editingRecord.fields);
+        setEditingRecord(null);
+        toast({ title: "Entry updated" });
+      } catch (err) {
+        if (err instanceof ValidationError) {
+          toast({ title: err.message, variant: "destructive" });
+          return;
+        }
+        toast({
+          title: "Error",
+          description: "Could not update the entry",
+          variant: "destructive",
+        });
+      }
+    },
+    [adapters, editingRecord, toast],
+  );
 
-  const handleEditEatingSubmit = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingEating) return;
-    const newTimestamp = dateTimeLocalToTimestamp(editTimestamp);
-    if (isNaN(newTimestamp)) { toast({ title: "Invalid date/time", variant: "destructive" }); return; }
-    const rec = editingEating;
-    try {
-      const eatingNote = editNote.trim() || undefined;
-      await updateEatingMutation.mutateAsync({ id: rec.id, updates: { timestamp: newTimestamp, ...(eatingNote !== undefined && { note: eatingNote }) } });
-      setEditingEating(null);
-      const updatedEating = { ...rec, timestamp: newTimestamp, ...(eatingNote !== undefined && { note: eatingNote }) };
-      setRecords(prev => prev.map(r => r.type === "eating" && r.record.id === rec.id ? { ...r, record: updatedEating } : r).sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a)));
-      toast({ title: "Entry updated" });
-    } catch { toast({ title: "Error", description: "Could not update", variant: "destructive" }); }
-  }, [editingEating, editTimestamp, editNote, toast, updateEatingMutation]);
-
-  const handleEditUrinationSubmit = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingUrination) return;
-    const newTimestamp = dateTimeLocalToTimestamp(editTimestamp);
-    if (isNaN(newTimestamp)) { toast({ title: "Invalid date/time", variant: "destructive" }); return; }
-    const rec = editingUrination;
-    try {
-      const urinationAmt = editAmountUrination || undefined;
-      const urinationNote = editNote.trim() || undefined;
-      await updateUrinationMutation.mutateAsync({ id: rec.id, updates: { timestamp: newTimestamp, ...(urinationAmt !== undefined && { amountEstimate: urinationAmt }), ...(urinationNote !== undefined && { note: urinationNote }) } });
-      setEditingUrination(null);
-      const updatedUrination = { ...rec, timestamp: newTimestamp, ...(urinationAmt !== undefined && { amountEstimate: urinationAmt }), ...(urinationNote !== undefined && { note: urinationNote }) };
-      setRecords(prev => prev.map(r => r.type === "urination" && r.record.id === rec.id ? { ...r, record: updatedUrination } : r).sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a)));
-      toast({ title: "Entry updated" });
-    } catch { toast({ title: "Error", description: "Could not update", variant: "destructive" }); }
-  }, [editingUrination, editTimestamp, editAmountUrination, editNote, toast, updateUrinationMutation]);
-
-  const handleEditDefecationSubmit = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingDefecation) return;
-    const newTimestamp = dateTimeLocalToTimestamp(editTimestamp);
-    if (isNaN(newTimestamp)) { toast({ title: "Invalid date/time", variant: "destructive" }); return; }
-    const rec = editingDefecation;
-    try {
-      const defecationAmt = editAmountDefecation || undefined;
-      const defecationNote = editNote.trim() || undefined;
-      await updateDefecationMutation.mutateAsync({ id: rec.id, updates: { timestamp: newTimestamp, ...(defecationAmt !== undefined && { amountEstimate: defecationAmt }), ...(defecationNote !== undefined && { note: defecationNote }) } });
-      setEditingDefecation(null);
-      const updatedDefecation = { ...rec, timestamp: newTimestamp, ...(defecationAmt !== undefined && { amountEstimate: defecationAmt }), ...(defecationNote !== undefined && { note: defecationNote }) };
-      setRecords(prev => prev.map(r => r.type === "defecation" && r.record.id === rec.id ? { ...r, record: updatedDefecation } : r).sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a)));
-      toast({ title: "Entry updated" });
-    } catch { toast({ title: "Error", description: "Could not update", variant: "destructive" }); }
-  }, [editingDefecation, editTimestamp, editAmountDefecation, editNote, toast, updateDefecationMutation]);
-
-  // Filtered and grouped
   const filteredRecords = filterRecords(records, filter);
   const groupedRecords = groupRecordsByDate(filteredRecords);
   const dateGroups = Array.from(groupedRecords.entries());
@@ -318,6 +205,13 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
     urination: CARD_THEMES.urination.buttonBg,
     defecation: CARD_THEMES.defecation.buttonBg,
   };
+
+  const intakeEdit = editingRecord?.type === "intake" ? editingRecord : null;
+  const weightEdit = editingRecord?.type === "weight" ? editingRecord : null;
+  const bpEdit = editingRecord?.type === "bp" ? editingRecord : null;
+  const eatingEdit = editingRecord?.type === "eating" ? editingRecord : null;
+  const urinationEdit = editingRecord?.type === "urination" ? editingRecord : null;
+  const defecationEdit = editingRecord?.type === "defecation" ? editingRecord : null;
 
   return (
     <>
@@ -385,12 +279,8 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
 
                 {hasMore && (
                   <div className="flex justify-center pt-4">
-                    <Button variant="outline" onClick={loadMoreRecords} disabled={isLoadingMore} className="gap-2">
-                      {isLoadingMore ? (
-                        <><Loader2 className="w-4 h-4 animate-spin" />Loading...</>
-                      ) : (
-                        <><ChevronDown className="w-4 h-4" />Load More</>
-                      )}
+                    <Button variant="outline" onClick={loadMoreRecords} className="gap-2">
+                      <ChevronDown className="w-4 h-4" />Load More
                     </Button>
                   </div>
                 )}
@@ -402,81 +292,81 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
 
       {/* Edit Dialogs */}
       <EditIntakeDialog
-        record={editingIntake}
-        onClose={() => setEditingIntake(null)}
-        onSubmit={handleEditIntakeSubmit}
-        amount={editAmount}
-        onAmountChange={setEditAmount}
-        timestamp={editTimestamp}
-        onTimestampChange={setEditTimestamp}
-        note={editNote}
-        onNoteChange={setEditNote}
+        record={intakeEdit?.record ?? null}
+        onClose={closeEdit}
+        onSubmit={handleEditSubmit}
+        amount={intakeEdit?.fields.amount ?? ""}
+        onAmountChange={(v) => patchFields<"intake">({ amount: v })}
+        timestamp={intakeEdit?.fields.timestamp ?? ""}
+        onTimestampChange={(v) => patchFields<"intake">({ timestamp: v })}
+        note={intakeEdit?.fields.note ?? ""}
+        onNoteChange={(v) => patchFields<"intake">({ note: v })}
         onFocus={scrollOnFocus}
       />
       <EditWeightDialog
-        record={editingWeight}
-        onClose={() => setEditingWeight(null)}
-        onSubmit={handleEditWeightSubmit}
-        weight={editWeight}
-        onWeightChange={setEditWeight}
-        timestamp={editTimestamp}
-        onTimestampChange={setEditTimestamp}
-        note={editNote}
-        onNoteChange={setEditNote}
+        record={weightEdit?.record ?? null}
+        onClose={closeEdit}
+        onSubmit={handleEditSubmit}
+        weight={weightEdit?.fields.weight ?? ""}
+        onWeightChange={(v) => patchFields<"weight">({ weight: v })}
+        timestamp={weightEdit?.fields.timestamp ?? ""}
+        onTimestampChange={(v) => patchFields<"weight">({ timestamp: v })}
+        note={weightEdit?.fields.note ?? ""}
+        onNoteChange={(v) => patchFields<"weight">({ note: v })}
         onFocus={scrollOnFocus}
       />
       <EditBloodPressureDialog
-        record={editingBP}
-        onClose={() => setEditingBP(null)}
-        onSubmit={handleEditBPSubmit}
-        systolic={editSystolic}
-        onSystolicChange={setEditSystolic}
-        diastolic={editDiastolic}
-        onDiastolicChange={setEditDiastolic}
-        heartRate={editHeartRate}
-        onHeartRateChange={setEditHeartRate}
-        position={editPosition}
-        onPositionChange={setEditPosition}
-        arm={editArm}
-        onArmChange={setEditArm}
-        timestamp={editTimestamp}
-        onTimestampChange={setEditTimestamp}
-        note={editNote}
-        onNoteChange={setEditNote}
+        record={bpEdit?.record ?? null}
+        onClose={closeEdit}
+        onSubmit={handleEditSubmit}
+        systolic={bpEdit?.fields.systolic ?? ""}
+        onSystolicChange={(v) => patchFields<"bp">({ systolic: v })}
+        diastolic={bpEdit?.fields.diastolic ?? ""}
+        onDiastolicChange={(v) => patchFields<"bp">({ diastolic: v })}
+        heartRate={bpEdit?.fields.heartRate ?? ""}
+        onHeartRateChange={(v) => patchFields<"bp">({ heartRate: v })}
+        position={bpEdit?.fields.position ?? "sitting"}
+        onPositionChange={(v) => patchFields<"bp">({ position: v })}
+        arm={bpEdit?.fields.arm ?? "left"}
+        onArmChange={(v) => patchFields<"bp">({ arm: v })}
+        timestamp={bpEdit?.fields.timestamp ?? ""}
+        onTimestampChange={(v) => patchFields<"bp">({ timestamp: v })}
+        note={bpEdit?.fields.note ?? ""}
+        onNoteChange={(v) => patchFields<"bp">({ note: v })}
         onFocus={scrollOnFocus}
       />
       <EditEatingDialog
-        record={editingEating}
-        onClose={() => setEditingEating(null)}
-        onSubmit={handleEditEatingSubmit}
-        timestamp={editTimestamp}
-        onTimestampChange={setEditTimestamp}
-        note={editNote}
-        onNoteChange={setEditNote}
+        record={eatingEdit?.record ?? null}
+        onClose={closeEdit}
+        onSubmit={handleEditSubmit}
+        timestamp={eatingEdit?.fields.timestamp ?? ""}
+        onTimestampChange={(v) => patchFields<"eating">({ timestamp: v })}
+        note={eatingEdit?.fields.note ?? ""}
+        onNoteChange={(v) => patchFields<"eating">({ note: v })}
         onFocus={scrollOnFocus}
       />
       <EditUrinationDialog
-        record={editingUrination}
-        onClose={() => setEditingUrination(null)}
-        onSubmit={handleEditUrinationSubmit}
-        timestamp={editTimestamp}
-        onTimestampChange={setEditTimestamp}
-        amount={editAmountUrination}
-        onAmountChange={setEditAmountUrination}
-        note={editNote}
-        onNoteChange={setEditNote}
+        record={urinationEdit?.record ?? null}
+        onClose={closeEdit}
+        onSubmit={handleEditSubmit}
+        timestamp={urinationEdit?.fields.timestamp ?? ""}
+        onTimestampChange={(v) => patchFields<"urination">({ timestamp: v })}
+        amount={urinationEdit?.fields.amount ?? ""}
+        onAmountChange={(v) => patchFields<"urination">({ amount: v })}
+        note={urinationEdit?.fields.note ?? ""}
+        onNoteChange={(v) => patchFields<"urination">({ note: v })}
         onFocus={scrollOnFocus}
       />
       <EditDefecationDialog
-        record={editingDefecation}
-        onClose={() => setEditingDefecation(null)}
-        onSubmit={handleEditDefecationSubmit}
-        timestamp={editTimestamp}
-        onTimestampChange={setEditTimestamp}
-        amount={editAmountDefecation}
-        onAmountChange={setEditAmountDefecation}
-        note={editNote}
-        onNoteChange={setEditNote}
+        record={defecationEdit?.record ?? null}
+        onClose={closeEdit}
+        onSubmit={handleEditSubmit}
+        timestamp={defecationEdit?.fields.timestamp ?? ""}
+        onTimestampChange={(v) => patchFields<"defecation">({ timestamp: v })}
+        amount={defecationEdit?.fields.amount ?? ""}
+        onAmountChange={(v) => patchFields<"defecation">({ amount: v })}
+        note={defecationEdit?.fields.note ?? ""}
+        onNoteChange={(v) => patchFields<"defecation">({ note: v })}
         onFocus={scrollOnFocus}
       />
     </>

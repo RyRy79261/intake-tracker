@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Download, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+// eslint-disable-next-line no-restricted-imports
 import { downloadBackup } from "@/lib/backup-service";
 
 interface BackupGateStepProps {

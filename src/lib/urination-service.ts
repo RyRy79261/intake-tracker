@@ -36,7 +36,7 @@ export async function getUrinationRecords(
 ): Promise<UrinationRecord[]> {
   const records = await db.urinationRecords.orderBy("timestamp").reverse().toArray();
   const active = records.filter((r) => r.deletedAt === null);
-  return limit ? active.slice(0, limit) : active;
+  return limit !== undefined ? active.slice(0, limit) : active;
 }
 
 export async function getUrinationRecordsByDateRange(

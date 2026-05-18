@@ -8,8 +8,10 @@ import {
   getUrinationRecordsByDateRange,
   updateUrinationRecord,
   deleteUrinationRecord,
+  undoDeleteUrinationRecord,
 } from "@/lib/urination-service";
 import { unwrap } from "@/lib/service-result";
+import { showUndoToast } from "@/components/medications/undo-toast";
 
 export type AddUrinationParams = {
   timestamp?: number;
@@ -62,5 +64,11 @@ export function useUpdateUrination() {
 export function useDeleteUrination() {
   return useMutation({
     mutationFn: async (id: string) => unwrap(await deleteUrinationRecord(id)),
+    onSuccess: (_data, id) => {
+      showUndoToast({
+        title: "Record deleted",
+        onUndo: () => { undoDeleteUrinationRecord(id); },
+      });
+    },
   });
 }

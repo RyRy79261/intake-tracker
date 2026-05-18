@@ -286,7 +286,21 @@ AI features require an authenticated Neon Auth session and a server-side `ANTHRO
 
 ## License
 
-This work is licensed under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/).
+This project is licensed under the [Functional Source License, Version 1.1, with Apache 2.0 Future License (FSL-1.1-ALv2)](https://fsl.software/). See [LICENSE](LICENSE) for the full text.
 
-You are free to share and adapt this work for non-commercial purposes with attribution.
-For commercial use, please contact the author for permission.
+**In plain language:**
+
+- You can use, copy, modify, fork, and redistribute the code for **any purpose** — personal use, self-hosting, internal use at your organization, education, research, or as part of professional services you provide — **except a Competing Use**. The LICENSE defines a Competing Use as making the Software available to others in a commercial product or service that (1) substitutes for the Software, (2) substitutes for any other product or service the licensor offers using the Software, or (3) offers the same or substantially similar functionality as the Software.
+- Clause (3) stands on its own: a commercial product or service offering the same or substantially similar functionality is a Competing Use **even if the licensor does not currently offer a competing product or service**.
+- **Every release auto-converts to Apache 2.0 on the second anniversary of its publication.** Each version carries its own clock, so older versions become fully open source on a rolling basis.
+
+**Examples:**
+
+- A patient self-hosting their own copy to track a chronic condition: allowed.
+- A clinician deploying it internally for their patients: allowed.
+- A developer forking it, wiring up their own AI provider, and sharing it with a community: allowed.
+- A company launching "HealthTrackerCloud" as a paid SaaS offering the same or substantially similar functionality as the Software: **not allowed** without a commercial license, whether or not the licensor currently offers a competing service.
+
+### Commercial licensing
+
+If your intended use is a Competing Use, or you're unsure whether it qualifies, please get in touch before deploying: **meowzit.eth@gmail.com**.
