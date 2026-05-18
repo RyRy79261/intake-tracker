@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +15,7 @@ import {
 import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
+import { CardShell } from "@/components/card-shell";
 import { RecentEntriesList, InlineEditFormShell } from "@/components/recent-entries-list";
 import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
 import { useEditRecord } from "@/hooks/use-edit-record";
@@ -33,7 +33,6 @@ import { useSettings } from "@/hooks/use-settings";
 const AMOUNT_OPTIONS = DEFECATION_AMOUNT_OPTIONS;
 
 const theme = CARD_THEMES.defecation;
-const Icon = theme.icon;
 
 export function DefecationCard() {
   const { toast } = useToast();
@@ -122,149 +121,138 @@ export function DefecationCard() {
   };
 
   return (
-    <>
-      <Card className={cn("relative overflow-hidden transition-all duration-300 bg-gradient-to-br", theme.gradient, theme.border)}>
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <div className={cn("p-2 rounded-lg", theme.iconBg)}>
-                <Icon className={cn("w-5 h-5", theme.iconColor)} />
-              </div>
-              <span className="font-semibold text-lg uppercase tracking-wide">
-                {theme.label}
-              </span>
-            </div>
-            {isLoading ? (
-              <div className={cn("h-6 w-20 rounded animate-pulse", theme.loadingBg)} />
-            ) : latestRecord ? (
-              <p className="text-xs text-muted-foreground">
-                {formatDateTime(latestRecord.timestamp)}
-              </p>
-            ) : null}
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <div className="grid grid-cols-3 gap-2">
-              {AMOUNT_OPTIONS.map((opt) => (
-                <Button
-                  key={opt.value}
-                  variant="outline"
-                  size="sm"
-                  disabled={submittingAmount !== null}
-                  className={cn("h-10", submittingAmount === opt.value && "opacity-70")}
-                  onClick={() => handleQuickLog(opt.value)}
-                >
-                  {submittingAmount === opt.value ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    opt.label
-                  )}
-                </Button>
-              ))}
-            </div>
-
+    <CardShell
+      theme={theme}
+      headerRight={
+        isLoading ? (
+          <div className={cn("h-6 w-20 rounded animate-pulse", theme.loadingBg)} />
+        ) : latestRecord ? (
+          <p className="text-xs text-muted-foreground">
+            {formatDateTime(latestRecord.timestamp)}
+          </p>
+        ) : null
+      }
+    >
+      <div className="flex flex-col gap-2">
+        <div className="grid grid-cols-3 gap-2">
+          {AMOUNT_OPTIONS.map((opt) => (
             <Button
-              variant="ghost"
+              key={opt.value}
+              variant="outline"
               size="sm"
-              className="w-full justify-between text-muted-foreground"
-              onClick={() => setShowDetails(!showDetails)}
+              disabled={submittingAmount !== null}
+              className={cn("h-10", submittingAmount === opt.value && "opacity-70")}
+              onClick={() => handleQuickLog(opt.value)}
             >
-              <span>Add details</span>
-              {showDetails ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              {submittingAmount === opt.value ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                opt.label
+              )}
             </Button>
+          ))}
+        </div>
 
-            {showDetails && (
-              <div className="p-3 rounded-lg bg-muted/50 border space-y-3">
-                <div className="space-y-2">
-                  <Label>Amount (optional)</Label>
-                  <Select value={amount} onValueChange={setAmount}>
-                    <SelectTrigger className="bg-background">
-                      <SelectValue placeholder="Select estimate" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">No estimate</SelectItem>
-                      {AMOUNT_OPTIONS.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="defecation-note">Note (optional)</Label>
-                  <Textarea
-                    id="defecation-note"
-                    placeholder="e.g. consistency, urgency"
-                    value={note}
-                    onChange={(e) => setNote(e.target.value)}
-                    className="min-h-[60px]"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="defecation-time">When</Label>
-                  <Input
-                    id="defecation-time"
-                    type="datetime-local"
-                    value={detailTime}
-                    onChange={(e) => setDetailTime(e.target.value)}
-                    max={getCurrentDateTimeLocal()}
-                  />
-                </div>
-                <Button
-                  onClick={handleSubmitDetails}
-                  disabled={addMutation.isPending}
-                  className={cn("w-full", theme.buttonBg)}
-                >
-                  {addMutation.isPending ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    "Record with details"
-                  )}
-                </Button>
-              </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full justify-between text-muted-foreground"
+          onClick={() => setShowDetails(!showDetails)}
+        >
+          <span>Add details</span>
+          {showDetails ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        </Button>
+
+        {showDetails && (
+          <div className="p-3 rounded-lg bg-muted/50 border space-y-3">
+            <div className="space-y-2">
+              <Label>Amount (optional)</Label>
+              <Select value={amount} onValueChange={setAmount}>
+                <SelectTrigger className="bg-background">
+                  <SelectValue placeholder="Select estimate" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">No estimate</SelectItem>
+                  {AMOUNT_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="defecation-note">Note (optional)</Label>
+              <Textarea
+                id="defecation-note"
+                placeholder="e.g. consistency, urgency"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                className="min-h-[60px]"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="defecation-time">When</Label>
+              <Input
+                id="defecation-time"
+                type="datetime-local"
+                value={detailTime}
+                onChange={(e) => setDetailTime(e.target.value)}
+                max={getCurrentDateTimeLocal()}
+              />
+            </div>
+            <Button
+              onClick={handleSubmitDetails}
+              disabled={addMutation.isPending}
+              className={cn("w-full", theme.buttonBg)}
+            >
+              {addMutation.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                "Record with details"
+              )}
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* Recent History */}
+      <RecentEntriesList
+        records={recentRecords}
+        deletingId={deletingId}
+        onDelete={handleDelete}
+        onEdit={openEdit}
+        editingId={editingRecord?.id ?? null}
+        borderColor={theme.border}
+        renderEntry={(record) => (
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-muted-foreground shrink-0">{formatDateTime(record.timestamp)}</span>
+            {record.amountEstimate && (
+              <span className="text-xs font-medium capitalize">{record.amountEstimate}</span>
+            )}
+            {record.note && (
+              <span className="text-xs text-muted-foreground/70 truncate">
+                {record.note}
+              </span>
             )}
           </div>
-
-          {/* Recent History */}
-          <RecentEntriesList
-            records={recentRecords}
-            deletingId={deletingId}
-            onDelete={handleDelete}
-            onEdit={openEdit}
-            editingId={editingRecord?.id ?? null}
-            borderColor={theme.border}
-            renderEntry={(record) => (
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="text-muted-foreground shrink-0">{formatDateTime(record.timestamp)}</span>
-                {record.amountEstimate && (
-                  <span className="text-xs font-medium capitalize">{record.amountEstimate}</span>
-                )}
-                {record.note && (
-                  <span className="text-xs text-muted-foreground/70 truncate">
-                    {record.note}
-                  </span>
-                )}
-              </div>
-            )}
-            renderEditForm={() => (
-              <InlineEditFormShell timestamp={editTimestamp} onTimestampChange={setEditTimestamp} note={editNote} onNoteChange={setEditNote} onSave={() => handleEditSubmit()} onCancel={closeEdit} buttonClassName={theme.buttonBg}>
-                <Select value={editAmountEstimate} onValueChange={setEditAmountEstimate}>
-                  <SelectTrigger className="h-8 text-sm">
-                    <SelectValue placeholder="Amount estimate" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">No estimate</SelectItem>
-                    {AMOUNT_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </InlineEditFormShell>
-            )}
-          />
-        </CardContent>
-      </Card>
-    </>
+        )}
+        renderEditForm={() => (
+          <InlineEditFormShell timestamp={editTimestamp} onTimestampChange={setEditTimestamp} note={editNote} onNoteChange={setEditNote} onSave={() => handleEditSubmit()} onCancel={closeEdit} buttonClassName={theme.buttonBg}>
+            <Select value={editAmountEstimate} onValueChange={setEditAmountEstimate}>
+              <SelectTrigger className="h-8 text-sm">
+                <SelectValue placeholder="Amount estimate" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">No estimate</SelectItem>
+                {AMOUNT_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </InlineEditFormShell>
+        )}
+      />
+    </CardShell>
   );
 }
