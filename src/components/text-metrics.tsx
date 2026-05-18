@@ -1,12 +1,13 @@
 "use client";
 
-import { Fragment, useState, useEffect, useMemo } from "react";
+import { Fragment, useMemo } from "react";
 import {
   useDailyIntakeTotal,
   getDayStartTimestamp,
   useIntakeRecordsByDateRange,
 } from "@/hooks/use-intake-queries";
 import { useSubstanceRecordsByDateRange } from "@/hooks/use-substance-queries";
+import { useNowTick } from "@/hooks/use-now-tick";
 import { useSettingsStore } from "@/stores/settings-store";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { Progress } from "@/components/ui/progress";
@@ -73,11 +74,7 @@ export function TextMetrics() {
   const saltLimit = useSettingsStore((s) => s.saltLimit);
 
   // 60-second tick for day boundary refresh
-  const [tick, setTick] = useState(0);
-  useEffect(() => {
-    const interval = setInterval(() => setTick((t) => t + 1), 60_000);
-    return () => clearInterval(interval);
-  }, []);
+  const tick = useNowTick();
 
   // Today's totals
   const waterTotal = useDailyIntakeTotal("water");
