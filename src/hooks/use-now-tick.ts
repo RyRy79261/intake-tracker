@@ -33,7 +33,12 @@ function subscribe(intervalMs: number, fn: () => void): () => void {
 }
 
 export function useNowTick(intervalMs: number = 60_000): number {
+  const safeIntervalMs =
+    Number.isFinite(intervalMs) && intervalMs > 0 ? intervalMs : 60_000;
   const [tick, setTick] = useState(0);
-  useEffect(() => subscribe(intervalMs, () => setTick((t) => t + 1)), [intervalMs]);
+  useEffect(
+    () => subscribe(safeIntervalMs, () => setTick((t) => t + 1)),
+    [safeIntervalMs],
+  );
   return tick;
 }
