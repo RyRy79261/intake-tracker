@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { withAuth } from "@/lib/auth-middleware";
 import { syncDoseSchedules } from "@/lib/push-db";
-import { zodErrorResponse } from "../../_shared/validation";
+import { parseJsonBody, zodErrorResponse } from "../../_shared/validation";
 
 const SyncScheduleSchema = z.object({
   schedules: z.array(
@@ -16,9 +16,10 @@ const SyncScheduleSchema = z.object({
 
 export const POST = withAuth(async ({ request, auth }) => {
   try {
-    const body = await request.json();
+    const json = await parseJsonBody(request);
+    if (!json.ok) return json.response;
 
-    const parsed = SyncScheduleSchema.safeParse(body);
+    const parsed = SyncScheduleSchema.safeParse(json.body);
     if (!parsed.success) {
       return zodErrorResponse("Push sync-schedule request failed", parsed.error);
     }

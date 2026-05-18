@@ -4,7 +4,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
 import { getClaudeClient, CLAUDE_MODELS } from "../_shared/claude-client";
-import { zodErrorResponse } from "../../_shared/validation";
+import { parseJsonBody, zodErrorResponse } from "../../_shared/validation";
 import { createRateLimiter, getClientIp } from "../../_shared/rate-limit";
 
 /**
@@ -188,8 +188,9 @@ export const POST = withAuth(async ({ request, auth }) => {
       );
     }
 
-    const body = await request.json();
-    const parsed = ParseRequestSchema.safeParse(body);
+    const json = await parseJsonBody(request);
+    if (!json.ok) return json.response;
+    const parsed = ParseRequestSchema.safeParse(json.body);
     if (!parsed.success) {
       return zodErrorResponse("voice-parse request invalid", parsed.error);
     }

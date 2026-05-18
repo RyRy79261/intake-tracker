@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { withAuth } from "@/lib/auth-middleware";
 import { savePushSubscription } from "@/lib/push-db";
-import { zodErrorResponse } from "../../_shared/validation";
+import { parseJsonBody, zodErrorResponse } from "../../_shared/validation";
 
 const SubscribeSchema = z.object({
   endpoint: z.string().url(),
@@ -14,9 +14,10 @@ const SubscribeSchema = z.object({
 
 export const POST = withAuth(async ({ request, auth }) => {
   try {
-    const body = await request.json();
+    const json = await parseJsonBody(request);
+    if (!json.ok) return json.response;
 
-    const parsed = SubscribeSchema.safeParse(body);
+    const parsed = SubscribeSchema.safeParse(json.body);
     if (!parsed.success) {
       return zodErrorResponse("Push subscribe request failed", parsed.error);
     }
