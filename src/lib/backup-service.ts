@@ -25,6 +25,18 @@ import {
 import { ok, err, type ServiceResult } from "./service-result";
 import { logAudit } from "./audit";
 import { encrypt, decrypt, type EncryptedData } from "./crypto";
+import { BACKUP_SCHEMAS, type BackupTableName } from "./backup-schemas";
+
+/**
+ * Feature flag for the validator cutover. While `false`, the hand-rolled
+ * isValid* functions below are authoritative; the Zod schemas in
+ * backup-schemas.ts run only in tests to prove equivalence. Flip in PR 2.
+ */
+export const useZodValidators: boolean = false;
+
+function zodAccepts(table: BackupTableName, record: unknown): boolean {
+  return BACKUP_SCHEMAS[table].safeParse(record).success;
+}
 
 export interface BackupData {
   version: number;
@@ -383,6 +395,7 @@ function validateBackupData(data: unknown): data is BackupData {
 // --- Record validators ---
 
 function isValidIntakeRecord(record: unknown): record is IntakeRecord {
+  if (useZodValidators) return zodAccepts("intakeRecords", record);
   if (!record || typeof record !== "object") return false;
   const r = record as Record<string, unknown>;
   return (
@@ -394,6 +407,7 @@ function isValidIntakeRecord(record: unknown): record is IntakeRecord {
 }
 
 function isValidWeightRecord(record: unknown): record is WeightRecord {
+  if (useZodValidators) return zodAccepts("weightRecords", record);
   if (!record || typeof record !== "object") return false;
   const r = record as Record<string, unknown>;
   return (
@@ -404,6 +418,7 @@ function isValidWeightRecord(record: unknown): record is WeightRecord {
 }
 
 function isValidBPRecord(record: unknown): record is BloodPressureRecord {
+  if (useZodValidators) return zodAccepts("bloodPressureRecords", record);
   if (!record || typeof record !== "object") return false;
   const r = record as Record<string, unknown>;
   return (
@@ -417,24 +432,28 @@ function isValidBPRecord(record: unknown): record is BloodPressureRecord {
 }
 
 function isValidEatingRecord(record: unknown): record is EatingRecord {
+  if (useZodValidators) return zodAccepts("eatingRecords", record);
   if (!record || typeof record !== "object") return false;
   const r = record as Record<string, unknown>;
   return typeof r.id === "string" && typeof r.timestamp === "number";
 }
 
 function isValidUrinationRecord(record: unknown): record is UrinationRecord {
+  if (useZodValidators) return zodAccepts("urinationRecords", record);
   if (!record || typeof record !== "object") return false;
   const r = record as Record<string, unknown>;
   return typeof r.id === "string" && typeof r.timestamp === "number";
 }
 
 function isValidDefecationRecord(record: unknown): record is DefecationRecord {
+  if (useZodValidators) return zodAccepts("defecationRecords", record);
   if (!record || typeof record !== "object") return false;
   const r = record as Record<string, unknown>;
   return typeof r.id === "string" && typeof r.timestamp === "number";
 }
 
 function isValidSubstanceRecord(record: unknown): record is SubstanceRecord {
+  if (useZodValidators) return zodAccepts("substanceRecords", record);
   if (!record || typeof record !== "object") return false;
   const r = record as Record<string, unknown>;
   return (
@@ -445,6 +464,7 @@ function isValidSubstanceRecord(record: unknown): record is SubstanceRecord {
 }
 
 function isValidPrescription(record: unknown): record is Prescription {
+  if (useZodValidators) return zodAccepts("prescriptions", record);
   if (!record || typeof record !== "object") return false;
   const r = record as Record<string, unknown>;
   return (
@@ -456,6 +476,7 @@ function isValidPrescription(record: unknown): record is Prescription {
 }
 
 function isValidMedicationPhase(record: unknown): record is MedicationPhase {
+  if (useZodValidators) return zodAccepts("medicationPhases", record);
   if (!record || typeof record !== "object") return false;
   const r = record as Record<string, unknown>;
   return (
@@ -467,6 +488,7 @@ function isValidMedicationPhase(record: unknown): record is MedicationPhase {
 }
 
 function isValidPhaseSchedule(record: unknown): record is PhaseSchedule {
+  if (useZodValidators) return zodAccepts("phaseSchedules", record);
   if (!record || typeof record !== "object") return false;
   const r = record as Record<string, unknown>;
   return (
@@ -477,6 +499,7 @@ function isValidPhaseSchedule(record: unknown): record is PhaseSchedule {
 }
 
 function isValidInventoryItem(record: unknown): record is InventoryItem {
+  if (useZodValidators) return zodAccepts("inventoryItems", record);
   if (!record || typeof record !== "object") return false;
   const r = record as Record<string, unknown>;
   return (
@@ -487,6 +510,7 @@ function isValidInventoryItem(record: unknown): record is InventoryItem {
 }
 
 function isValidInventoryTransaction(record: unknown): record is InventoryTransaction {
+  if (useZodValidators) return zodAccepts("inventoryTransactions", record);
   if (!record || typeof record !== "object") return false;
   const r = record as Record<string, unknown>;
   return (
@@ -497,6 +521,7 @@ function isValidInventoryTransaction(record: unknown): record is InventoryTransa
 }
 
 function isValidDoseLog(record: unknown): record is DoseLog {
+  if (useZodValidators) return zodAccepts("doseLogs", record);
   if (!record || typeof record !== "object") return false;
   const r = record as Record<string, unknown>;
   return (
@@ -508,6 +533,7 @@ function isValidDoseLog(record: unknown): record is DoseLog {
 }
 
 function isValidTitrationPlan(record: unknown): record is TitrationPlan {
+  if (useZodValidators) return zodAccepts("titrationPlans", record);
   if (!record || typeof record !== "object") return false;
   const r = record as Record<string, unknown>;
   return (
@@ -518,6 +544,7 @@ function isValidTitrationPlan(record: unknown): record is TitrationPlan {
 }
 
 function isValidDailyNote(record: unknown): record is DailyNote {
+  if (useZodValidators) return zodAccepts("dailyNotes", record);
   if (!record || typeof record !== "object") return false;
   const r = record as Record<string, unknown>;
   return (
@@ -528,6 +555,7 @@ function isValidDailyNote(record: unknown): record is DailyNote {
 }
 
 function isValidAuditLog(record: unknown): record is AuditLog {
+  if (useZodValidators) return zodAccepts("auditLogs", record);
   if (!record || typeof record !== "object") return false;
   const r = record as Record<string, unknown>;
   return (
