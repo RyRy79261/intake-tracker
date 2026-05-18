@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.9.0](https://github.com/RyRy79261/intake-tracker/compare/v1.8.1...v1.9.0) (2026-05-18)
+
+
+### Features
+
+* throttle PIN unlock attempts with exponential backoff ([8e0e418](https://github.com/RyRy79261/intake-tracker/commit/8e0e4180dfbbae205337f138c3145bcee14eddad))
+
+
+### Bug Fixes
+
+* **e2e:** correct expected toast for food entry without note ([3217a7b](https://github.com/RyRy79261/intake-tracker/commit/3217a7be90f5baf442bdd0bb7eae6ffcf6720064))
+* **eating:** treat limit=0 as empty result, matching urination/defecation ([34178e7](https://github.com/RyRy79261/intake-tracker/commit/34178e7a67ac1eddcdd92442c8471d5cf66666a5))
+* **food:** require sodium before enabling save in food entry form ([bb93f65](https://github.com/RyRy79261/intake-tracker/commit/bb93f655d187fcaca41588bb08eaf77372783e61))
+* guard useNowTick against non-positive intervalMs ([840d6be](https://github.com/RyRy79261/intake-tracker/commit/840d6be20a7b85a90848063e97d5ca11c78a711b))
+* **liquids:** show name input on Coffee/Alcohol tabs when signed out ([7b78265](https://github.com/RyRy79261/intake-tracker/commit/7b78265ed55fd199bf1afe1f659e2350dee1b7d7))
+* **medications:** address CodeRabbit quick-win findings ([fcb8f14](https://github.com/RyRy79261/intake-tracker/commit/fcb8f1499a7b866fb19118192057af7165f55445))
+* **pin:** apply lockout throttle to changePin and removePin ([d6ef356](https://github.com/RyRy79261/intake-tracker/commit/d6ef3561a5de0de7e17283581dfd4fbded9ff851))
+* prune expired buckets in the rate limiter ([373205d](https://github.com/RyRy79261/intake-tracker/commit/373205d6a83c7f6fdcdcbde457ee2c22ef1ba9ad))
+* return 400 instead of 500/502 on malformed JSON ([7ee88be](https://github.com/RyRy79261/intake-tracker/commit/7ee88be226f915ea89b8a12efbef44bd70b64e07))
+* route remaining AI handlers through parseJsonBody ([3bd9936](https://github.com/RyRy79261/intake-tracker/commit/3bd9936cb97edc16b4aeb8e2de7497a018e8a7d6))
+* route substance-enrich through parseJsonBody for 400 on bad JSON ([94cf87d](https://github.com/RyRy79261/intake-tracker/commit/94cf87d89282396525a76d98e97a3fde71928e67))
+* soft-delete urination and defecation records ([d6903b9](https://github.com/RyRy79261/intake-tracker/commit/d6903b9b8c0156f89b9ad282b011087bbe37f860))
+* treat limit=0 as empty result in urination/defecation reads ([b7e6860](https://github.com/RyRy79261/intake-tracker/commit/b7e6860d0f7155d382f730611859c47988cffa63))
+
 ## [1.8.1](https://github.com/RyRy79261/intake-tracker/compare/v1.8.0...v1.8.1) (2026-05-17)
 
 
