@@ -6,27 +6,14 @@ import { sanitizeForAI } from "@/lib/security";
 import { getClaudeClient, CLAUDE_MODELS, WEB_SEARCH_TOOL } from "../_shared/claude-client";
 import { SubstanceLookupResponseSchema, SUBSTANCE_LOOKUP_TOOL } from "./schema";
 import { zodErrorResponse } from "../../_shared/validation";
+import { createRateLimiter, getClientIp } from "../../_shared/rate-limit";
 
 const RequestSchema = z.object({
   query: z.string().min(1).max(200),
   type: z.enum(["caffeine", "alcohol"]),
 });
 
-const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
-const RATE_LIMIT = 15;
-const RATE_WINDOW = 60 * 1000;
-
-function checkRateLimit(ip: string): boolean {
-  const now = Date.now();
-  const record = rateLimitMap.get(ip);
-  if (!record || now > record.resetTime) {
-    rateLimitMap.set(ip, { count: 1, resetTime: now + RATE_WINDOW });
-    return true;
-  }
-  if (record.count >= RATE_LIMIT) return false;
-  record.count++;
-  return true;
-}
+const rateLimiter = createRateLimiter(15);
 
 type ToolUseBlock = Extract<Anthropic.Messages.ContentBlock, { type: "tool_use" }>;
 
@@ -83,12 +70,9 @@ Process:
 
 export const POST = withAuth(async ({ request, auth }) => {
   try {
-    const ip =
-      request.headers.get("x-forwarded-for")?.split(",")[0] ||
-      request.headers.get("x-real-ip") ||
-      "unknown";
+    const ip = getClientIp(request);
 
-    if (!checkRateLimit(ip)) {
+    if (!rateLimiter.check(ip)) {
       return NextResponse.json(
         { error: "Rate limit exceeded. Please try again later." },
         { status: 429 }

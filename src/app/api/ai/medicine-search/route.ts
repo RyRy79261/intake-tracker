@@ -4,6 +4,7 @@ import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
 import { getClaudeClient, CLAUDE_MODELS } from "../_shared/claude-client";
 import { zodErrorResponse } from "../../_shared/validation";
+import { createRateLimiter, getClientIp } from "../../_shared/rate-limit";
 
 // --- Zod Schemas (co-located per user decision) ---
 
@@ -73,30 +74,13 @@ const MEDICINE_SEARCH_TOOL = {
   },
 };
 
-const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
-const RATE_LIMIT = 15;
-const RATE_WINDOW = 60 * 1000;
-
-function checkRateLimit(ip: string): boolean {
-  const now = Date.now();
-  const record = rateLimitMap.get(ip);
-  if (!record || now > record.resetTime) {
-    rateLimitMap.set(ip, { count: 1, resetTime: now + RATE_WINDOW });
-    return true;
-  }
-  if (record.count >= RATE_LIMIT) return false;
-  record.count++;
-  return true;
-}
+const rateLimiter = createRateLimiter(15);
 
 export const POST = withAuth(async ({ request, auth }) => {
   try {
-    const ip =
-      request.headers.get("x-forwarded-for")?.split(",")[0] ||
-      request.headers.get("x-real-ip") ||
-      "unknown";
+    const ip = getClientIp(request);
 
-    if (!checkRateLimit(ip)) {
+    if (!rateLimiter.check(ip)) {
       return NextResponse.json(
         { error: "Rate limit exceeded. Please try again later." },
         { status: 429 }

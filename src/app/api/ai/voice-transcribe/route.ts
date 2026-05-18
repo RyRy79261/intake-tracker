@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { withAuth } from "@/lib/auth-middleware";
+import { createRateLimiter, getClientIp } from "../../_shared/rate-limit";
 
 /**
  * Transcribe a short audio clip using Groq's hosted
@@ -22,30 +23,13 @@ const DOMAIN_PROMPT =
 const MAX_AUDIO_BYTES = 20 * 1024 * 1024; // 20 MB hard cap
 const ALLOWED_MIME_PREFIXES = ["audio/", "video/webm", "video/mp4"];
 
-const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
-const RATE_LIMIT = 30;
-const RATE_WINDOW = 60 * 1000;
-
-function checkRateLimit(ip: string): boolean {
-  const now = Date.now();
-  const record = rateLimitMap.get(ip);
-  if (!record || now > record.resetTime) {
-    rateLimitMap.set(ip, { count: 1, resetTime: now + RATE_WINDOW });
-    return true;
-  }
-  if (record.count >= RATE_LIMIT) return false;
-  record.count++;
-  return true;
-}
+const rateLimiter = createRateLimiter(30);
 
 export const POST = withAuth(async ({ request, auth }) => {
   try {
-    const ip =
-      request.headers.get("x-forwarded-for")?.split(",")[0] ||
-      request.headers.get("x-real-ip") ||
-      "unknown";
+    const ip = getClientIp(request);
 
-    if (!checkRateLimit(ip)) {
+    if (!rateLimiter.check(ip)) {
       return NextResponse.json(
         { error: "Rate limit exceeded. Please try again later." },
         { status: 429 }
