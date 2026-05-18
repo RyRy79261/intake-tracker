@@ -312,6 +312,27 @@ export interface SyncMetaRow {
   lastPulledUpdatedAt: number;
 }
 
+/** Source of a captured error/warning. Device-local debug data, never synced. */
+export type ErrorLogSource =
+  | "window-error"
+  | "unhandled-rejection"
+  | "error-boundary"
+  | "console-error"
+  | "console-warn";
+
+/** Captured error/warning. Local-only (Dexie v17+); not part of backup or sync. */
+export interface ErrorLogEntry {
+  id: string;
+  timestamp: number;
+  source: ErrorLogSource;
+  message: string;
+  stack?: string;
+  componentStack?: string;
+  route?: string;
+  userAgent?: string;
+  appVersion?: string;
+}
+
 const db = new Dexie("IntakeTrackerDB") as Dexie & {
   intakeRecords: EntityTable<IntakeRecord, "id">;
   auditLogs: EntityTable<AuditLog, "id">;
@@ -331,6 +352,7 @@ const db = new Dexie("IntakeTrackerDB") as Dexie & {
   titrationPlans: EntityTable<TitrationPlan, "id">;
   _syncQueue: EntityTable<SyncQueueRow, "id">;
   _syncMeta: EntityTable<SyncMetaRow, "tableName">;
+  _errorLogs: EntityTable<ErrorLogEntry, "id">;
 };
 
 // Schema is declared cumulatively: each version is the previous version's
@@ -628,6 +650,33 @@ db.version(16).stores({
   // `++id` = auto-increment; `[tableName+recordId]` = compound index for coalesce (D-04)
   _syncQueue:              "++id, [tableName+recordId], tableName, enqueuedAt",
   _syncMeta:               "tableName",
+});
+
+// Version 17: Add _errorLogs for device-local debug capture (window errors,
+// unhandled rejections, ErrorBoundary catches, console.error/warn). Not synced,
+// not backed up — purely a diagnostic surface for the Debug panel.
+db.version(17).stores({
+  // --- REPEAT all v16 stores verbatim ---
+  intakeRecords:           "id, [type+timestamp], timestamp, source, groupId, updatedAt",
+  weightRecords:           "id, timestamp, updatedAt",
+  bloodPressureRecords:    "id, timestamp, position, arm, updatedAt",
+  eatingRecords:           "id, timestamp, groupId, updatedAt",
+  urinationRecords:        "id, timestamp, updatedAt",
+  defecationRecords:       "id, timestamp, updatedAt",
+  prescriptions:           "id, isActive, updatedAt, createdAt",
+  medicationPhases:        "id, prescriptionId, status, type, titrationPlanId, updatedAt",
+  phaseSchedules:          "id, phaseId, time, enabled, updatedAt",
+  inventoryItems:          "id, prescriptionId, isActive, updatedAt",
+  inventoryTransactions:   "id, [inventoryItemId+timestamp], inventoryItemId, timestamp, type, updatedAt",
+  doseLogs:                "id, [prescriptionId+scheduledDate], prescriptionId, phaseId, scheduleId, scheduledDate, scheduledTime, status, updatedAt",
+  dailyNotes:              "id, date, prescriptionId, doseLogId, updatedAt",
+  auditLogs:               "id, [action+timestamp], timestamp, action",
+  substanceRecords:        "id, [type+timestamp], type, timestamp, source, sourceRecordId, groupId, updatedAt",
+  titrationPlans:          "id, conditionLabel, status, updatedAt",
+  _syncQueue:              "++id, [tableName+recordId], tableName, enqueuedAt",
+  _syncMeta:               "tableName",
+  // --- NEW in v17 ---
+  _errorLogs:              "id, timestamp, source",
 });
 
 export { db };

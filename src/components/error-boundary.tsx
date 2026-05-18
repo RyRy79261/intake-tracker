@@ -25,11 +25,19 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    // Log error to console in development
-    console.error("ErrorBoundary caught an error:", error, errorInfo);
-    
-    // In production, you could send to an error reporting service
-    // e.g., Sentry, LogRocket, etc.
+    // Persist to the in-app debug log so it's visible on devices without
+    // devtools. Use rawConsoleError to avoid double-capturing via the
+    // patched console.error.
+    import("@/lib/error-log-service").then((m) => {
+      m.rawConsoleError("ErrorBoundary caught an error:", error, errorInfo);
+      void m.logError("error-boundary", {
+        message: error.message,
+        ...(error.stack !== undefined ? { stack: error.stack } : {}),
+        ...(errorInfo.componentStack
+          ? { componentStack: errorInfo.componentStack }
+          : {}),
+      });
+    });
   }
 
   handleReset = () => {

@@ -87,7 +87,7 @@ const TABLE_TO_FIXTURE: Record<string, string> = {
   auditLogs: "makeAuditLog",
 };
 
-const INTERNAL_TABLES = ["_syncQueue", "_syncMeta"];
+const INTERNAL_TABLES = ["_syncQueue", "_syncMeta", "_errorLogs"];
 
 describe("db.ts <-> BackupData sync", () => {
   it("every db.ts table has a BackupData key", () => {
