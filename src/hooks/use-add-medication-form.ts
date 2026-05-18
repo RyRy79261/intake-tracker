@@ -5,6 +5,7 @@ import { z } from "zod";
 import type { PillShape, FoodInstruction } from "@/lib/db";
 import type { MedicineSearchResult } from "@/hooks/use-medicine-search";
 import { logAudit } from "@/lib/audit";
+import { ALL_DAYS } from "@/components/medications/add-medication-steps/types";
 
 // --- Per-step Zod schemas ---
 
@@ -60,8 +61,6 @@ export interface AddMedicationFormState {
   refillAlertDays: string;
   refillAlertPills: string;
 }
-
-const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
 
 const INITIAL_STATE: AddMedicationFormState = {
   selectedPrescriptionId: "new",
