@@ -10,9 +10,8 @@ import {
   type PanInfo,
 } from "motion/react";
 import { NAV_ROUTES } from "@/lib/nav-routes";
+import { useSettingsStore } from "@/stores/settings-store";
 
-const SWIPE_THRESHOLD_RATIO = 0.28;
-const VELOCITY_THRESHOLD = 500;
 const DIRECTION_LOCK_THRESHOLD = 8;
 const RESISTANCE = 0.25;
 const COMMIT_DURATION = 0.18;
@@ -27,6 +26,18 @@ export function SwipeNav({ children }: { children: React.ReactNode }) {
   const startedRef = useRef(false);
   const navigatingRef = useRef(false);
   const commitDirRef = useRef<"prev" | "next" | null>(null);
+  const distanceThresholdPct = useSettingsStore((s) => s.swipeNavDistanceThresholdPct);
+  const velocityThreshold = useSettingsStore((s) => s.swipeNavVelocityThreshold);
+  // Mirror reactive thresholds into refs so handlers always read live values
+  // without forcing handler reallocation on every settings change.
+  const distanceThresholdRef = useRef(distanceThresholdPct);
+  const velocityThresholdRef = useRef(velocityThreshold);
+  useEffect(() => {
+    distanceThresholdRef.current = distanceThresholdPct;
+  }, [distanceThresholdPct]);
+  useEffect(() => {
+    velocityThresholdRef.current = velocityThreshold;
+  }, [velocityThreshold]);
 
   const currentIndex = NAV_ROUTES.findIndex((r) => r.path === pathname);
   const isTopRoute = currentIndex !== -1;
@@ -118,13 +129,14 @@ export function SwipeNav({ children }: { children: React.ReactNode }) {
       }
 
       const w = window.innerWidth || width || 1;
-      const threshold = w * SWIPE_THRESHOLD_RATIO;
+      const threshold = w * (distanceThresholdRef.current / 100);
+      const vThreshold = velocityThresholdRef.current;
       const { offset, velocity } = info;
 
       const goingPrev =
-        offset.x > 0 && prevRoute && (offset.x > threshold || velocity.x > VELOCITY_THRESHOLD);
+        offset.x > 0 && prevRoute && (offset.x > threshold || velocity.x > vThreshold);
       const goingNext =
-        offset.x < 0 && nextRoute && (offset.x < -threshold || velocity.x < -VELOCITY_THRESHOLD);
+        offset.x < 0 && nextRoute && (offset.x < -threshold || velocity.x < -vThreshold);
 
       if (goingPrev || goingNext) {
         navigatingRef.current = true;

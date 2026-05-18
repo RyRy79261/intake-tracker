@@ -24,6 +24,7 @@ import { LiquidPresetsSection } from "@/components/settings/liquid-presets-secti
 import { UrinationDefecationDefaults } from "@/components/settings/urination-defecation-defaults";
 import { MedicationSettingsSection } from "@/components/settings/medication-settings-section";
 import { AnimationTimingSection } from "@/components/settings/animation-timing-section";
+import { SwipeNavSection } from "@/components/settings/swipe-nav-section";
 import { StorageInfoSection } from "@/components/settings/storage-info-section";
 
 
@@ -70,6 +71,7 @@ function SettingsContent() {
           <AppearanceSection />
           <QuickNavSection />
           <AnimationTimingSection />
+          <SwipeNavSection />
         </SettingsAccordionGroup>
 
         <SettingsAccordionGroup value="medication" icon={Pill} label="Medication" iconColorClass="text-teal-600 dark:text-teal-400">
