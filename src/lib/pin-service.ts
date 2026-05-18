@@ -20,10 +20,20 @@ const PIN_STORAGE_KEY = "intake-tracker-pin";
 const SESSION_SECRET_KEY = "intake-tracker-session";
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 
+// Throttling: after this many failed attempts, lock out for an escalating
+// duration. PBKDF2 already throttles each attempt to ~hundreds of ms, this
+// is a defence-in-depth against an attacker that automates against the
+// session storage.
+const LOCKOUT_THRESHOLD = 5;
+const LOCKOUT_BASE_MS = 30_000;
+const LOCKOUT_MAX_MS = 15 * 60 * 1000;
+
 // PIN data stored in localStorage
 interface PinStorageData {
   encryptedSecret: EncryptedData;
   lastUnlockTime: number | null;
+  failedAttempts?: number;
+  lockedUntil?: number | null;
 }
 
 /**
@@ -160,107 +170,151 @@ export async function setupPin(pin: string): Promise<ServiceResult<boolean>> {
 }
 
 /**
+ * Compute the lockout duration for the n-th consecutive failure. With the
+ * threshold-inclusive check below (`>= LOCKOUT_THRESHOLD`), the first lockout
+ * fires at `failedAttempts === LOCKOUT_THRESHOLD` and gets base duration
+ * (overage 0). Each subsequent failure doubles, capped at LOCKOUT_MAX_MS.
+ */
+function lockoutDurationMs(failedAttempts: number): number {
+  const overage = Math.max(0, failedAttempts - LOCKOUT_THRESHOLD);
+  const ms = LOCKOUT_BASE_MS * Math.pow(2, overage);
+  return Math.min(ms, LOCKOUT_MAX_MS);
+}
+
+/**
+ * Verify a PIN against the stored encrypted record, applying the throttling
+ * shared by unlock / changePin / removePin.
+ *
+ * - Throws if currently locked out (caller should surface a "try again later"
+ *   message; getLockoutRemainingMs() reports the countdown).
+ * - On success, returns the decrypted gate secret. The caller is responsible
+ *   for writing back any other storage updates (e.g., re-encrypted secret,
+ *   updated lastUnlockTime) along with `failedAttempts: 0, lockedUntil: null`.
+ * - On wrong PIN, increments the failure counter, sets `lockedUntil` once
+ *   the threshold is reached, and returns null.
+ */
+async function verifyPinWithThrottle(
+  pinData: PinStorageData,
+  pin: string,
+): Promise<string | null> {
+  if (pinData.lockedUntil && pinData.lockedUntil > Date.now()) {
+    throw new Error("Too many failed attempts. Try again later.");
+  }
+
+  try {
+    return await decrypt(pinData.encryptedSecret, pin);
+  } catch {
+    const failedAttempts = (pinData.failedAttempts ?? 0) + 1;
+    const lockedUntil =
+      failedAttempts >= LOCKOUT_THRESHOLD
+        ? Date.now() + lockoutDurationMs(failedAttempts)
+        : null;
+    setPinStorage({ ...pinData, failedAttempts, lockedUntil });
+    return null;
+  }
+}
+
+/**
+ * Returns the number of milliseconds remaining on an active lockout,
+ * or null if the user is not locked out.
+ */
+export function getLockoutRemainingMs(): number | null {
+  const pinData = getPinStorage();
+  if (!pinData?.lockedUntil) return null;
+  const remaining = pinData.lockedUntil - Date.now();
+  return remaining > 0 ? remaining : null;
+}
+
+/**
  * Attempt to unlock with a PIN
  * @param pin The PIN to try
  * @returns true if unlock successful, false if wrong PIN
+ * @throws if locked out (caller can poll getLockoutRemainingMs())
  */
 export async function unlock(pin: string): Promise<boolean> {
   if (!isCryptoAvailable()) {
     throw new Error("Web Crypto API not available");
   }
-  
+
   const pinData = getPinStorage();
   if (!pinData) {
     throw new Error("No PIN has been set up");
   }
-  
-  try {
-    // Try to decrypt the gate secret
-    const gateSecret = await decrypt(pinData.encryptedSecret, pin);
-    
-    // Success! Store in session and update unlock time
-    setSessionSecret(gateSecret);
-    setPinStorage({
-      ...pinData,
-      lastUnlockTime: Date.now(),
-    });
-    
-    return true;
-  } catch {
-    // Decryption failed = wrong PIN
-    return false;
-  }
+
+  const gateSecret = await verifyPinWithThrottle(pinData, pin);
+  if (gateSecret === null) return false;
+
+  setSessionSecret(gateSecret);
+  setPinStorage({
+    ...pinData,
+    lastUnlockTime: Date.now(),
+    failedAttempts: 0,
+    lockedUntil: null,
+  });
+
+  return true;
 }
 
 /**
  * Change the PIN
  * @param oldPin Current PIN for verification
  * @param newPin New PIN to set
- * @returns true if successful
+ * @returns true if successful, false if old PIN was wrong
+ * @throws if locked out
  */
 export async function changePin(oldPin: string, newPin: string): Promise<boolean> {
   if (!isCryptoAvailable()) {
     throw new Error("Web Crypto API not available");
   }
-  
+
   if (!newPin || newPin.length < 4) {
     throw new Error("New PIN must be at least 4 characters");
   }
-  
+
   const pinData = getPinStorage();
   if (!pinData) {
     throw new Error("No PIN has been set up");
   }
-  
-  try {
-    // Decrypt with old PIN to get the gate secret
-    const gateSecret = await decrypt(pinData.encryptedSecret, oldPin);
-    
-    // Re-encrypt with new PIN
-    const newEncryptedSecret = await encrypt(gateSecret, newPin);
-    
-    // Store the new encrypted secret
-    setPinStorage({
-      encryptedSecret: newEncryptedSecret,
-      lastUnlockTime: Date.now(),
-    });
-    
-    return true;
-  } catch {
-    // Decryption failed = wrong old PIN
-    return false;
-  }
+
+  const gateSecret = await verifyPinWithThrottle(pinData, oldPin);
+  if (gateSecret === null) return false;
+
+  const newEncryptedSecret = await encrypt(gateSecret, newPin);
+
+  setPinStorage({
+    encryptedSecret: newEncryptedSecret,
+    lastUnlockTime: Date.now(),
+    failedAttempts: 0,
+    lockedUntil: null,
+  });
+
+  return true;
 }
 
 /**
  * Remove PIN protection entirely
  * @param pin Current PIN for verification
- * @returns true if successful
+ * @returns true if successful, false if PIN was wrong
+ * @throws if locked out
  */
 export async function removePin(pin: string): Promise<boolean> {
   if (!isCryptoAvailable()) {
     throw new Error("Web Crypto API not available");
   }
-  
+
   const pinData = getPinStorage();
   if (!pinData) {
     // No PIN to remove
     return true;
   }
-  
-  try {
-    // Verify the PIN first
-    await decrypt(pinData.encryptedSecret, pin);
-    
-    // Clear all PIN data
-    clearPinStorage();
-    clearSessionSecret();
-    
-    return true;
-  } catch {
-    // Wrong PIN
-    return false;
-  }
+
+  const gateSecret = await verifyPinWithThrottle(pinData, pin);
+  if (gateSecret === null) return false;
+
+  clearPinStorage();
+  clearSessionSecret();
+
+  return true;
 }
 
 /**

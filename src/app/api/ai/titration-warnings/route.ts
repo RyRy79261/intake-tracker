@@ -3,6 +3,7 @@ import { z } from "zod";
 import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
 import { getClaudeClient, CLAUDE_MODELS } from "../_shared/claude-client";
+import { parseJsonBody, zodErrorResponse } from "@/app/api/_shared/validation";
 
 const RequestSchema = z.object({
   prescriptions: z
@@ -64,13 +65,11 @@ Keep each warning to one short sentence. Aim for 4-8 warnings. Be practical and 
 
 export const POST = withAuth(async ({ request, auth }) => {
   try {
-    const body = await request.json();
-    const parsed = RequestSchema.safeParse(body);
+    const json = await parseJsonBody(request);
+    if (!json.ok) return json.response;
+    const parsed = RequestSchema.safeParse(json.body);
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: "Invalid request", details: parsed.error.flatten() },
-        { status: 400 },
-      );
+      return zodErrorResponse("Titration warnings request failed", parsed.error);
     }
 
     let client;

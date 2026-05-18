@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useCallback } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useMutation } from "@tanstack/react-query";
 import {
@@ -18,6 +18,7 @@ import {
 import { unwrap } from "@/lib/service-result";
 import { showUndoToast } from "@/components/medications/undo-toast";
 import { useSettingsStore } from "@/stores/settings-store";
+import { useNowTick } from "@/hooks/use-now-tick";
 
 /**
  * Get the timestamp for when the current "day" started based on the configurable hour.
@@ -44,12 +45,7 @@ export function getDayStartTimestamp(dayStartHour: number): number {
  * to handle rolling 24h window boundary.
  */
 export function useIntakeTotal(type: "water" | "salt") {
-  const [tick, setTick] = useState(0);
-  useEffect(() => {
-    const interval = setInterval(() => setTick(t => t + 1), 60_000);
-    return () => clearInterval(interval);
-  }, []);
-
+  const tick = useNowTick();
   return useLiveQuery(() => getTotalInLast24Hours(type), [type, tick], 0);
 }
 
@@ -60,12 +56,7 @@ export function useIntakeTotal(type: "water" | "salt") {
  */
 export function useDailyIntakeTotal(type: "water" | "salt") {
   const dayStartHour = useSettingsStore((state) => state.dayStartHour);
-  const [tick, setTick] = useState(0);
-  useEffect(() => {
-    const interval = setInterval(() => setTick(t => t + 1), 60_000);
-    return () => clearInterval(interval);
-  }, []);
-
+  const tick = useNowTick();
   return useLiveQuery(() => getDailyTotal(type, dayStartHour), [type, dayStartHour, tick], 0);
 }
 
@@ -73,12 +64,7 @@ export function useDailyIntakeTotal(type: "water" | "salt") {
  * Hook to get records for a type in the last 24 hours.
  */
 export function useIntakeRecords(type: "water" | "salt") {
-  const [tick, setTick] = useState(0);
-  useEffect(() => {
-    const interval = setInterval(() => setTick(t => t + 1), 60_000);
-    return () => clearInterval(interval);
-  }, []);
-
+  const tick = useNowTick();
   return useLiveQuery(() => getRecordsInLast24Hours(type), [type, tick], []);
 }
 
@@ -187,12 +173,7 @@ export function useIntakeRecordsByDateRange(
   endTime: number,
   type?: "water" | "salt"
 ) {
-  const [tick, setTick] = useState(0);
-  useEffect(() => {
-    const interval = setInterval(() => setTick(t => t + 1), 60_000);
-    return () => clearInterval(interval);
-  }, []);
-
+  const tick = useNowTick();
   return useLiveQuery(
     () => getRecordsByDateRange(startTime, endTime, type),
     [startTime, endTime, type, tick],

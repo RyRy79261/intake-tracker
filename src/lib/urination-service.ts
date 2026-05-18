@@ -28,26 +28,39 @@ export async function addUrinationRecord(
 export async function getUrinationRecords(
   limit?: number
 ): Promise<UrinationRecord[]> {
-  const query = db.urinationRecords.orderBy("timestamp").reverse();
-  return limit ? query.limit(limit).toArray() : query.toArray();
+  const records = await db.urinationRecords.orderBy("timestamp").reverse().toArray();
+  const active = records.filter((r) => r.deletedAt === null);
+  return limit !== undefined ? active.slice(0, limit) : active;
 }
 
 export async function getUrinationRecordsByDateRange(
   startTime: number,
   endTime: number
 ): Promise<UrinationRecord[]> {
-  return db.urinationRecords
+  const records = await db.urinationRecords
     .where("timestamp")
     .between(startTime, endTime)
     .toArray();
+  return records.filter((r) => r.deletedAt === null);
 }
 
 export async function deleteUrinationRecord(id: string): Promise<ServiceResult<void>> {
   try {
-    await db.urinationRecords.delete(id);
+    const now = Date.now();
+    await db.urinationRecords.update(id, { deletedAt: now, updatedAt: now });
     return ok(undefined);
   } catch (e) {
     return err("Failed to delete urination record", e);
+  }
+}
+
+export async function undoDeleteUrinationRecord(id: string): Promise<ServiceResult<void>> {
+  try {
+    const now = Date.now();
+    await db.urinationRecords.update(id, { deletedAt: null, updatedAt: now });
+    return ok(undefined);
+  } catch (e) {
+    return err("Failed to undo delete urination record", e);
   }
 }
 
