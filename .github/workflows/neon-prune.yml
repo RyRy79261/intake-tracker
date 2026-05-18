@@ -1,0 +1,104 @@
+name: Prune Neon CI branches
+
+# Removes Neon branches left behind by previous CI runs / closed PRs.
+# Branches managed inline by ci.yml (`ci-e2e-<run_id>`, `ci-schema-<run_id>`)
+# normally clean up themselves via `if: always()` delete steps, but those
+# can be skipped when the create step itself fails (quota exhausted, API
+# error, etc.), leaving the project at-quota for the next run.
+#
+# Triggers:
+#   - schedule: hourly sweep
+#   - workflow_dispatch: manual run, with optional `max_age_minutes` input
+#     (default 60) so an operator can flush very recent stale branches if
+#     a run is mid-debug.
+
+on:
+  schedule:
+    # Hourly at :17 to avoid collision with other hourly crons.
+    - cron: "17 * * * *"
+  workflow_dispatch:
+    inputs:
+      max_age_minutes:
+        description: "Delete matching branches older than this (minutes). Use a low number to force-purge recent stale branches."
+        required: false
+        default: "60"
+
+permissions:
+  contents: read
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prune stale Neon branches
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+          MAX_AGE_MINUTES: ${{ github.event.inputs.max_age_minutes || '60' }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${NEON_API_KEY:-}" ] || [ -z "${NEON_PROJECT_ID:-}" ]; then
+            echo "::error::NEON_API_KEY or NEON_PROJECT_ID is empty in workflow context"
+            exit 1
+          fi
+
+          # Patterns of branches created by CI that are safe to delete.
+          # The primary branch (`main`/`production`) is excluded via the
+          # `primary` flag below regardless of name.
+          patterns='^(ci-e2e-|ci-schema-|preview/pr-)'
+
+          # Cutoff (ISO-8601 UTC) computed in seconds since epoch for
+          # straightforward comparison with parsed branch created_at.
+          now_epoch=$(date -u +%s)
+          cutoff_epoch=$(( now_epoch - (MAX_AGE_MINUTES * 60) ))
+          echo "Pruning Neon branches matching $patterns created before $(date -u -d @"$cutoff_epoch" --iso-8601=seconds)"
+
+          api="https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}"
+          auth="Authorization: Bearer ${NEON_API_KEY}"
+
+          # List branches. Exit early on auth/permission failure so the
+          # job fails loudly rather than silently doing nothing.
+          resp=$(curl -sS -w "\n%{http_code}" -H "$auth" -H "Accept: application/json" "$api/branches")
+          body=$(printf '%s' "$resp" | sed '$d')
+          status=$(printf '%s' "$resp" | tail -n1)
+          if [ "$status" != "200" ]; then
+            echo "::error::Neon API returned HTTP $status when listing branches"
+            echo "$body"
+            exit 1
+          fi
+
+          # jq filter: select non-primary branches whose name matches one of
+          # our CI patterns and whose created_at is older than the cutoff.
+          # Output one "id<TAB>name<TAB>created_at" record per line.
+          targets=$(printf '%s' "$body" | jq -r --arg pat "$patterns" --argjson cutoff "$cutoff_epoch" '
+            .branches[]
+            | select(.primary != true)
+            | select(.name | test($pat))
+            | select((.created_at | fromdateiso8601) < $cutoff)
+            | [.id, .name, .created_at] | @tsv
+          ')
+
+          if [ -z "$targets" ]; then
+            echo "No stale CI branches to prune."
+            exit 0
+          fi
+
+          deleted=0
+          failed=0
+          while IFS=$'\t' read -r id name created_at; do
+            [ -z "$id" ] && continue
+            echo "Deleting branch: $name (id=$id, created=$created_at)"
+            del_resp=$(curl -sS -o /dev/null -w "%{http_code}" -X DELETE -H "$auth" "$api/branches/$id")
+            if [ "$del_resp" = "200" ] || [ "$del_resp" = "202" ]; then
+              deleted=$((deleted + 1))
+            else
+              echo "::warning::Failed to delete $name (HTTP $del_resp)"
+              failed=$((failed + 1))
+            fi
+          done <<< "$targets"
+
+          echo "Pruned $deleted branch(es); $failed failure(s)."
+          # Exit non-zero only on outright API failure (handled above);
+          # individual delete failures are warnings so a transient 5xx on
+          # one branch doesn't stop the next hourly run from succeeding.
