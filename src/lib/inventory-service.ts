@@ -1,13 +1,226 @@
 /**
- * Inventory service — stock recalculation from event-sourced transactions.
+ * Inventory service — inventory items, transactions, and stock recalculation.
  *
- * Separate from medication-service.ts intentionally:
- *   - medication-service.ts: prescription/phase/schedule CRUD
- *   - inventory-service.ts: stock derivation from transactions
+ * Companion to prescription-service.ts (prescription CRUD) and
+ * phase-service.ts (phase lifecycle).
  */
 
-import { db } from "@/lib/db";
-import { writeAuditLog } from "@/lib/audit-service";
+import { db, type InventoryItem, type InventoryTransaction } from "@/lib/db";
+import { ok, err, type ServiceResult } from "@/lib/service-result";
+import { syncFields } from "@/lib/utils";
+import { buildAuditEntry, writeAuditLog } from "@/lib/audit-service";
+import { buildTransaction } from "@/lib/medication-builders";
+
+// ---------------------------------------------------------------------------
+// Reads
+// ---------------------------------------------------------------------------
+
+export async function getInventoryForPrescription(prescriptionId: string): Promise<InventoryItem[]> {
+  return db.inventoryItems.where("prescriptionId").equals(prescriptionId).toArray();
+}
+
+export async function getActiveInventoryForPrescription(prescriptionId: string): Promise<InventoryItem | undefined> {
+  const items = await db.inventoryItems.where("prescriptionId").equals(prescriptionId).toArray();
+  return items.find(i => i.isActive === true);
+}
+
+export async function getAllInventoryItems(): Promise<InventoryItem[]> {
+  return db.inventoryItems.toArray();
+}
+
+export async function getAllActiveInventoryItems(): Promise<InventoryItem[]> {
+  const all = await db.inventoryItems.toArray();
+  return all.filter(i => i.isActive === true);
+}
+
+export async function getInventoryTransactions(inventoryItemId: string): Promise<InventoryTransaction[]> {
+  return db.inventoryTransactions
+    .where("inventoryItemId")
+    .equals(inventoryItemId)
+    .reverse()
+    .sortBy("timestamp");
+}
+
+// ---------------------------------------------------------------------------
+// Mutations
+// ---------------------------------------------------------------------------
+
+export async function addInventoryItem(input: Omit<InventoryItem, "id" | "createdAt" | "updatedAt" | "deletedAt" | "deviceId">): Promise<ServiceResult<InventoryItem>> {
+  try {
+    const item: InventoryItem = {
+      ...input,
+      id: crypto.randomUUID(),
+      ...syncFields(),
+    };
+    await db.transaction("rw", [db.inventoryItems, db.auditLogs], async () => {
+      await db.inventoryItems.add(item);
+      await db.auditLogs.add(buildAuditEntry("inventory_added", {
+        inventoryItemId: item.id,
+        prescriptionId: item.prescriptionId,
+        brandName: item.brandName,
+        strength: item.strength,
+      }));
+    });
+    return ok(item);
+  } catch (e) {
+    return err("Failed to add inventory item", e);
+  }
+}
+
+export async function updateInventoryItem(
+  id: string,
+  updates: Partial<Omit<InventoryItem, "id" | "createdAt" | "prescriptionId">>,
+): Promise<ServiceResult<void>> {
+  try {
+    await db.transaction("rw", [db.inventoryItems, db.auditLogs], async () => {
+      await db.inventoryItems.update(id, { ...updates, updatedAt: Date.now() });
+      await db.auditLogs.add(buildAuditEntry("inventory_adjusted", {
+        inventoryItemId: id,
+        updatedFields: Object.keys(updates),
+      }));
+    });
+    return ok(undefined);
+  } catch (e) {
+    return err("Failed to update inventory item", e);
+  }
+}
+
+export async function deleteInventoryItem(id: string): Promise<ServiceResult<void>> {
+  try {
+    await db.transaction("rw", [db.inventoryItems, db.auditLogs], async () => {
+      await db.inventoryItems.delete(id);
+      await db.auditLogs.add(buildAuditEntry("inventory_deleted", {
+        inventoryItemId: id,
+      }));
+    });
+    return ok(undefined);
+  } catch (e) {
+    return err("Failed to delete inventory item", e);
+  }
+}
+
+export async function adjustStock(
+  inventoryItemId: string,
+  delta: number,
+  note?: string,
+  type?: "refill" | "consumed" | "adjusted",
+): Promise<ServiceResult<number>> {
+  try {
+    const item = await db.inventoryItems.get(inventoryItemId);
+    if (!item) return err(`InventoryItem ${inventoryItemId} not found`);
+    const currentStock = item.currentStock ?? 0;
+    // Negative stock allowed per user decision — no Math.max(0, ...) clamp
+    const newStock = Math.round((currentStock + delta) * 10000) / 10000;
+    const now = Date.now();
+
+    await db.transaction("rw", [db.inventoryItems, db.inventoryTransactions, db.auditLogs], async () => {
+      await db.inventoryItems.update(inventoryItemId, { currentStock: newStock, updatedAt: now });
+      await db.inventoryTransactions.add(buildTransaction(
+        inventoryItemId,
+        delta,
+        type ?? (delta > 0 ? "refill" : "consumed"),
+        now,
+        note,
+      ));
+      await db.auditLogs.add(buildAuditEntry("inventory_adjusted", {
+        inventoryItemId,
+        delta,
+        newStock,
+        ...(note !== undefined && { note }),
+      }));
+    });
+
+    return ok(newStock);
+  } catch (e) {
+    return err("Failed to adjust stock", e);
+  }
+}
+
+export async function updateInventoryTransaction(
+  id: string,
+  updates: { amount?: number; note?: string },
+): Promise<ServiceResult<void>> {
+  try {
+    const now = Date.now();
+
+    await db.transaction("rw", [db.inventoryTransactions, db.inventoryItems, db.auditLogs], async () => {
+      const tx = await db.inventoryTransactions.get(id);
+      if (!tx) throw new Error(`Transaction ${id} not found`);
+
+      await db.inventoryTransactions.update(id, { ...updates, updatedAt: now });
+
+      // Recalculate currentStock from all non-deleted transactions
+      const allTxs = await db.inventoryTransactions
+        .where("inventoryItemId")
+        .equals(tx.inventoryItemId)
+        .toArray();
+      const newStock = allTxs
+        .filter(t => t.deletedAt === null)
+        .reduce((sum, t) => {
+          const amount = t.id === id && updates.amount !== undefined ? updates.amount : t.amount;
+          return sum + amount;
+        }, 0);
+
+      await db.inventoryItems.update(tx.inventoryItemId, {
+        currentStock: Math.round(newStock * 10000) / 10000,
+        updatedAt: now,
+      });
+
+      await db.auditLogs.add(buildAuditEntry("inventory_adjusted", {
+        transactionId: id,
+        inventoryItemId: tx.inventoryItemId,
+        action: "transaction_updated",
+        updatedFields: Object.keys(updates),
+      }));
+    });
+
+    return ok(undefined);
+  } catch (e) {
+    return err("Failed to update inventory transaction", e);
+  }
+}
+
+export async function deleteInventoryTransaction(id: string): Promise<ServiceResult<void>> {
+  try {
+    const now = Date.now();
+
+    await db.transaction("rw", [db.inventoryTransactions, db.inventoryItems, db.auditLogs], async () => {
+      const tx = await db.inventoryTransactions.get(id);
+      if (!tx) throw new Error(`Transaction ${id} not found`);
+
+      // Soft-delete
+      await db.inventoryTransactions.update(id, { deletedAt: now, updatedAt: now });
+
+      // Recalculate currentStock from all non-deleted transactions (excluding this one)
+      const allTxs = await db.inventoryTransactions
+        .where("inventoryItemId")
+        .equals(tx.inventoryItemId)
+        .toArray();
+      const newStock = allTxs
+        .filter(t => t.deletedAt === null && t.id !== id)
+        .reduce((sum, t) => sum + t.amount, 0);
+
+      await db.inventoryItems.update(tx.inventoryItemId, {
+        currentStock: Math.round(newStock * 10000) / 10000,
+        updatedAt: now,
+      });
+
+      await db.auditLogs.add(buildAuditEntry("inventory_adjusted", {
+        transactionId: id,
+        inventoryItemId: tx.inventoryItemId,
+        action: "transaction_deleted",
+      }));
+    });
+
+    return ok(undefined);
+  } catch (e) {
+    return err("Failed to delete inventory transaction", e);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Stock derivation / recalculation
+// ---------------------------------------------------------------------------
 
 /**
  * Derive current stock for an inventory item by summing all its transactions.
