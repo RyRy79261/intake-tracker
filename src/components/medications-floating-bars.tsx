@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { Plus } from "lucide-react";
 import { AddMedicationWizard } from "@/components/medications/add-medication-wizard";
@@ -16,6 +17,15 @@ export function MedicationsFloatingBars() {
   const activeTab = useMedicationUIStore((s) => s.activeTab);
   const wizardOpen = useMedicationUIStore((s) => s.wizardOpen);
   const setWizardOpen = useMedicationUIStore((s) => s.setWizardOpen);
+
+  // Close the wizard when the user navigates away from the medications page,
+  // so coming back doesn't reopen it mid-flow. Tab state is intentionally
+  // preserved.
+  useEffect(() => {
+    if (pathname !== "/medications") {
+      setWizardOpen(false);
+    }
+  }, [pathname, setWizardOpen]);
 
   if (pathname !== "/medications") return null;
 
