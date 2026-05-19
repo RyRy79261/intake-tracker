@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Sparkles, Mic, KeyRound, Share2, Activity, Trash2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -234,12 +234,15 @@ function ShareControls() {
   const ownHasGroq = !!status?.groq?.configured;
   const canShareAny = ownHasAnthropic || ownHasGroq;
 
-  // Default the provider selector to one we can actually share.
-  if (provider === "anthropic" && !ownHasAnthropic && ownHasGroq) {
-    setProvider("groq");
-  } else if (provider === "groq" && !ownHasGroq && ownHasAnthropic) {
-    setProvider("anthropic");
-  }
+  // Keep the provider selector pointed at a provider we can actually share.
+  // Runs as an effect to avoid setState-during-render warnings.
+  useEffect(() => {
+    if (provider === "anthropic" && !ownHasAnthropic && ownHasGroq) {
+      setProvider("groq");
+    } else if (provider === "groq" && !ownHasGroq && ownHasAnthropic) {
+      setProvider("anthropic");
+    }
+  }, [provider, ownHasAnthropic, ownHasGroq]);
 
   const handleGrant = async () => {
     const trimmed = email.trim();

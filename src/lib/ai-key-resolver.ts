@@ -13,7 +13,7 @@
  * into usage tracking without re-deriving them.
  */
 
-import { eq, and } from "drizzle-orm";
+import { eq, and, asc } from "drizzle-orm";
 import { db } from "@/lib/drizzle";
 import { userApiKeys, userKeyShares } from "@/db/schema";
 import { decryptKey } from "@/lib/key-vault";
@@ -85,9 +85,10 @@ export async function resolveAiKey(
     };
   }
 
-  // Look for a share granted to this user for this provider. If multiple
-  // grantors exist, pick the first deterministically (createdAt asc) — in
-  // practice a user shouldn't have many concurrent grants.
+  // Look for a share granted to this user for this provider. Ordered by
+  // createdAt asc so selection is deterministic; no LIMIT because a stale
+  // grantor (one without a stored key) would otherwise truncate away a
+  // valid grant further down the list.
   const shareRows = await db
     .select({
       grantorId: userKeyShares.grantorId,
@@ -99,7 +100,7 @@ export async function resolveAiKey(
         eq(userKeyShares.provider, provider),
       ),
     )
-    .limit(5);
+    .orderBy(asc(userKeyShares.createdAt), asc(userKeyShares.grantorId));
 
   for (const { grantorId } of shareRows) {
     const grantorRows = await db

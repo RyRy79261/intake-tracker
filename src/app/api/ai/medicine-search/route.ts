@@ -113,9 +113,10 @@ export const POST = withAuth(async ({ request, auth }) => {
     }
 
     const sanitized = sanitizeForAI(query.trim());
+    const sanitizedCountry = country ? sanitizeForAI(country.trim()) : "";
 
-    const prompt = country
-      ? `Look up this medication and provide detailed pharmaceutical information, focusing specifically on brands and availability in ${country}: "${sanitized}"`
+    const prompt = sanitizedCountry
+      ? `Look up this medication and provide detailed pharmaceutical information, focusing specifically on brands and availability in ${sanitizedCountry}: "${sanitized}"`
       : `Look up this medication and provide detailed pharmaceutical information: "${sanitized}"`;
 
     const startedAt = Date.now();

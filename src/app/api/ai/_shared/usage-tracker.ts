@@ -47,8 +47,12 @@ export function recordUsage(record: UsageRecord): void {
       audioSeconds: record.audioSeconds ?? null,
       durationMs: record.durationMs ?? null,
     })
-    .catch((e) => {
-      console.error("[ai-usage] failed to record usage:", e);
+    .catch((e: unknown) => {
+      // Sanitize: DB errors can echo SQL fragments and parameter values
+      // (potentially including user ids). Log only the human-readable
+      // message; the full error stays inside the unhandled-rejection.
+      const message = e instanceof Error ? e.message : String(e);
+      console.error("[ai-usage] failed to record usage:", { message });
     });
 }
 

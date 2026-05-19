@@ -22,16 +22,20 @@ vi.mock("@/lib/__tests__/ai-key-resolver-mock-state", () => ({
 
 vi.mock("@/lib/drizzle", async () => {
   const { mockState } = await import("@/lib/__tests__/ai-key-resolver-mock-state");
+  const nextRows = async () => {
+    const rows = mockState.rowsByCall[mockState.idx] ?? [];
+    mockState.idx += 1;
+    return rows;
+  };
   return {
     db: {
       select: () => ({
         from: () => ({
           where: () => ({
-            limit: async () => {
-              const rows = mockState.rowsByCall[mockState.idx] ?? [];
-              mockState.idx += 1;
-              return rows;
-            },
+            // Either `.limit(...)` (own/grantor lookups) or `.orderBy(...)`
+            // (share lookup) terminates the chain and yields the queued rows.
+            limit: nextRows,
+            orderBy: nextRows,
           }),
         }),
       }),
@@ -169,6 +173,26 @@ describe("resolveAiKey priority chain", () => {
     await expect(
       resolveAiKey("alice", "alice@example.com", "anthropic"),
     ).rejects.toBeInstanceOf(NoAiKeyError);
+  });
+
+  it("traverses every share in deterministic order — picks the only grantor with a key even past five entries", async () => {
+    setNoOwnRow();
+    // 8 grantors in DB-returned order; the 7th is the only one with a key.
+    setShareRows(["g1", "g2", "g3", "g4", "g5", "g6", "g7", "g8"]);
+    setGrantorKey(2, "g1", "anthropic");
+    setGrantorKey(3, "g2", "anthropic");
+    setGrantorKey(4, "g3", "anthropic");
+    setGrantorKey(5, "g4", "anthropic");
+    setGrantorKey(6, "g5", "anthropic");
+    setGrantorKey(7, "g6", "anthropic");
+    setGrantorKey(8, "g7", "anthropic", "sk-ant-g7-wins");
+    // g8 not reached, but stub anyway to keep call indices stable.
+    setGrantorKey(9, "g8", "anthropic", "sk-ant-g8-never-used");
+
+    const result = await resolveAiKey("alice", "alice@example.com", "anthropic");
+    expect(result.apiKey).toBe("sk-ant-g7-wins");
+    expect(result.keyOwnerId).toBe("g7");
+    expect(result.source).toBe("shared_from");
   });
 
   it("resolves Groq independently of Anthropic", async () => {
