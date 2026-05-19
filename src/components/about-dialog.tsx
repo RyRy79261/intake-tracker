@@ -55,6 +55,18 @@ export function AboutDialog() {
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 pt-2">
+          <div className="space-y-3 px-1">
+            <p className="text-sm text-muted-foreground leading-relaxed text-left">
+              This app was created by me in response to difficulties in
+              tracking the things needed to manage a new chronic condition.
+              The hope is if anyone else needs this app the way I do, that
+              it is here now.
+            </p>
+            <p className="text-sm text-muted-foreground leading-relaxed text-left">
+              I can&apos;t offer the AI features for free but I can make it
+              easier to set it up yourself and use it.
+            </p>
+          </div>
           <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-muted/50">
             <span className="text-sm text-muted-foreground">Version</span>
             <span className="text-sm font-mono font-medium">{appVersion}</span>
