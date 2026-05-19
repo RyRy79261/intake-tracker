@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Accordion } from "@/components/ui/accordion";
-import { RotateCcw, Activity, Palette, Pill, Database, Shield, Bug } from "lucide-react";
+import { RotateCcw, Activity, Palette, Pill, Database, Shield, Bug, Download } from "lucide-react";
 import { useSettings } from "@/hooks/use-settings";
 import { useToast } from "@/hooks/use-toast";
 import { useScrollHide } from "@/hooks/use-scroll-hide";
@@ -85,9 +85,12 @@ function SettingsContent() {
           <PermissionsSection />
         </SettingsAccordionGroup>
 
+        <SettingsAccordionGroup value="system" icon={Download} label="System" iconColorClass="text-sky-600 dark:text-sky-400">
+          <AppUpdatesSection />
+        </SettingsAccordionGroup>
+
         <SettingsAccordionGroup value="debug" icon={Bug} label="Debug" iconColorClass="text-slate-600 dark:text-slate-400">
           <DebugPanel />
-          <AppUpdatesSection />
         </SettingsAccordionGroup>
       </Accordion>
 

@@ -61,6 +61,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    import("@/lib/error-log-service").then((m) => m.installErrorCapture());
+  }, []);
+
+  useEffect(() => {
     const env = process.env.NEXT_PUBLIC_VERCEL_ENV;
     if (env && env !== "production" && "serviceWorker" in navigator) {
       navigator.serviceWorker.getRegistrations().then((regs) => {

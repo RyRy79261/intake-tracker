@@ -35,9 +35,13 @@ module.exports = {
       rules: { "no-restricted-imports": "off" },
     },
     // The debug panel surfaces raw tables and audit logs for ops; it has to
-    // talk to the DB and services directly.
+    // talk to the DB and services directly. Same for its subcomponents under
+    // src/components/debug/.
     {
-      files: ["src/components/debug-panel.tsx"],
+      files: [
+        "src/components/debug-panel.tsx",
+        "src/components/debug/**/*",
+      ],
       rules: { "no-restricted-imports": "off" },
     },
     // Providers wire up the QueryClient and other singletons that initialise

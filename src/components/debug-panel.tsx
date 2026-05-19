@@ -39,7 +39,13 @@ import {
   Database,
   FileText,
   Package,
+  AlertOctagon,
+  Info,
+  Cog,
 } from "lucide-react";
+import { ErrorLogViewer } from "@/components/debug/error-log-viewer";
+import { EnvironmentInfo } from "@/components/debug/environment-info";
+import { ServiceWorkerDiagnostics } from "@/components/debug/service-worker-diagnostics";
 
 // ---------------------------------------------------------------------------
 // Audit action options for filter
@@ -520,12 +526,92 @@ export function DebugPanel() {
         <DialogHeader>
           <DialogTitle>Debug Panel</DialogTitle>
           <DialogDescription>
-            Audit logs, stock management, and raw database records.
+            Errors, environment info, service worker state, audit logs, stock, and raw records.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Section 1: Audit Log Viewer */}
+          {/* Section: Error Logs */}
+          <Collapsible
+            open={activeSection === "errors"}
+            onOpenChange={(open) =>
+              setActiveSection(open ? "errors" : null)
+            }
+          >
+            <CollapsibleTrigger asChild>
+              <Button
+                variant="ghost"
+                className="w-full justify-between h-9 text-sm"
+              >
+                <span className="flex items-center gap-2">
+                  <AlertOctagon className="h-4 w-4" />
+                  Error Logs
+                </span>
+                {activeSection === "errors" ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-2">
+              <ErrorLogViewer />
+            </CollapsibleContent>
+          </Collapsible>
+
+          {/* Section: Environment Info */}
+          <Collapsible
+            open={activeSection === "env"}
+            onOpenChange={(open) => setActiveSection(open ? "env" : null)}
+          >
+            <CollapsibleTrigger asChild>
+              <Button
+                variant="ghost"
+                className="w-full justify-between h-9 text-sm"
+              >
+                <span className="flex items-center gap-2">
+                  <Info className="h-4 w-4" />
+                  Environment
+                </span>
+                {activeSection === "env" ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-2">
+              <EnvironmentInfo />
+            </CollapsibleContent>
+          </Collapsible>
+
+          {/* Section: Service Worker & Push */}
+          <Collapsible
+            open={activeSection === "sw"}
+            onOpenChange={(open) => setActiveSection(open ? "sw" : null)}
+          >
+            <CollapsibleTrigger asChild>
+              <Button
+                variant="ghost"
+                className="w-full justify-between h-9 text-sm"
+              >
+                <span className="flex items-center gap-2">
+                  <Cog className="h-4 w-4" />
+                  Service Worker & Push
+                </span>
+                {activeSection === "sw" ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-2">
+              <ServiceWorkerDiagnostics />
+            </CollapsibleContent>
+          </Collapsible>
+
+          {/* Section: Audit Log Viewer */}
           <Collapsible
             open={activeSection === "audit"}
             onOpenChange={(open) =>
