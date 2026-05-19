@@ -9,7 +9,7 @@ import {
   animate,
   type PanInfo,
 } from "motion/react";
-import { NAV_ROUTES, type NavRoute } from "@/lib/nav-routes";
+import { NAV_ROUTES } from "@/lib/nav-routes";
 import { useSettingsStore } from "@/stores/settings-store";
 
 const DIRECTION_LOCK_THRESHOLD = 8;
@@ -17,41 +17,11 @@ const RESISTANCE = 0.25;
 const COMMIT_DURATION = 0.18;
 const ENTER_DURATION = 0.22;
 
-function PageSkeleton({ route }: { route: NavRoute | null }) {
-  if (!route) {
-    return <div className="w-screen shrink-0" aria-hidden="true" />;
-  }
-  return (
-    <div className="w-screen shrink-0" aria-hidden="true">
-      <div className="container mx-auto max-w-lg px-4 py-6">
-        <div className="-mx-4 px-4 py-4 mb-2">
-          <div className="flex items-center justify-between gap-3">
-            <div className="space-y-2">
-              <div className="h-7 w-44 rounded bg-muted/70" />
-              <div className="h-4 w-32 rounded bg-muted/50" />
-            </div>
-            <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10">
-              <route.icon className="h-5 w-5 text-primary/70" />
-            </div>
-          </div>
-        </div>
-        <div className="space-y-4 pt-2">
-          <div className="h-28 rounded-xl bg-muted/40" />
-          <div className="h-28 rounded-xl bg-muted/40" />
-          <div className="h-28 rounded-xl bg-muted/40" />
-          <div className="h-28 rounded-xl bg-muted/40" />
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export function SwipeNav({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const x = useMotionValue(0);
   const [width, setWidth] = useState(0);
-  const [mounted, setMounted] = useState(false);
   const lockRef = useRef<"horizontal" | "vertical" | null>(null);
   const startedRef = useRef(false);
   const navigatingRef = useRef(false);
@@ -69,50 +39,46 @@ export function SwipeNav({ children }: { children: React.ReactNode }) {
 
   const currentIndex = NAV_ROUTES.findIndex((r) => r.path === pathname);
   const isTopRoute = currentIndex !== -1;
-  const prevRoute: NavRoute | null =
+  const prevRoute =
     isTopRoute && currentIndex > 0 ? NAV_ROUTES[currentIndex - 1] ?? null : null;
-  const nextRoute: NavRoute | null =
+  const nextRoute =
     isTopRoute && currentIndex < NAV_ROUTES.length - 1
       ? NAV_ROUTES[currentIndex + 1] ?? null
       : null;
 
-  useLayoutEffect(() => {
-    setWidth(window.innerWidth);
-    setMounted(true);
-  }, []);
-
   useEffect(() => {
     const update = () => setWidth(window.innerWidth);
+    update();
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
   }, []);
 
-  // Prefetch adjacent routes so the post-commit gap is as small as possible.
+  // Prefetch adjacent routes so the post-commit gap is as short as possible.
   useEffect(() => {
     if (prevRoute) router.prefetch(prevRoute.path);
     if (nextRoute) router.prefetch(nextRoute.path);
   }, [prevRoute, nextRoute, router]);
 
-  // After a route change, snap the strip back to centered without animating —
-  // the destination skeleton was already centered when we navigated, and now
-  // the real children have taken its place.
+  // After the route changes, slide the new page in from the side the user
+  // committed toward — so a left-swipe (→ next) makes the new page enter from
+  // the right, matching the gesture. useLayoutEffect runs before paint so the
+  // user never sees the new page flash at x=0.
   useLayoutEffect(() => {
-    if (commitDirRef.current) {
-      x.set(0);
-      commitDirRef.current = null;
+    const w = window.innerWidth;
+    if (commitDirRef.current === "next") {
+      x.set(w);
+      animate(x, 0, { type: "tween", ease: [0.22, 1, 0.36, 1], duration: ENTER_DURATION });
+    } else if (commitDirRef.current === "prev") {
+      x.set(-w);
+      animate(x, 0, { type: "tween", ease: [0.22, 1, 0.36, 1], duration: ENTER_DURATION });
     } else {
-      // Non-swipe navigation (header buttons, links): no animation needed.
       x.set(0);
     }
+    commitDirRef.current = null;
     navigatingRef.current = false;
     lockRef.current = null;
     startedRef.current = false;
   }, [pathname, x]);
-
-  // Translate the strip so the *current* pane (middle of three) sits at x=0
-  // when the drag value is 0. Negative drag reveals the next pane, positive
-  // reveals the previous pane.
-  const stripX = useTransform(x, (v) => v - (width || 0));
 
   const handlePanStart = useCallback(
     (event: PointerEvent, _info: PanInfo) => {
@@ -203,29 +169,46 @@ export function SwipeNav({ children }: { children: React.ReactNode }) {
     [x, width, prevRoute, nextRoute, router],
   );
 
-  // Non-top routes (e.g. /auth/*) and the first pre-mount render skip the
-  // swipe strip and render children plainly so layout is stable and there's
-  // no risk of a one-frame flash showing the previous-skeleton pane.
-  if (!isTopRoute || !mounted) {
-    return (
-      <div className="container mx-auto max-w-lg px-4 pb-6">{children}</div>
-    );
-  }
+  // Edge hint pills (icon + label) that fade in as the user drags.
+  const prevHintOpacity = useTransform(x, [0, 60, 140], [0, 0.65, 1]);
+  const nextHintOpacity = useTransform(x, [-140, -60, 0], [1, 0.65, 0]);
+  const prevHintScale = useTransform(x, [0, 140], [0.85, 1]);
+  const nextHintScale = useTransform(x, [-140, 0], [1, 0.85]);
 
   return (
     <div className="overflow-x-hidden">
+      {isTopRoute && prevRoute && (
+        <motion.div
+          aria-hidden="true"
+          className="pointer-events-none fixed left-3 top-1/2 z-30 -translate-y-1/2 flex items-center gap-2 rounded-full border bg-background/95 px-3 py-2 shadow-lg backdrop-blur"
+          style={{ opacity: prevHintOpacity, scale: prevHintScale }}
+        >
+          <prevRoute.icon className="h-4 w-4 text-primary" />
+          <span className="text-xs font-medium">{prevRoute.title}</span>
+        </motion.div>
+      )}
+      {isTopRoute && nextRoute && (
+        <motion.div
+          aria-hidden="true"
+          className="pointer-events-none fixed right-3 top-1/2 z-30 -translate-y-1/2 flex items-center gap-2 rounded-full border bg-background/95 px-3 py-2 shadow-lg backdrop-blur"
+          style={{ opacity: nextHintOpacity, scale: nextHintScale }}
+        >
+          <span className="text-xs font-medium">{nextRoute.title}</span>
+          <nextRoute.icon className="h-4 w-4 text-primary" />
+        </motion.div>
+      )}
       <motion.div
-        className="flex will-change-transform"
-        style={{ x: stripX, touchAction: "pan-y" }}
-        onPanStart={handlePanStart}
-        onPan={handlePan}
-        onPanEnd={handlePanEnd}
+        className="will-change-transform"
+        style={{ x, touchAction: "pan-y" }}
+        {...(isTopRoute
+          ? {
+              onPanStart: handlePanStart,
+              onPan: handlePan,
+              onPanEnd: handlePanEnd,
+            }
+          : {})}
       >
-        <PageSkeleton route={prevRoute} />
-        <div className="w-screen shrink-0">
-          <div className="container mx-auto max-w-lg px-4 pb-6">{children}</div>
-        </div>
-        <PageSkeleton route={nextRoute} />
+        <div className="container mx-auto max-w-lg px-4 pb-6">{children}</div>
       </motion.div>
     </div>
   );
