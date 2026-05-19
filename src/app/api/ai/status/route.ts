@@ -1,18 +1,18 @@
 import { NextResponse } from "next/server";
 
 /**
- * Public endpoint to check AI service configuration status.
- * Returns only boolean config flags — no sensitive data (key length, format, etc.).
- *
- * As of phase 41 (Neon Auth replacement), Privy is removed entirely. Auth is
- * now enforced server-side via withAuth() reading the Neon Auth cookie session.
+ * Public endpoint to check AI service configuration status. Reports only
+ * whether the server has fallback env-var keys configured — never anything
+ * about a specific user's stored keys (those go through /api/user/api-keys
+ * which is auth-gated).
  */
 export async function GET() {
   return NextResponse.json({
     timestamp: new Date().toISOString(),
     config: {
       authConfigured: !!process.env.DATABASE_URL,
-      serverApiKeyConfigured: !!process.env.ANTHROPIC_API_KEY,
+      serverAnthropicKeyConfigured: !!process.env.ANTHROPIC_API_KEY,
+      serverGroqKeyConfigured: !!process.env.GROQ_API_KEY,
     },
     environment: process.env.NODE_ENV,
   });

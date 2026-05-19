@@ -3,10 +3,12 @@ import { z } from "zod";
 import type Anthropic from "@anthropic-ai/sdk";
 import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
-import { getClaudeClient, CLAUDE_MODELS, WEB_SEARCH_TOOL } from "../_shared/claude-client";
+import { getClaudeClientForUser, CLAUDE_MODELS, WEB_SEARCH_TOOL } from "../_shared/claude-client";
 import { ethanolGrams, standardDrinksFromAbv } from "@/lib/alcohol-units";
 import { parseJsonBody, zodErrorResponse } from "@/app/api/_shared/validation";
 import { createRateLimiter, getClientIp } from "@/app/api/_shared/rate-limit";
+import { recordUsage, tokensFromAnthropic } from "../_shared/usage-tracker";
+import { aiErrorResponse } from "../_shared/ai-error-response";
 
 /**
  * AI enrichment for caffeine / alcohol "Other" entries. Uses Opus + web_search
@@ -138,13 +140,13 @@ export const POST = withAuth(async ({ request, auth }) => {
     console.log(`[AUDIT] Substance enrich from user: ${auth.userId}, type: ${type}`);
 
     let client;
+    let resolved;
     try {
-      client = getClaudeClient();
-    } catch {
-      return NextResponse.json(
-        { error: "AI service not configured on server" },
-        { status: 503 }
-      );
+      ({ client, resolved } = await getClaudeClientForUser(auth.userId!, auth.email));
+    } catch (e) {
+      const mapped = aiErrorResponse(e);
+      if (mapped) return mapped;
+      throw e;
     }
 
     const sanitized = sanitizeForAI(description);
@@ -162,6 +164,7 @@ export const POST = withAuth(async ({ request, auth }) => {
         ? `Estimate caffeine (mg) and volume (ml) for: "${sanitized}". Use web_search for branded items, then call caffeine_enrichment.`
         : `Estimate ABV (%) and volume (ml) for: "${sanitized}". Use web_search if branded or unfamiliar, then call alcohol_enrichment. Return ABV as a percentage, NOT grams.`;
 
+    const startedAt = Date.now();
     const response = await client.messages.create({
       model: CLAUDE_MODELS.quality,
       max_tokens: 4096,
@@ -170,10 +173,22 @@ export const POST = withAuth(async ({ request, auth }) => {
       tools: [WEB_SEARCH_TOOL, tool],
       messages: [{ role: "user", content: userPrompt }],
     });
+    recordUsage({
+      userId: auth.userId!,
+      keyOwnerId: resolved.keyOwnerId,
+      keySource: resolved.source,
+      provider: "anthropic",
+      model: CLAUDE_MODELS.quality,
+      route: "/api/ai/substance-enrich",
+      status: "success",
+      durationMs: Date.now() - startedAt,
+      ...tokensFromAnthropic(response.usage),
+    });
 
     let toolBlock = findToolUse(response.content, tool.name);
 
     if (!toolBlock) {
+      const followupStartedAt = Date.now();
       const followup = await client.messages.create({
         model: CLAUDE_MODELS.quality,
         max_tokens: 1024,
@@ -192,6 +207,17 @@ export const POST = withAuth(async ({ request, auth }) => {
             content: `Now return the final answer via the ${tool.name} tool.`,
           },
         ],
+      });
+      recordUsage({
+        userId: auth.userId!,
+        keyOwnerId: resolved.keyOwnerId,
+        keySource: resolved.source,
+        provider: "anthropic",
+        model: CLAUDE_MODELS.quality,
+        route: "/api/ai/substance-enrich",
+        status: "success",
+        durationMs: Date.now() - followupStartedAt,
+        ...tokensFromAnthropic(followup.usage),
       });
       toolBlock = findToolUse(followup.content, tool.name);
     }
@@ -242,6 +268,8 @@ export const POST = withAuth(async ({ request, auth }) => {
       ...(validated.data.reasoning !== undefined && { reasoning: validated.data.reasoning }),
     });
   } catch (error) {
+    const mapped = aiErrorResponse(error);
+    if (mapped) return mapped;
     console.error("Substance enrich error:", error);
     return NextResponse.json(
       { error: "Failed to process request" },

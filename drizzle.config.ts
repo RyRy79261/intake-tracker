@@ -6,7 +6,7 @@ loadEnvConfig(process.cwd());
 /**
  * Drizzle Kit configuration — Phase 42.
  *
- * Schema source of truth: src/db/schema.ts (20 tables: 16 Dexie-mirrored + 4 push).
+ * Schema source of truth: src/db/schema.ts (23 tables: 16 Dexie-mirrored + 4 push + 3 AI keys/usage).
  * Migrations live in /drizzle/ and are committed to the repo.
  *
  * Usage:

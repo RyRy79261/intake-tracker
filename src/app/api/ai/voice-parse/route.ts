@@ -3,9 +3,11 @@ import { z } from "zod";
 import type Anthropic from "@anthropic-ai/sdk";
 import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
-import { getClaudeClient, CLAUDE_MODELS } from "../_shared/claude-client";
+import { getClaudeClientForUser, CLAUDE_MODELS } from "../_shared/claude-client";
 import { parseJsonBody, zodErrorResponse } from "@/app/api/_shared/validation";
 import { createRateLimiter, getClientIp } from "@/app/api/_shared/rate-limit";
+import { recordUsage, tokensFromAnthropic } from "../_shared/usage-tracker";
+import { aiErrorResponse } from "../_shared/ai-error-response";
 
 /**
  * Parse a voice transcript into a heterogeneous list of health record items
@@ -196,13 +198,13 @@ export const POST = withAuth(async ({ request, auth }) => {
     }
 
     let client;
+    let resolved;
     try {
-      client = getClaudeClient();
-    } catch {
-      return NextResponse.json(
-        { error: "AI service not configured on server" },
-        { status: 503 }
-      );
+      ({ client, resolved } = await getClaudeClientForUser(auth.userId!, auth.email));
+    } catch (e) {
+      const mapped = aiErrorResponse(e);
+      if (mapped) return mapped;
+      throw e;
     }
 
     const sanitized = sanitizeForAI(parsed.data.transcript);
@@ -221,6 +223,7 @@ export const POST = withAuth(async ({ request, auth }) => {
     const REQUEST_TIMEOUT_MS = 60_000;
 
     let response: Anthropic.Messages.Message;
+    const startedAt = Date.now();
     try {
       response = await client.messages.create(
         {
@@ -239,11 +242,23 @@ export const POST = withAuth(async ({ request, auth }) => {
       }
       throw e;
     }
+    recordUsage({
+      userId: auth.userId!,
+      keyOwnerId: resolved.keyOwnerId,
+      keySource: resolved.source,
+      provider: "anthropic",
+      model: CLAUDE_MODELS.quality,
+      route: "/api/ai/voice-parse",
+      status: "success",
+      durationMs: Date.now() - startedAt,
+      ...tokensFromAnthropic(response.usage),
+    });
 
     let toolBlock = findToolUse(response.content, PARSE_TOOL.name);
 
     if (!toolBlock) {
       let followup: Anthropic.Messages.Message;
+      const followupStartedAt = Date.now();
       try {
         followup = await client.messages.create(
           {
@@ -270,6 +285,17 @@ export const POST = withAuth(async ({ request, auth }) => {
         }
         throw e;
       }
+      recordUsage({
+        userId: auth.userId!,
+        keyOwnerId: resolved.keyOwnerId,
+        keySource: resolved.source,
+        provider: "anthropic",
+        model: CLAUDE_MODELS.quality,
+        route: "/api/ai/voice-parse",
+        status: "success",
+        durationMs: Date.now() - followupStartedAt,
+        ...tokensFromAnthropic(followup.usage),
+      });
       toolBlock = findToolUse(followup.content, PARSE_TOOL.name);
     }
 
@@ -294,6 +320,8 @@ export const POST = withAuth(async ({ request, auth }) => {
 
     return NextResponse.json(validated.data);
   } catch (error) {
+    const mapped = aiErrorResponse(error);
+    if (mapped) return mapped;
     console.error("voice-parse error:", error);
     return NextResponse.json(
       { error: "Failed to parse transcript" },

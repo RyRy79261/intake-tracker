@@ -1,8 +1,10 @@
 /**
- * Postgres schema — single source of truth for all 20 tables.
+ * Postgres schema — single source of truth for all 23 tables.
  *
- * Mirrors src/lib/db.ts Dexie v15 interfaces exactly (16 app tables) and
- * includes 4 push notification tables that replace scripts/push-migration.sql.
+ * Mirrors src/lib/db.ts Dexie v15 interfaces exactly (16 app tables),
+ * includes 4 push notification tables that replace scripts/push-migration.sql,
+ * and 3 server-only AI tables (user_api_keys, user_key_shares, ai_usage)
+ * that have no Dexie counterpart.
  *
  * Conventions:
  *   - TS property: camelCase (matches Dexie interfaces)
@@ -34,6 +36,7 @@ import {
   check,
   index,
   uniqueIndex,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
@@ -696,3 +699,105 @@ export const pushSettings = pgTable("push_settings", {
   dayStartHour: integer("day_start_hour").notNull().default(2),
 });
 
+// ─────────────────────────────────────────────────────────────────────────
+// User-supplied AI provider keys.
+//
+// One row per user. Each provider column stores a versioned encrypted blob
+// (see src/lib/key-vault.ts). The `*Last4` columns hold the last 4 plaintext
+// characters for UI display only — never the whole key. Encryption secret
+// lives in API_KEY_ENCRYPTION_SECRET; rotating it invalidates every stored
+// key (users re-enter). KMS migration: add a "v2:" prefix to the blob in
+// the same column.
+// ─────────────────────────────────────────────────────────────────────────
+
+export const userApiKeys = pgTable("user_api_keys", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => usersSync.id, { onDelete: "cascade" }),
+  anthropicKeyEncrypted: text("anthropic_key_encrypted"),
+  anthropicLast4: text("anthropic_last4"),
+  groqKeyEncrypted: text("groq_key_encrypted"),
+  groqLast4: text("groq_last4"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// Key sharing — a grantor lets a grantee use the grantor's stored key for a
+// specific provider. Both ids reference users_sync; the composite primary key
+// (grantor, grantee, provider) prevents duplicate grants.
+// ─────────────────────────────────────────────────────────────────────────
+
+export const userKeyShares = pgTable(
+  "user_key_shares",
+  {
+    grantorId: text("grantor_id")
+      .notNull()
+      .references(() => usersSync.id, { onDelete: "cascade" }),
+    granteeId: text("grantee_id")
+      .notNull()
+      .references(() => usersSync.id, { onDelete: "cascade" }),
+    provider: text("provider").notNull(),
+    granteeEmail: text("grantee_email").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.grantorId, t.granteeId, t.provider] }),
+    providerCheck: check(
+      "user_key_shares_provider_check",
+      sql`${t.provider} IN ('anthropic','groq')`,
+    ),
+    granteeIdx: index("idx_user_key_shares_grantee").on(t.granteeId, t.provider),
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────────────────
+// AI usage tracking — one row per AI call, fire-and-forget insert after the
+// upstream provider responds. `userId` is the caller; `keyOwnerId` is whose
+// key was used (self, a grantor, or null for the env-var fallback).
+// ─────────────────────────────────────────────────────────────────────────
+
+export const aiUsage = pgTable(
+  "ai_usage",
+  {
+    id: serial("id").primaryKey(),
+    timestamp: timestamp("timestamp", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => usersSync.id, { onDelete: "cascade" }),
+    keyOwnerId: text("key_owner_id").references(() => usersSync.id, {
+      onDelete: "set null",
+    }),
+    keySource: text("key_source").notNull(),
+    provider: text("provider").notNull(),
+    model: text("model").notNull(),
+    route: text("route").notNull(),
+    inputTokens: integer("input_tokens").notNull().default(0),
+    outputTokens: integer("output_tokens").notNull().default(0),
+    cacheReadTokens: integer("cache_read_tokens").notNull().default(0),
+    cacheCreateTokens: integer("cache_create_tokens").notNull().default(0),
+    audioSeconds: integer("audio_seconds"),
+    status: text("status").notNull(),
+    durationMs: integer("duration_ms"),
+  },
+  (t) => ({
+    keySourceCheck: check(
+      "ai_usage_key_source_check",
+      sql`${t.keySource} IN ('own_stored','shared_from','env_var')`,
+    ),
+    providerCheck: check(
+      "ai_usage_provider_check",
+      sql`${t.provider} IN ('anthropic','groq')`,
+    ),
+    statusCheck: check(
+      "ai_usage_status_check",
+      sql`${t.status} IN ('success','error')`,
+    ),
+    userTsIdx: index("idx_ai_usage_user_ts").on(t.userId, t.timestamp),
+    keyOwnerTsIdx: index("idx_ai_usage_owner_ts").on(t.keyOwnerId, t.timestamp),
+  }),
+);
