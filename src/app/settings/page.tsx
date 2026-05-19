@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Accordion } from "@/components/ui/accordion";
-import { RotateCcw, Activity, Palette, Pill, Database, Shield, Bug, Download } from "lucide-react";
+import { RotateCcw, Activity, Palette, Pill, Database, Shield, Bug, Download, Sparkles } from "lucide-react";
 import { useSettings } from "@/hooks/use-settings";
 import { useToast } from "@/hooks/use-toast";
 import { useScrollHide } from "@/hooks/use-scroll-hide";
@@ -25,6 +25,7 @@ import { UrinationDefecationDefaults } from "@/components/settings/urination-def
 import { MedicationSettingsSection } from "@/components/settings/medication-settings-section";
 import { AnimationTimingSection } from "@/components/settings/animation-timing-section";
 import { StorageInfoSection } from "@/components/settings/storage-info-section";
+import { AiKeysSection } from "@/components/settings/ai-keys-section";
 
 
 function SettingsContent() {
@@ -79,6 +80,10 @@ function SettingsContent() {
         <SettingsAccordionGroup value="data-storage" icon={Database} label="Data & Storage" iconColorClass="text-amber-600 dark:text-amber-400">
           <StorageInfoSection />
           <DataManagementSection />
+        </SettingsAccordionGroup>
+
+        <SettingsAccordionGroup value="ai-features" icon={Sparkles} label="AI features" iconColorClass="text-amber-600 dark:text-amber-400">
+          <AiKeysSection />
         </SettingsAccordionGroup>
 
         <SettingsAccordionGroup value="privacy-security" icon={Shield} label="Privacy & Security" iconColorClass="text-emerald-600 dark:text-emerald-400">

@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { withAuth } from "@/lib/auth-middleware";
 import { createRateLimiter, getClientIp } from "@/app/api/_shared/rate-limit";
+import { resolveAiKey } from "@/lib/ai-key-resolver";
+import { recordUsage } from "../_shared/usage-tracker";
+import { aiErrorResponse } from "../_shared/ai-error-response";
 
 /**
  * Transcribe a short audio clip using Groq's hosted
@@ -36,13 +39,15 @@ export const POST = withAuth(async ({ request, auth }) => {
       );
     }
 
-    const apiKey = process.env.GROQ_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json(
-        { error: "Voice transcription not configured on server (GROQ_API_KEY missing)" },
-        { status: 503 }
-      );
+    let resolved;
+    try {
+      resolved = await resolveAiKey(auth.userId!, auth.email, "groq");
+    } catch (e) {
+      const mapped = aiErrorResponse(e);
+      if (mapped) return mapped;
+      throw e;
     }
+    const apiKey = resolved.apiKey;
 
     const form = await request.formData();
     const file = form.get("audio");
@@ -79,13 +84,15 @@ export const POST = withAuth(async ({ request, auth }) => {
     upstream.append("file", file, file.name || "clip.webm");
     upstream.append("model", GROQ_MODEL);
     upstream.append("prompt", DOMAIN_PROMPT);
-    upstream.append("response_format", "json");
+    // verbose_json includes a `duration` field (seconds) we record for usage.
+    upstream.append("response_format", "verbose_json");
     upstream.append("temperature", "0");
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30_000);
 
     let response: Response;
+    const startedAt = Date.now();
     try {
       response = await fetch(GROQ_ENDPOINT, {
         method: "POST",
@@ -104,18 +111,43 @@ export const POST = withAuth(async ({ request, auth }) => {
     } finally {
       clearTimeout(timeoutId);
     }
+    const durationMs = Date.now() - startedAt;
 
     if (!response.ok) {
       const detail = await response.text().catch(() => "");
       console.error(`[voice-transcribe] Groq ${response.status}: ${detail.slice(0, 500)}`);
+      recordUsage({
+        userId: auth.userId!,
+        keyOwnerId: resolved.keyOwnerId,
+        keySource: resolved.source,
+        provider: "groq",
+        model: GROQ_MODEL,
+        route: "/api/ai/voice-transcribe",
+        status: "error",
+        durationMs,
+      });
+      if (response.status === 401 || response.status === 403) {
+        return NextResponse.json(
+          {
+            error: "Groq rejected the API key. Update it in Settings → AI features.",
+            code: "INVALID_KEY",
+            provider: "groq",
+          },
+          { status: 400 }
+        );
+      }
       return NextResponse.json(
         { error: "Transcription service failed", status: response.status },
         { status: 502 }
       );
     }
 
-    const body = (await response.json()) as { text?: unknown };
+    const body = (await response.json()) as { text?: unknown; duration?: unknown };
     const text = typeof body.text === "string" ? body.text.trim() : "";
+    const audioSeconds =
+      typeof body.duration === "number" && Number.isFinite(body.duration)
+        ? Math.round(body.duration)
+        : undefined;
 
     if (!text) {
       return NextResponse.json(
@@ -124,8 +156,22 @@ export const POST = withAuth(async ({ request, auth }) => {
       );
     }
 
+    recordUsage({
+      userId: auth.userId!,
+      keyOwnerId: resolved.keyOwnerId,
+      keySource: resolved.source,
+      provider: "groq",
+      model: GROQ_MODEL,
+      route: "/api/ai/voice-transcribe",
+      status: "success",
+      durationMs,
+      audioSeconds,
+    });
+
     return NextResponse.json({ text });
   } catch (error) {
+    const mapped = aiErrorResponse(error);
+    if (mapped) return mapped;
     console.error("voice-transcribe error:", error);
     return NextResponse.json(
       { error: "Failed to transcribe audio" },

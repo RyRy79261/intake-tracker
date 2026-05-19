@@ -29,6 +29,13 @@
       "when": 1778848856611,
       "tag": "0003_polite_callisto",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1779200319516,
+      "tag": "0004_regular_thundra",
+      "breakpoints": true
     }
   ]
 }

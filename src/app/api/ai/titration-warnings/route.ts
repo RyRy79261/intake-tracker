@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
-import { getClaudeClient, CLAUDE_MODELS } from "../_shared/claude-client";
+import { getClaudeClientForUser, CLAUDE_MODELS } from "../_shared/claude-client";
 import { parseJsonBody, zodErrorResponse } from "@/app/api/_shared/validation";
+import { recordUsage, tokensFromAnthropic } from "../_shared/usage-tracker";
+import { aiErrorResponse } from "../_shared/ai-error-response";
 
 const RequestSchema = z.object({
   prescriptions: z
@@ -73,13 +75,13 @@ export const POST = withAuth(async ({ request, auth }) => {
     }
 
     let client;
+    let resolved;
     try {
-      client = getClaudeClient();
-    } catch {
-      return NextResponse.json(
-        { error: "AI service not configured" },
-        { status: 503 },
-      );
+      ({ client, resolved } = await getClaudeClientForUser(auth.userId!, auth.email));
+    } catch (e) {
+      const mapped = aiErrorResponse(e);
+      if (mapped) return mapped;
+      throw e;
     }
 
     const { prescriptions, otherMedications, title } = parsed.data;
@@ -113,6 +115,7 @@ export const POST = withAuth(async ({ request, auth }) => {
 
     console.log(`[AUDIT] Titration warnings request from user: ${auth.userId}`);
 
+    const startedAt = Date.now();
     const response = await client.messages.create({
       model: CLAUDE_MODELS.premium,
       max_tokens: 1536,
@@ -121,6 +124,17 @@ export const POST = withAuth(async ({ request, auth }) => {
       tools: [TITRATION_WARNINGS_TOOL],
       tool_choice: { type: "tool", name: "titration_warnings_result" },
       messages: [{ role: "user", content: prompt }],
+    });
+    recordUsage({
+      userId: auth.userId!,
+      keyOwnerId: resolved.keyOwnerId,
+      keySource: resolved.source,
+      provider: "anthropic",
+      model: CLAUDE_MODELS.premium,
+      route: "/api/ai/titration-warnings",
+      status: "success",
+      durationMs: Date.now() - startedAt,
+      ...tokensFromAnthropic(response.usage),
     });
 
     const toolBlock = response.content.find(b => b.type === "tool_use");
@@ -142,6 +156,8 @@ export const POST = withAuth(async ({ request, auth }) => {
 
     return NextResponse.json(validated.data);
   } catch (error) {
+    const mapped = aiErrorResponse(error);
+    if (mapped) return mapped;
     console.error("Titration warnings error:", error);
     return NextResponse.json(
       { error: "Failed to generate warnings" },

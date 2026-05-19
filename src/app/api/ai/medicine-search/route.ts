@@ -2,9 +2,11 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
-import { getClaudeClient, CLAUDE_MODELS } from "../_shared/claude-client";
+import { getClaudeClientForUser, CLAUDE_MODELS } from "../_shared/claude-client";
 import { parseJsonBody, zodErrorResponse } from "@/app/api/_shared/validation";
 import { createRateLimiter, getClientIp } from "@/app/api/_shared/rate-limit";
+import { recordUsage, tokensFromAnthropic } from "../_shared/usage-tracker";
+import { aiErrorResponse } from "../_shared/ai-error-response";
 
 // --- Zod Schemas (co-located per user decision) ---
 
@@ -101,13 +103,13 @@ export const POST = withAuth(async ({ request, auth }) => {
     console.log(`[AUDIT] Medicine search request from user: ${auth.userId}`);
 
     let client;
+    let resolved;
     try {
-      client = getClaudeClient();
-    } catch {
-      return NextResponse.json(
-        { error: "AI service not configured on server" },
-        { status: 503 }
-      );
+      ({ client, resolved } = await getClaudeClientForUser(auth.userId!, auth.email));
+    } catch (e) {
+      const mapped = aiErrorResponse(e);
+      if (mapped) return mapped;
+      throw e;
     }
 
     const sanitized = sanitizeForAI(query.trim());
@@ -116,6 +118,7 @@ export const POST = withAuth(async ({ request, auth }) => {
       ? `Look up this medication and provide detailed pharmaceutical information, focusing specifically on brands and availability in ${country}: "${sanitized}"`
       : `Look up this medication and provide detailed pharmaceutical information: "${sanitized}"`;
 
+    const startedAt = Date.now();
     const response = await client.messages.create({
       model: CLAUDE_MODELS.premium,
       max_tokens: 2048,
@@ -124,6 +127,17 @@ export const POST = withAuth(async ({ request, auth }) => {
       tools: [MEDICINE_SEARCH_TOOL],
       tool_choice: { type: "tool", name: "medicine_search_result" },
       messages: [{ role: "user", content: prompt }],
+    });
+    recordUsage({
+      userId: auth.userId!,
+      keyOwnerId: resolved.keyOwnerId,
+      keySource: resolved.source,
+      provider: "anthropic",
+      model: CLAUDE_MODELS.premium,
+      route: "/api/ai/medicine-search",
+      status: "success",
+      durationMs: Date.now() - startedAt,
+      ...tokensFromAnthropic(response.usage),
     });
 
     const toolBlock = response.content.find(b => b.type === "tool_use");
@@ -145,6 +159,8 @@ export const POST = withAuth(async ({ request, auth }) => {
 
     return NextResponse.json(validated.data);
   } catch (error) {
+    const mapped = aiErrorResponse(error);
+    if (mapped) return mapped;
     console.error("Medicine search error:", error);
     return NextResponse.json(
       { error: "Failed to process request" },

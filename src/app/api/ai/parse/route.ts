@@ -3,9 +3,11 @@ import { z } from "zod";
 import type Anthropic from "@anthropic-ai/sdk";
 import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
-import { getClaudeClient, CLAUDE_MODELS, WEB_SEARCH_TOOL } from "../_shared/claude-client";
+import { getClaudeClientForUser, CLAUDE_MODELS, WEB_SEARCH_TOOL } from "../_shared/claude-client";
 import { parseJsonBody, zodErrorResponse } from "@/app/api/_shared/validation";
 import { createRateLimiter, getClientIp } from "@/app/api/_shared/rate-limit";
+import { recordUsage, tokensFromAnthropic } from "../_shared/usage-tracker";
+import { aiErrorResponse } from "../_shared/ai-error-response";
 
 /**
  * Server-side AI parsing for food / drink descriptions.
@@ -113,13 +115,13 @@ export const POST = withAuth(async ({ request, auth }) => {
     console.log(`[AUDIT] AI parse from user: ${auth.userId}`);
 
     let client;
+    let resolved;
     try {
-      client = getClaudeClient();
-    } catch {
-      return NextResponse.json(
-        { error: "AI service not configured on server" },
-        { status: 503 }
-      );
+      ({ client, resolved } = await getClaudeClientForUser(auth.userId!, auth.email));
+    } catch (e) {
+      const mapped = aiErrorResponse(e);
+      if (mapped) return mapped;
+      throw e;
     }
 
     const sanitizedInput = sanitizeForAI(input);
@@ -132,6 +134,7 @@ export const POST = withAuth(async ({ request, auth }) => {
 
     const userMessage = `Estimate water (ml) and sodium (mg) for: "${sanitizedInput}". Use web_search for branded or regional items, then call parse_food_result.`;
 
+    const startedAt = Date.now();
     const response = await client.messages.create({
       model: CLAUDE_MODELS.quality,
       max_tokens: 4096,
@@ -140,12 +143,24 @@ export const POST = withAuth(async ({ request, auth }) => {
       tools: [WEB_SEARCH_TOOL, PARSE_RESULT_TOOL],
       messages: [{ role: "user", content: userMessage }],
     });
+    recordUsage({
+      userId: auth.userId!,
+      keyOwnerId: resolved.keyOwnerId,
+      keySource: resolved.source,
+      provider: "anthropic",
+      model: CLAUDE_MODELS.quality,
+      route: "/api/ai/parse",
+      status: "success",
+      durationMs: Date.now() - startedAt,
+      ...tokensFromAnthropic(response.usage),
+    });
 
     let toolBlock = findToolUse(response.content, PARSE_RESULT_TOOL.name);
 
     // If the model finished with text instead of calling the structured tool,
     // run a second turn that forces the tool with the prior context.
     if (!toolBlock) {
+      const followupStartedAt = Date.now();
       const followup = await client.messages.create({
         model: CLAUDE_MODELS.quality,
         max_tokens: 1024,
@@ -164,6 +179,17 @@ export const POST = withAuth(async ({ request, auth }) => {
             content: "Now return the final estimate via the parse_food_result tool.",
           },
         ],
+      });
+      recordUsage({
+        userId: auth.userId!,
+        keyOwnerId: resolved.keyOwnerId,
+        keySource: resolved.source,
+        provider: "anthropic",
+        model: CLAUDE_MODELS.quality,
+        route: "/api/ai/parse",
+        status: "success",
+        durationMs: Date.now() - followupStartedAt,
+        ...tokensFromAnthropic(followup.usage),
       });
       toolBlock = findToolUse(followup.content, PARSE_RESULT_TOOL.name);
     }
@@ -197,6 +223,8 @@ export const POST = withAuth(async ({ request, auth }) => {
       ...(validated.data.reasoning !== undefined && { reasoning: validated.data.reasoning }),
     });
   } catch (error) {
+    const mapped = aiErrorResponse(error);
+    if (mapped) return mapped;
     console.error("AI parse error:", error);
     return NextResponse.json(
       { error: "Failed to process request" },
