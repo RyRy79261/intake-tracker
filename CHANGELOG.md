@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.11.0](https://github.com/RyRy79261/intake-tracker/compare/v1.10.0...v1.11.0) (2026-05-19)
+
+
+### Features
+
+* **ai:** user-supplied API keys with sharing + usage tracking ([e2629b8](https://github.com/RyRy79261/intake-tracker/commit/e2629b8ff676b16009fe7db9ff480138394a5d0c))
+
+
+### Bug Fixes
+
+* **ai:** address CodeRabbit review on user-API-keys PR ([7fbb626](https://github.com/RyRy79261/intake-tracker/commit/7fbb626e7893bbe2306b489be88332ab39b6b9d3))
+* **ci:** bump verify-schema EXPECTED_TABLE_COUNT to 23 ([eb6db3d](https://github.com/RyRy79261/intake-tracker/commit/eb6db3de65f94e6594aeb1a446688737c02e4bf1))
+* **settings:** gate cloud sync controls on auth state ([2418d00](https://github.com/RyRy79261/intake-tracker/commit/2418d0014e7d863263631da857466243d7cef59b))
+
 ## [1.10.0](https://github.com/RyRy79261/intake-tracker/compare/v1.9.1...v1.10.0) (2026-05-19)
 
 
