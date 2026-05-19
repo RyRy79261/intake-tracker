@@ -1,8 +1,10 @@
 /**
- * Postgres schema — single source of truth for all 20 tables.
+ * Postgres schema — single source of truth for all 23 tables.
  *
- * Mirrors src/lib/db.ts Dexie v15 interfaces exactly (16 app tables) and
- * includes 4 push notification tables that replace scripts/push-migration.sql.
+ * Mirrors src/lib/db.ts Dexie v15 interfaces exactly (16 app tables),
+ * includes 4 push notification tables that replace scripts/push-migration.sql,
+ * and 3 server-only AI tables (user_api_keys, user_key_shares, ai_usage)
+ * that have no Dexie counterpart.
  *
  * Conventions:
  *   - TS property: camelCase (matches Dexie interfaces)

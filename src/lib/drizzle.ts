@@ -7,7 +7,7 @@
  * via `vi.mock("@/lib/drizzle")` without touching `process.env.DATABASE_URL`.
  *
  * Phase 42 introduced src/db/schema.ts as the single source of truth for all
- * 20 Postgres tables. Phase 43 (sync engine) is the first phase that needs a
+ * 20 Postgres tables (plus 3 AI keys/usage tables added later). Phase 43 (sync engine) is the first phase that needs a
  * runtime Drizzle client — pull/push routes and the sync engine both import
  * `db` from here.
  *
