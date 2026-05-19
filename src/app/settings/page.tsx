@@ -5,8 +5,6 @@ import { Accordion } from "@/components/ui/accordion";
 import { RotateCcw, Activity, Palette, Pill, Database, Shield, Bug } from "lucide-react";
 import { useSettings } from "@/hooks/use-settings";
 import { useToast } from "@/hooks/use-toast";
-import { useScrollHide } from "@/hooks/use-scroll-hide";
-import { AppHeader } from "@/components/app-header";
 import { DebugPanel } from "@/components/debug-panel";
 import { AboutDialog } from "@/components/about-dialog";
 import { SettingsAccordionGroup } from "@/components/settings/settings-accordion-group";
@@ -32,12 +30,6 @@ function SettingsContent() {
   const settings = useSettings();
   const { toast } = useToast();
 
-  const barTransitionSec = settings.barTransitionDurationMs / 1000;
-  const { isHidden } = useScrollHide({
-    scrollDurationMs: settings.scrollDurationMs,
-    autoHideDelayMs: settings.autoHideDelayMs,
-  });
-
   const handleResetToDefaults = () => {
     settings.resetToDefaults();
     toast({
@@ -48,11 +40,6 @@ function SettingsContent() {
 
   return (
     <>
-      <AppHeader
-        headerHidden={isHidden}
-        transitionDuration={barTransitionSec}
-      />
-
       <div className="pb-6">
         <AccountSection />
       </div>

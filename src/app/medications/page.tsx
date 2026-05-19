@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { AppHeader } from "@/components/app-header";
 import { WeekDaySelector } from "@/components/medications/week-day-selector";
 import { MedTabBar, type MedTab } from "@/components/medications/med-footer";
 import { ScheduleView } from "@/components/medications/schedule-view";
@@ -11,8 +10,6 @@ import { AddMedicationWizard } from "@/components/medications/add-medication-wiz
 import { CompoundList } from "@/components/medications/compound-list";
 import { PrescriptionsView } from "@/components/medications/prescriptions-view";
 import { TitrationsView } from "@/components/medications/titrations-view";
-import { useScrollHide } from "@/hooks/use-scroll-hide";
-import { useSettings } from "@/hooks/use-settings";
 import type { DoseSlot } from "@/hooks/use-medication-queries";
 import { useMedicationNotifications } from "@/hooks/use-medication-notifications";
 
@@ -25,13 +22,6 @@ function MedicationsContent() {
   const [selectedSlot, setSelectedSlot] = useState<DoseSlot | null>(null);
 
   useMedicationNotifications();
-
-  const settings = useSettings();
-  const barTransitionSec = settings.barTransitionDurationMs / 1000;
-  const { isHidden } = useScrollHide({
-    scrollDurationMs: settings.scrollDurationMs,
-    autoHideDelayMs: settings.autoHideDelayMs,
-  });
 
   const isToday = selectedDate.toDateString() === new Date().toDateString();
 
@@ -46,11 +36,6 @@ function MedicationsContent() {
 
   return (
     <>
-      <AppHeader
-        headerHidden={isHidden}
-        transitionDuration={barTransitionSec}
-      />
-
       <MedTabBar activeTab={activeTab} onTabChange={setActiveTab} />
 
       {activeTab === "schedule" && (

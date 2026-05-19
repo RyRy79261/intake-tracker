@@ -9,22 +9,13 @@ import { InsightsTab } from "@/components/analytics/insights-tab";
 import { CorrelationsTab } from "@/components/analytics/correlations-tab";
 import { TitrationTab } from "@/components/analytics/titration-tab";
 import { ExportControls } from "@/components/analytics/export-controls";
-import { AppHeader } from "@/components/app-header";
 import { useTimeScopeRange } from "@/hooks/use-analytics-queries";
-import { useScrollHide } from "@/hooks/use-scroll-hide";
-import { useSettings } from "@/hooks/use-settings";
 import type { TimeScope, TimeRange } from "@/lib/analytics-types";
 
 type AnalyticsTab = "records" | "insights" | "correlations" | "titration";
 
 function AnalyticsContent() {
-  const settings = useSettings();
   const searchParams = useSearchParams();
-  const barTransitionSec = settings.barTransitionDurationMs / 1000;
-  const { isHidden } = useScrollHide({
-    scrollDurationMs: settings.scrollDurationMs,
-    autoHideDelayMs: settings.autoHideDelayMs,
-  });
 
   const tabParam = searchParams.get("tab");
   const initialTab: AnalyticsTab =
@@ -47,10 +38,7 @@ function AnalyticsContent() {
   const effectiveRange = customRange ?? scopeRange;
 
   return (
-    <>
-      <AppHeader headerHidden={isHidden} transitionDuration={barTransitionSec} />
-
-      <div className="space-y-4">
+    <div className="space-y-4">
         <div className="flex items-center justify-between gap-2">
           <TimeRangeSelector
             scope={scope}
@@ -96,8 +84,7 @@ function AnalyticsContent() {
             <TitrationTab range={effectiveRange} />
           </TabsContent>
         </Tabs>
-      </div>
-    </>
+    </div>
   );
 }
 

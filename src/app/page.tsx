@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { WeightCard } from "@/components/weight-card";
 import { BloodPressureCard } from "@/components/blood-pressure-card";
-import { AppHeader } from "@/components/app-header";
 import { QuickNavFooter } from "@/components/quick-nav-footer";
 import { TextMetrics } from "@/components/text-metrics";
 import { UrinationCard } from "@/components/urination-card";
@@ -44,11 +43,6 @@ function HomeContent() {
 
   return (
     <>
-      <AppHeader
-        headerHidden={isHidden}
-        transitionDuration={barTransitionSec}
-      />
-
       <div className="mb-4">
         <InsightBadge />
       </div>
