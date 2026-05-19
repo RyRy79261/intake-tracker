@@ -1,17 +1,21 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { HardDrive, Cloud, Upload } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { HardDrive, Cloud, Upload, LogIn } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useStorageInfo } from "@/hooks/use-storage-info";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useSyncStatusStore } from "@/stores/sync-status-store";
+import { useAuth } from "@/components/auth-guard";
 // eslint-disable-next-line no-restricted-imports
 import { checkInterruptedMigration } from "@/lib/migration-service";
 import { MigrationWizard } from "@/components/migration/migration-wizard";
 
 export function StorageInfoSection() {
+  const router = useRouter();
+  const { ready, authenticated } = useAuth();
   const { storageUsage, storageQuota, totalRecords } = useStorageInfo();
   const storageMode = useSettingsStore((s) => s.storageMode);
   const lastPushedAt = useSyncStatusStore((s) => s.lastPushedAt);
@@ -55,7 +59,23 @@ export function StorageInfoSection() {
           </p>
         )}
 
-        {storageMode === "local" && hasInterrupted && (
+        {storageMode === "local" && ready && !authenticated && (
+          <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+            <p className="text-xs text-muted-foreground">
+              Sign in to enable cloud sync across your devices.
+            </p>
+            <Button
+              size="sm"
+              className="gap-2"
+              onClick={() => router.push("/auth")}
+            >
+              <LogIn className="h-3 w-3" />
+              Sign In
+            </Button>
+          </div>
+        )}
+
+        {storageMode === "local" && authenticated && hasInterrupted && (
           <Button
             variant="outline"
             size="sm"
@@ -67,7 +87,7 @@ export function StorageInfoSection() {
           </Button>
         )}
 
-        {storageMode === "local" && !hasInterrupted && (
+        {storageMode === "local" && authenticated && !hasInterrupted && (
           <Button
             variant="outline"
             size="sm"
