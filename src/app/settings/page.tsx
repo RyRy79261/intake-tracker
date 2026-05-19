@@ -58,6 +58,15 @@ function SettingsContent() {
       </div>
 
       <Accordion type="single" collapsible className="pb-8">
+        <SettingsAccordionGroup value="ai-features" icon={Sparkles} label="AI features" iconColorClass="text-amber-600 dark:text-amber-400">
+          <AiKeysSection />
+        </SettingsAccordionGroup>
+
+        <SettingsAccordionGroup value="data-storage" icon={Database} label="Data & Storage" iconColorClass="text-amber-600 dark:text-amber-400">
+          <StorageInfoSection />
+          <DataManagementSection />
+        </SettingsAccordionGroup>
+
         <SettingsAccordionGroup value="tracking" icon={Activity} label="Tracking" iconColorClass="text-indigo-600 dark:text-indigo-400">
           <DaySettingsSection />
           <WaterSettingsSection />
@@ -75,15 +84,6 @@ function SettingsContent() {
 
         <SettingsAccordionGroup value="medication" icon={Pill} label="Medication" iconColorClass="text-teal-600 dark:text-teal-400">
           <MedicationSettingsSection />
-        </SettingsAccordionGroup>
-
-        <SettingsAccordionGroup value="data-storage" icon={Database} label="Data & Storage" iconColorClass="text-amber-600 dark:text-amber-400">
-          <StorageInfoSection />
-          <DataManagementSection />
-        </SettingsAccordionGroup>
-
-        <SettingsAccordionGroup value="ai-features" icon={Sparkles} label="AI features" iconColorClass="text-amber-600 dark:text-amber-400">
-          <AiKeysSection />
         </SettingsAccordionGroup>
 
         <SettingsAccordionGroup value="privacy-security" icon={Shield} label="Privacy & Security" iconColorClass="text-emerald-600 dark:text-emerald-400">
