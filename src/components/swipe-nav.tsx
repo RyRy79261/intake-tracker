@@ -167,6 +167,7 @@ export function SwipeNav({ children }: { children: React.ReactNode }) {
     <>
       {isTopRoute && prevRoute && (
         <motion.div
+          aria-hidden="true"
           className="pointer-events-none fixed left-3 top-1/2 z-30 -translate-y-1/2 flex items-center gap-2 rounded-full border bg-background/95 px-3 py-2 shadow-lg backdrop-blur"
           style={{ opacity: prevHintOpacity, scale: prevHintScale }}
         >
@@ -176,6 +177,7 @@ export function SwipeNav({ children }: { children: React.ReactNode }) {
       )}
       {isTopRoute && nextRoute && (
         <motion.div
+          aria-hidden="true"
           className="pointer-events-none fixed right-3 top-1/2 z-30 -translate-y-1/2 flex items-center gap-2 rounded-full border bg-background/95 px-3 py-2 shadow-lg backdrop-blur"
           style={{ opacity: nextHintOpacity, scale: nextHintScale }}
         >
