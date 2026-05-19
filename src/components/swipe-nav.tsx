@@ -9,7 +9,7 @@ import {
   animate,
   type PanInfo,
 } from "motion/react";
-import { NAV_ROUTES } from "@/lib/nav-routes";
+import { NAV_ROUTES, type NavRoute } from "@/lib/nav-routes";
 import { useSettingsStore } from "@/stores/settings-store";
 
 const DIRECTION_LOCK_THRESHOLD = 8;
@@ -17,11 +17,39 @@ const RESISTANCE = 0.25;
 const COMMIT_DURATION = 0.18;
 const ENTER_DURATION = 0.22;
 
+function PageSkeleton({ route }: { route: NavRoute }) {
+  return (
+    <div className="container mx-auto max-w-lg px-4 pt-2 pb-6" aria-hidden="true">
+      <div className="-mx-4 px-4 py-4 mb-2">
+        <div className="flex items-center justify-between gap-3">
+          <div className="space-y-2">
+            <div className="h-7 w-44 rounded bg-muted/70" />
+            <div className="h-4 w-32 rounded bg-muted/50" />
+          </div>
+          <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10">
+            <route.icon className="h-5 w-5 text-primary/70" />
+          </div>
+        </div>
+      </div>
+      <div className="space-y-4 pt-2">
+        <div className="h-28 rounded-xl bg-muted/40" />
+        <div className="h-28 rounded-xl bg-muted/40" />
+        <div className="h-28 rounded-xl bg-muted/40" />
+        <div className="h-28 rounded-xl bg-muted/40" />
+      </div>
+    </div>
+  );
+}
+
 export function SwipeNav({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const x = useMotionValue(0);
   const [width, setWidth] = useState(0);
+  // Hide skeletons during the post-commit enter animation so the (now stale)
+  // adjacent-route skeleton doesn't briefly slide across the screen as the
+  // new page slides in from the opposite edge.
+  const [skeletonsHidden, setSkeletonsHidden] = useState(false);
   const lockRef = useRef<"horizontal" | "vertical" | null>(null);
   const startedRef = useRef(false);
   const navigatingRef = useRef(false);
@@ -53,24 +81,29 @@ export function SwipeNav({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener("resize", update);
   }, []);
 
-  // Prefetch adjacent routes so the post-commit gap is as short as possible.
   useEffect(() => {
     if (prevRoute) router.prefetch(prevRoute.path);
     if (nextRoute) router.prefetch(nextRoute.path);
   }, [prevRoute, nextRoute, router]);
 
-  // After the route changes, slide the new page in from the side the user
-  // committed toward — so a left-swipe (→ next) makes the new page enter from
-  // the right, matching the gesture. useLayoutEffect runs before paint so the
-  // user never sees the new page flash at x=0.
   useLayoutEffect(() => {
     const w = window.innerWidth;
     if (commitDirRef.current === "next") {
       x.set(w);
-      animate(x, 0, { type: "tween", ease: [0.22, 1, 0.36, 1], duration: ENTER_DURATION });
+      setSkeletonsHidden(true);
+      animate(x, 0, {
+        type: "tween",
+        ease: [0.22, 1, 0.36, 1],
+        duration: ENTER_DURATION,
+      }).then(() => setSkeletonsHidden(false));
     } else if (commitDirRef.current === "prev") {
       x.set(-w);
-      animate(x, 0, { type: "tween", ease: [0.22, 1, 0.36, 1], duration: ENTER_DURATION });
+      setSkeletonsHidden(true);
+      animate(x, 0, {
+        type: "tween",
+        ease: [0.22, 1, 0.36, 1],
+        duration: ENTER_DURATION,
+      }).then(() => setSkeletonsHidden(false));
     } else {
       x.set(0);
     }
@@ -169,14 +202,19 @@ export function SwipeNav({ children }: { children: React.ReactNode }) {
     [x, width, prevRoute, nextRoute, router],
   );
 
-  // Edge hint pills (icon + label) that fade in as the user drags.
+  // Edge hint pills (icon + label) fade in as the user drags.
   const prevHintOpacity = useTransform(x, [0, 60, 140], [0, 0.65, 1]);
   const nextHintOpacity = useTransform(x, [-140, -60, 0], [1, 0.65, 0]);
   const prevHintScale = useTransform(x, [0, 140], [0.85, 1]);
   const nextHintScale = useTransform(x, [-140, 0], [1, 0.85]);
 
+  // Skeleton overlays share the drag x but sit one viewport over so they peek
+  // in naturally as the user drags toward them.
+  const prevSkelX = useTransform(x, (v) => v - (width || 0));
+  const nextSkelX = useTransform(x, (v) => v + (width || 0));
+
   return (
-    <div className="overflow-x-hidden">
+    <div className="relative overflow-x-hidden">
       {isTopRoute && prevRoute && (
         <motion.div
           aria-hidden="true"
@@ -197,6 +235,26 @@ export function SwipeNav({ children }: { children: React.ReactNode }) {
           <nextRoute.icon className="h-4 w-4 text-primary" />
         </motion.div>
       )}
+
+      {isTopRoute && prevRoute && !skeletonsHidden && (
+        <motion.div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 top-0"
+          style={{ x: prevSkelX }}
+        >
+          <PageSkeleton route={prevRoute} />
+        </motion.div>
+      )}
+      {isTopRoute && nextRoute && !skeletonsHidden && (
+        <motion.div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 top-0"
+          style={{ x: nextSkelX }}
+        >
+          <PageSkeleton route={nextRoute} />
+        </motion.div>
+      )}
+
       <motion.div
         className="will-change-transform"
         style={{ x, touchAction: "pan-y" }}
