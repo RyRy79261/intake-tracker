@@ -23,10 +23,6 @@ export function SwipeNav({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const x = useMotionValue(0);
   const [width, setWidth] = useState(0);
-  // Hide skeletons during the post-commit enter animation so the (now stale)
-  // adjacent-route skeleton doesn't briefly slide across the screen as the
-  // new page slides in from the opposite edge.
-  const [skeletonsHidden, setSkeletonsHidden] = useState(false);
   const lockRef = useRef<"horizontal" | "vertical" | null>(null);
   const startedRef = useRef(false);
   const navigatingRef = useRef(false);
@@ -64,26 +60,11 @@ export function SwipeNav({ children }: { children: React.ReactNode }) {
   }, [prevRoute, nextRoute, router]);
 
   useLayoutEffect(() => {
-    const w = window.innerWidth;
-    if (commitDirRef.current === "next") {
-      x.set(w);
-      setSkeletonsHidden(true);
-      animate(x, 0, {
-        type: "tween",
-        ease: [0.22, 1, 0.36, 1],
-        duration: ENTER_DURATION,
-      }).then(() => setSkeletonsHidden(false));
-    } else if (commitDirRef.current === "prev") {
-      x.set(-w);
-      setSkeletonsHidden(true);
-      animate(x, 0, {
-        type: "tween",
-        ease: [0.22, 1, 0.36, 1],
-        duration: ENTER_DURATION,
-      }).then(() => setSkeletonsHidden(false));
-    } else {
-      x.set(0);
-    }
+    // After a route change the destination skeleton was already centered (it
+    // animated into place during commit), so the real page just takes its
+    // position. No slide-in animation — that would look like the page is
+    // re-entering from the edge the user just swiped from.
+    x.set(0);
     commitDirRef.current = null;
     navigatingRef.current = false;
     lockRef.current = null;
@@ -213,7 +194,7 @@ export function SwipeNav({ children }: { children: React.ReactNode }) {
         </motion.div>
       )}
 
-      {isTopRoute && prevRoute && !skeletonsHidden && (
+      {isTopRoute && prevRoute && (
         <motion.div
           aria-hidden="true"
           className="pointer-events-none absolute inset-x-0 top-0"
@@ -222,7 +203,7 @@ export function SwipeNav({ children }: { children: React.ReactNode }) {
           <PageSkeleton route={prevRoute} />
         </motion.div>
       )}
-      {isTopRoute && nextRoute && !skeletonsHidden && (
+      {isTopRoute && nextRoute && (
         <motion.div
           aria-hidden="true"
           className="pointer-events-none absolute inset-x-0 top-0"
