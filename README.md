@@ -2,6 +2,13 @@
 
 A Progressive Web App (PWA) for tracking daily water and salt intake with a rolling 24-hour window.
 
+## About
+
+This app was created by me in response to difficulties in tracking the things
+needed to manage a new chronic condition. The hope is if anyone else needs
+this app the way I do, that it is here now. I can't offer the AI features for
+free but I can make it easier to set it up yourself and use it.
+
 ## Features
 
 - **Rolling 24-hour tracking**: Intake is calculated based on the last 24 hours, not calendar days
