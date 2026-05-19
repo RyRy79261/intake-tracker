@@ -9,37 +9,14 @@ import {
   animate,
   type PanInfo,
 } from "motion/react";
-import { NAV_ROUTES, type NavRoute } from "@/lib/nav-routes";
+import { NAV_ROUTES } from "@/lib/nav-routes";
 import { useSettingsStore } from "@/stores/settings-store";
+import { PageSkeleton } from "@/components/page-skeletons";
 
 const DIRECTION_LOCK_THRESHOLD = 8;
 const RESISTANCE = 0.25;
 const COMMIT_DURATION = 0.18;
 const ENTER_DURATION = 0.22;
-
-function PageSkeleton({ route }: { route: NavRoute }) {
-  return (
-    <div className="container mx-auto max-w-lg px-4 pt-2 pb-6" aria-hidden="true">
-      <div className="-mx-4 px-4 py-4 mb-2">
-        <div className="flex items-center justify-between gap-3">
-          <div className="space-y-2">
-            <div className="h-7 w-44 rounded bg-muted/70" />
-            <div className="h-4 w-32 rounded bg-muted/50" />
-          </div>
-          <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10">
-            <route.icon className="h-5 w-5 text-primary/70" />
-          </div>
-        </div>
-      </div>
-      <div className="space-y-4 pt-2">
-        <div className="h-28 rounded-xl bg-muted/40" />
-        <div className="h-28 rounded-xl bg-muted/40" />
-        <div className="h-28 rounded-xl bg-muted/40" />
-        <div className="h-28 rounded-xl bg-muted/40" />
-      </div>
-    </div>
-  );
-}
 
 export function SwipeNav({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
