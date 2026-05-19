@@ -6,6 +6,7 @@ import {
   motion,
   useMotionValue,
   useTransform,
+  useMotionTemplate,
   animate,
   type PanInfo,
 } from "motion/react";
@@ -167,9 +168,12 @@ export function SwipeNav({ children }: { children: React.ReactNode }) {
   const nextHintScale = useTransform(x, [-140, 0], [1, 0.85]);
 
   // Skeleton overlays share the drag x but sit one viewport over so they peek
-  // in naturally as the user drags toward them.
-  const prevSkelX = useTransform(x, (v) => v - (width || 0));
-  const nextSkelX = useTransform(x, (v) => v + (width || 0));
+  // in naturally as the user drags toward them. We use CSS calc with 100vw so
+  // the offset is correct from the very first render — useTransform with a
+  // JS-tracked width is stale until x next changes, which would leave the
+  // skeletons sitting on top of the children before the first drag.
+  const prevSkelTransform = useMotionTemplate`translateX(calc(${x}px - 100vw))`;
+  const nextSkelTransform = useMotionTemplate`translateX(calc(${x}px + 100vw))`;
 
   return (
     <div className="relative overflow-x-hidden">
@@ -197,8 +201,8 @@ export function SwipeNav({ children }: { children: React.ReactNode }) {
       {isTopRoute && prevRoute && (
         <motion.div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0 top-0"
-          style={{ x: prevSkelX }}
+          className="pointer-events-none absolute inset-x-0 top-0 will-change-transform"
+          style={{ transform: prevSkelTransform }}
         >
           <PageSkeleton route={prevRoute} />
         </motion.div>
@@ -206,8 +210,8 @@ export function SwipeNav({ children }: { children: React.ReactNode }) {
       {isTopRoute && nextRoute && (
         <motion.div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0 top-0"
-          style={{ x: nextSkelX }}
+          className="pointer-events-none absolute inset-x-0 top-0 will-change-transform"
+          style={{ transform: nextSkelTransform }}
         >
           <PageSkeleton route={nextRoute} />
         </motion.div>
