@@ -135,12 +135,20 @@ export function ServiceWorkerDiagnostics() {
 
   const handleSkipWaiting = useCallback(async () => {
     if (!("serviceWorker" in navigator)) return;
-    const reg = await navigator.serviceWorker.getRegistration();
-    if (reg?.waiting) {
-      reg.waiting.postMessage({ type: "SKIP_WAITING" });
-      toast({ title: "SKIP_WAITING posted to waiting worker" });
-    } else {
-      toast({ title: "No waiting worker" });
+    try {
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (reg?.waiting) {
+        reg.waiting.postMessage({ type: "SKIP_WAITING" });
+        toast({ title: "SKIP_WAITING posted to waiting worker" });
+      } else {
+        toast({ title: "No waiting worker" });
+      }
+    } catch (e) {
+      toast({
+        title: "Skip waiting failed",
+        description: e instanceof Error ? e.message : "Unknown error",
+        variant: "destructive",
+      });
     }
   }, [toast]);
 

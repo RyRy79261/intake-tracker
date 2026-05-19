@@ -20,6 +20,9 @@ permissions:
 
 jobs:
   delete-neon-branch:
+    # PRs from forks don't get secrets injected, so the empty-secret guard
+    # below would always fail. Short-circuit such runs at the job level.
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - name: Delete Neon branch for this PR
@@ -41,7 +44,11 @@ jobs:
           api="https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}"
           auth="Authorization: Bearer ${NEON_API_KEY}"
 
-          resp=$(curl -sS -w "\n%{http_code}" -H "$auth" -H "Accept: application/json" "$api/branches")
+          # Bounded timeouts + bounded retries: transient hangs/5xx get
+          # retried, but client errors are not (avoids --retry-all-errors).
+          curl_opts=(--connect-timeout 10 --max-time 30 --retry 3 --retry-delay 5)
+
+          resp=$(curl -sS "${curl_opts[@]}" -w "\n%{http_code}" -H "$auth" -H "Accept: application/json" "$api/branches")
           body=$(printf '%s' "$resp" | sed '$d')
           status=$(printf '%s' "$resp" | tail -n1)
           if [ "$status" != "200" ]; then
@@ -69,7 +76,7 @@ jobs:
           while IFS=$'\t' read -r id name; do
             [ -z "$id" ] && continue
             echo "Deleting branch: $name (id=$id)"
-            del_status=$(curl -sS -o /dev/null -w "%{http_code}" -X DELETE -H "$auth" "$api/branches/$id")
+            del_status=$(curl -sS "${curl_opts[@]}" -o /dev/null -w "%{http_code}" -X DELETE -H "$auth" "$api/branches/$id")
             if [ "$del_status" = "200" ] || [ "$del_status" = "202" ]; then
               echo "  ok"
             else
