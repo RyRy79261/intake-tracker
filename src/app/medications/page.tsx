@@ -1,37 +1,28 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { AppHeader } from "@/components/app-header";
 import { WeekDaySelector } from "@/components/medications/week-day-selector";
-import { MedTabBar, type MedTab } from "@/components/medications/med-footer";
+import { MedTabBar } from "@/components/medications/med-footer";
 import { ScheduleView } from "@/components/medications/schedule-view";
 import { MedicationSettingsView } from "@/components/medications/medication-settings-view";
 import { DoseDetailDialog } from "@/components/medications/dose-detail-dialog";
-import { AddMedicationWizard } from "@/components/medications/add-medication-wizard";
 import { CompoundList } from "@/components/medications/compound-list";
 import { PrescriptionsView } from "@/components/medications/prescriptions-view";
 import { TitrationsView } from "@/components/medications/titrations-view";
-import { useScrollHide } from "@/hooks/use-scroll-hide";
-import { useSettings } from "@/hooks/use-settings";
 import type { DoseSlot } from "@/hooks/use-medication-queries";
 import { useMedicationNotifications } from "@/hooks/use-medication-notifications";
+import { useMedicationUIStore } from "@/stores/medication-ui-store";
 
 function MedicationsContent() {
-  const [activeTab, setActiveTab] = useState<MedTab>("schedule");
+  const activeTab = useMedicationUIStore((s) => s.activeTab);
+  const setActiveTab = useMedicationUIStore((s) => s.setActiveTab);
+  const setWizardOpen = useMedicationUIStore((s) => s.setWizardOpen);
   const [selectedDate, setSelectedDate] = useState(() => new Date());
-  const [wizardOpen, setWizardOpen] = useState(false);
 
   const [doseDetailOpen, setDoseDetailOpen] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<DoseSlot | null>(null);
 
   useMedicationNotifications();
-
-  const settings = useSettings();
-  const barTransitionSec = settings.barTransitionDurationMs / 1000;
-  const { isHidden } = useScrollHide({
-    scrollDurationMs: settings.scrollDurationMs,
-    autoHideDelayMs: settings.autoHideDelayMs,
-  });
 
   const isToday = selectedDate.toDateString() === new Date().toDateString();
 
@@ -42,15 +33,10 @@ function MedicationsContent() {
 
   const handleAddMed = useCallback(() => {
     setWizardOpen(true);
-  }, []);
+  }, [setWizardOpen]);
 
   return (
     <>
-      <AppHeader
-        headerHidden={isHidden}
-        transitionDuration={barTransitionSec}
-      />
-
       <MedTabBar activeTab={activeTab} onTabChange={setActiveTab} />
 
       {activeTab === "schedule" && (
@@ -82,11 +68,6 @@ function MedicationsContent() {
         onOpenChange={setDoseDetailOpen}
         slot={selectedSlot}
         isToday={isToday}
-      />
-
-      <AddMedicationWizard
-        open={wizardOpen}
-        onOpenChange={setWizardOpen}
       />
     </>
   );

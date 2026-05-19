@@ -3,8 +3,6 @@
 import { useEffect, useState } from "react";
 import { WeightCard } from "@/components/weight-card";
 import { BloodPressureCard } from "@/components/blood-pressure-card";
-import { AppHeader } from "@/components/app-header";
-import { QuickNavFooter } from "@/components/quick-nav-footer";
 import { TextMetrics } from "@/components/text-metrics";
 import { UrinationCard } from "@/components/urination-card";
 import { DefecationCard } from "@/components/defecation-card";
@@ -12,20 +10,12 @@ import { useSettings } from "@/hooks/use-settings";
 import { LiquidsCard } from "@/components/liquids-card";
 import { FoodSaltCard } from "@/components/food-salt-card";
 import { InsightBadge } from "@/components/insight-badge";
-import { VoiceLaunchBar } from "@/components/voice/voice-launch-bar";
-import { useScrollHide } from "@/hooks/use-scroll-hide";
 import { cn } from "@/lib/utils";
 import { Droplets } from "lucide-react";
 
 function HomeContent() {
   const [mounted, setMounted] = useState(false);
   const settings = useSettings();
-
-  const barTransitionSec = settings.barTransitionDurationMs / 1000;
-  const { isHidden, handleQuickNav } = useScrollHide({
-    scrollDurationMs: settings.scrollDurationMs,
-    autoHideDelayMs: settings.autoHideDelayMs,
-  });
 
   useEffect(() => {
     setMounted(true);
@@ -44,11 +34,6 @@ function HomeContent() {
 
   return (
     <>
-      <AppHeader
-        headerHidden={isHidden}
-        transitionDuration={barTransitionSec}
-      />
-
       <div className="mb-4">
         <InsightBadge />
       </div>
@@ -91,23 +76,6 @@ function HomeContent() {
           Water: max 1L/day · Sodium: max 1500mg/day
         </p>
       </footer>
-
-      <VoiceLaunchBar
-        hidden={isHidden}
-        hasQuickNav={settings.showQuickNav}
-        transitionDuration={barTransitionSec}
-      />
-
-
-      {settings.showQuickNav && (
-        <QuickNavFooter
-          hidden={isHidden}
-          order={settings.quickNavOrder}
-          transitionDuration={barTransitionSec}
-          quickNavItems={settings.quickNavItems}
-          onScrollTo={handleQuickNav}
-        />
-      )}
     </>
   );
 }

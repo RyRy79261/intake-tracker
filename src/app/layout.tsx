@@ -5,6 +5,10 @@ import { Toaster } from "@/components/ui/toaster";
 import { Providers } from "./providers";
 import { UpdateNotification } from "@/components/update-notification";
 import { OfflineChip } from "@/components/sync/offline-chip";
+import { SwipeNav } from "@/components/swipe-nav";
+import { AppHeader } from "@/components/app-header";
+import { HomeFloatingBars } from "@/components/home-floating-bars";
+import { MedicationsFloatingBars } from "@/components/medications-floating-bars";
 
 const outfit = Outfit({ 
   subsets: ["latin"],
@@ -47,11 +51,14 @@ export default function RootLayout({
       </head>
       <body className={`${outfit.variable} font-sans antialiased`}>
         <Providers>
-          <main className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
-            <div className="container mx-auto px-4 py-6 max-w-lg">
+          <main className="min-h-screen overflow-x-hidden bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
+            <div className="container mx-auto max-w-lg px-4 pt-6">
               <OfflineChip />
-              {children}
+              <AppHeader />
             </div>
+            <SwipeNav>{children}</SwipeNav>
+            <HomeFloatingBars />
+            <MedicationsFloatingBars />
           </main>
         </Providers>
         <UpdateNotification />

@@ -56,6 +56,10 @@ export interface Settings {
   autoHideDelayMs: number;         // delay after scroll before header+footer hide (0-2000)
   barTransitionDurationMs: number; // header/footer slide in/out speed (50-500)
 
+  // Swipe navigation release thresholds
+  swipeNavDistanceThresholdPct: number; // % of viewport width to commit (10-60)
+  swipeNavVelocityThreshold: number;    // px/s flick velocity to commit (100-2000)
+
   // Tracking defaults
   urinationDefaultAmount: "small" | "medium" | "large";
   defecationDefaultAmount: "small" | "medium" | "large";
@@ -109,6 +113,8 @@ interface SettingsActions {
   setScrollDurationMs: (value: number) => void;
   setAutoHideDelayMs: (value: number) => void;
   setBarTransitionDurationMs: (value: number) => void;
+  setSwipeNavDistanceThresholdPct: (value: number) => void;
+  setSwipeNavVelocityThreshold: (value: number) => void;
   setUrinationDefaultAmount: (value: "small" | "medium" | "large") => void;
   setDefecationDefaultAmount: (value: "small" | "medium" | "large") => void;
   setWeightGraphShowEating: (value: boolean) => void;
@@ -154,6 +160,8 @@ const defaultSettings: Settings = {
   scrollDurationMs: 300,
   autoHideDelayMs: 500,
   barTransitionDurationMs: 200,
+  swipeNavDistanceThresholdPct: 28,
+  swipeNavVelocityThreshold: 500,
   urinationDefaultAmount: "small" as const,
   defecationDefaultAmount: "medium" as const,
   weightGraphShowEating: true,
@@ -230,6 +238,10 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
         set({ autoHideDelayMs: sanitizeNumericInput(value, 0, 2000) }),
       setBarTransitionDurationMs: (value) =>
         set({ barTransitionDurationMs: sanitizeNumericInput(value, 50, 500) }),
+      setSwipeNavDistanceThresholdPct: (value) =>
+        set({ swipeNavDistanceThresholdPct: sanitizeNumericInput(value, 10, 60) }),
+      setSwipeNavVelocityThreshold: (value) =>
+        set({ swipeNavVelocityThreshold: sanitizeNumericInput(value, 100, 2000) }),
 
       setUrinationDefaultAmount: (value) => set({ urinationDefaultAmount: value }),
       setDefecationDefaultAmount: (value) => set({ defecationDefaultAmount: value }),
@@ -296,7 +308,7 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
     {
       name: "intake-tracker-settings",
       storage: createJSONStorage(() => localStorage),
-      version: 8,
+      version: 9,
       migrate: (persisted, version) => {
         const state = persisted as Record<string, unknown>;
         if (version === 0) {
@@ -343,6 +355,10 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
         }
         if (version < 8) {
           state.storageMode = "local";
+        }
+        if (version < 9) {
+          state.swipeNavDistanceThresholdPct = 28;
+          state.swipeNavVelocityThreshold = 500;
         }
         return state as unknown as Settings & SettingsActions;
       },
