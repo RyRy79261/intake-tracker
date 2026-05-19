@@ -2,6 +2,13 @@
 
 A Progressive Web App (PWA) for tracking daily water and salt intake with a rolling 24-hour window.
 
+## About
+
+Built by someone navigating their own chronic health journey — a tool first
+made for personal use to keep track of intake, vitals, and medications day to
+day. Shared freely with anyone walking a similar path, in the hope that it
+makes the daily work of staying on top of things a little lighter.
+
 ## Features
 
 - **Rolling 24-hour tracking**: Intake is calculated based on the last 24 hours, not calendar days
