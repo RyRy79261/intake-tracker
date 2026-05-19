@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.11.1](https://github.com/RyRy79261/intake-tracker/compare/v1.11.0...v1.11.1) (2026-05-19)
+
+
+### Bug Fixes
+
+* **swipe-nav:** remove floating page-name hint pills during swipe ([b287b92](https://github.com/RyRy79261/intake-tracker/commit/b287b92124f65e21759d197cdd73ea00afcca457))
+* **swipe-nav:** remove floating page-name hint pills during swipe ([2cdcaba](https://github.com/RyRy79261/intake-tracker/commit/2cdcabaea28cd8c1ef5556f47659c01ebf2a8d39))
+
 ## [1.11.0](https://github.com/RyRy79261/intake-tracker/compare/v1.10.0...v1.11.0) (2026-05-19)
 
 
