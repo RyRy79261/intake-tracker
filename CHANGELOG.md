@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.10.0](https://github.com/RyRy79261/intake-tracker/compare/v1.9.1...v1.10.0) (2026-05-19)
+
+
+### Features
+
+* **about:** move creator copy into existing AboutDialog ([6cfe32b](https://github.com/RyRy79261/intake-tracker/commit/6cfe32ba8e6b6ef5674d1cbf7d9b4cceceb4343b))
+* **debug:** add error log capture, environment info, and SW/push diagnostics ([2944ef0](https://github.com/RyRy79261/intake-tracker/commit/2944ef0da94b09b1d28c89210fc450d059b8b2d8))
+* **settings:** add About section component and README story ([95b62d6](https://github.com/RyRy79261/intake-tracker/commit/95b62d61d6bc8740a20a3bece4affed2dfb0dc91))
+* **settings:** add About section component and README story ([19b8ac2](https://github.com/RyRy79261/intake-tracker/commit/19b8ac2e6f186f3d44b76cc697b4a44252a8a20a))
+* **settings:** move App Updates to its own tab ([0d16fb7](https://github.com/RyRy79261/intake-tracker/commit/0d16fb7612084dd2093f722a71e624fcaceb0286))
+* **settings:** wire AboutAppSection into System group with creator copy ([a062d90](https://github.com/RyRy79261/intake-tracker/commit/a062d900cd9d9c25bbc80b3de2ae2dd7d250224b))
+
+
+### Bug Fixes
+
+* address CodeRabbit review on neon-pr-cleanup + handleSkipWaiting ([39f6ae7](https://github.com/RyRy79261/intake-tracker/commit/39f6ae7f477b24292552b07175e4bffdc119c66b))
+* **ci:** reference NEON_PROJECT_ID as a repository variable ([6f82063](https://github.com/RyRy79261/intake-tracker/commit/6f82063bd6d3e7dbf67e7f3e51a949b4dd33a9aa))
+* **debug:** address CodeRabbit review comments ([b45a1fb](https://github.com/RyRy79261/intake-tracker/commit/b45a1fbe02617c46b55c58b98cc4f1b06fda6f15))
+* **debug:** stack error-log header to prevent horizontal overflow ([8e24fb0](https://github.com/RyRy79261/intake-tracker/commit/8e24fb0153e26c7d24e5ae14b73fc0ec786796b0))
+* **settings:** rename App Updates tab to System ([65d5499](https://github.com/RyRy79261/intake-tracker/commit/65d549935b6712abef0a1fd53bbdb2921e0dec9f))
+
 ## [1.9.1](https://github.com/RyRy79261/intake-tracker/compare/v1.9.0...v1.9.1) (2026-05-18)
 
 
