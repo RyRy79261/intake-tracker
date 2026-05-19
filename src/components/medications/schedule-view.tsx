@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useEffect, useState, useCallback } from "react";
-import { Plus } from "lucide-react";
 import { useDailyDoseSchedule, useTakeDose, useUntakeDose, useSkipDose, useTakeAllDoses } from "@/hooks/use-medication-queries";
 import type { DoseSlot } from "@/hooks/use-medication-queries";
 import { hapticTake, hapticSkip } from "@/lib/medication-ui-utils";
@@ -324,13 +323,6 @@ export function ScheduleView({ selectedDate, onDoseClick, onAddMed }: ScheduleVi
         compoundName="all doses"
         onConfirm={handleMarkAllTimeConfirm}
       />
-
-      <button
-        onClick={onAddMed}
-        className="fixed bottom-20 right-4 z-30 w-14 h-14 rounded-full bg-teal-600 hover:bg-teal-700 text-white shadow-lg flex items-center justify-center transition-colors active:scale-95"
-      >
-        <Plus className="w-6 h-6" />
-      </button>
     </div>
   );
 }

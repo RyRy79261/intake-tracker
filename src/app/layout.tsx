@@ -8,6 +8,7 @@ import { OfflineChip } from "@/components/sync/offline-chip";
 import { SwipeNav } from "@/components/swipe-nav";
 import { AppHeader } from "@/components/app-header";
 import { HomeFloatingBars } from "@/components/home-floating-bars";
+import { MedicationsFloatingBars } from "@/components/medications-floating-bars";
 
 const outfit = Outfit({ 
   subsets: ["latin"],
@@ -57,6 +58,7 @@ export default function RootLayout({
             </div>
             <SwipeNav>{children}</SwipeNav>
             <HomeFloatingBars />
+            <MedicationsFloatingBars />
           </main>
         </Providers>
         <UpdateNotification />
