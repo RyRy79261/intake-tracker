@@ -5,7 +5,6 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   motion,
   useMotionValue,
-  useTransform,
   animate,
   type PanInfo,
 } from "motion/react";
@@ -160,35 +159,8 @@ export function SwipeNav({ children }: { children: React.ReactNode }) {
     [x, width, prevRoute, nextRoute, router],
   );
 
-  // Edge hint pills (icon + label) fade in as the user drags.
-  const prevHintOpacity = useTransform(x, [0, 60, 140], [0, 0.65, 1]);
-  const nextHintOpacity = useTransform(x, [-140, -60, 0], [1, 0.65, 0]);
-  const prevHintScale = useTransform(x, [0, 140], [0.85, 1]);
-  const nextHintScale = useTransform(x, [-140, 0], [1, 0.85]);
-
   return (
     <div className="relative overflow-x-hidden">
-      {isTopRoute && prevRoute && (
-        <motion.div
-          aria-hidden="true"
-          className="pointer-events-none fixed left-3 top-1/2 z-30 -translate-y-1/2 flex items-center gap-2 rounded-full border bg-background/95 px-3 py-2 shadow-lg backdrop-blur"
-          style={{ opacity: prevHintOpacity, scale: prevHintScale }}
-        >
-          <prevRoute.icon className="h-4 w-4 text-primary" />
-          <span className="text-xs font-medium">{prevRoute.title}</span>
-        </motion.div>
-      )}
-      {isTopRoute && nextRoute && (
-        <motion.div
-          aria-hidden="true"
-          className="pointer-events-none fixed right-3 top-1/2 z-30 -translate-y-1/2 flex items-center gap-2 rounded-full border bg-background/95 px-3 py-2 shadow-lg backdrop-blur"
-          style={{ opacity: nextHintOpacity, scale: nextHintScale }}
-        >
-          <span className="text-xs font-medium">{nextRoute.title}</span>
-          <nextRoute.icon className="h-4 w-4 text-primary" />
-        </motion.div>
-      )}
-
       {/* Skeleton overlays. They share the drag motion value `x` for the
           translateX, but the resting offset (one viewport over) is set via
           plain CSS `left`. Doing the offset via `left` instead of folding it
