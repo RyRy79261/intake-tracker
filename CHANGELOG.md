@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.11.0](https://github.com/RyRy79261/intake-tracker/compare/v1.10.0...v1.11.0) (2026-05-19)
+
+
+### Features
+
+* **ai:** user-supplied API keys with sharing + usage tracking ([e2629b8](https://github.com/RyRy79261/intake-tracker/commit/e2629b8ff676b16009fe7db9ff480138394a5d0c))
+* **swipe-nav:** redo skeletons to actually mirror each page ([dad4986](https://github.com/RyRy79261/intake-tracker/commit/dad4986ea567eb7e479a577959cae26369a2a8ba))
+* **swipe-nav:** restore destination skeleton peek during drag ([3d7e1c0](https://github.com/RyRy79261/intake-tracker/commit/3d7e1c08d7e9f4390c0b266fca0784896003e5f0))
+* **swipe-nav:** route-specific skeleton layouts ([c0da5e2](https://github.com/RyRy79261/intake-tracker/commit/c0da5e2daef33061a1180ae1a79bc02f1460a126))
+* **swipe-nav:** stationary header + skeleton peek during drag ([57d9c73](https://github.com/RyRy79261/intake-tracker/commit/57d9c735493e95b70b6389b3b5118d4b23d6526f))
+
+
+### Bug Fixes
+
+* **a11y:** hide decorative swipe-nav hint pills from screen readers ([1528fb2](https://github.com/RyRy79261/intake-tracker/commit/1528fb2b905f59e885c3d51924d55b5429c2274e))
+* **ai:** address CodeRabbit review on user-API-keys PR ([7fbb626](https://github.com/RyRy79261/intake-tracker/commit/7fbb626e7893bbe2306b489be88332ab39b6b9d3))
+* **ci:** bump verify-schema EXPECTED_TABLE_COUNT to 23 ([eb6db3d](https://github.com/RyRy79261/intake-tracker/commit/eb6db3de65f94e6594aeb1a446688737c02e4bf1))
+* **medications:** auto-close wizard when leaving /medications ([89fcee4](https://github.com/RyRy79261/intake-tracker/commit/89fcee4ce27d155169cefe356a40234521ed3eff))
+* **settings:** gate cloud sync controls on auth state ([2418d00](https://github.com/RyRy79261/intake-tracker/commit/2418d0014e7d863263631da857466243d7cef59b))
+* **swipe-nav:** drop redundant slide-in after commit ([ee7c4b4](https://github.com/RyRy79261/intake-tracker/commit/ee7c4b44e79a129aeea017fdd03882186673dcc9))
+* **swipe-nav:** drop skeleton strip, restore single-page slide ([195f090](https://github.com/RyRy79261/intake-tracker/commit/195f090413cf9a969fb67458436ce15772c00384))
+* **swipe-nav:** lift home floating bars out of the swipe transform ([8da019d](https://github.com/RyRy79261/intake-tracker/commit/8da019dca4b5e9e77805198a192b17a495469f33))
+* **swipe-nav:** lift medications FAB + wizard out of swipe transform ([289442c](https://github.com/RyRy79261/intake-tracker/commit/289442cf942b1068e91da6bc838a28ff6a7e6622))
+* **swipe-nav:** set skeleton resting offset via CSS left, not transform ([0d145fc](https://github.com/RyRy79261/intake-tracker/commit/0d145fc45e1848e0c4503b57042e0e29c1322bc7))
+* **swipe-nav:** use vw-based skeleton offsets to fix stuck overlays ([2c908db](https://github.com/RyRy79261/intake-tracker/commit/2c908dbc92fe4bd699d9ee176d9bee87001c4c12))
+
 ## [1.10.0](https://github.com/RyRy79261/intake-tracker/compare/v1.9.1...v1.10.0) (2026-05-19)
 
 
