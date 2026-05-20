@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.12.0](https://github.com/RyRy79261/intake-tracker/compare/v1.11.2...v1.12.0) (2026-05-20)
+
+
+### Features
+
+* add in-app bug reporter that files structured GitHub issues ([5434989](https://github.com/RyRy79261/intake-tracker/commit/54349891c6a1e953fad952cb46991b358e6ebede))
+
+
+### Bug Fixes
+
+* address review feedback on the bug reporter ([7f73740](https://github.com/RyRy79261/intake-tracker/commit/7f73740f4f3d566c0ed58b8a99103f4a29aa7e35))
+
 ## [1.11.2](https://github.com/RyRy79261/intake-tracker/compare/v1.11.1...v1.11.2) (2026-05-20)
 
 
