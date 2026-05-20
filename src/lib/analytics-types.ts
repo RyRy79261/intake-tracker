@@ -127,30 +127,11 @@ export interface CorrelationResult {
   strength: "strong" | "moderate" | "weak" | "none";
   seriesA: DataPoint[];
   seriesB: DataPoint[];
+  /** Day-aligned (and lag-shifted) value pairs the coefficient was computed from. */
+  pairs: Array<{ a: number; b: number }>;
+  /** Count of overlapping days; fewer than 3 means the coefficient is not meaningful. */
+  pairedDays: number;
   lagDays: number;
-}
-
-// ---------------------------------------------------------------------------
-// Insights
-// ---------------------------------------------------------------------------
-
-export type InsightType =
-  | "adherence_drop"
-  | "bp_trend"
-  | "weight_trend"
-  | "fluid_deficit"
-  | "correlation_alert"
-  | "anomaly";
-
-export interface Insight {
-  id: string;
-  type: InsightType;
-  title: string;
-  description: string;
-  severity: "info" | "warning" | "alert";
-  value: number;
-  threshold: number;
-  timestamp: number;
 }
 
 // ---------------------------------------------------------------------------

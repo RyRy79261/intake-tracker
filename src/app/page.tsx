@@ -9,7 +9,6 @@ import { DefecationCard } from "@/components/defecation-card";
 import { useSettings } from "@/hooks/use-settings";
 import { LiquidsCard } from "@/components/liquids-card";
 import { FoodSaltCard } from "@/components/food-salt-card";
-import { InsightBadge } from "@/components/insight-badge";
 import { cn } from "@/lib/utils";
 import { Droplets } from "lucide-react";
 
@@ -34,10 +33,6 @@ function HomeContent() {
 
   return (
     <>
-      <div className="mb-4">
-        <InsightBadge />
-      </div>
-
       <div className="mb-6">
         <TextMetrics />
       </div>

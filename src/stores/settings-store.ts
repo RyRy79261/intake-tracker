@@ -72,8 +72,8 @@ export interface Settings {
   // Liquid presets (beverage CRUD)
   liquidPresets: LiquidPreset[];
 
-  // Insight dismissal (maps insight id to the value at time of dismissal)
-  dismissedInsights: Record<string, string | number>;
+  // Whether the one-time analytics intro dialog has been shown
+  analyticsIntroSeen: boolean;
 
   // Medication region settings
   primaryRegion: string;
@@ -124,9 +124,8 @@ interface SettingsActions {
   addLiquidPreset: (preset: Omit<LiquidPreset, "id">) => string;
   updateLiquidPreset: (id: string, updates: Partial<Omit<LiquidPreset, "id">>) => void;
   deleteLiquidPreset: (id: string) => void;
-  // Insight dismissal
-  dismissInsight: (id: string, value: string | number) => void;
-  isDismissed: (id: string, currentValue: string | number) => boolean;
+  // Analytics intro
+  setAnalyticsIntroSeen: (seen: boolean) => void;
   // Medication region settings
   setPrimaryRegion: (value: string) => void;
   setSecondaryRegion: (value: string) => void;
@@ -171,7 +170,7 @@ const defaultSettings: Settings = {
   liquidPresets: DEFAULT_LIQUID_PRESETS,
   weightIncrement: 0.05,
   storageMode: "local" as const,
-  dismissedInsights: {},
+  analyticsIntroSeen: false,
   primaryRegion: "",
   secondaryRegion: "",
   timeFormat: "24h" as const,
@@ -250,15 +249,8 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
       setWeightGraphShowDefecation: (value) => set({ weightGraphShowDefecation: value }),
       setWeightGraphShowDrinking: (value) => set({ weightGraphShowDrinking: value }),
 
-      // Insight dismissal
-      dismissInsight: (id, value) =>
-        set((state) => ({
-          dismissedInsights: { ...state.dismissedInsights, [id]: value },
-        })),
-      isDismissed: (id, currentValue) => {
-        const dismissed = get().dismissedInsights;
-        return dismissed[id] !== undefined && dismissed[id] === currentValue;
-      },
+      // Analytics intro
+      setAnalyticsIntroSeen: (seen) => set({ analyticsIntroSeen: seen }),
 
       // Medication region settings
       setPrimaryRegion: (value) => set({ primaryRegion: value }),
@@ -308,7 +300,7 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
     {
       name: "intake-tracker-settings",
       storage: createJSONStorage(() => localStorage),
-      version: 9,
+      version: 10,
       migrate: (persisted, version) => {
         const state = persisted as Record<string, unknown>;
         if (version === 0) {
@@ -359,6 +351,10 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
         if (version < 9) {
           state.swipeNavDistanceThresholdPct = 28;
           state.swipeNavVelocityThreshold = 500;
+        }
+        if (version < 10) {
+          // GH-32 follow-up: auto-generated insights removed; drop dismissals.
+          delete state.dismissedInsights;
         }
         return state as unknown as Settings & SettingsActions;
       },

@@ -10,6 +10,7 @@ import { EditBloodPressureDialog } from "@/components/edit-blood-pressure-dialog
 import { EditEatingDialog } from "@/components/edit-eating-dialog";
 import { EditUrinationDialog } from "@/components/edit-urination-dialog";
 import { EditDefecationDialog } from "@/components/edit-defecation-dialog";
+import { EditSubstanceDialog } from "@/components/edit-substance-dialog";
 import {
   Calendar,
   ChevronDown,
@@ -22,6 +23,7 @@ import {
   type EatingRecord,
   type UrinationRecord,
   type DefecationRecord,
+  type SubstanceRecord,
 } from "@/lib/db";
 import {
   type FilterType,
@@ -36,6 +38,7 @@ import { useUpdateWeight, useUpdateBloodPressure } from "@/hooks/use-health-quer
 import { useUpdateEating, useDeleteEating } from "@/hooks/use-eating-queries";
 import { useUpdateUrination, useDeleteUrination } from "@/hooks/use-urination-queries";
 import { useUpdateDefecation, useDeleteDefecation } from "@/hooks/use-defecation-queries";
+import { useUpdateSubstance } from "@/hooks/use-substance-queries";
 import { useToast } from "@/hooks/use-toast";
 import { useKeyboardAwareScroll } from "@/hooks/use-keyboard-scroll";
 import { cn } from "@/lib/utils";
@@ -103,6 +106,7 @@ export function RecordsTab({ range }: RecordsTabProps) {
   const deleteUrinationMutation = useDeleteUrination();
   const updateDefecationMutation = useUpdateDefecation();
   const deleteDefecationMutation = useDeleteDefecation();
+  const updateSubstanceMutation = useUpdateSubstance();
 
   // Edit dialog states
   const [editingIntake, setEditingIntake] = useState<IntakeRecord | null>(null);
@@ -111,6 +115,7 @@ export function RecordsTab({ range }: RecordsTabProps) {
   const [editingEating, setEditingEating] = useState<EatingRecord | null>(null);
   const [editingUrination, setEditingUrination] = useState<UrinationRecord | null>(null);
   const [editingDefecation, setEditingDefecation] = useState<DefecationRecord | null>(null);
+  const [editingSubstance, setEditingSubstance] = useState<SubstanceRecord | null>(null);
 
   // Edit form states
   const [editAmount, setEditAmount] = useState("");
@@ -124,6 +129,8 @@ export function RecordsTab({ range }: RecordsTabProps) {
   const [editArm, setEditArm] = useState<"left" | "right">("left");
   const [editAmountUrination, setEditAmountUrination] = useState("");
   const [editAmountDefecation, setEditAmountDefecation] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editSubstanceAmount, setEditSubstanceAmount] = useState("");
 
   // Filter + paginate
   const filteredRecords = filterRecords(allRecords, filter);
@@ -180,8 +187,15 @@ export function RecordsTab({ range }: RecordsTabProps) {
     } else if (unified.type === "defecation") {
       setEditingDefecation(unified.record);
       setEditAmountDefecation(unified.record.amountEstimate || "");
+    } else if (unified.type === "caffeine" || unified.type === "alcohol") {
+      setEditingSubstance(unified.record);
+      setEditDescription(unified.record.description);
+      setEditSubstanceAmount(
+        unified.type === "caffeine"
+          ? (unified.record.amountMg?.toString() ?? "")
+          : (unified.record.amountStandardDrinks?.toString() ?? ""),
+      );
     }
-    // Substance records (caffeine/alcohol) have no edit dialog -- delete only
   }, []);
 
   // Edit submit handlers
@@ -272,6 +286,32 @@ export function RecordsTab({ range }: RecordsTabProps) {
       toast({ title: "Entry updated" });
     } catch { toast({ title: "Error", description: "Could not update", variant: "destructive" }); }
   }, [editingDefecation, editTimestamp, editAmountDefecation, editNote, toast, updateDefecationMutation]);
+
+  const handleEditSubstanceSubmit = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingSubstance) return;
+    const newTimestamp = dateTimeLocalToTimestamp(editTimestamp);
+    if (isNaN(newTimestamp)) { toast({ title: "Invalid date/time", variant: "destructive" }); return; }
+    const desc = editDescription.trim();
+    if (!desc) { toast({ title: "Description required", variant: "destructive" }); return; }
+    const hasAmount = editSubstanceAmount.trim() !== "";
+    const amt = parseFloat(editSubstanceAmount);
+    if (hasAmount && (isNaN(amt) || amt < 0)) { toast({ title: "Invalid amount", variant: "destructive" }); return; }
+    try {
+      const amountField: Partial<SubstanceRecord> = !hasAmount
+        ? {}
+        : editingSubstance.type === "caffeine"
+          ? { amountMg: amt }
+          : { amountStandardDrinks: amt };
+      await updateSubstanceMutation(editingSubstance.id, {
+        timestamp: newTimestamp,
+        description: desc,
+        ...amountField,
+      });
+      setEditingSubstance(null);
+      toast({ title: "Entry updated" });
+    } catch { toast({ title: "Error", description: "Could not update", variant: "destructive" }); }
+  }, [editingSubstance, editTimestamp, editDescription, editSubstanceAmount, toast, updateSubstanceMutation]);
 
   return (
     <>
@@ -421,6 +461,18 @@ export function RecordsTab({ range }: RecordsTabProps) {
         onAmountChange={setEditAmountDefecation}
         note={editNote}
         onNoteChange={setEditNote}
+        onFocus={scrollOnFocus}
+      />
+      <EditSubstanceDialog
+        record={editingSubstance}
+        onClose={() => setEditingSubstance(null)}
+        onSubmit={handleEditSubstanceSubmit}
+        timestamp={editTimestamp}
+        onTimestampChange={setEditTimestamp}
+        description={editDescription}
+        onDescriptionChange={setEditDescription}
+        amount={editSubstanceAmount}
+        onAmountChange={setEditSubstanceAmount}
         onFocus={scrollOnFocus}
       />
     </>
