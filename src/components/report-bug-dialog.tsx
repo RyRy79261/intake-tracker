@@ -70,7 +70,9 @@ export function ReportBugDialog({
   const [env, setEnv] = useState<EnvField[] | null>(null);
   const [logs, setLogs] = useState<BugReportErrorLog[] | null>(null);
 
-  // Reset + collect diagnostics each time the dialog opens.
+  // Reset + collect diagnostics on each closed→open transition only. Deps are
+  // intentionally just [open]: late `defaultType` / `defaultDescription` prop
+  // updates must NOT wipe a draft the user is already typing.
   useEffect(() => {
     if (!open) return;
     setType(defaultType);
@@ -85,7 +87,7 @@ export function ReportBugDialog({
     void collectEnvironmentInfo().then(setEnv);
     void collectRecentErrorLogs().then(setLogs);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, defaultType, defaultDescription]);
+  }, [open]);
 
   const handleRecorded = useCallback(
     async (blob: Blob, mimeType: string) => {
@@ -118,7 +120,11 @@ export function ReportBugDialog({
   );
 
   const effectiveUseAi = useAi && anthropicConfigured;
-  const canSubmit = description.trim().length > 0 && !submit.isPending;
+  const diagnosticsReady = env !== null && logs !== null;
+  // Gate submit until diagnostics finish loading so a fast click can't file
+  // a report with empty environment/log arrays. The reads are sub-100ms.
+  const canSubmit =
+    description.trim().length > 0 && !submit.isPending && diagnosticsReady;
 
   const handleSubmit = () => {
     const aiKeyFields: EnvField[] = [
@@ -186,10 +192,13 @@ export function ReportBugDialog({
         ) : (
           <>
             <DialogHeader>
-              <DialogTitle>Report a bug</DialogTitle>
+              <DialogTitle>
+                {type === "bug" ? "Report a bug" : "Request a feature"}
+              </DialogTitle>
               <DialogDescription>
-                Files a GitHub issue. Environment info and recent error logs are
-                attached automatically, with personal data removed.
+                {type === "bug"
+                  ? "Files a GitHub issue. Environment info and recent error logs are attached automatically, with personal data removed."
+                  : "Files a GitHub issue as a feature request. Environment info is attached automatically, with personal data removed."}
               </DialogDescription>
             </DialogHeader>
 

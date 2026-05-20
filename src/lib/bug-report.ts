@@ -118,12 +118,19 @@ export async function collectEnvironmentInfo(extra: EnvField[] = []): Promise<En
 export async function collectRecentErrorLogs(
   limit = MAX_REPORT_LOGS,
 ): Promise<BugReportErrorLog[]> {
-  const logs = await getErrorLogs(limit);
-  return logs.map((l) => ({
-    timestamp: l.timestamp,
-    source: l.source,
-    message: l.message,
-    ...(l.stack ? { stack: l.stack } : {}),
-    ...(l.route ? { route: l.route } : {}),
-  }));
+  try {
+    const logs = await getErrorLogs(limit);
+    return logs.map((l) => ({
+      timestamp: l.timestamp,
+      source: l.source,
+      message: l.message,
+      ...(l.stack ? { stack: l.stack } : {}),
+      ...(l.route ? { route: l.route } : {}),
+    }));
+  } catch (e) {
+    // Diagnostics are best-effort — a Dexie read failure must not block
+    // the report. File it without the log excerpt.
+    console.warn("[bug-report] could not read error logs:", e);
+    return [];
+  }
 }

@@ -328,8 +328,10 @@ export const POST = withAuth(async ({ request, auth }) => {
     );
 
     const repoSlug = process.env.GITHUB_REPO || DEFAULT_REPO;
-    const [owner, repo] = repoSlug.split("/");
-    if (!owner || !repo) {
+    const segments = repoSlug.trim().split("/");
+    const owner = segments[0]?.trim();
+    const repo = segments[1]?.trim();
+    if (segments.length !== 2 || !owner || !repo) {
       return NextResponse.json(
         { error: "Server GITHUB_REPO is misconfigured", code: "BAD_REPO" },
         { status: 503 },

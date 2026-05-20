@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { sanitizeReportText } from "../security";
+import { sanitizeReportText } from "@/lib/security";
 
 describe("sanitizeReportText", () => {
   it("returns empty string for empty or non-string input", () => {

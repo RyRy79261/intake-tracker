@@ -15,7 +15,7 @@
  *   GITHUB_REPO=owner/name GITHUB_TOKEN=... pnpm tsx scripts/setup-github-labels.ts
  */
 import { Octokit } from "@octokit/rest";
-import { GITHUB_LABELS } from "../src/lib/github-labels";
+import { GITHUB_LABELS } from "@/lib/github-labels";
 
 const DEFAULT_REPO = "RyRy79261/intake-tracker";
 
@@ -44,33 +44,43 @@ async function main(): Promise<void> {
 
   let created = 0;
   let updated = 0;
+  const failures: string[] = [];
   for (const label of GITHUB_LABELS) {
-    if (existing.has(label.name)) {
-      await octokit.rest.issues.updateLabel({
-        owner,
-        repo,
-        name: label.name,
-        color: label.color,
-        description: label.description,
-      });
-      updated++;
-      console.log(`  updated  ${label.name}`);
-    } else {
-      await octokit.rest.issues.createLabel({
-        owner,
-        repo,
-        name: label.name,
-        color: label.color,
-        description: label.description,
-      });
-      created++;
-      console.log(`  created  ${label.name}`);
+    try {
+      if (existing.has(label.name)) {
+        await octokit.rest.issues.updateLabel({
+          owner,
+          repo,
+          name: label.name,
+          color: label.color,
+          description: label.description,
+        });
+        updated++;
+        console.log(`  updated  ${label.name}`);
+      } else {
+        await octokit.rest.issues.createLabel({
+          owner,
+          repo,
+          name: label.name,
+          color: label.color,
+          description: label.description,
+        });
+        created++;
+        console.log(`  created  ${label.name}`);
+      }
+    } catch (err) {
+      failures.push(label.name);
+      console.error(
+        `  FAILED   ${label.name}: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 
   console.log(
-    `\nDone — ${repoSlug}: ${created} created, ${updated} updated, ${GITHUB_LABELS.length} total.`,
+    `\nDone — ${repoSlug}: ${created} created, ${updated} updated, ` +
+      `${failures.length} failed, ${GITHUB_LABELS.length} total.`,
   );
+  if (failures.length > 0) process.exitCode = 1;
 }
 
 main().catch((err: unknown) => {

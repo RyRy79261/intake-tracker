@@ -3,7 +3,7 @@ import {
   GITHUB_LABELS,
   BUG_ISSUE_LABELS,
   FEATURE_ISSUE_LABELS,
-} from "../github-labels";
+} from "@/lib/github-labels";
 
 describe("github-labels catalogue", () => {
   it("has unique label names", () => {
