@@ -43,17 +43,22 @@ export interface BPCategory {
 }
 
 /**
- * Classify a blood-pressure reading according to AHA guidelines.
+ * Classify a blood-pressure reading per the AHA/ACC 2025 guideline.
+ * Categories are evaluated highest-first; each threshold is OR-based, so the
+ * worse of the two numbers determines the category (a normal systolic does
+ * not cancel out a high diastolic).
  */
 export function getBPCategory(systolic: number, diastolic: number): BPCategory {
-  if (systolic < 120 && diastolic < 80) {
-    return { label: "Normal", color: "text-green-600 dark:text-green-400" };
-  } else if (systolic < 130 && diastolic < 80) {
+  if (systolic > 180 || diastolic > 120) {
+    return { label: "Hypertensive Crisis", color: "text-red-700 dark:text-red-300" };
+  } else if (systolic >= 140 || diastolic >= 90) {
+    return { label: "Hypertension Stage 2", color: "text-red-600 dark:text-red-400" };
+  } else if (systolic >= 130 || diastolic >= 80) {
+    return { label: "Hypertension Stage 1", color: "text-orange-600 dark:text-orange-400" };
+  } else if (systolic >= 120) {
     return { label: "Elevated", color: "text-yellow-600 dark:text-yellow-400" };
-  } else if (systolic < 140 && diastolic < 90) {
-    return { label: "High Stage 1", color: "text-orange-600 dark:text-orange-400" };
   } else {
-    return { label: "High Stage 2", color: "text-red-600 dark:text-red-400" };
+    return { label: "Normal", color: "text-green-600 dark:text-green-400" };
   }
 }
 
