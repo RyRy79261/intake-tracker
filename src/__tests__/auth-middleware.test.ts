@@ -36,6 +36,19 @@ vi.mock("@/lib/neon-auth", () => ({
   },
 }));
 
+// withAuth upserts the user into neon_auth.users_sync; stub the DB so the
+// test runtime doesn't need a real Neon connection.
+vi.mock("@/lib/drizzle", () => ({
+  db: {
+    insert: () => ({
+      values: () => ({
+        onConflictDoUpdate: async () => undefined,
+        onConflictDoNothing: async () => undefined,
+      }),
+    }),
+  },
+}));
+
 const ORIGINAL_ALLOWED_EMAILS = process.env.ALLOWED_EMAILS;
 
 function makeRequest(url = "https://example.test/api/ai/parse"): NextRequest {

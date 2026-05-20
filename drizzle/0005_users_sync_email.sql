@@ -1,0 +1,1 @@
+ALTER TABLE "neon_auth"."users_sync" ADD COLUMN IF NOT EXISTS "email" text;

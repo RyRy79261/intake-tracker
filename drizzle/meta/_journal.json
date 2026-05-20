@@ -36,6 +36,13 @@
       "when": 1779200319516,
       "tag": "0004_regular_thundra",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1779265368334,
+      "tag": "0005_users_sync_email",
+      "breakpoints": true
     }
   ]
 }
