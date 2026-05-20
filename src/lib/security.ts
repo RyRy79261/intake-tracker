@@ -101,10 +101,9 @@ export function getSecurityWarnings(): string[] {
   return warnings;
 }
 
-// Data minimization helper for AI API
-// Strips any potentially sensitive info before sending to AI
-export function sanitizeForAI(input: string): string {
-  // Remove potential PII patterns
+// Strip potential PII patterns from a string. Shared by sanitizeForAI and
+// sanitizeReportText. Does NOT trim or length-limit — callers do that.
+function redactPii(input: string): string {
   return input
     // Email addresses
     .replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g, '[email]')
@@ -120,7 +119,22 @@ export function sanitizeForAI(input: string): string {
     .replace(/\b\d{4}-\d{2}-\d{2}\b/g, '[date]')
     .replace(/\b\d{2}\/\d{2}\/\d{4}\b/g, '[date]')
     // South African ID number: 13 consecutive digits
-    .replace(/\b\d{13}\b/g, '[id-number]')
+    .replace(/\b\d{13}\b/g, '[id-number]');
+}
+
+// Data minimization helper for AI API
+// Strips any potentially sensitive info before sending to AI
+export function sanitizeForAI(input: string): string {
+  return redactPii(input)
     .trim()
     .slice(0, 500); // Limit input length
+}
+
+// Sanitize multi-line text (descriptions, error logs, environment dumps) for
+// inclusion in a bug report. Same PII redaction as sanitizeForAI, but keeps
+// newlines and allows a larger length budget — the 500-char cap on
+// sanitizeForAI is too small for stack traces and log excerpts.
+export function sanitizeReportText(input: string, maxLength = 8000): string {
+  if (!input || typeof input !== 'string') return '';
+  return redactPii(input).trim().slice(0, maxLength);
 }

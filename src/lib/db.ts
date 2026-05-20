@@ -318,7 +318,8 @@ export type ErrorLogSource =
   | "unhandled-rejection"
   | "error-boundary"
   | "console-error"
-  | "console-warn";
+  | "console-warn"
+  | "api-error";
 
 /** Captured error/warning. Local-only (Dexie v17+); not part of backup or sync. */
 export interface ErrorLogEntry {
