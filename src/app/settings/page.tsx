@@ -1,8 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Accordion } from "@/components/ui/accordion";
-import { RotateCcw, Activity, Palette, Pill, Database, Shield, Bug, Download, Sparkles } from "lucide-react";
+import { RotateCcw, Activity, Palette, Pill, Database, Shield, Bug, Download, Sparkles, MessageSquare } from "lucide-react";
 import { useSettings } from "@/hooks/use-settings";
 import { useToast } from "@/hooks/use-toast";
 import { DebugPanel } from "@/components/debug-panel";
@@ -25,11 +26,38 @@ import { AnimationTimingSection } from "@/components/settings/animation-timing-s
 import { SwipeNavSection } from "@/components/settings/swipe-nav-section";
 import { StorageInfoSection } from "@/components/settings/storage-info-section";
 import { AiKeysSection } from "@/components/settings/ai-keys-section";
+import { ReportBugSection } from "@/components/settings/report-bug-section";
+import { ReportBugDialog } from "@/components/report-bug-dialog";
 
+/** Set by the ErrorBoundary crash screen before it navigates here. */
+const CRASH_REPORT_KEY = "intake-tracker:crash-report";
 
 function SettingsContent() {
   const settings = useSettings();
   const { toast } = useToast();
+  const [crash, setCrash] = useState<{ open: boolean; description: string }>({
+    open: false,
+    description: "",
+  });
+
+  // If we arrived here from the crash screen's "Report this problem" button,
+  // open the report dialog pre-filled with the caught error.
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(CRASH_REPORT_KEY);
+      if (!raw) return;
+      sessionStorage.removeItem(CRASH_REPORT_KEY);
+      const parsed = JSON.parse(raw) as { message?: string; stack?: string };
+      const description = [
+        "Reporting a crash.",
+        parsed.message ? `\n\nError: ${parsed.message}` : "",
+        parsed.stack ? `\n\n${parsed.stack}` : "",
+      ].join("");
+      setCrash({ open: true, description });
+    } catch {
+      // Malformed / unavailable sessionStorage — nothing to restore.
+    }
+  }, []);
 
   const handleResetToDefaults = () => {
     settings.resetToDefaults();
@@ -83,10 +111,21 @@ function SettingsContent() {
           <AppUpdatesSection />
         </SettingsAccordionGroup>
 
+        <SettingsAccordionGroup value="feedback" icon={MessageSquare} label="Feedback" iconColorClass="text-rose-600 dark:text-rose-400">
+          <ReportBugSection />
+        </SettingsAccordionGroup>
+
         <SettingsAccordionGroup value="debug" icon={Bug} label="Debug" iconColorClass="text-slate-600 dark:text-slate-400">
           <DebugPanel />
         </SettingsAccordionGroup>
       </Accordion>
+
+      <ReportBugDialog
+        open={crash.open}
+        onOpenChange={(open) => setCrash((c) => ({ ...c, open }))}
+        defaultType="bug"
+        defaultDescription={crash.description}
+      />
 
       <div className="pt-4 border-t space-y-2">
         <Button

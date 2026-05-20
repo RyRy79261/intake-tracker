@@ -31,6 +31,7 @@ const SOURCES: Array<ErrorLogSource | "all"> = [
   "error-boundary",
   "console-error",
   "console-warn",
+  "api-error",
 ];
 
 const SOURCE_COLOR: Record<ErrorLogSource, string> = {
@@ -39,6 +40,7 @@ const SOURCE_COLOR: Record<ErrorLogSource, string> = {
   "error-boundary": "text-rose-600 dark:text-rose-400",
   "console-error": "text-orange-600 dark:text-orange-400",
   "console-warn": "text-amber-600 dark:text-amber-400",
+  "api-error": "text-orange-600 dark:text-orange-400",
 };
 
 function formatTimestamp(ts: number): string {
