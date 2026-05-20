@@ -43,17 +43,25 @@ export interface BPCategory {
 }
 
 /**
- * Classify a blood-pressure reading according to AHA guidelines.
+ * Classify a blood-pressure reading per the ESH 2023 / 2018 ESC-ESH office BP
+ * classification — the same scale Withings BPM devices use in Europe.
+ * Categories are evaluated highest-first; each threshold is OR-based, so
+ * whichever of systolic/diastolic falls in the higher band sets the category
+ * (a normal systolic does not cancel out a high diastolic).
  */
 export function getBPCategory(systolic: number, diastolic: number): BPCategory {
-  if (systolic < 120 && diastolic < 80) {
-    return { label: "Normal", color: "text-green-600 dark:text-green-400" };
-  } else if (systolic < 130 && diastolic < 80) {
-    return { label: "Elevated", color: "text-yellow-600 dark:text-yellow-400" };
-  } else if (systolic < 140 && diastolic < 90) {
-    return { label: "High Stage 1", color: "text-orange-600 dark:text-orange-400" };
+  if (systolic >= 180 || diastolic >= 110) {
+    return { label: "Grade 3 hypertension", color: "text-red-700 dark:text-red-300" };
+  } else if (systolic >= 160 || diastolic >= 100) {
+    return { label: "Grade 2 hypertension", color: "text-red-600 dark:text-red-400" };
+  } else if (systolic >= 140 || diastolic >= 90) {
+    return { label: "Grade 1 hypertension", color: "text-orange-600 dark:text-orange-400" };
+  } else if (systolic >= 130 || diastolic >= 85) {
+    return { label: "High normal", color: "text-yellow-600 dark:text-yellow-400" };
+  } else if (systolic >= 120 || diastolic >= 80) {
+    return { label: "Normal", color: "text-lime-600 dark:text-lime-400" };
   } else {
-    return { label: "High Stage 2", color: "text-red-600 dark:text-red-400" };
+    return { label: "Optimal", color: "text-green-600 dark:text-green-400" };
   }
 }
 
