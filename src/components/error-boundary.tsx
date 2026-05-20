@@ -2,7 +2,10 @@
 
 import { Component, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, RefreshCw, Home } from "lucide-react";
+import { AlertTriangle, RefreshCw, Home, Bug } from "lucide-react";
+
+/** Read on the settings page to pre-fill the bug reporter after a crash. */
+const CRASH_REPORT_KEY = "intake-tracker:crash-report";
 
 interface Props {
   children: ReactNode;
@@ -50,6 +53,23 @@ export class ErrorBoundary extends Component<Props, State> {
 
   handleGoHome = () => {
     window.location.href = "/";
+  };
+
+  handleReport = () => {
+    const { error } = this.state;
+    try {
+      sessionStorage.setItem(
+        CRASH_REPORT_KEY,
+        JSON.stringify({
+          message: error?.message ?? "Unknown error",
+          stack: error?.stack ?? "",
+        }),
+      );
+    } catch {
+      // sessionStorage may be unavailable — the report form still opens,
+      // just without the pre-fill.
+    }
+    window.location.href = "/settings";
   };
 
   render() {
@@ -107,6 +127,15 @@ export class ErrorBoundary extends Component<Props, State> {
                 Go Home
               </Button>
             </div>
+
+            <Button
+              variant="ghost"
+              onClick={this.handleReport}
+              className="gap-2 text-muted-foreground"
+            >
+              <Bug className="w-4 h-4" />
+              Report this problem
+            </Button>
           </div>
         </div>
       );
