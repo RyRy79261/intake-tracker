@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.11.2](https://github.com/RyRy79261/intake-tracker/compare/v1.11.1...v1.11.2) (2026-05-20)
+
+
+### Bug Fixes
+
+* **auth:** mirror authenticated users into neon_auth.users_sync ([a035625](https://github.com/RyRy79261/intake-tracker/commit/a035625a00345da47fd9dcc9e1438db9f60dc50b))
+* **auth:** mirror authenticated users into neon_auth.users_sync ([be11452](https://github.com/RyRy79261/intake-tracker/commit/be11452ce4d9c23c75761cd7aa74b466e44dae49))
+
 ## [1.11.1](https://github.com/RyRy79261/intake-tracker/compare/v1.11.0...v1.11.1) (2026-05-19)
 
 
