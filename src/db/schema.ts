@@ -41,12 +41,18 @@ import {
 import { sql } from "drizzle-orm";
 
 // ─────────────────────────────────────────────────────────────────────────
-// Cross-schema reference: neon_auth.users_sync is managed by Neon Auth.
-// Our migrations do NOT create or modify this table — only reference it.
+// neon_auth.users_sync — local mirror of authenticated users.
+//
+// Neon Auth's hosted user-sync was never enabled on this database, so this
+// table is created and populated by the app itself: 0000_init.sql creates it
+// and withAuth() upserts {id, email} on every authenticated request. Every
+// other table's user_id FK points here, so the upsert must happen before any
+// user-scoped insert.
 // ─────────────────────────────────────────────────────────────────────────
 const neonAuth = pgSchema("neon_auth");
 export const usersSync = neonAuth.table("users_sync", {
   id: text("id").primaryKey(),
+  email: text("email"),
 });
 
 // ─────────────────────────────────────────────────────────────────────────

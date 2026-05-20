@@ -21,6 +21,19 @@ vi.mock("@/lib/neon-auth", () => ({
   },
 }));
 
+// withAuth upserts the user into neon_auth.users_sync; stub the DB so the
+// test runtime doesn't need a real Neon connection.
+vi.mock("@/lib/drizzle", () => ({
+  db: {
+    insert: () => ({
+      values: () => ({
+        onConflictDoUpdate: async () => undefined,
+        onConflictDoNothing: async () => undefined,
+      }),
+    }),
+  },
+}));
+
 const fetchMock = vi.fn<(input: string | URL | Request, init?: RequestInit) => Promise<Response>>();
 vi.stubGlobal("fetch", fetchMock);
 

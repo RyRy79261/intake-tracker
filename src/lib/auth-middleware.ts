@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "./neon-auth";
+import { db } from "./drizzle";
+import { usersSync } from "@/db/schema";
 
 export interface VerificationResult {
   success: boolean;
@@ -67,6 +69,31 @@ async function validateBearerToken(
 }
 
 /**
+ * Mirror the authenticated user into neon_auth.users_sync.
+ *
+ * Every user-scoped table FKs to users_sync(id); Neon Auth's hosted sync was
+ * never enabled on this database, so nothing else populates it. Run before
+ * the handler so any user-scoped insert downstream finds its parent row.
+ *
+ * Failures are logged but not fatal: read routes don't need the row, and a
+ * write route that does will surface the FK error on its own insert.
+ */
+async function ensureUserSynced(userId: string, email?: string): Promise<void> {
+  try {
+    if (email) {
+      await db
+        .insert(usersSync)
+        .values({ id: userId, email })
+        .onConflictDoUpdate({ target: usersSync.id, set: { email } });
+    } else {
+      await db.insert(usersSync).values({ id: userId }).onConflictDoNothing();
+    }
+  } catch (e) {
+    console.error("[auth] users_sync upsert failed:", e);
+  }
+}
+
+/**
  * Higher-order function that wraps an API route handler with authentication.
  *
  * On failure, returns:
@@ -112,6 +139,8 @@ export function withAuth(handler: AuthenticatedHandler) {
         );
       }
 
+      await ensureUserSynced(result.userId, userEmail);
+
       return handler({
         request,
         auth: {
@@ -147,6 +176,8 @@ export function withAuth(handler: AuthenticatedHandler) {
         { status: 401 }
       );
     }
+
+    await ensureUserSynced(userId, userEmail);
 
     return handler({
       request,
