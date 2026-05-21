@@ -4,7 +4,6 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { Providers } from "./providers";
 import { UpdateNotification } from "@/components/update-notification";
-import { OfflineChip } from "@/components/sync/offline-chip";
 import { SwipeNav } from "@/components/swipe-nav";
 import { AppHeader } from "@/components/app-header";
 import { HomeFloatingBars } from "@/components/home-floating-bars";
@@ -53,7 +52,6 @@ export default function RootLayout({
         <Providers>
           <main className="min-h-screen overflow-x-hidden bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
             <div className="container mx-auto max-w-lg px-4 pt-6">
-              <OfflineChip />
               <AppHeader />
             </div>
             <SwipeNav>{children}</SwipeNav>

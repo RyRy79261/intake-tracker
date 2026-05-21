@@ -56,15 +56,20 @@ export async function addInventoryItem(input: Omit<InventoryItem, "id" | "create
       id: crypto.randomUUID(),
       ...syncFields(),
     };
-    await db.transaction("rw", [db.inventoryItems, db.auditLogs], async () => {
+    await db.transaction("rw", [db.inventoryItems, db.auditLogs, db._syncQueue], async () => {
       await db.inventoryItems.add(item);
-      await db.auditLogs.add(buildAuditEntry("inventory_added", {
+      await enqueueInsideTx("inventoryItems", item.id, "upsert");
+
+      const audit = buildAuditEntry("inventory_added", {
         inventoryItemId: item.id,
         prescriptionId: item.prescriptionId,
         brandName: item.brandName,
         strength: item.strength,
-      }));
+      });
+      await db.auditLogs.add(audit);
+      await enqueueInsideTx("auditLogs", audit.id, "upsert");
     });
+    schedulePush();
     return ok(item);
   } catch (e) {
     return err("Failed to add inventory item", e);
@@ -76,13 +81,18 @@ export async function updateInventoryItem(
   updates: Partial<Omit<InventoryItem, "id" | "createdAt" | "prescriptionId">>,
 ): Promise<ServiceResult<void>> {
   try {
-    await db.transaction("rw", [db.inventoryItems, db.auditLogs], async () => {
+    await db.transaction("rw", [db.inventoryItems, db.auditLogs, db._syncQueue], async () => {
       await db.inventoryItems.update(id, { ...updates, updatedAt: Date.now() });
-      await db.auditLogs.add(buildAuditEntry("inventory_adjusted", {
+      await enqueueInsideTx("inventoryItems", id, "upsert");
+
+      const audit = buildAuditEntry("inventory_adjusted", {
         inventoryItemId: id,
         updatedFields: Object.keys(updates),
-      }));
+      });
+      await db.auditLogs.add(audit);
+      await enqueueInsideTx("auditLogs", audit.id, "upsert");
     });
+    schedulePush();
     return ok(undefined);
   } catch (e) {
     return err("Failed to update inventory item", e);
@@ -123,22 +133,30 @@ export async function adjustStock(
     const newStock = Math.round((currentStock + delta) * 10000) / 10000;
     const now = Date.now();
 
-    await db.transaction("rw", [db.inventoryItems, db.inventoryTransactions, db.auditLogs], async () => {
+    await db.transaction("rw", [db.inventoryItems, db.inventoryTransactions, db.auditLogs, db._syncQueue], async () => {
       await db.inventoryItems.update(inventoryItemId, { currentStock: newStock, updatedAt: now });
-      await db.inventoryTransactions.add(buildTransaction(
+      await enqueueInsideTx("inventoryItems", inventoryItemId, "upsert");
+
+      const transaction = buildTransaction(
         inventoryItemId,
         delta,
         type ?? (delta > 0 ? "refill" : "consumed"),
         now,
         note,
-      ));
-      await db.auditLogs.add(buildAuditEntry("inventory_adjusted", {
+      );
+      await db.inventoryTransactions.add(transaction);
+      await enqueueInsideTx("inventoryTransactions", transaction.id, "upsert");
+
+      const audit = buildAuditEntry("inventory_adjusted", {
         inventoryItemId,
         delta,
         newStock,
         ...(note !== undefined && { note }),
-      }));
+      });
+      await db.auditLogs.add(audit);
+      await enqueueInsideTx("auditLogs", audit.id, "upsert");
     });
+    schedulePush();
 
     return ok(newStock);
   } catch (e) {
@@ -153,11 +171,12 @@ export async function updateInventoryTransaction(
   try {
     const now = Date.now();
 
-    await db.transaction("rw", [db.inventoryTransactions, db.inventoryItems, db.auditLogs], async () => {
+    await db.transaction("rw", [db.inventoryTransactions, db.inventoryItems, db.auditLogs, db._syncQueue], async () => {
       const tx = await db.inventoryTransactions.get(id);
       if (!tx) throw new Error(`Transaction ${id} not found`);
 
       await db.inventoryTransactions.update(id, { ...updates, updatedAt: now });
+      await enqueueInsideTx("inventoryTransactions", id, "upsert");
 
       // Recalculate currentStock from all non-deleted transactions
       const allTxs = await db.inventoryTransactions
@@ -175,14 +194,18 @@ export async function updateInventoryTransaction(
         currentStock: Math.round(newStock * 10000) / 10000,
         updatedAt: now,
       });
+      await enqueueInsideTx("inventoryItems", tx.inventoryItemId, "upsert");
 
-      await db.auditLogs.add(buildAuditEntry("inventory_adjusted", {
+      const audit = buildAuditEntry("inventory_adjusted", {
         transactionId: id,
         inventoryItemId: tx.inventoryItemId,
         action: "transaction_updated",
         updatedFields: Object.keys(updates),
-      }));
+      });
+      await db.auditLogs.add(audit);
+      await enqueueInsideTx("auditLogs", audit.id, "upsert");
     });
+    schedulePush();
 
     return ok(undefined);
   } catch (e) {
@@ -194,12 +217,13 @@ export async function deleteInventoryTransaction(id: string): Promise<ServiceRes
   try {
     const now = Date.now();
 
-    await db.transaction("rw", [db.inventoryTransactions, db.inventoryItems, db.auditLogs], async () => {
+    await db.transaction("rw", [db.inventoryTransactions, db.inventoryItems, db.auditLogs, db._syncQueue], async () => {
       const tx = await db.inventoryTransactions.get(id);
       if (!tx) throw new Error(`Transaction ${id} not found`);
 
       // Soft-delete
       await db.inventoryTransactions.update(id, { deletedAt: now, updatedAt: now });
+      await enqueueInsideTx("inventoryTransactions", id, "delete");
 
       // Recalculate currentStock from all non-deleted transactions (excluding this one)
       const allTxs = await db.inventoryTransactions
@@ -214,13 +238,17 @@ export async function deleteInventoryTransaction(id: string): Promise<ServiceRes
         currentStock: Math.round(newStock * 10000) / 10000,
         updatedAt: now,
       });
+      await enqueueInsideTx("inventoryItems", tx.inventoryItemId, "upsert");
 
-      await db.auditLogs.add(buildAuditEntry("inventory_adjusted", {
+      const audit = buildAuditEntry("inventory_adjusted", {
         transactionId: id,
         inventoryItemId: tx.inventoryItemId,
         action: "transaction_deleted",
-      }));
+      });
+      await db.auditLogs.add(audit);
+      await enqueueInsideTx("auditLogs", audit.id, "upsert");
     });
+    schedulePush();
 
     return ok(undefined);
   } catch (e) {
