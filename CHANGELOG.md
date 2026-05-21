@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.13.0](https://github.com/RyRy79261/intake-tracker/compare/v1.12.0...v1.13.0) (2026-05-21)
+
+
+### Features
+
+* add configurable shake-to-report tolerances ([1667201](https://github.com/RyRy79261/intake-tracker/commit/16672014c7869813e718f6480ae9e88040ab2e17))
+* add shake gesture to open the bug report dialog ([0cad935](https://github.com/RyRy79261/intake-tracker/commit/0cad9355c21ed31c939be7ee7ee918640a73699e))
+* add shake gesture to open the bug report dialog ([ee43bb3](https://github.com/RyRy79261/intake-tracker/commit/ee43bb353aee55ffcf6032712a1acf4c00e4d318)), closes [#96](https://github.com/RyRy79261/intake-tracker/issues/96)
+* collapse shake tolerance controls into a dropdown ([9deae7f](https://github.com/RyRy79261/intake-tracker/commit/9deae7f4f29b05be8e9588577b6c5e8f7d7d4a63))
+
+
+### Bug Fixes
+
+* make shake detection rotation-invariant ([aee1a46](https://github.com/RyRy79261/intake-tracker/commit/aee1a46ae75052af5f4a03f71f40960fbd11f6e9))
+* request iOS motion permission for default-on shake gesture ([24c24f6](https://github.com/RyRy79261/intake-tracker/commit/24c24f6696ed4d4fc06eb8375d7630774f5021cf))
+
 ## [1.12.0](https://github.com/RyRy79261/intake-tracker/compare/v1.11.2...v1.12.0) (2026-05-20)
 
 
