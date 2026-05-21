@@ -72,6 +72,24 @@ describe("AnalyticsInsightsRequestSchema", () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it("accepts an optional profile with conditions", () => {
+    const result = AnalyticsInsightsRequestSchema.safeParse({
+      range: { start: 0, end: 1000 },
+      profile: { conditions: ["HFrEF", "Idiopathic dilated cardiomyopathy"] },
+      metrics: { bp: validBp },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a profile whose only context is present but has no metrics", () => {
+    const result = AnalyticsInsightsRequestSchema.safeParse({
+      range: { start: 0, end: 1000 },
+      profile: { conditions: ["HFrEF"] },
+      metrics: {},
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 describe("buildInsightsPrompt", () => {
@@ -86,6 +104,55 @@ describe("buildInsightsPrompt", () => {
     expect(prompt).toContain("14 reading");
     // diastolic trend confidence 0.1 is below the 0.3 gate.
     expect(prompt).toContain("no clear trend");
+  });
+
+  it("includes user-reported conditions when a profile is supplied", () => {
+    const req = AnalyticsInsightsRequestSchema.parse({
+      range: { start: 0, end: 7 * 86_400_000 },
+      profile: { conditions: ["HFrEF", "Idiopathic dilated cardiomyopathy"] },
+      metrics: { bp: validBp },
+    });
+    const prompt = buildInsightsPrompt(req);
+
+    expect(prompt).toContain("User-reported medical conditions");
+    expect(prompt).toContain("HFrEF");
+    expect(prompt).toContain("Idiopathic dilated cardiomyopathy");
+  });
+
+  it("includes active medications when supplied in the profile", () => {
+    const req = AnalyticsInsightsRequestSchema.parse({
+      range: { start: 0, end: 7 * 86_400_000 },
+      profile: {
+        conditions: [],
+        medications: [
+          {
+            name: "Bisoprolol",
+            phaseType: "titration",
+            dose: "2.5 mg",
+            frequency: "once daily",
+            daysOnPhase: 12,
+          },
+        ],
+      },
+      metrics: { bp: validBp },
+    });
+    const prompt = buildInsightsPrompt(req);
+
+    expect(prompt).toContain("Current medications");
+    expect(prompt).toContain("Bisoprolol");
+    expect(prompt).toContain("titration phase");
+    expect(prompt).toContain("2.5 mg");
+    expect(prompt).toContain("12 day(s)");
+  });
+
+  it("omits the conditions line when no profile is supplied", () => {
+    const req = AnalyticsInsightsRequestSchema.parse({
+      range: { start: 0, end: 7 * 86_400_000 },
+      metrics: { bp: validBp },
+    });
+    const prompt = buildInsightsPrompt(req);
+
+    expect(prompt).not.toContain("User-reported medical conditions");
   });
 
   it("flags a correlation with fewer than 3 paired days as insufficient data", () => {

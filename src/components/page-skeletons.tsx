@@ -331,11 +331,47 @@ function SettingsBody() {
   );
 }
 
+// ── Profile ────────────────────────────────────────────────
+
+function ProfileBody() {
+  return (
+    <>
+      {/* Account card */}
+      <div className="rounded-xl border bg-card/40 p-4 mb-6">
+        <BlockSoft className="h-3 w-16 mb-3" />
+        <div className="flex items-center gap-3">
+          <Pill className="h-10 w-10" />
+          <div className="flex-1 space-y-1.5">
+            <Block className="h-4 w-40" />
+            <BlockSoft className="h-3 w-28" />
+          </div>
+        </div>
+      </div>
+      {/* Medical context card */}
+      <div className="rounded-xl border bg-card/40 p-4">
+        <Block className="h-4 w-24 mb-3" />
+        <BlockSoft className="h-3 w-full mb-1" />
+        <BlockSoft className="h-3 w-2/3 mb-3" />
+        <div className="flex gap-1.5 mb-4">
+          <Pill className="h-6 w-20" />
+          <Pill className="h-6 w-28" />
+        </div>
+        <Block className="h-10 w-full mb-4" />
+        <div className="space-y-3 border-t pt-3">
+          <BlockSoft className="h-8 w-full" />
+          <BlockSoft className="h-8 w-full" />
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ── Dispatcher ─────────────────────────────────────────────
 
 export function PageSkeleton({ route }: { route: NavRoute }) {
   return (
     <div className="container mx-auto max-w-lg px-4 pb-6">
+      {route.path === "/profile" && <ProfileBody />}
       {route.path === "/" && <IntakeBody />}
       {route.path === "/medications" && <MedicationsBody />}
       {route.path === "/analytics" && <AnalyticsBody />}

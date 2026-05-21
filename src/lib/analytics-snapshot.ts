@@ -15,10 +15,75 @@ import {
   alcoholVsBP,
   getRecordsByDomain,
 } from "./analytics-service";
+import { db } from "./db";
+import { getActivePrescriptions } from "./prescription-service";
+import { getActivePhaseForPrescription } from "./phase-service";
 import type { TimeRange, TrendDirection } from "./analytics-types";
 import type { AnalyticsInsightsRequest } from "./analytics-insights";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+
+type MedicationSnapshot = NonNullable<
+  NonNullable<AnalyticsInsightsRequest["profile"]>["medications"]
+>;
+
+/**
+ * Summarise active prescriptions for the insights snapshot: for each active
+ * prescription, its active phase, dose, dosing frequency, and how long that
+ * maintenance/titration phase has been running.
+ */
+async function buildMedicationSummary(): Promise<MedicationSnapshot> {
+  const prescriptions = await getActivePrescriptions();
+  const now = Date.now();
+  const meds: MedicationSnapshot = [];
+
+  for (const rx of prescriptions) {
+    const phase = await getActivePhaseForPrescription(rx.id);
+    if (!phase) continue;
+
+    const schedules = (
+      await db.phaseSchedules.where("phaseId").equals(phase.id).toArray()
+    ).filter((s) => s.enabled && s.deletedAt === null);
+
+    const dosages = [...new Set(schedules.map((s) => s.dosage))].sort(
+      (a, b) => a - b,
+    );
+    const dose =
+      dosages.length > 0
+        ? dosages.map((d) => `${d} ${phase.unit}`).join(", ")
+        : "no active schedule";
+
+    const dayUnion = new Set<number>();
+    for (const s of schedules) for (const d of s.daysOfWeek) dayUnion.add(d);
+    const count = schedules.length;
+    let frequency: string;
+    if (count === 0) {
+      frequency = "no active schedule";
+    } else {
+      const per = count === 1 ? "once" : count === 2 ? "twice" : `${count}x`;
+      frequency =
+        dayUnion.size >= 7
+          ? `${per} daily`
+          : `${per} on ${[...dayUnion]
+              .sort((a, b) => a - b)
+              .map((d) => DAY_NAMES[d])
+              .join(", ")}`;
+    }
+
+    meds.push({
+      name: rx.genericName,
+      phaseType: phase.type,
+      dose,
+      frequency,
+      daysOnPhase: Math.max(0, Math.floor((now - phase.startDate) / MS_PER_DAY)),
+    });
+    if (meds.length >= 40) break;
+  }
+
+  return meds;
+}
 
 /** Insights always analyse a rolling window of this many days. */
 export const INSIGHTS_WINDOW_DAYS = 30;
@@ -48,10 +113,16 @@ function toTrend(t: TrendDirection) {
 /**
  * Assemble the analytics snapshot for the given range. Metric groups with no
  * underlying data are omitted; `snapshotIsEmpty` reports when nothing remains.
+ *
+ * `conditions` and `includeMedications` carry the user-reported medical
+ * context, included only when the caller has confirmed the user opted in to
+ * sharing each one.
  */
 export async function buildAnalyticsSnapshot(
   range: TimeRange,
   goals: IntakeGoals,
+  conditions?: string[],
+  includeMedications?: boolean,
 ): Promise<AnalyticsInsightsRequest> {
   const [bp, weight, fluid, water, salt, saltWeight, caffBp, alcBp] =
     await Promise.all([
@@ -136,7 +207,20 @@ export async function buildAnalyticsSnapshot(
     metrics.correlations = correlations;
   }
 
-  return { range, metrics };
+  const snapshot: AnalyticsInsightsRequest = { range, metrics };
+
+  const sharedConditions =
+    conditions && conditions.length > 0 ? conditions : [];
+  const medications = includeMedications
+    ? await buildMedicationSummary()
+    : [];
+  if (sharedConditions.length > 0 || medications.length > 0) {
+    snapshot.profile = {
+      conditions: sharedConditions,
+      ...(medications.length > 0 && { medications }),
+    };
+  }
+  return snapshot;
 }
 
 /** True when no metric group survived — there is nothing to summarise. */

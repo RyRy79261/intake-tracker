@@ -1,6 +1,11 @@
 /**
- * Comprehensive backup service for all health data.
- * Supports export/import of all 16 data tables with conflict detection.
+ * Comprehensive backup service for all health data — export/import of all 17
+ * data tables (including userProfile).
+ *
+ * Conflict detection is scoped: in merge mode the medication/system tables and
+ * userProfile record conflicts (mergeTableWithConflicts), while health tables
+ * skip rows whose id already exists. Replace mode bypasses conflict detection
+ * and overwrites every table.
  */
 
 import {
@@ -21,6 +26,7 @@ import {
   type TitrationPlan,
   type DailyNote,
   type AuditLog,
+  type UserProfile,
 } from "./db";
 import { ok, err, type ServiceResult } from "./service-result";
 import { logAudit } from "./audit";
@@ -47,6 +53,7 @@ export interface BackupData {
   titrationPlans?: TitrationPlan[];
   dailyNotes?: DailyNote[];
   auditLogs?: AuditLog[];
+  userProfile?: UserProfile[];
   settings?: Record<string, unknown>;
 }
 
@@ -75,6 +82,7 @@ export interface ImportResult {
   titrationPlansImported: number;
   dailyNotesImported: number;
   auditLogsImported: number;
+  userProfileImported: number;
   skipped: number;
   conflicts: ConflictRecord[];
   errors: string[];
@@ -107,6 +115,7 @@ function emptyImportResult(): ImportResult {
     titrationPlansImported: 0,
     dailyNotesImported: 0,
     auditLogsImported: 0,
+    userProfileImported: 0,
     skipped: 0,
     conflicts: [],
     errors: [],
@@ -153,7 +162,7 @@ export async function exportBackup(): Promise<Blob> {
     eatingRecords, urinationRecords, defecationRecords, substanceRecords,
     prescriptions, medicationPhases, phaseSchedules,
     inventoryItems, inventoryTransactions, doseLogs,
-    titrationPlans, dailyNotes, auditLogs,
+    titrationPlans, dailyNotes, auditLogs, userProfile,
   ] = await Promise.all([
     db.intakeRecords.toArray(),
     db.weightRecords.toArray(),
@@ -171,6 +180,7 @@ export async function exportBackup(): Promise<Blob> {
     db.titrationPlans.toArray(),
     db.dailyNotes.toArray(),
     db.auditLogs.toArray(),
+    db.userProfile.toArray(),
   ]);
 
   // Get settings from localStorage
@@ -208,6 +218,7 @@ export async function exportBackup(): Promise<Blob> {
     titrationPlans,
     dailyNotes,
     auditLogs,
+    userProfile,
     settings,
   };
 
@@ -218,7 +229,7 @@ export async function exportBackup(): Promise<Blob> {
     `${substanceRecords.length} substance, ${prescriptions.length} prescriptions, ${medicationPhases.length} phases, ` +
     `${phaseSchedules.length} schedules, ${inventoryItems.length} inventory items, ${inventoryTransactions.length} inv txns, ` +
     `${doseLogs.length} dose logs, ${titrationPlans.length} titration plans, ${dailyNotes.length} daily notes, ` +
-    `${auditLogs.length} audit logs`
+    `${auditLogs.length} audit logs, ${userProfile.length} profile`
   );
 
   const json = JSON.stringify(backupData, null, 2);
@@ -377,6 +388,7 @@ function validateBackupData(data: unknown): data is BackupData {
   if (backup.titrationPlans !== undefined && !Array.isArray(backup.titrationPlans)) return false;
   if (backup.dailyNotes !== undefined && !Array.isArray(backup.dailyNotes)) return false;
   if (backup.auditLogs !== undefined && !Array.isArray(backup.auditLogs)) return false;
+  if (backup.userProfile !== undefined && !Array.isArray(backup.userProfile)) return false;
 
   return true;
 }
@@ -492,6 +504,7 @@ export async function importBackup(
         db.titrationPlans.clear(),
         db.dailyNotes.clear(),
         db.auditLogs.clear(),
+        db.userProfile.clear(),
       ]);
     }
 
@@ -537,6 +550,7 @@ export async function importBackup(
       result.titrationPlansImported = await mergeTableWithConflicts("titrationPlans", data.titrationPlans || [], BACKUP_VALIDATORS.titrationPlans, result);
       result.dailyNotesImported = await mergeTableWithConflicts("dailyNotes", data.dailyNotes || [], BACKUP_VALIDATORS.dailyNotes, result);
       result.auditLogsImported = await mergeTableWithConflicts("auditLogs", data.auditLogs || [], BACKUP_VALIDATORS.auditLogs, result);
+      result.userProfileImported = await mergeTableWithConflicts("userProfile", data.userProfile || [], BACKUP_VALIDATORS.userProfile, result);
     } else {
       // Replace mode: import everything without ID checks
       result.intakeImported = await importHealthTable(data.intakeRecords || [], BACKUP_VALIDATORS.intakeRecords, new Set(), db.intakeRecords, result);
@@ -557,6 +571,7 @@ export async function importBackup(
       result.titrationPlansImported = await importHealthTable(data.titrationPlans || [], BACKUP_VALIDATORS.titrationPlans, new Set(), db.titrationPlans, result);
       result.dailyNotesImported = await importHealthTable(data.dailyNotes || [], BACKUP_VALIDATORS.dailyNotes, new Set(), db.dailyNotes, result);
       result.auditLogsImported = await importHealthTable(data.auditLogs || [], BACKUP_VALIDATORS.auditLogs, new Set(), db.auditLogs, result);
+      result.userProfileImported = await importHealthTable(data.userProfile || [], BACKUP_VALIDATORS.userProfile, new Set(), db.userProfile, result);
     }
 
     result.success = true;
@@ -567,7 +582,7 @@ export async function importBackup(
       result.substanceImported + result.prescriptionsImported + result.phasesImported +
       result.schedulesImported + result.inventoryItemsImported + result.inventoryTransactionsImported +
       result.doseLogsImported + result.titrationPlansImported + result.dailyNotesImported +
-      result.auditLogsImported;
+      result.auditLogsImported + result.userProfileImported;
     logAudit("data_import", `Imported ${totalImported} records (${result.skipped} skipped, ${result.conflicts.length} conflicts)`);
 
   } catch (error) {
@@ -649,6 +664,7 @@ export async function getBackupStats(): Promise<{
   titrationPlanCount: number;
   dailyNoteCount: number;
   auditLogCount: number;
+  userProfileCount: number;
   totalCount: number;
   oldestRecord: Date | null;
   newestRecord: Date | null;
@@ -656,7 +672,7 @@ export async function getBackupStats(): Promise<{
   const [
     intakeRecords, weightRecords, bpRecords, eatingRecords, urinationRecords, defecationRecords, substanceRecords,
     prescriptions, phases, schedules, inventoryItems, inventoryTransactions, doseLogs,
-    titrationPlans, dailyNotes, auditLogs,
+    titrationPlans, dailyNotes, auditLogs, userProfile,
   ] = await Promise.all([
     db.intakeRecords.toArray(),
     db.weightRecords.toArray(),
@@ -674,6 +690,7 @@ export async function getBackupStats(): Promise<{
     db.titrationPlans.toArray(),
     db.dailyNotes.toArray(),
     db.auditLogs.toArray(),
+    db.userProfile.toArray(),
   ]);
 
   const allTimestamps = [
@@ -705,12 +722,14 @@ export async function getBackupStats(): Promise<{
     titrationPlanCount: titrationPlans.length,
     dailyNoteCount: dailyNotes.length,
     auditLogCount: auditLogs.length,
+    userProfileCount: userProfile.length,
     totalCount:
       intakeRecords.length + weightRecords.length + bpRecords.length +
       eatingRecords.length + urinationRecords.length + defecationRecords.length +
       substanceRecords.length + prescriptions.length + phases.length +
       schedules.length + inventoryItems.length + inventoryTransactions.length +
-      doseLogs.length + titrationPlans.length + dailyNotes.length + auditLogs.length,
+      doseLogs.length + titrationPlans.length + dailyNotes.length + auditLogs.length +
+      userProfile.length,
     oldestRecord: allTimestamps.length > 0 ? new Date(Math.min(...allTimestamps)) : null,
     newestRecord: allTimestamps.length > 0 ? new Date(Math.max(...allTimestamps)) : null,
   };

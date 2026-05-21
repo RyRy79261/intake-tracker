@@ -38,7 +38,10 @@ export function AppHeader() {
         <p className="text-sm text-muted-foreground">{current.subtitle}</p>
       </div>
       <div className="flex items-center gap-1">
-        {NAV_ITEMS.map((item) => {
+        {/* AuthButton is the /profile route's nav control — show login state
+            and act as its tab — so the generic icon for it is filtered out. */}
+        <AuthButton />
+        {NAV_ITEMS.filter((item) => item.path !== "/profile").map((item) => {
           const isActive = item.path === pathname;
           return (
             <Button
@@ -58,7 +61,6 @@ export function AppHeader() {
             </Button>
           );
         })}
-        <AuthButton />
       </div>
     </motion.header>
   );

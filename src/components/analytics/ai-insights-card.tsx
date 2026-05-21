@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useInsightsStore } from "@/stores/insights-store";
 import { useGenerateInsights, NotEnoughDataError } from "@/hooks/use-insights";
+import { useUserProfile } from "@/hooks/use-profile-queries";
 import { insightsRange, INSIGHTS_WINDOW_DAYS } from "@/lib/analytics-snapshot";
 
 /**
@@ -19,12 +20,23 @@ export function AiInsightsCard() {
   const sodiumLimitMg = useSettingsStore((s) => s.saltLimit);
   const lastResult = useInsightsStore((s) => s.lastResult);
   const setResult = useInsightsStore((s) => s.setResult);
+  const profile = useUserProfile();
   const { toast } = useToast();
   const { mutate, isPending } = useGenerateInsights();
 
+  const shareConditions =
+    profile.shareConditionsWithAI && profile.conditions.length > 0;
+  const shareMedications = profile.shareMedicationsWithAI;
+  const personalised = shareConditions || shareMedications;
+
   const generate = () => {
     mutate(
-      { range: insightsRange(), goals: { waterGoalMl, sodiumLimitMg } },
+      {
+        range: insightsRange(),
+        goals: { waterGoalMl, sodiumLimitMg },
+        ...(shareConditions && { conditions: profile.conditions }),
+        ...(shareMedications && { includeMedications: true }),
+      },
       {
         onSuccess: setResult,
         onError: (error) => {
@@ -92,6 +104,12 @@ export function AiInsightsCard() {
               ? "Regenerate"
               : "Generate insights"}
         </Button>
+
+        {personalised && (
+          <p className="text-[11px] text-muted-foreground">
+            Personalised with your medical profile.
+          </p>
+        )}
       </CardContent>
     </Card>
   );

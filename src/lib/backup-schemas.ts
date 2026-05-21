@@ -148,6 +148,13 @@ export const auditLogSchema = baseRecord
   })
   .passthrough();
 
+export const userProfileSchema = baseRecord
+  .extend({
+    conditions: z.array(z.string()),
+    shareConditionsWithAI: z.boolean(),
+  })
+  .passthrough();
+
 export type BackupTableName =
   | "intakeRecords"
   | "weightRecords"
@@ -164,7 +171,8 @@ export type BackupTableName =
   | "doseLogs"
   | "titrationPlans"
   | "dailyNotes"
-  | "auditLogs";
+  | "auditLogs"
+  | "userProfile";
 
 export const BACKUP_SCHEMAS: Record<BackupTableName, z.ZodTypeAny> = {
   intakeRecords: intakeRecordSchema,
@@ -183,6 +191,7 @@ export const BACKUP_SCHEMAS: Record<BackupTableName, z.ZodTypeAny> = {
   titrationPlans: titrationPlanSchema,
   dailyNotes: dailyNoteSchema,
   auditLogs: auditLogSchema,
+  userProfile: userProfileSchema,
 };
 
 /** Boolean type guard backed by a Zod schema. */
@@ -208,4 +217,5 @@ export const BACKUP_VALIDATORS: Record<BackupTableName, (record: unknown) => boo
   titrationPlans: makeZodValidator(titrationPlanSchema),
   dailyNotes: makeZodValidator(dailyNoteSchema),
   auditLogs: makeZodValidator(auditLogSchema),
+  userProfile: makeZodValidator(userProfileSchema),
 };
