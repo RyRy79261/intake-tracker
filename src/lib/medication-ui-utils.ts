@@ -48,7 +48,8 @@ export function hapticSkip(): void {
 
 /**
  * Compute progress from a DoseSlot array.
- * Only counts slots up to the current time (plus any future slots already actioned).
+ * Counts every scheduled slot for the day so the total reflects the full
+ * daily dose count regardless of notification batching or time of day.
  */
 export function computeProgress(slots: DoseSlot[]): {
   total: number;
@@ -58,26 +59,16 @@ export function computeProgress(slots: DoseSlot[]): {
   pct: number;
   allDone: boolean;
 } {
-  const now = new Date();
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
-
   let total = 0;
   let taken = 0;
   let skipped = 0;
   let pending = 0;
 
   for (const slot of slots) {
-    const parts = slot.localTime.split(":").map(Number);
-    const slotMinutes = (parts[0] ?? 0) * 60 + (parts[1] ?? 0);
-    const isFutureSlot = slotMinutes > nowMinutes;
-
-    // Count if slot is in the past/now, OR if a future slot was already actioned
-    if (!isFutureSlot || slot.status === "taken" || slot.status === "skipped") {
-      total++;
-      if (slot.status === "taken") taken++;
-      else if (slot.status === "skipped") skipped++;
-      else pending++;
-    }
+    total++;
+    if (slot.status === "taken") taken++;
+    else if (slot.status === "skipped") skipped++;
+    else pending++;
   }
 
   const handled = taken + skipped;
