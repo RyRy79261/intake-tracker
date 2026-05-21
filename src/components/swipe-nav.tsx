@@ -121,7 +121,14 @@ export function SwipeNav({ children }: { children: React.ReactNode }) {
       startedRef.current = false;
       lockRef.current = null;
 
-      if (!wasHorizontal || navigatingRef.current) {
+      // While a navigation commit is in flight it owns the `x` motion value
+      // until the route changes. Starting another animation here (from a
+      // stray gesture during a rapid swipe) would cancel the commit
+      // animation, dropping its queued router.push() and leaving the
+      // skeleton overlay and page content desynced.
+      if (navigatingRef.current) return;
+
+      if (!wasHorizontal) {
         animate(x, 0, { type: "spring", stiffness: 400, damping: 40 });
         return;
       }
