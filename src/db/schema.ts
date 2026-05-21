@@ -1,7 +1,7 @@
 /**
- * Postgres schema — single source of truth for all 23 tables.
+ * Postgres schema — single source of truth for all 24 tables.
  *
- * Mirrors src/lib/db.ts Dexie v15 interfaces exactly (16 app tables),
+ * Mirrors src/lib/db.ts Dexie interfaces exactly (17 app tables),
  * includes 4 push notification tables that replace scripts/push-migration.sql,
  * and 3 server-only AI tables (user_api_keys, user_key_shares, ai_usage)
  * that have no Dexie counterpart.
@@ -620,6 +620,35 @@ export const auditLogs = pgTable(
     actionTimestampIdx: index("idx_audit_action_ts").on(
       t.action,
       t.timestamp,
+    ),
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────────────────
+// User medical profile — mirrors the UserProfile interface in src/lib/db.ts.
+// Treated as a per-user singleton by the app, but stored as a normal synced
+// table (globally-unique `id`). No `timezone` column — UserProfile omits it.
+// ─────────────────────────────────────────────────────────────────────────
+
+export const userProfile = pgTable(
+  "user_profile",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => usersSync.id, { onDelete: "cascade" }),
+    conditions: text("conditions").array().notNull(),
+    shareConditionsWithAI: boolean("share_conditions_with_ai").notNull(),
+    aiInsightsConsentAt: bigint("ai_insights_consent_at", { mode: "number" }),
+    createdAt: bigint("created_at", { mode: "number" }).notNull(),
+    updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
+    deletedAt: bigint("deleted_at", { mode: "number" }),
+    deviceId: text("device_id").notNull(),
+  },
+  (t) => ({
+    userUpdatedIdx: index("idx_user_profile_user_updated").on(
+      t.userId,
+      t.updatedAt,
     ),
   }),
 );

@@ -8,7 +8,7 @@
  *     `eq(table.userId, auth.userId!)` so cross-user reads are impossible
  *     (T-sync-05).
  *   - Body is validated by `pullBodySchema` — cursor keys are restricted to
- *     the 16 known tableName literals (z.enum) and cursor values must be
+ *     the known tableName literals (z.enum) and cursor values must be
  *     non-negative integers (T-43-04-05 blocks cursor injection).
  *
  * Cursor-race safety (T-sync-07 / 43-RESEARCH.md Pattern 7):

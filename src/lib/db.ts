@@ -346,22 +346,21 @@ export interface ErrorLogEntry {
 /**
  * Single-user medical profile (Dexie v18). Holds user-reported medical
  * conditions that give AI analytics insights clinical context (e.g. why the
- * sodium and fluid limits matter). One row per device, keyed by
- * `USER_PROFILE_ID`. Local-only for now — it carries the standard sync
- * scaffolding fields so it can join the sync engine later without a migration.
+ * sodium and fluid limits matter). The app treats it as a singleton — the
+ * service layer reads the most-recently-updated active row — but each row
+ * carries a globally-unique `id` so it backs up and cloud-syncs through the
+ * standard record-oriented engine alongside every other table.
  */
 export interface UserProfile {
-  id: string; // singleton — always USER_PROFILE_ID
+  id: string;
   conditions: string[]; // user-reported medical conditions, e.g. "HFrEF"
   shareConditionsWithAI: boolean; // opt-in: include conditions in AI insights
+  aiInsightsConsentAt: number | null; // when the user first consented; null = never
   createdAt: number;
   updatedAt: number;
   deletedAt: number | null;
   deviceId: string;
 }
-
-/** Primary key of the singleton UserProfile row. */
-export const USER_PROFILE_ID = "primary";
 
 const db = new Dexie("IntakeTrackerDB") as Dexie & {
   intakeRecords: EntityTable<IntakeRecord, "id">;

@@ -105,7 +105,8 @@ export function DataManagementSection() {
       lastImportResult.doseLogsImported +
       lastImportResult.titrationPlansImported +
       lastImportResult.dailyNotesImported +
-      lastImportResult.auditLogsImported
+      lastImportResult.auditLogsImported +
+      lastImportResult.userProfileImported
     : 0;
 
   return (

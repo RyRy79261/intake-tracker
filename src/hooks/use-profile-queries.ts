@@ -6,6 +6,7 @@ import {
   getUserProfile,
   saveUserProfile,
   emptyProfile,
+  type ProfileUpdates,
 } from "@/lib/profile-service";
 import { unwrap } from "@/lib/service-result";
 import type { UserProfile } from "@/lib/db";
@@ -20,9 +21,7 @@ export function useUserProfile(): UserProfile {
 /** Mutation to upsert the medical profile. */
 export function useSaveProfile() {
   return useMutation({
-    mutationFn: async (updates: {
-      conditions?: string[];
-      shareConditionsWithAI?: boolean;
-    }) => unwrap(await saveUserProfile(updates)),
+    mutationFn: async (updates: ProfileUpdates) =>
+      unwrap(await saveUserProfile(updates)),
   });
 }

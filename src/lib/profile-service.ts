@@ -2,27 +2,38 @@
  * CRUD for the single-user medical profile (Dexie `userProfile`, v18).
  *
  * The profile holds user-reported medical conditions. They stay on the device
- * and are only sent off-device when the user explicitly opts in
- * (`shareConditionsWithAI`) — at which point the analytics insights call
- * includes them so the AI can frame the tracked data clinically.
+ * unless the user explicitly opts in (`shareConditionsWithAI`), at which point
+ * the analytics insights call includes them so the AI can frame the tracked
+ * data clinically.
+ *
+ * The table is treated as a singleton — `getUserProfile` returns the most
+ * recently updated active row — but every write goes through `writeWithSync`
+ * so the profile backs up and cloud-syncs like any other record.
  */
 
-import { db, type UserProfile, USER_PROFILE_ID } from "./db";
+import { db, type UserProfile } from "./db";
 import { ok, err, type ServiceResult } from "./service-result";
-import { getDeviceId } from "./utils";
+import { generateId, getDeviceId } from "./utils";
+import { writeWithSync } from "./sync-queue";
+import { schedulePush } from "./sync-engine";
 
 /** Maximum number of conditions a profile can hold. */
 export const MAX_CONDITIONS = 20;
 /** Maximum length of a single condition string. */
 export const MAX_CONDITION_LENGTH = 120;
 
-/** A blank profile — the shape returned before the user has saved anything. */
+/**
+ * A blank profile — the shape returned before the user has saved anything.
+ * An empty `id` marks it as not-yet-persisted; `saveUserProfile` assigns a
+ * real id on first write.
+ */
 export function emptyProfile(): UserProfile {
   const now = Date.now();
   return {
-    id: USER_PROFILE_ID,
+    id: "",
     conditions: [],
     shareConditionsWithAI: false,
+    aiInsightsConsentAt: null,
     createdAt: now,
     updatedAt: now,
     deletedAt: null,
@@ -46,31 +57,50 @@ export function normalizeConditions(raw: string[]): string[] {
   return out;
 }
 
-/** Read the medical profile, falling back to a blank profile when unset. */
+/**
+ * Read the medical profile. Returns the most recently updated active row, or
+ * a blank profile when none exists. Multiple active rows can briefly exist
+ * after a concurrent multi-device first-write; newest-updated wins.
+ */
 export async function getUserProfile(): Promise<UserProfile> {
-  const existing = await db.userProfile.get(USER_PROFILE_ID);
-  if (existing && existing.deletedAt === null) return existing;
-  return emptyProfile();
+  const rows = await db.userProfile.toArray();
+  const active = rows
+    .filter((r) => r.deletedAt === null)
+    .sort((a, b) => b.updatedAt - a.updatedAt);
+  return active[0] ?? emptyProfile();
 }
 
-/** Upsert the singleton medical profile with the supplied changes. */
-export async function saveUserProfile(updates: {
+export interface ProfileUpdates {
   conditions?: string[];
   shareConditionsWithAI?: boolean;
-}): Promise<ServiceResult<UserProfile>> {
+  aiInsightsConsentAt?: number | null;
+}
+
+/** Upsert the medical profile with the supplied changes. */
+export async function saveUserProfile(
+  updates: ProfileUpdates,
+): Promise<ServiceResult<UserProfile>> {
   try {
     const current = await getUserProfile();
     const next: UserProfile = {
       ...current,
+      id: current.id || generateId(),
       ...(updates.conditions !== undefined && {
         conditions: normalizeConditions(updates.conditions),
       }),
       ...(updates.shareConditionsWithAI !== undefined && {
         shareConditionsWithAI: updates.shareConditionsWithAI,
       }),
+      ...(updates.aiInsightsConsentAt !== undefined && {
+        aiInsightsConsentAt: updates.aiInsightsConsentAt,
+      }),
       updatedAt: Date.now(),
     };
-    await db.userProfile.put(next);
+    await writeWithSync("userProfile", "upsert", async () => {
+      await db.userProfile.put(next);
+      return next;
+    });
+    schedulePush();
     return ok(next);
   } catch (e) {
     return err("Failed to save profile", e);

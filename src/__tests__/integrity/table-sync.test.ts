@@ -85,18 +85,12 @@ const TABLE_TO_FIXTURE: Record<string, string> = {
   titrationPlans: "makeTitrationPlan",
   dailyNotes: "makeDailyNote",
   auditLogs: "makeAuditLog",
+  userProfile: "makeUserProfile",
 };
 
-// Tables intentionally excluded from the backup/fixture three-way sync.
-// `_syncQueue` / `_syncMeta` / `_errorLogs` are internal device-local stores.
-// `userProfile` holds user-reported medical conditions but is local-only for
-// now — not yet wired into backup/restore or the sync engine.
-const NON_BACKUP_TABLES = [
-  "_syncQueue",
-  "_syncMeta",
-  "_errorLogs",
-  "userProfile",
-];
+// Internal device-local stores — excluded from the backup/fixture three-way
+// sync because they are not user data (op-log, pull cursors, debug logs).
+const NON_BACKUP_TABLES = ["_syncQueue", "_syncMeta", "_errorLogs"];
 
 describe("db.ts <-> BackupData sync", () => {
   it("every db.ts table has a BackupData key", () => {

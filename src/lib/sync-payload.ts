@@ -89,6 +89,9 @@ const substanceRecordsRowSchema = createInsertSchema(
 const titrationPlansRowSchema = createInsertSchema(schema.titrationPlans).omit({
   userId: true,
 });
+const userProfileRowSchema = createInsertSchema(schema.userProfile).omit({
+  userId: true,
+});
 
 // ─────────────────────────────────────────────────────────────────────────
 // Discriminated union keyed by tableName
@@ -180,6 +183,11 @@ const opSchema = z.discriminatedUnion("tableName", [
     tableName: z.literal("titrationPlans"),
     row: titrationPlansRowSchema,
   }),
+  z.object({
+    ...baseOpShape,
+    tableName: z.literal("userProfile"),
+    row: userProfileRowSchema,
+  }),
 ]);
 
 export const pushBodySchema = z.object({
@@ -219,6 +227,7 @@ export const schemaByTableName = {
   auditLogs: schema.auditLogs,
   substanceRecords: schema.substanceRecords,
   titrationPlans: schema.titrationPlans,
+  userProfile: schema.userProfile,
 } as const;
 
 // --- Pull side (D-07, D-08) ---
@@ -269,6 +278,7 @@ const tableNameSchema = z.enum([
   "auditLogs",
   "substanceRecords",
   "titrationPlans",
+  "userProfile",
 ]);
 
 /**

@@ -43,6 +43,13 @@
       "when": 1779265368334,
       "tag": "0005_users_sync_email",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1779375537909,
+      "tag": "0006_complete_the_fallen",
+      "breakpoints": true
     }
   ]
 }

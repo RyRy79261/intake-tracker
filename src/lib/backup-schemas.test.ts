@@ -38,6 +38,7 @@ import {
   makeTitrationPlan,
   makeDailyNote,
   makeAuditLog,
+  makeUserProfile,
 } from "@/__tests__/fixtures/db-fixtures";
 
 /** Fixtures stripped of any undefined-valued keys, mirroring JSON round-trip. */
@@ -132,6 +133,15 @@ const fixturesByTable: Record<BackupTableName, () => Array<Record<string, unknow
     makeAuditLog({ action: "data_import", details: "imported 100 records" }),
     JSON.parse(JSON.stringify(makeAuditLog())),
   ],
+  userProfile: () => [
+    makeUserProfile(),
+    makeUserProfile({
+      conditions: ["HFrEF", "Idiopathic dilated cardiomyopathy"],
+      shareConditionsWithAI: true,
+      aiInsightsConsentAt: Date.now(),
+    }),
+    JSON.parse(JSON.stringify(makeUserProfile())),
+  ],
 };
 
 const tableNames = Object.keys(BACKUP_SCHEMAS) as BackupTableName[];
@@ -217,7 +227,7 @@ describe("backup-schemas: tightening over the legacy isValid* checks", () => {
 });
 
 describe("backup-schemas: invariants", () => {
-  it("BACKUP_SCHEMAS covers exactly the 16 expected tables", () => {
+  it("BACKUP_SCHEMAS covers exactly the 17 expected tables", () => {
     expect(tableNames.sort()).toEqual(
       [
         "auditLogs",
@@ -236,6 +246,7 @@ describe("backup-schemas: invariants", () => {
         "titrationPlans",
         "urinationRecords",
         "weightRecords",
+        "userProfile",
       ].sort()
     );
   });
