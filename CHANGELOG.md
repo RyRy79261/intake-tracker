@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.17.0](https://github.com/RyRy79261/intake-tracker/compare/v1.16.0...v1.17.0) (2026-05-21)
+
+
+### Features
+
+* **medications:** improve dose-marking time flow ([cfb3f53](https://github.com/RyRy79261/intake-tracker/commit/cfb3f53197bf85a80da5874f8438c03da385b90d))
+* **medications:** improve dose-marking time flow ([3727a15](https://github.com/RyRy79261/intake-tracker/commit/3727a15e688d599eb8ee8b41d0adfcea0ef0041d))
+
+
+### Bug Fixes
+
+* **medications:** validate dose time before storing timestamp ([14b1d46](https://github.com/RyRy79261/intake-tracker/commit/14b1d4601d95014cb748ba91decbcaabec0ec24d))
+
 ## [1.16.0](https://github.com/RyRy79261/intake-tracker/compare/v1.15.0...v1.16.0) (2026-05-21)
 
 
