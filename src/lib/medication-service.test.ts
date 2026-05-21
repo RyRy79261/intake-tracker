@@ -521,7 +521,7 @@ describe("inventory management", () => {
     expect(txs.map((t) => t.timestamp)).toEqual([3_000, 2_000, 1_000]);
   });
 
-  it("addMedicationToPrescription archives existing inventory and deactivates active phase", async () => {
+  it("addMedicationToPrescription adds an inactive brand without archiving the existing one", async () => {
     // Create initial prescription
     const rxResult = await addPrescription(validPrescriptionInput());
     expect(rxResult.success).toBe(true);
@@ -531,36 +531,71 @@ describe("inventory management", () => {
     const originalPhaseId = rxResult.data.phase!.id;
     const originalInvId = rxResult.data.inventory.id;
 
-    // Add new medication to same prescription
+    // Add a new brand to the same prescription
     const addResult = await addMedicationToPrescription({
       prescriptionId: rxId,
       unit: "mg",
-      foodInstruction: "after",
       brandName: "Generic Metoprolol",
       currentStock: 90,
       strength: 100,
       pillShape: "oval",
       pillColor: "#FF0000",
-      schedules: [{ time: "09:00", daysOfWeek: [0, 1, 2, 3, 4, 5, 6], dosage: 100 }],
     });
     expect(addResult.success).toBe(true);
 
-    // Original inventory archived
+    // Existing brand stays active and is not archived
     const originalInv = await db.inventoryItems.get(originalInvId);
-    expect(originalInv!.isActive).toBe(false);
-    expect(originalInv!.isArchived).toBe(true);
+    expect(originalInv!.isActive).toBe(true);
+    expect(originalInv!.isArchived).toBeFalsy();
 
-    // Original phase completed
+    // Existing phase/schedule is untouched
     const originalPhase = await db.medicationPhases.get(originalPhaseId);
-    expect(originalPhase!.status).toBe("completed");
+    expect(originalPhase!.status).toBe("active");
 
-    // New inventory is active
+    // New brand is added but inactive — the user activates it deliberately
     const allInv = await db.inventoryItems
       .where("prescriptionId")
       .equals(rxId)
       .toArray();
-    const activeInv = allInv.find((i) => i.isActive);
-    expect(activeInv).toBeDefined();
-    expect(activeInv!.brandName).toBe("Generic Metoprolol");
+    const newInv = allInv.find((i) => i.brandName === "Generic Metoprolol");
+    expect(newInv).toBeDefined();
+    expect(newInv!.isActive).toBe(false);
+
+    // Initial stock is recorded against the new brand
+    const txs = await db.inventoryTransactions
+      .where("inventoryItemId")
+      .equals(newInv!.id)
+      .toArray();
+    expect(txs.reduce((sum, t) => sum + t.amount, 0)).toBe(90);
+  });
+
+  it("addMedicationToPrescription activates the new brand when none is currently active", async () => {
+    const rxResult = await addPrescription(validPrescriptionInput());
+    expect(rxResult.success).toBe(true);
+    if (!rxResult.success) return;
+
+    const rxId = rxResult.data.prescription.id;
+    const originalInvId = rxResult.data.inventory.id;
+
+    // Deactivate the only existing brand
+    await db.inventoryItems.update(originalInvId, { isActive: false });
+
+    const addResult = await addMedicationToPrescription({
+      prescriptionId: rxId,
+      unit: "mg",
+      brandName: "Generic Metoprolol",
+      currentStock: 30,
+      strength: 100,
+      pillShape: "oval",
+      pillColor: "#FF0000",
+    });
+    expect(addResult.success).toBe(true);
+
+    const allInv = await db.inventoryItems
+      .where("prescriptionId")
+      .equals(rxId)
+      .toArray();
+    const newInv = allInv.find((i) => i.brandName === "Generic Metoprolol");
+    expect(newInv!.isActive).toBe(true);
   });
 });

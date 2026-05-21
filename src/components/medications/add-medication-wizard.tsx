@@ -67,10 +67,12 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
   const [conflictCheckState, setConflictCheckState] = useState<ConflictCheckState>("idle");
   const { check: checkInteractions, data: conflictData, reset: resetConflicts } = useInteractionCheck();
 
-  // Dynamic steps: skip indication for existing rx, skip schedule for as-needed
+  // Dynamic steps. Adding a brand to an existing prescription is a pure
+  // inventory addition — indication, dosage and schedule belong to the
+  // prescription itself, so those steps are skipped.
   const activeSteps = STEPS.filter(s => {
-    if (s === "indication" && isExistingPrescription) return false;
-    if (s === "schedule" && formState.asNeeded) return false;
+    if ((s === "indication" || s === "dosage") && isExistingPrescription) return false;
+    if (s === "schedule" && (isExistingPrescription || formState.asNeeded)) return false;
     return true;
   });
 
@@ -232,12 +234,9 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
           pillShape: formState.pillShape,
           pillColor: formState.pillColor,
           ...(formState.visualIdentification && { visualIdentification: formState.visualIdentification }),
-          foodInstruction: formState.foodInstruction,
-          ...(formState.foodNote && { foodNote: formState.foodNote }),
           currentStock: parseInt(formState.currentStock) || 0,
           ...(refillDays !== undefined && { refillAlertDays: refillDays }),
           ...(refillPills !== undefined && { refillAlertPills: refillPills }),
-          schedules: finalSchedules,
         });
       } else {
         await addPrescriptionMutation.mutateAsync({

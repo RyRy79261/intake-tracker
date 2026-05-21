@@ -1,4 +1,53 @@
 import type { DoseSlot } from "./dose-schedule-service";
+import type { MedicationPhase } from "./db";
+
+/**
+ * The maintenance ("baseline") phase for a prescription — what the Rx says when
+ * no titration is running. Prefers the active one, falls back to any.
+ */
+export function getMaintenancePhase(
+  phases: MedicationPhase[],
+): MedicationPhase | undefined {
+  return (
+    phases.find((p) => p.type === "maintenance" && p.status === "active") ??
+    phases.find((p) => p.type === "maintenance")
+  );
+}
+
+/** An active titration phase that belongs to a titration plan, if one is running. */
+export function getActiveTitrationPhase(
+  phases: MedicationPhase[],
+): MedicationPhase | undefined {
+  return phases.find(
+    (p) =>
+      p.type === "titration" && p.status === "active" && !!p.titrationPlanId,
+  );
+}
+
+/** A titration phase that is planned but not yet running. */
+export function getPendingTitrationPhase(
+  phases: MedicationPhase[],
+): MedicationPhase | undefined {
+  return phases.find(
+    (p) =>
+      p.type === "titration" && p.status === "pending" && !!p.titrationPlanId,
+  );
+}
+
+/**
+ * The phase that actually governs dosing right now. An active titration
+ * overrides maintenance — mirrors the logic in dose-schedule-service so the UI
+ * never shows a schedule that contradicts the day's real doses.
+ */
+export function getEffectivePhase(
+  phases: MedicationPhase[],
+): MedicationPhase | undefined {
+  return (
+    getActiveTitrationPhase(phases) ??
+    getMaintenancePhase(phases) ??
+    phases.find((p) => p.status === "active")
+  );
+}
 
 /**
  * Convert a pill count to a human-readable fraction string.

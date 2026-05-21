@@ -31,6 +31,9 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  // Shrink the layout when the on-screen keyboard opens so bottom-sheet
+  // drawers reflow above it instead of being covered.
+  interactiveWidget: "resizes-content",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#f5f7fa" },
     { media: "(prefers-color-scheme: dark)", color: "#111827" },

@@ -8,22 +8,18 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { PillIcon } from "./pill-icon";
-import { 
-  usePhasesForPrescription, 
-  useInventoryForPrescription, 
-  useStartNewPhase,
+import {
+  usePhasesForPrescription,
+  useSchedulesForPhase,
   useUpdatePrescription,
   useDeletePrescription,
-  useSchedulesForPhase,
   usePrescriptions,
   useUpdatePhase,
-  useDeletePhase,
-  useActivatePhase
+  useStartNewPhase,
 } from "@/hooks/use-medication-queries";
-import type { Prescription, MedicationPhase } from "@/lib/db";
-import { Loader2, Plus, Clock, Pill, Edit2, Check, X, Trash2, Play } from "lucide-react";
-import { format } from "date-fns";
+import { getMaintenancePhase, getActiveTitrationPhase } from "@/lib/medication-ui-utils";
+import type { Prescription, FoodInstruction } from "@/lib/db";
+import { Loader2, Plus, Clock, Edit2, Check, X, Trash2, TrendingUp } from "lucide-react";
 import { useMedicineSearch } from "@/hooks/use-medicine-search";
 
 interface PrescriptionViewDrawerProps {
@@ -36,40 +32,35 @@ export function PrescriptionViewDrawer({ prescription, open, onOpenChange }: Pre
   const prescriptions = usePrescriptions();
   const currentPrescription = prescriptions.find(p => p.id === prescription?.id) || prescription;
 
-  const inventory = useInventoryForPrescription(currentPrescription?.id);
-  const activeInventory = inventory.find(i => i.isActive && !i.isArchived) || inventory[0];
-
   if (!currentPrescription) return null;
-
-  const drawerTitle = activeInventory 
-    ? `${activeInventory.brandName} ${activeInventory.strength}${activeInventory.unit}`
-    : currentPrescription.genericName;
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
       <DrawerContent className="max-h-[90dvh] flex flex-col">
         <DrawerHeader className="border-b shrink-0">
-          <DrawerTitle>{drawerTitle}</DrawerTitle>
-          <p className="text-sm text-muted-foreground">{currentPrescription.indication}</p>
+          <DrawerTitle>{currentPrescription.genericName}</DrawerTitle>
+          <p className="text-sm text-muted-foreground">
+            {currentPrescription.indication || "Prescription"}
+          </p>
         </DrawerHeader>
 
         <div className="flex-1 overflow-y-auto">
-          <Tabs defaultValue="details" className="w-full h-full flex flex-col">
+          <Tabs defaultValue="schedule" className="w-full h-full flex flex-col">
             <div className="px-4 pt-4 shrink-0 border-b">
               <TabsList className="w-full grid grid-cols-3 h-auto p-1 bg-muted/50 rounded-lg mb-4">
+                <TabsTrigger value="schedule" className="py-2 text-xs">Schedule</TabsTrigger>
                 <TabsTrigger value="details" className="py-2 text-xs">Details</TabsTrigger>
-                <TabsTrigger value="titration" className="py-2 text-xs">Phases</TabsTrigger>
                 <TabsTrigger value="info" className="py-2 text-xs">Info</TabsTrigger>
               </TabsList>
             </div>
 
             <div className="flex-1 overflow-y-auto p-4">
-              <TabsContent value="details" className="mt-0 space-y-6">
-                <DetailsTab prescription={currentPrescription} onOpenChange={onOpenChange} />
+              <TabsContent value="schedule" className="mt-0">
+                <ScheduleTab prescription={currentPrescription} />
               </TabsContent>
 
-              <TabsContent value="titration" className="mt-0">
-                <TitrationTab prescription={currentPrescription} />
+              <TabsContent value="details" className="mt-0 space-y-6">
+                <DetailsTab prescription={currentPrescription} onOpenChange={onOpenChange} />
               </TabsContent>
 
               <TabsContent value="info" className="mt-0">
@@ -83,17 +74,276 @@ export function PrescriptionViewDrawer({ prescription, open, onOpenChange }: Pre
   );
 }
 
+// ============================================================================
+// Schedule Tab — edit the maintenance ("baseline") schedule directly.
+// Formal dosage changes go through the Titrations tab; this is for minor tweaks.
+// ============================================================================
+
+const DAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
+
+interface SchedRow {
+  id?: string;
+  time: string;
+  dosage: string;
+  daysOfWeek: number[];
+}
+
+function ScheduleTab({ prescription }: { prescription: Prescription }) {
+  const phases = usePhasesForPrescription(prescription.id);
+  const maintenancePhase = getMaintenancePhase(phases);
+  const activeTitration = getActiveTitrationPhase(phases);
+  const dbSchedules = useSchedulesForPhase(maintenancePhase?.id);
+  const updatePhase = useUpdatePhase();
+  const startNewPhase = useStartNewPhase();
+
+  const [unit, setUnit] = useState("mg");
+  const [foodInstruction, setFoodInstruction] = useState<FoodInstruction>("none");
+  const [rows, setRows] = useState<SchedRow[]>([]);
+  const [dirty, setDirty] = useState(false);
+
+  // Hydrate from the DB whenever the maintenance phase or its schedules change,
+  // unless the user has unsaved edits in progress.
+  useEffect(() => {
+    if (dirty) return;
+    setUnit(maintenancePhase?.unit ?? "mg");
+    setFoodInstruction(maintenancePhase?.foodInstruction ?? "none");
+    setRows(
+      dbSchedules.length > 0
+        ? [...dbSchedules]
+            .sort((a, b) => a.time.localeCompare(b.time))
+            .map((s) => ({
+              id: s.id,
+              time: s.time,
+              dosage: String(s.dosage),
+              daysOfWeek: s.daysOfWeek,
+            }))
+        : [],
+    );
+  }, [maintenancePhase, dbSchedules, dirty]);
+
+  const updateRow = (i: number, patch: Partial<SchedRow>) => {
+    setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+    setDirty(true);
+  };
+  const addRow = () => {
+    setRows((prev) => [...prev, { time: "20:00", dosage: "", daysOfWeek: [...ALL_DAYS] }]);
+    setDirty(true);
+  };
+  const removeRow = (i: number) => {
+    setRows((prev) => prev.filter((_, idx) => idx !== i));
+    setDirty(true);
+  };
+  const toggleDay = (i: number, day: number) => {
+    setRows((prev) =>
+      prev.map((r, idx) => {
+        if (idx !== i) return r;
+        const has = r.daysOfWeek.includes(day);
+        return {
+          ...r,
+          daysOfWeek: has
+            ? r.daysOfWeek.filter((d) => d !== day)
+            : [...r.daysOfWeek, day].sort((a, b) => a - b),
+        };
+      }),
+    );
+    setDirty(true);
+  };
+
+  const isRowValid = (r: SchedRow) =>
+    !!r.dosage && parseFloat(r.dosage) > 0 && r.daysOfWeek.length > 0;
+  const validRows = rows.filter(isRowValid);
+  // Save requires *every* row to be valid — otherwise a half-edited row would
+  // be silently dropped from the mutation.
+  const allRowsValid = rows.length > 0 && rows.every(isRowValid);
+  const isSaving = updatePhase.isPending || startNewPhase.isPending;
+  const canSave = dirty && allRowsValid && !isSaving;
+
+  const handleSave = async () => {
+    if (!allRowsValid) return;
+    if (maintenancePhase) {
+      await updatePhase.mutateAsync({
+        id: maintenancePhase.id,
+        unit,
+        foodInstruction,
+        schedules: validRows.map((r) => ({
+          ...(r.id ? { id: r.id } : {}),
+          time: r.time,
+          dosage: parseFloat(r.dosage),
+          daysOfWeek: r.daysOfWeek,
+        })),
+      });
+    } else {
+      await startNewPhase.mutateAsync({
+        prescriptionId: prescription.id,
+        type: "maintenance",
+        unit,
+        foodInstruction,
+        startDate: Date.now(),
+        schedules: validRows.map((r) => ({
+          time: r.time,
+          dosage: parseFloat(r.dosage),
+          daysOfWeek: r.daysOfWeek,
+        })),
+      });
+    }
+    setDirty(false);
+  };
+
+  const handleReset = () => setDirty(false);
+
+  return (
+    <div className="space-y-5 pb-4">
+      {activeTitration && (
+        <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50">
+          <TrendingUp className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+          <p className="text-xs text-amber-700 dark:text-amber-300">
+            An active titration is currently in effect — today&apos;s doses follow
+            the titration plan. Changes here update your baseline (maintenance)
+            schedule, which resumes when the titration ends.
+          </p>
+        </div>
+      )}
+
+      <p className="text-xs text-muted-foreground">
+        Edit the day-to-day schedule for minor tweaks. For a planned dose
+        increase or decrease, create a plan in the Titrations tab instead.
+      </p>
+
+      {/* Unit */}
+      <div className="space-y-1.5">
+        <Label className="text-xs">Dosage unit</Label>
+        <Input
+          value={unit}
+          onChange={(e) => { setUnit(e.target.value); setDirty(true); }}
+          className="h-9 w-28"
+          placeholder="mg"
+        />
+      </div>
+
+      {/* Food instruction */}
+      <div className="space-y-1.5">
+        <Label className="text-xs">Food instruction</Label>
+        <div className="flex gap-1">
+          {(["none", "before", "after"] as FoodInstruction[]).map((fi) => (
+            <Button
+              key={fi}
+              type="button"
+              variant={foodInstruction === fi ? "default" : "outline"}
+              size="sm"
+              className="text-xs h-8 flex-1 capitalize"
+              onClick={() => { setFoodInstruction(fi); setDirty(true); }}
+            >
+              {fi === "none" ? "Anytime" : `${fi} eating`}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      {/* Schedule rows */}
+      <div className="space-y-2">
+        <Label className="text-xs">Daily doses</Label>
+        {rows.length === 0 && (
+          <p className="text-xs text-muted-foreground p-3 border border-dashed rounded-lg text-center">
+            No doses scheduled. Add a time below.
+          </p>
+        )}
+        {rows.map((row, idx) => (
+          <div key={row.id ?? `new-${idx}`} className="border rounded-lg p-2.5 space-y-2">
+            <div className="flex items-center gap-2">
+              <Input
+                type="time"
+                value={row.time}
+                onChange={(e) => updateRow(idx, { time: e.target.value })}
+                className="h-8 text-sm flex-1"
+              />
+              <Input
+                type="number"
+                step="any"
+                min="0"
+                value={row.dosage}
+                onChange={(e) => updateRow(idx, { dosage: e.target.value })}
+                placeholder="Dose"
+                className="h-8 text-sm w-20"
+              />
+              <span className="text-xs text-muted-foreground w-8">{unit}</span>
+              <button
+                type="button"
+                onClick={() => removeRow(idx)}
+                className="text-muted-foreground hover:text-destructive p-1"
+                aria-label="Remove dose"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <div className="flex gap-1">
+              {ALL_DAYS.map((day) => (
+                <button
+                  key={day}
+                  type="button"
+                  onClick={() => toggleDay(idx, day)}
+                  className={`text-[10px] flex-1 h-6 rounded-md border transition-colors ${
+                    row.daysOfWeek.includes(day)
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "text-muted-foreground border-input hover:bg-muted"
+                  }`}
+                >
+                  {DAY_LABELS[day]}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="text-xs h-8 w-full"
+          onClick={addRow}
+        >
+          <Plus className="w-3 h-3 mr-1" /> Add time
+        </Button>
+      </div>
+
+      {dirty && (
+        <div className="flex gap-2 pt-1">
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex-1 h-9 text-xs"
+            onClick={handleReset}
+            disabled={isSaving}
+          >
+            Discard
+          </Button>
+          <Button
+            size="sm"
+            className="flex-1 h-9 text-xs bg-teal-600 hover:bg-teal-700"
+            onClick={handleSave}
+            disabled={!canSave}
+          >
+            {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Save schedule"}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// Details Tab — name, indication, notes, active toggle, delete.
+// ============================================================================
+
 function DetailsTab({ prescription, onOpenChange }: { prescription: Prescription, onOpenChange: (open: boolean) => void }) {
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(prescription.genericName);
   const [indication, setIndication] = useState(prescription.indication);
   const [notes, setNotes] = useState(prescription.notes || "");
   const [isActive, setIsActive] = useState(prescription.isActive);
-  
+
   const updatePrescription = useUpdatePrescription();
   const deletePrescription = useDeletePrescription();
 
-  // Reset form when prescription changes
   useEffect(() => {
     setName(prescription.genericName);
     setIndication(prescription.indication);
@@ -105,18 +355,13 @@ function DetailsTab({ prescription, onOpenChange }: { prescription: Prescription
   const handleSave = async () => {
     await updatePrescription.mutateAsync({
       id: prescription.id,
-      updates: {
-        genericName: name,
-        indication,
-        notes,
-        isActive
-      }
+      updates: { genericName: name, indication, notes, isActive },
     });
     setIsEditing(false);
   };
 
   const handleDelete = async () => {
-    if (confirm("Are you sure you want to permanently delete this prescription and all its history? This action cannot be undone.")) {
+    if (confirm("Permanently delete this prescription and all its history? This cannot be undone.")) {
       await deletePrescription.mutateAsync(prescription.id);
       onOpenChange(false);
     }
@@ -126,9 +371,7 @@ function DetailsTab({ prescription, onOpenChange }: { prescription: Prescription
     setIsActive(checked);
     await updatePrescription.mutateAsync({
       id: prescription.id,
-      updates: {
-        isActive: checked
-      }
+      updates: { isActive: checked },
     });
   };
 
@@ -161,10 +404,7 @@ function DetailsTab({ prescription, onOpenChange }: { prescription: Prescription
                 Turn off to hide from daily tracking
               </p>
             </div>
-            <Switch 
-              checked={isActive} 
-              onCheckedChange={setIsActive} 
-            />
+            <Switch checked={isActive} onCheckedChange={setIsActive} />
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Name</Label>
@@ -176,10 +416,10 @@ function DetailsTab({ prescription, onOpenChange }: { prescription: Prescription
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Notes</Label>
-            <Textarea 
-              value={notes} 
-              onChange={(e) => setNotes(e.target.value)} 
-              className="resize-none" 
+            <Textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="resize-none"
               rows={3}
             />
           </div>
@@ -193,17 +433,14 @@ function DetailsTab({ prescription, onOpenChange }: { prescription: Prescription
                 Turn off to hide from daily tracking
               </p>
             </div>
-            <Switch 
-              checked={isActive} 
-              onCheckedChange={handleToggleActive} 
-            />
+            <Switch checked={isActive} onCheckedChange={handleToggleActive} />
           </div>
-          
+
           <div>
             <p className="text-xs text-muted-foreground mb-1">Reason for use</p>
             <p className="text-sm font-medium">{prescription.indication || "None specified"}</p>
           </div>
-          
+
           <div>
             <p className="text-xs text-muted-foreground mb-1">Notes</p>
             <p className="text-sm bg-muted/30 p-3 rounded-lg border">
@@ -212,9 +449,9 @@ function DetailsTab({ prescription, onOpenChange }: { prescription: Prescription
           </div>
 
           <div className="pt-4 border-t">
-            <Button 
-              variant="destructive" 
-              className="w-full" 
+            <Button
+              variant="destructive"
+              className="w-full"
               onClick={handleDelete}
               disabled={deletePrescription.isPending}
             >
@@ -226,6 +463,10 @@ function DetailsTab({ prescription, onOpenChange }: { prescription: Prescription
     </div>
   );
 }
+
+// ============================================================================
+// Info Tab — AI-assisted contraindications & warnings.
+// ============================================================================
 
 function InfoTab({ prescription }: { prescription: Prescription }) {
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -244,7 +485,7 @@ function InfoTab({ prescription }: { prescription: Prescription }) {
       if (result) {
         setPendingAiData({
           contraindications: result.contraindications || [],
-          warnings: result.warnings || []
+          warnings: result.warnings || [],
         });
       }
     } catch (e) {
@@ -260,8 +501,8 @@ function InfoTab({ prescription }: { prescription: Prescription }) {
       id: prescription.id,
       updates: {
         contraindications: pendingAiData.contraindications,
-        warnings: pendingAiData.warnings
-      }
+        warnings: pendingAiData.warnings,
+      },
     });
     setPendingAiData(null);
   };
@@ -281,13 +522,13 @@ function InfoTab({ prescription }: { prescription: Prescription }) {
   const saveEdits = async () => {
     const newContraindications = editContraindications.split("\n").map(s => s.trim()).filter(Boolean);
     const newWarnings = editWarnings.split("\n").map(s => s.trim()).filter(Boolean);
-    
+
     await updatePrescription.mutateAsync({
       id: prescription.id,
       updates: {
         contraindications: newContraindications,
-        warnings: newWarnings
-      }
+        warnings: newWarnings,
+      },
     });
     setPendingAiData(null);
     setIsEditingAiData(false);
@@ -300,23 +541,23 @@ function InfoTab({ prescription }: { prescription: Prescription }) {
           <div className="flex items-center justify-between">
             <h3 className="font-semibold text-sm">Edit AI Information</h3>
           </div>
-          
+
           <div className="space-y-4">
             <div className="space-y-1.5">
               <Label className="text-xs text-red-500 dark:text-red-400">Contraindications (one per line)</Label>
-              <Textarea 
-                value={editContraindications} 
-                onChange={(e) => setEditContraindications(e.target.value)} 
-                className="resize-none" 
+              <Textarea
+                value={editContraindications}
+                onChange={(e) => setEditContraindications(e.target.value)}
+                className="resize-none"
                 rows={5}
               />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs text-amber-500 dark:text-amber-400">Warnings (one per line)</Label>
-              <Textarea 
-                value={editWarnings} 
-                onChange={(e) => setEditWarnings(e.target.value)} 
-                className="resize-none" 
+              <Textarea
+                value={editWarnings}
+                onChange={(e) => setEditWarnings(e.target.value)}
+                className="resize-none"
                 rows={5}
               />
             </div>
@@ -414,383 +655,6 @@ function InfoTab({ prescription }: { prescription: Prescription }) {
           <p className="text-sm text-muted-foreground bg-muted/30 p-3 rounded-lg border">
             No warnings listed.
           </p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function TitrationTab({ prescription }: { prescription: Prescription }) {
-  const phases = usePhasesForPrescription(prescription.id);
-  const startNewPhase = useStartNewPhase();
-  const [isAdding, setIsAdding] = useState(false);
-
-  // Form state
-  const [unit, setUnit] = useState("mg");
-  const [type, setType] = useState<"maintenance" | "titration">("titration");
-  const [startDate, setStartDate] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [schedules, setSchedules] = useState<{ time: string; dosage: number }[]>([
-    { time: "08:00", dosage: 100 }
-  ]);
-
-  const handleStartPhase = async () => {
-    if (schedules.length === 0) return;
-
-    // Parse the start date (default to now if invalid)
-    const parsedDate = new Date(startDate);
-    const startTimestamp = isNaN(parsedDate.getTime()) ? Date.now() : parsedDate.getTime();
-
-    await startNewPhase.mutateAsync({
-      prescriptionId: prescription.id,
-      type,
-      unit,
-      startDate: startTimestamp,
-      foodInstruction: "none",
-      schedules: schedules.map(s => ({ ...s, daysOfWeek: [0, 1, 2, 3, 4, 5, 6] }))
-    });
-    
-    setIsAdding(false);
-  };
-
-  const addSchedule = () => setSchedules([...schedules, { time: "20:00", dosage: 100 }]);
-  const updateSchedule = (i: number, updates: Partial<{ time: string; dosage: number }>) => {
-    const next = [...schedules];
-    const existing = next[i];
-    if (existing) {
-      next[i] = { ...existing, ...updates };
-      setSchedules(next);
-    }
-  };
-  const removeSchedule = (i: number) => {
-    setSchedules(schedules.filter((_, idx) => idx !== i));
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h3 className="font-semibold text-sm flex items-center gap-2">
-          <Clock className="w-4 h-4" /> Titration Phases
-        </h3>
-        {!isAdding && (
-          <Button size="sm" variant="outline" className="gap-1 h-8 text-xs" onClick={() => setIsAdding(true)}>
-            <Plus className="w-3 h-3" /> New Phase
-          </Button>
-        )}
-      </div>
-
-      {isAdding && (
-        <div className="p-4 rounded-xl border border-teal-500/30 bg-teal-50/30 dark:bg-teal-950/10 space-y-4 mb-6">
-          <h4 className="font-medium text-sm">Start New Dosage Phase</h4>
-          
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Type</Label>
-              <select 
-                className="flex h-9 w-full rounded-md border border-input bg-background text-foreground px-3 py-1 text-sm shadow-sm"
-                value={type}
-                onChange={(e) => setType(e.target.value as any)}
-              >
-                <option value="maintenance">Maintenance</option>
-                <option value="titration">Titration</option>
-              </select>
-            </div>
-            
-            <div className="space-y-1.5">
-              <Label className="text-xs">Unit (e.g. mg, ml)</Label>
-              <Input 
-                value={unit} 
-                onChange={(e) => setUnit(e.target.value)} 
-                className="h-9"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-xs">Start Date</Label>
-            <Input 
-              type="date"
-              value={startDate} 
-              onChange={(e) => setStartDate(e.target.value)} 
-              className="h-9"
-            />
-          </div>
-
-          <div className="space-y-3">
-            <Label className="text-xs">Daily Schedule</Label>
-            {schedules.map((s, i) => (
-              <div key={i} className="flex gap-2 items-center">
-                <Input 
-                  type="time" 
-                  value={s.time} 
-                  onChange={(e) => updateSchedule(i, { time: e.target.value })} 
-                  className="h-9"
-                />
-                <Input 
-                  type="number" 
-                  value={s.dosage} 
-                  onChange={(e) => updateSchedule(i, { dosage: parseFloat(e.target.value) || 0 })} 
-                  className="h-9"
-                  placeholder="Dosage"
-                />
-                {schedules.length > 1 && (
-                  <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => removeSchedule(i)}>
-                    <X className="w-4 h-4" />
-                  </Button>
-                )}
-              </div>
-            ))}
-            <Button size="sm" variant="outline" className="w-full gap-2 text-xs h-8 mt-1" onClick={addSchedule}>
-              <Plus className="w-3 h-3" /> Add Time
-            </Button>
-          </div>
-
-          <div className="flex gap-2 justify-end pt-2 border-t">
-            <Button size="sm" variant="ghost" onClick={() => setIsAdding(false)}>Cancel</Button>
-            <Button 
-              size="sm" 
-              className="bg-teal-600 hover:bg-teal-700" 
-              onClick={handleStartPhase}
-              disabled={startNewPhase.isPending || schedules.length === 0}
-            >
-              {startNewPhase.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Start Phase"}
-            </Button>
-          </div>
-        </div>
-      )}
-
-      <div className="space-y-3">
-        {phases.map((phase) => (
-          <PhaseCard key={phase.id} phase={phase} />
-        ))}
-        
-        {phases.length === 0 && !isAdding && (
-          <p className="text-sm text-center text-muted-foreground py-8">
-            No dosage phases found.
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function PhaseCard({ phase }: { phase: MedicationPhase }) {
-  const schedules = useSchedulesForPhase(phase.id);
-  const totalDaily = schedules.reduce((acc, s) => acc + s.dosage, 0);
-  const [isEditing, setIsEditing] = useState(false);
-  const updatePhase = useUpdatePhase();
-  const deletePhase = useDeletePhase();
-  const activatePhase = useActivatePhase();
-
-  const [unit, setUnit] = useState(phase.unit || "mg");
-  const [type, setType] = useState<"maintenance" | "titration">(phase.type || "titration");
-  const [startDate, setStartDate] = useState(format(phase.startDate || Date.now(), "yyyy-MM-dd"));
-  const [editSchedules, setEditSchedules] = useState<{ id?: string; time: string; dosage: number }[]>([]);
-
-  useEffect(() => {
-    if (isEditing) {
-      setUnit(phase.unit || "mg");
-      setType(phase.type || "titration");
-      setStartDate(format(phase.startDate || Date.now(), "yyyy-MM-dd"));
-      setEditSchedules(
-        schedules.length > 0
-          ? schedules.map(s => ({ id: s.id, time: s.time, dosage: s.dosage }))
-          : [{ time: "08:00", dosage: 100 }]
-      );
-    }
-  }, [isEditing, phase, schedules]);
-
-  const handleSave = async () => {
-    if (editSchedules.length === 0) return;
-    
-    const parsedDate = new Date(startDate);
-    const startTimestamp = isNaN(parsedDate.getTime()) ? phase.startDate : parsedDate.getTime();
-    
-    await updatePhase.mutateAsync({
-      id: phase.id,
-      type,
-      unit,
-      startDate: startTimestamp,
-      schedules: editSchedules.map(s => ({ ...s, daysOfWeek: [0, 1, 2, 3, 4, 5, 6] }))
-    });
-    setIsEditing(false);
-  };
-
-  const addSchedule = () => setEditSchedules([...editSchedules, { time: "20:00", dosage: 100 }]);
-  const updateSchedule = (i: number, updates: Partial<{ time: string; dosage: number }>) => {
-    const next = [...editSchedules];
-    const existing = next[i];
-    if (existing) {
-      next[i] = { ...existing, ...updates };
-      setEditSchedules(next);
-    }
-  };
-  const removeSchedule = (i: number) => {
-    setEditSchedules(editSchedules.filter((_, idx) => idx !== i));
-  };
-
-  if (isEditing) {
-    return (
-      <div className="p-4 rounded-xl border border-teal-500/30 bg-teal-50/30 dark:bg-teal-950/10 space-y-4">
-        <div className="flex items-center justify-between">
-          <h4 className="font-medium text-sm">Edit Dosage Phase</h4>
-          <div className="flex items-center gap-1">
-            <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => setIsEditing(false)}>
-              <X className="w-4 h-4" />
-            </Button>
-            <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-teal-600" onClick={handleSave} disabled={updatePhase.isPending || editSchedules.length === 0}>
-              {updatePhase.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-            </Button>
-          </div>
-        </div>
-        
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <Label className="text-xs">Type</Label>
-            <select 
-              className="flex h-9 w-full rounded-md border border-input bg-background text-foreground px-3 py-1 text-sm shadow-sm"
-              value={type}
-              onChange={(e) => setType(e.target.value as any)}
-            >
-              <option value="maintenance">Maintenance</option>
-              <option value="titration">Titration</option>
-            </select>
-          </div>
-          
-          <div className="space-y-1.5">
-            <Label className="text-xs">Unit (e.g. mg, ml)</Label>
-            <Input 
-              value={unit} 
-              onChange={(e) => setUnit(e.target.value)} 
-              className="h-9"
-            />
-          </div>
-        </div>
-
-        <div className="space-y-1.5">
-          <Label className="text-xs">Start Date</Label>
-          <Input 
-            type="date"
-            value={startDate} 
-            onChange={(e) => setStartDate(e.target.value)} 
-            className="h-9"
-          />
-        </div>
-
-        <div className="space-y-3">
-          <Label className="text-xs">Daily Schedule</Label>
-          {editSchedules.map((s, i) => (
-            <div key={i} className="flex gap-2 items-center">
-              <Input 
-                type="time" 
-                value={s.time} 
-                onChange={(e) => updateSchedule(i, { time: e.target.value })} 
-                className="h-9"
-              />
-              <Input 
-                type="number" 
-                value={s.dosage} 
-                onChange={(e) => updateSchedule(i, { dosage: parseFloat(e.target.value) || 0 })} 
-                className="h-9"
-                placeholder="Dosage"
-              />
-              {editSchedules.length > 1 && (
-                <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => removeSchedule(i)}>
-                  <X className="w-4 h-4" />
-                </Button>
-              )}
-            </div>
-          ))}
-          <Button size="sm" variant="outline" className="w-full gap-2 text-xs h-8 mt-1" onClick={addSchedule}>
-            <Plus className="w-3 h-3" /> Add Time
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div 
-      className={`p-4 rounded-xl border relative overflow-hidden group ${
-        phase.status === "active" 
-          ? "bg-card border-teal-500/50 shadow-sm" 
-          : phase.status === "pending"
-          ? "bg-muted/10 border-amber-500/30 border-dashed"
-          : "bg-muted/30 border-dashed opacity-70"
-      }`}
-    >
-      {phase.status === "active" && (
-        <div className="absolute top-0 right-0 w-1.5 h-full bg-teal-500" />
-      )}
-      {phase.status === "pending" && (
-        <div className="absolute top-0 right-0 w-1.5 h-full bg-amber-500/50" />
-      )}
-      
-      <div className="absolute top-2 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
-        {phase.status === "pending" && (
-          <>
-            <Button 
-              size="sm" 
-              variant="ghost" 
-              className="h-8 w-8 p-0 text-amber-600 hover:text-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/30" 
-              onClick={() => activatePhase.mutateAsync(phase.id)}
-              disabled={activatePhase.isPending}
-              title="Set as Active"
-            >
-              {activatePhase.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
-            </Button>
-            <Button 
-              size="sm" 
-              variant="ghost" 
-              className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-100 dark:hover:bg-red-900/30" 
-              onClick={() => {
-                if (confirm("Are you sure you want to delete this pending phase?")) {
-                  deletePhase.mutateAsync(phase.id);
-                }
-              }}
-              disabled={deletePhase.isPending}
-              title="Delete Phase"
-            >
-              {deletePhase.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-            </Button>
-          </>
-        )}
-        <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => setIsEditing(true)}>
-          <Edit2 className="w-3.5 h-3.5" />
-        </Button>
-      </div>
-
-      <div className="flex items-center justify-between mb-2 pr-20">
-        <div className="flex items-center gap-2">
-          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-            phase.type === "titration" 
-              ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300" 
-              : "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
-          }`}>
-            {phase.type === "titration" ? "Titration" : "Maintenance"}
-          </span>
-          {phase.status === "pending" && (
-            <span className="text-[10px] font-medium uppercase tracking-wider text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800 px-1.5 rounded bg-amber-50 dark:bg-amber-950/30">
-              Pending
-            </span>
-          )}
-        </div>
-        
-        <span className="text-xs text-muted-foreground">
-          {format(phase.startDate, "MMM d, yyyy")}
-          {phase.endDate ? ` - ${format(phase.endDate, "MMM d, yyyy")}` : phase.status === "pending" ? "" : " - Present"}
-        </span>
-      </div>
-      
-      <div className="flex flex-col gap-1 mt-3">
-        <p className="text-xl font-bold">
-          {totalDaily} <span className="text-sm font-normal text-muted-foreground">{phase.unit}/day</span>
-        </p>
-        {schedules.length > 0 && (
-          <div className="text-xs text-muted-foreground space-y-0.5 mt-1">
-            {schedules.map(s => (
-              <p key={s.id}>• {s.time} - {s.dosage} {phase.unit}</p>
-            ))}
-          </div>
         )}
       </div>
     </div>
