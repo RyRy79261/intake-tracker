@@ -1,5 +1,10 @@
 import type { DoseSlot } from "@/lib/dose-schedule-service";
 import type { MedicationPhase } from "@/lib/db";
+import {
+  isCombo,
+  splitDose,
+  formatCompoundShort,
+} from "@/lib/compound-utils";
 
 /**
  * The maintenance ("baseline") phase for a prescription — what the Rx says when
@@ -75,6 +80,28 @@ export function formatPillCount(pills: number): string {
 
   const combined = whole > 0 ? `${whole}${fracStr}` : fracStr;
   return `${combined} tablets`;
+}
+
+/**
+ * Human-readable amount for one dose slot. For a combination drug it shows the
+ * per-pill compound split (e.g. "2 tablets of 49/51mg") instead of a bare
+ * summed milligram figure; single-compound drugs keep the "N of XXmg" form.
+ */
+export function formatDoseAmount(slot: DoseSlot): string {
+  const { dosageMg, unit, pillsPerDose, inventory, prescription } = slot;
+
+  if (isCombo(inventory)) {
+    const per = formatCompoundShort(inventory!.compounds, unit);
+    return pillsPerDose != null
+      ? `${formatPillCount(pillsPerDose)} of ${per}`
+      : per;
+  }
+  if (isCombo(prescription)) {
+    return formatCompoundShort(splitDose(dosageMg, prescription.compounds), unit);
+  }
+  return pillsPerDose != null
+    ? `${formatPillCount(pillsPerDose)} of ${dosageMg}${unit}`
+    : `${dosageMg}${unit}`;
 }
 
 /** Current wall-clock time as a zero-padded 24-hour "HH:MM" string. */

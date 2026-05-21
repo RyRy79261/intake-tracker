@@ -1,6 +1,7 @@
 import { db, type Prescription, type MedicationPhase, type InventoryItem } from "@/lib/db";
 import { showNotification, getNotificationPermission } from "@/lib/push-notification-service";
 import { getSchedulesForPhase } from "@/lib/medication-schedule-service";
+import { isCombo, splitDose, formatCompoundShort } from "@/lib/compound-utils";
 
 const MED_NOTIFICATION_KEY = "intake-tracker-med-notifications";
 
@@ -105,8 +106,11 @@ export async function checkDoseReminders(): Promise<void> {
         const inv = activeInv.find(i => i.isActive && !i.isArchived) ?? activeInv[0];
         const name = inv?.brandName ?? prescription.genericName;
 
+        const doseText = isCombo(prescription)
+          ? formatCompoundShort(splitDose(schedule.dosage, prescription.compounds), phase.unit)
+          : `${schedule.dosage}${phase.unit}`;
         dueNow.push({
-          name: `${name} ${schedule.dosage}${phase.unit}`,
+          name: `${name} ${doseText}`,
           time: schedule.time,
         });
         state.notifiedDoses.push(doseKey);
@@ -170,7 +174,9 @@ export async function checkRefillAlerts(): Promise<void> {
     if (shouldAlert && !state.notifiedRefills.includes(prescription.id)) {
       await showRefillAlert(
         activeInventory.brandName || prescription.genericName,
-        `${activeInventory.strength}${activeInventory.unit}`,
+        isCombo(activeInventory)
+          ? formatCompoundShort(activeInventory.compounds, activeInventory.unit)
+          : `${activeInventory.strength}${activeInventory.unit}`,
         prescription.id,
         stock,
         daysLeft

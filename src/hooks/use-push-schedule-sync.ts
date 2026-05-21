@@ -11,6 +11,8 @@ import {
   requestNotificationPermission,
   isNotificationSupported,
 } from "@/lib/push-notification-service";
+import type { CompoundStrength } from "@/lib/db";
+import { isCombo, splitDose, formatCompoundShort } from "@/lib/compound-utils";
 
 // Auth note: all push endpoints run under withAuth() on the server (see
 // plan 41-01). Since Neon Auth uses cookie sessions, same-origin fetch
@@ -34,7 +36,7 @@ interface ScheduleEntry {
 function buildScheduleEntries(
   slots: Array<{
     localTime: string;
-    prescription: { genericName: string };
+    prescription: { genericName: string; compounds?: CompoundStrength[] };
     dosageMg: number;
     unit: string;
     schedule: { daysOfWeek?: number[] };
@@ -54,7 +56,12 @@ function buildScheduleEntries(
 
   byTime.forEach((timeSlots, timeSlot) => {
     const medicationsJson = timeSlots
-      .map((s) => `${s.prescription.genericName} ${s.dosageMg}${s.unit}`)
+      .map((s) => {
+        const dose = isCombo(s.prescription)
+          ? formatCompoundShort(splitDose(s.dosageMg, s.prescription.compounds), s.unit)
+          : `${s.dosageMg}${s.unit}`;
+        return `${s.prescription.genericName} ${dose}`;
+      })
       .join(", ");
 
     // Collect unique days from all schedules at this time

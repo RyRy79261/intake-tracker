@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { z } from "zod";
-import type { PillShape, FoodInstruction } from "@/lib/db";
+import type { PillShape, FoodInstruction, CompoundStrength } from "@/lib/db";
 import type { MedicineSearchResult } from "@/hooks/use-medicine-search";
 import { logAudit } from "@/lib/audit";
 import { ALL_DAYS } from "@/components/medications/add-medication-steps/types";
@@ -40,6 +40,10 @@ export interface AddMedicationFormState {
   genericName: string;
   dosageStrength: string;
 
+  // Combination ("multi-compound") drug — e.g. sacubitril/valsartan.
+  isCombination: boolean;
+  compounds: CompoundStrength[];
+
   pillShape: PillShape;
   pillColor: string;
   visualIdentification: string;
@@ -70,6 +74,12 @@ const INITIAL_STATE: AddMedicationFormState = {
   brandName: "",
   genericName: "",
   dosageStrength: "",
+
+  isCombination: false,
+  compounds: [
+    { name: "", strength: 0 },
+    { name: "", strength: 0 },
+  ],
 
   pillShape: "round",
   pillColor: "#E91E63",
@@ -180,6 +190,18 @@ export function useAddMedicationForm(): UseAddMedicationFormReturn {
             }).slice(0, 1000),
           );
           return false;
+        }
+        if (formState.isCombination) {
+          const valid = formState.compounds.filter(
+            (c) => c.name.trim() !== "" && c.strength > 0,
+          );
+          if (valid.length < 2) {
+            setErrors({
+              compounds:
+                "Enter a name and strength for both active ingredients",
+            });
+            return false;
+          }
         }
       }
 

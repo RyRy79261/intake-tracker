@@ -18,6 +18,7 @@ import {
   useDeleteInventoryTransaction,
 } from "@/hooks/use-medication-queries";
 import { getEffectivePhase } from "@/lib/medication-ui-utils";
+import { isCombo, formatCompoundShort, formatCompoundFull } from "@/lib/compound-utils";
 import type { Prescription, InventoryItem } from "@/lib/db";
 import { Loader2, Archive, ArchiveRestore, Plus, Pencil, Trash2, Check, X, CheckCircle2 } from "lucide-react";
 
@@ -42,7 +43,10 @@ export function InventoryItemViewDrawer({ item, prescription, open, onOpenChange
       <DrawerContent className="max-h-[90dvh] flex flex-col">
         <DrawerHeader className="border-b shrink-0">
           <DrawerTitle>
-            {current.brandName} {current.strength}{current.unit}
+            {current.brandName}{" "}
+            {isCombo(current)
+              ? formatCompoundShort(current.compounds, current.unit)
+              : `${current.strength}${current.unit}`}
           </DrawerTitle>
           <p className="text-sm text-muted-foreground">
             {prescription ? `For ${prescription.genericName}` : "Medicine"}
@@ -93,7 +97,9 @@ function DetailsTab({ item, prescription }: { item: InventoryItem; prescription:
           <div>
             <p className="font-medium">{item.brandName}</p>
             <p className="text-sm text-muted-foreground">
-              {item.strength}{item.unit} per pill
+              {isCombo(item)
+                ? `${formatCompoundFull(item.compounds, item.unit)} per pill`
+                : `${item.strength}${item.unit} per pill`}
             </p>
           </div>
         </div>

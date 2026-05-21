@@ -1,4 +1,4 @@
-import { db, type Prescription, type MedicationPhase, type InventoryItem, type PhaseSchedule, type PillShape, type FoodInstruction } from "@/lib/db";
+import { db, type Prescription, type MedicationPhase, type InventoryItem, type PhaseSchedule, type PillShape, type FoodInstruction, type CompoundStrength } from "@/lib/db";
 import { ok, err, type ServiceResult } from "@/lib/service-result";
 import { buildAuditEntry } from "@/lib/audit-service";
 import { buildPrescription, buildPhase, buildInventory, buildSchedules, buildTransaction } from "@/lib/medication-builders";
@@ -12,6 +12,8 @@ export interface CreatePrescriptionInput {
   notes?: string;
   contraindications?: string[];
   warnings?: string[];
+  /** Active ingredients for a combination drug (≥ 2). Omit for single-compound. */
+  compounds?: CompoundStrength[];
 
   // Phase level (initial maintenance phase)
   unit: string;

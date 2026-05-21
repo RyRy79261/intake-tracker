@@ -1,6 +1,7 @@
 import { Capacitor } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
 import { db } from "@/lib/db";
+import { isCombo, splitDose, formatCompoundShort } from "@/lib/compound-utils";
 
 export async function initLocalNotifications(): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
@@ -71,9 +72,14 @@ export async function syncMedicationNotifications(): Promise<void> {
     const hour = Math.floor(utcMinutes / 60) % 24;
     const minute = utcMinutes % 60;
 
-    const dosageText = schedule.unit
-      ? `${schedule.dosage}${schedule.unit}`
-      : `${schedule.dosage}`;
+    const dosageText = isCombo(prescription)
+      ? formatCompoundShort(
+          splitDose(schedule.dosage, prescription.compounds),
+          schedule.unit ?? "mg",
+        )
+      : schedule.unit
+        ? `${schedule.dosage}${schedule.unit}`
+        : `${schedule.dosage}`;
 
     for (const dow of schedule.daysOfWeek) {
       // Capacitor weekday: 1=Sunday, 2=Monday, ..., 7=Saturday

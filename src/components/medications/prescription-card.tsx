@@ -9,11 +9,12 @@ import { InventoryItemViewDrawer } from "@/components/medications/inventory-item
 import { ChevronDown } from "lucide-react";
 import { PillIconWithBadge } from "@/components/medications/pill-icon";
 import {
-  formatPillCount,
+  formatDoseAmount,
   getEffectivePhase,
   getActiveTitrationPhase,
   getPendingTitrationPhase,
 } from "@/lib/medication-ui-utils";
+import { isCombo, splitDose, formatCompoundShort } from "@/lib/compound-utils";
 import {
   usePhasesForPrescription,
   useInventoryForPrescription,
@@ -60,6 +61,13 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
   const firstSlot = prescriptionSlots.length > 0 ? prescriptionSlots[0] : undefined;
   const dosageMg = firstSlot?.dosageMg;
   const unit = effectivePhase?.unit ?? "mg";
+  // Dose chip — per-compound split for a combination drug, plain mg otherwise.
+  const dosageChip =
+    dosageMg === undefined
+      ? undefined
+      : firstSlot && isCombo(firstSlot.prescription)
+        ? formatCompoundShort(splitDose(dosageMg, firstSlot.prescription.compounds), unit)
+        : `${dosageMg}${unit}`;
 
   const pendingSlots = prescriptionSlots.filter((s) => s.status === "pending");
   const allHandled = prescriptionSlots.length > 0 && pendingSlots.length === 0;
@@ -120,9 +128,9 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
         </div>
 
         <div className="flex items-center gap-1.5 flex-wrap mt-1">
-          {dosageMg !== undefined && (
+          {dosageChip !== undefined && (
             <span className="text-[10px] text-muted-foreground">
-              {dosageMg}{unit}
+              {dosageChip}
             </span>
           )}
           <span className="text-[10px] text-muted-foreground">
@@ -179,12 +187,14 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
                   {activeInventory.brandName}
                 </span>
                 <span className="text-[9px] text-emerald-600 dark:text-emerald-400 shrink-0 ml-auto">
-                  {activeInventory.strength}{activeInventory.unit}
+                  {isCombo(activeInventory)
+                    ? formatCompoundShort(activeInventory.compounds, activeInventory.unit)
+                    : `${activeInventory.strength}${activeInventory.unit}`}
                 </span>
               </div>
               {firstSlot?.pillsPerDose != null && dosageMg != null && (
                 <p className="text-[9px] text-emerald-600 dark:text-emerald-400">
-                  {formatPillCount(firstSlot.pillsPerDose)} of {dosageMg}{unit}
+                  {formatDoseAmount(firstSlot)}
                   {effectivePhase?.foodInstruction && effectivePhase.foodInstruction !== "none" && ` · ${effectivePhase.foodInstruction} eating`}
                 </p>
               )}

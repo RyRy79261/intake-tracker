@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Drawer, DrawerContent } from "@/components/ui/drawer";
 import { PillIconWithBadge } from "@/components/medications/pill-icon";
 import { useUntakeDose, useSkipAllDoses, useEditAllDoseTimes } from "@/hooks/use-medication-queries";
-import { hapticTake, hapticSkip, formatPillCount, getCurrentTimeHHMM } from "@/lib/medication-ui-utils";
+import { hapticTake, hapticSkip, formatDoseAmount, getCurrentTimeHHMM } from "@/lib/medication-ui-utils";
 import { toast } from "@/hooks/use-toast";
 import { X, RotateCcw, Clock } from "lucide-react";
 import { RetroactiveTimePicker } from "@/components/medications/retroactive-time-picker";
@@ -124,9 +124,7 @@ export function BulkDoseEditDialog({ open, onOpenChange, time, slots, date }: Bu
             {/* Dose list */}
             <div className="space-y-3 mb-6 max-h-[50vh] overflow-y-auto">
               {slots.map((slot) => {
-                const doseLabel = slot.pillsPerDose != null
-                  ? `${slot.dosageMg}${slot.unit}, take ${formatPillCount(slot.pillsPerDose)}`
-                  : `${slot.dosageMg}${slot.unit}`;
+                const doseLabel = formatDoseAmount(slot);
                 return (
                   <div key={`${slot.scheduleId}-${slot.localTime}`} className="flex items-center gap-3">
                     <PillIconWithBadge

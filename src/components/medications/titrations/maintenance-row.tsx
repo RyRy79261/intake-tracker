@@ -4,6 +4,7 @@ import { Clock } from "lucide-react";
 import { usePhasesForPrescription, useSchedulesForPhase } from "@/hooks/use-medication-queries";
 import type { Prescription } from "@/lib/db";
 import { DAY_LABELS_LONG } from "@/components/medications/titrations/types";
+import { isCombo, splitDose, formatCompoundShort } from "@/lib/compound-utils";
 
 export function MaintenanceRow({ prescription }: { prescription: Prescription }) {
   const phases = usePhasesForPrescription(prescription.id);
@@ -15,13 +16,18 @@ export function MaintenanceRow({ prescription }: { prescription: Prescription })
   if (!maintenancePhase || schedules.length === 0) return null;
 
   const totalDaily = schedules.reduce((acc, s) => acc + s.dosage, 0);
+  const combo = isCombo(prescription);
+  const fmtDose = (mg: number, unit: string) =>
+    combo
+      ? formatCompoundShort(splitDose(mg, prescription.compounds), unit)
+      : `${mg}${unit}`;
 
   return (
     <div className="p-2.5 rounded-lg bg-muted/30 border border-border/40">
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium">{prescription.genericName}</span>
         <span className="text-[10px] text-muted-foreground">
-          {totalDaily}{maintenancePhase.unit}/day
+          {fmtDose(totalDaily, maintenancePhase.unit)}/day
         </span>
       </div>
       {prescription.indication && (
@@ -33,7 +39,7 @@ export function MaintenanceRow({ prescription }: { prescription: Prescription })
             <Clock className="w-3 h-3" />
             <span>{s.time}</span>
             <span className="font-medium text-foreground">
-              {s.dosage}{maintenancePhase.unit}
+              {fmtDose(s.dosage, maintenancePhase.unit)}
             </span>
             {s.daysOfWeek.length < 7 && (
               <span className="text-[10px]">

@@ -15,11 +15,23 @@ const MedicineSearchRequestSchema = z.object({
   country: z.string().max(100).optional(),
 });
 
+const CompoundStrengthSchema = z.object({
+  name: z.string(),
+  strength: z.number(),
+});
+
+const StrengthOptionSchema = z.object({
+  label: z.string(),
+  compounds: z.array(CompoundStrengthSchema).default([]),
+});
+
 const MedicineSearchResponseSchema = z.object({
   brandNames: z.array(z.string()).default([]),
   localAlternatives: z.array(z.string()).default([]),
   genericName: z.string().default(""),
   dosageStrengths: z.array(z.string()).default([]),
+  activeIngredients: z.array(z.string()).default([]),
+  strengthOptions: z.array(StrengthOptionSchema).default([]),
   commonIndications: z.array(z.string()).default([]),
   foodInstruction: z.enum(["before", "after", "none"]).default("none"),
   foodNote: z.string().optional(),
@@ -40,7 +52,12 @@ const SYSTEM_PROMPT = `You are a pharmaceutical information assistant. When give
 If the user searches for a specific brand name, you MUST provide the physical description for that specific brand and include the searched brand name in the response. If you cannot find information for that exact brand and must fall back to generic information, explicitly mention that the physical description and details are for the generic equivalent.
 
 Be precise with medical information. If you're uncertain about food instructions, default to "none".
-For pill appearance, research the most common commercially available form of the medication.`;
+For pill appearance, research the most common commercially available form of the medication.
+
+COMBINATION DRUGS: Many medications combine two or more active ingredients in one tablet (e.g. sacubitril/valsartan sold as Entresto or Vymada, or amlodipine/valsartan). For EVERY medication:
+- "activeIngredients": list each active ingredient by name. A single-ingredient drug has exactly one entry; a combination drug has two or more.
+- "strengthOptions": one entry per marketed strength of the searched brand. Each entry has a "label" (how the strength is printed on the box, e.g. "100 (49/51 mg)" or "75 mg") and a "compounds" array giving the per-tablet milligram amount of EACH active ingredient. For a combination tablet sold as "Vymada 100", compounds is [{"name":"Sacubitril","strength":49},{"name":"Valsartan","strength":51}]. For a single-ingredient tablet, compounds has one entry whose strength equals the tablet strength.
+Always populate "activeIngredients" and "strengthOptions" — they are required.`;
 
 // --- Tool Definition ---
 
@@ -54,6 +71,35 @@ const MEDICINE_SEARCH_TOOL = {
       localAlternatives: { type: "array", items: { type: "string" } },
       genericName: { type: "string" },
       dosageStrengths: { type: "array", items: { type: "string" } },
+      activeIngredients: {
+        type: "array",
+        items: { type: "string" },
+        description: "Each active ingredient name; one entry for a single-ingredient drug, two or more for a combination drug",
+      },
+      strengthOptions: {
+        type: "array",
+        description: "One entry per marketed strength, with the per-tablet mg of each active ingredient",
+        items: {
+          type: "object",
+          properties: {
+            label: { type: "string" },
+            compounds: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  name: { type: "string" },
+                  strength: { type: "number" },
+                },
+                required: ["name", "strength"],
+                additionalProperties: false,
+              },
+            },
+          },
+          required: ["label", "compounds"],
+          additionalProperties: false,
+        },
+      },
       commonIndications: { type: "array", items: { type: "string" } },
       foodInstruction: { type: "string", enum: ["before", "after", "none"] },
       foodNote: { type: "string", description: "Optional detail about food interaction" },
@@ -68,6 +114,7 @@ const MEDICINE_SEARCH_TOOL = {
     },
     required: [
       "brandNames", "localAlternatives", "genericName", "dosageStrengths",
+      "activeIngredients", "strengthOptions",
       "commonIndications", "foodInstruction", "foodNote", "pillColor",
       "pillShape", "pillDescription", "drugClass", "visualIdentification",
       "contraindications", "warnings", "isGenericFallback",

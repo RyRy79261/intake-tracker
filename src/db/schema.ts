@@ -30,6 +30,7 @@ import {
   bigint,
   boolean,
   real,
+  jsonb,
   serial,
   date,
   timestamp,
@@ -301,6 +302,8 @@ export const prescriptions = pgTable(
     notes: text("notes"),
     contraindications: text("contraindications").array(),
     warnings: text("warnings").array(),
+    // Combination-drug active ingredients (mirrors Dexie CompoundStrength[]).
+    compounds: jsonb("compounds").$type<{ name: string; strength: number }[]>(),
     isActive: boolean("is_active").notNull(),
     // NOTE: no timezone column — Prescription interface in src/lib/db.ts omits it.
     createdAt: bigint("created_at", { mode: "number" }).notNull(),
@@ -449,6 +452,8 @@ export const inventoryItems = pgTable(
     /** @deprecated Kept for Dexie interface parity; inventoryTransactions is authoritative. */
     currentStock: integer("current_stock"),
     strength: real("strength").notNull(),
+    // Per-pill combination-drug breakdown (mirrors Dexie CompoundStrength[]).
+    compounds: jsonb("compounds").$type<{ name: string; strength: number }[]>(),
     unit: text("unit").notNull(),
     pillShape: text("pill_shape").notNull(),
     pillColor: text("pill_color").notNull(),

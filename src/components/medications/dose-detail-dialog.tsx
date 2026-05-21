@@ -8,7 +8,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { PillIcon } from "@/components/medications/pill-icon";
 import { useTakeDose, useUntakeDose, useSkipDose, useRescheduleDose } from "@/hooks/use-medication-queries";
-import { hapticTake, hapticSkip, formatPillCount } from "@/lib/medication-ui-utils";
+import { hapticTake, hapticSkip, formatDoseAmount } from "@/lib/medication-ui-utils";
+import { isCombo, formatCompoundShort, formatCompoundFull } from "@/lib/compound-utils";
 import { Info, X, RotateCcw, Clock, Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
@@ -39,7 +40,7 @@ export function DoseDetailDialog({
 
   if (!slot) return null;
 
-  const { status, prescription, phase, schedule, inventory, pillsPerDose } = slot;
+  const { status, prescription, phase, schedule, inventory } = slot;
 
   const handleTake = async () => {
     if (isToday) {
@@ -123,9 +124,11 @@ export function DoseDetailDialog({
       })
     : null;
 
-  const pillLabel = pillsPerDose != null
-    ? formatPillCount(pillsPerDose)
-    : "1 tablet";
+  const doseAmountLabel = formatDoseAmount(slot);
+  // Strength shown next to the brand name in the header.
+  const headerStrength = isCombo(inventory)
+    ? formatCompoundShort(inventory!.compounds, phase.unit)
+    : `${schedule.dosage}${phase.unit}`;
 
   const dateLabel = new Date(slot.scheduledDate + "T00:00:00").toLocaleDateString("en-US", {
     weekday: "long",
@@ -142,7 +145,7 @@ export function DoseDetailDialog({
             <div className="flex flex-col items-center text-center mb-6">
               <PillIcon shape={inventory?.pillShape || "round"} color={inventory?.pillColor || "#ccc"} size={48} />
               <h2 className="text-lg font-bold mt-3">
-                {inventory?.brandName || prescription.genericName} {schedule.dosage}{phase.unit} ({prescription.genericName})
+                {inventory?.brandName || prescription.genericName} {headerStrength} ({prescription.genericName})
               </h2>
               {actionTime && (
                 <p className={cn(
@@ -164,12 +167,20 @@ export function DoseDetailDialog({
               <div className="flex items-center gap-2">
                 <Info className="w-4 h-4" />
                 <span>
-                  {schedule.dosage}{phase.unit}, take {pillLabel}
+                  Take {doseAmountLabel}
                   {phase.foodInstruction !== "none" && ` ${phase.foodInstruction} eating`}
                   {phase.foodNote && ` ${phase.foodNote}`}
                 </span>
               </div>
-              {status === "taken" && inventory && (
+              {isCombo(inventory) && (
+                <div className="flex items-center gap-2">
+                  <Info className="w-4 h-4" />
+                  <span>
+                    {inventory!.brandName}: {formatCompoundFull(inventory!.compounds, phase.unit)} per pill
+                  </span>
+                </div>
+              )}
+              {status === "taken" && inventory && !isCombo(inventory) && (
                 <div className="flex items-center gap-2">
                   <Info className="w-4 h-4" />
                   <span>
