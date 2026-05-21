@@ -16,6 +16,8 @@ interface TimeSlotGroupProps {
   onSkip: (slot: DoseSlot) => void;
   onDoseClick: (slot: DoseSlot) => void;
   onMarkAll: (time: string, slots: DoseSlot[]) => void;
+  onEditAll: (time: string, slots: DoseSlot[]) => void;
+  onEditTime: (slot: DoseSlot, time: string) => void;
 }
 
 function formatTime12(time24: string): string {
@@ -46,8 +48,11 @@ export function TimeSlotGroup({
   onSkip,
   onDoseClick,
   onMarkAll,
+  onEditAll,
+  onEditTime,
 }: TimeSlotGroupProps) {
   const hasPending = slots.some((s) => s.status === "pending" || s.status === "missed");
+  const hasTaken = slots.some((s) => s.status === "taken");
   const allDone = slots.every((s) => s.status === "taken" || s.status === "skipped");
   const overdue = isToday && isTimeOverdue(time) && hasPending;
 
@@ -79,6 +84,16 @@ export function TimeSlotGroup({
             Mark All
           </Button>
         )}
+        {!isFuture && !hasPending && hasTaken && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-xs text-muted-foreground h-7"
+            onClick={() => onEditAll(time, slots)}
+          >
+            Edit All
+          </Button>
+        )}
       </div>
 
       <div className="space-y-2">
@@ -92,6 +107,7 @@ export function TimeSlotGroup({
             onRetroactiveTake={onRetroactiveTake}
             onSkip={onSkip}
             onDoseClick={onDoseClick}
+            onEditTime={onEditTime}
           />
         ))}
       </div>

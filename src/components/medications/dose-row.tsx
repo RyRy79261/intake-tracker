@@ -5,7 +5,7 @@ import { PillIconWithBadge } from "@/components/medications/pill-icon";
 import { Button } from "@/components/ui/button";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatPillCount } from "@/lib/medication-ui-utils";
+import { formatPillCount, getCurrentTimeHHMM } from "@/lib/medication-ui-utils";
 import { RetroactiveTimePicker } from "@/components/medications/retroactive-time-picker";
 import type { DoseSlot } from "@/hooks/use-medication-queries";
 
@@ -17,6 +17,7 @@ interface DoseRowProps {
   onRetroactiveTake: (slot: DoseSlot, time: string) => void;
   onSkip: (slot: DoseSlot) => void;
   onDoseClick: (slot: DoseSlot) => void;
+  onEditTime: (slot: DoseSlot, time: string) => void;
 }
 
 const LATE_THRESHOLD_MINUTES = 30;
@@ -34,9 +35,10 @@ function formatTimestamp(ts: number): string {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
-export function DoseRow({ slot, isToday, isFuture, onTake, onRetroactiveTake, onSkip, onDoseClick }: DoseRowProps) {
+export function DoseRow({ slot, isToday, isFuture, onTake, onRetroactiveTake, onSkip, onDoseClick, onEditTime }: DoseRowProps) {
   const { status, prescription, phase, inventory, pillsPerDose } = slot;
   const [timePickerOpen, setTimePickerOpen] = useState(false);
+  const [editPickerOpen, setEditPickerOpen] = useState(false);
 
   const isActionable = !isFuture && (status === "pending" || status === "missed");
 
@@ -139,15 +141,39 @@ export function DoseRow({ slot, isToday, isFuture, onTake, onRetroactiveTake, on
               </Button>
             </div>
           )}
+
+          {status === "taken" && (
+            <div className="flex items-center shrink-0">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 px-3 text-xs text-muted-foreground"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditPickerOpen(true);
+                }}
+              >
+                Edit
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 
       <RetroactiveTimePicker
         open={timePickerOpen}
         onOpenChange={setTimePickerOpen}
-        defaultTime={slot.localTime}
+        defaultTime={getCurrentTimeHHMM()}
         compoundName={prescription.genericName}
         onConfirm={handleRetroactiveConfirm}
+      />
+
+      <RetroactiveTimePicker
+        open={editPickerOpen}
+        onOpenChange={setEditPickerOpen}
+        defaultTime={takenAtDisplay}
+        compoundName={prescription.genericName}
+        onConfirm={(time) => onEditTime(slot, time)}
       />
     </>
   );

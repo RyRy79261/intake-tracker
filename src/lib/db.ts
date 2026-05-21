@@ -37,6 +37,7 @@ export type AuditAction =
   | "dose_taken"
   | "dose_skipped"
   | "dose_rescheduled"
+  | "dose_time_edited"
   | "prescription_added"
   | "prescription_updated"
   | "inventory_adjusted"

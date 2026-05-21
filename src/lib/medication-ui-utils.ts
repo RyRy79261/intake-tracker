@@ -77,6 +77,12 @@ export function formatPillCount(pills: number): string {
   return `${combined} tablets`;
 }
 
+/** Current wall-clock time as a zero-padded 24-hour "HH:MM" string. */
+export function getCurrentTimeHHMM(): string {
+  const now = new Date();
+  return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+}
+
 /**
  * Haptic feedback for taking a dose.
  */
