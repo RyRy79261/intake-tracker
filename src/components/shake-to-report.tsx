@@ -1,8 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSettingsStore } from "@/stores/settings-store";
-import { useShakeGesture } from "@/hooks/use-shake-gesture";
+import {
+  useShakeGesture,
+  requestMotionPermission,
+  motionPermissionNeeded,
+} from "@/hooks/use-shake-gesture";
 import { ReportBugDialog } from "@/components/report-bug-dialog";
 
 /**
@@ -21,6 +25,19 @@ export function ShakeToReport() {
     threshold,
     requiredJolts,
   });
+
+  // iOS 13+ gates `devicemotion` behind a permission prompt that must be
+  // triggered by a user gesture. The settings toggle requests it on an
+  // explicit opt-in, but the feature also ships enabled by default — so on
+  // iOS we request it once on the first interaction after the app loads.
+  useEffect(() => {
+    if (!enabled || !motionPermissionNeeded()) return;
+    const onFirstGesture = () => {
+      void requestMotionPermission();
+    };
+    window.addEventListener("pointerdown", onFirstGesture, { once: true });
+    return () => window.removeEventListener("pointerdown", onFirstGesture);
+  }, [enabled]);
 
   if (!enabled && !open) return null;
 
