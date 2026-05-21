@@ -129,8 +129,8 @@ export function DataManagementSection() {
               <p className="text-sm text-amber-800 dark:text-amber-200">
                 Cloud Sync hasn&apos;t finished downloading all your data to
                 this device yet. Exporting now may produce an incomplete file.
-                Wait until &ldquo;All data synced&rdquo; shows in the Storage
-                section, or export anyway.
+                Wait until the Storage section shows &ldquo;Full copy of your
+                data on this device&rdquo;, or export anyway.
               </p>
             </div>
             <div className="flex gap-2">

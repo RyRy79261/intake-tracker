@@ -60,7 +60,7 @@ export function StorageInfoSection() {
             {initialSyncComplete ? (
               <>
                 <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400" />
-                <span className="text-sm">All data synced to this device</span>
+                <span className="text-sm">Full copy of your data on this device</span>
               </>
             ) : isOnline ? (
               <>
