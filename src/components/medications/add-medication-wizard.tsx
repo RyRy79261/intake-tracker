@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import {
   Drawer,
   DrawerContent,
+  DrawerTitle,
 } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
 import { useMedicineSearch, MedicineSearchCancelledError } from "@/hooks/use-medicine-search";
@@ -279,7 +280,8 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
 
   return (
     <Drawer open={open} onOpenChange={(o) => { if (!o) handleClose(); }} repositionInputs={false}>
-      <DrawerContent className="w-full max-w-[100vw] overflow-hidden max-h-[90dvh]">
+      <DrawerContent className="w-full max-w-[100vw] overflow-hidden max-h-[90dvh]" aria-describedby={undefined}>
+        <DrawerTitle className="sr-only">Add medication</DrawerTitle>
         <ConflictCheckOverlay
           state={conflictCheckState}
           data={conflictData}

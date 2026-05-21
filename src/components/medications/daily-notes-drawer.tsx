@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Drawer, DrawerContent } from "@/components/ui/drawer";
+import { Drawer, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -39,13 +39,13 @@ export function DailyNotesDrawer({
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent className="max-h-[85vh]">
+      <DrawerContent className="max-h-[85vh]" aria-describedby={undefined}>
         <div className="p-4 flex flex-col h-full max-h-[80vh]">
           <div className="mb-4">
-            <h2 className="text-lg font-bold flex items-center gap-2">
+            <DrawerTitle className="text-lg font-bold flex items-center gap-2">
               <MessageSquare className="w-5 h-5" />
               Notes for {displayDate}
-            </h2>
+            </DrawerTitle>
             {prescriptionName && (
               <p className="text-sm text-muted-foreground mt-1">
                 Ref: {prescriptionName}

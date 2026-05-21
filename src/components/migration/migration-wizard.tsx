@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useMigrationStore } from "@/stores/migration-store";
 // eslint-disable-next-line no-restricted-imports
 import {
@@ -79,7 +79,9 @@ export function MigrationWizard({
           onEscapeKeyDown={(e) => {
             if (isBlocking) e.preventDefault();
           }}
+          aria-describedby={undefined}
         >
+          <DialogTitle className="sr-only">Cloud sync migration</DialogTitle>
           {phase === "backup" && (
             <BackupGateStep onProceed={handleProceedFromBackup} />
           )}
