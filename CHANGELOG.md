@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.18.0](https://github.com/RyRy79261/intake-tracker/compare/v1.17.1...v1.18.0) (2026-05-21)
+
+
+### Features
+
+* **medications:** add multi-compound combination drug support ([9156a9b](https://github.com/RyRy79261/intake-tracker/commit/9156a9be5e721c1a4dccab66d80ffc88024a3d8d))
+
+
+### Bug Fixes
+
+* **medications:** correct combination-drug state and dose display ([9d7ac62](https://github.com/RyRy79261/intake-tracker/commit/9d7ac623d6bf225cadeaaaeb315068e0f74d1a0c))
+
 ## [1.17.1](https://github.com/RyRy79261/intake-tracker/compare/v1.17.0...v1.17.1) (2026-05-21)
 
 
