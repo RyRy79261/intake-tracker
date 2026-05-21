@@ -14,11 +14,21 @@ export function MedicalAiSection() {
         <HeartPulse className="w-4 h-4" />
         <h3 className="font-semibold">Medical conditions & AI</h3>
       </div>
-      <div className="p-3 rounded-lg border">
-        <AiInsightsConsentToggle />
+      <div className="p-3 rounded-lg border space-y-4">
+        <AiInsightsConsentToggle
+          field="shareConditionsWithAI"
+          label="Share conditions with AI insights"
+          noun="conditions"
+        />
+        <AiInsightsConsentToggle
+          field="shareMedicationsWithAI"
+          label="Share medications with AI insights"
+          noun="medications"
+        />
       </div>
       <p className="text-xs text-muted-foreground">
         Add or remove the conditions themselves on your Profile page.
+        Medications come from your Medications page.
       </p>
     </div>
   );

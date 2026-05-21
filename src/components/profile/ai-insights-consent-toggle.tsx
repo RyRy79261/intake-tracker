@@ -13,19 +13,40 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { useUserProfile, useSaveProfile } from "@/hooks/use-profile-queries";
+import {
+  useUserProfile,
+  useSaveProfile,
+  type ProfileUpdates,
+} from "@/hooks/use-profile-queries";
+
+type ToggleField = "shareConditionsWithAI" | "shareMedicationsWithAI";
+
+interface Props {
+  /** Which profile opt-in this toggle controls. */
+  field: ToggleField;
+  /** Toggle label text. */
+  label: string;
+  /** Short noun for the data being shared, e.g. "conditions", "medications". */
+  noun: string;
+}
+
+/** Build a typed single-field update without an unsafe computed-key cast. */
+function fieldUpdate(field: ToggleField, value: boolean): ProfileUpdates {
+  return field === "shareConditionsWithAI"
+    ? { shareConditionsWithAI: value }
+    : { shareMedicationsWithAI: value };
+}
 
 /**
  * Disclaimer body — shared between the first-time consent prompt and the
  * informational re-open. Rendered as the dialog's accessible description.
  */
-function DisclaimerBody() {
+function DisclaimerBody({ noun }: { noun: string }) {
   return (
     <DialogDescription className="space-y-2 pt-1 text-left">
       <span className="block">
-        Turning this on shares the conditions saved in your profile with the AI
-        when it generates insights. Enabling it is your consent to include that
-        data.
+        Turning this on shares your {noun} with the AI when it generates
+        insights. Enabling it is your consent to include that data.
       </span>
       <span className="block">
         AI insights are only an attempt to guess what your data might mean —
@@ -43,20 +64,22 @@ function DisclaimerBody() {
 }
 
 /**
- * Opt-in toggle for sharing medical conditions with AI insights. The first
- * time it is switched on, a consent dialog appears — confirming the dialog is
- * the opt-in. After consent the toggle flips directly. Rendered on both the
- * profile page and in Settings → Privacy & Security.
+ * Opt-in toggle for sharing a category of medical data with AI insights. The
+ * first time the user enables any sharing toggle, a consent dialog appears —
+ * the dialog is the opt-in. Consent is recorded once (`aiInsightsConsentAt`)
+ * and covers every sharing toggle thereafter. Rendered on the profile page and
+ * in Settings → Privacy & Security.
  */
-export function AiInsightsConsentToggle() {
+export function AiInsightsConsentToggle({ field, label, noun }: Props) {
   const profile = useUserProfile();
   const { mutate: save } = useSaveProfile();
   const [dialog, setDialog] = useState<null | "consent" | "info">(null);
 
-  const enabled = profile.shareConditionsWithAI;
+  const enabled = profile[field];
   // Nullish check: both null and a missing (undefined) field mean "not yet
   // consented" — `!== null` alone would let an undefined value bypass the gate.
   const hasConsented = profile.aiInsightsConsentAt != null;
+  const inputId = `toggle-${field}`;
 
   const handleToggle = (next: boolean) => {
     // First enable ever → the dialog is the consent gate; don't save yet.
@@ -64,11 +87,11 @@ export function AiInsightsConsentToggle() {
       setDialog("consent");
       return;
     }
-    save({ shareConditionsWithAI: next });
+    save(fieldUpdate(field, next));
   };
 
   const confirmConsent = () => {
-    save({ shareConditionsWithAI: true, aiInsightsConsentAt: Date.now() });
+    save({ ...fieldUpdate(field, true), aiInsightsConsentAt: Date.now() });
     setDialog(null);
   };
 
@@ -77,8 +100,8 @@ export function AiInsightsConsentToggle() {
       <div className="flex items-center justify-between gap-3">
         <div className="space-y-0.5">
           <div className="flex items-center gap-1.5">
-            <Label htmlFor="share-conditions-ai" className="text-sm">
-              Share conditions with AI insights
+            <Label htmlFor={inputId} className="text-sm">
+              {label}
             </Label>
             <button
               type="button"
@@ -91,15 +114,11 @@ export function AiInsightsConsentToggle() {
           </div>
           <p className="text-xs text-muted-foreground">
             {enabled
-              ? "Your conditions are included when generating AI insights."
-              : "Your conditions stay on this device and are not sent to the AI."}
+              ? `Your ${noun} are included when generating AI insights.`
+              : `Your ${noun} stay on this device and are not sent to the AI.`}
           </p>
         </div>
-        <Switch
-          id="share-conditions-ai"
-          checked={enabled}
-          onCheckedChange={handleToggle}
-        />
+        <Switch id={inputId} checked={enabled} onCheckedChange={handleToggle} />
       </div>
 
       <Dialog
@@ -112,10 +131,10 @@ export function AiInsightsConsentToggle() {
           <DialogHeader>
             <DialogTitle>
               {dialog === "consent"
-                ? "Share conditions with AI?"
+                ? `Share ${noun} with AI?`
                 : "About AI insights"}
             </DialogTitle>
-            <DisclaimerBody />
+            <DisclaimerBody noun={noun} />
           </DialogHeader>
           {dialog === "consent" ? (
             <DialogFooter className="gap-2">

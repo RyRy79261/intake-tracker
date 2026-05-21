@@ -1,0 +1,1 @@
+ALTER TABLE "user_profile" ADD COLUMN "share_medications_with_ai" boolean DEFAULT false NOT NULL;

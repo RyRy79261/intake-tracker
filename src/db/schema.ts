@@ -645,6 +645,10 @@ export const userProfile = pgTable(
       .references(() => usersSync.id, { onDelete: "cascade" }),
     conditions: text("conditions").array().notNull(),
     shareConditionsWithAI: boolean("share_conditions_with_ai").notNull(),
+    // .default(false) keeps the ADD COLUMN migration safe on existing rows.
+    shareMedicationsWithAI: boolean("share_medications_with_ai")
+      .notNull()
+      .default(false),
     aiInsightsConsentAt: bigint("ai_insights_consent_at", { mode: "number" }),
     createdAt: bigint("created_at", { mode: "number" }).notNull(),
     updatedAt: bigint("updated_at", { mode: "number" }).notNull(),

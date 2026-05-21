@@ -119,6 +119,32 @@ describe("buildInsightsPrompt", () => {
     expect(prompt).toContain("Idiopathic dilated cardiomyopathy");
   });
 
+  it("includes active medications when supplied in the profile", () => {
+    const req = AnalyticsInsightsRequestSchema.parse({
+      range: { start: 0, end: 7 * 86_400_000 },
+      profile: {
+        conditions: [],
+        medications: [
+          {
+            name: "Bisoprolol",
+            phaseType: "titration",
+            dose: "2.5 mg",
+            frequency: "once daily",
+            daysOnPhase: 12,
+          },
+        ],
+      },
+      metrics: { bp: validBp },
+    });
+    const prompt = buildInsightsPrompt(req);
+
+    expect(prompt).toContain("Current medications");
+    expect(prompt).toContain("Bisoprolol");
+    expect(prompt).toContain("titration phase");
+    expect(prompt).toContain("2.5 mg");
+    expect(prompt).toContain("12 day(s)");
+  });
+
   it("omits the conditions line when no profile is supplied", () => {
     const req = AnalyticsInsightsRequestSchema.parse({
       range: { start: 0, end: 7 * 86_400_000 },

@@ -26,6 +26,8 @@ interface GenerateInsightsInput {
   goals: IntakeGoals;
   /** User-reported conditions — pass only when the user has opted in. */
   conditions?: string[];
+  /** Include active medications — pass only when the user has opted in. */
+  includeMedications?: boolean;
 }
 
 /**
@@ -35,8 +37,13 @@ interface GenerateInsightsInput {
  */
 export function useGenerateInsights() {
   return useMutation<InsightsResult, Error, GenerateInsightsInput>({
-    mutationFn: async ({ range, goals, conditions }) => {
-      const snapshot = await buildAnalyticsSnapshot(range, goals, conditions);
+    mutationFn: async ({ range, goals, conditions, includeMedications }) => {
+      const snapshot = await buildAnalyticsSnapshot(
+        range,
+        goals,
+        conditions,
+        includeMedications,
+      );
       if (snapshotIsEmpty(snapshot)) {
         throw new NotEnoughDataError();
       }

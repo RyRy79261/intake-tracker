@@ -122,8 +122,22 @@ export function MedicalContextSection() {
             </Button>
           </div>
 
-          <div className="pt-3 border-t">
-            <AiInsightsConsentToggle />
+          <div className="pt-3 border-t space-y-4">
+            <AiInsightsConsentToggle
+              field="shareConditionsWithAI"
+              label="Share conditions with AI insights"
+              noun="conditions"
+            />
+            <AiInsightsConsentToggle
+              field="shareMedicationsWithAI"
+              label="Share medications with AI insights"
+              noun="medications"
+            />
+            <p className="text-xs text-muted-foreground">
+              Sharing medications sends your active prescriptions — name, dose,
+              frequency, and how long the current titration or maintenance
+              phase has run. Manage medications on the Medications page.
+            </p>
           </div>
         </CardContent>
       </Card>

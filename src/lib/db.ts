@@ -356,6 +356,7 @@ export interface UserProfile {
   id: string;
   conditions: string[]; // user-reported medical conditions, e.g. "HFrEF"
   shareConditionsWithAI: boolean; // opt-in: include conditions in AI insights
+  shareMedicationsWithAI: boolean; // opt-in: include active medications in AI insights
   aiInsightsConsentAt: number | null; // when the user first consented; null = never
   createdAt: number;
   updatedAt: number;

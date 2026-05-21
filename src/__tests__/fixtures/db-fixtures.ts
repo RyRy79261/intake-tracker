@@ -269,6 +269,7 @@ export function makeUserProfile(overrides?: Partial<UserProfile>): UserProfile {
     id: crypto.randomUUID(),
     conditions: [],
     shareConditionsWithAI: false,
+    shareMedicationsWithAI: false,
     aiInsightsConsentAt: null,
     createdAt: BASE_TS,
     updatedAt: BASE_TS,

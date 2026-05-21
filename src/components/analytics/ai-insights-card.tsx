@@ -24,15 +24,18 @@ export function AiInsightsCard() {
   const { toast } = useToast();
   const { mutate, isPending } = useGenerateInsights();
 
-  const personalised =
+  const shareConditions =
     profile.shareConditionsWithAI && profile.conditions.length > 0;
+  const shareMedications = profile.shareMedicationsWithAI;
+  const personalised = shareConditions || shareMedications;
 
   const generate = () => {
     mutate(
       {
         range: insightsRange(),
         goals: { waterGoalMl, sodiumLimitMg },
-        ...(personalised && { conditions: profile.conditions }),
+        ...(shareConditions && { conditions: profile.conditions }),
+        ...(shareMedications && { includeMedications: true }),
       },
       {
         onSuccess: setResult,
@@ -104,7 +107,7 @@ export function AiInsightsCard() {
 
         {personalised && (
           <p className="text-[11px] text-muted-foreground">
-            Personalised with the conditions in your profile.
+            Personalised with your medical profile.
           </p>
         )}
       </CardContent>

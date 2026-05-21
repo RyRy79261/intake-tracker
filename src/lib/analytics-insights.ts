@@ -74,12 +74,26 @@ const CorrelationMetricSchema = z.object({
 });
 
 /**
+ * A single active medication — the user's current prescription with its dose,
+ * frequency, and how long the active maintenance/titration phase has run.
+ */
+const MedicationSchema = z.object({
+  name: z.string().min(1).max(120),
+  phaseType: z.enum(["maintenance", "titration"]),
+  dose: z.string().min(1).max(80),
+  frequency: z.string().min(1).max(120),
+  daysOnPhase: z.number().int().nonnegative(),
+});
+
+/**
  * Optional user-reported clinical context. Conditions are short, structured
- * labels (e.g. "HFrEF") — not free text or record notes — and only reach this
- * request when the user has explicitly opted in on the profile page.
+ * labels (e.g. "HFrEF") and medications are the structured active-prescription
+ * list — not free text or record notes. Both only reach this request when the
+ * user has explicitly opted in on the profile page.
  */
 const ProfileSchema = z.object({
   conditions: z.array(z.string().min(1).max(120)).max(20),
+  medications: z.array(MedicationSchema).max(40).optional(),
 });
 
 export const AnalyticsInsightsRequestSchema = z.object({
@@ -153,7 +167,7 @@ export const INSIGHTS_SYSTEM_PROMPT = `You summarise personal health-tracking me
 Rules:
 - Be factual and specific. Reference the actual numbers you are given.
 - Describe what the data shows. Do NOT diagnose new conditions, and do NOT recommend, prescribe, or suggest changes to treatment, medication, or dosage.
-- If the user has supplied known medical conditions, you MAY use them as clinical context: explain why a tracked goal or limit matters for someone with that condition, and prioritise the observations most relevant to it (for example, framing fluid balance, sodium intake, and short-term weight change in the context of heart failure). Keep this as general, educational context — not personalised medical advice — and never act as the user's clinician.
+- If the user has supplied known medical conditions or a current medication list, you MAY use them as clinical context: explain why a tracked goal or limit matters for someone with that condition or treatment, and prioritise the observations most relevant to it (for example, framing fluid balance, sodium intake, and short-term weight change in the context of heart failure, or noting how long a titration phase has been running). Keep this as general, educational context — not personalised medical advice — and never act as the user's clinician.
 - Treat low-confidence trends as inconclusive rather than asserting a direction.
 - A correlation with fewer than 3 paired days is insufficient data, not evidence of "no relationship".
 - Correlation is not causation — never imply one metric causes another.
@@ -192,6 +206,20 @@ export function buildInsightsPrompt(req: AnalyticsInsightsRequest): string {
     lines.push(
       `User-reported medical conditions: ${profile.conditions.join("; ")}.`,
       "Use these as clinical context to explain why the tracked goals matter and to prioritise the most relevant observations. Do not diagnose new conditions or recommend treatment.",
+      "",
+    );
+  }
+
+  if (profile && profile.medications && profile.medications.length > 0) {
+    lines.push("Current medications (user-reported):");
+    for (const m of profile.medications) {
+      lines.push(
+        `- ${m.name}: ${m.phaseType} phase, ${m.dose}, ${m.frequency}; ` +
+          `current phase active ${m.daysOnPhase} day(s).`,
+      );
+    }
+    lines.push(
+      "Use these only as context. Do not recommend, change, or suggest dosages.",
       "",
     );
   }

@@ -33,6 +33,7 @@ export function emptyProfile(): UserProfile {
     id: "",
     conditions: [],
     shareConditionsWithAI: false,
+    shareMedicationsWithAI: false,
     aiInsightsConsentAt: null,
     createdAt: now,
     updatedAt: now,
@@ -67,12 +68,16 @@ export async function getUserProfile(): Promise<UserProfile> {
   const active = rows
     .filter((r) => r.deletedAt === null)
     .sort((a, b) => b.updatedAt - a.updatedAt);
-  return active[0] ?? emptyProfile();
+  const row = active[0];
+  // Spread over emptyProfile so a row written before a field existed (e.g.
+  // shareMedicationsWithAI) still has every field defined.
+  return row ? { ...emptyProfile(), ...row } : emptyProfile();
 }
 
 export interface ProfileUpdates {
   conditions?: string[];
   shareConditionsWithAI?: boolean;
+  shareMedicationsWithAI?: boolean;
   aiInsightsConsentAt?: number | null;
 }
 
@@ -90,6 +95,9 @@ export async function saveUserProfile(
       }),
       ...(updates.shareConditionsWithAI !== undefined && {
         shareConditionsWithAI: updates.shareConditionsWithAI,
+      }),
+      ...(updates.shareMedicationsWithAI !== undefined && {
+        shareMedicationsWithAI: updates.shareMedicationsWithAI,
       }),
       ...(updates.aiInsightsConsentAt !== undefined && {
         aiInsightsConsentAt: updates.aiInsightsConsentAt,

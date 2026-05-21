@@ -12,6 +12,7 @@ import { unwrap } from "@/lib/service-result";
 import type { UserProfile } from "@/lib/db";
 
 export { MAX_CONDITIONS, MAX_CONDITION_LENGTH } from "@/lib/profile-service";
+export type { ProfileUpdates } from "@/lib/profile-service";
 
 /** Live medical profile. Returns a blank profile until the query resolves. */
 export function useUserProfile(): UserProfile {
