@@ -277,7 +277,8 @@ export interface SubstanceRecord {
   id: string;
   type: 'caffeine' | 'alcohol';
   amountMg?: number;           // caffeine mg
-  amountStandardDrinks?: number; // alcohol standard drinks
+  amountStandardDrinks?: number; // alcohol: metric standard drinks (derived from abvPercent + volumeMl)
+  abvPercent?: number;          // alcohol: alcohol by volume %, the user-entered input value
   volumeMl?: number;            // liquid volume for fluid balance linking
   description: string;
   source: 'water_intake' | 'eating' | 'standalone';

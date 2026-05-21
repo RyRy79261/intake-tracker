@@ -174,26 +174,70 @@ export function TitrationPlanCard({
                 )}
                 {plan.status === "active" && (
                   <>
-                    <Button
-                      variant="default"
-                      size="sm"
-                      className="h-7 text-xs gap-1 bg-emerald-600 hover:bg-emerald-700"
-                      onClick={() => completeMutation.mutate(plan.id)}
-                      disabled={completeMutation.isPending}
-                    >
-                      <CheckCircle2 className="w-3 h-3" />
-                      Complete &amp; Promote
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs gap-1 text-red-500 hover:text-red-600"
-                      onClick={() => cancelMutation.mutate(plan.id)}
-                      disabled={cancelMutation.isPending}
-                    >
-                      <XCircle className="w-3 h-3" />
-                      Cancel
-                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          variant="default"
+                          size="sm"
+                          className="h-7 text-xs gap-1 bg-emerald-600 hover:bg-emerald-700"
+                          disabled={completeMutation.isPending}
+                        >
+                          <CheckCircle2 className="w-3 h-3" />
+                          Complete &amp; Promote
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Complete titration?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This finishes &ldquo;{plan.title}&rdquo; and promotes its
+                            doses to become the new maintenance schedule for every
+                            prescription in the plan. This replaces the current
+                            baseline and cannot be undone.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            className="bg-emerald-600 hover:bg-emerald-700"
+                            onClick={() => completeMutation.mutate(plan.id)}
+                          >
+                            Complete &amp; Promote
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs gap-1 text-red-500 hover:text-red-600"
+                          disabled={cancelMutation.isPending}
+                        >
+                          <XCircle className="w-3 h-3" />
+                          Cancel
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Cancel titration?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            &ldquo;{plan.title}&rdquo; will stop and every affected
+                            prescription reverts to its maintenance schedule.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Keep running</AlertDialogCancel>
+                          <AlertDialogAction
+                            className="bg-red-600 hover:bg-red-700"
+                            onClick={() => cancelMutation.mutate(plan.id)}
+                          >
+                            Cancel titration
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   </>
                 )}
                 {(plan.status === "draft" || plan.status === "cancelled") && (

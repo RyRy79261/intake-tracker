@@ -14,6 +14,7 @@ import { useAddUrination } from "@/hooks/use-urination-queries";
 import { useAddDefecation } from "@/hooks/use-defecation-queries";
 import { useAddSubstance } from "@/hooks/use-substance-queries";
 import type { VoiceParsedItem, VoiceParseResponse } from "@/lib/voice-types";
+import { standardDrinksFromAbv } from "@/lib/alcohol-units";
 import { apiFetch } from "@/lib/api-fetch";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -220,14 +221,18 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
               description: item.description,
             });
             break;
-          case "alcohol":
+          case "alcohol": {
+            const stdDrinks =
+              Math.round(standardDrinksFromAbv(item.abvPercent, item.volumeMl) * 10) / 10;
             await addSubstance({
               type: "alcohol",
-              amountStandardDrinks: item.standardDrinks,
-              ...(item.volumeMl !== undefined && { volumeMl: item.volumeMl }),
+              amountStandardDrinks: stdDrinks,
+              abvPercent: item.abvPercent,
+              volumeMl: item.volumeMl,
               description: item.description,
             });
             break;
+          }
           case "urination":
             await addUrination.mutateAsync({
               ...(item.amountEstimate !== undefined && {

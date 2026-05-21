@@ -60,7 +60,7 @@ export function MedicationCard({ item, prescription }: MedicationCardProps) {
               <span className="text-xs text-muted-foreground">{stockDisplay}</span>
               {item.updatedAt && (
                 <span className="text-[10px] text-muted-foreground/70">
-                  Refilled {new Date(item.updatedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                  Updated {new Date(item.updatedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                 </span>
               )}
               {isNegativeStock && (
@@ -79,6 +79,7 @@ export function MedicationCard({ item, prescription }: MedicationCardProps) {
       </motion.div>
 
       <InventoryItemViewDrawer
+        item={item}
         prescription={prescription ?? null}
         open={drawerOpen}
         onOpenChange={setDrawerOpen}

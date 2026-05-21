@@ -8,6 +8,7 @@ export type AddSubstanceInput = {
   type: 'caffeine' | 'alcohol';
   amountMg?: number;
   amountStandardDrinks?: number;
+  abvPercent?: number;
   volumeMl?: number;
   description: string;
   source?: 'standalone';
@@ -28,6 +29,7 @@ export async function addSubstanceRecord(
       type: input.type,
       ...(input.amountMg !== undefined && { amountMg: input.amountMg }),
       ...(input.amountStandardDrinks !== undefined && { amountStandardDrinks: input.amountStandardDrinks }),
+      ...(input.abvPercent !== undefined && { abvPercent: input.abvPercent }),
       ...(input.volumeMl !== undefined && { volumeMl: input.volumeMl }),
       description: input.description,
       source: input.source ?? "standalone",

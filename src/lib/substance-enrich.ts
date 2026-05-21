@@ -67,6 +67,7 @@ export async function runSubstanceEnrichment(): Promise<{
             await updateSubstanceRecord(record.id, {
               amountStandardDrinks: data.standardDrinks,
               volumeMl: data.volumeMl,
+              ...(data.abvPercent !== undefined && { abvPercent: data.abvPercent }),
               aiEnriched: true,
             });
             return { success: true as const, id: record.id };

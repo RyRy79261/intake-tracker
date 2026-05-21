@@ -25,6 +25,9 @@ interface EditSubstanceDialogProps {
   onDescriptionChange: (value: string) => void;
   amount: string;
   onAmountChange: (value: string) => void;
+  /** Alcohol only — volume in ml, paired with ABV % to derive standard drinks. */
+  volume: string;
+  onVolumeChange: (value: string) => void;
   onFocus?: (e: FocusEvent<HTMLInputElement>) => void;
 }
 
@@ -38,11 +41,13 @@ export function EditSubstanceDialog({
   onDescriptionChange,
   amount,
   onAmountChange,
+  volume,
+  onVolumeChange,
   onFocus,
 }: EditSubstanceDialogProps) {
   const isCaffeine = record?.type === "caffeine";
   const theme = CARD_THEMES[isCaffeine ? "caffeine" : "alcohol"];
-  const amountLabel = isCaffeine ? "Caffeine (mg)" : "Standard drinks";
+  const amountLabel = isCaffeine ? "Caffeine (mg)" : "% ABV";
   const amountStep = isCaffeine ? "1" : "0.1";
 
   return (
@@ -92,6 +97,24 @@ export function EditSubstanceDialog({
               onFocus={onFocus}
             />
           </div>
+          {!isCaffeine && (
+            <div className="space-y-2">
+              <Label htmlFor="edit-substance-volume">Volume (ml)</Label>
+              <Input
+                id="edit-substance-volume"
+                type="number"
+                inputMode="numeric"
+                min={0}
+                step="1"
+                value={volume}
+                onChange={(e) => onVolumeChange(e.target.value)}
+                onFocus={onFocus}
+              />
+              <p className="text-xs text-muted-foreground">
+                Standard drinks are calculated from ABV % and volume.
+              </p>
+            </div>
+          )}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel

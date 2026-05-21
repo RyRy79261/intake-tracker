@@ -18,3 +18,17 @@ export function ethanolGrams(abvPercent: number, volumeMl: number): number {
 export function standardDrinksFromAbv(abvPercent: number, volumeMl: number): number {
   return ethanolGrams(abvPercent, volumeMl) / GRAMS_PER_STANDARD_DRINK;
 }
+
+/**
+ * Inverse of standardDrinksFromAbv: recover the ABV % of a drink from its
+ * metric standard-drink count and volume. Used to show legacy alcohol records
+ * (logged before abvPercent was stored) back in percentage terms for editing.
+ * Returns 0 when the volume is non-positive.
+ */
+export function abvFromStandardDrinks(standardDrinks: number, volumeMl: number): number {
+  if (volumeMl <= 0) return 0;
+  return (
+    (standardDrinks * GRAMS_PER_STANDARD_DRINK) /
+    (volumeMl * ETHANOL_DENSITY_G_PER_ML)
+  ) * 100;
+}

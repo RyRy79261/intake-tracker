@@ -5,9 +5,15 @@ import { motion, AnimatePresence } from "motion/react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CompoundCardExpanded } from "@/components/medications/compound-card-expanded";
+import { InventoryItemViewDrawer } from "@/components/medications/inventory-item-view-drawer";
 import { ChevronDown } from "lucide-react";
 import { PillIconWithBadge } from "@/components/medications/pill-icon";
-import { formatPillCount } from "@/lib/medication-ui-utils";
+import {
+  formatPillCount,
+  getEffectivePhase,
+  getActiveTitrationPhase,
+  getPendingTitrationPhase,
+} from "@/lib/medication-ui-utils";
 import {
   usePhasesForPrescription,
   useInventoryForPrescription,
@@ -32,6 +38,7 @@ function getTodayDateStr(): string {
 
 export function PrescriptionCard({ prescription, expanded: controlledExpanded, onToggleExpanded, className }: PrescriptionCardProps) {
   const [internalExpanded, setInternalExpanded] = useState(false);
+  const [medDrawerOpen, setMedDrawerOpen] = useState(false);
   const expanded = controlledExpanded ?? internalExpanded;
   const toggleExpanded = onToggleExpanded ?? (() => setInternalExpanded((v) => !v));
 
@@ -40,8 +47,9 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
   const inventoryItems = useInventoryForPrescription(prescription.id);
   const allSlots = useDailyDoseSchedule(todayDateStr);
 
-  const activePhase = phases.find((p) => p.status === "active");
-  const hasPendingPhase = phases.some((p) => p.status === "pending");
+  const effectivePhase = getEffectivePhase(phases);
+  const activeTitration = getActiveTitrationPhase(phases);
+  const pendingTitration = getPendingTitrationPhase(phases);
   const activeInventory = inventoryItems.find((item) => item.isActive && !item.isArchived);
 
   const slotsArray = allSlots ?? [];
@@ -51,14 +59,14 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
 
   const firstSlot = prescriptionSlots.length > 0 ? prescriptionSlots[0] : undefined;
   const dosageMg = firstSlot?.dosageMg;
-  const unit = activePhase?.unit ?? "mg";
+  const unit = effectivePhase?.unit ?? "mg";
 
   const pendingSlots = prescriptionSlots.filter((s) => s.status === "pending");
   const allHandled = prescriptionSlots.length > 0 && pendingSlots.length === 0;
   const firstPending = pendingSlots.length > 0 ? pendingSlots[0] : undefined;
   const nextDoseTime = firstPending?.localTime ?? null;
 
-  const isAsNeeded = !activePhase;
+  const isAsNeeded = !effectivePhase;
 
   let nextDoseLabel: string;
   if (isAsNeeded) {
@@ -74,11 +82,6 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
   }
 
   const currentStock = activeInventory?.currentStock ?? 0;
-  const isFractional = currentStock % 1 !== 0;
-  const stockDisplay = isFractional
-    ? formatPillCount(currentStock)
-    : `${currentStock} pills`;
-
   const isNegativeStock = activeInventory && currentStock < 0;
   const isLowStock =
     activeInventory &&
@@ -128,9 +131,14 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
         </div>
 
         <div className="flex items-center gap-1 flex-wrap mt-1">
-          {hasPendingPhase && (
-            <Badge className="text-[9px] px-1 py-0 bg-blue-500 hover:bg-blue-600 text-white">
-              Titration
+          {activeTitration && (
+            <Badge className="text-[9px] px-1 py-0 bg-amber-500 hover:bg-amber-600 text-white">
+              On titration
+            </Badge>
+          )}
+          {!activeTitration && pendingTitration && (
+            <Badge variant="outline" className="text-[9px] px-1 py-0 border-blue-400 text-blue-600 dark:text-blue-400">
+              Titration planned
             </Badge>
           )}
           {isNegativeStock && (
@@ -145,9 +153,21 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
           )}
         </div>
 
-        {/* Active medication mini-card — always visible */}
+        {/* Active medicine mini-card — tap to open that medicine's details */}
         {activeInventory && (
-          <div className="mt-1.5 p-1.5 rounded-md bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200/60 dark:border-emerald-800/40 flex items-center gap-1.5">
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={(e) => { e.stopPropagation(); setMedDrawerOpen(true); }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.stopPropagation();
+                e.preventDefault();
+                setMedDrawerOpen(true);
+              }
+            }}
+            className="mt-1.5 p-1.5 rounded-md bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200/60 dark:border-emerald-800/40 flex items-center gap-1.5 cursor-pointer hover:bg-emerald-100/80 dark:hover:bg-emerald-900/40 transition-colors"
+          >
             <PillIconWithBadge
               shape={activeInventory.pillShape ?? "round"}
               color={activeInventory.pillColor ?? "#94a3b8"}
@@ -165,7 +185,7 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
               {firstSlot?.pillsPerDose != null && dosageMg != null && (
                 <p className="text-[9px] text-emerald-600 dark:text-emerald-400">
                   {formatPillCount(firstSlot.pillsPerDose)} of {dosageMg}{unit}
-                  {activePhase?.foodInstruction && activePhase.foodInstruction !== "none" && ` · ${activePhase.foodInstruction} eating`}
+                  {effectivePhase?.foodInstruction && effectivePhase.foodInstruction !== "none" && ` · ${effectivePhase.foodInstruction} eating`}
                 </p>
               )}
             </div>
@@ -181,15 +201,18 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
               transition={{ duration: 0.2 }}
               className="overflow-hidden"
             >
-              <CompoundCardExpanded
-                prescription={prescription}
-                onClose={toggleExpanded}
-              />
+              <CompoundCardExpanded prescription={prescription} />
             </motion.div>
           )}
         </AnimatePresence>
       </Card>
+
+      <InventoryItemViewDrawer
+        item={activeInventory ?? null}
+        prescription={prescription}
+        open={medDrawerOpen}
+        onOpenChange={setMedDrawerOpen}
+      />
     </motion.div>
   );
 }
-
