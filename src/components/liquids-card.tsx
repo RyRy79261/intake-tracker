@@ -134,14 +134,17 @@ export function LiquidsCard() {
           } else if (substance.type === "alcohol") {
             // Prefer the stored ABV %; fall back to deriving it from the
             // legacy std-drinks value and the entry's volume for old records.
-            const abv =
-              substance.abvPercent ??
-              (substance.amountStandardDrinks !== undefined
-                ? abvFromStandardDrinks(
-                    substance.amountStandardDrinks,
-                    substance.volumeMl ?? record.amount,
-                  )
-                : undefined);
+            let abv = substance.abvPercent;
+            if (abv === undefined && substance.amountStandardDrinks !== undefined) {
+              const vol = substance.volumeMl ?? record.amount;
+              if (vol > 0) {
+                const derived = abvFromStandardDrinks(
+                  substance.amountStandardDrinks,
+                  vol,
+                );
+                if (Number.isFinite(derived)) abv = derived;
+              }
+            }
             if (abv !== undefined) {
               setEditSubstanceAmount(parseFloat(abv.toFixed(1)).toString());
             }

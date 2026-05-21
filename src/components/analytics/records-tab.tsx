@@ -313,21 +313,31 @@ export function RecordsTab({ range }: RecordsTabProps) {
     if (hasAmount && (isNaN(amt) || amt < 0)) { toast({ title: "Invalid amount", variant: "destructive" }); return; }
     const vol = parseFloat(editSubstanceVolume);
     const hasVolume = editSubstanceVolume.trim() !== "" && !isNaN(vol) && vol > 0;
+    // Alcohol amount is ABV %; standard drinks are derived from ABV % + volume,
+    // so both must be valid before persisting an alcohol amount change.
+    if (hasAmount && editingSubstance.type === "alcohol") {
+      if (amt <= 0 || amt > 100) {
+        toast({ title: "ABV must be between 0 and 100", variant: "destructive" });
+        return;
+      }
+      if (!hasVolume) {
+        toast({ title: "Enter a volume greater than 0", variant: "destructive" });
+        return;
+      }
+    }
     try {
       let amountField: Partial<SubstanceRecord> = {};
       if (hasAmount) {
         if (editingSubstance.type === "caffeine") {
           amountField = { amountMg: amt };
         } else {
-          // `amt` is ABV %. Standard drinks are derived from ABV % and volume.
+          // `amt` is ABV %; volume is validated as positive above.
           amountField = {
             abvPercent: amt,
-            ...(hasVolume && {
-              volumeMl: vol,
-              amountStandardDrinks: parseFloat(
-                standardDrinksFromAbv(amt, vol).toFixed(2),
-              ),
-            }),
+            volumeMl: vol,
+            amountStandardDrinks: parseFloat(
+              standardDrinksFromAbv(amt, vol).toFixed(2),
+            ),
           };
         }
       }

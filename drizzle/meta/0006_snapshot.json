@@ -2855,6 +2855,10 @@
         "substance_records_source_check": {
           "name": "substance_records_source_check",
           "value": "\"substance_records\".\"source\" IN ('water_intake','eating','standalone')"
+        },
+        "substance_records_abv_percent_range": {
+          "name": "substance_records_abv_percent_range",
+          "value": "\"substance_records\".\"abv_percent\" IS NULL OR (\"substance_records\".\"abv_percent\" >= 0 AND \"substance_records\".\"abv_percent\" <= 100)"
         }
       },
       "isRLSEnabled": false
