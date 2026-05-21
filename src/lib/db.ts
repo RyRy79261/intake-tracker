@@ -137,6 +137,18 @@ export type PillShape = "round" | "oval" | "capsule" | "diamond" | "tablet";
 export type FoodInstruction = "before" | "after" | "none";
 export type DoseStatus = "taken" | "skipped" | "rescheduled" | "pending";
 
+/**
+ * One active ingredient of a combination drug, with its per-pill (or
+ * per-reference-dose) strength. Combination tablets like Entresto/Vymada
+ * carry two: e.g. `{ name: "Sacubitril", strength: 49 }` +
+ * `{ name: "Valsartan", strength: 51 }` for a "Vymada 100" tablet.
+ * The unit is shared with the parent record's `unit` field (normally "mg").
+ */
+export interface CompoundStrength {
+  name: string;
+  strength: number;
+}
+
 export interface Prescription {
   id: string;
   genericName: string;
@@ -144,6 +156,13 @@ export interface Prescription {
   notes?: string;
   contraindications?: string[];
   warnings?: string[];
+  /**
+   * Active ingredients for a combination drug. Absent ⇒ single-compound
+   * prescription (the common case). When present (length ≥ 2) the strengths
+   * describe one standard reference dose and fix the compound ratio used to
+   * label doses. Non-indexed — no Dexie version bump required.
+   */
+  compounds?: CompoundStrength[];
   isActive: boolean;
   createdAt: number;
   updatedAt: number;
@@ -210,7 +229,15 @@ export interface InventoryItem {
   brandName: string;
   /** @deprecated Use inventoryTransactions sum. Will be removed in Phase 3. */
   currentStock?: number;
+  /** Sum of `compounds` strengths for a combination tablet; the single
+   *  per-pill strength otherwise. Always the pill-math denominator. */
   strength: number;
+  /**
+   * Per-pill breakdown for a combination tablet (e.g. Vymada 100 ⇒
+   * Sacubitril 49 + Valsartan 51). Absent ⇒ single-compound pill.
+   * `strength` stays authoritative for dose math; this is descriptive.
+   */
+  compounds?: CompoundStrength[];
   unit: string;
   pillShape: PillShape;
   pillColor: string;

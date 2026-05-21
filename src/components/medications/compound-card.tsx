@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PillIconWithBadge } from "@/components/medications/pill-icon";
 import { formatPillCount } from "@/lib/medication-ui-utils";
+import { isCombo, formatCompoundShort } from "@/lib/compound-utils";
 import { InventoryItemViewDrawer } from "@/components/medications/inventory-item-view-drawer";
 import type { InventoryItem, Prescription } from "@/lib/db";
 
@@ -47,7 +48,9 @@ export function MedicationCard({ item, prescription }: MedicationCardProps) {
                 {item.brandName}
               </h3>
               <p className="text-xs text-muted-foreground">
-                {item.strength}{item.unit ?? "mg"}
+                {isCombo(item)
+                  ? formatCompoundShort(item.compounds, item.unit ?? "mg")
+                  : `${item.strength}${item.unit ?? "mg"}`}
               </p>
               {prescription && (
                 <p className="text-[11px] text-muted-foreground truncate">

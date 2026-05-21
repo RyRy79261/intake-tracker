@@ -26,6 +26,19 @@ All data lives in **IndexedDB via Dexie.js** (`src/lib/db.ts`). There is no serv
 
 When adding a new Dexie version, you must repeat all existing store definitions (Dexie requires the full schema each version).
 
+### Database Migrations (Drizzle / Neon Postgres)
+
+The sync engine mirrors every Dexie table to Neon Postgres. The server schema lives in `src/db/schema.ts` and must stay field-for-field in parity with the Dexie interfaces in `src/lib/db.ts` — `src/__tests__/schema-parity.test.ts` fails the build otherwise.
+
+Workflow: edit `src/db/schema.ts`, run `pnpm db:generate` (emits a numbered SQL file + snapshot under `drizzle/`), commit the generated files. `pnpm db:migrate` applies them. **Never** run `drizzle-kit push`.
+
+**Migration timestamp footgun.** drizzle's migrator applies a migration only when its journal `when` exceeds the highest `created_at` already recorded in the target database's `__drizzle_migrations` table. Migrations 0006–0010 carry **hand-edited future-dated `when` values** (up to `1780100000000` ≈ 2026-05-29) — a pre-existing wart (see commit `7935991`).
+
+- **Until ≈ 2026-05-29:** a freshly generated migration gets a real `Date.now()` that sorts *below* those fakes, so the migrator silently skips it (while still printing "Migrations applied successfully"). Hand-bumping the new entry's `when` in `drizzle/meta/_journal.json` above the last entry may be unavoidable — do it only when necessary.
+- **After ≈ 2026-05-29:** real generated timestamps exceed every deployed migration on their own. **Never hand-edit `_journal.json` again** — `drizzle-kit generate` is the only thing that should write `when`.
+
+`src/__tests__/migration/drizzle-journal.test.ts` enforces both rules: `when` must strictly increase, and (once past the cutoff) no entry may be future-dated.
+
 ### Service Layer
 
 Each data domain has a service file in `src/lib/` (e.g., `intake-service.ts`, `medication-service.ts`, `health-service.ts`) that handles CRUD operations against Dexie. Corresponding React Query hooks in `src/hooks/` (e.g., `use-intake-queries.ts`, `use-medication-queries.ts`) wrap service calls with cache invalidation.

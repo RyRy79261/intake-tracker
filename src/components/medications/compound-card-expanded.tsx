@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PillIcon } from "@/components/medications/pill-icon";
 import { formatPillCount, getEffectivePhase } from "@/lib/medication-ui-utils";
+import { isCombo, splitDose, formatCompoundShort } from "@/lib/compound-utils";
 import {
   useInventoryForPrescription,
   usePhasesForPrescription,
@@ -57,6 +58,13 @@ export function CompoundCardExpanded({ prescription }: CompoundCardExpandedProps
     });
 
   const hasMultipleBrands = sortedInventory.length > 1;
+
+  // For a combination drug, render a summed mg dose as its per-compound split.
+  const comboPrescription = isCombo(prescription);
+  const fmtDose = (mg: number, unit: string) =>
+    comboPrescription
+      ? formatCompoundShort(splitDose(mg, prescription.compounds), unit)
+      : `${mg}${unit}`;
 
   const openItem = (item: InventoryItem) => {
     setSelectedItem(item);
@@ -117,7 +125,9 @@ export function CompoundCardExpanded({ prescription }: CompoundCardExpandedProps
                       )}
                     </div>
                     <span className="text-xs text-muted-foreground">
-                      {item.strength}{item.unit}
+                      {isCombo(item)
+                        ? formatCompoundShort(item.compounds, item.unit)
+                        : `${item.strength}${item.unit}`}
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
@@ -166,7 +176,7 @@ export function CompoundCardExpanded({ prescription }: CompoundCardExpandedProps
                     <div className="flex items-center gap-2 text-xs">
                       <Clock className="w-3 h-3 text-muted-foreground" />
                       <span className="font-medium">
-                        {schedules[0].dosage}{effectivePhase.unit} {freq}
+                        {fmtDose(schedules[0].dosage, effectivePhase.unit)} {freq}
                       </span>
                       <span className="text-muted-foreground">at {times}</span>
                     </div>
@@ -175,7 +185,7 @@ export function CompoundCardExpanded({ prescription }: CompoundCardExpandedProps
                 return schedules.map(s => (
                   <div key={s.id} className="flex items-center gap-2 text-xs">
                     <Clock className="w-3 h-3 text-muted-foreground" />
-                    <span className="font-medium">{s.dosage}{effectivePhase.unit}</span>
+                    <span className="font-medium">{fmtDose(s.dosage, effectivePhase.unit)}</span>
                     <span className="text-muted-foreground">at {s.time}</span>
                   </div>
                 ));
@@ -224,8 +234,7 @@ export function CompoundCardExpanded({ prescription }: CompoundCardExpandedProps
                 )}
                 <span className="text-muted-foreground">{slot.localTime}</span>
                 <span className="text-muted-foreground">
-                  {slot.dosageMg}
-                  {slot.unit}
+                  {fmtDose(slot.dosageMg, slot.unit)}
                 </span>
                 <span
                   className={`ml-auto text-[10px] font-medium ${

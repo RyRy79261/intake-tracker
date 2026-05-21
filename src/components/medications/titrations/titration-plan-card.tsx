@@ -38,6 +38,7 @@ import {
 import type { MedicationPhase, TitrationPlan } from "@/lib/db";
 import { cn } from "@/lib/utils";
 import { DAY_LABELS_LONG } from "@/components/medications/titrations/types";
+import { isCombo, splitDose, formatCompoundShort } from "@/lib/compound-utils";
 
 export function TitrationPlanCard({
   plan, onEdit,
@@ -311,7 +312,9 @@ function PhaseEntryRow({ phase }: { phase: MedicationPhase }) {
               <Clock className="w-3 h-3" />
               <span>{s.time}</span>
               <span className="font-medium text-foreground">
-                {s.dosage}{phase.unit}
+                {isCombo(rx)
+                  ? formatCompoundShort(splitDose(s.dosage, rx?.compounds), phase.unit)
+                  : `${s.dosage}${phase.unit}`}
               </span>
               {s.daysOfWeek.length < 7 && (
                 <span className="text-[10px]">

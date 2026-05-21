@@ -1,9 +1,9 @@
-import { type Prescription, type MedicationPhase, type InventoryItem, type PhaseSchedule, type PillShape, type FoodInstruction, type InventoryTransaction } from "@/lib/db";
+import { type Prescription, type MedicationPhase, type InventoryItem, type PhaseSchedule, type PillShape, type FoodInstruction, type InventoryTransaction, type CompoundStrength } from "@/lib/db";
 import { syncFields } from "@/lib/utils";
 import { getDeviceTimezone, localHHMMStringToUTCMinutes } from "@/lib/timezone";
 
 export function buildPrescription(
-  input: { genericName: string; indication: string; notes?: string; contraindications?: string[]; warnings?: string[] },
+  input: { genericName: string; indication: string; notes?: string; contraindications?: string[]; warnings?: string[]; compounds?: CompoundStrength[] },
   now: number,
 ): Prescription {
   const sf = syncFields();
@@ -14,6 +14,7 @@ export function buildPrescription(
     ...(input.notes !== undefined && { notes: input.notes }),
     ...(input.contraindications !== undefined && { contraindications: input.contraindications }),
     ...(input.warnings !== undefined && { warnings: input.warnings }),
+    ...(input.compounds !== undefined && input.compounds.length > 0 && { compounds: input.compounds }),
     isActive: true,
     createdAt: now,
     updatedAt: now,
@@ -48,7 +49,7 @@ export function buildPhase(
 
 export function buildInventory(
   prescriptionId: string,
-  input: { brandName: string; currentStock: number; strength: number; unit: string; pillShape: PillShape; pillColor: string; visualIdentification?: string; refillAlertDays?: number; refillAlertPills?: number },
+  input: { brandName: string; currentStock: number; strength: number; unit: string; pillShape: PillShape; pillColor: string; visualIdentification?: string; refillAlertDays?: number; refillAlertPills?: number; compounds?: CompoundStrength[] },
   now: number,
 ): InventoryItem {
   const sf = syncFields();
@@ -58,6 +59,7 @@ export function buildInventory(
     brandName: input.brandName,
     currentStock: input.currentStock,
     strength: input.strength,
+    ...(input.compounds !== undefined && input.compounds.length > 0 && { compounds: input.compounds }),
     unit: input.unit,
     pillShape: input.pillShape,
     pillColor: input.pillColor,

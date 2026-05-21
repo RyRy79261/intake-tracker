@@ -11,7 +11,7 @@ import { useMedicineSearch, MedicineSearchCancelledError } from "@/hooks/use-med
 import { useAuthGate } from "@/components/auth-guard";
 import { useAddPrescription, usePrescriptions, useAddMedicationToPrescription, usePhasesForPrescription } from "@/hooks/use-medication-queries";
 import { useToast } from "@/hooks/use-toast";
-import type { PillShape, MedicationPhase } from "@/lib/db";
+import type { PillShape, MedicationPhase, CompoundStrength } from "@/lib/db";
 import { ArrowLeft, ArrowRight, Loader2, Check, X } from "lucide-react";
 import { useInteractionCheck } from "@/hooks/use-interaction-check";
 import { cn } from "@/lib/utils";
@@ -28,6 +28,7 @@ import { ScheduleStep } from "@/components/medications/add-medication-steps/sche
 import { InventoryStep } from "@/components/medications/add-medication-steps/inventory-step";
 import { ConflictCheckOverlay, type ConflictCheckState } from "@/components/medications/add-medication-steps/conflict-check-overlay";
 import { PILL_SHAPES, COLOR_NAME_MAP } from "@/components/medications/add-medication-steps/types";
+import { compoundSum, formatCompoundNames } from "@/lib/compound-utils";
 
 const STEPS: WizardStep[] = ["search", "appearance", "indication", "dosage", "schedule", "inventory"];
 const STEP_LABELS: Record<WizardStep, string> = {
@@ -48,6 +49,14 @@ function capitalizeWords(str: string) {
   if (!str) return "";
   return str.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
 }
+
+// Two blank ingredient rows — the combo-fields' "cleared" state, mirroring
+// the wizard form's initial value. A fresh array per call avoids sharing a
+// mutable reference across patches.
+const emptyCompounds = (): CompoundStrength[] => [
+  { name: "", strength: 0 },
+  { name: "", strength: 0 },
+];
 
 export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardProps) {
   const { toast } = useToast();
@@ -81,14 +90,26 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
   const handlePrescriptionSelect = useCallback((id: string) => {
     onFieldChange("selectedPrescriptionId", id);
     if (id !== "new") {
+      const partial: Partial<AddMedicationFormState> = {};
       const activePhase = selectedPrescriptionPhases.find((p: MedicationPhase) => p.status === "active");
       if (activePhase) {
-        const partial: Partial<AddMedicationFormState> = { foodInstruction: activePhase.foodInstruction };
+        partial.foodInstruction = activePhase.foodInstruction;
         if (activePhase.foodNote) partial.foodNote = activePhase.foodNote;
-        patch(partial);
       }
+      // The selected prescription dictates combo mode: a combination Rx
+      // pre-fills the ingredient names (only the per-pill mg need entering),
+      // a single-compound Rx clears any stale combo state.
+      const rx = existingPrescriptions.find((p) => p.id === id);
+      if (rx?.compounds && rx.compounds.length >= 2) {
+        partial.isCombination = true;
+        partial.compounds = rx.compounds.map((c) => ({ name: c.name, strength: 0 }));
+      } else {
+        partial.isCombination = false;
+        partial.compounds = emptyCompounds();
+      }
+      if (Object.keys(partial).length > 0) patch(partial);
     }
-  }, [selectedPrescriptionPhases, onFieldChange, patch]);
+  }, [existingPrescriptions, selectedPrescriptionPhases, onFieldChange, patch]);
 
   const handleClose = useCallback(() => {
     onOpenChange(false);
@@ -128,6 +149,44 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
         } else if (result.dosageStrengths[0]) {
           partial.dosageStrength = result.dosageStrengths[0];
         }
+      }
+      // Combination drug: mirror the AI's verdict. ≥2 active ingredients ⇒
+      // enable combo mode and pre-fill compounds from a marketed strength
+      // option (matching the query's number when given), falling back to the
+      // ingredient names alone. A single-ingredient result clears any stale
+      // combo state left from a previous search.
+      const comboOptions = (result.strengthOptions ?? []).filter(
+        (o) => o.compounds.length >= 2,
+      );
+      if ((result.activeIngredients?.length ?? 0) >= 2) {
+        partial.isCombination = true;
+        if (comboOptions.length > 0) {
+          const doseMatch = query.match(/(\d+(?:\.\d+)?)/);
+          let chosen = comboOptions[0];
+          if (doseMatch && doseMatch[1]) {
+            const q = doseMatch[1];
+            const matched = comboOptions.find(
+              (o) =>
+                o.label.includes(q) ||
+                String(compoundSum(o.compounds)).startsWith(q),
+            );
+            if (matched) chosen = matched;
+          }
+          if (chosen) {
+            partial.compounds = chosen.compounds.map((c) => ({
+              name: c.name,
+              strength: c.strength,
+            }));
+          }
+        } else {
+          partial.compounds = result.activeIngredients!.map((name) => ({
+            name,
+            strength: 0,
+          }));
+        }
+      } else {
+        partial.isCombination = false;
+        partial.compounds = emptyCompounds();
       }
       if (result.commonIndications.length > 0) partial.indication = result.commonIndications.join(", ");
       if (result.contraindications) partial.contraindications = result.contraindications;
@@ -212,7 +271,17 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
       return { strength: 1, unit: "mg" };
     };
 
-    const { strength, unit } = parseStrength(formState.dosageStrength);
+    // Combination drugs keep `strength` as the SUM of compound strengths, so
+    // the pill math (dosage / strength) stays identical to single-compound.
+    const validCompounds = formState.compounds.filter(
+      (c) => c.name.trim() !== "" && c.strength > 0,
+    );
+    const isCombo = formState.isCombination && validCompounds.length >= 2;
+
+    const { strength, unit } = isCombo
+      ? { strength: compoundSum(validCompounds), unit: "mg" }
+      : parseStrength(formState.dosageStrength);
+    const compoundsForSave = isCombo ? validCompounds : undefined;
     const finalDosage = formState.customDosage ? parseFloat(formState.customDosage) : formState.dosageAmount;
     const scheduleDosage = (finalDosage || 1) * strength;
 
@@ -235,6 +304,7 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
           pillShape: formState.pillShape,
           pillColor: formState.pillColor,
           ...(formState.visualIdentification && { visualIdentification: formState.visualIdentification }),
+          ...(compoundsForSave && { compounds: compoundsForSave }),
           currentStock: parseInt(formState.currentStock) || 0,
           ...(refillDays !== undefined && { refillAlertDays: refillDays }),
           ...(refillPills !== undefined && { refillAlertPills: refillPills }),
@@ -242,12 +312,15 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
       } else {
         await addPrescriptionMutation.mutateAsync({
           brandName: finalBrandName,
-          genericName: formState.genericName || formState.brandName,
+          genericName:
+            formState.genericName ||
+            (isCombo ? formatCompoundNames(validCompounds) : formState.brandName),
           strength,
           unit,
           pillShape: formState.pillShape,
           pillColor: formState.pillColor,
           ...(formState.visualIdentification && { visualIdentification: formState.visualIdentification }),
+          ...(compoundsForSave && { compounds: compoundsForSave }),
           indication: formState.indication,
           ...(formState.contraindications.length > 0 && { contraindications: formState.contraindications }),
           ...(formState.warnings.length > 0 && { warnings: formState.warnings }),

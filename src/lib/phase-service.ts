@@ -1,4 +1,4 @@
-import { db, type MedicationPhase, type PhaseSchedule, type PillShape, type FoodInstruction } from "@/lib/db";
+import { db, type MedicationPhase, type PhaseSchedule, type PillShape, type FoodInstruction, type CompoundStrength } from "@/lib/db";
 import { ok, err, type ServiceResult } from "@/lib/service-result";
 import { syncFields } from "@/lib/utils";
 import { getDeviceTimezone, localHHMMStringToUTCMinutes } from "@/lib/timezone";
@@ -18,6 +18,8 @@ export interface AddMedicationToPrescriptionInput {
   visualIdentification?: string;
   refillAlertDays?: number;
   refillAlertPills?: number;
+  /** Per-pill combination-drug breakdown; omit for single-compound brands. */
+  compounds?: CompoundStrength[];
 }
 
 export interface CreatePhaseInput {

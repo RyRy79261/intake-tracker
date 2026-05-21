@@ -3,11 +3,14 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Loader2, Search } from "lucide-react";
 import { useAuthGate } from "@/components/auth-guard";
-import type { Prescription } from "@/lib/db";
+import type { Prescription, CompoundStrength } from "@/lib/db";
 import type { AddMedicationFormState } from "@/hooks/use-add-medication-form";
+import type { MedicineStrengthOption } from "@/hooks/use-medicine-search";
 import { cn } from "@/lib/utils";
+import { compoundSum, formatCompoundShort } from "@/lib/compound-utils";
 import type { FieldChange } from "@/components/medications/add-medication-steps/types";
 
 export function SearchStep({
@@ -25,7 +28,29 @@ export function SearchStep({
   searchError?: string;
 }) {
   const showAi = useAuthGate();
-  const { searchQuery, searchResult: result, brandName, genericName, dosageStrength, selectedPrescriptionId } = formState;
+  const {
+    searchQuery, searchResult: result, brandName, genericName,
+    dosageStrength, selectedPrescriptionId, isCombination, compounds,
+  } = formState;
+
+  const setCompound = (index: number, patch: Partial<CompoundStrength>) => {
+    const next = compounds.map((c, i) => (i === index ? { ...c, ...patch } : c));
+    onFieldChange("compounds", next);
+  };
+
+  // Combination strength presets from AI search (options with ≥ 2 ingredients).
+  const comboOptions: MedicineStrengthOption[] = (result?.strengthOptions ?? [])
+    .filter((o) => o.compounds.length >= 2);
+
+  const applyComboOption = (option: MedicineStrengthOption) => {
+    onFieldChange(
+      "compounds",
+      option.compounds.map((c) => ({ name: c.name, strength: c.strength })),
+    );
+  };
+
+  const comboTotal = compoundSum(compounds);
+
   return (
     <div className="space-y-4">
       {existingPrescriptions.length > 0 && (
@@ -83,6 +108,11 @@ export function SearchStep({
             </div>
           )}
           {result.drugClass && <p className="text-xs text-muted-foreground">Class: {result.drugClass}</p>}
+          {result.activeIngredients && result.activeIngredients.length > 1 && (
+            <p className="text-xs text-muted-foreground">
+              Combination drug: {result.activeIngredients.join(" + ")}
+            </p>
+          )}
           {result.localAlternatives && result.localAlternatives.length > 0 && (
             <p className="text-xs text-muted-foreground">
               Local: {result.localAlternatives.join(", ")}
@@ -113,28 +143,103 @@ export function SearchStep({
           <Label className="text-sm mb-1.5 block">Active ingredient</Label>
           <Input value={genericName} onChange={(e) => onFieldChange("genericName", e.target.value)} placeholder="e.g. Clopidogrel" />
         </div>
-        <div>
-          <Label className="text-sm mb-1.5 block">Dosage strength</Label>
-          <Input value={dosageStrength} onChange={(e) => onFieldChange("dosageStrength", e.target.value)} placeholder="e.g. 75mg" />
-          {result && result.dosageStrengths.length > 1 && (
-            <div className="flex flex-wrap gap-1 mt-1.5">
-              {result.dosageStrengths.map((s: string) => (
-                <button
-                  key={s}
-                  onClick={() => onFieldChange("dosageStrength", s)}
-                  className={cn(
-                    "text-xs px-2 py-0.5 rounded-full border transition-colors",
-                    dosageStrength === s
-                      ? "bg-teal-100 border-teal-300 dark:bg-teal-900 dark:border-teal-700"
-                      : "border-border hover:bg-muted"
-                  )}
-                >
-                  {s}
-                </button>
+
+        <div className="flex items-center justify-between rounded-lg border p-3">
+          <div>
+            <p className="text-sm font-medium">Combination drug</p>
+            <p className="text-xs text-muted-foreground">Tablet with two active ingredients</p>
+          </div>
+          <Switch
+            checked={isCombination}
+            onCheckedChange={(v) => onFieldChange("isCombination", v)}
+          />
+        </div>
+
+        {isCombination ? (
+          <div>
+            <Label className="text-sm mb-1.5 block">Active ingredients (per pill)</Label>
+            {comboOptions.length > 0 && (
+              <div className="flex flex-wrap gap-1 mb-2">
+                {comboOptions.map((opt) => {
+                  const selected =
+                    formatCompoundShort(compounds) === formatCompoundShort(opt.compounds);
+                  return (
+                    <button
+                      key={opt.label}
+                      type="button"
+                      onClick={() => applyComboOption(opt)}
+                      className={cn(
+                        "text-xs px-2 py-0.5 rounded-full border transition-colors",
+                        selected
+                          ? "bg-teal-100 border-teal-300 dark:bg-teal-900 dark:border-teal-700"
+                          : "border-border hover:bg-muted"
+                      )}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            <div className="space-y-2">
+              {compounds.map((c, i) => (
+                <div key={i} className="flex gap-2">
+                  <Input
+                    value={c.name}
+                    onChange={(e) => setCompound(i, { name: e.target.value })}
+                    placeholder={i === 0 ? "e.g. Sacubitril" : "e.g. Valsartan"}
+                    className="flex-1"
+                  />
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Input
+                      type="number"
+                      step="any"
+                      min="0"
+                      value={c.strength || ""}
+                      onChange={(e) =>
+                        setCompound(i, { strength: parseFloat(e.target.value) || 0 })
+                      }
+                      placeholder="mg"
+                      className="w-20"
+                    />
+                    <span className="text-xs text-muted-foreground">mg</span>
+                  </div>
+                </div>
               ))}
             </div>
-          )}
-        </div>
+            {comboTotal > 0 && (
+              <p className="text-xs text-muted-foreground mt-1.5">
+                Total per pill: <span className="font-medium text-foreground">{comboTotal}mg</span>
+              </p>
+            )}
+            {errors.compounds && (
+              <p className="text-sm text-destructive mt-1">{errors.compounds}</p>
+            )}
+          </div>
+        ) : (
+          <div>
+            <Label className="text-sm mb-1.5 block">Dosage strength</Label>
+            <Input value={dosageStrength} onChange={(e) => onFieldChange("dosageStrength", e.target.value)} placeholder="e.g. 75mg" />
+            {result && result.dosageStrengths.length > 1 && (
+              <div className="flex flex-wrap gap-1 mt-1.5">
+                {result.dosageStrengths.map((s: string) => (
+                  <button
+                    key={s}
+                    onClick={() => onFieldChange("dosageStrength", s)}
+                    className={cn(
+                      "text-xs px-2 py-0.5 rounded-full border transition-colors",
+                      dosageStrength === s
+                        ? "bg-teal-100 border-teal-300 dark:bg-teal-900 dark:border-teal-700"
+                        : "border-border hover:bg-muted"
+                    )}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

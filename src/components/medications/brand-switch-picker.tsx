@@ -9,6 +9,7 @@ import {
 import { PillIcon } from "@/components/medications/pill-icon";
 import { Badge } from "@/components/ui/badge";
 import { formatPillCount } from "@/lib/medication-ui-utils";
+import { isCombo, formatCompoundShort } from "@/lib/compound-utils";
 import {
   useInventoryForPrescription,
   useUpdateInventoryItem,
@@ -96,7 +97,10 @@ export function BrandSwitchPicker({
                     </span>
                   </div>
                   <span className="text-xs text-muted-foreground">
-                    {item.strength}{item.unit} &middot; {stockText}
+                    {isCombo(item)
+                      ? formatCompoundShort(item.compounds, item.unit)
+                      : `${item.strength}${item.unit}`}
+                    {" "}&middot; {stockText}
                   </span>
                 </div>
                 {item.isActive && (

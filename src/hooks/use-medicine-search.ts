@@ -4,11 +4,20 @@ import { useMutation } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api-fetch";
 import { useSettingsStore } from "@/stores/settings-store";
 
+export interface MedicineStrengthOption {
+  label: string;
+  compounds: { name: string; strength: number }[];
+}
+
 export interface MedicineSearchResult {
   brandNames: string[];
   localAlternatives: string[];
   genericName: string;
   dosageStrengths: string[];
+  /** Active ingredient names — length ≥ 2 marks a combination drug. */
+  activeIngredients: string[];
+  /** Per-marketed-strength breakdown of each active ingredient's mg. */
+  strengthOptions: MedicineStrengthOption[];
   commonIndications: string[];
   foodInstruction: "before" | "after" | "none";
   foodNote?: string;

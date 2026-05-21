@@ -5,7 +5,7 @@ import { PillIconWithBadge } from "@/components/medications/pill-icon";
 import { Button } from "@/components/ui/button";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatPillCount, getCurrentTimeHHMM } from "@/lib/medication-ui-utils";
+import { formatDoseAmount, getCurrentTimeHHMM } from "@/lib/medication-ui-utils";
 import { RetroactiveTimePicker } from "@/components/medications/retroactive-time-picker";
 import type { DoseSlot } from "@/hooks/use-medication-queries";
 
@@ -36,15 +36,13 @@ function formatTimestamp(ts: number): string {
 }
 
 export function DoseRow({ slot, isToday, isFuture, onTake, onRetroactiveTake, onSkip, onDoseClick, onEditTime }: DoseRowProps) {
-  const { status, prescription, phase, inventory, pillsPerDose } = slot;
+  const { status, prescription, phase, inventory } = slot;
   const [timePickerOpen, setTimePickerOpen] = useState(false);
   const [editPickerOpen, setEditPickerOpen] = useState(false);
 
   const isActionable = !isFuture && (status === "pending" || status === "missed");
 
-  const doseLabel = pillsPerDose != null
-    ? `${formatPillCount(pillsPerDose)} of ${slot.dosageMg}${slot.unit}`
-    : `${slot.dosageMg}${slot.unit}`;
+  const doseLabel = formatDoseAmount(slot);
 
   const foodInstruction = phase.foodInstruction !== "none" ? phase.foodInstruction : null;
 
