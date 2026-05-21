@@ -61,4 +61,33 @@ describe("drizzle migration journal", () => {
       ).toBeGreaterThan(prev.when);
     }
   });
+
+  /**
+   * `drizzle-kit generate` always stamps a new entry with a real `Date.now()`,
+   * so a future-dated `when` only ever appears when `_journal.json` is
+   * hand-edited. Migrations 0006–0010 carry such hand-edited future values —
+   * a pre-existing wart (see commit 7935991 and CLAUDE.md "Database
+   * Migrations"). Until wall-clock passes the last of them, a hand-bump on a
+   * new migration is an unavoidable consequence of that mess, so this check
+   * stays dormant. Once wall-clock passes `HANDWRITTEN_CUTOFF` (the `when` of
+   * 0010_dashing_the_hood), a freshly generated migration's real timestamp
+   * naturally exceeds every prior entry — there is no longer any reason to
+   * hand-edit, and every entry's `when` must be a real (non-future) value.
+   */
+  const HANDWRITTEN_CUTOFF = 1780100000000; // 0010_dashing_the_hood — ≈ 2026-05-29
+
+  it.skipIf(Date.now() < HANDWRITTEN_CUTOFF)(
+    "no migration carries a future-dated (hand-written) `when`",
+    () => {
+      const now = Date.now();
+      for (const entry of journal.entries) {
+        expect(
+          entry.when,
+          `${entry.tag} (when=${entry.when}) is dated in the future. ` +
+            `Do not hand-edit drizzle/meta/_journal.json — let ` +
+            `drizzle-kit generate write a real timestamp.`,
+        ).toBeLessThanOrEqual(now);
+      }
+    },
+  );
 });
