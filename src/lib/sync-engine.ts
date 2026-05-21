@@ -463,9 +463,14 @@ export async function runPullCycle(): Promise<void> {
       if (!anyHasMore) break;
     }
 
+    // Reaching here means the while-loop drained every table (no `hasMore`),
+    // so IndexedDB now holds a complete copy of the cloud dataset. Early
+    // returns on network/HTTP errors skip this block, so the flag only
+    // flips once a full pull has genuinely succeeded.
     useSyncStatusStore.setState({
       lastPulledAt: Date.now(),
       lastError: null,
+      initialSyncComplete: true,
     });
 
     // Invalidate React Query caches so every hook re-fetches the freshly

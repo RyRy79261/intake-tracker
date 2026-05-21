@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { HardDrive, Cloud, Upload, LogIn } from "lucide-react";
+import { HardDrive, Cloud, CloudOff, Upload, LogIn, CheckCircle2, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useStorageInfo } from "@/hooks/use-storage-info";
@@ -19,6 +19,8 @@ export function StorageInfoSection() {
   const { storageUsage, storageQuota, totalRecords } = useStorageInfo();
   const storageMode = useSettingsStore((s) => s.storageMode);
   const lastPushedAt = useSyncStatusStore((s) => s.lastPushedAt);
+  const initialSyncComplete = useSyncStatusStore((s) => s.initialSyncComplete);
+  const isOnline = useSyncStatusStore((s) => s.isOnline);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [resumeMode, setResumeMode] = useState(false);
   const [hasInterrupted, setHasInterrupted] = useState(false);
@@ -52,6 +54,31 @@ export function StorageInfoSection() {
             </Badge>
           )}
         </div>
+
+        {storageMode === "cloud-sync" && (
+          <div className="flex items-center gap-2">
+            {initialSyncComplete ? (
+              <>
+                <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400" />
+                <span className="text-sm">All data synced to this device</span>
+              </>
+            ) : isOnline ? (
+              <>
+                <Loader2 className="w-4 h-4 text-amber-600 dark:text-amber-400 animate-spin" />
+                <span className="text-sm text-muted-foreground">
+                  Downloading your full data to this device…
+                </span>
+              </>
+            ) : (
+              <>
+                <CloudOff className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                <span className="text-sm text-muted-foreground">
+                  Waiting to download your data (offline)
+                </span>
+              </>
+            )}
+          </div>
+        )}
 
         {storageMode === "cloud-sync" && lastPushedAt && (
           <p className="text-xs text-muted-foreground">

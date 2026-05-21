@@ -10,6 +10,8 @@ import {
   type ImportResult,
 } from "@/hooks/use-backup-queries";
 import { ConflictReviewDrawer } from "@/components/settings/conflict-review-drawer";
+import { useSettingsStore } from "@/stores/settings-store";
+import { useSyncStatusStore } from "@/stores/sync-status-store";
 
 export function DataManagementSection() {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -20,12 +22,30 @@ export function DataManagementSection() {
     null
   );
   const [showConflictDrawer, setShowConflictDrawer] = useState(false);
+  const [showExportWarning, setShowExportWarning] = useState(false);
 
   const downloadMut = useDownloadBackup();
   const uploadMut = useUploadBackup();
   const clearMut = useClearAllData();
 
+  const storageMode = useSettingsStore((s) => s.storageMode);
+  const initialSyncComplete = useSyncStatusStore((s) => s.initialSyncComplete);
+  // Export reads only from local IndexedDB. In cloud-sync mode, until the
+  // first full pull finishes, this device may not hold the entire cloud
+  // dataset — exporting now would silently produce an incomplete file.
+  const exportMayBeIncomplete =
+    storageMode === "cloud-sync" && !initialSyncComplete;
+
   const handleExport = () => {
+    if (exportMayBeIncomplete) {
+      setShowExportWarning(true);
+      return;
+    }
+    downloadMut.mutate();
+  };
+
+  const handleConfirmExport = () => {
+    setShowExportWarning(false);
     downloadMut.mutate();
   };
 
@@ -101,6 +121,38 @@ export function DataManagementSection() {
           <Upload className="w-4 h-4" />
           {downloadMut.isPending ? "Exporting..." : "Export Data"}
         </Button>
+
+        {showExportWarning && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30 p-3 space-y-2">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+              <p className="text-sm text-amber-800 dark:text-amber-200">
+                Cloud Sync hasn&apos;t finished downloading all your data to
+                this device yet. Exporting now may produce an incomplete file.
+                Wait until &ldquo;All data synced&rdquo; shows in the Storage
+                section, or export anyway.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1"
+                onClick={() => setShowExportWarning(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                className="flex-1"
+                onClick={handleConfirmExport}
+                disabled={downloadMut.isPending}
+              >
+                {downloadMut.isPending ? "Exporting..." : "Export Anyway"}
+              </Button>
+            </div>
+          </div>
+        )}
 
         <input
           ref={fileInputRef}
