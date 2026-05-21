@@ -16,6 +16,7 @@ export interface ComposableEntryInput {
     type: "caffeine" | "alcohol";
     amountMg?: number;
     amountStandardDrinks?: number;
+    abvPercent?: number;
     volumeMl?: number;
     description: string;
   };
@@ -23,6 +24,7 @@ export interface ComposableEntryInput {
     type: "caffeine" | "alcohol";
     amountMg?: number;
     amountStandardDrinks?: number;
+    abvPercent?: number;
     volumeMl?: number;
     description: string;
   }>;
@@ -112,6 +114,7 @@ export async function addComposableEntry(
           type: input.substance.type,
           ...(input.substance.amountMg !== undefined && { amountMg: input.substance.amountMg }),
           ...(input.substance.amountStandardDrinks !== undefined && { amountStandardDrinks: input.substance.amountStandardDrinks }),
+          ...(input.substance.type === "alcohol" && input.substance.abvPercent !== undefined && { abvPercent: input.substance.abvPercent }),
           ...(input.substance.volumeMl !== undefined && { volumeMl: input.substance.volumeMl }),
           description: input.substance.description,
           source: "standalone" as const,
@@ -154,6 +157,7 @@ export async function addComposableEntry(
             type: sub.type,
             ...(sub.amountMg !== undefined && { amountMg: sub.amountMg }),
             ...(sub.amountStandardDrinks !== undefined && { amountStandardDrinks: sub.amountStandardDrinks }),
+            ...(sub.type === "alcohol" && sub.abvPercent !== undefined && { abvPercent: sub.abvPercent }),
             ...(sub.volumeMl !== undefined && { volumeMl: sub.volumeMl }),
             description: sub.description,
             source: "standalone" as const,
@@ -497,6 +501,7 @@ export async function syncLiquidGroup(
     volumeMl: number;
     amountMg?: number;
     amountStandardDrinks?: number;
+    abvPercent?: number;
   },
 ): Promise<ServiceResult<void>> {
   try {
@@ -521,6 +526,9 @@ export async function syncLiquidGroup(
         }
         if (sub.type === "alcohol" && patch.amountStandardDrinks !== undefined) {
           updates.amountStandardDrinks = patch.amountStandardDrinks;
+        }
+        if (sub.type === "alcohol" && patch.abvPercent !== undefined) {
+          updates.abvPercent = patch.abvPercent;
         }
         await db.substanceRecords.update(sub.id, updates);
       }

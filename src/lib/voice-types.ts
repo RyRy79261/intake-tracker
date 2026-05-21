@@ -64,8 +64,10 @@ export interface CaffeineItem {
 export interface AlcoholItem {
   kind: "alcohol";
   description: string;
-  standardDrinks: number;
-  volumeMl?: number;
+  /** Alcohol by volume % — the number on the bottle label. */
+  abvPercent: number;
+  /** Volume of the drink consumed, in millilitres. */
+  volumeMl: number;
 }
 
 export interface UrinationItem {
