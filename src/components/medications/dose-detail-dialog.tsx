@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   Drawer,
   DrawerContent,
+  DrawerTitle,
 } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
 import { PillIcon } from "@/components/medications/pill-icon";
@@ -136,14 +137,14 @@ export function DoseDetailDialog({
   return (
     <>
       <Drawer open={open} onOpenChange={onOpenChange}>
-        <DrawerContent className="max-h-[85vh]">
+        <DrawerContent className="max-h-[85vh]" aria-describedby={undefined}>
           <div className="p-6">
             {/* Header with pill icon */}
             <div className="flex flex-col items-center text-center mb-6">
               <PillIcon shape={inventory?.pillShape || "round"} color={inventory?.pillColor || "#ccc"} size={48} />
-              <h2 className="text-lg font-bold mt-3">
+              <DrawerTitle className="text-lg font-bold mt-3">
                 {inventory?.brandName || prescription.genericName} {schedule.dosage}{phase.unit} ({prescription.genericName})
-              </h2>
+              </DrawerTitle>
               {actionTime && (
                 <p className={cn(
                   "text-sm font-medium mt-1",

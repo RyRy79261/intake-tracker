@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Drawer, DrawerContent } from "@/components/ui/drawer";
+import { Drawer, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
 import { PillIconWithBadge } from "@/components/medications/pill-icon";
 import { useUntakeDose, useSkipAllDoses, useEditAllDoseTimes } from "@/hooks/use-medication-queries";
 import { hapticTake, hapticSkip, formatPillCount, getCurrentTimeHHMM } from "@/lib/medication-ui-utils";
@@ -106,12 +106,12 @@ export function BulkDoseEditDialog({ open, onOpenChange, time, slots, date }: Bu
   return (
     <>
       <Drawer open={open} onOpenChange={onOpenChange}>
-        <DrawerContent className="max-h-[85vh]">
+        <DrawerContent className="max-h-[85vh]" aria-describedby={undefined}>
           <div className="p-6">
             {/* Header */}
             <div className="flex items-center justify-between mb-4">
               <div className="w-8" />
-              <h2 className="text-lg font-bold">{formatTime12(time)}</h2>
+              <DrawerTitle className="text-lg font-bold">{formatTime12(time)}</DrawerTitle>
               <button
                 onClick={() => onOpenChange(false)}
                 className="w-8 h-8 flex items-center justify-center text-muted-foreground"
