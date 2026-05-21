@@ -711,10 +711,10 @@ db.version(17).stores({
   _errorLogs:              "id, timestamp, source",
 });
 
-// Version 18: Add userProfile — a single-row store for user-reported medical
-// conditions that give AI analytics insights clinical context. Local-only for
-// now; not yet registered with the sync engine (TABLE_PUSH_ORDER). New table
-// only, so no upgrade function is required.
+// Version 18: Add userProfile — a store for the user's medical profile
+// (conditions + AI-sharing opt-ins). Registered with the sync engine
+// (TABLE_PUSH_ORDER / sync-payload) and the backup service. New table only,
+// so no upgrade function is required.
 db.version(18).stores({
   // --- REPEAT all v17 stores verbatim ---
   intakeRecords:           "id, [type+timestamp], timestamp, source, groupId, updatedAt",

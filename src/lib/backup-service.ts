@@ -1,7 +1,11 @@
 /**
- * Comprehensive backup service for all health data.
- * Supports export/import of all 17 data tables (including userProfile) with
- * conflict detection.
+ * Comprehensive backup service for all health data — export/import of all 17
+ * data tables (including userProfile).
+ *
+ * Conflict detection is scoped: in merge mode the medication/system tables and
+ * userProfile record conflicts (mergeTableWithConflicts), while health tables
+ * skip rows whose id already exists. Replace mode bypasses conflict detection
+ * and overwrites every table.
  */
 
 import {
