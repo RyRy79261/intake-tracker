@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PillIcon } from "@/components/medications/pill-icon";
-import { formatPillCount } from "@/lib/medication-ui-utils";
+import { formatPillCount, getEffectivePhase } from "@/lib/medication-ui-utils";
 import {
   useInventoryForPrescription,
   usePhasesForPrescription,
@@ -15,12 +15,11 @@ import {
 import { BrandSwitchPicker } from "@/components/medications/brand-switch-picker";
 import { PrescriptionViewDrawer } from "@/components/medications/edit-medication-drawer";
 import { InventoryItemViewDrawer } from "@/components/medications/inventory-item-view-drawer";
-import type { Prescription } from "@/lib/db";
-import { ArrowRightLeft, Edit2, Package, Clock, CheckCircle2, XCircle, MinusCircle } from "lucide-react";
+import type { InventoryItem, Prescription } from "@/lib/db";
+import { ArrowRightLeft, ChevronRight, SlidersHorizontal, Clock, CheckCircle2, XCircle, MinusCircle } from "lucide-react";
 
 interface CompoundCardExpandedProps {
   prescription: Prescription;
-  onClose: () => void;
 }
 
 function getTodayDateStr(): string {
@@ -31,15 +30,15 @@ function getTodayDateStr(): string {
   return `${y}-${m}-${d}`;
 }
 
-export function CompoundCardExpanded({ prescription, onClose }: CompoundCardExpandedProps) {
+export function CompoundCardExpanded({ prescription }: CompoundCardExpandedProps) {
   const [brandPickerOpen, setBrandPickerOpen] = useState(false);
-  const [editDrawerOpen, setEditDrawerOpen] = useState(false);
-  const [inventoryDrawerOpen, setInventoryDrawerOpen] = useState(false);
+  const [detailDrawerOpen, setDetailDrawerOpen] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
 
   const inventoryItems = useInventoryForPrescription(prescription.id);
   const phases = usePhasesForPrescription(prescription.id);
-  const activePhase = phases.find((p) => p.status === "active");
-  const schedules = useSchedulesForPhase(activePhase?.id);
+  const effectivePhase = getEffectivePhase(phases);
+  const schedules = useSchedulesForPhase(effectivePhase?.id);
 
   const todayDateStr = getTodayDateStr();
   const allSlots = useDailyDoseSchedule(todayDateStr);
@@ -59,6 +58,10 @@ export function CompoundCardExpanded({ prescription, onClose }: CompoundCardExpa
 
   const hasMultipleBrands = sortedInventory.length > 1;
 
+  const openItem = (item: InventoryItem) => {
+    setSelectedItem(item);
+  };
+
   return (
     <div
       className="pt-3 space-y-4"
@@ -66,13 +69,13 @@ export function CompoundCardExpanded({ prescription, onClose }: CompoundCardExpa
     >
       <div className="border-t" />
 
-      {/* Section 1: Inventory Items */}
+      {/* Section 1: Medicines (inventory) — tap a row to see that brand */}
       <div className="space-y-2">
         <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-          Inventory
+          Medicines
         </h4>
         {sortedInventory.length === 0 ? (
-          <p className="text-xs text-muted-foreground">No inventory items</p>
+          <p className="text-xs text-muted-foreground">No medicines added yet</p>
         ) : (
           <div className="space-y-1.5">
             {sortedInventory.map((item) => {
@@ -88,9 +91,11 @@ export function CompoundCardExpanded({ prescription, onClose }: CompoundCardExpa
                 : `${stock} pills`;
 
               return (
-                <div
+                <button
                   key={item.id}
-                  className="flex items-center gap-2 p-2 rounded-lg bg-muted/30"
+                  type="button"
+                  onClick={() => openItem(item)}
+                  className="flex items-center gap-2 p-2 rounded-lg bg-muted/30 hover:bg-muted/60 transition-colors w-full text-left"
                 >
                   <PillIcon
                     shape={item.pillShape ?? "round"}
@@ -130,8 +135,9 @@ export function CompoundCardExpanded({ prescription, onClose }: CompoundCardExpa
                         Low
                       </Badge>
                     )}
+                    <ChevronRight className="w-4 h-4 text-muted-foreground/60" />
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>
@@ -139,10 +145,15 @@ export function CompoundCardExpanded({ prescription, onClose }: CompoundCardExpa
       </div>
 
       {/* Section 2: Schedule Summary */}
-      {activePhase && (
+      {effectivePhase && (
         <div className="space-y-2">
-          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
             Schedule
+            {effectivePhase.type === "titration" && (
+              <Badge className="text-[9px] px-1 py-0 bg-amber-500 hover:bg-amber-600 text-white">
+                On titration
+              </Badge>
+            )}
           </h4>
           <div className="space-y-1">
             {schedules.length > 0 ? (
@@ -155,7 +166,7 @@ export function CompoundCardExpanded({ prescription, onClose }: CompoundCardExpa
                     <div className="flex items-center gap-2 text-xs">
                       <Clock className="w-3 h-3 text-muted-foreground" />
                       <span className="font-medium">
-                        {schedules[0].dosage}{activePhase.unit} {freq}
+                        {schedules[0].dosage}{effectivePhase.unit} {freq}
                       </span>
                       <span className="text-muted-foreground">at {times}</span>
                     </div>
@@ -164,7 +175,7 @@ export function CompoundCardExpanded({ prescription, onClose }: CompoundCardExpa
                 return schedules.map(s => (
                   <div key={s.id} className="flex items-center gap-2 text-xs">
                     <Clock className="w-3 h-3 text-muted-foreground" />
-                    <span className="font-medium">{s.dosage}{activePhase.unit}</span>
+                    <span className="font-medium">{s.dosage}{effectivePhase.unit}</span>
                     <span className="text-muted-foreground">at {s.time}</span>
                   </div>
                 ));
@@ -174,13 +185,13 @@ export function CompoundCardExpanded({ prescription, onClose }: CompoundCardExpa
                 No schedules configured
               </p>
             )}
-            {activePhase.foodInstruction !== "none" && (
+            {effectivePhase.foodInstruction !== "none" && (
               <p className="text-[10px] text-muted-foreground mt-1">
-                {activePhase.foodInstruction === "before"
+                {effectivePhase.foodInstruction === "before"
                   ? "Take before eating"
-                  : activePhase.foodInstruction === "after"
+                  : effectivePhase.foodInstruction === "after"
                   ? "Take after eating"
-                  : activePhase.foodInstruction}
+                  : effectivePhase.foodInstruction}
               </p>
             )}
           </div>
@@ -252,19 +263,10 @@ export function CompoundCardExpanded({ prescription, onClose }: CompoundCardExpa
           variant="outline"
           size="sm"
           className="h-7 text-xs gap-1"
-          onClick={(e) => { e.stopPropagation(); setEditDrawerOpen(true); }}
+          onClick={(e) => { e.stopPropagation(); setDetailDrawerOpen(true); }}
         >
-          <Edit2 className="w-3 h-3" />
-          Edit
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-7 text-xs gap-1"
-          onClick={(e) => { e.stopPropagation(); setInventoryDrawerOpen(true); }}
-        >
-          <Package className="w-3 h-3" />
-          Inventory
+          <SlidersHorizontal className="w-3 h-3" />
+          Prescription Details
         </Button>
       </div>
 
@@ -276,13 +278,14 @@ export function CompoundCardExpanded({ prescription, onClose }: CompoundCardExpa
       />
       <PrescriptionViewDrawer
         prescription={prescription}
-        open={editDrawerOpen}
-        onOpenChange={setEditDrawerOpen}
+        open={detailDrawerOpen}
+        onOpenChange={setDetailDrawerOpen}
       />
       <InventoryItemViewDrawer
+        item={selectedItem}
         prescription={prescription}
-        open={inventoryDrawerOpen}
-        onOpenChange={setInventoryDrawerOpen}
+        open={selectedItem !== null}
+        onOpenChange={(open) => { if (!open) setSelectedItem(null); }}
       />
     </div>
   );
