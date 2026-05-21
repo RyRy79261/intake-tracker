@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSyncStatusStore } from "@/stores/sync-status-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useAuth } from "@/components/auth-guard";
@@ -8,18 +9,22 @@ import { cn } from "@/lib/utils";
 
 type PulseState = "syncing" | "synced" | "offline" | "error";
 
-const STATE_STYLES: Record<PulseState, { color: string; label: string }> = {
-  syncing: { color: "bg-yellow-400", label: "Syncing changes…" },
-  synced: { color: "bg-emerald-500", label: "All changes synced" },
-  offline: { color: "bg-slate-400", label: "Offline — changes saved locally" },
-  error: { color: "bg-red-500", label: "Sync error" },
+const COLOR: Record<PulseState, string> = {
+  syncing: "bg-yellow-400",
+  synced: "bg-emerald-500",
+  offline: "bg-slate-400",
+  error: "bg-red-500",
 };
 
+// How long the text label lingers before fading away — toast-like, brief.
+const LABEL_DURATION_MS = 1800;
+
 /**
- * Floating sync status dot pinned to the top-left corner. Renders above
- * everything else and stays out of document flow so it never reflows content.
- * Pulses yellow while syncing (or while local writes are queued), settles to
- * green once the engine is caught up.
+ * Sync status dot pinned flush to the dead top-left corner — only a quarter
+ * of the circle is visible. Renders above everything and stays out of
+ * document flow, so it never reflows content. Pulses yellow while syncing,
+ * settles to green once caught up. Tapping it (or the start of a sync) flashes
+ * a small label with the current status, which auto-dismisses.
  */
 export function SyncPulseIndicator() {
   const isSyncing = useSyncStatusStore((s) => s.isSyncing);
@@ -29,6 +34,26 @@ export function SyncPulseIndicator() {
   const storageMode = useSettingsStore((s) => s.storageMode);
   const { authenticated } = useAuth();
   const pathname = usePathname();
+
+  const [labelVisible, setLabelVisible] = useState(false);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wasSyncing = useRef(false);
+
+  const flashLabel = useCallback(() => {
+    setLabelVisible(true);
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    hideTimer.current = setTimeout(() => setLabelVisible(false), LABEL_DURATION_MS);
+  }, []);
+
+  // Flash the label whenever a sync cycle starts.
+  useEffect(() => {
+    if (isSyncing && !wasSyncing.current) flashLabel();
+    wasSyncing.current = isSyncing;
+  }, [isSyncing, flashLabel]);
+
+  useEffect(() => () => {
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+  }, []);
 
   // Only meaningful when the cloud-sync engine is actually running.
   if (storageMode !== "cloud-sync" || !authenticated || pathname?.startsWith("/auth")) {
@@ -43,33 +68,56 @@ export function SyncPulseIndicator() {
         ? "syncing"
         : "synced";
 
-  const { color, label } = STATE_STYLES[state];
+  const label =
+    state === "syncing"
+      ? queueDepth > 0
+        ? `Syncing ${queueDepth} ${queueDepth === 1 ? "change" : "changes"}…`
+        : "Syncing…"
+      : state === "synced"
+        ? "All changes synced"
+        : state === "offline"
+          ? "Offline — changes saved locally"
+          : "Sync error";
+
   const animated = state === "syncing";
 
   return (
-    <div
-      className="pointer-events-none fixed left-3 top-[calc(env(safe-area-inset-top,0px)_+_0.6rem)] z-[2147483647]"
-      role="status"
-      aria-label={label}
-      title={label}
-    >
-      <span className="relative flex h-3 w-3">
-        {animated && (
+    <div className="pointer-events-none fixed left-0 top-0 z-[2147483647]">
+      {/* Tap target sits in the dead corner; only a quarter of the dot shows. */}
+      <button
+        type="button"
+        onClick={flashLabel}
+        aria-label={label}
+        className="pointer-events-auto absolute left-0 top-0 h-7 w-7"
+      >
+        <span className="absolute left-0 top-0 flex h-5 w-5 -translate-x-1/2 -translate-y-1/2">
+          {animated && (
+            <span
+              className={cn(
+                "absolute inline-flex h-full w-full animate-ping rounded-full opacity-60",
+                COLOR[state],
+              )}
+            />
+          )}
           <span
             className={cn(
-              "absolute inline-flex h-full w-full animate-ping rounded-full opacity-75",
-              color,
+              "relative inline-flex h-5 w-5 rounded-full ring-1 ring-white/60 transition-colors duration-500 dark:ring-slate-900/60",
+              COLOR[state],
             )}
           />
+        </span>
+      </button>
+
+      <span
+        role="status"
+        aria-hidden={!labelVisible}
+        className={cn(
+          "absolute left-4 top-1 whitespace-nowrap rounded-md bg-slate-900/85 px-2 py-0.5 text-[10px] font-medium text-white shadow-sm backdrop-blur-sm transition-all duration-300 dark:bg-slate-100/90 dark:text-slate-900",
+          labelVisible ? "translate-x-0 opacity-100" : "-translate-x-1 opacity-0",
         )}
-        <span
-          className={cn(
-            "relative inline-flex h-3 w-3 rounded-full ring-2 ring-white/70 transition-colors duration-500 dark:ring-slate-900/70",
-            color,
-          )}
-        />
+      >
+        {label}
       </span>
-      <span className="sr-only">{label}</span>
     </div>
   );
 }
