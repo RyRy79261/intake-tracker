@@ -1,15 +1,15 @@
 name: Delete Neon branch for closed PR
 
 # When a PR closes (merged or not), delete the Neon branch that was
-# created for its preview deployment. Branch naming follows the Vercel
-# Neon integration / previous neon_workflow.yml convention:
+# created for its preview deployment. The Vercel Neon integration names
+# preview branches after the git head branch:
 #
-#   preview/pr-<pr-number>-<head-branch-name>
+#   preview/<head-branch-name>
 #
-# We look up by `preview/pr-<pr-number>-` prefix rather than reconstructing
-# the full name from event data — head-ref slugging can differ between
-# Vercel, the Neon integration, and tj-actions/branch-names, so a prefix
-# match is more robust and is still narrowly scoped to a single PR.
+# We look up by `preview/<head-branch-name>` prefix rather than
+# reconstructing the full name from event data — head-ref slugging can
+# differ between Vercel, the Neon integration, and tj-actions/branch-names,
+# so a prefix match is more robust and is still narrowly scoped to this PR.
 
 on:
   pull_request:
@@ -30,6 +30,7 @@ jobs:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_REF: ${{ github.head_ref }}
         run: |
           set -euo pipefail
 
@@ -38,7 +39,7 @@ jobs:
             exit 1
           fi
 
-          prefix="preview/pr-${PR_NUMBER}-"
+          prefix="preview/${HEAD_REF}"
           echo "Looking up Neon branches with prefix: $prefix"
 
           api="https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}"
