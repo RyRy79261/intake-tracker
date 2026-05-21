@@ -5,7 +5,7 @@ test.describe('History / Analytics', () => {
   test('should load analytics page with all four tabs', async ({ page }) => {
     await page.goto('/analytics');
     // Verify all 4 tabs are visible
-    for (const tabName of ['Records', 'Insights', 'Correlations', 'Titration']) {
+    for (const tabName of ['Records', 'Summary', 'Correlations', 'Titration']) {
       await expect(page.locator('[role="tab"]', { hasText: tabName })).toBeVisible();
     }
     // Records tab is active by default
@@ -15,7 +15,7 @@ test.describe('History / Analytics', () => {
   test('should switch between analytics tabs', async ({ page }) => {
     await page.goto('/analytics');
     // Click each tab and verify the panel renders
-    for (const tabName of ['Insights', 'Correlations', 'Titration', 'Records']) {
+    for (const tabName of ['Summary', 'Correlations', 'Titration', 'Records']) {
       await page.locator('[role="tab"]', { hasText: tabName }).click();
       await expect(page.locator('[role="tabpanel"][data-state="active"]')).toBeVisible();
     }
@@ -46,7 +46,7 @@ test.describe('History / Analytics', () => {
     await expect(page.locator('text=130/85')).toBeVisible({ timeout: 10000 });
   });
 
-  test('should render chart SVG containers on Insights tab with data (D-11)', async ({ page }) => {
+  test('should render chart SVG containers on Summary tab with data (D-11)', async ({ page }) => {
     // Step 1: Create some data via dashboard UI so charts have something to render
     await page.goto('/');
     // Log water entry
@@ -62,17 +62,17 @@ test.describe('History / Analytics', () => {
     await bpCard.locator('button:has-text("Record Reading")').click();
     await expect(page.getByText('Blood pressure recorded', { exact: true })).toBeVisible();
 
-    // Step 2: Navigate to analytics, switch to Insights tab
+    // Step 2: Navigate to analytics, switch to Summary tab
     await page.goto('/analytics');
-    await page.locator('[role="tab"]', { hasText: 'Insights' }).click();
+    await page.locator('[role="tab"]', { hasText: 'Summary' }).click();
     await expect(page.locator('[role="tabpanel"][data-state="active"]')).toBeVisible();
 
     // Per D-11: verify chart containers render (SVG elements present)
     // Do NOT assert on SVG path values -- only check for container/SVG presence
     // Use generous timeout since Recharts renders asynchronously
-    // If insights are available, we should see either SVG or "No notable insights" text
+    // With data seeded we expect charts; fall back to the empty-state text.
     const svgOrEmpty = page.locator('.recharts-responsive-container svg').first()
-      .or(page.locator('text=/No insights for this period/i'));
+      .or(page.locator('text=/No data for this period/i'));
     await expect(svgOrEmpty).toBeVisible({ timeout: 15000 });
   });
 });
