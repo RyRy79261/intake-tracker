@@ -45,11 +45,14 @@ import {
   rescheduleDose,
   takeAllDoses,
   skipAllDoses,
+  editDoseTime,
+  editAllDoseTimes,
   type DoseLogWithDetails,
   type TakeDoseInput,
   type UntakeDoseInput,
   type SkipDoseInput,
   type RescheduleDoseInput,
+  type EditDoseTimeInput,
 } from "@/lib/dose-log-service";
 import {
   getDailyDoseSchedule,
@@ -242,6 +245,19 @@ export function useSkipAllDoses() {
   return useMutation({
     mutationFn: async (args: { entries: { prescriptionId: string; phaseId: string; scheduleId: string; dosageMg: number }[]; date: string; time: string; reason?: string }) =>
       unwrap(await skipAllDoses(args.entries, args.date, args.time, args.reason)),
+  });
+}
+
+export function useEditDoseTime() {
+  return useMutation({
+    mutationFn: async (input: EditDoseTimeInput) => unwrap(await editDoseTime(input)),
+  });
+}
+
+export function useEditAllDoseTimes() {
+  return useMutation({
+    mutationFn: async (args: { entries: { prescriptionId: string; phaseId: string; scheduleId: string }[]; date: string; time: string; newTime: string }) =>
+      unwrap(await editAllDoseTimes(args.entries, args.date, args.time, args.newTime)),
   });
 }
 

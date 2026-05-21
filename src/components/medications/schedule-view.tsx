@@ -1,15 +1,17 @@
 "use client";
 
 import { useMemo, useEffect, useState, useCallback } from "react";
-import { useDailyDoseSchedule, useTakeDose, useUntakeDose, useSkipDose, useTakeAllDoses } from "@/hooks/use-medication-queries";
+import { useDailyDoseSchedule, useTakeDose, useUntakeDose, useSkipDose, useTakeAllDoses, useEditDoseTime } from "@/hooks/use-medication-queries";
 import type { DoseSlot } from "@/hooks/use-medication-queries";
-import { hapticTake, hapticSkip } from "@/lib/medication-ui-utils";
+import { hapticTake, hapticSkip, getCurrentTimeHHMM } from "@/lib/medication-ui-utils";
+import { toast } from "@/hooks/use-toast";
 import { showUndoToast } from "./undo-toast";
 import { DoseProgressSummary } from "./dose-progress-summary";
 import { TimeSlotGroup } from "./time-slot-group";
 import { SkipReasonPicker } from "./skip-reason-picker";
 import { EmptySchedule } from "./empty-schedule";
 import { RetroactiveTimePicker } from "./retroactive-time-picker";
+import { BulkDoseEditDialog } from "./bulk-dose-edit-dialog";
 
 interface ScheduleViewProps {
   selectedDate: Date;
@@ -35,6 +37,7 @@ export function ScheduleView({ selectedDate, onDoseClick, onAddMed }: ScheduleVi
   const untakeDoseMut = useUntakeDose();
   const skipDoseMut = useSkipDose();
   const takeAllDosesMut = useTakeAllDoses();
+  const editDoseTimeMut = useEditDoseTime();
 
   // Skip reason picker state
   const [skipPickerOpen, setSkipPickerOpen] = useState(false);
@@ -43,6 +46,10 @@ export function ScheduleView({ selectedDate, onDoseClick, onAddMed }: ScheduleVi
   // Mark All time picker state (for late doses)
   const [markAllPickerOpen, setMarkAllPickerOpen] = useState(false);
   const [markAllTarget, setMarkAllTarget] = useState<{ time: string; slots: DoseSlot[] } | null>(null);
+
+  // Bulk edit drawer state (for already-logged time slots)
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [bulkEditTarget, setBulkEditTarget] = useState<{ time: string; slots: DoseSlot[] } | null>(null);
 
   const today = new Date();
   const isToday = selectedDate.toDateString() === today.toDateString();
@@ -280,6 +287,29 @@ export function ScheduleView({ selectedDate, onDoseClick, onAddMed }: ScheduleVi
     [markAllTarget, executeMarkAll],
   );
 
+  // Handle editing the recorded time of a single taken dose
+  const handleEditTime = useCallback(
+    async (slot: DoseSlot, takenAtTime: string) => {
+      hapticTake();
+      await editDoseTimeMut.mutateAsync({
+        prescriptionId: slot.prescriptionId,
+        phaseId: slot.phaseId,
+        scheduleId: slot.scheduleId,
+        date: slot.scheduledDate,
+        time: slot.localTime,
+        newTime: takenAtTime,
+      });
+      toast({ title: `${slot.prescription.genericName} time updated` });
+    },
+    [editDoseTimeMut],
+  );
+
+  // Handle Edit All — open the bulk edit drawer for a logged time slot
+  const handleEditAll = useCallback((time: string, groupSlots: DoseSlot[]) => {
+    setBulkEditTarget({ time, slots: groupSlots });
+    setBulkEditOpen(true);
+  }, []);
+
   if (!slots || slots.length === 0) {
     return <EmptySchedule onAddMed={onAddMed} />;
   }
@@ -303,6 +333,8 @@ export function ScheduleView({ selectedDate, onDoseClick, onAddMed }: ScheduleVi
           onSkip={handleSkipStart}
           onDoseClick={onDoseClick}
           onMarkAll={handleMarkAll}
+          onEditAll={handleEditAll}
+          onEditTime={handleEditTime}
         />
       ))}
 
@@ -319,9 +351,17 @@ export function ScheduleView({ selectedDate, onDoseClick, onAddMed }: ScheduleVi
       <RetroactiveTimePicker
         open={markAllPickerOpen}
         onOpenChange={setMarkAllPickerOpen}
-        defaultTime={markAllTarget?.time ?? "08:00"}
+        defaultTime={getCurrentTimeHHMM()}
         compoundName="all doses"
         onConfirm={handleMarkAllTimeConfirm}
+      />
+
+      <BulkDoseEditDialog
+        open={bulkEditOpen}
+        onOpenChange={setBulkEditOpen}
+        time={bulkEditTarget?.time ?? ""}
+        slots={bulkEditTarget?.slots ?? []}
+        date={dateStr}
       />
     </div>
   );

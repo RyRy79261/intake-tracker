@@ -57,6 +57,15 @@ export interface RescheduleDoseInput {
   dosageMg: number;
 }
 
+export interface EditDoseTimeInput {
+  prescriptionId: string;
+  phaseId: string;
+  scheduleId: string;
+  date: string;
+  time: string;
+  newTime: string; // "HH:MM" — actual time the dose was taken
+}
+
 // ---------------------------------------------------------------------------
 // Fractional pill math helpers (exported for reuse)
 // ---------------------------------------------------------------------------
@@ -606,6 +615,74 @@ export async function skipAllDoses(
 
   if (errors.length > 0) {
     return err(`Failed to skip ${errors.length} dose(s): ${errors.join("; ")}`);
+  }
+  return ok(undefined);
+}
+
+/**
+ * Edit the recorded time of an already-taken dose. Only `actionTimestamp` is
+ * updated — inventory is untouched since the dose itself is unchanged.
+ */
+export async function editDoseTime(input: EditDoseTimeInput): Promise<ServiceResult<DoseLog>> {
+  try {
+    const { prescriptionId, phaseId, scheduleId, date, time, newTime } = input;
+
+    const [h, m] = newTime.split(":").map(Number);
+    const d = new Date(date + "T00:00:00");
+    d.setHours(h ?? 0, m ?? 0, 0, 0);
+    const newTimestamp = d.getTime();
+
+    const log = await db.transaction(
+      "rw",
+      [db.doseLogs, db.auditLogs, db._syncQueue],
+      async () => {
+        const prev = await getDoseLogRaw(prescriptionId, phaseId, scheduleId, date, time);
+        if (!prev || prev.status !== "taken") {
+          throw new Error("Dose is not logged as taken");
+        }
+
+        const now = Date.now();
+        await db.doseLogs.update(prev.id, { actionTimestamp: newTimestamp, updatedAt: now });
+        await enqueueInsideTx("doseLogs", prev.id, "upsert");
+
+        const auditEntry = buildAuditEntry("dose_time_edited", {
+          prescriptionId, date, time, newTime,
+        });
+        await db.auditLogs.add(auditEntry);
+        await enqueueInsideTx("auditLogs", auditEntry.id, "upsert");
+
+        return { ...prev, actionTimestamp: newTimestamp, updatedAt: now };
+      },
+    );
+    schedulePush();
+
+    return ok(log);
+  } catch (e) {
+    return err("Failed to edit dose time", e);
+  }
+}
+
+/**
+ * Edit the recorded time for a list of taken doses. Each dose gets its own
+ * transaction — one failure does not block others.
+ */
+export async function editAllDoseTimes(
+  entries: { prescriptionId: string; phaseId: string; scheduleId: string }[],
+  date: string,
+  time: string,
+  newTime: string,
+): Promise<ServiceResult<void>> {
+  const errors: string[] = [];
+
+  for (const entry of entries) {
+    const result = await editDoseTime({ ...entry, date, time, newTime });
+    if (!result.success) {
+      errors.push(result.error);
+    }
+  }
+
+  if (errors.length > 0) {
+    return err(`Failed to edit ${errors.length} dose(s): ${errors.join("; ")}`);
   }
   return ok(undefined);
 }

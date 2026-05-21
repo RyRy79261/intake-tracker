@@ -8,7 +8,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface RetroactiveTimePickerProps {
   open: boolean;
@@ -27,16 +27,18 @@ export function RetroactiveTimePicker({
 }: RetroactiveTimePickerProps) {
   const [selectedTime, setSelectedTime] = useState(defaultTime);
 
-  // Reset time when dialog opens with new default
-  const handleOpenChange = (newOpen: boolean) => {
-    if (newOpen) {
+  // Reset the input to the default every time the dialog opens, so a stale
+  // value from a previous dose never carries over. Radix only fires
+  // onOpenChange for its own events, not for controlled `open` prop changes,
+  // so the reset must key off `open` directly.
+  useEffect(() => {
+    if (open) {
       setSelectedTime(defaultTime);
     }
-    onOpenChange(newOpen);
-  };
+  }, [open, defaultTime]);
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-xs">
         <DialogHeader>
           <DialogTitle className="text-center">
