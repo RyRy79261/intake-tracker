@@ -11,6 +11,7 @@ import { queryClient } from "@/lib/query-client";
 import { SyncLifecycleMount } from "@/components/sync/sync-lifecycle-mount";
 import { SyncErrorBanner } from "@/components/sync/sync-error-banner";
 import { MigrationGuard } from "@/components/migration/migration-guard";
+import { ShakeToReport } from "@/components/shake-to-report";
 
 /**
  * Simplified provider stack (D-27). Privy wrappers and the PIN gate
@@ -82,6 +83,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
             <SyncLifecycleMount />
             <SyncErrorBanner />
             <MigrationGuard />
+            <ShakeToReport />
           </TimezoneGuard>
         </ThemeProvider>
       </QueryClientProvider>

@@ -93,6 +93,11 @@ export interface Settings {
   // Storage mode: local-only or cloud-sync
   storageMode: "local" | "cloud-sync";
 
+  // Shake the device to open the bug report / feature request dialog
+  shakeToReportEnabled: boolean;
+  shakeThreshold: number; // acceleration-magnitude jolt delta (m/s²) — lower = more sensitive
+  shakeRequiredJolts: number; // jolts within the detection window required to fire
+
   // Substance tracking configuration
   substanceConfig: SubstanceConfig;
 }
@@ -139,6 +144,10 @@ interface SettingsActions {
   setWeightIncrement: (value: number) => void;
   // Storage mode
   setStorageMode: (mode: "local" | "cloud-sync") => void;
+  // Shake to report
+  setShakeToReportEnabled: (value: boolean) => void;
+  setShakeThreshold: (value: number) => void;
+  setShakeRequiredJolts: (value: number) => void;
   // Substance config
   setSubstanceConfig: (config: SubstanceConfig) => void;
   resetToDefaults: () => void;
@@ -171,6 +180,9 @@ const defaultSettings: Settings = {
   weightIncrement: 0.05,
   storageMode: "local" as const,
   analyticsIntroSeen: false,
+  shakeToReportEnabled: true,
+  shakeThreshold: 8,
+  shakeRequiredJolts: 3,
   primaryRegion: "",
   secondaryRegion: "",
   timeFormat: "24h" as const,
@@ -271,6 +283,13 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
       // Storage mode
       setStorageMode: (mode) => set({ storageMode: mode }),
 
+      // Shake to report
+      setShakeToReportEnabled: (value) => set({ shakeToReportEnabled: value }),
+      setShakeThreshold: (value) =>
+        set({ shakeThreshold: sanitizeNumericInput(value, 4, 20) }),
+      setShakeRequiredJolts: (value) =>
+        set({ shakeRequiredJolts: sanitizeNumericInput(value, 2, 8) }),
+
       // Substance config
       setSubstanceConfig: (config) => set({ substanceConfig: config }),
 
@@ -300,7 +319,7 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
     {
       name: "intake-tracker-settings",
       storage: createJSONStorage(() => localStorage),
-      version: 10,
+      version: 12,
       migrate: (persisted, version) => {
         const state = persisted as Record<string, unknown>;
         if (version === 0) {
@@ -355,6 +374,17 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
         if (version < 10) {
           // GH-32 follow-up: auto-generated insights removed; drop dismissals.
           delete state.dismissedInsights;
+          state.shakeToReportEnabled = true;
+        }
+        if (version < 11) {
+          state.shakeThreshold = 15;
+          state.shakeRequiredJolts = 3;
+        }
+        if (version < 12) {
+          // Shake detection switched from a per-axis delta to a rotation-
+          // invariant magnitude delta; the old threshold scale no longer
+          // applies, so reset it to the recalibrated default.
+          state.shakeThreshold = 8;
         }
         return state as unknown as Settings & SettingsActions;
       },
