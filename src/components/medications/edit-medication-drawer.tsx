@@ -150,14 +150,17 @@ function ScheduleTab({ prescription }: { prescription: Prescription }) {
     setDirty(true);
   };
 
-  const validRows = rows.filter(
-    (r) => r.dosage && parseFloat(r.dosage) > 0 && r.daysOfWeek.length > 0,
-  );
+  const isRowValid = (r: SchedRow) =>
+    !!r.dosage && parseFloat(r.dosage) > 0 && r.daysOfWeek.length > 0;
+  const validRows = rows.filter(isRowValid);
+  // Save requires *every* row to be valid — otherwise a half-edited row would
+  // be silently dropped from the mutation.
+  const allRowsValid = rows.length > 0 && rows.every(isRowValid);
   const isSaving = updatePhase.isPending || startNewPhase.isPending;
-  const canSave = dirty && validRows.length > 0 && !isSaving;
+  const canSave = dirty && allRowsValid && !isSaving;
 
   const handleSave = async () => {
-    if (validRows.length === 0) return;
+    if (!allRowsValid) return;
     if (maintenancePhase) {
       await updatePhase.mutateAsync({
         id: maintenancePhase.id,
