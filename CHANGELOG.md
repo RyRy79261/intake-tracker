@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.14.0](https://github.com/RyRy79261/intake-tracker/compare/v1.13.0...v1.14.0) (2026-05-21)
+
+
+### Features
+
+* **analytics:** add Summary dashboard and fix local analytics issues ([be3ee15](https://github.com/RyRy79261/intake-tracker/commit/be3ee1545274517aa28e47c49b4bad38c2de52d5))
+
 ## [1.13.0](https://github.com/RyRy79261/intake-tracker/compare/v1.12.0...v1.13.0) (2026-05-21)
 
 
