@@ -272,26 +272,44 @@ const tableNameSchema = z.enum([
 ]);
 
 /**
+ * Per-table pull cursor — a keyset `(updatedAt, id)` pair.
+ *
+ * Pagination orders by `(updatedAt, id)`, so the cursor needs both halves:
+ * `updatedAt` alone is not unique (the v11 migration stamped every existing
+ * record with a single timestamp), and a 500-row page boundary landing
+ * inside such a run would otherwise strand every row after it.
+ *
+ * A bare `number` is still accepted for backwards compatibility — a
+ * service-worker-cached pre-keyset client sends `updatedAt` only. The route
+ * normalises it to `{ updatedAt: n, id: "" }`.
+ */
+const cursorSchema = z.union([
+  z.number().int().min(0),
+  z.object({
+    updatedAt: z.number().int().min(0),
+    // `id` is only ever used inside an `id > ?` keyset comparison scoped by
+    // userId — capped to a sane length so a hostile body can't bloat the query.
+    id: z.string().max(200),
+  }),
+]);
+
+/**
  * Pull request body shape.
  *
- * Shape (D-07): `{ cursors: { tableName: lastSeenUpdatedAtMs, ... } }`.
+ * Shape: `{ cursors: { tableName: { updatedAt, id }, ... } }`.
  *   - Keys MUST be known tableName literals (enum validation blocks typos
  *     or cross-user fingerprinting via arbitrary keys).
- *   - Values MUST be non-negative integers (milliseconds epoch). Negative
- *     or non-integer cursors are rejected at the 400 boundary so the route
- *     never issues a WHERE clause with a suspect cursor.
+ *   - Values are keyset cursors (or a legacy bare `updatedAt` number).
+ *     Negative / non-integer `updatedAt` is rejected at the 400 boundary so
+ *     the route never issues a WHERE clause with a suspect cursor.
  *   - Missing tableName keys default to cursor=0 server-side (= full pull
  *     for that table). That default lives in the route, not the schema.
  */
 export const pullBodySchema = z.object({
-  // `partialRecord` (zod/v4) allows missing tableName keys — per D-07, a
-  // missing entry means "cursor = 0 for that table" (full pull). A plain
-  // `z.record(enum, value)` in zod/v4 requires every enum member to be
-  // present, which would break the common case of a client that only
-  // tracks a subset of the 16 tables. `invalid_key` errors still fire on
-  // unknown keys (T-43-04-05 cursor injection), and `min(0)` still rejects
-  // negative / non-integer cursors.
-  cursors: z.partialRecord(tableNameSchema, z.number().int().min(0)),
+  // `partialRecord` (zod/v4) allows missing tableName keys — a missing entry
+  // means "cursor = 0 for that table" (full pull). `invalid_key` errors still
+  // fire on unknown keys (T-43-04-05 cursor injection).
+  cursors: z.partialRecord(tableNameSchema, cursorSchema),
 });
 
 export type PullBody = z.infer<typeof pullBodySchema>;
