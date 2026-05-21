@@ -1,13 +1,21 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { LogIn, User } from "lucide-react";
 import { useAuth } from "@/components/auth-guard";
+import { cn } from "@/lib/utils";
 
+/**
+ * The account control in the header — also the nav "tab" for the /profile
+ * route, so it carries the active highlight when that page is open. Always
+ * navigates to /profile; the profile page itself handles the signed-out case.
+ */
 export function AuthButton() {
   const { ready, authenticated, user } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
+  const isActive = pathname === "/profile";
 
   if (!ready) {
     return (
@@ -28,12 +36,15 @@ export function AuthButton() {
       <Button
         variant="ghost"
         size="icon"
-        onClick={() => router.push("/auth")}
-        className="shrink-0"
-        aria-label="Sign in"
-        title="Sign in"
+        onClick={() => router.push("/profile")}
+        className={cn(
+          "shrink-0 transition-colors",
+          isActive && "bg-primary/10 text-primary",
+        )}
+        aria-label="Profile"
+        title="Profile"
       >
-        <LogIn className="w-5 h-5" />
+        <LogIn className={cn("w-5 h-5", isActive && "text-primary")} />
       </Button>
     );
   }
@@ -45,7 +56,10 @@ export function AuthButton() {
     <Button
       variant="ghost"
       size="icon"
-      className="shrink-0"
+      className={cn(
+        "shrink-0 transition-colors",
+        isActive && "bg-primary/10 text-primary",
+      )}
       aria-label="Profile"
       title="Profile"
       onClick={() => router.push("/profile")}
