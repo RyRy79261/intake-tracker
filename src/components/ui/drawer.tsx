@@ -7,6 +7,11 @@ import { cn } from "@/lib/utils"
 
 const Drawer = ({
   shouldScaleBackground = true,
+  // Vaul's input repositioning yanks the whole sheet upward by the keyboard
+  // height, which can push fields at the top of the drawer off-screen. We
+  // keep it off and scroll the focused field into view ourselves (see
+  // DrawerContent below).
+  repositionInputs = false,
   open,
   onOpenChange,
   ...props
@@ -16,7 +21,7 @@ const Drawer = ({
 
   React.useEffect(() => {
     if (open === undefined) return;
-    
+
     if (open && !hasPushedState.current) {
       window.history.pushState({ drawerId: id }, "");
       hasPushedState.current = true;
@@ -45,6 +50,7 @@ const Drawer = ({
   return (
     <DrawerPrimitive.Root
       shouldScaleBackground={shouldScaleBackground}
+      repositionInputs={repositionInputs}
       {...(open !== undefined && { open })}
       {...(onOpenChange !== undefined && { onOpenChange })}
       {...props}
@@ -82,10 +88,10 @@ interface DrawerContentProps
 const DrawerContent = React.forwardRef<
   React.ElementRef<typeof DrawerPrimitive.Content>,
   DrawerContentProps
->(({ className, children, direction = "bottom", showHandle, ...props }, ref) => {
+>(({ className, children, direction = "bottom", showHandle, onFocus, ...props }, ref) => {
   // Default showHandle based on direction
   const shouldShowHandle = showHandle ?? direction === "bottom";
-  
+
   // Direction-specific styles
   const directionStyles = {
     bottom: "inset-x-0 bottom-0 mt-24 flex h-auto flex-col rounded-t-[10px] border-t",
@@ -94,11 +100,29 @@ const DrawerContent = React.forwardRef<
     left: "inset-y-0 left-0 h-full w-3/4 sm:max-w-sm flex flex-col border-r",
   };
 
+  // When a form field inside the drawer is focused, scroll it into view once
+  // the on-screen keyboard has finished animating in, so the user can always
+  // see what they're typing.
+  const handleFocus = (e: React.FocusEvent<HTMLDivElement>) => {
+    onFocus?.(e);
+    const target = e.target as HTMLElement;
+    if (
+      target.tagName === "INPUT" ||
+      target.tagName === "TEXTAREA" ||
+      target.tagName === "SELECT"
+    ) {
+      window.setTimeout(() => {
+        target.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 300);
+    }
+  };
+
   return (
     <DrawerPortal>
       <DrawerOverlay />
       <DrawerPrimitive.Content
         ref={ref}
+        onFocus={handleFocus}
         className={cn(
           "fixed z-50 bg-background outline-none",
           directionStyles[direction],
