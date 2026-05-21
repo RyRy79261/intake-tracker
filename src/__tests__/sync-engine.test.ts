@@ -235,9 +235,11 @@ describe("sync-engine", () => {
 
     await runPullCycle();
 
-    // min(maxRowUpdatedAt=1000, serverTime - 30s = 4_970_000) = 1000
+    // Table drained, row's updatedAt (1000) is far below serverTime - 30s
+    // (4_970_000) so no skew clamp — cursor parks on the row's tuple.
     const meta = await db._syncMeta.get("intakeRecords");
     expect(meta?.lastPulledUpdatedAt).toBe(1000);
+    expect(meta?.lastPulledId).toBe("pulled-1");
 
     // Row actually landed in Dexie.
     const stored = await db.intakeRecords.get("pulled-1");
@@ -270,6 +272,71 @@ describe("sync-engine", () => {
     const meta = await db._syncMeta.get("intakeRecords");
     expect(meta?.lastPulledUpdatedAt).toBe(serverTime - SKEW_MARGIN_MS);
     expect(meta?.lastPulledUpdatedAt).toBe(4_970_000);
+    // Clamp resets the id half of the cursor so the next cycle re-scans the
+    // whole skew window.
+    expect(meta?.lastPulledId).toBe("");
+  });
+
+  it("keyset cursor paginates a run of rows sharing one updatedAt", async () => {
+    installDom({ onLine: true });
+
+    // 1200 rows all stamped with one updatedAt — the exact shape the v11
+    // migration produced. A plain `updatedAt > cursor` query strands every
+    // row past the first 500-row page; the (updatedAt, id) keyset cursor
+    // must page through all of them.
+    const SHARED_UPDATED_AT = 1000;
+    const TOTAL = 1200;
+    const cluster = Array.from({ length: TOTAL }, (_, i) => ({
+      ...makeIntake({ id: `id-${String(i).padStart(4, "0")}` }),
+      updatedAt: SHARED_UPDATED_AT,
+    }));
+
+    // fetchMock emulates the real keyset-paginated pull route.
+    const fetchMock = vi.fn(async (_url: string, init?: { body?: string }) => {
+      const reqBody = JSON.parse(String(init?.body ?? "{}")) as {
+        cursors?: Record<string, { updatedAt: number; id: string }>;
+      };
+      const c = reqBody.cursors?.intakeRecords ?? { updatedAt: 0, id: "" };
+      const after = cluster
+        .filter(
+          (r) =>
+            r.updatedAt > c.updatedAt ||
+            (r.updatedAt === c.updatedAt && r.id > c.id),
+        )
+        .sort((a, b) =>
+          a.updatedAt !== b.updatedAt
+            ? a.updatedAt - b.updatedAt
+            : a.id < b.id
+              ? -1
+              : a.id > b.id
+                ? 1
+                : 0,
+        );
+      const page = after.slice(0, 500);
+      return jsonResponse({
+        result: {
+          intakeRecords: { rows: page, hasMore: after.length > 500 },
+        },
+        serverTime: 5_000_000,
+      });
+    }) as unknown as Mock;
+    vi.stubGlobal("fetch", fetchMock);
+
+    await runPullCycle();
+
+    // Every row in the cluster landed in Dexie — nothing stranded.
+    expect(await db.intakeRecords.count()).toBe(TOTAL);
+    expect(await db.intakeRecords.get("id-0499")).toBeDefined(); // first page boundary
+    expect(await db.intakeRecords.get("id-0500")).toBeDefined(); // stranded by the old query
+    expect(await db.intakeRecords.get("id-1199")).toBeDefined(); // last row
+
+    // Three pages: 500 + 500 + 200.
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+
+    // Cursor parked on the last (updatedAt, id) tuple of the cluster.
+    const meta = await db._syncMeta.get("intakeRecords");
+    expect(meta?.lastPulledUpdatedAt).toBe(SHARED_UPDATED_AT);
+    expect(meta?.lastPulledId).toBe("id-1199");
   });
 
   it("ack overwrites local updatedAt when local <= server", async () => {

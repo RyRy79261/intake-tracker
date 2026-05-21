@@ -39,7 +39,7 @@
  * from sync routes — keeps PHI out of logs by default).
  */
 import { NextResponse } from "next/server";
-import { and, asc, eq, gt } from "drizzle-orm";
+import { and, asc, eq, gt, or } from "drizzle-orm";
 import { withAuth } from "@/lib/auth-middleware";
 import { db as drizzleDb } from "@/lib/drizzle";
 import {
@@ -69,19 +69,34 @@ export const POST = withAuth(async ({ request, auth }) => {
     const tableNames = (Object.keys(schemaByTableName) as TableName[]).filter(t => t !== 'auditLogs');
     const entries = await Promise.all(
       tableNames.map(async (tableName) => {
-        const cursor = parsed.data.cursors[tableName] ?? 0;
+        // Keyset cursor: `(updatedAt, id)`. A legacy client may still send a
+        // bare `updatedAt` number — normalise it to a zero-id cursor.
+        const rawCursor = parsed.data.cursors[tableName];
+        const cursorUpdatedAt =
+          typeof rawCursor === "number" ? rawCursor : rawCursor?.updatedAt ?? 0;
+        const cursorId =
+          typeof rawCursor === "number" ? "" : rawCursor?.id ?? "";
         const table = schemaByTableName[tableName] as any;
 
+        // `updatedAt > cursor` OR `(updatedAt = cursor AND id > cursorId)` —
+        // the tuple comparison keeps pagination correct when many rows share
+        // one `updatedAt`. Ordering matches: `(updatedAt ASC, id ASC)`.
         const rows = (await drizzleDb
           .select()
           .from(table)
           .where(
             and(
               eq(table.userId, auth.userId!),
-              gt(table.updatedAt, cursor),
+              or(
+                gt(table.updatedAt, cursorUpdatedAt),
+                and(
+                  eq(table.updatedAt, cursorUpdatedAt),
+                  gt(table.id, cursorId),
+                ),
+              ),
             ),
           )
-          .orderBy(asc(table.updatedAt))
+          .orderBy(asc(table.updatedAt), asc(table.id))
           .limit(PULL_SOFT_CAP + 1)) as Record<string, unknown>[];
 
         const hasMore = rows.length > PULL_SOFT_CAP;

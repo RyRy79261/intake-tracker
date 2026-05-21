@@ -19,6 +19,9 @@ export interface SyncStatus {
   // Persisted — last successful push/pull timestamps (Unix ms).
   lastPushedAt: number | null;
   lastPulledAt: number | null;
+  // Persisted — true once a full pull-drain has completed on this device, i.e.
+  // IndexedDB holds a complete copy of the cloud dataset. Stays true once set.
+  initialSyncComplete: boolean;
   // Ephemeral — runtime-only, reset on reload.
   isOnline: boolean;
   isSyncing: boolean;
@@ -38,6 +41,7 @@ export interface SyncStatusActions {
 const defaultState: SyncStatus = {
   lastPushedAt: null,
   lastPulledAt: null,
+  initialSyncComplete: false,
   isOnline: true,
   isSyncing: false,
   queueDepth: 0,
@@ -59,11 +63,21 @@ export const useSyncStatusStore = create<SyncStatus & SyncStatusActions>()(
     {
       name: "intake-tracker-sync-status",
       storage: createJSONStorage(() => localStorage),
-      version: 1,
-      // Only timestamps persist — every other field is runtime/ephemeral.
+      version: 2,
+      migrate: (persisted, version) => {
+        const state = persisted as Record<string, unknown>;
+        if (version < 2) {
+          // Pre-existing cloud-sync users have already pulled their data;
+          // a non-null lastPulledAt means this device is already in parity.
+          state.initialSyncComplete = state.lastPulledAt != null;
+        }
+        return state as unknown as SyncStatus & SyncStatusActions;
+      },
+      // Only timestamps + the parity flag persist — the rest is ephemeral.
       partialize: (state) => ({
         lastPushedAt: state.lastPushedAt,
         lastPulledAt: state.lastPulledAt,
+        initialSyncComplete: state.initialSyncComplete,
       }),
     },
   ),

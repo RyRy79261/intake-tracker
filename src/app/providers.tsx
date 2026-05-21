@@ -10,6 +10,7 @@ import { TimezoneChangeDialog } from "@/components/medications/timezone-change-d
 import { queryClient } from "@/lib/query-client";
 import { SyncLifecycleMount } from "@/components/sync/sync-lifecycle-mount";
 import { SyncErrorBanner } from "@/components/sync/sync-error-banner";
+import { SyncPulseIndicator } from "@/components/sync/sync-pulse-indicator";
 import { MigrationGuard } from "@/components/migration/migration-guard";
 import { ShakeToReport } from "@/components/shake-to-report";
 
@@ -81,6 +82,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           <TimezoneGuard>
             {children}
             <SyncLifecycleMount />
+            <SyncPulseIndicator />
             <SyncErrorBanner />
             <MigrationGuard />
             <ShakeToReport />

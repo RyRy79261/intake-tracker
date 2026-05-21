@@ -211,6 +211,33 @@ describe("sync-pull-route", () => {
     expect(body.result.intakeRecords!.hasMore).toBe(false);
   });
 
+  it("accepts a compound { updatedAt, id } keyset cursor", async () => {
+    const { POST } = await import("@/app/api/sync/pull/route");
+    const { schemaByTableName } = await import("@/lib/sync-payload");
+
+    const intakeRows: StubRow[] = [
+      { id: "b", updatedAt: 1000, deletedAt: null },
+      { id: "c", updatedAt: 1001, deletedAt: null },
+    ];
+    rowsByTableRef.set(schemaByTableName.intakeRecords, intakeRows);
+
+    // The object cursor form must validate (no 400) — a bare number is the
+    // legacy form and is also still accepted.
+    const res = await POST(
+      makePullRequest({
+        cursors: { intakeRecords: { updatedAt: 1000, id: "a" } },
+      }),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      result: Record<string, { rows: StubRow[]; hasMore: boolean }>;
+    };
+    expect(body.result.intakeRecords!.rows.map((r) => r.id)).toEqual([
+      "b",
+      "c",
+    ]);
+  });
+
   it("soft-caps per table at PULL_SOFT_CAP (500) and sets hasMore=true when exceeded", async () => {
     const { POST } = await import("@/app/api/sync/pull/route");
     const { schemaByTableName, PULL_SOFT_CAP } = await import(
