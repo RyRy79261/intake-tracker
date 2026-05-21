@@ -93,6 +93,9 @@ export interface Settings {
   // Storage mode: local-only or cloud-sync
   storageMode: "local" | "cloud-sync";
 
+  // Shake the device to open the bug report / feature request dialog
+  shakeToReportEnabled: boolean;
+
   // Substance tracking configuration
   substanceConfig: SubstanceConfig;
 }
@@ -140,6 +143,8 @@ interface SettingsActions {
   setWeightIncrement: (value: number) => void;
   // Storage mode
   setStorageMode: (mode: "local" | "cloud-sync") => void;
+  // Shake to report
+  setShakeToReportEnabled: (value: boolean) => void;
   // Substance config
   setSubstanceConfig: (config: SubstanceConfig) => void;
   resetToDefaults: () => void;
@@ -171,6 +176,7 @@ const defaultSettings: Settings = {
   liquidPresets: DEFAULT_LIQUID_PRESETS,
   weightIncrement: 0.05,
   storageMode: "local" as const,
+  shakeToReportEnabled: true,
   dismissedInsights: {},
   primaryRegion: "",
   secondaryRegion: "",
@@ -279,6 +285,9 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
       // Storage mode
       setStorageMode: (mode) => set({ storageMode: mode }),
 
+      // Shake to report
+      setShakeToReportEnabled: (value) => set({ shakeToReportEnabled: value }),
+
       // Substance config
       setSubstanceConfig: (config) => set({ substanceConfig: config }),
 
@@ -308,7 +317,7 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
     {
       name: "intake-tracker-settings",
       storage: createJSONStorage(() => localStorage),
-      version: 9,
+      version: 10,
       migrate: (persisted, version) => {
         const state = persisted as Record<string, unknown>;
         if (version === 0) {
@@ -359,6 +368,9 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
         if (version < 9) {
           state.swipeNavDistanceThresholdPct = 28;
           state.swipeNavVelocityThreshold = 500;
+        }
+        if (version < 10) {
+          state.shakeToReportEnabled = true;
         }
         return state as unknown as Settings & SettingsActions;
       },
