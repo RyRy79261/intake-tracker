@@ -627,9 +627,14 @@ export async function editDoseTime(input: EditDoseTimeInput): Promise<ServiceRes
   try {
     const { prescriptionId, phaseId, scheduleId, date, time, newTime } = input;
 
-    const [h, m] = newTime.split(":").map(Number);
+    const match = /^(\d{1,2}):(\d{2})$/.exec(newTime);
+    const h = match ? Number(match[1]) : NaN;
+    const m = match ? Number(match[2]) : NaN;
+    if (!Number.isInteger(h) || !Number.isInteger(m) || h < 0 || h > 23 || m < 0 || m > 59) {
+      return err(`Invalid time "${newTime}"`);
+    }
     const d = new Date(date + "T00:00:00");
-    d.setHours(h ?? 0, m ?? 0, 0, 0);
+    d.setHours(h, m, 0, 0);
     const newTimestamp = d.getTime();
 
     const log = await db.transaction(
