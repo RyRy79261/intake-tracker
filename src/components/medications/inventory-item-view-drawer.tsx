@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { PillIcon } from "./pill-icon";
 import {
   usePhasesForPrescription,
+  useInventoryForPrescription,
   useInventoryTransactions,
   useSchedulesForPhase,
   useUpdateInventoryItem,
@@ -18,7 +19,7 @@ import {
 } from "@/hooks/use-medication-queries";
 import { getEffectivePhase } from "@/lib/medication-ui-utils";
 import type { Prescription, InventoryItem } from "@/lib/db";
-import { Loader2, Archive, ArchiveRestore, Plus, Pencil, Trash2, Check, X } from "lucide-react";
+import { Loader2, Archive, ArchiveRestore, Plus, Pencil, Trash2, Check, X, CheckCircle2 } from "lucide-react";
 
 interface InventoryItemViewDrawerProps {
   /** The specific inventory item (pill brand) being viewed. */
@@ -30,19 +31,23 @@ interface InventoryItemViewDrawerProps {
 }
 
 export function InventoryItemViewDrawer({ item, prescription, open, onOpenChange }: InventoryItemViewDrawerProps) {
+  // Re-resolve against the live query so stock, active and archive state stay
+  // current after edits, even when the caller passes a snapshot.
+  const siblings = useInventoryForPrescription(item?.prescriptionId);
   if (!item) return null;
+  const current = siblings.find((i) => i.id === item.id) ?? item;
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
       <DrawerContent className="max-h-[90dvh] flex flex-col">
         <DrawerHeader className="border-b shrink-0">
           <DrawerTitle>
-            {item.brandName} {item.strength}{item.unit}
+            {current.brandName} {current.strength}{current.unit}
           </DrawerTitle>
           <p className="text-sm text-muted-foreground">
             {prescription ? `For ${prescription.genericName}` : "Medicine"}
-            {!item.isActive && " · Not the active brand"}
-            {item.isArchived && " · Archived"}
+            {current.isActive ? " · Active brand" : " · Not active"}
+            {current.isArchived && " · Archived"}
           </p>
         </DrawerHeader>
 
@@ -58,15 +63,15 @@ export function InventoryItemViewDrawer({ item, prescription, open, onOpenChange
 
             <div className="flex-1 overflow-y-auto p-4">
               <TabsContent value="details" className="mt-0 space-y-6">
-                <DetailsTab item={item} prescription={prescription} />
+                <DetailsTab item={current} prescription={prescription} />
               </TabsContent>
 
               <TabsContent value="inventory" className="mt-0 space-y-6">
-                <InventoryTab item={item} prescription={prescription} />
+                <InventoryTab item={current} prescription={prescription} />
               </TabsContent>
 
               <TabsContent value="manage" className="mt-0">
-                <ManageTab item={item} onOpenChange={onOpenChange} />
+                <ManageTab item={current} siblings={siblings} onOpenChange={onOpenChange} />
               </TabsContent>
             </div>
           </Tabs>
@@ -171,6 +176,13 @@ function InventoryTab({ item, prescription }: { item: InventoryItem; prescriptio
           <p className="text-xl font-semibold">{daysLeft === Infinity ? "∞" : daysLeft} <span className="text-sm font-normal text-muted-foreground">days</span></p>
         </div>
       </div>
+
+      {!item.isActive && (
+        <p className="text-xs text-muted-foreground bg-muted/30 p-2.5 rounded-lg border">
+          This brand is not active, so its stock is not deducted when doses are
+          taken. Set it as the active brand from the Manage tab.
+        </p>
+      )}
 
       <div className="space-y-3">
         <h3 className="font-semibold text-sm">Log Refill</h3>
@@ -307,12 +319,56 @@ function TransactionRow({ tx }: { tx: { id: string; type: string; amount: number
   );
 }
 
-function ManageTab({ item, onOpenChange }: { item: InventoryItem; onOpenChange: (open: boolean) => void }) {
+function ManageTab({
+  item,
+  siblings,
+  onOpenChange,
+}: {
+  item: InventoryItem;
+  siblings: InventoryItem[];
+  onOpenChange: (open: boolean) => void;
+}) {
   const updateMutation = useUpdateInventoryItem();
   const deleteMutation = useDeleteInventoryItem();
 
+  const canActivate = !item.isActive && !item.isArchived;
+
+  const handleSetActive = async () => {
+    const currentActive = siblings.find(
+      (i) => i.isActive && !i.isArchived && i.id !== item.id,
+    );
+    if (currentActive) {
+      await updateMutation.mutateAsync({ id: currentActive.id, updates: { isActive: false } });
+    }
+    await updateMutation.mutateAsync({ id: item.id, updates: { isActive: true } });
+  };
+
   return (
     <div className="space-y-6">
+      {canActivate && (
+        <div className="space-y-2">
+          <h3 className="font-semibold text-sm">Active Brand</h3>
+          <p className="text-xs text-muted-foreground">
+            Make this the brand doses are deducted from. Switch deliberately
+            when you start taking pills from a different box.
+          </p>
+          <Button
+            className="w-full bg-teal-600 hover:bg-teal-700"
+            onClick={handleSetActive}
+            disabled={updateMutation.isPending}
+          >
+            {updateMutation.isPending ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <>
+                <CheckCircle2 className="w-4 h-4 mr-2" />
+                Set as active brand
+              </>
+            )}
+          </Button>
+        </div>
+      )}
+
       <div className="space-y-4">
         <h3 className="font-semibold text-sm">Archive Medicine</h3>
         <p className="text-xs text-muted-foreground">
@@ -321,7 +377,7 @@ function ManageTab({ item, onOpenChange }: { item: InventoryItem; onOpenChange: 
         <Button
           variant={item.isArchived ? "outline" : "destructive"}
           className="w-full"
-          onClick={() => updateMutation.mutate({ id: item.id, updates: { isArchived: !item.isArchived } })}
+          onClick={() => updateMutation.mutate({ id: item.id, updates: { isArchived: !item.isArchived, ...(item.isActive && !item.isArchived ? { isActive: false } : {}) } })}
           disabled={updateMutation.isPending}
         >
           {updateMutation.isPending ? (

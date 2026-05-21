@@ -10,8 +10,6 @@ import { schedulePush } from "./sync-engine";
 export interface AddMedicationToPrescriptionInput {
   prescriptionId: string;
   unit: string;
-  foodInstruction: FoodInstruction;
-  foodNote?: string;
   brandName: string;
   currentStock: number;
   strength: number;
@@ -20,7 +18,6 @@ export interface AddMedicationToPrescriptionInput {
   visualIdentification?: string;
   refillAlertDays?: number;
   refillAlertPills?: number;
-  schedules: { time: string; daysOfWeek: number[]; dosage: number }[];
 }
 
 export interface CreatePhaseInput {
@@ -69,46 +66,26 @@ export async function getPhasesForPrescription(prescriptionId: string): Promise<
 // ---------------------------------------------------------------------------
 
 /**
- * Adds a new medication (inventory + new active phase) to an existing prescription.
- * Straddles prescriptions and inventory — archives the prior active inventory
- * item and completes the previously active phase before adding the new ones.
+ * Adds a new medicine (a pill brand) to an existing prescription's stockpile.
+ *
+ * This is a pure inventory addition. It deliberately does NOT archive the
+ * existing brand, touch the schedule/phase, or auto-activate — switching the
+ * active brand is a manual action the user takes (via Switch Brand) to mirror
+ * which box they're actually filling their pillbox from. The new brand only
+ * becomes active when the prescription has no active brand at all, to avoid
+ * leaving it with nothing to deduct stock from.
  */
 export async function addMedicationToPrescription(input: AddMedicationToPrescriptionInput): Promise<ServiceResult<void>> {
   try {
     const now = Date.now();
 
-    const hasSchedules = input.schedules.length > 0;
-    const phase = hasSchedules ? buildPhase(input.prescriptionId, input, now) : null;
-    const inventory = buildInventory(input.prescriptionId, input, now);
-    const schedules = phase ? buildSchedules(phase.id, input.schedules, now) : [];
-
-    await db.transaction("rw", [db.medicationPhases, db.inventoryItems, db.phaseSchedules, db.inventoryTransactions, db.auditLogs, db._syncQueue], async () => {
+    await db.transaction("rw", [db.inventoryItems, db.inventoryTransactions, db.auditLogs, db._syncQueue], async () => {
       const existingInventory = await db.inventoryItems.where("prescriptionId").equals(input.prescriptionId).toArray();
-      for (const item of existingInventory) {
-        if (item.isActive) {
-          await db.inventoryItems.update(item.id, { isActive: false, isArchived: true, updatedAt: now });
-          await enqueueInsideTx("inventoryItems", item.id, "upsert");
-        }
-      }
+      const hasActiveBrand = existingInventory.some(
+        (item) => item.isActive && !item.isArchived && item.deletedAt === null,
+      );
 
-      const existingPhases = await db.medicationPhases.where("prescriptionId").equals(input.prescriptionId).toArray();
-      for (const p of existingPhases) {
-        if (p.status === "active") {
-          await db.medicationPhases.update(p.id, { status: "completed", endDate: now });
-          await enqueueInsideTx("medicationPhases", p.id, "upsert");
-        }
-      }
-
-      if (phase) {
-        await db.medicationPhases.add(phase);
-        await enqueueInsideTx("medicationPhases", phase.id, "upsert");
-        if (schedules.length > 0) {
-          await db.phaseSchedules.bulkAdd(schedules);
-          for (const s of schedules) {
-            await enqueueInsideTx("phaseSchedules", s.id, "upsert");
-          }
-        }
-      }
+      const inventory = { ...buildInventory(input.prescriptionId, input, now), isActive: !hasActiveBrand };
       await db.inventoryItems.add(inventory);
       await enqueueInsideTx("inventoryItems", inventory.id, "upsert");
 
@@ -121,8 +98,8 @@ export async function addMedicationToPrescription(input: AddMedicationToPrescrip
       const audit = buildAuditEntry("prescription_updated", {
         prescriptionId: input.prescriptionId,
         action: "medication_added",
-        phaseId: phase?.id ?? "none",
         inventoryId: inventory.id,
+        activatedImmediately: !hasActiveBrand,
       });
       await db.auditLogs.add(audit);
       await enqueueInsideTx("auditLogs", audit.id, "upsert");

@@ -39,7 +39,7 @@ export function SearchStep({
             <option value="new">Create new prescription</option>
             {existingPrescriptions.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.genericName}{p.indication ? ` - ${p.indication}` : ""}
+                {p.genericName}
               </option>
             ))}
           </select>
