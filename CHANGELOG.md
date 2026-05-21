@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.14.1](https://github.com/RyRy79261/intake-tracker/compare/v1.14.0...v1.14.1) (2026-05-21)
+
+
+### Bug Fixes
+
+* prevent stray gestures from breaking layout during rapid swipe navigation ([479f7cc](https://github.com/RyRy79261/intake-tracker/commit/479f7cc03d87645ae2f2757c48dcb490698e3065))
+
 ## [1.14.0](https://github.com/RyRy79261/intake-tracker/compare/v1.13.0...v1.14.0) (2026-05-21)
 
 
