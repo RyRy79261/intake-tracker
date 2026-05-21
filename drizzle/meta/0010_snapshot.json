@@ -1,6 +1,6 @@
 {
-  "id": "ef1a70f4-f5ed-4500-9cd8-c75d6faa3a34",
-  "prevId": "e445ac16-9ad0-484f-bf55-60a0898325ca",
+  "id": "c7f49d21-3afc-4110-9ee1-fa4d202b2913",
+  "prevId": "ef1a70f4-f5ed-4500-9cd8-c75d6faa3a34",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1394,6 +1394,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "compounds": {
+          "name": "compounds",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
         "unit": {
           "name": "unit",
           "type": "text",
@@ -2202,6 +2208,12 @@
         "warnings": {
           "name": "warnings",
           "type": "text[]",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "compounds": {
+          "name": "compounds",
+          "type": "jsonb",
           "primaryKey": false,
           "notNull": false
         },
