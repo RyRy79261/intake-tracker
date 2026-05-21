@@ -56,6 +56,7 @@ const TABLE_TO_INTERFACE: Record<string, string> = {
   dailyNotes: "DailyNote",
   auditLogs: "AuditLog",
   titrationPlans: "TitrationPlan",
+  userProfile: "UserProfile",
 };
 
 /** Default path to db.ts — resolved relative to this file's location in src/__tests__/ */

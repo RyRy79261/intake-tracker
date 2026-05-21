@@ -2,7 +2,8 @@ import { db, type IntakeRecord, type WeightRecord, type BloodPressureRecord,
   type EatingRecord, type UrinationRecord, type DefecationRecord,
   type Prescription, type MedicationPhase, type PhaseSchedule,
   type InventoryItem, type InventoryTransaction, type DoseLog,
-  type DailyNote, type AuditLog, type SubstanceRecord, type TitrationPlan } from "@/lib/db";
+  type DailyNote, type AuditLog, type SubstanceRecord, type TitrationPlan,
+  type UserProfile } from "@/lib/db";
 
 const BASE_TS = 1700000000000; // 2023-11-14 — fixed base for determinism
 
@@ -261,6 +262,21 @@ export function makeTitrationPlan(overrides?: Partial<TitrationPlan>): Titration
     deviceId: "test-device",
     ...overrides,
   } as TitrationPlan;
+}
+
+export function makeUserProfile(overrides?: Partial<UserProfile>): UserProfile {
+  return {
+    id: crypto.randomUUID(),
+    conditions: [],
+    shareConditionsWithAI: false,
+    shareMedicationsWithAI: false,
+    aiInsightsConsentAt: null,
+    createdAt: BASE_TS,
+    updatedAt: BASE_TS,
+    deletedAt: null,
+    deviceId: "test-device",
+    ...overrides,
+  } as UserProfile;
 }
 
 export function makeSubstanceRecord(overrides?: Partial<SubstanceRecord>): SubstanceRecord {

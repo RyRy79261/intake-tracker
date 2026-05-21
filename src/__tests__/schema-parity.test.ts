@@ -48,8 +48,8 @@ function getDrizzleColumnNames(table: Table): string[] {
 // ─────────────────────────────────────────────────────────────────────────
 
 describe("Dexie schema extractor sanity", () => {
-  it("extracts exactly 16 Dexie tables from src/lib/db.ts", () => {
-    expect(DEXIE_TABLES).toHaveLength(16);
+  it("extracts exactly 17 Dexie tables from src/lib/db.ts", () => {
+    expect(DEXIE_TABLES).toHaveLength(17);
   });
 
   it("extracted table list contains all expected table names", () => {
@@ -70,6 +70,7 @@ describe("Dexie schema extractor sanity", () => {
     expect(names).toContain("dailyNotes");
     expect(names).toContain("auditLogs");
     expect(names).toContain("titrationPlans");
+    expect(names).toContain("userProfile");
   });
 
   it("intakeRecords interface includes all expected sync-scaffold and domain fields", () => {
