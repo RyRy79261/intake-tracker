@@ -4,7 +4,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { motion } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { SyncStatusBadge } from "@/components/sync/sync-status-badge";
 import { AuthButton } from "@/components/auth-button";
 import { NAV_ROUTES } from "@/lib/nav-routes";
 import { useSettings } from "@/hooks/use-settings";
@@ -37,7 +36,6 @@ export function AppHeader() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">{current.title}</h1>
         <p className="text-sm text-muted-foreground">{current.subtitle}</p>
-        <SyncStatusBadge />
       </div>
       <div className="flex items-center gap-1">
         {NAV_ITEMS.map((item) => {

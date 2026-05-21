@@ -82,11 +82,12 @@ export async function addMedicationToPrescription(input: AddMedicationToPrescrip
     const inventory = buildInventory(input.prescriptionId, input, now);
     const schedules = phase ? buildSchedules(phase.id, input.schedules, now) : [];
 
-    await db.transaction("rw", [db.medicationPhases, db.inventoryItems, db.phaseSchedules, db.inventoryTransactions, db.auditLogs], async () => {
+    await db.transaction("rw", [db.medicationPhases, db.inventoryItems, db.phaseSchedules, db.inventoryTransactions, db.auditLogs, db._syncQueue], async () => {
       const existingInventory = await db.inventoryItems.where("prescriptionId").equals(input.prescriptionId).toArray();
       for (const item of existingInventory) {
         if (item.isActive) {
           await db.inventoryItems.update(item.id, { isActive: false, isArchived: true, updatedAt: now });
+          await enqueueInsideTx("inventoryItems", item.id, "upsert");
         }
       }
 
@@ -94,26 +95,39 @@ export async function addMedicationToPrescription(input: AddMedicationToPrescrip
       for (const p of existingPhases) {
         if (p.status === "active") {
           await db.medicationPhases.update(p.id, { status: "completed", endDate: now });
+          await enqueueInsideTx("medicationPhases", p.id, "upsert");
         }
       }
 
       if (phase) {
         await db.medicationPhases.add(phase);
-        if (schedules.length > 0) await db.phaseSchedules.bulkAdd(schedules);
+        await enqueueInsideTx("medicationPhases", phase.id, "upsert");
+        if (schedules.length > 0) {
+          await db.phaseSchedules.bulkAdd(schedules);
+          for (const s of schedules) {
+            await enqueueInsideTx("phaseSchedules", s.id, "upsert");
+          }
+        }
       }
       await db.inventoryItems.add(inventory);
+      await enqueueInsideTx("inventoryItems", inventory.id, "upsert");
 
       if (input.currentStock > 0) {
-        await db.inventoryTransactions.add(buildTransaction(inventory.id, input.currentStock, "refill", now, "Initial stock"));
+        const transaction = buildTransaction(inventory.id, input.currentStock, "refill", now, "Initial stock");
+        await db.inventoryTransactions.add(transaction);
+        await enqueueInsideTx("inventoryTransactions", transaction.id, "upsert");
       }
 
-      await db.auditLogs.add(buildAuditEntry("prescription_updated", {
+      const audit = buildAuditEntry("prescription_updated", {
         prescriptionId: input.prescriptionId,
         action: "medication_added",
         phaseId: phase?.id ?? "none",
         inventoryId: inventory.id,
-      }));
+      });
+      await db.auditLogs.add(audit);
+      await enqueueInsideTx("auditLogs", audit.id, "upsert");
     });
+    schedulePush();
 
     return ok(undefined);
   } catch (e) {
@@ -124,7 +138,7 @@ export async function addMedicationToPrescription(input: AddMedicationToPrescrip
 export async function activatePhase(id: string): Promise<ServiceResult<void>> {
   try {
     const now = Date.now();
-    await db.transaction("rw", [db.medicationPhases, db.auditLogs], async () => {
+    await db.transaction("rw", [db.medicationPhases, db.auditLogs, db._syncQueue], async () => {
       const phase = await db.medicationPhases.get(id);
       if (!phase) throw new Error("Phase not found");
 
@@ -139,18 +153,25 @@ export async function activatePhase(id: string): Promise<ServiceResult<void>> {
           status: "completed",
           endDate: currentActive.endDate ?? now,
         });
-        await db.auditLogs.add(buildAuditEntry("phase_completed", {
+        await enqueueInsideTx("medicationPhases", currentActive.id, "upsert");
+        const completedAudit = buildAuditEntry("phase_completed", {
           phaseId: currentActive.id,
           prescriptionId: phase.prescriptionId,
-        }));
+        });
+        await db.auditLogs.add(completedAudit);
+        await enqueueInsideTx("auditLogs", completedAudit.id, "upsert");
       }
 
       await db.medicationPhases.update(id, { status: "active", startDate: now });
-      await db.auditLogs.add(buildAuditEntry("phase_activated", {
+      await enqueueInsideTx("medicationPhases", id, "upsert");
+      const activatedAudit = buildAuditEntry("phase_activated", {
         phaseId: id,
         prescriptionId: phase.prescriptionId,
-      }));
+      });
+      await db.auditLogs.add(activatedAudit);
+      await enqueueInsideTx("auditLogs", activatedAudit.id, "upsert");
     });
+    schedulePush();
     return ok(undefined);
   } catch (e) {
     return err("Failed to activate phase", e);
@@ -161,7 +182,7 @@ export async function startNewPhase(input: CreatePhaseInput): Promise<ServiceRes
   try {
     const now = Date.now();
 
-    const result = await db.transaction("rw", [db.medicationPhases, db.phaseSchedules, db.auditLogs], async () => {
+    const result = await db.transaction("rw", [db.medicationPhases, db.phaseSchedules, db.auditLogs, db._syncQueue], async () => {
       const isFuture = input.startDate && input.startDate > now;
       const status = isFuture ? "pending" as const : "active" as const;
 
@@ -177,10 +198,13 @@ export async function startNewPhase(input: CreatePhaseInput): Promise<ServiceRes
             status: "completed",
             endDate: currentActive.endDate ?? now,
           });
-          await db.auditLogs.add(buildAuditEntry("phase_completed", {
+          await enqueueInsideTx("medicationPhases", currentActive.id, "upsert");
+          const completedAudit = buildAuditEntry("phase_completed", {
             phaseId: currentActive.id,
             prescriptionId: input.prescriptionId,
-          }));
+          });
+          await db.auditLogs.add(completedAudit);
+          await enqueueInsideTx("auditLogs", completedAudit.id, "upsert");
         }
       }
 
@@ -191,19 +215,26 @@ export async function startNewPhase(input: CreatePhaseInput): Promise<ServiceRes
       }, now);
 
       await db.medicationPhases.add(phase);
+      await enqueueInsideTx("medicationPhases", phase.id, "upsert");
 
       const schedules = buildSchedules(phase.id, input.schedules, now);
       await db.phaseSchedules.bulkAdd(schedules);
+      for (const s of schedules) {
+        await enqueueInsideTx("phaseSchedules", s.id, "upsert");
+      }
 
-      await db.auditLogs.add(buildAuditEntry("phase_started", {
+      const startedAudit = buildAuditEntry("phase_started", {
         phaseId: phase.id,
         prescriptionId: input.prescriptionId,
         type: input.type,
         status,
-      }));
+      });
+      await db.auditLogs.add(startedAudit);
+      await enqueueInsideTx("auditLogs", startedAudit.id, "upsert");
 
       return phase;
     });
+    schedulePush();
 
     return ok(result);
   } catch (e) {
@@ -213,11 +244,12 @@ export async function startNewPhase(input: CreatePhaseInput): Promise<ServiceRes
 
 export async function updatePhase(input: UpdatePhaseInput): Promise<ServiceResult<void>> {
   try {
-    await db.transaction("rw", [db.medicationPhases, db.phaseSchedules, db.auditLogs], async () => {
+    await db.transaction("rw", [db.medicationPhases, db.phaseSchedules, db.auditLogs, db._syncQueue], async () => {
       const { id, schedules, ...updates } = input;
 
       if (Object.keys(updates).length > 0) {
         await db.medicationPhases.update(id, updates);
+        await enqueueInsideTx("medicationPhases", id, "upsert");
       }
 
       if (schedules) {
@@ -254,8 +286,18 @@ export async function updatePhase(input: UpdatePhaseInput): Promise<ServiceResul
 
         const toDelete = Array.from(existingIds).filter(sid => !keptIds.has(sid));
 
-        if (toDelete.length > 0) await db.phaseSchedules.bulkDelete(toDelete);
-        if (toAdd.length > 0) await db.phaseSchedules.bulkAdd(toAdd);
+        if (toDelete.length > 0) {
+          await db.phaseSchedules.bulkDelete(toDelete);
+          for (const sid of toDelete) {
+            await enqueueInsideTx("phaseSchedules", sid, "delete");
+          }
+        }
+        if (toAdd.length > 0) {
+          await db.phaseSchedules.bulkAdd(toAdd);
+          for (const s of toAdd) {
+            await enqueueInsideTx("phaseSchedules", s.id, "upsert");
+          }
+        }
         for (const u of toUpdate) {
           const tz = getDeviceTimezone();
           await db.phaseSchedules.update(u.id, {
@@ -266,16 +308,20 @@ export async function updatePhase(input: UpdatePhaseInput): Promise<ServiceResul
             daysOfWeek: u.daysOfWeek,
             updatedAt: Date.now(),
           });
+          await enqueueInsideTx("phaseSchedules", u.id, "upsert");
         }
       }
 
-      await db.auditLogs.add(buildAuditEntry("prescription_updated", {
+      const audit = buildAuditEntry("prescription_updated", {
         phaseId: id,
         action: "phase_updated",
         updatedFields: Object.keys(updates),
         schedulesModified: !!schedules,
-      }));
+      });
+      await db.auditLogs.add(audit);
+      await enqueueInsideTx("auditLogs", audit.id, "upsert");
     });
+    schedulePush();
     return ok(undefined);
   } catch (e) {
     return err("Failed to update phase", e);
