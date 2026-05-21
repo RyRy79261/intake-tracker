@@ -255,6 +255,7 @@ export function PresetTab({ tab }: PresetTabProps) {
       type: "caffeine" | "alcohol";
       amountMg?: number;
       amountStandardDrinks?: number;
+      abvPercent?: number;
       volumeMl?: number;
       description: string;
     }> = [];
@@ -274,6 +275,7 @@ export function PresetTab({ tab }: PresetTabProps) {
       substances.push({
         type: "alcohol",
         amountStandardDrinks: parseFloat(stdDrinks.toFixed(1)),
+        abvPercent: alcoholPer100ml,
         ...(waterAmount <= 0 && { volumeMl }),
         description,
       });

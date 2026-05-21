@@ -62,8 +62,8 @@ const ItemSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("alcohol"),
     description: z.string().min(1).max(200),
-    standardDrinks: z.number().min(0).max(50),
-    volumeMl: z.number().min(0).max(5000).optional(),
+    abvPercent: z.number().min(0).max(95),
+    volumeMl: z.number().min(1).max(5000),
   }),
   z.object({
     kind: z.literal("urination"),
@@ -91,7 +91,7 @@ Item kinds (use exactly these strings):
 - "salt": sodiumMg (number, in mg sodium NOT salt — if user says "1g of salt" convert: sodium_mg = salt_g * 400)
 - "food": description (short string), grams (optional), waterMl (optional rough estimate of water content), sodiumMg (optional rough estimate of sodium)
 - "caffeine": description, caffeineMg (e.g. drip coffee 250ml ~ 95mg, espresso 30ml ~ 63mg, tea ~ 47mg), volumeMl (optional)
-- "alcohol": description, standardDrinks (1 std drink = 10g ethanol; beer 330ml@5% ~ 1.3, wine 150ml@13% ~ 1.5, shot 45ml@40% ~ 1.4), volumeMl (optional)
+- "alcohol": description, abvPercent (alcohol by volume % — the number printed on the bottle label: lager ~5, IPA ~6, red wine ~13, vodka ~40), volumeMl (volume of the drink in ml: pint 568, half pint 284, wine glass 125-175, single spirit measure 25-30, double 50). Always provide BOTH abvPercent and volumeMl. Never report "standard drinks" or "units" — the app derives those from abvPercent and volumeMl.
 - "urination": amountEstimate ("small"|"medium"|"large", optional)
 - "defecation": amountEstimate ("small"|"medium"|"large", optional)
 
@@ -148,7 +148,7 @@ const PARSE_TOOL = {
             grams: { type: "number" },
             waterMl: { type: "number" },
             caffeineMg: { type: "number" },
-            standardDrinks: { type: "number" },
+            abvPercent: { type: "number" },
             volumeMl: { type: "number" },
             amountEstimate: { type: "string", enum: ["small", "medium", "large"] },
             note: { type: "string" },

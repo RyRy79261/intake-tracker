@@ -234,6 +234,8 @@ export const substanceRecords = pgTable(
     amountMg: integer("amount_mg"),
     // Standard drinks are often fractional (e.g. 1.5). Use real.
     amountStandardDrinks: real("amount_standard_drinks"),
+    // Alcohol by volume %, the user-entered input value. Fractional (e.g. 4.2).
+    abvPercent: real("abv_percent"),
     volumeMl: integer("volume_ml"),
     description: text("description").notNull(),
     source: text("source").notNull(),
@@ -260,6 +262,10 @@ export const substanceRecords = pgTable(
     sourceCheck: check(
       "substance_records_source_check",
       sql`${t.source} IN ('water_intake','eating','standalone')`,
+    ),
+    abvPercentRangeCheck: check(
+      "substance_records_abv_percent_range",
+      sql`${t.abvPercent} IS NULL OR (${t.abvPercent} >= 0 AND ${t.abvPercent} <= 100)`,
     ),
     userUpdatedIdx: index("idx_substance_user_updated").on(
       t.userId,
