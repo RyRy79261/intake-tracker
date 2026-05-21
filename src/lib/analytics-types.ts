@@ -4,17 +4,20 @@ import type { PhaseType } from "./db";
 // Domain & Time
 // ---------------------------------------------------------------------------
 
-export type Domain =
-  | "water"
-  | "salt"
-  | "weight"
-  | "bp"
-  | "eating"
-  | "urination"
-  | "defecation"
-  | "caffeine"
-  | "alcohol"
-  | "medication";
+export const DOMAINS = [
+  "water",
+  "salt",
+  "weight",
+  "bp",
+  "eating",
+  "urination",
+  "defecation",
+  "caffeine",
+  "alcohol",
+  "medication",
+] as const;
+
+export type Domain = (typeof DOMAINS)[number];
 
 export type TimeScope = "24h" | "7d" | "30d" | "90d" | "all";
 

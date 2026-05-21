@@ -13,10 +13,10 @@ export interface InsightsResult {
   generatedAt: number;
 }
 
-/** Thrown before any network call when the 30-day window has nothing to summarise. */
+/** Thrown before any network call when the requested window has nothing to summarise. */
 export class NotEnoughDataError extends Error {
   constructor() {
-    super("Not enough tracked data in the last 30 days to generate insights.");
+    super("Not enough tracked data to generate insights.");
     this.name = "NotEnoughDataError";
   }
 }
@@ -44,17 +44,40 @@ export function useGenerateInsights() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(snapshot),
       });
-      const body = (await res.json().catch(() => ({}))) as Partial<InsightsResult> & {
-        error?: string;
-      };
-      if (!res.ok) {
-        throw new Error(body.error ?? "Failed to generate insights");
+
+      let body: unknown = null;
+      try {
+        body = await res.json();
+      } catch {
+        // Non-JSON body — caught by the validation below.
       }
 
+      if (!res.ok) {
+        const message =
+          body &&
+          typeof body === "object" &&
+          typeof (body as { error?: unknown }).error === "string"
+            ? (body as { error: string }).error
+            : "Failed to generate insights";
+        throw new Error(message);
+      }
+
+      // A malformed 200 must fail loudly, not be cached as a blank insight.
+      if (
+        !body ||
+        typeof body !== "object" ||
+        typeof (body as InsightsResult).narrative !== "string" ||
+        !Array.isArray((body as InsightsResult).observations)
+      ) {
+        throw new Error("The insights service returned a malformed response.");
+      }
+
+      const result = body as InsightsResult;
       return {
-        narrative: body.narrative ?? "",
-        observations: body.observations ?? [],
-        generatedAt: body.generatedAt ?? Date.now(),
+        narrative: result.narrative,
+        observations: result.observations,
+        generatedAt:
+          typeof result.generatedAt === "number" ? result.generatedAt : Date.now(),
       };
     },
   });

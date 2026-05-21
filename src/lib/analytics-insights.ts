@@ -10,22 +10,9 @@
  */
 
 import { z } from "zod";
+import { DOMAINS, type Domain } from "./analytics-types";
 
-// Domains accepted in correlation entries — kept in sync with analytics-types.
-const DOMAINS = [
-  "water",
-  "salt",
-  "weight",
-  "bp",
-  "eating",
-  "urination",
-  "defecation",
-  "caffeine",
-  "alcohol",
-  "medication",
-] as const;
-
-const DOMAIN_LABELS: Record<(typeof DOMAINS)[number], string> = {
+const DOMAIN_LABELS: Record<Domain, string> = {
   water: "water intake",
   salt: "sodium intake",
   weight: "weight",
@@ -87,10 +74,14 @@ const CorrelationMetricSchema = z.object({
 });
 
 export const AnalyticsInsightsRequestSchema = z.object({
-  range: z.object({
-    start: z.number(),
-    end: z.number(),
-  }),
+  range: z
+    .object({
+      start: z.number(),
+      end: z.number(),
+    })
+    .refine((r) => r.start <= r.end, {
+      message: "range.start must be <= range.end",
+    }),
   metrics: z
     .object({
       bp: BpMetricSchema.optional(),
@@ -167,7 +158,7 @@ function describeTrend(t: z.infer<typeof TrendSchema>): string {
   return `${t.direction} (confidence ${(t.confidence * 100).toFixed(0)}%)`;
 }
 
-function domainLabel(d: (typeof DOMAINS)[number]): string {
+function domainLabel(d: Domain): string {
   return DOMAIN_LABELS[d];
 }
 

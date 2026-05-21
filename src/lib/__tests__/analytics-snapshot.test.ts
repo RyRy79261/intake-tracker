@@ -3,8 +3,8 @@ import {
   insightsRange,
   snapshotIsEmpty,
   INSIGHTS_WINDOW_DAYS,
-} from "../analytics-snapshot";
-import type { AnalyticsInsightsRequest } from "../analytics-insights";
+} from "@/lib/analytics-snapshot";
+import type { AnalyticsInsightsRequest } from "@/lib/analytics-insights";
 
 describe("insightsRange", () => {
   it("spans exactly the rolling window ending at the given time", () => {

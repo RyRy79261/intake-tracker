@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   AnalyticsInsightsRequestSchema,
   buildInsightsPrompt,
-} from "../analytics-insights";
+} from "@/lib/analytics-insights";
 
 const validBp = {
   avgSystolic: 128,

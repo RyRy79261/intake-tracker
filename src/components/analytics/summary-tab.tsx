@@ -31,7 +31,7 @@ import {
 } from "@/hooks/use-analytics-queries";
 import { useRecordsTabData } from "@/hooks/use-records-tab-queries";
 import { useSettingsStore } from "@/stores/settings-store";
-import { AiInsightsCard } from "./ai-insights-card";
+import { AiInsightsCard } from "@/components/analytics/ai-insights-card";
 import type { TimeRange, TrendDirection } from "@/lib/analytics-types";
 
 const TOOLTIP_STYLE = {

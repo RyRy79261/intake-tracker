@@ -85,17 +85,22 @@ export const POST = withAuth(async ({ request, auth }) => {
       tool_choice: { type: "tool", name: INSIGHT_TOOL.name },
       messages: [{ role: "user", content: buildInsightsPrompt(parsed.data) }],
     });
-    recordUsage({
-      userId: auth.userId!,
-      keyOwnerId: resolved.keyOwnerId,
-      keySource: resolved.source,
-      provider: "anthropic",
-      model: CLAUDE_MODELS.quality,
-      route: "/api/analytics/insights",
-      status: "success",
-      durationMs: Date.now() - startedAt,
-      ...tokensFromAnthropic(response.usage),
-    });
+    // Usage telemetry must never turn a successful AI call into a 502.
+    try {
+      recordUsage({
+        userId: auth.userId!,
+        keyOwnerId: resolved.keyOwnerId,
+        keySource: resolved.source,
+        provider: "anthropic",
+        model: CLAUDE_MODELS.quality,
+        route: "/api/analytics/insights",
+        status: "success",
+        durationMs: Date.now() - startedAt,
+        ...tokensFromAnthropic(response.usage),
+      });
+    } catch (usageError) {
+      console.error("[analytics/insights] usage recording failed:", usageError);
+    }
 
     const toolBlock = response.content.find(
       (b): b is ToolUseBlock =>

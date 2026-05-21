@@ -1,4 +1,15 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
+
+/**
+ * The analytics page shows a one-time intro modal on first visit. A fresh E2E
+ * context always triggers it, and its overlay blocks tab clicks — dismiss it
+ * before interacting with the tabs.
+ */
+async function dismissAnalyticsIntro(page: Page) {
+  const gotIt = page.getByRole('button', { name: /got it/i });
+  await gotIt.click({ timeout: 10_000 });
+  await expect(gotIt).toBeHidden();
+}
 
 test.describe('History / Analytics', () => {
 
@@ -14,6 +25,7 @@ test.describe('History / Analytics', () => {
 
   test('should switch between analytics tabs', async ({ page }) => {
     await page.goto('/analytics');
+    await dismissAnalyticsIntro(page);
     // Click each tab and verify the panel renders
     for (const tabName of ['Summary', 'Correlations', 'Titration', 'Records']) {
       await page.locator('[role="tab"]', { hasText: tabName }).click();
@@ -64,6 +76,7 @@ test.describe('History / Analytics', () => {
 
     // Step 2: Navigate to analytics, switch to Summary tab
     await page.goto('/analytics');
+    await dismissAnalyticsIntro(page);
     await page.locator('[role="tab"]', { hasText: 'Summary' }).click();
     await expect(page.locator('[role="tabpanel"][data-state="active"]')).toBeVisible();
 
