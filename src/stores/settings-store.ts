@@ -95,7 +95,7 @@ export interface Settings {
 
   // Shake the device to open the bug report / feature request dialog
   shakeToReportEnabled: boolean;
-  shakeThreshold: number; // sum-of-axes jolt delta (m/s²) — lower = more sensitive
+  shakeThreshold: number; // acceleration-magnitude jolt delta (m/s²) — lower = more sensitive
   shakeRequiredJolts: number; // jolts within the detection window required to fire
 
   // Substance tracking configuration
@@ -181,7 +181,7 @@ const defaultSettings: Settings = {
   weightIncrement: 0.05,
   storageMode: "local" as const,
   shakeToReportEnabled: true,
-  shakeThreshold: 15,
+  shakeThreshold: 8,
   shakeRequiredJolts: 3,
   dismissedInsights: {},
   primaryRegion: "",
@@ -294,7 +294,7 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
       // Shake to report
       setShakeToReportEnabled: (value) => set({ shakeToReportEnabled: value }),
       setShakeThreshold: (value) =>
-        set({ shakeThreshold: sanitizeNumericInput(value, 8, 40) }),
+        set({ shakeThreshold: sanitizeNumericInput(value, 4, 20) }),
       setShakeRequiredJolts: (value) =>
         set({ shakeRequiredJolts: sanitizeNumericInput(value, 2, 8) }),
 
@@ -327,7 +327,7 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
     {
       name: "intake-tracker-settings",
       storage: createJSONStorage(() => localStorage),
-      version: 11,
+      version: 12,
       migrate: (persisted, version) => {
         const state = persisted as Record<string, unknown>;
         if (version === 0) {
@@ -385,6 +385,12 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
         if (version < 11) {
           state.shakeThreshold = 15;
           state.shakeRequiredJolts = 3;
+        }
+        if (version < 12) {
+          // Shake detection switched from a per-axis delta to a rotation-
+          // invariant magnitude delta; the old threshold scale no longer
+          // applies, so reset it to the recalibrated default.
+          state.shakeThreshold = 8;
         }
         return state as unknown as Settings & SettingsActions;
       },

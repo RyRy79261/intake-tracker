@@ -6,17 +6,17 @@ import {
 } from "@/hooks/use-shake-gesture";
 
 const BASE: ShakeDetectorConfig = {
-  threshold: 15,
+  threshold: 8,
   requiredJolts: 3,
   windowMs: 800,
   cooldownMs: 3000,
 };
 
 /**
- * Feed the detector an alternating sample at each timestamp. Consecutive
- * samples differ by `delta` on the x-axis, so every transition registers a
- * jolt when `delta` exceeds the configured threshold. Returns the timestamps
- * at which a shake was detected.
+ * Feed the detector an alternating sample at each timestamp. Samples alternate
+ * between magnitude 0 and magnitude `delta` on the x-axis, so every transition
+ * changes the acceleration magnitude by `delta` and registers a jolt when that
+ * exceeds the threshold. Returns the timestamps at which a shake was detected.
  */
 function run(
   config: ShakeDetectorConfig,
@@ -73,5 +73,28 @@ describe("createShakeDetector", () => {
       3200, 3260, 3320, // cooldown elapsed -> fires again
     ]);
     expect(triggers).toEqual([180, 3320]);
+  });
+
+  it("ignores reorientation that keeps total acceleration constant", () => {
+    // Gravity (~9.8 m/s²) redistributing across the axes as the device is
+    // tilted: every sample has the same magnitude but different per-axis
+    // values. A per-axis delta would read this as a violent shake; the
+    // magnitude-based detector correctly sees no movement.
+    const detector = createShakeDetector({ ...BASE, threshold: 4 });
+    const G = 9.8;
+    const D = G / Math.SQRT2; // ~6.93 — keeps magnitude at G
+    const rotations: ShakeSample[] = [
+      { x: G, y: 0, z: 0 },
+      { x: 0, y: G, z: 0 },
+      { x: 0, y: 0, z: G },
+      { x: D, y: D, z: 0 },
+      { x: 0, y: D, z: D },
+      { x: D, y: 0, z: D },
+    ];
+    let fired = false;
+    rotations.forEach((sample, i) => {
+      if (detector.process(sample, i * 60)) fired = true;
+    });
+    expect(fired).toBe(false);
   });
 });

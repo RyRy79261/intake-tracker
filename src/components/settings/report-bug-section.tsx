@@ -101,21 +101,21 @@ export function ReportBugSection() {
                   onBlur={() =>
                     validateAndSave(
                       thresholdInput,
-                      8,
-                      40,
+                      4,
+                      20,
                       settings.shakeThreshold,
                       settings.setShakeThreshold,
                       setThresholdInput,
                     )
                   }
-                  min={8}
-                  max={40}
+                  min={4}
+                  max={20}
                   step={1}
                   onIncrement={() =>
                     incrementSetting(
                       settings.shakeThreshold,
                       1,
-                      40,
+                      20,
                       settings.setShakeThreshold,
                       setThresholdInput,
                     )
@@ -124,15 +124,15 @@ export function ReportBugSection() {
                     decrementSetting(
                       settings.shakeThreshold,
                       1,
-                      8,
+                      4,
                       settings.setShakeThreshold,
                       setThresholdInput,
                     )
                   }
                 />
                 <p className="text-xs text-muted-foreground">
-                  Jolt strength needed to register a shake (8-40). Lower = more
-                  sensitive.
+                  Movement strength needed to register a shake (4-20). Lower =
+                  more sensitive.
                 </p>
               </div>
 
