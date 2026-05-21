@@ -4,17 +4,20 @@ import type { PhaseType } from "./db";
 // Domain & Time
 // ---------------------------------------------------------------------------
 
-export type Domain =
-  | "water"
-  | "salt"
-  | "weight"
-  | "bp"
-  | "eating"
-  | "urination"
-  | "defecation"
-  | "caffeine"
-  | "alcohol"
-  | "medication";
+export const DOMAINS = [
+  "water",
+  "salt",
+  "weight",
+  "bp",
+  "eating",
+  "urination",
+  "defecation",
+  "caffeine",
+  "alcohol",
+  "medication",
+] as const;
+
+export type Domain = (typeof DOMAINS)[number];
 
 export type TimeScope = "24h" | "7d" | "30d" | "90d" | "all";
 
@@ -127,30 +130,11 @@ export interface CorrelationResult {
   strength: "strong" | "moderate" | "weak" | "none";
   seriesA: DataPoint[];
   seriesB: DataPoint[];
+  /** Day-aligned (and lag-shifted) value pairs the coefficient was computed from. */
+  pairs: Array<{ a: number; b: number }>;
+  /** Count of overlapping days; fewer than 3 means the coefficient is not meaningful. */
+  pairedDays: number;
   lagDays: number;
-}
-
-// ---------------------------------------------------------------------------
-// Insights
-// ---------------------------------------------------------------------------
-
-export type InsightType =
-  | "adherence_drop"
-  | "bp_trend"
-  | "weight_trend"
-  | "fluid_deficit"
-  | "correlation_alert"
-  | "anomaly";
-
-export interface Insight {
-  id: string;
-  type: InsightType;
-  title: string;
-  description: string;
-  severity: "info" | "warning" | "alert";
-  value: number;
-  threshold: number;
-  timestamp: number;
 }
 
 // ---------------------------------------------------------------------------

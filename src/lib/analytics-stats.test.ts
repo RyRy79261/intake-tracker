@@ -63,6 +63,17 @@ describe("trend", () => {
     expect(result.direction).toBe("stable");
   });
 
+  it("reports noisy data as stable even when the regression slope is non-trivial", () => {
+    // Strong zigzag with a slight upward drift: the slope is clearly outside
+    // the +/-0.01 'rising' band, but the linear fit is poor (low R-squared),
+    // so the confidence gate should force the direction to 'stable'.
+    const pts = makePoints([0, 20, 1, 21, 2, 22, 3, 30]);
+    const result = trend(pts);
+    expect(Math.abs(result.slope)).toBeGreaterThan(0.01); // would read 'rising' ungated
+    expect(result.confidence).toBeLessThan(0.3);
+    expect(result.direction).toBe("stable");
+  });
+
   it("returns stable with 0 confidence for empty array", () => {
     const result = trend([]);
     expect(result.direction).toBe("stable");
@@ -97,6 +108,37 @@ describe("correlateTimeSeries", () => {
     const result = correlateTimeSeries([], []);
     expect(result.coefficient).toBe(0);
     expect(result.strength).toBe("none");
+    expect(result.pairedDays).toBe(0);
+    expect(result.pairs).toEqual([]);
+  });
+
+  it("exposes day-aligned value pairs alongside the coefficient", () => {
+    const base = 1_700_000_000_000;
+    const day = 86_400_000;
+    const seriesA = makePoints([1, 2, 3, 4, 5], base, day);
+    const seriesB = makePoints([2, 4, 6, 8, 10], base, day);
+
+    const result = correlateTimeSeries(seriesA, seriesB);
+    expect(result.pairedDays).toBe(5);
+    expect(result.pairs).toHaveLength(5);
+    // Pairs are day-ordered, so the earliest day pairs A=1 with B=2.
+    expect(result.pairs[0]).toEqual({ a: 1, b: 2 });
+  });
+
+  it("flags insufficient overlapping data without claiming 'no correlation'", () => {
+    // Only two overlapping days — too few for a meaningful coefficient.
+    const base = 1_700_000_000_000;
+    const day = 86_400_000;
+    const seriesA = makePoints([1, 2], base, day);
+    const seriesB = makePoints([10, 20], base, day);
+
+    const result = correlateTimeSeries(seriesA, seriesB);
+    expect(result.pairedDays).toBe(2);
+    expect(result.coefficient).toBe(0);
+    expect(result.strength).toBe("none");
+    // The pairs are still surfaced so callers can distinguish "too little
+    // data" (pairedDays < 3) from a genuine absence of correlation.
+    expect(result.pairs).toHaveLength(2);
   });
 
   it("handles lag days parameter", () => {

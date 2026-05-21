@@ -12,6 +12,7 @@ import {
   alcoholVsBP,
   correlate,
 } from "@/lib/analytics-service";
+import { startOfDay, endOfDay, subDays } from "date-fns";
 import type {
   Domain,
   TimeScope,
@@ -22,7 +23,6 @@ import type {
   BPTrendResult,
   WeightTrendResult,
   CorrelationResult,
-  Insight,
 } from "@/lib/analytics-types";
 
 // ---------------------------------------------------------------------------
@@ -89,6 +89,8 @@ const DEFAULT_CORRELATION: AnalyticsResult<CorrelationResult> = {
     strength: "none",
     seriesA: [],
     seriesB: [],
+    pairs: [],
+    pairedDays: 0,
     lagDays: 0,
   },
   unit: "correlation",
@@ -202,52 +204,38 @@ export function useCorrelation(
 }
 
 // ---------------------------------------------------------------------------
-// Insights hook
-// ---------------------------------------------------------------------------
-
-/**
- * Derive cross-domain insights from multiple analytics queries.
- * Returns Insight[] with meaningful alerts based on thresholds.
- */
-// GH-32: Default auto-generated insights removed. Only user-created insights are supported.
-const EMPTY_INSIGHTS: Insight[] = [];
-export function useInsights(_range: TimeRange) {
-  return EMPTY_INSIGHTS;
-}
-
-// ---------------------------------------------------------------------------
 // Time scope utility
 // ---------------------------------------------------------------------------
 
-const MS_PER_HOUR = 60 * 60 * 1000;
-const MS_PER_DAY = 24 * MS_PER_HOUR;
-
 /**
- * Convert a TimeScope preset to a concrete TimeRange.
+ * Convert a TimeScope preset to a concrete TimeRange aligned to calendar-day
+ * boundaries — the range ends at the end of today and starts at the start of
+ * the first included day, so daily grouping never produces partial edge days.
  * Memoized to prevent unnecessary re-renders.
  */
 export function useTimeScopeRange(scope: TimeScope): TimeRange {
   return useMemo(() => {
-    const end = Date.now();
+    const now = new Date();
+    const end = endOfDay(now).getTime();
     let start: number;
     switch (scope) {
       case "24h":
-        start = end - 1 * MS_PER_DAY;
+        start = startOfDay(now).getTime();
         break;
       case "7d":
-        start = end - 7 * MS_PER_DAY;
+        start = startOfDay(subDays(now, 6)).getTime();
         break;
       case "30d":
-        start = end - 30 * MS_PER_DAY;
+        start = startOfDay(subDays(now, 29)).getTime();
         break;
       case "90d":
-        start = end - 90 * MS_PER_DAY;
+        start = startOfDay(subDays(now, 89)).getTime();
         break;
       case "all":
         start = 0;
         break;
       default:
-        start = end - 7 * MS_PER_DAY;
+        start = startOfDay(subDays(now, 6)).getTime();
     }
     return { start, end };
   }, [scope]);

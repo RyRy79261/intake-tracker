@@ -22,6 +22,7 @@ function RecordRowImpl({ unified, onDelete, onEdit, isDeleting, liquidPresets }:
   let icon: React.ReactNode;
   let measurement: string;
   let iconColor: string;
+  let typeLabel: string;
 
   if (unified.type === "intake") {
     const record = unified.record;
@@ -30,6 +31,7 @@ function RecordRowImpl({ unified, onDelete, onEdit, isDeleting, liquidPresets }:
     const Icon = theme.icon;
     icon = <Icon className="w-4 h-4" />;
     iconColor = theme.iconColor;
+    typeLabel = theme.label;
     const amountStr = `${record.amount} ${record.type === "water" ? "ml" : "mg"}`;
     const sourceLabel = record.type === "water"
       ? getLiquidTypeLabel(record.source, { presets: liquidPresets, note: record.note })
@@ -40,18 +42,21 @@ function RecordRowImpl({ unified, onDelete, onEdit, isDeleting, liquidPresets }:
     const Icon = theme.icon;
     icon = <Icon className="w-4 h-4" />;
     iconColor = theme.iconColor;
+    typeLabel = theme.label;
     measurement = `${unified.record.weight} kg`;
   } else if (unified.type === "eating") {
     const theme = CARD_THEMES.eating;
     const Icon = theme.icon;
     icon = <Icon className="w-4 h-4" />;
     iconColor = theme.iconColor;
+    typeLabel = theme.label;
     measurement = unified.record.note ? unified.record.note : "—";
   } else if (unified.type === "urination") {
     const theme = CARD_THEMES.urination;
     const Icon = theme.icon;
     icon = <Icon className="w-4 h-4" />;
     iconColor = theme.iconColor;
+    typeLabel = theme.label;
     const parts = [unified.record.amountEstimate, unified.record.note].filter(Boolean);
     measurement = parts.length > 0 ? parts.join(" · ") : "—";
   } else if (unified.type === "defecation") {
@@ -59,6 +64,7 @@ function RecordRowImpl({ unified, onDelete, onEdit, isDeleting, liquidPresets }:
     const Icon = theme.icon;
     icon = <Icon className="w-4 h-4" />;
     iconColor = theme.iconColor;
+    typeLabel = theme.label;
     const parts = [unified.record.amountEstimate, unified.record.note].filter(Boolean);
     measurement = parts.length > 0 ? parts.join(" · ") : "—";
   } else if (unified.type === "caffeine") {
@@ -66,6 +72,7 @@ function RecordRowImpl({ unified, onDelete, onEdit, isDeleting, liquidPresets }:
     const Icon = theme.icon;
     icon = <Icon className="w-4 h-4" />;
     iconColor = theme.iconColor;
+    typeLabel = theme.label;
     const amt = unified.record.amountMg ? `${unified.record.amountMg} mg` : "";
     measurement = [unified.record.description, amt].filter(Boolean).join(" · ") || "Caffeine";
   } else if (unified.type === "alcohol") {
@@ -73,6 +80,7 @@ function RecordRowImpl({ unified, onDelete, onEdit, isDeleting, liquidPresets }:
     const Icon = theme.icon;
     icon = <Icon className="w-4 h-4" />;
     iconColor = theme.iconColor;
+    typeLabel = theme.label;
     const amt = unified.record.amountStandardDrinks
       ? `${unified.record.amountStandardDrinks} drink${unified.record.amountStandardDrinks !== 1 ? "s" : ""}`
       : "";
@@ -82,6 +90,7 @@ function RecordRowImpl({ unified, onDelete, onEdit, isDeleting, liquidPresets }:
     const Icon = theme.icon;
     icon = <Icon className="w-4 h-4" />;
     iconColor = theme.iconColor;
+    typeLabel = theme.label;
     measurement = `${unified.record.systolic}/${unified.record.diastolic} mmHg`;
   }
 
@@ -100,8 +109,15 @@ function RecordRowImpl({ unified, onDelete, onEdit, isDeleting, liquidPresets }:
     >
       <div className="flex items-center gap-3 min-w-0">
         <span className={iconColor}>{icon}</span>
-        <span className="font-medium">{measurement}</span>
-        <span className="text-sm text-muted-foreground">{formatTimeOnly(unified.record.timestamp)}</span>
+        <div className="flex flex-col min-w-0">
+          <span className="text-[11px] uppercase tracking-wide text-muted-foreground leading-tight">
+            {typeLabel}
+          </span>
+          <span className="font-medium truncate leading-tight">{measurement}</span>
+        </div>
+        <span className="text-sm text-muted-foreground shrink-0">
+          {formatTimeOnly(unified.record.timestamp)}
+        </span>
       </div>
       <div
         className="flex items-center gap-1 shrink-0"

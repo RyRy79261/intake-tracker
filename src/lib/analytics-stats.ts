@@ -34,9 +34,16 @@ export function movingAverage(
 // ---------------------------------------------------------------------------
 
 /**
+ * Minimum R-squared for a regression slope to be reported as a direction.
+ * Below this the data is too noisy to call rising/falling, so it reads as
+ * 'stable' — this stops near-flat noise being shown as a confident trend.
+ */
+const MIN_TREND_CONFIDENCE = 0.3;
+
+/**
  * Determine trend direction from a series of data points using linear
  * regression. Returns 'stable' with 0 confidence for empty / single-element
- * arrays.
+ * arrays, and for fits too weak to be meaningful (R² < MIN_TREND_CONFIDENCE).
  */
 export function trend(points: DataPoint[]): TrendDirection {
   if (points.length <= 1) {
@@ -54,15 +61,18 @@ export function trend(points: DataPoint[]): TrendDirection {
   const ssTot = pairs.reduce((sum, p) => sum + (p[1] - yMean) ** 2, 0);
   const ssRes = pairs.reduce((sum, p) => sum + (p[1] - line(p[0])) ** 2, 0);
   const rSquared = ssTot === 0 ? 0 : 1 - ssRes / ssTot;
+  const confidence = Math.max(0, Math.min(1, rSquared));
 
   const direction =
-    reg.m > 0.01 ? "rising" : reg.m < -0.01 ? "falling" : "stable";
+    confidence < MIN_TREND_CONFIDENCE
+      ? "stable"
+      : reg.m > 0.01
+        ? "rising"
+        : reg.m < -0.01
+          ? "falling"
+          : "stable";
 
-  return {
-    slope: reg.m,
-    direction,
-    confidence: Math.max(0, Math.min(1, rSquared)),
-  };
+  return { slope: reg.m, direction, confidence };
 }
 
 // ---------------------------------------------------------------------------
@@ -83,6 +93,8 @@ export function correlateTimeSeries(
     strength: "none",
     seriesA,
     seriesB,
+    pairs: [],
+    pairedDays: 0,
     lagDays,
   };
 
@@ -131,12 +143,18 @@ export function correlateTimeSeries(
     }
   });
 
-  if (pairedA.length < 3) return empty;
+  const pairs = pairedA.map((a, i) => ({ a, b: pairedB[i]! }));
+
+  if (pairedA.length < 3) {
+    return { ...empty, pairs, pairedDays: pairedA.length };
+  }
 
   // Check for zero variance (constant series)
   const stdA = sampleStandardDeviation(pairedA);
   const stdB = sampleStandardDeviation(pairedB);
-  if (stdA === 0 || stdB === 0) return empty;
+  if (stdA === 0 || stdB === 0) {
+    return { ...empty, pairs, pairedDays: pairedA.length };
+  }
 
   const r = sampleCorrelation(pairedA, pairedB);
   const absR = Math.abs(r);
@@ -155,6 +173,8 @@ export function correlateTimeSeries(
     strength,
     seriesA,
     seriesB,
+    pairs,
+    pairedDays: pairedA.length,
     lagDays,
   };
 }

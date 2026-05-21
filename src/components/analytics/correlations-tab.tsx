@@ -36,6 +36,8 @@ import {
 // Domain options for custom comparison
 // ---------------------------------------------------------------------------
 
+// Medication is intentionally excluded — medication-domain analytics are a
+// separate refactor (it has no single numeric series today).
 const DOMAIN_OPTIONS: { value: Domain; label: string }[] = [
   { value: "water", label: "Water Intake" },
   { value: "salt", label: "Salt Intake" },
@@ -46,15 +48,30 @@ const DOMAIN_OPTIONS: { value: Domain; label: string }[] = [
   { value: "defecation", label: "Defecation" },
   { value: "caffeine", label: "Caffeine" },
   { value: "alcohol", label: "Alcohol" },
-  { value: "medication", label: "Medication" },
 ];
+
+const DOMAIN_UNITS: Record<Domain, string> = {
+  water: " ml",
+  salt: " mg",
+  weight: " kg",
+  bp: " mmHg",
+  eating: "",
+  urination: " ml",
+  defecation: "",
+  caffeine: " mg",
+  alcohol: " drinks",
+  medication: "",
+};
 
 // ---------------------------------------------------------------------------
 // Interpretation helper
 // ---------------------------------------------------------------------------
 
 function interpretCorrelation(result: CorrelationResult): string {
-  const { coefficient, strength } = result;
+  const { coefficient, strength, pairedDays } = result;
+  if (pairedDays < 3) {
+    return "Not enough overlapping days in this period to assess a relationship.";
+  }
   if (strength === "none") return "No meaningful relationship detected in this period.";
   const direction = coefficient > 0 ? "increase together" : "move in opposite directions";
   const qualifier =
@@ -113,6 +130,9 @@ const TOOLTIP_STYLE = {
   fontSize: 12,
 };
 
+// Fluid balance target: ml of intake above estimated output per day.
+const FLUID_TARGET_ML = 500;
+
 function FluidBalanceCard({ range }: { range: TimeRange }) {
   const data = useFluidBalance(range);
 
@@ -160,6 +180,17 @@ function FluidBalanceCard({ range }: { range: TimeRange }) {
             />
             <Tooltip contentStyle={TOOLTIP_STYLE} />
             <ReferenceLine y={0} stroke="hsl(var(--border))" />
+            <ReferenceLine
+              y={FLUID_TARGET_ML}
+              stroke="hsl(160 84% 39%)"
+              strokeDasharray="4 4"
+              label={{
+                value: `Target +${FLUID_TARGET_ML}ml`,
+                position: "insideTopRight",
+                fontSize: 9,
+                fill: "hsl(160 84% 39%)",
+              }}
+            />
             <Bar
               dataKey="balance"
               name="Balance"
@@ -170,13 +201,15 @@ function FluidBalanceCard({ range }: { range: TimeRange }) {
           </BarChart>
         </ResponsiveContainer>
         <div className="flex items-center justify-between text-xs text-muted-foreground mt-1 px-1">
-          <span>
-            Avg: {Math.round(data.value.avgBalance)} ml/day
-          </span>
+          <span>Avg: {Math.round(data.value.avgBalance)} ml/day</span>
           <span>
             {data.value.daysAboveTarget}/{data.value.daysTotal} days on target
           </span>
         </div>
+        <p className="text-[10px] text-muted-foreground mt-1 px-1">
+          Balance = water intake − estimated urination output. Output is
+          estimated from logged amount categories.
+        </p>
       </CardContent>
     </Card>
   );
@@ -266,8 +299,8 @@ function CustomComparison({ range }: { range: TimeRange }) {
               result={correlationData.value}
               labelA={domainLabel(domainA)}
               labelB={domainLabel(domainB)}
-              unitA=""
-              unitB=""
+              unitA={DOMAIN_UNITS[domainA]}
+              unitB={DOMAIN_UNITS[domainB]}
             />
             <p className="text-xs text-muted-foreground mt-2">
               {interpretCorrelation(correlationData.value)}
@@ -287,7 +320,6 @@ export function CorrelationsTab({ range }: { range: TimeRange }) {
   const saltVsWeight = useSaltVsWeight(range);
   const caffeineVsBP = useCaffeineVsBP(range);
   const alcoholVsBP = useAlcoholVsBP(range);
-  const bpVsMeds = useCorrelation("bp", "medication", range);
 
   return (
     <div className="space-y-3">
@@ -296,16 +328,6 @@ export function CorrelationsTab({ range }: { range: TimeRange }) {
         <BarChart3 className="w-4 h-4 text-muted-foreground" />
         <h3 className="text-sm font-medium">Pre-configured Correlations</h3>
       </div>
-
-      {/* Pre-configured correlation cards */}
-      <CorrelationCard
-        title="Blood Pressure vs Medication Adherence"
-        result={bpVsMeds}
-        labelA="Systolic BP"
-        labelB="Adherence"
-        unitA=" mmHg"
-        unitB="%"
-      />
 
       <CorrelationCard
         title="Weight vs Salt Intake"

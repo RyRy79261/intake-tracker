@@ -7,9 +7,11 @@ import {
   getSubstanceRecords,
   getSubstanceRecordsByDateRange,
   deleteSubstanceRecord,
+  updateSubstanceRecord,
   type AddSubstanceInput,
 } from "@/lib/substance-service";
 import { unwrap } from "@/lib/service-result";
+import type { SubstanceRecord } from "@/lib/db";
 
 /**
  * Hook to get substance records with optional type filter.
@@ -51,4 +53,16 @@ export function useDeleteSubstance() {
   return useCallback(async (id: string) => {
     return unwrap(await deleteSubstanceRecord(id));
   }, []);
+}
+
+/**
+ * Hook to update a substance record. Returns a mutation function.
+ */
+export function useUpdateSubstance() {
+  return useCallback(
+    async (id: string, updates: Partial<SubstanceRecord>) => {
+      return unwrap(await updateSubstanceRecord(id, updates));
+    },
+    [],
+  );
 }

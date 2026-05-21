@@ -1,4 +1,4 @@
-import { format, startOfDay, endOfDay } from "date-fns";
+import { format } from "date-fns";
 import { getRecordsByDateRange as getIntakeRecordsByDateRange } from "./intake-service";
 import {
   getWeightRecordsByDateRange,
