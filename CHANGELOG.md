@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.17.1](https://github.com/RyRy79261/intake-tracker/compare/v1.17.0...v1.17.1) (2026-05-21)
+
+
+### Bug Fixes
+
+* **a11y:** give every dialog/drawer/sheet an accessible title ([3fc9f78](https://github.com/RyRy79261/intake-tracker/commit/3fc9f78c1c45e522de0e789246ff2e0ebf919353))
+* **db:** bump migration 0009 timestamp so the migrator applies it ([7935991](https://github.com/RyRy79261/intake-tracker/commit/7935991c97a03d1cdcb805bff7d4f9b680b41189))
+* **sync:** allow dose_time_edited in audit_logs action constraint ([4aa3034](https://github.com/RyRy79261/intake-tracker/commit/4aa30340662ef9a24b987185c15c7226bc8a8d92))
+* **sync:** allow dose_time_edited in audit_logs action constraint ([d8bb191](https://github.com/RyRy79261/intake-tracker/commit/d8bb191ae1282569b2475069aa8f430f631da590))
+
 ## [1.17.0](https://github.com/RyRy79261/intake-tracker/compare/v1.16.0...v1.17.0) (2026-05-21)
 
 
