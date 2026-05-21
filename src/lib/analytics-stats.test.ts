@@ -5,8 +5,8 @@ import {
   correlateTimeSeries,
   detectAnomalies,
   computeRegression,
-} from "./analytics-stats";
-import type { DataPoint } from "./analytics-types";
+} from "@/lib/analytics-stats";
+import type { DataPoint } from "@/lib/analytics-types";
 
 // ---------------------------------------------------------------------------
 // Helpers

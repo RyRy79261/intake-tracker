@@ -14,7 +14,7 @@ function makeApiRequest(
 
 describe("CORS middleware for /api/* routes", () => {
   it("returns 204 for OPTIONS preflight with allowed origin", async () => {
-    const { default: middleware } = await import("../../src/middleware");
+    const { default: middleware } = await import("@/middleware");
     const req = makeApiRequest("/api/sync/push", {
       method: "OPTIONS",
       origin: "https://localhost",
@@ -34,7 +34,7 @@ describe("CORS middleware for /api/* routes", () => {
   });
 
   it("adds CORS headers to GET request with allowed origin", async () => {
-    const { default: middleware } = await import("../../src/middleware");
+    const { default: middleware } = await import("@/middleware");
     const req = makeApiRequest("/api/sync/status", {
       origin: "http://localhost",
     });
@@ -47,7 +47,7 @@ describe("CORS middleware for /api/* routes", () => {
   });
 
   it("supports capacitor://localhost origin", async () => {
-    const { default: middleware } = await import("../../src/middleware");
+    const { default: middleware } = await import("@/middleware");
     const req = makeApiRequest("/api/ai/parse", {
       method: "POST",
       origin: "capacitor://localhost",
@@ -60,7 +60,7 @@ describe("CORS middleware for /api/* routes", () => {
   });
 
   it("omits CORS headers for disallowed origin", async () => {
-    const { default: middleware } = await import("../../src/middleware");
+    const { default: middleware } = await import("@/middleware");
     const req = makeApiRequest("/api/sync/push", {
       origin: "https://evil.test",
     });
@@ -70,7 +70,7 @@ describe("CORS middleware for /api/* routes", () => {
   });
 
   it("omits CORS headers for same-origin (no origin header)", async () => {
-    const { default: middleware } = await import("../../src/middleware");
+    const { default: middleware } = await import("@/middleware");
     const req = makeApiRequest("/api/sync/push");
 
     const res = await middleware(req);
@@ -78,7 +78,7 @@ describe("CORS middleware for /api/* routes", () => {
   });
 
   it("passes through non-API paths without CORS headers", async () => {
-    const { default: middleware } = await import("../../src/middleware");
+    const { default: middleware } = await import("@/middleware");
     const req = new NextRequest("https://example.test/medications", {
       method: "GET",
     });
@@ -88,7 +88,7 @@ describe("CORS middleware for /api/* routes", () => {
   });
 
   it("matcher config includes only /api/:path*", async () => {
-    const { config } = await import("../../src/middleware");
+    const { config } = await import("@/middleware");
     expect(config.matcher).toContain("/api/:path*");
     expect(config.matcher.length).toBe(1);
   });

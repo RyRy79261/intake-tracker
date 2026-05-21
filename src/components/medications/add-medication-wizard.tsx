@@ -19,14 +19,14 @@ import {
   type AddMedicationFormState,
   type WizardStep,
 } from "@/hooks/use-add-medication-form";
-import { SearchStep } from "./add-medication-steps/search-step";
-import { AppearanceStep } from "./add-medication-steps/appearance-step";
-import { IndicationStep } from "./add-medication-steps/indication-step";
-import { DosageStep } from "./add-medication-steps/dosage-step";
-import { ScheduleStep } from "./add-medication-steps/schedule-step";
-import { InventoryStep } from "./add-medication-steps/inventory-step";
-import { ConflictCheckOverlay, type ConflictCheckState } from "./add-medication-steps/conflict-check-overlay";
-import { PILL_SHAPES, COLOR_NAME_MAP } from "./add-medication-steps/types";
+import { SearchStep } from "@/components/medications/add-medication-steps/search-step";
+import { AppearanceStep } from "@/components/medications/add-medication-steps/appearance-step";
+import { IndicationStep } from "@/components/medications/add-medication-steps/indication-step";
+import { DosageStep } from "@/components/medications/add-medication-steps/dosage-step";
+import { ScheduleStep } from "@/components/medications/add-medication-steps/schedule-step";
+import { InventoryStep } from "@/components/medications/add-medication-steps/inventory-step";
+import { ConflictCheckOverlay, type ConflictCheckState } from "@/components/medications/add-medication-steps/conflict-check-overlay";
+import { PILL_SHAPES, COLOR_NAME_MAP } from "@/components/medications/add-medication-steps/types";
 
 const STEPS: WizardStep[] = ["search", "appearance", "indication", "dosage", "schedule", "inventory"];
 const STEP_LABELS: Record<WizardStep, string> = {

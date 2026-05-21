@@ -10,7 +10,7 @@
  */
 
 import { z } from "zod";
-import { DOMAINS, type Domain } from "./analytics-types";
+import { DOMAINS, type Domain } from "@/lib/analytics-types";
 
 const DOMAIN_LABELS: Record<Domain, string> = {
   water: "water intake",

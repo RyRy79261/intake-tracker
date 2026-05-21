@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { PillIconWithBadge } from "./pill-icon";
+import { PillIconWithBadge } from "@/components/medications/pill-icon";
 import { Button } from "@/components/ui/button";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatPillCount } from "@/lib/medication-ui-utils";
-import { RetroactiveTimePicker } from "./retroactive-time-picker";
+import { RetroactiveTimePicker } from "@/components/medications/retroactive-time-picker";
 import type { DoseSlot } from "@/hooks/use-medication-queries";
 
 interface DoseRowProps {

@@ -3,7 +3,7 @@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { AddMedicationFormState } from "@/hooks/use-add-medication-form";
-import type { FieldChange } from "./types";
+import type { FieldChange } from "@/components/medications/add-medication-steps/types";
 
 export function InventoryStep({
   formState, onFieldChange,

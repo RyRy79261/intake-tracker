@@ -6,8 +6,8 @@ import {
   makePhaseSchedule,
   makeDoseLog,
 } from "@/__tests__/fixtures/db-fixtures";
-import { recalculateScheduleTimezones } from "./timezone-recalculation-service";
-import { utcMinutesToLocalTime, localTimeToUTCMinutes } from "./timezone";
+import { recalculateScheduleTimezones } from "@/lib/timezone-recalculation-service";
+import { utcMinutesToLocalTime, localTimeToUTCMinutes } from "@/lib/timezone";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -165,7 +165,7 @@ describe("recalculateScheduleTimezones", () => {
 
   it("Test 7: getDailyDoseSchedule returns correct slots after recalculation (integration)", async () => {
     // Import getDailyDoseSchedule
-    const { getDailyDoseSchedule } = await import("./dose-schedule-service");
+    const { getDailyDoseSchedule } = await import("@/lib/dose-schedule-service");
     const { makeInventoryItem } = await import("@/__tests__/fixtures/db-fixtures");
 
     const rx = makePrescription({ createdAt: 1700000000000 });

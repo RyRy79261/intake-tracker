@@ -1,15 +1,15 @@
 import { format } from "date-fns";
-import { getRecordsByDateRange as getIntakeRecordsByDateRange } from "./intake-service";
+import { getRecordsByDateRange as getIntakeRecordsByDateRange } from "@/lib/intake-service";
 import {
   getWeightRecordsByDateRange,
   getBloodPressureRecordsByDateRange,
-} from "./health-service";
-import { getUrinationRecordsByDateRange } from "./urination-service";
-import { getEatingRecordsByDateRange } from "./eating-service";
-import { getDefecationRecordsByDateRange } from "./defecation-service";
-import { getDoseScheduleForDateRange } from "./dose-schedule-service";
-import { db, type SubstanceRecord } from "./db";
-import { trend as computeTrend, correlateTimeSeries } from "./analytics-stats";
+} from "@/lib/health-service";
+import { getUrinationRecordsByDateRange } from "@/lib/urination-service";
+import { getEatingRecordsByDateRange } from "@/lib/eating-service";
+import { getDefecationRecordsByDateRange } from "@/lib/defecation-service";
+import { getDoseScheduleForDateRange } from "@/lib/dose-schedule-service";
+import { db, type SubstanceRecord } from "@/lib/db";
+import { trend as computeTrend, correlateTimeSeries } from "@/lib/analytics-stats";
 import type {
   Domain,
   TimeRange,
@@ -21,8 +21,8 @@ import type {
   BPTrendResult,
   WeightTrendResult,
   CorrelationResult,
-} from "./analytics-types";
-import { URINATION_ESTIMATE_ML, DEFAULT_SALT_WEIGHT_LAG_DAYS } from "./analytics-types";
+} from "@/lib/analytics-types";
+import { URINATION_ESTIMATE_ML, DEFAULT_SALT_WEIGHT_LAG_DAYS } from "@/lib/analytics-types";
 
 // ---------------------------------------------------------------------------
 // Internal helpers

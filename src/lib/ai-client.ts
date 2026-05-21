@@ -1,4 +1,4 @@
-import { logAudit } from "./audit";
+import { logAudit } from "@/lib/audit";
 import { apiFetch } from "@/lib/api-fetch";
 
 export interface ParsedIntake {

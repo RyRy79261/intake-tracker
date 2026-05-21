@@ -1,4 +1,4 @@
-import type { PhaseType } from "./db";
+import type { PhaseType } from "@/lib/db";
 
 // ---------------------------------------------------------------------------
 // Domain & Time

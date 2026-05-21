@@ -2,8 +2,8 @@
 
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { AuthShell } from "../auth-shell";
-import { ResetPasswordForm } from "../reset-password-form";
+import { AuthShell } from "@/app/auth/auth-shell";
+import { ResetPasswordForm } from "@/app/auth/reset-password-form";
 
 function ResetPasswordContent() {
   const searchParams = useSearchParams();

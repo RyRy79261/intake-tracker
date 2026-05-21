@@ -5,7 +5,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { checkInterruptedMigration } from "@/lib/migration-service";
 
 const MigrationWizard = lazy(() =>
-  import("./migration-wizard").then((m) => ({ default: m.MigrationWizard })),
+  import("@/components/migration/migration-wizard").then((m) => ({ default: m.MigrationWizard })),
 );
 
 export function MigrationGuard() {

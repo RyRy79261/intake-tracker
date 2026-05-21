@@ -5,7 +5,7 @@ import {
   startMedicationNotifications,
   stopMedicationNotifications,
 } from "@/lib/medication-notification-service";
-import { usePushScheduleSync } from "./use-push-schedule-sync";
+import { usePushScheduleSync } from "@/hooks/use-push-schedule-sync";
 
 /**
  * Hook that starts medication notifications on mount

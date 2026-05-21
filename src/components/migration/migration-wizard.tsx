@@ -10,10 +10,10 @@ import {
   resumeMigration,
   completeMigration,
 } from "@/lib/migration-service";
-import { BackupGateStep } from "./backup-gate-step";
-import { UploadProgressStep } from "./upload-progress-step";
-import { CompletionSummaryStep } from "./completion-summary-step";
-import { CancelConfirmDialog } from "./cancel-confirm-dialog";
+import { BackupGateStep } from "@/components/migration/backup-gate-step";
+import { UploadProgressStep } from "@/components/migration/upload-progress-step";
+import { CompletionSummaryStep } from "@/components/migration/completion-summary-step";
+import { CancelConfirmDialog } from "@/components/migration/cancel-confirm-dialog";
 
 interface MigrationWizardProps {
   open: boolean;

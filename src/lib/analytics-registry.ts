@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { AnalyticsResult, Domain } from "./analytics-types";
+import type { AnalyticsResult, Domain } from "@/lib/analytics-types";
 import {
   fluidBalance,
   adherenceRate,
@@ -9,7 +9,7 @@ import {
   caffeineVsBP,
   alcoholVsBP,
   correlate,
-} from "./analytics-service";
+} from "@/lib/analytics-service";
 
 // ---------------------------------------------------------------------------
 // Types

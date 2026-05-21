@@ -6,13 +6,13 @@ import {
   DrawerContent,
 } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
-import { PillIcon } from "./pill-icon";
+import { PillIcon } from "@/components/medications/pill-icon";
 import { useTakeDose, useUntakeDose, useSkipDose, useRescheduleDose } from "@/hooks/use-medication-queries";
 import { hapticTake, hapticSkip, formatPillCount } from "@/lib/medication-ui-utils";
 import { Info, X, RotateCcw, Clock, Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
-import { RetroactiveTimePicker } from "./retroactive-time-picker";
+import { RetroactiveTimePicker } from "@/components/medications/retroactive-time-picker";
 import type { DoseSlot } from "@/hooks/use-medication-queries";
 
 interface DoseDetailDialogProps {

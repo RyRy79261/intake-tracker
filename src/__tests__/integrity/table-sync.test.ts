@@ -13,7 +13,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
 import { resolve } from "path";
-import { getLatestTables } from "./parse-schema";
+import { getLatestTables } from "@/__tests__/integrity/parse-schema";
 
 // --- BackupData interface parser ---
 

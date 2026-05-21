@@ -14,9 +14,9 @@ import {
   caffeineVsBP,
   alcoholVsBP,
   getRecordsByDomain,
-} from "./analytics-service";
-import type { TimeRange, TrendDirection } from "./analytics-types";
-import type { AnalyticsInsightsRequest } from "./analytics-insights";
+} from "@/lib/analytics-service";
+import type { TimeRange, TrendDirection } from "@/lib/analytics-types";
+import type { AnalyticsInsightsRequest } from "@/lib/analytics-insights";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 

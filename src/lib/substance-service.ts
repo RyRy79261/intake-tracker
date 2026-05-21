@@ -1,8 +1,8 @@
-import { db, type SubstanceRecord } from "./db";
-import { ok, err, type ServiceResult } from "./service-result";
-import { syncFields } from "./utils";
-import { enqueueInsideTx } from "./sync-queue";
-import { schedulePush } from "./sync-engine";
+import { db, type SubstanceRecord } from "@/lib/db";
+import { ok, err, type ServiceResult } from "@/lib/service-result";
+import { syncFields } from "@/lib/utils";
+import { enqueueInsideTx } from "@/lib/sync-queue";
+import { schedulePush } from "@/lib/sync-engine";
 
 export type AddSubstanceInput = {
   type: 'caffeine' | 'alcohol';

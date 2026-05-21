@@ -5,7 +5,7 @@ import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/u
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PillIcon } from "./pill-icon";
+import { PillIcon } from "@/components/medications/pill-icon";
 import {
   usePhasesForPrescription,
   useInventoryForPrescription,

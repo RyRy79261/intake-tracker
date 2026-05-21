@@ -1,5 +1,5 @@
-import { AuthShell } from "./auth-shell";
-import { SignInForm } from "./sign-in-form";
+import { AuthShell } from "@/app/auth/auth-shell";
+import { SignInForm } from "@/app/auth/sign-in-form";
 
 /**
  * The single sign-in surface for the app. Middleware (src/middleware.ts)

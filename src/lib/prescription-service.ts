@@ -1,9 +1,9 @@
-import { db, type Prescription, type MedicationPhase, type InventoryItem, type PhaseSchedule, type PillShape, type FoodInstruction } from "./db";
-import { ok, err, type ServiceResult } from "./service-result";
-import { buildAuditEntry } from "./audit-service";
-import { buildPrescription, buildPhase, buildInventory, buildSchedules, buildTransaction } from "./medication-builders";
-import { enqueueInsideTx } from "./sync-queue";
-import { schedulePush } from "./sync-engine";
+import { db, type Prescription, type MedicationPhase, type InventoryItem, type PhaseSchedule, type PillShape, type FoodInstruction } from "@/lib/db";
+import { ok, err, type ServiceResult } from "@/lib/service-result";
+import { buildAuditEntry } from "@/lib/audit-service";
+import { buildPrescription, buildPhase, buildInventory, buildSchedules, buildTransaction } from "@/lib/medication-builders";
+import { enqueueInsideTx } from "@/lib/sync-queue";
+import { schedulePush } from "@/lib/sync-engine";
 
 export interface CreatePrescriptionInput {
   // Prescription level

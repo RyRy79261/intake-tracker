@@ -13,7 +13,7 @@ import {
 import { Clock, Plus, X } from "lucide-react";
 import { usePhasesForPrescription, useSchedulesForPhase } from "@/hooks/use-medication-queries";
 import type { Prescription } from "@/lib/db";
-import type { RxEntry } from "./types";
+import type { RxEntry } from "@/components/medications/titrations/types";
 
 export function RxEntryCard({
   entry,

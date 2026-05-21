@@ -2,10 +2,10 @@
 
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { PillIcon } from "../pill-icon";
+import { PillIcon } from "@/components/medications/pill-icon";
 import { cn } from "@/lib/utils";
 import type { AddMedicationFormState } from "@/hooks/use-add-medication-form";
-import { type FieldChange, PILL_SHAPES, PRESET_COLORS } from "./types";
+import { type FieldChange, PILL_SHAPES, PRESET_COLORS } from "@/components/medications/add-medication-steps/types";
 
 export function AppearanceStep({
   formState, onFieldChange,

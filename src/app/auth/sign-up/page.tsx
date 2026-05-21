@@ -1,5 +1,5 @@
-import { AuthShell } from "../auth-shell";
-import { SignUpForm } from "../sign-up-form";
+import { AuthShell } from "@/app/auth/auth-shell";
+import { SignUpForm } from "@/app/auth/sign-up-form";
 
 export default function SignUpPage() {
   return (

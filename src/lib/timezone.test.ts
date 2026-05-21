@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { getDeviceTimezone, clearTimezoneCache } from "./timezone";
+import { getDeviceTimezone, clearTimezoneCache } from "@/lib/timezone";
 
 describe("clearTimezoneCache", () => {
   let originalDateTimeFormat: typeof Intl.DateTimeFormat;
