@@ -1,6 +1,7 @@
 /**
  * Comprehensive backup service for all health data.
- * Supports export/import of all 16 data tables with conflict detection.
+ * Supports export/import of all 17 data tables (including userProfile) with
+ * conflict detection.
  */
 
 import {

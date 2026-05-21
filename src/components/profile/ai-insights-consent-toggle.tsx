@@ -54,7 +54,9 @@ export function AiInsightsConsentToggle() {
   const [dialog, setDialog] = useState<null | "consent" | "info">(null);
 
   const enabled = profile.shareConditionsWithAI;
-  const hasConsented = profile.aiInsightsConsentAt !== null;
+  // Nullish check: both null and a missing (undefined) field mean "not yet
+  // consented" — `!== null` alone would let an undefined value bypass the gate.
+  const hasConsented = profile.aiInsightsConsentAt != null;
 
   const handleToggle = (next: boolean) => {
     // First enable ever → the dialog is the consent gate; don't save yet.
@@ -123,7 +125,9 @@ export function AiInsightsConsentToggle() {
               <Button onClick={confirmConsent}>Enable insights</Button>
             </DialogFooter>
           ) : (
-            <Button onClick={() => setDialog(null)}>Got it</Button>
+            <DialogFooter className="gap-2">
+              <Button onClick={() => setDialog(null)}>Got it</Button>
+            </DialogFooter>
           )}
         </DialogContent>
       </Dialog>
