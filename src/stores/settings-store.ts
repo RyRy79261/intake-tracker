@@ -95,6 +95,8 @@ export interface Settings {
 
   // Shake the device to open the bug report / feature request dialog
   shakeToReportEnabled: boolean;
+  shakeThreshold: number; // sum-of-axes jolt delta (m/s²) — lower = more sensitive
+  shakeRequiredJolts: number; // jolts within the detection window required to fire
 
   // Substance tracking configuration
   substanceConfig: SubstanceConfig;
@@ -145,6 +147,8 @@ interface SettingsActions {
   setStorageMode: (mode: "local" | "cloud-sync") => void;
   // Shake to report
   setShakeToReportEnabled: (value: boolean) => void;
+  setShakeThreshold: (value: number) => void;
+  setShakeRequiredJolts: (value: number) => void;
   // Substance config
   setSubstanceConfig: (config: SubstanceConfig) => void;
   resetToDefaults: () => void;
@@ -177,6 +181,8 @@ const defaultSettings: Settings = {
   weightIncrement: 0.05,
   storageMode: "local" as const,
   shakeToReportEnabled: true,
+  shakeThreshold: 15,
+  shakeRequiredJolts: 3,
   dismissedInsights: {},
   primaryRegion: "",
   secondaryRegion: "",
@@ -287,6 +293,10 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
 
       // Shake to report
       setShakeToReportEnabled: (value) => set({ shakeToReportEnabled: value }),
+      setShakeThreshold: (value) =>
+        set({ shakeThreshold: sanitizeNumericInput(value, 8, 40) }),
+      setShakeRequiredJolts: (value) =>
+        set({ shakeRequiredJolts: sanitizeNumericInput(value, 2, 8) }),
 
       // Substance config
       setSubstanceConfig: (config) => set({ substanceConfig: config }),
@@ -317,7 +327,7 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
     {
       name: "intake-tracker-settings",
       storage: createJSONStorage(() => localStorage),
-      version: 10,
+      version: 11,
       migrate: (persisted, version) => {
         const state = persisted as Record<string, unknown>;
         if (version === 0) {
@@ -371,6 +381,10 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
         }
         if (version < 10) {
           state.shakeToReportEnabled = true;
+        }
+        if (version < 11) {
+          state.shakeThreshold = 15;
+          state.shakeRequiredJolts = 3;
         }
         return state as unknown as Settings & SettingsActions;
       },

@@ -11,11 +11,15 @@ import { ReportBugDialog } from "@/components/report-bug-dialog";
  */
 export function ShakeToReport() {
   const enabled = useSettingsStore((s) => s.shakeToReportEnabled);
+  const threshold = useSettingsStore((s) => s.shakeThreshold);
+  const requiredJolts = useSettingsStore((s) => s.shakeRequiredJolts);
   const [open, setOpen] = useState(false);
 
   useShakeGesture({
     enabled: enabled && !open,
     onShake: () => setOpen(true),
+    threshold,
+    requiredJolts,
   });
 
   if (!enabled && !open) return null;
