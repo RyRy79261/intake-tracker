@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { PillIcon } from "@/components/medications/pill-icon";
 import { useTakeDose, useUntakeDose, useSkipDose, useRescheduleDose } from "@/hooks/use-medication-queries";
 import { hapticTake, hapticSkip, formatDoseAmount } from "@/lib/medication-ui-utils";
-import { isCombo, formatCompoundShort, formatCompoundFull } from "@/lib/compound-utils";
+import { isCombo, splitDose, formatCompoundShort, formatCompoundFull } from "@/lib/compound-utils";
 import { Info, X, RotateCcw, Clock, Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
@@ -126,9 +126,11 @@ export function DoseDetailDialog({
     : null;
 
   const doseAmountLabel = formatDoseAmount(slot);
-  // Strength shown next to the brand name in the header.
+  // Strength shown next to the brand name in the header — the scheduled dose,
+  // split per compound for a combination drug (not the full per-pill content,
+  // which would misrepresent fractional doses).
   const headerStrength = isCombo(inventory)
-    ? formatCompoundShort(inventory!.compounds, phase.unit)
+    ? formatCompoundShort(splitDose(schedule.dosage, inventory!.compounds), phase.unit)
     : `${schedule.dosage}${phase.unit}`;
 
   const dateLabel = new Date(slot.scheduledDate + "T00:00:00").toLocaleDateString("en-US", {

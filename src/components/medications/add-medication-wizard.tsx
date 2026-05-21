@@ -11,7 +11,7 @@ import { useMedicineSearch, MedicineSearchCancelledError } from "@/hooks/use-med
 import { useAuthGate } from "@/components/auth-guard";
 import { useAddPrescription, usePrescriptions, useAddMedicationToPrescription, usePhasesForPrescription } from "@/hooks/use-medication-queries";
 import { useToast } from "@/hooks/use-toast";
-import type { PillShape, MedicationPhase } from "@/lib/db";
+import type { PillShape, MedicationPhase, CompoundStrength } from "@/lib/db";
 import { ArrowLeft, ArrowRight, Loader2, Check, X } from "lucide-react";
 import { useInteractionCheck } from "@/hooks/use-interaction-check";
 import { cn } from "@/lib/utils";
@@ -49,6 +49,14 @@ function capitalizeWords(str: string) {
   if (!str) return "";
   return str.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
 }
+
+// Two blank ingredient rows — the combo-fields' "cleared" state, mirroring
+// the wizard form's initial value. A fresh array per call avoids sharing a
+// mutable reference across patches.
+const emptyCompounds = (): CompoundStrength[] => [
+  { name: "", strength: 0 },
+  { name: "", strength: 0 },
+];
 
 export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardProps) {
   const { toast } = useToast();
@@ -88,12 +96,16 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
         partial.foodInstruction = activePhase.foodInstruction;
         if (activePhase.foodNote) partial.foodNote = activePhase.foodNote;
       }
-      // A combination prescription dictates the new brand is also a combo —
-      // pre-fill the ingredient names so only the per-pill mg need entering.
+      // The selected prescription dictates combo mode: a combination Rx
+      // pre-fills the ingredient names (only the per-pill mg need entering),
+      // a single-compound Rx clears any stale combo state.
       const rx = existingPrescriptions.find((p) => p.id === id);
       if (rx?.compounds && rx.compounds.length >= 2) {
         partial.isCombination = true;
         partial.compounds = rx.compounds.map((c) => ({ name: c.name, strength: 0 }));
+      } else {
+        partial.isCombination = false;
+        partial.compounds = emptyCompounds();
       }
       if (Object.keys(partial).length > 0) patch(partial);
     }
@@ -138,30 +150,43 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
           partial.dosageStrength = result.dosageStrengths[0];
         }
       }
-      // Combination drug: auto-enable the toggle and pre-fill both compounds
-      // from a marketed strength option (matching the query's number if given).
+      // Combination drug: mirror the AI's verdict. ≥2 active ingredients ⇒
+      // enable combo mode and pre-fill compounds from a marketed strength
+      // option (matching the query's number when given), falling back to the
+      // ingredient names alone. A single-ingredient result clears any stale
+      // combo state left from a previous search.
       const comboOptions = (result.strengthOptions ?? []).filter(
         (o) => o.compounds.length >= 2,
       );
-      if ((result.activeIngredients?.length ?? 0) >= 2 && comboOptions.length > 0) {
+      if ((result.activeIngredients?.length ?? 0) >= 2) {
         partial.isCombination = true;
-        const doseMatch = query.match(/(\d+(?:\.\d+)?)/);
-        let chosen = comboOptions[0];
-        if (doseMatch && doseMatch[1]) {
-          const q = doseMatch[1];
-          const matched = comboOptions.find(
-            (o) =>
-              o.label.includes(q) ||
-              String(compoundSum(o.compounds)).startsWith(q),
-          );
-          if (matched) chosen = matched;
-        }
-        if (chosen) {
-          partial.compounds = chosen.compounds.map((c) => ({
-            name: c.name,
-            strength: c.strength,
+        if (comboOptions.length > 0) {
+          const doseMatch = query.match(/(\d+(?:\.\d+)?)/);
+          let chosen = comboOptions[0];
+          if (doseMatch && doseMatch[1]) {
+            const q = doseMatch[1];
+            const matched = comboOptions.find(
+              (o) =>
+                o.label.includes(q) ||
+                String(compoundSum(o.compounds)).startsWith(q),
+            );
+            if (matched) chosen = matched;
+          }
+          if (chosen) {
+            partial.compounds = chosen.compounds.map((c) => ({
+              name: c.name,
+              strength: c.strength,
+            }));
+          }
+        } else {
+          partial.compounds = result.activeIngredients!.map((name) => ({
+            name,
+            strength: 0,
           }));
         }
+      } else {
+        partial.isCombination = false;
+        partial.compounds = emptyCompounds();
       }
       if (result.commonIndications.length > 0) partial.indication = result.commonIndications.join(", ");
       if (result.contraindications) partial.contraindications = result.contraindications;

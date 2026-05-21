@@ -72,14 +72,10 @@ export async function syncMedicationNotifications(): Promise<void> {
     const hour = Math.floor(utcMinutes / 60) % 24;
     const minute = utcMinutes % 60;
 
+    const unit = phase.unit ?? "mg";
     const dosageText = isCombo(prescription)
-      ? formatCompoundShort(
-          splitDose(schedule.dosage, prescription.compounds),
-          schedule.unit ?? "mg",
-        )
-      : schedule.unit
-        ? `${schedule.dosage}${schedule.unit}`
-        : `${schedule.dosage}`;
+      ? formatCompoundShort(splitDose(schedule.dosage, prescription.compounds), unit)
+      : `${schedule.dosage}${unit}`;
 
     for (const dow of schedule.daysOfWeek) {
       // Capacitor weekday: 1=Sunday, 2=Monday, ..., 7=Saturday
