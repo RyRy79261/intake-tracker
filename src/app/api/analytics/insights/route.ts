@@ -1,10 +1,6 @@
-import { NextResponse, type NextRequest } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
-import {
-  verifyWebhookSignature,
-  WEBHOOK_TIMESTAMP_HEADER,
-  WEBHOOK_SIGNATURE_HEADER,
-} from "@/lib/webhook-auth";
+import { NextResponse } from "next/server";
+import type Anthropic from "@anthropic-ai/sdk";
+import { withAuth } from "@/lib/auth-middleware";
 import {
   AnalyticsInsightsRequestSchema,
   InsightResponseSchema,
@@ -12,18 +8,29 @@ import {
   INSIGHTS_SYSTEM_PROMPT,
   buildInsightsPrompt,
 } from "@/lib/analytics-insights";
-import { zodErrorResponse } from "@/app/api/_shared/validation";
+import { parseJsonBody, zodErrorResponse } from "@/app/api/_shared/validation";
 import { createRateLimiter, getClientIp } from "@/app/api/_shared/rate-limit";
-import { CLAUDE_MODELS } from "@/app/api/ai/_shared/claude-client";
+import {
+  getClaudeClientForUser,
+  CLAUDE_MODELS,
+} from "@/app/api/ai/_shared/claude-client";
+import {
+  recordUsage,
+  tokensFromAnthropic,
+} from "@/app/api/ai/_shared/usage-tracker";
 import { aiErrorResponse } from "@/app/api/ai/_shared/ai-error-response";
 
 /**
- * Analytics insights webhook.
+ * Analytics insights endpoint.
  *
- * Accepts a numeric analytics snapshot, authenticates it with an HMAC
- * signature (no user session — see webhook-auth.ts), and returns an
- * AI-generated narrative. The signed payload is intentionally aggregate-only,
- * so no free-text personal data reaches the external AI call.
+ * Called by a signed-in client device (the PWA) which computes a numeric
+ * analytics snapshot locally and POSTs it here. The endpoint turns that
+ * snapshot into an AI-written narrative using the caller's resolved Claude
+ * key. The client throttles how often it calls this, so AI cost scales with
+ * active usage rather than total user count.
+ *
+ * The request body is intentionally aggregate-only (numbers/enums, no free
+ * text), so no personal health detail reaches the external AI call.
  */
 
 export const runtime = "nodejs";
@@ -35,7 +42,7 @@ type ToolUseBlock = Extract<
   { type: "tool_use" }
 >;
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async ({ request, auth }) => {
   try {
     const ip = getClientIp(request);
     if (!rateLimiter.check(ip)) {
@@ -45,60 +52,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const secret = process.env.ANALYTICS_WEBHOOK_SECRET;
-    if (!secret) {
-      console.error(
-        "[analytics/insights] ANALYTICS_WEBHOOK_SECRET is not configured",
-      );
-      return NextResponse.json(
-        { error: "Service not configured" },
-        { status: 503 },
-      );
-    }
+    const json = await parseJsonBody(request);
+    if (!json.ok) return json.response;
 
-    // Read the raw body once — the HMAC is computed over the exact bytes.
-    const rawBody = await request.text();
-
-    const verification = verifyWebhookSignature({
-      rawBody,
-      timestamp: request.headers.get(WEBHOOK_TIMESTAMP_HEADER),
-      signature: request.headers.get(WEBHOOK_SIGNATURE_HEADER),
-      secret,
-    });
-    if (!verification.valid) {
-      console.warn(
-        `[analytics/insights] signature rejected: ${verification.reason}`,
-      );
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    let json: unknown;
-    try {
-      json = JSON.parse(rawBody);
-    } catch {
-      return NextResponse.json(
-        { error: "Request body is not valid JSON" },
-        { status: 400 },
-      );
-    }
-
-    const parsed = AnalyticsInsightsRequestSchema.safeParse(json);
+    const parsed = AnalyticsInsightsRequestSchema.safeParse(json.body);
     if (!parsed.success) {
       return zodErrorResponse("Invalid analytics payload", parsed.error);
     }
 
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) {
-      console.error(
-        "[analytics/insights] ANTHROPIC_API_KEY is not configured",
-      );
-      return NextResponse.json(
-        { error: "AI service unavailable" },
-        { status: 503 },
-      );
+    let client;
+    let resolved;
+    try {
+      ({ client, resolved } = await getClaudeClientForUser(
+        auth.userId!,
+        auth.email,
+      ));
+    } catch (e) {
+      const mapped = aiErrorResponse(e);
+      if (mapped) return mapped;
+      throw e;
     }
 
-    const client = new Anthropic({ apiKey });
+    console.log(`[AUDIT] analytics insights from user: ${auth.userId}`);
+
+    const startedAt = Date.now();
     const response = await client.messages.create({
       model: CLAUDE_MODELS.quality,
       max_tokens: 1024,
@@ -107,6 +84,17 @@ export async function POST(request: NextRequest) {
       tools: [INSIGHT_TOOL],
       tool_choice: { type: "tool", name: INSIGHT_TOOL.name },
       messages: [{ role: "user", content: buildInsightsPrompt(parsed.data) }],
+    });
+    recordUsage({
+      userId: auth.userId!,
+      keyOwnerId: resolved.keyOwnerId,
+      keySource: resolved.source,
+      provider: "anthropic",
+      model: CLAUDE_MODELS.quality,
+      route: "/api/analytics/insights",
+      status: "success",
+      durationMs: Date.now() - startedAt,
+      ...tokensFromAnthropic(response.usage),
     });
 
     const toolBlock = response.content.find(
@@ -147,4 +135,4 @@ export async function POST(request: NextRequest) {
       { status: 502 },
     );
   }
-}
+});
