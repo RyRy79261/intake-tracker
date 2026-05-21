@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.15.1](https://github.com/RyRy79261/intake-tracker/compare/v1.15.0...v1.15.1) (2026-05-21)
+
+
+### Bug Fixes
+
+* **alcohol:** record alcohol inputs as ABV % + volume, not standard drinks ([8be2284](https://github.com/RyRy79261/intake-tracker/commit/8be22841e5faed01757026599ce5c3eb46f02e53))
+* **alcohol:** record alcohol inputs as ABV % + volume, not standard drinks ([80252a4](https://github.com/RyRy79261/intake-tracker/commit/80252a4a03ca84f28b56d1940d4a081159006b9d))
+* **alcohol:** validate ABV range and harden derivation paths ([8798f59](https://github.com/RyRy79261/intake-tracker/commit/8798f59ac5f5345f19d967e5f42827d5a0daa031))
+* **medications:** make adding a brand a pure, non-destructive inventory action ([5c0ec53](https://github.com/RyRy79261/intake-tracker/commit/5c0ec5314776ba79f0f5f6be26c8b940ed2b186e))
+* **ui:** keep focused inputs visible above the on-screen keyboard ([3cdc904](https://github.com/RyRy79261/intake-tracker/commit/3cdc9043be81805998c69e8fee0032eb5b525665))
+
 ## [1.15.0](https://github.com/RyRy79261/intake-tracker/compare/v1.14.1...v1.15.0) (2026-05-21)
 
 
