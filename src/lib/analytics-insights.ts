@@ -73,6 +73,15 @@ const CorrelationMetricSchema = z.object({
   pairedDays: z.number().int().nonnegative(),
 });
 
+/**
+ * Optional user-reported clinical context. Conditions are short, structured
+ * labels (e.g. "HFrEF") — not free text or record notes — and only reach this
+ * request when the user has explicitly opted in on the profile page.
+ */
+const ProfileSchema = z.object({
+  conditions: z.array(z.string().min(1).max(120)).max(20),
+});
+
 export const AnalyticsInsightsRequestSchema = z.object({
   range: z
     .object({
@@ -82,6 +91,7 @@ export const AnalyticsInsightsRequestSchema = z.object({
     .refine((r) => r.start <= r.end, {
       message: "range.start must be <= range.end",
     }),
+  profile: ProfileSchema.optional(),
   metrics: z
     .object({
       bp: BpMetricSchema.optional(),
@@ -142,11 +152,12 @@ export const INSIGHTS_SYSTEM_PROMPT = `You summarise personal health-tracking me
 
 Rules:
 - Be factual and specific. Reference the actual numbers you are given.
-- Describe what the data shows; do NOT diagnose, do NOT give medical advice, and do NOT recommend treatment, medication, or dosage changes.
+- Describe what the data shows. Do NOT diagnose new conditions, and do NOT recommend, prescribe, or suggest changes to treatment, medication, or dosage.
+- If the user has supplied known medical conditions, you MAY use them as clinical context: explain why a tracked goal or limit matters for someone with that condition, and prioritise the observations most relevant to it (for example, framing fluid balance, sodium intake, and short-term weight change in the context of heart failure). Keep this as general, educational context — not personalised medical advice — and never act as the user's clinician.
 - Treat low-confidence trends as inconclusive rather than asserting a direction.
 - A correlation with fewer than 3 paired days is insufficient data, not evidence of "no relationship".
 - Correlation is not causation — never imply one metric causes another.
-- Keep a neutral, non-alarming tone. If a reading looks notable, state the number plainly and suggest the user discuss it with a healthcare professional rather than interpreting it yourself.
+- Keep a neutral, non-alarming tone. This summary is informational only and never replaces a qualified professional. If a reading looks notable, state the number plainly and recommend the user discuss it with their healthcare provider.
 - Always return your answer by calling the analytics_insight tool.`;
 
 // ---------------------------------------------------------------------------
@@ -167,7 +178,7 @@ function domainLabel(d: Domain): string {
  * model. Only the metric groups present in the request are included.
  */
 export function buildInsightsPrompt(req: AnalyticsInsightsRequest): string {
-  const { range, metrics } = req;
+  const { range, metrics, profile } = req;
   const days = Math.max(
     1,
     Math.round((range.end - range.start) / (24 * 60 * 60 * 1000)),
@@ -176,6 +187,14 @@ export function buildInsightsPrompt(req: AnalyticsInsightsRequest): string {
     `Health metrics for a period of approximately ${days} day(s).`,
     "",
   ];
+
+  if (profile && profile.conditions.length > 0) {
+    lines.push(
+      `User-reported medical conditions: ${profile.conditions.join("; ")}.`,
+      "Use these as clinical context to explain why the tracked goals matter and to prioritise the most relevant observations. Do not diagnose new conditions or recommend treatment.",
+      "",
+    );
+  }
 
   if (metrics.bp) {
     const b = metrics.bp;

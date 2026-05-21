@@ -244,16 +244,17 @@ describe("v16 migration: _syncQueue + _syncMeta tables added", () => {
 
     const tableNames = db.tables.map((t) => t.name).sort();
 
-    // 16 v15 data tables + 2 v16 tables + 1 v17 table = 19 total
+    // 16 v15 data tables + 2 v16 tables + 1 v17 table + 1 v18 table = 20 total
     const expected = [
       ...V15_STORES,
       "_syncQueue",
       "_syncMeta",
       "_errorLogs",
+      "userProfile",
     ].sort();
 
     expect(tableNames).toEqual(expected);
-    expect(tableNames).toHaveLength(19);
+    expect(tableNames).toHaveLength(20);
 
     // Explicitly assert each v15 data table is still accessible
     for (const name of V15_STORES) {

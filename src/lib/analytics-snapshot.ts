@@ -48,10 +48,14 @@ function toTrend(t: TrendDirection) {
 /**
  * Assemble the analytics snapshot for the given range. Metric groups with no
  * underlying data are omitted; `snapshotIsEmpty` reports when nothing remains.
+ *
+ * `conditions` is the user-reported medical context, included only when the
+ * caller has confirmed the user opted in to sharing it.
  */
 export async function buildAnalyticsSnapshot(
   range: TimeRange,
   goals: IntakeGoals,
+  conditions?: string[],
 ): Promise<AnalyticsInsightsRequest> {
   const [bp, weight, fluid, water, salt, saltWeight, caffBp, alcBp] =
     await Promise.all([
@@ -136,7 +140,11 @@ export async function buildAnalyticsSnapshot(
     metrics.correlations = correlations;
   }
 
-  return { range, metrics };
+  const snapshot: AnalyticsInsightsRequest = { range, metrics };
+  if (conditions && conditions.length > 0) {
+    snapshot.profile = { conditions };
+  }
+  return snapshot;
 }
 
 /** True when no metric group survived — there is nothing to summarise. */

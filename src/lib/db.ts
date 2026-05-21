@@ -343,6 +343,26 @@ export interface ErrorLogEntry {
   appVersion?: string;
 }
 
+/**
+ * Single-user medical profile (Dexie v18). Holds user-reported medical
+ * conditions that give AI analytics insights clinical context (e.g. why the
+ * sodium and fluid limits matter). One row per device, keyed by
+ * `USER_PROFILE_ID`. Local-only for now — it carries the standard sync
+ * scaffolding fields so it can join the sync engine later without a migration.
+ */
+export interface UserProfile {
+  id: string; // singleton — always USER_PROFILE_ID
+  conditions: string[]; // user-reported medical conditions, e.g. "HFrEF"
+  shareConditionsWithAI: boolean; // opt-in: include conditions in AI insights
+  createdAt: number;
+  updatedAt: number;
+  deletedAt: number | null;
+  deviceId: string;
+}
+
+/** Primary key of the singleton UserProfile row. */
+export const USER_PROFILE_ID = "primary";
+
 const db = new Dexie("IntakeTrackerDB") as Dexie & {
   intakeRecords: EntityTable<IntakeRecord, "id">;
   auditLogs: EntityTable<AuditLog, "id">;
@@ -360,6 +380,7 @@ const db = new Dexie("IntakeTrackerDB") as Dexie & {
   doseLogs: EntityTable<DoseLog, "id">;
   substanceRecords: EntityTable<SubstanceRecord, "id">;
   titrationPlans: EntityTable<TitrationPlan, "id">;
+  userProfile: EntityTable<UserProfile, "id">;
   _syncQueue: EntityTable<SyncQueueRow, "id">;
   _syncMeta: EntityTable<SyncMetaRow, "tableName">;
   _errorLogs: EntityTable<ErrorLogEntry, "id">;
@@ -689,11 +710,40 @@ db.version(17).stores({
   _errorLogs:              "id, timestamp, source",
 });
 
+// Version 18: Add userProfile — a single-row store for user-reported medical
+// conditions that give AI analytics insights clinical context. Local-only for
+// now; not yet registered with the sync engine (TABLE_PUSH_ORDER). New table
+// only, so no upgrade function is required.
+db.version(18).stores({
+  // --- REPEAT all v17 stores verbatim ---
+  intakeRecords:           "id, [type+timestamp], timestamp, source, groupId, updatedAt",
+  weightRecords:           "id, timestamp, updatedAt",
+  bloodPressureRecords:    "id, timestamp, position, arm, updatedAt",
+  eatingRecords:           "id, timestamp, groupId, updatedAt",
+  urinationRecords:        "id, timestamp, updatedAt",
+  defecationRecords:       "id, timestamp, updatedAt",
+  prescriptions:           "id, isActive, updatedAt, createdAt",
+  medicationPhases:        "id, prescriptionId, status, type, titrationPlanId, updatedAt",
+  phaseSchedules:          "id, phaseId, time, enabled, updatedAt",
+  inventoryItems:          "id, prescriptionId, isActive, updatedAt",
+  inventoryTransactions:   "id, [inventoryItemId+timestamp], inventoryItemId, timestamp, type, updatedAt",
+  doseLogs:                "id, [prescriptionId+scheduledDate], prescriptionId, phaseId, scheduleId, scheduledDate, scheduledTime, status, updatedAt",
+  dailyNotes:              "id, date, prescriptionId, doseLogId, updatedAt",
+  auditLogs:               "id, [action+timestamp], timestamp, action",
+  substanceRecords:        "id, [type+timestamp], type, timestamp, source, sourceRecordId, groupId, updatedAt",
+  titrationPlans:          "id, conditionLabel, status, updatedAt",
+  _syncQueue:              "++id, [tableName+recordId], tableName, enqueuedAt",
+  _syncMeta:               "tableName",
+  _errorLogs:              "id, timestamp, source",
+  // --- NEW in v18 ---
+  userProfile:             "id, updatedAt",
+});
+
 /**
  * Current Dexie schema version. Bump this constant in lockstep with each new
  * `db.version(N)` block above so diagnostic surfaces (Debug → Environment)
  * always reflect the real schema.
  */
-export const DB_SCHEMA_VERSION = 17;
+export const DB_SCHEMA_VERSION = 18;
 
 export { db };

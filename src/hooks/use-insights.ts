@@ -24,6 +24,8 @@ export class NotEnoughDataError extends Error {
 interface GenerateInsightsInput {
   range: TimeRange;
   goals: IntakeGoals;
+  /** User-reported conditions — pass only when the user has opted in. */
+  conditions?: string[];
 }
 
 /**
@@ -33,8 +35,8 @@ interface GenerateInsightsInput {
  */
 export function useGenerateInsights() {
   return useMutation<InsightsResult, Error, GenerateInsightsInput>({
-    mutationFn: async ({ range, goals }) => {
-      const snapshot = await buildAnalyticsSnapshot(range, goals);
+    mutationFn: async ({ range, goals, conditions }) => {
+      const snapshot = await buildAnalyticsSnapshot(range, goals, conditions);
       if (snapshotIsEmpty(snapshot)) {
         throw new NotEnoughDataError();
       }

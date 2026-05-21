@@ -33,9 +33,16 @@ export function AppHeader() {
       animate={{ y: isHidden ? "-100%" : 0 }}
       transition={{ duration: transitionDuration, ease: "easeInOut" }}
     >
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">{current.title}</h1>
-        <p className="text-sm text-muted-foreground">{current.subtitle}</p>
+      <div className="flex items-center gap-2 min-w-0">
+        <AuthButton />
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold tracking-tight truncate">
+            {current.title}
+          </h1>
+          <p className="text-sm text-muted-foreground truncate">
+            {current.subtitle}
+          </p>
+        </div>
       </div>
       <div className="flex items-center gap-1">
         {NAV_ITEMS.map((item) => {
@@ -58,7 +65,6 @@ export function AppHeader() {
             </Button>
           );
         })}
-        <AuthButton />
       </div>
     </motion.header>
   );
