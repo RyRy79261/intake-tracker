@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.15.0](https://github.com/RyRy79261/intake-tracker/compare/v1.14.1...v1.15.0) (2026-05-21)
+
+
+### Features
+
+* add cloud-sync parity indicator and guard incomplete exports ([3348f8f](https://github.com/RyRy79261/intake-tracker/commit/3348f8f8eb3f4361ca9c94d295a13f8868756947))
+* add cloud-sync parity indicator and guard incomplete exports ([ffdefbe](https://github.com/RyRy79261/intake-tracker/commit/ffdefbe1241bf5cf4c64abd9ba87813d15f00804))
+* align sync pulse dot with initial-sync parity state ([c5b32b6](https://github.com/RyRy79261/intake-tracker/commit/c5b32b6f6269a8c965a7c9aab041f815f656d95c))
+* **sync:** pin pulse dot to dead corner with tap-to-reveal label ([c9341ea](https://github.com/RyRy79261/intake-tracker/commit/c9341ea6643811de04d32879f5a29ea683886916))
+
+
+### Bug Fixes
+
+* **sync:** enqueue inventory and phase writes for cloud sync ([777e5fb](https://github.com/RyRy79261/intake-tracker/commit/777e5fb6c4a0d36f57c97a05612f5a9187385285))
+* **sync:** paginate pull with a compound (updatedAt, id) keyset cursor ([3e8c177](https://github.com/RyRy79261/intake-tracker/commit/3e8c17783e40b8dba2c6731a4abf1218b3f2b777))
+
 ## [1.14.1](https://github.com/RyRy79261/intake-tracker/compare/v1.14.0...v1.14.1) (2026-05-21)
 
 
