@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.16.0](https://github.com/RyRy79261/intake-tracker/compare/v1.15.0...v1.16.0) (2026-05-21)
+
+
+### Features
+
+* **profile:** add opt-in to share active medications with AI insights ([5977a4b](https://github.com/RyRy79261/intake-tracker/commit/5977a4bd635c7283b3240ae12a1f5ab3bf3f3b8f))
+* **profile:** add profile page with medical context for AI insights ([7951f9b](https://github.com/RyRy79261/intake-tracker/commit/7951f9bdf7ffc7142b72d89318530622ef652bd4))
+* **profile:** add profile page with medical context for AI insights ([99020d8](https://github.com/RyRy79261/intake-tracker/commit/99020d83da18d7e10a2945e0cd5a2b70bd2d4e09))
+* **profile:** back up and cloud-sync the medical profile; gate AI sharing behind consent ([6129e76](https://github.com/RyRy79261/intake-tracker/commit/6129e760180d6e7915a7e1c0ab0e58c60886770a))
+* **profile:** make /profile a swipeable top-level route ([a8bab2f](https://github.com/RyRy79261/intake-tracker/commit/a8bab2ffc5e05374732b8ea9e246d20670b3dc84))
+
+
+### Bug Fixes
+
+* **alcohol:** record alcohol inputs as ABV % + volume, not standard drinks ([8be2284](https://github.com/RyRy79261/intake-tracker/commit/8be22841e5faed01757026599ce5c3eb46f02e53))
+* **alcohol:** record alcohol inputs as ABV % + volume, not standard drinks ([80252a4](https://github.com/RyRy79261/intake-tracker/commit/80252a4a03ca84f28b56d1940d4a081159006b9d))
+* **alcohol:** validate ABV range and harden derivation paths ([8798f59](https://github.com/RyRy79261/intake-tracker/commit/8798f59ac5f5345f19d967e5f42827d5a0daa031))
+* **ci:** bump expected schema table count to 24 for user_profile ([47afcc4](https://github.com/RyRy79261/intake-tracker/commit/47afcc47d57ac33cf25773b08dfab0a9d1a90e86))
+* **db:** make the user_profile migration idempotent and correctly ordered ([4026957](https://github.com/RyRy79261/intake-tracker/commit/4026957040efd0a5687b2ddbd9cacec47685cf9f))
+* **header:** place the account indicator as the first nav item ([264e034](https://github.com/RyRy79261/intake-tracker/commit/264e034814aa30c19e10b377148e6edbefc67692))
+* **medications:** make adding a brand a pure, non-destructive inventory action ([5c0ec53](https://github.com/RyRy79261/intake-tracker/commit/5c0ec5314776ba79f0f5f6be26c8b940ed2b186e))
+* **profile:** treat a missing consent timestamp as not-consented ([bb1cc45](https://github.com/RyRy79261/intake-tracker/commit/bb1cc4549b9a9c67574606120ecddb426570d093))
+* **ui:** keep focused inputs visible above the on-screen keyboard ([3cdc904](https://github.com/RyRy79261/intake-tracker/commit/3cdc9043be81805998c69e8fee0032eb5b525665))
+
 ## [1.15.0](https://github.com/RyRy79261/intake-tracker/compare/v1.14.1...v1.15.0) (2026-05-21)
 
 
