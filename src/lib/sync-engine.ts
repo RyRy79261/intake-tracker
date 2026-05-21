@@ -386,10 +386,13 @@ export async function runPullCycle(): Promise<void> {
   try {
     // eslint-disable-next-line no-constant-condition
     while (true) {
-      const cursors: Record<string, number> = {};
+      const cursors: Record<string, { updatedAt: number; id: string }> = {};
       for (const tn of TABLE_PUSH_ORDER) {
         const meta = await db._syncMeta.get(tn);
-        cursors[tn] = meta?.lastPulledUpdatedAt ?? 0;
+        cursors[tn] = {
+          updatedAt: meta?.lastPulledUpdatedAt ?? 0,
+          id: meta?.lastPulledId ?? "",
+        };
       }
 
       let res: Response;
@@ -441,21 +444,43 @@ export async function runPullCycle(): Promise<void> {
 
         if (rows.length === 0) continue;
 
-        const cursor = cursors[tn] ?? 0;
-        const maxUpdatedAt = rows.reduce<number>((m, r) => {
-          const u = (r as { updatedAt?: number }).updatedAt ?? 0;
-          return u > m ? u : m;
-        }, cursor);
-        const safeCursor = Math.min(
-          maxUpdatedAt,
-          body.serverTime - SKEW_MARGIN_MS,
-        );
+        // Rows arrive ordered by `(updatedAt, id)` ASC, so the last row is
+        // the max tuple — the keyset cursor for the next page.
+        const lastRow = rows[rows.length - 1] as {
+          updatedAt?: number;
+          id?: string;
+        };
+        const lastUpdatedAt = lastRow.updatedAt ?? 0;
+        const lastId = lastRow.id ?? "";
+
+        let nextUpdatedAt: number;
+        let nextId: string;
+        if (slice.hasMore) {
+          // More rows queued — advance to the exact `(updatedAt, id)` seen.
+          // No skew clamp here: clamping while `hasMore` is true would
+          // re-fetch this same page forever. Forward progress by the keyset
+          // tuple is what lets a duplicate-`updatedAt` run paginate at all.
+          nextUpdatedAt = lastUpdatedAt;
+          nextId = lastId;
+        } else if (lastUpdatedAt > body.serverTime - SKEW_MARGIN_MS) {
+          // Table drained, but the newest rows sit inside the clock-skew
+          // window. Clamp the persisted cursor back (id reset to "") so the
+          // next pull cycle re-scans that window for rows written concurrently
+          // with this query (Pattern 7). The current loop still terminates —
+          // `hasMore` is false.
+          nextUpdatedAt = body.serverTime - SKEW_MARGIN_MS;
+          nextId = "";
+        } else {
+          nextUpdatedAt = lastUpdatedAt;
+          nextId = lastId;
+        }
 
         await db.transaction("rw", [db.table(tn), db._syncMeta] as any, async () => {
           await (db.table(tn) as any).bulkPut(rows);
           await db._syncMeta.put({
             tableName: tn,
-            lastPulledUpdatedAt: safeCursor,
+            lastPulledUpdatedAt: nextUpdatedAt,
+            lastPulledId: nextId,
           });
         });
       }
@@ -463,9 +488,14 @@ export async function runPullCycle(): Promise<void> {
       if (!anyHasMore) break;
     }
 
+    // Reaching here means the while-loop drained every table (no `hasMore`),
+    // so IndexedDB now holds a complete copy of the cloud dataset. Early
+    // returns on network/HTTP errors skip this block, so the flag only
+    // flips once a full pull has genuinely succeeded.
     useSyncStatusStore.setState({
       lastPulledAt: Date.now(),
       lastError: null,
+      initialSyncComplete: true,
     });
 
     // Invalidate React Query caches so every hook re-fetches the freshly

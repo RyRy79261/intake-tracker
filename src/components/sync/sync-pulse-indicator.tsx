@@ -31,6 +31,7 @@ export function SyncPulseIndicator() {
   const isOnline = useSyncStatusStore((s) => s.isOnline);
   const queueDepth = useSyncStatusStore((s) => s.queueDepth);
   const lastError = useSyncStatusStore((s) => s.lastError);
+  const initialSyncComplete = useSyncStatusStore((s) => s.initialSyncComplete);
   const storageMode = useSettingsStore((s) => s.storageMode);
   const { authenticated } = useAuth();
   const pathname = usePathname();
@@ -60,19 +61,24 @@ export function SyncPulseIndicator() {
     return null;
   }
 
+  // `!initialSyncComplete` keeps the dot in the syncing state until the first
+  // full pull has downloaded a complete copy of the cloud data — otherwise a
+  // fresh device flashes green "synced" before the pull cycle even starts.
   const state: PulseState = lastError
     ? "error"
     : !isOnline
       ? "offline"
-      : isSyncing || queueDepth > 0
+      : isSyncing || queueDepth > 0 || !initialSyncComplete
         ? "syncing"
         : "synced";
 
   const label =
     state === "syncing"
-      ? queueDepth > 0
-        ? `Syncing ${queueDepth} ${queueDepth === 1 ? "change" : "changes"}…`
-        : "Syncing…"
+      ? !initialSyncComplete
+        ? "Downloading your data…"
+        : queueDepth > 0
+          ? `Syncing ${queueDepth} ${queueDepth === 1 ? "change" : "changes"}…`
+          : "Syncing…"
       : state === "synced"
         ? "All changes synced"
         : state === "offline"

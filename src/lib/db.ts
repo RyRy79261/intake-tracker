@@ -310,6 +310,15 @@ export interface SyncQueueRow {
 export interface SyncMetaRow {
   tableName: string;
   lastPulledUpdatedAt: number;
+  /**
+   * Tiebreaker for the keyset cursor — the `id` of the last row consumed at
+   * `lastPulledUpdatedAt`. Pagination orders by `(updatedAt, id)` so that a
+   * page boundary landing inside a run of rows that share one `updatedAt`
+   * (e.g. the v11 migration stamped every record with a single timestamp)
+   * cannot strand the rows after the boundary. Absent on cursors written by
+   * pre-keyset clients — readers default it to `""` (sorts before any id).
+   */
+  lastPulledId?: string;
 }
 
 /** Source of a captured error/warning. Device-local debug data, never synced. */
