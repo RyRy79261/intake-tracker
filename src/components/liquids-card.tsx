@@ -25,7 +25,7 @@ import { useSyncLiquidGroup, fetchEntryGroup } from "@/hooks/use-composable-entr
 import { cn, formatAmount, getLiquidTypeLabel } from "@/lib/utils";
 import { formatTimeOnly } from "@/lib/date-utils";
 import { type IntakeRecord } from "@/lib/db";
-import { standardDrinksFromAbv } from "@/lib/alcohol-units";
+import { standardDrinksFromAbv, abvFromStandardDrinks } from "@/lib/alcohol-units";
 
 const TAB_THEMES = {
   water: CARD_THEMES.water,
@@ -110,8 +110,7 @@ export function LiquidsCard() {
             const mg = Math.round((record.amount / 100) * preset.caffeinePer100ml);
             setEditSubstanceAmount(mg.toString());
           } else if (type === "alcohol" && preset.alcoholPer100ml !== undefined) {
-            const stdDrinks = standardDrinksFromAbv(preset.alcoholPer100ml, record.amount);
-            setEditSubstanceAmount(parseFloat(stdDrinks.toFixed(2)).toString());
+            setEditSubstanceAmount(preset.alcoholPer100ml.toString());
           }
         }
       }
@@ -132,11 +131,20 @@ export function LiquidsCard() {
           setShowBeverageNameField(true);
           if (substance.type === "caffeine" && substance.amountMg !== undefined) {
             setEditSubstanceAmount(substance.amountMg.toString());
-          } else if (
-            substance.type === "alcohol" &&
-            substance.amountStandardDrinks !== undefined
-          ) {
-            setEditSubstanceAmount(substance.amountStandardDrinks.toString());
+          } else if (substance.type === "alcohol") {
+            // Prefer the stored ABV %; fall back to deriving it from the
+            // legacy std-drinks value and the entry's volume for old records.
+            const abv =
+              substance.abvPercent ??
+              (substance.amountStandardDrinks !== undefined
+                ? abvFromStandardDrinks(
+                    substance.amountStandardDrinks,
+                    substance.volumeMl ?? record.amount,
+                  )
+                : undefined);
+            if (abv !== undefined) {
+              setEditSubstanceAmount(parseFloat(abv.toFixed(1)).toString());
+            }
           }
         });
       }
@@ -187,7 +195,10 @@ export function LiquidsCard() {
             }),
           ...(hasSubstanceAmount &&
             editSubstance.type === "alcohol" && {
-              amountStandardDrinks: parseFloat(parsedSubstanceAmount.toFixed(2)),
+              abvPercent: parsedSubstanceAmount,
+              amountStandardDrinks: parseFloat(
+                standardDrinksFromAbv(parsedSubstanceAmount, u.amount).toFixed(2),
+              ),
             }),
         });
       }
@@ -345,7 +356,7 @@ export function LiquidsCard() {
                   placeholder={
                     editSubstance.type === "caffeine"
                       ? "Caffeine (mg)"
-                      : "Alcohol (std drinks)"
+                      : "Alcohol (% ABV)"
                   }
                   value={editSubstanceAmount}
                   onChange={(e) => setEditSubstanceAmount(e.target.value)}

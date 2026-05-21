@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { standardDrinksFromAbv } from "@/lib/alcohol-units";
 import {
   VOICE_ITEM_COLOR,
   VOICE_ITEM_LABEL,
@@ -294,7 +295,8 @@ function ItemEditor({
         </div>
       );
 
-    case "alcohol":
+    case "alcohol": {
+      const stdDrinks = standardDrinksFromAbv(item.abvPercent, item.volumeMl);
       return (
         <div className="space-y-2">
           <Field label="Description">
@@ -305,15 +307,15 @@ function ItemEditor({
             />
           </Field>
           <div className="grid grid-cols-2 gap-2">
-            <Field label="Std drinks">
+            <Field label="% ABV">
               <Input
                 type="number"
                 step="0.1"
                 inputMode="decimal"
                 disabled={disabled}
-                value={item.standardDrinks}
+                value={item.abvPercent}
                 onChange={(e) =>
-                  onChange({ ...item, standardDrinks: numberOrZero(e.target.value) })
+                  onChange({ ...item, abvPercent: numberOrZero(e.target.value) })
                 }
               />
             </Field>
@@ -322,16 +324,19 @@ function ItemEditor({
                 type="number"
                 inputMode="numeric"
                 disabled={disabled}
-                value={item.volumeMl ?? ""}
-                placeholder="—"
+                value={item.volumeMl}
                 onChange={(e) =>
-                  onChange(setOptionalNumber(item, "volumeMl", e.target.value))
+                  onChange({ ...item, volumeMl: numberOrZero(e.target.value) })
                 }
               />
             </Field>
           </div>
+          <p className="text-xs text-muted-foreground">
+            ≈ {stdDrinks.toFixed(1)} standard drink{stdDrinks.toFixed(1) === "1.0" ? "" : "s"}
+          </p>
         </div>
       );
+    }
 
     case "urination":
     case "defecation":

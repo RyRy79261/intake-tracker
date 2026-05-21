@@ -47,6 +47,7 @@ import {
   dateTimeLocalToTimestamp,
 } from "@/lib/date-utils";
 import type { TimeRange } from "@/lib/analytics-types";
+import { standardDrinksFromAbv, abvFromStandardDrinks } from "@/lib/alcohol-units";
 
 const PAGE_SIZE = 50;
 
@@ -131,6 +132,7 @@ export function RecordsTab({ range }: RecordsTabProps) {
   const [editAmountDefecation, setEditAmountDefecation] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editSubstanceAmount, setEditSubstanceAmount] = useState("");
+  const [editSubstanceVolume, setEditSubstanceVolume] = useState("");
 
   // Filter + paginate
   const filteredRecords = filterRecords(allRecords, filter);
@@ -190,11 +192,23 @@ export function RecordsTab({ range }: RecordsTabProps) {
     } else if (unified.type === "caffeine" || unified.type === "alcohol") {
       setEditingSubstance(unified.record);
       setEditDescription(unified.record.description);
-      setEditSubstanceAmount(
-        unified.type === "caffeine"
-          ? (unified.record.amountMg?.toString() ?? "")
-          : (unified.record.amountStandardDrinks?.toString() ?? ""),
-      );
+      if (unified.type === "caffeine") {
+        setEditSubstanceAmount(unified.record.amountMg?.toString() ?? "");
+        setEditSubstanceVolume("");
+      } else {
+        const rec = unified.record;
+        // Prefer the stored ABV %; derive it from a legacy std-drinks value
+        // when the record predates abvPercent (needs a known volume).
+        const abv =
+          rec.abvPercent ??
+          (rec.amountStandardDrinks !== undefined && rec.volumeMl
+            ? abvFromStandardDrinks(rec.amountStandardDrinks, rec.volumeMl)
+            : undefined);
+        setEditSubstanceAmount(
+          abv !== undefined ? parseFloat(abv.toFixed(1)).toString() : "",
+        );
+        setEditSubstanceVolume(rec.volumeMl?.toString() ?? "");
+      }
     }
   }, []);
 
@@ -297,12 +311,26 @@ export function RecordsTab({ range }: RecordsTabProps) {
     const hasAmount = editSubstanceAmount.trim() !== "";
     const amt = parseFloat(editSubstanceAmount);
     if (hasAmount && (isNaN(amt) || amt < 0)) { toast({ title: "Invalid amount", variant: "destructive" }); return; }
+    const vol = parseFloat(editSubstanceVolume);
+    const hasVolume = editSubstanceVolume.trim() !== "" && !isNaN(vol) && vol > 0;
     try {
-      const amountField: Partial<SubstanceRecord> = !hasAmount
-        ? {}
-        : editingSubstance.type === "caffeine"
-          ? { amountMg: amt }
-          : { amountStandardDrinks: amt };
+      let amountField: Partial<SubstanceRecord> = {};
+      if (hasAmount) {
+        if (editingSubstance.type === "caffeine") {
+          amountField = { amountMg: amt };
+        } else {
+          // `amt` is ABV %. Standard drinks are derived from ABV % and volume.
+          amountField = {
+            abvPercent: amt,
+            ...(hasVolume && {
+              volumeMl: vol,
+              amountStandardDrinks: parseFloat(
+                standardDrinksFromAbv(amt, vol).toFixed(2),
+              ),
+            }),
+          };
+        }
+      }
       await updateSubstanceMutation(editingSubstance.id, {
         timestamp: newTimestamp,
         description: desc,
@@ -311,7 +339,7 @@ export function RecordsTab({ range }: RecordsTabProps) {
       setEditingSubstance(null);
       toast({ title: "Entry updated" });
     } catch { toast({ title: "Error", description: "Could not update", variant: "destructive" }); }
-  }, [editingSubstance, editTimestamp, editDescription, editSubstanceAmount, toast, updateSubstanceMutation]);
+  }, [editingSubstance, editTimestamp, editDescription, editSubstanceAmount, editSubstanceVolume, toast, updateSubstanceMutation]);
 
   return (
     <>
@@ -473,6 +501,8 @@ export function RecordsTab({ range }: RecordsTabProps) {
         onDescriptionChange={setEditDescription}
         amount={editSubstanceAmount}
         onAmountChange={setEditSubstanceAmount}
+        volume={editSubstanceVolume}
+        onVolumeChange={setEditSubstanceVolume}
         onFocus={scrollOnFocus}
       />
     </>

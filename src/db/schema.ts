@@ -234,6 +234,8 @@ export const substanceRecords = pgTable(
     amountMg: integer("amount_mg"),
     // Standard drinks are often fractional (e.g. 1.5). Use real.
     amountStandardDrinks: real("amount_standard_drinks"),
+    // Alcohol by volume %, the user-entered input value. Fractional (e.g. 4.2).
+    abvPercent: real("abv_percent"),
     volumeMl: integer("volume_ml"),
     description: text("description").notNull(),
     source: text("source").notNull(),

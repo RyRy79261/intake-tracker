@@ -1,0 +1,1 @@
+ALTER TABLE "substance_records" ADD COLUMN "abv_percent" real;
