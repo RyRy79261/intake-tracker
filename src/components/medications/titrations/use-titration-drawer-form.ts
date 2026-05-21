@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { TitrationPlan } from "@/lib/db";
-import type { RxEntry } from "./types";
+import type { RxEntry } from "@/components/medications/titrations/types";
 
 const todayLocalDateString = (): string => {
   const d = new Date();

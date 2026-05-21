@@ -15,7 +15,7 @@ vi.mock("@/hooks/use-interaction-check", () => ({
   useRefreshInteractions: () => ({ refresh: vi.fn(), isRefreshing: false }),
 }));
 
-import { InteractionsSection } from "./interactions-section";
+import { InteractionsSection } from "@/components/medications/interactions-section";
 import { renderWithProviders } from "@/__tests__/react-test-utils";
 import type { Prescription } from "@/lib/db";
 

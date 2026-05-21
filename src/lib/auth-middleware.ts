@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "./neon-auth";
-import { db } from "./drizzle";
+import { auth } from "@/lib/neon-auth";
+import { db } from "@/lib/drizzle";
 import { usersSync } from "@/db/schema";
 
 export interface VerificationResult {

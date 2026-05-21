@@ -1,8 +1,8 @@
-import { db, type EatingRecord } from "./db";
-import { ok, err, type ServiceResult } from "./service-result";
-import { generateId, syncFields } from "./utils";
-import { writeWithSync } from "./sync-queue";
-import { schedulePush } from "./sync-engine";
+import { db, type EatingRecord } from "@/lib/db";
+import { ok, err, type ServiceResult } from "@/lib/service-result";
+import { generateId, syncFields } from "@/lib/utils";
+import { writeWithSync } from "@/lib/sync-queue";
+import { schedulePush } from "@/lib/sync-engine";
 
 export async function addEatingRecord(
   timestamp?: number,

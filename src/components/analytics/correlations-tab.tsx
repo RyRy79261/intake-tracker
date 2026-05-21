@@ -20,7 +20,7 @@ import {
   useFluidBalance,
 } from "@/hooks/use-analytics-queries";
 import type { TimeRange, Domain, CorrelationResult, AnalyticsResult } from "@/lib/analytics-types";
-import { CorrelationChart } from "./correlation-chart";
+import { CorrelationChart } from "@/components/analytics/correlation-chart";
 import {
   ResponsiveContainer,
   BarChart,

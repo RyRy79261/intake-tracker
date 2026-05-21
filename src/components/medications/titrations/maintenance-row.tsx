@@ -3,7 +3,7 @@
 import { Clock } from "lucide-react";
 import { usePhasesForPrescription, useSchedulesForPhase } from "@/hooks/use-medication-queries";
 import type { Prescription } from "@/lib/db";
-import { DAY_LABELS_LONG } from "./types";
+import { DAY_LABELS_LONG } from "@/components/medications/titrations/types";
 
 export function MaintenanceRow({ prescription }: { prescription: Prescription }) {
   const phases = usePhasesForPrescription(prescription.id);

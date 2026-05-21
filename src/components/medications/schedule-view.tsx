@@ -4,12 +4,12 @@ import { useMemo, useEffect, useState, useCallback } from "react";
 import { useDailyDoseSchedule, useTakeDose, useUntakeDose, useSkipDose, useTakeAllDoses } from "@/hooks/use-medication-queries";
 import type { DoseSlot } from "@/hooks/use-medication-queries";
 import { hapticTake, hapticSkip } from "@/lib/medication-ui-utils";
-import { showUndoToast } from "./undo-toast";
-import { DoseProgressSummary } from "./dose-progress-summary";
-import { TimeSlotGroup } from "./time-slot-group";
-import { SkipReasonPicker } from "./skip-reason-picker";
-import { EmptySchedule } from "./empty-schedule";
-import { RetroactiveTimePicker } from "./retroactive-time-picker";
+import { showUndoToast } from "@/components/medications/undo-toast";
+import { DoseProgressSummary } from "@/components/medications/dose-progress-summary";
+import { TimeSlotGroup } from "@/components/medications/time-slot-group";
+import { SkipReasonPicker } from "@/components/medications/skip-reason-picker";
+import { EmptySchedule } from "@/components/medications/empty-schedule";
+import { RetroactiveTimePicker } from "@/components/medications/retroactive-time-picker";
 
 interface ScheduleViewProps {
   selectedDate: Date;

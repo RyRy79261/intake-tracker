@@ -37,7 +37,7 @@ import {
 } from "@/hooks/use-medication-queries";
 import type { MedicationPhase, TitrationPlan } from "@/lib/db";
 import { cn } from "@/lib/utils";
-import { DAY_LABELS_LONG } from "./types";
+import { DAY_LABELS_LONG } from "@/components/medications/titrations/types";
 
 export function TitrationPlanCard({
   plan, onEdit,

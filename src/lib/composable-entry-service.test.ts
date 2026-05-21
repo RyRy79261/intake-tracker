@@ -10,7 +10,7 @@ import {
   undoDeleteSingleRecord,
   recalculateFromCurrentValues,
   type ComposableEntryInput,
-} from "./composable-entry-service";
+} from "@/lib/composable-entry-service";
 
 describe("composable-entry-service", () => {
   // ─── addComposableEntry ─────────────────────────────────────────────

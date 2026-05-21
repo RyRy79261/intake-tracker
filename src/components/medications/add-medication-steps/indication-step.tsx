@@ -9,7 +9,7 @@ import { useAuthGate } from "@/components/auth-guard";
 import { cn } from "@/lib/utils";
 import type { FoodInstruction } from "@/lib/db";
 import type { AddMedicationFormState } from "@/hooks/use-add-medication-form";
-import type { FieldChange } from "./types";
+import type { FieldChange } from "@/components/medications/add-medication-steps/types";
 
 export function IndicationStep({
   formState, onFieldChange,

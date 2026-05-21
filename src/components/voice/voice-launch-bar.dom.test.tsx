@@ -12,7 +12,7 @@ vi.mock("@/components/voice/voice-panel", () => ({
   VoicePanel: () => null,
 }));
 
-import { VoiceLaunchBar } from "./voice-launch-bar";
+import { VoiceLaunchBar } from "@/components/voice/voice-launch-bar";
 
 describe("VoiceLaunchBar — auth gating", () => {
   beforeEach(() => {

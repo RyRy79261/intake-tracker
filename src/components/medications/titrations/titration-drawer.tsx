@@ -21,9 +21,9 @@ import {
 import type { Prescription, TitrationPlan } from "@/lib/db";
 import { useAiFetch } from "@/hooks/use-ai-fetch";
 import { useAuthGate } from "@/components/auth-guard";
-import { RxEntryCard, EditPhaseScheduleLoader } from "./rx-entry-card";
-import { DAY_LABELS_LONG } from "./types";
-import { useTitrationDrawerForm } from "./use-titration-drawer-form";
+import { RxEntryCard, EditPhaseScheduleLoader } from "@/components/medications/titrations/rx-entry-card";
+import { DAY_LABELS_LONG } from "@/components/medications/titrations/types";
+import { useTitrationDrawerForm } from "@/components/medications/titrations/use-titration-drawer-form";
 
 export function TitrationDrawer({
   open,

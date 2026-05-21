@@ -19,7 +19,7 @@ export {
   getInactivePrescriptions,
   getPrescriptionById,
   type CreatePrescriptionInput,
-} from "./prescription-service";
+} from "@/lib/prescription-service";
 
 export {
   addMedicationToPrescription,
@@ -32,7 +32,7 @@ export {
   type AddMedicationToPrescriptionInput,
   type CreatePhaseInput,
   type UpdatePhaseInput,
-} from "./phase-service";
+} from "@/lib/phase-service";
 
 export {
   addInventoryItem,
@@ -46,4 +46,4 @@ export {
   getAllInventoryItems,
   getAllActiveInventoryItems,
   getInventoryTransactions,
-} from "./inventory-service";
+} from "@/lib/inventory-service";

@@ -8,7 +8,7 @@ import type {
   AddMedicationFormState,
   ScheduleEntry,
 } from "@/hooks/use-add-medication-form";
-import { type FieldChange, ALL_DAYS, DAY_LABELS_SHORT } from "./types";
+import { type FieldChange, ALL_DAYS, DAY_LABELS_SHORT } from "@/components/medications/add-medication-steps/types";
 
 export function ScheduleStep({
   formState, onFieldChange,

@@ -5,9 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Plus, TrendingUp } from "lucide-react";
 import { usePrescriptions, useTitrationPlans } from "@/hooks/use-medication-queries";
 import type { TitrationPlan } from "@/lib/db";
-import { MaintenanceRow } from "./titrations/maintenance-row";
-import { TitrationPlanCard } from "./titrations/titration-plan-card";
-import { TitrationDrawer } from "./titrations/titration-drawer";
+import { MaintenanceRow } from "@/components/medications/titrations/maintenance-row";
+import { TitrationPlanCard } from "@/components/medications/titrations/titration-plan-card";
+import { TitrationDrawer } from "@/components/medications/titrations/titration-drawer";
 
 export function TitrationsView() {
   const [drawerOpen, setDrawerOpen] = useState(false);

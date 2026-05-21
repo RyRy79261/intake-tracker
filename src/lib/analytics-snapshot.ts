@@ -14,12 +14,12 @@ import {
   caffeineVsBP,
   alcoholVsBP,
   getRecordsByDomain,
-} from "./analytics-service";
-import { db } from "./db";
-import { getActivePrescriptions } from "./prescription-service";
-import { getActivePhaseForPrescription } from "./phase-service";
-import type { TimeRange, TrendDirection } from "./analytics-types";
-import type { AnalyticsInsightsRequest } from "./analytics-insights";
+} from "@/lib/analytics-service";
+import { db } from "@/lib/db";
+import { getActivePrescriptions } from "@/lib/prescription-service";
+import { getActivePhaseForPrescription } from "@/lib/phase-service";
+import type { TimeRange, TrendDirection } from "@/lib/analytics-types";
+import type { AnalyticsInsightsRequest } from "@/lib/analytics-insights";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 

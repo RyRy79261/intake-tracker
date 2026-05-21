@@ -8,8 +8,8 @@
  * - GDPR right to erasure support
  */
 
-import { db, type IntakeRecord } from "./db";
-import { logAudit } from "./audit";
+import { db, type IntakeRecord } from "@/lib/db";
+import { logAudit } from "@/lib/audit";
 
 export interface RetentionStats {
   totalRecords: number;

@@ -21,7 +21,7 @@ describe("network-status", () => {
   });
 
   async function loadModule() {
-    return import("../lib/network-status");
+    return import("@/lib/network-status");
   }
 
   describe("isOnline()", () => {

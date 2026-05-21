@@ -39,7 +39,7 @@ export function isCapacitorMode(): boolean {
  * Dexie into every fetch site. Fire-and-forget — never blocks or throws.
  */
 function captureFailure(detail: string): void {
-  void import("./error-log-service")
+  void import("@/lib/error-log-service")
     .then((m) => m.logError("api-error", { message: detail }))
     .catch(() => undefined);
 }

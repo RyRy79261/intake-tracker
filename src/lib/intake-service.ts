@@ -1,9 +1,9 @@
 import { z } from "zod";
-import { db, type IntakeRecord } from "./db";
-import { ok, err, type ServiceResult } from "./service-result";
-import { generateId, syncFields } from "./utils";
-import { writeWithSync } from "./sync-queue";
-import { schedulePush } from "./sync-engine";
+import { db, type IntakeRecord } from "@/lib/db";
+import { ok, err, type ServiceResult } from "@/lib/service-result";
+import { generateId, syncFields } from "@/lib/utils";
+import { writeWithSync } from "@/lib/sync-queue";
+import { schedulePush } from "@/lib/sync-engine";
 
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 

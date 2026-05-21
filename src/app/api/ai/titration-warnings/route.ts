@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
-import { getClaudeClientForUser, CLAUDE_MODELS } from "../_shared/claude-client";
+import { getClaudeClientForUser, CLAUDE_MODELS } from "@/app/api/ai/_shared/claude-client";
 import { parseJsonBody, zodErrorResponse } from "@/app/api/_shared/validation";
-import { recordUsage, tokensFromAnthropic } from "../_shared/usage-tracker";
-import { aiErrorResponse } from "../_shared/ai-error-response";
+import { recordUsage, tokensFromAnthropic } from "@/app/api/ai/_shared/usage-tracker";
+import { aiErrorResponse } from "@/app/api/ai/_shared/ai-error-response";
 
 const RequestSchema = z.object({
   prescriptions: z

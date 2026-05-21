@@ -1,38 +1,38 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { IntakeRecord, WeightRecord, BloodPressureRecord, UrinationRecord, SubstanceRecord } from "./db";
-import type { DoseSlot } from "./dose-schedule-service";
-import type { TimeRange } from "./analytics-types";
+import type { IntakeRecord, WeightRecord, BloodPressureRecord, UrinationRecord, SubstanceRecord } from "@/lib/db";
+import type { DoseSlot } from "@/lib/dose-schedule-service";
+import type { TimeRange } from "@/lib/analytics-types";
 
 // ---------------------------------------------------------------------------
 // Mocks — must be declared before imports that use them
 // ---------------------------------------------------------------------------
 
-vi.mock("./intake-service", () => ({
+vi.mock("@/lib/intake-service", () => ({
   getRecordsByDateRange: vi.fn().mockResolvedValue([]),
 }));
 
-vi.mock("./health-service", () => ({
+vi.mock("@/lib/health-service", () => ({
   getWeightRecordsByDateRange: vi.fn().mockResolvedValue([]),
   getBloodPressureRecordsByDateRange: vi.fn().mockResolvedValue([]),
 }));
 
-vi.mock("./urination-service", () => ({
+vi.mock("@/lib/urination-service", () => ({
   getUrinationRecordsByDateRange: vi.fn().mockResolvedValue([]),
 }));
 
-vi.mock("./eating-service", () => ({
+vi.mock("@/lib/eating-service", () => ({
   getEatingRecordsByDateRange: vi.fn().mockResolvedValue([]),
 }));
 
-vi.mock("./defecation-service", () => ({
+vi.mock("@/lib/defecation-service", () => ({
   getDefecationRecordsByDateRange: vi.fn().mockResolvedValue([]),
 }));
 
-vi.mock("./dose-schedule-service", () => ({
+vi.mock("@/lib/dose-schedule-service", () => ({
   getDoseScheduleForDateRange: vi.fn().mockResolvedValue(new Map()),
 }));
 
-vi.mock("./db", () => ({
+vi.mock("@/lib/db", () => ({
   db: {
     substanceRecords: {
       where: vi.fn().mockReturnValue({
@@ -59,16 +59,16 @@ import {
   getRecordsByDomain,
   groupByDay,
   correlate,
-} from "./analytics-service";
+} from "@/lib/analytics-service";
 
-import { getRecordsByDateRange as mockGetIntake } from "./intake-service";
+import { getRecordsByDateRange as mockGetIntake } from "@/lib/intake-service";
 import {
   getWeightRecordsByDateRange as mockGetWeight,
   getBloodPressureRecordsByDateRange as mockGetBP,
-} from "./health-service";
-import { getUrinationRecordsByDateRange as mockGetUrination } from "./urination-service";
-import { getDoseScheduleForDateRange as mockGetDoseSchedule } from "./dose-schedule-service";
-import { db as mockDb } from "./db";
+} from "@/lib/health-service";
+import { getUrinationRecordsByDateRange as mockGetUrination } from "@/lib/urination-service";
+import { getDoseScheduleForDateRange as mockGetDoseSchedule } from "@/lib/dose-schedule-service";
+import { db as mockDb } from "@/lib/db";
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -1,5 +1,5 @@
-import type { DoseSlot } from "./dose-schedule-service";
-import type { MedicationPhase } from "./db";
+import type { DoseSlot } from "@/lib/dose-schedule-service";
+import type { MedicationPhase } from "@/lib/db";
 
 /**
  * The maintenance ("baseline") phase for a prescription — what the Rx says when

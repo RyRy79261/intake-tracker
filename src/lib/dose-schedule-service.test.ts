@@ -371,7 +371,7 @@ describe("timezone behavior", () => {
   });
 
   it("recalculateScheduleTimezones preserves wall-clock time for getDailyDoseSchedule", async () => {
-    const { recalculateScheduleTimezones } = await import("./timezone-recalculation-service");
+    const { recalculateScheduleTimezones } = await import("@/lib/timezone-recalculation-service");
 
     // Seed schedule anchored at SA: 08:30 SA (UTC+2) = 06:30 UTC = 390 min
     const rx = makePrescription({ createdAt: 1700000000000 });

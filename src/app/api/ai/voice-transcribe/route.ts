@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { withAuth } from "@/lib/auth-middleware";
 import { createRateLimiter, getClientIp } from "@/app/api/_shared/rate-limit";
 import { resolveAiKey } from "@/lib/ai-key-resolver";
-import { recordUsage } from "../_shared/usage-tracker";
-import { aiErrorResponse } from "../_shared/ai-error-response";
+import { recordUsage } from "@/app/api/ai/_shared/usage-tracker";
+import { aiErrorResponse } from "@/app/api/ai/_shared/ai-error-response";
 
 /**
  * Transcribe a short audio clip using Groq's hosted

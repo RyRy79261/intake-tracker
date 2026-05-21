@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 const originalEnv = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 function loadModule() {
-  return import("../lib/api-fetch");
+  return import("@/lib/api-fetch");
 }
 
 describe("api-fetch", () => {

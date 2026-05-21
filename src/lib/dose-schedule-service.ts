@@ -5,9 +5,9 @@ import {
   type MedicationPhase,
   type PhaseSchedule,
   type InventoryItem,
-} from "./db";
-import { formatLocalTime, getDeviceTimezone } from "./timezone";
-import { calculatePillsConsumed, isCleanFraction } from "./dose-log-service";
+} from "@/lib/db";
+import { formatLocalTime, getDeviceTimezone } from "@/lib/timezone";
+import { calculatePillsConsumed, isCleanFraction } from "@/lib/dose-log-service";
 
 // ---------------------------------------------------------------------------
 // Types

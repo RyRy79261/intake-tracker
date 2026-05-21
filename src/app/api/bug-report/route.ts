@@ -4,10 +4,10 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { Octokit } from "@octokit/rest";
 import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeReportText } from "@/lib/security";
-import { getClaudeClientForUser, CLAUDE_MODELS } from "../ai/_shared/claude-client";
+import { getClaudeClientForUser, CLAUDE_MODELS } from "@/app/api/ai/_shared/claude-client";
 import { parseJsonBody, zodErrorResponse } from "@/app/api/_shared/validation";
 import { createRateLimiter, getClientIp } from "@/app/api/_shared/rate-limit";
-import { recordUsage, tokensFromAnthropic } from "../ai/_shared/usage-tracker";
+import { recordUsage, tokensFromAnthropic } from "@/app/api/ai/_shared/usage-tracker";
 import { BUG_ISSUE_LABELS, FEATURE_ISSUE_LABELS } from "@/lib/github-labels";
 
 /**

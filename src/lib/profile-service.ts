@@ -11,11 +11,11 @@
  * so the profile backs up and cloud-syncs like any other record.
  */
 
-import { db, type UserProfile } from "./db";
-import { ok, err, type ServiceResult } from "./service-result";
-import { generateId, getDeviceId } from "./utils";
-import { writeWithSync } from "./sync-queue";
-import { schedulePush } from "./sync-engine";
+import { db, type UserProfile } from "@/lib/db";
+import { ok, err, type ServiceResult } from "@/lib/service-result";
+import { generateId, getDeviceId } from "@/lib/utils";
+import { writeWithSync } from "@/lib/sync-queue";
+import { schedulePush } from "@/lib/sync-engine";
 
 /** Maximum number of conditions a profile can hold. */
 export const MAX_CONDITIONS = 20;

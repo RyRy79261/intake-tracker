@@ -12,8 +12,8 @@ import {
   bpTrend,
   weightTrend,
   getRecordsByDomain,
-} from "./analytics-service";
-import type { TimeRange, Domain, AnalyticsResult, DataPoint } from "./analytics-types";
+} from "@/lib/analytics-service";
+import type { TimeRange, Domain, AnalyticsResult, DataPoint } from "@/lib/analytics-types";
 
 // ---------------------------------------------------------------------------
 // CSV helpers
