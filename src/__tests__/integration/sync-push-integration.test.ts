@@ -12,7 +12,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { eq } from "drizzle-orm";
-import { setupTestDb, type TestDbContext } from "../helpers/test-db";
+import { setupTestDb, type TestDbContext } from "@/__tests__/helpers/test-db";
 import * as schema from "@/db/schema";
 
 let ctx: TestDbContext;

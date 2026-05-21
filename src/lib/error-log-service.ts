@@ -13,7 +13,7 @@
  * trim keeps the table at MAX_ENTRIES.
  */
 
-import { db, type ErrorLogEntry, type ErrorLogSource } from "./db";
+import { db, type ErrorLogEntry, type ErrorLogSource } from "@/lib/db";
 
 const MAX_ENTRIES = 500;
 const CLIENT_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || "0.0.0";

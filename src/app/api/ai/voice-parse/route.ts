@@ -3,11 +3,11 @@ import { z } from "zod";
 import type Anthropic from "@anthropic-ai/sdk";
 import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
-import { getClaudeClientForUser, CLAUDE_MODELS } from "../_shared/claude-client";
+import { getClaudeClientForUser, CLAUDE_MODELS } from "@/app/api/ai/_shared/claude-client";
 import { parseJsonBody, zodErrorResponse } from "@/app/api/_shared/validation";
 import { createRateLimiter, getClientIp } from "@/app/api/_shared/rate-limit";
-import { recordUsage, tokensFromAnthropic } from "../_shared/usage-tracker";
-import { aiErrorResponse } from "../_shared/ai-error-response";
+import { recordUsage, tokensFromAnthropic } from "@/app/api/ai/_shared/usage-tracker";
+import { aiErrorResponse } from "@/app/api/ai/_shared/ai-error-response";
 
 /**
  * Parse a voice transcript into a heterogeneous list of health record items

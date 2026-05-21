@@ -5,13 +5,13 @@ import { useDailyDoseSchedule, useTakeDose, useUntakeDose, useSkipDose, useTakeA
 import type { DoseSlot } from "@/hooks/use-medication-queries";
 import { hapticTake, hapticSkip, getCurrentTimeHHMM } from "@/lib/medication-ui-utils";
 import { toast } from "@/hooks/use-toast";
-import { showUndoToast } from "./undo-toast";
-import { DoseProgressSummary } from "./dose-progress-summary";
-import { TimeSlotGroup } from "./time-slot-group";
-import { SkipReasonPicker } from "./skip-reason-picker";
-import { EmptySchedule } from "./empty-schedule";
-import { RetroactiveTimePicker } from "./retroactive-time-picker";
-import { BulkDoseEditDialog } from "./bulk-dose-edit-dialog";
+import { showUndoToast } from "@/components/medications/undo-toast";
+import { DoseProgressSummary } from "@/components/medications/dose-progress-summary";
+import { TimeSlotGroup } from "@/components/medications/time-slot-group";
+import { SkipReasonPicker } from "@/components/medications/skip-reason-picker";
+import { EmptySchedule } from "@/components/medications/empty-schedule";
+import { RetroactiveTimePicker } from "@/components/medications/retroactive-time-picker";
+import { BulkDoseEditDialog } from "@/components/medications/bulk-dose-edit-dialog";
 
 interface ScheduleViewProps {
   selectedDate: Date;

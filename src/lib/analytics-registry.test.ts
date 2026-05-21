@@ -7,7 +7,7 @@ import {
   AdherenceParamsSchema,
   SaltWeightParamsSchema,
   CorrelationParamsSchema,
-} from "./analytics-registry";
+} from "@/lib/analytics-registry";
 
 const EXPECTED_IDS = [
   "fluid_balance",

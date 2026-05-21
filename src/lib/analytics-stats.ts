@@ -6,7 +6,7 @@ import {
   zScore,
   mean,
 } from "simple-statistics";
-import type { DataPoint, TrendDirection, CorrelationResult } from "./analytics-types";
+import type { DataPoint, TrendDirection, CorrelationResult } from "@/lib/analytics-types";
 
 // ---------------------------------------------------------------------------
 // Moving Average

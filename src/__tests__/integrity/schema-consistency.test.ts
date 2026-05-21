@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { parseDbSchema } from "./parse-schema";
+import { parseDbSchema } from "@/__tests__/integrity/parse-schema";
 
 describe("schema parser self-test", () => {
   it("parses all version blocks from db.ts", () => {

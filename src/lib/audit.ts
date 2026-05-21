@@ -9,9 +9,9 @@
  * Logs are stored in IndexedDB and can be exported.
  */
 
-import { db, type AuditAction, type AuditLog } from "./db";
-import { getDeviceId } from "./utils";
-import { getDeviceTimezone } from "./timezone";
+import { db, type AuditAction, type AuditLog } from "@/lib/db";
+import { getDeviceId } from "@/lib/utils";
+import { getDeviceTimezone } from "@/lib/timezone";
 
 // Re-export the types
 export type { AuditAction };

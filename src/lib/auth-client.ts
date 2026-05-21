@@ -2,7 +2,7 @@
 
 import { createAuthClient } from "@neondatabase/auth";
 import { BetterAuthReactAdapter } from "@neondatabase/auth/react/adapters";
-import { saveAuthToken, clearAuthToken, isCapacitorMode } from "./api-fetch";
+import { saveAuthToken, clearAuthToken, isCapacitorMode } from "@/lib/api-fetch";
 
 const baseURL = process.env.NEXT_PUBLIC_API_BASE_URL || undefined;
 

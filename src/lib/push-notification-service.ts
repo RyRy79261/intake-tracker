@@ -3,8 +3,8 @@
  * Uses the browser's Notification API for local notifications.
  */
 
-import { db } from "./db";
-import { ok, err, type ServiceResult } from "./service-result";
+import { db } from "@/lib/db";
+import { ok, err, type ServiceResult } from "@/lib/service-result";
 import { apiFetch } from "@/lib/api-fetch";
 
 export type NotificationPermissionState = "granted" | "denied" | "default";

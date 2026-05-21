@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { exportToCSV, _escapeCSVField } from "./export-service";
-import type { AnalyticsResult, DataPoint } from "./analytics-types";
+import { exportToCSV, _escapeCSVField } from "@/lib/export-service";
+import type { AnalyticsResult, DataPoint } from "@/lib/analytics-types";
 
 // Save the original URL constructor so jspdf can still use `new URL(...)`
 const OriginalURL = globalThis.URL;
@@ -111,7 +111,7 @@ describe("exportAllRecordsCSV", () => {
 
     const mockGetRecordsByDomain = vi.fn().mockResolvedValue([]);
 
-    vi.doMock("./analytics-service", () => ({
+    vi.doMock("@/lib/analytics-service", () => ({
       getRecordsByDomain: mockGetRecordsByDomain,
       fluidBalance: vi.fn(),
       adherenceRate: vi.fn(),
@@ -136,7 +136,7 @@ describe("exportAllRecordsCSV", () => {
       body: { appendChild: vi.fn(), removeChild: vi.fn() },
     });
 
-    const mod = await import("./export-service");
+    const mod = await import("@/lib/export-service");
     const range = { start: Date.now() - 86400000, end: Date.now() };
 
     await mod.exportAllRecordsCSV(range);

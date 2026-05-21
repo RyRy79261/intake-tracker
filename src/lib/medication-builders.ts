@@ -1,6 +1,6 @@
-import { type Prescription, type MedicationPhase, type InventoryItem, type PhaseSchedule, type PillShape, type FoodInstruction, type InventoryTransaction } from "./db";
-import { syncFields } from "./utils";
-import { getDeviceTimezone, localHHMMStringToUTCMinutes } from "./timezone";
+import { type Prescription, type MedicationPhase, type InventoryItem, type PhaseSchedule, type PillShape, type FoodInstruction, type InventoryTransaction } from "@/lib/db";
+import { syncFields } from "@/lib/utils";
+import { getDeviceTimezone, localHHMMStringToUTCMinutes } from "@/lib/timezone";
 
 export function buildPrescription(
   input: { genericName: string; indication: string; notes?: string; contraindications?: string[]; warnings?: string[] },

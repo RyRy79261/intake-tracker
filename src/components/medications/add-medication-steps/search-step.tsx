@@ -8,7 +8,7 @@ import { useAuthGate } from "@/components/auth-guard";
 import type { Prescription } from "@/lib/db";
 import type { AddMedicationFormState } from "@/hooks/use-add-medication-form";
 import { cn } from "@/lib/utils";
-import type { FieldChange } from "./types";
+import type { FieldChange } from "@/components/medications/add-medication-steps/types";
 
 export function SearchStep({
   formState, onFieldChange, errors,

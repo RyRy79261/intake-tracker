@@ -27,11 +27,11 @@ import {
   type DailyNote,
   type AuditLog,
   type UserProfile,
-} from "./db";
-import { ok, err, type ServiceResult } from "./service-result";
-import { logAudit } from "./audit";
-import { encrypt, decrypt, type EncryptedData } from "./crypto";
-import { BACKUP_VALIDATORS } from "./backup-schemas";
+} from "@/lib/db";
+import { ok, err, type ServiceResult } from "@/lib/service-result";
+import { logAudit } from "@/lib/audit";
+import { encrypt, decrypt, type EncryptedData } from "@/lib/crypto";
+import { BACKUP_VALIDATORS } from "@/lib/backup-schemas";
 
 export interface BackupData {
   version: number;

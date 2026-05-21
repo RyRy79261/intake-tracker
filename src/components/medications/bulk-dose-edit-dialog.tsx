@@ -2,12 +2,12 @@
 
 import { useState } from "react";
 import { Drawer, DrawerContent } from "@/components/ui/drawer";
-import { PillIconWithBadge } from "./pill-icon";
+import { PillIconWithBadge } from "@/components/medications/pill-icon";
 import { useUntakeDose, useSkipAllDoses, useEditAllDoseTimes } from "@/hooks/use-medication-queries";
 import { hapticTake, hapticSkip, formatPillCount, getCurrentTimeHHMM } from "@/lib/medication-ui-utils";
 import { toast } from "@/hooks/use-toast";
 import { X, RotateCcw, Clock } from "lucide-react";
-import { RetroactiveTimePicker } from "./retroactive-time-picker";
+import { RetroactiveTimePicker } from "@/components/medications/retroactive-time-picker";
 import type { DoseSlot } from "@/hooks/use-medication-queries";
 
 interface BulkDoseEditDialogProps {

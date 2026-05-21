@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import type { AddMedicationFormState } from "@/hooks/use-add-medication-form";
-import { type FieldChange, DOSE_MULTIPLIERS } from "./types";
+import { type FieldChange, DOSE_MULTIPLIERS } from "@/components/medications/add-medication-steps/types";
 
 export function DosageStep({
   formState, onFieldChange,

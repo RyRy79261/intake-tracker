@@ -6,11 +6,11 @@
  * (`src/app/api/bug-report/route.ts`) so request/response shapes stay in sync.
  */
 
-import { getErrorLogs } from "./error-log-service";
-import { getDeviceId } from "./utils";
-import { getDeviceTimezone } from "./timezone";
-import { DB_SCHEMA_VERSION } from "./db";
-import { isCapacitorMode } from "./api-fetch";
+import { getErrorLogs } from "@/lib/error-log-service";
+import { getDeviceId } from "@/lib/utils";
+import { getDeviceTimezone } from "@/lib/timezone";
+import { DB_SCHEMA_VERSION } from "@/lib/db";
+import { isCapacitorMode } from "@/lib/api-fetch";
 
 export type BugReportType = "bug" | "feature";
 

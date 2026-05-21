@@ -1,4 +1,4 @@
-import { getUnenrichedSubstanceRecords, updateSubstanceRecord } from "./substance-service";
+import { getUnenrichedSubstanceRecords, updateSubstanceRecord } from "@/lib/substance-service";
 import { apiFetch } from "@/lib/api-fetch";
 
 /**

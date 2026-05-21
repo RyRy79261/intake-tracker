@@ -5,11 +5,11 @@
  * PhaseSchedule records to preserve wall-clock dose times (D-01).
  */
 
-import { db } from "./db";
-import { utcMinutesToLocalTime, localTimeToUTCMinutes } from "./timezone";
-import { buildAuditEntry } from "./audit-service";
-import { enqueueInsideTx } from "./sync-queue";
-import { schedulePush } from "./sync-engine";
+import { db } from "@/lib/db";
+import { utcMinutesToLocalTime, localTimeToUTCMinutes } from "@/lib/timezone";
+import { buildAuditEntry } from "@/lib/audit-service";
+import { enqueueInsideTx } from "@/lib/sync-queue";
+import { schedulePush } from "@/lib/sync-engine";
 
 /**
  * Recalculate scheduleTimeUTC for all active (enabled) PhaseSchedule records

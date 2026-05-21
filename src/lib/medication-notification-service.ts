@@ -1,6 +1,6 @@
-import { db, type Prescription, type MedicationPhase, type InventoryItem } from "./db";
-import { showNotification, getNotificationPermission } from "./push-notification-service";
-import { getSchedulesForPhase } from "./medication-schedule-service";
+import { db, type Prescription, type MedicationPhase, type InventoryItem } from "@/lib/db";
+import { showNotification, getNotificationPermission } from "@/lib/push-notification-service";
+import { getSchedulesForPhase } from "@/lib/medication-schedule-service";
 
 const MED_NOTIFICATION_KEY = "intake-tracker-med-notifications";
 

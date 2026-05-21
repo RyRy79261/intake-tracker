@@ -288,7 +288,7 @@ describe("withAuth Bearer token validation", () => {
   });
 
   it("OPTIONS preflight with no origin → no CORS headers (handled by middleware)", async () => {
-    const { default: middleware } = await import("../../src/middleware");
+    const { default: middleware } = await import("@/middleware");
     const req = new NextRequest("https://example.test/api/sync/push", {
       method: "OPTIONS",
     });
