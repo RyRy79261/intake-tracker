@@ -6,8 +6,8 @@ import {
 
 export interface IntakeRecord {
   id: string;
-  type: "water" | "salt";
-  amount: number; // ml for water, mg for salt
+  type: "water" | "salt" | "sugar";
+  amount: number; // ml for water, mg for salt, g for sugar
   timestamp: number; // Unix timestamp in milliseconds
   source?: string; // "manual", "food:apple", "voice", etc.
   note?: string; // Optional note for the entry

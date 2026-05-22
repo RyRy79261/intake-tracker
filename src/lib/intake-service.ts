@@ -10,7 +10,7 @@ const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 // Zod schemas for validation
 const IntakeRecordSchema = z.object({
   id: z.string().min(1),
-  type: z.enum(["water", "salt"]),
+  type: z.enum(["water", "salt", "sugar"]),
   amount: z.number().positive().max(100000), // Reasonable max
   timestamp: z.number().positive(),
   source: z.string().optional(),
@@ -29,7 +29,7 @@ export type ImportValidationError = {
 };
 
 export async function addIntakeRecord(
-  type: "water" | "salt",
+  type: "water" | "salt" | "sugar",
   amount: number,
   source: string = "manual",
   timestamp?: number,
@@ -105,7 +105,7 @@ export async function updateIntakeRecord(
 }
 
 export async function getRecordsInLast24Hours(
-  type?: "water" | "salt"
+  type?: "water" | "salt" | "sugar"
 ): Promise<IntakeRecord[]> {
   const cutoffTime = Date.now() - TWENTY_FOUR_HOURS_MS;
   const query = db.intakeRecords.where("timestamp").aboveOrEqual(cutoffTime);
@@ -116,7 +116,7 @@ export async function getRecordsInLast24Hours(
   return records.filter((r) => r.deletedAt === null);
 }
 
-export async function getTotalInLast24Hours(type: "water" | "salt"): Promise<number> {
+export async function getTotalInLast24Hours(type: "water" | "salt" | "sugar"): Promise<number> {
   const records = await getRecordsInLast24Hours(type);
   return records.reduce((sum, record) => sum + record.amount, 0);
 }
@@ -134,7 +134,7 @@ function getDayStartTimestamp(dayStartHour: number): number {
   return dayStart.getTime();
 }
 
-export async function getDailyTotal(type: "water" | "salt", dayStartHour: number): Promise<number> {
+export async function getDailyTotal(type: "water" | "salt" | "sugar", dayStartHour: number): Promise<number> {
   const cutoffTime = getDayStartTimestamp(dayStartHour);
   const records = await db.intakeRecords
     .where("timestamp")
@@ -144,7 +144,7 @@ export async function getDailyTotal(type: "water" | "salt", dayStartHour: number
   return records.reduce((sum, r) => sum + r.amount, 0);
 }
 
-export async function getRecentRecords(type: "water" | "salt", limit: number = 3): Promise<IntakeRecord[]> {
+export async function getRecentRecords(type: "water" | "salt" | "sugar", limit: number = 3): Promise<IntakeRecord[]> {
   const records = await db.intakeRecords
     .where("type")
     .equals(type)
@@ -219,7 +219,7 @@ export async function getRecordsByCursor(
 export async function getRecordsByDateRange(
   startTime: number,
   endTime: number,
-  type?: "water" | "salt"
+  type?: "water" | "salt" | "sugar"
 ): Promise<IntakeRecord[]> {
   let records = await db.intakeRecords
     .where("timestamp")
@@ -309,7 +309,7 @@ export async function importData(
     }
 
     for (const record of validatedData.records) {
-      if (record.type !== "water" && record.type !== "salt") {
+      if (record.type !== "water" && record.type !== "salt" && record.type !== "sugar") {
         errors.push({ index: skipped + imported, errors: [`Invalid type: ${record.type}`] });
         skipped++;
         continue;
@@ -354,14 +354,15 @@ export async function importData(
   }
 }
 
-export async function getSaltTotalsByGroupIds(
-  groupIds: string[]
+async function getIntakeTotalsByGroupIds(
+  groupIds: string[],
+  type: "water" | "salt" | "sugar"
 ): Promise<Map<string, number>> {
   if (groupIds.length === 0) return new Map();
   const records = await db.intakeRecords
     .where("groupId")
     .anyOf(groupIds)
-    .and((r) => r.type === "salt" && r.deletedAt === null)
+    .and((r) => r.type === type && r.deletedAt === null)
     .toArray();
   const map = new Map<string, number>();
   for (const r of records) {
@@ -370,6 +371,18 @@ export async function getSaltTotalsByGroupIds(
     }
   }
   return map;
+}
+
+export function getSaltTotalsByGroupIds(
+  groupIds: string[]
+): Promise<Map<string, number>> {
+  return getIntakeTotalsByGroupIds(groupIds, "salt");
+}
+
+export function getSugarTotalsByGroupIds(
+  groupIds: string[]
+): Promise<Map<string, number>> {
+  return getIntakeTotalsByGroupIds(groupIds, "sugar");
 }
 
 export async function clearAllData(): Promise<ServiceResult<void>> {

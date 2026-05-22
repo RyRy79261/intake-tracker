@@ -40,16 +40,26 @@ export function EditIntakeDialog({
   onNoteChange,
   onFocus,
 }: EditIntakeDialogProps) {
+  const typeLabel =
+    record?.type === "water" ? "Water" : record?.type === "sugar" ? "Sugar" : "Sodium";
+  const unit =
+    record?.type === "water" ? "ml" : record?.type === "sugar" ? "g" : "mg";
+  const amountDesc =
+    record?.type === "water"
+      ? "water amount in milliliters"
+      : record?.type === "sugar"
+        ? "sugar amount in grams"
+        : "salt amount in milligrams";
   return (
     <Dialog open={record !== null} onOpenChange={(dialogOpen) => !dialogOpen && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Edit {record?.type === "water" ? "Water" : "Sodium"} Entry</DialogTitle>
+          <DialogTitle>Edit {typeLabel} Entry</DialogTitle>
           <DialogDescription>Update the amount, time, or note for this entry</DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="edit-amount">Amount ({record?.type === "water" ? "ml" : "mg"})</Label>
+            <Label htmlFor="edit-amount">Amount ({unit})</Label>
             <Input
               id="edit-amount"
               type="number"
@@ -64,7 +74,7 @@ export function EditIntakeDialog({
               aria-describedby="edit-amount-desc"
             />
             <p id="edit-amount-desc" className="sr-only">
-              Enter the {record?.type === "water" ? "water amount in milliliters" : "salt amount in milligrams"}
+              Enter the {amountDesc}
             </p>
           </div>
           <div className="space-y-2">
@@ -104,7 +114,11 @@ export function EditIntakeDialog({
             <Button
               type="submit"
               className={cn(
-                record?.type === "water" ? "bg-sky-600 hover:bg-sky-700" : "bg-amber-600 hover:bg-amber-700"
+                record?.type === "water"
+                  ? "bg-sky-600 hover:bg-sky-700"
+                  : record?.type === "sugar"
+                    ? "bg-pink-600 hover:bg-pink-700"
+                    : "bg-amber-600 hover:bg-amber-700"
               )}
             >
               Save Changes

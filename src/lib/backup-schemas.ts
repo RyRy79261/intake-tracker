@@ -40,7 +40,7 @@ const baseRecord = syncFieldsSchema.extend({
 
 export const intakeRecordSchema = baseRecord
   .extend({
-    type: z.union([z.literal("water"), z.literal("salt")]),
+    type: z.union([z.literal("water"), z.literal("salt"), z.literal("sugar")]),
     amount: finiteNumber,
     timestamp: timestampSchema,
   })

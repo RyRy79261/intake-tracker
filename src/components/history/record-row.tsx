@@ -26,13 +26,16 @@ function RecordRowImpl({ unified, onDelete, onEdit, isDeleting, liquidPresets }:
 
   if (unified.type === "intake") {
     const record = unified.record;
-    const themeKey = record.type === "water" ? "water" : "salt";
+    const themeKey =
+      record.type === "water" ? "water" : record.type === "sugar" ? "sugar" : "salt";
     const theme = CARD_THEMES[themeKey];
     const Icon = theme.icon;
     icon = <Icon className="w-4 h-4" />;
     iconColor = theme.iconColor;
     typeLabel = theme.label;
-    const amountStr = `${record.amount} ${record.type === "water" ? "ml" : "mg"}`;
+    const unit =
+      record.type === "water" ? "ml" : record.type === "sugar" ? "g" : "mg";
+    const amountStr = `${record.amount} ${unit}`;
     const sourceLabel = record.type === "water"
       ? getLiquidTypeLabel(record.source, { presets: liquidPresets, note: record.note })
       : null;
