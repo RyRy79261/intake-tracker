@@ -1,9 +1,11 @@
 # Testing & Coverage Strategy — Research & Proposal
 
-> Status: **research / proposal** — not yet adopted. Authored on branch
-> `claude/coverage-stress-testing-research-yJSUb`. Nothing here is wired into
-> CI; this document exists so the trade-offs can be reviewed before any of it
-> is implemented.
+> Status: **research + partial implementation** — authored on branch
+> `claude/coverage-stress-testing-research-yJSUb`. The proposal in §1–§4 was
+> drafted first as a discussion artifact; §5 ("Implementation status")
+> tracks which paradigms have since been wired up on the branch and what
+> was learned along the way. Nothing has been merged to `main`; this
+> document and the new test files all live on the research branch.
 
 ## TL;DR
 
@@ -553,6 +555,80 @@ What actually moves confidence:
 The current suite is strong on internal logic correctness (good!) and weak
 on the boundaries where reality hits the code (bad). The proposals above
 are deliberately weighted toward those boundaries.
+
+---
+
+## 5. Implementation status
+
+The proposal in §1–§4 was drafted as a research artifact. After the
+brief was accepted ("that sounds incredible, go for it"), the items
+below were actually built on this branch. Test counts: **1625 unit
+tests passing**, up from the 1594-test baseline (+31 net). Two more
+Playwright specs added (`a11y.spec.ts`, `chaos.spec.ts`) and a
+mutation-testing config.
+
+### Built
+
+| Paradigm | Status | File(s) | Notes |
+|---|---|---|---|
+| **§2.1** MSW integration "missing middle" | ✅ Built | `src/components/food-salt/food-section.flow.test.tsx` | Demonstrates pattern: type → MSW → Dexie → live-query rerender. Replaces ~5 shallow unit tests with one. |
+| **§2.1** Day-in-the-life multi-card simulation | ✅ Built (extension) | `src/__tests__/day-in-the-life.flow.test.tsx` | 8 sequential user actions across 6 cards, runtime ~850 ms. Catches cross-card state corruption that single-action tests miss. |
+| **§2.2** Mutation testing | ✅ Wired | `stryker.conf.json`, `pnpm test:mutation` | Scoped to `src/lib/sync-engine.ts` + `sync-queue.ts` + `sync-topology.ts` + `sync-payload.ts`. Stryker validates config; instruments 473 mutants. Baseline score not yet published — run `pnpm test:mutation` to generate. |
+| **§2.3** Property testing — backup round-trip | ✅ Built | `src/__tests__/integrity/backup-round-trip.property.test.ts` | `forall db_state. reload(export(s)) ≡ s` over 22 generated states. |
+| **§2.3** Property testing — timezone | ✅ Built | `src/lib/timezone.property.test.ts` | 8 properties, round-trip identity across 8 IANA zones including half-hour (Kolkata) and quarter-hour (Kathmandu) offsets. |
+| **§2.3** Property testing — computeProgress | ✅ Built | `src/lib/medication-ui-utils.property.test.ts` | 7 properties on dose-progress aggregation, including idempotence-under-permutation. |
+| **§2.4 Layer A** Adversarial AI fuzz | ✅ Built | `src/app/api/ai/parse/route.fuzz.test.ts` | 3 properties, 110+ random Claude shapes. Asserts the route always returns one of `{200, 400, 422, 429, 502}` with a valid body. |
+| **§2.5** Two-client sync conflict | ✅ Built | `src/__tests__/sync-conflict.property.test.ts` | Property-based against the push route. 5 invariants (resurrection guard, LWW, clock-skew clamp, order-independence). **Real finding — see below.** |
+| **§2.6** Chaos-as-fixtures | ✅ Built | `e2e/chaos.spec.ts` | 4 PWA failure modes: network drop mid-request, flaky API retry, IDB quota exceeded, clock jump backward. |
+| **§2.7** axe-core a11y scanning | ✅ Built | `e2e/a11y.spec.ts` | Scans `/`, `/history`, `/medications`, `/settings`. Fails only on critical violations; logs serious for triage. |
+| **§2.11** Client-side scale stress | ✅ Built | `src/components/analytics/records-tab.scale.test.tsx` | Render budgets at 500 / 5 000 / 50 000 records. Measured locally: 560 ms at 5 k. |
+
+### Skipped (with reasons)
+
+| Paradigm | Why not yet |
+|---|---|
+| **§2.4 Layer B** Promptfoo red-team | Costs live Claude API spend. Belongs in nightly CI, needs budget conversation. |
+| **§2.8** Visual regression | Needs seeded fixtures + frozen clock first; otherwise the maintenance overhead dominates the value. |
+| **§2.9** Storybook play-function migration | Conditional on adopting Storybook for design too — the cost only justifies itself if Storybook is being used beyond testing. |
+| **§2.10** k6 sync-route stress | Needs a preview-deploy strategy and a budget conversation. Single-user PWA today; revisit if multi-tenancy is ever in scope. |
+
+### Headline finding
+
+While running the conflict property test, fast-check **discovered a
+real edge case in `/api/sync/push`'s LWW resolution**: when two ops
+have identical `updatedAt` and the second is a tombstone, the tombstone
+is silently dropped. Trace through the D-12 rules:
+
+  - Rule 1 (existing tombstoned, incoming upsert) — doesn't fire,
+    server's `deletedAt` is null.
+  - Rule 2 (`incoming.updatedAt > existing.updatedAt`) — false on a tie.
+  - Rule 3 (else: skip, keep server row) — fires; tombstone lost.
+
+This is exactly the class of bug example-based tests can't catch because
+no hand-picked scenario thought to test "tied updatedAt with one
+tombstone arriving second." The property test ran 50 iterations and
+shrunk to the minimal counter-example in 9 tries.
+
+A dedicated regression test `I1-asymmetry` in the conflict-property file
+locks in the current behaviour so the gap stays visible. Whether to add
+a tombstone-precedence rule in `route.ts` (one-line change:
+`if (op.row.deletedAt != null && clampedUpdatedAt >= existing.updatedAt) write`)
+is a product call — this branch only surfaces the finding.
+
+### Quickest follow-ups if the work continues
+
+1. **Run `pnpm test:mutation`** once locally and publish the baseline
+   mutation score for the sync engine. Then decide whether to wire it
+   into a nightly CI workflow.
+2. **Decide on the tombstone-on-tie behaviour** — either fix the route
+   or document the asymmetry as intended in `/api/sync/push/route.ts`'s
+   D-12 docstring.
+3. **Triage the axe-core output** — run `pnpm exec playwright test e2e/a11y.spec.ts`
+   to see which serious-impact violations exist (they log but don't gate
+   yet) and decide what to fix vs. accept.
+4. **Add a second MSW integration flow** for the medication wizard —
+   it's the most complex user flow in the app and would benefit most
+   from this paradigm.
 
 ---
 
