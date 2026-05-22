@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.21.0](https://github.com/RyRy79261/intake-tracker/compare/v1.20.0...v1.21.0) (2026-05-22)
+
+
+### Features
+
+* add AI sugar estimation to food tracking ([0ec0803](https://github.com/RyRy79261/intake-tracker/commit/0ec08032037205f7195d4859b65210e006f456b5))
+* add AI sugar estimation to food tracking ([5b8f855](https://github.com/RyRy79261/intake-tracker/commit/5b8f8558b4f059bfa116497405b83097137dd12d))
+* add sugar to the analytics page, insights and correlations ([f440247](https://github.com/RyRy79261/intake-tracker/commit/f440247d1f5dff588ef11875776dbe592802e1ea))
+* show sugar in the daily intake summary, rename Food card ([a264ec9](https://github.com/RyRy79261/intake-tracker/commit/a264ec9fa3d0e5f7653c2e23124af1c145f9e30e))
+
+
+### Bug Fixes
+
+* use consistent "sodium" wording in edit dialog screen-reader label ([6564bed](https://github.com/RyRy79261/intake-tracker/commit/6564bedf6d7692e17167fd71820a6939dc3a5a7a))
+
 ## [1.20.0](https://github.com/RyRy79261/intake-tracker/compare/v1.19.0...v1.20.0) (2026-05-22)
 
 
