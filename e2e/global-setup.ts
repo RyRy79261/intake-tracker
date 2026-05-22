@@ -2,6 +2,7 @@ import { chromium, type FullConfig } from "@playwright/test";
 import * as fs from "fs";
 import * as path from "path";
 import { neon } from "@neondatabase/serverless";
+import { WELCOME_SEEN_KEY } from "../src/lib/constants";
 
 /**
  * Phase 41 E2E auth setup.
@@ -32,11 +33,12 @@ async function globalSetup(config: FullConfig) {
     config.projects[0]?.use.baseURL ?? "http://localhost:3000";
 
   // Pre-seed the first-run welcome dialog's "seen" flag so its modal overlay
-  // doesn't intercept clicks during specs. Kept in sync with WELCOME_SEEN_KEY
-  // in src/components/welcome-dialog.tsx.
+  // doesn't intercept clicks during specs. Only used by the unauthenticated
+  // fallback path below — the authenticated path captures live storage state
+  // instead (see the page.evaluate near storageState()).
   const welcomeOrigin = {
     origin: new URL(baseURL).origin,
-    localStorage: [{ name: "intake-tracker-welcome-seen", value: "true" }],
+    localStorage: [{ name: WELCOME_SEEN_KEY, value: "true" }],
   };
 
   if (!email || !password) {
@@ -83,9 +85,12 @@ async function globalSetup(config: FullConfig) {
       { timeout: 30_000 }
     );
 
-    await page.evaluate(() => {
-      localStorage.setItem("intake-tracker-welcome-seen", "true");
-    });
+    // context.storageState() below overwrites authFile wholesale, so the
+    // welcomeOrigin object above does NOT reach the authenticated state.
+    // Set the flag live in the browser context so storageState() captures it.
+    await page.evaluate((key) => {
+      localStorage.setItem(key, "true");
+    }, WELCOME_SEEN_KEY);
 
     await context.storageState({ path: authFile });
     console.log("[e2e-global-setup] Authenticated state saved to", authFile);

@@ -4,6 +4,11 @@
  * find, test, and extend.
  */
 
+// ─── localStorage Keys ───────────────────────────────────────────────
+
+/** First-run welcome dialog "seen" flag. Device-local, never synced. */
+export const WELCOME_SEEN_KEY = "intake-tracker-welcome-seen";
+
 // ─── Food Presets (water content %) ──────────────────────────────────
 
 export interface FoodPreset {

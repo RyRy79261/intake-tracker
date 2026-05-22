@@ -12,8 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Droplets, Smartphone, Hand, LifeBuoy } from "lucide-react";
-
-const WELCOME_SEEN_KEY = "intake-tracker-welcome-seen";
+import { WELCOME_SEEN_KEY } from "@/lib/constants";
 
 /**
  * First-launch greeting. The "seen" flag lives only in localStorage and is
