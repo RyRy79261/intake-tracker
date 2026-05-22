@@ -5,6 +5,7 @@ export interface ParsedIntake {
   water: number | null; // ml
   valueMg: number | null; // mg of sodium OR salt — measurementType says which
   measurementType: "sodium" | "salt";
+  sugarG: number | null; // total sugars in grams
   reasoning?: string;
 }
 
@@ -49,8 +50,9 @@ export async function parseIntakeWithAI(input: string): Promise<ParsedIntake | n
 
     return {
       water: result.water,
-      valueMg: result.value_mg,
+      valueMg: result.salt,
       measurementType: result.measurement_type,
+      sugarG: result.sugar,
       reasoning: result.reasoning,
     };
   } catch (error) {

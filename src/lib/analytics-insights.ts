@@ -15,6 +15,7 @@ import { DOMAINS, type Domain } from "@/lib/analytics-types";
 const DOMAIN_LABELS: Record<Domain, string> = {
   water: "water intake",
   salt: "sodium intake",
+  sugar: "sugar intake",
   weight: "weight",
   bp: "blood pressure",
   eating: "eating",
@@ -61,8 +62,10 @@ const FluidBalanceMetricSchema = z.object({
 const IntakeMetricSchema = z.object({
   avgWaterMl: z.number().nonnegative(),
   avgSodiumMg: z.number().nonnegative(),
+  avgSugarG: z.number().nonnegative(),
   waterGoalMl: z.number().positive(),
   sodiumLimitMg: z.number().positive(),
+  sugarLimitG: z.number().positive(),
 });
 
 const CorrelationMetricSchema = z.object({
@@ -253,7 +256,8 @@ export function buildInsightsPrompt(req: AnalyticsInsightsRequest): string {
     const i = metrics.intake;
     lines.push(
       `Daily intake: water averaged ${i.avgWaterMl.toFixed(0)} ml against a ${i.waterGoalMl} ml goal; ` +
-        `sodium averaged ${i.avgSodiumMg.toFixed(0)} mg against a ${i.sodiumLimitMg} mg limit.`,
+        `sodium averaged ${i.avgSodiumMg.toFixed(0)} mg against a ${i.sodiumLimitMg} mg limit; ` +
+        `sugar averaged ${i.avgSugarG.toFixed(0)} g against a ${i.sugarLimitG} g limit.`,
     );
   }
 

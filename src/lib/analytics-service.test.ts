@@ -54,6 +54,7 @@ import {
   bpTrend,
   weightTrend,
   saltVsWeight,
+  sugarVsWeight,
   caffeineVsBP,
   alcoholVsBP,
   getRecordsByDomain,
@@ -81,7 +82,7 @@ function makeRange(days: number): TimeRange {
   return { start: BASE_TS, end: BASE_TS + days * DAY_MS };
 }
 
-function makeIntakeRecord(overrides: Partial<IntakeRecord> & { type: "water" | "salt"; amount: number; timestamp: number }): IntakeRecord {
+function makeIntakeRecord(overrides: Partial<IntakeRecord> & { type: "water" | "salt" | "sugar"; amount: number; timestamp: number }): IntakeRecord {
   return {
     id: Math.random().toString(36).slice(2),
     source: "manual",
@@ -317,6 +318,29 @@ describe("saltVsWeight", () => {
     vi.mocked(mockGetWeight).mockResolvedValue(weightRecords);
 
     const result = await saltVsWeight(makeRange(7));
+    expect(result.unit).toBe("correlation");
+    expect(result.value.lagDays).toBe(2); // default lag
+    expect(typeof result.value.coefficient).toBe("number");
+  });
+});
+
+describe("sugarVsWeight", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("applies lag correctly (2-day default)", async () => {
+    const sugarRecords = Array.from({ length: 7 }, (_, i) =>
+      makeIntakeRecord({ type: "sugar" as const, amount: 20 + i * 5, timestamp: BASE_TS + i * DAY_MS }),
+    );
+    const weightRecords = Array.from({ length: 7 }, (_, i) =>
+      makeWeightRecord(70 + i * 0.3, BASE_TS + i * DAY_MS),
+    );
+
+    vi.mocked(mockGetIntake).mockResolvedValue(sugarRecords);
+    vi.mocked(mockGetWeight).mockResolvedValue(weightRecords);
+
+    const result = await sugarVsWeight(makeRange(7));
     expect(result.unit).toBe("correlation");
     expect(result.value.lagDays).toBe(2); // default lag
     expect(typeof result.value.coefficient).toBe("number");

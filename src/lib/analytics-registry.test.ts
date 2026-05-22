@@ -15,6 +15,7 @@ const EXPECTED_IDS = [
   "bp_trend",
   "weight_trend",
   "salt_vs_weight",
+  "sugar_vs_weight",
   "caffeine_vs_bp",
   "alcohol_vs_bp",
   "custom_correlation",
@@ -25,8 +26,8 @@ describe("analytics-registry", () => {
   // Registry completeness
   // -----------------------------------------------------------------------
 
-  it("has exactly 8 entries", () => {
-    expect(queryRegistry).toHaveLength(8);
+  it("has exactly 9 entries", () => {
+    expect(queryRegistry).toHaveLength(9);
   });
 
   it("contains all expected query IDs", () => {
@@ -47,6 +48,7 @@ describe("analytics-registry", () => {
       bp_trend: { start: 1000, end: 2000 },
       weight_trend: { start: 1000, end: 2000 },
       salt_vs_weight: { start: 1000, end: 2000, lagDays: 3 },
+      sugar_vs_weight: { start: 1000, end: 2000, lagDays: 3 },
       caffeine_vs_bp: { start: 1000, end: 2000 },
       alcohol_vs_bp: { start: 1000, end: 2000 },
       custom_correlation: {
@@ -88,7 +90,7 @@ describe("analytics-registry", () => {
 
   it("listQueries returns array with id, name, description, category for each entry", () => {
     const list = listQueries();
-    expect(list).toHaveLength(8);
+    expect(list).toHaveLength(9);
 
     for (const item of list) {
       expect(item).toHaveProperty("id");

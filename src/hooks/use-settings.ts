@@ -25,3 +25,10 @@ export function useSaltSettings() {
   return { increment, limit, setIncrement, setLimit };
 }
 
+export function useSugarSettings() {
+  const limit = useSettingsStore((s) => s.sugarLimit);
+  const setLimit = useSettingsStore((s) => s.setSugarLimit);
+
+  return { limit, setLimit };
+}
+

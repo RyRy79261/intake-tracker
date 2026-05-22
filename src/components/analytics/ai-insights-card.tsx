@@ -28,11 +28,12 @@ import { insightsRange, INSIGHTS_WINDOW_DAYS } from "@/lib/analytics-snapshot";
 const TRACKED_DATA = [
   "Water intake",
   "Salt / sodium intake",
+  "Sugar intake",
   "Blood pressure readings",
   "Weight readings",
   "Fluid balance (in vs. out)",
-  "Correlations: salt vs. weight, caffeine & alcohol vs. blood pressure",
-  "Your water goal & sodium limit",
+  "Correlations: salt vs. weight, sugar vs. weight, caffeine & alcohol vs. blood pressure",
+  "Your water goal, sodium limit & sugar limit",
 ];
 
 /**
@@ -43,6 +44,7 @@ const TRACKED_DATA = [
 export function AiInsightsCard() {
   const waterGoalMl = useSettingsStore((s) => s.waterLimit);
   const sodiumLimitMg = useSettingsStore((s) => s.saltLimit);
+  const sugarLimitG = useSettingsStore((s) => s.sugarLimit);
   const lastResult = useInsightsStore((s) => s.lastResult);
   const setResult = useInsightsStore((s) => s.setResult);
   const profile = useUserProfile();
@@ -60,7 +62,7 @@ export function AiInsightsCard() {
     mutate(
       {
         range: insightsRange(),
-        goals: { waterGoalMl, sodiumLimitMg },
+        goals: { waterGoalMl, sodiumLimitMg, sugarLimitG },
         ...(shareConditions && { conditions: profile.conditions }),
         ...(shareMedications && { includeMedications: true }),
       },

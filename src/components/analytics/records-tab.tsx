@@ -59,6 +59,7 @@ const FILTER_TABS: { value: FilterType; label: string }[] = [
   { value: "all", label: "All" },
   { value: "water", label: "Water" },
   { value: "salt", label: "Salt" },
+  { value: "sugar", label: "Sugar" },
   { value: "weight", label: "Weight" },
   { value: "bp", label: "BP" },
   { value: "eating", label: "Eating" },
@@ -71,6 +72,7 @@ const FILTER_TABS: { value: FilterType; label: string }[] = [
 const filterColorMap: Record<string, string> = {
   water: CARD_THEMES.water.buttonBg,
   salt: CARD_THEMES.salt.buttonBg,
+  sugar: CARD_THEMES.sugar.buttonBg,
   weight: CARD_THEMES.weight.buttonBg,
   bp: CARD_THEMES.bp.buttonBg,
   eating: CARD_THEMES.eating.buttonBg,

@@ -11,7 +11,7 @@ const COMPOSABLE_TABLES = [db.intakeRecords, db.eatingRecords, db.substanceRecor
 
 export interface ComposableEntryInput {
   eating?: { note?: string; grams?: number };
-  intakes?: Array<{ type: "water" | "salt"; amount: number; source?: string; note?: string }>;
+  intakes?: Array<{ type: "water" | "salt" | "sugar"; amount: number; source?: string; note?: string }>;
   substance?: {
     type: "caffeine" | "alcohol";
     amountMg?: number;
@@ -319,6 +319,7 @@ export async function undoDeleteSingleRecord(
 export type SodiumKind = "sodium" | "salt" | "msg";
 
 const FOOD_WATER_SOURCE = "manual:food_water_content";
+const SUGAR_SOURCE = "manual:sugar";
 const SODIUM_KINDS: ReadonlyArray<SodiumKind> = ["sodium", "salt", "msg"];
 
 function isSodiumKindSource(source: string | undefined): boolean {
@@ -344,6 +345,7 @@ export async function syncEatingGroup(
     sodiumMg: number;
     sodiumKind: SodiumKind;
     waterMl: number;
+    sugarG: number;
   },
 ): Promise<ServiceResult<void>> {
   try {
@@ -355,7 +357,7 @@ export async function syncEatingGroup(
       if (!eating) throw new Error("Eating record not found");
 
       let groupId = eating.groupId;
-      if (!groupId && (patch.sodiumMg > 0 || patch.waterMl > 0)) {
+      if (!groupId && (patch.sodiumMg > 0 || patch.waterMl > 0 || patch.sugarG > 0)) {
         groupId = crypto.randomUUID();
       }
 
@@ -388,8 +390,12 @@ export async function syncEatingGroup(
       const existingWaters = groupIntakes.filter(
         (r) => r.type === "water" && r.deletedAt === null && r.source === FOOD_WATER_SOURCE,
       );
+      const existingSugars = groupIntakes.filter(
+        (r) => r.type === "sugar" && r.deletedAt === null && r.source === SUGAR_SOURCE,
+      );
       const [existingSalt, ...extraSalts] = existingSalts;
       const [existingWater, ...extraWaters] = existingWaters;
+      const [existingSugar, ...extraSugars] = existingSugars;
 
       const sodiumSource = `manual:${patch.sodiumKind}`;
       const groupSource = eating.groupSource ?? "manual_food_entry";
@@ -462,6 +468,40 @@ export async function syncEatingGroup(
         });
       }
       for (const dup of extraWaters) {
+        await db.intakeRecords.update(dup.id, {
+          deletedAt: now,
+          updatedAt: now,
+        });
+      }
+
+      // ── Sugar intake ──
+      if (patch.sugarG > 0) {
+        if (existingSugar) {
+          await db.intakeRecords.update(existingSugar.id, {
+            amount: patch.sugarG,
+            timestamp: patch.timestamp,
+            updatedAt: now,
+          });
+        } else {
+          const record: IntakeRecord = {
+            id: crypto.randomUUID(),
+            type: "sugar",
+            amount: patch.sugarG,
+            timestamp: patch.timestamp,
+            source: SUGAR_SOURCE,
+            groupId,
+            groupSource,
+            ...fields,
+          };
+          await db.intakeRecords.add(record);
+        }
+      } else if (existingSugar) {
+        await db.intakeRecords.update(existingSugar.id, {
+          deletedAt: now,
+          updatedAt: now,
+        });
+      }
+      for (const dup of extraSugars) {
         await db.intakeRecords.update(dup.id, {
           deletedAt: now,
           updatedAt: now,

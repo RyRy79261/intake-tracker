@@ -23,18 +23,21 @@ const ParseRequestSchema = z.object({
 const AIParseResponseSchema = z.object({
   water: z.number().min(0).max(10000).nullable(),
   sodiumMg: z.number().min(0).max(20000).nullable(),
+  sugarG: z.number().min(0).max(1000).nullable(),
   reasoning: z.string().max(1000).optional(),
 });
 
 const SYSTEM_PROMPT = `You are a nutrition lookup assistant. Given a food or drink description, return:
 - water_ml: water content in millilitres (ml)
 - sodium_mg: sodium content in milligrams (mg) -- NOT salt (NaCl). If a label or source reports salt in grams, convert: sodium_mg = salt_g * 1000 / 2.5.
+- sugar_g: total sugars in grams (g) -- the sum of naturally-occurring and added sugars, as reported on a nutrition label's "of which sugars" line. A rough estimate is fine.
 - reasoning: 1-3 sentence explanation citing the values used.
 
 Units (metric only, no US units):
 - All volumes in millilitres (ml).
-- All masses in milligrams (mg) for sodium, grams (g) for portion weight.
+- All masses in milligrams (mg) for sodium, grams (g) for portion weight and for sugar.
 - Sodium, never salt. A "pinch of salt" is ~0.4 g of NaCl, which is ~155 mg sodium.
+- Sugar is total sugars in grams, never teaspoons.
 
 Process:
 1. If the item is a branded product, regional dish, restaurant menu item, or anything where you are not highly confident of the typical nutritional values, USE THE web_search TOOL to look up authoritative data (manufacturer site, supermarket listing, USDA / EFSA / national food database). Prefer per-100g or per-100ml figures and scale to the described portion.
@@ -53,11 +56,19 @@ Reference values for sodium (per typical serving):
 - Restaurant entrée: 800-2000 mg
 - Salty snack (chips): ~150-250 mg per ~30 g serving
 
+Reference values for sugar (total sugars per typical serving):
+- Plain water, black coffee/tea, eggs, plain meat: ~0 g
+- One teaspoon of table sugar: ~4 g
+- A 330 ml can of regular cola / soft drink: ~35 g
+- A medium apple: ~19 g; a banana: ~14 g
+- A glass of milk (250 ml): ~12 g; fruit juice (250 ml): ~22 g
+- A chocolate bar (~45 g): ~25 g
+
 If you cannot estimate a value, return null for that field.`;
 
 const PARSE_RESULT_TOOL = {
   name: "parse_food_result" as const,
-  description: "Return parsed water (ml) and sodium (mg) for a food or drink description.",
+  description: "Return parsed water (ml), sodium (mg) and total sugar (g) for a food or drink description.",
   input_schema: {
     type: "object" as const,
     properties: {
@@ -70,12 +81,17 @@ const PARSE_RESULT_TOOL = {
         description:
           "Sodium content in milligrams (NOT NaCl). If the source reports salt, divide by 2.5 before returning. Null if it cannot be estimated.",
       },
+      sugar_g: {
+        type: ["number", "null"],
+        description:
+          "Total sugars in grams (naturally-occurring plus added). Null if it cannot be estimated.",
+      },
       reasoning: {
         type: "string",
         description: "Brief explanation of the estimate, including any sources consulted.",
       },
     },
-    required: ["water_ml", "sodium_mg", "reasoning"],
+    required: ["water_ml", "sodium_mg", "sugar_g", "reasoning"],
     additionalProperties: false,
   },
 };
@@ -132,7 +148,7 @@ export const POST = withAuth(async ({ request, auth }) => {
       );
     }
 
-    const userMessage = `Estimate water (ml) and sodium (mg) for: "${sanitizedInput}". Use web_search for branded or regional items, then call parse_food_result.`;
+    const userMessage = `Estimate water (ml), sodium (mg) and total sugar (g) for: "${sanitizedInput}". Use web_search for branded or regional items, then call parse_food_result.`;
 
     const startedAt = Date.now();
     const response = await client.messages.create({
@@ -205,6 +221,7 @@ export const POST = withAuth(async ({ request, auth }) => {
     const validated = AIParseResponseSchema.safeParse({
       water: toolInput.water_ml,
       sodiumMg: toolInput.sodium_mg,
+      sugarG: toolInput.sugar_g,
       reasoning: toolInput.reasoning,
     });
     if (!validated.success) {
@@ -220,6 +237,7 @@ export const POST = withAuth(async ({ request, auth }) => {
       // Backwards-compatible field name; value is always sodium in mg.
       salt: validated.data.sodiumMg,
       measurement_type: "sodium" as const,
+      sugar: validated.data.sugarG,
       ...(validated.data.reasoning !== undefined && { reasoning: validated.data.reasoning }),
     });
   } catch (error) {

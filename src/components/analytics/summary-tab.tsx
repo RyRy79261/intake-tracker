@@ -18,6 +18,7 @@ import {
   Droplets,
   Heart,
   Scale,
+  Candy,
   TrendingUp,
   TrendingDown,
   Minus,
@@ -115,11 +116,13 @@ export function SummaryTab({ range }: { range: TimeRange }) {
   const { data: records } = useRecordsTabData(range);
   const waterGoal = useSettingsStore((s) => s.waterLimit);
   const saltLimit = useSettingsStore((s) => s.saltLimit);
+  const sugarLimit = useSettingsStore((s) => s.sugarLimit);
 
   // Aggregate the unified record list into intake totals and event counts.
   const totals = useMemo(() => {
     let waterMl = 0;
     let saltMg = 0;
+    let sugarG = 0;
     let meals = 0;
     let urination = 0;
     let defecation = 0;
@@ -131,6 +134,7 @@ export function SummaryTab({ range }: { range: TimeRange }) {
       activeDays.add(new Date(r.record.timestamp).toDateString());
       if (r.type === "intake" && r.record.type === "water") waterMl += r.record.amount;
       else if (r.type === "intake" && r.record.type === "salt") saltMg += r.record.amount;
+      else if (r.type === "intake" && r.record.type === "sugar") sugarG += r.record.amount;
       else if (r.type === "eating") meals += 1;
       else if (r.type === "urination") urination += 1;
       else if (r.type === "defecation") defecation += 1;
@@ -141,6 +145,7 @@ export function SummaryTab({ range }: { range: TimeRange }) {
     return {
       waterMl,
       saltMg,
+      sugarG,
       meals,
       urination,
       defecation,
@@ -207,8 +212,15 @@ export function SummaryTab({ range }: { range: TimeRange }) {
       );
     }
 
+    const avgSugar = totals.sugarG / rangeDays;
+    if (totals.sugarG > 0 && avgSugar > sugarLimit) {
+      out.push(
+        `Average daily sugar (${Math.round(avgSugar)} g) is above your ${sugarLimit} g limit.`,
+      );
+    }
+
     return out;
-  }, [bp, bpReadings, weightReadings, fluid, totals, rangeDays, waterGoal, saltLimit]);
+  }, [bp, bpReadings, weightReadings, fluid, totals, rangeDays, waterGoal, saltLimit, sugarLimit]);
 
   if (!hasAnyData) {
     return (
@@ -307,6 +319,12 @@ export function SummaryTab({ range }: { range: TimeRange }) {
           label="Sodium Intake"
           value={`${Math.round(totals.saltMg / rangeDays)} mg`}
           sub={`${totals.saltMg} mg total · avg/day`}
+        />
+        <KpiCard
+          icon={<Candy className="w-3.5 h-3.5" />}
+          label="Sugar Intake"
+          value={`${Math.round(totals.sugarG / rangeDays)} g`}
+          sub={`${totals.sugarG} g total · avg/day`}
         />
         <KpiCard
           icon={<Activity className="w-3.5 h-3.5" />}

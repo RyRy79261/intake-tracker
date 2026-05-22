@@ -30,7 +30,10 @@ import {
   useDeleteEating,
 } from "@/hooks/use-eating-queries";
 import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
-import { useSaltTotalsByGroupIds } from "@/hooks/use-intake-queries";
+import {
+  useSaltTotalsByGroupIds,
+  useSugarTotalsByGroupIds,
+} from "@/hooks/use-intake-queries";
 import { useEditRecord } from "@/hooks/use-edit-record";
 import { useToast } from "@/hooks/use-toast";
 import { type EatingRecord } from "@/lib/db";
@@ -65,6 +68,7 @@ export function FoodSection() {
   const [detailGrams, setDetailGrams] = useState("");
   const [sodiumMg, setSodiumMg] = useState("");
   const [sodiumSource, setSodiumSource] = useState<SodiumSource>("sodium");
+  const [sugarG, setSugarG] = useState("");
   const [waterMl, setWaterMl] = useState("");
   const [isParsing, setIsParsing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -79,6 +83,10 @@ export function FoodSection() {
       : 0;
   const hasSodium = calculatedSodiumMg > 0;
 
+  // ─── Derived sugar calculation ────────────────────────────────────
+  const sugarGNum = sugarG ? parseFloat(sugarG) : 0;
+  const calculatedSugarG = sugarGNum > 0 ? Math.round(sugarGNum) : 0;
+
   // ─── Recent eating records ────────────────────────────────────────
   const recentRecords = useEatingRecords(5);
 
@@ -89,6 +97,7 @@ export function FoodSection() {
   );
 
   const groupSodiumMap = useSaltTotalsByGroupIds(groupIds);
+  const groupSugarMap = useSugarTotalsByGroupIds(groupIds);
 
   const deleteMutation = useDeleteEating();
   const syncEatingGroupMutation = useSyncEatingGroup();
@@ -101,6 +110,7 @@ export function FoodSection() {
   const [editGrams, setEditGrams] = useState("");
   const [editSodiumMg, setEditSodiumMg] = useState("");
   const [editSodiumSource, setEditSodiumSource] = useState<SodiumSource>("sodium");
+  const [editSugarG, setEditSugarG] = useState("");
   const [editWaterMl, setEditWaterMl] = useState("");
   // Token to discard stale fetchEntryGroup results when opening another record
   const openTokenRef = useRef(0);
@@ -120,12 +130,16 @@ export function FoodSection() {
       setEditGrams(record.grams?.toString() || "");
       setEditSodiumMg("");
       setEditSodiumSource("sodium");
+      setEditSugarG("");
       setEditWaterMl("");
       if (record.groupId) {
         void fetchEntryGroup(record.groupId).then((group) => {
           if (token !== openTokenRef.current) return;
           if (!group) return;
           const salt = group.intakes.find((r) => r.type === "salt");
+          const sugar = group.intakes.find(
+            (r) => r.type === "sugar" && r.source === "manual:sugar",
+          );
           const water = group.intakes.find(
             (r) => r.type === "water" && r.source === "manual:food_water_content",
           );
@@ -136,6 +150,9 @@ export function FoodSection() {
             const inputValue = Math.round(salt.amount / multiplier);
             setEditSodiumMg(inputValue.toString());
             setEditSodiumSource(kind);
+          }
+          if (sugar) {
+            setEditSugarG(sugar.amount.toString());
           }
           if (water) {
             setEditWaterMl(water.amount.toString());
@@ -151,6 +168,7 @@ export function FoodSection() {
           ? Math.round(sodiumInput * SODIUM_MULTIPLIERS[editSodiumSource])
           : 0;
       const waterInput = editWaterMl ? parseFloat(editWaterMl) : 0;
+      const sugarInput = editSugarG ? parseFloat(editSugarG) : 0;
       return {
         timestamp,
         note,
@@ -158,6 +176,7 @@ export function FoodSection() {
         sodiumMg: calculatedSodiumMg,
         sodiumKind: editSodiumSource,
         waterMl: waterInput > 0 ? Math.round(waterInput) : 0,
+        sugarG: sugarInput > 0 ? Math.round(sugarInput) : 0,
       };
     },
     mutateAsync: async ({ id, updates }) => {
@@ -175,6 +194,7 @@ export function FoodSection() {
     setDetailGrams("");
     setSodiumMg("");
     setSodiumSource("sodium");
+    setSugarG("");
     setWaterMl("");
     setAiPopulated(false);
   }, []);
@@ -196,6 +216,9 @@ export function FoodSection() {
       }
       if (result.water && result.water > 0) {
         setWaterMl(result.water.toString());
+      }
+      if (result.sugarG && result.sugarG > 0) {
+        setSugarG(result.sugarG.toString());
       }
       setAiPopulated(true);
 
@@ -243,6 +266,13 @@ export function FoodSection() {
           type: "salt",
           amount: calculatedSodiumMg,
           source: `manual:${sodiumSource}`,
+        });
+      }
+      if (calculatedSugarG > 0) {
+        intakes.push({
+          type: "sugar",
+          amount: calculatedSugarG,
+          source: "manual:sugar",
         });
       }
       const waterMlNum = waterMl ? parseFloat(waterMl) : 0;
@@ -299,6 +329,7 @@ export function FoodSection() {
     detailGrams,
     calculatedSodiumMg,
     sodiumSource,
+    calculatedSugarG,
     waterMl,
     aiPopulated,
     addComposableEntry,
@@ -408,6 +439,22 @@ export function FoodSection() {
           )}
         </div>
 
+        {/* Sugar section */}
+        <div className="space-y-1">
+          <Label htmlFor="eating-sugar" className="text-sm">
+            Sugar (g){" "}
+            <span className="text-muted-foreground font-normal">(optional)</span>
+          </Label>
+          <Input
+            id="eating-sugar"
+            type="number"
+            min="0"
+            placeholder="g"
+            value={sugarG}
+            onChange={(e) => setSugarG(e.target.value)}
+          />
+        </div>
+
         {/* Water content */}
         <div className="space-y-1">
           <Label htmlFor="eating-water" className="text-sm">
@@ -461,6 +508,11 @@ export function FoodSection() {
                 {groupSodiumMap.get(record.groupId)}mg
               </span>
             ) : null}
+            {record.groupId && groupSugarMap.get(record.groupId) ? (
+              <span className="text-xs font-medium text-pink-600 dark:text-pink-400">
+                {groupSugarMap.get(record.groupId)}g sugar
+              </span>
+            ) : null}
             {record.grams && (
               <span className="text-xs font-medium">{record.grams}g</span>
             )}
@@ -503,6 +555,14 @@ export function FoodSection() {
                 </SelectContent>
               </Select>
             </div>
+            <Input
+              type="number"
+              min="0"
+              placeholder="Sugar (g, optional)"
+              value={editSugarG}
+              onChange={(e) => setEditSugarG(e.target.value)}
+              className="h-8 text-sm"
+            />
             <Input
               type="number"
               min="0"

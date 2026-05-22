@@ -30,6 +30,7 @@ export interface Settings {
   // Daily limits
   waterLimit: number; // ml (default 1000ml = 1L)
   saltLimit: number; // mg (default 1500mg)
+  sugarLimit: number; // g (default 30g total sugars)
 
   // Secret to authenticate with server-side AI (if using server API key)
   // Set AI_AUTH_SECRET env var on server, enter same value here
@@ -107,6 +108,7 @@ interface SettingsActions {
   setSaltIncrement: (value: number) => void;
   setWaterLimit: (value: number) => void;
   setSaltLimit: (value: number) => void;
+  setSugarLimit: (value: number) => void;
   setAiAuthSecret: (secret: string) => void;
   getDeobfuscatedAuthSecret: () => string;
   setTheme: (theme: "light" | "dark" | "system") => void;
@@ -158,6 +160,7 @@ const defaultSettings: Settings = {
   saltIncrement: 250,
   waterLimit: 1000,
   saltLimit: 1500,
+  sugarLimit: 30,
   aiAuthSecret: "",
   theme: "system",
   dataRetentionDays: 90, // Default: keep 90 days of data
@@ -222,8 +225,10 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
         set({ saltIncrement: sanitizeNumericInput(value, 10, 1000) }),
       setWaterLimit: (value) => 
         set({ waterLimit: sanitizeNumericInput(value, 100, 10000) }),
-      setSaltLimit: (value) => 
+      setSaltLimit: (value) =>
         set({ saltLimit: sanitizeNumericInput(value, 100, 10000) }),
+      setSugarLimit: (value) =>
+        set({ sugarLimit: sanitizeNumericInput(value, 5, 500) }),
       
       // Store auth secret with obfuscation
       setAiAuthSecret: (secret) =>
@@ -319,7 +324,7 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
     {
       name: "intake-tracker-settings",
       storage: createJSONStorage(() => localStorage),
-      version: 12,
+      version: 13,
       migrate: (persisted, version) => {
         const state = persisted as Record<string, unknown>;
         if (version === 0) {
@@ -385,6 +390,10 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
           // invariant magnitude delta; the old threshold scale no longer
           // applies, so reset it to the recalibrated default.
           state.shakeThreshold = 8;
+        }
+        if (version < 13) {
+          // New sugar tracking — seed existing users with the default limit.
+          state.sugarLimit = 30;
         }
         return state as unknown as Settings & SettingsActions;
       },
