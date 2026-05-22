@@ -1,6 +1,50 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { exportToCSV, _escapeCSVField } from "@/lib/export-service";
 import type { AnalyticsResult, DataPoint } from "@/lib/analytics-types";
+
+// Mock jsPDF so exportToPDF's `doc.save()` is captured instead of triggering a
+// real file download. The factory wraps the real implementation so autoTable
+// and all PDF rendering still run for real.
+const pdfSaves: Array<{ filename: string; dataUri: string }> = [];
+vi.mock("jspdf", async () => {
+  const actual = await vi.importActual<typeof import("jspdf")>("jspdf");
+  const Real = actual.jsPDF;
+  const Wrapped = function WrappedJsPDF(...args: unknown[]) {
+    const Ctor = Real as unknown as new (...a: unknown[]) => InstanceType<
+      typeof Real
+    >;
+    const inst = new Ctor(...args);
+    (inst as unknown as { save: (n: string) => void }).save = (
+      filename: string,
+    ) => {
+      pdfSaves.push({
+        filename,
+        dataUri: (inst as unknown as { output: (t: string) => string }).output(
+          "datauristring",
+        ),
+      });
+    };
+    return inst;
+  } as unknown as typeof Real;
+  Wrapped.prototype = Real.prototype;
+  return { ...actual, jsPDF: Wrapped };
+});
+
+import {
+  exportToCSV,
+  exportAllRecordsCSV,
+  exportToPDF,
+  _escapeCSVField,
+} from "@/lib/export-service";
+import { db } from "@/lib/db";
+import {
+  makeIntakeRecord,
+  makeWeightRecord,
+  makeBloodPressureRecord,
+  makeSubstanceRecord,
+} from "@/__tests__/fixtures/db-fixtures";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const BASE_TS = 1700000000000;
 
 // Save the original URL constructor so jspdf can still use `new URL(...)`
 const OriginalURL = globalThis.URL;
@@ -150,5 +194,116 @@ describe("exportAllRecordsCSV", () => {
     expect(mockGetRecordsByDomain).toHaveBeenCalledWith("bp", range);
     expect(mockGetRecordsByDomain).toHaveBeenCalledWith("caffeine", range);
     expect(mockGetRecordsByDomain).toHaveBeenCalledWith("alcohol", range);
+  });
+});
+
+/** Read back the Blob that was passed to URL.createObjectURL during a download. */
+async function capturedCSV(): Promise<string> {
+  const calls = (URL.createObjectURL as ReturnType<typeof vi.fn>).mock.calls;
+  expect(calls.length).toBeGreaterThan(0);
+  const blob = calls[0]![0] as Blob;
+  return blob.text();
+}
+
+describe("exportToCSV content", () => {
+  it("emits a header row and one row per data point", async () => {
+    exportToCSV(
+      makeResult([
+        { timestamp: 1000, value: 42, label: "first" },
+        { timestamp: 2000, value: 99, label: "second" },
+      ]),
+      "out.csv",
+    );
+
+    const csv = await capturedCSV();
+    const lines = csv.split("\n");
+    expect(lines[0]).toBe("timestamp,value,label");
+    expect(lines).toHaveLength(3);
+    expect(lines[1]).toBe("1000,42,first");
+    expect(lines[2]).toBe("2000,99,second");
+  });
+
+  it("quotes a label that contains a comma", async () => {
+    exportToCSV(
+      makeResult([{ timestamp: 1000, value: 1, label: "a,b" }]),
+      "out.csv",
+    );
+    const csv = await capturedCSV();
+    expect(csv).toContain('"a,b"');
+  });
+});
+
+describe("exportAllRecordsCSV (real Dexie data)", () => {
+  it("returns without downloading when no records exist", async () => {
+    await exportAllRecordsCSV({ start: BASE_TS, end: BASE_TS + DAY_MS });
+    expect(URL.createObjectURL).not.toHaveBeenCalled();
+  });
+
+  it("includes seeded records from multiple domains, sorted by timestamp", async () => {
+    await db.intakeRecords.bulkAdd([
+      makeIntakeRecord({ type: "water", amount: 500, timestamp: BASE_TS + DAY_MS }),
+      makeIntakeRecord({ type: "salt", amount: 800, timestamp: BASE_TS }),
+    ]);
+    await db.weightRecords.add(
+      makeWeightRecord({ weight: 73.5, timestamp: BASE_TS + 2 * DAY_MS }),
+    );
+    await db.substanceRecords.add(
+      makeSubstanceRecord({ type: "caffeine", amountMg: 95, timestamp: BASE_TS + 3 * DAY_MS }),
+    );
+
+    await exportAllRecordsCSV({ start: BASE_TS - DAY_MS, end: BASE_TS + 5 * DAY_MS });
+
+    const csv = await capturedCSV();
+    const lines = csv.split("\n");
+    expect(lines[0]).toBe("timestamp,domain,value,unit,note");
+    expect(lines).toHaveLength(5); // header + 4 records
+
+    // Body rows are sorted ascending by ISO timestamp.
+    const bodyDomains = lines.slice(1).map((l) => l.split(",")[1]);
+    expect(bodyDomains).toEqual(["salt", "water", "weight", "caffeine"]);
+
+    expect(csv).toContain(`,salt,800,mg,`);
+    expect(csv).toContain(`,water,500,ml,`);
+    expect(csv).toContain(`,weight,73.5,kg,`);
+    expect(csv).toContain(`,caffeine,95,mg,`);
+  });
+});
+
+describe("exportToPDF", () => {
+  it("saves a PDF with a date-stamped filename for an empty range", async () => {
+    pdfSaves.length = 0;
+
+    await exportToPDF({ start: BASE_TS, end: BASE_TS + 7 * DAY_MS });
+
+    expect(pdfSaves).toHaveLength(1);
+    expect(pdfSaves[0]!.filename).toMatch(
+      /^health-report-\d{4}-\d{2}-\d{2}-\d{4}-\d{2}-\d{2}\.pdf$/,
+    );
+    expect(pdfSaves[0]!.dataUri.startsWith("data:application/pdf")).toBe(true);
+  });
+
+  it("generates a PDF without error when health records are seeded", async () => {
+    pdfSaves.length = 0;
+
+    await db.bloodPressureRecords.bulkAdd([
+      makeBloodPressureRecord({ systolic: 120, diastolic: 80, timestamp: BASE_TS }),
+      makeBloodPressureRecord({
+        systolic: 130,
+        diastolic: 86,
+        timestamp: BASE_TS + DAY_MS,
+      }),
+    ]);
+    await db.weightRecords.add(
+      makeWeightRecord({ weight: 71, timestamp: BASE_TS }),
+    );
+    await db.intakeRecords.add(
+      makeIntakeRecord({ type: "water", amount: 600, timestamp: BASE_TS }),
+    );
+
+    await exportToPDF({ start: BASE_TS - DAY_MS, end: BASE_TS + 7 * DAY_MS });
+
+    expect(pdfSaves).toHaveLength(1);
+    expect(pdfSaves[0]!.filename).toMatch(/\.pdf$/);
+    expect(pdfSaves[0]!.dataUri.startsWith("data:application/pdf")).toBe(true);
   });
 });

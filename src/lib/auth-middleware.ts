@@ -133,9 +133,9 @@ export function withAuth(handler: AuthenticatedHandler) {
         return NextResponse.json(
           {
             error: "Your account is not authorized to use this app",
-            requiresAuth: true,
+            accountUnapproved: true,
           },
-          { status: 401 }
+          { status: 403 }
         );
       }
 
@@ -171,9 +171,9 @@ export function withAuth(handler: AuthenticatedHandler) {
       return NextResponse.json(
         {
           error: "Your account is not authorized to use this app",
-          requiresAuth: true,
+          accountUnapproved: true,
         },
-        { status: 401 }
+        { status: 403 }
       );
     }
 

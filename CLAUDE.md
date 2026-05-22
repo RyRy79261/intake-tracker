@@ -32,10 +32,10 @@ The sync engine mirrors every Dexie table to Neon Postgres. The server schema li
 
 Workflow: edit `src/db/schema.ts`, run `pnpm db:generate` (emits a numbered SQL file + snapshot under `drizzle/`), commit the generated files. `pnpm db:migrate` applies them. **Never** run `drizzle-kit push`.
 
-**Migration timestamp footgun.** drizzle's migrator applies a migration only when its journal `when` exceeds the highest `created_at` already recorded in the target database's `__drizzle_migrations` table. Migrations 0006–0010 carry **hand-edited future-dated `when` values** (up to `1780100000000` ≈ 2026-05-29) — a pre-existing wart (see commit `7935991`).
+**Migration timestamp footgun.** drizzle's migrator applies a migration only when its journal `when` exceeds the highest `created_at` already recorded in the target database's `__drizzle_migrations` table. Migrations 0006–0011 carry **hand-edited future-dated `when` values** (up to `1780200000000` ≈ 2026-05-31) — a pre-existing wart (see commit `7935991`).
 
-- **Until ≈ 2026-05-29:** a freshly generated migration gets a real `Date.now()` that sorts *below* those fakes, so the migrator silently skips it (while still printing "Migrations applied successfully"). Hand-bumping the new entry's `when` in `drizzle/meta/_journal.json` above the last entry may be unavoidable — do it only when necessary.
-- **After ≈ 2026-05-29:** real generated timestamps exceed every deployed migration on their own. **Never hand-edit `_journal.json` again** — `drizzle-kit generate` is the only thing that should write `when`.
+- **Until ≈ 2026-05-31:** a freshly generated migration gets a real `Date.now()` that sorts *below* those fakes, so the migrator silently skips it (while still printing "Migrations applied successfully"). Hand-bumping the new entry's `when` in `drizzle/meta/_journal.json` above the last entry may be unavoidable — do it only when necessary.
+- **After ≈ 2026-05-31:** real generated timestamps exceed every deployed migration on their own. **Never hand-edit `_journal.json` again** — `drizzle-kit generate` is the only thing that should write `when`.
 
 `src/__tests__/migration/drizzle-journal.test.ts` enforces both rules: `when` must strictly increase, and (once past the cutoff) no entry may be future-dated.
 

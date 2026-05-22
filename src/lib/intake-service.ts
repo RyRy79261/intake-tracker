@@ -1,32 +1,10 @@
-import { z } from "zod";
 import { db, type IntakeRecord } from "@/lib/db";
 import { ok, err, type ServiceResult } from "@/lib/service-result";
 import { generateId, syncFields } from "@/lib/utils";
-import { writeWithSync } from "@/lib/sync-queue";
+import { writeWithSync, enqueueInsideTx } from "@/lib/sync-queue";
 import { schedulePush } from "@/lib/sync-engine";
 
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
-
-// Zod schemas for validation
-const IntakeRecordSchema = z.object({
-  id: z.string().min(1),
-  type: z.enum(["water", "salt", "sugar"]),
-  amount: z.number().positive().max(100000), // Reasonable max
-  timestamp: z.number().positive(),
-  source: z.string().optional(),
-  note: z.string().max(200).optional(),
-});
-
-const ImportDataSchema = z.object({
-  version: z.number().optional(),
-  exportedAt: z.string().optional(),
-  records: z.array(IntakeRecordSchema),
-});
-
-export type ImportValidationError = {
-  index: number;
-  errors: string[];
-};
 
 export async function addIntakeRecord(
   type: "water" | "salt" | "sugar",
@@ -241,119 +219,6 @@ export async function exportAllData(): Promise<string> {
   );
 }
 
-export interface ImportResult {
-  imported: number;
-  skipped: number;
-  errors: ImportValidationError[];
-}
-
-export function validateImportData(jsonData: string): {
-  valid: boolean;
-  errors: ImportValidationError[];
-  recordCount?: number;
-} {
-  let data: unknown;
-
-  try {
-    data = JSON.parse(jsonData);
-  } catch {
-    return {
-      valid: false,
-      errors: [{ index: -1, errors: ["Invalid JSON format"] }]
-    };
-  }
-
-  const result = ImportDataSchema.safeParse(data);
-
-  if (!result.success) {
-    const errors: ImportValidationError[] = result.error.issues.map((issue) => ({
-      index: typeof issue.path[1] === "number" ? issue.path[1] : -1,
-      errors: [issue.message],
-    }));
-    return { valid: false, errors };
-  }
-
-  return { valid: true, errors: [], recordCount: result.data.records.length };
-}
-
-export async function importData(
-  jsonData: string,
-  mode: "merge" | "replace" = "merge"
-): Promise<ServiceResult<ImportResult>> {
-  let data: unknown;
-
-  try {
-    data = JSON.parse(jsonData);
-  } catch {
-    return err("Invalid JSON format");
-  }
-
-  const parseResult = ImportDataSchema.safeParse(data);
-
-  if (!parseResult.success) {
-    const errorMessages = parseResult.error.issues
-      .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
-      .join("; ");
-    return err(`Invalid data format: ${errorMessages}`);
-  }
-
-  const validatedData = parseResult.data;
-
-  let imported = 0;
-  let skipped = 0;
-  const errors: ImportValidationError[] = [];
-
-  try {
-    if (mode === "replace") {
-      await db.intakeRecords.clear();
-    }
-
-    for (const record of validatedData.records) {
-      if (record.type !== "water" && record.type !== "salt" && record.type !== "sugar") {
-        errors.push({ index: skipped + imported, errors: [`Invalid type: ${record.type}`] });
-        skipped++;
-        continue;
-      }
-
-      if (mode === "merge") {
-        const existing = await db.intakeRecords.get(record.id);
-        if (existing) {
-          skipped++;
-          continue;
-        }
-      }
-
-      try {
-        const newRecord: IntakeRecord = {
-          id: record.id,
-          type: record.type,
-          amount: record.amount,
-          timestamp: record.timestamp,
-          ...(record.source !== undefined && { source: record.source }),
-          ...(record.note !== undefined && { note: record.note }),
-          ...syncFields(),
-        };
-        await writeWithSync("intakeRecords", "upsert", async () => {
-          await db.intakeRecords.add(newRecord);
-          return newRecord;
-        });
-        imported++;
-      } catch (error) {
-        errors.push({
-          index: skipped + imported,
-          errors: [error instanceof Error ? error.message : "Unknown error"]
-        });
-        skipped++;
-      }
-    }
-
-    if (imported > 0) schedulePush();
-    return ok({ imported, skipped, errors });
-  } catch (e) {
-    return err("Failed to import data", e);
-  }
-}
-
 async function getIntakeTotalsByGroupIds(
   groupIds: string[],
   type: "water" | "salt" | "sugar"
@@ -387,7 +252,19 @@ export function getSugarTotalsByGroupIds(
 
 export async function clearAllData(): Promise<ServiceResult<void>> {
   try {
-    await db.intakeRecords.clear();
+    const now = Date.now();
+    // Soft-delete + enqueue each row rather than a hard `.clear()`. A hard
+    // clear leaves no tombstone and no sync-queue entry, so the next pull
+    // cycle re-downloads every "deleted" record and resurrects it.
+    await db.transaction("rw", db.intakeRecords, db._syncQueue, async () => {
+      const records = await db.intakeRecords.toArray();
+      for (const record of records) {
+        if (record.deletedAt !== null) continue;
+        await db.intakeRecords.update(record.id, { deletedAt: now, updatedAt: now });
+        await enqueueInsideTx("intakeRecords", record.id, "delete");
+      }
+    });
+    schedulePush();
     return ok(undefined);
   } catch (e) {
     return err("Failed to clear all data", e);

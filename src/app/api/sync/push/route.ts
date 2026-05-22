@@ -139,15 +139,14 @@ export const POST = withAuth(async ({ request, auth }) => {
           }
         }
       } catch (selectErr) {
-        const dbErr = extractDbError(selectErr);
         console.error(
-          `[sync/push] Batch SELECT failed: table=${tableName} — ${dbErr}`,
+          `[sync/push] Batch SELECT failed: table=${tableName} — ${extractDbError(selectErr)}`,
         );
         for (const op of tableOps) {
           rejected.push({
             queueId: op.queueId,
             tableName,
-            error: dbErr,
+            error: "Server rejected the write",
           });
         }
         continue;
@@ -197,14 +196,13 @@ export const POST = withAuth(async ({ request, auth }) => {
               serverUpdatedAt: clampedUpdatedAt,
             });
           } catch (err: unknown) {
-            const dbErr = extractDbError(err);
             console.error(
-              `[sync/push] Op failed: table=${tableName} id=${op.row.id} — ${dbErr}`,
+              `[sync/push] Op failed: table=${tableName} id=${op.row.id} — ${extractDbError(err)}`,
             );
             rejected.push({
               queueId: op.queueId,
               tableName,
-              error: dbErr,
+              error: "Server rejected the write",
             });
           }
           continue;
@@ -220,10 +218,8 @@ export const POST = withAuth(async ({ request, auth }) => {
     return NextResponse.json({ accepted, rejected });
   } catch (error) {
     console.error("[sync/push] Error:", error);
-    const message =
-      error instanceof Error ? error.message : "Unknown server error";
     return NextResponse.json(
-      { error: "Failed to apply push batch", detail: message },
+      { error: "Failed to apply push batch" },
       { status: 500 },
     );
   }

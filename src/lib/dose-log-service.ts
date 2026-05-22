@@ -5,6 +5,7 @@ import { getDeviceTimezone } from "@/lib/timezone";
 import { buildAuditEntry } from "@/lib/audit-service";
 import { enqueueInsideTx } from "@/lib/sync-queue";
 import { schedulePush } from "@/lib/sync-engine";
+import { getActiveInventoryForPrescription } from "@/lib/inventory-service";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -266,10 +267,11 @@ export async function takeDose(input: TakeDoseInput): Promise<ServiceResult<Dose
         let pillsConsumed = 0;
 
         if (!wasTaken) {
-          // Find active inventory for this prescription
-          const inventory = await db.inventoryItems
-            .where({ prescriptionId, isActive: 1 })
-            .first();
+          // Find active inventory for this prescription. `isActive` is a
+          // boolean and IndexedDB cannot index booleans, so a
+          // `.where({ isActive: 1 })` equality match never hits — the shared
+          // helper filters in memory the same way every other call site does.
+          const inventory = await getActiveInventoryForPrescription(prescriptionId);
 
           if (inventory) {
             inventoryItemId = inventory.id;
