@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.20.0](https://github.com/RyRy79261/intake-tracker/compare/v1.19.0...v1.20.0) (2026-05-22)
+
+
+### Features
+
+* add in-app user manual help section ([a5bc7f3](https://github.com/RyRy79261/intake-tracker/commit/a5bc7f3b38c81b7f09df9d6fc37e37ca39a71be0))
+
 ## [1.19.0](https://github.com/RyRy79261/intake-tracker/compare/v1.18.0...v1.19.0) (2026-05-22)
 
 
