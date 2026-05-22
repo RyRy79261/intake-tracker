@@ -64,7 +64,6 @@ export function FoodSaltCard() {
               >
                 {formatAmount(dailyTotal, "mg")} / {formatAmount(limit, "mg")}
               </p>
-              <p className="text-xs text-muted-foreground">today (sodium)</p>
               <p className="text-xs text-muted-foreground/70">
                 24h: {formatAmount(rollingTotal, "mg")}
               </p>
@@ -96,7 +95,6 @@ export function FoodSaltCard() {
               >
                 {formatAmount(sugarDaily, "g")} / {formatAmount(sugarLimit, "g")}
               </p>
-              <p className="text-xs text-muted-foreground">today</p>
               <p className="text-xs text-muted-foreground/70">
                 24h: {formatAmount(sugarRolling, "g")}
               </p>
