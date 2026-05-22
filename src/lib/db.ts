@@ -392,7 +392,7 @@ export interface UserProfile {
   deviceId: string;
 }
 
-const db = new Dexie("IntakeTrackerDB") as Dexie & {
+export type AppDatabase = Dexie & {
   intakeRecords: EntityTable<IntakeRecord, "id">;
   auditLogs: EntityTable<AuditLog, "id">;
   weightRecords: EntityTable<WeightRecord, "id">;
@@ -414,6 +414,17 @@ const db = new Dexie("IntakeTrackerDB") as Dexie & {
   _syncMeta: EntityTable<SyncMetaRow, "tableName">;
   _errorLogs: EntityTable<ErrorLogEntry, "id">;
 };
+
+const realDb = new Dexie("IntakeTrackerDB") as AppDatabase;
+
+/**
+ * The active database. Normally `realDb` (backed by the real IndexedDB), but
+ * the in-app component previews swap in a throwaway database via
+ * `setActiveDatabase` so a previewed component reads and writes isolated
+ * sample data instead of the user's real records. `db` is an ES-module live
+ * binding — every `import { db }` consumer follows the swap automatically.
+ */
+export let db: AppDatabase = realDb;
 
 // Schema is declared cumulatively: each version is the previous version's
 // schema with the additions/changes for that version spread in. Dexie still
@@ -471,7 +482,7 @@ const V15_STORES = {
 // and event-sourced inventory. Replaces v4-v9 (all prior migrations ran on
 // production data and are no longer needed in code). Legacy `medications` and
 // `medicationSchedules` tables intentionally omitted — Dexie will delete them.
-db.version(10).stores(V10_STORES).upgrade(async (trans) => {
+realDb.version(10).stores(V10_STORES).upgrade(async (trans) => {
   const now = Date.now();
   const deviceId = "migrated-v10";
 
@@ -542,7 +553,7 @@ db.version(10).stores(V10_STORES).upgrade(async (trans) => {
 //   - Before 2026-02-12 → "Africa/Johannesburg"
 //   - From 2026-02-12 onward → "Europe/Berlin"
 // No index changes vs v10 — V11_STORES === V10_STORES.
-db.version(11).stores(V11_STORES).upgrade(async (trans) => {
+realDb.version(11).stores(V11_STORES).upgrade(async (trans) => {
   const now = Date.now();
 
   // Helper: backfill timezone on a table using its primary timestamp field
@@ -614,7 +625,7 @@ const DEFAULT_ALCOHOL_DRINKS: Record<string, number> = {
   beer: 1, wine: 1, cocktail: 1.5,
 };
 
-db.version(12).stores(V12_STORES).upgrade(async (trans) => {
+realDb.version(12).stores(V12_STORES).upgrade(async (trans) => {
   const intakeRecords = await trans.table("intakeRecords").toArray();
   const substanceTable = trans.table("substanceRecords");
 
@@ -670,25 +681,25 @@ db.version(12).stores(V12_STORES).upgrade(async (trans) => {
 // Fixes "KeyPath createdAt on object store prescriptions is not indexed" error
 // when getPrescriptions() calls orderBy('createdAt'). No upgrade function needed —
 // Dexie auto-creates the index from existing data.
-db.version(13).stores(V13_STORES);
+realDb.version(13).stores(V13_STORES);
 
 // Version 14: Add titrationPlans table and titrationPlanId index on medicationPhases.
 // Titration plans group cross-prescription dosage adjustments for a condition.
 // No data migration needed — new tables only.
-db.version(14).stores(V14_STORES);
+realDb.version(14).stores(V14_STORES);
 
 // Version 15: Add groupId index to intakeRecords, eatingRecords, substanceRecords.
 // Enables composable entry queries — records sharing a groupId form an atomic group.
 // No .upgrade() needed — existing records have undefined groupId, which IndexedDB
 // excludes from index entries. Zero backfill required.
-db.version(15).stores(V15_STORES);
+realDb.version(15).stores(V15_STORES);
 
 // Version 16: Add _syncQueue (op-log) and _syncMeta (cursor map) tables
 // to support the bidirectional sync engine (Phase 43, D-15).
 // No changes to the 16 data tables — their createdAt/updatedAt/deletedAt/
 // deviceId sync scaffolding (Dexie v10) is already sufficient.
 // Dexie requires the FULL schema per version; omission drops a store.
-db.version(16).stores({
+realDb.version(16).stores({
   // --- REPEAT all v15 stores verbatim (PITFALL 5: omission drops data) ---
   intakeRecords:           "id, [type+timestamp], timestamp, source, groupId, updatedAt",
   weightRecords:           "id, timestamp, updatedAt",
@@ -715,7 +726,7 @@ db.version(16).stores({
 // Version 17: Add _errorLogs for device-local debug capture (window errors,
 // unhandled rejections, ErrorBoundary catches, console.error/warn). Not synced,
 // not backed up — purely a diagnostic surface for the Debug panel.
-db.version(17).stores({
+realDb.version(17).stores({
   // --- REPEAT all v16 stores verbatim ---
   intakeRecords:           "id, [type+timestamp], timestamp, source, groupId, updatedAt",
   weightRecords:           "id, timestamp, updatedAt",
@@ -743,7 +754,7 @@ db.version(17).stores({
 // (conditions + AI-sharing opt-ins). Registered with the sync engine
 // (TABLE_PUSH_ORDER / sync-payload) and the backup service. New table only,
 // so no upgrade function is required.
-db.version(18).stores({
+realDb.version(18).stores({
   // --- REPEAT all v17 stores verbatim ---
   intakeRecords:           "id, [type+timestamp], timestamp, source, groupId, updatedAt",
   weightRecords:           "id, timestamp, updatedAt",
@@ -770,9 +781,46 @@ db.version(18).stores({
 
 /**
  * Current Dexie schema version. Bump this constant in lockstep with each new
- * `db.version(N)` block above so diagnostic surfaces (Debug → Environment)
+ * `realDb.version(N)` block above so diagnostic surfaces (Debug → Environment)
  * always reflect the real schema.
  */
 export const DB_SCHEMA_VERSION = 18;
 
-export { db };
+/**
+ * Store definitions for a preview database — the current (v18) schema in a
+ * single version. A preview database is created empty and discarded, so it
+ * needs no migration history.
+ */
+const PREVIEW_STORES = {
+  ...V15_STORES,
+  _syncQueue: "++id, [tableName+recordId], tableName, enqueuedAt",
+  _syncMeta: "tableName",
+  _errorLogs: "id, timestamp, source",
+  userProfile: "id, updatedAt",
+} as const;
+
+let previewDbCounter = 0;
+
+/**
+ * Create a fresh, isolated database for an in-app component preview. It has
+ * the current schema and a unique name, and holds no data until seeded. Pair
+ * with `setActiveDatabase` / `resetActiveDatabase`.
+ */
+export function createPreviewDatabase(): AppDatabase {
+  previewDbCounter += 1;
+  const preview = new Dexie(
+    `IntakeTrackerPreviewDB-${previewDbCounter}`,
+  ) as AppDatabase;
+  preview.version(DB_SCHEMA_VERSION).stores(PREVIEW_STORES);
+  return preview;
+}
+
+/** Point every `db` consumer at `next` — used by component previews. */
+export function setActiveDatabase(next: AppDatabase): void {
+  db = next;
+}
+
+/** Restore the real database after a preview is torn down. */
+export function resetActiveDatabase(): void {
+  db = realDb;
+}

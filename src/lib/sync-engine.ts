@@ -66,6 +66,7 @@ let pushTimer: ReturnType<typeof setTimeout> | null = null;
 let pushInFlight = false;
 let pullInFlight = false;
 let engineStarted = false;
+let engineSuspended = false;
 let listenersAttached = false;
 
 // Cached handler references so detach removes the exact functions we added.
@@ -100,7 +101,7 @@ export function nextBackoff(attempts: number): number {
  * single flush that fires `delayMs` after the *last* call (D-09).
  */
 export function schedulePush(delayMs: number = DEBOUNCE_MS): void {
-  if (!engineStarted) return;
+  if (!engineStarted || engineSuspended) return;
   if (pushTimer) clearTimeout(pushTimer);
   pushTimer = setTimeout(() => {
     pushTimer = null;
@@ -218,6 +219,7 @@ async function applyServerAck(
  */
 export async function runPushCycle(): Promise<void> {
   if (pushInFlight) return;
+  if (engineSuspended) return;
   if (!isOnline()) return;
 
   pushInFlight = true;
@@ -359,6 +361,7 @@ async function incrementAttemptsAndReschedule(
  * called from inside runPushCycle).
  */
 export function schedulePull(): void {
+  if (engineSuspended) return;
   if (typeof queueMicrotask === "function") {
     queueMicrotask(() => {
       void runPullCycle();
@@ -378,6 +381,7 @@ export function schedulePull(): void {
  */
 export async function runPullCycle(): Promise<void> {
   if (pullInFlight) return;
+  if (engineSuspended) return;
   if (!isOnline()) return;
 
   pullInFlight = true;
@@ -572,6 +576,23 @@ export function stopEngine(): void {
 }
 
 /**
+ * Suspend push/pull while an in-app component preview is active. The preview
+ * swaps the active database (see `setActiveDatabase`); suspending guarantees
+ * the engine never pushes that throwaway data to the cloud. Pending push
+ * timers are cancelled. Pair with `resumeEngine`.
+ */
+export function suspendEngine(): void {
+  engineSuspended = true;
+  if (pushTimer) clearTimeout(pushTimer);
+  pushTimer = null;
+}
+
+/** Lift the suspension applied by `suspendEngine` once a preview is closed. */
+export function resumeEngine(): void {
+  engineSuspended = false;
+}
+
+/**
  * Idempotent engine start. Called once by the lifecycle hook after listeners
  * are attached. Sets initial online state, kicks a startup pull (D-10), and
  * attaches the dev-only window.__syncEngine hook under a NODE_ENV guard
@@ -615,6 +636,7 @@ export function __resetEngineForTests(): void {
   pushInFlight = false;
   pullInFlight = false;
   engineStarted = false;
+  engineSuspended = false;
   detachLifecycleListeners();
 }
 

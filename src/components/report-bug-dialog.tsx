@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Dialog,
   DialogContent,
@@ -27,6 +28,7 @@ import {
   ExternalLink,
   Loader2,
   CheckCircle2,
+  BookOpen,
 } from "lucide-react";
 import { VoiceRecorder } from "@/components/voice/voice-recorder";
 import { useApiKeyStatus } from "@/hooks/use-ai-keys";
@@ -55,6 +57,7 @@ export function ReportBugDialog({
   defaultDescription = "",
 }: ReportBugDialogProps) {
   const { toast } = useToast();
+  const router = useRouter();
   const { data: keyStatus } = useApiKeyStatus();
   const submit = useSubmitBugReport();
 
@@ -352,6 +355,31 @@ export function ReportBugDialog({
                 {submit.isPending ? "Filing…" : "Submit report"}
               </Button>
             </DialogFooter>
+
+            {/* A loud, separate destination below the bug-report form: a shake
+                often means "how does this work?", not "this is broken". */}
+            <div className="mt-2 rounded-lg border border-sky-200 bg-sky-50 p-4 dark:border-sky-900 dark:bg-sky-950/40">
+              <div className="flex items-center gap-2">
+                <BookOpen className="h-5 w-5 text-sky-600 dark:text-sky-400" />
+                <h3 className="font-semibold text-sky-900 dark:text-sky-50">
+                  Wanna read the manual?
+                </h3>
+              </div>
+              <p className="mt-1.5 text-sm text-sky-800/80 dark:text-sky-200/80">
+                We have a full manual that walks you through how every card,
+                button and feature works — step by step.
+              </p>
+              <Button
+                className="mt-3 w-full gap-2 bg-sky-600 text-white hover:bg-sky-700"
+                onClick={() => {
+                  onOpenChange(false);
+                  router.push("/help");
+                }}
+              >
+                <BookOpen className="h-4 w-4" />
+                Open the manual
+              </Button>
+            </div>
           </>
         )}
       </DialogContent>
