@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.23.0](https://github.com/RyRy79261/intake-tracker/compare/v1.22.0...v1.23.0) (2026-05-22)
+
+
+### Features
+
+* add first-time welcome dialog ([b84c68e](https://github.com/RyRy79261/intake-tracker/commit/b84c68ea3cbca74231637af2816992515f7d81fa))
+
+
+### Bug Fixes
+
+* **voice:** salvage valid items instead of 422-ing the whole parse ([9168620](https://github.com/RyRy79261/intake-tracker/commit/9168620da2ef888d14121e0fb4e59c74fa81fa6d))
+* **voice:** salvage valid items instead of 422-ing the whole parse ([34513d4](https://github.com/RyRy79261/intake-tracker/commit/34513d462aaec05c56bab630e19588e3ffdf89d2))
+
 ## [1.22.0](https://github.com/RyRy79261/intake-tracker/compare/v1.21.0...v1.22.0) (2026-05-22)
 
 
