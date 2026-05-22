@@ -49,7 +49,7 @@ export function EditIntakeDialog({
       ? "water amount in milliliters"
       : record?.type === "sugar"
         ? "sugar amount in grams"
-        : "salt amount in milligrams";
+        : "sodium amount in milligrams";
   return (
     <Dialog open={record !== null} onOpenChange={(dialogOpen) => !dialogOpen && onClose()}>
       <DialogContent className="sm:max-w-md">
