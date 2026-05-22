@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.23.1](https://github.com/RyRy79261/intake-tracker/compare/v1.23.0...v1.23.1) (2026-05-22)
+
+
+### Bug Fixes
+
+* **migration:** track 0011 in journal future-date cutoff ([e13ba97](https://github.com/RyRy79261/intake-tracker/commit/e13ba97b9ceaaa162be6f8cf4964a0d9e8fe5446))
+* **test:** name renderHook wrapper to satisfy react/display-name ([7bd6caf](https://github.com/RyRy79261/intake-tracker/commit/7bd6caf4f90ae190dac7c52e669f61224a2c0b57))
+
 ## [1.23.0](https://github.com/RyRy79261/intake-tracker/compare/v1.22.0...v1.23.0) (2026-05-22)
 
 
