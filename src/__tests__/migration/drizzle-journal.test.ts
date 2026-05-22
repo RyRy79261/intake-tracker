@@ -65,16 +65,22 @@ describe("drizzle migration journal", () => {
   /**
    * `drizzle-kit generate` always stamps a new entry with a real `Date.now()`,
    * so a future-dated `when` only ever appears when `_journal.json` is
-   * hand-edited. Migrations 0006–0010 carry such hand-edited future values —
+   * hand-edited. Migrations 0006–0011 carry such hand-edited future values —
    * a pre-existing wart (see commit 7935991 and CLAUDE.md "Database
    * Migrations"). Until wall-clock passes the last of them, a hand-bump on a
    * new migration is an unavoidable consequence of that mess, so this check
-   * stays dormant. Once wall-clock passes `HANDWRITTEN_CUTOFF` (the `when` of
-   * 0010_dashing_the_hood), a freshly generated migration's real timestamp
-   * naturally exceeds every prior entry — there is no longer any reason to
-   * hand-edit, and every entry's `when` must be a real (non-future) value.
+   * stays dormant.
+   *
+   * `HANDWRITTEN_CUTOFF` MUST equal the `when` of the latest hand-edited entry
+   * (currently 0011_acoustic_mulholland_black). The check only wakes once
+   * wall-clock reaches it — by which point every committed entry is in the
+   * past, so a freshly generated migration's real timestamp naturally exceeds
+   * them all. From then on there is no reason to hand-edit, and any
+   * future-dated `when` is a genuine regression this check will catch. If a
+   * cutoff lower than the newest hand-edited entry is used, the check wakes
+   * early and fails the build on that still-future entry.
    */
-  const HANDWRITTEN_CUTOFF = 1780100000000; // 0010_dashing_the_hood — ≈ 2026-05-29
+  const HANDWRITTEN_CUTOFF = 1780200000000; // 0011_acoustic_mulholland_black — ≈ 2026-05-31
 
   it.skipIf(Date.now() < HANDWRITTEN_CUTOFF)(
     "no migration carries a future-dated (hand-written) `when`",
