@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Dialog,
   DialogContent,
@@ -27,6 +28,7 @@ import {
   ExternalLink,
   Loader2,
   CheckCircle2,
+  BookOpen,
 } from "lucide-react";
 import { VoiceRecorder } from "@/components/voice/voice-recorder";
 import { useApiKeyStatus } from "@/hooks/use-ai-keys";
@@ -55,6 +57,7 @@ export function ReportBugDialog({
   defaultDescription = "",
 }: ReportBugDialogProps) {
   const { toast } = useToast();
+  const router = useRouter();
   const { data: keyStatus } = useApiKeyStatus();
   const submit = useSubmitBugReport();
 
@@ -337,6 +340,26 @@ export function ReportBugDialog({
                   )}
                 </CollapsibleContent>
               </Collapsible>
+
+              {/* Escape hatch: a shake often means "how does this work?", not
+                  "this is broken". Offer the manual before they file a report. */}
+              <button
+                type="button"
+                onClick={() => {
+                  onOpenChange(false);
+                  router.push("/help");
+                }}
+                className="flex w-full items-center gap-2 rounded-md border border-dashed p-2.5 text-left text-xs text-muted-foreground transition-colors hover:bg-accent"
+              >
+                <BookOpen className="h-4 w-4 shrink-0" />
+                <span>
+                  Not a bug?{" "}
+                  <span className="font-medium text-foreground">
+                    Open the user manual
+                  </span>{" "}
+                  to learn how a feature works.
+                </span>
+              </button>
             </div>
 
             <DialogFooter>

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Accordion } from "@/components/ui/accordion";
-import { RotateCcw, Activity, Palette, Pill, Database, Shield, Bug, Download, Sparkles, MessageSquare } from "lucide-react";
+import { RotateCcw, Activity, Palette, Pill, Database, Shield, Bug, Download, Sparkles, MessageSquare, BookOpen } from "lucide-react";
 import { useSettings } from "@/hooks/use-settings";
 import { useToast } from "@/hooks/use-toast";
 import { DebugPanel } from "@/components/debug-panel";
@@ -28,6 +28,7 @@ import { SwipeNavSection } from "@/components/settings/swipe-nav-section";
 import { StorageInfoSection } from "@/components/settings/storage-info-section";
 import { AiKeysSection } from "@/components/settings/ai-keys-section";
 import { ReportBugSection } from "@/components/settings/report-bug-section";
+import { HelpSection } from "@/components/settings/help-section";
 import { ReportBugDialog } from "@/components/report-bug-dialog";
 
 /** Set by the ErrorBoundary crash screen before it navigates here. */
@@ -111,6 +112,10 @@ function SettingsContent() {
 
         <SettingsAccordionGroup value="system" icon={Download} label="System" iconColorClass="text-sky-600 dark:text-sky-400">
           <AppUpdatesSection />
+        </SettingsAccordionGroup>
+
+        <SettingsAccordionGroup value="help" icon={BookOpen} label="Help & Manual" iconColorClass="text-sky-600 dark:text-sky-400">
+          <HelpSection />
         </SettingsAccordionGroup>
 
         <SettingsAccordionGroup value="feedback" icon={MessageSquare} label="Feedback" iconColorClass="text-rose-600 dark:text-rose-400">
