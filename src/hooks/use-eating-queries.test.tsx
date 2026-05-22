@@ -21,9 +21,10 @@ const DAY = 86_400_000;
 
 function makeWrapper() {
   const client = makeTestQueryClient();
-  return ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={client}>{children}</QueryClientProvider>
-  );
+  function Wrapper({ children }: { children: ReactNode }) {
+    return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  }
+  return Wrapper;
 }
 
 describe("use-eating-queries read hooks", () => {

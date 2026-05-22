@@ -22,9 +22,10 @@ import {
 
 function makeWrapper() {
   const client = makeTestQueryClient();
-  return ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={client}>{children}</QueryClientProvider>
-  );
+  function Wrapper({ children }: { children: ReactNode }) {
+    return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  }
+  return Wrapper;
 }
 
 describe("use-health-queries weight hooks", () => {
