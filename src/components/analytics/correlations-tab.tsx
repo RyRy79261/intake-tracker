@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { BarChart3, ArrowRightLeft } from "lucide-react";
 import {
   useSaltVsWeight,
+  useSugarVsWeight,
   useCaffeineVsBP,
   useAlcoholVsBP,
   useCorrelation,
@@ -41,6 +42,7 @@ import {
 const DOMAIN_OPTIONS: { value: Domain; label: string }[] = [
   { value: "water", label: "Water Intake" },
   { value: "salt", label: "Salt Intake" },
+  { value: "sugar", label: "Sugar Intake" },
   { value: "weight", label: "Weight" },
   { value: "bp", label: "Blood Pressure" },
   { value: "eating", label: "Eating" },
@@ -53,6 +55,7 @@ const DOMAIN_OPTIONS: { value: Domain; label: string }[] = [
 const DOMAIN_UNITS: Record<Domain, string> = {
   water: " ml",
   salt: " mg",
+  sugar: " g",
   weight: " kg",
   bp: " mmHg",
   eating: "",
@@ -318,6 +321,7 @@ function CustomComparison({ range }: { range: TimeRange }) {
 
 export function CorrelationsTab({ range }: { range: TimeRange }) {
   const saltVsWeight = useSaltVsWeight(range);
+  const sugarVsWeight = useSugarVsWeight(range);
   const caffeineVsBP = useCaffeineVsBP(range);
   const alcoholVsBP = useAlcoholVsBP(range);
 
@@ -335,6 +339,15 @@ export function CorrelationsTab({ range }: { range: TimeRange }) {
         labelA="Salt"
         labelB="Weight"
         unitA=" mg"
+        unitB=" kg"
+      />
+
+      <CorrelationCard
+        title="Weight vs Sugar Intake"
+        result={sugarVsWeight}
+        labelA="Sugar"
+        labelB="Weight"
+        unitA=" g"
         unitB=" kg"
       />
 

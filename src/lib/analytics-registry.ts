@@ -6,6 +6,7 @@ import {
   bpTrend,
   weightTrend,
   saltVsWeight,
+  sugarVsWeight,
   caffeineVsBP,
   alcoholVsBP,
   correlate,
@@ -31,6 +32,7 @@ export interface QueryDescriptor {
 const domains: [Domain, ...Domain[]] = [
   "water",
   "salt",
+  "sugar",
   "weight",
   "bp",
   "eating",
@@ -133,6 +135,18 @@ export const queryRegistry: QueryDescriptor[] = [
     },
   },
   {
+    id: "sugar_vs_weight",
+    name: "Sugar vs Weight Correlation",
+    description:
+      "Pearson correlation between daily sugar intake and weight with configurable lag (default 2 days) to detect delayed effects.",
+    category: "correlation",
+    parameters: SaltWeightParamsSchema,
+    execute: async (params) => {
+      const { start, end, lagDays } = SaltWeightParamsSchema.parse(params);
+      return sugarVsWeight({ start, end }, lagDays);
+    },
+  },
+  {
     id: "caffeine_vs_bp",
     name: "Caffeine vs BP Correlation",
     description:
@@ -160,7 +174,7 @@ export const queryRegistry: QueryDescriptor[] = [
     id: "custom_correlation",
     name: "Custom Domain Correlation",
     description:
-      "Pearson correlation between any two health domains with optional lag. Supports all tracked domains: water, salt, weight, bp, eating, urination, defecation, caffeine, alcohol, medication.",
+      "Pearson correlation between any two health domains with optional lag. Supports all tracked domains: water, salt, sugar, weight, bp, eating, urination, defecation, caffeine, alcohol, medication.",
     category: "custom",
     parameters: CorrelationParamsSchema,
     execute: async (params) => {

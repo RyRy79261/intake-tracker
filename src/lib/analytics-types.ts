@@ -7,6 +7,7 @@ import type { PhaseType } from "@/lib/db";
 export const DOMAINS = [
   "water",
   "salt",
+  "sugar",
   "weight",
   "bp",
   "eating",
@@ -169,3 +170,6 @@ export const URINATION_ESTIMATE_ML: Record<string, number> = {
 
 /** Default lag in days for salt-vs-weight correlation (per research) */
 export const DEFAULT_SALT_WEIGHT_LAG_DAYS = 2;
+
+/** Default lag in days for sugar-vs-weight correlation */
+export const DEFAULT_SUGAR_WEIGHT_LAG_DAYS = 2;
