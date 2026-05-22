@@ -2,12 +2,12 @@
  * Static schema parser for db.ts.
  *
  * Reads the raw file from disk (no Dexie import) and extracts all
- * db.version(N).stores(...) blocks. Used by integrity tests to verify
+ * realDb.version(N).stores(...) blocks. Used by integrity tests to verify
  * schema consistency and three-way sync.
  *
  * Handles two forms:
- *   1. Inline object literal:  db.version(N).stores({ foo: "...", ... })
- *   2. Named constant:         db.version(N).stores(V12_STORES)
+ *   1. Inline object literal:  realDb.version(N).stores({ foo: "...", ... })
+ *   2. Named constant:         realDb.version(N).stores(V12_STORES)
  *
  * Named-constant resolution understands references (`const V11 = V10;`)
  * and spreads (`const V12 = { ...V11, foo: "..." };`).
@@ -86,7 +86,7 @@ function parseStoreConstants(source: string): Map<string, string[]> {
 }
 
 /**
- * Parse all db.version(N).stores(...) blocks from src/lib/db.ts.
+ * Parse all realDb.version(N).stores(...) blocks from src/lib/db.ts.
  * Returns an array of { version, tables } sorted by version ascending.
  *
  * Throws if no version blocks are found (parser regression guard).
@@ -97,8 +97,8 @@ export function parseDbSchema(): VersionSchema[] {
 
   const constants = parseStoreConstants(source);
 
-  // Match db.version(N).stores(ARG) where ARG is either `{...}` or an identifier.
-  const versionPattern = /db\.version\((\d+)\)\.stores\(\s*(\{[^}]+\}|\w+)\s*\)/gs;
+  // Match realDb.version(N).stores(ARG) where ARG is `{...}` or an identifier.
+  const versionPattern = /realDb\.version\((\d+)\)\.stores\(\s*(\{[^}]+\}|\w+)\s*\)/gs;
 
   const results: VersionSchema[] = [];
   let match: RegExpExecArray | null;
@@ -126,7 +126,7 @@ export function parseDbSchema(): VersionSchema[] {
   if (results.length === 0) {
     throw new Error(
       "parse-schema: Failed to parse any version blocks from db.ts. " +
-        "Check that db.version(N).stores({...}) pattern is intact."
+        "Check that realDb.version(N).stores({...}) pattern is intact."
     );
   }
 

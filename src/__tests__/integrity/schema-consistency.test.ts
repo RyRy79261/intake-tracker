@@ -44,7 +44,7 @@ describe("schema consistency across versions", () => {
         [
           `x [Schema Consistency]: Version ${current.version} is missing tables that existed in version ${prev.version}`,
           `  Missing: ${missingTables.join(", ")}`,
-          `  Fix: Add the missing table(s) to the db.version(${current.version}).stores({...}) block in src/lib/db.ts`,
+          `  Fix: Add the missing table(s) to the realDb.version(${current.version}).stores({...}) block in src/lib/db.ts`,
           `  Note: Dexie requires every version to repeat ALL table definitions from prior versions`,
         ].join("\n")
       ).toHaveLength(0);

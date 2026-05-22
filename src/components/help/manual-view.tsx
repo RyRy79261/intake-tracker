@@ -5,10 +5,13 @@ import { cn } from "@/lib/utils";
 import type { Manual } from "@/lib/help/manuals";
 import { HelpTopBar } from "@/components/help/help-top-bar";
 import { ManualCallout } from "@/components/help/manual-callout";
+import { ComponentPreview } from "@/components/help/component-preview";
+import { getManualPreview } from "@/components/help/preview-registry";
 
 export function ManualView({ manual }: { manual: Manual }) {
   const router = useRouter();
   const Icon = manual.icon;
+  const preview = getManualPreview(manual.slug);
 
   return (
     <div className="pb-12">
@@ -25,6 +28,20 @@ export function ManualView({ manual }: { manual: Manual }) {
           {manual.whereToFind}
         </p>
       </header>
+
+      {preview && (
+        <section className="mb-6">
+          <h3 className="mb-2 font-semibold">Try it</h3>
+          <p className="mb-3 text-sm leading-relaxed text-muted-foreground">
+            This is the real component, loaded with sample data. Tap and type —
+            it works exactly as it does in the app, and nothing you do here is
+            saved.
+          </p>
+          <ComponentPreview key={manual.slug} seed={preview.seed}>
+            {preview.render()}
+          </ComponentPreview>
+        </section>
+      )}
 
       <div className="space-y-6">
         {manual.sections.map((section, index) => (
