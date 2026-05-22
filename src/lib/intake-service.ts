@@ -2,7 +2,7 @@ import { z } from "zod";
 import { db, type IntakeRecord } from "@/lib/db";
 import { ok, err, type ServiceResult } from "@/lib/service-result";
 import { generateId, syncFields } from "@/lib/utils";
-import { writeWithSync } from "@/lib/sync-queue";
+import { writeWithSync, enqueueInsideTx } from "@/lib/sync-queue";
 import { schedulePush } from "@/lib/sync-engine";
 
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
@@ -387,7 +387,19 @@ export function getSugarTotalsByGroupIds(
 
 export async function clearAllData(): Promise<ServiceResult<void>> {
   try {
-    await db.intakeRecords.clear();
+    const now = Date.now();
+    // Soft-delete + enqueue each row rather than a hard `.clear()`. A hard
+    // clear leaves no tombstone and no sync-queue entry, so the next pull
+    // cycle re-downloads every "deleted" record and resurrects it.
+    await db.transaction("rw", db.intakeRecords, db._syncQueue, async () => {
+      const records = await db.intakeRecords.toArray();
+      for (const record of records) {
+        if (record.deletedAt !== null) continue;
+        await db.intakeRecords.update(record.id, { deletedAt: now, updatedAt: now });
+        await enqueueInsideTx("intakeRecords", record.id, "delete");
+      }
+    });
+    schedulePush();
     return ok(undefined);
   } catch (e) {
     return err("Failed to clear all data", e);
