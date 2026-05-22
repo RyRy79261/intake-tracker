@@ -1,9 +1,18 @@
 "use client";
 
+import { useState } from "react";
 import { formatDistanceToNow } from "date-fns";
-import { Sparkles } from "lucide-react";
+import { Check, Sparkles, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useInsightsStore } from "@/stores/insights-store";
@@ -12,8 +21,24 @@ import { useUserProfile } from "@/hooks/use-profile-queries";
 import { insightsRange, INSIGHTS_WINDOW_DAYS } from "@/lib/analytics-snapshot";
 
 /**
+ * Tracked-data domains that can feed the rolling-window analysis. Each is
+ * included by `buildAnalyticsSnapshot` only when the window holds enough data
+ * for it, so the dialog frames them as conditional rather than guaranteed.
+ */
+const TRACKED_DATA = [
+  "Water intake",
+  "Salt / sodium intake",
+  "Blood pressure readings",
+  "Weight readings",
+  "Fluid balance (in vs. out)",
+  "Correlations: salt vs. weight, caffeine & alcohol vs. blood pressure",
+  "Your water goal & sodium limit",
+];
+
+/**
  * On-demand AI summary of the last 30 days of tracked data. Generation is
- * user-triggered (a button) and the latest result is cached locally.
+ * user-triggered (a button) and the latest result is cached locally. Before
+ * generating, a dialog spells out exactly what data feeds the analysis.
  */
 export function AiInsightsCard() {
   const waterGoalMl = useSettingsStore((s) => s.waterLimit);
@@ -23,6 +48,7 @@ export function AiInsightsCard() {
   const profile = useUserProfile();
   const { toast } = useToast();
   const { mutate, isPending } = useGenerateInsights();
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const shareConditions =
     profile.shareConditionsWithAI && profile.conditions.length > 0;
@@ -30,6 +56,7 @@ export function AiInsightsCard() {
   const personalised = shareConditions || shareMedications;
 
   const generate = () => {
+    setConfirmOpen(false);
     mutate(
       {
         range: insightsRange(),
@@ -95,7 +122,7 @@ export function AiInsightsCard() {
           variant={lastResult ? "outline" : "default"}
           size="sm"
           className="w-full"
-          onClick={generate}
+          onClick={() => setConfirmOpen(true)}
           disabled={isPending}
         >
           {isPending
@@ -111,6 +138,97 @@ export function AiInsightsCard() {
           </p>
         )}
       </CardContent>
+
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-violet-500" />
+              What goes into this summary
+            </DialogTitle>
+            <DialogDescription>
+              The AI analyses the last {INSIGHTS_WINDOW_DAYS} days of your
+              tracked data. Here&apos;s exactly what&apos;s included.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 text-sm">
+            <div className="space-y-1.5">
+              <p className="font-medium text-slate-700 dark:text-slate-200">
+                Tracked data (last {INSIGHTS_WINDOW_DAYS} days)
+              </p>
+              <ul className="space-y-1 text-slate-600 dark:text-slate-300">
+                {TRACKED_DATA.map((item) => (
+                  <li key={item} className="flex gap-1.5">
+                    <Check className="w-3.5 h-3.5 mt-0.5 shrink-0 text-emerald-500" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-muted-foreground">
+                Each is included only when the window holds enough data for it.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <p className="font-medium text-slate-700 dark:text-slate-200">
+                Your medical profile
+              </p>
+              <ul className="space-y-1 text-slate-600 dark:text-slate-300">
+                <li className="flex gap-1.5">
+                  {shareConditions ? (
+                    <Check className="w-3.5 h-3.5 mt-0.5 shrink-0 text-emerald-500" />
+                  ) : (
+                    <X className="w-3.5 h-3.5 mt-0.5 shrink-0 text-slate-400" />
+                  )}
+                  <span>
+                    {shareConditions ? (
+                      <>
+                        Conditions included:{" "}
+                        <span className="text-slate-700 dark:text-slate-200">
+                          {profile.conditions.join(", ")}
+                        </span>
+                      </>
+                    ) : (
+                      "Conditions not included — turn on sharing in your Profile to personalise the summary"
+                    )}
+                  </span>
+                </li>
+                <li className="flex gap-1.5">
+                  {shareMedications ? (
+                    <Check className="w-3.5 h-3.5 mt-0.5 shrink-0 text-emerald-500" />
+                  ) : (
+                    <X className="w-3.5 h-3.5 mt-0.5 shrink-0 text-slate-400" />
+                  )}
+                  <span>
+                    {shareMedications
+                      ? "Medications included — your active prescriptions, doses, and titration/maintenance phases"
+                      : "Medications not included — turn on sharing in your Profile to add prescription context"}
+                  </span>
+                </li>
+              </ul>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              Only aggregated numbers are sent — individual entries, notes, and
+              timestamps never leave your device.
+            </p>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setConfirmOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button size="sm" onClick={generate} disabled={isPending}>
+              {lastResult ? "Regenerate" : "Generate insights"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
