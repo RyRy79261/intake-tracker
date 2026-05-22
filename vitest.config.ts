@@ -32,10 +32,10 @@ export default defineConfig({
       // exits non-zero when any metric drops below these floors. Raise them as
       // coverage improves — never lower them.
       thresholds: {
-        lines: 42,
-        statements: 41,
-        functions: 32,
-        branches: 28,
+        lines: 54,
+        statements: 53,
+        functions: 45,
+        branches: 44,
       },
     },
   },
