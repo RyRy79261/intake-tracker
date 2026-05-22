@@ -44,7 +44,7 @@ export function FoodSaltCard() {
               />
             </div>
             <span className="font-semibold text-lg uppercase tracking-wide">
-              Food + Sodium
+              Food
             </span>
           </div>
           <div className="text-right">

@@ -215,28 +215,29 @@ export const MANUALS: Manual[] = [
   },
   {
     slug: "food-and-sodium",
-    title: "Tracking food & sodium",
+    title: "Tracking food, sodium & sugar",
     domain: "intake",
     icon: Salad,
-    summary: "Log meals and keep your sodium intake within budget.",
-    whereToFind: "Home screen → Food + Sodium card",
+    summary: "Log meals and keep your sodium and sugar intake within budget.",
+    whereToFind: "Home screen → Food card",
     sections: [
       {
         heading: "What it tracks",
-        body: "The Food + Sodium card focuses on sodium (salt). A progress bar shows how much of your daily sodium allowance you have used — the default limit is 1500 mg, adjustable under Settings → Tracking → Salt.\n\nFood can also carry water content, which counts toward your fluid total.",
+        body: "The Food card tracks sodium (salt) and sugar. Two progress bars show how much of each daily allowance you have used — the defaults are 1500 mg sodium and 30 g sugar, adjustable under Settings → Sodium Settings and Settings → Sugar Settings.\n\nFood can also carry water content, which counts toward your fluid total.",
       },
       {
         heading: "Logging a meal",
         steps: [
-          "Open the Food + Sodium card.",
+          "Open the Food card.",
           "Describe what you ate.",
           "Enter the sodium amount if you know it from a label, or use the AI helper below.",
+          "Optionally add a sugar estimate — handy for keeping an eye on sugar intake.",
           "Save the entry.",
         ],
       },
       {
         heading: "The sparkle button",
-        body: "A small sparkle icon sits inside the food input. Type a plain-language description like \"two slices of pizza\", tap the sparkle, and the app estimates the sodium and water content for you, with a short note explaining the estimate.",
+        body: "A small sparkle icon sits inside the food input. Type a plain-language description like \"two slices of pizza\", tap the sparkle, and the app estimates the sodium, sugar and water content for you, with a short note explaining the estimate.",
         callout: {
           tone: "note",
           text: "The sparkle only appears once an Anthropic API key is set up. See the AI features & API keys manual to switch it on.",

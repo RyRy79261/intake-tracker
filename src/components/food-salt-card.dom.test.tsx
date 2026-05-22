@@ -16,7 +16,7 @@ describe("FoodSaltCard", () => {
   it("renders the card header", async () => {
     await renderWithFixtures(<FoodSaltCard />);
 
-    expect(await screen.findByText("Food + Sodium")).toBeInTheDocument();
+    expect(await screen.findByText("Food")).toBeInTheDocument();
   });
 
   it("reflects the day's seeded sodium total", async () => {
