@@ -2,6 +2,10 @@ import { generateId, syncFields } from "@/lib/utils";
 import type {
   AppDatabase,
   BloodPressureRecord,
+  DefecationRecord,
+  IntakeRecord,
+  SubstanceRecord,
+  UrinationRecord,
   WeightRecord,
 } from "@/lib/db";
 
@@ -13,6 +17,7 @@ import type {
  */
 
 const DAY_MS = 86_400_000;
+const HOUR_MS = 3_600_000;
 
 export async function seedBloodPressurePreview(
   database: AppDatabase,
@@ -73,4 +78,155 @@ export async function seedWeightPreview(
     },
   ];
   await database.weightRecords.bulkAdd(rows);
+}
+
+export async function seedLiquidsPreview(
+  database: AppDatabase,
+): Promise<void> {
+  const now = Date.now();
+  const rows: IntakeRecord[] = [
+    {
+      id: generateId(),
+      type: "water",
+      amount: 250,
+      timestamp: now - HOUR_MS,
+      source: "manual",
+      ...syncFields(),
+    },
+    {
+      id: generateId(),
+      type: "water",
+      amount: 200,
+      timestamp: now - 3 * HOUR_MS,
+      source: "manual",
+      ...syncFields(),
+    },
+    {
+      id: generateId(),
+      type: "water",
+      amount: 300,
+      timestamp: now - 6 * HOUR_MS,
+      source: "manual",
+      ...syncFields(),
+    },
+  ];
+  await database.intakeRecords.bulkAdd(rows);
+}
+
+export async function seedFoodSaltPreview(
+  database: AppDatabase,
+): Promise<void> {
+  const now = Date.now();
+  const rows: IntakeRecord[] = [
+    {
+      id: generateId(),
+      type: "salt",
+      amount: 400,
+      timestamp: now - 2 * HOUR_MS,
+      source: "manual",
+      note: "Lunch",
+      ...syncFields(),
+    },
+    {
+      id: generateId(),
+      type: "salt",
+      amount: 250,
+      timestamp: now - 5 * HOUR_MS,
+      source: "manual",
+      note: "Breakfast",
+      ...syncFields(),
+    },
+  ];
+  await database.intakeRecords.bulkAdd(rows);
+}
+
+export async function seedBathroomPreview(
+  database: AppDatabase,
+): Promise<void> {
+  const now = Date.now();
+  const urination: UrinationRecord[] = [
+    {
+      id: generateId(),
+      timestamp: now - HOUR_MS,
+      amountEstimate: "medium",
+      ...syncFields(),
+    },
+    {
+      id: generateId(),
+      timestamp: now - 4 * HOUR_MS,
+      amountEstimate: "large",
+      ...syncFields(),
+    },
+    {
+      id: generateId(),
+      timestamp: now - 8 * HOUR_MS,
+      amountEstimate: "small",
+      note: "pale",
+      ...syncFields(),
+    },
+  ];
+  const defecation: DefecationRecord[] = [
+    {
+      id: generateId(),
+      timestamp: now - 5 * HOUR_MS,
+      amountEstimate: "medium",
+      note: "normal",
+      ...syncFields(),
+    },
+    {
+      id: generateId(),
+      timestamp: now - DAY_MS - 4 * HOUR_MS,
+      amountEstimate: "small",
+      ...syncFields(),
+    },
+  ];
+  await database.urinationRecords.bulkAdd(urination);
+  await database.defecationRecords.bulkAdd(defecation);
+}
+
+export async function seedTextMetricsPreview(
+  database: AppDatabase,
+): Promise<void> {
+  const now = Date.now();
+  const intake: IntakeRecord[] = [
+    {
+      id: generateId(),
+      type: "water",
+      amount: 500,
+      timestamp: now - HOUR_MS,
+      source: "manual",
+      ...syncFields(),
+    },
+    {
+      id: generateId(),
+      type: "water",
+      amount: 300,
+      timestamp: now - 4 * HOUR_MS,
+      source: "manual",
+      ...syncFields(),
+    },
+    {
+      id: generateId(),
+      type: "salt",
+      amount: 600,
+      timestamp: now - 2 * HOUR_MS,
+      source: "manual",
+      ...syncFields(),
+    },
+  ];
+  const substances: SubstanceRecord[] = [
+    {
+      id: generateId(),
+      type: "caffeine",
+      amountMg: 95,
+      volumeMl: 250,
+      description: "Coffee",
+      source: "standalone",
+      aiEnriched: false,
+      timestamp: now - 3 * HOUR_MS,
+      ...syncFields(),
+    },
+  ];
+  await database.intakeRecords.bulkAdd(intake);
+  await database.substanceRecords.bulkAdd(substances);
 }
