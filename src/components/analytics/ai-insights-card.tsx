@@ -20,14 +20,18 @@ import { useGenerateInsights, NotEnoughDataError } from "@/hooks/use-insights";
 import { useUserProfile } from "@/hooks/use-profile-queries";
 import { insightsRange, INSIGHTS_WINDOW_DAYS } from "@/lib/analytics-snapshot";
 
-/** Tracked-data domains that always feed the rolling-window analysis. */
-const ALWAYS_INCLUDED = [
+/**
+ * Tracked-data domains that can feed the rolling-window analysis. Each is
+ * included by `buildAnalyticsSnapshot` only when the window holds enough data
+ * for it, so the dialog frames them as conditional rather than guaranteed.
+ */
+const TRACKED_DATA = [
   "Water intake",
   "Salt / sodium intake",
   "Blood pressure readings",
   "Weight readings",
   "Fluid balance (in vs. out)",
-  "Caffeine & alcohol correlations",
+  "Correlations: salt vs. weight, caffeine & alcohol vs. blood pressure",
   "Your water goal & sodium limit",
 ];
 
@@ -154,13 +158,16 @@ export function AiInsightsCard() {
                 Tracked data (last {INSIGHTS_WINDOW_DAYS} days)
               </p>
               <ul className="space-y-1 text-slate-600 dark:text-slate-300">
-                {ALWAYS_INCLUDED.map((item) => (
+                {TRACKED_DATA.map((item) => (
                   <li key={item} className="flex gap-1.5">
                     <Check className="w-3.5 h-3.5 mt-0.5 shrink-0 text-emerald-500" />
                     <span>{item}</span>
                   </li>
                 ))}
               </ul>
+              <p className="text-xs text-muted-foreground">
+                Each is included only when the window holds enough data for it.
+              </p>
             </div>
 
             <div className="space-y-1.5">
@@ -216,7 +223,7 @@ export function AiInsightsCard() {
             >
               Cancel
             </Button>
-            <Button size="sm" onClick={generate}>
+            <Button size="sm" onClick={generate} disabled={isPending}>
               {lastResult ? "Regenerate" : "Generate insights"}
             </Button>
           </DialogFooter>
