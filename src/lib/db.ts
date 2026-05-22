@@ -392,6 +392,27 @@ export interface UserProfile {
   deviceId: string;
 }
 
+/**
+ * A cached AI analytics insight report (Dexie v19). Each row is one generated
+ * "AI Insights" summary — the narrative and observations the model produced
+ * for a rolling analysis window. Persisting them gives the user a history of
+ * past assessments and lets a fresh analysis optionally compare against the
+ * previous one. Synced and backed up like every other record-oriented table.
+ */
+export interface InsightReport {
+  id: string;
+  generatedAt: number; // when the AI produced this report (Unix ms)
+  rangeStart: number; // analysis window start (Unix ms)
+  rangeEnd: number; // analysis window end (Unix ms)
+  narrative: string; // plain-language summary
+  observations: string[]; // specific factual observations
+  personalised: boolean; // whether the user's medical profile fed the analysis
+  createdAt: number;
+  updatedAt: number;
+  deletedAt: number | null;
+  deviceId: string;
+}
+
 export type AppDatabase = Dexie & {
   intakeRecords: EntityTable<IntakeRecord, "id">;
   auditLogs: EntityTable<AuditLog, "id">;
@@ -410,6 +431,7 @@ export type AppDatabase = Dexie & {
   substanceRecords: EntityTable<SubstanceRecord, "id">;
   titrationPlans: EntityTable<TitrationPlan, "id">;
   userProfile: EntityTable<UserProfile, "id">;
+  insightReports: EntityTable<InsightReport, "id">;
   _syncQueue: EntityTable<SyncQueueRow, "id">;
   _syncMeta: EntityTable<SyncMetaRow, "tableName">;
   _errorLogs: EntityTable<ErrorLogEntry, "id">;
@@ -779,15 +801,45 @@ realDb.version(18).stores({
   userProfile:             "id, updatedAt",
 });
 
+// Version 19: Add insightReports — a store for cached AI analytics insight
+// reports (narrative + observations per generated summary). Registered with
+// the sync engine (TABLE_PUSH_ORDER / sync-payload) and the backup service.
+// New table only, so no upgrade function is required.
+realDb.version(19).stores({
+  // --- REPEAT all v18 stores verbatim ---
+  intakeRecords:           "id, [type+timestamp], timestamp, source, groupId, updatedAt",
+  weightRecords:           "id, timestamp, updatedAt",
+  bloodPressureRecords:    "id, timestamp, position, arm, updatedAt",
+  eatingRecords:           "id, timestamp, groupId, updatedAt",
+  urinationRecords:        "id, timestamp, updatedAt",
+  defecationRecords:       "id, timestamp, updatedAt",
+  prescriptions:           "id, isActive, updatedAt, createdAt",
+  medicationPhases:        "id, prescriptionId, status, type, titrationPlanId, updatedAt",
+  phaseSchedules:          "id, phaseId, time, enabled, updatedAt",
+  inventoryItems:          "id, prescriptionId, isActive, updatedAt",
+  inventoryTransactions:   "id, [inventoryItemId+timestamp], inventoryItemId, timestamp, type, updatedAt",
+  doseLogs:                "id, [prescriptionId+scheduledDate], prescriptionId, phaseId, scheduleId, scheduledDate, scheduledTime, status, updatedAt",
+  dailyNotes:              "id, date, prescriptionId, doseLogId, updatedAt",
+  auditLogs:               "id, [action+timestamp], timestamp, action",
+  substanceRecords:        "id, [type+timestamp], type, timestamp, source, sourceRecordId, groupId, updatedAt",
+  titrationPlans:          "id, conditionLabel, status, updatedAt",
+  _syncQueue:              "++id, [tableName+recordId], tableName, enqueuedAt",
+  _syncMeta:               "tableName",
+  _errorLogs:              "id, timestamp, source",
+  userProfile:             "id, updatedAt",
+  // --- NEW in v19 ---
+  insightReports:          "id, generatedAt, updatedAt",
+});
+
 /**
  * Current Dexie schema version. Bump this constant in lockstep with each new
  * `realDb.version(N)` block above so diagnostic surfaces (Debug → Environment)
  * always reflect the real schema.
  */
-export const DB_SCHEMA_VERSION = 18;
+export const DB_SCHEMA_VERSION = 19;
 
 /**
- * Store definitions for a preview database — the current (v18) schema in a
+ * Store definitions for a preview database — the current (v19) schema in a
  * single version. A preview database is created empty and discarded, so it
  * needs no migration history.
  */
@@ -797,6 +849,7 @@ const PREVIEW_STORES = {
   _syncMeta: "tableName",
   _errorLogs: "id, timestamp, source",
   userProfile: "id, updatedAt",
+  insightReports: "id, generatedAt, updatedAt",
 } as const;
 
 let previewDbCounter = 0;

@@ -39,6 +39,7 @@ import {
   makeDailyNote,
   makeAuditLog,
   makeUserProfile,
+  makeInsightReport,
 } from "@/__tests__/fixtures/db-fixtures";
 
 /** Fixtures stripped of any undefined-valued keys, mirroring JSON round-trip. */
@@ -142,6 +143,14 @@ const fixturesByTable: Record<BackupTableName, () => Array<Record<string, unknow
     }),
     JSON.parse(JSON.stringify(makeUserProfile())),
   ],
+  insightReports: () => [
+    makeInsightReport(),
+    makeInsightReport({
+      personalised: true,
+      observations: ["BP averaged 128/82 mmHg.", "Weight rose 0.4 kg."],
+    }),
+    JSON.parse(JSON.stringify(makeInsightReport())),
+  ],
 };
 
 const tableNames = Object.keys(BACKUP_SCHEMAS) as BackupTableName[];
@@ -227,7 +236,7 @@ describe("backup-schemas: tightening over the legacy isValid* checks", () => {
 });
 
 describe("backup-schemas: invariants", () => {
-  it("BACKUP_SCHEMAS covers exactly the 17 expected tables", () => {
+  it("BACKUP_SCHEMAS covers exactly the 18 expected tables", () => {
     expect(tableNames.sort()).toEqual(
       [
         "auditLogs",
@@ -247,6 +256,7 @@ describe("backup-schemas: invariants", () => {
         "urinationRecords",
         "weightRecords",
         "userProfile",
+        "insightReports",
       ].sort()
     );
   });

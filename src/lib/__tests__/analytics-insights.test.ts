@@ -90,6 +90,39 @@ describe("AnalyticsInsightsRequestSchema", () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it("accepts optional priorAssessments", () => {
+    const result = AnalyticsInsightsRequestSchema.safeParse({
+      range: { start: 0, end: 1000 },
+      metrics: { bp: validBp },
+      priorAssessments: [
+        {
+          generatedAt: 500,
+          rangeStart: 0,
+          rangeEnd: 500,
+          summary: "Earlier period summary.",
+          observations: ["BP averaged 130/85 mmHg."],
+        },
+      ],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects more than 3 priorAssessments", () => {
+    const assessment = {
+      generatedAt: 500,
+      rangeStart: 0,
+      rangeEnd: 500,
+      summary: "Earlier period summary.",
+      observations: ["BP averaged 130/85 mmHg."],
+    };
+    const result = AnalyticsInsightsRequestSchema.safeParse({
+      range: { start: 0, end: 1000 },
+      metrics: { bp: validBp },
+      priorAssessments: [assessment, assessment, assessment, assessment],
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 describe("buildInsightsPrompt", () => {
@@ -172,5 +205,36 @@ describe("buildInsightsPrompt", () => {
     });
     const prompt = buildInsightsPrompt(req);
     expect(prompt).toContain("insufficient overlapping data");
+  });
+
+  it("renders prior assessments and asks the model to compare periods", () => {
+    const req = AnalyticsInsightsRequestSchema.parse({
+      range: { start: 0, end: 30 * 86_400_000 },
+      metrics: { bp: validBp },
+      priorAssessments: [
+        {
+          generatedAt: 30 * 86_400_000,
+          rangeStart: 0,
+          rangeEnd: 30 * 86_400_000,
+          summary: "Sodium averaged 2400 mg over the prior month.",
+          observations: ["Weight rose 0.8 kg."],
+        },
+      ],
+    });
+    const prompt = buildInsightsPrompt(req);
+
+    expect(prompt).toContain("Previous AI assessment(s)");
+    expect(prompt).toContain("Sodium averaged 2400 mg over the prior month.");
+    expect(prompt).toContain("Weight rose 0.8 kg.");
+    expect(prompt).toContain("Compare the current period");
+  });
+
+  it("omits the prior-assessment section when none are supplied", () => {
+    const req = AnalyticsInsightsRequestSchema.parse({
+      range: { start: 0, end: 7 * 86_400_000 },
+      metrics: { bp: validBp },
+    });
+    const prompt = buildInsightsPrompt(req);
+    expect(prompt).not.toContain("Previous AI assessment(s)");
   });
 });

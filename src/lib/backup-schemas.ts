@@ -155,6 +155,14 @@ export const userProfileSchema = baseRecord
   })
   .passthrough();
 
+export const insightReportSchema = baseRecord
+  .extend({
+    generatedAt: timestampSchema,
+    narrative: z.string(),
+    observations: z.array(z.string()),
+  })
+  .passthrough();
+
 export type BackupTableName =
   | "intakeRecords"
   | "weightRecords"
@@ -172,7 +180,8 @@ export type BackupTableName =
   | "titrationPlans"
   | "dailyNotes"
   | "auditLogs"
-  | "userProfile";
+  | "userProfile"
+  | "insightReports";
 
 export const BACKUP_SCHEMAS: Record<BackupTableName, z.ZodTypeAny> = {
   intakeRecords: intakeRecordSchema,
@@ -192,6 +201,7 @@ export const BACKUP_SCHEMAS: Record<BackupTableName, z.ZodTypeAny> = {
   dailyNotes: dailyNoteSchema,
   auditLogs: auditLogSchema,
   userProfile: userProfileSchema,
+  insightReports: insightReportSchema,
 };
 
 /** Boolean type guard backed by a Zod schema. */
@@ -218,4 +228,5 @@ export const BACKUP_VALIDATORS: Record<BackupTableName, (record: unknown) => boo
   dailyNotes: makeZodValidator(dailyNoteSchema),
   auditLogs: makeZodValidator(auditLogSchema),
   userProfile: makeZodValidator(userProfileSchema),
+  insightReports: makeZodValidator(insightReportSchema),
 };

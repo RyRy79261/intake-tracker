@@ -57,6 +57,7 @@ const TABLE_TO_INTERFACE: Record<string, string> = {
   auditLogs: "AuditLog",
   titrationPlans: "TitrationPlan",
   userProfile: "UserProfile",
+  insightReports: "InsightReport",
 };
 
 /** Default path to db.ts — resolved relative to this file's location in src/__tests__/ */

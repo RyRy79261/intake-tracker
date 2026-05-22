@@ -7,6 +7,12 @@
  * health detail cannot reach the external AI call by construction. The webhook
  * caller computes the predefined analytics queries (the same ones the app runs
  * locally); this layer turns them into an AI-written narrative.
+ *
+ * The one exception is `priorAssessments`: when the user opts in, previously
+ * generated AI summaries are sent back so the model can compare periods. These
+ * are model-authored narratives derived from the same aggregate snapshot — not
+ * raw records — but they are free text, so they only travel when the user
+ * explicitly enables the comparison.
  */
 
 import { z } from "zod";
@@ -99,6 +105,22 @@ const ProfileSchema = z.object({
   medications: z.array(MedicationSchema).max(40).optional(),
 });
 
+/**
+ * A previously generated AI assessment, sent back so the model can describe
+ * how the current period compares. `summary` and `observations` are the
+ * model's own earlier output; `rangeStart`/`rangeEnd` mark the window it
+ * covered. Only present when the user opted in to including past summaries.
+ */
+const PriorAssessmentSchema = z.object({
+  generatedAt: z.number(),
+  rangeStart: z.number(),
+  rangeEnd: z.number(),
+  summary: z.string().min(1).max(2000),
+  observations: z.array(z.string().min(1).max(500)).max(12),
+});
+
+export type PriorAssessment = z.infer<typeof PriorAssessmentSchema>;
+
 export const AnalyticsInsightsRequestSchema = z.object({
   range: z
     .object({
@@ -109,6 +131,7 @@ export const AnalyticsInsightsRequestSchema = z.object({
       message: "range.start must be <= range.end",
     }),
   profile: ProfileSchema.optional(),
+  priorAssessments: z.array(PriorAssessmentSchema).max(3).optional(),
   metrics: z
     .object({
       bp: BpMetricSchema.optional(),
@@ -175,6 +198,7 @@ Rules:
 - A correlation with fewer than 3 paired days is insufficient data, not evidence of "no relationship".
 - Correlation is not causation — never imply one metric causes another.
 - Keep a neutral, non-alarming tone. This summary is informational only and never replaces a qualified professional. If a reading looks notable, state the number plainly and recommend the user discuss it with their healthcare provider.
+- If one or more previous assessments are supplied, compare the current period against the most recent one: note specifically what has changed, improved, or worsened, citing both the old and new numbers where possible. Do not simply repeat unchanged observations.
 - Always return your answer by calling the analytics_insight tool.`;
 
 // ---------------------------------------------------------------------------
@@ -195,11 +219,9 @@ function domainLabel(d: Domain): string {
  * model. Only the metric groups present in the request are included.
  */
 export function buildInsightsPrompt(req: AnalyticsInsightsRequest): string {
-  const { range, metrics, profile } = req;
-  const days = Math.max(
-    1,
-    Math.round((range.end - range.start) / (24 * 60 * 60 * 1000)),
-  );
+  const { range, metrics, profile, priorAssessments } = req;
+  const MS_PER_DAY = 24 * 60 * 60 * 1000;
+  const days = Math.max(1, Math.round((range.end - range.start) / MS_PER_DAY));
   const lines: string[] = [
     `Health metrics for a period of approximately ${days} day(s).`,
     "",
@@ -272,6 +294,29 @@ export function buildInsightsPrompt(req: AnalyticsInsightsRequest): string {
         `- ${domainLabel(c.domainA)} vs ${domainLabel(c.domainB)}: ${detail}`,
       );
     }
+  }
+
+  if (priorAssessments && priorAssessments.length > 0) {
+    lines.push(
+      "",
+      "Previous AI assessment(s) for earlier periods, most recent first:",
+    );
+    for (const p of priorAssessments) {
+      const pDays = Math.max(
+        1,
+        Math.round((p.rangeEnd - p.rangeStart) / MS_PER_DAY),
+      );
+      const generatedOn = new Date(p.generatedAt).toISOString().slice(0, 10);
+      lines.push(
+        `- Generated ${generatedOn}, covering ~${pDays} day(s):`,
+        `  Summary: ${p.summary}`,
+      );
+      for (const o of p.observations) lines.push(`  - ${o}`);
+    }
+    lines.push(
+      "",
+      "Compare the current period against the most recent assessment above and call out what changed.",
+    );
   }
 
   lines.push(

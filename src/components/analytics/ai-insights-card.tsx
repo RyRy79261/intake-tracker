@@ -2,9 +2,15 @@
 
 import { useState } from "react";
 import { formatDistanceToNow } from "date-fns";
-import { Check, Sparkles, X } from "lucide-react";
+import { Check, ChevronDown, Sparkles, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import {
   Dialog,
   DialogContent,
@@ -15,10 +21,14 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useSettingsStore } from "@/stores/settings-store";
-import { useInsightsStore } from "@/stores/insights-store";
-import { useGenerateInsights, NotEnoughDataError } from "@/hooks/use-insights";
+import {
+  useGenerateInsights,
+  useInsightReports,
+  NotEnoughDataError,
+} from "@/hooks/use-insights";
 import { useUserProfile } from "@/hooks/use-profile-queries";
 import { insightsRange, INSIGHTS_WINDOW_DAYS } from "@/lib/analytics-snapshot";
+import type { InsightReport } from "@/lib/db";
 
 /**
  * Tracked-data domains that can feed the rolling-window analysis. Each is
@@ -36,26 +46,61 @@ const TRACKED_DATA = [
   "Your water goal, sodium limit & sugar limit",
 ];
 
+/** Render one cached report's narrative + observations. */
+function ReportBody({ report }: { report: InsightReport }) {
+  return (
+    <div className="space-y-2">
+      <p className="text-sm text-slate-700 dark:text-slate-200">
+        {report.narrative}
+      </p>
+      {report.observations.length > 0 && (
+        <ul className="space-y-1 text-sm text-slate-600 dark:text-slate-300">
+          {report.observations.map((observation, i) => (
+            <li key={i} className="flex gap-1.5">
+              <span aria-hidden className="text-violet-500">
+                &bull;
+              </span>
+              <span>{observation}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 /**
  * On-demand AI summary of the last 30 days of tracked data. Generation is
- * user-triggered (a button) and the latest result is cached locally. Before
- * generating, a dialog spells out exactly what data feeds the analysis.
+ * user-triggered (a button); every result is cached to IndexedDB so past
+ * assessments survive reloads and sync across devices. Before generating, a
+ * dialog spells out exactly what data feeds the analysis.
  */
 export function AiInsightsCard() {
   const waterGoalMl = useSettingsStore((s) => s.waterLimit);
   const sodiumLimitMg = useSettingsStore((s) => s.saltLimit);
   const sugarLimitG = useSettingsStore((s) => s.sugarLimit);
-  const lastResult = useInsightsStore((s) => s.lastResult);
-  const setResult = useInsightsStore((s) => s.setResult);
+  const reports = useInsightReports();
   const profile = useUserProfile();
   const { toast } = useToast();
   const { mutate, isPending } = useGenerateInsights();
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [includePrevious, setIncludePrevious] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+
+  const latest = reports[0] ?? null;
+  const history = reports.slice(1);
+  const hasPrevious = reports.length > 0;
 
   const shareConditions =
     profile.shareConditionsWithAI && profile.conditions.length > 0;
   const shareMedications = profile.shareMedicationsWithAI;
   const personalised = shareConditions || shareMedications;
+
+  const openConfirm = () => {
+    // Only meaningful when a prior report exists to compare against.
+    setIncludePrevious(false);
+    setConfirmOpen(true);
+  };
 
   const generate = () => {
     setConfirmOpen(false);
@@ -65,9 +110,9 @@ export function AiInsightsCard() {
         goals: { waterGoalMl, sodiumLimitMg, sugarLimitG },
         ...(shareConditions && { conditions: profile.conditions }),
         ...(shareMedications && { includeMedications: true }),
+        ...(includePrevious && hasPrevious && { includePrevious: true }),
       },
       {
-        onSuccess: setResult,
         onError: (error) => {
           toast({
             title:
@@ -91,26 +136,12 @@ export function AiInsightsCard() {
         </CardTitle>
       </CardHeader>
       <CardContent className="px-3 pb-3 space-y-3">
-        {lastResult ? (
+        {latest ? (
           <div className="space-y-2">
-            <p className="text-sm text-slate-700 dark:text-slate-200">
-              {lastResult.narrative}
-            </p>
-            {lastResult.observations.length > 0 && (
-              <ul className="space-y-1 text-sm text-slate-600 dark:text-slate-300">
-                {lastResult.observations.map((observation, i) => (
-                  <li key={i} className="flex gap-1.5">
-                    <span aria-hidden className="text-violet-500">
-                      &bull;
-                    </span>
-                    <span>{observation}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <ReportBody report={latest} />
             <p className="text-xs text-muted-foreground">
               Generated{" "}
-              {formatDistanceToNow(lastResult.generatedAt, { addSuffix: true })}
+              {formatDistanceToNow(latest.generatedAt, { addSuffix: true })}
             </p>
           </div>
         ) : (
@@ -121,15 +152,15 @@ export function AiInsightsCard() {
         )}
 
         <Button
-          variant={lastResult ? "outline" : "default"}
+          variant={latest ? "outline" : "default"}
           size="sm"
           className="w-full"
-          onClick={() => setConfirmOpen(true)}
+          onClick={openConfirm}
           disabled={isPending}
         >
           {isPending
             ? "Analysing…"
-            : lastResult
+            : latest
               ? "Regenerate"
               : "Generate insights"}
         </Button>
@@ -138,6 +169,41 @@ export function AiInsightsCard() {
           <p className="text-[11px] text-muted-foreground">
             Personalised with your medical profile.
           </p>
+        )}
+
+        {history.length > 0 && (
+          <Collapsible open={historyOpen} onOpenChange={setHistoryOpen}>
+            <CollapsibleTrigger asChild>
+              <button
+                type="button"
+                className="flex w-full items-center justify-between text-xs font-medium text-muted-foreground hover:text-foreground"
+              >
+                <span>
+                  Previous summaries ({history.length})
+                </span>
+                <ChevronDown
+                  className={`w-3.5 h-3.5 transition-transform ${
+                    historyOpen ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-3 pt-2">
+              {history.map((report) => (
+                <div
+                  key={report.id}
+                  className="space-y-1 border-t border-slate-200 dark:border-slate-800 pt-2"
+                >
+                  <p className="text-[11px] text-muted-foreground">
+                    {formatDistanceToNow(report.generatedAt, {
+                      addSuffix: true,
+                    })}
+                  </p>
+                  <ReportBody report={report} />
+                </div>
+              ))}
+            </CollapsibleContent>
+          </Collapsible>
         )}
       </CardContent>
 
@@ -211,9 +277,33 @@ export function AiInsightsCard() {
               </ul>
             </div>
 
+            {hasPrevious && (
+              <div className="space-y-1.5">
+                <p className="font-medium text-slate-700 dark:text-slate-200">
+                  Compare with history
+                </p>
+                <label className="flex gap-2 text-slate-600 dark:text-slate-300">
+                  <Checkbox
+                    className="mt-0.5"
+                    checked={includePrevious}
+                    onCheckedChange={(checked) =>
+                      setIncludePrevious(checked === true)
+                    }
+                  />
+                  <span>
+                    Include my previous summary so the AI can describe what
+                    changed since then.
+                  </span>
+                </label>
+              </div>
+            )}
+
             <p className="text-xs text-muted-foreground">
               Only aggregated numbers are sent — individual entries, notes, and
               timestamps never leave your device.
+              {includePrevious && hasPrevious
+                ? " The text of your previous summary is sent too, so the AI can compare periods."
+                : ""}
             </p>
           </div>
 
@@ -226,7 +316,7 @@ export function AiInsightsCard() {
               Cancel
             </Button>
             <Button size="sm" onClick={generate} disabled={isPending}>
-              {lastResult ? "Regenerate" : "Generate insights"}
+              {latest ? "Regenerate" : "Generate insights"}
             </Button>
           </DialogFooter>
         </DialogContent>
