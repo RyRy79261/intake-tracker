@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Minus, Plus, Check } from "lucide-react";
 import { cn, formatAmount } from "@/lib/utils";
@@ -11,6 +12,16 @@ import { ManualInputDialog } from "@/components/manual-input-dialog";
 import { useSettings } from "@/hooks/use-settings";
 import { useToast } from "@/hooks/use-toast";
 import { useIntake } from "@/hooks/use-intake-queries";
+import {
+  useAddComposableEntry,
+  type ComposableEntryInput,
+} from "@/hooks/use-composable-entry";
+
+/** Parse the optional sugar field into rounded grams (0 when empty/invalid). */
+function parseSugarGrams(value: string): number {
+  const parsed = parseFloat(value);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) : 0;
+}
 
 const theme = CARD_THEMES.water;
 const unit = "ml";
@@ -29,10 +40,12 @@ export function BeverageTab() {
 
   const [pendingAmount, setPendingAmount] = useState(waterIncrement);
   const [beverageName, setBeverageName] = useState("");
+  const [sugarG, setSugarG] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showManualInput, setShowManualInput] = useState(false);
 
   const { toast } = useToast();
+  const addEntry = useAddComposableEntry();
 
   const handleIncrement = useCallback(() => {
     setPendingAmount((prev) => prev + waterIncrement);
@@ -42,15 +55,37 @@ export function BeverageTab() {
     setPendingAmount((prev) => Math.max(waterIncrement, prev - waterIncrement));
   }, [waterIncrement]);
 
+  // Log the beverage — when a sugar amount is present, the drink volume and
+  // sugar are written together as one grouped composable entry; otherwise a
+  // plain water record.
+  const logBeverage = useCallback(
+    async (amount: number, timestamp?: number, note?: string) => {
+      const source = beverageName.trim()
+        ? `beverage:${beverageName.trim()}`
+        : "beverage";
+      const sugar = parseSugarGrams(sugarG);
+      if (sugar > 0) {
+        const intakes: ComposableEntryInput["intakes"] = [
+          { type: "water", amount, source, ...(note ? { note } : {}) },
+          { type: "sugar", amount: sugar, source: "manual:sugar" },
+        ];
+        await addEntry(
+          { intakes, groupSource: "manual_beverage_entry" },
+          timestamp
+        );
+      } else {
+        await waterIntake.addRecord(amount, source, timestamp, note);
+      }
+    },
+    [beverageName, sugarG, addEntry, waterIntake]
+  );
+
   const handleConfirm = useCallback(async () => {
     if (pendingAmount <= 0 || isSubmitting) return;
 
     setIsSubmitting(true);
     try {
-      const source = beverageName.trim()
-        ? `beverage:${beverageName.trim()}`
-        : "beverage";
-      await waterIntake.addRecord(pendingAmount, source);
+      await logBeverage(pendingAmount);
       toast({
         title: `Added ${formatAmount(pendingAmount, unit)}`,
         description: "Beverage intake recorded",
@@ -58,6 +93,7 @@ export function BeverageTab() {
       });
       setPendingAmount(waterIncrement);
       setBeverageName("");
+      setSugarG("");
     } catch {
       toast({
         title: "Error",
@@ -67,16 +103,13 @@ export function BeverageTab() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [pendingAmount, isSubmitting, beverageName, waterIntake, toast, waterIncrement]);
+  }, [pendingAmount, isSubmitting, logBeverage, toast, waterIncrement]);
 
   const handleManualSubmit = useCallback(
     async (amount: number, timestamp?: number, note?: string) => {
       setIsSubmitting(true);
       try {
-        const source = beverageName.trim()
-          ? `beverage:${beverageName.trim()}`
-          : "beverage";
-        await waterIntake.addRecord(amount, source, timestamp, note);
+        await logBeverage(amount, timestamp, note);
         toast({
           title: `Added ${formatAmount(amount, unit)}`,
           description: timestamp
@@ -85,6 +118,7 @@ export function BeverageTab() {
           variant: "success",
         });
         setShowManualInput(false);
+        setSugarG("");
       } catch {
         toast({
           title: "Error",
@@ -95,7 +129,7 @@ export function BeverageTab() {
         setIsSubmitting(false);
       }
     },
-    [beverageName, waterIntake, toast]
+    [logBeverage, toast]
   );
 
   return (
@@ -177,6 +211,23 @@ export function BeverageTab() {
         >
           <Plus className="w-6 h-6" />
         </Button>
+      </div>
+
+      {/* Optional sugar content */}
+      <div className="mt-4 space-y-1">
+        <Label htmlFor="beverage-sugar" className="text-sm">
+          Sugar (g){" "}
+          <span className="text-muted-foreground font-normal">(optional)</span>
+        </Label>
+        <Input
+          id="beverage-sugar"
+          type="number"
+          min="0"
+          inputMode="decimal"
+          placeholder="g"
+          value={sugarG}
+          onChange={(e) => setSugarG(e.target.value)}
+        />
       </div>
 
       {/* Confirm Button */}

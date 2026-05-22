@@ -19,6 +19,24 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "json-summary", "json"],
       reportOnFailure: true,
+      // Count every source file in `include`, not just the ones a test
+      // happens to import, so the percentage reflects the real codebase.
+      include: ["src/**/*.{ts,tsx}"],
+      exclude: [
+        "src/**/*.test.{ts,tsx}",
+        "src/**/*.d.ts",
+        "src/__tests__/**",
+        "src/**/__tests__/**",
+      ],
+      // Coverage ratchet: CI's `coverage` job runs `pnpm test:coverage`, which
+      // exits non-zero when any metric drops below these floors. Raise them as
+      // coverage improves — never lower them.
+      thresholds: {
+        lines: 54,
+        statements: 53,
+        functions: 45,
+        branches: 44,
+      },
     },
   },
 });

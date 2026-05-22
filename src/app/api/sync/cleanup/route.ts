@@ -48,10 +48,8 @@ export const POST = withAuth(async ({ auth }) => {
     return NextResponse.json({ deleted });
   } catch (error) {
     console.error("[sync/cleanup] Error:", error);
-    const message =
-      error instanceof Error ? error.message : "Unknown server error";
     return NextResponse.json(
-      { error: "Failed to clean up user data", detail: message },
+      { error: "Failed to clean up user data" },
       { status: 500 },
     );
   }

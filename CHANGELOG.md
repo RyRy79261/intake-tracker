@@ -1,5 +1,35 @@
 # Changelog
 
+## [1.23.0](https://github.com/RyRy79261/intake-tracker/compare/v1.22.0...v1.23.0) (2026-05-22)
+
+
+### Features
+
+* add first-time welcome dialog ([b84c68e](https://github.com/RyRy79261/intake-tracker/commit/b84c68ea3cbca74231637af2816992515f7d81fa))
+
+
+### Bug Fixes
+
+* **voice:** salvage valid items instead of 422-ing the whole parse ([9168620](https://github.com/RyRy79261/intake-tracker/commit/9168620da2ef888d14121e0fb4e59c74fa81fa6d))
+* **voice:** salvage valid items instead of 422-ing the whole parse ([34513d4](https://github.com/RyRy79261/intake-tracker/commit/34513d462aaec05c56bab630e19588e3ffdf89d2))
+
+## [1.22.0](https://github.com/RyRy79261/intake-tracker/compare/v1.21.0...v1.22.0) (2026-05-22)
+
+
+### Features
+
+* add sugar entry to drink logging and standardize sodium bar label ([359a54f](https://github.com/RyRy79261/intake-tracker/commit/359a54f833482efa330ce21791b15dadccdd6c67))
+* add sugar entry to drink logging and standardize sodium bar label ([35f52ea](https://github.com/RyRy79261/intake-tracker/commit/35f52eab74a36165b2681ab5d2df7178a4397bcd))
+
+
+### Bug Fixes
+
+* add Sodium and Sugar left-side labels to Food card metric rows ([759a76d](https://github.com/RyRy79261/intake-tracker/commit/759a76d426f60f05c07dda06a45d5425d7a163ba))
+* drop the "today" line from Food card metric rows ([c21beb3](https://github.com/RyRy79261/intake-tracker/commit/c21beb337f8bf92b2b42afd38c3168f6852765ea))
+* **e2e:** mock the AI parse response with the current field names ([45a3c09](https://github.com/RyRy79261/intake-tracker/commit/45a3c097acfb5b7af606c4bceb895225a1769ff6))
+* remove sugar entry from the Water tab ([600a03b](https://github.com/RyRy79261/intake-tracker/commit/600a03b1871a8d0c107a7623fa06c4730774ec89))
+* use the header-style stacked metric for the Food card sugar bar ([d01071e](https://github.com/RyRy79261/intake-tracker/commit/d01071ed99850cb7a9b17b6953335e1748cf5ccb))
+
 ## [1.21.0](https://github.com/RyRy79261/intake-tracker/compare/v1.20.0...v1.21.0) (2026-05-22)
 
 

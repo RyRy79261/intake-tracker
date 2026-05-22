@@ -35,9 +35,6 @@ export const POST = withAuth(async ({ request, auth }) => {
     return NextResponse.json({ ok: true, id, updatedAt: record.updatedAt });
   } catch (error) {
     console.error("[e2e-test/insert-intake] Error:", error);
-    return NextResponse.json(
-      { error: "Insert failed", detail: String(error) },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: "Insert failed" }, { status: 500 });
   }
 });
