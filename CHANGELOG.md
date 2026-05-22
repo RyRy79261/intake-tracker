@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.19.0](https://github.com/RyRy79261/intake-tracker/compare/v1.18.0...v1.19.0) (2026-05-22)
+
+
+### Features
+
+* add data-disclosure dialog before generating AI insights ([3d049f1](https://github.com/RyRy79261/intake-tracker/commit/3d049f11d1bdebc028bc860ff4ec1429bd4bdc3a))
+* add data-disclosure dialog before generating AI insights ([55cee90](https://github.com/RyRy79261/intake-tracker/commit/55cee907c6a8d0038c0a57ea35ae0afd7a94d4bc))
+
+
+### Bug Fixes
+
+* correct insights dialog disclosure and disable guard ([9341cf2](https://github.com/RyRy79261/intake-tracker/commit/9341cf2c63e3fb07cf7ebe0c9e230aa61d9eeb80))
+
 ## [1.18.0](https://github.com/RyRy79261/intake-tracker/compare/v1.17.1...v1.18.0) (2026-05-21)
 
 
