@@ -340,26 +340,6 @@ export function ReportBugDialog({
                   )}
                 </CollapsibleContent>
               </Collapsible>
-
-              {/* Escape hatch: a shake often means "how does this work?", not
-                  "this is broken". Offer the manual before they file a report. */}
-              <button
-                type="button"
-                onClick={() => {
-                  onOpenChange(false);
-                  router.push("/help");
-                }}
-                className="flex w-full items-center gap-2 rounded-md border border-dashed p-2.5 text-left text-xs text-muted-foreground transition-colors hover:bg-accent"
-              >
-                <BookOpen className="h-4 w-4 shrink-0" />
-                <span>
-                  Not a bug?{" "}
-                  <span className="font-medium text-foreground">
-                    Open the user manual
-                  </span>{" "}
-                  to learn how a feature works.
-                </span>
-              </button>
             </div>
 
             <DialogFooter>
@@ -375,6 +355,31 @@ export function ReportBugDialog({
                 {submit.isPending ? "Filing…" : "Submit report"}
               </Button>
             </DialogFooter>
+
+            {/* A loud, separate destination below the bug-report form: a shake
+                often means "how does this work?", not "this is broken". */}
+            <div className="mt-2 rounded-lg border border-sky-200 bg-sky-50 p-4 dark:border-sky-900 dark:bg-sky-950/40">
+              <div className="flex items-center gap-2">
+                <BookOpen className="h-5 w-5 text-sky-600 dark:text-sky-400" />
+                <h3 className="font-semibold text-sky-900 dark:text-sky-50">
+                  Wanna read the manual?
+                </h3>
+              </div>
+              <p className="mt-1.5 text-sm text-sky-800/80 dark:text-sky-200/80">
+                We have a full manual that walks you through how every card,
+                button and feature works — step by step.
+              </p>
+              <Button
+                className="mt-3 w-full gap-2 bg-sky-600 text-white hover:bg-sky-700"
+                onClick={() => {
+                  onOpenChange(false);
+                  router.push("/help");
+                }}
+              >
+                <BookOpen className="h-4 w-4" />
+                Open the manual
+              </Button>
+            </div>
           </>
         )}
       </DialogContent>
