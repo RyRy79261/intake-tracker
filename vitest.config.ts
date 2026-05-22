@@ -19,9 +19,8 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "json-summary", "json"],
       reportOnFailure: true,
-      // Count every source file, not just the ones a test happens to import,
-      // so the percentage reflects the real codebase.
-      all: true,
+      // Count every source file in `include`, not just the ones a test
+      // happens to import, so the percentage reflects the real codebase.
       include: ["src/**/*.{ts,tsx}"],
       exclude: [
         "src/**/*.test.{ts,tsx}",
@@ -33,10 +32,10 @@ export default defineConfig({
       // exits non-zero when any metric drops below these floors. Raise them as
       // coverage improves — never lower them.
       thresholds: {
-        lines: 28,
-        statements: 27,
-        functions: 21,
-        branches: 18,
+        lines: 34,
+        statements: 33,
+        functions: 23,
+        branches: 22,
       },
     },
   },
