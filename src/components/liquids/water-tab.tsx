@@ -2,8 +2,6 @@
 
 import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Minus, Plus, Check } from "lucide-react";
 import { cn, formatAmount } from "@/lib/utils";
@@ -12,16 +10,6 @@ import { ManualInputDialog } from "@/components/manual-input-dialog";
 import { useSettings } from "@/hooks/use-settings";
 import { useToast } from "@/hooks/use-toast";
 import { useIntake } from "@/hooks/use-intake-queries";
-import {
-  useAddComposableEntry,
-  type ComposableEntryInput,
-} from "@/hooks/use-composable-entry";
-
-/** Parse the optional sugar field into rounded grams (0 when empty/invalid). */
-function parseSugarGrams(value: string): number {
-  const parsed = parseFloat(value);
-  return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) : 0;
-}
 
 const theme = CARD_THEMES.water;
 const unit = "ml";
@@ -34,12 +22,10 @@ export function WaterTab() {
   const waterIntake = useIntake("water");
 
   const [pendingAmount, setPendingAmount] = useState(waterIncrement);
-  const [sugarG, setSugarG] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showManualInput, setShowManualInput] = useState(false);
 
   const { toast } = useToast();
-  const addEntry = useAddComposableEntry();
 
   const { dailyTotal } = waterIntake;
 
@@ -57,37 +43,18 @@ export function WaterTab() {
     setPendingAmount((prev) => Math.max(waterIncrement, prev - waterIncrement));
   }, [waterIncrement]);
 
-  // Log water — when a sugar amount is present, water and sugar are written
-  // together as one grouped composable entry; otherwise a plain water record.
-  const logWater = useCallback(
-    async (amount: number, timestamp?: number, note?: string) => {
-      const sugar = parseSugarGrams(sugarG);
-      if (sugar > 0) {
-        const intakes: ComposableEntryInput["intakes"] = [
-          { type: "water", amount, source: "manual", ...(note ? { note } : {}) },
-          { type: "sugar", amount: sugar, source: "manual:sugar" },
-        ];
-        await addEntry({ intakes, groupSource: "manual_water_entry" }, timestamp);
-      } else {
-        await waterIntake.addRecord(amount, "manual", timestamp, note);
-      }
-    },
-    [sugarG, addEntry, waterIntake]
-  );
-
   const handleConfirm = useCallback(async () => {
     if (pendingAmount <= 0 || isSubmitting) return;
 
     setIsSubmitting(true);
     try {
-      await logWater(pendingAmount);
+      await waterIntake.addRecord(pendingAmount, "manual");
       toast({
         title: `Added ${formatAmount(pendingAmount, unit)}`,
         description: "Water intake recorded",
         variant: "success",
       });
       setPendingAmount(waterIncrement);
-      setSugarG("");
     } catch {
       toast({
         title: "Error",
@@ -97,13 +64,13 @@ export function WaterTab() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [pendingAmount, isSubmitting, logWater, toast, waterIncrement]);
+  }, [pendingAmount, isSubmitting, waterIntake, toast, waterIncrement]);
 
   const handleManualSubmit = useCallback(
     async (amount: number, timestamp?: number, note?: string) => {
       setIsSubmitting(true);
       try {
-        await logWater(amount, timestamp, note);
+        await waterIntake.addRecord(amount, "manual", timestamp, note);
         toast({
           title: `Added ${formatAmount(amount, unit)}`,
           description: timestamp
@@ -112,7 +79,6 @@ export function WaterTab() {
           variant: "success",
         });
         setShowManualInput(false);
-        setSugarG("");
       } catch {
         toast({
           title: "Error",
@@ -123,7 +89,7 @@ export function WaterTab() {
         setIsSubmitting(false);
       }
     },
-    [logWater, toast]
+    [waterIntake, toast]
   );
 
   return (
@@ -204,23 +170,6 @@ export function WaterTab() {
         >
           <Plus className="w-6 h-6" />
         </Button>
-      </div>
-
-      {/* Optional sugar content */}
-      <div className="mt-4 space-y-1">
-        <Label htmlFor="water-sugar" className="text-sm">
-          Sugar (g){" "}
-          <span className="text-muted-foreground font-normal">(optional)</span>
-        </Label>
-        <Input
-          id="water-sugar"
-          type="number"
-          min="0"
-          inputMode="decimal"
-          placeholder="g"
-          value={sugarG}
-          onChange={(e) => setSugarG(e.target.value)}
-        />
       </div>
 
       {/* Confirm Button */}
