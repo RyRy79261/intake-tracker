@@ -29,17 +29,17 @@ test.describe('Dashboard', () => {
   });
 
   test('should create composable food entry via AI parse', async ({ page }) => {
-    // Mock the AI parse endpoint. Response schema is
-    // { water, salt, measurement_type, sugar, reasoning } (see the
-    // NextResponse.json in src/app/api/ai/parse/route.ts). `salt` is a
-    // backwards-compatible field name that always carries sodium in mg;
-    // with measurement_type: "sodium" it lands in #eating-sodium unchanged.
+    // Mock the AI parse endpoint. The route responds with
+    // { water, salt, measurement_type, sugar, reasoning } — `salt` always
+    // carries sodium in mg regardless of measurement_type (see
+    // src/app/api/ai/parse/route.ts). The client maps `salt` straight into
+    // #eating-sodium and `water` into #eating-water.
     await page.route('/api/ai/parse', async route => {
       const json = {
         water: 200,
         salt: 450,
         measurement_type: 'sodium',
-        sugar: 6,
+        sugar: null,
         reasoning: 'Bowl of soup estimated at 200ml water, 450mg sodium',
       };
       await route.fulfill({ json });
