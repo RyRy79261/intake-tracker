@@ -85,8 +85,22 @@ function backupDataToFile(data: BackupData): File {
   });
 }
 
+type TableLike = {
+  clear(): Promise<void>;
+  bulkAdd(rows: unknown[]): Promise<unknown>;
+  toArray(): Promise<unknown[]>;
+  count(): Promise<number>;
+};
+const tables = db as unknown as Record<string, TableLike>;
+
+function tableFor(name: string): TableLike {
+  const t = tables[name];
+  if (!t) throw new Error(`unknown table: ${name}`);
+  return t;
+}
+
 async function clearEverything() {
-  await Promise.all(ALL_TABLES.map((t) => db[t as keyof typeof db].clear()));
+  await Promise.all(ALL_TABLES.map((t) => tableFor(t).clear()));
 }
 
 // One arbitrary per table: a small count of records (kept small to keep
@@ -166,7 +180,7 @@ describe("backup round-trip: property-based invariants", () => {
         makeInventoryTransaction(inv.id),
       );
       const doseLogs = prescriptions.map((p, i) =>
-        makeDoseLog(p.id, phases[i].id, schedules[i].id),
+        makeDoseLog(p.id, phases[i]!.id, schedules[i]!.id),
       );
 
       inserted.prescriptions = prescriptions;
@@ -180,7 +194,7 @@ describe("backup round-trip: property-based invariants", () => {
       for (const table of ALL_TABLES) {
         const rows = inserted[table];
         if (rows && rows.length > 0) {
-          await db[table as keyof typeof db].bulkAdd(rows as never[]);
+          await tableFor(table).bulkAdd(rows);
         }
       }
 
@@ -201,11 +215,11 @@ describe("backup round-trip: property-based invariants", () => {
         const originals = inserted[table];
         if (!originals || originals.length === 0) continue;
 
-        const restored = await db[table as keyof typeof db].toArray();
+        const restored = (await tableFor(table).toArray()) as Array<{ id: string }>;
 
         for (const original of originals) {
           const o = original as { id: string };
-          const match = restored.find((r: { id: string }) => r.id === o.id);
+          const match = restored.find((r) => r.id === o.id);
           expect(
             match,
             `missing ${table} record ${o.id} after round-trip`,
