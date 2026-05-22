@@ -28,17 +28,28 @@ async function globalSetup(config: FullConfig) {
   const email = process.env.NEON_AUTH_TEST_EMAIL;
   const password = process.env.NEON_AUTH_TEST_PASSWORD;
 
+  const baseURL =
+    config.projects[0]?.use.baseURL ?? "http://localhost:3000";
+
+  // Pre-seed the first-run welcome dialog's "seen" flag so its modal overlay
+  // doesn't intercept clicks during specs. Kept in sync with WELCOME_SEEN_KEY
+  // in src/components/welcome-dialog.tsx.
+  const welcomeOrigin = {
+    origin: new URL(baseURL).origin,
+    localStorage: [{ name: "intake-tracker-welcome-seen", value: "true" }],
+  };
+
   if (!email || !password) {
     console.warn(
       "[e2e-global-setup] NEON_AUTH_TEST_EMAIL / NEON_AUTH_TEST_PASSWORD not set; " +
         "writing empty storage state. Specs will run unauthenticated."
     );
-    fs.writeFileSync(authFile, JSON.stringify({ cookies: [], origins: [] }));
+    fs.writeFileSync(
+      authFile,
+      JSON.stringify({ cookies: [], origins: [welcomeOrigin] })
+    );
     return;
   }
-
-  const baseURL =
-    config.projects[0]?.use.baseURL ?? "http://localhost:3000";
 
   const browser = await chromium.launch();
   const context = await browser.newContext({ baseURL });
@@ -71,6 +82,10 @@ async function globalSetup(config: FullConfig) {
       (url) => !url.pathname.startsWith("/auth"),
       { timeout: 30_000 }
     );
+
+    await page.evaluate(() => {
+      localStorage.setItem("intake-tracker-welcome-seen", "true");
+    });
 
     await context.storageState({ path: authFile });
     console.log("[e2e-global-setup] Authenticated state saved to", authFile);
