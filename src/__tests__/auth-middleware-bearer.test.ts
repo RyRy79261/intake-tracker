@@ -183,9 +183,10 @@ describe("withAuth Bearer token validation", () => {
     const wrapped = withAuth(handler as never);
 
     const res = await wrapped(makeRequest({ bearer: "valid-token" }));
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(403);
     const body = await readJson(res);
     expect(body.error).toBe("Your account is not authorized to use this app");
+    expect(body.accountUnapproved).toBe(true);
     expect(handler).not.toHaveBeenCalled();
   });
 

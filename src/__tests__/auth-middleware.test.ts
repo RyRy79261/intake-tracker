@@ -5,7 +5,8 @@
  * module never tries to resolve `next/headers` at the Node test runtime.
  * Every test stubs `auth.getSession()` per case to cover:
  *   1. No session → 401 { requiresAuth: true }
- *   2. Session present but email not in ALLOWED_EMAILS → 401
+ *   2. Session present but email not in ALLOWED_EMAILS → 403
+ *      { accountUnapproved: true }
  *   3. Session present and email in ALLOWED_EMAILS → handler runs with ctx
  *   4. Empty ALLOWED_EMAILS → any authenticated email passes
  *
@@ -87,7 +88,7 @@ describe("withAuth HOF (Neon Auth cookie sessions)", () => {
     expect(handler).not.toHaveBeenCalled();
   });
 
-  it("returns 401 when authenticated email is not in ALLOWED_EMAILS", async () => {
+  it("returns 403 when authenticated email is not in ALLOWED_EMAILS", async () => {
     process.env.ALLOWED_EMAILS = "owner@example.test";
     getSessionMock.mockResolvedValue({
       data: { user: { id: "user-123", email: "outsider@example.test" } },
@@ -99,10 +100,10 @@ describe("withAuth HOF (Neon Auth cookie sessions)", () => {
     const wrapped = withAuth(handler as never);
 
     const res = await wrapped(makeRequest());
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(403);
     const body = await readJson(res);
     expect(body.error).toBe("Your account is not authorized to use this app");
-    expect(body.requiresAuth).toBe(true);
+    expect(body.accountUnapproved).toBe(true);
     expect(handler).not.toHaveBeenCalled();
   });
 

@@ -73,10 +73,8 @@ export const POST = withAuth(async ({ auth }) => {
     return NextResponse.json({ hashes, rowCounts });
   } catch (error) {
     console.error("[sync/verify-hash] Error:", error);
-    const message =
-      error instanceof Error ? error.message : "Unknown server error";
     return NextResponse.json(
-      { error: "Failed to compute verification hashes", detail: message },
+      { error: "Failed to compute verification hashes" },
       { status: 500 },
     );
   }
