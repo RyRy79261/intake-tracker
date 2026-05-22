@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import {
   Dialog,
   DialogContent,
@@ -19,22 +20,30 @@ const WELCOME_SEEN_KEY = "intake-tracker-welcome-seen";
  * intentionally never synced to the cloud, so it shows once per device.
  */
 export function WelcomeDialog() {
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   // The shake gesture only works on touch devices, so desktop users are
   // pointed to the Help section in Settings instead.
   const [isTouch, setIsTouch] = useState(true);
 
+  // Never greet on the auth pages — the modal overlay would block the
+  // sign-in form (and a "welcome" popup makes no sense before login).
+  const onAuthPage = pathname.startsWith("/auth");
+
   useEffect(() => {
+    if (onAuthPage) return;
     if (localStorage.getItem(WELCOME_SEEN_KEY) !== "true") {
       setOpen(true);
     }
     setIsTouch(window.matchMedia("(pointer: coarse)").matches);
-  }, []);
+  }, [onAuthPage]);
 
   function dismiss() {
     localStorage.setItem(WELCOME_SEEN_KEY, "true");
     setOpen(false);
   }
+
+  if (onAuthPage) return null;
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && dismiss()}>
