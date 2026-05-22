@@ -36,37 +36,39 @@ export function FoodSaltCard() {
     >
       <CardContent className="p-6">
         {/* Card header */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <div className={cn("p-2 rounded-lg", CARD_THEMES.eating.iconBg)}>
-              <Utensils
-                className={cn("w-5 h-5", CARD_THEMES.eating.iconColor)}
-              />
-            </div>
-            <span className="font-semibold text-lg uppercase tracking-wide">
-              Food
-            </span>
+        <div className="flex items-center gap-2 mb-4">
+          <div className={cn("p-2 rounded-lg", CARD_THEMES.eating.iconBg)}>
+            <Utensils
+              className={cn("w-5 h-5", CARD_THEMES.eating.iconColor)}
+            />
           </div>
-          <div className="text-right">
-            <p
-              className={cn(
-                "text-sm font-medium",
-                isOverLimit
-                  ? "text-red-600 dark:text-red-400"
-                  : "text-foreground"
-              )}
-            >
-              {formatAmount(dailyTotal, "mg")} / {formatAmount(limit, "mg")}
-            </p>
-            <p className="text-xs text-muted-foreground">today (sodium)</p>
-            <p className="text-xs text-muted-foreground/70">
-              24h: {formatAmount(rollingTotal, "mg")}
-            </p>
-          </div>
+          <span className="font-semibold text-lg uppercase tracking-wide">
+            Food
+          </span>
         </div>
 
-        {/* Sodium progress bar */}
+        {/* Sodium total + progress bar */}
         <div className="mb-3">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              Sodium
+            </span>
+            <div className="text-right">
+              <span
+                className={cn(
+                  "text-sm font-medium",
+                  isOverLimit
+                    ? "text-red-600 dark:text-red-400"
+                    : "text-foreground"
+                )}
+              >
+                {formatAmount(dailyTotal, "mg")} / {formatAmount(limit, "mg")}
+              </span>
+              <span className="text-xs text-muted-foreground/70 ml-2">
+                24h: {formatAmount(rollingTotal, "mg")}
+              </span>
+            </div>
+          </div>
           <Progress
             value={progressPercent}
             className="h-3"

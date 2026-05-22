@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ import {
   useRecentIntakeRecords,
   useDeleteIntake,
   useUpdateIntake,
+  useSugarTotalsByGroupIds,
 } from "@/hooks/use-intake-queries";
 import { useSettings } from "@/hooks/use-settings";
 import { useToast } from "@/hooks/use-toast";
@@ -48,6 +49,17 @@ export function LiquidsCard() {
   const waterIntake = useIntake("water");
   const settings = useSettings();
   const recentRecords = useRecentIntakeRecords("water");
+
+  // Sugar logged alongside a drink is stored as a linked sugar intake record;
+  // look it up by groupId so recent entries can show it.
+  const groupIds = useMemo(
+    () =>
+      (recentRecords || [])
+        .map((r) => r.groupId)
+        .filter((id): id is string => !!id),
+    [recentRecords]
+  );
+  const groupSugarMap = useSugarTotalsByGroupIds(groupIds);
 
   const { toast } = useToast();
   const deleteMutation = useDeleteIntake();
@@ -330,6 +342,11 @@ export function LiquidsCard() {
                   <span className="font-medium shrink-0">
                     {formatAmount(record.amount, "ml")}
                   </span>
+                  {record.groupId && groupSugarMap.get(record.groupId) ? (
+                    <span className="text-xs font-medium text-pink-600 dark:text-pink-400 shrink-0">
+                      {groupSugarMap.get(record.groupId)}g sugar
+                    </span>
+                  ) : null}
                   {sourceLabel && (
                     <span className="text-xs text-muted-foreground/80 bg-muted/60 px-1.5 py-0.5 rounded truncate">
                       {sourceLabel}

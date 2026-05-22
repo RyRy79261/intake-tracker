@@ -41,6 +41,7 @@ export function PresetTab({ tab }: PresetTabProps) {
   const [saltPer100ml, setSaltPer100ml] = useState<number>(0);
   const [waterContentPercent, setWaterContentPercent] = useState<number>(100);
   const [beverageName, setBeverageName] = useState("");
+  const [sugarG, setSugarG] = useState("");
   const [isLookingUp, setIsLookingUp] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [aiLookupUsed, setAiLookupUsed] = useState(false);
@@ -246,6 +247,15 @@ export function PresetTab({ tab }: PresetTabProps) {
         amount: Math.round((volumeMl / 100) * saltPer100ml),
       });
     }
+    // Sugar intake — direct per-entry gram amount
+    const parsedSugar = parseFloat(sugarG);
+    const sugar =
+      Number.isFinite(parsedSugar) && parsedSugar > 0
+        ? Math.round(parsedSugar)
+        : 0;
+    if (sugar > 0) {
+      intakes.push({ type: "sugar", amount: sugar, source: "manual:sugar" });
+    }
     if (intakes.length > 0) {
       entry.intakes = intakes;
     }
@@ -360,6 +370,7 @@ export function PresetTab({ tab }: PresetTabProps) {
     setSearchText("");
     setSelectedPresetId(null);
     setAiLookupUsed(false);
+    setSugarG("");
   };
 
   // Primary substance label for the per-100ml input
@@ -528,6 +539,26 @@ export function PresetTab({ tab }: PresetTabProps) {
             step={tab === "alcohol" ? "0.5" : "1"}
           />
         </div>
+      </div>
+
+      {/* Optional sugar content */}
+      <div className="mb-3 space-y-1">
+        <Label
+          htmlFor={`${tab}-sugar`}
+          className="text-xs text-muted-foreground"
+        >
+          Sugar (g) — optional
+        </Label>
+        <Input
+          id={`${tab}-sugar`}
+          type="number"
+          min={0}
+          inputMode="decimal"
+          placeholder="g"
+          value={sugarG}
+          onChange={(e) => setSugarG(e.target.value)}
+          className="h-10"
+        />
       </div>
 
       {/* 4. Calculated Amount Display */}
