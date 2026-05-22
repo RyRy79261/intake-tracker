@@ -22,7 +22,11 @@ import type {
   WeightTrendResult,
   CorrelationResult,
 } from "@/lib/analytics-types";
-import { URINATION_ESTIMATE_ML, DEFAULT_SALT_WEIGHT_LAG_DAYS } from "@/lib/analytics-types";
+import {
+  URINATION_ESTIMATE_ML,
+  DEFAULT_SALT_WEIGHT_LAG_DAYS,
+  DEFAULT_SUGAR_WEIGHT_LAG_DAYS,
+} from "@/lib/analytics-types";
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -78,6 +82,13 @@ export async function getRecordsByDomain(
       return records.map((r) => ({
         timestamp: r.timestamp,
         value: r.amount, // mg
+      }));
+    }
+    case "sugar": {
+      const records = await getIntakeRecordsByDateRange(start, end, "sugar");
+      return records.map((r) => ({
+        timestamp: r.timestamp,
+        value: r.amount, // g
       }));
     }
     case "weight": {
@@ -390,6 +401,22 @@ export async function saltVsWeight(
   lagDays: number = DEFAULT_SALT_WEIGHT_LAG_DAYS,
 ): Promise<AnalyticsResult<CorrelationResult>> {
   const result = await correlate("salt", "weight", range, lagDays);
+  return {
+    value: result,
+    unit: "correlation",
+    period: range,
+    dataPoints: result.seriesA,
+  };
+}
+
+/**
+ * Sugar intake vs weight correlation with configurable lag.
+ */
+export async function sugarVsWeight(
+  range: TimeRange,
+  lagDays: number = DEFAULT_SUGAR_WEIGHT_LAG_DAYS,
+): Promise<AnalyticsResult<CorrelationResult>> {
+  const result = await correlate("sugar", "weight", range, lagDays);
   return {
     value: result,
     unit: "correlation",

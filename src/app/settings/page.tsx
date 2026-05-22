@@ -13,6 +13,7 @@ import { AccountSection } from "@/components/settings/account-section";
 import { DaySettingsSection } from "@/components/settings/day-settings-section";
 import { WaterSettingsSection } from "@/components/settings/water-settings-section";
 import { SaltSettingsSection } from "@/components/settings/salt-settings-section";
+import { SugarSettingsSection } from "@/components/settings/sugar-settings-section";
 import { WeightSettingsSection } from "@/components/settings/weight-settings-section";
 import { AppearanceSection } from "@/components/settings/appearance-section";
 import { QuickNavSection } from "@/components/settings/quick-nav-section";
@@ -89,6 +90,7 @@ function SettingsContent() {
           <DaySettingsSection />
           <WaterSettingsSection />
           <SaltSettingsSection />
+          <SugarSettingsSection />
           <WeightSettingsSection />
           <LiquidPresetsSection />
           <UrinationDefecationDefaults />

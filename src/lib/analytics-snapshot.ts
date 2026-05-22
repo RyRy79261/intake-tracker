@@ -11,6 +11,7 @@ import {
   weightTrend,
   fluidBalance,
   saltVsWeight,
+  sugarVsWeight,
   caffeineVsBP,
   alcoholVsBP,
   getRecordsByDomain,
@@ -91,6 +92,7 @@ export const INSIGHTS_WINDOW_DAYS = 30;
 export interface IntakeGoals {
   waterGoalMl: number;
   sodiumLimitMg: number;
+  sugarLimitG: number;
 }
 
 /** The rolling analysis window ending now. */
@@ -124,14 +126,16 @@ export async function buildAnalyticsSnapshot(
   conditions?: string[],
   includeMedications?: boolean,
 ): Promise<AnalyticsInsightsRequest> {
-  const [bp, weight, fluid, water, salt, saltWeight, caffBp, alcBp] =
+  const [bp, weight, fluid, water, salt, sugar, saltWeight, sugarWeight, caffBp, alcBp] =
     await Promise.all([
       bpTrend(range),
       weightTrend(range),
       fluidBalance(range),
       getRecordsByDomain("water", range),
       getRecordsByDomain("salt", range),
+      getRecordsByDomain("sugar", range),
       saltVsWeight(range),
+      sugarVsWeight(range),
       caffeineVsBP(range),
       alcoholVsBP(range),
     ]);
@@ -171,9 +175,10 @@ export async function buildAnalyticsSnapshot(
   }
 
   if (
-    (water.length > 0 || salt.length > 0) &&
+    (water.length > 0 || salt.length > 0 || sugar.length > 0) &&
     goals.waterGoalMl > 0 &&
-    goals.sodiumLimitMg > 0
+    goals.sodiumLimitMg > 0 &&
+    goals.sugarLimitG > 0
   ) {
     const days = Math.max(1, Math.round((range.end - range.start) / MS_PER_DAY));
     const sum = (pts: { value: number }[]) =>
@@ -181,14 +186,17 @@ export async function buildAnalyticsSnapshot(
     metrics.intake = {
       avgWaterMl: sum(water) / days,
       avgSodiumMg: sum(salt) / days,
+      avgSugarG: sum(sugar) / days,
       waterGoalMl: goals.waterGoalMl,
       sodiumLimitMg: goals.sodiumLimitMg,
+      sugarLimitG: goals.sugarLimitG,
     };
   }
 
   const correlations = (
     [
       { domainA: "salt", domainB: "weight", result: saltWeight.value },
+      { domainA: "sugar", domainB: "weight", result: sugarWeight.value },
       { domainA: "caffeine", domainB: "bp", result: caffBp.value },
       { domainA: "alcohol", domainB: "bp", result: alcBp.value },
     ] as const

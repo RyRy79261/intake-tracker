@@ -11,7 +11,7 @@ import { useNowTick } from "@/hooks/use-now-tick";
 import { useSettingsStore } from "@/stores/settings-store";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { Progress } from "@/components/ui/progress";
-import { Droplets, Sparkles, Coffee, Wine } from "lucide-react";
+import { Droplets, Sparkles, Coffee, Wine, Candy } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -72,6 +72,7 @@ export function TextMetrics() {
   const dayStartHour = useSettingsStore((s) => s.dayStartHour);
   const waterLimit = useSettingsStore((s) => s.waterLimit);
   const saltLimit = useSettingsStore((s) => s.saltLimit);
+  const sugarLimit = useSettingsStore((s) => s.sugarLimit);
 
   // 60-second tick for day boundary refresh
   const tick = useNowTick();
@@ -79,6 +80,7 @@ export function TextMetrics() {
   // Today's totals
   const waterTotal = useDailyIntakeTotal("water");
   const saltTotal = useDailyIntakeTotal("salt");
+  const sugarTotal = useDailyIntakeTotal("sugar");
 
   // Day start timestamp for substance queries
   const dayStart = useMemo(
@@ -133,6 +135,11 @@ export function TextMetrics() {
     weekEnd,
     "salt"
   );
+  const weeklySugarRecords = useIntakeRecordsByDateRange(
+    weekStart,
+    weekEnd,
+    "sugar"
+  );
 
   const weeklyCaffeineRecords = useSubstanceRecordsByDateRange(
     weekStart,
@@ -148,16 +155,20 @@ export function TextMetrics() {
   // Bucket records into 7 days
   const weeklyWater = useMemo(() => bucketByDay(weeklyWaterRecords, weekStart, (r) => r.amount), [weeklyWaterRecords, weekStart]);
   const weeklySalt = useMemo(() => bucketByDay(weeklySaltRecords, weekStart, (r) => r.amount), [weeklySaltRecords, weekStart]);
+  const weeklySugar = useMemo(() => bucketByDay(weeklySugarRecords, weekStart, (r) => r.amount), [weeklySugarRecords, weekStart]);
   const weeklyCaffeine = useMemo(() => bucketByDay(weeklyCaffeineRecords, weekStart, (r) => r.amountMg ?? 0), [weeklyCaffeineRecords, weekStart]);
   const weeklyAlcohol = useMemo(() => bucketByDay(weeklyAlcoholRecords, weekStart, (r) => r.amountStandardDrinks ?? 0), [weeklyAlcoholRecords, weekStart]);
 
   // Over limit checks
   const waterOverLimit = waterLimit > 0 && waterTotal > waterLimit;
   const saltOverLimit = saltLimit > 0 && saltTotal > saltLimit;
+  const sugarOverLimit = sugarLimit > 0 && sugarTotal > sugarLimit;
   const waterPct =
     waterLimit > 0 ? Math.min(100, (waterTotal / waterLimit) * 100) : 0;
   const saltPct =
     saltLimit > 0 ? Math.min(100, (saltTotal / saltLimit) * 100) : 0;
+  const sugarPct =
+    sugarLimit > 0 ? Math.min(100, (sugarTotal / sugarLimit) * 100) : 0;
 
   return (
     <section aria-label="Daily intake summary">
@@ -231,6 +242,38 @@ export function TextMetrics() {
             </span>
           </div>
 
+          {/* Sugar */}
+          <div className="flex items-center gap-3">
+            <Candy
+              className={cn("w-4 h-4", CARD_THEMES.sugar.iconColor)}
+              aria-hidden="true"
+            />
+            <span className="text-sm text-foreground w-16">Sugar</span>
+            <Progress
+              value={sugarPct}
+              className="h-2 flex-1"
+              indicatorClassName={
+                sugarOverLimit
+                  ? "bg-red-500"
+                  : CARD_THEMES.sugar.progressGradient
+              }
+              aria-label="Sugar intake progress"
+            />
+            <span
+              className={cn(
+                "text-sm font-semibold tabular-nums",
+                sugarOverLimit
+                  ? "text-red-600 dark:text-red-400"
+                  : CARD_THEMES.sugar.latestValueColor
+              )}
+            >
+              {formatValue(sugarTotal)}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              / {formatValue(sugarLimit)} g
+            </span>
+          </div>
+
           {/* Caffeine */}
           <div className="flex items-center gap-3">
             <Coffee
@@ -294,6 +337,7 @@ export function TextMetrics() {
           {[
             { key: "water", label: "Water", data: weeklyWater, theme: CARD_THEMES.water, limit: waterLimit, fmt: formatValue },
             { key: "salt", label: "Na", data: weeklySalt, theme: CARD_THEMES.salt, limit: saltLimit, fmt: formatValue },
+            { key: "sugar", label: "Sug", data: weeklySugar, theme: CARD_THEMES.sugar, limit: sugarLimit, fmt: formatValue },
             { key: "caf", label: "Caf", data: weeklyCaffeine, theme: CARD_THEMES.caffeine, limit: 0, fmt: (v: number) => formatValue(Math.round(v)) },
             { key: "alc", label: "Alc", data: weeklyAlcohol, theme: CARD_THEMES.alcohol, limit: 0, fmt: (v: number) => v.toFixed(1) },
           ].map((row) => (
