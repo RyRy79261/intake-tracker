@@ -8,78 +8,18 @@ import { parseJsonBody, zodErrorResponse } from "@/app/api/_shared/validation";
 import { createRateLimiter, getClientIp } from "@/app/api/_shared/rate-limit";
 import { recordUsage, tokensFromAnthropic } from "@/app/api/ai/_shared/usage-tracker";
 import { aiErrorResponse } from "@/app/api/ai/_shared/ai-error-response";
+import { PARSE_TOOL, extractVoiceItems } from "@/app/api/ai/voice-parse/schema";
 
 /**
  * Parse a voice transcript into a heterogeneous list of health record items
  * (BP, HR, weight, water, sodium, food, caffeine, alcohol, urination,
  * defecation). Mirrors the pattern in /api/ai/parse — structured tool output,
  * two-turn fallback when the model returns prose instead of calling the
- * tool, and Zod validation on the response.
+ * tool, and per-item validation on the response (see schema.ts).
  */
 
 const ParseRequestSchema = z.object({
   transcript: z.string().min(1).max(2000),
-});
-
-const ItemSchema = z.discriminatedUnion("kind", [
-  z.object({
-    kind: z.literal("blood_pressure"),
-    systolic: z.number().int().min(40).max(260),
-    diastolic: z.number().int().min(20).max(200),
-    heartRate: z.number().int().min(20).max(250).optional(),
-    position: z.enum(["sitting", "standing"]).optional(),
-    arm: z.enum(["left", "right"]).optional(),
-    note: z.string().max(200).optional(),
-  }),
-  z.object({
-    kind: z.literal("weight"),
-    weightKg: z.number().min(1).max(500),
-    note: z.string().max(200).optional(),
-  }),
-  z.object({
-    kind: z.literal("water"),
-    ml: z.number().min(1).max(10000),
-    note: z.string().max(200).optional(),
-  }),
-  z.object({
-    kind: z.literal("salt"),
-    sodiumMg: z.number().min(1).max(20000),
-    note: z.string().max(200).optional(),
-  }),
-  z.object({
-    kind: z.literal("food"),
-    description: z.string().min(1).max(200),
-    grams: z.number().min(1).max(5000).optional(),
-    waterMl: z.number().min(0).max(5000).optional(),
-    sodiumMg: z.number().min(0).max(20000).optional(),
-  }),
-  z.object({
-    kind: z.literal("caffeine"),
-    description: z.string().min(1).max(200),
-    caffeineMg: z.number().min(0).max(2000),
-    volumeMl: z.number().min(0).max(5000).optional(),
-  }),
-  z.object({
-    kind: z.literal("alcohol"),
-    description: z.string().min(1).max(200),
-    abvPercent: z.number().min(0).max(95),
-    volumeMl: z.number().min(1).max(5000),
-  }),
-  z.object({
-    kind: z.literal("urination"),
-    amountEstimate: z.enum(["small", "medium", "large"]).optional(),
-    note: z.string().max(200).optional(),
-  }),
-  z.object({
-    kind: z.literal("defecation"),
-    amountEstimate: z.enum(["small", "medium", "large"]).optional(),
-    note: z.string().max(200).optional(),
-  }),
-]);
-
-const ResponseSchema = z.object({
-  items: z.array(ItemSchema).max(20),
-  reasoning: z.string().max(1000).optional(),
 });
 
 const SYSTEM_PROMPT = `You convert a spoken health log transcript into a structured list of items. The user dictates multiple distinct events in one utterance — extract each as its own item.
@@ -105,66 +45,6 @@ Rules:
 7. If you cannot extract anything from the transcript, return items: [].
 8. Always call the parse_voice_log tool. Never return prose only.
 9. Be conservative on optional fields — only include them if the transcript supports the value.`;
-
-const PARSE_TOOL = {
-  name: "parse_voice_log" as const,
-  description:
-    "Return a structured list of health log items extracted from a voice transcript.",
-  input_schema: {
-    type: "object" as const,
-    properties: {
-      items: {
-        type: "array",
-        description: "Ordered list of extracted items. Empty if nothing parseable.",
-        items: {
-          type: "object",
-          properties: {
-            kind: {
-              type: "string",
-              enum: [
-                "blood_pressure",
-                "weight",
-                "water",
-                "salt",
-                "food",
-                "caffeine",
-                "alcohol",
-                "urination",
-                "defecation",
-              ],
-            },
-            // Fields are union — Anthropic tool input schemas don't enforce
-            // discriminated unions, so we list everything and validate
-            // server-side with Zod.
-            systolic: { type: "number" },
-            diastolic: { type: "number" },
-            heartRate: { type: "number" },
-            position: { type: "string", enum: ["sitting", "standing"] },
-            arm: { type: "string", enum: ["left", "right"] },
-            weightKg: { type: "number" },
-            ml: { type: "number" },
-            sodiumMg: { type: "number" },
-            description: { type: "string" },
-            grams: { type: "number" },
-            waterMl: { type: "number" },
-            caffeineMg: { type: "number" },
-            abvPercent: { type: "number" },
-            volumeMl: { type: "number" },
-            amountEstimate: { type: "string", enum: ["small", "medium", "large"] },
-            note: { type: "string" },
-          },
-          required: ["kind"],
-        },
-      },
-      reasoning: {
-        type: "string",
-        description: "Brief explanation of estimates and assumptions.",
-      },
-    },
-    required: ["items"],
-    additionalProperties: false,
-  },
-};
 
 const rateLimiter = createRateLimiter(20);
 
@@ -306,19 +186,27 @@ export const POST = withAuth(async ({ request, auth }) => {
       );
     }
 
-    const validated = ResponseSchema.safeParse(toolBlock.input);
-    if (!validated.success) {
+    const extracted = extractVoiceItems(toolBlock.input);
+    if (!extracted.ok) {
       console.error(
-        "[VALIDATION] voice-parse response invalid:",
-        JSON.stringify(validated.error.flatten())
+        "[VALIDATION] voice-parse: tool output had no usable items:",
+        JSON.stringify(toolBlock.input)
       );
       return NextResponse.json(
         { error: "AI response format invalid" },
         { status: 422 }
       );
     }
+    if (extracted.dropped > 0) {
+      console.warn(
+        `[VALIDATION] voice-parse: dropped ${extracted.dropped} malformed item(s)`
+      );
+    }
 
-    return NextResponse.json(validated.data);
+    return NextResponse.json({
+      items: extracted.items,
+      ...(extracted.reasoning !== undefined && { reasoning: extracted.reasoning }),
+    });
   } catch (error) {
     const mapped = aiErrorResponse(error);
     if (mapped) return mapped;
