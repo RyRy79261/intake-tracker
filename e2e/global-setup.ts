@@ -2,6 +2,7 @@ import { chromium, type FullConfig } from "@playwright/test";
 import * as fs from "fs";
 import * as path from "path";
 import { neon } from "@neondatabase/serverless";
+import { WELCOME_SEEN_KEY } from "../src/lib/constants";
 
 /**
  * Phase 41 E2E auth setup.
@@ -28,17 +29,29 @@ async function globalSetup(config: FullConfig) {
   const email = process.env.NEON_AUTH_TEST_EMAIL;
   const password = process.env.NEON_AUTH_TEST_PASSWORD;
 
+  const baseURL =
+    config.projects[0]?.use.baseURL ?? "http://localhost:3000";
+
+  // Pre-seed the first-run welcome dialog's "seen" flag so its modal overlay
+  // doesn't intercept clicks during specs. Only used by the unauthenticated
+  // fallback path below — the authenticated path captures live storage state
+  // instead (see the page.evaluate near storageState()).
+  const welcomeOrigin = {
+    origin: new URL(baseURL).origin,
+    localStorage: [{ name: WELCOME_SEEN_KEY, value: "true" }],
+  };
+
   if (!email || !password) {
     console.warn(
       "[e2e-global-setup] NEON_AUTH_TEST_EMAIL / NEON_AUTH_TEST_PASSWORD not set; " +
         "writing empty storage state. Specs will run unauthenticated."
     );
-    fs.writeFileSync(authFile, JSON.stringify({ cookies: [], origins: [] }));
+    fs.writeFileSync(
+      authFile,
+      JSON.stringify({ cookies: [], origins: [welcomeOrigin] })
+    );
     return;
   }
-
-  const baseURL =
-    config.projects[0]?.use.baseURL ?? "http://localhost:3000";
 
   const browser = await chromium.launch();
   const context = await browser.newContext({ baseURL });
@@ -71,6 +84,13 @@ async function globalSetup(config: FullConfig) {
       (url) => !url.pathname.startsWith("/auth"),
       { timeout: 30_000 }
     );
+
+    // context.storageState() below overwrites authFile wholesale, so the
+    // welcomeOrigin object above does NOT reach the authenticated state.
+    // Set the flag live in the browser context so storageState() captures it.
+    await page.evaluate((key) => {
+      localStorage.setItem(key, "true");
+    }, WELCOME_SEEN_KEY);
 
     await context.storageState({ path: authFile });
     console.log("[e2e-global-setup] Authenticated state saved to", authFile);
