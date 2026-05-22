@@ -87,6 +87,7 @@
     "zustand": "^5.0.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.11.3",
     "@babel/core": "^7.28.6",
     "@capacitor/assets": "^3.0.5",
     "@commitlint/cli": "^20.5.0",
@@ -110,8 +111,10 @@
     "eslint": "^8.57.1",
     "eslint-config-next": "14.2.35",
     "fake-indexeddb": "^6.2.5",
+    "fast-check": "^4.8.0",
     "husky": "^9.1.7",
     "jsdom": "^29.1.1",
+    "msw": "^2.14.6",
     "pg": "^8.20.0",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.14",
