@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Droplets, Smartphone, Hand } from "lucide-react";
+import { Droplets, Smartphone, Hand, LifeBuoy } from "lucide-react";
 
 const WELCOME_SEEN_KEY = "intake-tracker-welcome-seen";
 
@@ -20,11 +20,15 @@ const WELCOME_SEEN_KEY = "intake-tracker-welcome-seen";
  */
 export function WelcomeDialog() {
   const [open, setOpen] = useState(false);
+  // The shake gesture only works on touch devices, so desktop users are
+  // pointed to the Help section in Settings instead.
+  const [isTouch, setIsTouch] = useState(true);
 
   useEffect(() => {
     if (localStorage.getItem(WELCOME_SEEN_KEY) !== "true") {
       setOpen(true);
     }
+    setIsTouch(window.matchMedia("(pointer: coarse)").matches);
   }, []);
 
   function dismiss() {
@@ -46,9 +50,15 @@ export function WelcomeDialog() {
         </DialogHeader>
         <div className="space-y-3 pt-2">
           <div className="flex items-start gap-3 py-2 px-3 rounded-lg bg-muted/50">
-            <Hand className="w-4 h-4 mt-0.5 shrink-0 text-muted-foreground" />
+            {isTouch ? (
+              <Hand className="w-4 h-4 mt-0.5 shrink-0 text-muted-foreground" />
+            ) : (
+              <LifeBuoy className="w-4 h-4 mt-0.5 shrink-0 text-muted-foreground" />
+            )}
             <p className="text-sm text-muted-foreground leading-relaxed">
-              Lost or need help? Just shake your phone.
+              {isTouch
+                ? "Lost or need help? Just shake your phone."
+                : "Lost or need help? Open the Help section in Settings."}
             </p>
           </div>
           <div className="flex items-start gap-3 py-2 px-3 rounded-lg bg-muted/50">
