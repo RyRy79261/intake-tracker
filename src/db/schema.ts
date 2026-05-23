@@ -1,10 +1,11 @@
 /**
- * Postgres schema — single source of truth for all 24 tables.
+ * Postgres schema — single source of truth for all 28 tables.
  *
  * Mirrors src/lib/db.ts Dexie interfaces exactly (17 app tables),
  * includes 4 push notification tables that replace scripts/push-migration.sql,
- * and 3 server-only AI tables (user_api_keys, user_key_shares, ai_usage)
- * that have no Dexie counterpart.
+ * 3 server-only AI tables (user_api_keys, user_key_shares, ai_usage), and
+ * 4 server-only MCP-connector tables (mcp_oauth_clients, mcp_auth_codes,
+ * mcp_access_tokens, mcp_audit_log) that have no Dexie counterpart.
  *
  * Conventions:
  *   - TS property: camelCase (matches Dexie interfaces)
@@ -850,5 +851,116 @@ export const aiUsage = pgTable(
     ),
     userTsIdx: index("idx_ai_usage_user_ts").on(t.userId, t.timestamp),
     keyOwnerTsIdx: index("idx_ai_usage_owner_ts").on(t.keyOwnerId, t.timestamp),
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────────────────
+// MCP (Model Context Protocol) custom connector for claude.ai.
+//
+// These four tables back an OAuth 2.1 + DCR (RFC 7591) authorization
+// server that lets claude.ai's "Custom Connectors" feature query this
+// app's data on behalf of an authenticated Neon Auth user. User identity
+// is delegated to the existing Neon Auth Google sign-in flow; these
+// tables only persist the OAuth state needed to mint and validate tokens
+// scoped to a userId. See docs/mcp-connector.md.
+//
+// All four are server-only — they do NOT participate in Dexie sync.
+// ─────────────────────────────────────────────────────────────────────────
+
+export const mcpOauthClients = pgTable(
+  "mcp_oauth_clients",
+  {
+    clientId: text("client_id").primaryKey(),
+    clientSecretHash: text("client_secret_hash"),
+    clientName: text("client_name").notNull(),
+    redirectUris: text("redirect_uris").array().notNull(),
+    tokenEndpointAuthMethod: text("token_endpoint_auth_method").notNull(),
+    scope: text("scope"),
+    createdAt: bigint("created_at", { mode: "number" }).notNull(),
+    lastUsedAt: bigint("last_used_at", { mode: "number" }),
+  },
+  (t) => ({
+    authMethodCheck: check(
+      "mcp_oauth_clients_auth_method_check",
+      sql`${t.tokenEndpointAuthMethod} IN ('none','client_secret_basic','client_secret_post')`,
+    ),
+  }),
+);
+
+export const mcpAuthCodes = pgTable(
+  "mcp_auth_codes",
+  {
+    code: text("code").primaryKey(),
+    clientId: text("client_id")
+      .notNull()
+      .references(() => mcpOauthClients.clientId, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => usersSync.id, { onDelete: "cascade" }),
+    redirectUri: text("redirect_uri").notNull(),
+    codeChallenge: text("code_challenge").notNull(),
+    codeChallengeMethod: text("code_challenge_method").notNull(),
+    scope: text("scope").notNull(),
+    expiresAt: bigint("expires_at", { mode: "number" }).notNull(),
+    consumedAt: bigint("consumed_at", { mode: "number" }),
+    createdAt: bigint("created_at", { mode: "number" }).notNull(),
+  },
+  (t) => ({
+    challengeMethodCheck: check(
+      "mcp_auth_codes_challenge_method_check",
+      sql`${t.codeChallengeMethod} IN ('S256','plain')`,
+    ),
+    clientIdx: index("idx_mcp_auth_codes_client").on(t.clientId),
+    expiresIdx: index("idx_mcp_auth_codes_expires").on(t.expiresAt),
+  }),
+);
+
+export const mcpAccessTokens = pgTable(
+  "mcp_access_tokens",
+  {
+    tokenHash: text("token_hash").primaryKey(),
+    refreshTokenHash: text("refresh_token_hash").unique(),
+    clientId: text("client_id")
+      .notNull()
+      .references(() => mcpOauthClients.clientId, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => usersSync.id, { onDelete: "cascade" }),
+    scope: text("scope").notNull(),
+    expiresAt: bigint("expires_at", { mode: "number" }).notNull(),
+    refreshExpiresAt: bigint("refresh_expires_at", { mode: "number" }),
+    revokedAt: bigint("revoked_at", { mode: "number" }),
+    createdAt: bigint("created_at", { mode: "number" }).notNull(),
+    lastUsedAt: bigint("last_used_at", { mode: "number" }),
+  },
+  (t) => ({
+    userIdx: index("idx_mcp_access_tokens_user").on(t.userId),
+    expiresIdx: index("idx_mcp_access_tokens_expires").on(t.expiresAt),
+  }),
+);
+
+export const mcpAuditLog = pgTable(
+  "mcp_audit_log",
+  {
+    id: serial("id").primaryKey(),
+    timestamp: timestamp("timestamp", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => usersSync.id, { onDelete: "cascade" }),
+    clientId: text("client_id").notNull(),
+    tool: text("tool").notNull(),
+    argsJson: text("args_json"),
+    status: text("status").notNull(),
+    errorMessage: text("error_message"),
+    durationMs: integer("duration_ms"),
+  },
+  (t) => ({
+    statusCheck: check(
+      "mcp_audit_log_status_check",
+      sql`${t.status} IN ('success','error')`,
+    ),
+    userTsIdx: index("idx_mcp_audit_user_ts").on(t.userId, t.timestamp),
   }),
 );
