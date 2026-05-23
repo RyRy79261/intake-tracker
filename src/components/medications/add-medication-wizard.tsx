@@ -370,7 +370,12 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
 
         <div className="p-4 px-5">
           <div className="flex items-center justify-between mb-4">
-            <Button variant="ghost" size="icon" onClick={canGoBack ? goBack : handleClose}>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={canGoBack ? goBack : handleClose}
+              aria-label={canGoBack ? "Previous step" : "Close wizard"}
+            >
               {canGoBack ? <ArrowLeft className="w-5 h-5" /> : <X className="w-5 h-5" />}
             </Button>
             <div className="text-center">
