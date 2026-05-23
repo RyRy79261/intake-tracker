@@ -182,6 +182,7 @@ export function WeightCard() {
               onClick={handleDecrement}
               disabled={pendingWeight === null || pendingWeight <= settings.weightIncrement}
               className={cn("h-14 w-14 shrink-0 rounded-full transition-all", theme.hoverBg)}
+              aria-label="Decrease weight"
             >
               <Minus className="w-6 h-6" />
             </Button>
@@ -217,6 +218,7 @@ export function WeightCard() {
               onClick={handleIncrement}
               disabled={pendingWeight === null}
               className={cn("h-14 w-14 shrink-0 rounded-full transition-all", theme.hoverBg)}
+              aria-label="Increase weight"
             >
               <Plus className="w-6 h-6" />
             </Button>

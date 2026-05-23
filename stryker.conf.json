@@ -1,0 +1,40 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "_comment": "Mutation testing config — see docs/TESTING_STRATEGY.md §2.2. Line coverage tells us code executed; mutation testing tells us tests would actually catch a regression. Scoped narrowly to the sync engine (the highest-leverage module — a bug here loses user health data). Expand the `mutate` glob as confidence in the score grows.",
+  "packageManager": "pnpm",
+  "testRunner": "vitest",
+  "plugins": ["@stryker-mutator/vitest-runner"],
+  "vitest": {
+    "configFile": "vitest.config.ts"
+  },
+  "reporters": ["html", "json", "clear-text", "progress"],
+  "coverageAnalysis": "perTest",
+  "mutate": [
+    "src/lib/sync-engine.ts",
+    "src/lib/sync-queue.ts",
+    "src/lib/sync-topology.ts",
+    "src/lib/sync-payload.ts"
+  ],
+  "ignorePatterns": [
+    "dist",
+    ".next",
+    "node_modules",
+    "playwright",
+    ".coverage",
+    ".stryker-tmp",
+    "drizzle"
+  ],
+  "thresholds": {
+    "high": 80,
+    "low": 60,
+    "break": null
+  },
+  "timeoutMS": 60000,
+  "concurrency": 2,
+  "htmlReporter": {
+    "fileName": ".stryker-tmp/mutation/index.html"
+  },
+  "jsonReporter": {
+    "fileName": ".stryker-tmp/mutation/report.json"
+  }
+}

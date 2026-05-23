@@ -387,6 +387,7 @@ export function PresetTab({ tab }: PresetTabProps) {
           indicatorClassName={cn(
             isWaterOverLimit ? theme.progressOverLimit : theme.progressGradient
           )}
+          aria-label="Water intake today, as a percentage of the daily limit"
         />
       </div>
 

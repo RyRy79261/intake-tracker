@@ -422,7 +422,7 @@ export function FoodSection() {
               value={sodiumSource}
               onValueChange={(v) => setSodiumSource(v as SodiumSource)}
             >
-              <SelectTrigger className="w-[120px]">
+              <SelectTrigger className="w-[120px]" aria-label="Measurement source">
                 <SelectValue placeholder="Source" />
               </SelectTrigger>
               <SelectContent>

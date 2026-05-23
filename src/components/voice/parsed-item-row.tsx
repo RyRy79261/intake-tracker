@@ -216,7 +216,7 @@ function ItemEditor({
               onChange={(e) => onChange({ ...item, description: e.target.value })}
             />
           </Field>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             <Field label="Grams">
               <Input
                 type="number"
@@ -250,6 +250,19 @@ function ItemEditor({
                 placeholder="—"
                 onChange={(e) =>
                   onChange(setOptionalNumber(item, "sodiumMg", e.target.value))
+                }
+              />
+            </Field>
+            <Field label="Sugar (g)">
+              <Input
+                type="number"
+                inputMode="decimal"
+                step="0.1"
+                disabled={disabled}
+                value={item.sugarG ?? ""}
+                placeholder="—"
+                onChange={(e) =>
+                  onChange(setOptionalNumber(item, "sugarG", e.target.value))
                 }
               />
             </Field>

@@ -102,6 +102,7 @@ export function WaterTab() {
           indicatorClassName={cn(
             isOverLimit ? theme.progressOverLimit : theme.progressGradient
           )}
+          aria-label="Water intake today, as a percentage of the daily limit"
         />
       </div>
 
@@ -132,6 +133,7 @@ export function WaterTab() {
           onClick={handleDecrement}
           disabled={pendingAmount <= waterIncrement || isSubmitting}
           className={cn("shrink-0 rounded-full transition-all", theme.hoverBg)}
+          aria-label="Decrease water amount"
         >
           <Minus className="w-6 h-6" />
         </Button>
@@ -167,6 +169,7 @@ export function WaterTab() {
           onClick={handleIncrement}
           disabled={isSubmitting}
           className={cn("shrink-0 rounded-full transition-all", theme.hoverBg)}
+          aria-label="Increase water amount"
         >
           <Plus className="w-6 h-6" />
         </Button>

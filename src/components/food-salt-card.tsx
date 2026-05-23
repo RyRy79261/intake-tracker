@@ -75,6 +75,7 @@ export function FoodSaltCard() {
             indicatorClassName={cn(
               isOverLimit ? CARD_THEMES.salt.progressOverLimit : CARD_THEMES.salt.progressGradient
             )}
+            aria-label="Sodium intake today, as a percentage of the daily limit"
           />
         </div>
 
@@ -108,6 +109,7 @@ export function FoodSaltCard() {
                 ? CARD_THEMES.sugar.progressOverLimit
                 : CARD_THEMES.sugar.progressGradient
             )}
+            aria-label="Sugar intake today, as a percentage of the daily limit"
           />
         </div>
 
