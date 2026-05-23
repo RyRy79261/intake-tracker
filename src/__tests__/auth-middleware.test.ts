@@ -162,7 +162,14 @@ describe("root middleware.ts", () => {
     expect(mod.config).toBeDefined();
     expect(Array.isArray(mod.config.matcher)).toBe(true);
     const matcher = mod.config.matcher as string[];
-    expect(matcher.length).toBe(1);
-    expect(matcher).toContain("/api/:path*");
+    // /api/:path* drives the capacitor CORS branch; /auth and /auth/* are
+    // routed through Neon Auth's middleware so the OAuth verifier-exchange
+    // step runs on the OAuth return trip (without it the session cookie
+    // never materialises and the MCP custom-connector flow stalls after
+    // Google sign-in).
+    expect(matcher.length).toBe(3);
+    expect(matcher).toEqual(
+      expect.arrayContaining(["/api/:path*", "/auth", "/auth/:path*"]),
+    );
   });
 });
