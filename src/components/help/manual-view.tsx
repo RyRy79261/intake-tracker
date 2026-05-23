@@ -15,7 +15,7 @@ export function ManualView({ manual }: { manual: Manual }) {
 
   return (
     <div className="pb-12">
-      <HelpTopBar title="User Manual" onBack={() => router.push("/help")} />
+      <HelpTopBar title="User Manual" onBack={() => router.back()} />
 
       <header className="mb-6">
         <div className="mb-1 flex items-center gap-2">
