@@ -617,17 +617,20 @@ is a product call — this branch only surfaces the finding.
 
 ### Baseline mutation score (Stryker, sync engine)
 
-Ran `pnpm test:mutation` against the 4 sync-engine files. 473 mutants
-generated, 13:38 wall-clock runtime. **Overall mutation score: 39.96%
-(killed 185, survived 185, timed out 4, no coverage 99).**
+Initial baseline (commit `6684a1f`, 473 mutants, 13:38 runtime):
+**39.96%** — killed 185, survived 185, timed out 4, no coverage 99.
 
-Per-file breakdown:
+After three rounds of follow-up work, re-baselined (478 mutants, 19:54
+runtime): **55.44%** — killed 263, survived 173, timed out 2, no
+coverage 40. **+15.5 percentage points overall.**
 
-| File | Score | Killed | Survived | No coverage | Note |
+Per-file breakdown (final):
+
+| File | Score | Killed | Survived | No coverage | History |
 |---|---|---|---|---|---|
-| `sync-queue.ts`  | **100.00%** | 25 | 0   | 0  | Was 88% — three survivors closed by targeted tests in commit `c485a6d` |
-| `sync-engine.ts` | **52.56%**  | 183 | 127 | 40 | Was 40.34% — 8 failure-path tests in commit `0579eca` closed 59 no-coverage mutants (99 → 40) |
-| `sync-payload.ts`| **26.04%**  | 25 | 71  | 0  | **Stale baseline** — measured before the property tests in §2.3 landed; rerun will be much higher |
+| `sync-queue.ts`  | **100.00%** | 25  | 0   | 0  | 88% → 100% via 3 targeted tests in `c485a6d` |
+| `sync-engine.ts` | **52.56%**  | 183 | 127 | 40 | 40% → 53% via 8 failure-path tests in `0579eca` |
+| `sync-payload.ts`| **54.46%**  | 55  | 46  | 0  | 26% → 54% — **doubled** by the property tests in `2482012` |
 
 Survived-mutant types (top 5, whole suite):
 
@@ -649,24 +652,34 @@ What these mean concretely:
     push/pull is well-tested; the un-happy ones less so.
 
 What I'd recommend:
-  1. **Re-run mutation testing** after the sync-payload property tests
-     in commit `2482012` are included — the 26% score on that file is
-     a pre-property-test baseline and will jump.
-  2. **The loop works.** sync-queue.ts went 88% → 100% (3 targeted
-     tests, commit `c485a6d`). sync-engine.ts went 40% → 53% (8
-     failure-path tests, commit `0579eca` — closed 59 no-coverage
-     mutants). The remaining 127 surviving mutants on sync-engine.ts
-     are mostly module-level state flags (engineStarted, pushInFlight,
-     etc.) — flipping these in isolation doesn't break the happy path
-     in any single test. Closing them requires either life-cycle
-     property tests over an arbitrary sequence of operations or
-     accepting that these are low-value mutants. **Recommend**: stop
-     here on sync-engine, ratchet the gate to ≥50%, focus next
-     round on `sync-payload.ts` once it's re-baselined.
-  3. **Don't gate CI on the absolute score yet** — gate on
-     "score did not drop" instead. Use ratchet semantics, same as the
-     coverage ratchet in `vitest.config.ts`. The current scores then
-     become the floor; any new test must hold the line.
+  1. **The loop works on all three files.** Each round confirmed it:
+     - `sync-queue.ts`: 3 targeted tests → 88% to 100% (`c485a6d`).
+     - `sync-engine.ts`: 8 failure-path tests → 40% to 53% (`0579eca`).
+     - `sync-payload.ts`: 12 property tests → 26% to 54% (`2482012`,
+       remeasured after the fact).
+     The pattern is identical: read survivors → write tests that kill
+     them → score moves. No magic, just discipline.
+  2. **What's left on `sync-engine.ts`** — 127 surviving mutants are
+     mostly module-level state flags (engineStarted, pushInFlight,
+     etc.); flipping them in isolation doesn't break the happy path
+     in any single test. Closing them requires life-cycle property
+     tests over arbitrary operation sequences. The cost/benefit is
+     mediocre — recommend stopping at ~53% here unless a real bug
+     surfaces in this area.
+  3. **What's left on `sync-payload.ts`** — 46 survivors are mostly
+     string-literal mutants on error messages, and ObjectLiteral
+     mutants where the test asserts `success: false` without
+     inspecting the issue codes. Closing these would mean asserting
+     on Zod issue paths explicitly (e.g. `issue.path[0] === "ops"`).
+     Modest effort, ~70-80% score achievable.
+  4. **Gate semantics**: don't pin an absolute floor. Use ratchet
+     semantics — gate on "score did not drop" the same way the
+     coverage ratchet works in `vitest.config.ts`. The current
+     scores (100% / 53% / 54%) become the floor.
+  5. **Run nightly**: `.github/workflows/mutation.yml` is wired up
+     (commit `4d95558`) to run at 03:00 UTC + on demand. The score
+     table posts to the workflow summary; HTML report uploaded as
+     an artifact.
 
 ### Quickest follow-ups if the work continues
 
