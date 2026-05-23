@@ -319,7 +319,23 @@ export const pullBodySchema = z.object({
   // `partialRecord` (zod/v4) allows missing tableName keys — a missing entry
   // means "cursor = 0 for that table" (full pull). `invalid_key` errors still
   // fire on unknown keys (T-43-04-05 cursor injection).
-  cursors: z.partialRecord(tableNameSchema, cursorSchema),
+  //
+  // The .refine() layer below is defence-in-depth against a Zod quirk:
+  // `partialRecord` skips own-property names that look like prototype keys
+  // (`__proto__`, `constructor`) — they slip through the enum check.
+  // The route itself never iterates body.cursors directly (it walks
+  // schemaByTableName), so the runtime exposure is zero, but rejecting at
+  // the boundary keeps the contract honest and protects future refactors.
+  // Discovered by src/lib/sync-payload.property.test.ts PULL-2.
+  cursors: z
+    .partialRecord(tableNameSchema, cursorSchema)
+    .refine(
+      (obj) =>
+        Object.keys(obj).every(
+          (k) => tableNameSchema.safeParse(k).success,
+        ),
+      { message: "cursors contains an unknown table key" },
+    ),
 });
 
 export type PullBody = z.infer<typeof pullBodySchema>;
