@@ -615,20 +615,75 @@ a tombstone-precedence rule in `route.ts` (one-line change:
 `if (op.row.deletedAt != null && clampedUpdatedAt >= existing.updatedAt) write`)
 is a product call — this branch only surfaces the finding.
 
+### Baseline mutation score (Stryker, sync engine)
+
+Ran `pnpm test:mutation` against the 4 sync-engine files. 473 mutants
+generated, 13:38 wall-clock runtime. **Overall mutation score: 39.96%
+(killed 185, survived 185, timed out 4, no coverage 99).**
+
+Per-file breakdown:
+
+| File | Score | Killed | Survived | No coverage | Note |
+|---|---|---|---|---|---|
+| `sync-queue.ts`  | **88.00%** | 22 | 3   | 0  | Strong — assertions match execution |
+| `sync-engine.ts` | **40.34%** | 138 | 111 | 99 | Mediocre — 99 mutants on code no test runs |
+| `sync-payload.ts`| **26.04%** | 25 | 71  | 0  | **Stale baseline** — measured before the property tests in §2.3 landed; rerun will be much higher |
+
+Survived-mutant types (top 5, whole suite):
+
+  StringLiteral × 49 — literal strings changed, no assertion noticed
+  ConditionalExpression × 46 — `if` turned to `false`, code paths skipped silently
+  BooleanLiteral × 33 — true/false flipped
+  ObjectLiteral × 29 — fields removed from returned objects
+  BlockStatement × 10 — function bodies emptied
+
+What these mean concretely:
+  - `sync-queue.ts:62` — the `if (existing.op === op)` body can be
+    emptied and no test fails. The same-op coalesce-enqueue path has
+    no assertion that proves the enqueuedAt was actually bumped.
+  - `sync-queue.ts:95` — the `if (queueIds.length === 0) return;`
+    early-out can be replaced with `if (false) return;` and no test
+    fails. The empty-ack path isn't covered.
+  - 99 mutants in `sync-engine.ts` have no test coverage at all —
+    likely the error / backoff / failure-mode paths. The happy-path
+    push/pull is well-tested; the un-happy ones less so.
+
+What I'd recommend:
+  1. **Re-run mutation testing** after the sync-payload property tests
+     in commit `2482012` are included — the 26% score on that file is
+     a pre-property-test baseline and will jump.
+  2. **Treat sync-queue.ts (88%) as the proof point** that the existing
+     test pattern *can* produce high mutation scores. The gap on
+     sync-engine.ts is about coverage breadth (99 unreached mutants),
+     not test-writing technique.
+  3. **Don't gate CI on a 40% score** — the noise/signal ratio is bad
+     until the score is in the 70s. Use it as a tracked metric for now
+     (nightly workflow, posted score), gate later.
+
 ### Quickest follow-ups if the work continues
 
-1. **Run `pnpm test:mutation`** once locally and publish the baseline
-   mutation score for the sync engine. Then decide whether to wire it
-   into a nightly CI workflow.
-2. **Decide on the tombstone-on-tie behaviour** — either fix the route
-   or document the asymmetry as intended in `/api/sync/push/route.ts`'s
-   D-12 docstring.
-3. **Triage the axe-core output** — run `pnpm exec playwright test e2e/a11y.spec.ts`
-   to see which serious-impact violations exist (they log but don't gate
-   yet) and decide what to fix vs. accept.
-4. **Add a second MSW integration flow** for the medication wizard —
-   it's the most complex user flow in the app and would benefit most
-   from this paradigm.
+1. ~~Run `pnpm test:mutation` baseline~~ — ✅ Recorded above. See
+   `.stryker-tmp/mutation/index.html` for the per-mutant HTML report
+   (gitignored).
+2. ~~Decide on the tombstone-on-tie behaviour~~ — ✅ Fixed in
+   `104c581` (rule 2b in `/api/sync/push/route.ts`).
+3. ~~Triage the axe-core output~~ — ✅ Jsdom triage shipped in
+   `fd62f7c` (`src/__tests__/a11y/components-a11y.test.tsx`). Three
+   components have critical `button-name` violations
+   (LiquidsCard×4, FoodSaltCard×1, WeightCard×2) and two have
+   serious `aria-progressbar-name` violations (LiquidsCard×4,
+   FoodSaltCard×2). Two distinct root causes — icon buttons without
+   `aria-label` and Radix `Progress` components without an
+   accessible name. The Playwright spec stays as the source of
+   truth for full-page contrast / landmark checks.
+4. ~~Add a second MSW integration flow~~ — ✅ Wizard flow shipped in
+   `e6fba9f`.
+5. **Re-run mutation testing** after the sync-payload property tests
+   land in the baseline measurement.
+6. **Decide on the `__proto__` cursor finding** — already fixed
+   defensively in `2482012` (the route was never exposed but the
+   schema now correctly rejects); leaving the strategy doc note here
+   so the finding is tracked.
 
 ---
 
