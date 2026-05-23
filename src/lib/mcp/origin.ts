@@ -2,20 +2,28 @@
  * Resolve the public origin of this app for use in OAuth metadata,
  * redirect URIs, etc.
  *
- * Priority:
+ * Priority (request headers MUST win over VERCEL_URL — see below):
  *   1. MCP_PUBLIC_URL (explicit override for prod / staging)
- *   2. VERCEL_URL (Vercel auto-set, no protocol)
- *   3. Request `x-forwarded-host` + `x-forwarded-proto`
- *   4. Request `host` + `x-forwarded-proto` / req.protocol
+ *   2. Request `x-forwarded-host` + `x-forwarded-proto` (what the user
+ *      actually hit, including custom domains)
+ *   3. Request `host` header (less reliable, but still real)
+ *   4. VERCEL_URL (deployment-hash fallback; useful only when no
+ *      request is available, e.g. background jobs)
+ *   5. localhost (dev fallback)
+ *
+ * Why VERCEL_URL is NOT preferred: Vercel auto-sets it to the
+ * deployment-hash URL (e.g. intake-tracker-ooptvrqpl-…vercel.app),
+ * which is gated by Vercel SSO on production deployments. Using it as
+ * the OAuth issuer means claude.ai's connector tries to redirect users
+ * there and hits a 403. The custom domain (delivered via forwarded
+ * headers) is the URL the user actually configured, and is the right
+ * issuer for every OAuth document.
  */
 import type { NextRequest } from "next/server";
 
 export function getPublicOrigin(req?: NextRequest | Request): string {
   const override = process.env.MCP_PUBLIC_URL?.trim();
   if (override) return override.replace(/\/$/, "");
-
-  const vercel = process.env.VERCEL_URL?.trim();
-  if (vercel) return `https://${vercel.replace(/^https?:\/\//, "")}`;
 
   if (req) {
     const headers = "headers" in req ? req.headers : null;
@@ -33,6 +41,9 @@ export function getPublicOrigin(req?: NextRequest | Request): string {
       }
     }
   }
+
+  const vercel = process.env.VERCEL_URL?.trim();
+  if (vercel) return `https://${vercel.replace(/^https?:\/\//, "")}`;
 
   return "http://localhost:3000";
 }
