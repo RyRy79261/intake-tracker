@@ -200,6 +200,84 @@ describe("pushBodySchema — property invariants", () => {
     });
     expect(result.success).toBe(true);
   });
+
+  it("PUSH-6: userId in the incoming row is always stripped from the parsed result (security boundary)", () => {
+    // Defence-in-depth: every per-table row schema is built with
+    // `.omit({ userId: true })` so a malicious client can't claim to
+    // be another user via the request body. The push route itself
+    // also strips + restamps userId server-side, but the schema is
+    // the FIRST layer of that defence.
+    //
+    // Stryker round 1 found that mutating `.omit({ userId: true })` to
+    // `.omit({})` (or `.omit({ userId: false })`) survived every
+    // existing test — none asserted on the absence of userId in the
+    // parsed output. This property closes that gap.
+    fc.assert(
+      fc.property(
+        // Try a few tables — intakeRecords is the most commonly
+        // written; weightRecords + bloodPressureRecords exercise the
+        // discriminated union's other arms.
+        fc.constantFrom(
+          "intakeRecords",
+          "weightRecords",
+          "bloodPressureRecords",
+        ),
+        fc.string({ minLength: 1, maxLength: 40 }),
+        (tableName, evilUserId) => {
+          const validRow = (() => {
+            const base = validIntakeRow();
+            switch (tableName) {
+              case "intakeRecords":
+                return base;
+              case "weightRecords":
+                return {
+                  id: "w-1",
+                  weight: 75,
+                  timestamp: base.timestamp,
+                  createdAt: base.createdAt,
+                  updatedAt: base.updatedAt,
+                  deletedAt: null,
+                  deviceId: "dev-fc",
+                };
+              case "bloodPressureRecords":
+                return {
+                  id: "bp-1",
+                  systolic: 120,
+                  diastolic: 80,
+                  heartRate: 70,
+                  irregularHeartbeat: false,
+                  position: "sitting",
+                  arm: "left",
+                  timestamp: base.timestamp,
+                  createdAt: base.createdAt,
+                  updatedAt: base.updatedAt,
+                  deletedAt: null,
+                  deviceId: "dev-fc",
+                };
+            }
+          })();
+          const op = {
+            queueId: 1,
+            op: "upsert",
+            tableName,
+            // Client sneaks in a userId — the schema must drop it.
+            row: { ...validRow, userId: evilUserId },
+          };
+
+          const result = pushBodySchema.safeParse({ ops: [op] });
+          // Either the parse succeeds (with userId stripped) or it
+          // rejects entirely. Both are acceptable security outcomes.
+          // The unacceptable case is: success AND parsed.data.ops[0]
+          // .row.userId === evilUserId.
+          if (result.success) {
+            const parsed = result.data.ops[0]!.row as Record<string, unknown>;
+            expect(parsed.userId).toBeUndefined();
+          }
+        },
+      ),
+      { numRuns: 30 },
+    );
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────
