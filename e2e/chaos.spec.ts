@@ -224,3 +224,117 @@ test.describe("Chaos: clock jump backward", () => {
     ).not.toBeVisible();
   });
 });
+
+test.describe("Chaos: iOS 7-day storage eviction recovery", () => {
+  test("cold-start after a Dexie wipe still renders the dashboard and stays interactive", async ({
+    page,
+  }) => {
+    // Per the Mobile Viewer PWA Testing Checklist 2026, iOS evicts a
+    // PWA's IndexedDB + service-worker caches after ~7 days of
+    // inactivity unless persistent storage was granted. The next time
+    // the user opens the app, Dexie is empty even though the server
+    // still has their records.
+    //
+    // We can't fast-forward 7 days, but we can simulate the post-
+    // eviction state by visiting the app once (initialising Dexie),
+    // wiping every IndexedDB database, then reloading. The app should:
+    //   - render without crashing (no global error overlay)
+    //   - stay interactive (header visible, scrollable cards)
+    //   - NOT show "Something went wrong"
+    //
+    // What this catches: any code path that reads from Dexie at mount
+    // without handling the empty case, infinite retry loops on the
+    // sync engine, hung loading spinners, unhandled rejections that
+    // bubble to the React error boundary.
+    //
+    // Note: we don't assert the data eventually returns. That requires
+    // a working backend sync pull, which is the e2e-with-Neon-Auth
+    // job's responsibility. This is a SMOKE test for graceful
+    // degradation on the cold-start path.
+
+    // 1. Warm the app once so the IndexedDB databases exist.
+    await page.goto("/");
+    await expect(page.locator("text=Intake Tracker")).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // 2. Simulate the eviction: enumerate every IndexedDB database
+    //    on the origin and delete each one. Mirrors what iOS does
+    //    when storage pressure or the 7-day timer fires.
+    await page.evaluate(async () => {
+      const dbs = await (typeof indexedDB.databases === "function"
+        ? indexedDB.databases()
+        : Promise.resolve([{ name: "HealthTracker" }]));
+      await Promise.all(
+        dbs
+          .filter(
+            (d): d is IDBDatabaseInfo & { name: string } =>
+              typeof d.name === "string",
+          )
+          .map(
+            (d) =>
+              new Promise<void>((resolve) => {
+                const req = indexedDB.deleteDatabase(d.name);
+                req.onsuccess = () => resolve();
+                req.onerror = () => resolve();
+                req.onblocked = () => resolve();
+              }),
+          ),
+      );
+    });
+
+    // 3. Force a cold start. The app re-mounts against empty IDB.
+    await page.reload();
+
+    // 4. Dashboard must render. Generous timeout: a fresh boot may
+    //    re-run Dexie migrations from v1 to the current schema.
+    await expect(page.locator("text=Intake Tracker")).toBeVisible({
+      timeout: 20_000,
+    });
+
+    // 5. No global error UI.
+    await expect(
+      page.locator("text=Something went wrong"),
+    ).not.toBeVisible();
+    await expect(
+      page.locator("text=Cannot read properties"),
+    ).not.toBeVisible();
+
+    // 6. Interactivity smoke: scroll into a card without a stuck
+    //    overlay intercepting events.
+    const anyCard = page.locator('[id^="section-"]').first();
+    await expect(anyCard).toBeVisible({ timeout: 10_000 });
+    await anyCard.scrollIntoViewIfNeeded();
+  });
+
+  test("malformed localStorage state doesn't break the settings store", async ({
+    page,
+  }) => {
+    // Adjacent failure mode to iOS eviction: localStorage isn't wiped
+    // by the 7-day timer, but a partially-written value (storage full
+    // during a save, race between two tabs, manual edit via devtools)
+    // can leave a malformed JSON blob behind. The settings store
+    // (zustand-persist) must NOT throw on mount — it should fall back
+    // to defaults silently.
+    await page.addInitScript(() => {
+      try {
+        window.localStorage.setItem(
+          "settings-store",
+          '{"state":{"waterLimit":"not-a-number","saltIncrement":', // truncated
+        );
+      } catch {
+        // If localStorage isn't writable yet, the test still proves
+        // the cold-start path renders.
+      }
+    });
+
+    await page.goto("/");
+
+    await expect(page.locator("text=Intake Tracker")).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(
+      page.locator("text=Something went wrong"),
+    ).not.toBeVisible();
+  });
+});
