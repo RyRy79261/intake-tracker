@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.24.4](https://github.com/RyRy79261/intake-tracker/compare/v1.24.3...v1.24.4) (2026-05-23)
+
+
+### Bug Fixes
+
+* **auth:** auto-forward to callbackurl when session already exists ([ddd64a3](https://github.com/RyRy79261/intake-tracker/commit/ddd64a3f3e55fa9050cc076700853fdf45d92e60))
+
 ## [1.24.3](https://github.com/RyRy79261/intake-tracker/compare/v1.24.2...v1.24.3) (2026-05-23)
 
 
