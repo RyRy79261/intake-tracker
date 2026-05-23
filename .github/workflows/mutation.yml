@@ -1,0 +1,111 @@
+name: Mutation Testing
+
+# Runs Stryker mutation testing on the sync engine (the 4 files in
+# stryker.conf.json). Too slow to gate per-PR (~13 minutes), so we run
+# it nightly + on demand.
+#
+# Why this exists: line coverage tells us code executed; mutation
+# testing tells us whether the tests would actually catch a regression.
+# See docs/TESTING_STRATEGY.md §2.2 + §5 for the rationale and the
+# current baseline scores.
+#
+# The HTML report is uploaded as an artifact (per-mutant breakdown) and
+# the per-file score table is appended to the workflow run summary so
+# the headline numbers are visible without downloading anything.
+
+on:
+  schedule:
+    # Nightly at 03:00 UTC — well outside business hours for the
+    # primary user, so concurrent CI load is minimal.
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      mutate:
+        description: 'Optional override for the `mutate` glob (e.g. src/lib/sync-engine.ts). Leave blank to use stryker.conf.json.'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  mutation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # This workflow doesn't push, comment, or call the GitHub API
+          # after checkout, so leaving the GITHUB_TOKEN on disk gains
+          # nothing and widens the blast radius if a step is compromised.
+          persist-credentials: false
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+
+      - name: Validate optional mutate override
+        # workflow_dispatch inputs come from a user form so we whitelist
+        # the character set before letting the value reach the shell.
+        # Allowed: source-path globs only (letters, digits, /, _, -, ., *, ,).
+        env:
+          MUTATE: ${{ inputs.mutate }}
+        run: |
+          if [ -n "$MUTATE" ] && ! printf '%s' "$MUTATE" | grep -Eq '^[A-Za-z0-9._/*,-]+$'; then
+            echo "::error::inputs.mutate contains disallowed characters: $MUTATE"
+            exit 1
+          fi
+
+      - name: Run Stryker
+        id: stryker
+        # Assign the input to a quoted env var so the value can never
+        # be expanded directly into the shell command (avoids the
+        # classic actions injection class — see GHSA series).
+        env:
+          MUTATE: ${{ inputs.mutate }}
+        run: |
+          set -o pipefail
+          if [ -n "$MUTATE" ]; then
+            echo "Running with override: $MUTATE"
+            pnpm exec stryker run --mutate "$MUTATE" 2>&1 | tee stryker.log
+          else
+            pnpm test:mutation 2>&1 | tee stryker.log
+          fi
+
+      - name: Check baseline ratchet
+        if: always() && inputs.mutate == ''
+        # Only enforce the ratchet on full nightly runs (no mutate
+        # override). Workflow_dispatch overrides may scope the run to
+        # a single file, which wouldn't have all the baseline entries.
+        run: pnpm tsx scripts/check-mutation-baseline.ts
+
+      - name: Post score table to job summary
+        if: always()
+        run: |
+          {
+            echo "## Mutation score"
+            echo ""
+            echo '```'
+            # Stryker emits a per-file table at the end of the run.
+            # Grep the table lines (`|` separated) plus the "Done in"
+            # line for runtime. Always-run so the summary appears even
+            # if the run failed.
+            grep -E '^(\||----).*' stryker.log || echo "(no score table found — Stryker may have crashed; check logs)"
+            echo '```'
+            echo ""
+            echo "_See the \`stryker-html-report\` artifact for the per-mutant breakdown._"
+            grep -E 'Done in' stryker.log || true
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stryker-html-report
+          path: |
+            .stryker-tmp/mutation/
+            stryker.log
+          retention-days: 14
+          if-no-files-found: warn
