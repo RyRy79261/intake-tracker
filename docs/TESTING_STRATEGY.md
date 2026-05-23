@@ -625,7 +625,7 @@ Per-file breakdown:
 
 | File | Score | Killed | Survived | No coverage | Note |
 |---|---|---|---|---|---|
-| `sync-queue.ts`  | **88.00%** | 22 | 3   | 0  | Strong — assertions match execution |
+| `sync-queue.ts`  | **100.00%** | 25 | 0  | 0  | Was 88% — three survivors closed by targeted tests in commit `c485a6d` |
 | `sync-engine.ts` | **40.34%** | 138 | 111 | 99 | Mediocre — 99 mutants on code no test runs |
 | `sync-payload.ts`| **26.04%** | 25 | 71  | 0  | **Stale baseline** — measured before the property tests in §2.3 landed; rerun will be much higher |
 
@@ -652,13 +652,17 @@ What I'd recommend:
   1. **Re-run mutation testing** after the sync-payload property tests
      in commit `2482012` are included — the 26% score on that file is
      a pre-property-test baseline and will jump.
-  2. **Treat sync-queue.ts (88%) as the proof point** that the existing
-     test pattern *can* produce high mutation scores. The gap on
-     sync-engine.ts is about coverage breadth (99 unreached mutants),
-     not test-writing technique.
-  3. **Don't gate CI on a 40% score** — the noise/signal ratio is bad
-     until the score is in the 70s. Use it as a tracked metric for now
-     (nightly workflow, posted score), gate later.
+  2. **Treat sync-queue.ts (100%) as the proof point** that the loop
+     works: read survivors → write tests that kill them → score moves.
+     Started at 88% with 3 survivors; commit `c485a6d` closed all
+     three by pinning the `attempts`-preservation invariant on
+     same-op coalesce and asserting `ack([])` never touches Dexie.
+     The same recipe applied to the 99 uncovered mutants in
+     sync-engine.ts would lift that file too — much larger surface,
+     left as a follow-up.
+  3. **Don't gate CI on a 40% score yet** — the noise/signal ratio is
+     bad until the score is in the 70s. Use it as a tracked metric
+     for now (nightly workflow, posted score), gate later.
 
 ### Quickest follow-ups if the work continues
 
