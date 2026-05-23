@@ -25,6 +25,13 @@ const getSessionMock = vi.fn(
   async (): Promise<GetSessionResult> => ({ data: null, error: null })
 );
 
+// Trackable Neon Auth middleware so the root-middleware delegation test
+// below can assert that requests for /auth (and /auth/*) actually invoke
+// it — not just that the path is on the matcher list.
+const neonAuthMiddlewareFn = vi.fn(
+  async (_req: NextRequest) => new Response(null, { status: 204 })
+);
+
 vi.mock("@/lib/neon-auth", () => ({
   auth: {
     getSession: () => getSessionMock(),
@@ -32,8 +39,7 @@ vi.mock("@/lib/neon-auth", () => ({
       GET: async () => new Response(null, { status: 204 }),
       POST: async () => new Response(null, { status: 204 }),
     }),
-    middleware: (_config?: { loginUrl?: string }) =>
-      async (_req: NextRequest) => new Response(null, { status: 204 }),
+    middleware: (_config?: { loginUrl?: string }) => neonAuthMiddlewareFn,
   },
 }));
 
@@ -171,5 +177,30 @@ describe("root middleware.ts", () => {
     expect(matcher).toEqual(
       expect.arrayContaining(["/api/:path*", "/auth", "/auth/:path*"]),
     );
+  });
+
+  it("delegates /auth requests to the Neon Auth middleware", async () => {
+    neonAuthMiddlewareFn.mockClear();
+    const { default: middleware } = await import("@/middleware");
+    const req = new NextRequest("https://example.test/auth?callbackURL=/foo");
+    await middleware(req);
+    expect(neonAuthMiddlewareFn).toHaveBeenCalledTimes(1);
+    expect(neonAuthMiddlewareFn).toHaveBeenCalledWith(req);
+  });
+
+  it("delegates /auth/* subroutes to the Neon Auth middleware", async () => {
+    neonAuthMiddlewareFn.mockClear();
+    const { default: middleware } = await import("@/middleware");
+    const req = new NextRequest("https://example.test/auth/sign-up");
+    await middleware(req);
+    expect(neonAuthMiddlewareFn).toHaveBeenCalledTimes(1);
+  });
+
+  it("does NOT delegate /api/* requests to the Neon Auth middleware", async () => {
+    neonAuthMiddlewareFn.mockClear();
+    const { default: middleware } = await import("@/middleware");
+    const req = new NextRequest("https://example.test/api/mcp/oauth/register");
+    await middleware(req);
+    expect(neonAuthMiddlewareFn).not.toHaveBeenCalled();
   });
 });
