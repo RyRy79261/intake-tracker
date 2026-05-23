@@ -625,9 +625,9 @@ Per-file breakdown:
 
 | File | Score | Killed | Survived | No coverage | Note |
 |---|---|---|---|---|---|
-| `sync-queue.ts`  | **100.00%** | 25 | 0  | 0  | Was 88% — three survivors closed by targeted tests in commit `c485a6d` |
-| `sync-engine.ts` | **40.34%** | 138 | 111 | 99 | Mediocre — 99 mutants on code no test runs |
-| `sync-payload.ts`| **26.04%** | 25 | 71  | 0  | **Stale baseline** — measured before the property tests in §2.3 landed; rerun will be much higher |
+| `sync-queue.ts`  | **100.00%** | 25 | 0   | 0  | Was 88% — three survivors closed by targeted tests in commit `c485a6d` |
+| `sync-engine.ts` | **52.56%**  | 183 | 127 | 40 | Was 40.34% — 8 failure-path tests in commit `0579eca` closed 59 no-coverage mutants (99 → 40) |
+| `sync-payload.ts`| **26.04%**  | 25 | 71  | 0  | **Stale baseline** — measured before the property tests in §2.3 landed; rerun will be much higher |
 
 Survived-mutant types (top 5, whole suite):
 
@@ -652,17 +652,21 @@ What I'd recommend:
   1. **Re-run mutation testing** after the sync-payload property tests
      in commit `2482012` are included — the 26% score on that file is
      a pre-property-test baseline and will jump.
-  2. **Treat sync-queue.ts (100%) as the proof point** that the loop
-     works: read survivors → write tests that kill them → score moves.
-     Started at 88% with 3 survivors; commit `c485a6d` closed all
-     three by pinning the `attempts`-preservation invariant on
-     same-op coalesce and asserting `ack([])` never touches Dexie.
-     The same recipe applied to the 99 uncovered mutants in
-     sync-engine.ts would lift that file too — much larger surface,
-     left as a follow-up.
-  3. **Don't gate CI on a 40% score yet** — the noise/signal ratio is
-     bad until the score is in the 70s. Use it as a tracked metric
-     for now (nightly workflow, posted score), gate later.
+  2. **The loop works.** sync-queue.ts went 88% → 100% (3 targeted
+     tests, commit `c485a6d`). sync-engine.ts went 40% → 53% (8
+     failure-path tests, commit `0579eca` — closed 59 no-coverage
+     mutants). The remaining 127 surviving mutants on sync-engine.ts
+     are mostly module-level state flags (engineStarted, pushInFlight,
+     etc.) — flipping these in isolation doesn't break the happy path
+     in any single test. Closing them requires either life-cycle
+     property tests over an arbitrary sequence of operations or
+     accepting that these are low-value mutants. **Recommend**: stop
+     here on sync-engine, ratchet the gate to ≥50%, focus next
+     round on `sync-payload.ts` once it's re-baselined.
+  3. **Don't gate CI on the absolute score yet** — gate on
+     "score did not drop" instead. Use ratchet semantics, same as the
+     coverage ratchet in `vitest.config.ts`. The current scores then
+     become the floor; any new test must hold the line.
 
 ### Quickest follow-ups if the work continues
 
