@@ -18,9 +18,19 @@ import { test, expect } from "@playwright/test";
  *
  * Reference: https://www.deque.com/axe/core-documentation/api-documentation/
  */
-const ROUTES: ReadonlyArray<{ name: string; path: string; waitFor: string }> = [
+interface Route {
+  name: string;
+  path: string;
+  /** Final URL after any client-side redirect. Defaults to `path`. */
+  resolvedPath?: string;
+  waitFor: string;
+}
+
+const ROUTES: ReadonlyArray<Route> = [
   { name: "dashboard", path: "/", waitFor: "Intake Tracker" },
-  { name: "history", path: "/history", waitFor: "History" },
+  // src/app/history/page.tsx is a client-side redirect to /analytics
+  // (router.replace). Wait for the resolved URL before running axe.
+  { name: "history", path: "/history", resolvedPath: "/analytics", waitFor: "Analytics" },
   { name: "medications", path: "/medications", waitFor: "Medications" },
   { name: "settings", path: "/settings", waitFor: "Settings" },
 ];
@@ -28,6 +38,9 @@ const ROUTES: ReadonlyArray<{ name: string; path: string; waitFor: string }> = [
 for (const route of ROUTES) {
   test(`a11y: ${route.name} has no critical violations`, async ({ page }) => {
     await page.goto(route.path);
+    if (route.resolvedPath && route.resolvedPath !== route.path) {
+      await page.waitForURL(route.resolvedPath);
+    }
     await expect(page.getByText(route.waitFor, { exact: false }).first()).toBeVisible();
 
     const results = await new AxeBuilder({ page })

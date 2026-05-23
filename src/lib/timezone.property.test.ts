@@ -122,7 +122,12 @@ describe("timezone — bounded outputs (property)", () => {
     fc.assert(
       fc.property(utcMinutes, tz, (u, zone) => {
         const s = formatLocalTime(u, zone);
-        expect(s).toMatch(/^[0-2]\d:[0-5]\d$/);
+        // Hours must be 00–23, minutes 00–59. The earlier pattern
+        // `[0-2]\d` accidentally allowed 24–29 — fast-check never
+        // generated such a value because the input is bounded to
+        // [0, 1440) so the test passed, but the regex itself was
+        // too permissive.
+        expect(s).toMatch(/^(?:[01]\d|2[0-3]):[0-5]\d$/);
         expect(s).toHaveLength(5);
       }),
       { numRuns: 80 },

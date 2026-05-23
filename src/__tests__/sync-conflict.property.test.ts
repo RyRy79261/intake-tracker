@@ -358,12 +358,17 @@ describe("sync push route — two-client conflict invariants (property)", () => 
         resetDbState();
         await submit(POST, a, 1);
         await submit(POST, b, 2);
+        // Defensive: spreading `undefined` yields {} which would
+        // silently pass the field comparisons below. Require the
+        // server row to exist before comparing.
+        expect(existingRows["shared-row"], "row missing after A then B").toBeDefined();
         const finalAB = { ...existingRows["shared-row"] };
 
         // Run B then A
         resetDbState();
         await submit(POST, b, 1);
         await submit(POST, a, 2);
+        expect(existingRows["shared-row"], "row missing after B then A").toBeDefined();
         const finalBA = { ...existingRows["shared-row"] };
 
         // Both orders must converge to the same final row state.

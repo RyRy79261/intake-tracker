@@ -34,6 +34,11 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+        with:
+          # This workflow doesn't push, comment, or call the GitHub API
+          # after checkout, so leaving the GITHUB_TOKEN on disk gains
+          # nothing and widens the blast radius if a step is compromised.
+          persist-credentials: false
       - uses: pnpm/action-setup@v5
       - uses: actions/setup-node@v4
         with:
@@ -41,13 +46,30 @@ jobs:
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
 
+      - name: Validate optional mutate override
+        # workflow_dispatch inputs come from a user form so we whitelist
+        # the character set before letting the value reach the shell.
+        # Allowed: source-path globs only (letters, digits, /, _, -, ., *, ,).
+        env:
+          MUTATE: ${{ inputs.mutate }}
+        run: |
+          if [ -n "$MUTATE" ] && ! printf '%s' "$MUTATE" | grep -Eq '^[A-Za-z0-9._/*,-]+$'; then
+            echo "::error::inputs.mutate contains disallowed characters: $MUTATE"
+            exit 1
+          fi
+
       - name: Run Stryker
         id: stryker
+        # Assign the input to a quoted env var so the value can never
+        # be expanded directly into the shell command (avoids the
+        # classic actions injection class — see GHSA series).
+        env:
+          MUTATE: ${{ inputs.mutate }}
         run: |
           set -o pipefail
-          if [ -n "${{ inputs.mutate }}" ]; then
-            echo "Running with override: ${{ inputs.mutate }}"
-            pnpm exec stryker run --mutate "${{ inputs.mutate }}" 2>&1 | tee stryker.log
+          if [ -n "$MUTATE" ]; then
+            echo "Running with override: $MUTATE"
+            pnpm exec stryker run --mutate "$MUTATE" 2>&1 | tee stryker.log
           else
             pnpm test:mutation 2>&1 | tee stryker.log
           fi

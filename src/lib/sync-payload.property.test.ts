@@ -334,6 +334,20 @@ describe("pullBodySchema — property invariants", () => {
     );
   });
 
+  it("PULL-2 (regression): prototype-shaped keys (__proto__, constructor) always reject", () => {
+    // Deterministic guard for the two keys most likely to slip past
+    // Zod's `partialRecord` enum check. fast-check's random-string
+    // generator may not pick exactly these in 40 runs, so we pin
+    // them explicitly. Either form (own-property via computed key,
+    // or JSON-decoded body) must reject.
+    for (const proto of ["__proto__", "constructor", "prototype"] as const) {
+      expect(
+        pullBodySchema.safeParse({ cursors: { [proto]: 0 } }).success,
+        `expected ${proto} key to be rejected as an unknown table`,
+      ).toBe(false);
+    }
+  });
+
   it("PULL-3: negative cursor.updatedAt always rejects", () => {
     fc.assert(
       fc.property(

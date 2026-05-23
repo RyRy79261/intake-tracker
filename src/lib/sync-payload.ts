@@ -317,25 +317,38 @@ const cursorSchema = z.union([
  */
 export const pullBodySchema = z.object({
   // `partialRecord` (zod/v4) allows missing tableName keys — a missing entry
-  // means "cursor = 0 for that table" (full pull). `invalid_key` errors still
-  // fire on unknown keys (T-43-04-05 cursor injection).
+  // means "cursor = 0 for that table" (full pull). `invalid_key` errors fire
+  // on unknown keys for ordinary table names (T-43-04-05 cursor injection).
   //
-  // The .refine() layer below is defence-in-depth against a Zod quirk:
-  // `partialRecord` skips own-property names that look like prototype keys
-  // (`__proto__`, `constructor`) — they slip through the enum check.
-  // The route itself never iterates body.cursors directly (it walks
-  // schemaByTableName), so the runtime exposure is zero, but rejecting at
-  // the boundary keeps the contract honest and protects future refactors.
+  // Prototype-shaped keys (`__proto__`) are a separate quirk: zod's
+  // `partialRecord` silently strips them BEFORE downstream validation
+  // runs, so a `.refine()` on the partialRecord output can never see
+  // them. The `z.preprocess` layer below validates the raw input's
+  // OWN keys against the enum first, so `__proto__` (and any other
+  // unknown key) is rejected at the boundary before partialRecord
+  // normalises the shape.
+  //
+  // Runtime exposure is still zero — the route iterates
+  // schemaByTableName, not body.cursors — but rejecting at the schema
+  // boundary keeps the contract honest and protects future refactors.
   // Discovered by src/lib/sync-payload.property.test.ts PULL-2.
-  cursors: z
-    .partialRecord(tableNameSchema, cursorSchema)
-    .refine(
-      (obj) =>
-        Object.keys(obj).every(
-          (k) => tableNameSchema.safeParse(k).success,
-        ),
-      { message: "cursors contains an unknown table key" },
-    ),
+  cursors: z.preprocess((raw, ctx) => {
+    if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+      // Let partialRecord emit the canonical "expected object" error.
+      return raw;
+    }
+    for (const k of Object.keys(raw as Record<string, unknown>)) {
+      if (!tableNameSchema.safeParse(k).success) {
+        ctx.addIssue({
+          code: "custom",
+          message: `cursors contains an unknown table key: ${k}`,
+          path: ["cursors", k],
+        });
+        return z.NEVER;
+      }
+    }
+    return raw;
+  }, z.partialRecord(tableNameSchema, cursorSchema)),
 });
 
 export type PullBody = z.infer<typeof pullBodySchema>;

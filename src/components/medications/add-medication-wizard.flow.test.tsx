@@ -78,9 +78,10 @@ const MEDICINE_SEARCH_RESPONSE = {
 };
 
 const server = setupServer(
-  http.post("http://localhost:3000/api/ai/medicine-search", () =>
-    HttpResponse.json(MEDICINE_SEARCH_RESPONSE),
-  ),
+  // MSW v2 normalises relative paths against the request origin, so
+  // a single relative-path handler matches both forms the app may
+  // emit (relative for direct apiFetch, absolute after jsdom resolves
+  // against location.href).
   http.post("/api/ai/medicine-search", () =>
     HttpResponse.json(MEDICINE_SEARCH_RESPONSE),
   ),

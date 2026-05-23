@@ -137,8 +137,20 @@ describe("RecordsTab — scale stress", () => {
       }),
     );
 
-    // Silence "act" warnings from background timers in Recharts
-    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    // Filter (don't suppress) console.error: ignore only the known
+    // React `act(...)` warning that Recharts emits from background
+    // animation timers, and re-throw anything else so a real error
+    // can't hide behind this blanket spy.
+    const original = console.error;
+    const unexpected: unknown[][] = [];
+    const errSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation((...args: unknown[]) => {
+        const msg = String(args[0] ?? "");
+        if (/not wrapped in act\(/i.test(msg)) return; // benign Recharts timer noise
+        unexpected.push(args);
+        original.apply(console, args as Parameters<typeof console.error>);
+      });
     try {
       await renderWithFixtures(<RecordsTab range={range} />, {
         seed: { intakeRecords: records },
@@ -157,5 +169,11 @@ describe("RecordsTab — scale stress", () => {
     } finally {
       errSpy.mockRestore();
     }
+    // Surface anything the filter passed through. If a real error
+    // slipped in alongside the benign act warnings, fail the test.
+    expect(
+      unexpected,
+      `unexpected console.error calls during scale render: ${unexpected.map((a) => String(a[0])).join("; ")}`,
+    ).toEqual([]);
   }, 45_000);
 });

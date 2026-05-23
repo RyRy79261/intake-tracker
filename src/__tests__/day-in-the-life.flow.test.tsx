@@ -30,7 +30,7 @@
  *   - The cumulative perf regression that's invisible at N=1 but
  *     obvious at N=8
  */
-import { describe, it, expect, vi, beforeAll } from "vitest";
+import { describe, it, expect, vi, beforeAll, afterEach, afterAll } from "vitest";
 import { screen, waitFor, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
@@ -89,6 +89,8 @@ const server = setupServer(
   ),
 );
 beforeAll(() => server.listen({ onUnhandledRequest: "bypass" }));
+afterEach(() => server.resetHandlers());
+afterAll(() => server.close());
 
 describe("Day-in-the-life — multi-card user simulation", () => {
   it(
@@ -113,16 +115,18 @@ describe("Day-in-the-life — multi-card user simulation", () => {
       {
         const { unmount } = await renderWithFixtures(<LiquidsCard />);
         // Default LiquidsCard ships with a "Water" tab visible. Click
-        // the first preset button to record a water intake.
+        // the first "Log Entry" button to record a water intake.
         const presetButton = (
           await screen.findAllByRole("button")
         ).find((b) => /Log Entry/i.test(b.textContent ?? ""));
-        // Some configurations need scrolling/selection first. Fall back
-        // to dispatching the Log Entry directly if the tab UI is
-        // already on the active panel.
-        if (presetButton) {
-          await user.click(presetButton);
-        }
+        // Fail loudly if the button is missing — a silent skip turns
+        // a missing UI into a false-positive pass for the whole
+        // multi-card flow.
+        expect(
+          presetButton,
+          "expected a 'Log Entry' button on LiquidsCard (action 1)",
+        ).toBeDefined();
+        await user.click(presetButton!);
         unmount();
         cleanup();
       }
@@ -213,7 +217,11 @@ describe("Day-in-the-life — multi-card user simulation", () => {
         const logBtn = buttons.find((b) =>
           /Log Entry/i.test(b.textContent ?? ""),
         );
-        if (logBtn) await user.click(logBtn);
+        expect(
+          logBtn,
+          "expected a 'Log Entry' button on LiquidsCard (action 7)",
+        ).toBeDefined();
+        await user.click(logBtn!);
         unmount();
         cleanup();
       }
