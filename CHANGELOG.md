@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.24.1](https://github.com/RyRy79261/intake-tracker/compare/v1.24.0...v1.24.1) (2026-05-23)
+
+
+### Bug Fixes
+
+* **a11y:** label the week-day selector chevron buttons ([edad451](https://github.com/RyRy79261/intake-tracker/commit/edad4514235351d1bafa45018690e7cd94c6328e))
+
 ## [1.24.0](https://github.com/RyRy79261/intake-tracker/compare/v1.23.2...v1.24.0) (2026-05-23)
 
 
