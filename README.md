@@ -16,6 +16,7 @@ free but I can make it easier to set it up yourself and use it.
 - **Salt intake tracking**: Keep sodium under control (target: <1500mg/day)
 - **Food water calculator**: Calculate water content from fruits and vegetables
 - **AI-powered input**: Use natural language to log intake via Anthropic Claude API
+- **Claude custom connector (MCP)**: Attach your data to a Claude chat as a read-only MCP server — ask Claude "what was my average BP last week?" or "list my active medications" ([setup](#claude-custom-connector-mcp))
 - **Neon Auth**: Email/password authentication with whitelist-based access control
 - **Offline support**: Works without internet connection as a PWA
 - **Data export/import**: Backup and restore your data
@@ -286,10 +287,63 @@ When using the "AI Input" feature:
 
 AI features require an authenticated Neon Auth session and a server-side `ANTHROPIC_API_KEY`. The API key is stored in the server environment only and never exposed to the client.
 
+## Claude Custom Connector (MCP)
+
+The app ships a [Model Context Protocol](https://modelcontextprotocol.io) server so you can attach **your own data** to a Claude chat as a custom connector and ask Claude to query it directly — "what was my average BP last week?", "how much water have I logged today?", "list my active medications". **Read-only**: the connector cannot insert, update, or delete records.
+
+### Prerequisites
+
+- A Claude account on **Pro, Max, Team, or Enterprise** (claude.ai's Custom Connectors UI requires DCR-capable OAuth, which Free plans don't currently expose).
+- The app deployed to an HTTPS URL Claude can reach (Vercel preview or production both work; localhost only if you tunnel through e.g. `ngrok` or Cloudflare Tunnel).
+- Your email is on `ALLOWED_EMAILS` — Claude signs you in with the same Google account you use for the app, and the whitelist applies to MCP requests too.
+
+### Server configuration
+
+Optional. The OAuth metadata auto-derives the public origin from `VERCEL_URL` or `X-Forwarded-*` headers, so a standard Vercel deploy works out of the box. Set this only when running behind a proxy that doesn't forward those headers, or to pin the issuer to a specific domain:
+
+```bash
+# .env.local (or Vercel env var) — no trailing slash
+MCP_PUBLIC_URL=https://your-app.example.com
+```
+
+### Connecting in claude.ai
+
+1. In Claude, open **Settings → Connectors → Add custom connector**.
+2. Paste the MCP endpoint URL:
+   ```text
+   https://<your-app>/api/mcp/mcp
+   ```
+3. Click **Connect**. Claude redirects you to the intake-tracker.
+4. Sign in with Google (skipped if you're already signed in to the app in that browser).
+5. The consent screen lists the data Claude will be able to read. Click **Approve**.
+6. You're back in Claude, the connector is now active. The 8 read-only tools (below) appear in any new chat.
+
+### Available tools
+
+| Tool | What it returns |
+|------|-----------------|
+| `get_today_summary` | water/salt/sugar totals for today, latest BP/weight, doses logged |
+| `query_intake_history` | water/salt/sugar records in a date range |
+| `query_weight_history` | weight readings in a date range |
+| `query_blood_pressure_history` | BP readings in a date range |
+| `query_eating_history` | food log entries with linked caffeine/alcohol |
+| `list_medications` | active prescriptions + current phase + schedules |
+| `list_recent_doses` | most recent dose log entries |
+| `get_inventory_status` | per-prescription pill stock + refill thresholds |
+
+### Revocation
+
+Disconnect at any time from **Settings → Connectors** in Claude. The server-side access token is invalidated on next request. Removing your email from `ALLOWED_EMAILS` also revokes access on the next call (the whitelist is re-checked per request).
+
+### Design + security details
+
+See [docs/mcp-connector.md](docs/mcp-connector.md) for the OAuth 2.1 + DCR flow, schema, threat model, and audit-log shape.
+
 ## Documentation
 
 - [Rollback & Recovery Runbook](docs/ROLLBACK.md) — How to recover from bad production deployments
 - [Staging Setup Guide](docs/staging-setup.md) — Manual Vercel and DNS configuration for staging
+- [Claude Custom Connector (MCP) Design](docs/mcp-connector.md) — OAuth 2.1 + DCR flow, schema, threat model
 
 ## License
 
