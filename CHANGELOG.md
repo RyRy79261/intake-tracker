@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.24.0](https://github.com/RyRy79261/intake-tracker/compare/v1.23.2...v1.24.0) (2026-05-23)
+
+
+### Features
+
+* **voice:** track sugar in voice input pipeline ([3351c8b](https://github.com/RyRy79261/intake-tracker/commit/3351c8b5f7fbc2ddde8c902e5ad379fb366115a4))
+
 ## [1.23.2](https://github.com/RyRy79261/intake-tracker/compare/v1.23.1...v1.23.2) (2026-05-23)
 
 
