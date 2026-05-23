@@ -35,6 +35,14 @@
  * (`aria-progressbar-name`) violations across LiquidsCard, FoodSaltCard,
  * and WeightCard. All critical and serious were fixed in the same
  * commit that ratcheted this test from triage tool to gate.
+ *
+ * Round 2: extended to cover medications-page components after the
+ * Playwright a11y run (e2e/a11y.spec.ts) caught a button-name
+ * violation in WeekDaySelector that this jsdom triage had missed —
+ * it was scanning only dashboard cards. Adding the per-component
+ * coverage means the next regression of the same shape fails in
+ * fast feedback (vitest, <1 s/test) instead of the slow Playwright
+ * job. See commit `edad451` for the original WeekDaySelector fix.
  */
 import { describe, it, expect, vi, beforeAll } from "vitest";
 import axe from "axe-core";
@@ -66,6 +74,12 @@ import { BloodPressureCard } from "@/components/blood-pressure-card";
 import { WeightCard } from "@/components/weight-card";
 import { UrinationCard } from "@/components/urination-card";
 import { DefecationCard } from "@/components/defecation-card";
+// Medications-page components (round 2 — see file-level history).
+import { WeekDaySelector } from "@/components/medications/week-day-selector";
+import { MedTabBar } from "@/components/medications/med-footer";
+import { EmptySchedule } from "@/components/medications/empty-schedule";
+import { CompoundList } from "@/components/medications/compound-list";
+import { AddMedicationWizard } from "@/components/medications/add-medication-wizard";
 import { renderWithFixtures } from "@/__tests__/react-test-utils";
 
 interface AxeViolation {
@@ -135,17 +149,45 @@ async function scan(label: string, container: HTMLElement): Promise<AxeViolation
   return critical;
 }
 
-const CARDS: { label: string; element: () => React.ReactElement }[] = [
+const COMPONENTS: { label: string; element: () => React.ReactElement }[] = [
+  // Dashboard cards (round 1)
   { label: "LiquidsCard", element: () => <LiquidsCard /> },
   { label: "FoodSaltCard", element: () => <FoodSaltCard /> },
   { label: "BloodPressureCard", element: () => <BloodPressureCard /> },
   { label: "WeightCard", element: () => <WeightCard /> },
   { label: "UrinationCard", element: () => <UrinationCard /> },
   { label: "DefecationCard", element: () => <DefecationCard /> },
+  // Medications-page components (round 2)
+  {
+    label: "WeekDaySelector",
+    element: () => (
+      <WeekDaySelector selectedDate={new Date()} onSelectDate={() => {}} />
+    ),
+  },
+  {
+    label: "MedTabBar",
+    element: () => (
+      <MedTabBar activeTab="schedule" onTabChange={() => {}} />
+    ),
+  },
+  {
+    label: "EmptySchedule",
+    element: () => <EmptySchedule onAddMed={() => {}} />,
+  },
+  {
+    label: "CompoundList",
+    element: () => <CompoundList onAddMed={() => {}} />,
+  },
+  {
+    label: "AddMedicationWizard (open)",
+    element: () => (
+      <AddMedicationWizard open onOpenChange={() => {}} />
+    ),
+  },
 ];
 
-describe("a11y scan of dashboard components (jsdom + axe-core)", () => {
-  for (const card of CARDS) {
+describe("a11y scan of dashboard + medications components (jsdom + axe-core)", () => {
+  for (const card of COMPONENTS) {
     it(`${card.label} has no critical a11y violations`, async () => {
       const { container } = await renderWithFixtures(card.element());
       // Brief wait for any async render (useEffect, live query) to settle.
