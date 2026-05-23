@@ -650,4 +650,206 @@ describe("sync-engine", () => {
 
     expect(useSyncStatusStore.getState().lastError).toBe("rate limited");
   });
+
+  // ─── Targeted mutant-killing tests (round 2) ──────────────────────────
+  // After the failure-path round in this file, ~127 mutants survived on
+  // sync-engine.ts. The block below targets the seven concrete branches
+  // Stryker flagged at lines 105, 126, 135, 152, 159, 176, and 202 —
+  // each one represents a specific edge case the happy-path tests
+  // never exercise.
+
+  it("push: empty queue → fetch is never called (early-return on no pending ops)", async () => {
+    // Mutant: `if (pending.length === 0) return;` → `if (false) return;`
+    // — would proceed to fetch with an empty body. Asserting the fetch
+    // mock was NEVER called distinguishes the two paths.
+    installDom();
+    __startEngineForTests();
+
+    const fetchMock = vi.fn() as unknown as Mock;
+    vi.stubGlobal("fetch", fetchMock);
+
+    await runPushCycle();
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("push: queue rows with an unknown tableName are silently skipped", async () => {
+    // Mutant: `if (!TABLE_PUSH_ORDER.includes(tn)) continue;` →
+    // `if (false) continue;` — would attempt to push rows for unknown
+    // tables. We sneak a row into the queue with a tableName that's
+    // not in TABLE_PUSH_ORDER and assert the resulting push body has
+    // empty ops (i.e. fetch is never called because the FILTERED list
+    // is empty).
+    installDom();
+    __startEngineForTests();
+
+    // Bypass enqueue() (which would route through enqueueInsideTx and
+    // succeed regardless of table validity) by writing the queue row
+    // directly. tableName "unknown-table" isn't in TABLE_PUSH_ORDER.
+    await db._syncQueue.add({
+      tableName: "unknown-table",
+      recordId: "x",
+      op: "upsert",
+      enqueuedAt: Date.now(),
+      attempts: 0,
+    });
+
+    const fetchMock = vi.fn() as unknown as Mock;
+    vi.stubGlobal("fetch", fetchMock);
+
+    await runPushCycle();
+
+    // The unknown-table row was filtered out, so ops was empty, so
+    // the early-return on line 126 fired. Fetch never called.
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("push: an upsert op whose live row disappeared is silently skipped", async () => {
+    // Mutant: `if (!liveRow) continue;` → `if (false) continue;` —
+    // would push a synthesised undefined row to the server. We enqueue
+    // an upsert, delete the underlying record, then push — the op
+    // must be dropped, not sent.
+    installDom();
+    __startEngineForTests();
+
+    await db.intakeRecords.add(makeIntake({ id: "vanished-1" }));
+    await enqueue("intakeRecords", "vanished-1", "upsert");
+
+    // Now delete the underlying row — the queue still has the upsert
+    // pointer but liveRow lookup will return undefined.
+    await db.intakeRecords.delete("vanished-1");
+
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ accepted: [] }),
+    ) as unknown as Mock;
+    vi.stubGlobal("fetch", fetchMock);
+
+    await runPushCycle();
+
+    // The vanished upsert was filtered out, so ops was empty, so we
+    // never hit the network at all.
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("push: delete op carries through even without a live row (synthesised stub)", async () => {
+    // Mutant: `if (qRow.op === "delete")` → `if (true)` or `if (false)`.
+    // Either mutant would mishandle the upsert/delete split. The
+    // delete-without-live-row path synthesises a {id, deletedAt,
+    // updatedAt} stub — this test verifies the path actually fires.
+    installDom();
+    __startEngineForTests();
+
+    // Enqueue a delete for a record that no longer exists locally.
+    // (The legitimate path: user delete commits row+enqueue tx, then
+    // the Dexie delete strips the live row.)
+    await enqueue("intakeRecords", "ghost-1", "delete");
+
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({
+        accepted: [],
+      }),
+    ) as unknown as Mock;
+    vi.stubGlobal("fetch", fetchMock);
+
+    await runPushCycle();
+
+    // Unlike the vanished-upsert case above, this one DOES hit the
+    // network — the delete op carries a synthesised stub row even
+    // when nothing exists locally.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const body = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string) as {
+      ops: { op: string; row: { id: string; deletedAt: number | null } }[];
+    };
+    expect(body.ops).toHaveLength(1);
+    expect(body.ops[0]!.op).toBe("delete");
+    expect(body.ops[0]!.row.id).toBe("ghost-1");
+    expect(body.ops[0]!.row.deletedAt).not.toBeNull();
+  });
+
+  it("push: body.ops length matches queue length exactly (no junk array element)", async () => {
+    // Mutant: `}> = [];` → `}> = ["Stryker was here"];` — would prepend
+    // a junk string to the ops array. Tests that only check the
+    // accepted set wouldn't notice, but a strict length check does.
+    installDom();
+    __startEngineForTests();
+
+    await db.intakeRecords.add(makeIntake({ id: "exact-1" }));
+    await db.intakeRecords.add(makeIntake({ id: "exact-2" }));
+    await enqueue("intakeRecords", "exact-1", "upsert");
+    await enqueue("intakeRecords", "exact-2", "upsert");
+
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ accepted: [] }),
+    ) as unknown as Mock;
+    vi.stubGlobal("fetch", fetchMock);
+
+    await runPushCycle();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const body = JSON.parse(
+      (fetchMock.mock.calls[0]![1] as RequestInit).body as string,
+    ) as { ops: { tableName: string; row: { id: string } }[] };
+    // Exactly 2 ops, both intakeRecords. No junk strings.
+    expect(body.ops).toHaveLength(2);
+    for (const op of body.ops) {
+      expect(typeof op).toBe("object");
+      expect(op.tableName).toBe("intakeRecords");
+      expect(typeof op.row).toBe("object");
+    }
+  });
+
+  it("applyServerAck: ack for an unknown queueId is silently skipped (no crash)", async () => {
+    // Mutant: `if (!origin) continue;` → `if (false) continue;` —
+    // would crash dereferencing `origin.tableName`. The server can
+    // legitimately return ack ids the client never sent (in a stale
+    // retry scenario), so the client must tolerate this.
+    installDom();
+    __startEngineForTests();
+
+    await db.intakeRecords.add(makeIntake({ id: "ack-unknown-1" }));
+    await enqueue("intakeRecords", "ack-unknown-1", "upsert");
+
+    const queueRows = await db._syncQueue.toArray();
+    const realQueueId = queueRows[0]!.id!;
+
+    // Server response includes a bogus queueId we never sent (99999)
+    // alongside the real one. The bogus one must be silently dropped
+    // without throwing.
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({
+        accepted: [
+          { queueId: realQueueId, serverUpdatedAt: 10_000 },
+          { queueId: 99_999, serverUpdatedAt: 20_000 },
+        ],
+      }),
+    ) as unknown as Mock;
+    vi.stubGlobal("fetch", fetchMock);
+
+    // No throw — the bogus ack is just dropped.
+    await expect(runPushCycle()).resolves.toBeUndefined();
+
+    // The legitimate ack was applied (queue is now empty).
+    expect(await db._syncQueue.count()).toBe(0);
+  });
+
+  it("schedulePush: calling before any timer exists doesn't throw (null-check on clearTimeout)", async () => {
+    // Mutant: `if (pushTimer) clearTimeout(pushTimer);` → `if (true)
+    // clearTimeout(pushTimer);` — would call clearTimeout(null) on the
+    // first call. clearTimeout(null) is technically a no-op in modern
+    // runtimes, but a regression that swapped the guard for a real
+    // .clear() on a wrapped object would crash. Pin the behaviour.
+    installDom();
+    __startEngineForTests();
+    vi.useFakeTimers();
+
+    // Right after __startEngineForTests pushTimer is null. The first
+    // schedulePush() must not throw.
+    expect(() => schedulePush()).not.toThrow();
+
+    // A second call (now with a timer) must also not throw and must
+    // collapse onto the same flush.
+    expect(() => schedulePush()).not.toThrow();
+
+    vi.useRealTimers();
+  });
 });
