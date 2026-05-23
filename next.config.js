@@ -71,13 +71,29 @@ const nextConfig = {
     NEXT_PUBLIC_VERCEL_ENV: process.env.VERCEL_ENV || 'development',
   },
   async rewrites() {
+    // MCP custom connector: OAuth metadata is required to live at
+    // /.well-known/* (RFC 8414 + RFC 9728) but Next.js's app router does not
+    // route dotted folders. Rewrite to non-dotted internal paths.
+    const mcpWellKnown = [
+      {
+        source: '/.well-known/oauth-authorization-server',
+        destination: '/api/mcp/well-known/oauth-authorization-server',
+      },
+      {
+        source: '/.well-known/oauth-protected-resource',
+        destination: '/api/mcp/well-known/oauth-protected-resource',
+      },
+    ];
     // On non-production deploys, rewrite /sw.js to a self-destructing SW that
     // clears Workbox caches and unregisters itself — breaks stale-cache loops
     // where a previously-cached SW serves old HTML before client JS can run.
     if (!isPWAEnabled) {
-      return [{ source: '/sw.js', destination: '/sw-kill.js' }];
+      return [
+        ...mcpWellKnown,
+        { source: '/sw.js', destination: '/sw-kill.js' },
+      ];
     }
-    return [];
+    return mcpWellKnown;
   },
   async headers() {
     return [
