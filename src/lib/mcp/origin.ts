@@ -21,6 +21,14 @@
  */
 import type { NextRequest } from "next/server";
 
+function tryParseUrl(input: string): URL | null {
+  try {
+    return new URL(input);
+  } catch {
+    return null;
+  }
+}
+
 export function getPublicOrigin(req?: NextRequest | Request): string {
   const override = process.env.MCP_PUBLIC_URL?.trim();
   if (override) return override.replace(/\/$/, "");
@@ -30,13 +38,24 @@ export function getPublicOrigin(req?: NextRequest | Request): string {
     if (headers) {
       const fwdHost = headers.get("x-forwarded-host");
       const fwdProto = headers.get("x-forwarded-proto");
+      // Derive the scheme from the request itself as the last-resort
+      // proto fallback — better than hard-coding "http" behind a proxy
+      // that terminates TLS upstream but strips x-forwarded-proto.
+      const requestProto = (() => {
+        const url =
+          "nextUrl" in req
+            ? (req as NextRequest).nextUrl
+            : tryParseUrl(req.url);
+        return url?.protocol.replace(/:$/, "");
+      })();
+
       if (fwdHost) {
-        const proto = fwdProto ?? "https";
+        const proto = fwdProto ?? requestProto ?? "https";
         return `${proto}://${fwdHost}`;
       }
       const host = headers.get("host");
       if (host) {
-        const proto = fwdProto ?? "http";
+        const proto = fwdProto ?? requestProto ?? "http";
         return `${proto}://${host}`;
       }
     }
