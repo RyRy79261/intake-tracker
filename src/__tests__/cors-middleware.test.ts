@@ -1,6 +1,18 @@
 import { describe, it, expect, vi } from "vitest";
 import { NextRequest } from "next/server";
 
+// Mock the Neon Auth module to avoid pulling @neondatabase/auth/next/server
+// (which imports next/headers and fails to resolve under vitest). The CORS
+// branch of the middleware never invokes neonAuthMiddleware, so a no-op
+// stub is sufficient for these tests.
+vi.mock("@/lib/neon-auth", () => ({
+  auth: {
+    middleware: () => () => {
+      throw new Error("neon auth middleware called unexpectedly");
+    },
+  },
+}));
+
 
 function makeApiRequest(
   path: string,
@@ -87,9 +99,15 @@ describe("CORS middleware for /api/* routes", () => {
     expect(res.headers.get("Access-Control-Allow-Origin")).toBeNull();
   });
 
-  it("matcher config includes only /api/:path*", async () => {
+  it("matcher config includes /api/:path* and the /auth paths used by the verifier exchange", async () => {
     const { config } = await import("@/middleware");
-    expect(config.matcher).toContain("/api/:path*");
-    expect(config.matcher.length).toBe(1);
+    expect(config.matcher).toEqual(
+      expect.arrayContaining(["/api/:path*", "/auth", "/auth/:path*"]),
+    );
+    // /auth and /auth/* are added so Neon Auth's auth.middleware() can
+    // run the OAuth verifier-exchange step on the OAuth return trip.
+    // Without them the session cookie is never materialised and the MCP
+    // custom-connector flow fails after Google sign-in.
+    expect(config.matcher.length).toBe(3);
   });
 });
