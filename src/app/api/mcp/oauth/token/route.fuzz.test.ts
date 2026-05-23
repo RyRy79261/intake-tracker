@@ -43,7 +43,7 @@ vi.mock("@/lib/drizzle", () => ({
 
 let POST: (req: NextRequest) => Promise<Response>;
 beforeEach(async () => {
-  const mod = await import("./route");
+  const mod = await import("@/app/api/mcp/oauth/token/route");
   POST = mod.POST as typeof POST;
 });
 

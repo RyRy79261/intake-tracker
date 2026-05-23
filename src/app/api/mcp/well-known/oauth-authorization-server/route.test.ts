@@ -1,13 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { NextRequest } from "next/server";
-import { GET } from "./route";
+import { GET } from "@/app/api/mcp/well-known/oauth-authorization-server/route";
 
 describe("GET /.well-known/oauth-authorization-server", () => {
   it("returns RFC 8414 metadata with the expected endpoints", async () => {
     const req = new NextRequest(
       "https://app.test/.well-known/oauth-authorization-server",
     );
-    const res = GET(req);
+    const res = await GET(req);
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.issuer).toMatch(/^https?:\/\//);
@@ -26,7 +26,7 @@ describe("GET /.well-known/oauth-authorization-server", () => {
     const req = new NextRequest(
       "https://app.test/.well-known/oauth-authorization-server",
     );
-    const res = GET(req);
+    const res = await GET(req);
     expect(res.headers.get("Access-Control-Allow-Origin")).toBe("*");
   });
 });

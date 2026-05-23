@@ -403,7 +403,18 @@ export async function listRecentDoses(userId: string, limit: number) {
       genericName: prescriptions.genericName,
     })
     .from(doseLogs)
-    .leftJoin(prescriptions, eq(doseLogs.prescriptionId, prescriptions.id))
+    // Scope the join by user + soft-delete so we never surface a dose
+    // joined against a prescription that belongs to another user (FKs
+    // prevent it today, but the explicit predicate is defence in depth)
+    // or a soft-deleted prescription.
+    .leftJoin(
+      prescriptions,
+      and(
+        eq(doseLogs.prescriptionId, prescriptions.id),
+        eq(prescriptions.userId, userId),
+        isNull(prescriptions.deletedAt),
+      ),
+    )
     .where(and(eq(doseLogs.userId, userId), isNull(doseLogs.deletedAt)))
     .orderBy(desc(doseLogs.actionTimestamp))
     .limit(cap);
@@ -427,7 +438,11 @@ export async function getInventoryStatus(userId: string) {
     .from(inventoryItems)
     .leftJoin(
       prescriptions,
-      eq(inventoryItems.prescriptionId, prescriptions.id),
+      and(
+        eq(inventoryItems.prescriptionId, prescriptions.id),
+        eq(prescriptions.userId, userId),
+        isNull(prescriptions.deletedAt),
+      ),
     )
     .where(
       and(

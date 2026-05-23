@@ -34,7 +34,11 @@ export function GET(req: NextRequest) {
         "client_secret_post",
       ],
       code_challenge_methods_supported: ["S256"],
-      service_documentation: `${origin}/docs/mcp-connector.md`,
+      // Point at the in-repo design doc on GitHub — the markdown isn't
+      // served from the app, so this must be an externally reachable URL
+      // rather than `${origin}/docs/mcp-connector.md` (which 404s).
+      service_documentation:
+        "https://github.com/RyRy79261/intake-tracker/blob/main/docs/mcp-connector.md",
     }),
   );
 }

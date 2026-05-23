@@ -51,6 +51,10 @@ vi.mock("drizzle-orm", async () => {
       __pred: (r: Row) =>
         (r[(column._key as string) ?? column.name!] as number) < value,
     }),
+    gte: (column: { name?: string; _key?: string }, value: number) => ({
+      __pred: (r: Row) =>
+        (r[(column._key as string) ?? column.name!] as number) >= value,
+    }),
   };
 });
 
@@ -103,7 +107,15 @@ vi.mock("@/db/schema", async () => {
 });
 
 vi.mock("@/lib/drizzle", () => {
-  const db = {
+  // The transaction stub is degenerate — there is no real isolation in the
+  // in-memory map, so commits are immediate and rollback on a thrown error
+  // is best-effort (we don't try to undo prior mutations). That's fine for
+  // these tests: rotation-race behaviour and atomicity are covered by the
+  // real-Postgres integration suite (src/__tests__/integration/mcp-rotation-race.test.ts).
+  const db: Record<string, unknown> = {
+    transaction: async <T>(fn: (tx: typeof db) => Promise<T>): Promise<T> => {
+      return fn(db);
+    },
     insert(table: unknown) {
       return {
         values(row: Row | Row[]) {

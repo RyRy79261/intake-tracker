@@ -51,16 +51,6 @@ async function verifyToken(
   const lookup = await lookupAccessToken(bearerToken);
   if (!lookup) return undefined;
 
-  // Re-check the whitelist on every request so removing a user from
-  // ALLOWED_EMAILS revokes access without waiting for token expiry.
-  const userRows = await db
-    .select({ email: usersSync.email })
-    .from(usersSync)
-    .where(eq(usersSync.id, lookup.userId))
-    .limit(1);
-  const email = userRows[0]?.email ?? null;
-  if (!isEmailAllowed(email)) return undefined;
-
   return {
     token: bearerToken,
     clientId: lookup.clientId,
@@ -78,7 +68,51 @@ const authedHandler = withMcpAuth(baseHandler, verifyToken, {
   resourceMetadataPath: "/.well-known/oauth-protected-resource",
 });
 
+/**
+ * Re-check ALLOWED_EMAILS on every request so removing a user from the
+ * whitelist revokes access without waiting for token expiry.
+ *
+ * This runs OUTSIDE withMcpAuth because mcp-handler's verifyToken hook
+ * only has two return shapes (AuthInfo | undefined) and collapses every
+ * "undefined" into a 401. Whitelist denial is conceptually a 403
+ * (authentication succeeded, authorization failed) — so we pre-flight
+ * the bearer here and return an explicit 403 when the token is valid
+ * but the user isn't allowed.
+ */
+async function checkWhitelist(
+  request: Request,
+): Promise<NextResponse | null> {
+  const header = request.headers.get("authorization");
+  if (!header?.startsWith("Bearer ")) return null;
+  const token = header.slice(7).trim();
+  if (!token) return null;
+  const lookup = await lookupAccessToken(token);
+  if (!lookup) return null; // let withMcpAuth render the 401
+
+  const userRows = await db
+    .select({ email: usersSync.email })
+    .from(usersSync)
+    .where(eq(usersSync.id, lookup.userId))
+    .limit(1);
+  const email = userRows[0]?.email ?? null;
+  if (isEmailAllowed(email)) return null;
+
+  return withCors(
+    NextResponse.json(
+      {
+        error: "forbidden",
+        error_description:
+          "Your account is no longer on the access list for this connector.",
+      },
+      { status: 403 },
+    ),
+  );
+}
+
 async function handle(request: Request) {
+  const denied = await checkWhitelist(request);
+  if (denied) return denied;
+
   const res = await authedHandler(request);
   // Layer CORS on top so claude.ai (which calls from another origin) gets the
   // headers it needs.

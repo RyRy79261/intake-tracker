@@ -13,6 +13,11 @@ export const MCP_CORS_HEADERS = {
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers":
     "Content-Type, Authorization, mcp-protocol-version, mcp-session-id",
+  // WWW-Authenticate carries the MCP `Bearer resource_metadata=` hint that
+  // browser-based MCP clients need to discover the protected-resource
+  // metadata URL after a 401. Without exposing it, the fetch() consumer
+  // can't read it across origins.
+  "Access-Control-Expose-Headers": "WWW-Authenticate",
   "Access-Control-Max-Age": "86400",
 } as const;
 

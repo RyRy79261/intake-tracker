@@ -29,12 +29,16 @@ import { getPublicOrigin } from "@/lib/mcp/origin";
 
 export const dynamic = "force-dynamic";
 
+// PKCE method intentionally restricted to S256 — must match the
+// `code_challenge_methods_supported: ["S256"]` advertised by the
+// authorization-server metadata. Accepting "plain" here would weaken
+// PKCE and contradict discovery, so the schema rejects it outright.
 const querySchema = z.object({
   response_type: z.literal("code"),
   client_id: z.string().min(1),
   redirect_uri: z.string().url(),
   code_challenge: z.string().min(43).max(128),
-  code_challenge_method: z.enum(["S256", "plain"]).default("S256"),
+  code_challenge_method: z.literal("S256").default("S256"),
   state: z.string().min(1).max(512),
   scope: z.string().optional(),
 });

@@ -34,8 +34,10 @@ export function hashesEqual(a: string, b: string): boolean {
  */
 export function verifyPkceS256(verifier: string, challenge: string): boolean {
   const computed = createHash("sha256").update(verifier).digest("base64url");
-  if (computed.length !== challenge.length) return false;
-  return timingSafeEqual(Buffer.from(computed), Buffer.from(challenge));
+  const bufComputed = Buffer.from(computed);
+  const bufChallenge = Buffer.from(challenge);
+  if (bufComputed.length !== bufChallenge.length) return false;
+  return timingSafeEqual(bufComputed, bufChallenge);
 }
 
 export const TOKEN_PREFIX = {

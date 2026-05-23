@@ -1,13 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { NextRequest } from "next/server";
-import { GET } from "./route";
+import { GET } from "@/app/api/mcp/well-known/oauth-protected-resource/route";
 
 describe("GET /.well-known/oauth-protected-resource", () => {
   it("returns RFC 9728 metadata pointing at our AS", async () => {
     const req = new NextRequest(
       "https://app.test/.well-known/oauth-protected-resource",
     );
-    const res = GET(req);
+    const res = await GET(req);
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.resource).toContain("/api/mcp");

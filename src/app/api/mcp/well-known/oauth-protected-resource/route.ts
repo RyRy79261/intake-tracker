@@ -26,7 +26,8 @@ export function GET(req: NextRequest) {
       authorization_servers: [urls.issuer],
       bearer_methods_supported: ["header"],
       scopes_supported: [...SUPPORTED_SCOPES],
-      resource_documentation: `${origin}/docs/mcp-connector.md`,
+      resource_documentation:
+        "https://github.com/RyRy79261/intake-tracker/blob/main/docs/mcp-connector.md",
     }),
   );
 }

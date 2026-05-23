@@ -6,7 +6,7 @@
  * module mints and validates tokens scoped to a userId that the
  * authorize-endpoint has already verified via session cookie.
  */
-import { eq, and, isNull, lt } from "drizzle-orm";
+import { eq, and, gte, isNull, lt } from "drizzle-orm";
 import { db } from "@/lib/drizzle";
 import {
   mcpAccessTokens,
@@ -47,19 +47,23 @@ export interface RegisterInput {
 export function isAllowedRedirectUri(uri: string): boolean {
   try {
     const u = new URL(uri);
-    if (u.protocol !== "https:" && u.protocol !== "http:") return false;
-    // Production: claude.ai + the new claude domain
+    const isLoopback =
+      u.hostname === "localhost" ||
+      u.hostname === "127.0.0.1" ||
+      u.hostname === "[::1]";
+
+    if (isLoopback) {
+      // Local dev only — http or https both fine on loopback.
+      return u.protocol === "http:" || u.protocol === "https:";
+    }
+
+    // Public hosts require https. Anything else (http, ftp, etc.) is rejected.
+    if (u.protocol !== "https:") return false;
+
     if (u.hostname === "claude.ai") return true;
     if (u.hostname.endsWith(".claude.ai")) return true;
     if (u.hostname === "anthropic.com") return true;
     if (u.hostname.endsWith(".anthropic.com")) return true;
-    // Local dev: any localhost loopback is fine. http permitted only here.
-    if (
-      u.hostname === "localhost" ||
-      u.hostname === "127.0.0.1" ||
-      u.hostname === "[::1]"
-    )
-      return true;
     return false;
   } catch {
     return false;
@@ -175,7 +179,14 @@ export async function consumeAuthCode(input: ConsumeCodeInput): Promise<
 > {
   const now = Date.now();
 
-  // Atomic single-use guard: only succeeds if `consumedAt IS NULL`.
+  // Atomic guard — the row is only marked consumed if EVERY one of these
+  // matches: code present, not yet consumed, correct client, correct
+  // redirect_uri, not expired. This means a malformed exchange attempt
+  // (wrong client or expired) does NOT burn the code, so the legitimate
+  // client can still complete the flow if it retries with correct values.
+  // PKCE verification still happens AFTER the consume — if it fails the
+  // code is already burned, which is correct: a PKCE mismatch means an
+  // attacker likely intercepted the code, so we don't want a retry path.
   const consumed = await db
     .update(mcpAuthCodes)
     .set({ consumedAt: now })
@@ -183,20 +194,21 @@ export async function consumeAuthCode(input: ConsumeCodeInput): Promise<
       and(
         eq(mcpAuthCodes.code, input.code),
         isNull(mcpAuthCodes.consumedAt),
+        eq(mcpAuthCodes.clientId, input.clientId),
+        eq(mcpAuthCodes.redirectUri, input.redirectUri),
+        gte(mcpAuthCodes.expiresAt, now),
       ),
     )
     .returning();
 
   if (consumed.length === 0) {
-    return { ok: false, reason: "code not found or already consumed" };
+    return {
+      ok: false,
+      reason: "code not found, already consumed, expired, or client/redirect mismatch",
+    };
   }
 
   const row = consumed[0]!;
-  if (row.expiresAt < now) return { ok: false, reason: "code expired" };
-  if (row.clientId !== input.clientId)
-    return { ok: false, reason: "client mismatch" };
-  if (row.redirectUri !== input.redirectUri)
-    return { ok: false, reason: "redirect_uri mismatch" };
 
   if (row.codeChallengeMethod === "S256") {
     if (!verifyPkceS256(input.codeVerifier, row.codeChallenge)) {
@@ -258,33 +270,70 @@ export async function rotateRefreshToken(
   const refreshHash = hashToken(refreshTokenPlain);
   const now = Date.now();
 
-  // Atomic rotation: revoke the row if it's still valid, capture its state.
-  const revoked = await db
-    .update(mcpAccessTokens)
-    .set({ revokedAt: now })
-    .where(
-      and(
-        eq(mcpAccessTokens.refreshTokenHash, refreshHash),
-        isNull(mcpAccessTokens.revokedAt),
-      ),
-    )
-    .returning();
+  // Wrap revoke + new-token-insert in a single transaction so that if the
+  // insert fails the revoke is rolled back — otherwise a transient DB
+  // error would permanently kill the user's session. The atomic revoke
+  // (with isNull guard) still gives the "exactly one winner" property
+  // under concurrent rotation: only one transaction's UPDATE returns the
+  // row; the others see zero rows and abort.
+  //
+  // All validation predicates (client_id, refresh_expires_at) are in the
+  // WHERE clause so a wrong client or expired token simply leaves the
+  // old token intact.
+  try {
+    return await db.transaction(async (tx) => {
+      const revoked = await tx
+        .update(mcpAccessTokens)
+        .set({ revokedAt: now })
+        .where(
+          and(
+            eq(mcpAccessTokens.refreshTokenHash, refreshHash),
+            eq(mcpAccessTokens.clientId, clientId),
+            isNull(mcpAccessTokens.revokedAt),
+            gte(mcpAccessTokens.refreshExpiresAt, now),
+          ),
+        )
+        .returning();
 
-  if (revoked.length === 0) {
-    return { ok: false, reason: "refresh token not found or already revoked" };
+      if (revoked.length === 0) {
+        return {
+          ok: false as const,
+          reason:
+            "refresh token not found, already revoked, expired, or client mismatch",
+        };
+      }
+      const row = revoked[0]!;
+
+      const accessToken = generateOpaqueToken(TOKEN_PREFIX.ACCESS, 32);
+      const refreshToken = generateOpaqueToken(TOKEN_PREFIX.REFRESH, 32);
+      await tx.insert(mcpAccessTokens).values({
+        tokenHash: hashToken(accessToken),
+        refreshTokenHash: hashToken(refreshToken),
+        clientId: row.clientId,
+        userId: row.userId,
+        scope: row.scope,
+        expiresAt: now + TOKEN_TTL.ACCESS_TOKEN_MS,
+        refreshExpiresAt: now + TOKEN_TTL.REFRESH_TOKEN_MS,
+        createdAt: now,
+      });
+
+      return {
+        ok: true as const,
+        tokens: {
+          accessToken,
+          refreshToken,
+          accessExpiresIn: Math.floor(TOKEN_TTL.ACCESS_TOKEN_MS / 1000),
+        },
+        userId: row.userId,
+        scope: row.scope,
+      };
+    });
+  } catch (err) {
+    return {
+      ok: false,
+      reason: err instanceof Error ? err.message : "rotation failed",
+    };
   }
-  const row = revoked[0]!;
-  if (row.clientId !== clientId)
-    return { ok: false, reason: "client mismatch" };
-  if (!row.refreshExpiresAt || row.refreshExpiresAt < now)
-    return { ok: false, reason: "refresh token expired" };
-
-  const tokens = await issueAccessToken({
-    clientId: row.clientId,
-    userId: row.userId,
-    scope: row.scope,
-  });
-  return { ok: true, tokens, userId: row.userId, scope: row.scope };
 }
 
 export async function lookupAccessToken(accessTokenPlain: string): Promise<
@@ -323,10 +372,15 @@ export async function lookupAccessToken(accessTokenPlain: string): Promise<
 
 /**
  * Periodic cleanup helper — not wired to a cron, but exposed so a future
- * job can purge expired auth codes and consumed/revoked tokens.
+ * job can purge expired auth codes and tokens whose refresh has also
+ * expired. We DON'T delete by `expiresAt` (access-token TTL) because the
+ * row still carries a usable refresh token until `refreshExpiresAt` —
+ * dropping it would force users back to re-authorize daily.
  */
 export async function purgeExpired(): Promise<void> {
   const now = Date.now();
   await db.delete(mcpAuthCodes).where(lt(mcpAuthCodes.expiresAt, now));
-  await db.delete(mcpAccessTokens).where(lt(mcpAccessTokens.expiresAt, now));
+  await db
+    .delete(mcpAccessTokens)
+    .where(lt(mcpAccessTokens.refreshExpiresAt, now));
 }

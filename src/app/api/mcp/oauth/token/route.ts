@@ -38,11 +38,28 @@ const refreshGrantSchema = z.object({
   scope: z.string().optional(),
 });
 
+// RFC 6749 §5.1: token endpoint responses MUST NOT be cached. Set on every
+// response — error and success — so a misbehaving proxy can't replay a
+// previous token to a different caller.
+const NO_STORE_HEADERS = {
+  "Cache-Control": "no-store",
+  Pragma: "no-cache",
+} as const;
+
+function applyNoStore(res: NextResponse): NextResponse {
+  for (const [k, v] of Object.entries(NO_STORE_HEADERS)) {
+    res.headers.set(k, v);
+  }
+  return res;
+}
+
 function err(error: string, description?: string, status = 400) {
   return withCors(
-    NextResponse.json(
-      { error, ...(description ? { error_description: description } : {}) },
-      { status },
+    applyNoStore(
+      NextResponse.json(
+        { error, ...(description ? { error_description: description } : {}) },
+        { status },
+      ),
     ),
   );
 }
@@ -137,13 +154,15 @@ export async function POST(request: NextRequest) {
       scope: result.scope,
     });
     return withCors(
-      NextResponse.json({
-        access_token: tokens.accessToken,
-        token_type: "Bearer",
-        expires_in: tokens.accessExpiresIn,
-        refresh_token: tokens.refreshToken,
-        scope: result.scope,
-      }),
+      applyNoStore(
+        NextResponse.json({
+          access_token: tokens.accessToken,
+          token_type: "Bearer",
+          expires_in: tokens.accessExpiresIn,
+          refresh_token: tokens.refreshToken,
+          scope: result.scope,
+        }),
+      ),
     );
   }
 
@@ -166,13 +185,15 @@ export async function POST(request: NextRequest) {
     if (!rotated.ok) return err("invalid_grant", rotated.reason);
 
     return withCors(
-      NextResponse.json({
-        access_token: rotated.tokens.accessToken,
-        token_type: "Bearer",
-        expires_in: rotated.tokens.accessExpiresIn,
-        refresh_token: rotated.tokens.refreshToken,
-        scope: rotated.scope,
-      }),
+      applyNoStore(
+        NextResponse.json({
+          access_token: rotated.tokens.accessToken,
+          token_type: "Bearer",
+          expires_in: rotated.tokens.accessExpiresIn,
+          refresh_token: rotated.tokens.refreshToken,
+          scope: rotated.scope,
+        }),
+      ),
     );
   }
 

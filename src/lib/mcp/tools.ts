@@ -95,6 +95,9 @@ async function runTool<TArgs extends Record<string, unknown>>(
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    // Full internal error is captured in the audit log only. The reply
+    // to the MCP client is intentionally generic so we don't leak SQL
+    // shapes, stack frames, or internal field names to the model.
     void writeMcpAudit({
       userId,
       clientId,
@@ -108,7 +111,7 @@ async function runTool<TArgs extends Record<string, unknown>>(
       content: [
         {
           type: "text" as const,
-          text: `Error: ${message}`,
+          text: "An internal error occurred while processing your request.",
         },
       ],
       isError: true,
