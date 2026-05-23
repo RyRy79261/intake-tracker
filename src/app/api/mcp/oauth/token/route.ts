@@ -49,22 +49,32 @@ function err(error: string, description?: string, status = 400) {
 
 async function readBody(
   request: NextRequest,
-): Promise<Record<string, string>> {
+): Promise<Record<string, string> | { __error: string }> {
   const ct = request.headers.get("content-type") ?? "";
-  if (ct.includes("application/json")) {
-    const json = await request.json();
+  try {
+    if (ct.includes("application/json")) {
+      const text = await request.text();
+      if (!text.trim()) return {};
+      const json = JSON.parse(text) as unknown;
+      const out: Record<string, string> = {};
+      if (json && typeof json === "object" && !Array.isArray(json)) {
+        for (const [k, v] of Object.entries(json)) {
+          if (typeof v === "string") out[k] = v;
+        }
+      }
+      return out;
+    }
+    const form = await request.formData();
     const out: Record<string, string> = {};
-    for (const [k, v] of Object.entries(json ?? {})) {
+    for (const [k, v] of form.entries()) {
       if (typeof v === "string") out[k] = v;
     }
     return out;
+  } catch (err) {
+    return {
+      __error: err instanceof Error ? err.message : "could not parse body",
+    };
   }
-  const form = await request.formData();
-  const out: Record<string, string> = {};
-  for (const [k, v] of form.entries()) {
-    if (typeof v === "string") out[k] = v;
-  }
-  return out;
 }
 
 function readClientCredsFromHeader(
@@ -86,7 +96,11 @@ function readClientCredsFromHeader(
 }
 
 export async function POST(request: NextRequest) {
-  const body = await readBody(request);
+  const parsedBody = await readBody(request);
+  if ("__error" in parsedBody) {
+    return err("invalid_request", parsedBody.__error);
+  }
+  const body = parsedBody;
 
   // Client may authenticate via Basic header OR body params.
   const basic = readClientCredsFromHeader(request);

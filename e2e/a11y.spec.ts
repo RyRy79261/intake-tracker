@@ -66,3 +66,71 @@ for (const route of ROUTES) {
     ).toEqual([]);
   });
 }
+
+/**
+ * The MCP consent screen is the only HTML view in the OAuth flow the user
+ * actually sees — every other endpoint is machine-to-machine. It's a
+ * hand-rolled HTML string (not a React route), so it needs its own scan.
+ */
+test("a11y: MCP consent screen has no critical violations", async ({
+  page,
+  request,
+  baseURL,
+}) => {
+  test.skip(
+    !process.env.NEON_AUTH_TEST_EMAIL,
+    "needs a real Neon Auth session (set NEON_AUTH_TEST_EMAIL)",
+  );
+
+  // Register a fresh client so the consent page renders for a real flow.
+  const reg = await request.post(
+    `${baseURL}/api/mcp/oauth/register`,
+    {
+      headers: { "content-type": "application/json" },
+      data: {
+        client_name: "a11y-probe",
+        redirect_uris: ["http://localhost:3000/playwright-callback"],
+        token_endpoint_auth_method: "none",
+      },
+    },
+  );
+  const { client_id, redirect_uris } = (await reg.json()) as {
+    client_id: string;
+    redirect_uris: string[];
+  };
+
+  // Static PKCE challenge — irrelevant to a11y, just needs to satisfy
+  // the route's Zod schema so the consent page renders.
+  const challenge =
+    "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
+
+  const params = new URLSearchParams({
+    response_type: "code",
+    client_id,
+    redirect_uri: redirect_uris[0]!,
+    code_challenge: challenge,
+    code_challenge_method: "S256",
+    state: "a11y-state",
+    scope: "intake-tracker:read",
+  });
+
+  await page.goto(`/api/mcp/oauth/authorize?${params.toString()}`);
+  await expect(page.getByText(/Connect to intake-tracker/i)).toBeVisible();
+
+  const results = await new AxeBuilder({ page })
+    .withTags(["wcag2a", "wcag2aa"])
+    .analyze();
+
+  const critical = results.violations.filter((v) => v.impact === "critical");
+  const serious = results.violations.filter((v) => v.impact === "serious");
+  if (serious.length > 0) {
+    console.log(
+      `[a11y][mcp-consent] ${serious.length} serious violation(s):`,
+      serious.map((v) => `${v.id} (${v.nodes.length} nodes)`).join(", "),
+    );
+  }
+  expect(
+    critical,
+    `Critical a11y violations on MCP consent: ${critical.map((v) => v.id).join(", ")}`,
+  ).toEqual([]);
+});
