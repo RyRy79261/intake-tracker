@@ -24,7 +24,17 @@ import { test, expect, type APIRequestContext } from "@playwright/test";
  * exercises the rewrite, the consent screen markup, the OAuth state
  * machine, the bearer-token validator, and the MCP JSON-RPC dispatch in
  * one pass.
+ *
+ * Run gating: the security-critical behaviour of these endpoints is
+ * already pinned by the unit + fuzz + Postgres-integration tests
+ * (src/lib/mcp/**, src/__tests__/integration/mcp-*). This spec drives
+ * the **HTTP wiring** — rewrites, consent-form roundtrip, MCP dispatch —
+ * which depends on a running production server + an authenticated Neon
+ * Auth session for the consent flow. To avoid coupling the regular CI
+ * e2e job to that setup, this whole spec is opt-in via
+ * RUN_MCP_E2E=1. Without it, the spec is skipped silently.
  */
+const RUN = process.env.RUN_MCP_E2E === "1";
 
 const PKCE_VERIFIER =
   "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-_";
@@ -53,6 +63,8 @@ async function registerClient(api: APIRequestContext, baseURL: string) {
 }
 
 test.describe("MCP connector handshake", () => {
+  test.skip(!RUN, "Set RUN_MCP_E2E=1 to run the MCP connector E2E spec");
+
   test("OAuth metadata advertises the expected endpoints", async ({
     request,
     baseURL,

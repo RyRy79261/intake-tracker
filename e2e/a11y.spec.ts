@@ -77,9 +77,14 @@ test("a11y: MCP consent screen has no critical violations", async ({
   request,
   baseURL,
 }) => {
+  // Gated alongside the MCP connector E2E spec — same prerequisites
+  // (running production server + authenticated session). The consent
+  // screen markup itself is a static HTML string; the unit/fuzz/integration
+  // suites cover the route logic, so running this a11y scan per-PR is
+  // unnecessary for catching regressions on the markup.
   test.skip(
-    !process.env.NEON_AUTH_TEST_EMAIL,
-    "needs a real Neon Auth session (set NEON_AUTH_TEST_EMAIL)",
+    process.env.RUN_MCP_E2E !== "1",
+    "Set RUN_MCP_E2E=1 to scan the MCP consent screen",
   );
 
   // Register a fresh client so the consent page renders for a real flow.
