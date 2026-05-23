@@ -3,9 +3,13 @@
  *
  *   1. Validate query params (client_id, redirect_uri, PKCE, state).
  *   2. Check Neon Auth session.
- *      - If none, redirect to /api/auth/sign-in/social?provider=google with
- *        callbackURL pointing back here. After Google sign-in completes,
- *        Neon Auth sets the session cookie and re-delivers the user to us.
+ *      - If none, redirect to /auth?callbackURL=<this-url>. The /auth
+ *        page is the client-side sign-in UI (email/password + Google
+ *        button) — it forwards the callbackURL into signIn.social /
+ *        signIn.email so the user lands back here after sign-in.
+ *        We can't redirect straight to /api/auth/sign-in/social: that
+ *        endpoint is the Neon Auth POST-only JSON API, not a navigable
+ *        browser URL.
  *   3. Verify the signed-in email is on the ALLOWED_EMAILS whitelist.
  *   4. Mirror the user into neon_auth.users_sync (FK target for auth_codes).
  *   5. Render a minimal consent page on first GET; on POST (Approve), mint
@@ -152,11 +156,16 @@ export async function GET(req: NextRequest) {
 
   const user = await getSignedInUser();
   if (!user) {
+    // Bounce through the /auth page (client UI) rather than the
+    // /api/auth/sign-in/social JSON endpoint, which only accepts POST.
+    // The /auth page reads `callbackURL` from its query string and
+    // passes it into signIn.social({...}), so the user lands back here
+    // after Google completes. callbackURL is a same-origin relative
+    // path (sign-in-form.tsx rejects anything else).
     const origin = getPublicOrigin(req);
-    const callback = `${origin}/api/mcp/oauth/authorize?${req.nextUrl.searchParams.toString()}`;
-    const signInUrl = new URL("/api/auth/sign-in/social", origin);
-    signInUrl.searchParams.set("provider", "google");
-    signInUrl.searchParams.set("callbackURL", callback);
+    const callbackPath = `/api/mcp/oauth/authorize?${req.nextUrl.searchParams.toString()}`;
+    const signInUrl = new URL("/auth", origin);
+    signInUrl.searchParams.set("callbackURL", callbackPath);
     return NextResponse.redirect(signInUrl.toString(), { status: 302 });
   }
 
