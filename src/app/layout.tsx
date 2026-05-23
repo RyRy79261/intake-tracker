@@ -27,8 +27,7 @@ const BOOT_SHELL_CSS = `
 #__boot_shell{position:fixed;inset:0;z-index:2147483647;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#f5f7fa;color:#1f2937;font-family:system-ui,-apple-system,sans-serif;transition:opacity 200ms ease-out}
 @media (prefers-color-scheme:dark){#__boot_shell{background:#111827;color:#e5e7eb}}
 html.app-booted #__boot_shell{opacity:0;pointer-events:none}
-#__boot_shell .title{font-size:18px;font-weight:600}
-#__boot_shell .sub{font-size:13px;opacity:.7;margin-top:4px}
+#__boot_shell .label{font-size:15px;opacity:.7}
 #__boot_shell .spinner{width:22px;height:22px;border:3px solid rgba(127,127,127,.2);border-top-color:#3b82f6;border-radius:50%;animation:itrk-spin .8s linear infinite;margin-top:18px}
 @keyframes itrk-spin{to{transform:rotate(360deg)}}
 #__boot_shell .recover{display:none;margin-top:28px;padding:10px 16px;border:1px solid rgba(127,127,127,.4);border-radius:8px;background:transparent;color:inherit;font:inherit;text-decoration:none}
@@ -78,8 +77,7 @@ export default function RootLayout({
       </head>
       <body className={`${outfit.variable} font-sans antialiased`}>
         <div id="__boot_shell" aria-hidden="true">
-          <div className="title">Intake Tracker</div>
-          <div className="sub">Loading…</div>
+          <div className="label">Loading…</div>
           <div className="spinner" />
           <a className="recover" href="/recover.html">Reset app</a>
         </div>
