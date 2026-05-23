@@ -75,6 +75,40 @@ function escapeHtml(s: string): string {
   })[c] as string);
 }
 
+/**
+ * Cross-origin "redirect" via HTML response.
+ *
+ * Why this exists instead of NextResponse.redirect:
+ *
+ * The app-wide CSP (next.config.js) sets `form-action 'self'`. When the
+ * consent screen's form POSTs to this route and the handler responds
+ * with a 302 to claude.ai (or any non-self origin), CSP3 §6.1.18 makes
+ * the browser check `form-action` against the redirect target as well —
+ * not just the initial submission URL. The 302 to claude.ai therefore
+ * gets blocked silently and the user's Approve click appears to do
+ * nothing. (Reproduced in mobile Chrome inside Claude's in-app browser.)
+ *
+ * Returning an HTML page instead is treated as a normal document load —
+ * `form-action` only restricts form submissions, so the meta-refresh and
+ * JS-driven navigation that follow are unaffected. Both vectors are
+ * included so users without JS still continue, and the anchor is the
+ * final fallback for old engines that ignore meta-refresh too.
+ */
+function htmlRedirect(target: string): NextResponse {
+  const escaped = escapeHtml(target);
+  const body = `<!doctype html>
+<html><head><meta charset="utf-8"><title>Redirecting…</title>
+<meta http-equiv="refresh" content="0;url=${escaped}">
+</head><body>
+<p>Redirecting back to the application… <a href="${escaped}">Continue</a> if not redirected.</p>
+<script>window.location.replace(${JSON.stringify(target)});</script>
+</body></html>`;
+  return new NextResponse(body, {
+    status: 200,
+    headers: { "content-type": "text/html; charset=utf-8" },
+  });
+}
+
 function redirectClientWithError(
   redirectUri: string,
   state: string | null,
@@ -85,7 +119,7 @@ function redirectClientWithError(
   url.searchParams.set("error", error);
   if (description) url.searchParams.set("error_description", description);
   if (state) url.searchParams.set("state", state);
-  return NextResponse.redirect(url.toString(), { status: 302 });
+  return htmlRedirect(url.toString());
 }
 
 async function getSignedInUser(): Promise<
@@ -276,5 +310,7 @@ export async function POST(req: NextRequest) {
   const cb = new URL(params.redirect_uri);
   cb.searchParams.set("code", code);
   cb.searchParams.set("state", params.state);
-  return NextResponse.redirect(cb.toString(), { status: 302 });
+  // HTML redirect (not 302) — see htmlRedirect() docstring for why
+  // form-action 'self' in the global CSP would otherwise block this.
+  return htmlRedirect(cb.toString());
 }
