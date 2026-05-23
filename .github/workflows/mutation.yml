@@ -52,6 +52,13 @@ jobs:
             pnpm test:mutation 2>&1 | tee stryker.log
           fi
 
+      - name: Check baseline ratchet
+        if: always() && inputs.mutate == ''
+        # Only enforce the ratchet on full nightly runs (no mutate
+        # override). Workflow_dispatch overrides may scope the run to
+        # a single file, which wouldn't have all the baseline entries.
+        run: pnpm tsx scripts/check-mutation-baseline.ts
+
       - name: Post score table to job summary
         if: always()
         run: |
