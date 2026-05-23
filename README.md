@@ -310,7 +310,7 @@ MCP_PUBLIC_URL=https://your-app.example.com
 
 1. In Claude, open **Settings → Connectors → Add custom connector**.
 2. Paste the MCP endpoint URL:
-   ```
+   ```text
    https://<your-app>/api/mcp/mcp
    ```
 3. Click **Connect**. Claude redirects you to the intake-tracker.
