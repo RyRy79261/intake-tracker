@@ -68,7 +68,13 @@ export function WeekDaySelector({ selectedDate, onSelectDate }: WeekDaySelectorP
   return (
     <div className="mb-4">
       <div className="flex items-center">
-        <Button variant="ghost" size="icon" className="shrink-0 h-8 w-8" onClick={() => shiftWeek(-1)}>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="shrink-0 h-8 w-8"
+          onClick={() => shiftWeek(-1)}
+          aria-label="Previous week"
+        >
           <ChevronLeft className="w-4 h-4" />
         </Button>
 
@@ -104,7 +110,13 @@ export function WeekDaySelector({ selectedDate, onSelectDate }: WeekDaySelectorP
           })}
         </div>
 
-        <Button variant="ghost" size="icon" className="shrink-0 h-8 w-8" onClick={() => shiftWeek(1)}>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="shrink-0 h-8 w-8"
+          onClick={() => shiftWeek(1)}
+          aria-label="Next week"
+        >
           <ChevronRight className="w-4 h-4" />
         </Button>
       </div>

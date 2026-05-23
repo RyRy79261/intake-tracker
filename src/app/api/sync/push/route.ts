@@ -19,9 +19,15 @@
  *      cannot be resurrected by a stale edit.
  *   2. Else if no existing server row OR clampedUpdatedAt > existing.updatedAt
  *      → upsert via onConflictDoUpdate.
- *   3. Else (server row newer OR exact tie) → skip write, ack with
- *      existing.updatedAt. Strict `>` makes ties deterministic: server keeps
- *      its row.
+ *   2b. Tombstone tie-break: if incoming op carries a tombstone AND the
+ *      server row is live AND the clamped updatedAt ties exactly with
+ *      existing.updatedAt → write the tombstone. Symmetric with rule 1:
+ *      deletion is a deliberate user action and a stronger intent than
+ *      a concurrent edit, so it wins on ties. Stale tombstones (where
+ *      incoming.updatedAt < existing.updatedAt) still lose via rule 3.
+ *   3. Else (server row newer OR upsert-vs-upsert tie) → skip write, ack
+ *      with existing.updatedAt. Strict `>` keeps upsert ties deterministic
+ *      (server's row wins) since both writes carry equivalent intent.
  *
  * Clock skew (Pattern 9):
  *   `clampedUpdatedAt = min(op.row.updatedAt, serverNow + MAX_FUTURE_MS)`
@@ -171,7 +177,21 @@ export const POST = withAuth(async ({ request, auth }) => {
           continue;
         }
 
-        if (!serverRow || clampedUpdatedAt > serverRow.updatedAt) {
+        // Rule 2b (tombstone tie-break): an incoming tombstone against
+        // a live server row with the same clamped updatedAt should
+        // succeed. Without this, the strict `>` rule below silently
+        // drops the delete — discovered by the property test in
+        // src/__tests__/sync-conflict.property.test.ts (D-12 finding).
+        // Deletion is a deliberate user action and a stronger intent
+        // than a concurrent edit, so it wins on ties. Stale tombstones
+        // (incoming.updatedAt < existing.updatedAt) still lose.
+        const tombstoneTieBreak =
+          serverRow != null &&
+          serverRow.deletedAt == null &&
+          op.row.deletedAt != null &&
+          clampedUpdatedAt === serverRow.updatedAt;
+
+        if (!serverRow || clampedUpdatedAt > serverRow.updatedAt || tombstoneTieBreak) {
           const rowWithoutUserId: Record<string, any> = { ...op.row };
           delete rowWithoutUserId.userId;
           sanitizeRow(rowWithoutUserId);
