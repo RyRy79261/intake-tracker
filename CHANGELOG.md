@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.23.2](https://github.com/RyRy79261/intake-tracker/compare/v1.23.1...v1.23.2) (2026-05-23)
+
+
+### Bug Fixes
+
+* use router.back() from help manual pages ([4e70c67](https://github.com/RyRy79261/intake-tracker/commit/4e70c679874535c0ada3dd46c40c3fdb07158fab))
+* use router.back() from help manual pages ([8a41599](https://github.com/RyRy79261/intake-tracker/commit/8a415993953d6f668a12cc94f52a4bc37e471756))
+
 ## [1.23.1](https://github.com/RyRy79261/intake-tracker/compare/v1.23.0...v1.23.1) (2026-05-22)
 
 
