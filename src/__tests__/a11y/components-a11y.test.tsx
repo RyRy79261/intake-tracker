@@ -25,13 +25,16 @@
  *   moderate → notable friction
  *   minor    → polish
  *
- * This is a TRIAGE tool, not a gate. The first run surfaces existing
- * violations across the codebase that no test has ever enforced; the
- * sensible move is to log them, decide what to fix, then ratchet the
- * gate upward over time. So this test always passes — the value is
- * the structured console output that lists violations by component
- * and impact level. Wire a failure threshold in once the baseline is
- * clean.
+ * Failure model: this test FAILS the suite on any `critical`-impact
+ * violation. `serious`, `moderate`, and `minor` violations are logged
+ * for triage so they're visible in the test output but don't gate CI.
+ * As violations get cleaned up, ratchet the gate upward by including
+ * the next impact level in the assertion.
+ *
+ * History: initial run found 3 critical (`button-name`) and 2 serious
+ * (`aria-progressbar-name`) violations across LiquidsCard, FoodSaltCard,
+ * and WeightCard. All critical and serious were fixed in the same
+ * commit that ratcheted this test from triage tool to gate.
  */
 import { describe, it, expect, vi, beforeAll } from "vitest";
 import axe from "axe-core";
@@ -143,15 +146,19 @@ const CARDS: { label: string; element: () => React.ReactElement }[] = [
 
 describe("a11y scan of dashboard components (jsdom + axe-core)", () => {
   for (const card of CARDS) {
-    it(`${card.label} — a11y triage scan`, async () => {
+    it(`${card.label} has no critical a11y violations`, async () => {
       const { container } = await renderWithFixtures(card.element());
       // Brief wait for any async render (useEffect, live query) to settle.
       await new Promise((r) => setTimeout(r, 50));
-      // scan() logs findings and returns the critical violations. We
-      // deliberately don't assert on the count — this is triage, not a
-      // gate. The container needs to actually render *something* though.
-      await scan(card.label, container);
-      expect(container.children.length).toBeGreaterThan(0);
+      const critical = await scan(card.label, container);
+      expect(
+        critical,
+        critical.length
+          ? `critical violations on ${card.label}: ${critical
+              .map((v) => `${v.id} (${v.nodes.length} nodes) → ${v.helpUrl.split("?")[0]}`)
+              .join("; ")}`
+          : undefined,
+      ).toEqual([]);
     }, 15_000);
   }
 });

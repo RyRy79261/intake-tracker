@@ -147,7 +147,12 @@ describe("Day-in-the-life — multi-card user simulation", () => {
         await user.type(aiInput, "lunch wrap");
         await user.keyboard("{Enter}");
         await waitFor(() => {
-          expect(screen.getByLabelText(/Sodium/i)).toHaveValue(320);
+          // Target the number input specifically — the Progress bar in
+          // FoodSaltCard now also carries a "Sodium…" aria-label so a
+          // bare getByLabelText(/Sodium/i) matches both.
+          expect(
+            screen.getByRole("spinbutton", { name: /sodium/i }),
+          ).toHaveValue(320);
         });
         await user.click(
           screen.getByRole("button", { name: /Record with details/i }),
