@@ -145,7 +145,12 @@ export interface IssueCodeInput {
   userId: string;
   redirectUri: string;
   codeChallenge: string;
-  codeChallengeMethod: "S256" | "plain";
+  // Issuance is locked to S256. The authorize route's Zod schema enforces
+  // z.literal("S256"), and the OAuth metadata advertises
+  // code_challenge_methods_supported: ["S256"], so "plain" can never reach
+  // this code path. The DB column's CHECK still allows both values for
+  // backwards compatibility with any historical row.
+  codeChallengeMethod: "S256";
   scope: string;
 }
 

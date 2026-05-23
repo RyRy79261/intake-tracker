@@ -10,7 +10,11 @@ import { NextResponse } from "next/server";
 
 export const MCP_CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  // DELETE is part of the MCP Streamable HTTP spec for session termination.
+  // The [transport] route handler registers DELETE — if it's missing from the
+  // preflight allow-list, browsers (claude.ai) block the request before it
+  // reaches the server.
+  "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
   "Access-Control-Allow-Headers":
     "Content-Type, Authorization, mcp-protocol-version, mcp-session-id",
   // WWW-Authenticate carries the MCP `Bearer resource_metadata=` hint that

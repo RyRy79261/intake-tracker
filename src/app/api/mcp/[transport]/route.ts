@@ -43,12 +43,43 @@ const baseHandler = createMcpHandler(
   },
 );
 
+/**
+ * Per-request memo of the bearer-token lookup. The preflight whitelist
+ * check below populates this; verifyToken (called by withMcpAuth shortly
+ * after) reads from it instead of issuing a second `lookupAccessToken`
+ * round-trip. WeakMap so entries vanish with the Request — no manual
+ * eviction needed.
+ */
+const lookupByRequest = new WeakMap<
+  Request,
+  Awaited<ReturnType<typeof lookupAccessToken>>
+>();
+
+async function resolveBearer(request: Request) {
+  if (lookupByRequest.has(request)) {
+    return lookupByRequest.get(request) ?? null;
+  }
+  const header = request.headers.get("authorization");
+  if (!header?.startsWith("Bearer ")) {
+    lookupByRequest.set(request, null);
+    return null;
+  }
+  const token = header.slice(7).trim();
+  if (!token) {
+    lookupByRequest.set(request, null);
+    return null;
+  }
+  const lookup = await lookupAccessToken(token);
+  lookupByRequest.set(request, lookup);
+  return lookup;
+}
+
 async function verifyToken(
-  _req: Request,
+  req: Request,
   bearerToken?: string,
 ): Promise<AuthInfo | undefined> {
   if (!bearerToken) return undefined;
-  const lookup = await lookupAccessToken(bearerToken);
+  const lookup = await resolveBearer(req);
   if (!lookup) return undefined;
 
   return {
@@ -82,11 +113,7 @@ const authedHandler = withMcpAuth(baseHandler, verifyToken, {
 async function checkWhitelist(
   request: Request,
 ): Promise<NextResponse | null> {
-  const header = request.headers.get("authorization");
-  if (!header?.startsWith("Bearer ")) return null;
-  const token = header.slice(7).trim();
-  if (!token) return null;
-  const lookup = await lookupAccessToken(token);
+  const lookup = await resolveBearer(request);
   if (!lookup) return null; // let withMcpAuth render the 401
 
   const userRows = await db
