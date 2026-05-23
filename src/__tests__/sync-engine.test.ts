@@ -31,6 +31,7 @@ import {
   schedulePush,
   SKEW_MARGIN_MS,
 } from "@/lib/sync-engine";
+import { useSyncStatusStore } from "@/stores/sync-status-store";
 
 // ─────────────────────────────────────────────────────────────────────────
 // DOM polyfills — enough surface for addEventListener/dispatchEvent to work
@@ -400,5 +401,253 @@ describe("sync-engine", () => {
 
     const preserved = await db.intakeRecords.get("ack-race");
     expect(preserved?.updatedAt).toBe(5000);
+  });
+
+  // ─── Failure-path coverage (Stryker mutant-killing) ───────────────────
+  // The mutation baseline in commit 6684a1f found ~99 no-coverage mutants
+  // on the error-handling paths below: network catch, 401 short-circuit,
+  // non-OK status parsing, server-rejected ops. The happy-path tests
+  // above never exercise these branches. The tests below pin the
+  // documented behaviour of each so the next mutation pass catches a
+  // regression that empties any of them.
+
+  it("push: network error increments attempts on every queue row and sets lastError", async () => {
+    installDom();
+    __startEngineForTests();
+
+    const record = makeIntake({ id: "neterr-1" });
+    await db.intakeRecords.add(record);
+    await enqueue("intakeRecords", "neterr-1", "upsert");
+
+    // Reset the status store so we're asserting on a clean slate.
+    useSyncStatusStore.setState({ lastError: null, queueDepth: 0 });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("network down");
+      }) as unknown as Mock,
+    );
+
+    await runPushCycle();
+
+    // Every queue row touched in this cycle had its attempts bumped.
+    const rows = await db._syncQueue.toArray();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.attempts).toBe(1);
+
+    // lastError carries the underlying message so the UI can surface it.
+    expect(useSyncStatusStore.getState().lastError).toBe("network down");
+  });
+
+  it("push: 401 from server clears lastError and skips retry (auth handled elsewhere)", async () => {
+    installDom();
+    __startEngineForTests();
+
+    const record = makeIntake({ id: "auth-1" });
+    await db.intakeRecords.add(record);
+    await enqueue("intakeRecords", "auth-1", "upsert");
+
+    // Pre-seed an error so we can prove the 401 path explicitly CLEARS it.
+    useSyncStatusStore.setState({ lastError: "stale error", queueDepth: 0 });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("", { status: 401 })) as unknown as Mock,
+    );
+
+    await runPushCycle();
+
+    // No retry: attempts NOT incremented (the row is left alone for the
+    // next push cycle once auth recovers).
+    const rows = await db._syncQueue.toArray();
+    expect(rows[0]!.attempts ?? 0).toBe(0);
+
+    // The 401 branch explicitly resets lastError to null.
+    expect(useSyncStatusStore.getState().lastError).toBeNull();
+  });
+
+  it("push: non-OK status (500) bumps attempts and surfaces the body's detail field", async () => {
+    installDom();
+    __startEngineForTests();
+
+    const record = makeIntake({ id: "5xx-1" });
+    await db.intakeRecords.add(record);
+    await enqueue("intakeRecords", "5xx-1", "upsert");
+
+    useSyncStatusStore.setState({ lastError: null });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ detail: "db connection lost" }), {
+            status: 500,
+            headers: { "Content-Type": "application/json" },
+          }),
+      ) as unknown as Mock,
+    );
+
+    await runPushCycle();
+
+    const rows = await db._syncQueue.toArray();
+    expect(rows[0]!.attempts).toBe(1);
+
+    // The error parser walks body.detail first, then body.error. This
+    // pins the precedence — a mutant that swaps the order would fail.
+    expect(useSyncStatusStore.getState().lastError).toBe("db connection lost");
+  });
+
+  it("push: non-OK status falls back to body.error when body.detail is absent", async () => {
+    installDom();
+    __startEngineForTests();
+
+    const record = makeIntake({ id: "5xx-2" });
+    await db.intakeRecords.add(record);
+    await enqueue("intakeRecords", "5xx-2", "upsert");
+
+    useSyncStatusStore.setState({ lastError: null });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ error: "validation failed" }), {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          }),
+      ) as unknown as Mock,
+    );
+
+    await runPushCycle();
+
+    expect(useSyncStatusStore.getState().lastError).toBe("validation failed");
+  });
+
+  it("push: non-OK status with non-JSON body falls back to HTTP <status>", async () => {
+    installDom();
+    __startEngineForTests();
+
+    const record = makeIntake({ id: "5xx-3" });
+    await db.intakeRecords.add(record);
+    await enqueue("intakeRecords", "5xx-3", "upsert");
+
+    useSyncStatusStore.setState({ lastError: null });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () => new Response("<!doctype html><html>...</html>", { status: 502 }),
+      ) as unknown as Mock,
+    );
+
+    await runPushCycle();
+
+    expect(useSyncStatusStore.getState().lastError).toBe("HTTP 502");
+  });
+
+  it("push: server-rejected ops bump attempts only on the rejected ids", async () => {
+    installDom();
+    __startEngineForTests();
+
+    // Two queued ops; the server accepts one and rejects the other.
+    const a = makeIntake({ id: "rej-a" });
+    const b = makeIntake({ id: "rej-b" });
+    await db.intakeRecords.bulkAdd([a, b]);
+    await enqueue("intakeRecords", "rej-a", "upsert");
+    await enqueue("intakeRecords", "rej-b", "upsert");
+
+    const queueBefore = await db._syncQueue.toArray();
+    expect(queueBefore).toHaveLength(2);
+    const acceptedQueueId = queueBefore.find((q) => q.recordId === "rej-a")!.id!;
+    const rejectedQueueId = queueBefore.find((q) => q.recordId === "rej-b")!.id!;
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          jsonResponse({
+            accepted: [{ queueId: acceptedQueueId, serverUpdatedAt: 10_000 }],
+            rejected: [
+              {
+                queueId: rejectedQueueId,
+                tableName: "intakeRecords",
+                error: "schema mismatch",
+              },
+            ],
+          }),
+      ) as unknown as Mock,
+    );
+
+    await runPushCycle();
+
+    // Accepted op: ack removed it.
+    // Rejected op: still queued, attempts bumped to 1.
+    const after = await db._syncQueue.toArray();
+    expect(after).toHaveLength(1);
+    expect(after[0]!.recordId).toBe("rej-b");
+    expect(after[0]!.attempts).toBe(1);
+
+    // lastError surfaces the table + reason from the first rejected entry.
+    const err = useSyncStatusStore.getState().lastError ?? "";
+    expect(err).toContain("intakeRecords");
+    expect(err).toContain("schema mismatch");
+  });
+
+  it("pull: network error sets lastError without throwing or stalling", async () => {
+    installDom();
+    __startEngineForTests();
+
+    useSyncStatusStore.setState({ lastError: null });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("dns failure");
+      }) as unknown as Mock,
+    );
+
+    // Must NOT throw — failure is observable via the store, not the call.
+    await expect(runPullCycle()).resolves.toBeUndefined();
+
+    expect(useSyncStatusStore.getState().lastError).toBe("dns failure");
+  });
+
+  it("pull: 401 clears lastError and exits cleanly (auth handled elsewhere)", async () => {
+    installDom();
+    __startEngineForTests();
+
+    useSyncStatusStore.setState({ lastError: "stale" });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("", { status: 401 })) as unknown as Mock,
+    );
+
+    await runPullCycle();
+
+    expect(useSyncStatusStore.getState().lastError).toBeNull();
+  });
+
+  it("pull: non-OK status surfaces error from response body", async () => {
+    installDom();
+    __startEngineForTests();
+
+    useSyncStatusStore.setState({ lastError: null });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ error: "rate limited" }), {
+            status: 429,
+            headers: { "Content-Type": "application/json" },
+          }),
+      ) as unknown as Mock,
+    );
+
+    await runPullCycle();
+
+    expect(useSyncStatusStore.getState().lastError).toBe("rate limited");
   });
 });
