@@ -211,6 +211,72 @@ describe("sync-push-route", () => {
     expect(body.accepted).toEqual([{ queueId: 3, serverUpdatedAt: 1000 }]);
   });
 
+  it("tombstone tie-break: incoming tombstone with same updatedAt as live server row wins", async () => {
+    // Rule 2b in route.ts: deletion intent beats a concurrent edit
+    // when timestamps tie. Counterpart to "deletedAt wins" above,
+    // which covers the inverse direction (server tombstone vs
+    // incoming upsert). Without this rule, the route silently drops
+    // the delete — see sync-conflict.property.test.ts for the
+    // property-test discovery.
+    existingRows["row-1"] = {
+      id: "row-1",
+      userId: "user-test",
+      updatedAt: 5000,
+      deletedAt: null,
+    };
+    const { POST } = await import("@/app/api/sync/push/route");
+    const req = makePushRequest({
+      ops: [
+        {
+          queueId: 99,
+          tableName: "intakeRecords",
+          op: "upsert",
+          row: validIntakeRow({ updatedAt: 5000, deletedAt: 5000 }),
+        },
+      ],
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    expect(insertCalls).toHaveLength(1);
+    // The acked serverUpdatedAt matches the tied clamped value.
+    const body = (await res.json()) as {
+      accepted: { queueId: number; serverUpdatedAt: number }[];
+    };
+    expect(body.accepted).toEqual([{ queueId: 99, serverUpdatedAt: 5000 }]);
+  });
+
+  it("tombstone tie-break does NOT fire for stale tombstones (strictly older)", async () => {
+    // Defensive: a stale tombstone (incoming.updatedAt < existing)
+    // must still lose. Rule 2b requires equality, not just non-null.
+    existingRows["row-1"] = {
+      id: "row-1",
+      userId: "user-test",
+      updatedAt: 5000,
+      deletedAt: null,
+    };
+    const { POST } = await import("@/app/api/sync/push/route");
+    const req = makePushRequest({
+      ops: [
+        {
+          queueId: 100,
+          tableName: "intakeRecords",
+          op: "upsert",
+          row: validIntakeRow({ updatedAt: 4000, deletedAt: 4000 }),
+        },
+      ],
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    expect(insertCalls).toHaveLength(0);
+    const body = (await res.json()) as {
+      accepted: { queueId: number; serverUpdatedAt: number }[];
+    };
+    // Stale tombstone is acked with the EXISTING server updatedAt.
+    expect(body.accepted).toEqual([{ queueId: 100, serverUpdatedAt: 5000 }]);
+  });
+
   it("clamp future: client updatedAt > serverNow+60s clamps to serverNow+60s", async () => {
     const FROZEN_NOW = 1_000_000;
     vi.spyOn(Date, "now").mockReturnValue(FROZEN_NOW);

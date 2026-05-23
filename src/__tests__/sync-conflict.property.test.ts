@@ -8,10 +8,13 @@
  *
  * The invariants under test, drawn from the route's D-12 LWW rules:
  *
- *   I1 (resurrection guard):
- *     If either side has deletedAt != null, the result row has
- *     deletedAt != null.  A stale edit can NEVER resurrect a deleted
- *     record.
+ *   I1 (deletion precedence):
+ *     If either side has deletedAt != null AND its updatedAt is the
+ *     latest (>=) of the two, the final row carries that tombstone.
+ *     Existing-tombstone always wins via rule 1; incoming-tombstone
+ *     wins on >= via the rule 2b tie-break.  Net effect: a stale
+ *     edit can NEVER resurrect a deleted record, and a deletion
+ *     request with timestamp >= the existing edit gets applied.
  *
  *   I2 (latest-wins on upsert):
  *     For two upserts with updatedAt = u_a, u_b where neither carries
@@ -192,37 +195,24 @@ describe("sync push route — two-client conflict invariants (property)", () => 
     vi.restoreAllMocks();
   });
 
-  it("I1: a tombstone with strictly higher updatedAt wins (resurrection guard)", async () => {
+  it("I1: a tombstone with updatedAt >= existing wins (deletion precedence)", async () => {
     const { POST } = await import("@/app/api/sync/push/route");
 
-    // NOTE: this property is intentionally narrowed to *strictly higher*
-    // updatedAt on the tombstone side. An initial broader version of
-    // this invariant — "any tombstone wins" — was failing under fast-
-    // check with a minimal counter-example of two ops sharing the same
-    // updatedAt where the tombstone arrived second.
-    //
-    // Trace through the route's D-12 rules with existing.deletedAt=null,
-    // incoming.deletedAt=non-null, and matched updatedAt:
-    //   Rule 1 (existing tombstoned, incoming upsert) — doesn't apply.
-    //   Rule 2 (incoming updatedAt > existing) — false on a tie.
-    //   Rule 3 (else: skip write, keep server row) — fires; tombstone
-    //                                                lost.
-    //
-    // The asymmetry is documented in a dedicated test below ("ties:
-    // tombstones lose to upserts on the same updatedAt") so the
-    // behaviour is at least tracked. Whether to change the route to
-    // give tombstones precedence on ties is a product call — leaving
-    // it as-is keeps the rule symmetric in `updatedAt` but means an
-    // edge case can drop a delete.
+    // The first iteration of this invariant was narrower (strictly
+    // higher). fast-check found a counter-example on a tie: an
+    // arriving tombstone with the same updatedAt as the existing live
+    // row was silently dropped (rule 3's strict `>` left no room for
+    // tombstones at the boundary). That gap is now fixed in route.ts
+    // by rule 2b (tombstone tie-break); this property widens back to
+    // `>=` to lock in the corrected behaviour.
     await fc.assert(
       fc.asyncProperty(clientOp("A"), clientOp("B"), async (a, b) => {
-        resetDbState();
-
-        // Force one side to be the deletion, the other a plain upsert,
-        // and require the deletion's updatedAt to be strictly higher.
+        // Force one side to be the deletion, the other a plain upsert.
+        // The tombstone's updatedAt must be >= the upsert's for the
+        // invariant to apply (a stale tombstone still loses).
         const tombstone = { ...a, deletedAt: a.updatedAt };
         const upsert = { ...b, deletedAt: null };
-        fc.pre(tombstone.updatedAt > upsert.updatedAt);
+        fc.pre(tombstone.updatedAt >= upsert.updatedAt);
 
         // Try both orders — invariant must hold regardless of arrival.
         // Order 1: upsert first, tombstone second
@@ -241,14 +231,11 @@ describe("sync push route — two-client conflict invariants (property)", () => 
     );
   }, 30_000);
 
-  it("I1-asymmetry: documented finding — on a strict tie, an arriving tombstone is dropped", async () => {
-    // This test exists to lock in the existing behaviour as discovered
-    // by the property test above. It's NOT an endorsement of the
-    // behaviour — it's a regression guard so the gap is visible in the
-    // test suite. The fix (if we choose to make one) would be to add a
-    // rule in route.ts: "if incoming.deletedAt != null AND existing
-    // exists AND incoming.updatedAt >= existing.updatedAt, write the
-    // tombstone."
+  it("I1-tie: an incoming tombstone wins against a live server row at the same updatedAt", async () => {
+    // Regression guard for the route's rule 2b. The earlier version of
+    // this test ("I1-asymmetry") locked in the *broken* behaviour
+    // (tombstone silently dropped). After the route fix, the
+    // assertion flips: tombstone now wins.
     const { POST } = await import("@/app/api/sync/push/route");
 
     resetDbState();
@@ -261,16 +248,40 @@ describe("sync push route — two-client conflict invariants (property)", () => 
     expect(existingRows["shared-row"]).toBeDefined();
     expect(existingRows["shared-row"]!.deletedAt).toBeNull();
 
-    // Step 2: client B tries to delete the same row at the same
-    // updatedAt. By the strict `>` tie rule, B's delete is dropped.
+    // Step 2: client B deletes the same row at the same updatedAt.
+    // Rule 2b fires: tombstone wins on tie.
     await submit(
       POST,
       { client: "B", amount: 250, updatedAt: 5000, deletedAt: 5000 },
       2,
     );
 
-    // The asymmetric finding: tombstone was discarded on tie.
+    expect(existingRows["shared-row"]!.deletedAt).toBe(5000);
+  });
+
+  it("I1-stale-tombstone: a tombstone with strictly older updatedAt still loses", async () => {
+    // Make sure the rule 2b fix didn't accidentally let stale
+    // tombstones overwrite newer edits.
+    const { POST } = await import("@/app/api/sync/push/route");
+
+    resetDbState();
+    // Step 1: client A writes an upsert at updatedAt = 5000 (newer)
+    await submit(
+      POST,
+      { client: "A", amount: 250, updatedAt: 5000, deletedAt: null },
+      1,
+    );
+
+    // Step 2: client B submits a stale tombstone at updatedAt = 4000
+    await submit(
+      POST,
+      { client: "B", amount: 250, updatedAt: 4000, deletedAt: 4000 },
+      2,
+    );
+
+    // Stale tombstone does NOT overwrite — existing live row stays.
     expect(existingRows["shared-row"]!.deletedAt).toBeNull();
+    expect(existingRows["shared-row"]!.updatedAt).toBe(5000);
   });
 
   it("I2: for non-tombstone pairs, the higher updatedAt wins (last-write-wins)", async () => {
