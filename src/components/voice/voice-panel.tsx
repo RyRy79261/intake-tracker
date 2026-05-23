@@ -211,6 +211,14 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
                 note: item.description,
               });
             }
+            if (item.sugarG && item.sugarG > 0) {
+              await addIntake.mutateAsync({
+                type: "sugar",
+                amount: item.sugarG,
+                source: `voice:food:${eating.id}`,
+                note: item.description,
+              });
+            }
             break;
           }
           case "caffeine":
