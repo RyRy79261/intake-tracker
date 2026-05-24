@@ -76,6 +76,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  // Signal that React mounted — clears the boot watchdog (see layout.tsx)
+  // and hides the static loading shell.
+  useEffect(() => {
+    try { localStorage.removeItem("itrk:bootState"); } catch { /* storage may be blocked */ }
+    document.documentElement.classList.add("app-booted");
+  }, []);
+
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
