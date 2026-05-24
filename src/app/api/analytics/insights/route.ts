@@ -84,7 +84,7 @@ export const POST = withAuth(async ({ request, auth }) => {
     // approaches that ceiling, so 1024 truncates mid-JSON and the tool_use
     // input fails schema validation downstream.
     const response = await client.messages.create({
-      model: CLAUDE_MODELS.quality,
+      model: CLAUDE_MODELS.premium,
       max_tokens: 2048,
       temperature: 0.3,
       system: INSIGHTS_SYSTEM_PROMPT,
@@ -99,7 +99,7 @@ export const POST = withAuth(async ({ request, auth }) => {
         keyOwnerId: resolved.keyOwnerId,
         keySource: resolved.source,
         provider: "anthropic",
-        model: CLAUDE_MODELS.quality,
+        model: CLAUDE_MODELS.premium,
         route: "/api/analytics/insights",
         status: "success",
         durationMs: Date.now() - startedAt,
