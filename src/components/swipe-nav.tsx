@@ -167,7 +167,15 @@ export function SwipeNav({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <div className="relative overflow-x-hidden">
+    // `overflow-clip` is load-bearing. The offscreen skeletons are
+    // absolutely positioned at `top: 0, left: ±100vw`; if their box leaks
+    // out of this wrapper they add bogus scrollHeight to a `position:
+    // relative` ancestor and the page picks up phantom vertical scroll —
+    // most visible on short pages like /profile next to the tall /intake
+    // skeleton. `clip` (not `hidden`) avoids the spec's overflow-axis
+    // coercion that would otherwise turn this wrapper into its own scroll
+    // container.
+    <div className="relative overflow-clip">
       {/* Skeleton overlays. They share the drag motion value `x` for the
           translateX, but the resting offset (one viewport over) is set via
           plain CSS `left`. Doing the offset via `left` instead of folding it
