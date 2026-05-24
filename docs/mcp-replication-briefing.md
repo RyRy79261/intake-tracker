@@ -1,12 +1,13 @@
-# Briefing: Replicating Neon Auth + Claude MCP Custom Connector
+# Briefing: Implementing Neon Auth + Claude MCP Custom Connector
 
-> Hand this to a Claude Code agent in another repo (Camp 404) to replicate
-> the OAuth-bridged Claude.ai Custom Connector that ships in `intake-tracker`.
+> Implementation checklist for a Claude Code agent adding an
+> OAuth-bridged Claude.ai Custom Connector to a Next.js 14 + Vercel +
+> Neon app.
 >
-> Status: working in production. Six PRs of pain produced this checklist —
-> follow it in order and you'll skip every wrong turn we took. The "Hard-won
-> gotchas" section is the single most valuable part. **Read it before
-> writing any code.**
+> Status: working in production reference (`intake-tracker`). Follow
+> in order and you'll skip the wrong turns that produced this doc. The
+> "Hard-won gotchas" section is the single most valuable part. **Read it
+> before writing any code.**
 
 ## What this gives you
 
@@ -104,7 +105,7 @@ export default async function middleware(request: NextRequest) {
   // inside auth.middleware(). Without this, Google sign-in returns the
   // user to /auth?...&neon_auth_session_verifier=... but no server code
   // converts the verifier into a session cookie, and useSession() stays
-  // null forever. We spent four PRs missing this.
+  // null forever. This is the #1 trap — see gotcha #1 in the parent doc.
   if (pathname === "/auth" || pathname.startsWith("/auth/")) {
     return neonAuthMiddleware(request);
   }
@@ -507,8 +508,9 @@ Adapt to your domain. Patterns to copy:
 
 ## Hard-won gotchas (READ THIS BEFORE WRITING CODE)
 
-These cost six PRs to find. Each one is a specific assumption I made
-that was wrong.
+Each of these is a specific wrong assumption that breaks the flow in a
+way that's hard to diagnose without prior knowledge. Read all ten before
+writing any of the code below.
 
 ### Gotcha 1: `auth.middleware()` is required, not optional
 
@@ -643,7 +645,7 @@ If step 3 stalls on the Approve click, **read gotcha #4 first**.
 
 ---
 
-## Recommended phasing for the Camp 404 agent
+## Recommended phasing
 
 | Step | What | Verify before continuing |
 |------|------|--------------------------|
