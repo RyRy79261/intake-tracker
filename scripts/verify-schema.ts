@@ -28,15 +28,17 @@ import { neon } from "@neondatabase/serverless";
 // "drizzle" schema, not "public".
 const EXPECTED_TABLE_COUNT = 29;
 
-// Representative tables spot-checked by name. Four is enough to catch
+// Representative tables spot-checked by name. Five is enough to catch
 // a schema that happened to have the right COUNT but the wrong shape
 // (e.g., someone deleted intake_records and added a placeholder). The
-// MCP entry guards the new connector tables added in 0012.
+// MCP entry guards the connector tables added in 0012; insight_reports
+// guards the AI-insights cache table added in 0013.
 const SPOT_CHECK_TABLES = [
   "intake_records",
   "push_schedules",
   "prescriptions",
   "mcp_oauth_clients",
+  "insight_reports",
 ] as const;
 
 async function main(): Promise<void> {

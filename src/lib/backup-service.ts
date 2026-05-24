@@ -716,6 +716,7 @@ export async function getBackupStats(): Promise<{
     ...substanceRecords.map((r) => r.timestamp),
     ...inventoryTransactions.map((r) => r.timestamp),
     ...auditLogs.map((r) => r.timestamp),
+    ...insightReports.map((r) => r.generatedAt),
   ];
 
   return {

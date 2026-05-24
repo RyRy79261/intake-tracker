@@ -132,16 +132,20 @@ export function useGenerateInsights() {
 
       // Persist to the cache. A storage failure must not discard the result
       // the user just paid tokens for, so swallow it here.
-      await saveInsightReport({
-        generatedAt: insight.generatedAt,
-        rangeStart: range.start,
-        rangeEnd: range.end,
-        narrative: insight.narrative,
-        observations: insight.observations,
-        personalised:
-          (conditions !== undefined && conditions.length > 0) ||
-          includeMedications === true,
-      });
+      try {
+        await saveInsightReport({
+          generatedAt: insight.generatedAt,
+          rangeStart: range.start,
+          rangeEnd: range.end,
+          narrative: insight.narrative,
+          observations: insight.observations,
+          personalised:
+            (conditions !== undefined && conditions.length > 0) ||
+            includeMedications === true,
+        });
+      } catch (cacheError) {
+        console.warn("Failed to cache insight report:", cacheError);
+      }
 
       return insight;
     },
