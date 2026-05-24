@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.25.0](https://github.com/RyRy79261/intake-tracker/compare/v1.24.4...v1.25.0) (2026-05-24)
+
+
+### Features
+
+* cache AI insight reports with previous-assessment comparison ([b6c0e79](https://github.com/RyRy79261/intake-tracker/commit/b6c0e792412232d136f3d7ae83882fb044aef7b0))
+
+
+### Bug Fixes
+
+* address review findings on insight-report cache wiring ([8991cde](https://github.com/RyRy79261/intake-tracker/commit/8991cde6ef8bbee7eb426b9b1f9b845ca9772f77))
+* **auth:** install neon auth middleware for verifier exchange ([4bb5c26](https://github.com/RyRy79261/intake-tracker/commit/4bb5c2607400ba221d706813abea1f2ca69c444d))
+* **mcp:** bypass csp form-action by html-redirecting from consent post ([8911727](https://github.com/RyRy79261/intake-tracker/commit/89117278f5cca015cfee6a7d7a694a60ffd47c62))
+* **mcp:** bypass csp form-action by html-redirecting from consent post ([b8f30b0](https://github.com/RyRy79261/intake-tracker/commit/b8f30b00a13ec184327baafa576c72c8cfd900f2))
+* **migration:** make insight_reports 0013 idempotent to tolerate preview replay ([88b33c3](https://github.com/RyRy79261/intake-tracker/commit/88b33c3375607d2b095733d424bcb191b9b3697b))
+* **pwa:** guard against splash-screen hang on standalone install ([d1eb9d6](https://github.com/RyRy79261/intake-tracker/commit/d1eb9d6acfe204590a6183cfb4a8cdff62f686dd))
+* **swipe-nav:** stop tall next-page skeleton from leaking scroll ([e42884d](https://github.com/RyRy79261/intake-tracker/commit/e42884df462e255b43bc84f15f65755d77f86bbc))
+* **swipe-nav:** stop tall next-page skeleton from leaking scroll ([f234baf](https://github.com/RyRy79261/intake-tracker/commit/f234baff456f84978a80dc077f93c26f2dae7ab0))
+* **voice:** link food sodium/sugar/water to the eating record ([0a3a8f4](https://github.com/RyRy79261/intake-tracker/commit/0a3a8f4d689c57bc490696c36496ee46a43cdbd6))
+* **voice:** link food sodium/sugar/water to the eating record ([e600641](https://github.com/RyRy79261/intake-tracker/commit/e6006412072db07ce125b9de51d893249f299498))
+
 ## [1.24.4](https://github.com/RyRy79261/intake-tracker/compare/v1.24.3...v1.24.4) (2026-05-23)
 
 
