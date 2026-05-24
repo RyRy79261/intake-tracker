@@ -20,12 +20,14 @@ import Anthropic from "@anthropic-ai/sdk";
 // ── Controllable stubs ───────────────────────────────────────────────────
 
 let aiContent: unknown[] = [];
+let aiStopReason: string = "tool_use";
 let aiThrows: Error | null = null;
 let claudeClientThrows: Error | null = null;
 const messagesCreateCalls: unknown[] = [];
 
 function resetState() {
   aiContent = [];
+  aiStopReason = "tool_use";
   aiThrows = null;
   claudeClientThrows = null;
   messagesCreateCalls.length = 0;
@@ -58,6 +60,7 @@ vi.mock("@/app/api/ai/_shared/claude-client", () => ({
             if (aiThrows) throw aiThrows;
             return {
               content: aiContent,
+              stop_reason: aiStopReason,
               usage: { input_tokens: 20, output_tokens: 10 },
             };
           },
@@ -219,6 +222,45 @@ describe("POST /api/analytics/insights", () => {
     expect(res.status).toBe(502);
     const body = (await res.json()) as { error: string };
     expect(body.error).toBe("AI response format invalid");
+  });
+
+  it("returns a clear 502 / RESPONSE_TRUNCATED when stop_reason is max_tokens", async () => {
+    // When the model hits max_tokens it still emits a tool_use block, but
+    // the JSON in `input` is truncated mid-object — schema validation would
+    // otherwise hide this behind the generic "format invalid" message.
+    aiStopReason = "max_tokens";
+    aiContent = [
+      insightToolBlock({
+        summary: "Comparison against the previous month shows",
+        // observations field never finished streaming
+      }),
+    ];
+
+    const { POST } = await import("./route");
+    const res = await POST(makeRequest(validBody()));
+
+    expect(res.status).toBe(502);
+    const body = (await res.json()) as { error: string; code?: string };
+    expect(body.code).toBe("RESPONSE_TRUNCATED");
+    expect(body.error).toMatch(/cut off/i);
+  });
+
+  it("requests enough tokens to fit a comparison summary", async () => {
+    aiContent = [
+      insightToolBlock({
+        summary: "ok",
+        observations: ["ok"],
+      }),
+    ];
+
+    const { POST } = await import("./route");
+    await POST(makeRequest(validBody()));
+
+    expect(messagesCreateCalls).toHaveLength(1);
+    const params = messagesCreateCalls[0] as { max_tokens: number };
+    // 1024 truncates comparison output mid-JSON when priorAssessments is
+    // included; the cap needs enough headroom for the full tool response.
+    expect(params.max_tokens).toBeGreaterThanOrEqual(2048);
   });
 
   it("returns a generic 502 when the model call throws an unmapped error", async () => {

@@ -78,9 +78,14 @@ export const POST = withAuth(async ({ request, auth }) => {
     console.log(`[AUDIT] analytics insights from user: ${auth.userId}`);
 
     const startedAt = Date.now();
+    // The response schema permits ~2000 chars summary + 12×500 chars
+    // observations ≈ well over 1024 tokens once tool-call JSON overhead is
+    // added. Comparison output (when priorAssessments is included) reliably
+    // approaches that ceiling, so 1024 truncates mid-JSON and the tool_use
+    // input fails schema validation downstream.
     const response = await client.messages.create({
       model: CLAUDE_MODELS.quality,
-      max_tokens: 1024,
+      max_tokens: 2048,
       temperature: 0.3,
       system: INSIGHTS_SYSTEM_PROMPT,
       tools: [INSIGHT_TOOL],
@@ -108,8 +113,27 @@ export const POST = withAuth(async ({ request, auth }) => {
       (b): b is ToolUseBlock =>
         b.type === "tool_use" && b.name === INSIGHT_TOOL.name,
     );
+    // When the model hits max_tokens the tool_use block is still emitted but
+    // its `input` JSON is truncated mid-object — surface that as a distinct,
+    // actionable error instead of the generic "format invalid" toast.
+    if (response.stop_reason === "max_tokens") {
+      console.error(
+        "[analytics/insights] response truncated by max_tokens",
+        { hasToolBlock: Boolean(toolBlock) },
+      );
+      return NextResponse.json(
+        {
+          error:
+            "AI response was cut off before it finished. Try again, or generate without 'Include my previous summary'.",
+          code: "RESPONSE_TRUNCATED",
+        },
+        { status: 502 },
+      );
+    }
     if (!toolBlock) {
-      console.error("[analytics/insights] model did not call the insight tool");
+      console.error("[analytics/insights] model did not call the insight tool", {
+        stopReason: response.stop_reason,
+      });
       return NextResponse.json(
         { error: "AI response format invalid" },
         { status: 502 },
@@ -121,6 +145,7 @@ export const POST = withAuth(async ({ request, auth }) => {
       console.error(
         "[analytics/insights] AI response validation failed:",
         JSON.stringify(validated.error.flatten()),
+        { stopReason: response.stop_reason },
       );
       return NextResponse.json(
         { error: "AI response format invalid" },
