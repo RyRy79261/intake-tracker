@@ -1,4 +1,4 @@
-CREATE TABLE "insight_reports" (
+CREATE TABLE IF NOT EXISTS "insight_reports" (
 	"id" text PRIMARY KEY NOT NULL,
 	"user_id" text NOT NULL,
 	"generated_at" bigint NOT NULL,
@@ -13,6 +13,11 @@ CREATE TABLE "insight_reports" (
 	"device_id" text NOT NULL
 );
 --> statement-breakpoint
-ALTER TABLE "insight_reports" ADD CONSTRAINT "insight_reports_user_id_users_sync_id_fk" FOREIGN KEY ("user_id") REFERENCES "neon_auth"."users_sync"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-CREATE INDEX "idx_insight_reports_user_updated" ON "insight_reports" USING btree ("user_id","updated_at");--> statement-breakpoint
-CREATE INDEX "idx_insight_reports_generated" ON "insight_reports" USING btree ("generated_at");
+DO $$ BEGIN
+	ALTER TABLE "insight_reports" ADD CONSTRAINT "insight_reports_user_id_users_sync_id_fk" FOREIGN KEY ("user_id") REFERENCES "neon_auth"."users_sync"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION
+	WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "idx_insight_reports_user_updated" ON "insight_reports" USING btree ("user_id","updated_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "idx_insight_reports_generated" ON "insight_reports" USING btree ("generated_at");
