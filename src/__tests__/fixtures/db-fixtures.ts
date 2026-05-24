@@ -3,7 +3,7 @@ import { db, type IntakeRecord, type WeightRecord, type BloodPressureRecord,
   type Prescription, type MedicationPhase, type PhaseSchedule,
   type InventoryItem, type InventoryTransaction, type DoseLog,
   type DailyNote, type AuditLog, type SubstanceRecord, type TitrationPlan,
-  type UserProfile } from "@/lib/db";
+  type UserProfile, type InsightReport } from "@/lib/db";
 
 const BASE_TS = 1700000000000; // 2023-11-14 — fixed base for determinism
 
@@ -277,6 +277,23 @@ export function makeUserProfile(overrides?: Partial<UserProfile>): UserProfile {
     deviceId: "test-device",
     ...overrides,
   } as UserProfile;
+}
+
+export function makeInsightReport(overrides?: Partial<InsightReport>): InsightReport {
+  return {
+    id: crypto.randomUUID(),
+    generatedAt: BASE_TS,
+    rangeStart: BASE_TS - 30 * 24 * 60 * 60 * 1000,
+    rangeEnd: BASE_TS,
+    narrative: "Water intake averaged 1800 ml against a 2000 ml goal.",
+    observations: ["Sodium averaged 1900 mg, under the 2300 mg limit."],
+    personalised: false,
+    createdAt: BASE_TS,
+    updatedAt: BASE_TS,
+    deletedAt: null,
+    deviceId: "test-device",
+    ...overrides,
+  } as InsightReport;
 }
 
 export function makeSubstanceRecord(overrides?: Partial<SubstanceRecord>): SubstanceRecord {

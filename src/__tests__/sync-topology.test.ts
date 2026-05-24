@@ -21,9 +21,9 @@ describe("sync-topology", () => {
     expect(idx("intakeRecords")).toBeLessThan(idx("substanceRecords"));
   });
 
-  it("contains exactly 17 data tables, no duplicates", () => {
-    expect(TABLE_PUSH_ORDER).toHaveLength(17);
-    expect(new Set(TABLE_PUSH_ORDER).size).toBe(17);
+  it("contains exactly 18 data tables, no duplicates", () => {
+    expect(TABLE_PUSH_ORDER).toHaveLength(18);
+    expect(new Set(TABLE_PUSH_ORDER).size).toBe(18);
   });
 
   it("every FK pair in src/db/schema.ts satisfies parent-before-child in TABLE_PUSH_ORDER", () => {

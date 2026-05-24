@@ -1,5 +1,5 @@
 /**
- * Sync topology — static FK parent-before-child ordering for the 17 Dexie/Neon
+ * Sync topology — static FK parent-before-child ordering for the 18 Dexie/Neon
  * data tables (Phase 43 D-02).
  *
  * Derived from src/db/schema.ts FK declarations. The push loop (Plan 06) groups
@@ -51,10 +51,12 @@ export const TABLE_PUSH_ORDER = [
   "auditLogs",
   // Standalone — only FK is user_id, no app-table parents.
   "userProfile",
+  "insightReports",
 ] as const;
 
-/** Literal union of the 17 valid table names. */
+/** Literal union of the 18 valid table names. */
 export type TableName = (typeof TABLE_PUSH_ORDER)[number];
 
-// Note: `userProfile` was added in Phase 18-equivalent (medical profile). It
-// has no app-table FK parents, so its push position is unconstrained.
+// Note: `userProfile` was added in Phase 18-equivalent (medical profile) and
+// `insightReports` in Dexie v19 (cached AI insight reports). Neither has an
+// app-table FK parent, so their push position is unconstrained.

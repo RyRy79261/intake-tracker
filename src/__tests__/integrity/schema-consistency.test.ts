@@ -14,16 +14,16 @@ import { parseDbSchema } from "@/__tests__/integrity/parse-schema";
 describe("schema parser self-test", () => {
   it("parses all version blocks from db.ts", () => {
     const versions = parseDbSchema();
-    expect(versions).toHaveLength(9);
+    expect(versions).toHaveLength(10);
     expect(versions.map((v) => v.version)).toEqual([
-      10, 11, 12, 13, 14, 15, 16, 17, 18,
+      10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
     ]);
   });
 
-  it("latest version has 20 tables", () => {
+  it("latest version has 21 tables", () => {
     const versions = parseDbSchema();
     const latest = versions[versions.length - 1]!;
-    expect(latest.tables).toHaveLength(20);
+    expect(latest.tables).toHaveLength(21);
   });
 });
 

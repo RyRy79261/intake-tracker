@@ -30,7 +30,9 @@ import { aiErrorResponse } from "@/app/api/ai/_shared/ai-error-response";
  * active usage rather than total user count.
  *
  * The request body is intentionally aggregate-only (numbers/enums, no free
- * text), so no personal health detail reaches the external AI call.
+ * text), so no personal health detail reaches the external AI call — except
+ * `priorAssessments`, the app's own earlier AI summaries, which the user can
+ * opt in to including so the model can compare periods.
  */
 
 export const runtime = "nodejs";

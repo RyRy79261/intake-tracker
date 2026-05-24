@@ -1,11 +1,19 @@
 import { useMutation } from "@tanstack/react-query";
+import { useLiveQuery } from "dexie-react-hooks";
 import { apiFetch } from "@/lib/api-fetch";
 import {
   buildAnalyticsSnapshot,
   snapshotIsEmpty,
   type IntakeGoals,
 } from "@/lib/analytics-snapshot";
+import {
+  getInsightReports,
+  getLatestInsightReport,
+  saveInsightReport,
+} from "@/lib/insight-report-service";
+import type { PriorAssessment } from "@/lib/analytics-insights";
 import type { TimeRange } from "@/lib/analytics-types";
+import type { InsightReport } from "@/lib/db";
 
 export interface InsightsResult {
   narrative: string;
@@ -28,16 +36,33 @@ interface GenerateInsightsInput {
   conditions?: string[];
   /** Include active medications — pass only when the user has opted in. */
   includeMedications?: boolean;
+  /**
+   * Attach the most recent cached report so the AI can compare periods.
+   * Pass only when the user has opted in — prior summaries are free text.
+   */
+  includePrevious?: boolean;
+}
+
+/** Live history of cached insight reports, newest first. */
+export function useInsightReports(): InsightReport[] {
+  return useLiveQuery(getInsightReports, [], []);
 }
 
 /**
  * Builds the analytics snapshot locally and asks the server to turn it into an
  * AI narrative. The caller triggers this explicitly (a button), so cost is
- * bounded by user intent rather than scheduled traffic.
+ * bounded by user intent rather than scheduled traffic. A successful result is
+ * persisted to the `insightReports` cache.
  */
 export function useGenerateInsights() {
   return useMutation<InsightsResult, Error, GenerateInsightsInput>({
-    mutationFn: async ({ range, goals, conditions, includeMedications }) => {
+    mutationFn: async ({
+      range,
+      goals,
+      conditions,
+      includeMedications,
+      includePrevious,
+    }) => {
       const snapshot = await buildAnalyticsSnapshot(
         range,
         goals,
@@ -46,6 +71,20 @@ export function useGenerateInsights() {
       );
       if (snapshotIsEmpty(snapshot)) {
         throw new NotEnoughDataError();
+      }
+
+      if (includePrevious) {
+        const previous = await getLatestInsightReport();
+        if (previous) {
+          const priorAssessment: PriorAssessment = {
+            generatedAt: previous.generatedAt,
+            rangeStart: previous.rangeStart,
+            rangeEnd: previous.rangeEnd,
+            summary: previous.narrative,
+            observations: previous.observations,
+          };
+          snapshot.priorAssessments = [priorAssessment];
+        }
       }
 
       const res = await apiFetch("/api/analytics/insights", {
@@ -82,12 +121,33 @@ export function useGenerateInsights() {
       }
 
       const result = body as InsightsResult;
-      return {
+      const insight: InsightsResult = {
         narrative: result.narrative,
         observations: result.observations,
         generatedAt:
-          typeof result.generatedAt === "number" ? result.generatedAt : Date.now(),
+          typeof result.generatedAt === "number"
+            ? result.generatedAt
+            : Date.now(),
       };
+
+      // Persist to the cache. A storage failure must not discard the result
+      // the user just paid tokens for, so swallow it here.
+      try {
+        await saveInsightReport({
+          generatedAt: insight.generatedAt,
+          rangeStart: range.start,
+          rangeEnd: range.end,
+          narrative: insight.narrative,
+          observations: insight.observations,
+          personalised:
+            (conditions !== undefined && conditions.length > 0) ||
+            includeMedications === true,
+        });
+      } catch (cacheError) {
+        console.warn("Failed to cache insight report:", cacheError);
+      }
+
+      return insight;
     },
   });
 }

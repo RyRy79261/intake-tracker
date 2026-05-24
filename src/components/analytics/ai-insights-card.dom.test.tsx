@@ -1,25 +1,22 @@
 // @vitest-environment jsdom
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { AiInsightsCard } from "@/components/analytics/ai-insights-card";
 import { renderWithFixtures } from "@/__tests__/react-test-utils";
-import { useInsightsStore } from "@/stores/insights-store";
+import { makeInsightReport } from "@/__tests__/fixtures/db-fixtures";
 
 /**
- * AiInsightsCard generates a summary via POST /api/analytics/insights. The
- * snapshot builder reads the test DB and the request goes through `fetch`,
- * so we stub `fetch` to return a deterministic narrative.
+ * AiInsightsCard generates a summary via POST /api/analytics/insights and
+ * caches the result to the `insightReports` Dexie table. The snapshot builder
+ * reads the test DB and the request goes through `fetch`, so tests that
+ * exercise generation stub `fetch`; tests that exercise the cached-render path
+ * seed Dexie directly.
  */
 describe("AiInsightsCard", () => {
-  beforeEach(() => {
-    useInsightsStore.getState().clear();
-  });
-
   afterEach(() => {
     vi.unstubAllGlobals();
-    useInsightsStore.getState().clear();
   });
 
   it("shows the pre-generation prompt and a Generate button when no result is cached", async () => {
@@ -34,13 +31,20 @@ describe("AiInsightsCard", () => {
   });
 
   it("renders a cached insights result with its narrative and observations", async () => {
-    useInsightsStore.getState().setResult({
-      narrative: "Your hydration improved this week.",
-      observations: ["Water intake rose 12%", "Sodium stayed within limit"],
-      generatedAt: Date.now(),
+    await renderWithFixtures(<AiInsightsCard />, {
+      seed: {
+        insightReports: [
+          makeInsightReport({
+            generatedAt: Date.now(),
+            narrative: "Your hydration improved this week.",
+            observations: [
+              "Water intake rose 12%",
+              "Sodium stayed within limit",
+            ],
+          }),
+        ],
+      },
     });
-
-    await renderWithFixtures(<AiInsightsCard />);
 
     expect(
       await screen.findByText("Your hydration improved this week."),

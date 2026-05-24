@@ -1,7 +1,7 @@
 /**
- * Postgres schema — single source of truth for all 28 tables.
+ * Postgres schema — single source of truth for all 29 tables.
  *
- * Mirrors src/lib/db.ts Dexie interfaces exactly (17 app tables),
+ * Mirrors src/lib/db.ts Dexie interfaces exactly (18 app tables),
  * includes 4 push notification tables that replace scripts/push-migration.sql,
  * 3 server-only AI tables (user_api_keys, user_key_shares, ai_usage), and
  * 4 server-only MCP-connector tables (mcp_oauth_clients, mcp_auth_codes,
@@ -667,6 +667,39 @@ export const userProfile = pgTable(
       t.userId,
       t.updatedAt,
     ),
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────────────────
+// Cached AI analytics insight reports — mirrors the InsightReport interface
+// in src/lib/db.ts. One row per generated "AI Insights" summary. No
+// `timezone` column — InsightReport omits it.
+// ─────────────────────────────────────────────────────────────────────────
+
+export const insightReports = pgTable(
+  "insight_reports",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => usersSync.id, { onDelete: "cascade" }),
+    generatedAt: bigint("generated_at", { mode: "number" }).notNull(),
+    rangeStart: bigint("range_start", { mode: "number" }).notNull(),
+    rangeEnd: bigint("range_end", { mode: "number" }).notNull(),
+    narrative: text("narrative").notNull(),
+    observations: text("observations").array().notNull(),
+    personalised: boolean("personalised").notNull(),
+    createdAt: bigint("created_at", { mode: "number" }).notNull(),
+    updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
+    deletedAt: bigint("deleted_at", { mode: "number" }),
+    deviceId: text("device_id").notNull(),
+  },
+  (t) => ({
+    userUpdatedIdx: index("idx_insight_reports_user_updated").on(
+      t.userId,
+      t.updatedAt,
+    ),
+    generatedAtIdx: index("idx_insight_reports_generated").on(t.generatedAt),
   }),
 );
 
