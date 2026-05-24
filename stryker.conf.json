@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
-  "_comment": "Mutation testing config — see docs/TESTING_STRATEGY.md §2.2. Line coverage tells us code executed; mutation testing tells us tests would actually catch a regression. Scoped narrowly to the sync engine (the highest-leverage module — a bug here loses user health data). Expand the `mutate` glob as confidence in the score grows.",
+  "_comment": "Mutation testing config — see docs/TESTING_STRATEGY.md §2.2. Line coverage tells us code executed; mutation testing tells us tests would actually catch a regression. Scoped to the highest-leverage modules: the sync engine (a bug loses user health data) and the MCP OAuth implementation (a bug grants unauthorized data access).",
   "packageManager": "pnpm",
   "testRunner": "vitest",
   "plugins": ["@stryker-mutator/vitest-runner"],
@@ -13,7 +13,11 @@
     "src/lib/sync-engine.ts",
     "src/lib/sync-queue.ts",
     "src/lib/sync-topology.ts",
-    "src/lib/sync-payload.ts"
+    "src/lib/sync-payload.ts",
+    "src/lib/mcp/oauth.ts",
+    "src/lib/mcp/tokens.ts",
+    "src/lib/mcp/scopes.ts",
+    "src/lib/mcp/whitelist.ts"
   ],
   "ignorePatterns": [
     "dist",

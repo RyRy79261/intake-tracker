@@ -47,7 +47,7 @@ Each data domain has a service file in `src/lib/` (e.g., `intake-service.ts`, `m
 
 - **Zustand** (`src/stores/settings-store.ts`) — persisted to localStorage for user preferences (increments, limits, theme, day-start-hour, UI animation timing, etc.)
 - **React Query** — async data fetching/caching for all Dexie operations
-- **Neon Auth** — cookie session managed by Better Auth, no React Context required
+- **Neon Auth** (`@neondatabase/auth`) — cookie session, no React Context required
 
 ### Provider Stack
 
@@ -71,7 +71,7 @@ API routes handle server-side Claude API calls (key never exposed to client). PI
 
 ### Auth
 
-**Neon Auth** (Better Auth on Neon Postgres) for authentication (email/password). Whitelist enforcement via `ALLOWED_EMAILS` env var checked in `src/lib/auth-middleware.ts`. E2E tests seed a session via `e2e/global-setup.ts` using `E2E_TEST_EMAIL` / `E2E_TEST_PASSWORD` and persist `playwright/.auth/user.json`.
+**Neon Auth** (`@neondatabase/auth`) for authentication (email/password + Google social via `/api/auth/callback/google`). Whitelist enforcement via `ALLOWED_EMAILS` env var checked in `src/lib/auth-middleware.ts`. E2E tests seed a session via `e2e/global-setup.ts` using `E2E_TEST_EMAIL` / `E2E_TEST_PASSWORD` and persist `playwright/.auth/user.json`.
 
 ### UI
 

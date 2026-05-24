@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.24.4](https://github.com/RyRy79261/intake-tracker/compare/v1.24.3...v1.24.4) (2026-05-23)
+
+
+### Bug Fixes
+
+* **auth:** auto-forward to callbackurl when session already exists ([ddd64a3](https://github.com/RyRy79261/intake-tracker/commit/ddd64a3f3e55fa9050cc076700853fdf45d92e60))
+
+## [1.24.3](https://github.com/RyRy79261/intake-tracker/compare/v1.24.2...v1.24.3) (2026-05-23)
+
+
+### Bug Fixes
+
+* **mcp:** bounce unauth users through /auth page, not POST-only api ([7a7d827](https://github.com/RyRy79261/intake-tracker/commit/7a7d8273720951193e3998eb92bd6cd9eeb72f28))
+* **mcp:** derive scheme from request when forwarded headers absent ([8960a37](https://github.com/RyRy79261/intake-tracker/commit/8960a374eae594432f9542910e1fde5f2be81da5))
+* **mcp:** prefer request host over vercel_url for oauth issuer ([97ad6db](https://github.com/RyRy79261/intake-tracker/commit/97ad6dbca22461d258af444bf3857e63faaeb613))
+
+## [1.24.2](https://github.com/RyRy79261/intake-tracker/compare/v1.24.1...v1.24.2) (2026-05-23)
+
+
+### Bug Fixes
+
+* **ci:** gate MCP E2E spec behind RUN_MCP_E2E env var ([e71c6e9](https://github.com/RyRy79261/intake-tracker/commit/e71c6e9e0706da8d1b9a6d36a08a9e5af217f5da))
+* **ci:** update schema verifier table count for MCP tables ([34b5807](https://github.com/RyRy79261/intake-tracker/commit/34b5807461e0f28dab4e02a2314277a5a0f6c8fc))
+* **mcp:** address CodeRabbit review on PR [#146](https://github.com/RyRy79261/intake-tracker/issues/146) ([475d1c7](https://github.com/RyRy79261/intake-tracker/commit/475d1c71aa10019ee2c01a14c45ec0bb57ec3e2e))
+* **mcp:** coderabbit pass 2 — DELETE in CORS, dedupe lookup ([04c57e4](https://github.com/RyRy79261/intake-tracker/commit/04c57e484392f031fa6b8d7823c110072dd745f7))
+
 ## [1.24.1](https://github.com/RyRy79261/intake-tracker/compare/v1.24.0...v1.24.1) (2026-05-23)
 
 

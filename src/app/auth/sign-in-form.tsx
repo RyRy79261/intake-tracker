@@ -1,20 +1,50 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { signIn } from "@/lib/auth-client";
+import { signIn, useSession } from "@/lib/auth-client";
 import { isCapacitorMode } from "@/lib/api-fetch";
+
+/**
+ * Only accept a same-origin relative path as the post-sign-in target.
+ * Rejects absolute URLs (cross-origin redirect attack), protocol-relative
+ * URLs (`//evil.example`), and anything that doesn't start with a single
+ * `/`. Returns the canonical fallback `/` for anything invalid.
+ */
+function safeCallbackUrl(raw: string | null | undefined): string {
+  if (!raw) return "/";
+  if (!raw.startsWith("/")) return "/";
+  if (raw.startsWith("//")) return "/";
+  return raw;
+}
 
 export function SignInForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const callbackURL = safeCallbackUrl(searchParams.get("callbackURL"));
+  const { data: session, isPending: sessionPending } = useSession();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Auto-forward when the user lands here with an active session AND a
+  // pending callbackURL. This catches the case where Better Auth's social
+  // sign-in returns the user to the originating page (/auth?callbackURL=…)
+  // instead of unwrapping the callbackURL value itself — without this the
+  // user would just see the sign-in form again despite being authenticated.
+  useEffect(() => {
+    if (sessionPending) return;
+    if (!session?.user) return;
+    if (callbackURL === "/") return;
+    // Hard navigation: callbackURL may be an API route (e.g. the MCP
+    // authorize endpoint), which router.push won't reach.
+    window.location.replace(callbackURL);
+  }, [sessionPending, session, callbackURL]);
 
   async function handleEmailSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -34,12 +64,12 @@ export function SignInForm() {
       const result = await signIn.email({
         email: email.trim(),
         password,
-        callbackURL: "/",
+        callbackURL,
       });
       if (result && "error" in result && result.error) {
         setError(result.error.message ?? "Sign in failed");
       } else if (isCapacitorMode()) {
-        router.replace("/");
+        router.replace(callbackURL);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign in failed");
@@ -52,7 +82,7 @@ export function SignInForm() {
     setError(null);
     setLoading(true);
     try {
-      await signIn.social({ provider: "google", callbackURL: "/" });
+      await signIn.social({ provider: "google", callbackURL });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Google sign in failed");
       setLoading(false);
