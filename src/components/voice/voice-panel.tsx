@@ -8,11 +8,11 @@ import { useToast } from "@/hooks/use-toast";
 import { VoiceRecorder } from "@/components/voice/voice-recorder";
 import { ParsedItemRow } from "@/components/voice/parsed-item-row";
 import { useAddIntake } from "@/hooks/use-intake-queries";
-import { useAddEating } from "@/hooks/use-eating-queries";
 import { useAddWeight, useAddBloodPressure } from "@/hooks/use-health-queries";
 import { useAddUrination } from "@/hooks/use-urination-queries";
 import { useAddDefecation } from "@/hooks/use-defecation-queries";
 import { useAddSubstance } from "@/hooks/use-substance-queries";
+import { useAddComposableEntry, type ComposableEntryInput } from "@/hooks/use-composable-entry";
 import type { VoiceParsedItem, VoiceParseResponse } from "@/lib/voice-types";
 import { standardDrinksFromAbv } from "@/lib/alcohol-units";
 import { apiFetch } from "@/lib/api-fetch";
@@ -30,12 +30,12 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
   const queryClient = useQueryClient();
 
   const addIntake = useAddIntake();
-  const addEating = useAddEating();
   const addWeight = useAddWeight();
   const addBloodPressure = useAddBloodPressure();
   const addUrination = useAddUrination();
   const addDefecation = useAddDefecation();
   const addSubstance = useAddSubstance();
+  const addComposableEntry = useAddComposableEntry();
 
   const [transcript, setTranscript] = useState<string>("");
   const [rows, setRows] = useState<RowState[]>([]);
@@ -191,34 +191,39 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
             });
             break;
           case "food": {
-            const eating = await addEating.mutateAsync({
-              note: item.description,
-              ...(item.grams !== undefined && { grams: item.grams }),
-            });
+            const intakes: ComposableEntryInput["intakes"] = [];
             if (item.waterMl && item.waterMl > 0) {
-              await addIntake.mutateAsync({
+              intakes.push({
                 type: "water",
                 amount: item.waterMl,
-                source: `voice:food:${eating.id}`,
+                source: "manual:food_water_content",
                 note: item.description,
               });
             }
             if (item.sodiumMg && item.sodiumMg > 0) {
-              await addIntake.mutateAsync({
+              intakes.push({
                 type: "salt",
                 amount: item.sodiumMg,
-                source: `voice:food:${eating.id}`,
+                source: "manual:sodium",
                 note: item.description,
               });
             }
             if (item.sugarG && item.sugarG > 0) {
-              await addIntake.mutateAsync({
+              intakes.push({
                 type: "sugar",
                 amount: item.sugarG,
-                source: `voice:food:${eating.id}`,
+                source: "manual:sugar",
                 note: item.description,
               });
             }
+            await addComposableEntry({
+              eating: {
+                note: item.description,
+                ...(item.grams !== undefined && { grams: item.grams }),
+              },
+              ...(intakes.length > 0 && { intakes }),
+              groupSource: "ai_food_parse",
+            });
             break;
           }
           case "caffeine":
@@ -288,7 +293,7 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
     reset,
     queryClient,
     addIntake,
-    addEating,
+    addComposableEntry,
     addWeight,
     addBloodPressure,
     addUrination,
