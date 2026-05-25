@@ -525,52 +525,68 @@ export function FoodSection() {
         )}
         renderEditForm={() => (
           <InlineEditFormShell timestamp={editTimestamp} onTimestampChange={setEditTimestamp} note={editNote} onNoteChange={setEditNote} onSave={() => handleEditSubmit()} onCancel={closeEdit} buttonClassName={theme.buttonBg}>
-            <Input
-              type="number"
-              placeholder="Grams (optional)"
-              value={editGrams}
-              onChange={(e) => setEditGrams(e.target.value)}
-              className="h-8 text-sm"
-            />
-            <div className="flex gap-2">
+            <div className="space-y-1">
+              <Label htmlFor="edit-eating-grams" className="text-xs text-muted-foreground">Weight (g)</Label>
               <Input
+                id="edit-eating-grams"
+                type="number"
+                placeholder="optional"
+                value={editGrams}
+                onChange={(e) => setEditGrams(e.target.value)}
+                className="h-8 text-sm"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="edit-eating-sodium" className="text-xs text-muted-foreground">Sodium</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="edit-eating-sodium"
+                  type="number"
+                  min="0"
+                  placeholder="mg"
+                  value={editSodiumMg}
+                  onChange={(e) => setEditSodiumMg(e.target.value)}
+                  className="h-8 text-sm flex-1"
+                />
+                <Select
+                  value={editSodiumSource}
+                  onValueChange={(v) => setEditSodiumSource(v as SodiumSource)}
+                >
+                  <SelectTrigger className="h-8 text-sm w-[100px]" aria-label="Measurement source">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="sodium">Sodium</SelectItem>
+                    <SelectItem value="salt">Salt</SelectItem>
+                    <SelectItem value="msg">MSG</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="edit-eating-sugar" className="text-xs text-muted-foreground">Sugar (g)</Label>
+              <Input
+                id="edit-eating-sugar"
                 type="number"
                 min="0"
-                placeholder="Sodium (optional)"
-                value={editSodiumMg}
-                onChange={(e) => setEditSodiumMg(e.target.value)}
-                className="h-8 text-sm flex-1"
+                placeholder="optional"
+                value={editSugarG}
+                onChange={(e) => setEditSugarG(e.target.value)}
+                className="h-8 text-sm"
               />
-              <Select
-                value={editSodiumSource}
-                onValueChange={(v) => setEditSodiumSource(v as SodiumSource)}
-              >
-                <SelectTrigger className="h-8 text-sm w-[100px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="sodium">Sodium</SelectItem>
-                  <SelectItem value="salt">Salt</SelectItem>
-                  <SelectItem value="msg">MSG</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
-            <Input
-              type="number"
-              min="0"
-              placeholder="Sugar (g, optional)"
-              value={editSugarG}
-              onChange={(e) => setEditSugarG(e.target.value)}
-              className="h-8 text-sm"
-            />
-            <Input
-              type="number"
-              min="0"
-              placeholder="Water content (ml, optional)"
-              value={editWaterMl}
-              onChange={(e) => setEditWaterMl(e.target.value)}
-              className="h-8 text-sm"
-            />
+            <div className="space-y-1">
+              <Label htmlFor="edit-eating-water" className="text-xs text-muted-foreground">Water content (ml)</Label>
+              <Input
+                id="edit-eating-water"
+                type="number"
+                min="0"
+                placeholder="optional"
+                value={editWaterMl}
+                onChange={(e) => setEditWaterMl(e.target.value)}
+                className="h-8 text-sm"
+              />
+            </div>
           </InlineEditFormShell>
         )}
       />

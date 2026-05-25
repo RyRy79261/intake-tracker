@@ -413,13 +413,25 @@ function RawRecordViewer() {
     async () => {
       const table = db.table(selectedTable);
       const count = await table.count();
-      // Get 50 most recent by sorting by createdAt descending (fallback to reverse order)
+      // Every table indexes `updatedAt`, so it's the reliable sort key for a
+      // "most-recent first" debug view. Fall back to an in-memory sort by the
+      // best available date field if the index is somehow missing.
       let items: Record<string, unknown>[];
       try {
-        items = await table.orderBy("createdAt").reverse().limit(50).toArray();
+        items = await table.orderBy("updatedAt").reverse().limit(50).toArray();
       } catch {
-        // Table may not have createdAt index -- fall back to raw limit
-        items = await table.reverse().limit(50).toArray();
+        items = await table.limit(50).toArray();
+        items.sort((a, b) => {
+          const aDate =
+            (typeof a.updatedAt === "number" ? a.updatedAt : undefined) ??
+            (typeof a.timestamp === "number" ? a.timestamp : undefined) ??
+            (typeof a.createdAt === "number" ? a.createdAt : 0);
+          const bDate =
+            (typeof b.updatedAt === "number" ? b.updatedAt : undefined) ??
+            (typeof b.timestamp === "number" ? b.timestamp : undefined) ??
+            (typeof b.createdAt === "number" ? b.createdAt : 0);
+          return bDate - aDate;
+        });
       }
       return { count, items };
     },
@@ -484,11 +496,21 @@ function RawRecordViewer() {
                     <ChevronRight className="h-3 w-3 shrink-0" />
                   )}
                   <span className="font-mono truncate">{id}</span>
-                  {typeof record.timestamp === "number" && (
-                    <span className="text-muted-foreground shrink-0">
-                      {formatTimestamp(record.timestamp)}
-                    </span>
-                  )}
+                  {(() => {
+                    const ts =
+                      typeof record.timestamp === "number"
+                        ? record.timestamp
+                        : typeof record.updatedAt === "number"
+                          ? record.updatedAt
+                          : typeof record.createdAt === "number"
+                            ? record.createdAt
+                            : null;
+                    return ts !== null ? (
+                      <span className="text-muted-foreground shrink-0">
+                        {formatTimestamp(ts)}
+                      </span>
+                    ) : null;
+                  })()}
                 </button>
                 {isExpanded && (
                   <pre className="mt-1 ml-5 p-2 bg-muted rounded text-[10px] overflow-x-auto whitespace-pre-wrap break-all">
