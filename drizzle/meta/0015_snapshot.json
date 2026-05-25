@@ -1,6 +1,6 @@
 {
-  "id": "e212640c-3681-4447-a08e-bb7bbda1220f",
-  "prevId": "841f1971-1d7a-48e6-b7d4-d1420a855387",
+  "id": "a5178165-ee8a-4ce8-b5d0-377b4274e27e",
+  "prevId": "e212640c-3681-4447-a08e-bb7bbda1220f",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1193,7 +1193,7 @@
           "name": "batch_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "status": {
           "name": "status",
@@ -1299,6 +1299,19 @@
             "id"
           ],
           "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "insight_jobs_result_report_id_insight_reports_id_fk": {
+          "name": "insight_jobs_result_report_id_insight_reports_id_fk",
+          "tableFrom": "insight_jobs",
+          "tableTo": "insight_reports",
+          "columnsFrom": [
+            "result_report_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },

@@ -104,7 +104,14 @@
       "idx": 14,
       "version": "7",
       "when": 1780500000000,
-      "tag": "0014_petite_warbound",
+      "tag": "0014_dazzling_anthem",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1780600000000,
+      "tag": "0015_worried_baron_strucker",
       "breakpoints": true
     }
   ]

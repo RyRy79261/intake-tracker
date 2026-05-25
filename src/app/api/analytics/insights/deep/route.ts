@@ -156,6 +156,10 @@ export const POST = withAuth(async ({ request, auth }) => {
     } catch (e) {
       // Batch submission failed before any external state was created.
       // Release the unique-index lock so the user can retry immediately.
+      console.error(
+        "[analytics/insights/deep] batches.create failed:",
+        e instanceof Error ? `${e.name}: ${e.message}` : e,
+      );
       await deletePendingJob(job.id, auth.userId!).catch((cleanupErr) =>
         console.error(
           "[analytics/insights/deep] failed to release pending job after batch error:",
@@ -170,10 +174,21 @@ export const POST = withAuth(async ({ request, auth }) => {
     // Attach the real batch_id to the reserved row. If this fails, we have
     // a paid batch with no DB record — cancel the batch so we don't keep
     // racking up cost on something nothing will ever poll.
-    const attached = await attachBatchToJob(job.id, batch.id).catch(
-      () => false,
-    );
+    let attached = false;
+    try {
+      attached = await attachBatchToJob(job.id, batch.id);
+    } catch (attachErr) {
+      console.error(
+        "[analytics/insights/deep] attachBatchToJob threw:",
+        attachErr instanceof Error
+          ? `${attachErr.name}: ${attachErr.message}`
+          : attachErr,
+      );
+    }
     if (!attached) {
+      console.error(
+        `[analytics/insights/deep] attach returned false for job=${job.id} batch=${batch.id} — cancelling orphan`,
+      );
       await client.messages.batches.cancel(batch.id).catch((cancelErr) =>
         console.error(
           "[analytics/insights/deep] failed to cancel orphaned batch:",
@@ -198,7 +213,12 @@ export const POST = withAuth(async ({ request, auth }) => {
   } catch (error) {
     const mapped = aiErrorResponse(error);
     if (mapped) return mapped;
-    console.error("[analytics/insights/deep] error:", error);
+    console.error(
+      "[analytics/insights/deep] unhandled error:",
+      error instanceof Error
+        ? `${error.name}: ${error.message}\n${error.stack ?? ""}`
+        : error,
+    );
     return NextResponse.json(
       { error: "Failed to start deep analysis" },
       { status: 502 },
