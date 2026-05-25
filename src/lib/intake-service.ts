@@ -86,12 +86,18 @@ export async function getRecordsInLast24Hours(
   type?: "water" | "salt" | "sugar"
 ): Promise<IntakeRecord[]> {
   const cutoffTime = Date.now() - TWENTY_FOUR_HOURS_MS;
-  const query = db.intakeRecords.where("timestamp").aboveOrEqual(cutoffTime);
-  const records = await query.toArray();
-  if (type) {
-    return records.filter((r) => r.type === type && r.deletedAt === null);
-  }
-  return records.filter((r) => r.deletedAt === null);
+  // Full scan + JS filter rather than `where("timestamp").aboveOrEqual(...)`.
+  // IndexedDB compares index keys by type, so a single row whose `timestamp`
+  // was bulkPut as a string (a pull-path bigint round-trip edge case) silently
+  // drops the entire range result and the dashboard reads zero. JS-side
+  // coercion via `Number()` tolerates both shapes; cost is trivial here.
+  const records = await db.intakeRecords.toArray();
+  return records.filter(
+    (r) =>
+      r.deletedAt === null &&
+      Number(r.timestamp) >= cutoffTime &&
+      (!type || r.type === type),
+  );
 }
 
 export async function getTotalInLast24Hours(type: "water" | "salt" | "sugar"): Promise<number> {
@@ -114,12 +120,17 @@ function getDayStartTimestamp(dayStartHour: number): number {
 
 export async function getDailyTotal(type: "water" | "salt" | "sugar", dayStartHour: number): Promise<number> {
   const cutoffTime = getDayStartTimestamp(dayStartHour);
-  const records = await db.intakeRecords
-    .where("timestamp")
-    .aboveOrEqual(cutoffTime)
-    .filter((r) => r.type === type && r.deletedAt === null)
-    .toArray();
-  return records.reduce((sum, r) => sum + r.amount, 0);
+  // Full scan + JS filter — see comment on `getRecordsInLast24Hours` for why
+  // we deliberately avoid the timestamp index range scan here.
+  const records = await db.intakeRecords.toArray();
+  return records
+    .filter(
+      (r) =>
+        r.deletedAt === null &&
+        r.type === type &&
+        Number(r.timestamp) >= cutoffTime,
+    )
+    .reduce((sum, r) => sum + r.amount, 0);
 }
 
 export async function getRecentRecords(type: "water" | "salt" | "sugar", limit: number = 3): Promise<IntakeRecord[]> {
