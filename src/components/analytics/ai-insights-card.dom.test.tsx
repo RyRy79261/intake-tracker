@@ -33,7 +33,7 @@ describe("AiInsightsCard", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders a cached insights result with its narrative and observations", async () => {
+  it("renders a compact preview of the cached report inline with the narrative and a Read affordance", async () => {
     await renderWithFixtures(<AiInsightsCard />, {
       seed: {
         insightReports: [
@@ -49,19 +49,50 @@ describe("AiInsightsCard", () => {
       },
     });
 
+    // Narrative previewed inline so the user knows what's in the report
+    // without opening it.
     expect(
       await screen.findByText("Your hydration improved this week."),
     ).toBeInTheDocument();
-    expect(screen.getByText("Water intake rose 12%")).toBeInTheDocument();
-    expect(screen.getByText("Sodium stayed within limit")).toBeInTheDocument();
-    // Both buttons remain available so the user can run either flavour
-    // when a previous result is already cached.
+    // Observations are gated behind the reading dialog — they should NOT
+    // be visible until the user clicks through. This keeps deep-mode
+    // reports from dominating the analytics page.
+    expect(screen.queryByText("Water intake rose 12%")).not.toBeInTheDocument();
+    expect(screen.getByText(/Read/i)).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Fast analysis" }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /Deep analysis/i }),
     ).toBeInTheDocument();
+  });
+
+  it("opens the reading dialog with full observations + sources when the preview is tapped", async () => {
+    const user = userEvent.setup();
+    await renderWithFixtures(<AiInsightsCard />, {
+      seed: {
+        insightReports: [
+          makeInsightReport({
+            generatedAt: Date.now(),
+            narrative: "Deep summary on the card.",
+            observations: ["Observation revealed only in the modal."],
+            sources: ["https://www.example.test/clinical-ref"],
+            mode: "deep",
+          }),
+        ],
+      },
+    });
+
+    // Tap the preview row to open the reading dialog.
+    await user.click(
+      await screen.findByText("Deep summary on the card."),
+    );
+
+    expect(
+      await screen.findByText("Observation revealed only in the modal."),
+    ).toBeInTheDocument();
+    // Sources are surfaced inside the dialog as a hostname chip.
+    expect(screen.getByText("example.test")).toBeInTheDocument();
   });
 
   it("renders a 'Deep' badge on deep-mode cached reports", async () => {

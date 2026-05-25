@@ -5,6 +5,7 @@ import { formatDistanceToNow } from "date-fns";
 import {
   Check,
   ChevronDown,
+  ChevronRight,
   Loader2,
   Search,
   Sparkles,
@@ -71,29 +72,67 @@ function sourceLabel(url: string): string {
   }
 }
 
-/** Render one cached report's narrative + observations. */
-function ReportBody({ report }: { report: InsightReport }) {
+/**
+ * Compact one-row teaser for a cached report — relative timestamp, mode
+ * badge, a clipped narrative snippet, and a "Read report" affordance.
+ * Tapping anywhere on the row hands the full report to the parent so it
+ * can swap it into the reading dialog. Keeps the card scannable when a
+ * deep-mode report would otherwise dominate the analytics page.
+ */
+function ReportPreview({
+  report,
+  onOpen,
+}: {
+  report: InsightReport;
+  onOpen: (report: InsightReport) => void;
+}) {
   return (
-    <div className="space-y-2">
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-sm text-slate-700 dark:text-slate-200">
-          {report.narrative}
-        </p>
-        {report.mode === "deep" && (
-          <span
-            className="shrink-0 inline-flex items-center gap-1 rounded-full bg-violet-100 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300 px-1.5 py-0.5 text-[10px] font-medium"
-            title="Deep analysis with web search"
-          >
-            <Search className="w-2.5 h-2.5" />
-            Deep
+    <button
+      type="button"
+      onClick={() => onOpen(report)}
+      className="w-full text-left rounded-md border border-slate-200 dark:border-slate-800 bg-white/40 dark:bg-slate-900/40 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors px-2.5 py-2"
+    >
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="text-[11px] text-muted-foreground truncate">
+            {formatDistanceToNow(report.generatedAt, { addSuffix: true })}
           </span>
-        )}
+          {report.mode === "deep" && (
+            <span
+              className="shrink-0 inline-flex items-center gap-1 rounded-full bg-violet-100 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300 px-1.5 py-0.5 text-[10px] font-medium"
+              title="Deep analysis with web search"
+            >
+              <Search className="w-2.5 h-2.5" />
+              Deep
+            </span>
+          )}
+        </div>
+        <span className="shrink-0 inline-flex items-center gap-0.5 text-[11px] font-medium text-violet-600 dark:text-violet-400">
+          Read
+          <ChevronRight className="w-3 h-3" />
+        </span>
       </div>
+      <p className="text-xs text-slate-600 dark:text-slate-300 line-clamp-2">
+        {report.narrative}
+      </p>
+    </button>
+  );
+}
+
+/** Full report contents — narrative + observations + sources. Rendered
+ * inside the reading dialog; intentionally not constrained in height so
+ * the dialog's own scroll container handles overflow. */
+function ReportContent({ report }: { report: InsightReport }) {
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-slate-700 dark:text-slate-200 whitespace-pre-line">
+        {report.narrative}
+      </p>
       {report.observations.length > 0 && (
-        <ul className="space-y-1 text-sm text-slate-600 dark:text-slate-300">
+        <ul className="space-y-1.5 text-sm text-slate-600 dark:text-slate-300">
           {report.observations.map((observation, i) => (
             <li key={i} className="flex gap-1.5">
-              <span aria-hidden className="text-violet-500">
+              <span aria-hidden className="text-violet-500 leading-5">
                 &bull;
               </span>
               <span>{observation}</span>
@@ -102,11 +141,11 @@ function ReportBody({ report }: { report: InsightReport }) {
         </ul>
       )}
       {report.sources && report.sources.length > 0 && (
-        <div className="pt-1 border-t border-slate-200 dark:border-slate-800">
-          <p className="text-[11px] font-medium text-muted-foreground mb-1">
+        <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
+          <p className="text-xs font-medium text-muted-foreground mb-1.5">
             Sources
           </p>
-          <ul className="flex flex-wrap gap-x-2 gap-y-0.5 text-[11px]">
+          <ul className="flex flex-wrap gap-x-2 gap-y-1 text-xs">
             {report.sources.map((url, i) => (
               <li key={i}>
                 <a
@@ -151,6 +190,11 @@ export function AiInsightsCard() {
   const [dialogMode, setDialogMode] = useState<"fast" | "deep">("fast");
   const [includePrevious, setIncludePrevious] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  // The report currently being read in the dedicated reading dialog. null
+  // when the dialog is closed.
+  const [readingReport, setReadingReport] = useState<InsightReport | null>(
+    null,
+  );
   // Recompute "long-running" wording each minute while a deep job is pending
   // so the message swaps without a refresh once the threshold is crossed.
   const [, forceTick] = useState(0);
@@ -259,13 +303,7 @@ export function AiInsightsCard() {
       </CardHeader>
       <CardContent className="px-3 pb-3 space-y-3">
         {latest ? (
-          <div className="space-y-2">
-            <ReportBody report={latest} />
-            <p className="text-xs text-muted-foreground">
-              Generated{" "}
-              {formatDistanceToNow(latest.generatedAt, { addSuffix: true })}
-            </p>
-          </div>
+          <ReportPreview report={latest} onOpen={setReadingReport} />
         ) : (
           <p className="text-sm text-muted-foreground">
             Generate an AI summary of your last {INSIGHTS_WINDOW_DAYS} days of
@@ -349,19 +387,13 @@ export function AiInsightsCard() {
                 />
               </button>
             </CollapsibleTrigger>
-            <CollapsibleContent className="space-y-3 pt-2">
+            <CollapsibleContent className="space-y-2 pt-2">
               {history.map((report) => (
-                <div
+                <ReportPreview
                   key={report.id}
-                  className="space-y-1 border-t border-slate-200 dark:border-slate-800 pt-2"
-                >
-                  <p className="text-[11px] text-muted-foreground">
-                    {formatDistanceToNow(report.generatedAt, {
-                      addSuffix: true,
-                    })}
-                  </p>
-                  <ReportBody report={report} />
-                </div>
+                  report={report}
+                  onOpen={setReadingReport}
+                />
               ))}
             </CollapsibleContent>
           </Collapsible>
@@ -511,6 +543,45 @@ export function AiInsightsCard() {
                   : "Generate insights"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={readingReport !== null}
+        onOpenChange={(open) => {
+          if (!open) setReadingReport(null);
+        }}
+      >
+        <DialogContent className="max-w-lg max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-violet-500" />
+              AI insights report
+              {readingReport?.mode === "deep" && (
+                <span
+                  className="ml-1 inline-flex items-center gap-1 rounded-full bg-violet-100 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300 px-1.5 py-0.5 text-[10px] font-medium"
+                  title="Deep analysis with web search"
+                >
+                  <Search className="w-2.5 h-2.5" />
+                  Deep
+                </span>
+              )}
+            </DialogTitle>
+            {readingReport && (
+              <DialogDescription>
+                Generated{" "}
+                {formatDistanceToNow(readingReport.generatedAt, {
+                  addSuffix: true,
+                })}
+                .
+              </DialogDescription>
+            )}
+          </DialogHeader>
+          {readingReport && (
+            <div className="overflow-y-auto pr-1 -mr-1">
+              <ReportContent report={readingReport} />
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </Card>
