@@ -3,7 +3,7 @@ import { z } from "zod";
 import type Anthropic from "@anthropic-ai/sdk";
 import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
-import { getClaudeClientForUser, CLAUDE_MODELS } from "@/app/api/ai/_shared/claude-client";
+import { getClaudeClientForUser, CLAUDE_MODELS, WEB_SEARCH_TOOL } from "@/app/api/ai/_shared/claude-client";
 import { parseJsonBody, zodErrorResponse } from "@/app/api/_shared/validation";
 import { createRateLimiter, getClientIp } from "@/app/api/_shared/rate-limit";
 import { recordUsage, tokensFromAnthropic } from "@/app/api/ai/_shared/usage-tracker";
@@ -36,6 +36,11 @@ const NutrientAnalysisResponseSchema = z.object({
 const SYSTEM_PROMPT = `You are a nutrition pattern analyst. The user will send a list of food and drink descriptions they consumed over a recent time window. Your job is to identify nutrient biases — nutrients they may be over- or under-consuming based on the foods listed.
 
 You MUST call the report_nutrient_analysis tool to return your findings. Do not return free text only.
+
+Tool use:
+- If the food list contains BRANDED products, regional dishes, restaurant menu items, or anything you are not highly confident about the nutritional profile of, USE THE web_search TOOL to look up authoritative data (manufacturer, supermarket, USDA / national food database). Prefer per-100g figures.
+- For generic/common items (banana, white rice, plain milk, etc.) you may answer from your own knowledge.
+- After at most a few targeted lookups, call report_nutrient_analysis with your synthesis. Don't search for every item — only the ones you're uncertain about.
 
 How to analyze:
 1. Group the foods mentally by the dominant nutrients they provide (e.g. bananas/potatoes/spinach → potassium; red meat/lentils → iron; dairy → calcium; whole grains/legumes → fiber; oily fish/walnuts → omega-3; processed foods → sodium; sugary drinks → added sugar).
@@ -162,16 +167,15 @@ export const POST = withAuth(async ({ request, auth }) => {
       ? `\n\nThe user has asked you to focus on: ${sanitizedFocus}`
       : "";
 
-    const userMessage = `Below are the user's logged food and drink entries from the last ${windowDays} days. Some have approximate portions (in grams) shown in parentheses; many will not. Analyze for nutrient biases and call the report_nutrient_analysis tool.${focusLine}\n\nFoods:\n${foodListText}`;
+    const userMessage = `Below are the user's logged food and drink entries from the last ${windowDays} days. Some have approximate portions (in grams) shown in parentheses; many will not. Use web_search if you need to look up specific branded or regional items, then call the report_nutrient_analysis tool with your synthesis.${focusLine}\n\nFoods:\n${foodListText}`;
 
     const startedAt = Date.now();
     const response = await client.messages.create({
       model: CLAUDE_MODELS.quality,
-      max_tokens: 2048,
+      max_tokens: 4096,
       temperature: 0.2,
       system: SYSTEM_PROMPT,
-      tools: [NUTRIENT_ANALYSIS_TOOL],
-      tool_choice: { type: "tool", name: NUTRIENT_ANALYSIS_TOOL.name },
+      tools: [WEB_SEARCH_TOOL, NUTRIENT_ANALYSIS_TOOL],
       messages: [{ role: "user", content: userMessage }],
     });
     recordUsage({
@@ -186,7 +190,44 @@ export const POST = withAuth(async ({ request, auth }) => {
       ...tokensFromAnthropic(response.usage),
     });
 
-    const toolBlock = findToolUse(response.content, NUTRIENT_ANALYSIS_TOOL.name);
+    let toolBlock = findToolUse(response.content, NUTRIENT_ANALYSIS_TOOL.name);
+
+    // Claude may finish with prose if web_search satisfied it. Force the
+    // structured tool on a second turn, carrying the prior context so the
+    // earlier server_tool_use blocks remain valid.
+    if (!toolBlock) {
+      const followupStartedAt = Date.now();
+      const followup = await client.messages.create({
+        model: CLAUDE_MODELS.quality,
+        max_tokens: 2048,
+        temperature: 0.2,
+        system: SYSTEM_PROMPT,
+        tools: [WEB_SEARCH_TOOL, NUTRIENT_ANALYSIS_TOOL],
+        tool_choice: { type: "tool", name: NUTRIENT_ANALYSIS_TOOL.name },
+        messages: [
+          { role: "user", content: userMessage },
+          { role: "assistant", content: response.content },
+          {
+            role: "user",
+            content:
+              "Now return your nutrient bias findings via the report_nutrient_analysis tool.",
+          },
+        ],
+      });
+      recordUsage({
+        userId: auth.userId!,
+        keyOwnerId: resolved.keyOwnerId,
+        keySource: resolved.source,
+        provider: "anthropic",
+        model: CLAUDE_MODELS.quality,
+        route: "/api/ai/nutrient-analysis",
+        status: "success",
+        durationMs: Date.now() - followupStartedAt,
+        ...tokensFromAnthropic(followup.usage),
+      });
+      toolBlock = findToolUse(followup.content, NUTRIENT_ANALYSIS_TOOL.name);
+    }
+
     if (!toolBlock) {
       return NextResponse.json(
         { error: "AI response format invalid" },

@@ -143,8 +143,10 @@ export function NutrientAnalysisCard() {
       <CardContent className="px-3 pb-3 space-y-3">
         <p className="text-xs text-muted-foreground">
           Scan your last {WINDOW_DAYS} days of food entries for nutrient biases
-          — e.g. too much potassium, low fiber. Only food descriptions are sent;
-          timestamps stay on device.
+          — e.g. too much potassium, low fiber. The model can web-search any
+          branded or regional items it doesn&apos;t recognise, so this can take
+          5-15 seconds. Only food descriptions are sent; timestamps stay on
+          device.
         </p>
 
         <div className="flex items-center justify-between text-[11px] text-muted-foreground">
