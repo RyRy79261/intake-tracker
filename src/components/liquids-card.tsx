@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { Droplets, Coffee, Wine } from "lucide-react";
 import { WaterTab } from "@/components/liquids/water-tab";
@@ -358,30 +359,37 @@ export function LiquidsCard() {
           }}
           renderEditForm={() => (
             <InlineEditFormShell timestamp={editTimestamp} onTimestampChange={setEditTimestamp} note={editNote} onNoteChange={setEditNote} onSave={() => handleEditSubmit()} onCancel={closeEdit} buttonClassName={CARD_THEMES.water.buttonBg}>
-              <Input type="number" placeholder="Amount (ml)" value={editAmount} onChange={(e) => setEditAmount(e.target.value)} className="h-8 text-sm" />
+              <div className="space-y-1">
+                <Label htmlFor="edit-liquid-amount" className="text-xs text-muted-foreground">Amount (ml)</Label>
+                <Input id="edit-liquid-amount" type="number" value={editAmount} onChange={(e) => setEditAmount(e.target.value)} className="h-8 text-sm" />
+              </div>
               {showBeverageNameField && (
-                <Input
-                  type="text"
-                  placeholder="Beverage name"
-                  value={editBeverageName}
-                  onChange={(e) => setEditBeverageName(e.target.value)}
-                  className="h-8 text-sm"
-                />
+                <div className="space-y-1">
+                  <Label htmlFor="edit-liquid-beverage" className="text-xs text-muted-foreground">Beverage name</Label>
+                  <Input
+                    id="edit-liquid-beverage"
+                    type="text"
+                    value={editBeverageName}
+                    onChange={(e) => setEditBeverageName(e.target.value)}
+                    className="h-8 text-sm"
+                  />
+                </div>
               )}
               {editSubstance && (
-                <Input
-                  type="number"
-                  min="0"
-                  step={editSubstance.type === "alcohol" ? "0.1" : "1"}
-                  placeholder={
-                    editSubstance.type === "caffeine"
-                      ? "Caffeine (mg)"
-                      : "Alcohol (% ABV)"
-                  }
-                  value={editSubstanceAmount}
-                  onChange={(e) => setEditSubstanceAmount(e.target.value)}
-                  className="h-8 text-sm"
-                />
+                <div className="space-y-1">
+                  <Label htmlFor="edit-liquid-substance" className="text-xs text-muted-foreground">
+                    {editSubstance.type === "caffeine" ? "Caffeine (mg)" : "Alcohol (% ABV)"}
+                  </Label>
+                  <Input
+                    id="edit-liquid-substance"
+                    type="number"
+                    min="0"
+                    step={editSubstance.type === "alcohol" ? "0.1" : "1"}
+                    value={editSubstanceAmount}
+                    onChange={(e) => setEditSubstanceAmount(e.target.value)}
+                    className="h-8 text-sm"
+                  />
+                </div>
               )}
             </InlineEditFormShell>
           )}
