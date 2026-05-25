@@ -1,0 +1,54 @@
+name: CodeQL
+
+# CodeQL static analysis for JavaScript/TypeScript.
+#
+# Runs on PRs to main/staging, on pushes to main (so the default branch
+# always has a fresh analysis result that PR alerts can diff against),
+# and on a weekly schedule to catch newly-published rule changes.
+#
+# The configured queries (security-extended + security-and-quality) cover
+# the same surface a healthcare PWA needs: injection, prototype
+# pollution, authentication bypass, sensitive-data exposure, regex DoS.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main, staging]
+  schedule:
+    # Monday 04:00 UTC — outside the main CI window, so we don't compete
+    # for runners with the per-PR pipeline.
+    - cron: '0 4 * * 1'
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        language:
+          - javascript-typescript
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          # security-extended adds rules beyond the default; -and-quality
+          # adds maintainability/correctness rules. Both are recommended
+          # by GitHub for production codebases.
+          queries: security-extended,security-and-quality
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: '/language:${{ matrix.language }}'
