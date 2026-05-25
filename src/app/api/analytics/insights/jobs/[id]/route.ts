@@ -241,9 +241,24 @@ export const GET = withAuth(async ({ request, auth }) => {
   if (!validated.success) {
     const err =
       "Deep analysis returned a response that failed structural validation.";
+    // Inline counts so the per-request log line in Vercel's UI surfaces the
+    // diagnostic detail directly (it only shows the first console.error
+    // arg). flatten() then ships the per-field zod errors for the full log.
+    const raw = toolBlock.input as { summary?: unknown; observations?: unknown };
+    const summaryLen =
+      typeof raw.summary === "string" ? raw.summary.length : -1;
+    const obsCount = Array.isArray(raw.observations)
+      ? raw.observations.length
+      : -1;
+    const obsMaxLen = Array.isArray(raw.observations)
+      ? raw.observations.reduce(
+          (max, o) =>
+            Math.max(max, typeof o === "string" ? o.length : 0),
+          0,
+        )
+      : -1;
     console.error(
-      "[analytics/insights/jobs] response validation failed:",
-      JSON.stringify(validated.error.flatten()),
+      `[analytics/insights/jobs] response validation failed: summaryLen=${summaryLen} obsCount=${obsCount} obsMaxLen=${obsMaxLen} fields=${JSON.stringify(validated.error.flatten().fieldErrors)}`,
     );
     await failInsightJob(job.id, err);
     return NextResponse.json({

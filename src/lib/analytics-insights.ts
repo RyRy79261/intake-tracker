@@ -115,8 +115,10 @@ const PriorAssessmentSchema = z.object({
   generatedAt: z.number(),
   rangeStart: z.number(),
   rangeEnd: z.number(),
-  summary: z.string().min(1).max(2000),
-  observations: z.array(z.string().min(1).max(500)).max(12),
+  // Bound matches InsightResponseSchema below — see comment there for why
+  // the deep-research ceiling is generous.
+  summary: z.string().min(1).max(4000),
+  observations: z.array(z.string().min(1).max(2000)).max(16),
 });
 
 export type PriorAssessment = z.infer<typeof PriorAssessmentSchema>;
@@ -159,9 +161,13 @@ export type AnalyticsInsightsRequest = z.infer<
 // Response contract
 // ---------------------------------------------------------------------------
 
+// Caps sized for the deep-research path: Opus with web_search routinely
+// produces longer summaries and longer observations (citations, clinical
+// context, "this matters because…" framing). The fast path is well under
+// these limits in normal use, so a single ceiling avoids a parallel schema.
 export const InsightResponseSchema = z.object({
-  summary: z.string().min(1).max(2000),
-  observations: z.array(z.string().min(1).max(500)).max(12),
+  summary: z.string().min(1).max(4000),
+  observations: z.array(z.string().min(1).max(2000)).max(16),
 });
 
 export const INSIGHT_TOOL = {
