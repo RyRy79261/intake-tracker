@@ -26,6 +26,7 @@ const GOALS: IntakeGoals = {
   waterGoalMl: 2000,
   sodiumLimitMg: 2300,
   sugarLimitG: 50,
+  potassiumLimitMg: 3500,
 };
 
 function fullRange(): { start: number; end: number } {
@@ -171,6 +172,7 @@ describe("buildAnalyticsSnapshot", () => {
       waterGoalMl: 0,
       sodiumLimitMg: 0,
       sugarLimitG: 0,
+      potassiumLimitMg: 0,
     });
 
     expect(snapshot.metrics.intake).toBeUndefined();

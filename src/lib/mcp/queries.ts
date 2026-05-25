@@ -133,11 +133,13 @@ export async function getTodaySummary(userId: string) {
     water_ml: 0,
     salt_mg: 0,
     sugar_g: 0,
+    potassium_mg: 0,
   };
   for (const row of intake) {
     if (row.type === "water") intakeTotals.water_ml = Number(row.total) || 0;
     else if (row.type === "salt") intakeTotals.salt_mg = Number(row.total) || 0;
     else if (row.type === "sugar") intakeTotals.sugar_g = Number(row.total) || 0;
+    else if (row.type === "potassium") intakeTotals.potassium_mg = Number(row.total) || 0;
   }
 
   return {
@@ -156,7 +158,7 @@ export async function getTodaySummary(userId: string) {
 
 export async function queryIntakeHistory(
   userId: string,
-  type: "water" | "salt" | "sugar" | "all",
+  type: "water" | "salt" | "sugar" | "potassium" | "all",
   range: DateRange,
 ) {
   const typeFilter =

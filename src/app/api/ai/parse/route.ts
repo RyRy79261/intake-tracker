@@ -24,6 +24,7 @@ const AIParseResponseSchema = z.object({
   water: z.number().min(0).max(10000).nullable(),
   sodiumMg: z.number().min(0).max(20000).nullable(),
   sugarG: z.number().min(0).max(1000).nullable(),
+  potassiumMg: z.number().min(0).max(20000).nullable(),
   reasoning: z.string().max(1000).optional(),
 });
 
@@ -31,13 +32,15 @@ const SYSTEM_PROMPT = `You are a nutrition lookup assistant. Given a food or dri
 - water_ml: water content in millilitres (ml)
 - sodium_mg: sodium content in milligrams (mg) -- NOT salt (NaCl). If a label or source reports salt in grams, convert: sodium_mg = salt_g * 1000 / 2.5.
 - sugar_g: total sugars in grams (g) -- the sum of naturally-occurring and added sugars, as reported on a nutrition label's "of which sugars" line. A rough estimate is fine.
+- potassium_mg: potassium content in milligrams (mg). Many labels do not report potassium; estimate from typical food composition tables (USDA / EFSA) when no label value is available. A rough estimate is fine -- potassium varies widely between foods and exact values are unattainable.
 - reasoning: 1-3 sentence explanation citing the values used.
 
 Units (metric only, no US units):
 - All volumes in millilitres (ml).
-- All masses in milligrams (mg) for sodium, grams (g) for portion weight and for sugar.
+- All masses in milligrams (mg) for sodium and potassium, grams (g) for portion weight and for sugar.
 - Sodium, never salt. A "pinch of salt" is ~0.4 g of NaCl, which is ~155 mg sodium.
 - Sugar is total sugars in grams, never teaspoons.
+- Potassium in mg of elemental potassium (K+), as reported on nutrition labels.
 
 Process:
 1. If the item is a branded product, regional dish, restaurant menu item, or anything where you are not highly confident of the typical nutritional values, USE THE web_search TOOL to look up authoritative data (manufacturer site, supermarket listing, USDA / EFSA / national food database). Prefer per-100g or per-100ml figures and scale to the described portion.
@@ -64,11 +67,22 @@ Reference values for sugar (total sugars per typical serving):
 - A glass of milk (250 ml): ~12 g; fruit juice (250 ml): ~22 g
 - A chocolate bar (~45 g): ~25 g
 
+Reference values for potassium (per typical serving, rough):
+- Medium banana (~120 g): ~420 mg
+- Medium baked potato with skin (~170 g): ~900 mg
+- Avocado (half, ~100 g): ~485 mg
+- Glass of orange juice (250 ml): ~500 mg
+- Glass of milk (250 ml): ~380 mg
+- Cooked spinach (1 cup, ~180 g): ~840 mg
+- Cooked lentils (1 cup, ~200 g): ~730 mg
+- Plain chicken breast (100 g): ~250 mg
+- Plain water / black coffee / tea: ~0-100 mg
+
 If you cannot estimate a value, return null for that field.`;
 
 const PARSE_RESULT_TOOL = {
   name: "parse_food_result" as const,
-  description: "Return parsed water (ml), sodium (mg) and total sugar (g) for a food or drink description.",
+  description: "Return parsed water (ml), sodium (mg), total sugar (g) and potassium (mg) for a food or drink description.",
   input_schema: {
     type: "object" as const,
     properties: {
@@ -86,12 +100,17 @@ const PARSE_RESULT_TOOL = {
         description:
           "Total sugars in grams (naturally-occurring plus added). Null if it cannot be estimated.",
       },
+      potassium_mg: {
+        type: ["number", "null"],
+        description:
+          "Potassium content in milligrams (elemental K+). Estimate from typical food composition tables when not labelled. Null if it cannot be estimated.",
+      },
       reasoning: {
         type: "string",
         description: "Brief explanation of the estimate, including any sources consulted.",
       },
     },
-    required: ["water_ml", "sodium_mg", "sugar_g", "reasoning"],
+    required: ["water_ml", "sodium_mg", "sugar_g", "potassium_mg", "reasoning"],
     additionalProperties: false,
   },
 };
@@ -148,7 +167,7 @@ export const POST = withAuth(async ({ request, auth }) => {
       );
     }
 
-    const userMessage = `Estimate water (ml), sodium (mg) and total sugar (g) for: "${sanitizedInput}". Use web_search for branded or regional items, then call parse_food_result.`;
+    const userMessage = `Estimate water (ml), sodium (mg), total sugar (g) and potassium (mg) for: "${sanitizedInput}". Use web_search for branded or regional items, then call parse_food_result.`;
 
     const startedAt = Date.now();
     const response = await client.messages.create({
@@ -222,6 +241,7 @@ export const POST = withAuth(async ({ request, auth }) => {
       water: toolInput.water_ml,
       sodiumMg: toolInput.sodium_mg,
       sugarG: toolInput.sugar_g,
+      potassiumMg: toolInput.potassium_mg,
       reasoning: toolInput.reasoning,
     });
     if (!validated.success) {
@@ -238,6 +258,7 @@ export const POST = withAuth(async ({ request, auth }) => {
       salt: validated.data.sodiumMg,
       measurement_type: "sodium" as const,
       sugar: validated.data.sugarG,
+      potassium: validated.data.potassiumMg,
       ...(validated.data.reasoning !== undefined && { reasoning: validated.data.reasoning }),
     });
   } catch (error) {

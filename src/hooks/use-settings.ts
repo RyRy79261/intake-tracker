@@ -32,3 +32,10 @@ export function useSugarSettings() {
   return { limit, setLimit };
 }
 
+export function usePotassiumSettings() {
+  const limit = useSettingsStore((s) => s.potassiumLimit);
+  const setLimit = useSettingsStore((s) => s.setPotassiumLimit);
+
+  return { limit, setLimit };
+}
+

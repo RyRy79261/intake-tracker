@@ -185,11 +185,12 @@ describe("exportAllRecordsCSV", () => {
 
     await mod.exportAllRecordsCSV(range);
 
-    // All domains return empty, so no download is triggered, but all 10 domains are fetched
-    expect(mockGetRecordsByDomain).toHaveBeenCalledTimes(10);
+    // All domains return empty, so no download is triggered, but all 11 domains are fetched
+    expect(mockGetRecordsByDomain).toHaveBeenCalledTimes(11);
     expect(mockGetRecordsByDomain).toHaveBeenCalledWith("water", range);
     expect(mockGetRecordsByDomain).toHaveBeenCalledWith("salt", range);
     expect(mockGetRecordsByDomain).toHaveBeenCalledWith("sugar", range);
+    expect(mockGetRecordsByDomain).toHaveBeenCalledWith("potassium", range);
     expect(mockGetRecordsByDomain).toHaveBeenCalledWith("weight", range);
     expect(mockGetRecordsByDomain).toHaveBeenCalledWith("bp", range);
     expect(mockGetRecordsByDomain).toHaveBeenCalledWith("caffeine", range);

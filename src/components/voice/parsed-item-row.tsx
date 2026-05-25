@@ -266,6 +266,18 @@ function ItemEditor({
                 }
               />
             </Field>
+            <Field label="Potassium (mg)">
+              <Input
+                type="number"
+                inputMode="numeric"
+                disabled={disabled}
+                value={item.potassiumMg ?? ""}
+                placeholder="—"
+                onChange={(e) =>
+                  onChange(setOptionalNumber(item, "potassiumMg", e.target.value))
+                }
+              />
+            </Field>
           </div>
         </div>
       );

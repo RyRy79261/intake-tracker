@@ -216,6 +216,14 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
                 note: item.description,
               });
             }
+            if (item.potassiumMg && item.potassiumMg > 0) {
+              intakes.push({
+                type: "potassium",
+                amount: item.potassiumMg,
+                source: "manual:potassium",
+                note: item.description,
+              });
+            }
             await addComposableEntry({
               eating: {
                 note: item.description,

@@ -14,6 +14,7 @@ import { DaySettingsSection } from "@/components/settings/day-settings-section";
 import { WaterSettingsSection } from "@/components/settings/water-settings-section";
 import { SaltSettingsSection } from "@/components/settings/salt-settings-section";
 import { SugarSettingsSection } from "@/components/settings/sugar-settings-section";
+import { PotassiumSettingsSection } from "@/components/settings/potassium-settings-section";
 import { WeightSettingsSection } from "@/components/settings/weight-settings-section";
 import { AppearanceSection } from "@/components/settings/appearance-section";
 import { QuickNavSection } from "@/components/settings/quick-nav-section";
@@ -91,6 +92,7 @@ function SettingsContent() {
           <WaterSettingsSection />
           <SaltSettingsSection />
           <SugarSettingsSection />
+          <PotassiumSettingsSection />
           <WeightSettingsSection />
           <LiquidPresetsSection />
           <UrinationDefecationDefaults />

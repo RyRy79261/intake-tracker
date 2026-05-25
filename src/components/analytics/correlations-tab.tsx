@@ -15,6 +15,7 @@ import { BarChart3, ArrowRightLeft } from "lucide-react";
 import {
   useSaltVsWeight,
   useSugarVsWeight,
+  usePotassiumVsWeight,
   useCaffeineVsBP,
   useAlcoholVsBP,
   useCorrelation,
@@ -43,6 +44,7 @@ const DOMAIN_OPTIONS: { value: Domain; label: string }[] = [
   { value: "water", label: "Water Intake" },
   { value: "salt", label: "Salt Intake" },
   { value: "sugar", label: "Sugar Intake" },
+  { value: "potassium", label: "Potassium Intake" },
   { value: "weight", label: "Weight" },
   { value: "bp", label: "Blood Pressure" },
   { value: "eating", label: "Eating" },
@@ -56,6 +58,7 @@ const DOMAIN_UNITS: Record<Domain, string> = {
   water: " ml",
   salt: " mg",
   sugar: " g",
+  potassium: " mg",
   weight: " kg",
   bp: " mmHg",
   eating: "",
@@ -322,6 +325,7 @@ function CustomComparison({ range }: { range: TimeRange }) {
 export function CorrelationsTab({ range }: { range: TimeRange }) {
   const saltVsWeight = useSaltVsWeight(range);
   const sugarVsWeight = useSugarVsWeight(range);
+  const potassiumVsWeight = usePotassiumVsWeight(range);
   const caffeineVsBP = useCaffeineVsBP(range);
   const alcoholVsBP = useAlcoholVsBP(range);
 
@@ -348,6 +352,15 @@ export function CorrelationsTab({ range }: { range: TimeRange }) {
         labelA="Sugar"
         labelB="Weight"
         unitA=" g"
+        unitB=" kg"
+      />
+
+      <CorrelationCard
+        title="Weight vs Potassium Intake"
+        result={potassiumVsWeight}
+        labelA="Potassium"
+        labelB="Weight"
+        unitA=" mg"
         unitB=" kg"
       />
 

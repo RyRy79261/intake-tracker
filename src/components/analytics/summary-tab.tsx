@@ -19,6 +19,7 @@ import {
   Heart,
   Scale,
   Candy,
+  Banana,
   TrendingUp,
   TrendingDown,
   Minus,
@@ -117,12 +118,14 @@ export function SummaryTab({ range }: { range: TimeRange }) {
   const waterGoal = useSettingsStore((s) => s.waterLimit);
   const saltLimit = useSettingsStore((s) => s.saltLimit);
   const sugarLimit = useSettingsStore((s) => s.sugarLimit);
+  const potassiumLimit = useSettingsStore((s) => s.potassiumLimit);
 
   // Aggregate the unified record list into intake totals and event counts.
   const totals = useMemo(() => {
     let waterMl = 0;
     let saltMg = 0;
     let sugarG = 0;
+    let potassiumMg = 0;
     let meals = 0;
     let urination = 0;
     let defecation = 0;
@@ -135,6 +138,7 @@ export function SummaryTab({ range }: { range: TimeRange }) {
       if (r.type === "intake" && r.record.type === "water") waterMl += r.record.amount;
       else if (r.type === "intake" && r.record.type === "salt") saltMg += r.record.amount;
       else if (r.type === "intake" && r.record.type === "sugar") sugarG += r.record.amount;
+      else if (r.type === "intake" && r.record.type === "potassium") potassiumMg += r.record.amount;
       else if (r.type === "eating") meals += 1;
       else if (r.type === "urination") urination += 1;
       else if (r.type === "defecation") defecation += 1;
@@ -146,6 +150,7 @@ export function SummaryTab({ range }: { range: TimeRange }) {
       waterMl,
       saltMg,
       sugarG,
+      potassiumMg,
       meals,
       urination,
       defecation,
@@ -219,8 +224,17 @@ export function SummaryTab({ range }: { range: TimeRange }) {
       );
     }
 
+    // Potassium is a soft target — no over-limit warning, just a "below
+    // target" observation since the deficit case is what usually matters.
+    const avgPotassium = totals.potassiumMg / rangeDays;
+    if (totals.potassiumMg > 0 && potassiumLimit > 0 && avgPotassium < potassiumLimit) {
+      out.push(
+        `Average daily potassium (${Math.round(avgPotassium)} mg) is below your ${potassiumLimit} mg target — note potassium estimates are rough.`,
+      );
+    }
+
     return out;
-  }, [bp, bpReadings, weightReadings, fluid, totals, rangeDays, waterGoal, saltLimit, sugarLimit]);
+  }, [bp, bpReadings, weightReadings, fluid, totals, rangeDays, waterGoal, saltLimit, sugarLimit, potassiumLimit]);
 
   if (!hasAnyData) {
     return (
@@ -325,6 +339,12 @@ export function SummaryTab({ range }: { range: TimeRange }) {
           label="Sugar Intake"
           value={`${Math.round(totals.sugarG / rangeDays)} g`}
           sub={`${totals.sugarG} g total · avg/day`}
+        />
+        <KpiCard
+          icon={<Banana className="w-3.5 h-3.5" />}
+          label="Potassium Intake"
+          value={`${Math.round(totals.potassiumMg / rangeDays)} mg`}
+          sub={`${totals.potassiumMg} mg total · avg/day`}
         />
         <KpiCard
           icon={<Activity className="w-3.5 h-3.5" />}

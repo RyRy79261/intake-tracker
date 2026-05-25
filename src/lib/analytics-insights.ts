@@ -22,6 +22,7 @@ const DOMAIN_LABELS: Record<Domain, string> = {
   water: "water intake",
   salt: "sodium intake",
   sugar: "sugar intake",
+  potassium: "potassium intake",
   weight: "weight",
   bp: "blood pressure",
   eating: "eating",
@@ -69,9 +70,11 @@ const IntakeMetricSchema = z.object({
   avgWaterMl: z.number().nonnegative(),
   avgSodiumMg: z.number().nonnegative(),
   avgSugarG: z.number().nonnegative(),
+  avgPotassiumMg: z.number().nonnegative(),
   waterGoalMl: z.number().positive(),
   sodiumLimitMg: z.number().positive(),
   sugarLimitG: z.number().positive(),
+  potassiumLimitMg: z.number().positive(),
 });
 
 const CorrelationMetricSchema = z.object({
@@ -300,7 +303,9 @@ export function buildInsightsPrompt(req: AnalyticsInsightsRequest): string {
     lines.push(
       `Daily intake: water averaged ${i.avgWaterMl.toFixed(0)} ml against a ${i.waterGoalMl} ml goal; ` +
         `sodium averaged ${i.avgSodiumMg.toFixed(0)} mg against a ${i.sodiumLimitMg} mg limit; ` +
-        `sugar averaged ${i.avgSugarG.toFixed(0)} g against a ${i.sugarLimitG} g limit.`,
+        `sugar averaged ${i.avgSugarG.toFixed(0)} g against a ${i.sugarLimitG} g limit; ` +
+        `potassium averaged ${i.avgPotassiumMg.toFixed(0)} mg against a ${i.potassiumLimitMg} mg soft target ` +
+        `(estimates are rough — many foods are not labelled for potassium).`,
     );
   }
 

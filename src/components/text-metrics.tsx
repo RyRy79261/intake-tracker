@@ -11,7 +11,7 @@ import { useNowTick } from "@/hooks/use-now-tick";
 import { useSettingsStore } from "@/stores/settings-store";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { Progress } from "@/components/ui/progress";
-import { Droplets, Sparkles, Coffee, Wine, Candy } from "lucide-react";
+import { Droplets, Sparkles, Coffee, Wine, Candy, Banana } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -73,6 +73,7 @@ export function TextMetrics() {
   const waterLimit = useSettingsStore((s) => s.waterLimit);
   const saltLimit = useSettingsStore((s) => s.saltLimit);
   const sugarLimit = useSettingsStore((s) => s.sugarLimit);
+  const potassiumLimit = useSettingsStore((s) => s.potassiumLimit);
 
   // 60-second tick for day boundary refresh
   const tick = useNowTick();
@@ -81,6 +82,7 @@ export function TextMetrics() {
   const waterTotal = useDailyIntakeTotal("water");
   const saltTotal = useDailyIntakeTotal("salt");
   const sugarTotal = useDailyIntakeTotal("sugar");
+  const potassiumTotal = useDailyIntakeTotal("potassium");
 
   // Day start timestamp for substance queries
   const dayStart = useMemo(
@@ -140,6 +142,11 @@ export function TextMetrics() {
     weekEnd,
     "sugar"
   );
+  const weeklyPotassiumRecords = useIntakeRecordsByDateRange(
+    weekStart,
+    weekEnd,
+    "potassium"
+  );
 
   const weeklyCaffeineRecords = useSubstanceRecordsByDateRange(
     weekStart,
@@ -156,6 +163,7 @@ export function TextMetrics() {
   const weeklyWater = useMemo(() => bucketByDay(weeklyWaterRecords, weekStart, (r) => r.amount), [weeklyWaterRecords, weekStart]);
   const weeklySalt = useMemo(() => bucketByDay(weeklySaltRecords, weekStart, (r) => r.amount), [weeklySaltRecords, weekStart]);
   const weeklySugar = useMemo(() => bucketByDay(weeklySugarRecords, weekStart, (r) => r.amount), [weeklySugarRecords, weekStart]);
+  const weeklyPotassium = useMemo(() => bucketByDay(weeklyPotassiumRecords, weekStart, (r) => r.amount), [weeklyPotassiumRecords, weekStart]);
   const weeklyCaffeine = useMemo(() => bucketByDay(weeklyCaffeineRecords, weekStart, (r) => r.amountMg ?? 0), [weeklyCaffeineRecords, weekStart]);
   const weeklyAlcohol = useMemo(() => bucketByDay(weeklyAlcoholRecords, weekStart, (r) => r.amountStandardDrinks ?? 0), [weeklyAlcoholRecords, weekStart]);
 
@@ -169,6 +177,11 @@ export function TextMetrics() {
     saltLimit > 0 ? Math.min(100, (saltTotal / saltLimit) * 100) : 0;
   const sugarPct =
     sugarLimit > 0 ? Math.min(100, (sugarTotal / sugarLimit) * 100) : 0;
+  // Potassium is a soft target — progress bar fills but does not turn red.
+  const potassiumPct =
+    potassiumLimit > 0
+      ? Math.min(100, (potassiumTotal / potassiumLimit) * 100)
+      : 0;
 
   return (
     <section aria-label="Daily intake summary">
@@ -274,6 +287,32 @@ export function TextMetrics() {
             </span>
           </div>
 
+          {/* Potassium — soft target, never reds out */}
+          <div className="flex items-center gap-3">
+            <Banana
+              className={cn("w-4 h-4", CARD_THEMES.potassium.iconColor)}
+              aria-hidden="true"
+            />
+            <span className="text-sm text-foreground w-16">Potassium</span>
+            <Progress
+              value={potassiumPct}
+              className="h-2 flex-1"
+              indicatorClassName={CARD_THEMES.potassium.progressGradient}
+              aria-label="Potassium intake progress"
+            />
+            <span
+              className={cn(
+                "text-sm font-semibold tabular-nums",
+                CARD_THEMES.potassium.latestValueColor
+              )}
+            >
+              {formatValue(potassiumTotal)}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              / {formatValue(potassiumLimit)} mg
+            </span>
+          </div>
+
           {/* Caffeine */}
           <div className="flex items-center gap-3">
             <Coffee
@@ -338,6 +377,7 @@ export function TextMetrics() {
             { key: "water", label: "Water", data: weeklyWater, theme: CARD_THEMES.water, limit: waterLimit, fmt: formatValue },
             { key: "salt", label: "Na", data: weeklySalt, theme: CARD_THEMES.salt, limit: saltLimit, fmt: formatValue },
             { key: "sugar", label: "Sug", data: weeklySugar, theme: CARD_THEMES.sugar, limit: sugarLimit, fmt: formatValue },
+            { key: "potassium", label: "K", data: weeklyPotassium, theme: CARD_THEMES.potassium, limit: 0, fmt: formatValue },
             { key: "caf", label: "Caf", data: weeklyCaffeine, theme: CARD_THEMES.caffeine, limit: 0, fmt: (v: number) => formatValue(Math.round(v)) },
             { key: "alc", label: "Alc", data: weeklyAlcohol, theme: CARD_THEMES.alcohol, limit: 0, fmt: (v: number) => v.toFixed(1) },
           ].map((row) => (

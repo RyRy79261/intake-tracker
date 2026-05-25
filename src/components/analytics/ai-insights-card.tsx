@@ -54,11 +54,12 @@ const TRACKED_DATA = [
   "Water intake",
   "Salt / sodium intake",
   "Sugar intake",
+  "Potassium intake",
   "Blood pressure readings",
   "Weight readings",
   "Fluid balance (in vs. out)",
-  "Correlations: salt vs. weight, sugar vs. weight, caffeine & alcohol vs. blood pressure",
-  "Your water goal, sodium limit & sugar limit",
+  "Correlations: salt vs. weight, sugar vs. weight, potassium vs. weight, caffeine & alcohol vs. blood pressure",
+  "Your water goal, sodium limit, sugar limit & potassium target",
 ];
 
 /**
@@ -220,6 +221,7 @@ export function AiInsightsCard() {
   const waterGoalMl = useSettingsStore((s) => s.waterLimit);
   const sodiumLimitMg = useSettingsStore((s) => s.saltLimit);
   const sugarLimitG = useSettingsStore((s) => s.sugarLimit);
+  const potassiumLimitMg = useSettingsStore((s) => s.potassiumLimit);
   const reports = useInsightReports();
   const profile = useUserProfile();
   const { toast } = useToast();
@@ -271,7 +273,7 @@ export function AiInsightsCard() {
     setConfirmOpen(false);
     const payload = {
       range: insightsRange(),
-      goals: { waterGoalMl, sodiumLimitMg, sugarLimitG },
+      goals: { waterGoalMl, sodiumLimitMg, sugarLimitG, potassiumLimitMg },
       ...(shareConditions && { conditions: profile.conditions }),
       ...(shareMedications && { includeMedications: true }),
       ...(includePrevious && hasPrevious && { includePrevious: true }),
