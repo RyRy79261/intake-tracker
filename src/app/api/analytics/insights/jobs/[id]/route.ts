@@ -282,6 +282,10 @@ export const GET = withAuth(async ({ request, auth }) => {
         submitted.profile.medications.length > 0,
     );
 
+  const sources =
+    validated.data.sources && validated.data.sources.length > 0
+      ? validated.data.sources
+      : null;
   const completion = await completeInsightJob(job.id, {
     userId: auth.userId!,
     generatedAt,
@@ -289,6 +293,7 @@ export const GET = withAuth(async ({ request, auth }) => {
     rangeEnd: submitted.range.end,
     narrative: validated.data.summary,
     observations: validated.data.observations,
+    sources,
     personalised,
   });
 
@@ -314,6 +319,7 @@ export const GET = withAuth(async ({ request, auth }) => {
     status: "completed" as const,
     narrative: validated.data.summary,
     observations: validated.data.observations,
+    sources: sources ?? undefined,
     generatedAt,
     startedAt: job.createdAt,
   });
@@ -339,6 +345,7 @@ async function respondCompleted(job: InsightJobRow) {
     status: "completed" as const,
     narrative: report.narrative,
     observations: report.observations,
+    sources: report.sources ?? undefined,
     generatedAt: report.generatedAt,
     startedAt: job.createdAt,
   });

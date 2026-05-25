@@ -20,6 +20,8 @@ export interface NewInsightReport {
   rangeEnd: number;
   narrative: string;
   observations: string[];
+  /** Deep-mode URLs cited via web_search. Undefined for fast-mode reports. */
+  sources?: string[];
   personalised: boolean;
   /**
    * "fast" = sync Sonnet summary; "deep" = async Opus + web-search deep
@@ -54,6 +56,9 @@ export async function saveInsightReport(
       rangeEnd: input.rangeEnd,
       narrative: input.narrative,
       observations: input.observations,
+      ...(input.sources && input.sources.length > 0
+        ? { sources: input.sources }
+        : {}),
       personalised: input.personalised,
       mode: input.mode ?? "fast",
       createdAt: now,

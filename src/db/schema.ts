@@ -688,6 +688,10 @@ export const insightReports = pgTable(
     rangeEnd: bigint("range_end", { mode: "number" }).notNull(),
     narrative: text("narrative").notNull(),
     observations: text("observations").array().notNull(),
+    // URLs cited by the model when web_search was used (deep mode). Null
+    // for fast-mode reports and for legacy rows persisted before sources
+    // were tracked.
+    sources: text("sources").array(),
     personalised: boolean("personalised").notNull(),
     // "fast" = sync Sonnet summary; "deep" = async Opus + web-search deep
     // research. Nullable for backward compatibility with rows written before

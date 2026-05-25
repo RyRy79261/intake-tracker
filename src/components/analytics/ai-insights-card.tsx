@@ -60,6 +60,17 @@ const TRACKED_DATA = [
   "Your water goal, sodium limit & sugar limit",
 ];
 
+/** Best-effort hostname pretty-print for a source URL. Falls back to the
+ * raw string when the input cannot be parsed (e.g. shortened pre-validated
+ * forms from older reports). */
+function sourceLabel(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
 /** Render one cached report's narrative + observations. */
 function ReportBody({ report }: { report: InsightReport }) {
   return (
@@ -89,6 +100,28 @@ function ReportBody({ report }: { report: InsightReport }) {
             </li>
           ))}
         </ul>
+      )}
+      {report.sources && report.sources.length > 0 && (
+        <div className="pt-1 border-t border-slate-200 dark:border-slate-800">
+          <p className="text-[11px] font-medium text-muted-foreground mb-1">
+            Sources
+          </p>
+          <ul className="flex flex-wrap gap-x-2 gap-y-0.5 text-[11px]">
+            {report.sources.map((url, i) => (
+              <li key={i}>
+                <a
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-violet-600 dark:text-violet-400 hover:underline"
+                  title={url}
+                >
+                  {sourceLabel(url)}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </div>
   );

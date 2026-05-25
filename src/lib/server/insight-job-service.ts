@@ -167,6 +167,8 @@ export interface PersistDeepReportInput {
   rangeEnd: number;
   narrative: string;
   observations: string[];
+  /** URLs cited via web_search; null when the model produced none. */
+  sources: string[] | null;
   personalised: boolean;
 }
 
@@ -198,6 +200,7 @@ export async function completeInsightJob(
     rangeEnd: report.rangeEnd,
     narrative: report.narrative,
     observations: report.observations,
+    sources: report.sources,
     personalised: report.personalised,
     mode: "deep",
     createdAt: now,
@@ -275,12 +278,14 @@ export async function getReportForJob(
 ): Promise<{
   narrative: string;
   observations: string[];
+  sources: string[] | null;
   generatedAt: number;
 } | null> {
   const rows = await db
     .select({
       narrative: insightReports.narrative,
       observations: insightReports.observations,
+      sources: insightReports.sources,
       generatedAt: insightReports.generatedAt,
     })
     .from(insightReports)

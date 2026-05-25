@@ -20,6 +20,7 @@ import type { InsightReport } from "@/lib/db";
 export interface InsightsResult {
   narrative: string;
   observations: string[];
+  sources?: string[];
   generatedAt: number;
 }
 
@@ -84,6 +85,9 @@ export function useGenerateInsights() {
             rangeEnd: previous.rangeEnd,
             summary: previous.narrative,
             observations: previous.observations,
+            ...(previous.sources && previous.sources.length > 0
+              ? { sources: previous.sources }
+              : {}),
           };
           snapshot.priorAssessments = [priorAssessment];
         }
@@ -126,6 +130,9 @@ export function useGenerateInsights() {
       const insight: InsightsResult = {
         narrative: result.narrative,
         observations: result.observations,
+        ...(Array.isArray(result.sources) && result.sources.length > 0
+          ? { sources: result.sources }
+          : {}),
         generatedAt:
           typeof result.generatedAt === "number"
             ? result.generatedAt

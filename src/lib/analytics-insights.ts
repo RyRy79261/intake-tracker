@@ -119,6 +119,9 @@ const PriorAssessmentSchema = z.object({
   // the deep-research ceiling is generous.
   summary: z.string().min(1).max(4000),
   observations: z.array(z.string().min(1).max(2000)).max(16),
+  // URLs from the prior deep report's web_search citations. Sent back so
+  // the model can avoid re-fetching sources it already grounded against.
+  sources: z.array(z.string().url()).max(30).optional(),
 });
 
 export type PriorAssessment = z.infer<typeof PriorAssessmentSchema>;
@@ -165,9 +168,15 @@ export type AnalyticsInsightsRequest = z.infer<
 // produces longer summaries and longer observations (citations, clinical
 // context, "this matters because…" framing). The fast path is well under
 // these limits in normal use, so a single ceiling avoids a parallel schema.
+//
+// `sources` is the deep-mode citation list — URLs the model retrieved via
+// web_search to ground its clinical claims. Optional so fast-mode reports
+// (which never invoke web_search) can produce a valid tool input without
+// populating it.
 export const InsightResponseSchema = z.object({
   summary: z.string().min(1).max(4000),
   observations: z.array(z.string().min(1).max(2000)).max(16),
+  sources: z.array(z.string().url()).max(30).optional(),
 });
 
 export const INSIGHT_TOOL = {
@@ -180,13 +189,19 @@ export const INSIGHT_TOOL = {
       summary: {
         type: "string",
         description:
-          "A 2-4 sentence plain-language overview of the period, referencing the actual numbers.",
+          "A 2-4 sentence plain-language overview of the period, referencing the actual numbers. In deep mode this can be longer (3-5 sentences) and weave in clinical context, condition framing, and medication-response alignment.",
       },
       observations: {
         type: "array",
         items: { type: "string" },
         description:
-          "3-6 specific, factual observations. Each cites a concrete metric.",
+          "3-6 specific, factual observations in fast mode; 4-8 in deep mode. Each cites a concrete metric. In deep mode, observations should connect trends to the user's medications and conditions where applicable, and may cite a source URL inline.",
+      },
+      sources: {
+        type: "array",
+        items: { type: "string", format: "uri" },
+        description:
+          "Deep mode only: the URLs you retrieved via web_search to ground clinical claims. Required when web_search was used; omit when no external references back the observations.",
       },
     },
     required: ["summary", "observations"],
@@ -318,6 +333,9 @@ export function buildInsightsPrompt(req: AnalyticsInsightsRequest): string {
         `  Summary: ${p.summary}`,
       );
       for (const o of p.observations) lines.push(`  - ${o}`);
+      if (p.sources && p.sources.length > 0) {
+        lines.push(`  Sources previously cited: ${p.sources.join(", ")}`);
+      }
     }
     lines.push(
       "",
