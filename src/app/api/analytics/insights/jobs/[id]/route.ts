@@ -267,7 +267,7 @@ export const GET = withAuth(async ({ request, auth }) => {
         submitted.profile.medications.length > 0,
     );
 
-  await completeInsightJob(job.id, {
+  const completion = await completeInsightJob(job.id, {
     userId: auth.userId!,
     generatedAt,
     rangeStart: submitted.range.start,
@@ -276,6 +276,24 @@ export const GET = withAuth(async ({ request, auth }) => {
     observations: validated.data.observations,
     personalised,
   });
+
+  if (completion === null) {
+    // Lost the CAS race — another concurrent poller already finalised this
+    // job. Echo whatever that winning poller persisted so the client sees
+    // a consistent view (matching id, matching generatedAt) instead of our
+    // synthesised one. The winning row's status drives the response.
+    const winning = await getInsightJob(job.id, auth.userId!);
+    if (winning && winning.status === "completed") {
+      return respondCompleted(winning);
+    }
+    // Defensive: status flipped to failed/expired by the winner, or the
+    // row disappeared. Tell the client to poll again rather than asserting
+    // a synthetic outcome.
+    return NextResponse.json({
+      status: "pending" as const,
+      startedAt: job.createdAt,
+    });
+  }
 
   return NextResponse.json({
     status: "completed" as const,

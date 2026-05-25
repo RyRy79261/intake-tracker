@@ -33,6 +33,13 @@ const PAYLOAD = {
 
 let mockJob: MockJobRow | null = null;
 let mockReport: { narrative: string; observations: string[]; generatedAt: number } | null = null;
+// Override completeInsightJob's return value to simulate the CAS-loss path
+// (another concurrent poller already finalised the job).
+let completionReturn: { reportId: string } | null = { reportId: "report-test-1" };
+// Optional override for the SECOND getInsightJob call (used after a CAS
+// loss). When null the second call returns mockJob unchanged.
+let mockJobAfterCas: MockJobRow | null = null;
+let getJobCalls = 0;
 let batchProcessingStatus: "in_progress" | "ended" = "in_progress";
 let batchResults: Array<{
   custom_id: string;
@@ -57,6 +64,9 @@ const expireCalls: unknown[] = [];
 function resetState() {
   mockJob = null;
   mockReport = null;
+  completionReturn = { reportId: "report-test-1" };
+  mockJobAfterCas = null;
+  getJobCalls = 0;
   batchProcessingStatus = "in_progress";
   batchResults = [];
   completeCalls.length = 0;
@@ -113,15 +123,18 @@ vi.mock("@/app/api/ai/_shared/usage-tracker", () => ({
 
 vi.mock("@/lib/server/insight-job-service", () => ({
   getInsightJob: async (jobId: string, userId: string) => {
-    if (!mockJob || mockJob.id !== jobId || mockJob.userId !== userId) {
+    getJobCalls += 1;
+    // Second call after a CAS loss may return a different (winner's) row.
+    const row = getJobCalls > 1 && mockJobAfterCas ? mockJobAfterCas : mockJob;
+    if (!row || row.id !== jobId || row.userId !== userId) {
       return null;
     }
-    return mockJob;
+    return row;
   },
   completeInsightJob: async (jobId: string, report: unknown) => {
     completeCalls.push({ jobId, report });
     // Mirrors the real CAS return: null when the caller lost the race.
-    return { reportId: "report-test-1" };
+    return completionReturn;
   },
   failInsightJob: async (jobId: string, error: string) => {
     failCalls.push({ jobId, error });
@@ -407,6 +420,61 @@ describe("GET /api/analytics/insights/jobs/:id", () => {
     expect(body.status).toBe("pending");
     expect(failCalls).toHaveLength(0);
     expect(expireCalls).toHaveLength(0);
+  });
+
+  it("echoes the winning poller's persisted result when completeInsightJob loses the CAS race", async () => {
+    // Two pollers reach the finalisation step concurrently. This one loses
+    // the conditional update — completeInsightJob returns null — and must
+    // NOT respond with its own synthesised payload. Instead it should
+    // re-read the job (now flipped to completed by the winner) and echo
+    // the persisted result so both clients see the same data.
+    const startedAt = Date.now() - 60_000;
+    mockJob = {
+      id: "job-cas",
+      userId: "user-test",
+      batchId: "msgbatch_test_123",
+      status: "pending",
+      requestPayload: PAYLOAD,
+      resultReportId: null,
+      error: null,
+      createdAt: startedAt,
+      completedAt: null,
+    };
+    batchProcessingStatus = "ended";
+    batchResults = [
+      {
+        custom_id: "insight-1",
+        result: succeededResult({
+          summary: "Loser-pol summary, should NOT be returned.",
+          observations: ["Loser-pol observation."],
+        }),
+      },
+    ];
+    completionReturn = null; // Lost the race.
+    // The second getInsightJob call (after CAS loss) sees the winning
+    // poller's terminal state — status=completed with a result row.
+    mockJobAfterCas = {
+      ...mockJob,
+      status: "completed",
+      resultReportId: "report-winner",
+      completedAt: startedAt + 30_000,
+    };
+    mockReport = {
+      narrative: "Winner-pol summary.",
+      observations: ["Winner-pol observation."],
+      generatedAt: startedAt + 30_000,
+    };
+
+    const { GET } = await import("./route");
+    const res = await GET(makeRequest("job-cas"));
+    const body = (await res.json()) as {
+      status: string;
+      narrative: string;
+      observations: string[];
+    };
+    expect(body.status).toBe("completed");
+    expect(body.narrative).toBe("Winner-pol summary.");
+    expect(body.observations).toEqual(["Winner-pol observation."]);
   });
 
   it("echoes the cached result when the job is already completed", async () => {
