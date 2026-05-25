@@ -306,9 +306,21 @@ export const GET = withAuth(async ({ request, auth }) => {
     if (winning && winning.status === "completed") {
       return respondCompleted(winning);
     }
-    // Defensive: status flipped to failed/expired by the winner, or the
-    // row disappeared. Tell the client to poll again rather than asserting
-    // a synthetic outcome.
+    if (
+      winning &&
+      (winning.status === "failed" || winning.status === "expired")
+    ) {
+      // Propagate the winner's terminal state instead of pretending we're
+      // still pending — otherwise the client polls forever for a job the
+      // other branch already marked failed/expired.
+      return NextResponse.json({
+        status: winning.status,
+        error: winning.error ?? "Deep analysis did not complete.",
+        startedAt: job.createdAt,
+      });
+    }
+    // Defensive: winning row disappeared (extremely rare). Tell the client
+    // to poll again rather than asserting a synthetic outcome.
     return NextResponse.json({
       status: "pending" as const,
       startedAt: job.createdAt,

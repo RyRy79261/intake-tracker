@@ -19,8 +19,8 @@ test.describe('History / Analytics', () => {
     for (const tabName of ['Records', 'Summary', 'Correlations', 'Titration']) {
       await expect(page.locator('[role="tab"]', { hasText: tabName })).toBeVisible();
     }
-    // Records tab is active by default
-    await expect(page.locator('[role="tab"]', { hasText: 'Records' })).toHaveAttribute('data-state', 'active');
+    // Summary tab is active by default (the deep-vs-fast insights live here)
+    await expect(page.locator('[role="tab"]', { hasText: 'Summary' })).toHaveAttribute('data-state', 'active');
   });
 
   test('should switch between analytics tabs', async ({ page }) => {
@@ -36,7 +36,9 @@ test.describe('History / Analytics', () => {
   test('should show empty state on Records tab with no data', async ({ page }) => {
     // Fresh browser context = empty IndexedDB = no records
     await page.goto('/analytics');
-    await expect(page.locator('[role="tab"]', { hasText: 'Records' })).toBeVisible();
+    await dismissAnalyticsIntro(page);
+    // Records is no longer the default tab — click it explicitly.
+    await page.locator('[role="tab"]', { hasText: 'Records' }).click();
     // Records tab should at least render its tab panel (even if empty)
     await expect(page.locator('[role="tabpanel"][data-state="active"]')).toBeVisible();
   });
@@ -53,7 +55,9 @@ test.describe('History / Analytics', () => {
 
     // Step 2: Navigate to analytics and verify the record appears
     await page.goto('/analytics');
-    await expect(page.locator('[role="tab"]', { hasText: 'Records' })).toBeVisible();
+    await dismissAnalyticsIntro(page);
+    // Records is no longer the default tab — click it before asserting.
+    await page.locator('[role="tab"]', { hasText: 'Records' }).click();
     // Look for the BP reading in the records list (format: "130/85 mmHg")
     await expect(page.locator('text=130/85')).toBeVisible({ timeout: 10000 });
   });

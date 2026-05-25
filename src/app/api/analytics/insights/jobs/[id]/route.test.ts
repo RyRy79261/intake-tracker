@@ -422,6 +422,49 @@ describe("GET /api/analytics/insights/jobs/:id", () => {
     expect(expireCalls).toHaveLength(0);
   });
 
+  it("propagates the winner's failed state when completeInsightJob loses the CAS race to a failure", async () => {
+    // Two pollers race; the winning poller had already flipped the job to
+    // "failed" by the time this one tried to complete it. The losing
+    // poller MUST surface the persisted failure, not its own synthesised
+    // "completed" payload — otherwise the client gets contradictory
+    // status across pollers.
+    const startedAt = Date.now() - 60_000;
+    mockJob = {
+      id: "job-cas-fail",
+      userId: "user-test",
+      batchId: "msgbatch_test_123",
+      status: "pending",
+      requestPayload: PAYLOAD,
+      resultReportId: null,
+      error: null,
+      createdAt: startedAt,
+      completedAt: null,
+    };
+    batchProcessingStatus = "ended";
+    batchResults = [
+      {
+        custom_id: "insight-1",
+        result: succeededResult({
+          summary: "Loser-pol summary",
+          observations: ["Loser-pol observation."],
+        }),
+      },
+    ];
+    completionReturn = null;
+    mockJobAfterCas = {
+      ...mockJob,
+      status: "failed",
+      error: "Winner flipped this to failed.",
+      completedAt: startedAt + 30_000,
+    };
+
+    const { GET } = await import("./route");
+    const res = await GET(makeRequest("job-cas-fail"));
+    const body = (await res.json()) as { status: string; error: string };
+    expect(body.status).toBe("failed");
+    expect(body.error).toBe("Winner flipped this to failed.");
+  });
+
   it("echoes the winning poller's persisted result when completeInsightJob loses the CAS race", async () => {
     // Two pollers reach the finalisation step concurrently. This one loses
     // the conditional update — completeInsightJob returns null — and must

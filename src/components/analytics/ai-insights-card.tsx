@@ -61,15 +61,62 @@ const TRACKED_DATA = [
   "Your water goal, sodium limit & sugar limit",
 ];
 
-/** Best-effort hostname pretty-print for a source URL. Falls back to the
+/**
+ * Best-effort hostname pretty-print for a source URL. Falls back to the
  * raw string when the input cannot be parsed (e.g. shortened pre-validated
- * forms from older reports). */
+ * forms from older reports).
+ */
 function sourceLabel(url: string): string {
   try {
-    return new URL(url).hostname.replace(/^www\./, "");
+    const host = new URL(url).hostname.replace(/^www\./, "");
+    // URL.hostname is empty for schemes like `javascript:` or `data:`.
+    // Fall back to the raw URL so the user still sees something — and
+    // the XSS guard downstream keeps it from being clickable.
+    return host || url;
   } catch {
     return url;
   }
+}
+
+/**
+ * Anchor-safety guard: `z.string().url()` accepts `javascript:` and `data:`
+ * schemes, which we would NEVER want to render as a clickable link given
+ * the URL is model-generated. Only http(s) survives as an anchor; anything
+ * else falls back to plain text so the source still shows but cannot be
+ * activated.
+ */
+function isSafeHref(url: string): boolean {
+  try {
+    const protocol = new URL(url).protocol;
+    return protocol === "http:" || protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function SourceLink({ url }: { url: string }) {
+  const label = sourceLabel(url);
+  if (!isSafeHref(url)) {
+    return (
+      <span
+        className="text-muted-foreground"
+        title={`Unsafe URL scheme: ${url}`}
+      >
+        {label}
+      </span>
+    );
+  }
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-violet-600 dark:text-violet-400 hover:underline"
+      title={url}
+    >
+      {label}
+    </a>
+  );
 }
 
 /**
@@ -148,15 +195,7 @@ function ReportContent({ report }: { report: InsightReport }) {
           <ul className="flex flex-wrap gap-x-2 gap-y-1 text-xs">
             {report.sources.map((url, i) => (
               <li key={i}>
-                <a
-                  href={url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-violet-600 dark:text-violet-400 hover:underline"
-                  title={url}
-                >
-                  {sourceLabel(url)}
-                </a>
+                <SourceLink url={url} />
               </li>
             ))}
           </ul>

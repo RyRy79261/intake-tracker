@@ -95,6 +95,36 @@ describe("AiInsightsCard", () => {
     expect(screen.getByText("example.test")).toBeInTheDocument();
   });
 
+  it("never renders an anchor for a non-http source URL (XSS guard)", async () => {
+    // The model-generated sources field is zod-validated as a URL but
+    // z.url() accepts javascript: and data: schemes. The card MUST refuse
+    // to make those clickable; only http(s) survive as an <a>. Anything
+    // else falls back to plain text.
+    const user = userEvent.setup();
+    await renderWithFixtures(<AiInsightsCard />, {
+      seed: {
+        insightReports: [
+          makeInsightReport({
+            generatedAt: Date.now(),
+            narrative: "Deep summary with a malicious source.",
+            observations: ["Observation."],
+            sources: ["javascript:alert(1)"],
+            mode: "deep",
+          }),
+        ],
+      },
+    });
+
+    await user.click(
+      await screen.findByText("Deep summary with a malicious source."),
+    );
+
+    // The source still surfaces as plain text so the user sees it, but
+    // the renderer is plain text, NOT an <a> the user can activate.
+    const node = await screen.findByText("javascript:alert(1)");
+    expect(node.tagName).not.toBe("A");
+  });
+
   it("renders a 'Deep' badge on deep-mode cached reports", async () => {
     await renderWithFixtures(<AiInsightsCard />, {
       seed: {
