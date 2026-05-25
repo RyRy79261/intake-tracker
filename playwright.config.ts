@@ -50,6 +50,26 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
       },
     },
+    {
+      // iPhone 14 (Mobile Safari) — the app's primary target. The desktop
+      // chromium project already renders the mobile-first max-w-lg layout,
+      // but only iOS Safari exposes the touch-event quirks, the PWA install
+      // banner, and the 7-day storage-eviction semantics that matter on
+      // real devices. We deliberately scope this to the user-facing specs;
+      // sync-engine / mcp-connector / chaos exercise non-UI surfaces that
+      // would only double CI time without adding mobile-specific signal.
+      name: 'mobile-safari',
+      testMatch: [
+        'dashboard.spec.ts',
+        'medications.spec.ts',
+        'history.spec.ts',
+        'settings.spec.ts',
+        'a11y.spec.ts',
+      ],
+      use: {
+        ...devices['iPhone 14'],
+      },
+    },
   ],
 
   /* Run your local dev server before starting the tests */
