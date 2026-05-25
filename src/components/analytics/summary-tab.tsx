@@ -33,6 +33,7 @@ import {
 import { useRecordsTabData } from "@/hooks/use-records-tab-queries";
 import { useSettingsStore } from "@/stores/settings-store";
 import { AiInsightsCard } from "@/components/analytics/ai-insights-card";
+import { NutrientAnalysisCard } from "@/components/analytics/nutrient-analysis-card";
 import type { TimeRange, TrendDirection } from "@/lib/analytics-types";
 
 const TOOLTIP_STYLE = {
@@ -263,6 +264,7 @@ export function SummaryTab({ range }: { range: TimeRange }) {
   return (
     <div className="space-y-4">
       <AiInsightsCard />
+      <NutrientAnalysisCard />
 
       {/* KPI grid */}
       <div className="grid grid-cols-2 gap-2">
