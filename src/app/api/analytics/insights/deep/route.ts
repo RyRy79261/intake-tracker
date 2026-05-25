@@ -16,6 +16,8 @@ import {
 import { aiErrorResponse } from "@/app/api/ai/_shared/ai-error-response";
 import {
   createInsightJob,
+  attachBatchToJob,
+  deletePendingJob,
   PendingJobConflictError,
 } from "@/lib/server/insight-job-service";
 
@@ -94,10 +96,33 @@ export const POST = withAuth(async ({ request, auth }) => {
       `[AUDIT] analytics insights DEEP submit from user: ${auth.userId}`,
     );
 
+    // Reserve the pending-job slot BEFORE submitting to Anthropic. Doing it
+    // in the other order can leak a paid batch when a concurrent submission
+    // races: both calls succeed at Anthropic, but only one wins the unique
+    // index and the other batch becomes an orphan we can't reconcile.
+    let job;
+    try {
+      job = await createInsightJob({
+        userId: auth.userId!,
+        requestPayload: parsed.data,
+      });
+    } catch (e) {
+      if (e instanceof PendingJobConflictError) {
+        return NextResponse.json(
+          {
+            error: e.message,
+            code: "PENDING_JOB_EXISTS",
+          },
+          { status: 409 },
+        );
+      }
+      throw e;
+    }
+
     // The batch carries exactly one request. We use a stable custom_id so
     // the results stream is easy to match later (only one entry anyway, but
     // belts-and-braces if Anthropic ever bundles concurrent submissions).
-    const customId = `insight-${Date.now()}`;
+    const customId = `insight-${job.id}`;
 
     let batch;
     try {
@@ -129,29 +154,37 @@ export const POST = withAuth(async ({ request, auth }) => {
         ],
       });
     } catch (e) {
+      // Batch submission failed before any external state was created.
+      // Release the unique-index lock so the user can retry immediately.
+      await deletePendingJob(job.id, auth.userId!).catch((cleanupErr) =>
+        console.error(
+          "[analytics/insights/deep] failed to release pending job after batch error:",
+          cleanupErr,
+        ),
+      );
       const mapped = aiErrorResponse(e);
       if (mapped) return mapped;
       throw e;
     }
 
-    let job;
-    try {
-      job = await createInsightJob({
-        userId: auth.userId!,
-        batchId: batch.id,
-        requestPayload: parsed.data,
-      });
-    } catch (e) {
-      if (e instanceof PendingJobConflictError) {
-        return NextResponse.json(
-          {
-            error: e.message,
-            code: "PENDING_JOB_EXISTS",
-          },
-          { status: 409 },
-        );
-      }
-      throw e;
+    // Attach the real batch_id to the reserved row. If this fails, we have
+    // a paid batch with no DB record — cancel the batch so we don't keep
+    // racking up cost on something nothing will ever poll.
+    const attached = await attachBatchToJob(job.id, batch.id).catch(
+      () => false,
+    );
+    if (!attached) {
+      await client.messages.batches.cancel(batch.id).catch((cancelErr) =>
+        console.error(
+          "[analytics/insights/deep] failed to cancel orphaned batch:",
+          cancelErr,
+        ),
+      );
+      await deletePendingJob(job.id, auth.userId!).catch(() => undefined);
+      return NextResponse.json(
+        { error: "Failed to start deep analysis. Please try again." },
+        { status: 502 },
+      );
     }
 
     return NextResponse.json(

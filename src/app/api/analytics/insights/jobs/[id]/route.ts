@@ -93,6 +93,16 @@ export const GET = withAuth(async ({ request, auth }) => {
     });
   }
 
+  // Submission is still in flight — the reservation insert won the unique
+  // index but the batch_id hasn't been attached yet. Tell the client to
+  // keep polling; we'll have a batch to query on the next tick.
+  if (!job.batchId) {
+    return NextResponse.json({
+      status: "pending" as const,
+      startedAt: job.createdAt,
+    });
+  }
+
   let client;
   let resolved;
   try {

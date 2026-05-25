@@ -18,19 +18,29 @@ import { NoAiKeyError } from "@/lib/ai-key-resolver";
 
 let claudeClientThrows: Error | null = null;
 let batchesCreateThrows: Error | null = null;
+let batchCancelThrows: Error | null = null;
 let batchId = "msgbatch_test_123";
 
 let jobServiceThrows: Error | null = null;
+let attachReturns: boolean = true;
 const batchesCreateCalls: unknown[] = [];
+const batchesCancelCalls: string[] = [];
 const createJobCalls: unknown[] = [];
+const attachCalls: { jobId: string; batchId: string }[] = [];
+const deleteCalls: { jobId: string; userId: string }[] = [];
 
 function resetState() {
   claudeClientThrows = null;
   batchesCreateThrows = null;
+  batchCancelThrows = null;
   batchId = "msgbatch_test_123";
   jobServiceThrows = null;
+  attachReturns = true;
   batchesCreateCalls.length = 0;
+  batchesCancelCalls.length = 0;
   createJobCalls.length = 0;
+  attachCalls.length = 0;
+  deleteCalls.length = 0;
 }
 
 vi.mock("@/lib/auth-middleware", () => ({
@@ -70,6 +80,11 @@ vi.mock("@/app/api/ai/_shared/claude-client", () => ({
               if (batchesCreateThrows) throw batchesCreateThrows;
               return { id: batchId, processing_status: "in_progress" };
             },
+            cancel: async (id: string) => {
+              batchesCancelCalls.push(id);
+              if (batchCancelThrows) throw batchCancelThrows;
+              return { id, processing_status: "canceling" };
+            },
           },
         },
       },
@@ -90,7 +105,10 @@ vi.mock("@/lib/server/insight-job-service", async () => {
       return {
         id: "job-test-1",
         userId: "user-test",
-        batchId,
+        // After the refactor the job is reserved BEFORE the batch is
+        // submitted, so the row starts with batchId=null and is updated
+        // by attachBatchToJob.
+        batchId: null,
         status: "pending" as const,
         requestPayload: (input as { requestPayload: unknown }).requestPayload,
         resultReportId: null,
@@ -98,6 +116,13 @@ vi.mock("@/lib/server/insight-job-service", async () => {
         createdAt: 1_700_000_000_000,
         completedAt: null,
       };
+    },
+    attachBatchToJob: async (jobId: string, batchId: string) => {
+      attachCalls.push({ jobId, batchId });
+      return attachReturns;
+    },
+    deletePendingJob: async (jobId: string, userId: string) => {
+      deleteCalls.push({ jobId, userId });
     },
   };
 });
@@ -189,15 +214,59 @@ describe("POST /api/analytics/insights/deep", () => {
     expect(createJobCalls).toHaveLength(1);
     const call = createJobCalls[0] as {
       userId: string;
-      batchId: string;
       requestPayload: unknown;
     };
     expect(call.userId).toBe("user-test");
-    expect(call.batchId).toBe("msgbatch_test_123");
     expect(call.requestPayload).toMatchObject({
       range: { start: expect.any(Number), end: expect.any(Number) },
       metrics: { intake: expect.any(Object) },
     });
+  });
+
+  it("reserves the DB lock BEFORE submitting to Anthropic and attaches batchId afterwards", async () => {
+    const { POST } = await import("./route");
+    await POST(makeRequest(validBody()));
+
+    // The reservation has to land first — otherwise a duplicate submission
+    // can race and we'd pay for two batches with only one DB record.
+    expect(createJobCalls).toHaveLength(1);
+    expect(batchesCreateCalls).toHaveLength(1);
+    expect(attachCalls).toEqual([
+      { jobId: "job-test-1", batchId: "msgbatch_test_123" },
+    ]);
+    expect(deleteCalls).toHaveLength(0);
+  });
+
+  it("releases the pending-job reservation when Anthropic batch submission fails", async () => {
+    batchesCreateThrows = new Error("anthropic 500 internal");
+
+    const { POST } = await import("./route");
+    const res = await POST(makeRequest(validBody()));
+
+    expect(res.status).toBe(502);
+    // The reservation was taken but the batch never landed — the pending
+    // slot must be released so the user can retry immediately.
+    expect(createJobCalls).toHaveLength(1);
+    expect(deleteCalls).toEqual([
+      { jobId: "job-test-1", userId: "user-test" },
+    ]);
+    expect(attachCalls).toHaveLength(0);
+  });
+
+  it("cancels the orphaned batch when attaching batchId to the reserved job fails", async () => {
+    attachReturns = false;
+
+    const { POST } = await import("./route");
+    const res = await POST(makeRequest(validBody()));
+
+    expect(res.status).toBe(502);
+    expect(batchesCreateCalls).toHaveLength(1);
+    expect(attachCalls).toHaveLength(1);
+    // Without this, we'd keep paying for a batch nothing will ever poll.
+    expect(batchesCancelCalls).toEqual(["msgbatch_test_123"]);
+    expect(deleteCalls).toEqual([
+      { jobId: "job-test-1", userId: "user-test" },
+    ]);
   });
 
   it("returns 409 / PENDING_JOB_EXISTS when the user already has a pending deep job", async () => {

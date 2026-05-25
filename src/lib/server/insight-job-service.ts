@@ -28,7 +28,6 @@ const SERVER_DEVICE_ID = "server-deep-batch";
 
 export interface CreateInsightJobInput {
   userId: string;
-  batchId: string;
   // The raw validated request body so we can re-run / audit later without
   // depending on Anthropic retaining the message contents past 24h.
   requestPayload: unknown;
@@ -37,7 +36,7 @@ export interface CreateInsightJobInput {
 export interface InsightJobRow {
   id: string;
   userId: string;
-  batchId: string;
+  batchId: string | null;
   status: "pending" | "completed" | "failed" | "expired";
   requestPayload: unknown;
   resultReportId: string | null;
@@ -58,6 +57,19 @@ export class PendingJobConflictError extends Error {
   }
 }
 
+/**
+ * Reserve the pending-job slot for a user BEFORE submitting to Anthropic.
+ *
+ * The flow at the route is:
+ *   1. createInsightJob() — takes the unique-index lock, returns a job row
+ *      with batchId=null.
+ *   2. client.messages.batches.create() — pays for the batch.
+ *   3. attachBatchToJob() — writes the real batch_id onto the row.
+ *
+ * Doing the DB reservation first guarantees that two concurrent submissions
+ * from the same user can never both result in a paid batch (the second
+ * createInsightJob raises PendingJobConflictError before any API call).
+ */
 export async function createInsightJob(
   input: CreateInsightJobInput,
 ): Promise<InsightJobRow> {
@@ -77,7 +89,7 @@ export async function createInsightJob(
       .values({
         id,
         userId: input.userId,
-        batchId: input.batchId,
+        batchId: null,
         status: "pending",
         requestPayload: input.requestPayload as object,
         createdAt: now,
@@ -96,6 +108,44 @@ export async function createInsightJob(
     }
     throw e;
   }
+}
+
+/**
+ * Attach the Anthropic batch_id to a previously-reserved pending job.
+ * Returns true on success, false if the job is no longer pending (e.g.
+ * already failed by a cleanup path).
+ */
+export async function attachBatchToJob(
+  jobId: string,
+  batchId: string,
+): Promise<boolean> {
+  const updated = await db
+    .update(insightJobs)
+    .set({ batchId })
+    .where(and(eq(insightJobs.id, jobId), eq(insightJobs.status, "pending")))
+    .returning({ id: insightJobs.id });
+  return updated.length > 0;
+}
+
+/**
+ * Delete a pending job row outright. Used as the rollback path when batch
+ * submission to Anthropic fails BEFORE we have a real batch_id — the row
+ * has no external side-effect to preserve and removing it frees the
+ * unique-index lock immediately so the user can retry.
+ */
+export async function deletePendingJob(
+  jobId: string,
+  userId: string,
+): Promise<void> {
+  await db
+    .delete(insightJobs)
+    .where(
+      and(
+        eq(insightJobs.id, jobId),
+        eq(insightJobs.userId, userId),
+        eq(insightJobs.status, "pending"),
+      ),
+    );
 }
 
 export async function getInsightJob(
@@ -122,16 +172,24 @@ export interface PersistDeepReportInput {
 
 /**
  * Insert the freshly produced deep report into `insight_reports` and flip the
- * job to "completed", in a single atomic step the polling endpoint can call.
- * The row is stamped with `device_id = "server-deep-batch"` so the client's
- * sync pull recognises it as a foreign-device write rather than its own.
+ * job to "completed". The transition is guarded by a compare-and-set on
+ * `status='pending'` — the neon-http driver has no interactive transactions,
+ * so we use a conditional UPDATE + RETURNING to detect lost races between
+ * concurrent pollers. On a lost race we soft-delete the orphan report so it
+ * doesn't surface as a duplicate in the user's history.
+ *
+ * Returns `null` when the CAS lost — caller should treat it as "another
+ * poller already finalised this job" and just read the existing row.
  */
 export async function completeInsightJob(
   jobId: string,
   report: PersistDeepReportInput,
-): Promise<{ reportId: string }> {
+): Promise<{ reportId: string } | null> {
   const reportId = generateId();
   const now = Date.now();
+  // Insert the report first. If we lose the race below, we soft-delete it
+  // so the FK on result_report_id can still resolve from the winning row,
+  // and the deleted flag keeps it out of the active history view.
   await db.insert(insightReports).values({
     id: reportId,
     userId: report.userId,
@@ -147,40 +205,63 @@ export async function completeInsightJob(
     deletedAt: null,
     deviceId: SERVER_DEVICE_ID,
   });
-  await db
+
+  const updated = await db
     .update(insightJobs)
     .set({
       status: "completed",
       completedAt: now,
       resultReportId: reportId,
     })
-    .where(eq(insightJobs.id, jobId));
+    .where(and(eq(insightJobs.id, jobId), eq(insightJobs.status, "pending")))
+    .returning({ id: insightJobs.id });
+
+  if (updated.length === 0) {
+    // Another poller flipped the job first — soft-delete the orphan to
+    // keep history clean.
+    await db
+      .update(insightReports)
+      .set({ deletedAt: now, updatedAt: now })
+      .where(eq(insightReports.id, reportId));
+    return null;
+  }
+
   return { reportId };
 }
 
+/**
+ * Compare-and-set: only flips a still-pending job to "failed". Returns true
+ * when the caller won the race; false means another poller already marked
+ * the job terminal and the caller should defer to that outcome.
+ */
 export async function failInsightJob(
   jobId: string,
   error: string,
-): Promise<void> {
-  await db
+): Promise<boolean> {
+  const updated = await db
     .update(insightJobs)
     .set({
       status: "failed",
       completedAt: Date.now(),
       error,
     })
-    .where(eq(insightJobs.id, jobId));
+    .where(and(eq(insightJobs.id, jobId), eq(insightJobs.status, "pending")))
+    .returning({ id: insightJobs.id });
+  return updated.length > 0;
 }
 
-export async function expireInsightJob(jobId: string): Promise<void> {
-  await db
+/** Same compare-and-set semantics as failInsightJob — see above. */
+export async function expireInsightJob(jobId: string): Promise<boolean> {
+  const updated = await db
     .update(insightJobs)
     .set({
       status: "expired",
       completedAt: Date.now(),
       error: "Batch exceeded the 24-hour SLA without completing.",
     })
-    .where(eq(insightJobs.id, jobId));
+    .where(and(eq(insightJobs.id, jobId), eq(insightJobs.status, "pending")))
+    .returning({ id: insightJobs.id });
+  return updated.length > 0;
 }
 
 /**

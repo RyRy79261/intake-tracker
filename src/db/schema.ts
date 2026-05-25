@@ -730,13 +730,22 @@ export const insightJobs = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => usersSync.id, { onDelete: "cascade" }),
-    batchId: text("batch_id").notNull(),
+    // Nullable: we reserve the pending-job lock BEFORE submitting to
+    // Anthropic so a duplicate submission is rejected by the DB rather
+    // than leaking a paid batch. The polling endpoint only treats jobs
+    // with a non-null batch_id as actually submitted.
+    batchId: text("batch_id"),
     status: text("status").notNull(),
     // The validated AnalyticsInsightsRequest that was submitted, so we can
     // re-run or audit later without depending on Anthropic retaining bodies.
     requestPayload: jsonb("request_payload").notNull(),
-    // Set when the row flips to "completed" — points at the persisted report.
-    resultReportId: text("result_report_id"),
+    // FK with ON DELETE SET NULL so a hard-deleted insight_reports row
+    // doesn't leave a dangling reference on the historical job. Soft-delete
+    // is the normal path; this guards the rare hard-delete (data clear).
+    resultReportId: text("result_report_id").references(
+      (): typeof insightReports.id => insightReports.id,
+      { onDelete: "set null" },
+    ),
     // Free-text error from Anthropic or from server-side validation on
     // completion (e.g. tool_use input failed schema). Populated when
     // status="failed".

@@ -17,7 +17,7 @@ import { NextRequest } from "next/server";
 interface MockJobRow {
   id: string;
   userId: string;
-  batchId: string;
+  batchId: string | null;
   status: "pending" | "completed" | "failed" | "expired";
   requestPayload: unknown;
   resultReportId: string | null;
@@ -120,13 +120,16 @@ vi.mock("@/lib/server/insight-job-service", () => ({
   },
   completeInsightJob: async (jobId: string, report: unknown) => {
     completeCalls.push({ jobId, report });
+    // Mirrors the real CAS return: null when the caller lost the race.
     return { reportId: "report-test-1" };
   },
   failInsightJob: async (jobId: string, error: string) => {
     failCalls.push({ jobId, error });
+    return true;
   },
   expireInsightJob: async (jobId: string) => {
     expireCalls.push({ jobId });
+    return true;
   },
   getReportForJob: async () => mockReport,
 }));
@@ -315,6 +318,95 @@ describe("GET /api/analytics/insights/jobs/:id", () => {
     const body = (await res.json()) as { status: string; error: string };
     expect(body.status).toBe("expired");
     expect(expireCalls).toHaveLength(1);
+  });
+
+  it("flips the job to failed when the tool output fails InsightResponseSchema validation", async () => {
+    mockJob = {
+      id: "job-7",
+      userId: "user-test",
+      batchId: "msgbatch_test_123",
+      status: "pending",
+      requestPayload: PAYLOAD,
+      resultReportId: null,
+      error: null,
+      createdAt: Date.now() - 60_000,
+      completedAt: null,
+    };
+    batchProcessingStatus = "ended";
+    // Missing the required `observations` array — Zod rejects it.
+    batchResults = [
+      {
+        custom_id: "insight-1",
+        result: succeededResult({ summary: "Partial answer only." }),
+      },
+    ];
+
+    const { GET } = await import("./route");
+    const res = await GET(makeRequest("job-7"));
+    const body = (await res.json()) as { status: string; error: string };
+    expect(body.status).toBe("failed");
+    expect(body.error).toMatch(/structural validation/i);
+    expect(failCalls).toHaveLength(1);
+    expect(completeCalls).toHaveLength(0);
+  });
+
+  it("flips the job to failed when the model returned only plain text (no tool call)", async () => {
+    mockJob = {
+      id: "job-8",
+      userId: "user-test",
+      batchId: "msgbatch_test_123",
+      status: "pending",
+      requestPayload: PAYLOAD,
+      resultReportId: null,
+      error: null,
+      createdAt: Date.now() - 60_000,
+      completedAt: null,
+    };
+    batchProcessingStatus = "ended";
+    batchResults = [
+      {
+        custom_id: "insight-1",
+        result: {
+          type: "succeeded" as const,
+          message: {
+            content: [{ type: "text", text: "Here is a plain prose reply." }],
+            stop_reason: "end_turn",
+            usage: { input_tokens: 20, output_tokens: 10 },
+          },
+        },
+      },
+    ];
+
+    const { GET } = await import("./route");
+    const res = await GET(makeRequest("job-8"));
+    const body = (await res.json()) as { status: string; error: string };
+    expect(body.status).toBe("failed");
+    expect(body.error).toMatch(/no tool call/i);
+    expect(failCalls).toHaveLength(1);
+    expect(completeCalls).toHaveLength(0);
+  });
+
+  it("returns status=pending when the row's batch_id has not been attached yet", async () => {
+    // Transient state right after the route reserves the slot but before
+    // attachBatchToJob lands — must not call Anthropic.
+    mockJob = {
+      id: "job-9",
+      userId: "user-test",
+      batchId: null,
+      status: "pending",
+      requestPayload: PAYLOAD,
+      resultReportId: null,
+      error: null,
+      createdAt: Date.now() - 1_000,
+      completedAt: null,
+    };
+
+    const { GET } = await import("./route");
+    const res = await GET(makeRequest("job-9"));
+    const body = (await res.json()) as { status: string };
+    expect(body.status).toBe("pending");
+    expect(failCalls).toHaveLength(0);
+    expect(expireCalls).toHaveLength(0);
   });
 
   it("echoes the cached result when the job is already completed", async () => {

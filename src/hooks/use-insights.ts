@@ -375,59 +375,64 @@ export function useDeepInsightJob() {
   const submit = useCallback(
     async (input: DeepJobInput): Promise<void> => {
       setState({ status: "submitting" });
-      const snapshot = await buildAnalyticsSnapshot(
-        input.range,
-        input.goals,
-        input.conditions,
-        input.includeMedications,
-      );
-      if (snapshotIsEmpty(snapshot)) {
-        setState({ status: "idle" });
-        throw new NotEnoughDataError();
-      }
-      if (input.includePrevious) {
-        const previous = await getLatestInsightReport();
-        if (previous) {
-          const priorAssessment: PriorAssessment = {
-            generatedAt: previous.generatedAt,
-            rangeStart: previous.rangeStart,
-            rangeEnd: previous.rangeEnd,
-            summary: previous.narrative,
-            observations: previous.observations,
-          };
-          snapshot.priorAssessments = [priorAssessment];
-        }
-      }
-
-      const res = await apiFetch("/api/analytics/insights/deep", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(snapshot),
-      });
-      const body = (await res.json().catch(() => null)) as {
-        jobId?: string;
-        startedAt?: number;
-        status?: string;
-        error?: string;
-      } | null;
-
-      if (!res.ok || !body?.jobId) {
-        setState({ status: "idle" });
-        throw new Error(
-          body?.error ?? "Failed to start deep analysis.",
+      try {
+        const snapshot = await buildAnalyticsSnapshot(
+          input.range,
+          input.goals,
+          input.conditions,
+          input.includeMedications,
         );
-      }
+        if (snapshotIsEmpty(snapshot)) {
+          throw new NotEnoughDataError();
+        }
+        if (input.includePrevious) {
+          const previous = await getLatestInsightReport();
+          if (previous) {
+            const priorAssessment: PriorAssessment = {
+              generatedAt: previous.generatedAt,
+              rangeStart: previous.rangeStart,
+              rangeEnd: previous.rangeEnd,
+              summary: previous.narrative,
+              observations: previous.observations,
+            };
+            snapshot.priorAssessments = [priorAssessment];
+          }
+        }
 
-      const stored: StoredPendingJob = {
-        jobId: body.jobId,
-        startedAt: body.startedAt ?? Date.now(),
-      };
-      writeStoredJob(stored);
-      setState({
-        status: "pending",
-        jobId: stored.jobId,
-        startedAt: stored.startedAt,
-      });
+        const res = await apiFetch("/api/analytics/insights/deep", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(snapshot),
+        });
+        const body = (await res.json().catch(() => null)) as {
+          jobId?: string;
+          startedAt?: number;
+          status?: string;
+          error?: string;
+        } | null;
+
+        if (!res.ok || !body?.jobId) {
+          throw new Error(body?.error ?? "Failed to start deep analysis.");
+        }
+
+        const stored: StoredPendingJob = {
+          jobId: body.jobId,
+          startedAt: body.startedAt ?? Date.now(),
+        };
+        writeStoredJob(stored);
+        setState({
+          status: "pending",
+          jobId: stored.jobId,
+          startedAt: stored.startedAt,
+        });
+      } catch (e) {
+        // Any pre-submit throw (snapshot build, Dexie read, fetch error,
+        // non-OK response) must leave the UI re-clickable; the previous
+        // version only reset on a couple of branches and could wedge the
+        // card on a "Submitting…" button forever.
+        setState({ status: "idle" });
+        throw e;
+      }
     },
     [],
   );
