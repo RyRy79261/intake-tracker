@@ -1,0 +1,174 @@
+import { NextResponse } from "next/server";
+import { withAuth } from "@/lib/auth-middleware";
+import {
+  AnalyticsInsightsRequestSchema,
+  INSIGHT_TOOL,
+  INSIGHTS_SYSTEM_PROMPT,
+  buildInsightsPrompt,
+} from "@/lib/analytics-insights";
+import { parseJsonBody, zodErrorResponse } from "@/app/api/_shared/validation";
+import { createRateLimiter, getClientIp } from "@/app/api/_shared/rate-limit";
+import {
+  getClaudeClientForUser,
+  CLAUDE_MODELS,
+  WEB_SEARCH_TOOL,
+} from "@/app/api/ai/_shared/claude-client";
+import { aiErrorResponse } from "@/app/api/ai/_shared/ai-error-response";
+import {
+  createInsightJob,
+  PendingJobConflictError,
+} from "@/lib/server/insight-job-service";
+
+/**
+ * Async deep-research analytics insights — submits an Anthropic Message Batch
+ * with Opus 4.6 and the web-search tool, returns immediately with a jobId the
+ * client can poll. See ./jobs/[id]/route.ts for the polling endpoint.
+ *
+ * Why a batch and not a streaming long-running call:
+ *   - Batches survive client disconnect, browser close, and Vercel timeouts.
+ *   - Anthropic charges batches at 50% of standard pricing.
+ *   - The 24h SLA is well above typical deep-research completion (<10 min).
+ *
+ * The request body is the same `AnalyticsInsightsRequest` as the fast route,
+ * so the client can submit either with the same payload — only the button
+ * routes to a different endpoint.
+ */
+
+export const runtime = "nodejs";
+
+// Throttle the SUBMISSION side; the polling endpoint is intentionally cheap
+// and not rate-limited. One pending job per user (enforced by a DB unique
+// index) handles abuse on the long-running side.
+const rateLimiter = createRateLimiter(10);
+
+// More headroom than the fast Sonnet path. Deep research summaries are
+// allowed to be longer and incorporate citations from the searches.
+const DEEP_MAX_TOKENS = 4096;
+
+// Cap web-search invocations so a runaway plan can't fan out. ~12 is enough
+// to cover the 5-7 metric domains the snapshot can contain plus a couple of
+// follow-ups, but not so high it explodes cost.
+const DEEP_WEB_SEARCH_MAX_USES = 12;
+
+const DEEP_SYSTEM_PROMPT = `${INSIGHTS_SYSTEM_PROMPT}
+
+You have access to the web_search tool. Use it to look up current clinical
+references when they would help explain why a metric matters for this user —
+e.g. published target ranges, guideline thresholds, or recently updated
+recommendations relevant to the user-reported conditions. Cite specific
+numbers from your sources when you use them.
+
+Treat web search as supporting context, not a substitute for the metrics you
+were given. Do not browse beyond what is needed to ground the observations
+you would already have made from the numeric snapshot. When you are ready
+to deliver the final answer, call the analytics_insight tool exactly once.`;
+
+export const POST = withAuth(async ({ request, auth }) => {
+  try {
+    const ip = getClientIp(request);
+    if (!rateLimiter.check(ip)) {
+      return NextResponse.json(
+        { error: "Rate limit exceeded. Please try again later." },
+        { status: 429 },
+      );
+    }
+
+    const json = await parseJsonBody(request);
+    if (!json.ok) return json.response;
+
+    const parsed = AnalyticsInsightsRequestSchema.safeParse(json.body);
+    if (!parsed.success) {
+      return zodErrorResponse("Invalid analytics payload", parsed.error);
+    }
+
+    let client;
+    try {
+      ({ client } = await getClaudeClientForUser(auth.userId!, auth.email));
+    } catch (e) {
+      const mapped = aiErrorResponse(e);
+      if (mapped) return mapped;
+      throw e;
+    }
+
+    console.log(
+      `[AUDIT] analytics insights DEEP submit from user: ${auth.userId}`,
+    );
+
+    // The batch carries exactly one request. We use a stable custom_id so
+    // the results stream is easy to match later (only one entry anyway, but
+    // belts-and-braces if Anthropic ever bundles concurrent submissions).
+    const customId = `insight-${Date.now()}`;
+
+    let batch;
+    try {
+      batch = await client.messages.batches.create({
+        requests: [
+          {
+            custom_id: customId,
+            params: {
+              model: CLAUDE_MODELS.premium,
+              max_tokens: DEEP_MAX_TOKENS,
+              temperature: 0.3,
+              system: DEEP_SYSTEM_PROMPT,
+              tools: [
+                { ...WEB_SEARCH_TOOL, max_uses: DEEP_WEB_SEARCH_MAX_USES },
+                INSIGHT_TOOL,
+              ],
+              // Auto so the model can run web_search before deciding it has
+              // enough to call analytics_insight. Forcing analytics_insight
+              // would block web_search calls before the final tool.
+              tool_choice: { type: "auto" },
+              messages: [
+                {
+                  role: "user",
+                  content: buildInsightsPrompt(parsed.data),
+                },
+              ],
+            },
+          },
+        ],
+      });
+    } catch (e) {
+      const mapped = aiErrorResponse(e);
+      if (mapped) return mapped;
+      throw e;
+    }
+
+    let job;
+    try {
+      job = await createInsightJob({
+        userId: auth.userId!,
+        batchId: batch.id,
+        requestPayload: parsed.data,
+      });
+    } catch (e) {
+      if (e instanceof PendingJobConflictError) {
+        return NextResponse.json(
+          {
+            error: e.message,
+            code: "PENDING_JOB_EXISTS",
+          },
+          { status: 409 },
+        );
+      }
+      throw e;
+    }
+
+    return NextResponse.json(
+      {
+        jobId: job.id,
+        status: "pending" as const,
+        startedAt: job.createdAt,
+      },
+      { status: 202 },
+    );
+  } catch (error) {
+    const mapped = aiErrorResponse(error);
+    if (mapped) return mapped;
+    console.error("[analytics/insights/deep] error:", error);
+    return NextResponse.json(
+      { error: "Failed to start deep analysis" },
+      { status: 502 },
+    );
+  }
+});

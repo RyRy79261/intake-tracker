@@ -1,0 +1,349 @@
+/**
+ * Tests for GET /api/analytics/insights/jobs/:id — polling endpoint for
+ * the async deep-research batch.
+ *
+ * Strategy:
+ *   - Mock @/lib/auth-middleware with a fixed user.
+ *   - Mock @/lib/server/insight-job-service so the test controls the row
+ *     state and captures completeInsightJob / failInsightJob calls.
+ *   - Mock @/app/api/ai/_shared/claude-client so batches.retrieve and
+ *     batches.results are deterministic.
+ */
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { NextRequest } from "next/server";
+
+// ── Controllable stubs ───────────────────────────────────────────────────
+
+interface MockJobRow {
+  id: string;
+  userId: string;
+  batchId: string;
+  status: "pending" | "completed" | "failed" | "expired";
+  requestPayload: unknown;
+  resultReportId: string | null;
+  error: string | null;
+  createdAt: number;
+  completedAt: number | null;
+}
+
+const PAYLOAD = {
+  range: { start: 1_700_000_000_000 - 30 * 86_400_000, end: 1_700_000_000_000 },
+  metrics: { intake: { avgWaterMl: 1800, avgSodiumMg: 2100, avgSugarG: 40 } },
+};
+
+let mockJob: MockJobRow | null = null;
+let mockReport: { narrative: string; observations: string[]; generatedAt: number } | null = null;
+let batchProcessingStatus: "in_progress" | "ended" = "in_progress";
+let batchResults: Array<{
+  custom_id: string;
+  result:
+    | {
+        type: "succeeded";
+        message: {
+          content: Array<{ type: string; name?: string; input?: unknown; text?: string }>;
+          stop_reason: string;
+          usage: { input_tokens: number; output_tokens: number };
+        };
+      }
+    | { type: "errored"; error: { error: { type: string; message: string } } }
+    | { type: "expired" }
+    | { type: "canceled" };
+}> = [];
+
+const completeCalls: unknown[] = [];
+const failCalls: unknown[] = [];
+const expireCalls: unknown[] = [];
+
+function resetState() {
+  mockJob = null;
+  mockReport = null;
+  batchProcessingStatus = "in_progress";
+  batchResults = [];
+  completeCalls.length = 0;
+  failCalls.length = 0;
+  expireCalls.length = 0;
+}
+
+vi.mock("@/lib/auth-middleware", () => ({
+  withAuth: (
+    handler: (ctx: {
+      request: NextRequest;
+      auth: { success: true; userId: string; email: string };
+    }) => Promise<Response>,
+  ) => {
+    return async (request: NextRequest) =>
+      handler({
+        request,
+        auth: { success: true, userId: "user-test", email: "test@example.test" },
+      });
+  },
+}));
+
+vi.mock("@/app/api/ai/_shared/claude-client", () => ({
+  CLAUDE_MODELS: {
+    fast: "claude-haiku-test",
+    quality: "claude-sonnet-test",
+    premium: "claude-opus-test",
+  },
+  WEB_SEARCH_TOOL: { type: "web_search_20250305", name: "web_search", max_uses: 5 },
+  getClaudeClientForUser: async () => ({
+    client: {
+      messages: {
+        batches: {
+          retrieve: async () => ({
+            id: "msgbatch_test_123",
+            processing_status: batchProcessingStatus,
+          }),
+          results: async () => ({
+            async *[Symbol.asyncIterator]() {
+              for (const entry of batchResults) yield entry;
+            },
+          }),
+        },
+      },
+    },
+    resolved: { keyOwnerId: "user-test", source: "env" },
+  }),
+}));
+
+vi.mock("@/app/api/ai/_shared/usage-tracker", () => ({
+  recordUsage: () => undefined,
+  tokensFromAnthropic: () => ({ inputTokens: 20, outputTokens: 10 }),
+}));
+
+vi.mock("@/lib/server/insight-job-service", () => ({
+  getInsightJob: async (jobId: string, userId: string) => {
+    if (!mockJob || mockJob.id !== jobId || mockJob.userId !== userId) {
+      return null;
+    }
+    return mockJob;
+  },
+  completeInsightJob: async (jobId: string, report: unknown) => {
+    completeCalls.push({ jobId, report });
+    return { reportId: "report-test-1" };
+  },
+  failInsightJob: async (jobId: string, error: string) => {
+    failCalls.push({ jobId, error });
+  },
+  expireInsightJob: async (jobId: string) => {
+    expireCalls.push({ jobId });
+  },
+  getReportForJob: async () => mockReport,
+}));
+
+// ── Helpers ──────────────────────────────────────────────────────────────
+
+function makeRequest(jobId: string): NextRequest {
+  return new NextRequest(
+    `https://example.test/api/analytics/insights/jobs/${jobId}`,
+    { method: "GET" },
+  );
+}
+
+function succeededResult(input: unknown, stopReason: string = "tool_use") {
+  return {
+    type: "succeeded" as const,
+    message: {
+      content: [
+        { type: "tool_use", name: "analytics_insight", input },
+      ],
+      stop_reason: stopReason,
+      usage: { input_tokens: 20, output_tokens: 10 },
+    },
+  };
+}
+
+// ── Tests ────────────────────────────────────────────────────────────────
+
+describe("GET /api/analytics/insights/jobs/:id", () => {
+  beforeEach(() => {
+    resetState();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("returns 404 when the job is not found", async () => {
+    const { GET } = await import("./route");
+    const res = await GET(makeRequest("missing"));
+    expect(res.status).toBe(404);
+  });
+
+  it("returns status=pending while the batch is still in progress", async () => {
+    mockJob = {
+      id: "job-1",
+      userId: "user-test",
+      batchId: "msgbatch_test_123",
+      status: "pending",
+      requestPayload: PAYLOAD,
+      resultReportId: null,
+      error: null,
+      createdAt: Date.now() - 60_000,
+      completedAt: null,
+    };
+    batchProcessingStatus = "in_progress";
+
+    const { GET } = await import("./route");
+    const res = await GET(makeRequest("job-1"));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { status: string; startedAt: number };
+    expect(body.status).toBe("pending");
+    expect(typeof body.startedAt).toBe("number");
+    expect(completeCalls).toHaveLength(0);
+    expect(failCalls).toHaveLength(0);
+  });
+
+  it("finalises and returns the result when the batch ended and the tool output is valid", async () => {
+    mockJob = {
+      id: "job-2",
+      userId: "user-test",
+      batchId: "msgbatch_test_123",
+      status: "pending",
+      requestPayload: PAYLOAD,
+      resultReportId: null,
+      error: null,
+      createdAt: Date.now() - 5 * 60_000,
+      completedAt: null,
+    };
+    batchProcessingStatus = "ended";
+    batchResults = [
+      {
+        custom_id: "insight-1",
+        result: succeededResult({
+          summary: "Sodium averaged 2100 mg against a 2300 mg limit.",
+          observations: [
+            "Water averaged 1800 ml — 700 ml below the 2500 ml goal.",
+          ],
+        }),
+      },
+    ];
+
+    const { GET } = await import("./route");
+    const res = await GET(makeRequest("job-2"));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      status: string;
+      narrative: string;
+      observations: string[];
+    };
+    expect(body.status).toBe("completed");
+    expect(body.narrative).toContain("2100 mg");
+    expect(body.observations).toHaveLength(1);
+    expect(completeCalls).toHaveLength(1);
+    expect(failCalls).toHaveLength(0);
+  });
+
+  it("flips the job to failed when the model truncated at max_tokens", async () => {
+    mockJob = {
+      id: "job-3",
+      userId: "user-test",
+      batchId: "msgbatch_test_123",
+      status: "pending",
+      requestPayload: PAYLOAD,
+      resultReportId: null,
+      error: null,
+      createdAt: Date.now() - 60_000,
+      completedAt: null,
+    };
+    batchProcessingStatus = "ended";
+    batchResults = [
+      {
+        custom_id: "insight-1",
+        result: succeededResult(
+          { summary: "Comparison started but was cut off…" },
+          "max_tokens",
+        ),
+      },
+    ];
+
+    const { GET } = await import("./route");
+    const res = await GET(makeRequest("job-3"));
+    const body = (await res.json()) as { status: string; error: string };
+    expect(body.status).toBe("failed");
+    expect(body.error).toMatch(/cut off/i);
+    expect(failCalls).toHaveLength(1);
+    expect(completeCalls).toHaveLength(0);
+  });
+
+  it("flips the job to failed when Anthropic returns an errored individual result", async () => {
+    mockJob = {
+      id: "job-4",
+      userId: "user-test",
+      batchId: "msgbatch_test_123",
+      status: "pending",
+      requestPayload: PAYLOAD,
+      resultReportId: null,
+      error: null,
+      createdAt: Date.now() - 60_000,
+      completedAt: null,
+    };
+    batchProcessingStatus = "ended";
+    batchResults = [
+      {
+        custom_id: "insight-1",
+        result: {
+          type: "errored",
+          error: { error: { type: "overloaded", message: "service overloaded" } },
+        },
+      },
+    ];
+
+    const { GET } = await import("./route");
+    const res = await GET(makeRequest("job-4"));
+    const body = (await res.json()) as { status: string; error: string };
+    expect(body.status).toBe("failed");
+    expect(failCalls).toHaveLength(1);
+  });
+
+  it("flips the job to expired when it has been pending past the 24h SLA", async () => {
+    const SLA_MS = 24 * 60 * 60 * 1000;
+    mockJob = {
+      id: "job-5",
+      userId: "user-test",
+      batchId: "msgbatch_test_123",
+      status: "pending",
+      requestPayload: PAYLOAD,
+      resultReportId: null,
+      error: null,
+      createdAt: Date.now() - SLA_MS - 60_000,
+      completedAt: null,
+    };
+
+    const { GET } = await import("./route");
+    const res = await GET(makeRequest("job-5"));
+    const body = (await res.json()) as { status: string; error: string };
+    expect(body.status).toBe("expired");
+    expect(expireCalls).toHaveLength(1);
+  });
+
+  it("echoes the cached result when the job is already completed", async () => {
+    mockJob = {
+      id: "job-6",
+      userId: "user-test",
+      batchId: "msgbatch_test_123",
+      status: "completed",
+      requestPayload: PAYLOAD,
+      resultReportId: "report-test-1",
+      error: null,
+      createdAt: Date.now() - 60 * 60_000,
+      completedAt: Date.now() - 30 * 60_000,
+    };
+    mockReport = {
+      narrative: "Cached deep summary.",
+      observations: ["One observation."],
+      generatedAt: Date.now() - 30 * 60_000,
+    };
+
+    const { GET } = await import("./route");
+    const res = await GET(makeRequest("job-6"));
+    const body = (await res.json()) as {
+      status: string;
+      narrative: string;
+      observations: string[];
+    };
+    expect(body.status).toBe("completed");
+    expect(body.narrative).toBe("Cached deep summary.");
+    expect(body.observations).toEqual(["One observation."]);
+  });
+});

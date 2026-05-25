@@ -14,9 +14,9 @@ import { parseDbSchema } from "@/__tests__/integrity/parse-schema";
 describe("schema parser self-test", () => {
   it("parses all version blocks from db.ts", () => {
     const versions = parseDbSchema();
-    expect(versions).toHaveLength(10);
+    expect(versions).toHaveLength(11);
     expect(versions.map((v) => v.version)).toEqual([
-      10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+      10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
     ]);
   });
 

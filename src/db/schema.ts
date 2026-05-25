@@ -689,17 +689,76 @@ export const insightReports = pgTable(
     narrative: text("narrative").notNull(),
     observations: text("observations").array().notNull(),
     personalised: boolean("personalised").notNull(),
+    // "fast" = sync Sonnet summary; "deep" = async Opus + web-search deep
+    // research. Nullable for backward compatibility with rows written before
+    // the two-tier rollout (treated as "fast" by the client).
+    mode: text("mode"),
     createdAt: bigint("created_at", { mode: "number" }).notNull(),
     updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
     deletedAt: bigint("deleted_at", { mode: "number" }),
     deviceId: text("device_id").notNull(),
   },
   (t) => ({
+    modeCheck: check(
+      "insight_reports_mode_check",
+      sql`${t.mode} IS NULL OR ${t.mode} IN ('fast','deep')`,
+    ),
     userUpdatedIdx: index("idx_insight_reports_user_updated").on(
       t.userId,
       t.updatedAt,
     ),
     generatedAtIdx: index("idx_insight_reports_generated").on(t.generatedAt),
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────────────────
+// Deep-research insight jobs — server-only state for async batch requests.
+//
+// Each row tracks one Anthropic Message Batches submission for the deep
+// analytics summary (Opus 4.6 + web search). Polling endpoints look up the
+// row, ask Anthropic for batch status, and on completion persist the result
+// to `insight_reports` (synced) and flip status to "completed".
+//
+// Server-only — does NOT participate in Dexie sync. One pending job per user
+// is enforced by a partial unique index on user_id.
+// ─────────────────────────────────────────────────────────────────────────
+
+export const insightJobs = pgTable(
+  "insight_jobs",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => usersSync.id, { onDelete: "cascade" }),
+    batchId: text("batch_id").notNull(),
+    status: text("status").notNull(),
+    // The validated AnalyticsInsightsRequest that was submitted, so we can
+    // re-run or audit later without depending on Anthropic retaining bodies.
+    requestPayload: jsonb("request_payload").notNull(),
+    // Set when the row flips to "completed" — points at the persisted report.
+    resultReportId: text("result_report_id"),
+    // Free-text error from Anthropic or from server-side validation on
+    // completion (e.g. tool_use input failed schema). Populated when
+    // status="failed".
+    error: text("error"),
+    createdAt: bigint("created_at", { mode: "number" }).notNull(),
+    completedAt: bigint("completed_at", { mode: "number" }),
+  },
+  (t) => ({
+    statusCheck: check(
+      "insight_jobs_status_check",
+      sql`${t.status} IN ('pending','completed','failed','expired')`,
+    ),
+    // One pending job per user — partial unique index, only enforced on
+    // pending rows so completed/failed history can accumulate freely.
+    onePendingPerUser: uniqueIndex("insight_jobs_one_pending_per_user_uq")
+      .on(t.userId)
+      .where(sql`status = 'pending'`),
+    userCreatedIdx: index("idx_insight_jobs_user_created").on(
+      t.userId,
+      t.createdAt,
+    ),
+    batchIdx: index("idx_insight_jobs_batch").on(t.batchId),
   }),
 );
 

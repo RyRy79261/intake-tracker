@@ -21,6 +21,11 @@ export interface NewInsightReport {
   narrative: string;
   observations: string[];
   personalised: boolean;
+  /**
+   * "fast" = sync Sonnet summary; "deep" = async Opus + web-search deep
+   * research. Defaults to "fast" for backward-compat callers that omit it.
+   */
+  mode?: "fast" | "deep";
 }
 
 /** All cached reports, active rows only, newest generated first. */
@@ -50,6 +55,7 @@ export async function saveInsightReport(
       narrative: input.narrative,
       observations: input.observations,
       personalised: input.personalised,
+      mode: input.mode ?? "fast",
       createdAt: now,
       updatedAt: now,
       deletedAt: null,
