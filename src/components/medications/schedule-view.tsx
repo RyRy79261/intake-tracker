@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useEffect, useState, useCallback } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { useDailyDoseSchedule, useTakeDose, useUntakeDose, useSkipDose, useTakeAllDoses, useEditDoseTime } from "@/hooks/use-medication-queries";
 import type { DoseSlot } from "@/hooks/use-medication-queries";
 import { hapticTake, hapticSkip, getCurrentTimeHHMM } from "@/lib/medication-ui-utils";
@@ -108,18 +108,6 @@ export function ScheduleView({ selectedDate, onDoseClick, onAddMed }: ScheduleVi
     }
     return Array.from(names);
   }, [slots]);
-
-  // Auto-scroll to next upcoming time slot on mount
-  useEffect(() => {
-    if (isToday && nextUpcomingTime) {
-      const el = document.getElementById(`time-slot-${nextUpcomingTime}`);
-      if (el) {
-        setTimeout(() => {
-          el.scrollIntoView({ behavior: "smooth", block: "start" });
-        }, 100);
-      }
-    }
-  }, [isToday, nextUpcomingTime]);
 
   // Handle Take (today -- immediate)
   const handleTake = useCallback(

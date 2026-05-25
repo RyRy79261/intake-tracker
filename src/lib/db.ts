@@ -406,7 +406,15 @@ export interface InsightReport {
   rangeEnd: number; // analysis window end (Unix ms)
   narrative: string; // plain-language summary
   observations: string[]; // specific factual observations
+  // URLs the model cited via web_search (deep mode only). Optional —
+  // fast-mode reports and legacy rows from before sources were tracked
+  // leave this undefined.
+  sources?: string[];
   personalised: boolean; // whether the user's medical profile fed the analysis
+  // "fast" = sync Sonnet summary; "deep" = async Opus + web-search deep
+  // research. Optional for rows written before the two-tier rollout — the
+  // client treats `undefined` as "fast".
+  mode?: "fast" | "deep";
   createdAt: number;
   updatedAt: number;
   deletedAt: number | null;
@@ -831,12 +839,71 @@ realDb.version(19).stores({
   insightReports:          "id, generatedAt, updatedAt",
 });
 
+// Version 21: Add `sources` field to InsightReport for deep-mode reports
+// that cite URLs via web_search. No new Dexie index — `sources` is a
+// display field, not queryable. Stores byte-identical to v20; the version
+// bump exists so the sync layer recognises the new field.
+realDb.version(21).stores({
+  // --- REPEAT all v20 stores verbatim ---
+  intakeRecords:           "id, [type+timestamp], timestamp, source, groupId, updatedAt",
+  weightRecords:           "id, timestamp, updatedAt",
+  bloodPressureRecords:    "id, timestamp, position, arm, updatedAt",
+  eatingRecords:           "id, timestamp, groupId, updatedAt",
+  urinationRecords:        "id, timestamp, updatedAt",
+  defecationRecords:       "id, timestamp, updatedAt",
+  prescriptions:           "id, isActive, updatedAt, createdAt",
+  medicationPhases:        "id, prescriptionId, status, type, titrationPlanId, updatedAt",
+  phaseSchedules:          "id, phaseId, time, enabled, updatedAt",
+  inventoryItems:          "id, prescriptionId, isActive, updatedAt",
+  inventoryTransactions:   "id, [inventoryItemId+timestamp], inventoryItemId, timestamp, type, updatedAt",
+  doseLogs:                "id, [prescriptionId+scheduledDate], prescriptionId, phaseId, scheduleId, scheduledDate, scheduledTime, status, updatedAt",
+  dailyNotes:              "id, date, prescriptionId, doseLogId, updatedAt",
+  auditLogs:               "id, [action+timestamp], timestamp, action",
+  substanceRecords:        "id, [type+timestamp], type, timestamp, source, sourceRecordId, groupId, updatedAt",
+  titrationPlans:          "id, conditionLabel, status, updatedAt",
+  _syncQueue:              "++id, [tableName+recordId], tableName, enqueuedAt",
+  _syncMeta:               "tableName",
+  _errorLogs:              "id, timestamp, source",
+  userProfile:             "id, updatedAt",
+  insightReports:          "id, generatedAt, updatedAt",
+});
+
+// Version 20: Add `mode` field to InsightReport ("fast" | "deep"). No new
+// Dexie index — `mode` is a filter/display field, not a query key — so the
+// stores definition is byte-identical to v19. The Dexie version bump still
+// has to happen because the interface gained a field and the sync layer
+// needs to push/pull it.
+realDb.version(20).stores({
+  // --- REPEAT all v19 stores verbatim ---
+  intakeRecords:           "id, [type+timestamp], timestamp, source, groupId, updatedAt",
+  weightRecords:           "id, timestamp, updatedAt",
+  bloodPressureRecords:    "id, timestamp, position, arm, updatedAt",
+  eatingRecords:           "id, timestamp, groupId, updatedAt",
+  urinationRecords:        "id, timestamp, updatedAt",
+  defecationRecords:       "id, timestamp, updatedAt",
+  prescriptions:           "id, isActive, updatedAt, createdAt",
+  medicationPhases:        "id, prescriptionId, status, type, titrationPlanId, updatedAt",
+  phaseSchedules:          "id, phaseId, time, enabled, updatedAt",
+  inventoryItems:          "id, prescriptionId, isActive, updatedAt",
+  inventoryTransactions:   "id, [inventoryItemId+timestamp], inventoryItemId, timestamp, type, updatedAt",
+  doseLogs:                "id, [prescriptionId+scheduledDate], prescriptionId, phaseId, scheduleId, scheduledDate, scheduledTime, status, updatedAt",
+  dailyNotes:              "id, date, prescriptionId, doseLogId, updatedAt",
+  auditLogs:               "id, [action+timestamp], timestamp, action",
+  substanceRecords:        "id, [type+timestamp], type, timestamp, source, sourceRecordId, groupId, updatedAt",
+  titrationPlans:          "id, conditionLabel, status, updatedAt",
+  _syncQueue:              "++id, [tableName+recordId], tableName, enqueuedAt",
+  _syncMeta:               "tableName",
+  _errorLogs:              "id, timestamp, source",
+  userProfile:             "id, updatedAt",
+  insightReports:          "id, generatedAt, updatedAt",
+});
+
 /**
  * Current Dexie schema version. Bump this constant in lockstep with each new
  * `realDb.version(N)` block above so diagnostic surfaces (Debug → Environment)
  * always reflect the real schema.
  */
-export const DB_SCHEMA_VERSION = 19;
+export const DB_SCHEMA_VERSION = 21;
 
 /**
  * Store definitions for a preview database — the current (v19) schema in a

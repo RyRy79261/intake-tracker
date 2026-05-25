@@ -13,9 +13,9 @@ import { AnalyticsIntroDialog } from "@/components/analytics/analytics-intro-dia
 import { useTimeScopeRange } from "@/hooks/use-analytics-queries";
 import type { TimeScope, TimeRange } from "@/lib/analytics-types";
 
-type AnalyticsTab = "records" | "summary" | "correlations" | "titration";
+type AnalyticsTab = "summary" | "correlations" | "records" | "titration";
 
-const TAB_VALUES: AnalyticsTab[] = ["records", "summary", "correlations", "titration"];
+const TAB_VALUES: AnalyticsTab[] = ["summary", "correlations", "records", "titration"];
 
 function isAnalyticsTab(value: string | null): value is AnalyticsTab {
   return value !== null && (TAB_VALUES as string[]).includes(value);
@@ -25,7 +25,7 @@ function AnalyticsContent() {
   const searchParams = useSearchParams();
 
   const tabParam = searchParams.get("tab");
-  const initialTab: AnalyticsTab = isAnalyticsTab(tabParam) ? tabParam : "records";
+  const initialTab: AnalyticsTab = isAnalyticsTab(tabParam) ? tabParam : "summary";
 
   const [activeTab, setActiveTab] = useState<AnalyticsTab>(initialTab);
 
@@ -60,23 +60,19 @@ function AnalyticsContent() {
           onValueChange={(v) => setActiveTab(v as AnalyticsTab)}
         >
           <TabsList className="w-full">
-            <TabsTrigger value="records" className="flex-1 text-xs">
-              Records
-            </TabsTrigger>
             <TabsTrigger value="summary" className="flex-1 text-xs">
               Summary
             </TabsTrigger>
             <TabsTrigger value="correlations" className="flex-1 text-xs">
               Correlations
             </TabsTrigger>
+            <TabsTrigger value="records" className="flex-1 text-xs">
+              Records
+            </TabsTrigger>
             <TabsTrigger value="titration" className="flex-1 text-xs">
               Titration
             </TabsTrigger>
           </TabsList>
-
-          <TabsContent value="records">
-            <RecordsTab range={effectiveRange} />
-          </TabsContent>
 
           <TabsContent value="summary">
             <SummaryTab range={effectiveRange} />
@@ -84,6 +80,10 @@ function AnalyticsContent() {
 
           <TabsContent value="correlations">
             <CorrelationsTab range={effectiveRange} />
+          </TabsContent>
+
+          <TabsContent value="records">
+            <RecordsTab range={effectiveRange} />
           </TabsContent>
 
           <TabsContent value="titration">

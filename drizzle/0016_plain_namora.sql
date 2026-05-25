@@ -1,0 +1,1 @@
+ALTER TABLE "insight_reports" ADD COLUMN "sources" text[];
