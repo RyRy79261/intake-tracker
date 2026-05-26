@@ -10,6 +10,13 @@ const Progress = React.forwardRef<
     indicatorClassName?: string;
     extendedValue?: number;
     extendedIndicatorClassName?: string;
+    /**
+     * Optional position (0-100%) of a thin target-line marker overlaid on
+     * the bar. Used in two-stage mode to keep the daily target visible
+     * even when the extended segment is still empty.
+     */
+    targetMarkerPct?: number;
+    targetMarkerClassName?: string;
   }
 >(
   (
@@ -19,6 +26,8 @@ const Progress = React.forwardRef<
       indicatorClassName,
       extendedValue,
       extendedIndicatorClassName,
+      targetMarkerPct,
+      targetMarkerClassName,
       ...props
     },
     ref
@@ -28,6 +37,10 @@ const Progress = React.forwardRef<
     const extended = hasExtended
       ? Math.max(0, Math.min(100 - primary, extendedValue ?? 0))
       : 0;
+    const showMarker =
+      targetMarkerPct !== undefined &&
+      targetMarkerPct > 0 &&
+      targetMarkerPct < 100;
 
     return (
       <ProgressPrimitive.Root
@@ -62,6 +75,16 @@ const Progress = React.forwardRef<
               indicatorClassName || "bg-primary"
             )}
             style={{ transform: `translateX(-${100 - primary}%)` }}
+          />
+        )}
+        {showMarker && (
+          <div
+            aria-hidden="true"
+            className={cn(
+              "absolute top-0 h-full w-0.5 bg-foreground/40 dark:bg-foreground/50",
+              targetMarkerClassName
+            )}
+            style={{ left: `calc(${targetMarkerPct}% - 1px)` }}
           />
         )}
       </ProgressPrimitive.Root>

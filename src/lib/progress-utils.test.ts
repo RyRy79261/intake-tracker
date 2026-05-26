@@ -6,6 +6,7 @@ describe("computeTwoStageProgress", () => {
     expect(computeTwoStageProgress(500, 0, 500)).toEqual({
       primaryPct: 0,
       extendedPct: 0,
+      targetPct: 0,
       isOverTarget: false,
       isOverExtended: false,
       maxAmount: 0,
@@ -16,6 +17,7 @@ describe("computeTwoStageProgress", () => {
     const r = computeTwoStageProgress(750, 1500, 500);
     expect(r.primaryPct).toBeCloseTo((750 / 2000) * 100);
     expect(r.extendedPct).toBe(0);
+    expect(r.targetPct).toBeCloseTo((1500 / 2000) * 100);
     expect(r.isOverTarget).toBe(false);
     expect(r.isOverExtended).toBe(false);
     expect(r.maxAmount).toBe(2000);
@@ -45,10 +47,11 @@ describe("computeTwoStageProgress", () => {
     expect(r.extendedPct).toBeCloseTo((500 / 2000) * 100);
   });
 
-  it("treats 0 buffer like single-stage (no extended segment)", () => {
+  it("treats 0 buffer like single-stage (no extended segment, no marker)", () => {
     const under = computeTwoStageProgress(750, 1500, 0);
     expect(under.primaryPct).toBeCloseTo(50);
     expect(under.extendedPct).toBe(0);
+    expect(under.targetPct).toBe(0);
     expect(under.maxAmount).toBe(1500);
 
     const over = computeTwoStageProgress(1600, 1500, 0);

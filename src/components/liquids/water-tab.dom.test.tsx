@@ -120,15 +120,22 @@ describe("WaterTab", () => {
 
     // 1800ml of a 1500/2000 bar -> 1500/2000=75% primary + 300/2000=15% extended.
     // Re-query inside waitFor: the bar starts single-segment before the live
-    // query resolves the seeded record.
+    // query resolves the seeded record. Exclude the aria-hidden target marker.
     await waitFor(() => {
       const segments = document.querySelectorAll<HTMLElement>(
-        "[role='progressbar'] > div"
+        "[role='progressbar'] > div:not([aria-hidden='true'])"
       );
       expect(segments).toHaveLength(2);
       expect(segments[0]!.style.width).toBe("75%");
       expect(segments[1]!.style.width).toBe("15%");
       expect(segments[1]!.style.left).toBe("75%");
     });
+
+    // The target marker sits at 75% (1500 / 2000) regardless of fill state.
+    const marker = document.querySelector<HTMLElement>(
+      "[role='progressbar'] > div[aria-hidden='true']"
+    );
+    expect(marker).not.toBeNull();
+    expect(marker!.style.left).toBe("calc(75% - 1px)");
   });
 });

@@ -79,6 +79,7 @@ export function FoodSaltCard() {
           <Progress
             value={saltProgress.isOverExtended ? 100 : saltProgress.primaryPct}
             extendedValue={saltProgress.isOverExtended ? 0 : saltProgress.extendedPct}
+            targetMarkerPct={saltProgress.isOverExtended ? 0 : saltProgress.targetPct}
             className="h-3"
             indicatorClassName={
               saltProgress.isOverExtended
@@ -117,6 +118,7 @@ export function FoodSaltCard() {
           <Progress
             value={sugarProgress.isOverExtended ? 100 : sugarProgress.primaryPct}
             extendedValue={sugarProgress.isOverExtended ? 0 : sugarProgress.extendedPct}
+            targetMarkerPct={sugarProgress.isOverExtended ? 0 : sugarProgress.targetPct}
             className="h-3"
             indicatorClassName={
               sugarProgress.isOverExtended

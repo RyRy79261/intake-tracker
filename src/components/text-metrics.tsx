@@ -200,6 +200,7 @@ export function TextMetrics() {
             <Progress
               value={waterProgress.isOverExtended ? 100 : waterProgress.primaryPct}
               extendedValue={waterProgress.isOverExtended ? 0 : waterProgress.extendedPct}
+              targetMarkerPct={waterProgress.isOverExtended ? 0 : waterProgress.targetPct}
               className="h-2 flex-1"
               indicatorClassName={
                 waterProgress.isOverExtended
@@ -234,6 +235,7 @@ export function TextMetrics() {
             <Progress
               value={saltProgress.isOverExtended ? 100 : saltProgress.primaryPct}
               extendedValue={saltProgress.isOverExtended ? 0 : saltProgress.extendedPct}
+              targetMarkerPct={saltProgress.isOverExtended ? 0 : saltProgress.targetPct}
               className="h-2 flex-1"
               indicatorClassName={
                 saltProgress.isOverExtended
@@ -268,6 +270,7 @@ export function TextMetrics() {
             <Progress
               value={sugarProgress.isOverExtended ? 100 : sugarProgress.primaryPct}
               extendedValue={sugarProgress.isOverExtended ? 0 : sugarProgress.extendedPct}
+              targetMarkerPct={sugarProgress.isOverExtended ? 0 : sugarProgress.targetPct}
               className="h-2 flex-1"
               indicatorClassName={
                 sugarProgress.isOverExtended

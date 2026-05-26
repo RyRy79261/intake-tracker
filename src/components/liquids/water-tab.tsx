@@ -104,6 +104,7 @@ export function WaterTab() {
         <Progress
           value={progress.isOverExtended ? 100 : progress.primaryPct}
           extendedValue={progress.isOverExtended ? 0 : progress.extendedPct}
+          targetMarkerPct={progress.isOverExtended ? 0 : progress.targetPct}
           className="h-3"
           indicatorClassName={
             progress.isOverExtended ? theme.progressOverLimit : theme.progressGradient

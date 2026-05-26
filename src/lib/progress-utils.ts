@@ -1,6 +1,11 @@
 export interface TwoStageProgress {
   primaryPct: number;
   extendedPct: number;
+  /**
+   * Where the daily target sits on the bar (% of bar width). 0 when the
+   * buffer is disabled — the bar is single-stage and no marker is needed.
+   */
+  targetPct: number;
   isOverTarget: boolean;
   isOverExtended: boolean;
   maxAmount: number;
@@ -15,6 +20,7 @@ export function computeTwoStageProgress(
     return {
       primaryPct: 0,
       extendedPct: 0,
+      targetPct: 0,
       isOverTarget: false,
       isOverExtended: false,
       maxAmount: 0,
@@ -32,6 +38,7 @@ export function computeTwoStageProgress(
   return {
     primaryPct: (primaryAmount / maxAmount) * 100,
     extendedPct: buffer > 0 ? (extendedAmount / maxAmount) * 100 : 0,
+    targetPct: buffer > 0 ? (target / maxAmount) * 100 : 0,
     isOverTarget,
     isOverExtended,
     maxAmount,

@@ -388,6 +388,7 @@ export function PresetTab({ tab }: PresetTabProps) {
         <Progress
           value={waterProgress.isOverExtended ? 100 : waterProgress.primaryPct}
           extendedValue={waterProgress.isOverExtended ? 0 : waterProgress.extendedPct}
+          targetMarkerPct={waterProgress.isOverExtended ? 0 : waterProgress.targetPct}
           className="h-3"
           indicatorClassName={
             waterProgress.isOverExtended ? theme.progressOverLimit : theme.progressGradient
