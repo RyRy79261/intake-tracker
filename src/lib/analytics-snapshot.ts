@@ -97,6 +97,13 @@ export interface IntakeGoals {
   potassiumLimitMg: number;
 }
 
+/** Which optional trackers are enabled — passed from the client so the
+ *  snapshot only includes data and correlations the user actually tracks. */
+export interface EnabledOptionalTrackers {
+  sugar: boolean;
+  potassium: boolean;
+}
+
 /** The rolling analysis window ending now. */
 export function insightsRange(now: number = Date.now()): TimeRange {
   return { start: now - INSIGHTS_WINDOW_DAYS * MS_PER_DAY, end: now };
@@ -127,6 +134,7 @@ export async function buildAnalyticsSnapshot(
   goals: IntakeGoals,
   conditions?: string[],
   includeMedications?: boolean,
+  enabledTrackers: EnabledOptionalTrackers = { sugar: true, potassium: true },
 ): Promise<AnalyticsInsightsRequest> {
   const [
     bp,
@@ -147,11 +155,13 @@ export async function buildAnalyticsSnapshot(
     fluidBalance(range),
     getRecordsByDomain("water", range),
     getRecordsByDomain("salt", range),
-    getRecordsByDomain("sugar", range),
-    getRecordsByDomain("potassium", range),
+    // Skip disabled optional trackers entirely — no point reading data we
+    // won't surface, and it keeps the prompt focused on what the user tracks.
+    enabledTrackers.sugar ? getRecordsByDomain("sugar", range) : Promise.resolve([]),
+    enabledTrackers.potassium ? getRecordsByDomain("potassium", range) : Promise.resolve([]),
     saltVsWeight(range),
-    sugarVsWeight(range),
-    potassiumVsWeight(range),
+    enabledTrackers.sugar ? sugarVsWeight(range) : Promise.resolve(null),
+    enabledTrackers.potassium ? potassiumVsWeight(range) : Promise.resolve(null),
     caffeineVsBP(range),
     alcoholVsBP(range),
   ]);
@@ -196,9 +206,7 @@ export async function buildAnalyticsSnapshot(
       sugar.length > 0 ||
       potassium.length > 0) &&
     goals.waterGoalMl > 0 &&
-    goals.sodiumLimitMg > 0 &&
-    goals.sugarLimitG > 0 &&
-    goals.potassiumLimitMg > 0
+    goals.sodiumLimitMg > 0
   ) {
     const days = Math.max(1, Math.round((range.end - range.start) / MS_PER_DAY));
     const sum = (pts: { value: number }[]) =>
@@ -206,24 +214,39 @@ export async function buildAnalyticsSnapshot(
     metrics.intake = {
       avgWaterMl: sum(water) / days,
       avgSodiumMg: sum(salt) / days,
-      avgSugarG: sum(sugar) / days,
-      avgPotassiumMg: sum(potassium) / days,
       waterGoalMl: goals.waterGoalMl,
       sodiumLimitMg: goals.sodiumLimitMg,
-      sugarLimitG: goals.sugarLimitG,
-      potassiumLimitMg: goals.potassiumLimitMg,
+      // Optional trackers are only included when enabled AND configured.
+      ...(enabledTrackers.sugar && goals.sugarLimitG > 0 && {
+        avgSugarG: sum(sugar) / days,
+        sugarLimitG: goals.sugarLimitG,
+      }),
+      ...(enabledTrackers.potassium && goals.potassiumLimitMg > 0 && {
+        avgPotassiumMg: sum(potassium) / days,
+        potassiumLimitMg: goals.potassiumLimitMg,
+      }),
     };
   }
 
-  const correlations = (
-    [
-      { domainA: "salt", domainB: "weight", result: saltWeight.value },
-      { domainA: "sugar", domainB: "weight", result: sugarWeight.value },
-      { domainA: "potassium", domainB: "weight", result: potassiumWeight.value },
-      { domainA: "caffeine", domainB: "bp", result: caffBp.value },
-      { domainA: "alcohol", domainB: "bp", result: alcBp.value },
-    ] as const
-  )
+  // Optional-tracker correlations are present only when enabled (their
+  // upstream queries returned `null` otherwise).
+  type CorrEntry = {
+    domainA: "salt" | "sugar" | "potassium" | "caffeine" | "alcohol";
+    domainB: "weight" | "bp";
+    result: { pairedDays: number; coefficient: number; strength: "strong" | "moderate" | "weak" | "none" };
+  };
+  const correlationCandidates: CorrEntry[] = [
+    { domainA: "salt", domainB: "weight", result: saltWeight.value },
+    ...(sugarWeight
+      ? [{ domainA: "sugar" as const, domainB: "weight" as const, result: sugarWeight.value }]
+      : []),
+    ...(potassiumWeight
+      ? [{ domainA: "potassium" as const, domainB: "weight" as const, result: potassiumWeight.value }]
+      : []),
+    { domainA: "caffeine", domainB: "bp", result: caffBp.value },
+    { domainA: "alcohol", domainB: "bp", result: alcBp.value },
+  ];
+  const correlations = correlationCandidates
     .filter(
       (c) => c.result.pairedDays > 0 && Number.isFinite(c.result.coefficient),
     )

@@ -9,6 +9,7 @@ import {
 import { useSubstanceRecordsByDateRange } from "@/hooks/use-substance-queries";
 import { useNowTick } from "@/hooks/use-now-tick";
 import { useSettingsStore } from "@/stores/settings-store";
+import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { Progress } from "@/components/ui/progress";
 import { Droplets, Sparkles, Coffee, Wine, Candy, Banana } from "lucide-react";
@@ -74,6 +75,8 @@ export function TextMetrics() {
   const saltLimit = useSettingsStore((s) => s.saltLimit);
   const sugarLimit = useSettingsStore((s) => s.sugarLimit);
   const potassiumLimit = useSettingsStore((s) => s.potassiumLimit);
+  const sugarEnabled = useOptionalTrackerEnabled("sugar");
+  const potassiumEnabled = useOptionalTrackerEnabled("potassium");
 
   // 60-second tick for day boundary refresh
   const tick = useNowTick();
@@ -255,8 +258,9 @@ export function TextMetrics() {
             </span>
           </div>
 
-          {/* Sugar */}
-          <div className="flex items-center gap-3">
+          {/* Sugar — optional tracker */}
+          {sugarEnabled && (
+          <div className="flex items-center gap-3" data-testid="metrics-sugar-row">
             <Candy
               className={cn("w-4 h-4", CARD_THEMES.sugar.iconColor)}
               aria-hidden="true"
@@ -286,9 +290,11 @@ export function TextMetrics() {
               / {formatValue(sugarLimit)} g
             </span>
           </div>
+          )}
 
-          {/* Potassium — soft target, never reds out */}
-          <div className="flex items-center gap-3">
+          {/* Potassium — soft target, never reds out, optional tracker */}
+          {potassiumEnabled && (
+          <div className="flex items-center gap-3" data-testid="metrics-potassium-row">
             <Banana
               className={cn("w-4 h-4", CARD_THEMES.potassium.iconColor)}
               aria-hidden="true"
@@ -312,6 +318,7 @@ export function TextMetrics() {
               / {formatValue(potassiumLimit)} mg
             </span>
           </div>
+          )}
 
           {/* Caffeine */}
           <div className="flex items-center gap-3">
@@ -374,13 +381,13 @@ export function TextMetrics() {
           ))}
 
           {[
-            { key: "water", label: "Water", data: weeklyWater, theme: CARD_THEMES.water, limit: waterLimit, fmt: formatValue },
-            { key: "salt", label: "Na", data: weeklySalt, theme: CARD_THEMES.salt, limit: saltLimit, fmt: formatValue },
-            { key: "sugar", label: "Sug", data: weeklySugar, theme: CARD_THEMES.sugar, limit: sugarLimit, fmt: formatValue },
-            { key: "potassium", label: "K", data: weeklyPotassium, theme: CARD_THEMES.potassium, limit: 0, fmt: formatValue },
-            { key: "caf", label: "Caf", data: weeklyCaffeine, theme: CARD_THEMES.caffeine, limit: 0, fmt: (v: number) => formatValue(Math.round(v)) },
-            { key: "alc", label: "Alc", data: weeklyAlcohol, theme: CARD_THEMES.alcohol, limit: 0, fmt: (v: number) => v.toFixed(1) },
-          ].map((row) => (
+            { key: "water", label: "Water", data: weeklyWater, theme: CARD_THEMES.water, limit: waterLimit, fmt: formatValue, show: true },
+            { key: "salt", label: "Na", data: weeklySalt, theme: CARD_THEMES.salt, limit: saltLimit, fmt: formatValue, show: true },
+            { key: "sugar", label: "Sug", data: weeklySugar, theme: CARD_THEMES.sugar, limit: sugarLimit, fmt: formatValue, show: sugarEnabled },
+            { key: "potassium", label: "K", data: weeklyPotassium, theme: CARD_THEMES.potassium, limit: 0, fmt: formatValue, show: potassiumEnabled },
+            { key: "caf", label: "Caf", data: weeklyCaffeine, theme: CARD_THEMES.caffeine, limit: 0, fmt: (v: number) => formatValue(Math.round(v)), show: true },
+            { key: "alc", label: "Alc", data: weeklyAlcohol, theme: CARD_THEMES.alcohol, limit: 0, fmt: (v: number) => v.toFixed(1), show: true },
+          ].filter((row) => row.show).map((row) => (
             <Fragment key={row.key}>
               <div className="text-xs text-muted-foreground">{row.label}</div>
               {row.data.map((val, i) => {

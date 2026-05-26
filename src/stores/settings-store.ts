@@ -33,6 +33,17 @@ export interface Settings {
   sugarLimit: number; // g (default 30g total sugars)
   potassiumLimit: number; // mg (default 3500mg — WHO suggested adequate intake)
 
+  // Optional / opt-in nutritional trackers. Each tracker maps to an
+  // `IntakeRecord` type; when disabled the tracker is hidden from every
+  // surface (forms, voice editor, progress bars, weekly grid, analytics,
+  // history filter, AI snapshot) and new entries are not persisted.
+  // Sugar defaults on (the field shipped enabled in v13); potassium
+  // defaults off — opt-in, since the user has no firm target.
+  optionalTrackers: {
+    sugar: boolean;
+    potassium: boolean;
+  };
+
   // Secret to authenticate with server-side AI (if using server API key)
   // Set AI_AUTH_SECRET env var on server, enter same value here
   aiAuthSecret: string;
@@ -111,6 +122,7 @@ interface SettingsActions {
   setSaltLimit: (value: number) => void;
   setSugarLimit: (value: number) => void;
   setPotassiumLimit: (value: number) => void;
+  setOptionalTracker: (key: "sugar" | "potassium", enabled: boolean) => void;
   setAiAuthSecret: (secret: string) => void;
   getDeobfuscatedAuthSecret: () => string;
   setTheme: (theme: "light" | "dark" | "system") => void;
@@ -164,6 +176,10 @@ const defaultSettings: Settings = {
   saltLimit: 1500,
   sugarLimit: 30,
   potassiumLimit: 3500,
+  optionalTrackers: {
+    sugar: true,
+    potassium: false,
+  },
   aiAuthSecret: "",
   theme: "system",
   dataRetentionDays: 90, // Default: keep 90 days of data
@@ -217,6 +233,91 @@ const defaultSettings: Settings = {
   },
 };
 
+/**
+ * Schema-version number persisted alongside the settings JSON. Bump this and
+ * extend `migrateSettings` whenever the `Settings` shape changes in a way
+ * that would break an older stored state (new required field, dropped key,
+ * renamed key, etc).
+ */
+export const SETTINGS_PERSIST_VERSION = 15;
+
+/**
+ * Forward-migrate a persisted settings blob from any older version up to
+ * `SETTINGS_PERSIST_VERSION`. Extracted from the zustand `persist` config
+ * so it can be unit-tested in isolation — the actual migration callback
+ * below simply delegates here.
+ */
+export function migrateSettings(
+  persisted: unknown,
+  version: number,
+): Settings & SettingsActions {
+  const state = persisted as Record<string, unknown>;
+  if (version === 0) {
+    delete state.perplexityApiKey;
+    delete state.aiAuthSecret;
+  }
+  if (version < 2) {
+    state.liquidPresets = DEFAULT_LIQUID_PRESETS;
+  }
+  if (version < 3) {
+    delete state.coffeeDefaultType;
+    delete state.utilityOrder;
+    const presets = state.liquidPresets as Array<Record<string, unknown>>;
+    if (Array.isArray(presets)) {
+      state.liquidPresets = presets.map((p) => {
+        if ("tab" in p) return p;
+        const oldType = p.type as string;
+        const oldPer100ml = p.substancePer100ml as number;
+        const { type: _t, substancePer100ml: _s, ...rest } = p;
+        return {
+          ...rest,
+          tab: oldType === "caffeine" ? "coffee" : "alcohol",
+          waterContentPercent: 100,
+          ...(oldType === "caffeine" && { caffeinePer100ml: oldPer100ml }),
+          ...(oldType === "alcohol" && { alcoholPer100ml: oldPer100ml }),
+        };
+      });
+    }
+  }
+  if (version < 5) {
+    state.quickNavItems = DEFAULT_QUICK_NAV_ITEMS;
+  }
+  if (version < 7) {
+    delete state.experimentalFeatures;
+  }
+  if (version < 8) {
+    state.storageMode = "local";
+  }
+  if (version < 9) {
+    state.swipeNavDistanceThresholdPct = 28;
+    state.swipeNavVelocityThreshold = 500;
+  }
+  if (version < 10) {
+    delete state.dismissedInsights;
+    state.shakeToReportEnabled = true;
+  }
+  if (version < 11) {
+    state.shakeThreshold = 15;
+    state.shakeRequiredJolts = 3;
+  }
+  if (version < 12) {
+    state.shakeThreshold = 8;
+  }
+  if (version < 13) {
+    state.sugarLimit = 30;
+  }
+  if (version < 14) {
+    state.potassiumLimit = 3500;
+  }
+  if (version < 15) {
+    // Optional-trackers framework. Sugar shipped enabled in v13, so
+    // preserve that for existing users; potassium defaults off
+    // (opt-in) — the user has no firm target.
+    state.optionalTrackers = { sugar: true, potassium: false };
+  }
+  return state as unknown as Settings & SettingsActions;
+}
+
 export const useSettingsStore = create<Settings & SettingsActions>()(
   persist(
     (set, get) => ({
@@ -234,6 +335,10 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
         set({ sugarLimit: sanitizeNumericInput(value, 5, 500) }),
       setPotassiumLimit: (value) =>
         set({ potassiumLimit: sanitizeNumericInput(value, 100, 20000) }),
+      setOptionalTracker: (key, enabled) =>
+        set((state) => ({
+          optionalTrackers: { ...state.optionalTrackers, [key]: enabled },
+        })),
       
       // Store auth secret with obfuscation
       setAiAuthSecret: (secret) =>
@@ -329,84 +434,8 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
     {
       name: "intake-tracker-settings",
       storage: createJSONStorage(() => localStorage),
-      version: 14,
-      migrate: (persisted, version) => {
-        const state = persisted as Record<string, unknown>;
-        if (version === 0) {
-          delete state.perplexityApiKey;
-          delete state.aiAuthSecret;
-        }
-        if (version < 2) {
-          state.liquidPresets = DEFAULT_LIQUID_PRESETS;
-        }
-        if (version < 3) {
-          // D-07: Remove deprecated coffeeDefaultType from persisted state
-          delete state.coffeeDefaultType;
-          // Remove utility row ordering (utility row removed in Plan 03)
-          delete state.utilityOrder;
-          // D-12: Convert old LiquidPreset format (type/substancePer100ml) to new multi-substance format
-          const presets = state.liquidPresets as Array<Record<string, unknown>>;
-          if (Array.isArray(presets)) {
-            state.liquidPresets = presets.map(p => {
-              // Skip if already migrated (has `tab` field)
-              if ('tab' in p) return p;
-              const oldType = p.type as string;
-              const oldPer100ml = p.substancePer100ml as number;
-              const { type: _t, substancePer100ml: _s, ...rest } = p;
-              return {
-                ...rest,
-                tab: oldType === "caffeine" ? "coffee" : "alcohol",
-                waterContentPercent: 100,
-                ...(oldType === "caffeine" && { caffeinePer100ml: oldPer100ml }),
-                ...(oldType === "alcohol" && { alcoholPer100ml: oldPer100ml }),
-              };
-            });
-          }
-        }
-        // version < 4 migration: sodiumPresets removed in Phase 39 (no longer needed)
-        if (version < 5) {
-          // D-07: New quickNavItems field. Seed existing users with defaults.
-          state.quickNavItems = DEFAULT_QUICK_NAV_ITEMS;
-        }
-        // version < 6 migration: experimentalFeatures.voiceHealthMetrics
-        // removed when voice graduated. Old persisted state may still have
-        // the key — it's now ignored, so no cleanup is needed.
-        if (version < 7) {
-          delete state.experimentalFeatures;
-        }
-        if (version < 8) {
-          state.storageMode = "local";
-        }
-        if (version < 9) {
-          state.swipeNavDistanceThresholdPct = 28;
-          state.swipeNavVelocityThreshold = 500;
-        }
-        if (version < 10) {
-          // GH-32 follow-up: auto-generated insights removed; drop dismissals.
-          delete state.dismissedInsights;
-          state.shakeToReportEnabled = true;
-        }
-        if (version < 11) {
-          state.shakeThreshold = 15;
-          state.shakeRequiredJolts = 3;
-        }
-        if (version < 12) {
-          // Shake detection switched from a per-axis delta to a rotation-
-          // invariant magnitude delta; the old threshold scale no longer
-          // applies, so reset it to the recalibrated default.
-          state.shakeThreshold = 8;
-        }
-        if (version < 13) {
-          // New sugar tracking — seed existing users with the default limit.
-          state.sugarLimit = 30;
-        }
-        if (version < 14) {
-          // New potassium tracking — seed existing users with the WHO
-          // adequate-intake default (3500 mg).
-          state.potassiumLimit = 3500;
-        }
-        return state as unknown as Settings & SettingsActions;
-      },
+      version: SETTINGS_PERSIST_VERSION,
+      migrate: (persisted, version) => migrateSettings(persisted, version),
     }
   )
 );

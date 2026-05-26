@@ -346,8 +346,11 @@ export async function syncEatingGroup(
     sodiumMg: number;
     sodiumKind: SodiumKind;
     waterMl: number;
-    sugarG: number;
-    potassiumMg: number;
+    /** `undefined` ⇒ leave any existing linked sugar record untouched
+     *  (used when the optional tracker is disabled). `0` ⇒ soft-delete. */
+    sugarG?: number;
+    /** Same semantics as `sugarG` for potassium. */
+    potassiumMg?: number;
   },
 ): Promise<ServiceResult<void>> {
   try {
@@ -363,8 +366,8 @@ export async function syncEatingGroup(
         !groupId &&
         (patch.sodiumMg > 0 ||
           patch.waterMl > 0 ||
-          patch.sugarG > 0 ||
-          patch.potassiumMg > 0)
+          (patch.sugarG !== undefined && patch.sugarG > 0) ||
+          (patch.potassiumMg !== undefined && patch.potassiumMg > 0))
       ) {
         groupId = crypto.randomUUID();
       }
@@ -487,71 +490,78 @@ export async function syncEatingGroup(
       }
 
       // ── Sugar intake ──
-      if (patch.sugarG > 0) {
-        if (existingSugar) {
+      // `undefined` ⇒ caller (optional tracker disabled) opted out of the
+      // sugar field; preserve any existing linked record untouched.
+      if (patch.sugarG !== undefined) {
+        if (patch.sugarG > 0) {
+          if (existingSugar) {
+            await db.intakeRecords.update(existingSugar.id, {
+              amount: patch.sugarG,
+              timestamp: patch.timestamp,
+              updatedAt: now,
+            });
+          } else {
+            const record: IntakeRecord = {
+              id: crypto.randomUUID(),
+              type: "sugar",
+              amount: patch.sugarG,
+              timestamp: patch.timestamp,
+              source: SUGAR_SOURCE,
+              groupId,
+              groupSource,
+              ...fields,
+            };
+            await db.intakeRecords.add(record);
+          }
+        } else if (existingSugar) {
           await db.intakeRecords.update(existingSugar.id, {
-            amount: patch.sugarG,
-            timestamp: patch.timestamp,
+            deletedAt: now,
             updatedAt: now,
           });
-        } else {
-          const record: IntakeRecord = {
-            id: crypto.randomUUID(),
-            type: "sugar",
-            amount: patch.sugarG,
-            timestamp: patch.timestamp,
-            source: SUGAR_SOURCE,
-            groupId,
-            groupSource,
-            ...fields,
-          };
-          await db.intakeRecords.add(record);
         }
-      } else if (existingSugar) {
-        await db.intakeRecords.update(existingSugar.id, {
-          deletedAt: now,
-          updatedAt: now,
-        });
-      }
-      for (const dup of extraSugars) {
-        await db.intakeRecords.update(dup.id, {
-          deletedAt: now,
-          updatedAt: now,
-        });
+        for (const dup of extraSugars) {
+          await db.intakeRecords.update(dup.id, {
+            deletedAt: now,
+            updatedAt: now,
+          });
+        }
       }
 
       // ── Potassium intake ──
-      if (patch.potassiumMg > 0) {
-        if (existingPotassium) {
+      // `undefined` ⇒ caller opted out; preserve existing linked record.
+      if (patch.potassiumMg !== undefined) {
+        if (patch.potassiumMg > 0) {
+          if (existingPotassium) {
+            await db.intakeRecords.update(existingPotassium.id, {
+              amount: patch.potassiumMg,
+              timestamp: patch.timestamp,
+              updatedAt: now,
+            });
+          } else {
+            const record: IntakeRecord = {
+              id: crypto.randomUUID(),
+              type: "potassium",
+              amount: patch.potassiumMg,
+              timestamp: patch.timestamp,
+              source: POTASSIUM_SOURCE,
+              groupId,
+              groupSource,
+              ...fields,
+            };
+            await db.intakeRecords.add(record);
+          }
+        } else if (existingPotassium) {
           await db.intakeRecords.update(existingPotassium.id, {
-            amount: patch.potassiumMg,
-            timestamp: patch.timestamp,
+            deletedAt: now,
             updatedAt: now,
           });
-        } else {
-          const record: IntakeRecord = {
-            id: crypto.randomUUID(),
-            type: "potassium",
-            amount: patch.potassiumMg,
-            timestamp: patch.timestamp,
-            source: POTASSIUM_SOURCE,
-            groupId,
-            groupSource,
-            ...fields,
-          };
-          await db.intakeRecords.add(record);
         }
-      } else if (existingPotassium) {
-        await db.intakeRecords.update(existingPotassium.id, {
-          deletedAt: now,
-          updatedAt: now,
-        });
-      }
-      for (const dup of extraPotassiums) {
-        await db.intakeRecords.update(dup.id, {
-          deletedAt: now,
-          updatedAt: now,
-        });
+        for (const dup of extraPotassiums) {
+          await db.intakeRecords.update(dup.id, {
+            deletedAt: now,
+            updatedAt: now,
+          });
+        }
       }
     });
 

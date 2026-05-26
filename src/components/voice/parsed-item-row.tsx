@@ -18,6 +18,7 @@ import {
   VOICE_ITEM_LABEL,
   type VoiceParsedItem,
 } from "@/lib/voice-types";
+import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 
 interface ParsedItemRowProps {
   item: VoiceParsedItem;
@@ -121,6 +122,12 @@ function ItemEditor({
   onChange: (next: VoiceParsedItem) => void;
   disabled?: boolean;
 }) {
+  // Optional tracker visibility — gates the food editor's sugar/potassium
+  // fields so disabled trackers don't show up even if the AI returned a
+  // value. Reading both unconditionally keeps hook order stable across
+  // every render, regardless of which item kind we're editing.
+  const sugarEnabled = useOptionalTrackerEnabled("sugar");
+  const potassiumEnabled = useOptionalTrackerEnabled("potassium");
   switch (item.kind) {
     case "blood_pressure":
       return (
@@ -253,31 +260,35 @@ function ItemEditor({
                 }
               />
             </Field>
-            <Field label="Sugar (g)">
-              <Input
-                type="number"
-                inputMode="decimal"
-                step="0.1"
-                disabled={disabled}
-                value={item.sugarG ?? ""}
-                placeholder="—"
-                onChange={(e) =>
-                  onChange(setOptionalNumber(item, "sugarG", e.target.value))
-                }
-              />
-            </Field>
-            <Field label="Potassium (mg)">
-              <Input
-                type="number"
-                inputMode="numeric"
-                disabled={disabled}
-                value={item.potassiumMg ?? ""}
-                placeholder="—"
-                onChange={(e) =>
-                  onChange(setOptionalNumber(item, "potassiumMg", e.target.value))
-                }
-              />
-            </Field>
+            {sugarEnabled && (
+              <Field label="Sugar (g)">
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  step="0.1"
+                  disabled={disabled}
+                  value={item.sugarG ?? ""}
+                  placeholder="—"
+                  onChange={(e) =>
+                    onChange(setOptionalNumber(item, "sugarG", e.target.value))
+                  }
+                />
+              </Field>
+            )}
+            {potassiumEnabled && (
+              <Field label="Potassium (mg)">
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  disabled={disabled}
+                  value={item.potassiumMg ?? ""}
+                  placeholder="—"
+                  onChange={(e) =>
+                    onChange(setOptionalNumber(item, "potassiumMg", e.target.value))
+                  }
+                />
+              </Field>
+            )}
           </div>
         </div>
       );
