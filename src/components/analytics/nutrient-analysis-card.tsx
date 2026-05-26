@@ -157,6 +157,8 @@ export function NutrientAnalysisCard() {
           <button
             type="button"
             onClick={() => setFocusOpen((v) => !v)}
+            aria-expanded={focusOpen}
+            aria-controls="nutrient-focus-input"
             className="inline-flex items-center gap-0.5 text-violet-600 dark:text-violet-400 hover:underline"
           >
             {focusOpen ? (
@@ -175,6 +177,7 @@ export function NutrientAnalysisCard() {
 
         {focusOpen && (
           <Input
+            id="nutrient-focus-input"
             value={focus}
             onChange={(e) => setFocus(e.target.value.slice(0, 200))}
             placeholder="e.g. potassium, iron, fiber"
