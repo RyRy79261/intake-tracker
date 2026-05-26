@@ -288,6 +288,16 @@ export async function rotateRefreshToken(
   // All validation predicates (client_id, revokedAt, refresh_expires_at)
   // are in the WHERE clause so a wrong client or expired token simply
   // leaves the existing row untouched.
+  //
+  // Residual race: under truly concurrent refresh, both callers UPDATE
+  // the same row and last-writer-wins on `tokenHash`. The "loser" caller
+  // walks away with an access token whose hash is no longer in the DB,
+  // so its next API call gets 401 and the client refreshes again. This
+  // self-heals at the cost of one extra round trip and never locks the
+  // user out (which is what the previous single-use rotation did). The
+  // structurally clean fix — separate access-token rows per refresh —
+  // requires dropping the UNIQUE constraint on refresh_token_hash; we
+  // defer that until contention is observed in practice.
   try {
     const accessToken = generateOpaqueToken(TOKEN_PREFIX.ACCESS, 32);
     const updated = await db
