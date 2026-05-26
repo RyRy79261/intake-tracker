@@ -167,13 +167,18 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
-      - name: Install Playwright Chromium
+          # Cache key suffix "-v2" added when the mobile-safari project
+          # (devices['iPhone 14'] → WebKit) was introduced. Older caches
+          # contain Chromium only and would be a false hit.
+          key: playwright-v2-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Install Playwright browsers
+        # Chromium for the desktop chromium project, WebKit for the
+        # mobile-safari project (iPhone 14 uses defaultBrowserType: 'webkit').
         if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: npx playwright install chromium --with-deps
+        run: npx playwright install chromium webkit --with-deps
       - name: Install Playwright system deps
         if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: npx playwright install-deps chromium
+        run: npx playwright install-deps chromium webkit
       # Phase 41 (D-15): per-run isolated Neon test branch so each E2E run
       # gets a fresh database for push_* tables (Neon Auth users live in a
       # separate project-wide hosted store, unrelated to this branch).
