@@ -94,11 +94,14 @@ describe("WaterTab", () => {
       settings: { waterLimit: 1000, waterExtendedBuffer: 0 },
     });
 
-    // 500 of 1000ml = 50% primary fill. The live query resolves async.
+    // 500 of 1000ml = 50% primary fill. With the buffer disabled the bar
+    // falls back to the single-segment Radix indicator (translateX).
     const indicator = document.querySelector(
       "[role='progressbar'] > div"
     ) as HTMLElement;
-    await waitFor(() => expect(indicator.style.width).toBe("50%"));
+    await waitFor(() =>
+      expect(indicator.style.transform).toBe("translateX(-50%)")
+    );
   });
 
   it("renders the extended-buffer segment when the daily total spills past the target", async () => {
@@ -116,10 +119,12 @@ describe("WaterTab", () => {
     });
 
     // 1800ml of a 1500/2000 bar -> 1500/2000=75% primary + 300/2000=15% extended.
-    const segments = document.querySelectorAll<HTMLElement>(
-      "[role='progressbar'] > div"
-    );
+    // Re-query inside waitFor: the bar starts single-segment before the live
+    // query resolves the seeded record.
     await waitFor(() => {
+      const segments = document.querySelectorAll<HTMLElement>(
+        "[role='progressbar'] > div"
+      );
       expect(segments).toHaveLength(2);
       expect(segments[0]!.style.width).toBe("75%");
       expect(segments[1]!.style.width).toBe("15%");

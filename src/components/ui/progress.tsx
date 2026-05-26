@@ -24,7 +24,7 @@ const Progress = React.forwardRef<
     ref
   ) => {
     const primary = Math.max(0, Math.min(100, value ?? 0));
-    const hasExtended = extendedValue !== undefined;
+    const hasExtended = extendedValue !== undefined && extendedValue > 0;
     const extended = hasExtended
       ? Math.max(0, Math.min(100 - primary, extendedValue ?? 0))
       : 0;
