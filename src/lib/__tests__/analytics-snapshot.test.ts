@@ -26,6 +26,7 @@ const GOALS: IntakeGoals = {
   waterGoalMl: 2000,
   sodiumLimitMg: 2300,
   sugarLimitG: 50,
+  potassiumLimitMg: 3500,
 };
 
 function fullRange(): { start: number; end: number } {
@@ -82,6 +83,8 @@ describe("snapshotIsEmpty", () => {
     expect(snapshotIsEmpty(req)).toBe(false);
   });
 });
+
+const BOTH_ON = { sugar: true, potassium: true } as const;
 
 describe("buildAnalyticsSnapshot", () => {
   it("produces an empty snapshot when no data is seeded", async () => {
@@ -147,7 +150,13 @@ describe("buildAnalyticsSnapshot", () => {
     ]);
 
     const range = fullRange();
-    const snapshot = await buildAnalyticsSnapshot(range, GOALS);
+    const snapshot = await buildAnalyticsSnapshot(
+      range,
+      GOALS,
+      undefined,
+      undefined,
+      BOTH_ON,
+    );
 
     expect(snapshot.metrics.intake).toBeDefined();
     const days = Math.max(
@@ -162,6 +171,55 @@ describe("buildAnalyticsSnapshot", () => {
     expect(snapshot.metrics.intake!.sugarLimitG).toBe(GOALS.sugarLimitG);
   });
 
+  it("omits sugar from the intake metric when the tracker is disabled", async () => {
+    await db.intakeRecords.bulkAdd([
+      makeIntakeRecord({ type: "water", amount: 1000, timestamp: BASE_TS }),
+      makeIntakeRecord({ type: "salt", amount: 800, timestamp: BASE_TS }),
+      // Pre-existing sugar data — must NOT leak into the snapshot when the
+      // user has subsequently disabled the sugar tracker.
+      makeIntakeRecord({ type: "sugar", amount: 30, timestamp: BASE_TS }),
+    ]);
+
+    const snapshot = await buildAnalyticsSnapshot(
+      fullRange(),
+      GOALS,
+      undefined,
+      undefined,
+      { sugar: false, potassium: false },
+    );
+
+    expect(snapshot.metrics.intake).toBeDefined();
+    expect(snapshot.metrics.intake!.avgSugarG).toBeUndefined();
+    expect(snapshot.metrics.intake!.sugarLimitG).toBeUndefined();
+    expect(snapshot.metrics.intake!.avgPotassiumMg).toBeUndefined();
+    expect(snapshot.metrics.intake!.potassiumLimitMg).toBeUndefined();
+    // Core fields still present.
+    expect(snapshot.metrics.intake!.avgWaterMl).toBeGreaterThan(0);
+    expect(snapshot.metrics.intake!.avgSodiumMg).toBeGreaterThan(0);
+  });
+
+  it("includes potassium in the intake metric only when explicitly enabled", async () => {
+    await db.intakeRecords.bulkAdd([
+      makeIntakeRecord({ type: "water", amount: 1000, timestamp: BASE_TS }),
+      makeIntakeRecord({ type: "salt", amount: 800, timestamp: BASE_TS }),
+      makeIntakeRecord({ type: "potassium", amount: 2000, timestamp: BASE_TS }),
+    ]);
+
+    const snapshot = await buildAnalyticsSnapshot(
+      fullRange(),
+      GOALS,
+      undefined,
+      undefined,
+      { sugar: false, potassium: true },
+    );
+
+    expect(snapshot.metrics.intake!.avgPotassiumMg).toBeGreaterThan(0);
+    expect(snapshot.metrics.intake!.potassiumLimitMg).toBe(
+      GOALS.potassiumLimitMg,
+    );
+    expect(snapshot.metrics.intake!.avgSugarG).toBeUndefined();
+  });
+
   it("omits the intake metric when goals are zero", async () => {
     await db.intakeRecords.bulkAdd([
       makeIntakeRecord({ type: "water", amount: 1000, timestamp: BASE_TS }),
@@ -171,6 +229,7 @@ describe("buildAnalyticsSnapshot", () => {
       waterGoalMl: 0,
       sodiumLimitMg: 0,
       sugarLimitG: 0,
+      potassiumLimitMg: 0,
     });
 
     expect(snapshot.metrics.intake).toBeUndefined();

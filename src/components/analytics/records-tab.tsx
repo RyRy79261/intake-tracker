@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { RecordRow } from "@/components/history/record-row";
 import { useSettings } from "@/hooks/use-settings";
+import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import { EditIntakeDialog } from "@/components/edit-intake-dialog";
 import { EditWeightDialog } from "@/components/edit-weight-dialog";
 import { EditBloodPressureDialog } from "@/components/edit-blood-pressure-dialog";
@@ -55,11 +56,18 @@ interface RecordsTabProps {
   range: TimeRange;
 }
 
-const FILTER_TABS: { value: FilterType; label: string }[] = [
+// Optional-tracker filter tabs are gated on user settings — see
+// `visibleFilterTabs` inside RecordsTab.
+const FILTER_TABS: {
+  value: FilterType;
+  label: string;
+  optional?: "sugar" | "potassium";
+}[] = [
   { value: "all", label: "All" },
   { value: "water", label: "Water" },
   { value: "salt", label: "Salt" },
-  { value: "sugar", label: "Sugar" },
+  { value: "sugar", label: "Sugar", optional: "sugar" },
+  { value: "potassium", label: "K", optional: "potassium" },
   { value: "weight", label: "Weight" },
   { value: "bp", label: "BP" },
   { value: "eating", label: "Eating" },
@@ -73,6 +81,7 @@ const filterColorMap: Record<string, string> = {
   water: CARD_THEMES.water.buttonBg,
   salt: CARD_THEMES.salt.buttonBg,
   sugar: CARD_THEMES.sugar.buttonBg,
+  potassium: CARD_THEMES.potassium.buttonBg,
   weight: CARD_THEMES.weight.buttonBg,
   bp: CARD_THEMES.bp.buttonBg,
   eating: CARD_THEMES.eating.buttonBg,
@@ -86,6 +95,14 @@ export function RecordsTab({ range }: RecordsTabProps) {
   const { toast } = useToast();
   const { onFocus: scrollOnFocus } = useKeyboardAwareScroll();
   const settings = useSettings();
+  const sugarEnabled = useOptionalTrackerEnabled("sugar");
+  const potassiumEnabled = useOptionalTrackerEnabled("potassium");
+  const visibleFilterTabs = FILTER_TABS.filter(
+    (t) =>
+      !t.optional ||
+      (t.optional === "sugar" && sugarEnabled) ||
+      (t.optional === "potassium" && potassiumEnabled),
+  );
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterType>("all");
   const [page, setPage] = useState(1);
@@ -358,7 +375,7 @@ export function RecordsTab({ range }: RecordsTabProps) {
       {/* Domain filter */}
       <div className="mb-4">
         <div className="flex gap-1 overflow-x-auto pb-1">
-          {FILTER_TABS.map((f) => (
+          {visibleFilterTabs.map((f) => (
             <Button
               key={f.value}
               variant={filter === f.value ? "default" : "outline"}

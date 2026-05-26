@@ -33,6 +33,7 @@ import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
 import {
   useSaltTotalsByGroupIds,
   useSugarTotalsByGroupIds,
+  usePotassiumTotalsByGroupIds,
 } from "@/hooks/use-intake-queries";
 import { useEditRecord } from "@/hooks/use-edit-record";
 import { useToast } from "@/hooks/use-toast";
@@ -42,6 +43,7 @@ import {
   dateTimeLocalToTimestamp,
   formatDateTime,
 } from "@/lib/date-utils";
+import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 
 const theme = CARD_THEMES.eating;
 
@@ -59,6 +61,8 @@ export function FoodSection() {
   const { toast } = useToast();
   const showAi = useAuthGate();
   const addComposableEntry = useAddComposableEntry();
+  const sugarEnabled = useOptionalTrackerEnabled("sugar");
+  const potassiumEnabled = useOptionalTrackerEnabled("potassium");
 
   // ─── Mutations ────────────────────────────────────────────────────
   const addEatingMutation = useAddEating();
@@ -69,6 +73,7 @@ export function FoodSection() {
   const [sodiumMg, setSodiumMg] = useState("");
   const [sodiumSource, setSodiumSource] = useState<SodiumSource>("sodium");
   const [sugarG, setSugarG] = useState("");
+  const [potassiumMg, setPotassiumMg] = useState("");
   const [waterMl, setWaterMl] = useState("");
   const [isParsing, setIsParsing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -87,6 +92,11 @@ export function FoodSection() {
   const sugarGNum = sugarG ? parseFloat(sugarG) : 0;
   const calculatedSugarG = sugarGNum > 0 ? Math.round(sugarGNum) : 0;
 
+  // ─── Derived potassium calculation ────────────────────────────────
+  const potassiumMgNum = potassiumMg ? parseFloat(potassiumMg) : 0;
+  const calculatedPotassiumMg =
+    potassiumMgNum > 0 ? Math.round(potassiumMgNum) : 0;
+
   // ─── Recent eating records ────────────────────────────────────────
   const recentRecords = useEatingRecords(5);
 
@@ -98,6 +108,7 @@ export function FoodSection() {
 
   const groupSodiumMap = useSaltTotalsByGroupIds(groupIds);
   const groupSugarMap = useSugarTotalsByGroupIds(groupIds);
+  const groupPotassiumMap = usePotassiumTotalsByGroupIds(groupIds);
 
   const deleteMutation = useDeleteEating();
   const syncEatingGroupMutation = useSyncEatingGroup();
@@ -111,6 +122,7 @@ export function FoodSection() {
   const [editSodiumMg, setEditSodiumMg] = useState("");
   const [editSodiumSource, setEditSodiumSource] = useState<SodiumSource>("sodium");
   const [editSugarG, setEditSugarG] = useState("");
+  const [editPotassiumMg, setEditPotassiumMg] = useState("");
   const [editWaterMl, setEditWaterMl] = useState("");
   // Token to discard stale fetchEntryGroup results when opening another record
   const openTokenRef = useRef(0);
@@ -131,6 +143,7 @@ export function FoodSection() {
       setEditSodiumMg("");
       setEditSodiumSource("sodium");
       setEditSugarG("");
+      setEditPotassiumMg("");
       setEditWaterMl("");
       if (record.groupId) {
         void fetchEntryGroup(record.groupId).then((group) => {
@@ -139,6 +152,9 @@ export function FoodSection() {
           const salt = group.intakes.find((r) => r.type === "salt");
           const sugar = group.intakes.find(
             (r) => r.type === "sugar" && r.source === "manual:sugar",
+          );
+          const potassium = group.intakes.find(
+            (r) => r.type === "potassium" && r.source === "manual:potassium",
           );
           const water = group.intakes.find(
             (r) => r.type === "water" && r.source === "manual:food_water_content",
@@ -153,6 +169,9 @@ export function FoodSection() {
           }
           if (sugar) {
             setEditSugarG(sugar.amount.toString());
+          }
+          if (potassium) {
+            setEditPotassiumMg(potassium.amount.toString());
           }
           if (water) {
             setEditWaterMl(water.amount.toString());
@@ -169,6 +188,9 @@ export function FoodSection() {
           : 0;
       const waterInput = editWaterMl ? parseFloat(editWaterMl) : 0;
       const sugarInput = editSugarG ? parseFloat(editSugarG) : 0;
+      const potassiumInput = editPotassiumMg ? parseFloat(editPotassiumMg) : 0;
+      // When a tracker is disabled we omit its field entirely so
+      // syncEatingGroup leaves any pre-existing linked record untouched.
       return {
         timestamp,
         note,
@@ -176,7 +198,12 @@ export function FoodSection() {
         sodiumMg: calculatedSodiumMg,
         sodiumKind: editSodiumSource,
         waterMl: waterInput > 0 ? Math.round(waterInput) : 0,
-        sugarG: sugarInput > 0 ? Math.round(sugarInput) : 0,
+        ...(sugarEnabled && {
+          sugarG: sugarInput > 0 ? Math.round(sugarInput) : 0,
+        }),
+        ...(potassiumEnabled && {
+          potassiumMg: potassiumInput > 0 ? Math.round(potassiumInput) : 0,
+        }),
       };
     },
     mutateAsync: async ({ id, updates }) => {
@@ -195,6 +222,7 @@ export function FoodSection() {
     setSodiumMg("");
     setSodiumSource("sodium");
     setSugarG("");
+    setPotassiumMg("");
     setWaterMl("");
     setAiPopulated(false);
   }, []);
@@ -217,8 +245,11 @@ export function FoodSection() {
       if (result.water && result.water > 0) {
         setWaterMl(result.water.toString());
       }
-      if (result.sugarG && result.sugarG > 0) {
+      if (sugarEnabled && result.sugarG && result.sugarG > 0) {
         setSugarG(result.sugarG.toString());
+      }
+      if (potassiumEnabled && result.potassiumMg && result.potassiumMg > 0) {
+        setPotassiumMg(result.potassiumMg.toString());
       }
       setAiPopulated(true);
 
@@ -239,7 +270,7 @@ export function FoodSection() {
     } finally {
       setIsParsing(false);
     }
-  }, [foodText, isParsing, toast]);
+  }, [foodText, isParsing, toast, sugarEnabled, potassiumEnabled]);
 
   const handleDetailSubmit = useCallback(async () => {
     if (isSubmitting) return;
@@ -268,11 +299,18 @@ export function FoodSection() {
           source: `manual:${sodiumSource}`,
         });
       }
-      if (calculatedSugarG > 0) {
+      if (sugarEnabled && calculatedSugarG > 0) {
         intakes.push({
           type: "sugar",
           amount: calculatedSugarG,
           source: "manual:sugar",
+        });
+      }
+      if (potassiumEnabled && calculatedPotassiumMg > 0) {
+        intakes.push({
+          type: "potassium",
+          amount: calculatedPotassiumMg,
+          source: "manual:potassium",
         });
       }
       const waterMlNum = waterMl ? parseFloat(waterMl) : 0;
@@ -330,6 +368,9 @@ export function FoodSection() {
     calculatedSodiumMg,
     sodiumSource,
     calculatedSugarG,
+    calculatedPotassiumMg,
+    sugarEnabled,
+    potassiumEnabled,
     waterMl,
     aiPopulated,
     addComposableEntry,
@@ -439,21 +480,41 @@ export function FoodSection() {
           )}
         </div>
 
-        {/* Sugar section */}
-        <div className="space-y-1">
-          <Label htmlFor="eating-sugar" className="text-sm">
-            Sugar (g){" "}
-            <span className="text-muted-foreground font-normal">(optional)</span>
-          </Label>
-          <Input
-            id="eating-sugar"
-            type="number"
-            min="0"
-            placeholder="g"
-            value={sugarG}
-            onChange={(e) => setSugarG(e.target.value)}
-          />
-        </div>
+        {/* Sugar section — optional tracker */}
+        {sugarEnabled && (
+          <div className="space-y-1" data-testid="eating-sugar-field">
+            <Label htmlFor="eating-sugar" className="text-sm">
+              Sugar (g){" "}
+              <span className="text-muted-foreground font-normal">(optional)</span>
+            </Label>
+            <Input
+              id="eating-sugar"
+              type="number"
+              min="0"
+              placeholder="g"
+              value={sugarG}
+              onChange={(e) => setSugarG(e.target.value)}
+            />
+          </div>
+        )}
+
+        {/* Potassium section — optional tracker */}
+        {potassiumEnabled && (
+          <div className="space-y-1" data-testid="eating-potassium-field">
+            <Label htmlFor="eating-potassium" className="text-sm">
+              Potassium (mg){" "}
+              <span className="text-muted-foreground font-normal">(optional)</span>
+            </Label>
+            <Input
+              id="eating-potassium"
+              type="number"
+              min="0"
+              placeholder="mg"
+              value={potassiumMg}
+              onChange={(e) => setPotassiumMg(e.target.value)}
+            />
+          </div>
+        )}
 
         {/* Water content */}
         <div className="space-y-1">
@@ -508,9 +569,14 @@ export function FoodSection() {
                 {groupSodiumMap.get(record.groupId)}mg
               </span>
             ) : null}
-            {record.groupId && groupSugarMap.get(record.groupId) ? (
+            {sugarEnabled && record.groupId && groupSugarMap.get(record.groupId) ? (
               <span className="text-xs font-medium text-pink-600 dark:text-pink-400">
                 {groupSugarMap.get(record.groupId)}g sugar
+              </span>
+            ) : null}
+            {potassiumEnabled && record.groupId && groupPotassiumMap.get(record.groupId) ? (
+              <span className="text-xs font-medium text-purple-600 dark:text-purple-400">
+                {groupPotassiumMap.get(record.groupId)}mg K
               </span>
             ) : null}
             {record.grams && (
@@ -563,18 +629,34 @@ export function FoodSection() {
                 </Select>
               </div>
             </div>
-            <div className="space-y-1">
-              <Label htmlFor="edit-eating-sugar" className="text-xs text-muted-foreground">Sugar (g)</Label>
-              <Input
-                id="edit-eating-sugar"
-                type="number"
-                min="0"
-                placeholder="optional"
-                value={editSugarG}
-                onChange={(e) => setEditSugarG(e.target.value)}
-                className="h-8 text-sm"
-              />
-            </div>
+            {sugarEnabled && (
+              <div className="space-y-1">
+                <Label htmlFor="edit-eating-sugar" className="text-xs text-muted-foreground">Sugar (g)</Label>
+                <Input
+                  id="edit-eating-sugar"
+                  type="number"
+                  min="0"
+                  placeholder="optional"
+                  value={editSugarG}
+                  onChange={(e) => setEditSugarG(e.target.value)}
+                  className="h-8 text-sm"
+                />
+              </div>
+            )}
+            {potassiumEnabled && (
+              <div className="space-y-1">
+                <Label htmlFor="edit-eating-potassium" className="text-xs text-muted-foreground">Potassium (mg)</Label>
+                <Input
+                  id="edit-eating-potassium"
+                  type="number"
+                  min="0"
+                  placeholder="optional"
+                  value={editPotassiumMg}
+                  onChange={(e) => setEditPotassiumMg(e.target.value)}
+                  className="h-8 text-sm"
+                />
+              </div>
+            )}
             <div className="space-y-1">
               <Label htmlFor="edit-eating-water" className="text-xs text-muted-foreground">Water content (ml)</Label>
               <Input

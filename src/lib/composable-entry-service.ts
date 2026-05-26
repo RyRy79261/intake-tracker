@@ -11,7 +11,7 @@ const COMPOSABLE_TABLES = [db.intakeRecords, db.eatingRecords, db.substanceRecor
 
 export interface ComposableEntryInput {
   eating?: { note?: string; grams?: number };
-  intakes?: Array<{ type: "water" | "salt" | "sugar"; amount: number; source?: string; note?: string }>;
+  intakes?: Array<{ type: "water" | "salt" | "sugar" | "potassium"; amount: number; source?: string; note?: string }>;
   substance?: {
     type: "caffeine" | "alcohol";
     amountMg?: number;
@@ -320,6 +320,7 @@ export type SodiumKind = "sodium" | "salt" | "msg";
 
 const FOOD_WATER_SOURCE = "manual:food_water_content";
 const SUGAR_SOURCE = "manual:sugar";
+const POTASSIUM_SOURCE = "manual:potassium";
 const SODIUM_KINDS: ReadonlyArray<SodiumKind> = ["sodium", "salt", "msg"];
 
 function isSodiumKindSource(source: string | undefined): boolean {
@@ -345,7 +346,11 @@ export async function syncEatingGroup(
     sodiumMg: number;
     sodiumKind: SodiumKind;
     waterMl: number;
-    sugarG: number;
+    /** `undefined` ⇒ leave any existing linked sugar record untouched
+     *  (used when the optional tracker is disabled). `0` ⇒ soft-delete. */
+    sugarG?: number;
+    /** Same semantics as `sugarG` for potassium. */
+    potassiumMg?: number;
   },
 ): Promise<ServiceResult<void>> {
   try {
@@ -357,7 +362,13 @@ export async function syncEatingGroup(
       if (!eating) throw new Error("Eating record not found");
 
       let groupId = eating.groupId;
-      if (!groupId && (patch.sodiumMg > 0 || patch.waterMl > 0 || patch.sugarG > 0)) {
+      if (
+        !groupId &&
+        (patch.sodiumMg > 0 ||
+          patch.waterMl > 0 ||
+          (patch.sugarG !== undefined && patch.sugarG > 0) ||
+          (patch.potassiumMg !== undefined && patch.potassiumMg > 0))
+      ) {
         groupId = crypto.randomUUID();
       }
 
@@ -393,9 +404,13 @@ export async function syncEatingGroup(
       const existingSugars = groupIntakes.filter(
         (r) => r.type === "sugar" && r.deletedAt === null && r.source === SUGAR_SOURCE,
       );
+      const existingPotassiums = groupIntakes.filter(
+        (r) => r.type === "potassium" && r.deletedAt === null && r.source === POTASSIUM_SOURCE,
+      );
       const [existingSalt, ...extraSalts] = existingSalts;
       const [existingWater, ...extraWaters] = existingWaters;
       const [existingSugar, ...extraSugars] = existingSugars;
+      const [existingPotassium, ...extraPotassiums] = existingPotassiums;
 
       const sodiumSource = `manual:${patch.sodiumKind}`;
       const groupSource = eating.groupSource ?? "manual_food_entry";
@@ -475,37 +490,78 @@ export async function syncEatingGroup(
       }
 
       // ── Sugar intake ──
-      if (patch.sugarG > 0) {
-        if (existingSugar) {
+      // `undefined` ⇒ caller (optional tracker disabled) opted out of the
+      // sugar field; preserve any existing linked record untouched.
+      if (patch.sugarG !== undefined) {
+        if (patch.sugarG > 0) {
+          if (existingSugar) {
+            await db.intakeRecords.update(existingSugar.id, {
+              amount: patch.sugarG,
+              timestamp: patch.timestamp,
+              updatedAt: now,
+            });
+          } else {
+            const record: IntakeRecord = {
+              id: crypto.randomUUID(),
+              type: "sugar",
+              amount: patch.sugarG,
+              timestamp: patch.timestamp,
+              source: SUGAR_SOURCE,
+              groupId,
+              groupSource,
+              ...fields,
+            };
+            await db.intakeRecords.add(record);
+          }
+        } else if (existingSugar) {
           await db.intakeRecords.update(existingSugar.id, {
-            amount: patch.sugarG,
-            timestamp: patch.timestamp,
+            deletedAt: now,
             updatedAt: now,
           });
-        } else {
-          const record: IntakeRecord = {
-            id: crypto.randomUUID(),
-            type: "sugar",
-            amount: patch.sugarG,
-            timestamp: patch.timestamp,
-            source: SUGAR_SOURCE,
-            groupId,
-            groupSource,
-            ...fields,
-          };
-          await db.intakeRecords.add(record);
         }
-      } else if (existingSugar) {
-        await db.intakeRecords.update(existingSugar.id, {
-          deletedAt: now,
-          updatedAt: now,
-        });
+        for (const dup of extraSugars) {
+          await db.intakeRecords.update(dup.id, {
+            deletedAt: now,
+            updatedAt: now,
+          });
+        }
       }
-      for (const dup of extraSugars) {
-        await db.intakeRecords.update(dup.id, {
-          deletedAt: now,
-          updatedAt: now,
-        });
+
+      // ── Potassium intake ──
+      // `undefined` ⇒ caller opted out; preserve existing linked record.
+      if (patch.potassiumMg !== undefined) {
+        if (patch.potassiumMg > 0) {
+          if (existingPotassium) {
+            await db.intakeRecords.update(existingPotassium.id, {
+              amount: patch.potassiumMg,
+              timestamp: patch.timestamp,
+              updatedAt: now,
+            });
+          } else {
+            const record: IntakeRecord = {
+              id: crypto.randomUUID(),
+              type: "potassium",
+              amount: patch.potassiumMg,
+              timestamp: patch.timestamp,
+              source: POTASSIUM_SOURCE,
+              groupId,
+              groupSource,
+              ...fields,
+            };
+            await db.intakeRecords.add(record);
+          }
+        } else if (existingPotassium) {
+          await db.intakeRecords.update(existingPotassium.id, {
+            deletedAt: now,
+            updatedAt: now,
+          });
+        }
+        for (const dup of extraPotassiums) {
+          await db.intakeRecords.update(dup.id, {
+            deletedAt: now,
+            updatedAt: now,
+          });
+        }
       }
     });
 

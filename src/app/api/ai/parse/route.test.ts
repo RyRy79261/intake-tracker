@@ -92,6 +92,7 @@ describe("POST /api/ai/parse", () => {
         water_ml: 250,
         sodium_mg: 12,
         sugar_g: 22,
+        potassium_mg: 500,
         reasoning: "A 250 ml glass of orange juice.",
       }),
     );
@@ -105,6 +106,7 @@ describe("POST /api/ai/parse", () => {
       salt: number;
       measurement_type: string;
       sugar: number;
+      potassium: number;
       reasoning?: string;
     };
     // Route renames sodium_mg → salt and stamps measurement_type.
@@ -112,23 +114,25 @@ describe("POST /api/ai/parse", () => {
     expect(body.salt).toBe(12);
     expect(body.measurement_type).toBe("sodium");
     expect(body.sugar).toBe(22);
+    expect(body.potassium).toBe(500);
     expect(body.reasoning).toBe("A 250 ml glass of orange juice.");
     expect(messagesCreate).toHaveBeenCalledTimes(1);
   });
 
   it("passes through null AI values without error", async () => {
     messagesCreate.mockResolvedValueOnce(
-      toolResponse({ water_ml: null, sodium_mg: null, sugar_g: null, reasoning: "Unknown." }),
+      toolResponse({ water_ml: null, sodium_mg: null, sugar_g: null, potassium_mg: null, reasoning: "Unknown." }),
     );
 
     const { POST } = await import("./route");
     const res = await POST(makeRequest({ input: "mystery item" }));
 
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { water: number | null; salt: number | null; sugar: number | null };
+    const body = (await res.json()) as { water: number | null; salt: number | null; sugar: number | null; potassium: number | null };
     expect(body.water).toBeNull();
     expect(body.salt).toBeNull();
     expect(body.sugar).toBeNull();
+    expect(body.potassium).toBeNull();
   });
 
   it("input validation: empty input → 400, AI never called", async () => {
@@ -187,7 +191,7 @@ describe("POST /api/ai/parse", () => {
   it("AI-failure: tool result violates output schema (water out of range) → 422", async () => {
     // 99999 exceeds AIParseResponseSchema's water max of 10000.
     messagesCreate.mockResolvedValueOnce(
-      toolResponse({ water_ml: 99999, sodium_mg: 0, sugar_g: 0, reasoning: "bad" }),
+      toolResponse({ water_ml: 99999, sodium_mg: 0, sugar_g: 0, potassium_mg: 0, reasoning: "bad" }),
     );
 
     const { POST } = await import("./route");
@@ -202,7 +206,7 @@ describe("POST /api/ai/parse", () => {
   it("follow-up recovery: text first turn then a valid tool turn → 200", async () => {
     messagesCreate.mockResolvedValueOnce(textResponse());
     messagesCreate.mockResolvedValueOnce(
-      toolResponse({ water_ml: 100, sodium_mg: 1, sugar_g: 0, reasoning: "plain water" }),
+      toolResponse({ water_ml: 100, sodium_mg: 1, sugar_g: 0, potassium_mg: 0, reasoning: "plain water" }),
     );
 
     const { POST } = await import("./route");

@@ -7,7 +7,7 @@ import { schedulePush } from "@/lib/sync-engine";
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 
 export async function addIntakeRecord(
-  type: "water" | "salt" | "sugar",
+  type: "water" | "salt" | "sugar" | "potassium",
   amount: number,
   source: string = "manual",
   timestamp?: number,
@@ -83,7 +83,7 @@ export async function updateIntakeRecord(
 }
 
 export async function getRecordsInLast24Hours(
-  type?: "water" | "salt" | "sugar"
+  type?: "water" | "salt" | "sugar" | "potassium"
 ): Promise<IntakeRecord[]> {
   const cutoffTime = Date.now() - TWENTY_FOUR_HOURS_MS;
   const query = db.intakeRecords.where("timestamp").aboveOrEqual(cutoffTime);
@@ -94,7 +94,7 @@ export async function getRecordsInLast24Hours(
   return records.filter((r) => r.deletedAt === null);
 }
 
-export async function getTotalInLast24Hours(type: "water" | "salt" | "sugar"): Promise<number> {
+export async function getTotalInLast24Hours(type: "water" | "salt" | "sugar" | "potassium"): Promise<number> {
   const records = await getRecordsInLast24Hours(type);
   return records.reduce((sum, record) => sum + record.amount, 0);
 }
@@ -112,7 +112,7 @@ function getDayStartTimestamp(dayStartHour: number): number {
   return dayStart.getTime();
 }
 
-export async function getDailyTotal(type: "water" | "salt" | "sugar", dayStartHour: number): Promise<number> {
+export async function getDailyTotal(type: "water" | "salt" | "sugar" | "potassium", dayStartHour: number): Promise<number> {
   const cutoffTime = getDayStartTimestamp(dayStartHour);
   const records = await db.intakeRecords
     .where("timestamp")
@@ -122,7 +122,7 @@ export async function getDailyTotal(type: "water" | "salt" | "sugar", dayStartHo
   return records.reduce((sum, r) => sum + r.amount, 0);
 }
 
-export async function getRecentRecords(type: "water" | "salt" | "sugar", limit: number = 3): Promise<IntakeRecord[]> {
+export async function getRecentRecords(type: "water" | "salt" | "sugar" | "potassium", limit: number = 3): Promise<IntakeRecord[]> {
   const records = await db.intakeRecords
     .where("type")
     .equals(type)
@@ -197,7 +197,7 @@ export async function getRecordsByCursor(
 export async function getRecordsByDateRange(
   startTime: number,
   endTime: number,
-  type?: "water" | "salt" | "sugar"
+  type?: "water" | "salt" | "sugar" | "potassium"
 ): Promise<IntakeRecord[]> {
   let records = await db.intakeRecords
     .where("timestamp")
@@ -221,7 +221,7 @@ export async function exportAllData(): Promise<string> {
 
 async function getIntakeTotalsByGroupIds(
   groupIds: string[],
-  type: "water" | "salt" | "sugar"
+  type: "water" | "salt" | "sugar" | "potassium"
 ): Promise<Map<string, number>> {
   if (groupIds.length === 0) return new Map();
   const records = await db.intakeRecords
@@ -248,6 +248,12 @@ export function getSugarTotalsByGroupIds(
   groupIds: string[]
 ): Promise<Map<string, number>> {
   return getIntakeTotalsByGroupIds(groupIds, "sugar");
+}
+
+export function getPotassiumTotalsByGroupIds(
+  groupIds: string[]
+): Promise<Map<string, number>> {
+  return getIntakeTotalsByGroupIds(groupIds, "potassium");
 }
 
 export async function clearAllData(): Promise<ServiceResult<void>> {

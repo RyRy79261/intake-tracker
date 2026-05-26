@@ -82,7 +82,7 @@ function makeRange(days: number): TimeRange {
   return { start: BASE_TS, end: BASE_TS + days * DAY_MS };
 }
 
-function makeIntakeRecord(overrides: Partial<IntakeRecord> & { type: "water" | "salt" | "sugar"; amount: number; timestamp: number }): IntakeRecord {
+function makeIntakeRecord(overrides: Partial<IntakeRecord> & { type: "water" | "salt" | "sugar" | "potassium"; amount: number; timestamp: number }): IntakeRecord {
   return {
     id: Math.random().toString(36).slice(2),
     source: "manual",

@@ -22,6 +22,7 @@ const DOMAIN_LABELS: Record<Domain, string> = {
   water: "water intake",
   salt: "sodium intake",
   sugar: "sugar intake",
+  potassium: "potassium intake",
   weight: "weight",
   bp: "blood pressure",
   eating: "eating",
@@ -65,13 +66,18 @@ const FluidBalanceMetricSchema = z.object({
   daysTotal: z.number().int().nonnegative(),
 });
 
+// Sugar and potassium are optional trackers — the snapshot only includes
+// them when the user has the tracker enabled. Water and sodium always ship
+// because they are the core fluid-balance / cardiovascular metrics.
 const IntakeMetricSchema = z.object({
   avgWaterMl: z.number().nonnegative(),
   avgSodiumMg: z.number().nonnegative(),
-  avgSugarG: z.number().nonnegative(),
+  avgSugarG: z.number().nonnegative().optional(),
+  avgPotassiumMg: z.number().nonnegative().optional(),
   waterGoalMl: z.number().positive(),
   sodiumLimitMg: z.number().positive(),
-  sugarLimitG: z.number().positive(),
+  sugarLimitG: z.number().positive().optional(),
+  potassiumLimitMg: z.number().positive().optional(),
 });
 
 const CorrelationMetricSchema = z.object({
@@ -297,11 +303,22 @@ export function buildInsightsPrompt(req: AnalyticsInsightsRequest): string {
 
   if (metrics.intake) {
     const i = metrics.intake;
-    lines.push(
-      `Daily intake: water averaged ${i.avgWaterMl.toFixed(0)} ml against a ${i.waterGoalMl} ml goal; ` +
-        `sodium averaged ${i.avgSodiumMg.toFixed(0)} mg against a ${i.sodiumLimitMg} mg limit; ` +
-        `sugar averaged ${i.avgSugarG.toFixed(0)} g against a ${i.sugarLimitG} g limit.`,
-    );
+    const parts: string[] = [
+      `water averaged ${i.avgWaterMl.toFixed(0)} ml against a ${i.waterGoalMl} ml goal`,
+      `sodium averaged ${i.avgSodiumMg.toFixed(0)} mg against a ${i.sodiumLimitMg} mg limit`,
+    ];
+    if (i.avgSugarG !== undefined && i.sugarLimitG !== undefined) {
+      parts.push(
+        `sugar averaged ${i.avgSugarG.toFixed(0)} g against a ${i.sugarLimitG} g limit`,
+      );
+    }
+    if (i.avgPotassiumMg !== undefined && i.potassiumLimitMg !== undefined) {
+      parts.push(
+        `potassium averaged ${i.avgPotassiumMg.toFixed(0)} mg against a ${i.potassiumLimitMg} mg soft target ` +
+          `(estimates are rough — many foods are not labelled for potassium)`,
+      );
+    }
+    lines.push(`Daily intake: ${parts.join("; ")}.`);
   }
 
   if (metrics.correlations && metrics.correlations.length > 0) {

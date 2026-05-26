@@ -15,12 +15,14 @@ import { BarChart3, ArrowRightLeft } from "lucide-react";
 import {
   useSaltVsWeight,
   useSugarVsWeight,
+  usePotassiumVsWeight,
   useCaffeineVsBP,
   useAlcoholVsBP,
   useCorrelation,
   useFluidBalance,
 } from "@/hooks/use-analytics-queries";
 import type { TimeRange, Domain, CorrelationResult, AnalyticsResult } from "@/lib/analytics-types";
+import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import { CorrelationChart } from "@/components/analytics/correlation-chart";
 import {
   ResponsiveContainer,
@@ -38,11 +40,20 @@ import {
 // ---------------------------------------------------------------------------
 
 // Medication is intentionally excluded — medication-domain analytics are a
-// separate refactor (it has no single numeric series today).
-const DOMAIN_OPTIONS: { value: Domain; label: string }[] = [
+// separate refactor (it has no single numeric series today). Optional-
+// tracker entries (sugar, potassium) are filtered out at render time when
+// the tracker is disabled in settings.
+interface DomainOption {
+  value: Domain;
+  label: string;
+  /** Optional-tracker key gating the visibility of this option. */
+  optional?: "sugar" | "potassium";
+}
+const DOMAIN_OPTIONS: DomainOption[] = [
   { value: "water", label: "Water Intake" },
   { value: "salt", label: "Salt Intake" },
-  { value: "sugar", label: "Sugar Intake" },
+  { value: "sugar", label: "Sugar Intake", optional: "sugar" },
+  { value: "potassium", label: "Potassium Intake", optional: "potassium" },
   { value: "weight", label: "Weight" },
   { value: "bp", label: "Blood Pressure" },
   { value: "eating", label: "Eating" },
@@ -56,6 +67,7 @@ const DOMAIN_UNITS: Record<Domain, string> = {
   water: " ml",
   salt: " mg",
   sugar: " g",
+  potassium: " mg",
   weight: " kg",
   bp: " mmHg",
   eating: "",
@@ -223,6 +235,14 @@ function FluidBalanceCard({ range }: { range: TimeRange }) {
 // ---------------------------------------------------------------------------
 
 function CustomComparison({ range }: { range: TimeRange }) {
+  const sugarEnabled = useOptionalTrackerEnabled("sugar");
+  const potassiumEnabled = useOptionalTrackerEnabled("potassium");
+  const visibleOptions = DOMAIN_OPTIONS.filter(
+    (o) =>
+      !o.optional ||
+      (o.optional === "sugar" && sugarEnabled) ||
+      (o.optional === "potassium" && potassiumEnabled),
+  );
   const [domainA, setDomainA] = useState<Domain>("salt");
   const [domainB, setDomainB] = useState<Domain>("weight");
   const [lagDays, setLagDays] = useState(0);
@@ -254,7 +274,7 @@ function CustomComparison({ range }: { range: TimeRange }) {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {DOMAIN_OPTIONS.map((opt) => (
+              {visibleOptions.map((opt) => (
                 <SelectItem key={opt.value} value={opt.value}>
                   {opt.label}
                 </SelectItem>
@@ -267,7 +287,7 @@ function CustomComparison({ range }: { range: TimeRange }) {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {DOMAIN_OPTIONS.map((opt) => (
+              {visibleOptions.map((opt) => (
                 <SelectItem key={opt.value} value={opt.value}>
                   {opt.label}
                 </SelectItem>
@@ -320,8 +340,11 @@ function CustomComparison({ range }: { range: TimeRange }) {
 // ---------------------------------------------------------------------------
 
 export function CorrelationsTab({ range }: { range: TimeRange }) {
+  const sugarEnabled = useOptionalTrackerEnabled("sugar");
+  const potassiumEnabled = useOptionalTrackerEnabled("potassium");
   const saltVsWeight = useSaltVsWeight(range);
   const sugarVsWeight = useSugarVsWeight(range);
+  const potassiumVsWeight = usePotassiumVsWeight(range);
   const caffeineVsBP = useCaffeineVsBP(range);
   const alcoholVsBP = useAlcoholVsBP(range);
 
@@ -342,14 +365,27 @@ export function CorrelationsTab({ range }: { range: TimeRange }) {
         unitB=" kg"
       />
 
-      <CorrelationCard
-        title="Weight vs Sugar Intake"
-        result={sugarVsWeight}
-        labelA="Sugar"
-        labelB="Weight"
-        unitA=" g"
-        unitB=" kg"
-      />
+      {sugarEnabled && (
+        <CorrelationCard
+          title="Weight vs Sugar Intake"
+          result={sugarVsWeight}
+          labelA="Sugar"
+          labelB="Weight"
+          unitA=" g"
+          unitB=" kg"
+        />
+      )}
+
+      {potassiumEnabled && (
+        <CorrelationCard
+          title="Weight vs Potassium Intake"
+          result={potassiumVsWeight}
+          labelA="Potassium"
+          labelB="Weight"
+          unitA=" mg"
+          unitB=" kg"
+        />
+      )}
 
       <CorrelationCard
         title="Caffeine vs Blood Pressure"

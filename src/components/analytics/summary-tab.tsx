@@ -19,6 +19,7 @@ import {
   Heart,
   Scale,
   Candy,
+  Banana,
   TrendingUp,
   TrendingDown,
   Minus,
@@ -33,6 +34,7 @@ import {
 import { useRecordsTabData } from "@/hooks/use-records-tab-queries";
 import { useSettingsStore } from "@/stores/settings-store";
 import { AiInsightsCard } from "@/components/analytics/ai-insights-card";
+import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import type { TimeRange, TrendDirection } from "@/lib/analytics-types";
 
 const TOOLTIP_STYLE = {
@@ -117,12 +119,16 @@ export function SummaryTab({ range }: { range: TimeRange }) {
   const waterGoal = useSettingsStore((s) => s.waterLimit);
   const saltLimit = useSettingsStore((s) => s.saltLimit);
   const sugarLimit = useSettingsStore((s) => s.sugarLimit);
+  const potassiumLimit = useSettingsStore((s) => s.potassiumLimit);
+  const sugarEnabled = useOptionalTrackerEnabled("sugar");
+  const potassiumEnabled = useOptionalTrackerEnabled("potassium");
 
   // Aggregate the unified record list into intake totals and event counts.
   const totals = useMemo(() => {
     let waterMl = 0;
     let saltMg = 0;
     let sugarG = 0;
+    let potassiumMg = 0;
     let meals = 0;
     let urination = 0;
     let defecation = 0;
@@ -135,6 +141,7 @@ export function SummaryTab({ range }: { range: TimeRange }) {
       if (r.type === "intake" && r.record.type === "water") waterMl += r.record.amount;
       else if (r.type === "intake" && r.record.type === "salt") saltMg += r.record.amount;
       else if (r.type === "intake" && r.record.type === "sugar") sugarG += r.record.amount;
+      else if (r.type === "intake" && r.record.type === "potassium") potassiumMg += r.record.amount;
       else if (r.type === "eating") meals += 1;
       else if (r.type === "urination") urination += 1;
       else if (r.type === "defecation") defecation += 1;
@@ -146,6 +153,7 @@ export function SummaryTab({ range }: { range: TimeRange }) {
       waterMl,
       saltMg,
       sugarG,
+      potassiumMg,
       meals,
       urination,
       defecation,
@@ -212,15 +220,28 @@ export function SummaryTab({ range }: { range: TimeRange }) {
       );
     }
 
-    const avgSugar = totals.sugarG / rangeDays;
-    if (totals.sugarG > 0 && avgSugar > sugarLimit) {
-      out.push(
-        `Average daily sugar (${Math.round(avgSugar)} g) is above your ${sugarLimit} g limit.`,
-      );
+    if (sugarEnabled) {
+      const avgSugar = totals.sugarG / rangeDays;
+      if (totals.sugarG > 0 && avgSugar > sugarLimit) {
+        out.push(
+          `Average daily sugar (${Math.round(avgSugar)} g) is above your ${sugarLimit} g limit.`,
+        );
+      }
+    }
+
+    if (potassiumEnabled) {
+      // Potassium is a soft target — no over-limit warning, just a "below
+      // target" observation since the deficit case is what usually matters.
+      const avgPotassium = totals.potassiumMg / rangeDays;
+      if (totals.potassiumMg > 0 && potassiumLimit > 0 && avgPotassium < potassiumLimit) {
+        out.push(
+          `Average daily potassium (${Math.round(avgPotassium)} mg) is below your ${potassiumLimit} mg target — note potassium estimates are rough.`,
+        );
+      }
     }
 
     return out;
-  }, [bp, bpReadings, weightReadings, fluid, totals, rangeDays, waterGoal, saltLimit, sugarLimit]);
+  }, [bp, bpReadings, weightReadings, fluid, totals, rangeDays, waterGoal, saltLimit, sugarLimit, potassiumLimit, sugarEnabled, potassiumEnabled]);
 
   if (!hasAnyData) {
     return (
@@ -320,12 +341,22 @@ export function SummaryTab({ range }: { range: TimeRange }) {
           value={`${Math.round(totals.saltMg / rangeDays)} mg`}
           sub={`${totals.saltMg} mg total · avg/day`}
         />
-        <KpiCard
-          icon={<Candy className="w-3.5 h-3.5" />}
-          label="Sugar Intake"
-          value={`${Math.round(totals.sugarG / rangeDays)} g`}
-          sub={`${totals.sugarG} g total · avg/day`}
-        />
+        {sugarEnabled && (
+          <KpiCard
+            icon={<Candy className="w-3.5 h-3.5" />}
+            label="Sugar Intake"
+            value={`${Math.round(totals.sugarG / rangeDays)} g`}
+            sub={`${totals.sugarG} g total · avg/day`}
+          />
+        )}
+        {potassiumEnabled && (
+          <KpiCard
+            icon={<Banana className="w-3.5 h-3.5" />}
+            label="Potassium Intake"
+            value={`${Math.round(totals.potassiumMg / rangeDays)} mg`}
+            sub={`${totals.potassiumMg} mg total · avg/day`}
+          />
+        )}
         <KpiCard
           icon={<Activity className="w-3.5 h-3.5" />}
           label="Activity"

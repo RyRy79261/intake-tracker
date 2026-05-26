@@ -44,6 +44,11 @@ interface GenerateInsightsInput {
    * Pass only when the user has opted in — prior summaries are free text.
    */
   includePrevious?: boolean;
+  /**
+   * Which optional trackers (sugar, potassium) are currently enabled in
+   * settings. Disabled trackers are dropped from the snapshot entirely.
+   */
+  enabledTrackers?: { sugar: boolean; potassium: boolean };
 }
 
 /** Live history of cached insight reports, newest first. */
@@ -65,12 +70,14 @@ export function useGenerateInsights() {
       conditions,
       includeMedications,
       includePrevious,
+      enabledTrackers,
     }) => {
       const snapshot = await buildAnalyticsSnapshot(
         range,
         goals,
         conditions,
         includeMedications,
+        enabledTrackers,
       );
       if (snapshotIsEmpty(snapshot)) {
         throw new NotEnoughDataError();
@@ -186,6 +193,8 @@ interface DeepJobInput {
   conditions?: string[];
   includeMedications?: boolean;
   includePrevious?: boolean;
+  /** Which optional trackers are currently enabled. */
+  enabledTrackers?: { sugar: boolean; potassium: boolean };
 }
 
 interface DeepJobPendingState {
@@ -388,6 +397,7 @@ export function useDeepInsightJob() {
           input.goals,
           input.conditions,
           input.includeMedications,
+          input.enabledTrackers,
         );
         if (snapshotIsEmpty(snapshot)) {
           throw new NotEnoughDataError();
