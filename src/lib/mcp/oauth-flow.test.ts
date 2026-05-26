@@ -314,7 +314,7 @@ describe("OAuth code-grant flow", () => {
     expect(result.ok).toBe(false);
   });
 
-  it("rotates refresh tokens and revokes the old one", async () => {
+  it("issues a fresh access token while keeping the refresh token stable", async () => {
     const client = await oauth.registerClient({
       clientName: "claude.ai",
       redirectUris: ["https://claude.ai/cb"],
@@ -325,20 +325,21 @@ describe("OAuth code-grant flow", () => {
       userId: "user-1",
       scope: "intake-tracker:read",
     });
-    const rotated = await oauth.rotateRefreshToken(
+    const refreshed = await oauth.rotateRefreshToken(
       issued.refreshToken,
       client.clientId,
     );
-    expect(rotated.ok).toBe(true);
-    if (rotated.ok) {
-      expect(rotated.tokens.refreshToken).not.toBe(issued.refreshToken);
+    expect(refreshed.ok).toBe(true);
+    if (refreshed.ok) {
+      expect(refreshed.tokens.refreshToken).toBe(issued.refreshToken);
+      expect(refreshed.tokens.accessToken).not.toBe(issued.accessToken);
     }
-    // Old refresh token must be unusable.
-    const replay = await oauth.rotateRefreshToken(
+    // Same refresh token must keep working — no single-use rotation.
+    const again = await oauth.rotateRefreshToken(
       issued.refreshToken,
       client.clientId,
     );
-    expect(replay.ok).toBe(false);
+    expect(again.ok).toBe(true);
   });
 
   it("rejects DCR for a non-allowlisted redirect URI", async () => {

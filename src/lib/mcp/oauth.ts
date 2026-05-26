@@ -275,68 +275,61 @@ export async function rotateRefreshToken(
   const refreshHash = hashToken(refreshTokenPlain);
   const now = Date.now();
 
-  // Wrap revoke + new-token-insert in a single transaction so that if the
-  // insert fails the revoke is rolled back — otherwise a transient DB
-  // error would permanently kill the user's session. The atomic revoke
-  // (with isNull guard) still gives the "exactly one winner" property
-  // under concurrent rotation: only one transaction's UPDATE returns the
-  // row; the others see zero rows and abort.
+  // Refresh token is stable for the full refreshExpiresAt window — we issue
+  // a fresh access token and swap it into the existing row in place. The
+  // returned refresh_token is identical to what the caller sent.
   //
-  // All validation predicates (client_id, refresh_expires_at) are in the
-  // WHERE clause so a wrong client or expired token simply leaves the
-  // old token intact.
+  // Why no rotation: strict single-use refresh-token rotation locked the
+  // single legitimate client out whenever its parallel/retried refresh
+  // request raced or a response was lost mid-flight. For a single-user PWA
+  // (see CLAUDE.md), the marginal forensic benefit of refresh-token
+  // rotation does not justify forcing daily re-auth.
+  //
+  // All validation predicates (client_id, revokedAt, refresh_expires_at)
+  // are in the WHERE clause so a wrong client or expired token simply
+  // leaves the existing row untouched.
   try {
-    return await db.transaction(async (tx) => {
-      const revoked = await tx
-        .update(mcpAccessTokens)
-        .set({ revokedAt: now })
-        .where(
-          and(
-            eq(mcpAccessTokens.refreshTokenHash, refreshHash),
-            eq(mcpAccessTokens.clientId, clientId),
-            isNull(mcpAccessTokens.revokedAt),
-            gte(mcpAccessTokens.refreshExpiresAt, now),
-          ),
-        )
-        .returning();
-
-      if (revoked.length === 0) {
-        return {
-          ok: false as const,
-          reason:
-            "refresh token not found, already revoked, expired, or client mismatch",
-        };
-      }
-      const row = revoked[0]!;
-
-      const accessToken = generateOpaqueToken(TOKEN_PREFIX.ACCESS, 32);
-      const refreshToken = generateOpaqueToken(TOKEN_PREFIX.REFRESH, 32);
-      await tx.insert(mcpAccessTokens).values({
+    const accessToken = generateOpaqueToken(TOKEN_PREFIX.ACCESS, 32);
+    const updated = await db
+      .update(mcpAccessTokens)
+      .set({
         tokenHash: hashToken(accessToken),
-        refreshTokenHash: hashToken(refreshToken),
-        clientId: row.clientId,
-        userId: row.userId,
-        scope: row.scope,
         expiresAt: now + TOKEN_TTL.ACCESS_TOKEN_MS,
-        refreshExpiresAt: now + TOKEN_TTL.REFRESH_TOKEN_MS,
-        createdAt: now,
-      });
+        lastUsedAt: now,
+      })
+      .where(
+        and(
+          eq(mcpAccessTokens.refreshTokenHash, refreshHash),
+          eq(mcpAccessTokens.clientId, clientId),
+          isNull(mcpAccessTokens.revokedAt),
+          gte(mcpAccessTokens.refreshExpiresAt, now),
+        ),
+      )
+      .returning();
 
+    if (updated.length === 0) {
       return {
-        ok: true as const,
-        tokens: {
-          accessToken,
-          refreshToken,
-          accessExpiresIn: Math.floor(TOKEN_TTL.ACCESS_TOKEN_MS / 1000),
-        },
-        userId: row.userId,
-        scope: row.scope,
+        ok: false,
+        reason:
+          "refresh token not found, revoked, expired, or client mismatch",
       };
-    });
+    }
+    const row = updated[0]!;
+
+    return {
+      ok: true,
+      tokens: {
+        accessToken,
+        refreshToken: refreshTokenPlain,
+        accessExpiresIn: Math.floor(TOKEN_TTL.ACCESS_TOKEN_MS / 1000),
+      },
+      userId: row.userId,
+      scope: row.scope,
+    };
   } catch (err) {
     return {
       ok: false,
-      reason: err instanceof Error ? err.message : "rotation failed",
+      reason: err instanceof Error ? err.message : "refresh failed",
     };
   }
 }
