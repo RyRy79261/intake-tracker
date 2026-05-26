@@ -60,7 +60,9 @@ export default defineConfig({
       // would only double CI time without adding mobile-specific signal.
       name: 'mobile-safari',
       testMatch: [
+        'auth.spec.ts',
         'dashboard.spec.ts',
+        'intake-lifecycle.spec.ts',
         'medications.spec.ts',
         'history.spec.ts',
         'settings.spec.ts',
