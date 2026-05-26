@@ -23,6 +23,7 @@ export interface CardTheme {
   outlineBorder: string;
   outlineText: string;
   progressGradient: string;
+  progressExtended: string;
   progressOverLimit: string;
   hoverBg: string;
   inputBg: string;
@@ -45,6 +46,7 @@ export const CARD_THEMES = {
     outlineBorder: "border-sky-200 dark:border-sky-800",
     outlineText: "text-sky-700 dark:text-sky-300",
     progressGradient: "bg-gradient-to-r from-sky-400 to-cyan-500",
+    progressExtended: "bg-gradient-to-r from-blue-500 to-indigo-600",
     progressOverLimit: "bg-red-500",
     hoverBg: "hover:bg-sky-100 hover:border-sky-300 dark:hover:bg-sky-900/50",
     inputBg: "bg-sky-100/80 hover:bg-sky-200/80 dark:bg-sky-900/50 dark:hover:bg-sky-800/50",
@@ -65,6 +67,7 @@ export const CARD_THEMES = {
     outlineBorder: "border-amber-200 dark:border-amber-800",
     outlineText: "text-amber-700 dark:text-amber-300",
     progressGradient: "bg-gradient-to-r from-amber-400 to-orange-500",
+    progressExtended: "bg-gradient-to-r from-orange-600 to-amber-700",
     progressOverLimit: "bg-red-500",
     hoverBg: "hover:bg-amber-100 hover:border-amber-300 dark:hover:bg-amber-900/50",
     inputBg: "bg-amber-100/80 hover:bg-amber-200/80 dark:bg-amber-900/50 dark:hover:bg-amber-800/50",
@@ -85,6 +88,7 @@ export const CARD_THEMES = {
     outlineBorder: "border-pink-200 dark:border-pink-800",
     outlineText: "text-pink-700 dark:text-pink-300",
     progressGradient: "bg-gradient-to-r from-pink-400 to-rose-500",
+    progressExtended: "bg-gradient-to-r from-rose-600 to-fuchsia-700",
     progressOverLimit: "bg-red-500",
     hoverBg: "hover:bg-pink-100 hover:border-pink-300 dark:hover:bg-pink-900/50",
     inputBg: "bg-pink-100/80 hover:bg-pink-200/80 dark:bg-pink-900/50 dark:hover:bg-pink-800/50",
@@ -105,6 +109,7 @@ export const CARD_THEMES = {
     outlineBorder: "border-emerald-200 dark:border-emerald-800",
     outlineText: "text-emerald-700 dark:text-emerald-300",
     progressGradient: "",
+    progressExtended: "",
     progressOverLimit: "bg-red-500",
     hoverBg: "hover:bg-emerald-100 hover:border-emerald-300 dark:hover:bg-emerald-900/50",
     inputBg: "",
@@ -125,6 +130,7 @@ export const CARD_THEMES = {
     outlineBorder: "border-rose-200 dark:border-rose-800",
     outlineText: "text-rose-700 dark:text-rose-300",
     progressGradient: "",
+    progressExtended: "",
     progressOverLimit: "bg-red-500",
     hoverBg: "hover:bg-rose-100 hover:border-rose-300 dark:hover:bg-rose-900/50",
     inputBg: "",
@@ -145,6 +151,7 @@ export const CARD_THEMES = {
     outlineBorder: "border-orange-200 dark:border-orange-800",
     outlineText: "text-orange-700 dark:text-orange-300",
     progressGradient: "",
+    progressExtended: "",
     progressOverLimit: "bg-red-500",
     hoverBg: "hover:bg-orange-100 hover:border-orange-300 dark:hover:bg-orange-900/50",
     inputBg: "",
@@ -165,6 +172,7 @@ export const CARD_THEMES = {
     outlineBorder: "border-violet-200 dark:border-violet-800",
     outlineText: "text-violet-700 dark:text-violet-300",
     progressGradient: "",
+    progressExtended: "",
     progressOverLimit: "bg-red-500",
     hoverBg: "hover:bg-violet-100 hover:border-violet-300 dark:hover:bg-violet-900/50",
     inputBg: "",
@@ -185,6 +193,7 @@ export const CARD_THEMES = {
     outlineBorder: "border-stone-200 dark:border-stone-800",
     outlineText: "text-stone-700 dark:text-stone-300",
     progressGradient: "",
+    progressExtended: "",
     progressOverLimit: "bg-red-500",
     hoverBg: "hover:bg-stone-100 hover:border-stone-300 dark:hover:bg-stone-900/50",
     inputBg: "",
@@ -205,6 +214,7 @@ export const CARD_THEMES = {
     outlineBorder: "border-yellow-200 dark:border-yellow-800",
     outlineText: "text-yellow-700 dark:text-yellow-300",
     progressGradient: "bg-gradient-to-r from-yellow-400 to-amber-500",
+    progressExtended: "",
     progressOverLimit: "bg-red-500",
     hoverBg: "hover:bg-yellow-100 hover:border-yellow-300 dark:hover:bg-yellow-900/50",
     inputBg: "bg-yellow-100/80 hover:bg-yellow-200/80 dark:bg-yellow-900/50 dark:hover:bg-yellow-800/50",
@@ -225,6 +235,7 @@ export const CARD_THEMES = {
     outlineBorder: "border-fuchsia-200 dark:border-fuchsia-800",
     outlineText: "text-fuchsia-700 dark:text-fuchsia-300",
     progressGradient: "bg-gradient-to-r from-fuchsia-400 to-pink-500",
+    progressExtended: "",
     progressOverLimit: "bg-red-500",
     hoverBg: "hover:bg-fuchsia-100 hover:border-fuchsia-300 dark:hover:bg-fuchsia-900/50",
     inputBg: "bg-fuchsia-100/80 hover:bg-fuchsia-200/80 dark:bg-fuchsia-900/50 dark:hover:bg-fuchsia-800/50",

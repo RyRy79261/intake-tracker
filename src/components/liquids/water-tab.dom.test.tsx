@@ -89,15 +89,41 @@ describe("WaterTab", () => {
           }),
         ],
       },
-      settings: { waterLimit: 1000 },
+      // Disable the extended buffer so the bar runs single-stage and the
+      // primary fill maps directly onto the daily limit.
+      settings: { waterLimit: 1000, waterExtendedBuffer: 0 },
     });
 
-    // 500 of 1000ml = 50% progress. The live query resolves async.
+    // 500 of 1000ml = 50% primary fill. The live query resolves async.
     const indicator = document.querySelector(
       "[role='progressbar'] > div"
     ) as HTMLElement;
-    await waitFor(() =>
-      expect(indicator.style.transform).toBe("translateX(-50%)")
+    await waitFor(() => expect(indicator.style.width).toBe("50%"));
+  });
+
+  it("renders the extended-buffer segment when the daily total spills past the target", async () => {
+    await renderWithFixtures(<WaterTab />, {
+      seed: {
+        intakeRecords: [
+          makeIntakeRecord({
+            type: "water",
+            amount: 1800,
+            timestamp: Date.now(),
+          }),
+        ],
+      },
+      settings: { waterLimit: 1500, waterExtendedBuffer: 500 },
+    });
+
+    // 1800ml of a 1500/2000 bar -> 1500/2000=75% primary + 300/2000=15% extended.
+    const segments = document.querySelectorAll<HTMLElement>(
+      "[role='progressbar'] > div"
     );
+    await waitFor(() => {
+      expect(segments).toHaveLength(2);
+      expect(segments[0]!.style.width).toBe("75%");
+      expect(segments[1]!.style.width).toBe("15%");
+      expect(segments[1]!.style.left).toBe("75%");
+    });
   });
 });

@@ -12,11 +12,13 @@ export function WaterSettingsSection() {
   const settings = useSettings();
   const [incrementInput, setIncrementInput] = useState(settings.waterIncrement.toString());
   const [limitInput, setLimitInput] = useState(settings.waterLimit.toString());
+  const [extendedInput, setExtendedInput] = useState(settings.waterExtendedBuffer.toString());
 
   useEffect(() => {
     setIncrementInput(settings.waterIncrement.toString());
     setLimitInput(settings.waterLimit.toString());
-  }, [settings.waterIncrement, settings.waterLimit]);
+    setExtendedInput(settings.waterExtendedBuffer.toString());
+  }, [settings.waterIncrement, settings.waterLimit, settings.waterExtendedBuffer]);
 
   return (
     <ExpandableSettingsSection
@@ -57,6 +59,23 @@ export function WaterSettingsSection() {
           />
           <p className="text-xs text-muted-foreground">
             Your daily water intake target (100-10000)
+          </p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="water-extended">Extended Buffer (ml)</Label>
+          <NumericInput
+            id="water-extended"
+            value={extendedInput}
+            onChange={setExtendedInput}
+            onBlur={() => validateAndSave(extendedInput, 0, 10000, settings.waterExtendedBuffer, settings.setWaterExtendedBuffer, setExtendedInput)}
+            min={0}
+            max={10000}
+            step={100}
+            onIncrement={() => incrementSetting(settings.waterExtendedBuffer, 100, 10000, settings.setWaterExtendedBuffer, setExtendedInput)}
+            onDecrement={() => decrementSetting(settings.waterExtendedBuffer, 100, 0, settings.setWaterExtendedBuffer, setExtendedInput)}
+          />
+          <p className="text-xs text-muted-foreground">
+            Extra allowance shown in a second tone above your target before the bar turns red (0 to disable)
           </p>
         </div>
       </div>

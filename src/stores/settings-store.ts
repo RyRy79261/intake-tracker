@@ -32,6 +32,13 @@ export interface Settings {
   saltLimit: number; // mg (default 1500mg)
   sugarLimit: number; // g (default 30g total sugars)
 
+  // Extended buffers added on top of the daily limit. Progress bars render a
+  // second-tone segment from `limit` up to `limit + extendedBuffer` before
+  // turning red. 0 disables the second stage.
+  waterExtendedBuffer: number; // ml
+  saltExtendedBuffer: number; // mg
+  sugarExtendedBuffer: number; // g
+
   // Secret to authenticate with server-side AI (if using server API key)
   // Set AI_AUTH_SECRET env var on server, enter same value here
   aiAuthSecret: string;
@@ -109,6 +116,9 @@ interface SettingsActions {
   setWaterLimit: (value: number) => void;
   setSaltLimit: (value: number) => void;
   setSugarLimit: (value: number) => void;
+  setWaterExtendedBuffer: (value: number) => void;
+  setSaltExtendedBuffer: (value: number) => void;
+  setSugarExtendedBuffer: (value: number) => void;
   setAiAuthSecret: (secret: string) => void;
   getDeobfuscatedAuthSecret: () => string;
   setTheme: (theme: "light" | "dark" | "system") => void;
@@ -161,6 +171,9 @@ const defaultSettings: Settings = {
   waterLimit: 1000,
   saltLimit: 1500,
   sugarLimit: 30,
+  waterExtendedBuffer: 500,
+  saltExtendedBuffer: 500,
+  sugarExtendedBuffer: 10,
   aiAuthSecret: "",
   theme: "system",
   dataRetentionDays: 90, // Default: keep 90 days of data
@@ -229,6 +242,12 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
         set({ saltLimit: sanitizeNumericInput(value, 100, 10000) }),
       setSugarLimit: (value) =>
         set({ sugarLimit: sanitizeNumericInput(value, 5, 500) }),
+      setWaterExtendedBuffer: (value) =>
+        set({ waterExtendedBuffer: sanitizeNumericInput(value, 0, 10000) }),
+      setSaltExtendedBuffer: (value) =>
+        set({ saltExtendedBuffer: sanitizeNumericInput(value, 0, 10000) }),
+      setSugarExtendedBuffer: (value) =>
+        set({ sugarExtendedBuffer: sanitizeNumericInput(value, 0, 500) }),
       
       // Store auth secret with obfuscation
       setAiAuthSecret: (secret) =>
@@ -324,7 +343,7 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
     {
       name: "intake-tracker-settings",
       storage: createJSONStorage(() => localStorage),
-      version: 13,
+      version: 14,
       migrate: (persisted, version) => {
         const state = persisted as Record<string, unknown>;
         if (version === 0) {
@@ -394,6 +413,13 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
         if (version < 13) {
           // New sugar tracking — seed existing users with the default limit.
           state.sugarLimit = 30;
+        }
+        if (version < 14) {
+          // Two-stage progress bars — seed defaults for the extended buffer
+          // zone shown above the daily limit.
+          state.waterExtendedBuffer = 500;
+          state.saltExtendedBuffer = 500;
+          state.sugarExtendedBuffer = 10;
         }
         return state as unknown as Settings & SettingsActions;
       },

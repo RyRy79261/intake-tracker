@@ -10,6 +10,7 @@ import { ManualInputDialog } from "@/components/manual-input-dialog";
 import { useSettings } from "@/hooks/use-settings";
 import { useToast } from "@/hooks/use-toast";
 import { useIntake } from "@/hooks/use-intake-queries";
+import { computeTwoStageProgress } from "@/lib/progress-utils";
 
 const theme = CARD_THEMES.water;
 const unit = "ml";
@@ -18,6 +19,7 @@ export function WaterTab() {
   const settings = useSettings();
   const waterIncrement = settings.waterIncrement;
   const waterLimit = settings.waterLimit;
+  const waterExtendedBuffer = settings.waterExtendedBuffer;
 
   const waterIntake = useIntake("water");
 
@@ -29,9 +31,12 @@ export function WaterTab() {
 
   const { dailyTotal } = waterIntake;
 
-  const progressPercent =
-    waterLimit > 0 ? Math.min((dailyTotal / waterLimit) * 100, 100) : 0;
-  const isOverLimit = waterLimit > 0 && dailyTotal > waterLimit;
+  const progress = computeTwoStageProgress(
+    dailyTotal,
+    waterLimit,
+    waterExtendedBuffer
+  );
+  const isOverLimit = progress.isOverTarget;
   const wouldExceedLimit =
     waterLimit > 0 && dailyTotal + pendingAmount > waterLimit;
 
@@ -97,11 +102,13 @@ export function WaterTab() {
       {/* Progress Bar */}
       <div className="mb-4">
         <Progress
-          value={progressPercent}
+          value={progress.isOverExtended ? 100 : progress.primaryPct}
+          extendedValue={progress.isOverExtended ? 0 : progress.extendedPct}
           className="h-3"
-          indicatorClassName={cn(
-            isOverLimit ? theme.progressOverLimit : theme.progressGradient
-          )}
+          indicatorClassName={
+            progress.isOverExtended ? theme.progressOverLimit : theme.progressGradient
+          }
+          extendedIndicatorClassName={theme.progressExtended}
           aria-label="Water intake today, as a percentage of the daily limit"
         />
       </div>

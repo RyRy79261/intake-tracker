@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import type { LiquidPreset } from "@/lib/constants";
 import { standardDrinksFromAbv } from "@/lib/alcohol-units";
+import { computeTwoStageProgress } from "@/lib/progress-utils";
 
 interface PresetTabProps {
   tab: "coffee" | "alcohol" | "beverage";
@@ -61,10 +62,13 @@ export function PresetTab({ tab }: PresetTabProps) {
   const settings = useSettings();
   const waterIntake = useIntake("water");
   const waterLimit = settings.waterLimit;
+  const waterExtendedBuffer = settings.waterExtendedBuffer;
   const { dailyTotal: waterDailyTotal } = waterIntake;
-  const waterProgressPercent =
-    waterLimit > 0 ? Math.min((waterDailyTotal / waterLimit) * 100, 100) : 0;
-  const isWaterOverLimit = waterLimit > 0 && waterDailyTotal > waterLimit;
+  const waterProgress = computeTwoStageProgress(
+    waterDailyTotal,
+    waterLimit,
+    waterExtendedBuffer
+  );
 
   // Filter presets by tab prop
   const presets = useMemo(
@@ -382,11 +386,13 @@ export function PresetTab({ tab }: PresetTabProps) {
       {/* Water Progress Bar */}
       <div className="mb-4">
         <Progress
-          value={waterProgressPercent}
+          value={waterProgress.isOverExtended ? 100 : waterProgress.primaryPct}
+          extendedValue={waterProgress.isOverExtended ? 0 : waterProgress.extendedPct}
           className="h-3"
-          indicatorClassName={cn(
-            isWaterOverLimit ? theme.progressOverLimit : theme.progressGradient
-          )}
+          indicatorClassName={
+            waterProgress.isOverExtended ? theme.progressOverLimit : theme.progressGradient
+          }
+          extendedIndicatorClassName={CARD_THEMES.water.progressExtended}
           aria-label="Water intake today, as a percentage of the daily limit"
         />
       </div>

@@ -12,11 +12,13 @@ export function SaltSettingsSection() {
   const settings = useSettings();
   const [incrementInput, setIncrementInput] = useState(settings.saltIncrement.toString());
   const [limitInput, setLimitInput] = useState(settings.saltLimit.toString());
+  const [extendedInput, setExtendedInput] = useState(settings.saltExtendedBuffer.toString());
 
   useEffect(() => {
     setIncrementInput(settings.saltIncrement.toString());
     setLimitInput(settings.saltLimit.toString());
-  }, [settings.saltIncrement, settings.saltLimit]);
+    setExtendedInput(settings.saltExtendedBuffer.toString());
+  }, [settings.saltIncrement, settings.saltLimit, settings.saltExtendedBuffer]);
 
   return (
     <ExpandableSettingsSection
@@ -57,6 +59,23 @@ export function SaltSettingsSection() {
           />
           <p className="text-xs text-muted-foreground">
             Your daily sodium intake limit (100-10000)
+          </p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="salt-extended">Extended Buffer (mg)</Label>
+          <NumericInput
+            id="salt-extended"
+            value={extendedInput}
+            onChange={setExtendedInput}
+            onBlur={() => validateAndSave(extendedInput, 0, 10000, settings.saltExtendedBuffer, settings.setSaltExtendedBuffer, setExtendedInput)}
+            min={0}
+            max={10000}
+            step={100}
+            onIncrement={() => incrementSetting(settings.saltExtendedBuffer, 100, 10000, settings.setSaltExtendedBuffer, setExtendedInput)}
+            onDecrement={() => decrementSetting(settings.saltExtendedBuffer, 100, 0, settings.setSaltExtendedBuffer, setExtendedInput)}
+          />
+          <p className="text-xs text-muted-foreground">
+            Extra allowance shown in a second tone above your target before the bar turns red (0 to disable)
           </p>
         </div>
       </div>
