@@ -9,6 +9,7 @@ import {
   weightTrend,
   saltVsWeight,
   sugarVsWeight,
+  potassiumVsWeight,
   caffeineVsBP,
   alcoholVsBP,
   correlate,
@@ -164,6 +165,17 @@ export function useSaltVsWeight(range: TimeRange, lagDays?: number) {
 export function useSugarVsWeight(range: TimeRange, lagDays?: number) {
   return useLiveQuery(
     () => sugarVsWeight(range, lagDays),
+    [range.start, range.end, lagDays],
+    DEFAULT_CORRELATION,
+  );
+}
+
+/**
+ * Reactive potassium vs weight correlation with optional lag.
+ */
+export function usePotassiumVsWeight(range: TimeRange, lagDays?: number) {
+  return useLiveQuery(
+    () => potassiumVsWeight(range, lagDays),
     [range.start, range.end, lagDays],
     DEFAULT_CORRELATION,
   );

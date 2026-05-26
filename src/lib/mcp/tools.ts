@@ -125,7 +125,7 @@ export function registerReadOnlyTools(server: McpServer): void {
     {
       title: "Today's summary",
       description:
-        "Totals for water/salt/sugar intake since the user's day-start hour, plus the latest blood-pressure and weight readings, and doses logged today.",
+        "Totals for water/salt/sugar/potassium intake since the user's day-start hour, plus the latest blood-pressure and weight readings, and doses logged today.",
       inputSchema: {},
     },
     async (_args, ctx) =>
@@ -139,10 +139,10 @@ export function registerReadOnlyTools(server: McpServer): void {
     {
       title: "Intake history",
       description:
-        "Returns individual water/salt/sugar intake records in the given time range. Use type='all' to combine.",
+        "Returns individual water/salt/sugar/potassium intake records in the given time range. Use type='all' to combine.",
       inputSchema: {
         type: z
-          .enum(["water", "salt", "sugar", "all"])
+          .enum(["water", "salt", "sugar", "potassium", "all"])
           .describe("Intake type to filter on, or 'all'"),
         ...dateRangeShape,
       },

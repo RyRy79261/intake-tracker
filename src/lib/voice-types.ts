@@ -53,6 +53,7 @@ export interface FoodItem {
   waterMl?: number;
   sodiumMg?: number;
   sugarG?: number;
+  potassiumMg?: number;
 }
 
 export interface CaffeineItem {

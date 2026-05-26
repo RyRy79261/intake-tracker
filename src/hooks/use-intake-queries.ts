@@ -15,6 +15,7 @@ import {
   getRecordsByDateRange,
   getSaltTotalsByGroupIds,
   getSugarTotalsByGroupIds,
+  getPotassiumTotalsByGroupIds,
 } from "@/lib/intake-service";
 import { unwrap } from "@/lib/service-result";
 import { showUndoToast } from "@/components/medications/undo-toast";
@@ -45,7 +46,7 @@ export function getDayStartTimestamp(dayStartHour: number): number {
  * Uses useLiveQuery for reactive updates. Re-runs every 60s via tick dep
  * to handle rolling 24h window boundary.
  */
-export function useIntakeTotal(type: "water" | "salt" | "sugar") {
+export function useIntakeTotal(type: "water" | "salt" | "sugar" | "potassium") {
   const tick = useNowTick();
   return useLiveQuery(() => getTotalInLast24Hours(type), [type, tick], 0);
 }
@@ -55,7 +56,7 @@ export function useIntakeTotal(type: "water" | "salt" | "sugar") {
  * Uses the dayStartHour from settings (default 2am).
  * Re-runs every 60s via tick dep.
  */
-export function useDailyIntakeTotal(type: "water" | "salt" | "sugar") {
+export function useDailyIntakeTotal(type: "water" | "salt" | "sugar" | "potassium") {
   const dayStartHour = useSettingsStore((state) => state.dayStartHour);
   const tick = useNowTick();
   return useLiveQuery(() => getDailyTotal(type, dayStartHour), [type, dayStartHour, tick], 0);
@@ -64,7 +65,7 @@ export function useDailyIntakeTotal(type: "water" | "salt" | "sugar") {
 /**
  * Hook to get records for a type in the last 24 hours.
  */
-export function useIntakeRecords(type: "water" | "salt" | "sugar") {
+export function useIntakeRecords(type: "water" | "salt" | "sugar" | "potassium") {
   const tick = useNowTick();
   return useLiveQuery(() => getRecordsInLast24Hours(type), [type, tick], []);
 }
@@ -72,7 +73,7 @@ export function useIntakeRecords(type: "water" | "salt" | "sugar") {
 /**
  * Hook to get recent records for a type (last 3 entries).
  */
-export function useRecentIntakeRecords(type: "water" | "salt" | "sugar") {
+export function useRecentIntakeRecords(type: "water" | "salt" | "sugar" | "potassium") {
   return useLiveQuery(() => getRecentRecords(type), [type], []);
 }
 
@@ -88,7 +89,7 @@ export function useAddIntake() {
       timestamp,
       note,
     }: {
-      type: "water" | "salt" | "sugar";
+      type: "water" | "salt" | "sugar" | "potassium";
       amount: number;
       source?: string;
       timestamp?: number;
@@ -132,7 +133,7 @@ export function useDeleteIntake() {
  * Combined hook that provides totals (daily + rolling 24h), records, and actions for a type.
  * Drop-in replacement for the old useIntake hook.
  */
-export function useIntake(type: "water" | "salt" | "sugar") {
+export function useIntake(type: "water" | "salt" | "sugar" | "potassium") {
   const rollingTotal = useIntakeTotal(type);
   const dailyTotal = useDailyIntakeTotal(type);
   const addMutation = useAddIntake();
@@ -172,7 +173,7 @@ export function useIntake(type: "water" | "salt" | "sugar") {
 export function useIntakeRecordsByDateRange(
   startTime: number,
   endTime: number,
-  type?: "water" | "salt" | "sugar"
+  type?: "water" | "salt" | "sugar" | "potassium"
 ) {
   const tick = useNowTick();
   return useLiveQuery(
@@ -203,6 +204,19 @@ export function useSugarTotalsByGroupIds(groupIds: string[]) {
   const key = groupIds.join(",");
   return useLiveQuery(
     () => getSugarTotalsByGroupIds(groupIds),
+    [key],
+    new Map<string, number>()
+  );
+}
+
+/**
+ * Hook to get potassium totals keyed by groupId.
+ * Used to display potassium amounts alongside eating records.
+ */
+export function usePotassiumTotalsByGroupIds(groupIds: string[]) {
+  const key = groupIds.join(",");
+  return useLiveQuery(
+    () => getPotassiumTotalsByGroupIds(groupIds),
     [key],
     new Map<string, number>()
   );

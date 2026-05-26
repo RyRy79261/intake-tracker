@@ -38,6 +38,7 @@ export const ItemSchema = z.discriminatedUnion("kind", [
     waterMl: z.number().min(0).max(5000).optional(),
     sodiumMg: z.number().min(0).max(20000).optional(),
     sugarG: z.number().min(0).max(1000).optional(),
+    potassiumMg: z.number().min(0).max(20000).optional(),
   }),
   z.object({
     kind: z.literal("caffeine"),
@@ -110,6 +111,7 @@ export const PARSE_TOOL = {
             grams: { type: "number" },
             waterMl: { type: "number" },
             sugarG: { type: "number" },
+            potassiumMg: { type: "number" },
             caffeineMg: { type: "number" },
             abvPercent: { type: "number" },
             volumeMl: { type: "number" },

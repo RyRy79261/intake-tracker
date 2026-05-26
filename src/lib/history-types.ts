@@ -11,7 +11,7 @@ export type UnifiedRecord =
   | { type: "caffeine"; record: SubstanceRecord }
   | { type: "alcohol"; record: SubstanceRecord };
 
-export type FilterType = "all" | "water" | "salt" | "sugar" | "weight" | "bp" | "eating" | "urination" | "defecation" | "caffeine" | "alcohol";
+export type FilterType = "all" | "water" | "salt" | "sugar" | "potassium" | "weight" | "bp" | "eating" | "urination" | "defecation" | "caffeine" | "alcohol";
 
 /** Get timestamp from unified record */
 export function getRecordTimestamp(unified: UnifiedRecord): number {
@@ -51,6 +51,7 @@ export function filterRecords(records: UnifiedRecord[], filter: FilterType): Uni
   if (filter === "water") return records.filter((r) => r.type === "intake" && r.record.type === "water");
   if (filter === "salt") return records.filter((r) => r.type === "intake" && r.record.type === "salt");
   if (filter === "sugar") return records.filter((r) => r.type === "intake" && r.record.type === "sugar");
+  if (filter === "potassium") return records.filter((r) => r.type === "intake" && r.record.type === "potassium");
   if (filter === "caffeine") return records.filter((r) => r.type === "caffeine");
   if (filter === "alcohol") return records.filter((r) => r.type === "alcohol");
   return records.filter((r) => r.type === filter);

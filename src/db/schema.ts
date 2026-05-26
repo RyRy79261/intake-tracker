@@ -85,7 +85,7 @@ export const intakeRecords = pgTable(
   (t) => ({
     typeCheck: check(
       "intake_records_type_check",
-      sql`${t.type} IN ('water','salt','sugar')`,
+      sql`${t.type} IN ('water','salt','sugar','potassium')`,
     ),
     userUpdatedIdx: index("idx_intake_user_updated").on(t.userId, t.updatedAt),
     typeTimestampIdx: index("idx_intake_type_ts").on(t.type, t.timestamp),

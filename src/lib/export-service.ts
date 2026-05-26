@@ -86,6 +86,7 @@ export async function exportAllRecordsCSV(range: TimeRange): Promise<void> {
     "water",
     "salt",
     "sugar",
+    "potassium",
     "weight",
     "bp",
     "eating",
@@ -137,6 +138,8 @@ function domainUnit(domain: Domain): string {
       return "mg";
     case "sugar":
       return "g";
+    case "potassium":
+      return "mg";
     case "weight":
       return "kg";
     case "bp":
@@ -270,7 +273,7 @@ export async function exportToPDF(range: TimeRange): Promise<void> {
 
   // Gather recent records from all domains for the table
   const tableData: string[][] = [];
-  const domains: Domain[] = ["water", "salt", "sugar", "weight", "bp", "caffeine", "alcohol"];
+  const domains: Domain[] = ["water", "salt", "sugar", "potassium", "weight", "bp", "caffeine", "alcohol"];
 
   for (const domain of domains) {
     const points = await getRecordsByDomain(domain, range);

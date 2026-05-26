@@ -192,6 +192,7 @@ describe("useSyncEatingGroup", () => {
         sodiumKind: "salt",
         waterMl: 0,
         sugarG: 0,
+        potassiumMg: 0,
       });
     });
 
