@@ -81,8 +81,22 @@ export function FoodSaltCard() {
                       : "text-foreground"
                 )}
               >
-                {formatAmount(dailyTotal, "mg")} / {formatAmount(limit, "mg")}
+                {formatAmount(Math.min(dailyTotal, limit), "mg")} /{" "}
+                {formatAmount(limit, "mg")}
               </p>
+              {saltProgress.isOverTarget && saltProgress.extendedTotal > 0 && (
+                <p
+                  className={cn(
+                    "text-xs",
+                    saltProgress.isOverExtended
+                      ? "text-red-600 dark:text-red-400"
+                      : "text-orange-600 dark:text-orange-400"
+                  )}
+                >
+                  {formatAmount(saltProgress.extendedCurrent, "mg")} /{" "}
+                  {formatAmount(saltProgress.extendedTotal, "mg")} extra
+                </p>
+              )}
               <p className="text-xs text-muted-foreground/70">
                 24h: {formatAmount(rollingTotal, "mg")}
               </p>
@@ -121,8 +135,22 @@ export function FoodSaltCard() {
                       : "text-foreground"
                 )}
               >
-                {formatAmount(sugarDaily, "g")} / {formatAmount(sugarLimit, "g")}
+                {formatAmount(Math.min(sugarDaily, sugarLimit), "g")} /{" "}
+                {formatAmount(sugarLimit, "g")}
               </p>
+              {sugarProgress.isOverTarget && sugarProgress.extendedTotal > 0 && (
+                <p
+                  className={cn(
+                    "text-xs",
+                    sugarProgress.isOverExtended
+                      ? "text-red-600 dark:text-red-400"
+                      : "text-orange-600 dark:text-orange-400"
+                  )}
+                >
+                  {formatAmount(sugarProgress.extendedCurrent, "g")} /{" "}
+                  {formatAmount(sugarProgress.extendedTotal, "g")} extra
+                </p>
+              )}
               <p className="text-xs text-muted-foreground/70">
                 24h: {formatAmount(sugarRolling, "g")}
               </p>

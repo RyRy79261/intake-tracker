@@ -226,19 +226,36 @@ export function TextMetrics() {
               extendedIndicatorClassName={CARD_THEMES.water.progressExtended}
               aria-label="Water intake progress"
             />
-            <span
-              className={cn(
-                "text-sm font-semibold tabular-nums",
-                waterProgress.isOverExtended
-                  ? "text-red-600 dark:text-red-400"
-                  : CARD_THEMES.water.latestValueColor
+            <div className="flex flex-col items-end leading-tight">
+              <div className="flex items-baseline gap-1">
+                <span
+                  className={cn(
+                    "text-sm font-semibold tabular-nums",
+                    waterProgress.isOverExtended
+                      ? "text-red-600 dark:text-red-400"
+                      : CARD_THEMES.water.latestValueColor
+                  )}
+                >
+                  {formatValue(Math.min(waterTotal, waterLimit))}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  / {formatValue(waterLimit)} ml
+                </span>
+              </div>
+              {waterProgress.isOverTarget && waterProgress.extendedTotal > 0 && (
+                <span
+                  className={cn(
+                    "text-xs tabular-nums",
+                    waterProgress.isOverExtended
+                      ? "text-red-600 dark:text-red-400"
+                      : "text-muted-foreground"
+                  )}
+                >
+                  {formatValue(waterProgress.extendedCurrent)} /{" "}
+                  {formatValue(waterProgress.extendedTotal)} ml extra
+                </span>
               )}
-            >
-              {formatValue(waterTotal)}
-            </span>
-            <span className="text-xs text-muted-foreground">
-              / {formatValue(waterLimit)} ml
-            </span>
+            </div>
           </div>
 
           {/* Salt */}
@@ -261,19 +278,36 @@ export function TextMetrics() {
               extendedIndicatorClassName={CARD_THEMES.salt.progressExtended}
               aria-label="Sodium intake progress"
             />
-            <span
-              className={cn(
-                "text-sm font-semibold tabular-nums",
-                saltProgress.isOverExtended
-                  ? "text-red-600 dark:text-red-400"
-                  : CARD_THEMES.salt.latestValueColor
+            <div className="flex flex-col items-end leading-tight">
+              <div className="flex items-baseline gap-1">
+                <span
+                  className={cn(
+                    "text-sm font-semibold tabular-nums",
+                    saltProgress.isOverExtended
+                      ? "text-red-600 dark:text-red-400"
+                      : CARD_THEMES.salt.latestValueColor
+                  )}
+                >
+                  {formatValue(Math.min(saltTotal, saltLimit))}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  / {formatValue(saltLimit)} mg
+                </span>
+              </div>
+              {saltProgress.isOverTarget && saltProgress.extendedTotal > 0 && (
+                <span
+                  className={cn(
+                    "text-xs tabular-nums",
+                    saltProgress.isOverExtended
+                      ? "text-red-600 dark:text-red-400"
+                      : "text-muted-foreground"
+                  )}
+                >
+                  {formatValue(saltProgress.extendedCurrent)} /{" "}
+                  {formatValue(saltProgress.extendedTotal)} mg extra
+                </span>
               )}
-            >
-              {formatValue(saltTotal)}
-            </span>
-            <span className="text-xs text-muted-foreground">
-              / {formatValue(saltLimit)} mg
-            </span>
+            </div>
           </div>
 
           {/* Sugar — optional tracker */}
@@ -297,19 +331,36 @@ export function TextMetrics() {
               extendedIndicatorClassName={CARD_THEMES.sugar.progressExtended}
               aria-label="Sugar intake progress"
             />
-            <span
-              className={cn(
-                "text-sm font-semibold tabular-nums",
-                sugarProgress.isOverExtended
-                  ? "text-red-600 dark:text-red-400"
-                  : CARD_THEMES.sugar.latestValueColor
+            <div className="flex flex-col items-end leading-tight">
+              <div className="flex items-baseline gap-1">
+                <span
+                  className={cn(
+                    "text-sm font-semibold tabular-nums",
+                    sugarProgress.isOverExtended
+                      ? "text-red-600 dark:text-red-400"
+                      : CARD_THEMES.sugar.latestValueColor
+                  )}
+                >
+                  {formatValue(Math.min(sugarTotal, sugarLimit))}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  / {formatValue(sugarLimit)} g
+                </span>
+              </div>
+              {sugarProgress.isOverTarget && sugarProgress.extendedTotal > 0 && (
+                <span
+                  className={cn(
+                    "text-xs tabular-nums",
+                    sugarProgress.isOverExtended
+                      ? "text-red-600 dark:text-red-400"
+                      : "text-muted-foreground"
+                  )}
+                >
+                  {formatValue(sugarProgress.extendedCurrent)} /{" "}
+                  {formatValue(sugarProgress.extendedTotal)} g extra
+                </span>
               )}
-            >
-              {formatValue(sugarTotal)}
-            </span>
-            <span className="text-xs text-muted-foreground">
-              / {formatValue(sugarLimit)} g
-            </span>
+            </div>
           </div>
           )}
 
