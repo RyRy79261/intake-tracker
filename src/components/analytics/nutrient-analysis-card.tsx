@@ -1,11 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { formatDistanceToNow } from "date-fns";
 import {
   Apple,
   Loader2,
   ChevronDown,
   ChevronUp,
+  ChevronRight,
   AlertCircle,
   Check,
   X,
@@ -13,6 +15,11 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import {
   Dialog,
   DialogContent,
@@ -42,6 +49,13 @@ interface NutrientAnalysisResult {
   caveats: string[];
 }
 
+/** A scan result with the metadata needed for the in-session history list. */
+interface ScanRecord extends NutrientAnalysisResult {
+  id: string;
+  generatedAt: number;
+  focus?: string;
+}
+
 function StatusBadge({ status }: { status: NutrientFinding["status"] }) {
   const config = {
     high: {
@@ -51,8 +65,7 @@ function StatusBadge({ status }: { status: NutrientFinding["status"] }) {
     },
     low: {
       label: "Low",
-      classes:
-        "bg-sky-100 text-sky-800 dark:bg-sky-950/50 dark:text-sky-300",
+      classes: "bg-sky-100 text-sky-800 dark:bg-sky-950/50 dark:text-sky-300",
     },
     balanced: {
       label: "Balanced",
@@ -69,18 +82,121 @@ function StatusBadge({ status }: { status: NutrientFinding["status"] }) {
   );
 }
 
+/** Compact one-row teaser. Tapping anywhere hands the full record to the
+ *  parent so it can swap it into the reading dialog. Keeps the card from
+ *  ballooning when a multi-finding scan would otherwise dominate the page. */
+function ScanPreview({
+  record,
+  onOpen,
+}: {
+  record: ScanRecord;
+  onOpen: (record: ScanRecord) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(record)}
+      className="w-full text-left rounded-md border border-slate-200 dark:border-slate-800 bg-white/40 dark:bg-slate-900/40 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors px-2.5 py-2"
+    >
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+          <span className="text-[11px] text-muted-foreground truncate">
+            {formatDistanceToNow(record.generatedAt, { addSuffix: true })}
+          </span>
+          {record.focus && (
+            <span
+              className="shrink-0 inline-flex items-center rounded-full bg-violet-100 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300 px-1.5 py-0.5 text-[10px] font-medium truncate max-w-[10rem]"
+              title={`Focus: ${record.focus}`}
+            >
+              {record.focus}
+            </span>
+          )}
+        </div>
+        <span className="shrink-0 inline-flex items-center gap-0.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+          Read
+          <ChevronRight className="w-3 h-3" />
+        </span>
+      </div>
+      <p className="text-xs text-slate-600 dark:text-slate-300 line-clamp-2">
+        {record.summary}
+      </p>
+    </button>
+  );
+}
+
+/** Full scan body — summary, findings list, caveats. Rendered inside the
+ *  reading dialog; height-unconstrained so the dialog's own scroll
+ *  container handles overflow. */
+function ScanContent({ record }: { record: ScanRecord }) {
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-slate-700 dark:text-slate-200 whitespace-pre-line">
+        {record.summary}
+      </p>
+
+      {record.findings.length > 0 && (
+        <ul className="space-y-2">
+          {record.findings.map((f, i) => (
+            <li
+              key={i}
+              className="rounded-md border border-slate-200 dark:border-slate-800 bg-white/40 dark:bg-slate-900/40 px-2.5 py-2 space-y-1"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                  {f.nutrient}
+                </span>
+                <StatusBadge status={f.status} />
+              </div>
+              <p className="text-xs text-slate-600 dark:text-slate-300">
+                {f.detail}
+              </p>
+              {f.exampleFoods.length > 0 && (
+                <p className="text-[11px] text-muted-foreground">
+                  From: {f.exampleFoods.join(", ")}
+                </p>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {record.caveats.length > 0 && (
+        <div className="rounded-md border border-amber-200 dark:border-amber-900/60 bg-amber-50/70 dark:bg-amber-950/30 px-2.5 py-2 space-y-1">
+          <p className="flex items-center gap-1 text-[11px] font-medium text-amber-900 dark:text-amber-200">
+            <AlertCircle className="w-3 h-3" />
+            Caveats
+          </p>
+          <ul className="space-y-0.5 text-[11px] text-amber-900/90 dark:text-amber-200/90">
+            {record.caveats.map((c, i) => (
+              <li key={i}>• {c}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <p className="text-[11px] text-muted-foreground">
+        Observational only — not medical advice. Estimates are based on food
+        descriptions, not measured nutrient amounts.
+      </p>
+    </div>
+  );
+}
+
 /**
  * On-demand AI scan of the user's eating log for nutrient biases (e.g.
  * "you've eaten a lot of potassium-rich foods like potatoes"). Sends only
  * food descriptions + portions — no timestamps, no PII. Results are
- * session-only and not persisted.
+ * session-only — the in-session history shows in a collapsible and full
+ * scans open in a reading dialog.
  */
 export function NutrientAnalysisCard() {
   const [focus, setFocus] = useState("");
   const [focusOpen, setFocusOpen] = useState(false);
   const [pending, setPending] = useState(false);
-  const [result, setResult] = useState<NutrientAnalysisResult | null>(null);
+  const [scans, setScans] = useState<ScanRecord[]>([]);
+  const [readingScan, setReadingScan] = useState<ScanRecord | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const { toast } = useToast();
   const profile = useUserProfile();
 
@@ -111,12 +227,13 @@ export function NutrientAnalysisCard() {
   }, [records]);
 
   const canAnalyze = foods.length > 0 && !pending;
+  const latest = scans[0] ?? null;
+  const history = scans.slice(1);
 
   const analyze = async () => {
     if (!canAnalyze) return;
     setConfirmOpen(false);
     setPending(true);
-    setResult(null);
     try {
       const trimmedFocus = focus.trim();
       // Build the active-meds summary only when the user opted in; the
@@ -153,7 +270,14 @@ export function NutrientAnalysisCard() {
       }
 
       const data = (await res.json()) as NutrientAnalysisResult;
-      setResult(data);
+      const record: ScanRecord = {
+        ...data,
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        generatedAt: Date.now(),
+        ...(trimmedFocus && { focus: trimmedFocus }),
+      };
+      setScans((prev) => [record, ...prev]);
+      setReadingScan(record);
     } catch (e) {
       toast({
         title: "Couldn't analyze your food log",
@@ -174,13 +298,17 @@ export function NutrientAnalysisCard() {
         </CardTitle>
       </CardHeader>
       <CardContent className="px-3 pb-3 space-y-3">
-        <p className="text-xs text-muted-foreground">
-          Scan your last {WINDOW_DAYS} days of food entries for nutrient biases
-          — e.g. too much potassium, low fiber. The model can web-search any
-          branded or regional items it doesn&apos;t recognise, so this can take
-          5-15 seconds. Only food descriptions are sent; timestamps stay on
-          device.
-        </p>
+        {latest ? (
+          <ScanPreview record={latest} onOpen={setReadingScan} />
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            Scan your last {WINDOW_DAYS} days of food entries for nutrient
+            biases — e.g. too much potassium, low fiber. The model can
+            web-search any branded or regional items it doesn&apos;t
+            recognise, so this can take 5-15 seconds. Only food descriptions
+            are sent; timestamps stay on device.
+          </p>
+        )}
 
         {personalised && (
           <p className="text-[11px] text-muted-foreground">
@@ -232,6 +360,7 @@ export function NutrientAnalysisCard() {
         )}
 
         <Button
+          variant={latest ? "outline" : "default"}
           size="sm"
           onClick={() => setConfirmOpen(true)}
           disabled={!canAnalyze}
@@ -244,64 +373,38 @@ export function NutrientAnalysisCard() {
             </>
           ) : foods.length === 0 ? (
             "No food entries yet"
-          ) : result ? (
-            "Re-analyze"
+          ) : latest ? (
+            "Run another scan"
           ) : (
             "Analyze nutrient balance"
           )}
         </Button>
 
-        {result && (
-          <div className="space-y-2.5 pt-1">
-            <p className="text-sm text-slate-700 dark:text-slate-200 whitespace-pre-line">
-              {result.summary}
-            </p>
-
-            {result.findings.length > 0 && (
-              <ul className="space-y-2">
-                {result.findings.map((f, i) => (
-                  <li
-                    key={i}
-                    className="rounded-md border border-slate-200 dark:border-slate-800 bg-white/40 dark:bg-slate-900/40 px-2.5 py-2 space-y-1"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                        {f.nutrient}
-                      </span>
-                      <StatusBadge status={f.status} />
-                    </div>
-                    <p className="text-xs text-slate-600 dark:text-slate-300">
-                      {f.detail}
-                    </p>
-                    {f.exampleFoods.length > 0 && (
-                      <p className="text-[11px] text-muted-foreground">
-                        From: {f.exampleFoods.join(", ")}
-                      </p>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            {result.caveats.length > 0 && (
-              <div className="rounded-md border border-amber-200 dark:border-amber-900/60 bg-amber-50/70 dark:bg-amber-950/30 px-2.5 py-2 space-y-1">
-                <p className="flex items-center gap-1 text-[11px] font-medium text-amber-900 dark:text-amber-200">
-                  <AlertCircle className="w-3 h-3" />
-                  Caveats
-                </p>
-                <ul className="space-y-0.5 text-[11px] text-amber-900/90 dark:text-amber-200/90">
-                  {result.caveats.map((c, i) => (
-                    <li key={i}>• {c}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            <p className="text-[11px] text-muted-foreground">
-              Observational only — not medical advice. Estimates are based on
-              food descriptions, not measured nutrient amounts.
-            </p>
-          </div>
+        {history.length > 0 && (
+          <Collapsible open={historyOpen} onOpenChange={setHistoryOpen}>
+            <CollapsibleTrigger asChild>
+              <button
+                type="button"
+                className="flex w-full items-center justify-between text-xs font-medium text-muted-foreground hover:text-foreground"
+              >
+                <span>Previous scans ({history.length})</span>
+                <ChevronDown
+                  className={`w-3.5 h-3.5 transition-transform ${
+                    historyOpen ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-2 pt-2">
+              {history.map((record) => (
+                <ScanPreview
+                  key={record.id}
+                  record={record}
+                  onOpen={setReadingScan}
+                />
+              ))}
+            </CollapsibleContent>
+          </Collapsible>
         )}
       </CardContent>
 
@@ -412,9 +515,47 @@ export function NutrientAnalysisCard() {
               Cancel
             </Button>
             <Button size="sm" onClick={analyze} disabled={pending}>
-              {result ? "Re-analyze" : "Start analysis"}
+              {latest ? "Run scan" : "Start analysis"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={readingScan !== null}
+        onOpenChange={(open) => {
+          if (!open) setReadingScan(null);
+        }}
+      >
+        <DialogContent className="max-w-lg max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-1.5">
+              <Apple className="w-4 h-4 text-emerald-500" />
+              Nutrient scan
+              {readingScan?.focus && (
+                <span
+                  className="ml-1 inline-flex items-center rounded-full bg-violet-100 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300 px-1.5 py-0.5 text-[10px] font-medium"
+                  title={`Focus: ${readingScan.focus}`}
+                >
+                  {readingScan.focus}
+                </span>
+              )}
+            </DialogTitle>
+            {readingScan && (
+              <DialogDescription>
+                Generated{" "}
+                {formatDistanceToNow(readingScan.generatedAt, {
+                  addSuffix: true,
+                })}
+                .
+              </DialogDescription>
+            )}
+          </DialogHeader>
+          {readingScan && (
+            <div className="overflow-y-auto pr-1 -mr-1">
+              <ScanContent record={readingScan} />
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </Card>
