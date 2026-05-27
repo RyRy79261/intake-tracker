@@ -13,7 +13,7 @@ jobs:
       src: ${{ steps.filter.outputs.src }}
       bench: ${{ steps.filter.outputs.bench }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v4
         id: filter
         with:
@@ -37,7 +37,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v5
       - uses: actions/setup-node@v6
         with:
@@ -49,7 +49,7 @@ jobs:
   typecheck:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v5
       - uses: actions/setup-node@v6
         with:
@@ -73,7 +73,7 @@ jobs:
     if: needs.changes.outputs.src == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v5
       - uses: actions/setup-node@v6
         with:
@@ -88,7 +88,7 @@ jobs:
     if: needs.changes.outputs.src == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v5
       - uses: actions/setup-node@v6
         with:
@@ -101,7 +101,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v5
       - uses: actions/setup-node@v6
         with:
@@ -123,7 +123,7 @@ jobs:
   data-integrity:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v5
       - uses: actions/setup-node@v6
         with:
@@ -138,7 +138,7 @@ jobs:
     if: needs.changes.outputs.src == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v5
       - uses: actions/setup-node@v6
         with:
@@ -155,7 +155,7 @@ jobs:
     if: needs.changes.outputs.src == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v5
       - uses: actions/setup-node@v6
         with:
@@ -230,7 +230,7 @@ jobs:
     # Uses the same branch lifecycle pattern as the e2e job above.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v5
       - uses: actions/setup-node@v6
         with:
@@ -271,7 +271,7 @@ jobs:
   supply-chain:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v5
       - uses: actions/setup-node@v6
         with:
@@ -312,7 +312,7 @@ jobs:
     permissions:
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v5
       - uses: actions/setup-node@v6
         with:
@@ -332,7 +332,7 @@ jobs:
     if: needs.changes.outputs.bench == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v5
       - uses: actions/setup-node@v6
         with:
