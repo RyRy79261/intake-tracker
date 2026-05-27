@@ -34,6 +34,7 @@ import {
 import { useRecordsTabData } from "@/hooks/use-records-tab-queries";
 import { useSettingsStore } from "@/stores/settings-store";
 import { AiInsightsCard } from "@/components/analytics/ai-insights-card";
+import { NutrientAnalysisCard } from "@/components/analytics/nutrient-analysis-card";
 import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import type { TimeRange, TrendDirection } from "@/lib/analytics-types";
 
@@ -244,13 +245,19 @@ export function SummaryTab({ range }: { range: TimeRange }) {
   }, [bp, bpReadings, weightReadings, fluid, totals, rangeDays, waterGoal, saltLimit, sugarLimit, potassiumLimit, sugarEnabled, potassiumEnabled]);
 
   if (!hasAnyData) {
+    // The nutrient card uses a fixed 30-day window pinned at its mount,
+    // independent of the parent `range` selector — so it can still have
+    // food entries to analyse even when the selected range is empty.
     return (
-      <div className="py-12 text-center text-muted-foreground">
-        <BarChart3 className="w-8 h-8 mx-auto mb-3 opacity-50" />
-        <p className="text-lg font-medium">No data for this period</p>
-        <p className="text-sm mt-1 max-w-xs mx-auto">
-          Log entries or widen the time range to see your summary.
-        </p>
+      <div className="space-y-4">
+        <div className="py-12 text-center text-muted-foreground">
+          <BarChart3 className="w-8 h-8 mx-auto mb-3 opacity-50" />
+          <p className="text-lg font-medium">No data for this period</p>
+          <p className="text-sm mt-1 max-w-xs mx-auto">
+            Log entries or widen the time range to see your summary.
+          </p>
+        </div>
+        <NutrientAnalysisCard />
       </div>
     );
   }
@@ -284,6 +291,7 @@ export function SummaryTab({ range }: { range: TimeRange }) {
   return (
     <div className="space-y-4">
       <AiInsightsCard />
+      <NutrientAnalysisCard />
 
       {/* KPI grid */}
       <div className="grid grid-cols-2 gap-2">
