@@ -228,7 +228,7 @@ export function TextMetrics() {
             />
             <span
               className={cn(
-                "text-sm font-semibold tabular-nums w-14 text-right",
+                "text-sm font-semibold tabular-nums",
                 waterProgress.isOverExtended
                   ? "text-red-600 dark:text-red-400"
                   : CARD_THEMES.water.latestValueColor
@@ -236,7 +236,7 @@ export function TextMetrics() {
             >
               {formatValue(waterTotal)}
             </span>
-            <span className="text-xs text-muted-foreground tabular-nums w-20 text-left">
+            <span className="text-xs text-muted-foreground">
               / {formatValue(waterLimit)} ml
             </span>
           </div>
@@ -263,7 +263,7 @@ export function TextMetrics() {
             />
             <span
               className={cn(
-                "text-sm font-semibold tabular-nums w-14 text-right",
+                "text-sm font-semibold tabular-nums",
                 saltProgress.isOverExtended
                   ? "text-red-600 dark:text-red-400"
                   : CARD_THEMES.salt.latestValueColor
@@ -271,7 +271,7 @@ export function TextMetrics() {
             >
               {formatValue(saltTotal)}
             </span>
-            <span className="text-xs text-muted-foreground tabular-nums w-20 text-left">
+            <span className="text-xs text-muted-foreground">
               / {formatValue(saltLimit)} mg
             </span>
           </div>
@@ -299,7 +299,7 @@ export function TextMetrics() {
             />
             <span
               className={cn(
-                "text-sm font-semibold tabular-nums w-14 text-right",
+                "text-sm font-semibold tabular-nums",
                 sugarProgress.isOverExtended
                   ? "text-red-600 dark:text-red-400"
                   : CARD_THEMES.sugar.latestValueColor
@@ -307,7 +307,7 @@ export function TextMetrics() {
             >
               {formatValue(sugarTotal)}
             </span>
-            <span className="text-xs text-muted-foreground tabular-nums w-20 text-left">
+            <span className="text-xs text-muted-foreground">
               / {formatValue(sugarLimit)} g
             </span>
           </div>
