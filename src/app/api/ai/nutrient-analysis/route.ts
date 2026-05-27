@@ -33,17 +33,20 @@ const NutrientAnalysisRequestSchema = z.object({
   medications: z.array(MedicationSchema).max(40).optional(),
 });
 
+// Caps here are sanity limits, not display constraints — the real bound on
+// model output is `max_tokens`. Earlier-too-tight caps caused 422s when
+// Claude's detail strings spilled past 500 chars with web-search context.
 const NutrientFindingSchema = z.object({
-  nutrient: z.string().min(1).max(80),
+  nutrient: z.string().min(1).max(120),
   status: z.enum(["high", "low", "balanced"]),
-  detail: z.string().max(500),
-  exampleFoods: z.array(z.string().max(120)).max(8).default([]),
+  detail: z.string().max(2000),
+  exampleFoods: z.array(z.string().max(200)).max(12).default([]),
 });
 
 const NutrientAnalysisResponseSchema = z.object({
-  summary: z.string().max(1500),
-  findings: z.array(NutrientFindingSchema).max(15).default([]),
-  caveats: z.array(z.string().max(300)).max(5).default([]),
+  summary: z.string().max(4000),
+  findings: z.array(NutrientFindingSchema).max(20).default([]),
+  caveats: z.array(z.string().max(600)).max(8).default([]),
 });
 
 const SYSTEM_PROMPT = `You are a nutrition pattern analyst. The user will send a list of food and drink descriptions they consumed over a recent time window. Your job is to identify nutrient biases — nutrients they may be over- or under-consuming based on the foods listed.
@@ -62,11 +65,11 @@ How to analyze:
 4. Be cautious: a list of food descriptions is not a complete diet record. Note this in caveats when relevant (missing portion sizes, missing days, single-meal-type bias).
 5. If the user provides a focus area (e.g. "potassium"), prioritize findings about that nutrient but still mention other obvious patterns.
 6. Give 3-7 findings. Each finding needs:
-   - nutrient: the nutrient name
+   - nutrient: the nutrient name (single short label, e.g. "Potassium", not a sentence)
    - status: "high" (appears excessive), "low" (appears insufficient), or "balanced" (worth noting it looks ok)
-   - detail: 1-3 sentence plain explanation of why you flagged it, referencing what was eaten
-   - exampleFoods: 2-5 specific items from the input that drove this finding
-7. Keep summary to 2-4 sentences — a friendly overview, not a clinical diagnosis.
+   - detail: 1-3 sentence plain explanation of why you flagged it (KEEP UNDER ~400 chars), referencing what was eaten
+   - exampleFoods: 2-5 specific items from the input that drove this finding (short labels)
+7. Keep summary to 2-4 sentences — a friendly overview, not a clinical diagnosis. UNDER ~800 chars.
 8. NEVER give medical advice or recommend supplements. Phrase findings as observations ("your intake leans heavily on potassium-rich foods like bananas and potatoes"), not prescriptions.
 
 Personalisation:
@@ -272,8 +275,12 @@ export const POST = withAuth(async ({ request, auth }) => {
     }
 
     if (!toolBlock) {
+      console.error(
+        "[VALIDATION] Nutrient analysis: model never called the structured tool. Stop reason:",
+        response.stop_reason,
+      );
       return NextResponse.json(
-        { error: "AI response format invalid" },
+        { error: "The AI didn't return a structured response. Try again." },
         { status: 422 },
       );
     }
@@ -283,9 +290,11 @@ export const POST = withAuth(async ({ request, auth }) => {
       console.error(
         "[VALIDATION] Nutrient analysis response validation failed:",
         JSON.stringify(validated.error.flatten()),
+        "raw input:",
+        JSON.stringify(toolBlock.input).slice(0, 2000),
       );
       return NextResponse.json(
-        { error: "AI response format invalid" },
+        { error: "The AI response didn't match the expected shape. Try again." },
         { status: 422 },
       );
     }
