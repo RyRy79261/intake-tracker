@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.27.0](https://github.com/RyRy79261/intake-tracker/compare/v1.26.0...v1.27.0) (2026-05-27)
+
+
+### Features
+
+* **analytics:** add on-the-fly nutrient bias scan to summary tab ([dad3dd4](https://github.com/RyRy79261/intake-tracker/commit/dad3dd435b242a79273c33751d6d885da653615f))
+
+
+### Bug Fixes
+
+* **nutrient-bias:** trim review nits — log dump, confirm gate, copy ([ed95bd6](https://github.com/RyRy79261/intake-tracker/commit/ed95bd6d0e2729aebbb9585aaf2c8eb71c9270b7))
+
+
+### Reverts
+
+* **mcp:** restore 24h access-token TTL ([5e71050](https://github.com/RyRy79261/intake-tracker/commit/5e71050c70ee26e2619c756f425031eb1b181fb5))
+
 ## [1.26.0](https://github.com/RyRy79261/intake-tracker/compare/v1.25.0...v1.26.0) (2026-05-27)
 
 
