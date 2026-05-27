@@ -67,9 +67,9 @@ describe("optionalTrackers settings", () => {
     });
   });
 
-  describe("persisted-state migration (v15)", () => {
+  describe("persisted-state migration", () => {
     it("constant matches the version migrate brings state up to", () => {
-      expect(SETTINGS_PERSIST_VERSION).toBe(15);
+      expect(SETTINGS_PERSIST_VERSION).toBe(16);
     });
 
     it("upgrading from v14 seeds optionalTrackers with the documented defaults", () => {
@@ -111,20 +111,36 @@ describe("optionalTrackers settings", () => {
       expect("coffeeDefaultType" in migrated).toBe(false);
     });
 
-    it("re-running migrate on already-current state leaves it intact", () => {
+    it("re-running migrate on already-current state leaves the optional-tracker choice intact", () => {
       const current = {
         optionalTrackers: { sugar: false, potassium: true },
+        waterExtendedBuffer: 750,
       };
-      const migrated = migrateSettings(current, 15) as unknown as Record<
-        string,
-        unknown
-      >;
-      // No v < 15 branches should run, so the explicit user choice
-      // (sugar=false, potassium=true) survives.
+      const migrated = migrateSettings(
+        current,
+        SETTINGS_PERSIST_VERSION,
+      ) as unknown as Record<string, unknown>;
+      // No older branches should run, so the explicit user choices survive.
       expect(migrated.optionalTrackers).toEqual({
         sugar: false,
         potassium: true,
       });
+      expect(migrated.waterExtendedBuffer).toBe(750);
+    });
+
+    it("upgrading from v15 seeds the extended-buffer defaults", () => {
+      const v15State = {
+        sugarLimit: 30,
+        potassiumLimit: 3500,
+        optionalTrackers: { sugar: true, potassium: false },
+      };
+      const migrated = migrateSettings(v15State, 15) as unknown as Record<
+        string,
+        unknown
+      >;
+      expect(migrated.waterExtendedBuffer).toBe(500);
+      expect(migrated.saltExtendedBuffer).toBe(500);
+      expect(migrated.sugarExtendedBuffer).toBe(10);
     });
   });
 });

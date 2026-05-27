@@ -16,6 +16,7 @@ import {
   useAddComposableEntry,
   type ComposableEntryInput,
 } from "@/hooks/use-composable-entry";
+import { computeTwoStageProgress } from "@/lib/progress-utils";
 
 /** Parse the optional sugar field into rounded grams (0 when empty/invalid). */
 function parseSugarGrams(value: string): number {
@@ -31,12 +32,15 @@ export function BeverageTab() {
   const waterIncrement = settings.waterIncrement;
 
   const waterLimit = settings.waterLimit;
+  const waterExtendedBuffer = settings.waterExtendedBuffer;
   const waterIntake = useIntake("water");
 
   const { dailyTotal } = waterIntake;
-  const progressPercent =
-    waterLimit > 0 ? Math.min((dailyTotal / waterLimit) * 100, 100) : 0;
-  const isOverLimit = waterLimit > 0 && dailyTotal > waterLimit;
+  const progress = computeTwoStageProgress(
+    dailyTotal,
+    waterLimit,
+    waterExtendedBuffer
+  );
 
   const [pendingAmount, setPendingAmount] = useState(waterIncrement);
   const [beverageName, setBeverageName] = useState("");
@@ -137,11 +141,14 @@ export function BeverageTab() {
       {/* Water Progress Bar */}
       <div className="mb-4">
         <Progress
-          value={progressPercent}
+          value={progress.isOverExtended ? 100 : progress.primaryPct}
+          extendedValue={progress.isOverExtended ? 0 : progress.extendedPct}
+          targetMarkerPct={progress.isOverExtended ? 0 : progress.targetPct}
           className="h-3"
-          indicatorClassName={cn(
-            isOverLimit ? theme.progressOverLimit : theme.progressGradient
-          )}
+          indicatorClassName={
+            progress.isOverExtended ? theme.progressOverLimit : theme.progressGradient
+          }
+          extendedIndicatorClassName={theme.progressExtended}
           aria-label="Water intake today, as a percentage of the daily limit"
         />
       </div>

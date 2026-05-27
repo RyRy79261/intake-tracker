@@ -44,6 +44,13 @@ export interface Settings {
     potassium: boolean;
   };
 
+  // Extended buffers added on top of the daily limit. Progress bars render a
+  // second-tone segment from `limit` up to `limit + extendedBuffer` before
+  // turning red. 0 disables the second stage.
+  waterExtendedBuffer: number; // ml
+  saltExtendedBuffer: number; // mg
+  sugarExtendedBuffer: number; // g
+
   // Secret to authenticate with server-side AI (if using server API key)
   // Set AI_AUTH_SECRET env var on server, enter same value here
   aiAuthSecret: string;
@@ -121,6 +128,9 @@ interface SettingsActions {
   setWaterLimit: (value: number) => void;
   setSaltLimit: (value: number) => void;
   setSugarLimit: (value: number) => void;
+  setWaterExtendedBuffer: (value: number) => void;
+  setSaltExtendedBuffer: (value: number) => void;
+  setSugarExtendedBuffer: (value: number) => void;
   setPotassiumLimit: (value: number) => void;
   setOptionalTracker: (key: "sugar" | "potassium", enabled: boolean) => void;
   setAiAuthSecret: (secret: string) => void;
@@ -175,6 +185,9 @@ const defaultSettings: Settings = {
   waterLimit: 1000,
   saltLimit: 1500,
   sugarLimit: 30,
+  waterExtendedBuffer: 500,
+  saltExtendedBuffer: 500,
+  sugarExtendedBuffer: 10,
   potassiumLimit: 3500,
   optionalTrackers: {
     sugar: true,
@@ -239,7 +252,7 @@ const defaultSettings: Settings = {
  * that would break an older stored state (new required field, dropped key,
  * renamed key, etc).
  */
-export const SETTINGS_PERSIST_VERSION = 15;
+export const SETTINGS_PERSIST_VERSION = 16;
 
 /**
  * Forward-migrate a persisted settings blob from any older version up to
@@ -315,6 +328,13 @@ export function migrateSettings(
     // (opt-in) — the user has no firm target.
     state.optionalTrackers = { sugar: true, potassium: false };
   }
+  if (version < 16) {
+    // Two-stage progress bars — seed defaults for the extended buffer
+    // zone shown above the daily limit.
+    state.waterExtendedBuffer = 500;
+    state.saltExtendedBuffer = 500;
+    state.sugarExtendedBuffer = 10;
+  }
   return state as unknown as Settings & SettingsActions;
 }
 
@@ -333,6 +353,12 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
         set({ saltLimit: sanitizeNumericInput(value, 100, 10000) }),
       setSugarLimit: (value) =>
         set({ sugarLimit: sanitizeNumericInput(value, 5, 500) }),
+      setWaterExtendedBuffer: (value) =>
+        set({ waterExtendedBuffer: sanitizeNumericInput(value, 0, 10000) }),
+      setSaltExtendedBuffer: (value) =>
+        set({ saltExtendedBuffer: sanitizeNumericInput(value, 0, 10000) }),
+      setSugarExtendedBuffer: (value) =>
+        set({ sugarExtendedBuffer: sanitizeNumericInput(value, 0, 500) }),
       setPotassiumLimit: (value) =>
         set({ potassiumLimit: sanitizeNumericInput(value, 100, 20000) }),
       setOptionalTracker: (key, enabled) =>

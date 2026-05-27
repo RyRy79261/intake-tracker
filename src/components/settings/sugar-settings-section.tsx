@@ -11,10 +11,12 @@ import { ExpandableSettingsSection } from "@/components/settings/expandable-sett
 export function SugarSettingsSection() {
   const settings = useSettings();
   const [limitInput, setLimitInput] = useState(settings.sugarLimit.toString());
+  const [extendedInput, setExtendedInput] = useState(settings.sugarExtendedBuffer.toString());
 
   useEffect(() => {
     setLimitInput(settings.sugarLimit.toString());
-  }, [settings.sugarLimit]);
+    setExtendedInput(settings.sugarExtendedBuffer.toString());
+  }, [settings.sugarLimit, settings.sugarExtendedBuffer]);
 
   return (
     <ExpandableSettingsSection
@@ -38,6 +40,23 @@ export function SugarSettingsSection() {
           />
           <p className="text-xs text-muted-foreground">
             Your daily total-sugar intake limit (5-500)
+          </p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="sugar-extended">Extended Buffer (g)</Label>
+          <NumericInput
+            id="sugar-extended"
+            value={extendedInput}
+            onChange={setExtendedInput}
+            onBlur={() => validateAndSave(extendedInput, 0, 500, settings.sugarExtendedBuffer, settings.setSugarExtendedBuffer, setExtendedInput)}
+            min={0}
+            max={500}
+            step={5}
+            onIncrement={() => incrementSetting(settings.sugarExtendedBuffer, 5, 500, settings.setSugarExtendedBuffer, setExtendedInput)}
+            onDecrement={() => decrementSetting(settings.sugarExtendedBuffer, 5, 0, settings.setSugarExtendedBuffer, setExtendedInput)}
+          />
+          <p className="text-xs text-muted-foreground">
+            Extra allowance shown in a second tone above your target before the bar turns red (0 to disable)
           </p>
         </div>
       </div>

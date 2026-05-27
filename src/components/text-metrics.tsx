@@ -12,6 +12,7 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { Progress } from "@/components/ui/progress";
+import { computeTwoStageProgress } from "@/lib/progress-utils";
 import { Droplets, Sparkles, Coffee, Wine, Candy, Banana } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -74,6 +75,9 @@ export function TextMetrics() {
   const waterLimit = useSettingsStore((s) => s.waterLimit);
   const saltLimit = useSettingsStore((s) => s.saltLimit);
   const sugarLimit = useSettingsStore((s) => s.sugarLimit);
+  const waterExtendedBuffer = useSettingsStore((s) => s.waterExtendedBuffer);
+  const saltExtendedBuffer = useSettingsStore((s) => s.saltExtendedBuffer);
+  const sugarExtendedBuffer = useSettingsStore((s) => s.sugarExtendedBuffer);
   const potassiumLimit = useSettingsStore((s) => s.potassiumLimit);
   const sugarEnabled = useOptionalTrackerEnabled("sugar");
   const potassiumEnabled = useOptionalTrackerEnabled("potassium");
@@ -170,17 +174,25 @@ export function TextMetrics() {
   const weeklyCaffeine = useMemo(() => bucketByDay(weeklyCaffeineRecords, weekStart, (r) => r.amountMg ?? 0), [weeklyCaffeineRecords, weekStart]);
   const weeklyAlcohol = useMemo(() => bucketByDay(weeklyAlcoholRecords, weekStart, (r) => r.amountStandardDrinks ?? 0), [weeklyAlcoholRecords, weekStart]);
 
-  // Over limit checks
-  const waterOverLimit = waterLimit > 0 && waterTotal > waterLimit;
-  const saltOverLimit = saltLimit > 0 && saltTotal > saltLimit;
-  const sugarOverLimit = sugarLimit > 0 && sugarTotal > sugarLimit;
-  const waterPct =
-    waterLimit > 0 ? Math.min(100, (waterTotal / waterLimit) * 100) : 0;
-  const saltPct =
-    saltLimit > 0 ? Math.min(100, (saltTotal / saltLimit) * 100) : 0;
-  const sugarPct =
-    sugarLimit > 0 ? Math.min(100, (sugarTotal / sugarLimit) * 100) : 0;
-  // Potassium is a soft target — progress bar fills but does not turn red.
+  // Two-stage progress: primary fill up to the daily limit, then a
+  // second-tone segment up to (limit + extendedBuffer), then red when
+  // beyond the extended zone.
+  const waterProgress = computeTwoStageProgress(
+    waterTotal,
+    waterLimit,
+    waterExtendedBuffer
+  );
+  const saltProgress = computeTwoStageProgress(
+    saltTotal,
+    saltLimit,
+    saltExtendedBuffer
+  );
+  const sugarProgress = computeTwoStageProgress(
+    sugarTotal,
+    sugarLimit,
+    sugarExtendedBuffer
+  );
+  // Potassium is a soft target — single-stage, no buffer, no red over-limit.
   const potassiumPct =
     potassiumLimit > 0
       ? Math.min(100, (potassiumTotal / potassiumLimit) * 100)
@@ -202,28 +214,48 @@ export function TextMetrics() {
             />
             <span className="text-sm text-foreground w-16">Water</span>
             <Progress
-              value={waterPct}
+              value={waterProgress.isOverExtended ? 100 : waterProgress.primaryPct}
+              extendedValue={waterProgress.isOverExtended ? 0 : waterProgress.extendedPct}
+              targetMarkerPct={waterProgress.isOverExtended ? 0 : waterProgress.targetPct}
               className="h-2 flex-1"
               indicatorClassName={
-                waterOverLimit
+                waterProgress.isOverExtended
                   ? "bg-red-500"
                   : CARD_THEMES.water.progressGradient
               }
+              extendedIndicatorClassName={CARD_THEMES.water.progressExtended}
               aria-label="Water intake progress"
             />
-            <span
-              className={cn(
-                "text-sm font-semibold tabular-nums",
-                waterOverLimit
-                  ? "text-red-600 dark:text-red-400"
-                  : CARD_THEMES.water.latestValueColor
+            <div className="flex flex-col items-end leading-tight">
+              <div className="flex items-baseline gap-1">
+                <span
+                  className={cn(
+                    "text-sm font-semibold tabular-nums",
+                    waterProgress.isOverExtended
+                      ? "text-red-600 dark:text-red-400"
+                      : CARD_THEMES.water.latestValueColor
+                  )}
+                >
+                  {formatValue(Math.min(waterTotal, waterLimit))}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  / {formatValue(waterLimit)} ml
+                </span>
+              </div>
+              {waterProgress.isOverTarget && waterProgress.extendedTotal > 0 && (
+                <span
+                  className={cn(
+                    "text-xs tabular-nums",
+                    waterProgress.isOverExtended
+                      ? "text-red-600 dark:text-red-400"
+                      : "text-muted-foreground"
+                  )}
+                >
+                  {formatValue(waterProgress.extendedCurrent)} /{" "}
+                  {formatValue(waterProgress.extendedTotal)} ml extra
+                </span>
               )}
-            >
-              {formatValue(waterTotal)}
-            </span>
-            <span className="text-xs text-muted-foreground">
-              / {formatValue(waterLimit)} ml
-            </span>
+            </div>
           </div>
 
           {/* Salt */}
@@ -234,28 +266,48 @@ export function TextMetrics() {
             />
             <span className="text-sm text-foreground w-16">Sodium</span>
             <Progress
-              value={saltPct}
+              value={saltProgress.isOverExtended ? 100 : saltProgress.primaryPct}
+              extendedValue={saltProgress.isOverExtended ? 0 : saltProgress.extendedPct}
+              targetMarkerPct={saltProgress.isOverExtended ? 0 : saltProgress.targetPct}
               className="h-2 flex-1"
               indicatorClassName={
-                saltOverLimit
+                saltProgress.isOverExtended
                   ? "bg-red-500"
                   : CARD_THEMES.salt.progressGradient
               }
+              extendedIndicatorClassName={CARD_THEMES.salt.progressExtended}
               aria-label="Sodium intake progress"
             />
-            <span
-              className={cn(
-                "text-sm font-semibold tabular-nums",
-                saltOverLimit
-                  ? "text-red-600 dark:text-red-400"
-                  : CARD_THEMES.salt.latestValueColor
+            <div className="flex flex-col items-end leading-tight">
+              <div className="flex items-baseline gap-1">
+                <span
+                  className={cn(
+                    "text-sm font-semibold tabular-nums",
+                    saltProgress.isOverExtended
+                      ? "text-red-600 dark:text-red-400"
+                      : CARD_THEMES.salt.latestValueColor
+                  )}
+                >
+                  {formatValue(Math.min(saltTotal, saltLimit))}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  / {formatValue(saltLimit)} mg
+                </span>
+              </div>
+              {saltProgress.isOverTarget && saltProgress.extendedTotal > 0 && (
+                <span
+                  className={cn(
+                    "text-xs tabular-nums",
+                    saltProgress.isOverExtended
+                      ? "text-red-600 dark:text-red-400"
+                      : "text-muted-foreground"
+                  )}
+                >
+                  {formatValue(saltProgress.extendedCurrent)} /{" "}
+                  {formatValue(saltProgress.extendedTotal)} mg extra
+                </span>
               )}
-            >
-              {formatValue(saltTotal)}
-            </span>
-            <span className="text-xs text-muted-foreground">
-              / {formatValue(saltLimit)} mg
-            </span>
+            </div>
           </div>
 
           {/* Sugar — optional tracker */}
@@ -267,28 +319,48 @@ export function TextMetrics() {
             />
             <span className="text-sm text-foreground w-16">Sugar</span>
             <Progress
-              value={sugarPct}
+              value={sugarProgress.isOverExtended ? 100 : sugarProgress.primaryPct}
+              extendedValue={sugarProgress.isOverExtended ? 0 : sugarProgress.extendedPct}
+              targetMarkerPct={sugarProgress.isOverExtended ? 0 : sugarProgress.targetPct}
               className="h-2 flex-1"
               indicatorClassName={
-                sugarOverLimit
+                sugarProgress.isOverExtended
                   ? "bg-red-500"
                   : CARD_THEMES.sugar.progressGradient
               }
+              extendedIndicatorClassName={CARD_THEMES.sugar.progressExtended}
               aria-label="Sugar intake progress"
             />
-            <span
-              className={cn(
-                "text-sm font-semibold tabular-nums",
-                sugarOverLimit
-                  ? "text-red-600 dark:text-red-400"
-                  : CARD_THEMES.sugar.latestValueColor
+            <div className="flex flex-col items-end leading-tight">
+              <div className="flex items-baseline gap-1">
+                <span
+                  className={cn(
+                    "text-sm font-semibold tabular-nums",
+                    sugarProgress.isOverExtended
+                      ? "text-red-600 dark:text-red-400"
+                      : CARD_THEMES.sugar.latestValueColor
+                  )}
+                >
+                  {formatValue(Math.min(sugarTotal, sugarLimit))}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  / {formatValue(sugarLimit)} g
+                </span>
+              </div>
+              {sugarProgress.isOverTarget && sugarProgress.extendedTotal > 0 && (
+                <span
+                  className={cn(
+                    "text-xs tabular-nums",
+                    sugarProgress.isOverExtended
+                      ? "text-red-600 dark:text-red-400"
+                      : "text-muted-foreground"
+                  )}
+                >
+                  {formatValue(sugarProgress.extendedCurrent)} /{" "}
+                  {formatValue(sugarProgress.extendedTotal)} g extra
+                </span>
               )}
-            >
-              {formatValue(sugarTotal)}
-            </span>
-            <span className="text-xs text-muted-foreground">
-              / {formatValue(sugarLimit)} g
-            </span>
+            </div>
           </div>
           )}
 
@@ -381,19 +453,22 @@ export function TextMetrics() {
           ))}
 
           {[
-            { key: "water", label: "Water", data: weeklyWater, theme: CARD_THEMES.water, limit: waterLimit, fmt: formatValue, show: true },
-            { key: "salt", label: "Na", data: weeklySalt, theme: CARD_THEMES.salt, limit: saltLimit, fmt: formatValue, show: true },
-            { key: "sugar", label: "Sug", data: weeklySugar, theme: CARD_THEMES.sugar, limit: sugarLimit, fmt: formatValue, show: sugarEnabled },
-            { key: "potassium", label: "K", data: weeklyPotassium, theme: CARD_THEMES.potassium, limit: 0, fmt: formatValue, show: potassiumEnabled },
-            { key: "caf", label: "Caf", data: weeklyCaffeine, theme: CARD_THEMES.caffeine, limit: 0, fmt: (v: number) => formatValue(Math.round(v)), show: true },
-            { key: "alc", label: "Alc", data: weeklyAlcohol, theme: CARD_THEMES.alcohol, limit: 0, fmt: (v: number) => v.toFixed(1), show: true },
+            { key: "water", label: "Water", data: weeklyWater, theme: CARD_THEMES.water, limit: waterLimit, buffer: waterExtendedBuffer, fmt: formatValue, show: true },
+            { key: "salt", label: "Na", data: weeklySalt, theme: CARD_THEMES.salt, limit: saltLimit, buffer: saltExtendedBuffer, fmt: formatValue, show: true },
+            { key: "sugar", label: "Sug", data: weeklySugar, theme: CARD_THEMES.sugar, limit: sugarLimit, buffer: sugarExtendedBuffer, fmt: formatValue, show: sugarEnabled },
+            { key: "potassium", label: "K", data: weeklyPotassium, theme: CARD_THEMES.potassium, limit: 0, buffer: 0, fmt: formatValue, show: potassiumEnabled },
+            { key: "caf", label: "Caf", data: weeklyCaffeine, theme: CARD_THEMES.caffeine, limit: 0, buffer: 0, fmt: (v: number) => formatValue(Math.round(v)), show: true },
+            { key: "alc", label: "Alc", data: weeklyAlcohol, theme: CARD_THEMES.alcohol, limit: 0, buffer: 0, fmt: (v: number) => v.toFixed(1), show: true },
           ].filter((row) => row.show).map((row) => (
             <Fragment key={row.key}>
               <div className="text-xs text-muted-foreground">{row.label}</div>
               {row.data.map((val, i) => {
                 const isFuture = i > todayIndex;
                 const isToday = i === todayIndex;
-                const isOverLimit = row.limit > 0 && val > row.limit;
+                const isOverTarget = row.limit > 0 && val > row.limit;
+                const isOverExtended =
+                  row.limit > 0 && val > row.limit + row.buffer;
+                const isInExtendedZone = isOverTarget && !isOverExtended;
                 const hasData = val > 0;
                 return (
                   <div
@@ -402,8 +477,9 @@ export function TextMetrics() {
                       "text-xs tabular-nums text-center",
                       isFuture && "text-muted-foreground/50",
                       isToday && "font-semibold",
-                      !isFuture && !isOverLimit && hasData && row.theme.latestValueColor,
-                      !isFuture && isOverLimit && "text-red-600 dark:text-red-400",
+                      !isFuture && hasData && !isOverTarget && row.theme.latestValueColor,
+                      !isFuture && isInExtendedZone && "text-orange-600 dark:text-orange-400",
+                      !isFuture && isOverExtended && "text-red-600 dark:text-red-400",
                       !isFuture && !hasData && "text-muted-foreground/50"
                     )}
                   >

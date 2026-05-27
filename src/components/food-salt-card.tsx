@@ -9,6 +9,7 @@ import { useIntake } from "@/hooks/use-intake-queries";
 import { useSettings } from "@/hooks/use-settings";
 import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import { FoodSection } from "@/components/food-salt/food-section";
+import { computeTwoStageProgress } from "@/lib/progress-utils";
 
 export function FoodSaltCard() {
   const saltIntake = useIntake("salt");
@@ -19,16 +20,20 @@ export function FoodSaltCard() {
   const settings = useSettings();
   const { dailyTotal, rollingTotal } = saltIntake;
   const limit = settings.saltLimit;
-  const progressPercent =
-    limit > 0 ? Math.min((dailyTotal / limit) * 100, 100) : 0;
-  const isOverLimit = limit > 0 && dailyTotal > limit;
+  const saltProgress = computeTwoStageProgress(
+    dailyTotal,
+    limit,
+    settings.saltExtendedBuffer
+  );
 
   const sugarDaily = sugarIntake.dailyTotal;
   const sugarRolling = sugarIntake.rollingTotal;
   const sugarLimit = settings.sugarLimit;
-  const sugarProgressPercent =
-    sugarLimit > 0 ? Math.min((sugarDaily / sugarLimit) * 100, 100) : 0;
-  const isOverSugarLimit = sugarLimit > 0 && sugarDaily > sugarLimit;
+  const sugarProgress = computeTwoStageProgress(
+    sugarDaily,
+    sugarLimit,
+    settings.sugarExtendedBuffer
+  );
 
   const potassiumDaily = potassiumIntake.dailyTotal;
   const potassiumRolling = potassiumIntake.rollingTotal;
@@ -69,24 +74,45 @@ export function FoodSaltCard() {
               <p
                 className={cn(
                   "text-sm font-medium",
-                  isOverLimit
+                  saltProgress.isOverExtended
                     ? "text-red-600 dark:text-red-400"
-                    : "text-foreground"
+                    : saltProgress.isOverTarget
+                      ? "text-orange-600 dark:text-orange-400"
+                      : "text-foreground"
                 )}
               >
-                {formatAmount(dailyTotal, "mg")} / {formatAmount(limit, "mg")}
+                {formatAmount(Math.min(dailyTotal, limit), "mg")} /{" "}
+                {formatAmount(limit, "mg")}
               </p>
+              {saltProgress.isOverTarget && saltProgress.extendedTotal > 0 && (
+                <p
+                  className={cn(
+                    "text-xs",
+                    saltProgress.isOverExtended
+                      ? "text-red-600 dark:text-red-400"
+                      : "text-orange-600 dark:text-orange-400"
+                  )}
+                >
+                  {formatAmount(saltProgress.extendedCurrent, "mg")} /{" "}
+                  {formatAmount(saltProgress.extendedTotal, "mg")} extra
+                </p>
+              )}
               <p className="text-xs text-muted-foreground/70">
                 24h: {formatAmount(rollingTotal, "mg")}
               </p>
             </div>
           </div>
           <Progress
-            value={progressPercent}
+            value={saltProgress.isOverExtended ? 100 : saltProgress.primaryPct}
+            extendedValue={saltProgress.isOverExtended ? 0 : saltProgress.extendedPct}
+            targetMarkerPct={saltProgress.isOverExtended ? 0 : saltProgress.targetPct}
             className="h-3"
-            indicatorClassName={cn(
-              isOverLimit ? CARD_THEMES.salt.progressOverLimit : CARD_THEMES.salt.progressGradient
-            )}
+            indicatorClassName={
+              saltProgress.isOverExtended
+                ? CARD_THEMES.salt.progressOverLimit
+                : CARD_THEMES.salt.progressGradient
+            }
+            extendedIndicatorClassName={CARD_THEMES.salt.progressExtended}
             aria-label="Sodium intake today, as a percentage of the daily limit"
           />
         </div>
@@ -102,26 +128,45 @@ export function FoodSaltCard() {
               <p
                 className={cn(
                   "text-sm font-medium",
-                  isOverSugarLimit
+                  sugarProgress.isOverExtended
                     ? "text-red-600 dark:text-red-400"
-                    : "text-foreground"
+                    : sugarProgress.isOverTarget
+                      ? "text-orange-600 dark:text-orange-400"
+                      : "text-foreground"
                 )}
               >
-                {formatAmount(sugarDaily, "g")} / {formatAmount(sugarLimit, "g")}
+                {formatAmount(Math.min(sugarDaily, sugarLimit), "g")} /{" "}
+                {formatAmount(sugarLimit, "g")}
               </p>
+              {sugarProgress.isOverTarget && sugarProgress.extendedTotal > 0 && (
+                <p
+                  className={cn(
+                    "text-xs",
+                    sugarProgress.isOverExtended
+                      ? "text-red-600 dark:text-red-400"
+                      : "text-orange-600 dark:text-orange-400"
+                  )}
+                >
+                  {formatAmount(sugarProgress.extendedCurrent, "g")} /{" "}
+                  {formatAmount(sugarProgress.extendedTotal, "g")} extra
+                </p>
+              )}
               <p className="text-xs text-muted-foreground/70">
                 24h: {formatAmount(sugarRolling, "g")}
               </p>
             </div>
           </div>
           <Progress
-            value={sugarProgressPercent}
+            value={sugarProgress.isOverExtended ? 100 : sugarProgress.primaryPct}
+            extendedValue={sugarProgress.isOverExtended ? 0 : sugarProgress.extendedPct}
+            targetMarkerPct={sugarProgress.isOverExtended ? 0 : sugarProgress.targetPct}
             className="h-3"
-            indicatorClassName={cn(
-              isOverSugarLimit
+            indicatorClassName={
+              sugarProgress.isOverExtended
                 ? CARD_THEMES.sugar.progressOverLimit
                 : CARD_THEMES.sugar.progressGradient
-            )}
+            }
+            extendedIndicatorClassName={CARD_THEMES.sugar.progressExtended}
             aria-label="Sugar intake today, as a percentage of the daily limit"
           />
         </div>
