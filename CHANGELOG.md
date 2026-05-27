@@ -1,5 +1,40 @@
 # Changelog
 
+## [1.26.0](https://github.com/RyRy79261/intake-tracker/compare/v1.25.0...v1.26.0) (2026-05-27)
+
+
+### Features
+
+* **insights:** add deep-research mode via Anthropic Message Batches ([44a88e4](https://github.com/RyRy79261/intake-tracker/commit/44a88e40285e5606ad66412def456182d894bd28))
+* **insights:** deep mode now mandates web search + medication-aligned analysis ([66b8a9c](https://github.com/RyRy79261/intake-tracker/commit/66b8a9c00251a54ba5722dbfbf66ec79f4873297))
+* **insights:** move full report into a dedicated reading dialog ([79592df](https://github.com/RyRy79261/intake-tracker/commit/79592df2210c6f429c9f209d0f4665e61c6c8774))
+* **optional-trackers:** make sugar + potassium toggleable ([0996ea2](https://github.com/RyRy79261/intake-tracker/commit/0996ea2d4f9063e0f5944b89998d5f20dfd608e8))
+* **potassium:** track potassium intake on food entries ([39b46fa](https://github.com/RyRy79261/intake-tracker/commit/39b46fa6f75ff7937eb4955f39a162d642926b07))
+* **potassium:** track potassium intake on food entries ([de0c70e](https://github.com/RyRy79261/intake-tracker/commit/de0c70ed71760941b18cf98430a3a5672c050b0c))
+
+
+### Bug Fixes
+
+* **ci:** install WebKit alongside Chromium for the mobile-safari E2E project ([cb66312](https://github.com/RyRy79261/intake-tracker/commit/cb663123ba81299de37cb5a2fc6d7541876e5d60))
+* **debug,intake:** sort raw logs by date, label inline edit inputs ([539164a](https://github.com/RyRy79261/intake-tracker/commit/539164a2dd853c61a869ebc72e48f33a24d97ca7))
+* **debug,intake:** sort raw logs by date, label inline edit inputs ([d37b2b8](https://github.com/RyRy79261/intake-tracker/commit/d37b2b822bc80b50da483933b08838c0fac3bed1))
+* **e2e:** bump CI webServer timeout from 120s to 300s ([75107d2](https://github.com/RyRy79261/intake-tracker/commit/75107d20f3e94af74b38c8c0ccb88eb246012c8d))
+* **insights:** address CodeRabbit findings + CI table-count ([38c6cb7](https://github.com/RyRy79261/intake-tracker/commit/38c6cb7ff2a2e8a73ecc2896bde6c509501d9c5d))
+* **insights:** apply schema delta as 0015 instead of rewriting 0014 ([8b1a81f](https://github.com/RyRy79261/intake-tracker/commit/8b1a81f7a63477254b9f8acf28d6955e070475d7))
+* **insights:** raise max_tokens and detect truncation ([fe3e52a](https://github.com/RyRy79261/intake-tracker/commit/fe3e52ae96a593a4b52bd242e75b3986fe4f644b))
+* **insights:** respect completeInsightJob CAS-loss return ([c162d52](https://github.com/RyRy79261/intake-tracker/commit/c162d52eec1a6e1148ef02c667b893f957fd351e))
+* **insights:** unblock e2e + XSS guard sources + propagate CAS-loss ([1467507](https://github.com/RyRy79261/intake-tracker/commit/14675078a8c123dfa9b8196e00f3d314ebb12c45))
+* **insights:** widen response caps + drop two UI rough edges ([c5a96e8](https://github.com/RyRy79261/intake-tracker/commit/c5a96e8105e99a350657fb61c5949cb08f938c58))
+* **mcp:** shorten access-token TTL to 15m, document refresh race ([09d1414](https://github.com/RyRy79261/intake-tracker/commit/09d14143e3571f2cc7f33fe58fc2bc3fa30088f8))
+* **mcp:** stop rotating refresh tokens so client doesn't get locked out ([4770524](https://github.com/RyRy79261/intake-tracker/commit/4770524d524c6fea4a91af101604561a964aedd2))
+* **mcp:** stop rotating refresh tokens so client doesn't get locked out ([1717283](https://github.com/RyRy79261/intake-tracker/commit/17172831a89dad3dafcdceeefde24160c8c5b954))
+
+
+### Reverts
+
+* **e2e:** drop mobile-safari project to unblock CI ([58738c0](https://github.com/RyRy79261/intake-tracker/commit/58738c06380eadb430a77f45d38a6a9ae50f87a6))
+* **e2e:** remove auth + intake-lifecycle specs to isolate failure ([e781d4d](https://github.com/RyRy79261/intake-tracker/commit/e781d4d812fc4d051a23aad31eff9fbb1c4b0801))
+
 ## [1.25.0](https://github.com/RyRy79261/intake-tracker/compare/v1.24.4...v1.25.0) (2026-05-24)
 
 
