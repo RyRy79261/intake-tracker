@@ -1,0 +1,87 @@
+# Dependabot config — see https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+#
+# Strategy:
+# - npm: weekly version updates (grouped to keep PR volume manageable) +
+#   Dependabot's automatic security updates. The pnpm audit job in ci.yml
+#   gates merge on `--audit-level high`; Dependabot opens the PRs.
+# - github-actions: weekly so pinned action versions stay current.
+#
+# We intentionally cap open PRs and group minor/patch bumps to avoid PR spam.
+# Security advisories bypass the schedule and ignore `open-pull-requests-limit`.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "automated"
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+      include: "scope"
+    groups:
+      # Group routine bumps so reviewers see one PR per ecosystem area
+      # rather than ten. Major upgrades stay individual for blast radius.
+      radix-ui:
+        patterns:
+          - "@radix-ui/*"
+      tanstack:
+        patterns:
+          - "@tanstack/*"
+      drizzle:
+        patterns:
+          - "drizzle-*"
+          - "@drizzle/*"
+      testing:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
+          - "@testing-library/*"
+          - "@playwright/*"
+          - "playwright"
+          - "@stryker-mutator/*"
+          - "fast-check"
+          - "msw"
+          - "fake-indexeddb"
+      types:
+        patterns:
+          - "@types/*"
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+        exclude-patterns:
+          - "next"
+          - "react"
+          - "react-dom"
+          - "typescript"
+    ignore:
+      # Next.js 15 introduces RSC and other large surface changes; bump on a
+      # scheduled major-upgrade PR, not as a routine Dependabot bump.
+      - dependency-name: "next"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "ci"
+      - "automated"
+    commit-message:
+      prefix: "chore(ci)"
+      include: "scope"
