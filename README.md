@@ -156,6 +156,41 @@ Access settings via the gear icon to configure:
 - Daily limits for water (default 1000ml) and salt (default 1500mg)
 - AI integration settings
 
+## Testing & Quality
+
+The test suite is layered. See [`docs/TESTING_STRATEGY.md`](docs/TESTING_STRATEGY.md)
+for the philosophy and per-paradigm rationale, and
+[`docs/AUDIT_2026-05.md`](docs/AUDIT_2026-05.md) for the latest gap
+analysis and prioritized recommendations.
+
+| Layer | Command | Where |
+|---|---|---|
+| Unit / service (vitest) | `pnpm test` | `src/**/*.test.{ts,tsx}` |
+| Unit, timezone-pinned | `pnpm test:tz` | Africa/Johannesburg + Europe/Berlin |
+| Coverage | `pnpm test:coverage` | Thresholds in `vitest.config.ts` |
+| Integration (testcontainers + Postgres) | `pnpm test:integration` | `src/__tests__/integration/` |
+| E2E (Playwright) | `pnpm test:e2e` | `e2e/` |
+| Mutation (Stryker, nightly) | `pnpm test:mutation` | `stryker.conf.json` |
+| Benchmarks | `pnpm bench` | `src/__tests__/bench/` |
+
+CI guarantees per PR ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)):
+
+- Dual-timezone test runs (SA + DE) to catch DST and offset bugs.
+- Schema migrations applied to an **ephemeral Neon branch per PR run**
+  before E2E executes, so schema-vs-Postgres drift fails fast.
+- Aggregate coverage threshold ratchet (currently lines 54 / statements 53
+  / functions 45 / branches 44) — never lowered, only raised.
+- Nightly mutation testing on the sync engine + MCP OAuth modules
+  with a per-file score ratchet
+  ([`.github/workflows/mutation.yml`](.github/workflows/mutation.yml)).
+- Supply-chain audit (`pnpm audit --audit-level high`) with hardened
+  install policy (`minimumReleaseAge: 1440`, `trustPolicy: no-downgrade`,
+  `blockExoticSubdeps`).
+- Bundle-security scan on the built production output (no API-key
+  patterns, no dev-only surfaces).
+- Meta-tests that lock the CI workflow shape, the Playwright config,
+  and the supply-chain settings against silent drift.
+
 ## Installing on Your Phone
 
 ### Android
@@ -341,6 +376,8 @@ See [docs/mcp-connector.md](docs/mcp-connector.md) for the OAuth 2.1 + DCR flow,
 
 ## Documentation
 
+- [Testing & Quality Strategy](docs/TESTING_STRATEGY.md) — Test paradigms, implementation log, mutation baselines
+- [Test, Coverage & CI Audit — May 2026](docs/AUDIT_2026-05.md) — Current state of testing + prioritized recommendations
 - [Rollback & Recovery Runbook](docs/ROLLBACK.md) — How to recover from bad production deployments
 - [Staging Setup Guide](docs/staging-setup.md) — Manual Vercel and DNS configuration for staging
 - [Claude Custom Connector (MCP) Design](docs/mcp-connector.md) — OAuth 2.1 + DCR flow, schema, threat model

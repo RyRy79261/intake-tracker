@@ -58,7 +58,9 @@ export default defineConfig({
         command: 'pnpm build && pnpm start',
         url: 'http://localhost:3000',
         reuseExistingServer: false,
-        timeout: 120 * 1000,
+        // `pnpm build` alone takes ~90s on the free GitHub runner; 120s left no
+        // headroom for `pnpm start` and tipped over under runner contention.
+        timeout: 300 * 1000,
         env: {
           DATABASE_URL: process.env.DATABASE_URL ?? '',
           NEON_AUTH_URL: process.env.NEON_AUTH_URL ?? '',

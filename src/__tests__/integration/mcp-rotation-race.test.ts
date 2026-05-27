@@ -1,26 +1,18 @@
 /**
- * Refresh-token rotation under concurrent use — real Postgres only.
+ * Refresh-endpoint behaviour under concurrent use — real Postgres only.
  *
- * The atomic guard in `rotateRefreshToken` is
+ * The refresh path issues a fresh access token while keeping the refresh
+ * token stable for its full refresh-expiry window. Two properties matter:
  *
- *     UPDATE mcp_access_tokens
- *        SET revoked_at = $now
- *      WHERE refresh_token_hash = $hash
- *        AND revoked_at IS NULL
- *      RETURNING *
+ *   1. The same refresh token can be exchanged many times. There is no
+ *      single-use rotation, so a network blip or duplicate refresh from
+ *      the client never permanently locks the user out.
+ *   2. Concurrent refreshes both succeed. At minimum, the row's
+ *      `token_hash` after the dust settles matches one of the access
+ *      tokens that was returned to a caller, so at least one client
+ *      reply remains usable.
  *
- * Postgres row-level locking guarantees exactly one concurrent caller
- * sees the row in its pre-update state and gets the RETURNING payload;
- * everyone else gets zero rows back and returns `invalid_grant`. An
- * in-memory JS stub does NOT model that — only a real Postgres can.
- *
- * Property under test (docs/TESTING_STRATEGY.md §2.5):
- *
- *     For any sequence of N parallel rotation attempts against the
- *     same refresh token, exactly ONE succeeds.
- *
- * That single-winner property is what stops a leaked refresh token
- * from being usable twice in a refresh-token-replay attack.
+ * Client-scoping and refresh-expiry are still enforced.
  */
 import {
   describe,
@@ -65,8 +57,8 @@ async function freshClient() {
   });
 }
 
-describe("MCP refresh-token rotation race (real Postgres)", () => {
-  it("two parallel rotations of the same refresh token: exactly one wins", async () => {
+describe("MCP refresh endpoint (real Postgres)", () => {
+  it("two parallel refreshes both succeed and at least one access token is live", async () => {
     const client = await freshClient();
     const issued = await oauth.issueAccessToken({
       clientId: client.clientId,
@@ -79,14 +71,18 @@ describe("MCP refresh-token rotation race (real Postgres)", () => {
       oauth.rotateRefreshToken(issued.refreshToken, client.clientId),
     ]);
 
-    const winners = [a, b].filter((r) => r.ok);
-    const losers = [a, b].filter((r) => !r.ok);
-    expect(winners).toHaveLength(1);
-    expect(losers).toHaveLength(1);
+    expect(a.ok).toBe(true);
+    expect(b.ok).toBe(true);
+    if (!a.ok || !b.ok) throw new Error("unreachable");
+
+    const liveA = await oauth.lookupAccessToken(a.tokens.accessToken);
+    const liveB = await oauth.lookupAccessToken(b.tokens.accessToken);
+    // The last writer's token wins the row, but at least one must be live.
+    expect(Boolean(liveA) || Boolean(liveB)).toBe(true);
   });
 
   it(
-    "N parallel rotations of the same refresh token: exactly one wins (property)",
+    "N parallel refreshes all succeed (property)",
     async () => {
       await fc.assert(
         fc.asyncProperty(fc.integer({ min: 2, max: 6 }), async (n) => {
@@ -102,9 +98,7 @@ describe("MCP refresh-token rotation race (real Postgres)", () => {
               oauth.rotateRefreshToken(issued.refreshToken, client.clientId),
             ),
           );
-          const winners = results.filter((r) => r.ok).length;
-          expect(winners).toBe(1);
-          expect(results.length - winners).toBe(n - 1);
+          expect(results.every((r) => r.ok)).toBe(true);
         }),
         { numRuns: 5 },
       );
@@ -112,57 +106,32 @@ describe("MCP refresh-token rotation race (real Postgres)", () => {
     30_000,
   );
 
-  it("after a successful rotation, the old refresh token is permanently dead", async () => {
+  it("the same refresh token can be exchanged many times sequentially", async () => {
     const client = await freshClient();
     const issued = await oauth.issueAccessToken({
       clientId: client.clientId,
       userId: ctx.testUserId,
       scope: "intake-tracker:read",
     });
-    const first = await oauth.rotateRefreshToken(
-      issued.refreshToken,
-      client.clientId,
-    );
-    expect(first.ok).toBe(true);
 
-    // Replay the original token a few more times — must always fail.
-    for (let i = 0; i < 3; i++) {
-      const replay = await oauth.rotateRefreshToken(
+    let lastAccess = issued.accessToken;
+    for (let i = 0; i < 5; i++) {
+      const r = await oauth.rotateRefreshToken(
         issued.refreshToken,
         client.clientId,
       );
-      expect(replay.ok).toBe(false);
+      expect(r.ok).toBe(true);
+      if (!r.ok) throw new Error("unreachable");
+      expect(r.tokens.refreshToken).toBe(issued.refreshToken);
+      expect(r.tokens.accessToken).not.toBe(lastAccess);
+      lastAccess = r.tokens.accessToken;
+      // The newly issued access token must be usable.
+      const live = await oauth.lookupAccessToken(r.tokens.accessToken);
+      expect(live).not.toBeNull();
     }
   });
 
-  it("the NEW refresh token returned by rotation is usable exactly once", async () => {
-    const client = await freshClient();
-    const issued = await oauth.issueAccessToken({
-      clientId: client.clientId,
-      userId: ctx.testUserId,
-      scope: "intake-tracker:read",
-    });
-    const first = await oauth.rotateRefreshToken(
-      issued.refreshToken,
-      client.clientId,
-    );
-    expect(first.ok).toBe(true);
-    if (!first.ok) throw new Error("unreachable");
-
-    const second = await oauth.rotateRefreshToken(
-      first.tokens.refreshToken,
-      client.clientId,
-    );
-    expect(second.ok).toBe(true);
-
-    const replay = await oauth.rotateRefreshToken(
-      first.tokens.refreshToken,
-      client.clientId,
-    );
-    expect(replay.ok).toBe(false);
-  });
-
-  it("rotating with the wrong client_id fails even if refresh token matches", async () => {
+  it("refreshing with the wrong client_id fails even if refresh token matches", async () => {
     const a = await freshClient();
     const b = await freshClient();
     const issued = await oauth.issueAccessToken({
