@@ -1,10 +1,26 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Apple, Loader2, ChevronDown, ChevronUp, AlertCircle } from "lucide-react";
+import {
+  Apple,
+  Loader2,
+  ChevronDown,
+  ChevronUp,
+  AlertCircle,
+  Check,
+  X,
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useEatingRecordsByDateRange } from "@/hooks/use-eating-queries";
 import { useUserProfile } from "@/hooks/use-profile-queries";
@@ -64,6 +80,7 @@ export function NutrientAnalysisCard() {
   const [focusOpen, setFocusOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [result, setResult] = useState<NutrientAnalysisResult | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const { toast } = useToast();
   const profile = useUserProfile();
 
@@ -97,6 +114,7 @@ export function NutrientAnalysisCard() {
 
   const analyze = async () => {
     if (!canAnalyze) return;
+    setConfirmOpen(false);
     setPending(true);
     setResult(null);
     try {
@@ -215,7 +233,7 @@ export function NutrientAnalysisCard() {
 
         <Button
           size="sm"
-          onClick={analyze}
+          onClick={() => setConfirmOpen(true)}
           disabled={!canAnalyze}
           className="w-full"
         >
@@ -286,6 +304,119 @@ export function NutrientAnalysisCard() {
           </div>
         )}
       </CardContent>
+
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-1.5">
+              <Apple className="w-4 h-4 text-emerald-500" />
+              What goes into this scan
+            </DialogTitle>
+            <DialogDescription>
+              The AI looks at the last {WINDOW_DAYS} days of food entries and
+              the medical context you&apos;ve opted into sharing. Here&apos;s
+              exactly what&apos;s included.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 text-sm">
+            <div className="space-y-1.5">
+              <p className="font-medium text-slate-700 dark:text-slate-200">
+                Food data (last {WINDOW_DAYS} days)
+              </p>
+              <ul className="space-y-1 text-slate-600 dark:text-slate-300">
+                <li className="flex gap-1.5">
+                  <Check className="w-3.5 h-3.5 mt-0.5 shrink-0 text-emerald-500" />
+                  <span>
+                    {foods.length} food{" "}
+                    {foods.length === 1 ? "entry" : "entries"} — descriptions
+                    and approximate portions in grams when logged
+                  </span>
+                </li>
+                <li className="flex gap-1.5">
+                  <X className="w-3.5 h-3.5 mt-0.5 shrink-0 text-slate-400" />
+                  <span>
+                    Timestamps, notes, and any other tracked categories (water,
+                    BP, weight, etc.) are NOT sent
+                  </span>
+                </li>
+              </ul>
+            </div>
+
+            {focus.trim() !== "" && (
+              <div className="space-y-1.5">
+                <p className="font-medium text-slate-700 dark:text-slate-200">
+                  Focus
+                </p>
+                <p className="text-slate-600 dark:text-slate-300">
+                  Findings will lead with:{" "}
+                  <span className="text-slate-700 dark:text-slate-200 font-medium">
+                    {focus.trim()}
+                  </span>
+                </p>
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <p className="font-medium text-slate-700 dark:text-slate-200">
+                Your medical profile
+              </p>
+              <ul className="space-y-1 text-slate-600 dark:text-slate-300">
+                <li className="flex gap-1.5">
+                  {shareConditions ? (
+                    <Check className="w-3.5 h-3.5 mt-0.5 shrink-0 text-emerald-500" />
+                  ) : (
+                    <X className="w-3.5 h-3.5 mt-0.5 shrink-0 text-slate-400" />
+                  )}
+                  <span>
+                    {shareConditions ? (
+                      <>
+                        Conditions included:{" "}
+                        <span className="text-slate-700 dark:text-slate-200">
+                          {profile.conditions.join(", ")}
+                        </span>
+                      </>
+                    ) : (
+                      "Conditions not included — turn on sharing in your Profile to personalise the scan"
+                    )}
+                  </span>
+                </li>
+                <li className="flex gap-1.5">
+                  {shareMedications ? (
+                    <Check className="w-3.5 h-3.5 mt-0.5 shrink-0 text-emerald-500" />
+                  ) : (
+                    <X className="w-3.5 h-3.5 mt-0.5 shrink-0 text-slate-400" />
+                  )}
+                  <span>
+                    {shareMedications
+                      ? "Medications included — your active prescriptions, doses, and titration/maintenance phases"
+                      : "Medications not included — turn on sharing in your Profile to add prescription context"}
+                  </span>
+                </li>
+              </ul>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              Food descriptions are PII-stripped before they leave your device.
+              The model may web-search any branded or regional items it
+              doesn&apos;t recognise, so the scan typically takes 5-15 seconds.
+            </p>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setConfirmOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button size="sm" onClick={analyze} disabled={pending}>
+              {result ? "Re-analyze" : "Start analysis"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
