@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           # This workflow doesn't push, comment, or call the GitHub API
           # after checkout, so leaving the GITHUB_TOKEN on disk gains
