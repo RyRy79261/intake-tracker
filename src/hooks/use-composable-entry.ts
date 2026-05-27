@@ -10,7 +10,7 @@ import {
   deleteSingleGroupRecord,
   undoDeleteSingleRecord,
   syncEatingGroup,
-  syncLiquidGroup,
+  syncLiquidEntrySubstances,
   parseSodiumKindFromSource,
   type ComposableEntryInput,
   type ComposableEntryResult,
@@ -75,17 +75,17 @@ export function useSyncEatingGroup() {
 }
 
 /**
- * Mutation hook for syncing a liquid entry's linked substance records
- * (used by the inline edit form on the Liquids card for coffee/alcohol/preset
- * entries).
+ * Mutation hook for syncing a liquid entry's caffeine / alcohol / sugar
+ * records (used by the inline edit form on the Liquids card). Creates,
+ * updates, or soft-deletes the linked records to match the patch.
  */
-export function useSyncLiquidGroup() {
+export function useSyncLiquidEntrySubstances() {
   return useCallback(
     async (
-      groupId: string,
-      patch: Parameters<typeof syncLiquidGroup>[1],
+      intakeId: string,
+      patch: Parameters<typeof syncLiquidEntrySubstances>[1],
     ): Promise<void> => {
-      unwrap(await syncLiquidGroup(groupId, patch));
+      unwrap(await syncLiquidEntrySubstances(intakeId, patch));
     },
     [],
   );

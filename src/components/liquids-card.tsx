@@ -23,11 +23,12 @@ import { useSettings } from "@/hooks/use-settings";
 import { useToast } from "@/hooks/use-toast";
 import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
 import { useEditRecord } from "@/hooks/use-edit-record";
-import { useSyncLiquidGroup, fetchEntryGroup } from "@/hooks/use-composable-entry";
+import { useSyncLiquidEntrySubstances, fetchEntryGroup } from "@/hooks/use-composable-entry";
+import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import { cn, formatAmount, getLiquidTypeLabel } from "@/lib/utils";
 import { formatTimeOnly } from "@/lib/date-utils";
 import { type IntakeRecord } from "@/lib/db";
-import { standardDrinksFromAbv, abvFromStandardDrinks } from "@/lib/alcohol-units";
+import { abvFromStandardDrinks } from "@/lib/alcohol-units";
 
 const TAB_THEMES = {
   water: CARD_THEMES.water,
@@ -65,7 +66,8 @@ export function LiquidsCard() {
   const { toast } = useToast();
   const deleteMutation = useDeleteIntake();
   const updateMutation = useUpdateIntake();
-  const syncLiquidGroupMutation = useSyncLiquidGroup();
+  const syncLiquidSubstancesMutation = useSyncLiquidEntrySubstances();
+  const sugarEnabled = useOptionalTrackerEnabled("sugar");
   const { deletingId, handleDelete } = useDeleteWithToast(
     deleteMutation,
     "Water entry removed"
@@ -73,12 +75,9 @@ export function LiquidsCard() {
 
   const [editAmount, setEditAmount] = useState("");
   const [editBeverageName, setEditBeverageName] = useState("");
-  const [showBeverageNameField, setShowBeverageNameField] = useState(false);
-  const [editSubstance, setEditSubstance] = useState<{
-    type: "caffeine" | "alcohol";
-    description: string;
-  } | null>(null);
-  const [editSubstanceAmount, setEditSubstanceAmount] = useState("");
+  const [editCaffeineMg, setEditCaffeineMg] = useState("");
+  const [editAlcoholAbv, setEditAlcoholAbv] = useState("");
+  const [editSugarG, setEditSugarG] = useState("");
   // Token to discard stale fetchEntryGroup results when opening another record
   const openTokenRef = useRef(0);
 
@@ -96,34 +95,28 @@ export function LiquidsCard() {
       const token = ++openTokenRef.current;
       setEditAmount(record.amount.toString());
       setEditBeverageName("");
-      setShowBeverageNameField(false);
-      setEditSubstance(null);
-      setEditSubstanceAmount("");
+      setEditCaffeineMg("");
+      setEditAlcoholAbv("");
+      setEditSugarG("");
 
       const source = record.source ?? "";
       if (source.startsWith("beverage:")) {
-        setShowBeverageNameField(true);
         setEditBeverageName(source.slice("beverage:".length));
-      } else if (source === "beverage") {
-        setShowBeverageNameField(true);
       } else if (source.startsWith("preset:")) {
-        // Coffee/alcohol entries reference a preset by id. Look up the preset
-        // synchronously so the substance input shows even if the entry has no
-        // groupId (older records pre-v15) or fetchEntryGroup is slow.
+        // Coffee/alcohol entries reference a preset by id. Look up the
+        // preset synchronously so the substance values pre-fill even if the
+        // entry has no groupId (older records pre-v15) or fetchEntryGroup
+        // is slow. The async path below overrides with actual stored values.
         const presetId = source.slice("preset:".length);
         const preset = settings.liquidPresets.find((p) => p.id === presetId);
-        if (preset && (preset.tab === "coffee" || preset.tab === "alcohol")) {
-          const type = preset.tab === "coffee" ? "caffeine" : "alcohol";
-          setEditSubstance({ type, description: preset.name });
+        if (preset) {
           setEditBeverageName(preset.name);
-          setShowBeverageNameField(true);
-          // Pre-fill from preset's defaults; fetchEntryGroup will override
-          // with the actual logged amount if a SubstanceRecord exists.
-          if (type === "caffeine" && preset.caffeinePer100ml !== undefined) {
+          if (preset.caffeinePer100ml !== undefined && preset.caffeinePer100ml > 0) {
             const mg = Math.round((record.amount / 100) * preset.caffeinePer100ml);
-            setEditSubstanceAmount(mg.toString());
-          } else if (type === "alcohol" && preset.alcoholPer100ml !== undefined) {
-            setEditSubstanceAmount(preset.alcoholPer100ml.toString());
+            setEditCaffeineMg(mg.toString());
+          }
+          if (preset.alcoholPer100ml !== undefined && preset.alcoholPer100ml > 0) {
+            setEditAlcoholAbv(preset.alcoholPer100ml.toString());
           }
         }
       }
@@ -132,36 +125,39 @@ export function LiquidsCard() {
         void fetchEntryGroup(record.groupId).then((group) => {
           if (token !== openTokenRef.current) return;
           if (!group) return;
-          const substance = group.substances.find(
-            (s) => s.type === "caffeine" || s.type === "alcohol",
+          const caffeine = group.substances.find(
+            (s) => s.type === "caffeine" && s.deletedAt === null,
           );
-          if (!substance) return;
-          setEditSubstance({
-            type: substance.type,
-            description: substance.description,
-          });
-          setEditBeverageName(substance.description);
-          setShowBeverageNameField(true);
-          if (substance.type === "caffeine" && substance.amountMg !== undefined) {
-            setEditSubstanceAmount(substance.amountMg.toString());
-          } else if (substance.type === "alcohol") {
+          const alcohol = group.substances.find(
+            (s) => s.type === "alcohol" && s.deletedAt === null,
+          );
+          const sugar = group.intakes.find(
+            (i) => i.type === "sugar" && i.deletedAt === null,
+          );
+          if (caffeine?.description) setEditBeverageName(caffeine.description);
+          else if (alcohol?.description) setEditBeverageName(alcohol.description);
+          if (caffeine?.amountMg !== undefined) {
+            setEditCaffeineMg(caffeine.amountMg.toString());
+          }
+          if (alcohol) {
             // Prefer the stored ABV %; fall back to deriving it from the
             // legacy std-drinks value and the entry's volume for old records.
-            let abv = substance.abvPercent;
-            if (abv === undefined && substance.amountStandardDrinks !== undefined) {
-              const vol = substance.volumeMl ?? record.amount;
+            let abv = alcohol.abvPercent;
+            if (abv === undefined && alcohol.amountStandardDrinks !== undefined) {
+              const vol = alcohol.volumeMl ?? record.amount;
               if (vol > 0) {
                 const derived = abvFromStandardDrinks(
-                  substance.amountStandardDrinks,
+                  alcohol.amountStandardDrinks,
                   vol,
                 );
                 if (Number.isFinite(derived)) abv = derived;
               }
             }
             if (abv !== undefined) {
-              setEditSubstanceAmount(parseFloat(abv.toFixed(1)).toString());
+              setEditAlcoholAbv(parseFloat(abv.toFixed(1)).toString());
             }
           }
+          if (sugar) setEditSugarG(sugar.amount.toString());
         });
       }
     },
@@ -176,11 +172,12 @@ export function LiquidsCard() {
         timestamp,
         note,
       };
-      // Update IntakeRecord.source for plain beverage entries so the
-      // displayed name stays in sync. For coffee/alcohol entries the source
-      // is a `preset:<id>` / `substance:<id>` reference and the user-facing
-      // name lives on SubstanceRecord.description (synced separately below).
-      if (showBeverageNameField && !editSubstance) {
+      // Keep the displayed beverage name in sync for plain beverage entries
+      // (source `beverage:<name>`). For preset / substance-linked entries
+      // the user-facing name lives on SubstanceRecord.description and is
+      // synced separately below.
+      const source = editingRecord?.source ?? "";
+      if (source.startsWith("beverage:") || source === "beverage") {
         const trimmed = editBeverageName.trim();
         updates.source = trimmed ? `beverage:${trimmed}` : "beverage";
       }
@@ -188,36 +185,24 @@ export function LiquidsCard() {
     },
     mutateAsync: async ({ id, updates }) => {
       await updateMutation.mutateAsync({ id, updates });
-      // Sync linked substance records when editing a coffee/alcohol entry
-      if (editingRecord?.groupId && editSubstance) {
-        const u = updates as { amount: number; timestamp: number };
-        const rawSubstanceAmount = editSubstanceAmount.trim();
-        const parsedSubstanceAmount = rawSubstanceAmount
-          ? parseFloat(rawSubstanceAmount)
-          : NaN;
-        const hasSubstanceAmount =
-          rawSubstanceAmount !== "" &&
-          !isNaN(parsedSubstanceAmount) &&
-          parsedSubstanceAmount >= 0;
-        await syncLiquidGroupMutation(editingRecord.groupId, {
-          timestamp: u.timestamp,
-          description: editBeverageName.trim() || editSubstance.description,
-          volumeMl: u.amount,
-          // Only include the typed amount when the user supplied a value;
-          // otherwise leave the existing linked-record value intact.
-          ...(hasSubstanceAmount &&
-            editSubstance.type === "caffeine" && {
-              amountMg: Math.round(parsedSubstanceAmount),
-            }),
-          ...(hasSubstanceAmount &&
-            editSubstance.type === "alcohol" && {
-              abvPercent: parsedSubstanceAmount,
-              amountStandardDrinks: parseFloat(
-                standardDrinksFromAbv(parsedSubstanceAmount, u.amount).toFixed(2),
-              ),
-            }),
-        });
-      }
+      const u = updates as { amount: number; timestamp: number };
+      const parse = (raw: string): number | null => {
+        const trimmed = raw.trim();
+        if (trimmed === "") return 0; // user cleared → soft-delete any existing
+        const n = parseFloat(trimmed);
+        return Number.isFinite(n) && n >= 0 ? n : null;
+      };
+      const caffeineMg = parse(editCaffeineMg);
+      const alcoholAbv = parse(editAlcoholAbv);
+      const sugarG = sugarEnabled ? parse(editSugarG) : null;
+      await syncLiquidSubstancesMutation(id, {
+        timestamp: u.timestamp,
+        volumeMl: u.amount,
+        ...(editBeverageName.trim() && { description: editBeverageName.trim() }),
+        caffeineMg,
+        alcoholAbv,
+        sugarG,
+      });
     },
   });
 
@@ -358,35 +343,76 @@ export function LiquidsCard() {
             );
           }}
           renderEditForm={() => (
-            <InlineEditFormShell timestamp={editTimestamp} onTimestampChange={setEditTimestamp} note={editNote} onNoteChange={setEditNote} onSave={() => handleEditSubmit()} onCancel={closeEdit} buttonClassName={CARD_THEMES.water.buttonBg}>
+            <InlineEditFormShell
+              timestamp={editTimestamp}
+              onTimestampChange={setEditTimestamp}
+              note={editNote}
+              onNoteChange={setEditNote}
+              onSave={() => handleEditSubmit()}
+              onCancel={closeEdit}
+              buttonClassName={CARD_THEMES.water.buttonBg}
+              labeled
+              idPrefix="edit-liquid"
+            >
               <div className="space-y-1">
                 <Label htmlFor="edit-liquid-amount" className="text-xs text-muted-foreground">Amount (ml)</Label>
                 <Input id="edit-liquid-amount" type="number" value={editAmount} onChange={(e) => setEditAmount(e.target.value)} className="h-8 text-sm" />
               </div>
-              {showBeverageNameField && (
+              <div className="space-y-1">
+                <Label htmlFor="edit-liquid-beverage" className="text-xs text-muted-foreground">
+                  Beverage name <span className="font-normal">(optional)</span>
+                </Label>
+                <Input
+                  id="edit-liquid-beverage"
+                  type="text"
+                  value={editBeverageName}
+                  onChange={(e) => setEditBeverageName(e.target.value)}
+                  className="h-8 text-sm"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="edit-liquid-caffeine" className="text-xs text-muted-foreground">
+                  Caffeine (mg) <span className="font-normal">(optional)</span>
+                </Label>
+                <Input
+                  id="edit-liquid-caffeine"
+                  type="number"
+                  min="0"
+                  step="1"
+                  inputMode="decimal"
+                  value={editCaffeineMg}
+                  onChange={(e) => setEditCaffeineMg(e.target.value)}
+                  className="h-8 text-sm"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="edit-liquid-alcohol" className="text-xs text-muted-foreground">
+                  Alcohol (% ABV) <span className="font-normal">(optional)</span>
+                </Label>
+                <Input
+                  id="edit-liquid-alcohol"
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  inputMode="decimal"
+                  value={editAlcoholAbv}
+                  onChange={(e) => setEditAlcoholAbv(e.target.value)}
+                  className="h-8 text-sm"
+                />
+              </div>
+              {sugarEnabled && (
                 <div className="space-y-1">
-                  <Label htmlFor="edit-liquid-beverage" className="text-xs text-muted-foreground">Beverage name</Label>
-                  <Input
-                    id="edit-liquid-beverage"
-                    type="text"
-                    value={editBeverageName}
-                    onChange={(e) => setEditBeverageName(e.target.value)}
-                    className="h-8 text-sm"
-                  />
-                </div>
-              )}
-              {editSubstance && (
-                <div className="space-y-1">
-                  <Label htmlFor="edit-liquid-substance" className="text-xs text-muted-foreground">
-                    {editSubstance.type === "caffeine" ? "Caffeine (mg)" : "Alcohol (% ABV)"}
+                  <Label htmlFor="edit-liquid-sugar" className="text-xs text-muted-foreground">
+                    Sugar (g) <span className="font-normal">(optional)</span>
                   </Label>
                   <Input
-                    id="edit-liquid-substance"
+                    id="edit-liquid-sugar"
                     type="number"
                     min="0"
-                    step={editSubstance.type === "alcohol" ? "0.1" : "1"}
-                    value={editSubstanceAmount}
-                    onChange={(e) => setEditSubstanceAmount(e.target.value)}
+                    step="1"
+                    inputMode="decimal"
+                    value={editSugarG}
+                    onChange={(e) => setEditSugarG(e.target.value)}
                     className="h-8 text-sm"
                   />
                 </div>

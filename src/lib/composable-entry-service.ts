@@ -4,6 +4,7 @@ import { ok, err, type ServiceResult } from "@/lib/service-result";
 import { syncFields } from "@/lib/utils";
 import { enqueueInsideTx } from "@/lib/sync-queue";
 import { schedulePush } from "@/lib/sync-engine";
+import { standardDrinksFromAbv } from "@/lib/alcohol-units";
 
 const COMPOSABLE_TABLES = [db.intakeRecords, db.eatingRecords, db.substanceRecords] as const;
 
@@ -578,61 +579,237 @@ export function parseSodiumKindFromSource(source: string | undefined): SodiumKin
   return "sodium";
 }
 
-// ─── syncLiquidGroup ──────────────────────────────────────────────────
+// ─── syncLiquidEntrySubstances ────────────────────────────────────────
 
 /**
- * Apply edits to the linked substance records of a liquid intake entry.
- * Used when editing a coffee/alcohol/preset entry inline — keeps the
- * substance amount (mg / std drinks) and description in sync with the
- * water IntakeRecord.
+ * Apply caffeine / alcohol / sugar edits to the group around a liquid
+ * IntakeRecord. Creates / updates / soft-deletes linked SubstanceRecords
+ * (caffeine, alcohol) and IntakeRecords (sugar) so the group reflects the
+ * patch.
  *
- * Pass `volumeMl` so any substance record that tracks liquid volume
- * stays consistent with the edited IntakeRecord amount.
+ * - If the intake has no groupId and the patch introduces any substance or
+ *   sugar, one is generated and assigned to the intake.
+ * - `caffeineMg` / `alcoholAbv` / `sugarG`:
+ *     - `null` ⇒ leave the field untouched (caller opted out, e.g. sugar
+ *       tracker disabled).
+ *     - `0` or negative ⇒ soft-delete any existing linked record of that
+ *       kind.
+ *     - `>0` ⇒ upsert.
+ * - `volumeMl` keeps the substance records' volume in sync with the edited
+ *   IntakeRecord amount; for alcohol it also drives the derived
+ *   `amountStandardDrinks` value.
  */
-export async function syncLiquidGroup(
-  groupId: string,
+export async function syncLiquidEntrySubstances(
+  intakeId: string,
   patch: {
     timestamp: number;
-    description?: string;
     volumeMl: number;
-    amountMg?: number;
-    amountStandardDrinks?: number;
-    abvPercent?: number;
+    description?: string;
+    caffeineMg: number | null;
+    alcoholAbv: number | null;
+    sugarG: number | null;
   },
 ): Promise<ServiceResult<void>> {
   try {
-    const now = Date.now();
+    const fields = syncFields();
+    const now = fields.updatedAt;
 
-    await db.transaction("rw", [db.substanceRecords], async () => {
-      const substances = await db.substanceRecords
-        .where("groupId")
-        .equals(groupId)
-        .toArray();
+    await db.transaction(
+      "rw",
+      [...COMPOSABLE_TABLES, db._syncQueue],
+      async () => {
+        const intake = await db.intakeRecords.get(intakeId);
+        if (!intake) throw new Error("Intake record not found");
 
-      for (const sub of substances) {
-        if (sub.deletedAt !== null) continue;
-        const updates: Partial<SubstanceRecord> = {
-          timestamp: patch.timestamp,
-          updatedAt: now,
-        };
-        if (patch.description !== undefined) updates.description = patch.description;
-        if (sub.volumeMl !== undefined) updates.volumeMl = patch.volumeMl;
-        if (sub.type === "caffeine" && patch.amountMg !== undefined) {
-          updates.amountMg = patch.amountMg;
-        }
-        if (sub.type === "alcohol" && patch.amountStandardDrinks !== undefined) {
-          updates.amountStandardDrinks = patch.amountStandardDrinks;
-        }
-        if (sub.type === "alcohol" && patch.abvPercent !== undefined) {
-          updates.abvPercent = patch.abvPercent;
-        }
-        await db.substanceRecords.update(sub.id, updates);
-      }
-    });
+        const needsGroup =
+          (patch.caffeineMg !== null && patch.caffeineMg > 0) ||
+          (patch.alcoholAbv !== null && patch.alcoholAbv > 0) ||
+          (patch.sugarG !== null && patch.sugarG > 0);
 
+        let groupId = intake.groupId;
+        if (!groupId && needsGroup) {
+          groupId = crypto.randomUUID();
+          await db.intakeRecords.update(intakeId, { groupId, updatedAt: now });
+          await enqueueInsideTx("intakeRecords", intakeId, "upsert");
+        }
+
+        if (!groupId) return; // nothing to sync
+
+        const groupIntakes = await db.intakeRecords
+          .where("groupId")
+          .equals(groupId)
+          .toArray();
+        const groupSubstances = await db.substanceRecords
+          .where("groupId")
+          .equals(groupId)
+          .toArray();
+
+        const groupSource = intake.groupSource;
+        const description = patch.description?.trim() || undefined;
+
+        // ── Caffeine ──
+        if (patch.caffeineMg !== null) {
+          const existingCaffeines = groupSubstances.filter(
+            (s) => s.type === "caffeine" && s.deletedAt === null,
+          );
+          const [existingCaffeine, ...extraCaffeines] = existingCaffeines;
+          if (patch.caffeineMg > 0) {
+            const amountMg = Math.round(patch.caffeineMg);
+            if (existingCaffeine) {
+              const updates: Partial<SubstanceRecord> = {
+                amountMg,
+                timestamp: patch.timestamp,
+                updatedAt: now,
+              };
+              if (description !== undefined) updates.description = description;
+              if (existingCaffeine.volumeMl !== undefined) {
+                updates.volumeMl = patch.volumeMl;
+              }
+              await db.substanceRecords.update(existingCaffeine.id, updates);
+              await enqueueInsideTx("substanceRecords", existingCaffeine.id, "upsert");
+            } else {
+              const record: SubstanceRecord = {
+                id: crypto.randomUUID(),
+                type: "caffeine",
+                amountMg,
+                volumeMl: patch.volumeMl,
+                description: description ?? "Drink",
+                source: "standalone",
+                timestamp: patch.timestamp,
+                groupId,
+                ...(groupSource !== undefined && { groupSource }),
+                ...fields,
+              };
+              await db.substanceRecords.add(record);
+              await enqueueInsideTx("substanceRecords", record.id, "upsert");
+            }
+          } else if (existingCaffeine) {
+            await db.substanceRecords.update(existingCaffeine.id, {
+              deletedAt: now,
+              updatedAt: now,
+            });
+            await enqueueInsideTx("substanceRecords", existingCaffeine.id, "upsert");
+          }
+          for (const dup of extraCaffeines) {
+            await db.substanceRecords.update(dup.id, {
+              deletedAt: now,
+              updatedAt: now,
+            });
+            await enqueueInsideTx("substanceRecords", dup.id, "upsert");
+          }
+        }
+
+        // ── Alcohol ──
+        if (patch.alcoholAbv !== null) {
+          const existingAlcohols = groupSubstances.filter(
+            (s) => s.type === "alcohol" && s.deletedAt === null,
+          );
+          const [existingAlcohol, ...extraAlcohols] = existingAlcohols;
+          if (patch.alcoholAbv > 0) {
+            const abvPercent = patch.alcoholAbv;
+            const amountStandardDrinks = parseFloat(
+              standardDrinksFromAbv(abvPercent, patch.volumeMl).toFixed(2),
+            );
+            if (existingAlcohol) {
+              const updates: Partial<SubstanceRecord> = {
+                abvPercent,
+                amountStandardDrinks,
+                timestamp: patch.timestamp,
+                updatedAt: now,
+              };
+              if (description !== undefined) updates.description = description;
+              if (existingAlcohol.volumeMl !== undefined) {
+                updates.volumeMl = patch.volumeMl;
+              }
+              await db.substanceRecords.update(existingAlcohol.id, updates);
+              await enqueueInsideTx("substanceRecords", existingAlcohol.id, "upsert");
+            } else {
+              const record: SubstanceRecord = {
+                id: crypto.randomUUID(),
+                type: "alcohol",
+                abvPercent,
+                amountStandardDrinks,
+                volumeMl: patch.volumeMl,
+                description: description ?? "Drink",
+                source: "standalone",
+                timestamp: patch.timestamp,
+                groupId,
+                ...(groupSource !== undefined && { groupSource }),
+                ...fields,
+              };
+              await db.substanceRecords.add(record);
+              await enqueueInsideTx("substanceRecords", record.id, "upsert");
+            }
+          } else if (existingAlcohol) {
+            await db.substanceRecords.update(existingAlcohol.id, {
+              deletedAt: now,
+              updatedAt: now,
+            });
+            await enqueueInsideTx("substanceRecords", existingAlcohol.id, "upsert");
+          }
+          for (const dup of extraAlcohols) {
+            await db.substanceRecords.update(dup.id, {
+              deletedAt: now,
+              updatedAt: now,
+            });
+            await enqueueInsideTx("substanceRecords", dup.id, "upsert");
+          }
+        }
+
+        // ── Sugar ──
+        if (patch.sugarG !== null) {
+          const existingSugars = groupIntakes.filter(
+            (r) =>
+              r.type === "sugar" &&
+              r.deletedAt === null &&
+              r.source === SUGAR_SOURCE,
+          );
+          const [existingSugar, ...extraSugars] = existingSugars;
+          if (patch.sugarG > 0) {
+            const amount = Math.round(patch.sugarG);
+            if (existingSugar) {
+              await db.intakeRecords.update(existingSugar.id, {
+                amount,
+                timestamp: patch.timestamp,
+                updatedAt: now,
+              });
+              await enqueueInsideTx("intakeRecords", existingSugar.id, "upsert");
+            } else {
+              const record: IntakeRecord = {
+                id: crypto.randomUUID(),
+                type: "sugar",
+                amount,
+                timestamp: patch.timestamp,
+                source: SUGAR_SOURCE,
+                groupId,
+                ...(groupSource !== undefined && { groupSource }),
+                ...fields,
+              };
+              await db.intakeRecords.add(record);
+              await enqueueInsideTx("intakeRecords", record.id, "upsert");
+            }
+          } else if (existingSugar) {
+            await db.intakeRecords.update(existingSugar.id, {
+              deletedAt: now,
+              updatedAt: now,
+            });
+            await enqueueInsideTx("intakeRecords", existingSugar.id, "upsert");
+          }
+          for (const dup of extraSugars) {
+            await db.intakeRecords.update(dup.id, {
+              deletedAt: now,
+              updatedAt: now,
+            });
+            await enqueueInsideTx("intakeRecords", dup.id, "upsert");
+          }
+        }
+      },
+    );
+
+    schedulePush();
     return ok(undefined);
   } catch (e) {
-    return err("Failed to sync liquid group", e);
+    return err("Failed to sync liquid entry substances", e);
   }
 }
 
