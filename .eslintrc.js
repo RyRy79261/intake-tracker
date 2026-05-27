@@ -8,6 +8,36 @@
 module.exports = {
   extends: "next/core-web-vitals",
   rules: {
+    // ESLint hardening (P1 #9 from the May 2026 audit).
+    //
+    // next/core-web-vitals already includes plugin:react-hooks/recommended
+    // and eslint-plugin-jsx-a11y. The defaults are mostly "warn" so the dev
+    // experience stays smooth — these overrides promote the rules whose
+    // false-positive rate is low and whose true positives are bugs:
+    //
+    //   * exhaustive-deps:       stale closures inside useEffect/useMemo
+    //                            are the #1 source of "why does this UI
+    //                            not refresh?" support tickets.
+    //   * import/no-cycle:       cyclic imports break tree-shaking and
+    //                            can cause undefined-on-load at runtime.
+    //   * import/no-self-import: pure typo guard.
+    //   * jsx-a11y/click-events-have-key-events,
+    //     jsx-a11y/no-noninteractive-element-interactions: PWA is keyboard-
+    //     accessible by design — interactive divs without key handlers
+    //     ship broken to AT users. Currently 3 pre-existing violations
+    //     (record-row, compound-card-expanded, dose-row); kept at "warn"
+    //     so they surface in lint output without blocking the CI lint
+    //     job. Promote to "error" after the dedicated a11y cleanup pass.
+    //
+    // Deferred (audit also recommended): @typescript-eslint/strict rules
+    // and import/order. Both are high-churn warnings that need a dedicated
+    // cleanup pass; landing them now would either flood `pnpm lint` or
+    // require disabling most of them inline.
+    "react-hooks/exhaustive-deps": "error",
+    "import/no-cycle": "error",
+    "import/no-self-import": "error",
+    "jsx-a11y/click-events-have-key-events": "warn",
+    "jsx-a11y/no-noninteractive-element-interactions": "warn",
     "no-restricted-imports": [
       "error",
       {
