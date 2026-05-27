@@ -500,9 +500,11 @@ export function NutrientAnalysisCard() {
             </div>
 
             <p className="text-xs text-muted-foreground">
-              Food descriptions are PII-stripped before they leave your device.
-              The model may web-search any branded or regional items it
-              doesn&apos;t recognise, so the scan typically takes 5-15 seconds.
+              Food descriptions are sent to our server, where common PII
+              patterns (emails, phone numbers, ID-like number sequences) are
+              redacted before the descriptions reach the AI model. The model
+              may web-search any branded or regional items it doesn&apos;t
+              recognise, so the scan typically takes 5-15 seconds.
             </p>
           </div>
 
@@ -514,7 +516,7 @@ export function NutrientAnalysisCard() {
             >
               Cancel
             </Button>
-            <Button size="sm" onClick={analyze} disabled={pending}>
+            <Button size="sm" onClick={analyze} disabled={pending || !canAnalyze}>
               {latest ? "Run scan" : "Start analysis"}
             </Button>
           </DialogFooter>

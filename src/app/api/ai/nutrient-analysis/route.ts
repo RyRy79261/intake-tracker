@@ -290,8 +290,6 @@ export const POST = withAuth(async ({ request, auth }) => {
       console.error(
         "[VALIDATION] Nutrient analysis response validation failed:",
         JSON.stringify(validated.error.flatten()),
-        "raw input:",
-        JSON.stringify(toolBlock.input).slice(0, 2000),
       );
       return NextResponse.json(
         { error: "The AI response didn't match the expected shape. Try again." },
