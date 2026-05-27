@@ -13,6 +13,7 @@ import { useAddUrination } from "@/hooks/use-urination-queries";
 import { useAddDefecation } from "@/hooks/use-defecation-queries";
 import { useAddSubstance } from "@/hooks/use-substance-queries";
 import { useAddComposableEntry, type ComposableEntryInput } from "@/hooks/use-composable-entry";
+import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import type { VoiceParsedItem, VoiceParseResponse } from "@/lib/voice-types";
 import { standardDrinksFromAbv } from "@/lib/alcohol-units";
 import { apiFetch } from "@/lib/api-fetch";
@@ -36,6 +37,8 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
   const addDefecation = useAddDefecation();
   const addSubstance = useAddSubstance();
   const addComposableEntry = useAddComposableEntry();
+  const sugarEnabled = useOptionalTrackerEnabled("sugar");
+  const potassiumEnabled = useOptionalTrackerEnabled("potassium");
 
   const [transcript, setTranscript] = useState<string>("");
   const [rows, setRows] = useState<RowState[]>([]);
@@ -208,11 +211,19 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
                 note: item.description,
               });
             }
-            if (item.sugarG && item.sugarG > 0) {
+            if (sugarEnabled && item.sugarG && item.sugarG > 0) {
               intakes.push({
                 type: "sugar",
                 amount: item.sugarG,
                 source: "manual:sugar",
+                note: item.description,
+              });
+            }
+            if (potassiumEnabled && item.potassiumMg && item.potassiumMg > 0) {
+              intakes.push({
+                type: "potassium",
+                amount: item.potassiumMg,
+                source: "manual:potassium",
                 note: item.description,
               });
             }
@@ -300,6 +311,8 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
     addDefecation,
     addSubstance,
     onCommitted,
+    sugarEnabled,
+    potassiumEnabled,
   ]);
 
   const hasItems = rows.length > 0;

@@ -8,6 +8,7 @@ export const DOMAINS = [
   "water",
   "salt",
   "sugar",
+  "potassium",
   "weight",
   "bp",
   "eating",
@@ -173,3 +174,6 @@ export const DEFAULT_SALT_WEIGHT_LAG_DAYS = 2;
 
 /** Default lag in days for sugar-vs-weight correlation */
 export const DEFAULT_SUGAR_WEIGHT_LAG_DAYS = 2;
+
+/** Default lag in days for potassium-vs-weight correlation */
+export const DEFAULT_POTASSIUM_WEIGHT_LAG_DAYS = 2;

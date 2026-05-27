@@ -14,6 +14,9 @@ import { DaySettingsSection } from "@/components/settings/day-settings-section";
 import { WaterSettingsSection } from "@/components/settings/water-settings-section";
 import { SaltSettingsSection } from "@/components/settings/salt-settings-section";
 import { SugarSettingsSection } from "@/components/settings/sugar-settings-section";
+import { PotassiumSettingsSection } from "@/components/settings/potassium-settings-section";
+import { OptionalTrackersSection } from "@/components/settings/optional-trackers-section";
+import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import { WeightSettingsSection } from "@/components/settings/weight-settings-section";
 import { AppearanceSection } from "@/components/settings/appearance-section";
 import { QuickNavSection } from "@/components/settings/quick-nav-section";
@@ -38,6 +41,8 @@ const CRASH_REPORT_KEY = "intake-tracker:crash-report";
 function SettingsContent() {
   const settings = useSettings();
   const { toast } = useToast();
+  const sugarEnabled = useOptionalTrackerEnabled("sugar");
+  const potassiumEnabled = useOptionalTrackerEnabled("potassium");
   const [crash, setCrash] = useState<{ open: boolean; description: string }>({
     open: false,
     description: "",
@@ -90,7 +95,9 @@ function SettingsContent() {
           <DaySettingsSection />
           <WaterSettingsSection />
           <SaltSettingsSection />
-          <SugarSettingsSection />
+          <OptionalTrackersSection />
+          {sugarEnabled && <SugarSettingsSection />}
+          {potassiumEnabled && <PotassiumSettingsSection />}
           <WeightSettingsSection />
           <LiquidPresetsSection />
           <UrinationDefecationDefaults />

@@ -7,12 +7,16 @@ import { cn, formatAmount } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { useIntake } from "@/hooks/use-intake-queries";
 import { useSettings } from "@/hooks/use-settings";
+import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import { FoodSection } from "@/components/food-salt/food-section";
 import { computeTwoStageProgress } from "@/lib/progress-utils";
 
 export function FoodSaltCard() {
   const saltIntake = useIntake("salt");
   const sugarIntake = useIntake("sugar");
+  const potassiumIntake = useIntake("potassium");
+  const sugarEnabled = useOptionalTrackerEnabled("sugar");
+  const potassiumEnabled = useOptionalTrackerEnabled("potassium");
   const settings = useSettings();
   const { dailyTotal, rollingTotal } = saltIntake;
   const limit = settings.saltLimit;
@@ -30,6 +34,14 @@ export function FoodSaltCard() {
     sugarLimit,
     settings.sugarExtendedBuffer
   );
+
+  const potassiumDaily = potassiumIntake.dailyTotal;
+  const potassiumRolling = potassiumIntake.rollingTotal;
+  const potassiumLimit = settings.potassiumLimit;
+  const potassiumProgressPercent =
+    potassiumLimit > 0
+      ? Math.min((potassiumDaily / potassiumLimit) * 100, 100)
+      : 0;
 
   return (
     <Card
@@ -91,8 +103,9 @@ export function FoodSaltCard() {
           />
         </div>
 
-        {/* Sugar total + progress bar */}
-        <div className="mb-4">
+        {/* Sugar total + progress bar — optional tracker */}
+        {sugarEnabled && (
+        <div className="mb-4" data-testid="food-card-sugar">
           <div className="flex items-center justify-between mb-1.5">
             <span className="text-sm font-medium text-muted-foreground">
               Sugar
@@ -129,6 +142,33 @@ export function FoodSaltCard() {
             aria-label="Sugar intake today, as a percentage of the daily limit"
           />
         </div>
+        )}
+
+        {/* Potassium total + progress bar — soft target, optional tracker */}
+        {potassiumEnabled && (
+        <div className="mb-4" data-testid="food-card-potassium">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-sm font-medium text-muted-foreground">
+              Potassium
+            </span>
+            <div className="text-right">
+              <p className="text-sm font-medium text-foreground">
+                {formatAmount(potassiumDaily, "mg")} /{" "}
+                {formatAmount(potassiumLimit, "mg")}
+              </p>
+              <p className="text-xs text-muted-foreground/70">
+                24h: {formatAmount(potassiumRolling, "mg")}
+              </p>
+            </div>
+          </div>
+          <Progress
+            value={potassiumProgressPercent}
+            className="h-3"
+            indicatorClassName={CARD_THEMES.potassium.progressGradient}
+            aria-label="Potassium intake today, as a percentage of the daily target"
+          />
+        </div>
+        )}
 
         {/* Food section */}
         <FoodSection />

@@ -37,6 +37,7 @@ import {
 } from "@/hooks/use-insights";
 import { useUserProfile } from "@/hooks/use-profile-queries";
 import { insightsRange, INSIGHTS_WINDOW_DAYS } from "@/lib/analytics-snapshot";
+import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import type { InsightReport } from "@/lib/db";
 
 /**
@@ -45,21 +46,10 @@ import type { InsightReport } from "@/lib/db";
  */
 const DEEP_LONG_RUN_THRESHOLD_MS = 15 * 60 * 1000;
 
-/**
- * Tracked-data domains that can feed the rolling-window analysis. Each is
- * included by `buildAnalyticsSnapshot` only when the window holds enough data
- * for it, so the dialog frames them as conditional rather than guaranteed.
- */
-const TRACKED_DATA = [
-  "Water intake",
-  "Salt / sodium intake",
-  "Sugar intake",
-  "Blood pressure readings",
-  "Weight readings",
-  "Fluid balance (in vs. out)",
-  "Correlations: salt vs. weight, sugar vs. weight, caffeine & alcohol vs. blood pressure",
-  "Your water goal, sodium limit & sugar limit",
-];
+// Tracked-data list is built inside the component because it depends on the
+// user's enabled optional trackers. Each item is included by
+// `buildAnalyticsSnapshot` only when the window holds enough data for it, so
+// the dialog frames them as conditional rather than guaranteed.
 
 /**
  * Best-effort hostname pretty-print for a source URL. Falls back to the
@@ -220,6 +210,26 @@ export function AiInsightsCard() {
   const waterGoalMl = useSettingsStore((s) => s.waterLimit);
   const sodiumLimitMg = useSettingsStore((s) => s.saltLimit);
   const sugarLimitG = useSettingsStore((s) => s.sugarLimit);
+  const potassiumLimitMg = useSettingsStore((s) => s.potassiumLimit);
+  const sugarEnabled = useOptionalTrackerEnabled("sugar");
+  const potassiumEnabled = useOptionalTrackerEnabled("potassium");
+
+  // Build the tracked-data list dynamically — disabled optional trackers
+  // shouldn't claim to feed the AI summary because they aren't included
+  // in the snapshot the route receives.
+  const trackedData = [
+    "Water intake",
+    "Salt / sodium intake",
+    ...(sugarEnabled ? ["Sugar intake"] : []),
+    ...(potassiumEnabled ? ["Potassium intake"] : []),
+    "Blood pressure readings",
+    "Weight readings",
+    "Fluid balance (in vs. out)",
+    `Correlations: salt vs. weight${sugarEnabled ? ", sugar vs. weight" : ""}` +
+      `${potassiumEnabled ? ", potassium vs. weight" : ""}, caffeine & alcohol vs. blood pressure`,
+    `Your water goal, sodium limit${sugarEnabled ? ", sugar limit" : ""}` +
+      `${potassiumEnabled ? " & potassium target" : ""}`,
+  ];
   const reports = useInsightReports();
   const profile = useUserProfile();
   const { toast } = useToast();
@@ -271,7 +281,8 @@ export function AiInsightsCard() {
     setConfirmOpen(false);
     const payload = {
       range: insightsRange(),
-      goals: { waterGoalMl, sodiumLimitMg, sugarLimitG },
+      goals: { waterGoalMl, sodiumLimitMg, sugarLimitG, potassiumLimitMg },
+      enabledTrackers: { sugar: sugarEnabled, potassium: potassiumEnabled },
       ...(shareConditions && { conditions: profile.conditions }),
       ...(shareMedications && { includeMedications: true }),
       ...(includePrevious && hasPrevious && { includePrevious: true }),
@@ -477,7 +488,7 @@ export function AiInsightsCard() {
                 Tracked data (last {INSIGHTS_WINDOW_DAYS} days)
               </p>
               <ul className="space-y-1 text-slate-600 dark:text-slate-300">
-                {TRACKED_DATA.map((item) => (
+                {trackedData.map((item) => (
                   <li key={item} className="flex gap-1.5">
                     <Check className="w-3.5 h-3.5 mt-0.5 shrink-0 text-emerald-500" />
                     <span>{item}</span>
