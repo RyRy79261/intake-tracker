@@ -51,6 +51,6 @@ export const TOKEN_PREFIX = {
 // TTLs in milliseconds.
 export const TOKEN_TTL = {
   AUTH_CODE_MS: 10 * 60_000,
-  ACCESS_TOKEN_MS: 15 * 60_000,
+  ACCESS_TOKEN_MS: 24 * 60 * 60_000,
   REFRESH_TOKEN_MS: 30 * 24 * 60 * 60_000,
 } as const;
