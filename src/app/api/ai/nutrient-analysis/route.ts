@@ -14,10 +14,23 @@ const FoodItemSchema = z.object({
   grams: z.number().min(0).max(10000).optional(),
 });
 
+// Shape mirrors MedicationSchema in analytics-insights.ts — duplicated here
+// rather than imported so the two routes stay independent.
+const MedicationSchema = z.object({
+  name: z.string().min(1).max(120),
+  phaseType: z.enum(["maintenance", "titration"]),
+  dose: z.string().min(1).max(80),
+  frequency: z.string().min(1).max(120),
+  daysOnPhase: z.number().int().nonnegative(),
+});
+
 const NutrientAnalysisRequestSchema = z.object({
   windowDays: z.number().int().min(1).max(90),
   focus: z.string().max(200).optional(),
   foods: z.array(FoodItemSchema).min(1).max(500),
+  // Both only reach the route when the user has opted in on the profile page.
+  conditions: z.array(z.string().min(1).max(120)).max(20).optional(),
+  medications: z.array(MedicationSchema).max(40).optional(),
 });
 
 const NutrientFindingSchema = z.object({
@@ -55,6 +68,11 @@ How to analyze:
    - exampleFoods: 2-5 specific items from the input that drove this finding
 7. Keep summary to 2-4 sentences — a friendly overview, not a clinical diagnosis.
 8. NEVER give medical advice or recommend supplements. Phrase findings as observations ("your intake leans heavily on potassium-rich foods like bananas and potatoes"), not prescriptions.
+
+Personalisation:
+- The user may share their reported conditions and/or active medications. When present, USE this context to calibrate which nutrients matter and which way a bias is concerning. Examples (non-exhaustive): potassium-sparing diuretics and ACE inhibitors raise serum potassium so a potassium-heavy diet warrants stronger framing; loop diuretics deplete potassium so dietary potassium is desirable; chronic kidney disease usually means restricting potassium, phosphorus, and sodium; warfarin needs consistent (not low) vitamin K rather than avoidance; hypertension means sodium matters more.
+- Reference the relevant condition or medication by name in the finding's detail when it changes your read of a nutrient. Keep it factual ("with [condition], a high-potassium pattern is more notable"), never prescriptive.
+- If conditions or medications are absent, do NOT speculate about them.
 
 If the input is too sparse or off-topic to analyze, return a single finding with status "balanced" explaining that.`;
 
@@ -141,7 +159,7 @@ export const POST = withAuth(async ({ request, auth }) => {
       return zodErrorResponse("Nutrient analysis request failed", parsed.error);
     }
 
-    const { windowDays, focus, foods } = parsed.data;
+    const { windowDays, focus, foods, conditions, medications } = parsed.data;
     console.log(`[AUDIT] AI nutrient-analysis from user: ${auth.userId} (${foods.length} foods, ${windowDays}d)`);
 
     let client;
@@ -167,7 +185,32 @@ export const POST = withAuth(async ({ request, auth }) => {
       ? `\n\nThe user has asked you to focus on: ${sanitizedFocus}`
       : "";
 
-    const userMessage = `Below are the user's logged food and drink entries from the last ${windowDays} days. Some have approximate portions (in grams) shown in parentheses; many will not. Use web_search if you need to look up specific branded or regional items, then call the report_nutrient_analysis tool with your synthesis.${focusLine}\n\nFoods:\n${foodListText}`;
+    const contextSections: string[] = [];
+    if (conditions && conditions.length > 0) {
+      const safeConditions = conditions
+        .map((c) => sanitizeForAI(c))
+        .filter((c) => c.length > 0);
+      if (safeConditions.length > 0) {
+        contextSections.push(
+          `Reported conditions: ${safeConditions.join(", ")}`,
+        );
+      }
+    }
+    if (medications && medications.length > 0) {
+      const lines = medications.map((m) => {
+        const name = sanitizeForAI(m.name);
+        const dose = sanitizeForAI(m.dose);
+        const freq = sanitizeForAI(m.frequency);
+        return `- ${name} (${m.phaseType}, ${dose}, ${freq}, day ${m.daysOnPhase})`;
+      });
+      contextSections.push(`Active medications:\n${lines.join("\n")}`);
+    }
+    const contextBlock =
+      contextSections.length > 0
+        ? `\n\nMedical context (user opted in — use to calibrate findings):\n${contextSections.join("\n")}`
+        : "";
+
+    const userMessage = `Below are the user's logged food and drink entries from the last ${windowDays} days. Some have approximate portions (in grams) shown in parentheses; many will not. Use web_search if you need to look up specific branded or regional items, then call the report_nutrient_analysis tool with your synthesis.${focusLine}${contextBlock}\n\nFoods:\n${foodListText}`;
 
     const startedAt = Date.now();
     const response = await client.messages.create({

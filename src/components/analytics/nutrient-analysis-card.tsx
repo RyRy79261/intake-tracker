@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useEatingRecordsByDateRange } from "@/hooks/use-eating-queries";
+import { useUserProfile } from "@/hooks/use-profile-queries";
+import { buildMedicationSummary } from "@/lib/analytics-snapshot";
 
 const WINDOW_DAYS = 30;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -63,6 +65,12 @@ export function NutrientAnalysisCard() {
   const [pending, setPending] = useState(false);
   const [result, setResult] = useState<NutrientAnalysisResult | null>(null);
   const { toast } = useToast();
+  const profile = useUserProfile();
+
+  const shareConditions =
+    profile.shareConditionsWithAI && profile.conditions.length > 0;
+  const shareMedications = profile.shareMedicationsWithAI;
+  const personalised = shareConditions || shareMedications;
 
   // Pin the window at mount so the live query doesn't refetch every render.
   // Eating-record updates within the window still flow through Dexie's live
@@ -93,6 +101,11 @@ export function NutrientAnalysisCard() {
     setResult(null);
     try {
       const trimmedFocus = focus.trim();
+      // Build the active-meds summary only when the user opted in; the
+      // server schema makes it optional and ignores absence.
+      const medications = shareMedications
+        ? await buildMedicationSummary()
+        : null;
       const res = await fetch("/api/ai/nutrient-analysis", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -100,6 +113,8 @@ export function NutrientAnalysisCard() {
           windowDays: WINDOW_DAYS,
           foods,
           ...(trimmedFocus && { focus: trimmedFocus }),
+          ...(shareConditions && { conditions: profile.conditions }),
+          ...(medications && medications.length > 0 && { medications }),
         }),
       });
 
@@ -148,6 +163,18 @@ export function NutrientAnalysisCard() {
           5-15 seconds. Only food descriptions are sent; timestamps stay on
           device.
         </p>
+
+        {personalised && (
+          <p className="text-[11px] text-muted-foreground">
+            Personalised with your medical profile
+            {shareConditions && shareMedications
+              ? " (conditions + medications)"
+              : shareConditions
+                ? " (conditions)"
+                : " (medications)"}
+            .
+          </p>
+        )}
 
         <div className="flex items-center justify-between text-[11px] text-muted-foreground">
           <span>

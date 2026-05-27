@@ -36,7 +36,7 @@ type MedicationSnapshot = NonNullable<
  * prescription, its active phase, dose, dosing frequency, and how long that
  * maintenance/titration phase has been running.
  */
-async function buildMedicationSummary(): Promise<MedicationSnapshot> {
+export async function buildMedicationSummary(): Promise<MedicationSnapshot> {
   const prescriptions = await getActivePrescriptions();
   const now = Date.now();
   const meds: MedicationSnapshot = [];
