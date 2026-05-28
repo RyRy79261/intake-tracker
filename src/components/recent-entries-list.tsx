@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode } from "react";
+import { ReactNode, useId } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -38,8 +38,11 @@ export function InlineEditFormShell({
   labeled?: boolean;
   idPrefix?: string;
 }) {
-  const tsId = `${idPrefix}-timestamp`;
-  const noteId = `${idPrefix}-note`;
+  // Per-instance unique suffix so two shells mounted with the same idPrefix
+  // (e.g. the default "edit") don't produce colliding DOM ids.
+  const instanceId = useId();
+  const tsId = `${idPrefix}-${instanceId}-timestamp`;
+  const noteId = `${idPrefix}-${instanceId}-note`;
   return (
     <div className="space-y-2">
       {children}
