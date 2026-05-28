@@ -46,13 +46,17 @@ export function VoiceLaunchBar({
         <button
           type="button"
           onClick={() => setOpen(true)}
+          disabled={hidden}
+          tabIndex={hidden ? -1 : 0}
+          aria-hidden={hidden}
           className={cn(
-            "pointer-events-auto flex w-full items-center justify-center gap-2",
+            "flex w-full items-center justify-center gap-2",
             "border-t bg-gradient-to-t from-slate-50 to-slate-50/95 dark:from-slate-950 dark:to-slate-950/95",
             "backdrop-blur-sm px-4 py-2.5",
             "text-sm font-medium text-muted-foreground transition-colors",
             "hover:bg-muted/40 active:bg-muted/60",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+            hidden ? "pointer-events-none" : "pointer-events-auto"
           )}
           aria-label="Open voice log"
         >
