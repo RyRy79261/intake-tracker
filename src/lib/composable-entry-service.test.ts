@@ -9,6 +9,7 @@ import {
   deleteSingleGroupRecord,
   undoDeleteSingleRecord,
   recalculateFromCurrentValues,
+  syncLiquidEntrySubstances,
   type ComposableEntryInput,
 } from "@/lib/composable-entry-service";
 
@@ -633,6 +634,165 @@ describe("composable-entry-service", () => {
   });
 
   // ─── recalculateFromCurrentValues (stub) ────────────────────────────
+
+  describe("syncLiquidEntrySubstances", () => {
+    it("creates caffeine substance + groupId when entry has none", async () => {
+      const intake = makeIntakeRecord({ type: "water", amount: 300, source: "manual" });
+      await db.intakeRecords.add(intake);
+
+      const result = await syncLiquidEntrySubstances(intake.id, {
+        timestamp: intake.timestamp,
+        volumeMl: 300,
+        description: "Cold brew",
+        caffeineMg: 150,
+        alcoholAbv: null,
+        sugarG: null,
+      });
+      expect(result.success).toBe(true);
+
+      const updated = await db.intakeRecords.get(intake.id);
+      expect(updated?.groupId).toBeTruthy();
+
+      const subs = await db.substanceRecords
+        .where("groupId")
+        .equals(updated!.groupId!)
+        .toArray();
+      expect(subs).toHaveLength(1);
+      expect(subs[0]?.type).toBe("caffeine");
+      expect(subs[0]?.amountMg).toBe(150);
+      expect(subs[0]?.description).toBe("Cold brew");
+      expect(subs[0]?.volumeMl).toBe(300);
+    });
+
+    it("updates an existing caffeine substance in the group", async () => {
+      const { groupId, intakeIds } = await seedComposableGroup({
+        intakes: [{ type: "water", amount: 250 }],
+        substance: { type: "caffeine", amountMg: 95, volumeMl: 250, description: "Coffee" },
+      });
+
+      const result = await syncLiquidEntrySubstances(intakeIds[0]!, {
+        timestamp: 1700000000000,
+        volumeMl: 400,
+        description: "Big coffee",
+        caffeineMg: 200,
+        alcoholAbv: null,
+        sugarG: null,
+      });
+      expect(result.success).toBe(true);
+
+      const subs = await db.substanceRecords
+        .where("groupId").equals(groupId).toArray();
+      const active = subs.filter((s) => s.deletedAt === null);
+      expect(active).toHaveLength(1);
+      expect(active[0]?.amountMg).toBe(200);
+      expect(active[0]?.description).toBe("Big coffee");
+      expect(active[0]?.volumeMl).toBe(400);
+    });
+
+    it("soft-deletes caffeine when patch sets it to 0", async () => {
+      const { groupId, intakeIds } = await seedComposableGroup({
+        intakes: [{ type: "water", amount: 250 }],
+        substance: { type: "caffeine", amountMg: 95, description: "Coffee" },
+      });
+
+      const result = await syncLiquidEntrySubstances(intakeIds[0]!, {
+        timestamp: 1700000000000,
+        volumeMl: 250,
+        caffeineMg: 0,
+        alcoholAbv: null,
+        sugarG: null,
+      });
+      expect(result.success).toBe(true);
+
+      const subs = await db.substanceRecords
+        .where("groupId").equals(groupId).toArray();
+      expect(subs).toHaveLength(1);
+      expect(subs[0]?.deletedAt).not.toBeNull();
+    });
+
+    it("creates an alcohol substance with derived standard drinks", async () => {
+      const intake = makeIntakeRecord({ type: "water", amount: 500, source: "manual" });
+      await db.intakeRecords.add(intake);
+
+      const result = await syncLiquidEntrySubstances(intake.id, {
+        timestamp: intake.timestamp,
+        volumeMl: 500,
+        caffeineMg: null,
+        alcoholAbv: 5,
+        sugarG: null,
+      });
+      expect(result.success).toBe(true);
+
+      const updated = await db.intakeRecords.get(intake.id);
+      const subs = await db.substanceRecords
+        .where("groupId").equals(updated!.groupId!).toArray();
+      expect(subs).toHaveLength(1);
+      expect(subs[0]?.type).toBe("alcohol");
+      expect(subs[0]?.abvPercent).toBe(5);
+      expect(subs[0]?.amountStandardDrinks).toBeGreaterThan(0);
+      expect(subs[0]?.volumeMl).toBe(500);
+    });
+
+    it("creates a sugar IntakeRecord linked by groupId", async () => {
+      const intake = makeIntakeRecord({ type: "water", amount: 330, source: "beverage:soda" });
+      await db.intakeRecords.add(intake);
+
+      const result = await syncLiquidEntrySubstances(intake.id, {
+        timestamp: intake.timestamp,
+        volumeMl: 330,
+        caffeineMg: null,
+        alcoholAbv: null,
+        sugarG: 35,
+      });
+      expect(result.success).toBe(true);
+
+      const updated = await db.intakeRecords.get(intake.id);
+      const groupIntakes = await db.intakeRecords
+        .where("groupId").equals(updated!.groupId!).toArray();
+      const sugar = groupIntakes.find((r) => r.type === "sugar");
+      expect(sugar?.amount).toBe(35);
+      expect(sugar?.source).toBe("manual:sugar");
+    });
+
+    it("leaves existing substance untouched when corresponding patch field is null", async () => {
+      const { groupId, intakeIds } = await seedComposableGroup({
+        intakes: [{ type: "water", amount: 250 }],
+        substance: { type: "caffeine", amountMg: 95, description: "Coffee" },
+      });
+
+      const result = await syncLiquidEntrySubstances(intakeIds[0]!, {
+        timestamp: 1700000000000,
+        volumeMl: 250,
+        caffeineMg: null, // leave caffeine alone
+        alcoholAbv: null,
+        sugarG: null,
+      });
+      expect(result.success).toBe(true);
+
+      const subs = await db.substanceRecords
+        .where("groupId").equals(groupId).toArray();
+      expect(subs).toHaveLength(1);
+      expect(subs[0]?.amountMg).toBe(95);
+      expect(subs[0]?.deletedAt).toBeNull();
+    });
+
+    it("does not generate a groupId when no substance/sugar values are supplied", async () => {
+      const intake = makeIntakeRecord({ type: "water", amount: 250, source: "manual" });
+      await db.intakeRecords.add(intake);
+
+      const result = await syncLiquidEntrySubstances(intake.id, {
+        timestamp: intake.timestamp,
+        volumeMl: 250,
+        caffeineMg: 0,
+        alcoholAbv: 0,
+        sugarG: 0,
+      });
+      expect(result.success).toBe(true);
+
+      const updated = await db.intakeRecords.get(intake.id);
+      expect(updated?.groupId).toBeUndefined();
+    });
+  });
 
   describe("recalculateFromCurrentValues", () => {
     it("Test 28: returns err with 'Not implemented' message and no side effects", async () => {
