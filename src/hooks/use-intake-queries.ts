@@ -22,23 +22,9 @@ import { showUndoToast } from "@/components/medications/undo-toast";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useNowTick } from "@/hooks/use-now-tick";
 
-/**
- * Get the timestamp for when the current "day" started based on the configurable hour.
- * For example, if dayStartHour is 2 (2am):
- * - At 3am on Monday, returns 2am Monday
- * - At 1am on Monday, returns 2am Sunday (previous day's start)
- */
-export function getDayStartTimestamp(dayStartHour: number): number {
-  const now = new Date();
-  const dayStart = new Date(now);
-  dayStart.setHours(dayStartHour, 0, 0, 0);
-
-  // If current time is before day start hour, use previous day's start
-  if (now < dayStart) {
-    dayStart.setDate(dayStart.getDate() - 1);
-  }
-  return dayStart.getTime();
-}
+// Re-exported from the canonical home in date-utils so existing consumers
+// (e.g. text-metrics) keep importing it from the intake hooks module.
+export { getDayStartTimestamp } from "@/lib/date-utils";
 
 
 /**

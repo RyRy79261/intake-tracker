@@ -174,7 +174,9 @@ describe("getDailyTotal day-start-hour rollover", () => {
   const Y = 2024, M = 2, D = 10; // March (0-indexed)
 
   beforeEach(() => {
-    vi.useFakeTimers();
+    // Only fake the Date clock — faking setTimeout/queueMicrotask/etc. would
+    // stall fake-indexeddb's async transactions and time the test out.
+    vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date(Y, M, D, 10, 0, 0));
   });
 

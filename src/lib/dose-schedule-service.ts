@@ -8,6 +8,7 @@ import {
 } from "@/lib/db";
 import { formatLocalTime, getDeviceTimezone } from "@/lib/timezone";
 import { calculatePillsConsumed, isCleanFraction } from "@/lib/dose-log-service";
+import { toLocalDateKey } from "@/lib/date-utils";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -49,11 +50,7 @@ export interface DoseSlot {
  * Get today's date as YYYY-MM-DD in the local timezone.
  */
 function getTodayDateStr(): string {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  return toLocalDateKey();
 }
 
 /**
@@ -263,10 +260,7 @@ export async function getDoseScheduleForDateRange(
 
   const current = new Date(start);
   while (current <= end) {
-    const y = current.getFullYear();
-    const m = String(current.getMonth() + 1).padStart(2, "0");
-    const d = String(current.getDate()).padStart(2, "0");
-    const dateStr = `${y}-${m}-${d}`;
+    const dateStr = toLocalDateKey(current);
 
     const slots = await getDailyDoseSchedule(dateStr, timezone);
     result.set(dateStr, slots);

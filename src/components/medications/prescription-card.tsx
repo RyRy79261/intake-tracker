@@ -21,6 +21,7 @@ import {
   useDailyDoseSchedule,
 } from "@/hooks/use-medication-queries";
 import type { Prescription } from "@/lib/db";
+import { toLocalDateKey } from "@/lib/date-utils";
 
 interface PrescriptionCardProps {
   prescription: Prescription;
@@ -30,11 +31,7 @@ interface PrescriptionCardProps {
 }
 
 function getTodayDateStr(): string {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  return toLocalDateKey();
 }
 
 export function PrescriptionCard({ prescription, expanded: controlledExpanded, onToggleExpanded, className }: PrescriptionCardProps) {
