@@ -9,7 +9,7 @@
  *     `eq(table.userId, auth.userId!)` so cross-user access is impossible.
  *   - Body is validated by `pushBodySchema` (drizzle-zod discriminated union
  *     keyed by tableName, with `.omit({userId: true})` on every row schema).
- *     Malformed payloads → 400 with Zod flatten details.
+ *     Malformed payloads → 400 with generic error (no schema detail exposed).
  *   - Batch size capped at 500 ops via Zod `.max(500)` — blocks DoS payloads
  *     before any DB round trip.
  *
@@ -86,7 +86,7 @@ export const POST = withAuth(async ({ request, auth }) => {
     if (!parsed.success) {
       console.error("[sync/push] Zod validation failed:", JSON.stringify(parsed.error.flatten(), null, 2));
       return NextResponse.json(
-        { error: "Invalid request", details: parsed.error.flatten() },
+        { error: "Invalid request" },
         { status: 400 },
       );
     }
