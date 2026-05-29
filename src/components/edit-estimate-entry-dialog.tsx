@@ -95,14 +95,14 @@ export function EditEstimateEntryDialog({
             />
           </div>
           <div className="space-y-2">
-            <Label>Amount (optional)</Label>
+            <Label htmlFor={`${idPrefix}-amount`}>Amount (optional)</Label>
             <Select
               value={allowNoEstimate ? amount || NONE_VALUE : amount}
               onValueChange={(v) =>
                 onAmountChange(allowNoEstimate && v === NONE_VALUE ? "" : v)
               }
             >
-              <SelectTrigger>
+              <SelectTrigger id={`${idPrefix}-amount`}>
                 <SelectValue placeholder="Select estimate" />
               </SelectTrigger>
               <SelectContent>

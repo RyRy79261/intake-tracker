@@ -41,7 +41,11 @@ export async function getActiveRecords<T extends SoftDeleteRow>(
   return limit !== undefined ? active.slice(0, limit) : active;
 }
 
-/** Active records whose timestamp falls within [startTime, endTime]. */
+/**
+ * Active records whose timestamp falls in the half-open window
+ * [startTime, endTime) — endTime is exclusive, matching Dexie's
+ * `.between(lower, upper)` default (includeLower=true, includeUpper=false).
+ */
 export async function getRecordsBetween<T extends SoftDeleteRow>(
   table: RecordTable<T>,
   startTime: number,
