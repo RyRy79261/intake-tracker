@@ -62,7 +62,7 @@ function makeRequest(token: string | null): NextRequest {
 }
 
 async function callSend(token: string | null) {
-  const { POST } = await import("./route");
+  const { POST } = await import("@/app/api/push/send/route");
   return POST(makeRequest(token));
 }
 

@@ -169,7 +169,7 @@ describe("POST /api/analytics/insights/deep", () => {
   });
 
   it("submits the batch with Opus + web search + analytics_insight + tool_choice auto and returns 202", async () => {
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/analytics/insights/deep/route");
     const res = await POST(makeRequest(validBody()));
 
     expect(res.status).toBe(202);
@@ -210,7 +210,7 @@ describe("POST /api/analytics/insights/deep", () => {
   });
 
   it("persists the validated request payload alongside the job for later audit/re-run", async () => {
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/analytics/insights/deep/route");
     await POST(makeRequest(validBody()));
 
     expect(createJobCalls).toHaveLength(1);
@@ -226,7 +226,7 @@ describe("POST /api/analytics/insights/deep", () => {
   });
 
   it("reserves the DB lock BEFORE submitting to Anthropic and attaches batchId afterwards", async () => {
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/analytics/insights/deep/route");
     await POST(makeRequest(validBody()));
 
     // The reservation has to land first — otherwise a duplicate submission
@@ -242,7 +242,7 @@ describe("POST /api/analytics/insights/deep", () => {
   it("releases the pending-job reservation when Anthropic batch submission fails", async () => {
     batchesCreateThrows = new Error("anthropic 500 internal");
 
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/analytics/insights/deep/route");
     const res = await POST(makeRequest(validBody()));
 
     expect(res.status).toBe(502);
@@ -258,7 +258,7 @@ describe("POST /api/analytics/insights/deep", () => {
   it("cancels the orphaned batch when attaching batchId to the reserved job fails", async () => {
     attachReturns = false;
 
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/analytics/insights/deep/route");
     const res = await POST(makeRequest(validBody()));
 
     expect(res.status).toBe(502);
@@ -277,7 +277,7 @@ describe("POST /api/analytics/insights/deep", () => {
     );
     jobServiceThrows = new PendingJobConflictError();
 
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/analytics/insights/deep/route");
     const res = await POST(makeRequest(validBody()));
 
     expect(res.status).toBe(409);
@@ -286,7 +286,7 @@ describe("POST /api/analytics/insights/deep", () => {
   });
 
   it("returns 400 when the analytics payload fails schema validation", async () => {
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/analytics/insights/deep/route");
     const res = await POST(
       makeRequest({ range: { start: 1, end: 2 }, metrics: {} }),
     );
@@ -298,7 +298,7 @@ describe("POST /api/analytics/insights/deep", () => {
   it("returns 402 / NO_AI_KEY when the caller has no key configured", async () => {
     claudeClientThrows = new NoAiKeyError("anthropic");
 
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/analytics/insights/deep/route");
     const res = await POST(makeRequest(validBody()));
 
     expect(res.status).toBe(402);

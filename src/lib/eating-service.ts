@@ -3,6 +3,13 @@ import { ok, err, type ServiceResult } from "@/lib/service-result";
 import { generateId, syncFields } from "@/lib/utils";
 import { writeWithSync } from "@/lib/sync-queue";
 import { schedulePush } from "@/lib/sync-engine";
+import {
+  getActiveRecords,
+  getRecordsBetween,
+  softDeleteRecord,
+  undoSoftDeleteRecord,
+  updateRecord,
+} from "@/lib/record-crud";
 
 export async function addEatingRecord(
   timestamp?: number,
@@ -30,63 +37,28 @@ export async function addEatingRecord(
   }
 }
 
-export async function getEatingRecords(limit?: number): Promise<EatingRecord[]> {
-  const records = await db.eatingRecords.orderBy("timestamp").reverse().toArray();
-  const active = records.filter((r) => r.deletedAt === null);
-  return limit !== undefined ? active.slice(0, limit) : active;
+export function getEatingRecords(limit?: number): Promise<EatingRecord[]> {
+  return getActiveRecords<EatingRecord>(db.eatingRecords, limit);
 }
 
-export async function getEatingRecordsByDateRange(
+export function getEatingRecordsByDateRange(
   startTime: number,
   endTime: number
 ): Promise<EatingRecord[]> {
-  const records = await db.eatingRecords
-    .where("timestamp")
-    .between(startTime, endTime)
-    .toArray();
-  return records.filter((r) => r.deletedAt === null);
+  return getRecordsBetween<EatingRecord>(db.eatingRecords, startTime, endTime);
 }
 
-export async function deleteEatingRecord(id: string): Promise<ServiceResult<void>> {
-  try {
-    const now = Date.now();
-    await writeWithSync("eatingRecords", "delete", async () => {
-      await db.eatingRecords.update(id, { deletedAt: now, updatedAt: now });
-      return { id };
-    });
-    schedulePush();
-    return ok(undefined);
-  } catch (e) {
-    return err("Failed to delete eating record", e);
-  }
+export function deleteEatingRecord(id: string): Promise<ServiceResult<void>> {
+  return softDeleteRecord<EatingRecord>(db.eatingRecords, "eatingRecords", id, "Failed to delete eating record");
 }
 
-export async function undoDeleteEatingRecord(id: string): Promise<ServiceResult<void>> {
-  try {
-    const now = Date.now();
-    await writeWithSync("eatingRecords", "upsert", async () => {
-      await db.eatingRecords.update(id, { deletedAt: null, updatedAt: now });
-      return { id };
-    });
-    schedulePush();
-    return ok(undefined);
-  } catch (e) {
-    return err("Failed to undo delete eating record", e);
-  }
+export function undoDeleteEatingRecord(id: string): Promise<ServiceResult<void>> {
+  return undoSoftDeleteRecord<EatingRecord>(db.eatingRecords, "eatingRecords", id, "Failed to undo delete eating record");
 }
 
-export async function updateEatingRecord(
+export function updateEatingRecord(
   id: string,
   updates: { timestamp?: number; note?: string; grams?: number }
 ): Promise<ServiceResult<void>> {
-  try {
-    await writeWithSync("eatingRecords", "upsert", async () => {
-      await db.eatingRecords.update(id, { ...updates, updatedAt: Date.now() });
-      return { id };
-    });
-    schedulePush();
-    return ok(undefined);
-  } catch (e) {
-    return err("Failed to update eating record", e);
-  }
+  return updateRecord<EatingRecord>(db.eatingRecords, "eatingRecords", id, updates, "Failed to update eating record");
 }

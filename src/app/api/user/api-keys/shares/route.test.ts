@@ -176,7 +176,7 @@ describe("/api/user/api-keys/shares", () => {
     // getEmailById lookup for "user-alice".
     rawSqlResults = [[{ email: "alice@example.test" }]];
 
-    const { GET } = await import("./route");
+    const { GET } = await import("@/app/api/user/api-keys/shares/route");
     const res = await GET(getRequest());
 
     expect(res.status).toBe(200);
@@ -204,7 +204,7 @@ describe("/api/user/api-keys/shares", () => {
     ];
     rawSqlResults = [[]]; // getEmailById finds nobody
 
-    const { GET } = await import("./route");
+    const { GET } = await import("@/app/api/user/api-keys/shares/route");
     const res = await GET(getRequest());
 
     expect(res.status).toBe(200);
@@ -216,7 +216,7 @@ describe("/api/user/api-keys/shares", () => {
 
   it("GET error path: a drizzle failure yields a generic 500, no raw leak", async () => {
     drizzleShouldThrow = true;
-    const { GET } = await import("./route");
+    const { GET } = await import("@/app/api/user/api-keys/shares/route");
     const res = await GET(getRequest());
 
     expect(res.status).toBe(500);
@@ -233,7 +233,7 @@ describe("/api/user/api-keys/shares", () => {
     // findUserByEmail resolves the grantee (note mixed-case input email).
     rawSqlResults = [[{ id: "user-grantee", email: "Grantee@Example.test" }]];
 
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/user/api-keys/shares/route");
     const res = await POST(
       postRequest({ granteeEmail: "Grantee@Example.test", provider: "anthropic" }),
     );
@@ -251,7 +251,7 @@ describe("/api/user/api-keys/shares", () => {
   });
 
   it("POST validation: malformed JSON body -> 400", async () => {
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/user/api-keys/shares/route");
     const res = await POST(postRequest("{not valid json"));
 
     expect(res.status).toBe(400);
@@ -262,7 +262,7 @@ describe("/api/user/api-keys/shares", () => {
   });
 
   it("POST validation: schema-invalid body (bad email) -> 400", async () => {
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/user/api-keys/shares/route");
     const res = await POST(
       postRequest({ granteeEmail: "not-an-email", provider: "anthropic" }),
     );
@@ -275,7 +275,7 @@ describe("/api/user/api-keys/shares", () => {
   });
 
   it("POST validation: schema-invalid body (bad provider) -> 400", async () => {
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/user/api-keys/shares/route");
     const res = await POST(
       postRequest({ granteeEmail: "grantee@example.test", provider: "openai" }),
     );
@@ -287,7 +287,7 @@ describe("/api/user/api-keys/shares", () => {
   it("POST: 400 NO_OWN_KEY when the grantor lacks the requested key", async () => {
     drizzleResults = [[{ userId: "user-test", anthropicKeyEncrypted: null }]];
 
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/user/api-keys/shares/route");
     const res = await POST(
       postRequest({ granteeEmail: "grantee@example.test", provider: "anthropic" }),
     );
@@ -302,7 +302,7 @@ describe("/api/user/api-keys/shares", () => {
     drizzleResults = [[{ userId: "user-test", groqKeyEncrypted: "v1:blob" }]];
     rawSqlResults = [[]]; // findUserByEmail finds nobody
 
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/user/api-keys/shares/route");
     const res = await POST(
       postRequest({ granteeEmail: "ghost@example.test", provider: "groq" }),
     );
@@ -317,7 +317,7 @@ describe("/api/user/api-keys/shares", () => {
     drizzleResults = [[{ userId: "user-test", anthropicKeyEncrypted: "v1:blob" }]];
     rawSqlResults = [[{ id: "user-test", email: "test@example.test" }]];
 
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/user/api-keys/shares/route");
     const res = await POST(
       postRequest({ granteeEmail: "test@example.test", provider: "anthropic" }),
     );
@@ -331,7 +331,7 @@ describe("/api/user/api-keys/shares", () => {
 
   it("POST error path: a db failure yields a generic 500, no raw leak", async () => {
     drizzleShouldThrow = true;
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/user/api-keys/shares/route");
     const res = await POST(
       postRequest({ granteeEmail: "grantee@example.test", provider: "anthropic" }),
     );
@@ -345,7 +345,7 @@ describe("/api/user/api-keys/shares", () => {
   // ── DELETE ──────────────────────────────────────────────────────────────
 
   it("DELETE happy path: revokes a share for a valid granteeId + provider", async () => {
-    const { DELETE } = await import("./route");
+    const { DELETE } = await import("@/app/api/user/api-keys/shares/route");
     const res = await DELETE(
       deleteRequest("granteeId=user-bob&provider=anthropic"),
     );
@@ -356,7 +356,7 @@ describe("/api/user/api-keys/shares", () => {
   });
 
   it("DELETE validation: missing granteeId -> 400", async () => {
-    const { DELETE } = await import("./route");
+    const { DELETE } = await import("@/app/api/user/api-keys/shares/route");
     const res = await DELETE(deleteRequest("provider=anthropic"));
 
     expect(res.status).toBe(400);
@@ -367,7 +367,7 @@ describe("/api/user/api-keys/shares", () => {
   });
 
   it("DELETE validation: missing/invalid provider -> 400", async () => {
-    const { DELETE } = await import("./route");
+    const { DELETE } = await import("@/app/api/user/api-keys/shares/route");
     const res = await DELETE(deleteRequest("granteeId=user-bob&provider=openai"));
 
     expect(res.status).toBe(400);
@@ -379,7 +379,7 @@ describe("/api/user/api-keys/shares", () => {
 
   it("DELETE error path: a db failure yields a generic 500, no raw leak", async () => {
     drizzleShouldThrow = true;
-    const { DELETE } = await import("./route");
+    const { DELETE } = await import("@/app/api/user/api-keys/shares/route");
     const res = await DELETE(deleteRequest("granteeId=user-bob&provider=groq"));
 
     expect(res.status).toBe(500);

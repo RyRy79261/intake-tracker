@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { db } from "@/lib/db";
 import { makeIntakeRecord } from "@/__tests__/fixtures/db-fixtures";
 import {
@@ -161,5 +161,74 @@ describe("intake-service soft-delete", () => {
     // Verify it appears in read queries again
     const all = await getAllRecords();
     expect(all.map(r => r.id)).toContain("undo-1");
+  });
+});
+
+describe("getDailyTotal day-start-hour rollover", () => {
+  // getDayStartTimestamp uses LOCAL setHours(dayStartHour). We build all
+  // timestamps from local Date components so the test is timezone-agnostic.
+  // "Today" is pinned to a moment well after the 04:00 day-start so the
+  // day-start anchor lands on the current calendar date.
+  const DAY_START_HOUR = 4;
+  // Pinned "now": 2024-03-10 10:00 local. Day-start anchor => 2024-03-10 04:00.
+  const Y = 2024, M = 2, D = 10; // March (0-indexed)
+
+  beforeEach(() => {
+    // Only fake the Date clock — faking setTimeout/queueMicrotask/etc. would
+    // stall fake-indexeddb's async transactions and time the test out.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(Y, M, D, 10, 0, 0));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("counts a record AFTER the day-start hour toward the current day", async () => {
+    // 05:00 local today — after the 04:00 day start.
+    const afterStart = new Date(Y, M, D, 5, 0, 0).getTime();
+    await db.intakeRecords.add(
+      makeIntakeRecord({ id: "after", type: "water", amount: 300, timestamp: afterStart }),
+    );
+
+    const total = await getDailyTotal("water", DAY_START_HOUR);
+    expect(total).toBe(300);
+  });
+
+  it("excludes a record BEFORE the day-start hour (belongs to the previous day)", async () => {
+    // 02:00 local today — before the 04:00 day start, so it belongs to the
+    // previous "day" and must not count toward the current day total.
+    const beforeStart = new Date(Y, M, D, 2, 0, 0).getTime();
+    await db.intakeRecords.add(
+      makeIntakeRecord({ id: "before", type: "water", amount: 999, timestamp: beforeStart }),
+    );
+
+    const total = await getDailyTotal("water", DAY_START_HOUR);
+    expect(total).toBe(0);
+  });
+
+  it("partitions before/after the day-start hour into separate days", async () => {
+    const beforeStart = new Date(Y, M, D, 2, 0, 0).getTime(); // prev day
+    const afterStart = new Date(Y, M, D, 5, 0, 0).getTime(); // current day
+    await db.intakeRecords.add(
+      makeIntakeRecord({ id: "p-before", type: "water", amount: 100, timestamp: beforeStart }),
+    );
+    await db.intakeRecords.add(
+      makeIntakeRecord({ id: "p-after", type: "water", amount: 250, timestamp: afterStart }),
+    );
+
+    const total = await getDailyTotal("water", DAY_START_HOUR);
+    // Only the 05:00 record counts toward the current day.
+    expect(total).toBe(250);
+  });
+
+  it("with dayStartHour 0, a 02:00 record DOES count toward the current day", async () => {
+    const earlyMorning = new Date(Y, M, D, 2, 0, 0).getTime();
+    await db.intakeRecords.add(
+      makeIntakeRecord({ id: "midnight-start", type: "water", amount: 175, timestamp: earlyMorning }),
+    );
+
+    const total = await getDailyTotal("water", 0);
+    expect(total).toBe(175);
   });
 });

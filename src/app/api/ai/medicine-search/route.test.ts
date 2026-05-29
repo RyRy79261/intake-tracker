@@ -95,7 +95,7 @@ describe("POST /api/ai/medicine-search", () => {
   it("happy path: valid tool result → 200 with parsed body", async () => {
     messagesCreate.mockResolvedValueOnce(toolResponse(fullToolInput()));
 
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/ai/medicine-search/route");
     const res = await POST(makeRequest({ query: "atorvastatin" }));
 
     expect(res.status).toBe(200);
@@ -115,7 +115,7 @@ describe("POST /api/ai/medicine-search", () => {
   it("happy path: country is accepted and request still succeeds", async () => {
     messagesCreate.mockResolvedValueOnce(toolResponse(fullToolInput()));
 
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/ai/medicine-search/route");
     const res = await POST(makeRequest({ query: "paracetamol", country: "South Africa" }));
 
     expect(res.status).toBe(200);
@@ -131,7 +131,7 @@ describe("POST /api/ai/medicine-search", () => {
     // The response schema gives every field a default, so {} validates.
     messagesCreate.mockResolvedValueOnce(toolResponse({}));
 
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/ai/medicine-search/route");
     const res = await POST(makeRequest({ query: "ibuprofen" }));
 
     expect(res.status).toBe(200);
@@ -148,7 +148,7 @@ describe("POST /api/ai/medicine-search", () => {
   });
 
   it("input validation: empty query → 400, AI never called", async () => {
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/ai/medicine-search/route");
     const res = await POST(makeRequest({ query: "" }));
 
     expect(res.status).toBe(400);
@@ -158,7 +158,7 @@ describe("POST /api/ai/medicine-search", () => {
   });
 
   it("input validation: query over 200-char .max() → 400", async () => {
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/ai/medicine-search/route");
     const res = await POST(makeRequest({ query: "x".repeat(201) }));
 
     expect(res.status).toBe(400);
@@ -166,7 +166,7 @@ describe("POST /api/ai/medicine-search", () => {
   });
 
   it("input validation: missing query field → 400", async () => {
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/ai/medicine-search/route");
     const res = await POST(makeRequest({ country: "UK" }));
 
     expect(res.status).toBe(400);
@@ -176,7 +176,7 @@ describe("POST /api/ai/medicine-search", () => {
   it("AI-failure: messages.create throws → graceful 502", async () => {
     messagesCreate.mockRejectedValueOnce(new Error("upstream exploded"));
 
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/ai/medicine-search/route");
     const res = await POST(makeRequest({ query: "aspirin" }));
 
     expect(res.status).toBe(502);
@@ -190,7 +190,7 @@ describe("POST /api/ai/medicine-search", () => {
       usage: { input_tokens: 10, output_tokens: 5 },
     });
 
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/ai/medicine-search/route");
     const res = await POST(makeRequest({ query: "aspirin" }));
 
     expect(res.status).toBe(422);
@@ -204,7 +204,7 @@ describe("POST /api/ai/medicine-search", () => {
       toolResponse(fullToolInput({ foodInstruction: "sometimes" })),
     );
 
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/ai/medicine-search/route");
     const res = await POST(makeRequest({ query: "aspirin" }));
 
     expect(res.status).toBe(422);

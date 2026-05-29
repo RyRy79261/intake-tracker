@@ -14,8 +14,18 @@ export function formatAmount(amount: number, unit: string): string {
   return `${amount}${unit}`;
 }
 
+/**
+ * Generate an opaque, collision-resistant record id (RFC 4122 v4 UUID).
+ *
+ * Previously this returned a `${Date.now()}-${random}` string, which left the
+ * codebase with two id formats (this vs. the `crypto.randomUUID()` used by the
+ * medication/substance services) and made ids in this half sortable-by-creation
+ * while the other half were not. Ids are opaque sync keys — nothing parses the
+ * old timestamp prefix — so emitting a UUID here normalises every table on a
+ * single format without touching existing stored ids.
+ */
 export function generateId(): string {
-  return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+  return crypto.randomUUID();
 }
 
 let _deviceId: string | null = null;

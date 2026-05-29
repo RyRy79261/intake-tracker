@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { toLocalDateKey } from "@/lib/date-utils";
 import type { TimeScope, TimeRange } from "@/lib/analytics-types";
 
 const SCOPE_OPTIONS: { value: TimeScope; label: string }[] = [
@@ -21,11 +22,7 @@ interface TimeRangeSelectorProps {
 }
 
 function toDateInputValue(ms: number): string {
-  const d = new Date(ms);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  return toLocalDateKey(ms);
 }
 
 function fromDateInputValue(val: string, endOfDay: boolean): number {

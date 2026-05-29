@@ -134,7 +134,7 @@ describe("POST /api/bug-report", () => {
   });
 
   it("files an issue from a plain template when useAi is false", async () => {
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/bug-report/route");
     const res = await POST(makeRequest(validBody()));
 
     expect(res.status).toBe(200);
@@ -165,7 +165,7 @@ describe("POST /api/bug-report", () => {
       },
     ];
 
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/bug-report/route");
     const res = await POST(makeRequest(validBody({ useAi: true })));
 
     expect(res.status).toBe(200);
@@ -180,7 +180,7 @@ describe("POST /api/bug-report", () => {
   it("falls back to the plain template when the AI call fails", async () => {
     aiThrows = new Error("anthropic 529 overloaded");
 
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/bug-report/route");
     const res = await POST(makeRequest({ ...validBody(), useAi: true }));
 
     // AI failure is non-fatal — the issue is still filed.
@@ -194,7 +194,7 @@ describe("POST /api/bug-report", () => {
   });
 
   it("uses the feature label set for a feature request", async () => {
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/bug-report/route");
     const res = await POST(
       makeRequest(
         validBody({ type: "feature", description: "Add a dark theme toggle." }),
@@ -209,7 +209,7 @@ describe("POST /api/bug-report", () => {
   it("returns 503 when GITHUB_TOKEN is not configured", async () => {
     vi.stubEnv("GITHUB_TOKEN", "");
 
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/bug-report/route");
     const res = await POST(makeRequest(validBody()));
 
     expect(res.status).toBe(503);
@@ -219,7 +219,7 @@ describe("POST /api/bug-report", () => {
   });
 
   it("returns 400 for a request that fails schema validation", async () => {
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/bug-report/route");
     // Missing `type` and `useAi`, empty description.
     const res = await POST(
       makeRequest({ description: "", diagnostics: { environment: [], errorLogs: [] } }),
@@ -232,7 +232,7 @@ describe("POST /api/bug-report", () => {
   });
 
   it("returns 400 when the body is not valid JSON", async () => {
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/bug-report/route");
     const res = await POST(makeRequest("{ not json"));
 
     expect(res.status).toBe(400);
@@ -245,7 +245,7 @@ describe("POST /api/bug-report", () => {
       status: 401,
     });
 
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/bug-report/route");
     const res = await POST(makeRequest(validBody()));
 
     expect(res.status).toBe(502);
@@ -258,7 +258,7 @@ describe("POST /api/bug-report", () => {
       status: 403,
     });
 
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/bug-report/route");
     const res = await POST(makeRequest(validBody()));
 
     expect(res.status).toBe(502);
@@ -269,7 +269,7 @@ describe("POST /api/bug-report", () => {
   it("returns a generic 502 when Octokit throws a non-HTTP error", async () => {
     octokitCreateError = new Error("ECONNRESET socket hang up");
 
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/bug-report/route");
     const res = await POST(makeRequest(validBody()));
 
     expect(res.status).toBe(502);

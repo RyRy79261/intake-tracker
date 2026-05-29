@@ -92,8 +92,6 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.11.3",
     "@babel/core": "^7.28.6",
-    "@capacitor/assets": "^3.0.5",
-    "@commitlint/cli": "^20.5.0",
     "@commitlint/config-conventional": "^20.5.0",
     "@next/env": "14.2.35",
     "@playwright/test": "^1.58.2",
@@ -124,11 +122,9 @@
     "pg": "^8.20.0",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.14",
-    "testcontainers": "^11.14.0",
     "tsx": "^4.21.0",
     "typescript": "^5.6.3",
     "vite-tsconfig-paths": "^6.1.1",
-    "vitest": "^4.0.18",
-    "ws": "^8.20.0"
+    "vitest": "^4.0.18"
   }
 }

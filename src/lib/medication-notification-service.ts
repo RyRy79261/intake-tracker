@@ -31,7 +31,7 @@ function saveState(updates: Partial<MedNotificationState>): void {
   } catch {}
 }
 
-export async function showDoseReminder(
+async function showDoseReminder(
   medications: { name: string; time: string }[]
 ): Promise<boolean> {
   const firstMed = medications[0];
@@ -47,7 +47,7 @@ export async function showDoseReminder(
   });
 }
 
-export async function showRefillAlert(brandName: string, dosageStrength: string, id: string, currentStock: number, daysLeft: number): Promise<boolean> {
+async function showRefillAlert(brandName: string, dosageStrength: string, id: string, currentStock: number, daysLeft: number): Promise<boolean> {
   if (getNotificationPermission() !== "granted") return false;
 
   return showNotification(`Refill needed: ${brandName}`, {
@@ -56,7 +56,7 @@ export async function showRefillAlert(brandName: string, dosageStrength: string,
   });
 }
 
-export async function checkDoseReminders(): Promise<void> {
+async function checkDoseReminders(): Promise<void> {
   if (getNotificationPermission() !== "granted") return;
 
   const state = getState();
@@ -126,7 +126,7 @@ export async function checkDoseReminders(): Promise<void> {
   saveState({ lastDoseCheck: Date.now(), notifiedDoses: cleanedDoses });
 }
 
-export async function checkRefillAlerts(): Promise<void> {
+async function checkRefillAlerts(): Promise<void> {
   if (getNotificationPermission() !== "granted") return;
 
   const state = getState();

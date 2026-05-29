@@ -44,9 +44,8 @@ import {
 
 // Tests run in the node vitest environment (per vitest.config.ts), so File,
 // Blob, and crypto.subtle are present (Node 22+). document is NOT present —
-// downloadBackup() / downloadEncryptedBackup() are deliberately not covered
-// here because they rely on document.createElement("a") to trigger the
-// browser download UI.
+// downloadBackup() is deliberately not covered here because it relies on
+// document.createElement("a") to trigger the browser download UI.
 
 function makeBackupJson(extra: Record<string, unknown> = {}): string {
   return JSON.stringify({

@@ -14,7 +14,7 @@ import {
   useAddSubstance,
   useUpdateSubstance,
   useDeleteSubstance,
-} from "./use-substance-queries";
+} from "@/hooks/use-substance-queries";
 
 function wrapper({ children }: { children: ReactNode }) {
   return (

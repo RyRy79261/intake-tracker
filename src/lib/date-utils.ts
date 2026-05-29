@@ -39,6 +39,36 @@ export function dateTimeLocalToTimestamp(value: string): number {
 }
 
 /**
+ * Get the timestamp for when the current "day" started, based on a configurable
+ * day-start hour (the app treats a "day" as starting at this local hour rather
+ * than midnight). For example, with dayStartHour = 2 (2am):
+ * - At 3am Monday, returns 2am Monday
+ * - At 1am Monday, returns 2am Sunday (the previous day's start)
+ */
+export function getDayStartTimestamp(dayStartHour: number): number {
+  const now = new Date();
+  const dayStart = new Date(now);
+  dayStart.setHours(dayStartHour, 0, 0, 0);
+
+  // If current time is before the day-start hour, use the previous day's start.
+  if (now < dayStart) {
+    dayStart.setDate(dayStart.getDate() - 1);
+  }
+  return dayStart.getTime();
+}
+
+/**
+ * Format a Date or timestamp as a local calendar-day key ("YYYY-MM-DD").
+ *
+ * Uses the local-time getters (not toISOString) so the key reflects the
+ * viewer's calendar day. Defaults to "now" when called with no argument.
+ */
+export function toLocalDateKey(value: Date | number = new Date()): string {
+  const d = typeof value === "number" ? new Date(value) : value;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/**
  * Format a timestamp as time only (e.g., "2:30 PM").
  * Used for compact displays where date isn't needed.
  */

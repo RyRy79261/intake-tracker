@@ -131,12 +131,15 @@ describe("useEditRecord", () => {
     act(() => result.current.openEdit(RECORD));
     act(() => result.current.setEditTimestamp("not-a-date"));
 
-    // dateTimeLocalToTimestamp throws on an unparseable value, so the
-    // submit handler rejects before reaching the mutation.
+    // dateTimeLocalToTimestamp throws on an unparseable value; the handler
+    // catches it, surfaces the toast, and returns without rejecting.
     await act(async () => {
-      await expect(result.current.handleEditSubmit()).rejects.toThrow();
+      await expect(result.current.handleEditSubmit()).resolves.toBeUndefined();
     });
 
+    expect(toastSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Invalid date/time", variant: "destructive" }),
+    );
     expect(mutateAsync).not.toHaveBeenCalled();
     // Dialog stays open so the user can correct the value.
     expect(result.current.editingRecord).not.toBeNull();

@@ -8,7 +8,7 @@ import { db } from "@/lib/db";
 import { makeTestQueryClient } from "@/__tests__/react-test-utils";
 import { seedDatabase } from "@/__tests__/fixtures/scenarios";
 import { makeDailyNote } from "@/__tests__/fixtures/db-fixtures";
-import { useDailyNotes, useAddDailyNote } from "./use-daily-notes-queries";
+import { useDailyNotes, useAddDailyNote } from "@/hooks/use-daily-notes-queries";
 
 function wrapper({ children }: { children: ReactNode }) {
   return (

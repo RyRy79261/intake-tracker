@@ -294,29 +294,6 @@ export async function exportEncryptedBackup(pin: string): Promise<Blob> {
 }
 
 /**
- * Download an encrypted backup file (mutation -- keeps ServiceResult)
- */
-export async function downloadEncryptedBackup(
-  pin: string
-): Promise<ServiceResult<void>> {
-  try {
-    const blob = await exportEncryptedBackup(pin);
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    const date = new Date().toISOString().split("T")[0];
-    a.download = `intake-tracker-backup-${date}-encrypted.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    return ok(undefined);
-  } catch (e) {
-    return err("Failed to download encrypted backup", e);
-  }
-}
-
-/**
  * Import an encrypted backup file using the user's PIN.
  * Decrypts the payload, then delegates to normal import logic.
  */

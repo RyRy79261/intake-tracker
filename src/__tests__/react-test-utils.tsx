@@ -2,7 +2,7 @@ import { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, type RenderOptions } from "@testing-library/react";
 import { useSettingsStore, type Settings } from "@/stores/settings-store";
-import { seedDatabase, type SeedSpec } from "./fixtures/scenarios";
+import { seedDatabase, type SeedSpec } from "@/__tests__/fixtures/scenarios";
 
 /**
  * Builds a QueryClient with retries disabled and no caching so each test

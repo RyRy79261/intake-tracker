@@ -13,14 +13,14 @@ import {
 } from "@/lib/push-notification-service";
 import type { CompoundStrength } from "@/lib/db";
 import { isCombo, splitDose, formatCompoundShort } from "@/lib/compound-utils";
+import { toLocalDateKey } from "@/lib/date-utils";
 
 // Auth note: all push endpoints run under withAuth() on the server (see
 // plan 41-01). Since Neon Auth uses cookie sessions, same-origin fetch
 // carries the credential automatically — no Bearer token plumbing.
 
 function getTodayDateStr(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  return toLocalDateKey();
 }
 
 interface ScheduleEntry {

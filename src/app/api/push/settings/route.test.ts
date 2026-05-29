@@ -32,7 +32,7 @@ function makeRequest(body: unknown): NextRequest {
 }
 
 async function callSettings(body: unknown) {
-  const { POST } = await import("./route");
+  const { POST } = await import("@/app/api/push/settings/route");
   return POST(makeRequest(body));
 }
 

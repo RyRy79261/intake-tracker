@@ -1,8 +1,9 @@
 import { db, type IntakeRecord } from "@/lib/db";
-import { ok, err, type ServiceResult } from "@/lib/service-result";
+import { ok, err, type ServiceResult, type PaginatedResult } from "@/lib/service-result";
 import { generateId, syncFields } from "@/lib/utils";
 import { writeWithSync, enqueueInsideTx } from "@/lib/sync-queue";
 import { schedulePush } from "@/lib/sync-engine";
+import { getDayStartTimestamp } from "@/lib/date-utils";
 
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 
@@ -99,19 +100,6 @@ export async function getTotalInLast24Hours(type: "water" | "salt" | "sugar" | "
   return records.reduce((sum, record) => sum + record.amount, 0);
 }
 
-/**
- * Get the timestamp for when the current "day" started based on the configurable hour.
- */
-function getDayStartTimestamp(dayStartHour: number): number {
-  const now = new Date();
-  const dayStart = new Date(now);
-  dayStart.setHours(dayStartHour, 0, 0, 0);
-  if (now < dayStart) {
-    dayStart.setDate(dayStart.getDate() - 1);
-  }
-  return dayStart.getTime();
-}
-
 export async function getDailyTotal(type: "water" | "salt" | "sugar" | "potassium", dayStartHour: number): Promise<number> {
   const cutoffTime = getDayStartTimestamp(dayStartHour);
   const records = await db.intakeRecords
@@ -136,12 +124,6 @@ export async function getRecentRecords(type: "water" | "salt" | "sugar" | "potas
 export async function getAllRecords(): Promise<IntakeRecord[]> {
   const records = await db.intakeRecords.orderBy("timestamp").reverse().toArray();
   return records.filter((r) => r.deletedAt === null);
-}
-
-export interface PaginatedResult<T> {
-  records: T[];
-  hasMore: boolean;
-  total: number;
 }
 
 export async function getRecordsPaginated(

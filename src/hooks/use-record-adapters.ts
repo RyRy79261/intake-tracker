@@ -132,9 +132,13 @@ export type RecordAdapter<K extends EditableType> = {
 export type RecordAdapters = { [K in EditableType]: RecordAdapter<K> };
 
 function parseTimestamp(input: string): number {
-  const ts = dateTimeLocalToTimestamp(input);
-  if (isNaN(ts)) throw new ValidationError("Invalid date/time");
-  return ts;
+  // dateTimeLocalToTimestamp throws a plain Error on invalid input; re-raise it
+  // as a ValidationError so callers surface the friendly "Invalid date/time".
+  try {
+    return dateTimeLocalToTimestamp(input);
+  } catch {
+    throw new ValidationError("Invalid date/time");
+  }
 }
 
 export function useRecordAdapters(): RecordAdapters {

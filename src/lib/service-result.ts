@@ -14,3 +14,10 @@ export function unwrap<T>(result: ServiceResult<T>): T {
   if (result.success) return result.data;
   throw new Error(result.error);
 }
+
+/** A page of records plus enough metadata to drive "load more" pagination. */
+export interface PaginatedResult<T> {
+  records: T[];
+  hasMore: boolean;
+  total: number;
+}

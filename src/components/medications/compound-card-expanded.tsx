@@ -17,6 +17,7 @@ import { BrandSwitchPicker } from "@/components/medications/brand-switch-picker"
 import { PrescriptionViewDrawer } from "@/components/medications/edit-medication-drawer";
 import { InventoryItemViewDrawer } from "@/components/medications/inventory-item-view-drawer";
 import type { InventoryItem, Prescription } from "@/lib/db";
+import { toLocalDateKey } from "@/lib/date-utils";
 import { ArrowRightLeft, ChevronRight, SlidersHorizontal, Clock, CheckCircle2, XCircle, MinusCircle } from "lucide-react";
 
 interface CompoundCardExpandedProps {
@@ -24,11 +25,7 @@ interface CompoundCardExpandedProps {
 }
 
 function getTodayDateStr(): string {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  return toLocalDateKey();
 }
 
 export function CompoundCardExpanded({ prescription }: CompoundCardExpandedProps) {

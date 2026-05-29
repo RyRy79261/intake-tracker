@@ -12,6 +12,7 @@ import { SkipReasonPicker } from "@/components/medications/skip-reason-picker";
 import { EmptySchedule } from "@/components/medications/empty-schedule";
 import { RetroactiveTimePicker } from "@/components/medications/retroactive-time-picker";
 import { BulkDoseEditDialog } from "@/components/medications/bulk-dose-edit-dialog";
+import { toLocalDateKey } from "@/lib/date-utils";
 
 interface ScheduleViewProps {
   selectedDate: Date;
@@ -29,7 +30,7 @@ function formatTime12(time24: string): string {
 }
 
 export function ScheduleView({ selectedDate, onDoseClick, onAddMed }: ScheduleViewProps) {
-  const dateStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`;
+  const dateStr = toLocalDateKey(selectedDate);
 
   const slots = useDailyDoseSchedule(dateStr);
 

@@ -32,7 +32,7 @@ function makeRequest(rawBody: string): NextRequest {
 }
 
 async function callSubscribe(rawBody: string) {
-  const { POST } = await import("./route");
+  const { POST } = await import("@/app/api/push/subscribe/route");
   return POST(makeRequest(rawBody));
 }
 

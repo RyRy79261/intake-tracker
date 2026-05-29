@@ -151,7 +151,7 @@ describe("GET /api/user/ai-usage", () => {
       },
     ];
 
-    const { GET } = await import("./route");
+    const { GET } = await import("@/app/api/user/ai-usage/route");
     const res = await GET(makeRequest());
 
     expect(res.status).toBe(200);
@@ -180,7 +180,7 @@ describe("GET /api/user/ai-usage", () => {
     drizzleResults = [[], []];
     rawSqlRows = [];
 
-    const { GET } = await import("./route");
+    const { GET } = await import("@/app/api/user/ai-usage/route");
 
     const tooBig = await GET(
       makeRequest("https://example.test/api/user/ai-usage?days=99999"),
@@ -216,7 +216,7 @@ describe("GET /api/user/ai-usage", () => {
       },
     ];
 
-    const { GET } = await import("./route");
+    const { GET } = await import("@/app/api/user/ai-usage/route");
     const res = await GET(makeRequest());
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
@@ -228,7 +228,7 @@ describe("GET /api/user/ai-usage", () => {
   it("error path: a drizzle failure yields a generic 500, no raw error leak", async () => {
     drizzleShouldThrow = true;
 
-    const { GET } = await import("./route");
+    const { GET } = await import("@/app/api/user/ai-usage/route");
     const res = await GET(makeRequest());
 
     expect(res.status).toBe(500);
@@ -242,7 +242,7 @@ describe("GET /api/user/ai-usage", () => {
     drizzleResults = [[], []];
     rawSqlShouldThrow = true;
 
-    const { GET } = await import("./route");
+    const { GET } = await import("@/app/api/user/ai-usage/route");
     const res = await GET(makeRequest());
 
     expect(res.status).toBe(500);

@@ -27,7 +27,7 @@ import {
   makeMedicationPhase,
   makePhaseSchedule,
   makeInventoryItem,
-} from "./db-fixtures";
+} from "@/__tests__/fixtures/db-fixtures";
 
 const DAY_MS = 86_400_000;
 const HOUR_MS = 3_600_000;

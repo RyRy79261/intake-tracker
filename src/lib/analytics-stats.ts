@@ -6,6 +6,7 @@ import {
   zScore,
   mean,
 } from "simple-statistics";
+import { toLocalDateKey } from "@/lib/date-utils";
 import type { DataPoint, TrendDirection, CorrelationResult } from "@/lib/analytics-types";
 
 // ---------------------------------------------------------------------------
@@ -101,10 +102,7 @@ export function correlateTimeSeries(
   if (seriesA.length === 0 || seriesB.length === 0) return empty;
 
   // Group by day key (YYYY-MM-DD)
-  const dayKey = (ts: number): string => {
-    const d = new Date(ts);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  };
+  const dayKey = (ts: number): string => toLocalDateKey(ts);
 
   const avgByDay = (points: DataPoint[]): Map<string, number> => {
     const groups = new Map<string, number[]>();
@@ -128,7 +126,7 @@ export function correlateTimeSeries(
   const shiftDay = (dateStr: string, days: number): string => {
     const d = new Date(dateStr + "T12:00:00");
     d.setDate(d.getDate() + days);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    return toLocalDateKey(d);
   };
 
   const pairedA: number[] = [];

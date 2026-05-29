@@ -11,7 +11,7 @@ import {
   undoDeleteDefecationRecord,
 } from "@/lib/defecation-service";
 import { unwrap } from "@/lib/service-result";
-import { showUndoToast } from "@/components/medications/undo-toast";
+import { useUndoDeleteMutation } from "@/hooks/use-undo-delete-mutation";
 
 export type AddDefecationParams = {
   timestamp?: number;
@@ -62,13 +62,5 @@ export function useUpdateDefecation() {
 }
 
 export function useDeleteDefecation() {
-  return useMutation({
-    mutationFn: async (id: string) => unwrap(await deleteDefecationRecord(id)),
-    onSuccess: (_data, id) => {
-      showUndoToast({
-        title: "Record deleted",
-        onUndo: () => { undoDeleteDefecationRecord(id); },
-      });
-    },
-  });
+  return useUndoDeleteMutation(deleteDefecationRecord, undoDeleteDefecationRecord);
 }

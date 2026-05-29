@@ -3,14 +3,9 @@
 import { useState } from "react";
 import type { TitrationPlan } from "@/lib/db";
 import type { RxEntry } from "@/components/medications/titrations/types";
+import { toLocalDateKey } from "@/lib/date-utils";
 
-const todayLocalDateString = (): string => {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-};
+const todayLocalDateString = (): string => toLocalDateKey();
 
 export interface TitrationDrawerForm {
   title: string;
@@ -127,8 +122,7 @@ export function useTitrationDrawerForm(): TitrationDrawerForm {
     setNotes(plan.notes ?? "");
     setWarnings(plan.warnings?.join("\n") ?? "");
     if (plan.recommendedStartDate) {
-      const d = new Date(plan.recommendedStartDate);
-      setStartDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
+      setStartDate(toLocalDateKey(new Date(plan.recommendedStartDate)));
       setStartNow(false);
     } else {
       setStartNow(plan.status === "active");

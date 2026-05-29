@@ -29,7 +29,7 @@ function makeRequest(): NextRequest {
 }
 
 async function callUnsubscribe() {
-  const { POST } = await import("./route");
+  const { POST } = await import("@/app/api/push/unsubscribe/route");
   return POST(makeRequest());
 }
 
