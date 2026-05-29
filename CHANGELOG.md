@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.28.0](https://github.com/RyRy79261/intake-tracker/compare/v1.27.0...v1.28.0) (2026-05-28)
+
+
+### Features
+
+* **liquids:** edit caffeine, alcohol, sugar inline for any drink ([2a6093f](https://github.com/RyRy79261/intake-tracker/commit/2a6093f4e08ab898eb3355fe921c677279554446))
+* **liquids:** edit caffeine, alcohol, sugar inline for any drink ([e75ffbf](https://github.com/RyRy79261/intake-tracker/commit/e75ffbf6bf409f8f890c31dc3aa8adc8d0c6ab37))
+
+
+### Bug Fixes
+
+* **recent-entries:** make InlineEditFormShell ids per-instance ([05a0a3e](https://github.com/RyRy79261/intake-tracker/commit/05a0a3e64572f084687331497ce33a09c9a62b94))
+* **voice:** disable launch bar button when hidden ([e16e37c](https://github.com/RyRy79261/intake-tracker/commit/e16e37c46bd01262a80e493994e292cb8b94a720))
+* **voice:** disable launch bar button when hidden ([43edc76](https://github.com/RyRy79261/intake-tracker/commit/43edc763fafab3f9d4fc4ad3fb51d8329b58158b))
+
 ## [1.27.0](https://github.com/RyRy79261/intake-tracker/compare/v1.26.0...v1.27.0) (2026-05-27)
 
 
