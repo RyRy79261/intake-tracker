@@ -91,8 +91,6 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.3",
-    "@babel/core": "^7.28.6",
-    "@capacitor/assets": "^3.0.5",
     "@commitlint/cli": "^20.5.0",
     "@commitlint/config-conventional": "^20.5.0",
     "@next/env": "14.2.35",
@@ -112,7 +110,6 @@
     "@vitest/coverage-v8": "^4.0.18",
     "autoprefixer": "^10.4.20",
     "axe-core": "^4.11.4",
-    "babel-loader": "^10.0.0",
     "drizzle-kit": "^0.31.10",
     "eslint": "^8.57.1",
     "eslint-config-next": "14.2.35",
@@ -124,11 +121,9 @@
     "pg": "^8.20.0",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.14",
-    "testcontainers": "^11.14.0",
     "tsx": "^4.21.0",
     "typescript": "^5.6.3",
     "vite-tsconfig-paths": "^6.1.1",
-    "vitest": "^4.0.18",
-    "ws": "^8.20.0"
+    "vitest": "^4.0.18"
   }
 }
