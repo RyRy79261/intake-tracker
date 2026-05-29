@@ -91,6 +91,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.3",
+    "@babel/core": "^7.28.6",
     "@commitlint/cli": "^20.5.0",
     "@commitlint/config-conventional": "^20.5.0",
     "@next/env": "14.2.35",
@@ -110,6 +111,7 @@
     "@vitest/coverage-v8": "^4.0.18",
     "autoprefixer": "^10.4.20",
     "axe-core": "^4.11.4",
+    "babel-loader": "^10.0.0",
     "drizzle-kit": "^0.31.10",
     "eslint": "^8.57.1",
     "eslint-config-next": "14.2.35",
