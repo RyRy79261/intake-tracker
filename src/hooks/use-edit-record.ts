@@ -88,8 +88,12 @@ export function useEditRecord<
       e?.preventDefault();
       if (!editingRecord) return;
 
-      const newTimestamp = dateTimeLocalToTimestamp(editTimestamp);
-      if (isNaN(newTimestamp)) {
+      // dateTimeLocalToTimestamp throws (it never returns NaN) on an invalid
+      // value, so catch it to surface the toast instead of an unhandled error.
+      let newTimestamp: number;
+      try {
+        newTimestamp = dateTimeLocalToTimestamp(editTimestamp);
+      } catch {
         toast({ title: "Invalid date/time", variant: "destructive" });
         return;
       }

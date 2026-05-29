@@ -52,6 +52,17 @@ import { standardDrinksFromAbv, abvFromStandardDrinks } from "@/lib/alcohol-unit
 
 const PAGE_SIZE = 50;
 
+// dateTimeLocalToTimestamp throws on invalid input (it never returns NaN), so
+// parse defensively and return null — each edit handler turns null into the
+// "Invalid date/time" toast at its existing check site.
+function parseDateTimeLocalOrNull(value: string): number | null {
+  try {
+    return dateTimeLocalToTimestamp(value);
+  } catch {
+    return null;
+  }
+}
+
 interface RecordsTabProps {
   range: TimeRange;
 }
@@ -236,10 +247,10 @@ export function RecordsTab({ range }: RecordsTabProps) {
     e.preventDefault();
     if (!editingIntake) return;
     const newAmount = parseInt(editAmount, 10);
-    const newTimestamp = dateTimeLocalToTimestamp(editTimestamp);
+    const newTimestamp = parseDateTimeLocalOrNull(editTimestamp);
     const newNote = editNote.trim() || undefined;
     if (isNaN(newAmount) || newAmount <= 0) { toast({ title: "Invalid amount", variant: "destructive" }); return; }
-    if (isNaN(newTimestamp)) { toast({ title: "Invalid date/time", variant: "destructive" }); return; }
+    if (newTimestamp === null) { toast({ title: "Invalid date/time", variant: "destructive" }); return; }
     try {
       await updateMutation.mutateAsync({ id: editingIntake.id, updates: { amount: newAmount, timestamp: newTimestamp, ...(newNote !== undefined && { note: newNote }) } });
       setEditingIntake(null);
@@ -251,9 +262,9 @@ export function RecordsTab({ range }: RecordsTabProps) {
     e.preventDefault();
     if (!editingWeight) return;
     const newW = parseFloat(editWeight);
-    const newTimestamp = dateTimeLocalToTimestamp(editTimestamp);
+    const newTimestamp = parseDateTimeLocalOrNull(editTimestamp);
     if (isNaN(newW) || newW <= 0) { toast({ title: "Invalid weight", variant: "destructive" }); return; }
-    if (isNaN(newTimestamp)) { toast({ title: "Invalid date/time", variant: "destructive" }); return; }
+    if (newTimestamp === null) { toast({ title: "Invalid date/time", variant: "destructive" }); return; }
     try {
       const noteVal = editNote || undefined;
       await updateWeightMutation.mutateAsync({ id: editingWeight.id, updates: { weight: newW, timestamp: newTimestamp, ...(noteVal !== undefined && { note: noteVal }) } });
@@ -268,9 +279,9 @@ export function RecordsTab({ range }: RecordsTabProps) {
     const newSystolic = parseInt(editSystolic, 10);
     const newDiastolic = parseInt(editDiastolic, 10);
     const newHeartRate = editHeartRate ? parseInt(editHeartRate, 10) : undefined;
-    const newTimestamp = dateTimeLocalToTimestamp(editTimestamp);
+    const newTimestamp = parseDateTimeLocalOrNull(editTimestamp);
     if (isNaN(newSystolic) || isNaN(newDiastolic) || newSystolic <= 0 || newDiastolic <= 0) { toast({ title: "Invalid values", variant: "destructive" }); return; }
-    if (isNaN(newTimestamp)) { toast({ title: "Invalid date/time", variant: "destructive" }); return; }
+    if (newTimestamp === null) { toast({ title: "Invalid date/time", variant: "destructive" }); return; }
     try {
       const bpNoteVal = editNote || undefined;
       await updateBPMutation.mutateAsync({ id: editingBP.id, updates: { systolic: newSystolic, diastolic: newDiastolic, ...(newHeartRate !== undefined && { heartRate: newHeartRate }), position: editPosition, arm: editArm, timestamp: newTimestamp, ...(bpNoteVal !== undefined && { note: bpNoteVal }) } });
@@ -282,8 +293,8 @@ export function RecordsTab({ range }: RecordsTabProps) {
   const handleEditEatingSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingEating) return;
-    const newTimestamp = dateTimeLocalToTimestamp(editTimestamp);
-    if (isNaN(newTimestamp)) { toast({ title: "Invalid date/time", variant: "destructive" }); return; }
+    const newTimestamp = parseDateTimeLocalOrNull(editTimestamp);
+    if (newTimestamp === null) { toast({ title: "Invalid date/time", variant: "destructive" }); return; }
     try {
       const eatingNote = editNote.trim() || undefined;
       await updateEatingMutation.mutateAsync({ id: editingEating.id, updates: { timestamp: newTimestamp, ...(eatingNote !== undefined && { note: eatingNote }) } });
@@ -295,8 +306,8 @@ export function RecordsTab({ range }: RecordsTabProps) {
   const handleEditUrinationSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUrination) return;
-    const newTimestamp = dateTimeLocalToTimestamp(editTimestamp);
-    if (isNaN(newTimestamp)) { toast({ title: "Invalid date/time", variant: "destructive" }); return; }
+    const newTimestamp = parseDateTimeLocalOrNull(editTimestamp);
+    if (newTimestamp === null) { toast({ title: "Invalid date/time", variant: "destructive" }); return; }
     try {
       const urinationAmt = editAmountUrination || undefined;
       const urinationNote = editNote.trim() || undefined;
@@ -309,8 +320,8 @@ export function RecordsTab({ range }: RecordsTabProps) {
   const handleEditDefecationSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingDefecation) return;
-    const newTimestamp = dateTimeLocalToTimestamp(editTimestamp);
-    if (isNaN(newTimestamp)) { toast({ title: "Invalid date/time", variant: "destructive" }); return; }
+    const newTimestamp = parseDateTimeLocalOrNull(editTimestamp);
+    if (newTimestamp === null) { toast({ title: "Invalid date/time", variant: "destructive" }); return; }
     try {
       const defecationAmt = editAmountDefecation || undefined;
       const defecationNote = editNote.trim() || undefined;
@@ -323,8 +334,8 @@ export function RecordsTab({ range }: RecordsTabProps) {
   const handleEditSubstanceSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingSubstance) return;
-    const newTimestamp = dateTimeLocalToTimestamp(editTimestamp);
-    if (isNaN(newTimestamp)) { toast({ title: "Invalid date/time", variant: "destructive" }); return; }
+    const newTimestamp = parseDateTimeLocalOrNull(editTimestamp);
+    if (newTimestamp === null) { toast({ title: "Invalid date/time", variant: "destructive" }); return; }
     const desc = editDescription.trim();
     if (!desc) { toast({ title: "Description required", variant: "destructive" }); return; }
     const hasAmount = editSubstanceAmount.trim() !== "";
