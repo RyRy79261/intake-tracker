@@ -97,7 +97,7 @@ describe("POST /api/ai/parse", () => {
       }),
     );
 
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/ai/parse/route");
     const res = await POST(makeRequest({ input: "glass of orange juice" }));
 
     expect(res.status).toBe(200);
@@ -124,7 +124,7 @@ describe("POST /api/ai/parse", () => {
       toolResponse({ water_ml: null, sodium_mg: null, sugar_g: null, potassium_mg: null, reasoning: "Unknown." }),
     );
 
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/ai/parse/route");
     const res = await POST(makeRequest({ input: "mystery item" }));
 
     expect(res.status).toBe(200);
@@ -136,7 +136,7 @@ describe("POST /api/ai/parse", () => {
   });
 
   it("input validation: empty input → 400, AI never called", async () => {
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/ai/parse/route");
     const res = await POST(makeRequest({ input: "" }));
 
     expect(res.status).toBe(400);
@@ -146,7 +146,7 @@ describe("POST /api/ai/parse", () => {
   });
 
   it("input validation: input over 500-char .max() → 400", async () => {
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/ai/parse/route");
     const res = await POST(makeRequest({ input: "x".repeat(501) }));
 
     expect(res.status).toBe(400);
@@ -154,7 +154,7 @@ describe("POST /api/ai/parse", () => {
   });
 
   it("input validation: missing input field → 400", async () => {
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/ai/parse/route");
     const res = await POST(makeRequest({ notInput: "abc" }));
 
     expect(res.status).toBe(400);
@@ -164,7 +164,7 @@ describe("POST /api/ai/parse", () => {
   it("AI-failure: messages.create throws → graceful 502, not a crash", async () => {
     messagesCreate.mockRejectedValueOnce(new Error("upstream exploded"));
 
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/ai/parse/route");
     const res = await POST(makeRequest({ input: "coffee" }));
 
     expect(res.status).toBe(502);
@@ -178,7 +178,7 @@ describe("POST /api/ai/parse", () => {
     messagesCreate.mockResolvedValueOnce(textResponse());
     messagesCreate.mockResolvedValueOnce(textResponse());
 
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/ai/parse/route");
     const res = await POST(makeRequest({ input: "coffee" }));
 
     expect(res.status).toBe(422);
@@ -194,7 +194,7 @@ describe("POST /api/ai/parse", () => {
       toolResponse({ water_ml: 99999, sodium_mg: 0, sugar_g: 0, potassium_mg: 0, reasoning: "bad" }),
     );
 
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/ai/parse/route");
     const res = await POST(makeRequest({ input: "water" }));
 
     expect(res.status).toBe(422);
@@ -209,7 +209,7 @@ describe("POST /api/ai/parse", () => {
       toolResponse({ water_ml: 100, sodium_mg: 1, sugar_g: 0, potassium_mg: 0, reasoning: "plain water" }),
     );
 
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/ai/parse/route");
     const res = await POST(makeRequest({ input: "water" }));
 
     expect(res.status).toBe(200);

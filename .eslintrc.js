@@ -5,6 +5,17 @@
 // so that React Query / Dexie reactivity is preserved. The overrides below
 // carve out the legitimate exceptions.
 
+// All intra-`src` imports must use the `@/...` path alias rather than `./`
+// or `../` relative paths (tsconfig maps `@/*` -> `./src/*`). This keeps import
+// paths stable under file moves and consistent across the codebase. The ban is
+// expressed as a regex pattern so it is easy to reuse inside the overrides below
+// (which otherwise turn `no-restricted-imports` off and would lose the rule).
+const NO_RELATIVE_IMPORTS = {
+  group: ["./*", "../*"],
+  message:
+    "Use the '@/...' alias instead of relative imports (tsconfig maps @/* to ./src/*).",
+};
+
 module.exports = {
   extends: "next/core-web-vitals",
   rules: {
@@ -53,6 +64,7 @@ module.exports = {
             message:
               "Components/pages must not import services directly. Use hooks in src/hooks/ instead.",
           },
+          NO_RELATIVE_IMPORTS,
         ],
       },
     ],
@@ -62,7 +74,10 @@ module.exports = {
     // inside that layer.
     {
       files: ["src/hooks/**/*", "src/lib/**/*"],
-      rules: { "no-restricted-imports": "off" },
+      // Exempt from the db/service-access ban, but the relative-import ban stays.
+      rules: {
+        "no-restricted-imports": ["error", { patterns: [NO_RELATIVE_IMPORTS] }],
+      },
     },
     // The debug panel surfaces raw tables and audit logs for ops; it has to
     // talk to the DB and services directly. Same for its subcomponents under
@@ -72,17 +87,26 @@ module.exports = {
         "src/components/debug-panel.tsx",
         "src/components/debug/**/*",
       ],
-      rules: { "no-restricted-imports": "off" },
+      // Exempt from the db/service-access ban, but the relative-import ban stays.
+      rules: {
+        "no-restricted-imports": ["error", { patterns: [NO_RELATIVE_IMPORTS] }],
+      },
     },
     // Providers wire up the QueryClient and other singletons that initialise
     // before any hook can run.
     {
       files: ["src/app/providers.tsx"],
-      rules: { "no-restricted-imports": "off" },
+      // Exempt from the db/service-access ban, but the relative-import ban stays.
+      rules: {
+        "no-restricted-imports": ["error", { patterns: [NO_RELATIVE_IMPORTS] }],
+      },
     },
     {
       files: ["src/__tests__/**/*"],
-      rules: { "no-restricted-imports": "off" },
+      // Exempt from the db/service-access ban, but the relative-import ban stays.
+      rules: {
+        "no-restricted-imports": ["error", { patterns: [NO_RELATIVE_IMPORTS] }],
+      },
     },
     // Analytics tabs and the export-controls dialog run one-off queries and
     // batch exports that do not fit the React Query hook model (e.g. building
@@ -94,7 +118,10 @@ module.exports = {
         "src/components/analytics/records-tab.tsx",
         "src/components/analytics/export-controls.tsx",
       ],
-      rules: { "no-restricted-imports": "off" },
+      // Exempt from the db/service-access ban, but the relative-import ban stays.
+      rules: {
+        "no-restricted-imports": ["error", { patterns: [NO_RELATIVE_IMPORTS] }],
+      },
     },
   ],
 };

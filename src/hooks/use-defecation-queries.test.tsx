@@ -14,7 +14,7 @@ import {
   useAddDefecation,
   useUpdateDefecation,
   useDeleteDefecation,
-} from "./use-defecation-queries";
+} from "@/hooks/use-defecation-queries";
 
 function wrapper({ children }: { children: ReactNode }) {
   return (

@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Outfit } from "next/font/google";
-import "./globals.css";
+import "@/app/globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { Providers } from "@/app/providers";
 import { UpdateNotification } from "@/components/update-notification";

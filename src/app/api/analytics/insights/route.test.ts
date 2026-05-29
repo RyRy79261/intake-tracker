@@ -132,7 +132,7 @@ describe("POST /api/analytics/insights", () => {
       }),
     ];
 
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/analytics/insights/route");
     const res = await POST(makeRequest(validBody()));
 
     expect(res.status).toBe(200);
@@ -150,7 +150,7 @@ describe("POST /api/analytics/insights", () => {
   });
 
   it("returns 400 when the analytics payload fails schema validation", async () => {
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/analytics/insights/route");
     // metrics is empty — the schema's refine requires at least one group.
     const res = await POST(
       makeRequest({
@@ -167,7 +167,7 @@ describe("POST /api/analytics/insights", () => {
   });
 
   it("returns 400 when the body is not valid JSON", async () => {
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/analytics/insights/route");
     const res = await POST(makeRequest("}{ broken"));
 
     expect(res.status).toBe(400);
@@ -178,7 +178,7 @@ describe("POST /api/analytics/insights", () => {
   it("returns 402 / NO_AI_KEY when the caller has no key configured", async () => {
     claudeClientThrows = new NoAiKeyError("anthropic");
 
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/analytics/insights/route");
     const res = await POST(makeRequest(validBody()));
 
     expect(res.status).toBe(402);
@@ -195,7 +195,7 @@ describe("POST /api/analytics/insights", () => {
       new Headers(),
     );
 
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/analytics/insights/route");
     const res = await POST(makeRequest(validBody()));
 
     expect(res.status).toBe(400);
@@ -206,7 +206,7 @@ describe("POST /api/analytics/insights", () => {
   it("returns 502 when the model does not call the insight tool", async () => {
     aiContent = [{ type: "text", text: "Here is a plain prose reply." }];
 
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/analytics/insights/route");
     const res = await POST(makeRequest(validBody()));
 
     expect(res.status).toBe(502);
@@ -218,7 +218,7 @@ describe("POST /api/analytics/insights", () => {
     // `observations` must be an array of non-empty strings; empty summary fails.
     aiContent = [insightToolBlock({ summary: "", observations: [] })];
 
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/analytics/insights/route");
     const res = await POST(makeRequest(validBody()));
 
     expect(res.status).toBe(502);
@@ -238,7 +238,7 @@ describe("POST /api/analytics/insights", () => {
       }),
     ];
 
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/analytics/insights/route");
     const res = await POST(makeRequest(validBody()));
 
     expect(res.status).toBe(502);
@@ -255,7 +255,7 @@ describe("POST /api/analytics/insights", () => {
       }),
     ];
 
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/analytics/insights/route");
     await POST(makeRequest(validBody()));
 
     expect(messagesCreateCalls).toHaveLength(1);
@@ -268,7 +268,7 @@ describe("POST /api/analytics/insights", () => {
   it("returns a generic 502 when the model call throws an unmapped error", async () => {
     aiThrows = new Error("anthropic 529 overloaded SECRET_TRACE_ID=xyz");
 
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/analytics/insights/route");
     const res = await POST(makeRequest(validBody()));
 
     expect(res.status).toBe(502);

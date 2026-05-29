@@ -35,7 +35,7 @@ function makeRequest(rawBody: string): NextRequest {
 }
 
 async function callSync(rawBody: string) {
-  const { POST } = await import("./route");
+  const { POST } = await import("@/app/api/push/sync-schedule/route");
   return POST(makeRequest(rawBody));
 }
 

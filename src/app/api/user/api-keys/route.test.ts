@@ -130,7 +130,7 @@ describe("/api/user/api-keys", () => {
 
   it("GET: returns null providers when no row is stored", async () => {
     selectRow = undefined;
-    const { GET } = await import("./route");
+    const { GET } = await import("@/app/api/user/api-keys/route");
     const res = await GET(new NextRequest(BASE, { method: "GET" }));
 
     expect(res.status).toBe(200);
@@ -147,7 +147,7 @@ describe("/api/user/api-keys", () => {
       groqKeyEncrypted: null,
       groqLast4: null,
     };
-    const { GET } = await import("./route");
+    const { GET } = await import("@/app/api/user/api-keys/route");
     const res = await GET(new NextRequest(BASE, { method: "GET" }));
 
     expect(res.status).toBe(200);
@@ -165,7 +165,7 @@ describe("/api/user/api-keys", () => {
 
   it("PUT happy path: stores an anthropic key and returns only last4", async () => {
     const rawKey = "sk-ant-api03-REALSECRETVALUE9999";
-    const { PUT } = await import("./route");
+    const { PUT } = await import("@/app/api/user/api-keys/route");
     const res = await PUT(putRequest({ provider: "anthropic", key: rawKey }));
 
     expect(res.status).toBe(200);
@@ -188,7 +188,7 @@ describe("/api/user/api-keys", () => {
   });
 
   it("PUT validation: malformed JSON body -> 400", async () => {
-    const { PUT } = await import("./route");
+    const { PUT } = await import("@/app/api/user/api-keys/route");
     const res = await PUT(putRequest("{not valid json"));
 
     expect(res.status).toBe(400);
@@ -199,7 +199,7 @@ describe("/api/user/api-keys", () => {
   });
 
   it("PUT validation: schema-invalid body (bad provider) -> 400", async () => {
-    const { PUT } = await import("./route");
+    const { PUT } = await import("@/app/api/user/api-keys/route");
     const res = await PUT(
       putRequest({ provider: "openai", key: "sk-ant-longenough" }),
     );
@@ -212,7 +212,7 @@ describe("/api/user/api-keys", () => {
   });
 
   it("PUT validation: too-short key -> 400 (zod min(8))", async () => {
-    const { PUT } = await import("./route");
+    const { PUT } = await import("@/app/api/user/api-keys/route");
     const res = await PUT(putRequest({ provider: "groq", key: "short" }));
 
     expect(res.status).toBe(400);
@@ -220,7 +220,7 @@ describe("/api/user/api-keys", () => {
   });
 
   it("PUT validation: anthropic key with wrong prefix -> 400 format error", async () => {
-    const { PUT } = await import("./route");
+    const { PUT } = await import("@/app/api/user/api-keys/route");
     const res = await PUT(
       putRequest({ provider: "anthropic", key: "gsk_wrongprefixkey" }),
     );
@@ -234,7 +234,7 @@ describe("/api/user/api-keys", () => {
 
   it("PUT: missing encryption secret -> 503, key not persisted", async () => {
     delete process.env.API_KEY_ENCRYPTION_SECRET;
-    const { PUT } = await import("./route");
+    const { PUT } = await import("@/app/api/user/api-keys/route");
     const res = await PUT(
       putRequest({ provider: "groq", key: "gsk_validlookingkey12345" }),
     );
@@ -249,7 +249,7 @@ describe("/api/user/api-keys", () => {
   // ── DELETE ───────────────────────────────────────────────────────────────
 
   it("DELETE happy path: clears the requested provider key", async () => {
-    const { DELETE } = await import("./route");
+    const { DELETE } = await import("@/app/api/user/api-keys/route");
     const res = await DELETE(deleteRequest("anthropic"));
 
     expect(res.status).toBe(200);
@@ -263,7 +263,7 @@ describe("/api/user/api-keys", () => {
   });
 
   it("DELETE validation: missing/invalid provider query param -> 400", async () => {
-    const { DELETE } = await import("./route");
+    const { DELETE } = await import("@/app/api/user/api-keys/route");
 
     const missing = await DELETE(deleteRequest());
     expect(missing.status).toBe(400);
@@ -278,7 +278,7 @@ describe("/api/user/api-keys", () => {
 
   it("error path: a db failure on PUT yields a generic 500, no raw leak", async () => {
     dbShouldThrow = true;
-    const { PUT } = await import("./route");
+    const { PUT } = await import("@/app/api/user/api-keys/route");
     const res = await PUT(
       putRequest({ provider: "anthropic", key: "sk-ant-api03-validkey1234" }),
     );
@@ -291,7 +291,7 @@ describe("/api/user/api-keys", () => {
 
   it("error path: a db failure on GET yields a generic 500, no raw leak", async () => {
     dbShouldThrow = true;
-    const { GET } = await import("./route");
+    const { GET } = await import("@/app/api/user/api-keys/route");
     const res = await GET(new NextRequest(BASE, { method: "GET" }));
 
     expect(res.status).toBe(500);

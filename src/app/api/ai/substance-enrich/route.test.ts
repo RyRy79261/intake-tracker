@@ -85,7 +85,7 @@ describe("POST /api/ai/substance-enrich", () => {
       }),
     );
 
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/ai/substance-enrich/route");
     const res = await POST(makeRequest({ description: "cup of coffee", type: "caffeine" }));
 
     expect(res.status).toBe(200);
@@ -111,7 +111,7 @@ describe("POST /api/ai/substance-enrich", () => {
       }),
     );
 
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/ai/substance-enrich/route");
     const res = await POST(makeRequest({ description: "pint of lager", type: "alcohol" }));
 
     expect(res.status).toBe(200);
@@ -128,7 +128,7 @@ describe("POST /api/ai/substance-enrich", () => {
   });
 
   it("input validation: empty description → 400, AI never called", async () => {
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/ai/substance-enrich/route");
     const res = await POST(makeRequest({ description: "", type: "caffeine" }));
 
     expect(res.status).toBe(400);
@@ -138,7 +138,7 @@ describe("POST /api/ai/substance-enrich", () => {
   });
 
   it("input validation: description over 500-char .max() → 400", async () => {
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/ai/substance-enrich/route");
     const res = await POST(makeRequest({ description: "x".repeat(501), type: "caffeine" }));
 
     expect(res.status).toBe(400);
@@ -146,7 +146,7 @@ describe("POST /api/ai/substance-enrich", () => {
   });
 
   it("input validation: invalid type enum → 400", async () => {
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/ai/substance-enrich/route");
     const res = await POST(makeRequest({ description: "coke", type: "sugar" }));
 
     expect(res.status).toBe(400);
@@ -154,7 +154,7 @@ describe("POST /api/ai/substance-enrich", () => {
   });
 
   it("input validation: missing type field → 400", async () => {
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/ai/substance-enrich/route");
     const res = await POST(makeRequest({ description: "coffee" }));
 
     expect(res.status).toBe(400);
@@ -164,7 +164,7 @@ describe("POST /api/ai/substance-enrich", () => {
   it("AI-failure: messages.create throws → graceful 502", async () => {
     messagesCreate.mockRejectedValueOnce(new Error("upstream exploded"));
 
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/ai/substance-enrich/route");
     const res = await POST(makeRequest({ description: "coffee", type: "caffeine" }));
 
     expect(res.status).toBe(502);
@@ -177,7 +177,7 @@ describe("POST /api/ai/substance-enrich", () => {
     messagesCreate.mockResolvedValueOnce(textResponse());
     messagesCreate.mockResolvedValueOnce(textResponse());
 
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/ai/substance-enrich/route");
     const res = await POST(makeRequest({ description: "coffee", type: "caffeine" }));
 
     expect(res.status).toBe(422);
@@ -192,7 +192,7 @@ describe("POST /api/ai/substance-enrich", () => {
       toolResponse("caffeine_enrichment", { caffeineMg: 99999, volumeMl: 240, reasoning: "bad" }),
     );
 
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/ai/substance-enrich/route");
     const res = await POST(makeRequest({ description: "coffee", type: "caffeine" }));
 
     expect(res.status).toBe(422);
@@ -206,7 +206,7 @@ describe("POST /api/ai/substance-enrich", () => {
       toolResponse("alcohol_enrichment", { abvPercent: 200, volumeMl: 500, reasoning: "bad" }),
     );
 
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/ai/substance-enrich/route");
     const res = await POST(makeRequest({ description: "spirit", type: "alcohol" }));
 
     expect(res.status).toBe(422);
@@ -221,7 +221,7 @@ describe("POST /api/ai/substance-enrich", () => {
       toolResponse("caffeine_enrichment", { caffeineMg: 60, volumeMl: 30, reasoning: "espresso" }),
     );
 
-    const { POST } = await import("./route");
+    const { POST } = await import("@/app/api/ai/substance-enrich/route");
     const res = await POST(makeRequest({ description: "single espresso", type: "caffeine" }));
 
     expect(res.status).toBe(200);

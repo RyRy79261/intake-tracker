@@ -14,7 +14,7 @@ import {
   useAddUrination,
   useUpdateUrination,
   useDeleteUrination,
-} from "./use-urination-queries";
+} from "@/hooks/use-urination-queries";
 
 function wrapper({ children }: { children: ReactNode }) {
   return (

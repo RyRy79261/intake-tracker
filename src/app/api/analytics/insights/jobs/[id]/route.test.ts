@@ -181,7 +181,7 @@ describe("GET /api/analytics/insights/jobs/:id", () => {
   });
 
   it("returns 404 when the job is not found", async () => {
-    const { GET } = await import("./route");
+    const { GET } = await import("@/app/api/analytics/insights/jobs/[id]/route");
     const res = await GET(makeRequest("missing"));
     expect(res.status).toBe(404);
   });
@@ -200,7 +200,7 @@ describe("GET /api/analytics/insights/jobs/:id", () => {
     };
     batchProcessingStatus = "in_progress";
 
-    const { GET } = await import("./route");
+    const { GET } = await import("@/app/api/analytics/insights/jobs/[id]/route");
     const res = await GET(makeRequest("job-1"));
     expect(res.status).toBe(200);
     const body = (await res.json()) as { status: string; startedAt: number };
@@ -235,7 +235,7 @@ describe("GET /api/analytics/insights/jobs/:id", () => {
       },
     ];
 
-    const { GET } = await import("./route");
+    const { GET } = await import("@/app/api/analytics/insights/jobs/[id]/route");
     const res = await GET(makeRequest("job-2"));
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
@@ -273,7 +273,7 @@ describe("GET /api/analytics/insights/jobs/:id", () => {
       },
     ];
 
-    const { GET } = await import("./route");
+    const { GET } = await import("@/app/api/analytics/insights/jobs/[id]/route");
     const res = await GET(makeRequest("job-3"));
     const body = (await res.json()) as { status: string; error: string };
     expect(body.status).toBe("failed");
@@ -305,7 +305,7 @@ describe("GET /api/analytics/insights/jobs/:id", () => {
       },
     ];
 
-    const { GET } = await import("./route");
+    const { GET } = await import("@/app/api/analytics/insights/jobs/[id]/route");
     const res = await GET(makeRequest("job-4"));
     const body = (await res.json()) as { status: string; error: string };
     expect(body.status).toBe("failed");
@@ -326,7 +326,7 @@ describe("GET /api/analytics/insights/jobs/:id", () => {
       completedAt: null,
     };
 
-    const { GET } = await import("./route");
+    const { GET } = await import("@/app/api/analytics/insights/jobs/[id]/route");
     const res = await GET(makeRequest("job-5"));
     const body = (await res.json()) as { status: string; error: string };
     expect(body.status).toBe("expired");
@@ -354,7 +354,7 @@ describe("GET /api/analytics/insights/jobs/:id", () => {
       },
     ];
 
-    const { GET } = await import("./route");
+    const { GET } = await import("@/app/api/analytics/insights/jobs/[id]/route");
     const res = await GET(makeRequest("job-7"));
     const body = (await res.json()) as { status: string; error: string };
     expect(body.status).toBe("failed");
@@ -390,7 +390,7 @@ describe("GET /api/analytics/insights/jobs/:id", () => {
       },
     ];
 
-    const { GET } = await import("./route");
+    const { GET } = await import("@/app/api/analytics/insights/jobs/[id]/route");
     const res = await GET(makeRequest("job-8"));
     const body = (await res.json()) as { status: string; error: string };
     expect(body.status).toBe("failed");
@@ -414,7 +414,7 @@ describe("GET /api/analytics/insights/jobs/:id", () => {
       completedAt: null,
     };
 
-    const { GET } = await import("./route");
+    const { GET } = await import("@/app/api/analytics/insights/jobs/[id]/route");
     const res = await GET(makeRequest("job-9"));
     const body = (await res.json()) as { status: string };
     expect(body.status).toBe("pending");
@@ -458,7 +458,7 @@ describe("GET /api/analytics/insights/jobs/:id", () => {
       completedAt: startedAt + 30_000,
     };
 
-    const { GET } = await import("./route");
+    const { GET } = await import("@/app/api/analytics/insights/jobs/[id]/route");
     const res = await GET(makeRequest("job-cas-fail"));
     const body = (await res.json()) as { status: string; error: string };
     expect(body.status).toBe("failed");
@@ -508,7 +508,7 @@ describe("GET /api/analytics/insights/jobs/:id", () => {
       generatedAt: startedAt + 30_000,
     };
 
-    const { GET } = await import("./route");
+    const { GET } = await import("@/app/api/analytics/insights/jobs/[id]/route");
     const res = await GET(makeRequest("job-cas"));
     const body = (await res.json()) as {
       status: string;
@@ -538,7 +538,7 @@ describe("GET /api/analytics/insights/jobs/:id", () => {
       generatedAt: Date.now() - 30 * 60_000,
     };
 
-    const { GET } = await import("./route");
+    const { GET } = await import("@/app/api/analytics/insights/jobs/[id]/route");
     const res = await GET(makeRequest("job-6"));
     const body = (await res.json()) as {
       status: string;
