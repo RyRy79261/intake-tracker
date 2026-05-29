@@ -3,6 +3,13 @@ import { ok, err, type ServiceResult } from "@/lib/service-result";
 import { generateId, syncFields } from "@/lib/utils";
 import { writeWithSync } from "@/lib/sync-queue";
 import { schedulePush } from "@/lib/sync-engine";
+import {
+  getActiveRecords,
+  getRecordsBetween,
+  softDeleteRecord,
+  undoSoftDeleteRecord,
+  updateRecord,
+} from "@/lib/record-crud";
 
 export async function addUrinationRecord(
   timestamp?: number,
@@ -31,65 +38,28 @@ export async function addUrinationRecord(
   }
 }
 
-export async function getUrinationRecords(
-  limit?: number
-): Promise<UrinationRecord[]> {
-  const records = await db.urinationRecords.orderBy("timestamp").reverse().toArray();
-  const active = records.filter((r) => r.deletedAt === null);
-  return limit !== undefined ? active.slice(0, limit) : active;
+export function getUrinationRecords(limit?: number): Promise<UrinationRecord[]> {
+  return getActiveRecords<UrinationRecord>(db.urinationRecords, limit);
 }
 
-export async function getUrinationRecordsByDateRange(
+export function getUrinationRecordsByDateRange(
   startTime: number,
   endTime: number
 ): Promise<UrinationRecord[]> {
-  const records = await db.urinationRecords
-    .where("timestamp")
-    .between(startTime, endTime)
-    .toArray();
-  return records.filter((r) => r.deletedAt === null);
+  return getRecordsBetween<UrinationRecord>(db.urinationRecords, startTime, endTime);
 }
 
-export async function deleteUrinationRecord(id: string): Promise<ServiceResult<void>> {
-  try {
-    const now = Date.now();
-    await writeWithSync("urinationRecords", "delete", async () => {
-      await db.urinationRecords.update(id, { deletedAt: now, updatedAt: now });
-      return { id };
-    });
-    schedulePush();
-    return ok(undefined);
-  } catch (e) {
-    return err("Failed to delete urination record", e);
-  }
+export function deleteUrinationRecord(id: string): Promise<ServiceResult<void>> {
+  return softDeleteRecord<UrinationRecord>(db.urinationRecords, "urinationRecords", id, "Failed to delete urination record");
 }
 
-export async function undoDeleteUrinationRecord(id: string): Promise<ServiceResult<void>> {
-  try {
-    const now = Date.now();
-    await writeWithSync("urinationRecords", "upsert", async () => {
-      await db.urinationRecords.update(id, { deletedAt: null, updatedAt: now });
-      return { id };
-    });
-    schedulePush();
-    return ok(undefined);
-  } catch (e) {
-    return err("Failed to undo delete urination record", e);
-  }
+export function undoDeleteUrinationRecord(id: string): Promise<ServiceResult<void>> {
+  return undoSoftDeleteRecord<UrinationRecord>(db.urinationRecords, "urinationRecords", id, "Failed to undo delete urination record");
 }
 
-export async function updateUrinationRecord(
+export function updateUrinationRecord(
   id: string,
   updates: { timestamp?: number; amountEstimate?: string; note?: string }
 ): Promise<ServiceResult<void>> {
-  try {
-    await writeWithSync("urinationRecords", "upsert", async () => {
-      await db.urinationRecords.update(id, { ...updates, updatedAt: Date.now() });
-      return { id };
-    });
-    schedulePush();
-    return ok(undefined);
-  } catch (e) {
-    return err("Failed to update urination record", e);
-  }
+  return updateRecord<UrinationRecord>(db.urinationRecords, "urinationRecords", id, updates, "Failed to update urination record");
 }

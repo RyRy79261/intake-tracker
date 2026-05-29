@@ -90,12 +90,13 @@ describe("urination-service", () => {
       expect(stored!.updatedAt).toBeGreaterThan(1000);
     });
 
-    // NOTE: unlike defecation/intake services, updateUrinationRecord has NO
-    // existence guard — Dexie's update() is a no-op for a missing key and the
-    // call still resolves successfully. This test pins that actual behavior.
-    it("succeeds (no-op) when the record does not exist", async () => {
+    // Consolidated onto the shared updateRecord helper, urination now matches
+    // intake/defecation: updating a missing id returns a "Record not found"
+    // error rather than silently succeeding as a Dexie no-op.
+    it("returns an error when the record does not exist", async () => {
       const result = await updateUrinationRecord("missing", { note: "x" });
-      expect(result.success).toBe(true);
+      expect(result.success).toBe(false);
+      if (!result.success) expect(result.error).toBe("Record not found");
       const stored = await db.urinationRecords.get("missing");
       expect(stored).toBeUndefined();
     });
