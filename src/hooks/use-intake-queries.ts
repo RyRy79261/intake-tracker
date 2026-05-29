@@ -18,7 +18,7 @@ import {
   getPotassiumTotalsByGroupIds,
 } from "@/lib/intake-service";
 import { unwrap } from "@/lib/service-result";
-import { showUndoToast } from "@/components/medications/undo-toast";
+import { useUndoDeleteMutation } from "@/hooks/use-undo-delete-mutation";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useNowTick } from "@/hooks/use-now-tick";
 
@@ -104,15 +104,7 @@ export function useUpdateIntake() {
  * Shows an undo toast with ~5 second window per D-08.
  */
 export function useDeleteIntake() {
-  return useMutation({
-    mutationFn: async (id: string) => unwrap(await deleteIntakeRecord(id)),
-    onSuccess: (_data, id) => {
-      showUndoToast({
-        title: "Record deleted",
-        onUndo: () => { undoDeleteIntakeRecord(id); },
-      });
-    },
-  });
+  return useUndoDeleteMutation(deleteIntakeRecord, undoDeleteIntakeRecord);
 }
 
 /**
