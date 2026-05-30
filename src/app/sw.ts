@@ -37,6 +37,10 @@ serwist.addEventListeners();
 
 // Allow the app (debug panel) to force activation of a waiting worker.
 self.addEventListener("message", (event) => {
+  // Only honour messages from same-origin clients. A service worker controls
+  // same-origin clients, so a mismatched origin means an untrusted sender —
+  // reject it before acting (CodeQL js/missing-origin-check).
+  if (event.origin && event.origin !== self.location.origin) return;
   if (event.data && event.data.type === "SKIP_WAITING") {
     self.skipWaiting();
   }
