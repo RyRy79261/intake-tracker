@@ -16,7 +16,7 @@ Package manager is **pnpm** (enforced via `preinstall` hook; npm/yarn will fail)
 
 ## Architecture
 
-**Health tracking PWA** built with Next.js 14 App Router. Offline-first, mobile-focused (max-w-lg container), single-user app.
+**Health tracking PWA** built with Next.js 16 App Router (Turbopack). Offline-first, mobile-focused (max-w-lg container), single-user app.
 
 ### Data Layer (Client-Side)
 

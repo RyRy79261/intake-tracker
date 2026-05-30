@@ -8,6 +8,12 @@ import { SwipeNav } from "@/components/swipe-nav";
 import { AppHeader } from "@/components/app-header";
 import { HomeFloatingBars } from "@/components/home-floating-bars";
 import { MedicationsFloatingBars } from "@/components/medications-floating-bars";
+import { SerwistProvider } from "@serwist/turbopack/react";
+
+// The service worker (served at /serwist/sw.js) is registered only on the
+// production web deploy. Preview, dev, and Capacitor builds all report a
+// non-"production" NEXT_PUBLIC_VERCEL_ENV, matching the previous next-pwa gate.
+const swDisabled = process.env.NEXT_PUBLIC_VERCEL_ENV !== "production";
 
 const outfit = Outfit({
   subsets: ["latin"],
@@ -82,18 +88,20 @@ export default function RootLayout({
           <a className="recover" href="/recover.html">Reset app</a>
         </div>
         <script dangerouslySetInnerHTML={{ __html: BOOT_SHELL_FALLBACK_TIMER }} />
-        <Providers>
-          <main className="min-h-screen overflow-x-clip bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
-            <div className="container mx-auto max-w-lg px-4 pt-6">
-              <AppHeader />
-            </div>
-            <SwipeNav>{children}</SwipeNav>
-            <HomeFloatingBars />
-            <MedicationsFloatingBars />
-          </main>
-        </Providers>
-        <UpdateNotification />
-        <Toaster />
+        <SerwistProvider swUrl="/serwist/sw.js" disable={swDisabled} options={{ scope: "/" }}>
+          <Providers>
+            <main className="min-h-screen overflow-x-clip bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
+              <div className="container mx-auto max-w-lg px-4 pt-6">
+                <AppHeader />
+              </div>
+              <SwipeNav>{children}</SwipeNav>
+              <HomeFloatingBars />
+              <MedicationsFloatingBars />
+            </main>
+          </Providers>
+          <UpdateNotification />
+          <Toaster />
+        </SerwistProvider>
       </body>
     </html>
   );

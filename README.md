@@ -49,13 +49,13 @@ pnpm start
 
 ## Tech Stack
 
-- **Framework**: Next.js 14 (App Router)
+- **Framework**: Next.js 16 (App Router, Turbopack)
 - **UI Components**: shadcn/ui + Radix UI
 - **Styling**: Tailwind CSS
 - **Database**: IndexedDB via Dexie.js
 - **State**: Zustand
 - **Auth**: Neon Auth (cookie session, email/password)
-- **PWA**: next-pwa
+- **PWA**: Serwist (@serwist/turbopack)
 - **Encryption**: Web Crypto API (AES-GCM)
 
 ## Postgres Schema (Neon + Drizzle)
