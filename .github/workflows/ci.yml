@@ -34,6 +34,33 @@ jobs:
               - 'src/__tests__/integrity/**'
               - 'src/lib/backup-service.ts'
 
+  # The e2e and schema-migration jobs create an ephemeral Neon branch and
+  # therefore need NEON_API_KEY. Probe for it here so those jobs can gate on
+  # availability rather than on the actor: they run whenever the key is present
+  # (regular PRs always; Dependabot PRs once the Neon secrets are added to the
+  # Dependabot secrets store) and skip cleanly otherwise — instead of failing
+  # with "Cannot run interactive auth in CI" when the secret is an empty string.
+  #
+  # GitHub withholds *Actions* secrets from Dependabot-triggered runs but does
+  # expose *Dependabot* secrets, so mirroring NEON_API_KEY (and the other Neon
+  # secrets the jobs use) into the Dependabot secrets store is what turns these
+  # tests on for Dependabot PRs.
+  secrets-check:
+    runs-on: ubuntu-latest
+    outputs:
+      neon: ${{ steps.check.outputs.neon }}
+    steps:
+      - id: check
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          if [ -n "${NEON_API_KEY}" ]; then
+            echo "neon=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "neon=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::NEON_API_KEY unavailable — skipping DB-backed jobs (e2e, schema-migration). For Dependabot PRs, add the Neon secrets to the Dependabot secrets store to enable them."
+          fi
+
   lint:
     runs-on: ubuntu-latest
     steps:
@@ -151,13 +178,12 @@ jobs:
   e2e:
     # Phase 41: Privy is fully removed. Auth is Neon Auth (cookie session).
     # E2E tests use Playwright globalSetup to seed a session via Neon Auth.
-    needs: [changes]
-    # Dependabot PR runs are not granted the repository's Actions secrets, so
-    # secrets.NEON_API_KEY is empty and the Neon branch actions below fail with
-    # "Cannot run interactive auth in CI". Skip this secret-dependent job for
-    # Dependabot; dependency bumps are still covered by build + the static
-    # schema-parity/drizzle-freshness checks (typecheck, data-integrity).
-    if: needs.changes.outputs.src == 'true' && github.actor != 'dependabot[bot]'
+    needs: [changes, secrets-check]
+    # Runs whenever the Neon API key is available (see secrets-check). On
+    # Dependabot PRs this means the job runs once the Neon secrets are mirrored
+    # into the Dependabot secrets store, and skips cleanly until then instead of
+    # failing with "Cannot run interactive auth in CI".
+    if: needs.changes.outputs.src == 'true' && needs.secrets-check.outputs.neon == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -234,13 +260,13 @@ jobs:
     # cross-schema FK permissions, unreachable neon_auth.users_sync target).
     # Uses the same branch lifecycle pattern as the e2e job above.
     #
-    # Dependabot PR runs are not granted the repository's Actions secrets, so
-    # secrets.NEON_API_KEY is empty and the Neon branch creation below fails
-    # ("Cannot run interactive auth in CI"). Skip for Dependabot — its bumps
-    # never touch src/db/schema.ts, and the static parity + drizzle-freshness
-    # checks (typecheck, data-integrity) still run. ci-pass treats a skipped
+    # Runs whenever the Neon API key is available (see secrets-check). On
+    # Dependabot PRs this means the job runs once the Neon secrets are mirrored
+    # into the Dependabot secrets store, and skips cleanly until then instead of
+    # failing with "Cannot run interactive auth in CI". ci-pass treats a skipped
     # schema-migration as acceptable.
-    if: github.actor != 'dependabot[bot]'
+    needs: [secrets-check]
+    if: needs.secrets-check.outputs.neon == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -357,13 +383,14 @@ jobs:
 
   ci-pass:
     if: always()
-    needs: [changes, lint, typecheck, test-tz-sa, test-tz-de, build, data-integrity, integration, e2e, schema-migration, supply-chain, coverage, benchmark]
+    needs: [changes, secrets-check, lint, typecheck, test-tz-sa, test-tz-de, build, data-integrity, integration, e2e, schema-migration, supply-chain, coverage, benchmark]
     runs-on: ubuntu-latest
     steps:
       - name: Check all jobs passed
         run: |
           echo "=== Unconditional jobs ==="
           echo "changes: ${{ needs.changes.result }}"
+          echo "secrets-check: ${{ needs.secrets-check.result }}"
           echo "lint: ${{ needs.lint.result }}"
           echo "typecheck: ${{ needs.typecheck.result }}"
           echo "build: ${{ needs.build.result }}"
@@ -372,6 +399,7 @@ jobs:
 
           # Unconditional jobs: must succeed
           if [[ "${{ needs.changes.result }}" != "success" ||
+                "${{ needs.secrets-check.result }}" != "success" ||
                 "${{ needs.lint.result }}" != "success" ||
                 "${{ needs.typecheck.result }}" != "success" ||
                 "${{ needs.build.result }}" != "success" ||
@@ -387,9 +415,9 @@ jobs:
           echo "integration: ${{ needs.integration.result }}"
           echo "e2e: ${{ needs.e2e.result }}"
           # schema-migration is gated rather than unconditional: it needs the
-          # Neon secrets, which Dependabot PR runs don't receive, so it is
-          # skipped (not failed) on those runs. Still required to succeed on
-          # all non-Dependabot PRs since it never gets skipped there.
+          # Neon API key (see secrets-check), so it is skipped (not failed)
+          # when the key is unavailable — e.g. a Dependabot PR before the Neon
+          # secrets are mirrored into the Dependabot secrets store.
           echo "schema-migration: ${{ needs.schema-migration.result }}"
           echo "coverage: ${{ needs.coverage.result }}"
           echo "benchmark: ${{ needs.benchmark.result }}"
