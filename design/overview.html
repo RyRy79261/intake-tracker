@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Intake Tracker — Pencil Recreation Overview</title>
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 2rem 1.5rem 4rem;
+    font-family: "Outfit", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    background: hsl(220 20% 97%); color: hsl(220 20% 10%);
+  }
+  @media (prefers-color-scheme: dark) {
+    body { background: hsl(220 20% 8%); color: hsl(220 10% 95%); }
+    .card { background: hsl(220 20% 12%); border-color: hsl(220 15% 22%); }
+    figcaption { color: hsl(220 10% 70%); }
+    .frame { background: hsl(220 20% 16%); }
+  }
+  header { max-width: 1200px; margin: 0 auto 2rem; }
+  h1 { font-size: 1.6rem; margin: 0 0 .25rem; letter-spacing: -0.01em; }
+  .sub { color: hsl(220 10% 45%); margin: 0 0 1rem; }
+  .meta a { color: hsl(220 70% 50%); text-decoration: none; margin-right: 1rem; font-size: .9rem; }
+  .meta a:hover { text-decoration: underline; }
+  .grid {
+    max-width: 1200px; margin: 0 auto;
+    display: grid; gap: 1.25rem;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  }
+  .card {
+    background: #fff; border: 1px solid hsl(220 15% 88%); border-radius: 12px;
+    overflow: hidden; display: flex; flex-direction: column;
+  }
+  .frame {
+    background: hsl(220 20% 94%); display: flex; align-items: flex-start;
+    justify-content: center; padding: .75rem; max-height: 460px; overflow: hidden;
+  }
+  .frame img { width: 100%; height: auto; border-radius: 6px; display: block; }
+  figcaption { padding: .6rem .8rem; font-size: .85rem; font-weight: 600; }
+  figcaption .n { color: hsl(220 10% 55%); font-weight: 400; margin-right: .4rem; }
+  .wide { grid-column: span 2; }
+  .wide .frame { max-height: 520px; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Intake Tracker — Pencil Recreation</h1>
+    <p class="sub">14 artboards recreated from the live app via the headless Pencil CLI. Each screen is an editable <code>design/screens/*.pen</code> file; this page is the at-a-glance overview.</p>
+    <p class="meta">
+      <a href="../docs/design/2026-05-30-intake-tracker-design-brief.md">Design brief</a>
+      <a href="./README.md">Workflow README</a>
+      <a href="./screens/">Editable .pen files</a>
+    </p>
+  </header>
+  <div class="grid">
+    <figure class="card"><div class="frame"><img src="exports/_design-system.png" alt="Design System"></div><figcaption><span class="n">00</span>Design System</figcaption></figure>
+    <figure class="card"><div class="frame"><img src="exports/01-dashboard.png" alt="Dashboard"></div><figcaption><span class="n">01</span>Dashboard</figcaption></figure>
+    <figure class="card"><div class="frame"><img src="exports/02-medications-schedule.png" alt="Medications — Schedule"></div><figcaption><span class="n">02</span>Medications — Schedule</figcaption></figure>
+    <figure class="card"><div class="frame"><img src="exports/03-medications-library.png" alt="Medications — Library"></div><figcaption><span class="n">03</span>Medications — Library</figcaption></figure>
+    <figure class="card wide"><div class="frame"><img src="exports/04-add-medication-wizard.png" alt="Add-Medication Wizard"></div><figcaption><span class="n">04</span>Add-Medication Wizard</figcaption></figure>
+    <figure class="card"><div class="frame"><img src="exports/05-analytics-summary.png" alt="Analytics — Summary"></div><figcaption><span class="n">05</span>Analytics — Summary</figcaption></figure>
+    <figure class="card"><div class="frame"><img src="exports/06-analytics-records-titration.png" alt="Analytics — Records & Titration"></div><figcaption><span class="n">06</span>Analytics — Records &amp; Titration</figcaption></figure>
+    <figure class="card"><div class="frame"><img src="exports/07-settings.png" alt="Settings"></div><figcaption><span class="n">07</span>Settings</figcaption></figure>
+    <figure class="card"><div class="frame"><img src="exports/08-profile.png" alt="Profile"></div><figcaption><span class="n">08</span>Profile</figcaption></figure>
+    <figure class="card"><div class="frame"><img src="exports/09-auth-signin.png" alt="Sign In"></div><figcaption><span class="n">09</span>Sign In</figcaption></figure>
+    <figure class="card wide"><div class="frame"><img src="exports/10-auth-flows.png" alt="Auth Flows"></div><figcaption><span class="n">10</span>Auth Flows — Sign up / Forgot / Reset</figcaption></figure>
+    <figure class="card"><div class="frame"><img src="exports/11-help-index.png" alt="Help — Index"></div><figcaption><span class="n">11</span>Help — Index</figcaption></figure>
+    <figure class="card"><div class="frame"><img src="exports/12-help-article.png" alt="Help — Article"></div><figcaption><span class="n">12</span>Help — Article</figcaption></figure>
+    <figure class="card wide"><div class="frame"><img src="exports/13-dialogs-states.png" alt="Key Dialogs & States"></div><figcaption><span class="n">13</span>Key Dialogs &amp; States</figcaption></figure>
+  </div>
+</body>
+</html>
