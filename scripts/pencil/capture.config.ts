@@ -15,8 +15,10 @@ loadEnvConfig(process.cwd());
 export default defineConfig({
   testDir: __dirname,
   testMatch: 'capture-screenshots.ts',
-  // Refresh the authenticated storage state before capturing.
-  globalSetup: require.resolve('../../e2e/global-setup'),
+  // Refresh the authenticated storage state before capturing. Uses a
+  // capture-specific setup that signs in but skips the neon_auth.users_sync DB
+  // seeding (not needed for screenshots; avoids a stale DATABASE_URL failing).
+  globalSetup: require.resolve('./capture-setup'),
   // Single worker: the two capture flows write distinct files but share the dev server.
   workers: 1,
   timeout: 180_000,
