@@ -152,7 +152,12 @@ jobs:
     # Phase 41: Privy is fully removed. Auth is Neon Auth (cookie session).
     # E2E tests use Playwright globalSetup to seed a session via Neon Auth.
     needs: [changes]
-    if: needs.changes.outputs.src == 'true'
+    # Dependabot PR runs are not granted the repository's Actions secrets, so
+    # secrets.NEON_API_KEY is empty and the Neon branch actions below fail with
+    # "Cannot run interactive auth in CI". Skip this secret-dependent job for
+    # Dependabot; dependency bumps are still covered by build + the static
+    # schema-parity/drizzle-freshness checks (typecheck, data-integrity).
+    if: needs.changes.outputs.src == 'true' && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -228,6 +233,14 @@ jobs:
     # that static parity + freshness checks cannot (bad CHECK syntax,
     # cross-schema FK permissions, unreachable neon_auth.users_sync target).
     # Uses the same branch lifecycle pattern as the e2e job above.
+    #
+    # Dependabot PR runs are not granted the repository's Actions secrets, so
+    # secrets.NEON_API_KEY is empty and the Neon branch creation below fails
+    # ("Cannot run interactive auth in CI"). Skip for Dependabot — its bumps
+    # never touch src/db/schema.ts, and the static parity + drizzle-freshness
+    # checks (typecheck, data-integrity) still run. ci-pass treats a skipped
+    # schema-migration as acceptable.
+    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -356,7 +369,6 @@ jobs:
           echo "build: ${{ needs.build.result }}"
           echo "data-integrity: ${{ needs.data-integrity.result }}"
           echo "supply-chain: ${{ needs.supply-chain.result }}"
-          echo "schema-migration: ${{ needs.schema-migration.result }}"
 
           # Unconditional jobs: must succeed
           if [[ "${{ needs.changes.result }}" != "success" ||
@@ -364,8 +376,7 @@ jobs:
                 "${{ needs.typecheck.result }}" != "success" ||
                 "${{ needs.build.result }}" != "success" ||
                 "${{ needs.data-integrity.result }}" != "success" ||
-                "${{ needs.supply-chain.result }}" != "success" ||
-                "${{ needs.schema-migration.result }}" != "success" ]]; then
+                "${{ needs.supply-chain.result }}" != "success" ]]; then
             echo "::error::Unconditional job failed"
             exit 1
           fi
@@ -375,6 +386,11 @@ jobs:
           echo "test-tz-de: ${{ needs.test-tz-de.result }}"
           echo "integration: ${{ needs.integration.result }}"
           echo "e2e: ${{ needs.e2e.result }}"
+          # schema-migration is gated rather than unconditional: it needs the
+          # Neon secrets, which Dependabot PR runs don't receive, so it is
+          # skipped (not failed) on those runs. Still required to succeed on
+          # all non-Dependabot PRs since it never gets skipped there.
+          echo "schema-migration: ${{ needs.schema-migration.result }}"
           echo "coverage: ${{ needs.coverage.result }}"
           echo "benchmark: ${{ needs.benchmark.result }}"
 
@@ -384,6 +400,7 @@ jobs:
             "${{ needs.test-tz-de.result }}" \
             "${{ needs.integration.result }}" \
             "${{ needs.e2e.result }}" \
+            "${{ needs.schema-migration.result }}" \
             "${{ needs.coverage.result }}" \
             "${{ needs.benchmark.result }}"; do
             if [[ "$result" != "success" && "$result" != "skipped" ]]; then
