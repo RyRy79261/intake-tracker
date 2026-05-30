@@ -99,3 +99,10 @@ coverage/
 .cache/
 tmp/
 .stryker-tmp/
+
+# Pencil design — scratch artifacts only. Curated .pen files, design/reference/
+# and a selected set of design/exports/ are committed explicitly; transient
+# work-in-progress renders and CLI temp dirs are not.
+design/**/*-wip-*.png
+design/**/.pencil-tmp/
+.pencil/
