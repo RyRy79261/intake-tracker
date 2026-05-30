@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.29.0](https://github.com/RyRy79261/intake-tracker/compare/v1.28.0...v1.29.0) (2026-05-30)
+
+
+### Features
+
+* upgrade to Next.js 16 + React 19, replace next-pwa with Serwist ([63ffdb1](https://github.com/RyRy79261/intake-tracker/commit/63ffdb11e8892afb17d4775f4f099c5e8883cc50))
+
+
+### Bug Fixes
+
+* apply CodeRabbit auto-fixes ([836ee48](https://github.com/RyRy79261/intake-tracker/commit/836ee483ea6e6256c7094229cd58bca26c3a0970))
+* **deps:** restore @babel/core and babel-loader (next-pwa worker build) ([105cdc9](https://github.com/RyRy79261/intake-tracker/commit/105cdc9b3f4b1c3cbce9b7d2ab51e14deebb4d4d))
+* **edit:** surface 'Invalid date/time' toast instead of throwing on bad input ([5b97693](https://github.com/RyRy79261/intake-tracker/commit/5b976939b576ff6b774283c39bdd6bda51276f34))
+* **review:** associate Amount label with Select; correct date-range JSDoc ([dff3578](https://github.com/RyRy79261/intake-tracker/commit/dff3578b2185dec0dd62a41f772a16a9374b73de))
+* **sw:** verify message origin in service worker handler ([575e0e1](https://github.com/RyRy79261/intake-tracker/commit/575e0e1da98951865e4179198c79c2da740f4ec4))
+
 ## [1.28.0](https://github.com/RyRy79261/intake-tracker/compare/v1.27.0...v1.28.0) (2026-05-28)
 
 
