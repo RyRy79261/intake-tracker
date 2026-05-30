@@ -34,6 +34,51 @@ jobs:
               - 'src/__tests__/integrity/**'
               - 'src/lib/backup-service.ts'
 
+  # Supply-chain gate. Runs *before* every job that installs or executes
+  # dependency code (they all `needs: [security]`), so a known-malicious or
+  # vulnerable dependency change — or a secret committed into the diff — stops
+  # the run before any project code executes. These steps analyse PR
+  # metadata/diff only and never run the project's dependencies, so they are
+  # safe to run first.
+  security:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      # EDR-style monitoring of the runner's network egress + file/process
+      # activity. Kept in `audit` mode for now (observe + report, don't block).
+      # ROLLOUT: after a few runs, read the per-run network log at
+      # app.stepsecurity.io, then flip egress-policy to `block` with an
+      # allowed-endpoints allowlist to actively prevent exfiltration. Do NOT set
+      # `block` before the allowlist is verified — a wrong list breaks CI.
+      - name: Harden runner (egress audit)
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@v6
+        with:
+          # Full history so gitleaks can scan the PR's commit range.
+          fetch-depth: 0
+      # Fail the PR if it introduces a dependency carrying a known-malware or
+      # high/critical advisory. Public repo → no GitHub Advanced Security
+      # needed. allow-ghsas mirrors the accepted-risk advisories already
+      # documented in pnpm-workspace.yaml (auditConfig.ignoreCves) so this gate
+      # stays consistent with the `pnpm audit` step and doesn't re-flag the same
+      # reviewed transitive CVEs. License checks are off (this gate targets the
+      # malicious-dependency threat, not license compliance).
+      - name: Dependency review
+        uses: actions/dependency-review-action@v5
+        with:
+          fail-on-severity: high
+          license-check: false
+          allow-ghsas: GHSA-h25m-26qc-wcjf,GHSA-mw96-cpmx-2vgc,GHSA-3ppc-4f35-3m26,GHSA-7r86-cg39-jmmj,GHSA-23c5-xmqv-rm74,GHSA-c2c7-rcm5-vvqj
+      # Catch secrets accidentally committed in the diff. No license key needed
+      # for personal-account repos.
+      - name: Scan diff for committed secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   # The e2e and schema-migration jobs create an ephemeral Neon branch and
   # therefore need NEON_API_KEY. Probe for it here so those jobs gate on the
   # secret's availability: they run whenever the key is present (human PRs and
@@ -65,6 +110,7 @@ jobs:
           fi
 
   lint:
+    needs: [security]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -77,6 +123,7 @@ jobs:
       - run: pnpm lint
 
   typecheck:
+    needs: [security]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -99,7 +146,7 @@ jobs:
           echo "drizzle/ is up-to-date with src/db/schema.ts"
 
   test-tz-sa:
-    needs: [changes]
+    needs: [changes, security]
     if: needs.changes.outputs.src == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -114,7 +161,7 @@ jobs:
         run: pnpm test:tz:sa
 
   test-tz-de:
-    needs: [changes]
+    needs: [changes, security]
     if: needs.changes.outputs.src == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -129,8 +176,13 @@ jobs:
         run: pnpm test:tz:de
 
   build:
+    needs: [security]
     runs-on: ubuntu-latest
     steps:
+      - name: Harden runner (egress audit)
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v5
       - uses: actions/setup-node@v6
@@ -151,6 +203,7 @@ jobs:
         run: pnpm exec vitest run src/__tests__/bundle-security.test.ts
 
   data-integrity:
+    needs: [security]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -164,7 +217,7 @@ jobs:
         run: pnpm exec vitest run src/__tests__/integrity/
 
   integration:
-    needs: [changes]
+    needs: [changes, security]
     if: needs.changes.outputs.src == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -181,13 +234,20 @@ jobs:
   e2e:
     # Phase 41: Privy is fully removed. Auth is Neon Auth (cookie session).
     # E2E tests use Playwright globalSetup to seed a session via Neon Auth.
-    needs: [changes, secrets-check]
+    needs: [changes, secrets-check, security]
     # Runs whenever the Neon API key is available (see secrets-check). Skips on
     # Dependabot PRs, which intentionally don't get the Neon secrets; those
     # bumps get full E2E coverage via the release-please PR after merge.
     if: needs.changes.outputs.src == 'true' && needs.secrets-check.outputs.neon == 'true'
     runs-on: ubuntu-latest
     steps:
+      # This job holds the Neon secrets while running dependency code, so it is
+      # the highest-value place to monitor egress. See the security job for the
+      # audit→block rollout.
+      - name: Harden runner (egress audit)
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v5
       - uses: actions/setup-node@v6
@@ -266,10 +326,15 @@ jobs:
     # Dependabot PRs, which intentionally don't get the Neon secrets; ci-pass
     # treats a skipped schema-migration as acceptable. Dependency bumps don't
     # touch src/db/schema.ts and get full coverage via the release-please PR.
-    needs: [secrets-check]
+    needs: [secrets-check, security]
     if: needs.secrets-check.outputs.neon == 'true'
     runs-on: ubuntu-latest
     steps:
+      # Holds the Neon secrets while running dependency code — monitor egress.
+      - name: Harden runner (egress audit)
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v5
       - uses: actions/setup-node@v6
@@ -309,6 +374,7 @@ jobs:
           branch: ci-schema-${{ github.run_id }}
 
   supply-chain:
+    needs: [security]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -346,7 +412,7 @@ jobs:
             --ignore GHSA-c2c7-rcm5-vvqj
 
   coverage:
-    needs: [changes]
+    needs: [changes, security]
     if: needs.changes.outputs.src == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -368,7 +434,7 @@ jobs:
           file-coverage-mode: none
 
   benchmark:
-    needs: [changes]
+    needs: [changes, security]
     if: needs.changes.outputs.bench == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -384,7 +450,7 @@ jobs:
 
   ci-pass:
     if: always()
-    needs: [changes, secrets-check, lint, typecheck, test-tz-sa, test-tz-de, build, data-integrity, integration, e2e, schema-migration, supply-chain, coverage, benchmark]
+    needs: [changes, secrets-check, security, lint, typecheck, test-tz-sa, test-tz-de, build, data-integrity, integration, e2e, schema-migration, supply-chain, coverage, benchmark]
     runs-on: ubuntu-latest
     steps:
       - name: Check all jobs passed
@@ -392,6 +458,7 @@ jobs:
           echo "=== Unconditional jobs ==="
           echo "changes: ${{ needs.changes.result }}"
           echo "secrets-check: ${{ needs.secrets-check.result }}"
+          echo "security: ${{ needs.security.result }}"
           echo "lint: ${{ needs.lint.result }}"
           echo "typecheck: ${{ needs.typecheck.result }}"
           echo "build: ${{ needs.build.result }}"
@@ -401,6 +468,7 @@ jobs:
           # Unconditional jobs: must succeed
           if [[ "${{ needs.changes.result }}" != "success" ||
                 "${{ needs.secrets-check.result }}" != "success" ||
+                "${{ needs.security.result }}" != "success" ||
                 "${{ needs.lint.result }}" != "success" ||
                 "${{ needs.typecheck.result }}" != "success" ||
                 "${{ needs.build.result }}" != "success" ||
