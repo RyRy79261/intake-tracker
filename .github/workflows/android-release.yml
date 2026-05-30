@@ -3,14 +3,28 @@ name: Android Release
 on:
   release:
     types: [published]
+  # Allow manual re-runs (e.g. to retry a Play upload) against an existing tag.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to (re)build, e.g. v1.28.0"
+        required: true
+        type: string
 
 jobs:
-  build-apk:
+  build-and-publish:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      # Default Play track; override by setting a repository variable PLAY_TRACK
+      # to one of: internal | alpha (closed testing) | beta (open testing) | production
+      PLAY_TRACK: ${{ vars.PLAY_TRACK || 'beta' }}
+      PACKAGE_NAME: dev.ryanjnoble.intaketracker
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.inputs.tag || github.event.release.tag_name }}
 
       - uses: pnpm/action-setup@v5
       - uses: actions/setup-node@v6
@@ -54,17 +68,79 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Build debug APK
-        working-directory: android
-        run: ./gradlew assembleDebug
-
-      - name: Rename APK
+      - name: Decode upload keystore
+        id: keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
-          mv android/app/build/outputs/apk/debug/app-debug.apk \
-             android/app/build/outputs/apk/debug/intake-tracker-v${{ steps.version.outputs.version }}.apk
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "::error::ANDROID_KEYSTORE_BASE64 secret is not set — cannot produce a signed release. See docs/android-release.md"
+            exit 1
+          fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/upload-keystore.jks"
+          echo "path=$RUNNER_TEMP/upload-keystore.jks" >> "$GITHUB_OUTPUT"
 
-      - name: Attach APK to release
+      - name: Build signed AAB and APK
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_FILE: ${{ steps.keystore.outputs.path }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: ./gradlew bundleRelease assembleRelease --no-daemon
+
+      - name: Rename artifacts
+        id: artifacts
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          AAB_SRC=android/app/build/outputs/bundle/release/app-release.aab
+          APK_SRC=android/app/build/outputs/apk/release/app-release.apk
+          AAB_OUT="android/app/build/outputs/bundle/release/intake-tracker-v${VERSION}.aab"
+          APK_OUT="android/app/build/outputs/apk/release/intake-tracker-v${VERSION}.apk"
+          mv "$AAB_SRC" "$AAB_OUT"
+          mv "$APK_SRC" "$APK_OUT"
+          echo "aab=$AAB_OUT" >> "$GITHUB_OUTPUT"
+          echo "apk=$APK_OUT" >> "$GITHUB_OUTPUT"
+
+      - name: Attach artifacts to GitHub release
+        if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.release.tag_name }}
-          files: android/app/build/outputs/apk/debug/intake-tracker-v${{ steps.version.outputs.version }}.apk
+          files: |
+            ${{ steps.artifacts.outputs.aab }}
+            ${{ steps.artifacts.outputs.apk }}
+
+      # ---------------------------------------------------------------------
+      # Upload the signed AAB to Google Play.
+      #
+      # Requires the PLAY_SERVICE_ACCOUNT_JSON secret (a Google Cloud
+      # service-account key with the Play Developer API enabled and access
+      # granted in the Play Console). The step is skipped if the secret is
+      # absent, so the GitHub release still succeeds before Play is wired up.
+      #
+      # NOTE: the FIRST release of a brand-new app must be uploaded manually
+      # in the Play Console — the API cannot create the app listing. Every
+      # release after that one is automated by this step.
+      # ---------------------------------------------------------------------
+      - name: Check Play credentials
+        id: play
+        env:
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          if [ -n "$PLAY_SERVICE_ACCOUNT_JSON" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::PLAY_SERVICE_ACCOUNT_JSON not set — skipping Play upload. See docs/android-release.md"
+          fi
+
+      - name: Upload to Google Play (${{ env.PLAY_TRACK }})
+        if: steps.play.outputs.enabled == 'true'
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: ${{ env.PACKAGE_NAME }}
+          releaseFiles: ${{ steps.artifacts.outputs.aab }}
+          track: ${{ env.PLAY_TRACK }}
+          status: completed

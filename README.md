@@ -195,9 +195,16 @@ CI guarantees per PR ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)):
 
 ### Android
 
+Install as a PWA:
+
 1. Open the app in Chrome
 2. Tap the menu (three dots)
 3. Select "Add to Home Screen"
+
+Or install the native build from the Google Play Store (Capacitor wrapper). The
+signed release pipeline is documented in
+[`docs/android-release.md`](docs/android-release.md) — publishing a GitHub
+release builds a signed AAB and uploads it to Play automatically.
 
 ### iOS
 

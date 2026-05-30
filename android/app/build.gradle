@@ -10,6 +10,40 @@ if (versionPropsFile.canRead()) {
     appVersionName = versionProps['VERSION_NAME'] ?: "1.0.0"
 }
 
+// Release signing configuration.
+//
+// Reads from a local `android/keystore.properties` file when present (local
+// release builds), otherwise from environment variables (CI). Never commit the
+// keystore or its passwords — see docs/android-release.md.
+//
+// Supported keys / env vars:
+//   storeFile      / ANDROID_KEYSTORE_FILE     path to the .jks keystore
+//   storePassword  / ANDROID_KEYSTORE_PASSWORD keystore password
+//   keyAlias       / ANDROID_KEY_ALIAS         signing key alias
+//   keyPassword    / ANDROID_KEY_PASSWORD      signing key password
+def keystorePropertiesFile = file('keystore.properties')
+def keystoreProperties = new Properties()
+def hasKeystoreProps = keystorePropertiesFile.canRead()
+if (hasKeystoreProps) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
+def resolveSigning = { String propKey, String envKey ->
+    def value = hasKeystoreProps ? keystoreProperties[propKey] : System.getenv(envKey)
+    return (value != null && !value.toString().trim().isEmpty()) ? value.toString() : null
+}
+
+def releaseStoreFile = resolveSigning('storeFile', 'ANDROID_KEYSTORE_FILE')
+def releaseStorePassword = resolveSigning('storePassword', 'ANDROID_KEYSTORE_PASSWORD')
+def releaseKeyAlias = resolveSigning('keyAlias', 'ANDROID_KEY_ALIAS')
+def releaseKeyPassword = resolveSigning('keyPassword', 'ANDROID_KEY_PASSWORD')
+
+def hasReleaseSigning = releaseStoreFile != null &&
+        releaseStorePassword != null &&
+        releaseKeyAlias != null &&
+        releaseKeyPassword != null &&
+        file(releaseStoreFile).exists()
+
 android {
     namespace = "dev.ryanjnoble.intaketracker"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -26,10 +60,30 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (hasReleaseSigning) {
+            release {
+                storeFile file(releaseStoreFile)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+                // App Bundles for Play default to v1+v2; v2 also satisfies APK installs.
+                enableV1Signing true
+                enableV2Signing true
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            } else {
+                // No upload keystore available (e.g. local dev). The artifact will be
+                // unsigned / debug-signed and is NOT uploadable to Google Play.
+                project.logger.warn('android: no release keystore configured — release artifacts will be unsigned. See docs/android-release.md')
+            }
         }
     }
 }
