@@ -35,16 +35,19 @@ jobs:
               - 'src/lib/backup-service.ts'
 
   # The e2e and schema-migration jobs create an ephemeral Neon branch and
-  # therefore need NEON_API_KEY. Probe for it here so those jobs can gate on
-  # availability rather than on the actor: they run whenever the key is present
-  # (regular PRs always; Dependabot PRs once the Neon secrets are added to the
-  # Dependabot secrets store) and skip cleanly otherwise — instead of failing
-  # with "Cannot run interactive auth in CI" when the secret is an empty string.
+  # therefore need NEON_API_KEY. Probe for it here so those jobs gate on the
+  # secret's availability: they run whenever the key is present (human PRs and
+  # the release-please PR) and skip cleanly otherwise — instead of failing with
+  # "Cannot run interactive auth in CI" when the secret is an empty string.
   #
-  # GitHub withholds *Actions* secrets from Dependabot-triggered runs but does
-  # expose *Dependabot* secrets, so mirroring NEON_API_KEY (and the other Neon
-  # secrets the jobs use) into the Dependabot secrets store is what turns these
-  # tests on for Dependabot PRs.
+  # By design we do NOT give Dependabot the Neon secrets. GitHub already
+  # withholds Actions secrets from Dependabot-triggered runs, and we
+  # deliberately do not mirror them into the Dependabot secrets store: a
+  # compromised dependency bump would otherwise execute with our Neon
+  # credentials in scope (supply-chain exfiltration risk). Dependabot PRs
+  # therefore skip the DB-backed jobs and merge on the secret-free checks; the
+  # bumps get full DB + E2E coverage once they roll up into the release-please
+  # PR, which runs as a normal PR with the secrets available.
   secrets-check:
     runs-on: ubuntu-latest
     outputs:
@@ -58,7 +61,7 @@ jobs:
             echo "neon=true" >> "$GITHUB_OUTPUT"
           else
             echo "neon=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::NEON_API_KEY unavailable — skipping DB-backed jobs (e2e, schema-migration). For Dependabot PRs, add the Neon secrets to the Dependabot secrets store to enable them."
+            echo "::notice::NEON_API_KEY unavailable — skipping DB-backed jobs (e2e, schema-migration). Expected on Dependabot PRs (no Neon secrets by design); these bumps get full DB coverage via the release-please PR after merge."
           fi
 
   lint:
@@ -179,10 +182,9 @@ jobs:
     # Phase 41: Privy is fully removed. Auth is Neon Auth (cookie session).
     # E2E tests use Playwright globalSetup to seed a session via Neon Auth.
     needs: [changes, secrets-check]
-    # Runs whenever the Neon API key is available (see secrets-check). On
-    # Dependabot PRs this means the job runs once the Neon secrets are mirrored
-    # into the Dependabot secrets store, and skips cleanly until then instead of
-    # failing with "Cannot run interactive auth in CI".
+    # Runs whenever the Neon API key is available (see secrets-check). Skips on
+    # Dependabot PRs, which intentionally don't get the Neon secrets; those
+    # bumps get full E2E coverage via the release-please PR after merge.
     if: needs.changes.outputs.src == 'true' && needs.secrets-check.outputs.neon == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -260,11 +262,10 @@ jobs:
     # cross-schema FK permissions, unreachable neon_auth.users_sync target).
     # Uses the same branch lifecycle pattern as the e2e job above.
     #
-    # Runs whenever the Neon API key is available (see secrets-check). On
-    # Dependabot PRs this means the job runs once the Neon secrets are mirrored
-    # into the Dependabot secrets store, and skips cleanly until then instead of
-    # failing with "Cannot run interactive auth in CI". ci-pass treats a skipped
-    # schema-migration as acceptable.
+    # Runs whenever the Neon API key is available (see secrets-check). Skips on
+    # Dependabot PRs, which intentionally don't get the Neon secrets; ci-pass
+    # treats a skipped schema-migration as acceptable. Dependency bumps don't
+    # touch src/db/schema.ts and get full coverage via the release-please PR.
     needs: [secrets-check]
     if: needs.secrets-check.outputs.neon == 'true'
     runs-on: ubuntu-latest
@@ -416,8 +417,8 @@ jobs:
           echo "e2e: ${{ needs.e2e.result }}"
           # schema-migration is gated rather than unconditional: it needs the
           # Neon API key (see secrets-check), so it is skipped (not failed)
-          # when the key is unavailable — e.g. a Dependabot PR before the Neon
-          # secrets are mirrored into the Dependabot secrets store.
+          # when the key is unavailable — e.g. on Dependabot PRs, which by
+          # design don't receive the Neon secrets.
           echo "schema-migration: ${{ needs.schema-migration.result }}"
           echo "coverage: ${{ needs.coverage.result }}"
           echo "benchmark: ${{ needs.benchmark.result }}"
