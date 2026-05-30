@@ -1,0 +1,1624 @@
+{
+  "version": "2.11",
+  "children": [
+    {
+      "type": "frame",
+      "id": "RDBGD",
+      "x": 0,
+      "y": 0,
+      "name": "12 - Help Article",
+      "width": 440,
+      "fill": "#FFFFFF",
+      "cornerRadius": 12,
+      "layout": "vertical",
+      "children": [
+        {
+          "type": "frame",
+          "id": "KDw6R",
+          "name": "Top Bar",
+          "width": "fill_container",
+          "height": 56,
+          "fill": "#FFFFFF",
+          "gap": 8,
+          "padding": [
+            0,
+            20
+          ],
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "icon_font",
+              "id": "8Hu93",
+              "name": "backIcon",
+              "width": 20,
+              "height": 20,
+              "iconFontName": "arrow-left",
+              "iconFontFamily": "lucide",
+              "fill": "#111827"
+            },
+            {
+              "type": "text",
+              "id": "iipGl",
+              "name": "topBarTitle",
+              "fill": "#111827",
+              "content": "User Manual",
+              "fontFamily": "Outfit",
+              "fontSize": 16,
+              "fontWeight": "600"
+            }
+          ]
+        },
+        {
+          "type": "rectangle",
+          "id": "vt1kf",
+          "name": "Divider",
+          "fill": "#E5E7EB",
+          "width": "fill_container",
+          "height": 1
+        },
+        {
+          "type": "frame",
+          "id": "sJTFO",
+          "name": "Content",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 28,
+          "padding": [
+            24,
+            24,
+            32,
+            24
+          ],
+          "children": [
+            {
+              "type": "frame",
+              "id": "w24gL",
+              "name": "Article Header",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "r0nKe",
+                  "name": "Title Row",
+                  "width": "fill_container",
+                  "gap": 8,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "TdPjB",
+                      "name": "titleIcon",
+                      "width": 22,
+                      "height": 22,
+                      "iconFontName": "clipboard-list",
+                      "iconFontFamily": "lucide",
+                      "fill": "#3B82F6"
+                    },
+                    {
+                      "type": "text",
+                      "id": "qy5Kw",
+                      "name": "titleText",
+                      "fill": "#111827",
+                      "content": "How Intake Tracker works",
+                      "fontFamily": "Outfit",
+                      "fontSize": 22,
+                      "fontWeight": "700"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "6A60O",
+                  "name": "subtitle",
+                  "fill": "#6B7280",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "What the app is, where your data lives, and how to get around.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "Outfit",
+                  "fontSize": 14
+                },
+                {
+                  "type": "text",
+                  "id": "oTLnF",
+                  "name": "breadcrumb",
+                  "fill": "#9CA3AF",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Where to find it: Everywhere — this is the big picture.",
+                  "lineHeight": 1.4,
+                  "fontFamily": "Outfit",
+                  "fontSize": 12
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "Oa5bL",
+              "name": "Try It Section",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 12,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "nDCmE",
+                  "name": "tryItHeading",
+                  "fill": "#111827",
+                  "content": "Try it",
+                  "fontFamily": "Outfit",
+                  "fontSize": 18,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "WZUEw",
+                  "name": "tryItDesc",
+                  "fill": "#374151",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "This is the real component, loaded with sample data. Tap and type — it works exactly as it does in the app, and nothing you do here is saved.",
+                  "lineHeight": 1.55,
+                  "fontFamily": "Outfit",
+                  "fontSize": 14
+                },
+                {
+                  "type": "frame",
+                  "id": "aZs97",
+                  "name": "Preview Card",
+                  "clip": true,
+                  "width": "fill_container",
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 12,
+                  "stroke": {
+                    "align": "outside",
+                    "thickness": 1,
+                    "fill": "#E5E7EB"
+                  },
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "XnEyQ",
+                      "name": "Preview Banner",
+                      "width": "fill_container",
+                      "fill": "#F3F4F6",
+                      "gap": 8,
+                      "padding": [
+                        10,
+                        14
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "ellipse",
+                          "id": "5z5XQ",
+                          "name": "bannerDot",
+                          "fill": "#10B981",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "beEYh",
+                          "name": "bannerText",
+                          "fill": "#6B7280",
+                          "content": "Live preview · sample data · changes are not saved",
+                          "fontFamily": "Outfit",
+                          "fontSize": 11
+                        },
+                        {
+                          "type": "frame",
+                          "id": "BRxUB",
+                          "name": "bannerSpacer",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "frame",
+                          "id": "dmxPp",
+                          "name": "resetBtn",
+                          "cornerRadius": 6,
+                          "stroke": {
+                            "align": "inside",
+                            "thickness": 1,
+                            "fill": "#D1D5DB"
+                          },
+                          "gap": 4,
+                          "padding": [
+                            4,
+                            10
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon_font",
+                              "id": "PwFDu",
+                              "name": "resetIcon",
+                              "width": 12,
+                              "height": 12,
+                              "iconFontName": "rotate-ccw",
+                              "iconFontFamily": "lucide",
+                              "fill": "#6B7280"
+                            },
+                            {
+                              "type": "text",
+                              "id": "U3nvL",
+                              "name": "resetText",
+                              "fill": "#6B7280",
+                              "content": "Reset",
+                              "fontFamily": "Outfit",
+                              "fontSize": 11,
+                              "fontWeight": "500"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "HB8T2",
+                      "name": "Preview Content",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 14,
+                      "padding": 16,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "E6XeJ",
+                          "name": "todayLabel",
+                          "fill": "#9CA3AF",
+                          "content": "TODAY",
+                          "fontFamily": "Outfit",
+                          "fontSize": 11,
+                          "fontWeight": "600",
+                          "letterSpacing": 0.5
+                        },
+                        {
+                          "type": "frame",
+                          "id": "qisc9",
+                          "name": "Water Row",
+                          "width": "fill_container",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "ellipse",
+                              "id": "6ZunR",
+                              "name": "waterIcon",
+                              "fill": "#3B82F6",
+                              "width": 8,
+                              "height": 8
+                            },
+                            {
+                              "type": "text",
+                              "id": "cJYfy",
+                              "name": "waterName",
+                              "fill": "#374151",
+                              "content": "Water",
+                              "fontFamily": "Outfit",
+                              "fontSize": 14,
+                              "fontWeight": "500"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "8ldBh",
+                              "name": "waterSpacer",
+                              "width": "fill_container",
+                              "height": 1
+                            },
+                            {
+                              "type": "text",
+                              "id": "rDD4s",
+                              "name": "waterVal",
+                              "fill": "#3B82F6",
+                              "content": "800",
+                              "fontFamily": "Outfit",
+                              "fontSize": 14,
+                              "fontWeight": "600"
+                            },
+                            {
+                              "type": "text",
+                              "id": "6riOM",
+                              "name": "waterTotal",
+                              "fill": "#9CA3AF",
+                              "content": "/ 1,000 ml",
+                              "fontFamily": "Outfit",
+                              "fontSize": 12
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "y2POK",
+                          "name": "Sodium Row",
+                          "width": "fill_container",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "ellipse",
+                              "id": "FI149",
+                              "name": "sodiumIcon",
+                              "fill": "#F59E0B",
+                              "width": 8,
+                              "height": 8
+                            },
+                            {
+                              "type": "text",
+                              "id": "tiAzJ",
+                              "name": "sodiumName",
+                              "fill": "#374151",
+                              "content": "Sodium",
+                              "fontFamily": "Outfit",
+                              "fontSize": 14,
+                              "fontWeight": "500"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "Xzq5S",
+                              "name": "sodiumSpacer",
+                              "width": "fill_container",
+                              "height": 1
+                            },
+                            {
+                              "type": "text",
+                              "id": "8M8x5",
+                              "name": "sodiumVal",
+                              "fill": "#F59E0B",
+                              "content": "600",
+                              "fontFamily": "Outfit",
+                              "fontSize": 14,
+                              "fontWeight": "600"
+                            },
+                            {
+                              "type": "text",
+                              "id": "gBBOg",
+                              "name": "sodiumTotal",
+                              "fill": "#9CA3AF",
+                              "content": "/ 1,500 mg",
+                              "fontFamily": "Outfit",
+                              "fontSize": 12
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "0CZvD",
+                          "name": "Sugar Row",
+                          "width": "fill_container",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "ellipse",
+                              "id": "yCBV3",
+                              "name": "sugarIcon",
+                              "fill": "#EC4899",
+                              "width": 8,
+                              "height": 8
+                            },
+                            {
+                              "type": "text",
+                              "id": "d0G7v",
+                              "name": "sugarName",
+                              "fill": "#374151",
+                              "content": "Sugar",
+                              "fontFamily": "Outfit",
+                              "fontSize": 14,
+                              "fontWeight": "500"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "c4cDs",
+                          "name": "Caffeine Row",
+                          "width": "fill_container",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "ellipse",
+                              "id": "5oYJW",
+                              "name": "caffeineIcon",
+                              "fill": "#8B5CF6",
+                              "width": 8,
+                              "height": 8
+                            },
+                            {
+                              "type": "text",
+                              "id": "OBL8A",
+                              "name": "caffeineName",
+                              "fill": "#374151",
+                              "content": "Caffeine",
+                              "fontFamily": "Outfit",
+                              "fontSize": 14,
+                              "fontWeight": "500"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "KnUtU",
+                          "name": "Alcohol Row",
+                          "width": "fill_container",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "ellipse",
+                              "id": "KvN4b",
+                              "name": "alcoholIcon",
+                              "fill": "#EF4444",
+                              "width": 8,
+                              "height": 8
+                            },
+                            {
+                              "type": "text",
+                              "id": "rxVYd",
+                              "name": "alcoholName",
+                              "fill": "#374151",
+                              "content": "Alcohol",
+                              "fontFamily": "Outfit",
+                              "fontSize": 14,
+                              "fontWeight": "500"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "pPzE8",
+                              "name": "alcoholSpacer",
+                              "width": "fill_container",
+                              "height": 1
+                            },
+                            {
+                              "type": "text",
+                              "id": "hFLzf",
+                              "name": "alcoholVal",
+                              "fill": "#9CA3AF",
+                              "content": "0.0 std drinks",
+                              "fontFamily": "Outfit",
+                              "fontSize": 12
+                            }
+                          ]
+                        },
+                        {
+                          "type": "rectangle",
+                          "id": "VS504",
+                          "name": "weekDivider",
+                          "fill": "#F3F4F6",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "frame",
+                          "id": "9hOug",
+                          "name": "Week Section",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 8,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "nzlD6",
+                              "name": "weekLabel",
+                              "fill": "#9CA3AF",
+                              "content": "THIS WEEK (MON-SUN)",
+                              "fontFamily": "Outfit",
+                              "fontSize": 11,
+                              "fontWeight": "600",
+                              "letterSpacing": 0.5
+                            },
+                            {
+                              "type": "frame",
+                              "id": "TGq3d",
+                              "name": "Week Grid",
+                              "width": "fill_container",
+                              "layout": "vertical",
+                              "gap": 4,
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "1YLNO",
+                                  "name": "weekHeader",
+                                  "width": "fill_container",
+                                  "justifyContent": "space_between",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "zUXnY",
+                                      "name": "dayM",
+                                      "fill": "#9CA3AF",
+                                      "textGrowth": "fixed-width-height",
+                                      "width": 32,
+                                      "height": 14,
+                                      "content": "M",
+                                      "textAlign": "center",
+                                      "fontFamily": "Outfit",
+                                      "fontSize": 10,
+                                      "fontWeight": "500"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "ltEQu",
+                                      "name": "dayT",
+                                      "fill": "#9CA3AF",
+                                      "textGrowth": "fixed-width-height",
+                                      "width": 32,
+                                      "height": 14,
+                                      "content": "T",
+                                      "textAlign": "center",
+                                      "fontFamily": "Outfit",
+                                      "fontSize": 10,
+                                      "fontWeight": "500"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "7SxWW",
+                                      "name": "dayW",
+                                      "fill": "#9CA3AF",
+                                      "textGrowth": "fixed-width-height",
+                                      "width": 32,
+                                      "height": 14,
+                                      "content": "W",
+                                      "textAlign": "center",
+                                      "fontFamily": "Outfit",
+                                      "fontSize": 10,
+                                      "fontWeight": "500"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "ieRue",
+                                      "name": "dayTh",
+                                      "fill": "#9CA3AF",
+                                      "textGrowth": "fixed-width-height",
+                                      "width": 32,
+                                      "height": 14,
+                                      "content": "T",
+                                      "textAlign": "center",
+                                      "fontFamily": "Outfit",
+                                      "fontSize": 10,
+                                      "fontWeight": "500"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "HILyU",
+                                      "name": "dayF",
+                                      "fill": "#9CA3AF",
+                                      "textGrowth": "fixed-width-height",
+                                      "width": 32,
+                                      "height": 14,
+                                      "content": "F",
+                                      "textAlign": "center",
+                                      "fontFamily": "Outfit",
+                                      "fontSize": 10,
+                                      "fontWeight": "500"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "ahRTJ",
+                                      "name": "dayS",
+                                      "fill": "#9CA3AF",
+                                      "textGrowth": "fixed-width-height",
+                                      "width": 32,
+                                      "height": 14,
+                                      "content": "S",
+                                      "textAlign": "center",
+                                      "fontFamily": "Outfit",
+                                      "fontSize": 10,
+                                      "fontWeight": "500"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "X5AME",
+                                      "name": "daySu",
+                                      "fill": "#9CA3AF",
+                                      "textGrowth": "fixed-width-height",
+                                      "width": 32,
+                                      "height": 14,
+                                      "content": "S",
+                                      "textAlign": "center",
+                                      "fontFamily": "Outfit",
+                                      "fontSize": 10,
+                                      "fontWeight": "500"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "R56Bg",
+                                  "name": "Water Week",
+                                  "width": "fill_container",
+                                  "gap": 2,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "0KrEg",
+                                      "name": "wLbl",
+                                      "fill": "#3B82F6",
+                                      "textGrowth": "fixed-width-height",
+                                      "width": 16,
+                                      "height": 12,
+                                      "content": "Wa",
+                                      "fontFamily": "Outfit",
+                                      "fontSize": 9,
+                                      "fontWeight": "500"
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "N6r7Z",
+                                      "name": "wM",
+                                      "width": "fill_container",
+                                      "height": 16,
+                                      "fill": "#DBEAFE",
+                                      "cornerRadius": 3,
+                                      "padding": [
+                                        0,
+                                        4
+                                      ],
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "ZUJ40",
+                                          "name": "wMt",
+                                          "fill": "#3B82F6",
+                                          "content": "8",
+                                          "fontFamily": "Outfit",
+                                          "fontSize": 8,
+                                          "fontWeight": "600"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "FIbJd",
+                                      "name": "wT",
+                                      "width": "fill_container",
+                                      "height": 16,
+                                      "fill": "#DBEAFE",
+                                      "cornerRadius": 3,
+                                      "padding": [
+                                        0,
+                                        4
+                                      ],
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "SGG3h",
+                                          "name": "wTt",
+                                          "fill": "#3B82F6",
+                                          "content": "5",
+                                          "fontFamily": "Outfit",
+                                          "fontSize": 8,
+                                          "fontWeight": "600"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "XJ3P1",
+                                      "name": "wW",
+                                      "width": "fill_container",
+                                      "height": 16,
+                                      "fill": "#93C5FD",
+                                      "cornerRadius": 3,
+                                      "padding": [
+                                        0,
+                                        4
+                                      ],
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "BeTb8",
+                                          "name": "wWt",
+                                          "fill": "#1E40AF",
+                                          "content": "80",
+                                          "fontFamily": "Outfit",
+                                          "fontSize": 8,
+                                          "fontWeight": "600"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "kS6B8",
+                                      "name": "wTh",
+                                      "width": "fill_container",
+                                      "height": 16,
+                                      "fill": "#DBEAFE",
+                                      "cornerRadius": 3,
+                                      "padding": [
+                                        0,
+                                        4
+                                      ],
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "ad0lK",
+                                          "name": "wTht",
+                                          "fill": "#3B82F6",
+                                          "content": "5",
+                                          "fontFamily": "Outfit",
+                                          "fontSize": 8,
+                                          "fontWeight": "600"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "ONDzd",
+                                      "name": "wF",
+                                      "width": "fill_container",
+                                      "height": 16,
+                                      "fill": "#DBEAFE",
+                                      "cornerRadius": 3,
+                                      "padding": [
+                                        0,
+                                        4
+                                      ],
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "Bb9Wv",
+                                          "name": "wFt",
+                                          "fill": "#3B82F6",
+                                          "content": "8",
+                                          "fontFamily": "Outfit",
+                                          "fontSize": 8,
+                                          "fontWeight": "600"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "forXr",
+                                      "name": "wS",
+                                      "width": "fill_container",
+                                      "height": 16,
+                                      "fill": "#F3F4F6",
+                                      "cornerRadius": 3,
+                                      "padding": [
+                                        0,
+                                        4
+                                      ],
+                                      "alignItems": "center"
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "QQzTv",
+                                      "name": "wSu",
+                                      "width": "fill_container",
+                                      "height": 16,
+                                      "fill": "#F3F4F6",
+                                      "cornerRadius": 3,
+                                      "padding": [
+                                        0,
+                                        4
+                                      ],
+                                      "alignItems": "center"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "MQ5OS",
+                                  "name": "Sodium Week",
+                                  "width": "fill_container",
+                                  "gap": 2,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "3bNGH",
+                                      "name": "sLbl",
+                                      "fill": "#F59E0B",
+                                      "textGrowth": "fixed-width-height",
+                                      "width": 16,
+                                      "height": 12,
+                                      "content": "Na",
+                                      "fontFamily": "Outfit",
+                                      "fontSize": 9,
+                                      "fontWeight": "500"
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "bA9Ei",
+                                      "name": "sM",
+                                      "width": "fill_container",
+                                      "height": 16,
+                                      "fill": "#FEF3C7",
+                                      "cornerRadius": 3,
+                                      "padding": [
+                                        0,
+                                        4
+                                      ],
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "mZ5C8",
+                                          "name": "sMt",
+                                          "fill": "#D97706",
+                                          "content": "6",
+                                          "fontFamily": "Outfit",
+                                          "fontSize": 8,
+                                          "fontWeight": "600"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "mzYgI",
+                                      "name": "sT",
+                                      "width": "fill_container",
+                                      "height": 16,
+                                      "fill": "#FEF3C7",
+                                      "cornerRadius": 3,
+                                      "padding": [
+                                        0,
+                                        4
+                                      ],
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "cM3Gj",
+                                          "name": "sTt",
+                                          "fill": "#D97706",
+                                          "content": "3",
+                                          "fontFamily": "Outfit",
+                                          "fontSize": 8,
+                                          "fontWeight": "600"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "Dt58q",
+                                      "name": "sW",
+                                      "width": "fill_container",
+                                      "height": 16,
+                                      "fill": "#FDE68A",
+                                      "cornerRadius": 3,
+                                      "padding": [
+                                        0,
+                                        4
+                                      ],
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "4cyPx",
+                                          "name": "sWt",
+                                          "fill": "#92400E",
+                                          "content": "95",
+                                          "fontFamily": "Outfit",
+                                          "fontSize": 8,
+                                          "fontWeight": "600"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "SkztS",
+                                      "name": "sTh",
+                                      "width": "fill_container",
+                                      "height": 16,
+                                      "fill": "#FEF3C7",
+                                      "cornerRadius": 3,
+                                      "padding": [
+                                        0,
+                                        4
+                                      ],
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "oy9KB",
+                                          "name": "sTht",
+                                          "fill": "#D97706",
+                                          "content": "4",
+                                          "fontFamily": "Outfit",
+                                          "fontSize": 8,
+                                          "fontWeight": "600"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "2hBcA",
+                                      "name": "sF",
+                                      "width": "fill_container",
+                                      "height": 16,
+                                      "fill": "#FEF3C7",
+                                      "cornerRadius": 3,
+                                      "padding": [
+                                        0,
+                                        4
+                                      ],
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "2HXfc",
+                                          "name": "sFt",
+                                          "fill": "#D97706",
+                                          "content": "6",
+                                          "fontFamily": "Outfit",
+                                          "fontSize": 8,
+                                          "fontWeight": "600"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "iq3rb",
+                                      "name": "sSat",
+                                      "width": "fill_container",
+                                      "height": 16,
+                                      "fill": "#F3F4F6",
+                                      "cornerRadius": 3
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "L5hMi",
+                                      "name": "sSun",
+                                      "width": "fill_container",
+                                      "height": 16,
+                                      "fill": "#F3F4F6",
+                                      "cornerRadius": 3
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "QqZox",
+                                  "name": "Sugar Week",
+                                  "width": "fill_container",
+                                  "gap": 2,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "Ekf7s",
+                                      "name": "suLbl",
+                                      "fill": "#EC4899",
+                                      "textGrowth": "fixed-width-height",
+                                      "width": 16,
+                                      "height": 12,
+                                      "content": "Su",
+                                      "fontFamily": "Outfit",
+                                      "fontSize": 9,
+                                      "fontWeight": "500"
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "733uo",
+                                      "name": "suM",
+                                      "width": "fill_container",
+                                      "height": 16,
+                                      "fill": "#FCE7F3",
+                                      "cornerRadius": 3
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "r0sVo",
+                                      "name": "suT",
+                                      "width": "fill_container",
+                                      "height": 16,
+                                      "fill": "#FCE7F3",
+                                      "cornerRadius": 3
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "Uf27L",
+                                      "name": "suW",
+                                      "width": "fill_container",
+                                      "height": 16,
+                                      "fill": "#FBCFE8",
+                                      "cornerRadius": 3
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "LG8Ug",
+                                      "name": "suTh",
+                                      "width": "fill_container",
+                                      "height": 16,
+                                      "fill": "#FCE7F3",
+                                      "cornerRadius": 3
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "6eArj",
+                                      "name": "suF",
+                                      "width": "fill_container",
+                                      "height": 16,
+                                      "fill": "#FCE7F3",
+                                      "cornerRadius": 3
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "Qf9fM",
+                                      "name": "suS",
+                                      "width": "fill_container",
+                                      "height": 16,
+                                      "fill": "#F3F4F6",
+                                      "cornerRadius": 3
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "cleLW",
+                                      "name": "suSu",
+                                      "width": "fill_container",
+                                      "height": 16,
+                                      "fill": "#F3F4F6",
+                                      "cornerRadius": 3
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "ZrStg",
+                                  "name": "Caffeine Week",
+                                  "width": "fill_container",
+                                  "gap": 2,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "mgmjI",
+                                      "name": "caLbl",
+                                      "fill": "#8B5CF6",
+                                      "textGrowth": "fixed-width-height",
+                                      "width": 16,
+                                      "height": 12,
+                                      "content": "Ca",
+                                      "fontFamily": "Outfit",
+                                      "fontSize": 9,
+                                      "fontWeight": "500"
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "xstGm",
+                                      "name": "caM",
+                                      "width": "fill_container",
+                                      "height": 16,
+                                      "fill": "#EDE9FE",
+                                      "cornerRadius": 3
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "vbAeI",
+                                      "name": "caT",
+                                      "width": "fill_container",
+                                      "height": 16,
+                                      "fill": "#EDE9FE",
+                                      "cornerRadius": 3
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "r2py2",
+                                      "name": "caW",
+                                      "width": "fill_container",
+                                      "height": 16,
+                                      "fill": "#DDD6FE",
+                                      "cornerRadius": 3
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "dvrqv",
+                                      "name": "caTh",
+                                      "width": "fill_container",
+                                      "height": 16,
+                                      "fill": "#EDE9FE",
+                                      "cornerRadius": 3
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "0zvb0",
+                                      "name": "caF",
+                                      "width": "fill_container",
+                                      "height": 16,
+                                      "fill": "#EDE9FE",
+                                      "cornerRadius": 3
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "NUL8v",
+                                      "name": "caS",
+                                      "width": "fill_container",
+                                      "height": 16,
+                                      "fill": "#F3F4F6",
+                                      "cornerRadius": 3
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "Xu77p",
+                                      "name": "caSu",
+                                      "width": "fill_container",
+                                      "height": 16,
+                                      "fill": "#F3F4F6",
+                                      "cornerRadius": 3
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "FmWyj",
+                                  "name": "Alcohol Week",
+                                  "width": "fill_container",
+                                  "gap": 2,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "7KLYD",
+                                      "name": "alLbl",
+                                      "fill": "#EF4444",
+                                      "textGrowth": "fixed-width-height",
+                                      "width": 16,
+                                      "height": 12,
+                                      "content": "Al",
+                                      "fontFamily": "Outfit",
+                                      "fontSize": 9,
+                                      "fontWeight": "500"
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "ayjy1",
+                                      "name": "alM",
+                                      "width": "fill_container",
+                                      "height": 16,
+                                      "fill": "#F3F4F6",
+                                      "cornerRadius": 3
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "qjqGs",
+                                      "name": "alT",
+                                      "width": "fill_container",
+                                      "height": 16,
+                                      "fill": "#F3F4F6",
+                                      "cornerRadius": 3
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "N0xBI",
+                                      "name": "alW",
+                                      "width": "fill_container",
+                                      "height": 16,
+                                      "fill": "#F3F4F6",
+                                      "cornerRadius": 3
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "jC5ea",
+                                      "name": "alTh",
+                                      "width": "fill_container",
+                                      "height": 16,
+                                      "fill": "#F3F4F6",
+                                      "cornerRadius": 3
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "8ZLyR",
+                                      "name": "alF",
+                                      "width": "fill_container",
+                                      "height": 16,
+                                      "fill": "#F3F4F6",
+                                      "cornerRadius": 3
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "umuso",
+                                      "name": "alS",
+                                      "width": "fill_container",
+                                      "height": 16,
+                                      "fill": "#F3F4F6",
+                                      "cornerRadius": 3
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "vMS9Q",
+                                      "name": "alSu",
+                                      "width": "fill_container",
+                                      "height": 16,
+                                      "fill": "#F3F4F6",
+                                      "cornerRadius": 3
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "NEVQ0",
+              "name": "What This App Is For",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 12,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "YjdDY",
+                  "name": "whatHeading",
+                  "fill": "#111827",
+                  "content": "What this app is for",
+                  "fontFamily": "Outfit",
+                  "fontSize": 18,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "Xyhgb",
+                  "name": "whatPara1",
+                  "fill": "#374151",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Intake Tracker is a personal health log. It keeps a record of your hydration, nutrition, vitals and medications in one place so you can manage a chronic condition day to day.",
+                  "lineHeight": 1.55,
+                  "fontFamily": "Outfit",
+                  "fontSize": 14
+                },
+                {
+                  "type": "text",
+                  "id": "Awfbk",
+                  "name": "whatPara2",
+                  "fill": "#374151",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "It is a single-person app. Everything you see belongs to you — there is no feed, no sharing, and no other users.",
+                  "lineHeight": 1.55,
+                  "fontFamily": "Outfit",
+                  "fontSize": 14
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "vCW3G",
+              "name": "Your Data Section",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 12,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "ZxhyZ",
+                  "name": "dataHeading",
+                  "fill": "#111827",
+                  "content": "Your data lives on your device",
+                  "fontFamily": "Outfit",
+                  "fontSize": 18,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "R6mqH",
+                  "name": "dataPara",
+                  "fill": "#374151",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "The app is offline-first. Every entry is saved straight into your phone or browser's own storage, so logging works with no signal and the app loads instantly.",
+                  "lineHeight": 1.55,
+                  "fontFamily": "Outfit",
+                  "fontSize": 14
+                },
+                {
+                  "type": "frame",
+                  "id": "mNk44",
+                  "name": "Privacy Callout",
+                  "width": "fill_container",
+                  "fill": "#EEF2FF",
+                  "cornerRadius": 12,
+                  "gap": 12,
+                  "padding": 16,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "EPHCH",
+                      "name": "calloutIconWrap",
+                      "width": 36,
+                      "height": 36,
+                      "fill": "#DBEAFE",
+                      "cornerRadius": 8,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon_font",
+                          "id": "8uAdq",
+                          "name": "calloutIcon",
+                          "width": 18,
+                          "height": 18,
+                          "iconFontName": "shield",
+                          "iconFontFamily": "lucide",
+                          "fill": "#3B82F6"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "MEg5e",
+                      "name": "calloutContent",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 6,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "Rl0x1",
+                          "name": "calloutTitle",
+                          "fill": "#1E3A5F",
+                          "content": "Privacy",
+                          "fontFamily": "Outfit",
+                          "fontSize": 14,
+                          "fontWeight": "700"
+                        },
+                        {
+                          "type": "text",
+                          "id": "m4zJr",
+                          "name": "calloutBody",
+                          "fill": "#374151",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Nothing leaves your device unless you turn on cloud sync or use an AI feature — and even then, only the minimum needed is sent. See the Privacy manual for the full picture.",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Outfit",
+                          "fontSize": 13
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "I5wad",
+              "name": "Daily Budgets Section",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 12,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "THKRK",
+                  "name": "dailyHeading",
+                  "fill": "#111827",
+                  "content": "Daily budgets, not just totals",
+                  "fontFamily": "Outfit",
+                  "fontSize": 18,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "c0E0K",
+                  "name": "dailyPara1",
+                  "fill": "#374151",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Water and sodium are tracked against a daily budget rather than a running lifetime total. The progress rings and bars show how much of today's allowance you have used.",
+                  "lineHeight": 1.55,
+                  "fontFamily": "Outfit",
+                  "fontSize": 14
+                },
+                {
+                  "type": "text",
+                  "id": "0k4y8",
+                  "name": "dailyPara2",
+                  "fill": "#374151",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "The day rolls over at an hour you choose, so a late-night drink still counts toward the correct day. Set it under Settings → Tracking → Day start.",
+                  "lineHeight": 1.55,
+                  "fontFamily": "Outfit",
+                  "fontSize": 14
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "OVOxc",
+              "name": "Getting Around Section",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 12,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "bny2E",
+                  "name": "getAroundHeading",
+                  "fill": "#111827",
+                  "content": "Getting around",
+                  "fontFamily": "Outfit",
+                  "fontSize": 18,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "frame",
+                  "id": "ICCJ7",
+                  "name": "Bullet List",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 10,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "Jsguj",
+                      "name": "bullet1",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "8fqE6",
+                          "name": "b1dot",
+                          "fill": "#374151",
+                          "content": "•",
+                          "fontFamily": "Outfit",
+                          "fontSize": 14
+                        },
+                        {
+                          "type": "text",
+                          "id": "sHTb1",
+                          "name": "b1text",
+                          "fill": "#374151",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Five tabs sit along the top: Intake (home), Medications, Analytics, Settings and Profile.",
+                          "lineHeight": 1.55,
+                          "fontFamily": "Outfit",
+                          "fontSize": 14
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "kIPV6",
+                      "name": "bullet2",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "8QCFE",
+                          "name": "b2dot",
+                          "fill": "#374151",
+                          "content": "•",
+                          "fontFamily": "Outfit",
+                          "fontSize": 14
+                        },
+                        {
+                          "type": "text",
+                          "id": "HhJCu",
+                          "name": "b2text",
+                          "fill": "#374151",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Swipe left or right anywhere to move between those tabs.",
+                          "lineHeight": 1.55,
+                          "fontFamily": "Outfit",
+                          "fontSize": 14
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "VtfMh",
+                      "name": "bullet3",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "jpUvQ",
+                          "name": "b3dot",
+                          "fill": "#374151",
+                          "content": "•",
+                          "fontFamily": "Outfit",
+                          "fontSize": 14
+                        },
+                        {
+                          "type": "text",
+                          "id": "Gragi",
+                          "name": "b3text",
+                          "fill": "#374151",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "The quick-nav bar at the bottom of the home screen jumps straight to a card.",
+                          "lineHeight": 1.55,
+                          "fontFamily": "Outfit",
+                          "fontSize": 14
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "k88yK",
+                      "name": "bullet4",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "MDA1k",
+                          "name": "b4dot",
+                          "fill": "#374151",
+                          "content": "•",
+                          "fontFamily": "Outfit",
+                          "fontSize": 14
+                        },
+                        {
+                          "type": "text",
+                          "id": "rhHiD",
+                          "name": "b4text",
+                          "fill": "#374151",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Shaking your device opens the bug reporter — and from there you can reach this manual.",
+                          "lineHeight": 1.55,
+                          "fontFamily": "Outfit",
+                          "fontSize": 14
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "CtbDG",
+              "name": "Where To Go Next",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 12,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "29afY",
+                  "name": "whereHeading",
+                  "fill": "#111827",
+                  "content": "Where to go next",
+                  "fontFamily": "Outfit",
+                  "fontSize": 18,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "vblGY",
+                  "name": "wherePara",
+                  "fill": "#374151",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Each card and feature has its own manual in this section. If you are setting up for the first time, the food, drink and medication guides are a good place to start.",
+                  "lineHeight": 1.55,
+                  "fontFamily": "Outfit",
+                  "fontSize": 14
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

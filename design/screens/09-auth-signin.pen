@@ -1,0 +1,424 @@
+{
+  "version": "2.11",
+  "children": [
+    {
+      "type": "frame",
+      "id": "1Na6U",
+      "x": 0,
+      "y": 0,
+      "name": "Sign In",
+      "width": 440,
+      "height": 932,
+      "fill": "$bg-page",
+      "layout": "vertical",
+      "gap": 12,
+      "padding": [
+        180,
+        24,
+        0,
+        24
+      ],
+      "alignItems": "center",
+      "children": [
+        {
+          "type": "frame",
+          "id": "PS1AL",
+          "name": "backRow",
+          "gap": 8,
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "icon_font",
+              "id": "ZCWq3",
+              "name": "backIcon",
+              "width": 20,
+              "height": 20,
+              "iconFontName": "arrow-left",
+              "iconFontFamily": "lucide",
+              "fill": "$text-muted"
+            },
+            {
+              "type": "text",
+              "id": "YFgVf",
+              "name": "backText",
+              "fill": "$text-muted",
+              "content": "Back",
+              "fontFamily": "Outfit",
+              "fontSize": 14,
+              "fontWeight": "500"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "BvpEY",
+          "name": "Auth Card",
+          "width": "fill_container",
+          "fill": "$bg-card",
+          "cornerRadius": 12,
+          "effect": {
+            "type": "shadow",
+            "shadowType": "outer",
+            "color": "#0F172A10",
+            "offset": {
+              "x": 0,
+              "y": 2
+            },
+            "blur": 12
+          },
+          "layout": "vertical",
+          "gap": 20,
+          "padding": [
+            32,
+            32,
+            28,
+            32
+          ],
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "frame",
+              "id": "kpE0i",
+              "name": "headerGroup",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "QvpXP",
+                  "name": "heading",
+                  "fill": "$text-heading",
+                  "content": "Welcome back",
+                  "fontFamily": "Outfit",
+                  "fontSize": 28,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "bKbGU",
+                  "name": "subtitle",
+                  "fill": "$text-muted",
+                  "content": "Sign in to your Intake Tracker account",
+                  "textAlign": "center",
+                  "fontFamily": "Outfit",
+                  "fontSize": 14
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "VdyyA",
+              "name": "emailGroup",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 6,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "FpZkh",
+                  "name": "emailLabel",
+                  "fill": "$text-heading",
+                  "content": "Email",
+                  "fontFamily": "Outfit",
+                  "fontSize": 14,
+                  "fontWeight": "500"
+                },
+                {
+                  "type": "frame",
+                  "id": "77NgR",
+                  "name": "emailInput",
+                  "width": "fill_container",
+                  "height": 44,
+                  "fill": "$bg-input",
+                  "cornerRadius": 8,
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "$border-input"
+                  },
+                  "padding": [
+                    0,
+                    16
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "LXE1w",
+                      "name": "emailPlaceholder",
+                      "fill": "$text-placeholder",
+                      "content": "you@example.com",
+                      "fontFamily": "Outfit",
+                      "fontSize": 14
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "dgrJ9",
+              "name": "passGroup",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 6,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "hKgra",
+                  "name": "passLabelRow",
+                  "width": "fill_container",
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "Tu4iE",
+                      "name": "passLabel",
+                      "fill": "$text-heading",
+                      "content": "Password",
+                      "fontFamily": "Outfit",
+                      "fontSize": 14,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "type": "text",
+                      "id": "k4zeU",
+                      "name": "forgotLink",
+                      "fill": "$text-link",
+                      "content": "Forgot your password?",
+                      "fontFamily": "Outfit",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "kUdej",
+                  "name": "passInput",
+                  "width": "fill_container",
+                  "height": 44,
+                  "fill": "$bg-input",
+                  "cornerRadius": 8,
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "$border-input"
+                  },
+                  "padding": [
+                    0,
+                    16
+                  ],
+                  "justifyContent": "end",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "YWj0v",
+                      "name": "eyeIcon",
+                      "width": 18,
+                      "height": 18,
+                      "iconFontName": "eye-off",
+                      "iconFontFamily": "lucide",
+                      "fill": "$text-placeholder"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "RPhhg",
+              "name": "signInBtn",
+              "width": "fill_container",
+              "height": 44,
+              "fill": "$primary",
+              "cornerRadius": 8,
+              "justifyContent": "center",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "F8ap9",
+                  "name": "signInText",
+                  "fill": "$primary-text",
+                  "content": "Sign In",
+                  "fontFamily": "Outfit",
+                  "fontSize": 15,
+                  "fontWeight": "600"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "3wV4c",
+              "name": "dividerRow",
+              "width": "fill_container",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "4Zy8A",
+                  "name": "leftLine",
+                  "width": "fill_container",
+                  "height": 1,
+                  "fill": "$border-default"
+                },
+                {
+                  "type": "text",
+                  "id": "RTdzX",
+                  "name": "dividerText",
+                  "fill": "$text-placeholder",
+                  "content": "Or continue with",
+                  "fontFamily": "Outfit",
+                  "fontSize": 13
+                },
+                {
+                  "type": "frame",
+                  "id": "Xbkti",
+                  "name": "rightLine",
+                  "width": "fill_container",
+                  "height": 1,
+                  "fill": "$border-default"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "595nk",
+              "name": "googleBtn",
+              "width": "fill_container",
+              "height": 44,
+              "fill": "$bg-card",
+              "cornerRadius": 8,
+              "stroke": {
+                "align": "inside",
+                "thickness": 1,
+                "fill": "$border-input"
+              },
+              "gap": 10,
+              "justifyContent": "center",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "iyMZo",
+                  "name": "googleG",
+                  "fill": "$text-heading",
+                  "content": "G",
+                  "fontFamily": "Outfit",
+                  "fontSize": 18,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "M7B6t",
+                  "name": "googleText",
+                  "fill": "$text-heading",
+                  "content": "Continue with Google",
+                  "fontFamily": "Outfit",
+                  "fontSize": 14,
+                  "fontWeight": "500"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "OTT1H",
+              "name": "signupRow",
+              "gap": 4,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "Sb3fZ",
+                  "name": "signupPrompt",
+                  "fill": "$text-muted",
+                  "content": "Don't have an account?",
+                  "fontFamily": "Outfit",
+                  "fontSize": 14
+                },
+                {
+                  "type": "text",
+                  "id": "OTszZ",
+                  "name": "signupLink",
+                  "fill": "$text-link",
+                  "content": "Sign up",
+                  "fontFamily": "Outfit",
+                  "fontSize": 14,
+                  "fontWeight": "600"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "id": "pT5Jc",
+          "name": "footerText",
+          "fill": "$text-placeholder",
+          "textGrowth": "fixed-width",
+          "width": 340,
+          "content": "Your health data stays on your device. Sign in lets you sync across devices.",
+          "textAlign": "center",
+          "fontFamily": "Outfit",
+          "fontSize": 13
+        }
+      ]
+    }
+  ],
+  "variables": {
+    "bg-card": {
+      "type": "color",
+      "value": "#FFFFFF"
+    },
+    "bg-input": {
+      "type": "color",
+      "value": "#F8FAFC"
+    },
+    "bg-page": {
+      "type": "color",
+      "value": "#F1F5F9"
+    },
+    "border-default": {
+      "type": "color",
+      "value": "#E2E8F0"
+    },
+    "border-input": {
+      "type": "color",
+      "value": "#E2E8F0"
+    },
+    "primary": {
+      "type": "color",
+      "value": "#3B82F6"
+    },
+    "primary-text": {
+      "type": "color",
+      "value": "#FFFFFF"
+    },
+    "text-body": {
+      "type": "color",
+      "value": "#475569"
+    },
+    "text-heading": {
+      "type": "color",
+      "value": "#1E293B"
+    },
+    "text-link": {
+      "type": "color",
+      "value": "#3B82F6"
+    },
+    "text-muted": {
+      "type": "color",
+      "value": "#64748B"
+    },
+    "text-placeholder": {
+      "type": "color",
+      "value": "#94A3B8"
+    }
+  }
+}
