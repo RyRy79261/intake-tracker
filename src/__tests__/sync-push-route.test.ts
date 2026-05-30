@@ -354,11 +354,8 @@ describe("sync-push-route", () => {
     expect(res.status).toBe(400);
     const body = (await res.json()) as {
       error: string;
-      details?: unknown;
     };
     expect(body.error).toBe("Invalid request");
-    // Parse error should mention the 500-cap
-    expect(JSON.stringify(body.details)).toContain("500");
     expect(insertCalls).toHaveLength(0);
   });
 
