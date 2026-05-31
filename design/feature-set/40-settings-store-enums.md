@@ -19,7 +19,7 @@
 
 - **Persisted settings store** (`useSettingsStore`, Zustand + `persist` middleware) keyed in localStorage under `"intake-tracker-settings"`, JSON storage, schema `version: 16` (`SETTINGS_PERSIST_VERSION = 16`).
 - **Forward migration** (`migrateSettings`) upgrades any older persisted blob to v16 (seeds new fields, deletes removed ones).
-- **Numeric sanitization** — every numeric setter runs `sanitizeNumericInput(value, min, max, precision?)`: parses, rejects NaN/Infinity (returns `min`), clamps to `[min,max]`, rounds to integer (or to `precision` decimals when given).
+- **Numeric sanitization** — most numeric setters run `sanitizeNumericInput(value, min, max, precision?)`: parses, rejects NaN/Infinity (returns `min`), clamps to `[min,max]`, rounds to integer (or to `precision` decimals when given). Exception: `setReminderFollowUpCount` / `setReminderFollowUpInterval` are raw `set()` with **no** sanitize (constrained only by their Select UI). All non-numeric setters (toggles, enums, region, theme, quick-nav, storage mode, optional trackers, substance config, etc.) are also plain `set()`.
 - **Increment controls** for fast +/- entry on the dashboard: water (ml), salt (mg), weight (kg).
 - **Daily limits** that drive progress bars and over-limit coloring: water, salt (sodium), sugar, potassium.
 - **Extended buffers** — a second-tone progress segment from `limit` up to `limit + buffer` before the bar turns red; `0` disables the second stage. Applies to water, salt, sugar (not potassium).
@@ -37,7 +37,7 @@
 - **Storage mode** — local-only vs cloud-sync (mirrors Dexie to Neon Postgres).
 - **Shake to report** — shake gesture opens bug/feature dialog; tunable jolt threshold + jolts required.
 - **Substance config** — caffeine/alcohol enable + named types with default mg/drinks/volume (defaults only; no live UI setter consumer found).
-- **AI auth secret** — obfuscated server-AI shared secret (legacy field; current AI keys UI uses server-stored provider keys instead).
+- **AI auth secret** — obfuscated server-AI shared secret. **Fully dead**: neither `aiAuthSecret` nor `getDeobfuscatedAuthSecret` has any caller in the repo; current AI keys UI uses server-stored provider keys instead.
 - **One-time flags** — `analyticsIntroSeen` (analytics intro dialog).
 - **Reset to defaults** — restores the entire store to `defaultSettings`.
 - **Data management** (adjacent, not in store) — export/import/clear all Dexie data; import is merge-only with conflict review.
@@ -75,9 +75,9 @@
 - **Numeric input**: default (current value), editing (uncommitted string), validation-revert (out-of-range blur snaps to default), disabled +/- at min/max bounds.
 - **Optional-tracker dependent sections**: Sugar/Potassium settings sections only render when their tracker is enabled.
 - **Quick Nav**: footer-off state hides item list + order Select; per-item disabled = dimmed; drag = `cursor-grab`/`active:cursor-grabbing`.
-- **Dose reminders**: hidden entirely when signed out (`useAuthGate`); switch disabled + helper "Notifications not supported in this browser" when unsupported; helper "Sign in to enable push reminders across devices" when signed out & off; follow-up interval row hidden when count = 0.
-- **AI keys section**: `!ready` → renders null; unauthenticated → "Sign in to manage AI keys" card; per-provider: loading ("Loading…"), configured ("Using your key ending in <last4>"), shared ("Granted by <email>"), not-configured ("Not configured…"); editing form vs view (Add/Replace + Remove buttons); usage loading/empty/populated.
-- **Storage section**: badge "Cloud Sync" (green) vs "Local only" (secondary); cloud states: full-copy (`CheckCircle2` "Full copy of your data on this device"), downloading (spinner), offline-waiting (`CloudOff`); "Last synced <datetime>"; local+signed-out → sign-in CTA; local+authenticated → "Switch to Cloud Sync" or "Resume Migration"; estimated usage / "Storage info unavailable"; record count.
+- **Dose reminders**: hidden entirely when signed out (`useAuthGate`); switch disabled + helper "Notifications not supported in this browser" when unsupported; helper "Sign in to enable push reminders across devices" when signed out & off; default helper "Get push notifications when medications are due" when supported and (signed-in or already enabled); follow-up interval row hidden when count = 0.
+- **AI keys section**: `!ready` → renders null; unauthenticated → "Sign in to manage AI keys" card; per-provider: loading ("Loading…"), configured ("Using your key ending in <last4>"), shared ("Granted by <email>"), not-configured ("Not configured…"); editing form vs view (Add/Replace + Remove buttons); usage summary: loading ("Loading usage…"), empty ("No AI usage in the last N days."), populated.
+- **Storage section**: badge "Cloud Sync" (green) vs "Local only" (secondary); cloud states: full-copy (`CheckCircle2` "Full copy of your data on this device"), downloading (spinner + "Downloading your full data to this device…"), offline-waiting (`CloudOff` + "Waiting to download your data (offline)"); "Last synced <datetime>"; local+signed-out → sign-in CTA; local+authenticated → "Switch to Cloud Sync" or "Resume Migration"; estimated usage / "Storage info unavailable"; record count.
 - **Data export**: idle / "Exporting…"; incomplete-cloud warning panel (amber) with Cancel / Export Anyway.
 - **Data import**: idle / "Importing…"; merge-confirm panel (amber) Cancel / Continue Import; result line "X new, Y skipped, Z conflicts" with "Review N conflicts" button when conflicts exist.
 - **Clear data**: default button → two-button confirm (Cancel / Confirm Delete, destructive).
@@ -104,9 +104,9 @@ Every persisted field in `Settings` (defaults from `defaultSettings`, ranges fro
 | `sugarExtendedBuffer` | number (g) | `10` | 0–500 | 5 | second-tone zone above sugar limit |
 | `optionalTrackers.sugar` | boolean | `true` | true/false | — | show/persist sugar tracker |
 | `optionalTrackers.potassium` | boolean | `false` | true/false | — | show/persist potassium tracker |
-| `aiAuthSecret` | string (obfuscated `obf:`) | `""` | free text | — | legacy server-AI shared secret |
+| `aiAuthSecret` | string (obfuscated `obf:`) | `""` | free text | — | dead server-AI shared secret — `aiAuthSecret`/`getDeobfuscatedAuthSecret` have zero callers |
 | `theme` | `"light"\|"dark"\|"system"` | `"system"` | 3 options | — | color theme (UI uses next-themes) |
-| `dataRetentionDays` | number (days) | `90` | 0–365 (0 = keep forever) | — | data retention window |
+| `dataRetentionDays` | number (days) | `90` | 0–365 (0 = keep forever) | — | dead/unwired — stored & clamped but no consumer; no pruning routine reads it |
 | `dayStartHour` | number (0–23) | `2` | 0–23 | — | hour "today" begins for budgets |
 | `showQuickNav` | boolean | `true` | true/false | — | show footer quick-nav |
 | `quickNavOrder` | `"ltr"\|"rtl"` | `"rtl"` | 2 options | — | footer icon direction |
@@ -133,20 +133,21 @@ Every persisted field in `Settings` (defaults from `defaultSettings`, ranges fro
 | `secondaryRegion` | string | `""` | ISO-3166 + "None" | — | fallback region |
 | `timeFormat` | `"12h"\|"24h"` | `"24h"` | 2 options | — | clock display format |
 | `doseRemindersEnabled` | boolean | `false` | true/false | — | push dose reminders |
-| `reminderFollowUpCount` | number | `2` | 0,1,2,3 (Select) | — | extra reminders if unconfirmed |
-| `reminderFollowUpInterval` | number (min) | `10` | 5,10,15,20,30 (Select) | — | minutes between follow-ups |
+| `reminderFollowUpCount` | number | `2` | 0,1,2,3 (Select-constrained only; setter is raw `set()`, **not** sanitized) | — | extra reminders if unconfirmed |
+| `reminderFollowUpInterval` | number (min) | `10` | 5,10,15,20,30 (Select-constrained only; setter is raw `set()`, **not** sanitized) | — | minutes between follow-ups |
 | `substanceConfig` | `SubstanceConfig` | see below | enable + typed list | — | caffeine/alcohol tracking config |
 
 **`QuickNavItem`** (`{ id: CardThemeKey; enabled: boolean }`), `DEFAULT_QUICK_NAV_ITEMS` (order = top-to-bottom on dashboard):
 `water` (label override "Liquids"), `eating` (label override "Food & Salt"), `bp` ("Blood Pressure"), `weight` ("Weight"), `urination` ("Urination"), `defecation` ("Defecation") — all `enabled: true`.
 
 **`CardThemeKey`** (full set, drives quick-nav identities & icons): `water` (Water/Droplets), `salt` (Sodium/Sparkles), `sugar` (Sugar/Candy), `potassium` (Potassium/Banana), `weight` (Weight/Scale), `bp` (Blood Pressure/Heart), `eating` (Eating/Utensils), `urination` (Urination/Droplet), `defecation` (Defecation/CircleDot), `caffeine` (Caffeine/Coffee), `alcohol` (Alcohol/Wine).
+Each `CardTheme` also carries a `progressExtended` second-tone gradient token — the actual class the extended-buffer feature renders for the buffer zone above the limit. Only `water`, `salt`, and `sugar` define it (the three trackers with extended buffers); `potassium`/`weight`/`bp`/`eating`/`urination`/`defecation`/`caffeine`/`alcohol` leave it as an empty string.
 
 **`OPTIONAL_TRACKERS`** registry (`src/lib/optional-trackers.ts`):
 - `sugar` — label "Sugar", unit "g", default ON, icon Candy (pink). Desc: "Log total sugars per food entry…"
 - `potassium` — label "Potassium", unit "mg", default OFF, icon Banana (purple). Desc: "Estimate potassium per food entry. Values are rough…"
 
-**`LiquidPreset`** shape: `{ id, name, tab: "coffee"|"alcohol"|"beverage", defaultVolumeMl, waterContentPercent (0–100, default 100), caffeinePer100ml?, alcoholPer100ml? (ABV %), saltPer100ml?, isDefault, source: "manual"|"ai", aiConfidence? }`.
+**`LiquidPreset`** shape: `{ id, name, tab: "coffee"|"alcohol"|"beverage", defaultVolumeMl, waterContentPercent (0–100, default 100), caffeinePer100ml?, alcoholPer100ml? (stored as ABV %), saltPer100ml?, isDefault, source: "manual"|"ai", aiConfidence? }`. Edit form labels the alcohol input "% ABV", but the substance summary line renders it as "Nstd alc/100ml" (literal "std" — a wording quirk that mislabels the stored ABV value).
 
 **`DEFAULT_LIQUID_PRESETS`** (8): Espresso (coffee, 210 mg/100ml, 98% water, 30ml), Double Espresso (210, 98%, 60ml), Moka (130, 98%, 50ml), Coffee (38, 99%, 250ml), Tea (19, 99%, 250ml), Beer (alcohol, 5% ABV, 93% water, 330ml), Wine (12% ABV, 87%, 150ml), Spirit (40% ABV, 60%, 45ml).
 
@@ -175,7 +176,7 @@ Every persisted field in `Settings` (defaults from `defaultSettings`, ranges fro
 ## Data model touched
 
 - **Reads/writes:** `localStorage["intake-tracker-settings"]` via Zustand `persist` (JSON, versioned). No Dexie table for settings themselves.
-- **Indirectly governs Dexie/Neon data** (`src/lib/db.ts`, `src/db/schema.ts`): optional-tracker toggles gate whether `intakeRecords` of `type: "sugar"/"potassium"` get persisted; `storageMode` toggles the sync engine mirroring all Dexie tables to Neon Postgres; `dataRetentionDays` governs pruning; default amounts seed `urinationRecords`/`defecationRecords`; liquid/substance presets feed liquid & substance entry forms.
+- **Indirectly governs Dexie/Neon data** (`src/lib/db.ts`, `src/db/schema.ts`): optional-tracker toggles gate whether `intakeRecords` of `type: "sugar"/"potassium"` get persisted; `storageMode` toggles the sync engine mirroring all Dexie tables to Neon Postgres; default amounts seed `urinationRecords`/`defecationRecords`; liquid/substance presets feed liquid & substance entry forms. (`dataRetentionDays` is stored and clamped but **dead** — it has zero consumers and governs nothing; see below.)
 - **Data management** (`data-management-section.tsx`) reads/writes all Dexie tables on export/import/clear via `use-backup-queries` (`ImportResult` covers intake, weight, bp, eating, urination, defecation, substance, prescriptions, phases, schedules, inventoryItems, inventoryTransactions, doseLogs, titrationPlans, dailyNotes, auditLogs, userProfile, insightReports).
 - **AI keys / dose reminders / cloud sync** touch server-side Neon Postgres (provider keys, push subscriptions, mirrored records), not this localStorage store.
 
@@ -187,7 +188,7 @@ Every persisted field in `Settings` (defaults from `defaultSettings`, ranges fro
 - **`validateAndSave`** (UI blur): if parsed value is NaN or outside `[min,max]`, **reverts to the default**, not the clamped value; otherwise saves and reflects the parsed value.
 - **`incrementSetting`/`decrementSetting`**: step then clamp to max/min respectively; the decrement call passes `min` as the third arg (note water/salt limit decrement floors at 100, increments cap at 10000, etc.).
 - **Extended buffer = 0** disables the second progress stage (bar goes limit → red directly).
-- **`aiAuthSecret`** is stored obfuscated: setter wraps with `obfuscateApiKey` (XOR with `intake-tracker-v1`, base64, `obf:` prefix); `getDeobfuscatedAuthSecret` reverses it. This is obfuscation, **not encryption**.
+- **`aiAuthSecret`** is stored obfuscated: setter wraps with `obfuscateApiKey` (XOR with `intake-tracker-v1`, base64, `obf:` prefix); `getDeobfuscatedAuthSecret` reverses it. This is obfuscation, **not encryption**. Note it is **fully dead** — neither the field nor `getDeobfuscatedAuthSecret` is read anywhere in the repo.
 - **`dayStartHour`** (0–23) reclassifies records: entries logged after this hour count toward "today"; useful past midnight. `formatHour` special-cases 0 → "12:00 AM (midnight)", 12 → "12:00 PM (noon)".
 - **Optional trackers**: disabling not only hides UI but **stops persisting new entries of that type** (even AI-returned values); existing records preserved.
 - **Theme dual-source**: store has `theme` but `AppearanceSection` reads/writes `next-themes`; the store field can drift from the active theme.
@@ -196,7 +197,7 @@ Every persisted field in `Settings` (defaults from `defaultSettings`, ranges fro
 - **Storage mode** is not a free toggle — switching to cloud-sync runs the migration wizard and requires sign-in; `local` is the safe default. Export in cloud-sync mode before initial sync completes warns of an incomplete file (`exportMayBeIncomplete = storageMode === "cloud-sync" && !initialSyncComplete`).
 - **Import is merge-only** (`mode: "merge"`): adds new records, skips duplicates, surfaces conflicts for manual review.
 - **Shake-to-report** enabling requests device-motion permission (`requestMotionPermission`); denial shows a destructive toast and leaves it off.
-- **Persist migration** (`migrateSettings`) is forward-only and cumulative; key steps: v0 deletes `perplexityApiKey`/`aiAuthSecret`; <2 seeds liquid presets; <3 migrates old preset `type`/`substancePer100ml` to `tab`/`caffeinePer100ml`/`alcoholPer100ml` + `waterContentPercent: 100`, deletes `coffeeDefaultType`/`utilityOrder`; <5 seeds quick-nav items; <7 deletes `experimentalFeatures`; <8 seeds `storageMode: "local"`; <9 seeds swipe thresholds (28 / 500); <10 deletes `dismissedInsights`, seeds `shakeToReportEnabled: true`; <11 seeds shake (15 / 3); <12 sets `shakeThreshold: 8`; <13 seeds `sugarLimit: 30`; <14 seeds `potassiumLimit: 3500`; <15 seeds `optionalTrackers {sugar:true, potassium:false}`; <16 seeds extended buffers (500/500/10). (Note: current `defaultSettings` shake values are 10/5, diverging from the migration-seeded historical values.)
+- **Persist migration** (`migrateSettings`) is forward-only and cumulative; key steps: `version === 0` (strict equality — fires only for exactly-v0 blobs) deletes `perplexityApiKey`/`aiAuthSecret`; <2 seeds liquid presets; <3 migrates old preset `type`/`substancePer100ml` to `tab`/`caffeinePer100ml`/`alcoholPer100ml` + `waterContentPercent: 100`, deletes `coffeeDefaultType`/`utilityOrder`; <5 seeds quick-nav items; <7 deletes `experimentalFeatures`; <8 seeds `storageMode: "local"`; <9 seeds swipe thresholds (28 / 500); <10 deletes `dismissedInsights`, seeds `shakeToReportEnabled: true`; <11 seeds shake (15 / 3); <12 sets `shakeThreshold: 8`; <13 seeds `sugarLimit: 30`; <14 seeds `potassiumLimit: 3500`; <15 seeds `optionalTrackers {sugar:true, potassium:false}`; <16 seeds extended buffers (500/500/10). (Note: current `defaultSettings` shake values are 10/5, diverging from the migration-seeded historical values.)
 - **`resetToDefaults()`** replaces the whole state with `defaultSettings` (also drops any user liquid presets back to the 8 defaults).
 
 ---

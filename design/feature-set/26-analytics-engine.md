@@ -95,7 +95,7 @@ The engine is a service layer; user-facing actions flow through the analytics UI
 - **Adjust correlation lag (lagDays)** → re-runs `correlate`/`saltVsWeight`/etc. with the new lag; pairing and coefficient recompute.
 - **Filter adherence by prescription** → passes `prescriptionId` to `useAdherenceRate`; recomputes against that prescription's slots only.
 - **Tap "Generate Insights" (fast)** → `useGenerateInsights` builds the snapshot, throws `NotEnoughDataError` if empty (no network call), POSTs, validates, caches the report, returns the narrative.
-- **Tap "Deep Analysis"** → `useDeepInsightJob.submit()` builds the snapshot, POSTs to the deep endpoint, stores `jobId` in localStorage, begins 30s polling. Card shows submitting → pending → completed/failed.
+- **Tap "Deep Analysis"** → `useDeepInsightJob.submit()` builds the snapshot, POSTs to the deep endpoint, stores `jobId` in localStorage, begins 30s polling. Card shows submitting → pending → completed/failed. Any pre-submit throw (empty snapshot / `NotEnoughDataError`, Dexie read, fetch error, non-OK response) resets the state to `idle` (not `failed`) and re-throws the error, leaving the card re-clickable — so on the deep path `NotEnoughDataError` surfaces as idle + thrown error, distinct from the fast path.
 - **Opt in to share conditions / medications / previous summary** → toggles whether `profile.conditions`, `profile.medications`, and `priorAssessments` are attached to the snapshot.
 - **Close/reload the tab during a deep job** → polling resumes on mount from the localStorage `jobId`; the server-persisted report is pulled into the local cache via `schedulePull()` once complete.
 - **Dismiss a completed/failed deep banner** → `useDeepInsightJob.reset()` clears state and the stored job id.
@@ -117,8 +117,8 @@ The engine is a service layer; user-facing actions flow through the analytics UI
 - **Insights fast: errors** — `429` rate limit ("Rate limit exceeded"); `502` truncated (`code: RESPONSE_TRUNCATED`, "AI response was cut off…"); `502` "AI response format invalid"; `502` "Failed to generate insights".
 - **Deep job: submitting** — `{ status: "submitting" }` (button locked).
 - **Deep job: pending** — `{ status: "pending", jobId, startedAt }`; client polls every 30s; survives reload via localStorage.
-- **Deep job: completed** — `{ status: "completed", result: { narrative, observations, sources?, generatedAt } }`; triggers `schedulePull()`.
-- **Deep job: failed** — `{ status: "failed", error }` (batch errored, malformed/truncated output, validation failure, no results, job-not-found 404).
+- **Deep job: completed** — `{ status: "completed", result: { narrative, observations, generatedAt } }`; triggers `schedulePull()`. The poll endpoint also returns `sources` on the completed response, but the client hook reads only `narrative`/`observations`/`generatedAt` into the completed state and drops the poll-returned `sources`, relying on the sync pull to fetch the full report (incl. sources) from the server.
+- **Deep job: failed** — `{ status: "failed", error }` (batch errored, malformed/truncated output, validation failure, no results, job-not-found 404). The poll endpoint's `respondCompleted` adds two further terminal `failed` messages: "Job marked completed but has no result reference." (job flagged completed without a `resultReportId`) and "Cached result for this job is no longer available." (the referenced report can't be fetched).
 - **Deep job: expired** — `{ status: "expired", error: "Batch exceeded the 24-hour SLA without completing." }`.
 - **Deep job: conflict** — second submit while one pending → HTTP 409 `code: PENDING_JOB_EXISTS`.
 - **Offline / sync** — all local queries run fully offline against IndexedDB. AI insight endpoints require network; reports persist via `writeWithSync` and back up/sync like any record. Completed deep reports propagate to the device on the next/forced sync pull.
@@ -173,7 +173,7 @@ Query categories: `fluid` | `medication` | `vitals` | `correlation` | `custom`.
 - Rolling window: `INSIGHTS_WINDOW_DAYS = 30`.
 - Tool: `analytics_insight` (`INSIGHT_TOOL`). Forced (`tool_choice: { type: "tool" }`) on fast path; `auto` on deep path so web_search can run first.
 - Fast path: `CLAUDE_MODELS.quality`, `max_tokens: 2048`, `temperature: 0.3`, rate limit 10.
-- Deep path: `CLAUDE_MODELS.premium` (Opus), `DEEP_MAX_TOKENS = 4096`, `temperature: 0.3`, `WEB_SEARCH_TOOL` with `DEEP_WEB_SEARCH_MAX_USES = 12`, rate limit 10, mandatory ≥2 web searches.
+- Deep path: `CLAUDE_MODELS.premium` (Opus), `DEEP_MAX_TOKENS = 4096`, `temperature: 0.3`, `WEB_SEARCH_TOOL` (whose base default is `max_uses: 5`) spread-overridden at the deep route to `DEEP_WEB_SEARCH_MAX_USES = 12`, rate limit 10, mandatory ≥2 web searches.
 - Deep polling: `DEEP_POLL_INTERVAL_MS = 30_000`; localStorage key `insight-deep-job-pending`.
 - Batch SLA: `BATCH_SLA_MS = 24h`.
 - Response caps: `summary` 1–4000 chars; `observations` array max 16, each 1–2000 chars; `sources` max 30 URLs.
@@ -185,7 +185,7 @@ Query categories: `fluid` | `medication` | `vitals` | `correlation` | `custom`.
 `pending` | `completed` | `failed` | `expired`. Constants: `SERVER_DEVICE_ID = "server-deep-batch"`; deep report `mode = "deep"`; custom_id pattern `insight-<jobId>`.
 
 ### Day names (`DAY_NAMES`, for medication frequency)
-`Sun, Mon, Tue, Wed, Thu, Fri, Sat` (index 0–6). Frequency words: 1→"once", 2→"twice", N→"Nx"; "daily" when ≥7 distinct days.
+`Sun, Mon, Tue, Wed, Thu, Fri, Sat` (index 0–6). Frequency words come from `count = schedules.length` (number of enabled, non-deleted schedules): 1→"once", 2→"twice", N→"Nx". The `daily` flag uses `dayUnion.size >= 7` (union of `daysOfWeek` across those schedules); otherwise the explicit day list is rendered from that same union.
 
 ---
 
@@ -198,7 +198,7 @@ Query categories: `fluid` | `medication` | `vitals` | `correlation` | `custom`.
 - `urinationRecords` (`amountEstimate`, `timestamp`) via `urination-service`
 - `eatingRecords` (`timestamp`) via `eating-service`
 - `defecationRecords` (`timestamp`) via `defecation-service`
-- `substanceRecords` (`type`, `amountMg?`, `amountStandardDrinks?`, `timestamp`) — direct Dexie compound index `[type+timestamp]` (no substance-service yet; wrapped in try/catch for older schema versions)
+- `substanceRecords` (`type`, `amountMg?`, `amountStandardDrinks?`, `timestamp`) — read via an inline `db.substanceRecords` compound-index query (`[type+timestamp]`, wrapped in try/catch for older schema versions). A `substance-service.ts` with `getSubstanceRecordsByDateRange` does exist, but `analytics-service` keeps its own inline query and still carries a stale `// no substance-service exists yet` comment.
 - Dose schedule via `getDoseScheduleForDateRange` (status `taken` etc.) from `doseLogs`/`phaseSchedules`
 - `prescriptions` / `medicationPhases` / `phaseSchedules` (`getActivePrescriptions`, `getActivePhaseForPrescription`; schedule `dosage`, `daysOfWeek`, `enabled`, `deletedAt`, `unit`) for the medication summary
 
@@ -230,7 +230,8 @@ Query categories: `fluid` | `medication` | `vitals` | `correlation` | `custom`.
 - **Deep-job concurrency:** DB slot reserved *before* paying for the batch (prevents leaked paid batches on concurrent submit). Batch-create failure → delete the reserved job (releases lock for retry). Attach-failure → cancel the orphan batch + delete the job. Completion guarded by compare-and-set on `status='pending'`; CAS loser soft-deletes its orphan report and defers to the winner's persisted outcome.
 - **Polling is stateless:** the GET endpoint is the only mutator of job state; no cron/worker. Expiry computed lazily (`now - createdAt > 24h`). The window & personalisation are re-read from the saved `requestPayload`, never trusted from the poll request.
 - **Cache resilience:** a storage failure when caching a fast insight is swallowed (the user "paid tokens" for it); a malformed 200 must throw loudly, never cache a blank insight.
-- **Medication summary caps:** at most 40 meds; dose string dedupes & sorts dosages; frequency derived from union of `daysOfWeek` across enabled, non-deleted schedules.
+- **Usage telemetry:** both AI routes (fast endpoint and deep poll/finalisation endpoint) call `recordUsage` (provider/model/route/status/duration + token counts) wrapped in try/catch, so a telemetry write failure is logged but never turns a successful AI call into a 502.
+- **Medication summary caps:** at most 40 meds; dose string dedupes & sorts dosages; the once/twice/Nx frequency word comes from `schedules.length` (count of enabled, non-deleted schedules), while the `daily` flag and explicit day list come from the union of `daysOfWeek` across those schedules.
 
 ---
 

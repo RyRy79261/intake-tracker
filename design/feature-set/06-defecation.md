@@ -25,8 +25,8 @@
 - **Header "latest timestamp" readout**: when at least one record exists, the card header right-side shows the formatted timestamp of the most recent record (e.g. "Jan 15, 2:30 PM"). Shows a pulsing skeleton while loading; nothing if there are no records.
 - **Recent entries list** (most recent 5 fetched, top 3 displayed) showing each record's timestamp, capitalized amount estimate (if present), and truncated note (if present).
 - **Inline edit** of any recent entry: tapping a row swaps it for an inline form (amount Select + datetime + note + Save/Cancel) without leaving the card.
-- **Delete with undo**: a trash icon per row soft-deletes the record and raises a 5-second "Record deleted" toast with an "Undo" action that restores it.
-- **Toast feedback** on every mutation: success toast on quick-log ("Defecation (small) recorded") and details submit ("Defecation recorded"); error toast on failure ("Failed to record"); "Entry updated" / error on edit; "Entry deleted" / error on delete.
+- **Delete with undo**: a trash icon per row soft-deletes the record and fires **two** toasts: a success toast (`title: "Entry deleted"`, `description: "Defecation record removed"`) and a separate 5-second undo toast (`title: "Record deleted"`) with an "Undo" action that restores it.
+- **Toast feedback** on every mutation: success toast on quick-log (`title: "Logged"`, `description: "Defecation (small) recorded"`) and details submit; error toast on failure (`description: "Failed to record"`); on edit, `title: "Entry updated"` (success, no description) / failure `title: "Error"`, `description: "Could not update the entry"`; on delete, the success/undo toast pair above with failure `title: "Error"`, `description: "Could not delete the entry"`.
 - **Offline-first**: all reads/writes go to IndexedDB (Dexie) and are queued for background sync to Neon Postgres; the card works fully offline.
 - **Live updates**: list re-renders automatically via `useLiveQuery` when the underlying table changes (e.g. an edit elsewhere, or a sync pull).
 - **Standalone edit dialog** (`EditDefecationDialog`) reused by the History drawer and the Analytics records tab for editing defecation records outside the dashboard card.
@@ -41,9 +41,9 @@
 - **Type a note in the details panel** → free-text textarea (placeholder "e.g. consistency, urgency").
 - **Change the "When" datetime** → `datetime-local` input, `max` clamped to now.
 - **Tap "Record with details"** → parses the datetime, builds the record (omits amount when `__none__`/empty, omits note when blank), creates it; button shows a spinner while pending; on success the panel collapses and all fields reset (amount → settings default, note → empty, time → now).
-- **Tap a recent-entry row** → opens the inline edit form for that record (also keyboard-activatable: Enter/Space when the row is focused).
+- **Tap a recent-entry row** → opens the inline edit form for that record (also keyboard-activatable: Enter/Space when the row itself is focused — the handler only fires when `e.target === e.currentTarget`, so key events bubbling up from inner focusables are ignored). The row container gets `role="button"` / `tabIndex={0}` only when an edit handler (`onEdit`) is provided.
 - **In the inline edit form**: change amount Select, datetime, and note; **Save** submits the update (invalid datetime → "Invalid date/time" toast, abort); **Cancel** discards and closes the form.
-- **Tap the trash icon on a row** → soft-deletes (row shows spinner while deleting; click is `stopPropagation`'d so it doesn't open edit); raises an undo toast.
+- **Tap the trash icon on a row** → soft-deletes (row shows spinner while deleting; click is `stopPropagation`'d so it doesn't open edit); raises a success toast ("Entry deleted" / "Defecation record removed") and a separate undo toast.
 - **Tap "Undo" in the delete toast** (within 5s) → restores the soft-deleted record.
 - **In the standalone `EditDefecationDialog`** (History/Analytics): edit Time, Amount (with "No estimate"), Note; Save Changes / Cancel; closes on outside-click or Cancel.
 
@@ -58,7 +58,7 @@
 - **Details panel collapsed/expanded**: collapsed by default; expanded shows muted-background bordered panel with amount/note/time fields and submit.
 - **Details submit pending** (`addMutation.isPending`): "Record with details" button shows a spinner and is disabled.
 - **Row default vs editing**: a row in edit mode is replaced by the inline form on a `bg-muted/30` rounded background; non-editing rows are clickable with hover/active tint.
-- **Row deleting** (`deletingId === record.id`): trash icon becomes a spinner and the button is disabled.
+- **Row deleting** (`deletingId === record.id`): trash icon becomes a spinner and the button is disabled. The delete button carries `aria-label="Delete entry"`.
 - **Success**: success-variant toast (green) on quick-log / details submit; default toast on edit/delete.
 - **Error / validation**: destructive-variant toast on mutation failure or invalid edit datetime.
 - **Offline / syncing**: no distinct in-card UI; writes succeed locally and queue for sync transparently.
@@ -94,7 +94,8 @@
   - `note?: string` (stored only when non-empty)
   - `createdAt: number`, `updatedAt: number`, `deletedAt: number | null` (soft-delete), `deviceId: string`, `timezone: string` — sync/audit fields populated by `syncFields()`.
 - **Service ops** (`defecation-service.ts`): `addDefecationRecord(timestamp?, amountEstimate?, note?)`, `getDefecationRecords(limit?)`, `getDefecationRecordsByDateRange(start, end)`, `updateDefecationRecord(id, {timestamp?, amountEstimate?, note?})`, `deleteDefecationRecord(id)` (soft), `undoDeleteDefecationRecord(id)`. All writes go through `writeWithSync` + `schedulePush()`.
-- **Hooks** (`use-defecation-queries.ts`): `useDefecationRecords(limit=10)` and `useDefecationRecordsByDateRange` (live queries via `useLiveQuery`); `useAddDefecation`, `useUpdateDefecation`, `useDeleteDefecation` (mutations).
+- **Hooks** (`use-defecation-queries.ts`): `useDefecationRecords(limit=10)` and `useDefecationRecordsByDateRange` (live queries via `useLiveQuery`); `useAddDefecation`, `useUpdateDefecation`, `useDeleteDefecation` (mutations). `useDefecationRecordsByDateRange` short-circuits to `Promise.resolve([])` when `startTime >= endTime` (guards inverted ranges).
+- **Read internals** (`record-crud.ts`): `getActiveRecords` reads the **entire** table via `orderBy("timestamp").reverse().toArray()`, filters `deletedAt === null` in JS, then slices to `limit` — i.e. the limit is applied post-filter in memory, not via an indexed query. `getRecordsBetween` (backing the date-range read) uses a **half-open** `[start, end)` window (endTime exclusive, via Dexie `.between`) and filters soft-deleted rows.
 - **Settings read**: `settings.defecationDefaultAmount` (Zustand, persisted to localStorage).
 
 ---
@@ -102,7 +103,8 @@
 ## Validation, edge cases & business rules
 
 - **Amount and note are both optional**; a record can be created with neither (a bare quick-log records only amount; a "No estimate" + empty-note details submit records only the timestamp).
-- **Trimming**: `addDefecationRecord` trims `amountEstimate` and `note`; empty-after-trim values are omitted entirely (the field is not written rather than stored as `""`).
+- **Trimming**: `addDefecationRecord` trims `amountEstimate` and `note`; empty-after-trim values are omitted entirely (the field is not written rather than stored as `""`). In practice the quick-log path passes hard-coded literals ("small"/"medium"/"large") with no whitespace, so trimming only matters for the (already-constrained) details/edit paths.
+- **Missing-record update**: `updateDefecationRecord` returns `err("Record not found")` for an id that isn't in the table (it does not silently succeed).
 - **`__none__` handling**: both the details panel and edit forms convert `__none__` to "no amount" (omitted/undefined) before writing.
 - **Timestamp parsing**: `dateTimeLocalToTimestamp` throws on an unparseable datetime (never returns `NaN`); the edit flow catches this and shows "Invalid date/time", aborting the save. The details panel does not guard against this (input is constrained by `datetime-local`).
 - **No future-dating in details panel**: "When" input `max` is now; the inline edit and standalone dialog datetime inputs are **not** max-clamped.
@@ -110,7 +112,7 @@
 - **Soft delete**: deletes set `deletedAt` rather than removing the row; `getActiveRecords` filters out soft-deleted rows; undo clears `deletedAt`. Undo window is the 5s toast lifetime (the record stays soft-deleted in DB regardless).
 - **Default reset semantics**: after a details submit, amount resets to `settings.defecationDefaultAmount || ""` (falls back to empty string if the setting were unset).
 - **Capitalization**: amount estimate is displayed `capitalize` in the recent list (stored lowercase).
-- **Sync/timezone**: `syncFields()` stamps `deviceId` and `timezone`; records carry the device timezone for cross-device/day-start interpretation downstream.
+- **Sync/timezone**: `syncFields()` stamps the full set `createdAt`, `updatedAt`, `deletedAt: null`, `deviceId`, and `timezone`; records carry the device timezone for cross-device/day-start interpretation downstream. `getDeviceId()` returns the literal `"server"` when `window` is undefined (SSR), otherwise a persisted `crypto.randomUUID()` from localStorage.
 - **No daily limit / over-limit concept**: defecation has no target or threshold (theme defines `progressOverLimit` but the card renders no progress bar). Unlike water/salt cards, there is nothing to be "over".
 
 ---
@@ -119,8 +121,8 @@
 
 - **`DefecationCard`** — the dashboard card itself (quick-log grid + details panel + recent list with inline edit).
 - **`CardShell`** — shared themed card chrome (gradient wrapper, icon+label header, `headerRight` slot for the latest-timestamp readout / skeleton).
-- **`RecentEntriesList`** — shared "Recent" section: renders up to 3 rows via `renderEntry`, swaps a row for `renderEditForm` when editing, delete button per row.
-- **`InlineEditFormShell`** — shared inline edit form (children slot for the amount Select, plus timestamp + note inputs and Save/Cancel).
+- **`RecentEntriesList`** — shared "Recent" section: renders up to 3 rows via `renderEntry`, swaps a row for `renderEditForm` when editing, delete button per row (`aria-label="Delete entry"`). Rows get `role="button"`/`tabIndex={0}` only when an `onEdit` handler is supplied, and the Enter/Space keyboard handler only fires when the row itself (not an inner focusable) is the event target.
+- **`InlineEditFormShell`** — shared inline edit form (children slot for the amount Select, plus timestamp + note inputs and Save/Cancel). The shell supports a `labeled` mode (renders visible `<Label>`s) and an `idPrefix` prop, but the defecation card uses the **unlabeled** default (placeholder + `aria-label` inputs).
 - **`EditDefecationDialog`** — standalone modal edit dialog (used by `history-drawer.tsx` and `analytics/records-tab.tsx`, **not** by the card, which uses inline editing). Thin wrapper over `EditEstimateEntryDialog`.
 - **`EditEstimateEntryDialog`** — shared "time + optional amount-estimate + note" modal (also used by urination); `allowNoEstimate` enables the `__none__` sentinel; accent `bg-stone-600 hover:bg-stone-700`, id prefix `edit-defecation`.
 - **`useEditRecord`** — generic open/populate/submit-with-toast hook backing the inline edit (extra field: `editAmountEstimate`).

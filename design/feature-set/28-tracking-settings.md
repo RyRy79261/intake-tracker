@@ -34,8 +34,9 @@ Each section is an **ExpandableSettingsSection** (collapsible, default-collapsed
 - Increment (mg), Daily Limit (mg, sodium intake), Extended Buffer (mg).
 
 **Optional Trackers (ToggleLeft icon, indigo)**
-- Per-tracker on/off Switch rows for opt-in nutritional metrics (Sugar, Potassium). Each row: metric icon, label, description, Switch.
-- Disabling hides the tracker from forms, voice input, progress bars, weekly grid, analytics KPIs/correlations, AI insight snapshot, reports, and history filters; previously-logged data is preserved (not deleted). New entries are NOT persisted while disabled, even if AI returns a value.
+- Per-tracker on/off Switch rows for opt-in nutritional metrics (Sugar, Potassium). Each row: metric icon, label, description, Switch. Each row carries `data-testid="optional-tracker-row-{key}"` and the Switch has `aria-label="{label} tracking enabled/disabled"` (accessibility/testing hooks).
+- The on-screen helper copy reads: "Disabled trackers are hidden from forms, voice input, progress bars, reports and the AI summary; previously-logged data is preserved." (The fuller gating reach documented in `optional-trackers.ts` JSDoc — also covering weekly grid, analytics KPIs/correlations, AI insight snapshot, and history filters — is implemented in code but not all spelled out in the visible component text.)
+- Disabling hides the tracker across all those surfaces; previously-logged data is preserved (not deleted). New entries are NOT persisted while disabled, even if AI returns a value.
 - Enabling Sugar/Potassium conditionally reveals their dedicated limit sections below (`{sugarEnabled && <SugarSettingsSection/>}`, `{potassiumEnabled && <PotassiumSettingsSection/>}`).
 
 **Sugar Settings (Candy icon, pink)** — only rendered when the Sugar optional tracker is enabled.
@@ -46,7 +47,7 @@ Each section is an **ExpandableSettingsSection** (collapsible, default-collapsed
 
 **Weight Settings (Scale icon, emerald)**
 - Increment (kg) numeric control (per +/- tap on weight entry).
-- "Weight Graph Overlays" group: four GraphToggle switches choosing which reference event lines appear *by default* on the weight chart (still toggleable live on the chart): Eating, Urination, Defecation, Drinking. Each is a full-width button with label + description + an animated pill switch; active state tints the row border/background per-metric.
+- "Weight Graph Overlays" group: four GraphToggle switches — Eating, Urination, Defecation, Drinking. Each is a full-width button with label + description + an animated pill switch; active state tints the row border/background per-metric. **Note (dormant / write-only):** the section's UI copy says these choose which reference lines appear "by default" on the weight chart, but the four `weightGraphShow*` booleans these toggles write are read by **no chart or any other component** — a repo-wide grep finds them only in this writer and the store definition/default/setter. There is no weight-chart consumer, so flipping these currently has no visible effect (orphaned settings).
 
 **Liquid Presets (Droplets icon, blue)**
 - Full CRUD list of beverage presets used by the Liquids card tabs (Coffee/Alcohol/Beverage).
@@ -64,20 +65,20 @@ Each section is an **ExpandableSettingsSection** (collapsible, default-collapsed
 - Tap **−** button: decrement by `step`, clamped to `min` (`decrementSetting`).
 - Tap **+** button: increment by `step`, clamped to `max` (`incrementSetting`).
 - Type into the centered numeric `<input type=number>`: free-text edit of a local string; not yet saved.
-- **Blur** the input: `validateAndSave` parses; if valid and in `[min,max]` it saves and normalizes the displayed string; otherwise it reverts to the current stored value.
+- **Blur** the input: `validateAndSave` parses via `parseFloat` (decimals accepted at the UI layer); if valid and in `[min,max]` it saves and normalizes the displayed string; otherwise it reverts to the current stored value. Any rounding to integers happens later, at the store, in `sanitizeNumericInput`.
 - A `useEffect` keeps the local input string in sync if the store value changes externally (e.g. Reset to Defaults).
 
 **Day Settings:** open Select, choose an hour → `setDayStartHour(parseInt)` saves immediately.
 
 **Optional Trackers:** toggle a Switch → `setOptionalTracker(key, enabled)` saves immediately; flipping Sugar/Potassium mounts/unmounts its limit section in the same accordion.
 
-**Weight graph overlays:** tap a GraphToggle (whole row is the button, `aria-pressed`) → flips the boolean default immediately.
+**Weight graph overlays:** tap a GraphToggle (whole row is the button, `aria-pressed`) → flips the boolean immediately. (These booleans are currently write-only — nothing reads them yet, so the tap has no downstream effect.)
 
 **Liquid Presets:**
 - Tap **"Add Preset"** → reveals empty `PresetEditForm`.
 - Tap pencil (edit) on a row → replaces that row with `PresetEditForm` pre-filled.
 - Tap trash (delete, only on non-default rows) → replaces that row with an inline confirm ("Delete {name}?" + "Keep Preset" / "Delete Preset").
-- In the edit/add form: enter Name (required), pick Category (Coffee/Alcohol/Beverage), set Volume (ml), Water %, Caffeine/100ml, % ABV, Na/100ml. **Save** is disabled until Name is non-empty; trimmed name required. **Cancel** closes the form without saving. Saving an add appends a new preset (UUID id); saving an edit merges updates; confirm-delete removes the preset.
+- In the edit/add form: enter Name (required), pick Category (Coffee/Alcohol/Beverage), set Volume (ml), Water %, Caffeine/100ml, % ABV, Na/100ml. **Save** is disabled until Name is non-empty; trimmed name required. **Cancel** closes the form without saving. Saving an add appends a new preset (UUID id) — `addLiquidPreset` returns that new `id` (string); saving an edit merges updates; confirm-delete removes the preset.
 
 **Bathroom Defaults:** open either Select, choose Small/Medium/Large → `setUrinationDefaultAmount` / `setDefecationDefaultAmount` saves immediately.
 
@@ -133,13 +134,13 @@ All ranges below are enforced both at the UI (`min`/`max`/`step` props + `valida
 - `sugar`: label "Sugar", unit "g", Candy icon, pink. Desc: "Log total sugars per food entry. Helpful if you're watching added or hidden sugars."
 - `potassium`: label "Potassium", unit "mg", Banana icon, purple. Desc: "Estimate potassium per food entry. Values are rough — many foods aren't labelled for potassium."
 
-**Weight-graph overlay defaults (booleans, all default true):** `weightGraphShowEating`, `weightGraphShowUrination`, `weightGraphShowDefecation`, `weightGraphShowDrinking`. Active-tint colors: Eating orange, Urination violet, Defecation stone, Drinking sky.
+**Weight-graph overlay defaults (booleans, all default true):** `weightGraphShowEating`, `weightGraphShowUrination`, `weightGraphShowDefecation`, `weightGraphShowDrinking`. **Currently orphaned/write-only — no component reads them.** Active-tint colors (per-metric hue family, with explicit dark-mode variants such as `dark:bg-orange-900/50 dark:border-orange-700`): Eating orange, Urination violet, Defecation stone, Drinking sky.
 
-**Bathroom defaults:** `urinationDefaultAmount` default **"small"**, `defecationDefaultAmount` default **"medium"**. Enum each: `"small" | "medium" | "large"` (labels Small/Medium/Large; see `URINATION_AMOUNT_OPTIONS` / `DEFECATION_AMOUNT_OPTIONS`).
+**Bathroom defaults:** `urinationDefaultAmount` default **"small"**, `defecationDefaultAmount` default **"medium"**. Enum each: `"small" | "medium" | "large"` (labels Small/Medium/Large). Note: this settings component **hardcodes** the three `<SelectItem>` options inline; it does not import the `URINATION_AMOUNT_OPTIONS` / `DEFECATION_AMOUNT_OPTIONS` constants (those exist with matching values but are consumed by the urination/defecation cards, not here).
 
 **Liquid preset category tabs (enum):** `"coffee" | "alcohol" | "beverage"` (labels Coffee / Alcohol / Beverage).
 
-**Liquid preset form fields & defaults (new preset):** name "" (required), tab "coffee", defaultVolumeMl 250, caffeinePer100ml 0, alcoholPer100ml 0 (`% ABV`, step 0.5), saltPer100ml 0, waterContentPercent 100 (input min 0 max 100). `isDefault` false, `source` "manual" for new entries. Substance fields are only persisted when > 0 (spread-conditional).
+**Liquid preset form fields & defaults (new preset):** name "" (required), tab "coffee", defaultVolumeMl 250, caffeinePer100ml 0, alcoholPer100ml 0 (`% ABV`, step 0.5), saltPer100ml 0, waterContentPercent 100 (input min 0 max 100). `isDefault` false, `source` "manual" for new entries. Substance fields are only persisted when > 0 (spread-conditional). The form **always sets `source: "manual"`** and never sets or exposes the `aiConfidence` field — AI-sourced presets (`source: "ai"`) originate elsewhere, not from this CRUD UI.
 
 **Default seeded liquid presets (`DEFAULT_LIQUID_PRESETS`, all `isDefault: true`, `source: "manual"`):**
 - Coffee tab: Espresso (210 caff/100ml, 98% water, 30ml), Double Espresso (210, 98%, 60ml), Moka (130, 98%, 50ml), Coffee (38, 99%, 250ml), Tea (19, 99%, 250ml).
@@ -173,7 +174,7 @@ All reads/writes go through the Zustand store `useSettingsStore` (`src/stores/se
 - **Day-start hour** rolls the budget day over at the chosen hour: records logged after it count toward the new "today" — central to all daily limits.
 - **Optional tracker gating:** disabling a tracker stops persistence of new values and hides all surfaces but never deletes history; enabling/disabling Sugar/Potassium add/remove their limit sections live.
 - **Liquid presets:** name is required (trimmed, Save disabled while empty); only non-`isDefault` presets are deletable (no trash icon on defaults); delete requires inline confirm; substance fields persist only when > 0; new ids via `crypto.randomUUID()`.
-- **Weight-graph defaults** only seed the chart's initial overlay state; live chart toggles are independent and not written back here.
+- **Weight-graph defaults** are dormant: the toggles persist `weightGraphShow*` booleans, but nothing reads them — there is no weight-chart component that consumes these overlay flags, so they currently have no effect on any chart.
 - **Persistence/migration:** `migrateSettings` forward-migrates older stored blobs (e.g. v<14 seeds potassiumLimit 3500, v<15 seeds optionalTrackers, v<16 seeds the three extended buffers, v<13 seeds sugarLimit 30) so an upgrading user gets sane defaults for newly-added fields. `resetToDefaults` reverts the entire store (including every tracking value) at once.
 
 ---

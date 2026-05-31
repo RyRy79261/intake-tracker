@@ -34,7 +34,7 @@ The six sections (in order):
 - Reads the device-local `_errorLogs` Dexie table live (`useLiveQuery`), newest-first, capped at 200 rows.
 - Header shows "Error Logs (N)" where N = count after filtering.
 - **Source filter** dropdown (see enums) — "All sources" or a single source.
-- **Export** button: serializes ALL error logs (not just the 200 shown, not filtered) to a pretty-printed JSON blob and triggers a file download named `error-logs-<ISO-datetime-to-seconds>.json`. Disabled when there are zero logs.
+- **Export** button: serializes ALL error logs (not just the 200 shown, not filtered) to a pretty-printed JSON blob and triggers a file download named `error-logs-<ISO-datetime-to-seconds>.json`. The JSON is an envelope object `{ exportedAt, appVersion, logs }` (not a bare array); `exportedAt` is an ISO timestamp and `appVersion` is `CLIENT_VERSION`. Disabled when there are zero logs.
 - **Clear** button → two-step confirm (Clear → Confirm/Cancel). Confirm wipes the entire `_errorLogs` table. Disabled when zero logs.
 - Each row shows: timestamp (locale string), the source (color-coded, monospace), and the message (monospace, wrapped). A chevron appears only when the row has expandable detail (stack / componentStack / route / userAgent present).
 - **Expand a row** to reveal: Route (mono), Stack (`<pre>` block), Component stack (`<pre>`, prefixed "Component stack:"), and User agent (UA: …). Multiple rows can be expanded independently (a `Set` of ids).
@@ -62,13 +62,13 @@ The six sections (in order):
 - On open (and via **Refresh** button) reads SW registration + cache + push state in parallel.
 - Displays SW state rows: Supported, Registered, Scope, Script URL, Controller, Active state, Waiting state, Installing state, Caches (comma-joined names or "none"). Conditional rows only render when their value exists.
 - SW maintenance actions (4 buttons):
-  - **Force update check** → `reg.update()`, toast "Update check requested"; disabled if not registered.
+  - **Force update check** → `reg.update()`, toast "Update check requested" on success; disabled if not registered. If no registration is found at click time, short-circuits with toast "No service worker registered"; on error shows a destructive "Update failed" toast (with the error message).
   - **Skip waiting** → posts `{ type: "SKIP_WAITING" }` to the waiting worker; toast confirms or "No waiting worker"; disabled if no waiting worker.
   - **Clear caches** → deletes all Cache Storage entries; toast "Caches cleared — N cache(s) deleted"; disabled if no caches.
-  - **Unregister** (red/destructive text) → unregisters all SW registrations; toast "N registration(s) removed"; disabled if not registered.
+  - **Unregister** (red/destructive text) → unregisters all SW registrations; toast is a title+description pair (title "Service workers unregistered", description "N registration(s) removed"); disabled if not registered.
 - **Push** sub-block (separated by a top border, `BellRing` icon): rows for Push supported, Permission, Subscribed, Endpoint (conditional).
 - **Send test notification** → dynamically imports `push-notification-service` and calls `sendTestNotification()`; toast success/failure; disabled unless permission === "granted".
-- All actions show a `busy` state (spinning `RefreshCw` on the Refresh button) and disable while busy.
+- Most actions show a `busy` state (spinning `RefreshCw` on the Refresh button) and disable while busy. **Exception:** Skip waiting does NOT set `busy` (no `setBusy(true)`), so it isn't gated by the global busy spinner — it is disabled only by `!sw.waitingState`.
 
 ### 4. Audit Log Viewer (`debug-panel.tsx` → `AuditLogViewer`)
 - Reads `auditLogs` table live, newest-first, capped at 100.
@@ -80,8 +80,8 @@ The six sections (in order):
 
 ### 5. Stock Management (`debug-panel.tsx` → `StockManagement`)
 - Two actions for medication inventory integrity:
-  - **Recalculate All Stock** → calls `recalculateAllStock()`; spinner while running. Result card shows "Recalculation Result: X items updated, Y drifted" and lists each drifted item as `brandName: oldStock → newStock` (amber colored "Drifted Items").
-  - **Compare Cached vs Derived** → for each active inventory item, compares the stored `currentStock` against the freshly `getCurrentStock()`-derived value. Renders a card listing `brandName  cached: A | derived: B`, flagging mismatches `(DRIFT)` in amber when `|cached − derived| > 0.001`.
+  - **Recalculate All Stock** → calls `recalculateAllStock()`; spinner while running. Result card shows "Recalculation Result: X items updated, Y drifted"; only when there is at least one drifted item does it render the (amber) "Drifted Items:" heading followed by each drifted item as `brandName: oldStock → newStock` (oldStock is `currentStock ?? 0`). When zero drift, the card shows only the summary line. Beyond persisting recomputed stock, `recalculateAllStock()` has side effects: it enqueues sync (`_syncQueue`), calls `schedulePush()`, and writes a `stock_recalculated` audit log (with `totalItems`, `driftedCount`, `driftedItems`).
+  - **Compare Cached vs Derived** → for each active inventory item, compares the stored `currentStock` (null-coalesced via `currentStock ?? 0`) against the freshly `getCurrentStock()`-derived value. Renders a card with a header `Stock Comparison (N active items)`, then lists each item as `brandName  cached: A | derived: B`, flagging mismatches `(DRIFT)` in amber when `|cached − derived| > 0.001`.
 - Reads only active inventory items (`isActive === 1`).
 
 ### 6. Raw Record Viewer (`debug-panel.tsx` → `RawRecordViewer`)
@@ -124,18 +124,18 @@ The six sections (in order):
 
 - **Collapsed section (default):** header button with `ChevronRight`; body hidden.
 - **Expanded section:** `ChevronDown`; body rendered. Only one at a time.
-- **Loading / async:** SW diagnostics show `busy` (spinning Refresh icon, action buttons disabled). Stock "Recalculate" shows a spinning `RefreshCw` icon while `isRecalculating`. "Compare" disabled while `isLoadingComparisons`.
+- **Loading / async:** SW diagnostics show `busy` (spinning Refresh icon, action buttons disabled) for Refresh, Force update check, Clear caches, and Unregister; Skip waiting is the one action that never sets `busy`. Stock "Recalculate" shows a spinning `RefreshCw` icon while `isRecalculating`. "Compare" disabled while `isLoadingComparisons`.
 - **Live-updating:** Error Logs, Audit Logs, Raw Records and active-inventory query are `useLiveQuery` — re-render automatically as the underlying Dexie data changes.
 - **Empty states:** Error Logs "No errors captured."; Audit Logs "No audit logs found."; Raw Records "No records in this table." (centered, muted, text-xs).
 - **Confirm states:** Clear / Clear All swap into an inline Confirm (destructive variant) + Cancel (ghost) pair.
 - **Disabled states:** Export/Clear disabled when zero error logs; Force update / Unregister disabled when no SW registered; Skip waiting disabled when no waiting worker; Clear caches disabled when no caches; Send test notification disabled unless push permission === "granted".
-- **Success/feedback:** SW actions emit toasts (e.g. "Caches cleared — N cache(s) deleted", "SKIP_WAITING posted to waiting worker", "Update check requested", "Service workers unregistered — N removed", "Test notification sent"). Environment Copy → transient "Copied" label (2s).
+- **Success/feedback:** SW actions emit toasts (e.g. "Caches cleared — N cache(s) deleted", "SKIP_WAITING posted to waiting worker", "Update check requested", and the Unregister title+description pair "Service workers unregistered" / "N registration(s) removed", "Test notification sent"). Environment Copy → transient "Copied" label (2s).
 - **Error/destructive feedback:** SW action failures emit destructive-variant toasts with the error message. Notification failure → "Notification failed — Check permission and service worker".
 - **Offline/online:** Environment "Online" row reflects `navigator.onLine` live. Storage row shows "—" if estimate unavailable.
 - **Unsupported environment:** SW "Supported"/"Registered" → "no"; Push "Permission" → "unsupported" when Notifications API absent; conditional rows simply omitted.
-- **Drift highlight:** Stock comparisons and recalc drift rows render amber (`text-amber-600 dark:text-amber-400`) when drift detected; non-drift rows neutral.
+- **Drift highlight:** In **Compare Cached vs Derived**, per-item rows render amber (`text-amber-600 dark:text-amber-400`) and append `(DRIFT)` when `|cached − derived| > 0.001`; non-drift rows neutral. In **Recalculate All Stock**, only the "Drifted Items:" heading is amber — the per-item drift rows render plain `font-mono` (no per-row `> 0.001` color gate; that gate is comparison-only).
 - **Color-coded error sources:** see SOURCE_COLOR enum below.
-- **Capacitor/native vs Web:** Environment "Mode" row reflects `isCapacitorMode()`.
+- **Capacitor/native vs Web:** Environment "Mode" row reflects `isCapacitorMode()`. Note this is not a Capacitor runtime probe — `isCapacitorMode()` returns the truthiness of the `NEXT_PUBLIC_API_BASE_URL` env var.
 
 ---
 
@@ -161,7 +161,7 @@ The six sections (in order):
 ### Audit actions (`AuditAction`, db.ts) — full set (filter shows "All Actions" + these)
 `ai_parse_request`, `ai_parse_success`, `ai_parse_error`, `data_export`, `data_import`, `data_clear`, `settings_change`, `api_key_set`, `api_key_clear`, `pin_set`, `pin_verify_success`, `pin_verify_failure`, `dose_taken`, `dose_skipped`, `dose_rescheduled`, `dose_time_edited`, `prescription_added`, `prescription_updated`, `inventory_adjusted`, `phase_activated`, `validation_error`, `dose_untaken`, `prescription_deleted`, `phase_completed`, `phase_started`, `stock_recalculated`, `inventory_added`, `inventory_deleted`, `titration_plan_updated`, `timezone_adjusted`.
 
-> NOTE: The `AUDIT_ACTIONS` array in `debug-panel.tsx` currently lists 26 of these and is missing `dose_time_edited`, `titration_plan_updated`, and `timezone_adjusted` (the full `AuditAction` type has 30). An alternative design should source the dropdown from the type, not the hand-maintained array.
+> NOTE: The `AUDIT_ACTIONS` array in `debug-panel.tsx` currently lists 27 of these and is missing `dose_time_edited`, `titration_plan_updated`, and `timezone_adjusted` (the full `AuditAction` type has 30). An alternative design should source the dropdown from the type, not the hand-maintained array.
 
 ### Raw record table picker (`TABLE_NAMES`, debug-panel.tsx) — 14 tables
 `intakeRecords`, `weightRecords`, `bloodPressureRecords`, `eatingRecords`, `urinationRecords`, `defecationRecords`, `prescriptions`, `medicationPhases`, `phaseSchedules`, `inventoryItems`, `inventoryTransactions`, `doseLogs`, `dailyNotes`, `auditLogs`. (Default selection = first entry, `intakeRecords`.)
@@ -179,7 +179,7 @@ The six sections (in order):
 - Locale (`navigator.language`)
 - Screen (`width×height @ DPRx`)
 - Viewport (`innerWidth×innerHeight`)
-- Storage (`usage / quota`, formatted B/KB/MB/GB to 1 decimal)
+- Storage (`usage / quota`, formatted via `formatBytes`: bare `"N B"` with no decimal for values < 1024; KB/MB/GB to 1 decimal; `"—"` when the byte value is null)
 - User agent
 
 ### Service Worker state fields
@@ -212,7 +212,7 @@ The six sections (in order):
 
 - **`_errorLogs`** (`ErrorLogEntry`, db.ts; Dexie v17+, store key `id, timestamp, source`): READ (live, export) + WRITE (capture via `logError`) + CLEAR. Fields: `id`, `timestamp`, `source` (`ErrorLogSource`), `message`, `stack?`, `componentStack?`, `route?`, `userAgent?`, `appVersion?`. Local-only; excluded from sync/backup.
 - **`auditLogs`** (`AuditLog`, db.ts): READ (live, top 100 newest) + CLEAR. Fields: `id`, `timestamp`, `action` (`AuditAction`), `details?` (JSON string), `createdAt`, `updatedAt`, `deletedAt`, `deviceId`, `timezone`.
-- **`inventoryItems`** (`InventoryItem`, db.ts): READ active items (`isActive === 1`); fields used: `id`, `brandName`, `currentStock`, `isActive`. Stock recalc WRITES `currentStock` + `updatedAt` and enqueues sync (`_syncQueue`).
+- **`inventoryItems`** (`InventoryItem`, db.ts): READ active items (`isActive === 1`); fields used: `id`, `brandName`, `currentStock`, `isActive`. Stock recalc WRITES `currentStock` + `updatedAt`, enqueues sync (`_syncQueue`), calls `schedulePush()`, and writes a `stock_recalculated` audit log (`totalItems`, `driftedCount`, `driftedItems`).
 - **`inventoryTransactions` / `doseLogs`**: read indirectly via `getCurrentStock()` to derive true stock.
 - **All 14 picker tables**: READ-only via `db.table(name)` in Raw Record Viewer.
 - Reads `DB_SCHEMA_VERSION` constant; reads settings store (`dayStartHour`).
@@ -228,7 +228,7 @@ The six sections (in order):
 - **Reentrancy:** `writingDepth` guard + captured original console refs prevent the capture pipeline from recursing through its own patched console; `rawConsoleError` is the escape hatch used by the ErrorBoundary.
 - **LRU trim** runs only when count > 500; deletes exactly the overflow count of oldest rows.
 - **Export** is uncapped and unfiltered (full table), unlike the 200-row live view; filename is ISO datetime sliced to seconds.
-- **Drift detection** uses absolute difference > 0.001 (float tolerance), not strict equality.
+- **Drift detection** uses absolute difference > 0.001 (float tolerance), not strict equality. This epsilon gates the amber `(DRIFT)` highlight in **Compare Cached vs Derived**, and the inclusion of an item in the recalc `items[]` drift list (`recalculateAllStock`).
 - **Raw viewer sort fallback:** if `orderBy("updatedAt")` throws (missing index), falls back to in-memory sort by `updatedAt ?? timestamp ?? createdAt`.
 - **SSR/Server safety:** capture install and most reads no-op when `window`/`navigator` undefined.
 - **Clipboard** writes are wrapped in try/catch (fail silently in non-secure contexts).

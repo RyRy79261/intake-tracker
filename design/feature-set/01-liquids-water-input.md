@@ -6,7 +6,7 @@
 - `src/components/liquids/beverage-tab.tsx` (generic named beverage + optional sugar tab)
 - `src/components/liquids/preset-tab.tsx` (coffee & alcohol tabs: preset grid, AI lookup, substance auto-calc)
 - `src/components/manual-input-dialog.tsx` (modal for exact-amount entry with custom time + note)
-- `src/components/collapsible-time-input.tsx` (shared "Set different time" collapsible — pattern also used here)
+- `src/components/collapsible-time-input.tsx` (shared "Set different time" collapsible — used by other cards, e.g. weight/BP; the manual dialog here re-implements the same disclosure pattern inline rather than importing this component)
 - `src/components/recent-entries-list.tsx` (`RecentEntriesList` + `InlineEditFormShell`)
 - `src/hooks/use-intake-queries.ts` (`useIntake`, totals, recent records, add/update/delete)
 - `src/hooks/use-substance-queries.ts` (caffeine/alcohol substance CRUD)
@@ -38,7 +38,7 @@
 - **All tabs share one water progress bar** (rendered inside each tab) and one daily water budget — every drink across every tab counts as water.
 - **Recent entries list** (always visible below tabs, regardless of active tab): last 3 water-type intake records, newest first. Each row shows time, amount, optional `{n}g sugar` chip (pink), and a derived source label chip (beverage/preset name).
 - **Inline edit** of any recent entry expands the row into an edit form (amount, beverage name, caffeine mg, alcohol % ABV, optional sugar g, date/time, note).
-- **Delete with undo:** deleting a recent entry soft-deletes it and shows an undo toast (~5s window).
+- **Delete with undo:** deleting a recent entry soft-deletes it and fires **two** stacked toasts: an undo toast titled **"Record deleted"** with an Undo button (~5s window), plus a separate confirmation toast titled **"Entry deleted"** with description **"Water entry removed"**.
 - **Sugar tracking is conditional** on the optional "sugar" tracker being enabled (`useOptionalTrackerEnabled("sugar")`) — sugar inputs/chips hide when disabled.
 
 ### Water tab (water-tab.tsx)
@@ -67,21 +67,23 @@
 - **Name input** (always visible, even signed-out, so entries can be labeled).
 - **Volume (ml) + per-100ml substance fields**, editable; editing clears the selected preset id.
 - **Optional sugar (g) field.**
-- **Calculated amount display:** live string e.g. `52 mg caffeine` or `12% ABV (1.4 std drinks)`, or salt fallback `78 mg salt`; placeholder "Enter volume and concentration" when nothing to compute.
+- **Calculated amount display:** live string e.g. `52 mg caffeine` or `12% ABV (1.4 std drinks)`, or salt fallback `78 mg salt`; placeholder "Enter volume and concentration" when nothing to compute. There is **no UI field to enter salt** on the preset tab — `saltPer100ml` is only ever populated by loading a preset (or AI lookup) that already carries it, so the salt fallback string only appears when such a preset is loaded.
 - **Log Entry button** — writes a composable group (water + optional salt/sugar intakes + caffeine/alcohol substance record).
 - **"Save as preset & log" button** (signed-in, named, AI-populated only) — persists a new `LiquidPreset` then logs in one action.
 - Shares the same water two-stage progress bar (uses the tab's gradient for primary fill).
 
 ### Manual input dialog (manual-input-dialog.tsx)
-- Modal for entering an **exact amount** in ml (or mg when `type="salt"`).
+- Modal for entering an **exact amount** in ml (or mg when `type="salt"`). Title is "Enter Water Amount" for water, "Enter **Sodium** Amount" for salt.
+- The dialog re-implements its time + note disclosures **inline** (it does not import/use `CollapsibleTimeInput`; that shared component exists and is used by other cards, e.g. weight/BP).
 - **Quick-select chips:** `100, 250, 500, 750, 1000`.
 - **Collapsible "Set different time"** (`datetime-local`, capped at now) to back-date the entry.
 - **Collapsible "Add a note"** (textarea, max 200 chars, live counter).
 - **Zod validation** (amount positive & required; note ≤ 200). Field errors render inline; a validation_error audit log is written on failure.
+- **On-open reset:** each time the dialog opens, a `useEffect` re-seeds the amount to the current value and re-evaluates `getCurrentDateTimeLocal()`, resetting `customTime`, clearing the note, and collapsing both the time and note disclosures.
 
 ### Substance auto-calc
 - **Caffeine:** `mg = round(volumeMl / 100 × caffeinePer100ml)`.
-- **Alcohol:** standard drinks `= ethanolGrams / 10`, where `ethanolGrams = volumeMl × (abv/100) × 0.789`. ABV % is the stored input; standard drinks are derived & rounded to 1 dp.
+- **Alcohol:** standard drinks `= ethanolGrams / 10`, where `ethanolGrams = volumeMl × (abv/100) × 0.789`. ABV % is the stored input; standard drinks are derived. The live display and the create path (`buildComposableEntry`) round to **1 dp** (`toFixed(1)`); the **edit-form sync path rounds to 2 dp** (`standardDrinksFromAbv(...).toFixed(2)`), so stored std-drinks precision is not uniformly 1 dp.
 - **Salt (from preset):** `mg = round(volumeMl / 100 × saltPer100ml)`.
 
 ---
@@ -129,7 +131,7 @@
 - **Tap an entry row** → expand inline edit form (keyboard Enter/Space also opens).
 - **Edit amount / beverage name / caffeine mg / alcohol % ABV / sugar g / date-time / note → tap Save** → update intake record + sync linked substance/sugar records.
 - **Tap Cancel** → collapse edit form.
-- **Tap trash icon** → soft-delete + undo toast ("Water entry removed"). Shows spinner while deleting; stop-propagation so it doesn't open edit.
+- **Tap trash icon** → soft-delete; fires the undo toast (title "Record deleted", Undo button) **and** a confirmation toast (title "Entry deleted", description "Water entry removed"). Shows spinner while deleting; stop-propagation so it doesn't open edit.
 
 ---
 
@@ -195,12 +197,12 @@ Alcohol tab:
 ### Substance / measurement constants
 - `GRAMS_PER_STANDARD_DRINK = 10` (WHO/metric standard drink = 10 g ethanol).
 - `ETHANOL_DENSITY_G_PER_ML = 0.789`.
-- Caffeine unit: mg. Alcohol unit: % ABV (stored) + standard drinks (derived, 1 dp). Salt unit: mg. Sugar unit: g (rounded integer). Water/volume unit: ml.
-- Per-100ml input step: alcohol `0.5`, coffee/beverage `1`. Edit-form: caffeine step `1`, alcohol step `0.1`.
+- Caffeine unit: mg. Alcohol unit: % ABV (stored) + standard drinks (derived; 1 dp on the live display & create path, 2 dp on the edit-form sync path). Salt unit: mg. Sugar unit: g (rounded integer). Water/volume unit: ml.
+- Per-100ml input step: alcohol `0.5`, coffee/beverage `1`. Edit-form: caffeine step `1`, alcohol step `0.1`, sugar step `1`. All three edit inputs also set `min="0"` and `inputMode="decimal"`.
 
 ### Substance label strings (preset tab)
 - Primary per-100ml label: coffee → "per 100ml (mg caffeine)", alcohol → "% ABV", beverage → "per 100ml (mg)".
-- `aiLookupType`: coffee→"caffeine", alcohol→"alcohol", beverage→"caffeine".
+- `aiLookupType`: coffee→"caffeine", alcohol→"alcohol", beverage→"caffeine" (the beverage value is dead — that `PresetTab` variant is never mounted by `LiquidsCard`).
 - Default descriptions when name/search blank: coffee→"Coffee", alcohol→"Drink", beverage→"Beverage".
 
 ### Settings (Zustand `settings-store`, persisted to localStorage)
@@ -218,7 +220,7 @@ Alcohol tab:
 - `"substance:{id}"` — water auto-created by a standalone substance record.
 - `"manual:sugar"` — linked sugar intake.
 - Legacy: `"coffee:{name}"`, `"juice"`, `"food:*"` recognized by `getLiquidTypeLabel`.
-- `groupSource` values seen here: `"manual_beverage_entry"`, `"preset:{id|manual}"`.
+- `groupSource` values seen here: `"manual_beverage_entry"`, `"preset:{id|manual}"`. (On preset tabs the same `preset:{id|manual}` string is written to **two distinct fields**: the entry's `groupSource` and each water intake row's per-row `source`.)
 
 ### Misc constants
 - Recent entries shown: **3** (`getRecentRecords` limit + `RecentEntriesList` `maxEntries`).
@@ -244,6 +246,7 @@ Alcohol tab:
 
 ### `LiquidPreset` (constants.ts / stored in settings-store)
 `id, name, tab ("coffee"|"alcohol"|"beverage"), defaultVolumeMl, waterContentPercent (0-100), caffeinePer100ml?, alcoholPer100ml? (ABV %), saltPer100ml?, isDefault, source ("manual"|"ai"), aiConfidence?`
+- `aiConfidence?` exists on the type but is **never written** by this unit's save-as-preset path (`addLiquidPreset` omits it).
 
 ### Aggregation reads
 - `getDailyTotal(type, dayStartHour)` — sum of water since the day-start cutoff (the budget metric).
@@ -261,17 +264,17 @@ Alcohol tab:
 
 - **Amount must be positive:** water/beverage Confirm no-ops if `pendingAmount ≤ 0`; manual dialog Zod-validates `amount > 0` & required; edit form rejects `NaN`/`≤ 0` with toast "Invalid amount".
 - **Decrement floor:** stepper minimum is `waterIncrement` (can't go below one increment).
-- **Custom time is past-only:** `datetime-local` `max` = now in both the dialog and edit form; back-dated entries get the dialog timestamp, otherwise `Date.now()`.
+- **Custom time is past-only (manual dialog only):** the manual dialog's `datetime-local` caps `max` at now (`getCurrentDateTimeLocal()`). The inline edit form's `datetime-local` has **no `max` attribute** — it does not constrain to the past. Back-dated dialog entries get the dialog timestamp, otherwise `Date.now()`.
 - **Full volume counts as water:** caffeine/alcohol content does NOT reduce the logged water volume (explicit comment). `waterContentPercent` is stored on presets but not subtracted from the logged water amount.
-- **Avoid duplicate water:** a substance record only carries `volumeMl` when no explicit water intake exists in the same group (otherwise the service would auto-create a second water row).
+- **Avoid duplicate water:** a substance record only carries `volumeMl` when no explicit water intake exists in the same group (otherwise the service would auto-create a second water row). The edit-form sync preserves this invariant too: when an existing caffeine/alcohol record has **no** `volumeMl`, the update deliberately does NOT add one (`if (existing.volumeMl !== undefined)`).
 - **Substance required to log on preset tabs:** Log Entry requires `volumeMl > 0` AND (`caffeinePer100ml > 0` OR `alcoholPer100ml > 0`).
 - **Sugar parsing:** beverage tab `Math.round` of positive parse else 0; only grouped when > 0.
-- **Caffeine/salt rounding:** `Math.round((volumeMl/100)×perValue)`. Standard drinks rounded to 1 decimal.
+- **Caffeine/salt rounding:** `Math.round((volumeMl/100)×perValue)`. Standard drinks are rounded to 1 decimal on the live display and create path, but to 2 decimals on the edit-form sync path.
 - **Daily cutoff (`dayStartHour`, default 2am):** day-start = today at hour:00; if now is before that hour, use yesterday's start. The daily total resets at the configured hour, distinct from the rolling 24h window.
 - **Over-limit handling is non-blocking:** going over the limit only recolors text/bar; entries still save.
 - **Limit disabled (`waterLimit = 0`):** no over-limit/would-exceed logic; progress treats target ≤ 0 as empty bar.
 - **Edit beverage-name sync:** only plain `beverage[:name]` entries write the name back to `source`; preset/substance entries keep the name on `SubstanceRecord.description` (synced separately).
-- **Cleared substance field on edit = soft-delete:** an empty caffeine/alcohol/sugar field parses to `0`, which `syncLiquidEntrySubstances` interprets as "remove the linked record".
+- **Cleared substance field on edit = soft-delete; junk field = leave untouched:** the edit `parse()` helper maps an empty caffeine/alcohol/sugar field to `0` (which `syncLiquidEntrySubstances` interprets as "remove the linked record"), a finite `≥ 0` number to that value, and a **non-numeric non-empty** string to `null` (which the sync treats as "leave the existing record untouched").
 - **Stale async guard on edit:** an `openTokenRef` discards a slow `fetchEntryGroup` result if the user opened a different record meanwhile.
 - **Legacy alcohol records:** if a record stored `amountStandardDrinks` but no `abvPercent`, the edit form derives ABV via `abvFromStandardDrinks(stdDrinks, volume)` (returns 0 when volume ≤ 0).
 - **Pre-v15 / no-groupId records:** edit form falls back to looking up the preset by `source` ("preset:{id}") to pre-fill substance values synchronously.
@@ -288,7 +291,7 @@ Alcohol tab:
 - **`LiquidsCard`** — top-level card: header stats, 4-tab strip, recent-entries list, and the inline substance edit form.
 - **`WaterTab`** — plain water quick-add (size chips, stepper, confirm, manual dialog).
 - **`BeverageTab`** — named generic beverage + optional sugar; grouped write when sugar present.
-- **`PresetTab`** — coffee & alcohol (and beverage) variant: preset grid, long-press delete, AI lookup, substance auto-calc, save-as-preset.
+- **`PresetTab`** — coffee & alcohol variant: preset grid, long-press delete, AI lookup, substance auto-calc, save-as-preset. (The component also accepts `tab="beverage"`, but `LiquidsCard` never mounts that variant — the Beverage tab renders `BeverageTab` instead, so `PresetTab`'s beverage path is dead in this card.)
 - **`ManualInputDialog`** — modal for exact amount with quick chips, collapsible custom-time, collapsible note, Zod validation (`type: "water" | "salt"`).
 - **`CollapsibleTimeInput` / `CollapsibleTimeInputControlled`** — shared "Set different time" disclosure (datetime-local, max=now); uncontrolled vs parent-controlled variants.
 - **`RecentEntriesList`** — generic last-N entries list with click-to-edit, delete-with-spinner, custom row + edit-form render props.

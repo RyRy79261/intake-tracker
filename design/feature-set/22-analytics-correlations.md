@@ -20,13 +20,13 @@
 - **Weight vs Salt Intake** — salt (mg) overlaid against weight (kg); default lag **2 days** (`DEFAULT_SALT_WEIGHT_LAG_DAYS`).
 - **Weight vs Sugar Intake** — sugar (g) vs weight (kg); default lag **2 days**; only rendered when the **sugar** optional tracker is enabled.
 - **Weight vs Potassium Intake** — potassium (mg) vs weight (kg); default lag **2 days**; only rendered when the **potassium** optional tracker is enabled (default off).
-- **Caffeine vs Blood Pressure** — caffeine (mg) vs systolic BP (mmHg); **no lag**.
-- **Alcohol vs Blood Pressure** — alcohol (standard drinks) vs systolic BP (mmHg); **no lag**.
+- **Caffeine vs Blood Pressure** — caffeine (mg) vs systolic BP (mmHg); **no lag**. (Card `labelB` is the literal string `"Systolic BP"`, as is the Alcohol card's.)
+- **Alcohol vs Blood Pressure** — alcohol vs systolic BP (mmHg); **no lag**. Note the pre-built card hard-codes `unitA=" units"` inline, so its left Y-axis ticks read "… units" — this differs from the custom-comparison dropdown path, which uses `DOMAIN_UNITS.alcohol = " drinks"`. The two surfaces are inconsistent.
 - Each card shows: title, a `CorrelationChart` (dual Y-axis daily-mean overlay), a coefficient/strength/paired-day readout strip, and a one-line plain-language interpretation sentence.
 
 ### Fluid Balance card
 - Bar chart of **daily fluid balance** = water intake (ml) − estimated urination output (ml) per calendar day.
-- Horizontal **dashed target reference line** at +500 ml (`FLUID_TARGET_ML`) plus a zero baseline reference line.
+- Horizontal **dashed target reference line** at a flat +500 ml (`FLUID_TARGET_ML`, a private local constant in `correlations-tab.tsx`) plus a zero baseline reference line. Note this dashed line is a **constant 500** unrelated to the per-day variable `target` (estimated output + 500) used by the on-target footer stat.
 - Footer stats: **Avg X ml/day** (mean of daily balances, rounded) and **N/M days on target**.
 - Explanatory caption: "Balance = water intake − estimated urination output. Output is estimated from logged amount categories."
 - Urination output is *estimated*, not measured: derived from each urination record's `amountEstimate` category mapped via `URINATION_ESTIMATE_ML` (small=150, medium=300, large=500; default 300 ml when unset).
@@ -42,6 +42,7 @@
 - Aggregates each series to **one value per calendar day (daily mean)** before plotting, merging on the local day key (`toLocalDateKey`) so a multi-event day shows once — consistent with the day-aligned coefficient.
 - X axis labels are short dates (e.g. "Jan 5"); Y axes tick-format with each domain's unit suffix.
 - Below the chart, a stat strip shows `r = X.XX`, a strength+direction label, `· N days`, and (when lag > 0) a `with N-day lag` note.
+- The `strengthLabel` helper emits the literal string `"No correlation"` for strength "none", or otherwise a capitalized-first-letter `"Strong|Moderate|Weak positive|negative"` (direction from `coefficient >= 0`).
 
 ### Computation pipeline
 - **Day alignment:** both series grouped by local calendar day, averaged per day (`mean`).
@@ -81,10 +82,10 @@
 - **Moderate:** coefficient colored — emerald (positive) / rose (negative); qualifier "tend to".
 - **Strong:** coefficient colored emerald/rose; qualifier "clearly".
 - **Lag present:** stat strip appends `with N-day lag`; interpretation otherwise unchanged.
-- **Direction:** positive `r` → "increase together" (emerald); negative `r` → "move in opposite directions" (rose).
+- **Direction:** positive `r` → "increase together" (emerald); negative `r` → "move in opposite directions" (rose). The two helpers split at slightly different points: `interpretCorrelation` uses `coefficient > 0` (so an exact `r === 0` would map to "move in opposite directions"), while `strengthLabel` uses `coefficient >= 0` (so `r === 0` reads "positive"). This disagreement is practically unreachable — `r === 0` only occurs at strength "none", which produces a different sentence ("No meaningful relationship…") and the literal label `"No correlation"` — so it is cosmetic only.
 
 ### Fluid Balance card
-- **Empty:** when no fluid data (no daily rows), shows centered **"No fluid data for this period"** (height 200px), no footer stats.
+- **Empty:** the condition is `!data || data.value.daily.length === 0` — so this state also covers the transient `useLiveQuery` default/undefined (before data resolves), not only the "no daily rows" case. Shows centered **"No fluid data for this period"** (height 200px), no footer stats.
 - **Populated:** bar chart with per-day balance bars (blue), target dashed line at +500ml, zero baseline, footer avg + days-on-target stats, and caption.
 
 ### Custom Comparison
@@ -126,6 +127,7 @@
 
 ### Per-domain display units (`DOMAIN_UNITS`)
 `water=" ml"`, `salt=" mg"`, `sugar=" g"`, `potassium=" mg"`, `weight=" kg"`, `bp=" mmHg"`, `eating=""`, `urination=" ml"`, `defecation=""`, `caffeine=" mg"`, `alcohol=" drinks"`, `medication=""`.
+- These units drive the **custom-comparison** dropdown path. The pre-built Alcohol-vs-BP card overrides this with a hard-coded inline `unitA=" units"` (not `" drinks"`), so the pre-built card's axis label differs from the custom path's.
 
 ### Per-domain plotted value (what the line actually charts)
 - water → `amount` (ml), salt → `amount` (mg), sugar → `amount` (g), potassium → `amount` (mg)
@@ -152,7 +154,7 @@ strong → "clearly", moderate → "tend to", weak → "slightly".
 - negative → rose (`text-rose-600 dark:text-rose-400`)
 
 ### Time-scope presets (`TimeScope`, shared selector)
-`"24h" | "7d" | "30d" | "90d" | "all"` — default scope on the page is **`7d`**. Custom range supported via two date inputs. Ranges snap to calendar-day boundaries (`startOfDay`/`endOfDay`) so daily grouping has no partial edge days.
+`"24h" | "7d" | "30d" | "90d" | "all"` — default scope on the page is **`7d`** (set in `analytics/page.tsx` via `useState<TimeScope>("7d")`). The `useTimeScopeRange` switch also has a `default` (fall-through) case that maps to 7d. Custom range supported via two date inputs. Ranges snap to calendar-day boundaries (`startOfDay`/`endOfDay`) so daily grouping has no partial edge days. The page computes `effectiveRange = customRange ?? scopeRange` and passes it to **all four** analytics tabs; the Correlations tab does not own the range selector.
 
 ### Default lags (`analytics-types.ts`)
 - `DEFAULT_SALT_WEIGHT_LAG_DAYS = 2`
@@ -164,8 +166,9 @@ strong → "clearly", moderate → "tend to", weak → "slightly".
 `min=0`, `max=14`, default `0`.
 
 ### Fluid-balance constants
-- `FLUID_TARGET_ML = 500` (UI reference line) — target = output + 500 ml/day.
-- `URINATION_ESTIMATE_ML = { small: 150, medium: 300, large: 500 }`, fallback `300`.
+- `FLUID_TARGET_ML = 500` — **not** exported from `analytics-types.ts`; it is a private module constant declared locally in `correlations-tab.tsx` (`= 500`) and duplicated separately in `summary-tab.tsx`. Drives only the flat dashed UI reference line.
+- The per-day `FluidBalanceDay.target` (= estimated output + 500 ml/day) is a *separate* value computed in the service (`analytics-service.ts`) and used only by the on-target footer stat.
+- `URINATION_ESTIMATE_ML = { small: 150, medium: 300, large: 500 }`, fallback `300` (`analytics-types.ts`).
 
 ### Statistical thresholds
 - `MIN_PAIRED_DAYS = 3` (chart) — coefficient hidden below this.
@@ -194,9 +197,12 @@ Read-only across these Dexie tables (via domain services, `src/lib/db.ts`):
 - **urinationRecords** (`amountEstimate?`, `timestamp`) — `amountEstimate` ∈ small/medium/large drives estimated ml.
 - **eatingRecords** (`timestamp`) — counted as 1/event.
 - **defecationRecords** (`timestamp`) — counted as 1/event.
-- **substanceRecords** (`type` "caffeine"|"alcohol", `amountMg?`, `amountStandardDrinks?`, `timestamp`) — queried via compound index `[type+timestamp]`.
+- **substanceRecords** (`type` "caffeine"|"alcohol", `amountMg?`, `amountStandardDrinks?`, `timestamp`; record also carries `volumeMl?`, `abvPercent?`, `description`, `source`, `aiEnriched?`, `sourceRecordId?` — unused by correlations) — queried via compound index `[type+timestamp]`.
 
-Types: `Domain`, `TimeRange`, `DataPoint {timestamp, value, label?}`, `CorrelationResult {coefficient, strength, seriesA, seriesB, pairs[], pairedDays, lagDays}`, `AnalyticsResult<T> {value, unit, period, dataPoints, meta?}`, `FluidBalanceDay`, `FluidBalanceResult`. No writes; medication/prescription tables are NOT touched here.
+Types: `Domain`, `TimeRange`, `DataPoint {timestamp, value, label?}`, `CorrelationResult {coefficient, strength, seriesA, seriesB, pairs[], pairedDays, lagDays}`, `AnalyticsResult<T> {value, unit, period, dataPoints, meta?}`, `FluidBalanceDay`, `FluidBalanceResult {daily, intraday, avgBalance, daysAboveTarget, daysTotal}`. No writes; medication/prescription tables are NOT touched here.
+
+- **`FluidBalanceResult.intraday`** — `fluidBalance` also computes an `intraday` running-cumulative-balance `DataPoint[]` series (all water/urination events merged chronologically with a running cumulative). The Correlations tab **never renders this** (only `daily` is used); it is produced-but-unused here.
+- **`SubstanceRecord`** carries more fields than correlations consume: beyond `amountMg` / `amountStandardDrinks`, it has `volumeMl`, `abvPercent`, `description`, `source`, `aiEnriched`, `sourceRecordId` (`db.ts`). None of these are charted by correlations.
 
 ---
 
@@ -215,7 +221,7 @@ Types: `Domain`, `TimeRange`, `DataPoint {timestamp, value, label?}`, `Correlati
 - **Optional-tracker gating is double-enforced:** both the pre-built card and the dropdown option disappear when the tracker is disabled; disabled-tracker data is never surfaced even if present.
 - **Rounding:** avg fluid balance is `Math.round`ed for display; coefficient shown to 2 decimals (`toFixed(2)`).
 - **Substance table fault tolerance:** missing `substanceRecords` table (older schema) is caught and treated as empty rather than erroring.
-- **Fluid-balance "on target" rule:** `daysAboveTarget` counts days where `intakeMl >= target` (target = estimated output + 500 ml).
+- **Fluid-balance "on target" rule:** `daysAboveTarget` counts days where `intakeMl >= target`, where `target` is the **per-day** value `urinationEstimatedMl + 500` computed in the service (`analytics-service.ts`). This differs from the chart's **flat dashed reference line**, which is a constant `FLUID_TARGET_ML` (500) unrelated to per-day output — the footer stat and the visual line use two different "target" notions.
 
 ---
 

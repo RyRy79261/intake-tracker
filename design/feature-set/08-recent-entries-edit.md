@@ -4,6 +4,8 @@
 - `src/components/recent-entries-list.tsx` — `RecentEntriesList` + `InlineEditFormShell`
 - `src/components/edit-intake-dialog.tsx` — `EditIntakeDialog` (water/sugar/sodium)
 - `src/components/edit-eating-dialog.tsx` — `EditEatingDialog`
+- `src/components/edit-weight-dialog.tsx` — `EditWeightDialog`
+- `src/components/edit-blood-pressure-dialog.tsx` — `EditBloodPressureDialog`
 - `src/components/edit-substance-dialog.tsx` — `EditSubstanceDialog` (caffeine/alcohol)
 - `src/components/edit-estimate-entry-dialog.tsx` — `EditEstimateEntryDialog` (shared base)
 - `src/components/edit-urination-dialog.tsx` — `EditUrinationDialog` (wraps base)
@@ -23,7 +25,7 @@
 
 ### `RecentEntriesList` (the row list)
 - Renders a top-border-separated section labeled **"Recent"** below a card's input controls.
-- Shows up to `maxEntries` rows (default **3**; cards pass their own slice via the query, e.g. cards fetch the last **5** records).
+- Shows up to `maxEntries` rows (default **3**; cards pass their own slice via the query — Urination/Eating cards request the last **5**, Weight/BP query hooks default to **5**, and Liquids uses the water query whose `getRecentRecords` default `limit` is **3**).
 - Each row's content columns are caller-supplied via `renderEntry(record)` — so the same shell renders water amounts, BP readings, weight, eating macros, urination estimates, etc.
 - Renders nothing at all (returns `null`) when `records` is `undefined` or empty.
 - Per-row **Delete** button (trash icon) on the right.
@@ -53,16 +55,18 @@
 - `ValidationError` is a typed error subclass; the dialog host catches it to show its message as a toast (vs. a generic error).
 
 ### `useDeleteWithToast`
-- Shared delete-with-spinner pattern. Tracks `deletingId`; `handleDelete(id)` sets the spinner, awaits the delete mutation, shows a success toast (caller-supplied message) or error toast, then clears the spinner.
+- Shared delete-with-spinner pattern. Tracks `deletingId`; `handleDelete(id)` sets the spinner, awaits the delete mutation, shows a success toast (fixed title **"Entry deleted"**, the caller-supplied message as the `description`) or an error toast ("Error" / "Could not delete the entry"), then clears the spinner.
 
 ### `useUndoDeleteMutation`
 - Shared soft-delete mutation that, on success, shows an **Undo** toast (~5s window) whose action reverses the soft-delete by calling the domain's undo function. Used for intake, urination, defecation, eating.
 
 ### Per-type edit dialogs (modal variants)
 - `EditIntakeDialog` — edits a water/sugar/sodium intake (amount + time + note); title, unit, accent color all derive from `record.type`.
-- `EditEatingDialog` — edits an eating record (time + "what I ate" note + optional grams).
-- `EditSubstanceDialog` — edits a caffeine or alcohol substance (time + description + amount; alcohol adds a volume field and a "standard drinks are derived" hint).
+- `EditEatingDialog` — edits an eating record (time + "what I ate" note + optional grams). The grams field only renders when an `onGramsChange` prop is supplied; neither current modal host (history-drawer nor records-tab) passes it, so in the modal editor the grams field never appears. (Inline grams editing in FoodSection uses a separate `editGrams` field, not this dialog prop.)
+- `EditSubstanceDialog` — edits a caffeine or alcohol substance (time + description + amount, with the amount input shown for both types; alcohol additionally adds a Volume (ml) field and a "standard drinks are derived" hint — volume is the only alcohol-only block).
 - `EditEstimateEntryDialog` — shared base for the "time + optional amount-estimate select + note" pattern.
+- `EditWeightDialog` — edits a weight record (weight + time + note); rendered by both the history drawer and the analytics records tab.
+- `EditBloodPressureDialog` — edits a BP record (systolic/diastolic/HR/position/arm + time + note); rendered by both the history drawer and the analytics records tab. Its irregular-heartbeat Yes/No Select is gated on an `onIrregularHeartbeatChange` prop that neither host wires, so that field is not editable in the dialog path.
 - `EditUrinationDialog` / `EditDefecationDialog` — thin wrappers over the base with domain titles, options, placeholders, accent colors.
 
 ---
@@ -83,7 +87,7 @@
 - **Cancel** → closes the inline form without saving (`closeEdit`).
 
 ### In the modal dialogs (history/analytics)
-- **Tap a record row** → opens the matching modal dialog (caffeine/alcohol open the substance dialog; in history-drawer caffeine/alcohol edits are explicitly skipped).
+- **Tap a record row** → opens the matching modal dialog. Caffeine/alcohol open the substance dialog **only in the analytics records-tab** (the sole host that renders `EditSubstanceDialog`); in the history drawer `openEdit` early-returns for those types, so they are not editable there at all.
 - Edit fields per type (amount/time/note, plus type extras).
 - **Save Changes** (submit) → validate + persist, close on success, toast "Entry updated".
 - **Cancel** / click backdrop / press Esc / `onOpenChange(false)` → close without saving.
@@ -114,25 +118,27 @@
 ### Inline form states
 - **Labeled vs. unlabeled** (visible labels vs. placeholder-only).
 - **Validation error:** destructive toast (e.g. "Invalid amount", "Invalid weight", "Invalid values", "Invalid date/time"); form stays open.
+- **Update failure (mutation rejects):** `useEditRecord` shows a generic destructive toast `{title: "Error", description: "Could not update the entry"}`.
 - **Success:** toast "Entry updated", form closes.
 - **Per-domain children variant:** different field sets per record type (see below).
 
 ### Dialog states
 - **Open** (`record !== null` / `open` true) vs. **closed**.
 - **Type-themed accent:** submit button tint and title vary by record type/source.
-- **Conditional fields:** alcohol shows a volume field + hint; caffeine hides volume; eating grams field only when `onGramsChange` provided; defecation shows a "No estimate" sentinel option (`allowNoEstimate`).
+- **Conditional fields:** the only alcohol-only block is the **Volume (ml)** field + derived-drinks hint; caffeine still renders the amount input (`min={0}`, step `1`) — only the volume block is hidden for caffeine. The eating grams field renders only when `onGramsChange` is provided (currently never wired in either modal host). Defecation shows a "No estimate" sentinel option (`allowNoEstimate`).
 - **Validation error toasts:** "Invalid amount", "Description required", "Invalid date/time", "ABV must be between 0 and 100", "Enter a volume greater than 0".
 
 ### Delete/undo states
 - **Spinner-while-deleting**, **success toast**, **error toast** ("Could not delete the entry").
-- **Undo toast:** title (e.g. "Record deleted" / domain message), Undo action button, auto-dismiss after **5000 ms**.
+- **Undo toast (card path only):** title is always the default **"Record deleted"** (all four consumers call `useUndoDeleteMutation` with no custom title), an Undo action button, auto-dismiss after **5000 ms**.
+- **Dialog-host delete (history drawer / records tab):** deletes show a hardcoded toast `{title: "Entry deleted", description: "Record removed"}` with **no Undo** — the 5s Undo toast is exclusive to the consumer-card path.
 
 ---
 
 ## Enums, options & configurable values
 
 ### `RecentEntriesList` props/defaults
-- `maxEntries` default `3`. Cards typically fetch last `5` (Urination/Weight/BP/Eating) or use water query default (Liquids).
+- `maxEntries` default `3`. Urination/Eating cards pass `5` explicitly; Weight/BP query hooks default to `5`; Liquids uses the water query (`useRecentIntakeRecords` → `getRecentRecords`) whose default `limit` is `3`.
 - `borderColor` — Tailwind class from the card theme (`CARD_THEMES[...].border`).
 - Hover classes: `hover:bg-black/5 dark:hover:bg-white/5`; active: `active:bg-black/10 dark:active:bg-white/10`.
 
@@ -159,7 +165,7 @@
 ### Blood Pressure enums (inline form + dialog)
 - `position`: `"sitting" | "standing"` (labels Sitting/Standing).
 - `arm`: `"left" | "right"` (labels Left arm/Right arm).
-- `irregularHeartbeat`: boolean (checkbox / Yes/No toggle).
+- `irregularHeartbeat`: boolean. Editable **only in the inline BP-card form** (a Checkbox). In the **dialog/adapter** path it is NOT editable: `FieldMap.bp` omits the field, the bp adapter never writes it, and `EditBloodPressureDialog`'s Yes/No Select is gated on an `onIrregularHeartbeatChange` prop that neither the history-drawer nor the records-tab passes — so the modal editors silently leave it unchanged.
 - BP categories (from `getBPCategory`): Optimal, Normal, High normal, Grade 1 hypertension, Grade 2 hypertension, plus higher grades — thresholds at systolic ≥120/130/140/160 or diastolic ≥80/85/90/100.
 
 ### Food sodium sources (eating inline form)
@@ -175,7 +181,7 @@
 - `EditableType`: `intake | weight | bp | eating | urination | defecation`. (Caffeine/alcohol use the separate substance dialog; in history-drawer they are not editable.)
 
 ### Undo toast
-- Auto-dismiss `duration: 5000` ms; default title "Record deleted".
+- Auto-dismiss `duration: 5000` ms; title is always the default "Record deleted" (no consumer passes a custom title).
 
 ### Field constraints (inputs)
 - Intake amount: `type=number min=1 step=1`, note `maxLength=200`.
@@ -195,7 +201,7 @@ Reads/writes the following Dexie tables / interfaces (`src/lib/db.ts`); each als
 - **EatingRecord** (`eatingRecords`): `timestamp, grams?, note?, groupId?, originalInputText?, groupSource?`. Edit may also sync linked intake records (sodium/sugar/potassium/water content) via the composable-entry group.
 - **UrinationRecord** (`urinationRecords`): `timestamp, amountEstimate? (string), note?`.
 - **DefecationRecord** (`defecationRecords`): `timestamp, amountEstimate? ("small"|"medium"|"large"), note?`.
-- **SubstanceRecord** (`substanceRecords`): `type ("caffeine"|"alcohol"), amountMg?, amountStandardDrinks?, abvPercent?, volumeMl?, description, source ("water_intake"|"eating"|"standalone"), aiEnriched?, timestamp, groupId?`. Edit writes `timestamp, description`, plus `amountMg` (caffeine) or `{abvPercent, volumeMl, amountStandardDrinks}` (alcohol).
+- **SubstanceRecord** (`substanceRecords`): `type ("caffeine"|"alcohol"), amountMg?, amountStandardDrinks?, abvPercent?, volumeMl?, description, source ("water_intake"|"eating"|"standalone"), aiEnriched?, timestamp, groupId?`. Edit writes `timestamp, description`, plus — *only when the amount input is non-blank* — `amountMg` (caffeine) or `{abvPercent, volumeMl, amountStandardDrinks}` (alcohol). If the amount field is left blank, no amount field is written, so timestamp/description can be edited without touching the amount.
 
 Mutations come from React Query hooks: `useUpdate{Intake,Weight,BloodPressure,Eating,Urination,Defecation}`, `useDelete{Intake,Eating,Urination,Defecation,Weight,BloodPressure}`, plus composable-group sync hooks (`useSyncLiquidEntrySubstances`, `useSyncEatingGroup`) for linked substance/intake records.
 
@@ -208,9 +214,9 @@ Mutations come from React Query hooks: `useUpdate{Intake,Weight,BloodPressure,Ea
 - **Delete vs. edit click conflict:** trash button calls `e.stopPropagation()` so deleting never opens the edit form.
 - **Keyboard activation guard:** row key handler ignores Enter/Space that originate from a child input (`e.target !== e.currentTarget`).
 - **Unique DOM ids:** `InlineEditFormShell` uses `useId()` so duplicate `idPrefix` values across mounted shells don't break `<label htmlFor>`.
-- **Timestamp parsing:** `dateTimeLocalToTimestamp` throws (never NaN) on invalid input; handlers catch it and surface "Invalid date/time". In adapters it is re-raised as `ValidationError`.
+- **Timestamp parsing:** `dateTimeLocalToTimestamp` throws (never NaN) on invalid input; handlers catch it and surface "Invalid date/time". In the dialog adapters the `parseTimestamp` helper wraps that thrown `Error` and re-raises it as `ValidationError("Invalid date/time")`.
 - **Amount validation:** intake amount must parse to a number > 0; weight must parse > 0; BP systolic/diastolic must parse > 0; HR (if present) must parse > 0.
-- **Note handling:** trimmed; blank becomes `undefined` (field omitted from the update). Note max 200 chars in the intake dialog.
+- **Note handling:** blank becomes `undefined` (field omitted from the update). Trimmed in the intake/eating/urination/defecation adapters and in all inline `useEditRecord` paths; the **weight** and **bp** dialog adapters (and the analytics records-tab weight/BP handlers) use `note || undefined` *without* trimming. Note max 200 chars in the intake dialog.
 - **Eating composable edit:** edits back-convert stored sodium-mg into the user's chosen input unit using `SODIUM_MULTIPLIERS`; disabled trackers (sugar/potassium) are omitted entirely so linked records are left untouched; clearing a substance field to blank/0 soft-deletes the linked record.
 - **Liquid composable edit:** caffeine/alcohol/sugar fields sync to linked `SubstanceRecord`/sugar intake; clearing a field (empty string) sets it to 0 → soft-deletes any existing linked substance; beverage name persists into `source` as `beverage:<name>` for plain beverages; preset/group-linked names live on the substance description.
 - **Alcohol math:** ABV % must be `0 < amt ≤ 100` AND volume > 0 before persisting; standard drinks are derived (`standardDrinksFromAbv(abv, volume)`, rounded to 2 dp). Legacy records without `abvPercent` back-derive ABV from `amountStandardDrinks` + `volumeMl`.
@@ -218,7 +224,7 @@ Mutations come from React Query hooks: `useUpdate{Intake,Weight,BloodPressure,Ea
 - **Stale async guard:** liquid/food `onOpen` uses an `openTokenRef` so a slow `fetchEntryGroup` result from a previously opened record is discarded if the user opened another.
 - **History-drawer caffeine/alcohol:** `openEdit` returns early for those types (no inline edit there); analytics records-tab does route them to the substance dialog.
 - **Timezone/day-start:** timestamps stored as Unix ms; `datetime-local` conversions are local-time based (`timestampToDateTimeLocal` / `dateTimeLocalToTimestamp`); quick-add time inputs cap at `getCurrentDateTimeLocal()` (no future entries).
-- **Soft-delete + undo:** deletes set `deletedAt`; the undo toast's action reverses it within ~5s; both delete and undo go through `ServiceResult`/`unwrap`.
+- **Soft-delete + undo:** deletes set `deletedAt`; both delete and undo go through `ServiceResult`/`unwrap`. The ~5s Undo toast is only offered on the **consumer-card** delete path (`useUndoDeleteMutation`); the history-drawer and records-tab delete paths show a plain "Entry deleted / Record removed" toast with no undo affordance.
 
 ---
 
@@ -231,7 +237,9 @@ Mutations come from React Query hooks: `useUpdate{Intake,Weight,BloodPressure,Ea
 - `useDeleteWithToast` — delete + spinner + success/error toast.
 - `useUndoDeleteMutation` — soft-delete + 5s Undo toast.
 - `EditIntakeDialog` — modal water/sugar/sodium editor (type-driven label/unit/accent).
-- `EditEatingDialog` — modal eating editor (time + note + optional grams).
+- `EditEatingDialog` — modal eating editor (time + note + optional grams; grams field dormant — never wired in either modal host).
+- `EditWeightDialog` — modal weight editor (weight + time + note); used by history drawer & records tab.
+- `EditBloodPressureDialog` — modal BP editor (systolic/diastolic/HR/position/arm + time + note); used by history drawer & records tab; irregular-heartbeat Select gated on an unwired prop, so not editable in the dialog path.
 - `EditSubstanceDialog` — modal caffeine/alcohol editor (alcohol adds volume + derived-drinks hint).
 - `EditEstimateEntryDialog` — shared base for time + amount-estimate select + note records.
 - `EditUrinationDialog` — base wrapper (violet accent, Small/Medium/Large).

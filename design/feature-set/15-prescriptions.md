@@ -18,7 +18,7 @@
 ## Features
 
 **List container (`PrescriptionsView`)**
-- Reads all prescriptions via `usePrescriptions()` (live IndexedDB query), then filters to **active only** (`p.isActive`) and **sorts alphabetically by `genericName`** (`localeCompare`). Soft-deleted records (`deletedAt` set) are already excluded by the service read.
+- Reads all prescriptions via `usePrescriptions()` (live IndexedDB query), then filters to **active only** (`p.isActive`) and **sorts alphabetically by `genericName`** (`localeCompare`). Soft-deleted prescription records (`deletedAt` set) are already excluded by the `getPrescriptions()` read (which itself returns **createdAt-desc** order before the view re-sorts in-memory by `genericName`). Note: the inventory/phase reads (`getInventoryForPrescription`, `getPhasesForPrescription`) do **not** filter `deletedAt` — they return all rows for the prescription id.
 - Renders cards in a **2-column CSS grid** (`grid-cols-2 gap-2`).
 - **Single-expand accordion behavior:** only one card may be expanded at a time (tracked by `expandedId`). Opening a card closes any other.
 - **Dynamic column-span layout (`spanMap`):** computes which cards should span both columns so the grid never leaves an awkward orphan when a card expands:
@@ -32,21 +32,22 @@
 - **Generic name** (bold, truncated, single line).
 - **Indication** subtitle (only if `prescription.indication` present; truncated).
 - **Chevron** affordance that rotates 180° when expanded.
-- **Dosage chip** for the first scheduled slot today: plain `"{dosageMg}{unit}"` for single-compound drugs, or a per-compound split (`formatCompoundShort(splitDose(...))`, e.g. `49/51mg`) for combination drugs. Hidden if there is no dose today / no schedule.
+- **Dosage chip** for the **time-sorted earliest slot today** (`prescriptionSlots[0]`, where slots are sorted ascending by `localTime` in dose-schedule-service — relevant when doses have differing dosages): plain `"{dosageMg}{unit}"` for single-compound drugs, or a per-compound split (`formatCompoundShort(splitDose(...))`, e.g. `49/51mg`) for combination drugs. Hidden if there is no dose today / no schedule.
 - **Next-dose label** (see Enums) — "As needed", "No doses today", "All done", or `Next: HH:MM`.
 - **Status badges row:** titration badges + stock badges (see States).
-- **Active-medicine mini-card** (emerald-tinted), shown when an active, non-archived inventory item exists. Shows the pill icon (shape + color, with a count badge via `PillIconWithBadge`), the brand name, the strength/compound label, and a dose-amount line combining `formatDoseAmount(firstSlot)` with food-instruction text (e.g. `· before eating`) when the phase has a non-`none` `foodInstruction`. The mini-card is independently tappable.
+- **Active-medicine mini-card** (emerald-tinted), shown when an active, non-archived inventory item exists. Shows the pill icon (shape + color via `PillIconWithBadge`, invoked with only `shape`/`color`/`size` — **no badge actually renders** since no `status` prop is passed; `PillIconWithBadge`'s badge would be a dose-*status* glyph, not a count), the brand name, and the strength/compound label. A dose-amount line — `formatDoseAmount(firstSlot)` plus food-instruction text (e.g. `· before eating`) when the phase has a non-`none` `foodInstruction` — renders **only** when `firstSlot?.pillsPerDose != null && dosageMg != null` (so a PRN med or one with no slot today / no inventory strength shows the mini-card but no dose line). The mini-card is independently tappable.
 - `whileTap` scale-down micro-interaction (`scale: 0.98`) on the whole card.
 
 **Expanded body (`CompoundCardExpanded`)** — four sections separated by a top border:
-1. **Medicines (inventory):** every non-archived stocked brand for the prescription, sorted active-first then alphabetically by `brandName`. Each row: pill icon (shape/color), brand name, an **Active** outline badge if active, strength/compound label, stock text, optional **Low** badge, and a chevron. Empty → "No medicines added yet".
-2. **Schedule summary** (only if an effective phase exists): an **On titration** badge in the header when the effective phase is a titration. If all schedule rows share the same dosage it collapses to one line — `"{dose} {freq} at {times}"` where freq is `daily` / `twice daily` / `Nx daily` — otherwise one line per schedule (`{dose} at {time}`). Food instruction footnote ("Take before eating" / "Take after eating") when not `none`. Empty → "No schedules configured".
+1. **Medicines (inventory):** every non-archived stocked brand for the prescription, sorted active-first then alphabetically by `brandName`. The filter is `!item.isArchived` only — it is **not** a soft-delete filter, so a soft-deleted-but-not-archived inventory item could still appear (narrow exposure since soft-deleted prescriptions never reach the active list). Each row: pill icon (shape/color), brand name, an **Active** outline badge (`border-emerald-500 text-emerald-600`) if active, strength/compound label, stock text, optional **Low** badge, and a chevron. Empty → "No medicines added yet".
+2. **Schedule summary** (only if an effective phase exists): an **On titration** badge in the header when the effective phase is a titration. If all schedule rows share the same dosage it collapses to one line — `"{dose} {freq} at {times}"` where freq is `daily` / `twice daily` / `Nx daily` — otherwise one line per schedule (`{dose} at {time}`). The displayed times come from the **deprecated `s.time`** raw HH:MM string (`schedules.map(s => s.time)` / `at {s.time}`) — **not** `scheduleTimeUTC`/`localTime`, so unlike the "Today" rows (which normalize from `scheduleTimeUTC`) this section shows the un-normalized stored string. Food instruction footnote ("Take before eating" / "Take after eating") when not `none`; a defensive fallthrough renders the raw `foodInstruction` string for any other value (unreachable given the enum). Empty → "No schedules configured".
 3. **Today's dose status** (only if there are slots today): one row per slot with a status icon, the slot's `localTime`, the dose label, and the status word.
 4. **Actions:** **Switch Brand** button (only when >1 non-archived brand exists) and **Prescription Details** button (always).
 
 **Dose/label computation helpers**
-- `getEffectivePhase` — the phase that governs dosing *now*: active titration overrides maintenance; falls back to any active phase. Drives the dosage chip unit, food instruction, and "As needed" detection (`isAsNeeded = !effectivePhase`).
-- `getActiveTitrationPhase` / `getPendingTitrationPhase` — drive the titration badges.
+- `getEffectivePhase` — the phase that governs dosing *now*, resolved as a three-step chain: `getActiveTitrationPhase(phases)` → `getMaintenancePhase(phases)` → `phases.find(p => p.status === "active")` (any active phase). Drives the dosage chip unit, food instruction, and "As needed" detection (`isAsNeeded = !effectivePhase`).
+- `getMaintenancePhase` — itself a two-step: prefers an **active** maintenance phase, then falls back to any maintenance phase.
+- `getActiveTitrationPhase` / `getPendingTitrationPhase` — drive the titration badges (each requires `type === "titration"`, the matching status, and a non-null `titrationPlanId`).
 - Combination-drug labeling via `isCombo` / `splitDose` / `formatCompoundShort` / `formatPillCount`.
 
 ## User actions & interactions
@@ -62,6 +63,7 @@
   - `addPrescription(input)` — creates prescription + (optional) initial maintenance phase + schedules + inventory item, plus an initial-stock refill transaction when `currentStock > 0`; writes a `prescription_added` audit entry; enqueues all for sync.
   - `updatePrescription(id, updates)` — partial update (id/createdAt excluded), bumps `updatedAt`, audit `prescription_updated` records the changed field names.
   - `deletePrescription(id)` — **soft delete** cascade: hard-deletes dose logs; soft-deletes inventory items (and hard-deletes their transactions), phases, schedules, and the prescription (`deletedAt`/`updatedAt` set); audit `prescription_deleted`; enqueues deletes for sync.
+  - `addMedicationToPrescription(...)` — a sibling mutation (reachable via this domain's hooks, `use-medication-queries.ts`) that adds a brand to an existing prescription; it backs the "Switch Brand" / Medicines-list flows rather than the card surface.
 
 ## States & presentations
 
@@ -79,7 +81,7 @@
   - **Low** — solid amber badge when not negative and `currentStock <= refillAlertPills` (only if `refillAlertPills` defined).
 - **Active-medicine mini-card present vs absent:** shown only when an active, non-archived inventory item exists; absent otherwise (no placeholder).
 - **Expanded Medicines list:** active brand gets an emerald **Active** outline badge; low-stock brand gets a **Low** amber badge; negative stock renders stock text in red/medium; empty → "No medicines added yet".
-- **Per-dose status rows (Today):** color-coded icon + status word — taken (emerald check), skipped (gray X), pending (muted minus), missed (amber clock).
+- **Per-dose status rows (Today):** color-coded icon + status word — taken (emerald check), skipped (gray X), pending (muted minus), missed (amber clock). `deriveStatus` collapses a `rescheduled` dose log to slot status **`skipped`** ("rescheduled slots show as handled"), and maps a missing log on a past date to `missed` — so the row never renders a distinct "rescheduled" state even though `DoseStatus` defines one.
 - **Schedule section:** hidden entirely when no effective phase; "No schedules configured" when phase exists but has no schedule rows.
 - **Loading:** `usePrescriptions()` is a `useLiveQuery` seeded with an empty array default → renders the empty state until data resolves (no explicit skeleton/spinner). `useDailyDoseSchedule` may be `undefined` before resolving (coerced to `[]`).
 - **Offline/sync:** no offline-specific UI here; all reads are local IndexedDB. Mutations enqueue sync ops and call `schedulePush()` — sync status is not surfaced on these cards.
@@ -95,6 +97,7 @@
 - **`DoseSlotStatus`** (dose-schedule-service) = `"taken" | "skipped" | "pending" | "missed"` — the four statuses the per-dose rows render.
 - **`TitrationPlanStatus`** = `"draft" | "active" | "completed" | "cancelled"`.
 - **`InventoryTransaction.type`** = `"refill" | "consumed" | "adjusted" | "initial"` (card creation uses `"refill"` for initial stock).
+- **`DoseSlot.inventoryWarning`** (computed per slot in dose-schedule-service) = `"no_inventory" | "odd_fraction" | "negative_stock"`. Computed but **not surfaced** anywhere on the card/expanded body (read-only at the surface).
 - **Next-dose labels:** `"As needed"`, `"No doses today"`, `"All done"`, `"Next: {HH:MM}"`.
 - **Frequency words (schedule summary):** `daily` (1/day), `twice daily` (2/day), `{n}x daily` (≥3/day).
 - **Badge label strings:** `On titration`, `Titration planned`, `Negative`, `Low`, `Active`.

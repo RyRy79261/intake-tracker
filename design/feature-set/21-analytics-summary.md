@@ -42,7 +42,7 @@ Each `KpiCard` shows: icon + label (muted), a large mono value, an optional tren
 A `useMemo` builds a string list. Each rule appends a sentence when its condition holds:
 - Systolic BP trending **upward**/**downward** (when ≥2 BP readings and trend direction is rising/falling).
 - Weight increased/decreased by `X.X kg` across the period (when ≥2 weight readings and |change| ≥ 0.1 kg).
-- Fluid intake below the `+500 ml` target on `M of N day(s)` (when `daysTotal > 0` and below > 0).
+- Fluid intake below the `+500 ml` target on `M of N day(s)` (when `daysTotal > 0` and below > 0). The observation/chart string hardcodes `+500 ml` (`FLUID_TARGET_ML`), but the underlying `daysAboveTarget` day-classification compares `intakeMl >= target` where `target = urinationEstimatedMl + 500` (i.e. output-relative, not a flat 500).
 - Average daily water (`N ml`) is below your `{waterGoal} ml` goal (when total water > 0 and avg < goal).
 - Average daily sodium (`N mg`) is above your `{saltLimit} mg` limit (when total salt > 0 and avg > limit).
 - Average daily sugar (`N g`) is above your `{sugarLimit} g` limit (when sugar enabled, total > 0, avg > limit).
@@ -51,11 +51,11 @@ A `useMemo` builds a string list. Each rule appends a sentence when its conditio
 ### Trend charts (Recharts)
 - **Blood Pressure** — `LineChart`, height 180. Two lines: systolic (`hsl(346 77% 50%)`) and diastolic (`hsl(330 65% 55%)`), strokeWidth 2, no dots. X-axis = `MMM D` date, Y-axis auto. Tooltip with custom card style. Only rendered when ≥1 BP reading.
 - **Weight** — `LineChart`, height 180. One line `weight` (`hsl(160 84% 39%)`), strokeWidth 2, dots r=3. Y-axis domain `["dataMin - 1", "dataMax + 1"]`. Tooltip formatter `X.X kg`. Only when ≥1 weight reading.
-- **Daily Fluid Balance** — `BarChart`, height 180. Bars `balance` (`hsl(199 89% 48%)`, radius `[2,2,0,0]`). X = `date.slice(5)` (MM-DD). Two reference lines: y=0 (border color) and y=500 (`hsl(160 84% 39%)`, dashed) marking the `FLUID_TARGET_ML` target. Tooltip formatter `N ml`. Only when ≥1 fluid-balance day.
+- **Daily Fluid Balance** — `BarChart`, height 180. Bars `balance` (`hsl(199 89% 48%)`, radius `[2,2,0,0]`). X = `date.slice(5)` (MM-DD). Two reference lines: y=0 (border color) and y=500 (`hsl(160 84% 39%)`, dashed) marking the `FLUID_TARGET_ML` visual target. Tooltip formatter `N ml`. Only when ≥1 fluid-balance day. (Note: the dashed line is a flat +500 marker, but the "days on target" count uses an output-relative per-day target — see business rules.)
 
 ### AI Insights card (AiInsightsCard)
 On-demand AI narrative of the last **30 days** of tracked data. Two flavours:
-- **Fast analysis** — synchronous Sonnet summary, returns in ~10s. Cached to IndexedDB on success.
+- **Fast analysis** — synchronous Sonnet summary (typically returns in seconds). Cached to IndexedDB on success. (The "~10s" figure is only a JSDoc code comment — it does **not** appear in any user-facing copy.) Fast mode never web-searches: the route sends only `[INSIGHT_TOOL]` (no web_search tool), with `max_tokens: 2048`, `temperature: 0.3`, and `tool_choice` forced to `analytics_insight`.
 - **Deep analysis** — Opus 4.6 + web search, submitted as an Anthropic batch job; returns minutes later (typically 3–10 min). User may close the page and return; job state survives reload via localStorage + server-side Postgres `insight_jobs`. On completion the server has already persisted the report and a sync pull surfaces it locally.
 
 Card content:
@@ -86,7 +86,7 @@ Card content:
 - Focus **Input** (when expanded) — placeholder `e.g. potassium, iron, fiber`, max 200 chars.
 - **Analyze** button — label varies: `Analyzing…` / `No food entries yet` / `Run another scan` / `Analyze nutrient balance`.
 - **Previous scans (N)** collapsible.
-- Confirm dialog ("What goes into this scan") — food-data checklist (count + what's excluded), Focus echo, medical-profile section, server-redaction footer.
+- Confirm dialog ("What goes into this scan") — food-data checklist (count + what's excluded), Focus echo (`Findings will lead with: {focus}` — shown only when `focus.trim() !== ""`, displaying the trimmed value), medical-profile section, server-redaction footer.
 - Reading dialog — summary + findings list (each: nutrient name + status badge + detail + "From: foods") + amber **Caveats** box + "Observational only — not medical advice" disclaimer.
 
 ---
@@ -136,7 +136,7 @@ Card content:
 - **Deep submitting:** Deep button shows spinner + `Submitting…`.
 - **Deep pending:** violet in-progress banner; Deep button shows spinner + `In progress`; Fast button disabled.
 - **Deep long-running** (> 15 min): banner copy swaps to "Taking longer than usual — still working in the background…".
-- **Deep completed:** success toast; result appears via live query; hook resets to idle.
+- **Deep completed:** only treated as completed when the body has status `completed` **and** non-empty `narrative` **and** `observations`; then success toast, result appears via live query, hook resets to idle. A `completed` body missing `narrative`/`observations` falls through to the "unrecognised shape → keep polling" branch rather than being surfaced as a (blank) completion.
 - **Deep failed / expired:** destructive toast ("Deep analysis failed" / "Deep analysis timed out"); resets to idle.
 - **Not-enough-data error:** toast "Not enough data".
 - **Deep job 404 on poll:** state → failed with "job was not found… may have been cleared".
@@ -151,6 +151,7 @@ Card content:
 - **Pending:** spinner + `Analyzing…`, button disabled, focus input disabled.
 - **Has scan:** preview row; button becomes `outline` "Run another scan".
 - **Error (429):** toast "Try again in a minute".
+- **Error (422):** raised when the model never returns the structured tool even after the server's retry (see below) — surfaced via the generic "Couldn't analyze your food log" toast.
 - **Error (other / network):** toast "Couldn't analyze your food log".
 - **Focus collapsed/expanded:** input hidden/shown; toggle label + chevron flip.
 - **Status badges** per finding: High (amber), Low (sky), Balanced (emerald).
@@ -164,7 +165,7 @@ Card content:
 ## Enums, options & configurable values
 
 ### Time scope presets (parent selector, `SCOPE_OPTIONS`)
-`24h`, `7d`, `30d`, `90d`, `All` → `TimeScope = "24h" | "7d" | "30d" | "90d" | "all"`. Mapped to ranges aligned to calendar-day boundaries; `all` → `start = 0`.
+`24h`, `7d`, `30d`, `90d`, `All` → `TimeScope = "24h" | "7d" | "30d" | "90d" | "all"`. Mapped to ranges aligned to calendar-day boundaries; `all` → `start = 0`. The selector ALSO renders a separate hardcoded **Custom** button (date-range inputs) that is *not* in `SCOPE_OPTIONS`; the page resolves `effectiveRange = customRange ?? scopeRange`, so a user-set custom range can also drive the tab.
 
 ### Insights window
 `INSIGHTS_WINDOW_DAYS = 30` (AI Insights always analyses a rolling 30-day window ending now). Nutrient card `WINDOW_DAYS = 30`.
@@ -174,6 +175,9 @@ Card content:
 
 ### Deep-job state machine (`DeepJobState`)
 `idle | submitting | pending | completed | failed | expired`. Poll interval `DEEP_POLL_INTERVAL_MS = 30_000`. Long-run threshold `DEEP_LONG_RUN_THRESHOLD_MS = 15 * 60 * 1000`. localStorage key `insight-deep-job-pending`.
+
+### Deep route server caps (`insights/deep/route.ts`)
+`DEEP_MAX_TOKENS = 4096`, `DEEP_WEB_SEARCH_MAX_USES = 12`. The deep system prompt **requires ≥2 `web_search` queries** before the model may call `analytics_insight`. Exactly **one pending deep job per user** is enforced by a DB unique index. The submission endpoint is rate-limited (`createRateLimiter(10)`); the polling endpoint is intentionally cheap and **not** rate-limited.
 
 ### Domains (`DOMAINS`)
 `water, salt, sugar, potassium, weight, bp, eating, urination, defecation, caffeine, alcohol, medication`.
@@ -194,7 +198,7 @@ water→"water intake", salt→"sodium intake", sugar→"sugar intake", potassiu
 `"high" | "low" | "balanced"` → badges High (amber) / Low (sky) / Balanced (emerald).
 
 ### Optional trackers
-`OptionalTrackerKey = "sugar" | "potassium"`. Defaults: `sugar: true`, `potassium: false`. Disabled trackers are dropped from snapshot, KPI grid, observations, and AI tracked-data list.
+`OptionalTrackerKey = "sugar" | "potassium"`. Defaults: `sugar: true`, `potassium: false`. Disabled trackers are dropped from snapshot, KPI grid, observations, and AI tracked-data list. Enabled state is read via the reactive `useOptionalTrackerEnabled(key)` hook; a non-reactive `getOptionalTrackerEnabled(key)` snapshot (reads `useSettingsStore.getState()`) also exists for one-shot reads inside callbacks.
 
 ### Intake goals / limits (defaults + clamps, from settings-store)
 - `waterLimit`: default **1000** ml (clamp 100–10000).
@@ -209,7 +213,7 @@ water→"water intake", salt→"sodium intake", sugar→"sugar intake", potassiu
 - Chart colors: systolic `hsl(346 77% 50%)`, diastolic `hsl(330 65% 55%)`, weight/target `hsl(160 84% 39%)`, fluid bar `hsl(199 89% 48%)`.
 
 ### AI Insights tooltip / model copy
-- Deep model named "Opus 4.6" in dialog copy. Fast described as ~10s; deep ~3–10 min, ~10–20× cost.
+- Deep model named "Opus 4.6" in dialog copy — and this is genuinely accurate, not just marketing: the deep route's backing model is really `claude-opus-4-6` (`CLAUDE_MODELS.premium`). No fast-mode timing text is rendered anywhere; only the deep amber box surfaces timing ("typically 3-10 minutes … roughly 10-20× the cost of a fast summary").
 - Tracked-data list items: Water intake; Salt / sodium intake; (Sugar intake); (Potassium intake); Blood pressure readings; Weight readings; Fluid balance (in vs. out); Correlations (salt vs. weight[, sugar vs. weight][, potassium vs. weight], caffeine & alcohol vs. blood pressure); "Your water goal, sodium limit[, sugar limit][ & potassium target]".
 
 ### Correlation lag defaults (`analytics-types`)
@@ -221,6 +225,9 @@ water→"water intake", salt→"sodium intake", sugar→"sugar intake", potassiu
 ### Insight response contract caps (`analytics-insights`)
 `summary` 1–4000 chars; `observations` ≤16 items, each 1–2000 chars; `sources` ≤30 URLs. Prompt asks for 2–4 sentence summary (3–5 deep), 3–6 observations (4–8 deep). `priorAssessments` ≤3.
 
+### Nutrient route schema caps (`nutrient-analysis/route.ts`)
+Request: `windowDays` 1–90; `focus` ≤200 chars; `foods` 1–500 items, each `description` 1–300 chars and `grams` 0–10000 (optional); `conditions` ≤20 (each ≤120); `medications` ≤40. Response: `summary` ≤4000; `findings` ≤20 (each `detail` ≤2000, `exampleFoods` ≤12 of ≤200 chars); `caveats` ≤8 (each ≤600).
+
 ---
 
 ## Data model touched
@@ -230,7 +237,7 @@ water→"water intake", salt→"sodium intake", sugar→"sugar intake", potassiu
 - `bloodPressureRecords` → `useBPTrend` (systolic/diastolic/heartRate/position, trend, avg).
 - `weightRecords` → `useWeightTrend` (readings, trend, avg/min/max).
 - Fluid balance derived from intake + urination → `useFluidBalance` (`daily[]`, `avgBalance`, `daysAboveTarget`, `daysTotal`).
-- `eatingRecords` (nutrient card) via `useEatingRecordsByDateRange` — uses `originalInputText`/`note` and `grams`.
+- `eatingRecords` (nutrient card) via `useEatingRecordsByDateRange` — uses `originalInputText`/`note` and `grams`. The hook guards `startTime < endTime`, returning `[]` (no query) when the range is empty/inverted.
 - `prescriptions` / `medicationPhases` / `phaseSchedules` via `buildMedicationSummary` (active rx → active phase → enabled, non-deleted schedules → dosages + day-of-week union → frequency string).
 - User profile (`useUserProfile`): `shareConditionsWithAI`, `conditions`, `shareMedicationsWithAI`.
 - Settings store: `waterLimit`, `saltLimit`, `sugarLimit`, `potassiumLimit`.
@@ -258,6 +265,7 @@ water→"water intake", salt→"sodium intake", sugar→"sugar intake", potassiu
 - **Correlation rules (prompt):** `pairedDays < 3` = insufficient, not "no relationship"; "correlation is not causation"; coefficient clamped −1…1; confidence clamped 0…1.
 - **AI safety prompt:** factual only, never diagnose or recommend treatment/medication/dosage; neutral non-alarming tone; if a reading is notable, state the number and suggest discussing with a healthcare provider; compare against most recent prior assessment when supplied.
 - **PII protection:** insights snapshot is aggregate-only by construction (no raw records/notes/timestamps). Nutrient scan sends only food descriptions + grams; server redacts emails/phones/ID-like sequences. Prior-assessment free text only sent on explicit opt-in.
+- **Nutrient route two-turn retry:** if the first model turn finishes with prose instead of a tool call, the server issues a **follow-up call** with `tool_choice` forced to `report_nutrient_analysis` to re-request the structured tool. Only if that second turn still has no tool block does it return **422** ("The AI didn't return a structured response"); a tool block whose input fails schema validation also returns 422 ("didn't match the expected shape").
 - **Source-link XSS guard:** model-generated URLs only become clickable anchors for `http:`/`https:`; `javascript:`/`data:`/unparseable schemes render as inert muted text with an "Unsafe URL scheme" title. Hostname pretty-print strips `www.`, falls back to raw URL.
 - **Deep job resilience:** polling treats non-404 failures as transient and keeps retrying; 404 → failed; unrecognised body shape → keep polling rather than wedge UI. Any pre-submit throw resets state to `idle` so the button is re-clickable. Long-run wording recomputes each minute via a forced tick.
 - **Malformed 200 from insights API** must fail loudly (not be cached as a blank insight). Cache write failures are swallowed so a paid result is never discarded over a storage error.

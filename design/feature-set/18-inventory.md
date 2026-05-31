@@ -30,12 +30,13 @@
 - **Edit a transaction.** Inline-edit the amount and/or note of `refill` or `adjusted` transactions; stock is recalculated from the full transaction set on save.
 - **Delete a transaction.** Soft-delete a `refill`/`adjusted` transaction (sets `deletedAt`); stock recalculated excluding it. Requires confirm dialog.
 - **Active-brand designation.** Exactly one brand per prescription should be `isActive`; only the active brand's stock is auto-deducted when doses are taken. Setting a brand active deactivates the previously active one.
+- **Switch-brand picker (second active-switch path).** Besides the Manage-tab "Set as active brand", a `BrandSwitchPicker` (opened via the "Switch Brand" button on the expanded card, shown only when there are multiple brands) deactivates the current active brand and activates the selected one (two sequential awaited updates), then fires a "Brand switched" toast.
 - **Archive / unarchive a brand.** Archiving hides the brand from the active list but keeps history; archiving an active brand also clears its `isActive`.
 - **Permanent delete.** An archived brand can be permanently soft-deleted (sets `deletedAt`), closing the drawer.
 - **Pill identity display.** Shows brand name, per-pill strength (or per-pill compound split for combos), pill color (capitalized), pill shape (capitalized + `PillIcon`), and optional markings/visual-identification text.
 - **Current dosing summary.** Shows whether the prescription's effective phase is `titration` or `maintenance`, and the dose unit.
-- **Auto-consumption from dose logs.** Outside this drawer, taking a dose writes a `consumed` transaction (negative amount, linked via `doseLogId`) against the active inventory item and decrements stock — visible afterward in this ledger.
-- **Stock recalculation engine.** `recalculateAllStock()` re-derives every item's cached `currentStock` from its transactions, tracks drift, writes a `stock_recalculated` audit log; `initStockRecalculation()` runs it fire-and-forget on app launch. `recalculateStockForItem(id)` does one item.
+- **Auto-consumption from dose logs.** Outside this drawer, taking a dose writes a `consumed` transaction (negative amount, linked via `doseLogId`) against the active inventory item and decrements stock — visible afterward in this ledger. Reversing a previously taken dose — `untakeDose`, `skipDose`, or `rescheduleDose` from a taken state — writes a positive (`+pillsConsumed`) `consumed` transaction that restores the stock.
+- **Stock recalculation engine.** `recalculateAllStock()` re-derives every item's cached `currentStock` from its transactions, tracks drift, writes a `stock_recalculated` audit log; `initStockRecalculation()` runs it fire-and-forget on app launch, and `debug-panel.tsx` exposes a manual "recalculate all stock" trigger as a second invocation site. `recalculateStockForItem(id)` does one item. Both recalc engines build on `getCurrentStock(id)`, a read-only derivation that sums **every** transaction for the item — it does **not** filter `deletedAt` (unlike the edit/delete recalc paths, which exclude soft-deleted rows).
 - **Audit trail.** Every mutation writes an `auditLogs` entry: `inventory_added`, `inventory_adjusted` (also used for transaction update/delete and stock adjust), `inventory_deleted`, `stock_recalculated`.
 - **Sync.** Every write enqueues the affected row(s) into the sync queue and calls `schedulePush()` to mirror to Neon Postgres.
 
@@ -45,6 +46,7 @@
 
 **Entry point (medicine list row, compound-card-expanded):**
 - **Tap a medicine row** → opens the `InventoryItemViewDrawer` for that brand. Row shows pill icon, brand name, `Active` badge (if active), strength/compound, stock text, `Low` badge (if low), chevron.
+- **List ordering.** Archived items are filtered out of the row list entirely; remaining items are sorted active-brand-first, then alphabetically by `brandName`.
 
 **Drawer header:**
 - Shows `{brandName} {strength}{unit}` (or compound short form), and a subtitle: `For {genericName}` + ` · Active brand`/` · Not active` + ` · Archived` (if archived).
@@ -84,7 +86,7 @@
 - **Low-supply.** List-row shows amber `Low` badge when `stock <= refillAlertPills` and `stock >= 0`.
 - **Negative stock.** Stock text in red/medium weight in the list row; still allowed and displayed (no clamp). Est. supply still computed.
 - **Fractional stock.** Rendered with fraction words/glyphs (`½ tablet`, `1¼ tablets`) instead of `N pills`.
-- **Transaction edit mode.** Row becomes a 2-input panel (amount + note) with Cancel/Save; non-editable types (`consumed`, `initial`) never enter this state and show no edit/delete buttons.
+- **Transaction edit mode.** Row becomes a 2-input panel (amount + note) with Cancel/Save; non-editable types never enter this state and show no edit/delete buttons. Only system-generated `consumed` rows occur in practice (the `initial` type is never produced).
 - **Titration vs maintenance pill.** Details "Current Dosing" badge: amber "On titration" vs blue "Maintenance".
 - **Success.** Refill resets the form to `30` / empty note; transaction edit collapses back to the read row; permanent delete closes the drawer. No toast surfaced in this component (mutations resolve silently).
 - **Offline / syncing.** Writes complete locally against Dexie immediately; sync queue + `schedulePush()` mirror later — UI is not blocked by network state.
@@ -97,6 +99,7 @@
 - **`InventoryTransaction.type`:** `"refill" | "consumed" | "adjusted" | "initial"`.
   - Row labels: `refill` → "Refill", `consumed` → "Consumed", `initial` → "Initial", else → "Adjusted".
   - Editable types: `refill`, `adjusted` only.
+  - **`initial` is a dead branch in practice.** The type exists in the union and the row label maps it to "Initial", but no service ever writes a `type: "initial"` transaction (initial stock is seeded as a `refill`). The "Initial" label and its non-editability never actually render.
 - **`PillShape`:** `"round" | "oval" | "capsule" | "diamond" | "tablet"`.
 - **`adjustStock` type param:** `"refill" | "consumed" | "adjusted"`; default when omitted is `delta > 0 ? "refill" : "consumed"`.
 - **Refill amount input:** default `30`, `step="any"`, must be `> 0` to enable Add.
@@ -131,9 +134,9 @@
 - `type` (enum above), `doseLogId?` (links a `consumed` tx to its dose)
 - `createdAt`, `updatedAt`, `deletedAt` (soft-delete), `deviceId`, `timezone`
 
-**Reads:** inventory items for a prescription (`getInventoryForPrescription`), active item (`getActiveInventoryForPrescription`), all items/active items, transactions for an item (newest-first via `sortBy("timestamp")` then `.reverse()`), effective phase + its schedules.
+**Reads:** inventory items for a prescription (`getInventoryForPrescription`), active item (`getActiveInventoryForPrescription`), all items/active items, transactions for an item (newest-first via `sortBy("timestamp")` then `.reverse()`), effective phase + its schedules. Note `getInventoryTransactions` does **not** filter `deletedAt` — it returns soft-deleted rows too; the drawer component filters them out at render (`transactions.filter(tx => tx.deletedAt === null)`).
 **Writes:** add/update/delete inventory item; adjustStock (item + transaction); update/delete transaction (recalcs item stock); recalc engines. All writes also append to `auditLogs` and enqueue to `_syncQueue`.
-**Cross-feature:** `dose-log-service.ts` writes `consumed` transactions and decrements active-item stock on dose-take. `prescription-service.ts` seeds an `"initial"`/refill `"Initial stock"` transaction when a prescription is created with `currentStock > 0`. Server mirror in `src/db/schema.ts` (must stay field-parity).
+**Cross-feature:** `dose-log-service.ts` writes `consumed` transactions and decrements active-item stock on dose-take (and writes positive reversing `consumed` transactions that restore stock on untake/skip/reschedule from a taken dose). `prescription-service.ts` seeds a `type: "refill"` transaction with note `"Initial stock"` when a prescription is created with `currentStock > 0` (it does **not** use the `"initial"` type — no code path ever writes a `type: "initial"` transaction). Server mirror in `src/db/schema.ts` (must stay field-parity).
 
 ---
 
@@ -146,11 +149,11 @@
 - **Single active brand.** Setting active deactivates the prior active non-archived sibling first (two sequential awaited updates). Archiving an active brand auto-clears `isActive`.
 - **Activate only when eligible.** "Set as active brand" shown only when `!isActive && !isArchived`.
 - **Permanent delete gated.** Only offered for archived items; double-guarded by `confirm()`.
-- **Transaction edit/delete confirms.** Delete uses `window.confirm`; both only available for `refill`/`adjusted` (system-generated `consumed`/`initial` rows are immutable here).
+- **Transaction edit/delete confirms.** Delete uses `window.confirm`; both only available for `refill`/`adjusted` (system-generated `consumed` rows are immutable here; the `initial` type is in the union but never produced).
 - **Days-of-supply guards.** Returns `∞` unless there's an effective phase, ≥1 schedule, `strength > 0`, and `dailyPills > 0`; uses `Math.floor` (whole days, rounds down). Per-schedule weekly proration via `daysOfWeek.length / 7`.
 - **Low badge precondition.** `refillAlertPills` must be set; suppressed for negative stock (`stock >= 0` required).
 - **Stale-snapshot safety.** Drawer re-resolves the live item by id; falls back to the passed `item` if not found in the live list. Returns `null` (renders nothing) when `item` is null.
-- **Note trimming.** Refill note trimmed; empty trimmed note is omitted from the payload (not stored as empty string).
+- **Note trimming (refill only).** The refill form trims the note and omits an empty trimmed note from the payload (not stored as empty string). The transaction **edit** path does NOT trim — it stores the raw `editNote` via `editNote ? { note } : {}` truthiness, so a whitespace-only edit note would be saved.
 - **Soft-delete semantics.** Deletes set `deletedAt` and enqueue a `"delete"` sync op; reads filter `deletedAt === null`.
 - **Timezone/deviceId** stamped on every transaction/item via `syncFields()`.
 
@@ -163,6 +166,7 @@
 - **`InventoryTab`** — current-stock + est-supply card, not-active info callout, "Log Refill" form, "History" transaction list.
 - **`TransactionRow`** — single ledger row with read mode (type label, signed colored amount, note, date, edit/delete buttons for editable types) and inline edit mode (amount + note inputs, Save/Cancel).
 - **`ManageTab`** — "Active Brand" block (conditional), "Archive Medicine" block (Archive/Unarchive), and conditional "Delete Permanently".
+- **`BrandSwitchPicker`** (`brand-switch-picker.tsx`) — alternate active-brand switcher opened from the expanded card's "Switch Brand" button; deactivates current active + activates the chosen brand, then toasts "Brand switched".
 - **`PillIcon`** — renders the pill silhouette from `pillShape` + `pillColor` (sizes 40 in Details, 24 in list row).
 - **Compound helpers** — `isCombo`, `formatCompoundShort`, `formatCompoundFull` render combination-tablet strengths (e.g. `49/51mg`).
 - **`formatPillCount`** — fractional pill → human-readable tablets string.

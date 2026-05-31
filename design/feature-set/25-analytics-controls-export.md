@@ -40,7 +40,7 @@ Sections, in order:
 4. **Weight** — average kg (1dp), min–max range (1dp), trend direction + slope (3dp). Fallback line when empty.
 5. **Fluid Balance** — average daily balance (ml, 0dp), days above target / days total. Fallback line when empty.
 6. **Medication Adherence** — overall rate as `%` (1dp), taken / total doses. Fallback line when empty.
-7. **Recent Records** — a grid table (`Date | Domain | Value`) gathered from 8 domains, last 10 per domain, re-sorted descending by formatted date, capped at 50 rows.
+7. **Recent Records** — a grid table (`Date | Domain | Value`) gathered from 8 domains, last 10 per domain, re-sorted descending by a **lexical `localeCompare` on the formatted date string** (`"MMM d, HH:mm"`) — i.e. alphabetical by month name + day, **not true chronological order** — then capped at 50 rows. The `Value` cell embeds the unit: it is rendered as `"<raw value> <domainUnit>"` (raw, unrounded value with the domain's unit string appended).
 - Page-break handling: section headers break when `y > 260`, body lines break when `y > 275`.
 - Footer page numbers (`Page i of N`) stamped on every page.
 - File name: `health-report-<startYYYY-MM-DD>-<endYYYY-MM-DD>.pdf`.
@@ -68,6 +68,7 @@ Sections, in order:
 ### Analytics queries (`use-analytics-queries.ts`)
 - `useTimeScopeRange(scope)` — memoized scope→range converter (the engine behind preset chips).
 - Reactive `useLiveQuery` hooks (re-run on Dexie changes) returning instant defaults to avoid loading flashes: `useFluidBalance`, `useAdherenceRate` (optional `prescriptionId`), `useBPTrend`, `useWeightTrend`, `useSaltVsWeight` / `useSugarVsWeight` / `usePotassiumVsWeight` (optional `lagDays`), `useCaffeineVsBP`, `useAlcoholVsBP`, `useCorrelation(domainA, domainB, range, lagDays?)`.
+- `useCorrelation` assembles its result object **inline** (not from a `DEFAULT_*` template), and sets its `dataPoints` to `result.seriesA` (series A only).
 
 ---
 
@@ -140,7 +141,7 @@ Sections, in order:
 
 **Trend directions (`TrendDirection.direction`):** `"rising" | "falling" | "stable"`.
 
-**Correlation strength (`CorrelationResult.strength`):** `"strong" | "moderate" | "weak" | "none"`.
+**Correlation strength (`CorrelationResult.strength`):** `"strong" | "moderate" | "weak" | "none"`, assigned from `absR = |coefficient|`: `absR > 0.7 → strong`, `> 0.4 → moderate`, `> 0.2 → weak`, else `none`.
 
 **Correlation lag defaults:** `DEFAULT_SALT_WEIGHT_LAG_DAYS = 2`, `DEFAULT_SUGAR_WEIGHT_LAG_DAYS = 2`, `DEFAULT_POTASSIUM_WEIGHT_LAG_DAYS = 2`. Meaningful correlation requires `pairedDays >= 3`.
 
@@ -168,7 +169,7 @@ Reads only (no writes to health tables); writes only the intro flag to the setti
 - **`DataPoint`** `{ timestamp: number; value: number; label?: string }`.
 - **`AnalyticsResult<T>`** `{ value, unit, period, dataPoints, meta? }`.
 - **Source Dexie tables** (read via service helpers behind `getRecordsByDomain`): `intakeRecords` (water/salt/sugar/potassium → `amount`, `timestamp`), `weightRecords` (`weight`, `timestamp`), `bloodPressureRecords` (`systolic`/`diastolic`/`heartRate`/`position`/`timestamp`), `urinationRecords` (`amountEstimate`, `timestamp`), `eatingRecords`, `defecationRecords`, `substanceRecords` (`amountMg` for caffeine, `amountStandardDrinks` for alcohol), and medication/adherence/phase data (via `adherenceRate`).
-- **Result types:** `FluidBalanceResult` (`daily[]`, `intraday[]`, `avgBalance`, `daysAboveTarget`, `daysTotal`), `AdherenceResult` (`rate`, `taken`, `total`, `daily[]`), `BPTrendResult` (`readings[]`, `trend.systolic/diastolic`, `avg`), `WeightTrendResult` (`readings[]`, `trend`, `avg`, `min`, `max`), `CorrelationResult` (`coefficient`, `strength`, `seriesA/B`, `pairs`, `pairedDays`, `lagDays`).
+- **Result types:** `FluidBalanceResult` (`daily[]`, `intraday[]`, `avgBalance`, `daysAboveTarget`, `daysTotal`) — where `intraday[]` is a chronologically-merged running cumulative-balance series across all intake + output events (intake adds `+value`, output subtracts `−value`), `AdherenceResult` (`rate`, `taken`, `total`, `daily[]`), `BPTrendResult` (`readings[]`, `trend.systolic/diastolic`, `avg`), `WeightTrendResult` (`readings[]`, `trend`, `avg`, `min`, `max`), `CorrelationResult` (`coefficient`, `strength`, `seriesA/B`, `pairs`, `pairedDays`, `lagDays`).
 - **Settings store:** `analyticsIntroSeen` (localStorage-persisted).
 
 ---
@@ -181,13 +182,13 @@ Reads only (no writes to health tables); writes only the intro flag to the setti
 - **Date input value formatting:** uses `toLocalDateKey` (local `getFullYear/Month/Date`, not `toISOString`) so the displayed day reflects the viewer's local calendar day.
 - **Effective range precedence:** `customRange ?? scopeRange` — a non-null custom range always overrides the preset.
 - **CSV empty guard:** `exportAllRecordsCSV` returns with no download when zero records; `exportToCSV` returns when `dataPoints` empty.
-- **CSV escaping:** fields containing `,`, `"`, or `\n` are quoted and embedded quotes doubled.
+- **CSV escaping:** data-row fields containing `,`, `"`, or `\n` are quoted and embedded quotes doubled. Note an asymmetry between the two CSV paths: `exportAllRecordsCSV` does **not** escape its header row (`headers.join(",")`, plain), whereas `exportToCSV` **does** escape headers (`headers.map(escapeCSVField)`). (In practice the all-records header is a fixed safe set, so it never needs escaping.)
 - **CSV ordering:** ascending by ISO timestamp string; **PDF table ordering:** descending by formatted-date string, then capped at 50.
 - **PDF emptiness:** still generates a full document; each section prints a "No … in this period." fallback when its dataset is empty.
 - **Medication exclusion:** `medication` has no single numeric value → returns `[]` in `getRecordsByDomain`, is excluded from CSV/PDF record domains (adherence is surfaced as its own PDF section, not as records).
 - **Urination volume:** never a real measurement — always estimated from category (`small/medium/large` → 150/300/500), defaulting to `medium`/300 when `amountEstimate` is missing.
 - **Correlation meaningfulness:** `pairedDays < 3` means the coefficient is not meaningful (consumer of `CorrelationResult` should treat it as unreliable).
-- **Fluid balance target rule:** daily `target = urinationEstimatedMl + 500` (intake target is 500 ml above estimated output); `balance = intakeMl − urinationEstimatedMl`.
+- **Fluid balance target rule:** daily `target = urinationEstimatedMl + 500` (intake target is 500 ml above estimated output); `balance = intakeMl − urinationEstimatedMl`. `daysAboveTarget` counts days where `intakeMl >= target` — an **inclusive** (`>=`) test, so a day exactly at target counts as "above".
 - **No loading state by design:** every live-query hook seeds a zeroed default object, so consumers render instantly and update reactively.
 - **Intro hydration guard:** dialog only opens after client mount (`mounted` flag) to avoid an SSR/hydration flash before the persisted store settles.
 - **Offline-first:** PDF/CSV generation and all analytics computation are 100% client-side; downloads use an in-memory `Blob` + object URL that is revoked after the click.
@@ -204,6 +205,7 @@ Reads only (no writes to health tables); writes only the intro flag to the setti
   - `exportToPDF(range)` — structured multi-section health-report PDF.
   - `exportAllRecordsCSV(range)` — single normalized all-domains CSV.
   - `exportToCSV(data, filename)` — generic single-`AnalyticsResult` CSV.
-  - `escapeCSVField` (re-exported as `_escapeCSVField` for tests), `dataPointsToCSVRows`, `triggerDownload`, `domainUnit` — internal helpers.
+  - `escapeCSVField` (re-exported as `_escapeCSVField` for tests), `triggerDownload`, `domainUnit` — internal helpers.
+  - `dataPointsToCSVRows` — defined but **dead code** (not referenced anywhere in `src/`); it is not part of the live export path.
 - **`use-analytics-queries.ts`** hooks — `useTimeScopeRange` (range engine for chips) plus the reactive data hooks (`useFluidBalance`, `useAdherenceRate`, `useBPTrend`, `useWeightTrend`, `useSaltVsWeight`, `useSugarVsWeight`, `usePotassiumVsWeight`, `useCaffeineVsBP`, `useAlcoholVsBP`, `useCorrelation`).
 - **`analytics/page.tsx`** — host that wires the control strip (`TimeRangeSelector` + `ExportControls` in one flex row) above a 4-tab `Tabs` shell, computes `effectiveRange = customRange ?? scopeRange`, and renders `AnalyticsIntroDialog`.

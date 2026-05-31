@@ -21,18 +21,18 @@
 
 ## Features
 
-- **Latest-weight header stat.** Top-right of the card shows the most recent record's weight formatted `XX.XX kg` plus a relative/formatted timestamp (`formatDateTime`). Hidden when there are no records.
+- **Latest-weight header stat.** Top-right of the card shows the most recent record's weight formatted `XX.XX kg` plus an absolute calendar timestamp (`formatDateTime` → `"Mon DD, h:mm AM/PM"`, e.g. "Jan 15, 2:30 PM"; no relative "2h ago" formatting). Hidden when there are no records.
 - **Stepper entry.** Minus / Plus circular icon buttons (`h-14 w-14` rounded-full) adjust the pending weight by `settings.weightIncrement` (default **0.05 kg**).
 - **Direct keyboard input.** The big center value is an `InlineEdit` — tapping it turns the display into an editable text field (`inputMode="decimal"`, `pattern="[0-9]*[.]?[0-9]*"`) so the user can type an exact value.
 - **Rounding on blur.** When direct input loses focus, the typed value is clamped to `[0.1, 1000]` then snapped to the nearest `weightIncrement` multiple and re-rounded to 2 decimals.
 - **Pre-fill / carry-forward.** On load, pending weight is seeded from the latest record's weight (`D-03`). With no records, it defaults to **69** (`D-04`, `D-12`). After a successful record, the value is kept as the starting point for the next entry (no reset).
 - **Custom time entry.** Collapsible "Set different time" reveals a `datetime-local` input (max = now) so a weigh-in can be backdated; otherwise the record uses `Date.now()`.
-- **Record submission.** "Record Weight" button validates, persists to Dexie (offline-first), schedules a sync push, and shows a success toast (`"<value> kg logged successfully"`).
+- **Record submission.** "Record Weight" button validates, persists to Dexie (offline-first), then calls `schedulePush()` synchronously right after the local write (fires immediately, not batched on the card), and shows a success toast (`"<value> kg logged successfully"`).
 - **Recent history list.** Shows up to 3 of the latest 5 records, each as `timestamp · XX.XX kg`, with per-row delete and tap-to-edit-inline.
 - **Inline edit (in-card).** Tapping a Recent row opens an inline form (weight number input + datetime-local + optional note + Save/Cancel) without leaving the card.
 - **Inline delete with undo-capable service.** Soft-deletes a record (sets `deletedAt`); service exposes `undoDeleteWeightRecord` (restores `deletedAt: null`).
 - **Modal edit dialog (`EditWeightDialog`).** Full dialog with Weight / Time / Note fields used from History drawer and Analytics records tab (not from the dashboard card itself).
-- **Offline-first persistence + sync.** All writes go through `writeWithSync(...)` and call `schedulePush()` to mirror to Neon Postgres later.
+- **Offline-first persistence + sync.** All writes go through `writeWithSync(...)` and call `schedulePush()` (synchronously, right after the local write) to mirror to Neon Postgres.
 - **Live reactivity.** `useWeightRecords` is a Dexie `useLiveQuery`, so the header, stepper pre-fill, and Recent list update automatically when data changes (including from sync).
 
 ## User actions & interactions
@@ -44,7 +44,7 @@
 - **Toggle "Set different time":** expands/collapses the `datetime-local` picker (label "When was this measured?"; button text toggles "Set different time" ↔ "Using custom time", chevron flips).
 - **Change custom time:** updates `customTime`; used only when the section is expanded (`showTimeInput`).
 - **Tap "Record Weight":** runs Zod validation; on success persists and toasts; resets the time section to collapsed + now, but keeps the weight value. Disabled while the add mutation is pending or pending is `null`.
-- **Tap a Recent row:** opens the inline edit form for that record (keyboard: Enter/Space on the focused row also opens it).
+- **Tap a Recent row:** opens the inline edit form for that record (keyboard: Enter/Space on the focused row also opens it — but only when the row element *itself* is focused, guarded by `if (e.target !== e.currentTarget) return;`, so pressing Enter/Space while a child like the delete button is focused does **not** open edit).
 - **Inline edit — change weight / time / note, Save:** parses + validates and updates the record (`"Entry updated"` toast); invalid weight → `"Invalid weight"` destructive toast and aborts; invalid date → `"Invalid date/time"` destructive toast.
 - **Inline edit — Cancel:** closes the form without saving.
 - **Tap Recent row delete (trash icon):** soft-deletes (`stopPropagation` so it doesn't open edit); shows a per-row spinner; toast `"Entry deleted" / "Weight record removed"`; error toast on failure.
@@ -64,19 +64,20 @@
 - **Recent row — editing:** the tapped row is replaced by an inline form on a `bg-muted/30` rounded panel.
 - **Recent row — deleting:** that row's trash button shows a spinner and is disabled.
 - **Recent row — hover/active (when editable):** subtle background highlight (`hover:bg-black/5` / `dark:hover:bg-white/5`, active deeper).
-- **Offline / syncing:** no distinct UI on this card; writes succeed locally and queue a push. Live-query reflects synced changes when they land.
+- **Offline / syncing:** no distinct UI on this card; writes succeed locally and `schedulePush()` fires immediately after each write. Live-query reflects synced changes when they land.
 - **Success:** green-tinted toast variant on record; plain toast on edit/delete.
 - **Theme variant:** entire card uses the emerald/teal "weight" theme (see enums) in both light and dark mode.
 - **`EditWeightDialog` open/closed:** open when `record !== null`; closing via Cancel, backdrop, or Escape calls `onClose`. Weight input is `autoFocus`.
 
 ## Enums, options & configurable values
 
-- **Unit:** kilograms only — `kg`. Weight is stored "in kg" (per `WeightRecord` comment). **No lbs/pounds, no imperial/metric toggle exists in code.**
-- **`weightIncrement` (stepper step / rounding granularity):** default **0.05** kg. Settable via `setWeightIncrement`, sanitized by `sanitizeNumericInput(value, fallback=0.05, max=1, decimals=2)` → effective range roughly `(0, 1]`, 2-dp.
+- **Unit:** kilograms only — `kg`. Weight is stored "in kg" (per `WeightRecord` comment). The weight **card** has no lbs/pounds option and no imperial/metric toggle. (Repo-wide caveat: the help manual copy in `src/lib/help/manuals.ts` claims a "kilograms or pounds" + "optional target weight" setting under Settings → Tracking → Weight — that text is **stale**, no such setting exists; and the AI `voice-parse` route does an lbs→kg conversion in its prompt. Neither is wired to the card.)
+- **`weightIncrement` (stepper step / rounding granularity):** default **0.05** kg. Settable via `setWeightIncrement`, sanitized by `sanitizeNumericInput(value, min=0.05, max=1, precision=2)` → clamped to **`[0.05, 1]`**, 2-dp. The `0.05` arg is the hard floor `min` (not a "fallback"), though it doubles as the value returned on NaN/Infinity; a value of 0.05 is reachable and anything below is clamped up to it.
+- **Settings UI control for `weightIncrement`:** a dedicated `weight-settings-section.tsx` exposes the increment as a real numeric control labeled "Increment (kg)" with `min=0.05`, `max=1`, `step=0.05` (helper text "Amount added with each +/- tap (0.05-1.00 kg)"). The +/- spinners use `incrementSetting(..., 0.05, 1, ...)` / `decrementSetting(..., 0.05, 0.05, ...)` — floor **0.05**, ceiling **1**, decrement floor **0.05**.
 - **Value display format:** `value.toFixed(2)` → always 2 decimals (e.g. `69.05 kg`); placeholder `--` when null.
 - **Decrement floor:** **0.1 kg** (`Math.max(0.1, next)`).
 - **Direct-input clamp range:** `min = 0.1`, `max = 1000`.
-- **Validation bounds (Zod `WeightFormSchema`):** `weight` must be a number, `.positive()`, `.max(1000)`. Messages: `"Weight is required"` (invalid type), `"Weight must be positive"`, `"Weight seems too high"`.
+- **Validation bounds (Zod `WeightFormSchema`):** `weight` must be a number, `.positive()`, `.max(1000)`. Messages: `"Weight is required"` (invalid type), `"Weight must be positive"`, `"Weight seems too high"`. Note: because `pendingWeight` is guaranteed to be a `number` before submit (the `null` case is guarded out), the `"Weight is required"` (invalid-type) branch is effectively **unreachable** from the card UI — only `"Weight must be positive"` / `"Weight seems too high"` can actually fire.
 - **First-time fallback weight:** **69** kg.
 - **Recent query limit:** `useWeightRecords(5)` fetches 5; list renders `maxEntries = 3`.
 - **`InlineEdit` defaults:** `min = 0`, `max = 100000` (card overrides to 0.1 / 1000).
@@ -107,9 +108,9 @@
 
 **Neon Postgres mirror `weight_records`** (`src/db/schema.ts`): `id` (pk), `userId` (fk → usersSync, cascade), `weight: real`, `timestamp: bigint`, `note: text`, `createdAt/updatedAt/deletedAt: bigint`, `deviceId: text`, `timezone: text`; index `idx_weight_user_updated` on `(userId, updatedAt)`.
 
-**Service functions used** (`health-service.ts`): `addWeightRecord(weight, timestamp?, note?)`, `getWeightRecords(limit?)` (filters `deletedAt === null`, newest first), `getLatestWeightRecord()`, `updateWeightRecord(id, {weight?, timestamp?, note?})`, `deleteWeightRecord(id)` (soft), `undoDeleteWeightRecord(id)`, plus pagination/date-range helpers (`getWeightRecordsByDateRange`, `getWeightRecordsPaginated`). All writes go through `writeWithSync("weightRecords", ...)` and `schedulePush()`.
+**Service functions used** (`health-service.ts`): `addWeightRecord(weight, timestamp?, note?)`, `getWeightRecords(limit?)` (filters `deletedAt === null`, newest first), `getLatestWeightRecord()`, `updateWeightRecord(id, {weight?, timestamp?, note?})`, `deleteWeightRecord(id)` (soft), `undoDeleteWeightRecord(id)`, plus pagination/date-range helpers (`getWeightRecordsByDateRange`, `getWeightRecordsPaginated`). All writes go through `writeWithSync("weightRecords", ...)` and `schedulePush()`. Note: `getLatestWeightRecord()` exists in the service but the **card never calls it** (it reads `recentRecords[0]`). This module also houses the blood-pressure CRUD (`addBloodPressureRecord`, etc.); this doc scopes only to the weight functions.
 
-**Hooks** (`use-health-queries.ts`): `useWeightRecords(limit=5)`, `useLatestWeight()`, `useAddWeight()`, `useUpdateWeight()`, `useDeleteWeight()` (mutations unwrap `ServiceResult`).
+**Hooks** (`use-health-queries.ts`): `useWeightRecords(limit=5)`, `useLatestWeight()`, `useAddWeight()`, `useUpdateWeight()`, `useDeleteWeight()` (mutations unwrap `ServiceResult`). Note: `useLatestWeight()` exists (returns the latest record or `null` via `getWeightRecords(1)`) but `WeightCard` does **not** call it — the card derives `latestWeight` from `recentRecords[0]` instead.
 
 ## Validation, edge cases & business rules
 
@@ -133,7 +134,7 @@
 - `InlineEdit` — tap-to-type numeric display with clamp + round-on-blur; powers the center value.
 - `CollapsibleTimeInputControlled` — parent-controlled "Set different time" datetime panel (variant of `CollapsibleTimeInput`).
 - `RecentEntriesList` — shared Recent section (rows, delete buttons, click-to-edit), `maxEntries=3`.
-- `InlineEditFormShell` — shared inline edit form wrapper (children + timestamp + note + Save/Cancel).
+- `InlineEditFormShell` — shared inline edit form wrapper (children + timestamp + note + Save/Cancel). Supports a `labeled` prop (visible `<Label>`s) and an `idPrefix`; the weight card uses the **default unlabeled** variant (placeholder + `aria-label`, no `labeled` prop passed).
 - `CardShell` — themed card chrome (gradient, icon, label, header-right slot).
 - `useEditRecord` — generic open/populate/submit edit flow (timestamp/note + buildUpdates).
 - `useDeleteWithToast` — delete-with-spinner + toast flow (`deletingId`, `handleDelete`).

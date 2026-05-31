@@ -24,7 +24,7 @@ This is the primary, full-fidelity surface. It is organized into up to three bor
 1. **Dose Reminders** (icon: `Bell`, teal) — *gated*: the entire card is hidden unless `useAuthGate()` returns true (i.e. auth state is still loading OR the user is signed in). Contains:
    - **Enable Reminders** toggle (`Switch`) bound to `doseRemindersEnabled`.
    - A contextual helper sentence under the label that changes by capability/auth state (see States).
-   - **Follow-up reminders** select (only rendered when reminders are enabled): how many additional nudges to send if the dose is not confirmed. Helper text: "Additional reminders if dose not confirmed."
+   - **Follow-up reminders** select (only rendered when reminders are enabled): how many additional nudges to send if the dose is not confirmed. Helper text: "Additional reminders if dose not confirmed" (no trailing period).
    - **Reminder interval** select (only rendered when reminders enabled AND follow-up count > 0): minutes between follow-up nudges.
    - Toggling on triggers a real browser notification-permission request and a push subscription; toggling off unsubscribes. The toggle shows a disabled/busy state while this resolves.
 
@@ -32,16 +32,16 @@ This is the primary, full-fidelity surface. It is organized into up to three bor
    - **Time Format** select — "24-hour (14:00)" vs "12-hour (2:00 PM)", bound to `timeFormat`. Governs how dose/schedule times render across the medication UI.
 
 3. **Localization** (icon: `Globe`, teal):
-   - **Primary Region** — searchable country combobox (~195 ISO 3166-1 countries + a "Not Specified (Global Search)" sentinel). Used by AI to find local brand names/alternatives when adding a medication. Helper text explains this.
-   - **Secondary Region (Optional)** — same combobox, used as an AI fallback for alternatives.
+   - **Primary Region** — searchable country combobox (194 ISO 3166-1 countries + a "Not Specified (Global Search)" sentinel = 195 rows). Used by AI to find local brand names/alternatives when adding a medication. Helper text reads "This is used by the AI to search for local brand names and alternatives when adding a new medication."
+   - **Secondary Region (Optional)** — same combobox, used as an AI fallback for alternatives. Helper text reads "Used as a fallback for finding medication alternatives."
 
 The view header reads "Medication Settings" with subtitle "Configure preferences that apply to your prescriptions and search results." Bottom padding `pb-24` clears the medication tab bar.
 
 ### B. Medication Settings Section (global Settings → Medication accordion)
 A compact duplicate of the Localization controls only (no reminders, no display format). Icon: `Pill`, teal, heading "Medication". Two `Select` dropdowns (not comboboxes):
-- **Primary Region** — small fixed country list, defaults display to "US" when unset.
-- **Secondary Region (Optional)** — same list prefixed with a "None" option; displays "None" when unset.
-Each has muted helper text about finding/falling-back-to local medication alternatives. Both write the same `primaryRegion`/`secondaryRegion` store values as the rich view (the two surfaces are intentionally redundant but use different option sets — see Edge cases).
+- **Primary Region** — small fixed country list, defaults display to "US" when unset. Helper text: "Used to find local medication alternatives in search results."
+- **Secondary Region (Optional)** — same list prefixed with a "None" option; displays "None" when unset. Helper text: "Used as a fallback for finding medication alternatives."
+Both write the same `primaryRegion`/`secondaryRegion` store values as the rich view (the two surfaces are intentionally redundant but use different option sets — see Edge cases).
 
 ### C. Timezone Change Detection & Dialog (app-wide)
 - `useTimezoneDetection()` runs inside `TimezoneGuard` in the provider stack, so the dialog is global (not tied to the medications page).
@@ -55,8 +55,9 @@ Each has muted helper text about finding/falling-back-to local medication altern
 ### D. Local Dose Reminders & Refill Alerts (`medication-notification-service`)
 - Started/stopped by `useMedicationNotifications()` which is mounted on the medications page. Runs a `setInterval` every 60 s.
 - **Dose reminders:** every minute, for each enabled schedule whose `daysOfWeek` includes today's weekday, if the current local time is within `[0, 5]` minutes after the schedule time and not already notified today, it fires a "Time for your {HH:MM} medications" notification listing the medication name + dose, `requireInteraction: true`, deduped per `date-time-prescription` key (cleaned daily).
-- **Refill alerts:** on start, for each active prescription with an active phase + active (non-archived) inventory item, computes daily dosage (weighted by days-of-week / 7), daily pills, and `daysLeft = floor(stock / dailyPills)`. Fires a "Refill needed: {brand}" notification if `daysLeft <= refillAlertDays` OR `stock <= refillAlertPills`. Throttled to once per 12 h; deduped per prescription id.
+- **Refill alerts:** on start, for each active prescription with an active phase + active (non-archived) inventory item, computes daily dosage (weighted by days-of-week / 7), daily pills, and `daysLeft = floor(stock / dailyPills)`. Fires a "Refill needed: {brand}" notification (body `"{stock} pills left (~{daysLeft} days). Time to refill {brand} {strength}{unit}."`, where the strength substring comes from the inventory `strength`+`unit` or `formatCompoundShort` for combos — not the schedule dosage) if `daysLeft <= refillAlertDays` OR `stock <= refillAlertPills`. Throttled to once per 12 h; deduped per prescription id.
 - Compound (combo) meds render dose text via `formatCompoundShort(splitDose(...))`; single meds render `{dosage}{unit}`.
+- **Inventory-selection asymmetry:** the dose-reminder path picks the active non-archived inventory but **falls back to `activeInv[0]`** (first inventory found) for the med *name* if none is active; the refill path has **no such fallback** — it `continue`s (skips the prescription) when there is no active non-archived inventory.
 
 ### E. Server Push Sync (`usePushScheduleSync`)
 - Mounted via `useMedicationNotifications` (which calls `usePushScheduleSync`). No-ops when signed out.
@@ -70,7 +71,7 @@ Each has muted helper text about finding/falling-back-to local medication altern
 
 | Action | Where | Result |
 |---|---|---|
-| Toggle **Enable Reminders** on | Reminders card | Requests browser notification permission; if granted, subscribes to push and sets `doseRemindersEnabled=true`; toggle disabled while pending. If permission denied or subscription fails, silently reverts (toggle stays off). |
+| Toggle **Enable Reminders** on | Reminders card | Requests browser notification permission; if granted, subscribes to push and sets `doseRemindersEnabled=true`; toggle disabled while pending. If permission denied or subscription fails, the toggle stays off with no error toast (the handler `console.error`s thrown errors and `console.warn`s when the push subscription returns null — so it is UX-silent but not log-silent). |
 | Toggle **Enable Reminders** off | Reminders card | Unsubscribes from push, sets `doseRemindersEnabled=false`; the two sub-selects collapse. |
 | Select **Follow-up reminders** value | Reminders card | Sets `reminderFollowUpCount` (0/1/2/3). Choosing 0 ("None") hides the interval select. Syncs to `/api/push/settings`. |
 | Select **Reminder interval** value | Reminders card | Sets `reminderFollowUpInterval` (5/10/15/20/30 min). Syncs to `/api/push/settings`. |
@@ -83,7 +84,7 @@ Each has muted helper text about finding/falling-back-to local medication altern
 | Tap **Adjust Schedules** | Timezone dialog | Runs `recalculateScheduleTimezones`; button shows spinner + "Adjusting…"; on success closes + success toast; on failure shows destructive toast "Schedule adjustment failed" / "Your dose times have not changed. Try reopening the app." |
 | Tap **Not Now** | Timezone dialog | Sets a session-level dismissal flag and closes; won't re-prompt until reload/app restart. (Both buttons disabled while recalculating.) |
 | Receive dose reminder notification | OS | "Time for your {HH:MM} medications" with med list; `requireInteraction` keeps it visible. |
-| Receive refill notification | OS | "Refill needed: {brand}" with pills-left and ~days-left. |
+| Receive refill notification | OS | "Refill needed: {brand}" with body "{stock} pills left (~{daysLeft} days). Time to refill {brand} {strength}{unit}." |
 
 ---
 
@@ -136,7 +137,7 @@ Each has muted helper text about finding/falling-back-to local medication altern
 
 **Time format options:** `"24h"` → "24-hour (14:00)", `"12h"` → "12-hour (2:00 PM)".
 
-**Country list (rich combobox):** sentinel `{ value: "", label: "Not Specified (Global Search)", flag: "🌐" }` followed by ~195 ISO 3166-1 alpha-2 entries with flag emoji, alphabetical by label (Afghanistan `AF` … Zimbabwe `ZW`). Stored value = ISO code or `""`.
+**Country list (rich combobox):** sentinel `{ value: "", label: "Not Specified (Global Search)", flag: "🌐" }` followed by 194 ISO 3166-1 alpha-2 entries with flag emoji, alphabetical by label (Afghanistan `AF` … Zimbabwe `ZW`) — 195 rows total. Stored value = ISO code or `""`. Each `CommandItem` is keyed `country.value || "__global__"` and its `value` is the country **label**, so the search input filters on label text.
 
 **Country list (compact Settings section, divergent):** fixed short list — `US` United States, `UK` United Kingdom, `CA` Canada, `AU` Australia, `DE` Germany, `ZA` South Africa, `Other`; secondary adds a `None` option. (Note "UK"/"Other"/"None" don't match the rich view's ISO codes — see Edge cases.)
 
@@ -148,7 +149,7 @@ Each has muted helper text about finding/falling-back-to local medication altern
 - Notification options: dose `requireInteraction: true`, tag `dose-reminder-{time}`; refill tag `refill-{id}`.
 
 **Timezone constants (`timezone.ts`):**
-- `MIGRATION_TIMEZONE_CUTOFF` = `2026-02-12T00:00:00Z` (records before → `Africa/Johannesburg`, on/after → `Europe/Berlin`).
+- `MIGRATION_TIMEZONE_CUTOFF` = `2026-02-12T00:00:00Z` (records before → `Africa/Johannesburg`, on/after → `Europe/Berlin`). This constant and its helper `getTimezoneForTimestamp` are a **v11-migration backfill** path only — they are **not used by the settings or timezone-change runtime** described here.
 - SSR fallback timezone: `"UTC"`.
 - Minutes domain: schedule times stored as minutes-from-midnight-UTC, wrapped to `[0,1439]`.
 
@@ -183,9 +184,9 @@ Each has muted helper text about finding/falling-back-to local medication altern
 - **Session dismissal:** "Not Now" suppresses the dialog only until reload/app restart (module-level flag, not persisted).
 - **Detection fails silent:** any DB error during detection is swallowed so app startup never blocks.
 - **Reminders require auth + permission:** the card is hidden when signed-out (push needs auth); local timer checks no-op without `Notification` permission `granted`; toggle disabled when notifications unsupported.
-- **Permission denial is non-destructive:** if the user denies the browser prompt or push subscription fails, the toggle quietly stays off (no error toast).
+- **Permission denial is non-destructive:** if the user denies the browser prompt or push subscription fails, the toggle quietly stays off (no error toast). It is not fully silent at the log level, though — `useDoseReminderToggle` `console.error`s on thrown errors and `console.warn`s when `subscribeToPush()` returns null. (`supported` is computed as `typeof window !== "undefined" && isNotificationSupported()`.)
 - **Dose-due dedupe:** one notification per `{date}-{time}-{prescriptionId}`; keys pruned to today's date daily.
-- **Refill throttle:** at most once per 12 h; per-prescription dedupe within that window.
+- **Refill throttle:** at most once per 12 h; per-prescription dedupe within that window. A prescription with no active non-archived inventory is **skipped entirely** for refill alerts (no fallback to an archived/inactive item), unlike the dose-reminder path which falls back to the first inventory found for the med name.
 - **Refill trigger logic:** alerts when `daysLeft <= refillAlertDays` OR `stock <= refillAlertPills` (either threshold, if defined); `daysLeft` is `Infinity` when `dailyPills === 0`.
 - **Daily dosage weighting:** `dosage × (daysOfWeek.length / 7)` so non-daily schedules scale correctly.
 - **Two divergent region pickers:** the compact Settings section uses non-ISO values (`UK`, `Other`, `None`) while the rich view uses ISO codes + `""`. Editing region in one surface can surface a mismatched display in the other (the rich combobox falls back to its placeholder for unrecognized stored values). An alternative design should unify these on one canonical option set.

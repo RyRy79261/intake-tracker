@@ -34,8 +34,8 @@ Four sub-sections, all rendered inside one collapsible accordion item labeled **
 - Icon: `Navigation`, heading color `text-cyan-600 dark:text-cyan-400`. Heading: "Quick Navigation".
 - **Master toggle "Quick Nav Footer"** — On/Off button. Caption: "Show a footer bar to jump to sections". Controls `showQuickNav`.
 - When ON, reveals two more controls (hidden when OFF):
-  - **Footer Items list** (`Reorder.Group` from `motion/react`) — a draggable, reorderable vertical list of all 6 default sections. Each row shows: a grip handle (`GripVertical`), the section's themed icon in a colored chip (from `CARD_THEMES`), the section label, and a `Switch` to enable/disable that item. Disabled rows render at `opacity-50`. Caption: "Drag to reorder. Toggle to show/hide in the footer."
-  - **Icon Order dropdown** — `Select` with "Right to Left (recommended)" (`rtl`) and "Left to Right" (`ltr`). Caption: "RTL puts your most-used sections closest to your right thumb". Controls `quickNavOrder`.
+  - **Footer Items list** (`Reorder.Group` from `motion/react`) — a draggable, reorderable vertical list of all 6 default sections, under a "Footer Items" `Label` prefixed with a `GripVertical` icon. The list container is styled `rounded-lg border bg-background/50 p-2`. Each row shows: a grip handle (`GripVertical`), the section's themed icon in a colored chip (from `CARD_THEMES`), the section label, and a `Switch` to enable/disable that item. Disabled rows render at `opacity-50`. Caption: "Drag to reorder. Toggle to show/hide in the footer."
+  - **Icon Order dropdown** — under an "Icon Order" `Label` prefixed with an `ArrowRightLeft` icon; a `Select` with "Right to Left (recommended)" (`rtl`) and "Left to Right" (`ltr`). Caption: "RTL puts your most-used sections closest to your right thumb". Controls `quickNavOrder`.
 - The footer it configures (`QuickNavFooter`) renders enabled items as tap targets that smooth-scroll to the on-page section (`onScrollTo(sectionId)`); RTL reverses the visual order after filtering disabled items; if zero items are enabled the entire footer is hidden (returns `null`).
 
 ### 3. Animation Timing (`AnimationTimingSection`)
@@ -44,7 +44,7 @@ Four sub-sections, all rendered inside one collapsible accordion item labeled **
   - **Scroll Speed (ms)** — `scrollDurationMs`. How fast the page scrolls to a section. Caption: "How fast the page scrolls to a section (100-1000)".
   - **Auto-Hide Delay (ms)** — `autoHideDelayMs`. Delay before header/footer hide after a quick-nav scroll. Caption: "Delay before header/footer hide after scrolling (0-2000)".
   - **Bar Transition Speed (ms)** — `barTransitionDurationMs`. Header/footer slide-in/out speed. Caption: "How fast header/footer slide in and out (50-500)".
-- These feed `useScrollHide` (header + floating bars) and are converted ms→seconds (`/1000`) for the motion transition duration on the header and footer bars.
+- These feed `useScrollHide` (header + floating bars) and are converted ms→seconds (`/1000`) for the motion transition duration. `barTransitionDurationMs/1000` drives the slide transition on the header (`app-header.tsx`) and on the floating bars (`home-floating-bars.tsx`) — both the `QuickNavFooter` and the `VoiceLaunchBar`.
 
 ### 4. Swipe Navigation (`SwipeNavSection`)
 - Icon: `Hand`, heading color `text-violet-600 dark:text-violet-400`. Heading: "Swipe Navigation".
@@ -78,7 +78,7 @@ Four sub-sections, all rendered inside one collapsible accordion item labeled **
 
 **Page-level**
 - Tap **Reset to Defaults** → `resetToDefaults()` restores every setting to `defaultSettings`; toast confirms.
-- Expand/collapse the **Customization** accordion item (single-type accordion, `collapsible`) — only one accordion group open at a time across the page.
+- Expand/collapse the **Customization** accordion item (single-type accordion, `collapsible`) — only one accordion group open at a time across the page. Customization is one of many sibling groups on the Settings page (AI features, Data & Storage, Tracking, Customization, Medication, Privacy & Security, System, Help & Manual, Feedback, Debug).
 
 ---
 
@@ -117,7 +117,7 @@ Four sub-sections, all rendered inside one collapsible accordion item labeled **
   5. `urination` (enabled) → "Urination"
   6. `defecation` (enabled) → "Defecation"
 - Label overrides (`QUICK_NAV_LABEL_OVERRIDES`): `water → "Liquids"`, `eating → "Food & Salt"` (all others use `CARD_THEMES[id].label`).
-- `CardThemeKey` set (icon/color source, `CARD_THEMES`): `water` (Droplets, sky), `salt` (Sparkles, amber), `sugar` (Candy, pink), `potassium` (Banana, purple), `weight` (Scale, emerald), `bp` (Heart, rose), `eating` (Utensils, orange), `urination` (Droplet, violet), `defecation` (CircleDot, stone), `caffeine` (Coffee, yellow), `alcohol` (Wine, fuchsia). Each theme also carries `sectionId` (e.g. `section-water`, `section-food-salt`, `section-bp`, `section-weight`, `section-urination`, `section-defecation`) used as the scroll target.
+- `CardThemeKey` set (icon/color source, `CARD_THEMES`): `water` (Droplets, sky), `salt` (Sparkles, amber, label "Sodium"), `sugar` (Candy, pink), `potassium` (Banana, purple), `weight` (Scale, emerald), `bp` (Heart, rose), `eating` (Utensils, orange), `urination` (Droplet, violet), `defecation` (CircleDot, stone), `caffeine` (Coffee, yellow), `alcohol` (Wine, fuchsia). Each theme also carries `sectionId` (e.g. `section-water`, `section-food-salt`, `section-bp`, `section-weight`, `section-urination`, `section-defecation`) used as the scroll target. Note `sugar`, `potassium`, and `eating` all share `sectionId: "section-food-salt"` — so the `eating` quick-nav row scrolls to the shared food/salt section.
 
 ### Animation Timing (all in ms)
 - `scrollDurationMs`: default `300`; UI range **100–1000**, step **50**; store clamp `sanitizeNumericInput(v,100,1000)`. Increment min-clamp 100 / max-clamp 1000.
@@ -161,12 +161,12 @@ External lookups (read-only): `CARD_THEMES` (icons/colors/sectionIds), `QUICK_NA
 - **RTL ordering rule:** filtering of disabled items happens BEFORE the RTL reverse, so the configured order is preserved on both axes; only enabled items render.
 - **Empty footer rule:** if all items disabled, the footer hides entirely (returns `null`) even when `showQuickNav` is true.
 - **Theme hydration guard:** Select only sets `value` when `theme !== undefined`, avoiding a controlled/uncontrolled flip during SSR/first paint before next-themes resolves.
-- **Auto-hide sequencing:** `useScrollHide` uses a `navSeqRef` to ignore stale auto-hide timers if the user starts another quick-nav scroll; force-hide clears on scroll-up or reaching page bottom; the header always shows when at the bottom of the page.
-- **Swipe commit rule:** navigation commits when drag distance exceeds `width * (distancePct/100)` OR flick velocity exceeds the velocity threshold (in the correct direction) AND a prev/next route exists; at list edges, drag gets `RESISTANCE` rubber-banding and no commit.
-- **Swipe applies only on top-level routes** (`NAV_ROUTES`); elements marked `[data-no-swipe]` lock the gesture to vertical.
+- **Auto-hide sequencing:** `useScrollHide` uses a `navSeqRef` to ignore stale auto-hide timers if the user starts another quick-nav scroll; force-hide clears on scroll-up or reaching page bottom; the header always shows when at the bottom of the page. Two literal thresholds: "at bottom" is `scrollHeight - (innerHeight + scrollTop) <= 10` px, and scroll-down hiding only triggers once scrolled past 50 px (`current > 50`).
+- **Swipe commit rule:** navigation commits when drag distance exceeds `width * (distancePct/100)` OR flick velocity exceeds the velocity threshold (in the correct direction) AND a prev/next route exists; at list edges, drag gets `RESISTANCE` rubber-banding and no commit. The velocity direction is sign-specific: going to the previous route requires `offset.x > 0` and (`offset.x > threshold` OR `velocity.x > vThreshold`); going to the next route requires `offset.x < 0` and (`offset.x < -threshold` OR `velocity.x < -vThreshold`).
+- **Swipe applies only on top-level routes** (`NAV_ROUTES`); elements marked `[data-no-swipe]` lock the gesture to vertical. The swipe layer carries `style={{ touchAction: "pan-y" }}` so vertical scrolling stays native while horizontal pans drive navigation.
 - **Persist migrations** relevant here: v<5 seeds `quickNavItems` defaults; v<9 seeds swipe thresholds (28 / 500). Older stored blobs forward-migrate to v16.
 - **No required fields / no server validation** — every control has a safe default and reset path; there is no error/offline state because writes are synchronous to localStorage.
-- **Rounding:** numeric values are integers via integer steps (except weight increment elsewhere, not in this group); `validateAndSave` uses `parseFloat` then `.toString()`, so a typed decimal within range would be stored as-is (steps keep normal use on integers).
+- **Rounding:** numeric values are integers via integer steps (except weight increment elsewhere, not in this group). `validateAndSave` uses `parseFloat` then `.toString()`, but the store setters re-clamp through `sanitizeNumericInput(value, min, max)`, which (called with no `precision` argument) returns `Math.round(clamped)` — so a typed decimal within range is **rounded to an integer**, not stored as-is.
 
 ---
 

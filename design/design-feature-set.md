@@ -1,23 +1,20 @@
-<!-- AUTO-ASSEMBLED. Source of truth = design/feature-set/*.md (one file per unit).
-     Regenerate this master by re-running the assembly (header + 00-overview + 01..46). -->
+<!-- AUTO-ASSEMBLED from design/feature-set/*.md. Regenerate by re-running assembly. -->
 
 # Intake Tracker — Totalistic Design Feature-Set Brief
 
 **Date:** 2026-05-31
-**Purpose:** the complete, exhaustive map of *what the app does* — every component and
-module documented down to features, user actions, states/presentations, enums, data model,
-edge cases, and sub-components. It is the input for generating **alternative** designs.
+**Status:** Verified against source (adversarial 47-unit audit) and **corrected** — every
+flagged inaccuracy fixed and omission added. See `design/feature-set-verification-report.md`.
 
-**How to use this for alternative designs:** treat every feature, action, state, and enum
-below as a **requirement to preserve**. An alternative design may freely change layout,
-color, hierarchy, navigation, and interaction style — but it must **drop no functionality**
-and must handle every documented state. Start from `00 — Overview` (domains, shared
-patterns, the global states matrix, IA), then the 46 unit sections.
+**Purpose:** the exhaustive map of *what the app does* — every component/module down to
+features, actions, states, enums, data model, edge cases. Input for **alternative** designs.
 
-**Granular source:** each section below is also a standalone file in
-`design/feature-set/<NN>-<unit>.md`.
+**How to use:** treat every feature/action/state/enum below as a **requirement to preserve**.
+Alternatives may change layout/color/hierarchy/interaction freely — but drop no functionality
+and handle every documented state. Start at `00 — Overview`, then the 46 unit sections.
 
----
+**Granular source:** `design/feature-set/<NN>-<unit>.md` (+ verification at
+`design/feature-set/verification/<NN>-<unit>.md`).
 
 
 
@@ -89,8 +86,12 @@ shared status scale answers *"how am I doing?"*.
 
 Eleven `CARD_THEMES` keys exist (`water · salt · sugar · potassium · weight · bp · eating ·
 urination · defecation · caffeine · alcohol`); `eating` is the chrome of the combined Food card
-that hosts the salt/sugar/potassium budget bars. Several hues collide for color-vision-deficient
-users (`weight↔medication` <8°; the three blues `water`/`urination`/`primary`; the warm cluster
+that hosts the salt/sugar/potassium budget bars. Note: not all keys are backed by a `--<domain>`
+HSL CSS-var token — only nine are (`water · salt · weight · bp · eating · urination · defecation ·
+caffeine · alcohol`), plus `--medication`. `sugar` and `potassium` are **Tailwind-class-only** in
+`CARD_THEMES` (gradient classes `from-pink-* to-rose-*` / `from-purple-* to-indigo-*`), so their
+hues above are gradient descriptions, not single degree values like the var-backed domains. Several hues collide for color-vision-deficient
+users (`weight↔medication` exactly 8° apart — 160° vs 168°; the three blues `water`/`urination`/`primary`; the warm cluster
 `salt`/`eating`/`caffeine`) — alternatives **must distinguish colliding domains by icon + label,
 not hue**, and must not grow the hue count.
 
@@ -117,8 +118,10 @@ each, but every one must remain present and functional.
   datetime-local + note + Save/Cancel). Delete has a ~5s **Undo** toast (unit 08).
 - **Modal/dialog editors.** History drawer and Analytics records tab edit the same records through
   full modal dialogs via a unified adapter (unit 08, 09, 23).
-- **Segmented controls / toggles.** Active preset / size / arm / position / Bristol type / day-of-week
-  selectors render as tap-the-option segmented chips, never dropdowns or free-text (units 03, 05, 06).
+- **Segmented controls / toggles.** Active preset / size / arm / position / amount-estimate
+  (small/medium/large) / day-of-week selectors render as tap-the-option segmented chips, never
+  dropdowns or free-text (units 03, 05, 06). Defecation consistency/urgency is captured only via a
+  free-text note — there is no Bristol scale.
 - **Wizards.** Multi-step bottom-drawer flows for *setup* only — the Add-Medication wizard
   (branch-point first step, then progressive disclosure, segmented progress bar, per-step Zod
   validation, 3–6 dynamic steps) and the cloud-sync migration wizard (units 13, 42). Wizards are
@@ -258,7 +261,8 @@ dropdown), card shapes, chart styling, and overall mood.
    offline/syncing/synced/sync-failed/conflict/stale/over-target/over-limit/success/validation/
    disabled/dark). Design each one — do not ship only the happy path.
 4. **Every enum / option / configurable value** in "Enums, options & configurable values" (e.g. BP
-   categories, Bristol types 1–7, amount-estimate options, dose states taken/skipped/missed/pending,
+   categories — the 6-tier ESH grade scale Optimal / Normal / High normal / Grade 1–3 hypertension —
+   amount-estimate options small/medium/large, stored dose states taken/skipped/rescheduled/pending,
    frequency presets, day-parts, settings ranges). The UI must be able to represent exactly these
    values — no more, no less.
 5. **Every validation rule and edge case** in "Validation, edge cases & business rules."
@@ -284,7 +288,7 @@ faster glance, easier log, never judged.
 - `src/components/liquids/beverage-tab.tsx` (generic named beverage + optional sugar tab)
 - `src/components/liquids/preset-tab.tsx` (coffee & alcohol tabs: preset grid, AI lookup, substance auto-calc)
 - `src/components/manual-input-dialog.tsx` (modal for exact-amount entry with custom time + note)
-- `src/components/collapsible-time-input.tsx` (shared "Set different time" collapsible — pattern also used here)
+- `src/components/collapsible-time-input.tsx` (shared "Set different time" collapsible — used by other cards, e.g. weight/BP; the manual dialog here re-implements the same disclosure pattern inline rather than importing this component)
 - `src/components/recent-entries-list.tsx` (`RecentEntriesList` + `InlineEditFormShell`)
 - `src/hooks/use-intake-queries.ts` (`useIntake`, totals, recent records, add/update/delete)
 - `src/hooks/use-substance-queries.ts` (caffeine/alcohol substance CRUD)
@@ -316,7 +320,7 @@ faster glance, easier log, never judged.
 - **All tabs share one water progress bar** (rendered inside each tab) and one daily water budget — every drink across every tab counts as water.
 - **Recent entries list** (always visible below tabs, regardless of active tab): last 3 water-type intake records, newest first. Each row shows time, amount, optional `{n}g sugar` chip (pink), and a derived source label chip (beverage/preset name).
 - **Inline edit** of any recent entry expands the row into an edit form (amount, beverage name, caffeine mg, alcohol % ABV, optional sugar g, date/time, note).
-- **Delete with undo:** deleting a recent entry soft-deletes it and shows an undo toast (~5s window).
+- **Delete with undo:** deleting a recent entry soft-deletes it and fires **two** stacked toasts: an undo toast titled **"Record deleted"** with an Undo button (~5s window), plus a separate confirmation toast titled **"Entry deleted"** with description **"Water entry removed"**.
 - **Sugar tracking is conditional** on the optional "sugar" tracker being enabled (`useOptionalTrackerEnabled("sugar")`) — sugar inputs/chips hide when disabled.
 
 ### Water tab (water-tab.tsx)
@@ -345,21 +349,23 @@ faster glance, easier log, never judged.
 - **Name input** (always visible, even signed-out, so entries can be labeled).
 - **Volume (ml) + per-100ml substance fields**, editable; editing clears the selected preset id.
 - **Optional sugar (g) field.**
-- **Calculated amount display:** live string e.g. `52 mg caffeine` or `12% ABV (1.4 std drinks)`, or salt fallback `78 mg salt`; placeholder "Enter volume and concentration" when nothing to compute.
+- **Calculated amount display:** live string e.g. `52 mg caffeine` or `12% ABV (1.4 std drinks)`, or salt fallback `78 mg salt`; placeholder "Enter volume and concentration" when nothing to compute. There is **no UI field to enter salt** on the preset tab — `saltPer100ml` is only ever populated by loading a preset (or AI lookup) that already carries it, so the salt fallback string only appears when such a preset is loaded.
 - **Log Entry button** — writes a composable group (water + optional salt/sugar intakes + caffeine/alcohol substance record).
 - **"Save as preset & log" button** (signed-in, named, AI-populated only) — persists a new `LiquidPreset` then logs in one action.
 - Shares the same water two-stage progress bar (uses the tab's gradient for primary fill).
 
 ### Manual input dialog (manual-input-dialog.tsx)
-- Modal for entering an **exact amount** in ml (or mg when `type="salt"`).
+- Modal for entering an **exact amount** in ml (or mg when `type="salt"`). Title is "Enter Water Amount" for water, "Enter **Sodium** Amount" for salt.
+- The dialog re-implements its time + note disclosures **inline** (it does not import/use `CollapsibleTimeInput`; that shared component exists and is used by other cards, e.g. weight/BP).
 - **Quick-select chips:** `100, 250, 500, 750, 1000`.
 - **Collapsible "Set different time"** (`datetime-local`, capped at now) to back-date the entry.
 - **Collapsible "Add a note"** (textarea, max 200 chars, live counter).
 - **Zod validation** (amount positive & required; note ≤ 200). Field errors render inline; a validation_error audit log is written on failure.
+- **On-open reset:** each time the dialog opens, a `useEffect` re-seeds the amount to the current value and re-evaluates `getCurrentDateTimeLocal()`, resetting `customTime`, clearing the note, and collapsing both the time and note disclosures.
 
 ### Substance auto-calc
 - **Caffeine:** `mg = round(volumeMl / 100 × caffeinePer100ml)`.
-- **Alcohol:** standard drinks `= ethanolGrams / 10`, where `ethanolGrams = volumeMl × (abv/100) × 0.789`. ABV % is the stored input; standard drinks are derived & rounded to 1 dp.
+- **Alcohol:** standard drinks `= ethanolGrams / 10`, where `ethanolGrams = volumeMl × (abv/100) × 0.789`. ABV % is the stored input; standard drinks are derived. The live display and the create path (`buildComposableEntry`) round to **1 dp** (`toFixed(1)`); the **edit-form sync path rounds to 2 dp** (`standardDrinksFromAbv(...).toFixed(2)`), so stored std-drinks precision is not uniformly 1 dp.
 - **Salt (from preset):** `mg = round(volumeMl / 100 × saltPer100ml)`.
 
 ---
@@ -407,7 +413,7 @@ faster glance, easier log, never judged.
 - **Tap an entry row** → expand inline edit form (keyboard Enter/Space also opens).
 - **Edit amount / beverage name / caffeine mg / alcohol % ABV / sugar g / date-time / note → tap Save** → update intake record + sync linked substance/sugar records.
 - **Tap Cancel** → collapse edit form.
-- **Tap trash icon** → soft-delete + undo toast ("Water entry removed"). Shows spinner while deleting; stop-propagation so it doesn't open edit.
+- **Tap trash icon** → soft-delete; fires the undo toast (title "Record deleted", Undo button) **and** a confirmation toast (title "Entry deleted", description "Water entry removed"). Shows spinner while deleting; stop-propagation so it doesn't open edit.
 
 ---
 
@@ -473,12 +479,12 @@ Alcohol tab:
 ### Substance / measurement constants
 - `GRAMS_PER_STANDARD_DRINK = 10` (WHO/metric standard drink = 10 g ethanol).
 - `ETHANOL_DENSITY_G_PER_ML = 0.789`.
-- Caffeine unit: mg. Alcohol unit: % ABV (stored) + standard drinks (derived, 1 dp). Salt unit: mg. Sugar unit: g (rounded integer). Water/volume unit: ml.
-- Per-100ml input step: alcohol `0.5`, coffee/beverage `1`. Edit-form: caffeine step `1`, alcohol step `0.1`.
+- Caffeine unit: mg. Alcohol unit: % ABV (stored) + standard drinks (derived; 1 dp on the live display & create path, 2 dp on the edit-form sync path). Salt unit: mg. Sugar unit: g (rounded integer). Water/volume unit: ml.
+- Per-100ml input step: alcohol `0.5`, coffee/beverage `1`. Edit-form: caffeine step `1`, alcohol step `0.1`, sugar step `1`. All three edit inputs also set `min="0"` and `inputMode="decimal"`.
 
 ### Substance label strings (preset tab)
 - Primary per-100ml label: coffee → "per 100ml (mg caffeine)", alcohol → "% ABV", beverage → "per 100ml (mg)".
-- `aiLookupType`: coffee→"caffeine", alcohol→"alcohol", beverage→"caffeine".
+- `aiLookupType`: coffee→"caffeine", alcohol→"alcohol", beverage→"caffeine" (the beverage value is dead — that `PresetTab` variant is never mounted by `LiquidsCard`).
 - Default descriptions when name/search blank: coffee→"Coffee", alcohol→"Drink", beverage→"Beverage".
 
 ### Settings (Zustand `settings-store`, persisted to localStorage)
@@ -496,7 +502,7 @@ Alcohol tab:
 - `"substance:{id}"` — water auto-created by a standalone substance record.
 - `"manual:sugar"` — linked sugar intake.
 - Legacy: `"coffee:{name}"`, `"juice"`, `"food:*"` recognized by `getLiquidTypeLabel`.
-- `groupSource` values seen here: `"manual_beverage_entry"`, `"preset:{id|manual}"`.
+- `groupSource` values seen here: `"manual_beverage_entry"`, `"preset:{id|manual}"`. (On preset tabs the same `preset:{id|manual}` string is written to **two distinct fields**: the entry's `groupSource` and each water intake row's per-row `source`.)
 
 ### Misc constants
 - Recent entries shown: **3** (`getRecentRecords` limit + `RecentEntriesList` `maxEntries`).
@@ -522,6 +528,7 @@ Alcohol tab:
 
 ### `LiquidPreset` (constants.ts / stored in settings-store)
 `id, name, tab ("coffee"|"alcohol"|"beverage"), defaultVolumeMl, waterContentPercent (0-100), caffeinePer100ml?, alcoholPer100ml? (ABV %), saltPer100ml?, isDefault, source ("manual"|"ai"), aiConfidence?`
+- `aiConfidence?` exists on the type but is **never written** by this unit's save-as-preset path (`addLiquidPreset` omits it).
 
 ### Aggregation reads
 - `getDailyTotal(type, dayStartHour)` — sum of water since the day-start cutoff (the budget metric).
@@ -539,17 +546,17 @@ Alcohol tab:
 
 - **Amount must be positive:** water/beverage Confirm no-ops if `pendingAmount ≤ 0`; manual dialog Zod-validates `amount > 0` & required; edit form rejects `NaN`/`≤ 0` with toast "Invalid amount".
 - **Decrement floor:** stepper minimum is `waterIncrement` (can't go below one increment).
-- **Custom time is past-only:** `datetime-local` `max` = now in both the dialog and edit form; back-dated entries get the dialog timestamp, otherwise `Date.now()`.
+- **Custom time is past-only (manual dialog only):** the manual dialog's `datetime-local` caps `max` at now (`getCurrentDateTimeLocal()`). The inline edit form's `datetime-local` has **no `max` attribute** — it does not constrain to the past. Back-dated dialog entries get the dialog timestamp, otherwise `Date.now()`.
 - **Full volume counts as water:** caffeine/alcohol content does NOT reduce the logged water volume (explicit comment). `waterContentPercent` is stored on presets but not subtracted from the logged water amount.
-- **Avoid duplicate water:** a substance record only carries `volumeMl` when no explicit water intake exists in the same group (otherwise the service would auto-create a second water row).
+- **Avoid duplicate water:** a substance record only carries `volumeMl` when no explicit water intake exists in the same group (otherwise the service would auto-create a second water row). The edit-form sync preserves this invariant too: when an existing caffeine/alcohol record has **no** `volumeMl`, the update deliberately does NOT add one (`if (existing.volumeMl !== undefined)`).
 - **Substance required to log on preset tabs:** Log Entry requires `volumeMl > 0` AND (`caffeinePer100ml > 0` OR `alcoholPer100ml > 0`).
 - **Sugar parsing:** beverage tab `Math.round` of positive parse else 0; only grouped when > 0.
-- **Caffeine/salt rounding:** `Math.round((volumeMl/100)×perValue)`. Standard drinks rounded to 1 decimal.
+- **Caffeine/salt rounding:** `Math.round((volumeMl/100)×perValue)`. Standard drinks are rounded to 1 decimal on the live display and create path, but to 2 decimals on the edit-form sync path.
 - **Daily cutoff (`dayStartHour`, default 2am):** day-start = today at hour:00; if now is before that hour, use yesterday's start. The daily total resets at the configured hour, distinct from the rolling 24h window.
 - **Over-limit handling is non-blocking:** going over the limit only recolors text/bar; entries still save.
 - **Limit disabled (`waterLimit = 0`):** no over-limit/would-exceed logic; progress treats target ≤ 0 as empty bar.
 - **Edit beverage-name sync:** only plain `beverage[:name]` entries write the name back to `source`; preset/substance entries keep the name on `SubstanceRecord.description` (synced separately).
-- **Cleared substance field on edit = soft-delete:** an empty caffeine/alcohol/sugar field parses to `0`, which `syncLiquidEntrySubstances` interprets as "remove the linked record".
+- **Cleared substance field on edit = soft-delete; junk field = leave untouched:** the edit `parse()` helper maps an empty caffeine/alcohol/sugar field to `0` (which `syncLiquidEntrySubstances` interprets as "remove the linked record"), a finite `≥ 0` number to that value, and a **non-numeric non-empty** string to `null` (which the sync treats as "leave the existing record untouched").
 - **Stale async guard on edit:** an `openTokenRef` discards a slow `fetchEntryGroup` result if the user opened a different record meanwhile.
 - **Legacy alcohol records:** if a record stored `amountStandardDrinks` but no `abvPercent`, the edit form derives ABV via `abvFromStandardDrinks(stdDrinks, volume)` (returns 0 when volume ≤ 0).
 - **Pre-v15 / no-groupId records:** edit form falls back to looking up the preset by `source` ("preset:{id}") to pre-fill substance values synchronously.
@@ -566,7 +573,7 @@ Alcohol tab:
 - **`LiquidsCard`** — top-level card: header stats, 4-tab strip, recent-entries list, and the inline substance edit form.
 - **`WaterTab`** — plain water quick-add (size chips, stepper, confirm, manual dialog).
 - **`BeverageTab`** — named generic beverage + optional sugar; grouped write when sugar present.
-- **`PresetTab`** — coffee & alcohol (and beverage) variant: preset grid, long-press delete, AI lookup, substance auto-calc, save-as-preset.
+- **`PresetTab`** — coffee & alcohol variant: preset grid, long-press delete, AI lookup, substance auto-calc, save-as-preset. (The component also accepts `tab="beverage"`, but `LiquidsCard` never mounts that variant — the Beverage tab renders `BeverageTab` instead, so `PresetTab`'s beverage path is dead in this card.)
 - **`ManualInputDialog`** — modal for exact amount with quick chips, collapsible custom-time, collapsible note, Zod validation (`type: "water" | "salt"`).
 - **`CollapsibleTimeInput` / `CollapsibleTimeInputControlled`** — shared "Set different time" disclosure (datetime-local, max=now); uncontrolled vs parent-controlled variants.
 - **`RecentEntriesList`** — generic last-N entries list with click-to-edit, delete-with-spinner, custom row + edit-form render props.
@@ -610,9 +617,9 @@ Alcohol tab:
 - **Manual detail fields** (always visible): Weight (g, optional), Sodium (required, with measurement-source select), Sugar (g, optional — only if sugar tracker on), Potassium (mg, optional — only if potassium tracker on), Water content (ml, optional).
 - **Sodium measurement conversion:** the entered number is multiplied by a source factor to derive stored sodium-mg. A live hint shows `= <calculated>mg sodium` whenever source ≠ Sodium and the result > 0.
 - **Record with details** button — persists. If any intake fields or AI-population exist, writes a composable group; otherwise writes a plain eating record (note/grams only).
-- **Recent entries list** — last 5 eating records, each showing timestamp, linked sodium (`mg`), linked sugar (`g sugar`, if tracker on), linked potassium (`mg K`, if tracker on), grams, and note. Per-row edit + delete.
+- **Recent entries list** — the hook fetches the last 5 eating records, but `RecentEntriesList` is rendered without `maxEntries`, so it falls back to its default of **3** and only the 3 most recent rows are displayed. Each shows timestamp, linked sodium (`mg`), linked sugar (`g sugar`, if tracker on), linked potassium (`mg K`, if tracker on), grams, and note. The whole row is the edit affordance (no pencil icon); a `Trash2` delete button sits at the row's right edge.
 - **Inline edit form** — edits timestamp, note, weight, sodium (+source), sugar, potassium, water content; reconciles the linked group via `syncEatingGroup`.
-- **Delete with undo** — soft-delete with a toast offering Undo (~5s window).
+- **Delete with undo** — soft-delete. Two toasts fire: a 5s "Record deleted" toast with an **Undo** action, plus a separate non-undo "Entry deleted / Eating record removed" confirmation toast.
 
 ### Composable group model
 - One submit can create up to: 1 eating record + N intake records (`salt`, `sugar`, `potassium`, `water`), all sharing one `groupId` and a `groupSource`.
@@ -639,9 +646,9 @@ Alcohol tab:
 | Change Sodium source select | Switches multiplier (sodium 1.0 / salt 0.39 / msg 0.12). |
 | Enter Sugar (g) / Potassium (mg) | Optional; only when tracker enabled; rounded to int, saved only if > 0. |
 | Enter Water content (ml) | Optional; rounded, creates a linked water intake (`manual:food_water_content`) carrying the food note. |
-| Tap "Record with details" | Saves. Blocked (with toast) if no sodium. Composable group if intakes/AI present, else plain eating record. Success toast + form reset. |
-| Tap edit (pencil) on a recent row | Opens inline edit form; back-fills sodium (back-converted to input units via source multiplier), sugar, potassium, water, grams, note, timestamp. |
-| Edit & Save in inline form | `syncEatingGroup` upserts/soft-deletes linked records; a `groupId` is generated if the record had none and any nutrient > 0. |
+| Tap "Record with details" | Saves. Blocked if no sodium, with a destructive toast titled "Sodium required" / "Enter a sodium amount before saving." Composable group if intakes/AI present, else plain eating record. Success → toast titled "Logged" + form reset. |
+| Click a recent row (or press Enter/Space on it) | The whole row is the edit affordance — there is no pencil icon. Clicking it (or keyboard-activating the focused row, only when the event target is the row itself) opens the inline edit form; back-fills sodium (back-converted to input units via source multiplier), sugar, potassium, water, grams, note, timestamp. |
+| Edit & Save in inline form | `syncEatingGroup` upserts/soft-deletes linked records; a `groupId` is generated if the record had none and any nutrient > 0. Success → "Entry updated" toast; failure → destructive "Error / Could not update the entry" toast; an unparseable timestamp → destructive "Invalid date/time" toast (save aborts). |
 | Cancel inline edit | Closes form, discards changes; stale async group fetches are ignored via `openTokenRef`. |
 | Tap delete on a recent row | Soft-deletes the eating record; undo toast (~5s). |
 | Tap X on a preview row (ComposablePreview) | Removes that record from the preview list (stops propagation). |
@@ -670,16 +677,16 @@ Alcohol tab:
 - **Parsing:** food input `disabled`; Sparkles → spinner; button disabled.
 - **AI-populated:** fields filled; `aiPopulated` flag changes save to a composable group with `groupSource: "ai_food_parse"` and stores `originalInputText`.
 - **Submitting:** save button shows spinner; disabled.
-- **Validation error (no sodium):** save disabled; destructive toast if forced; hint text below button.
-- **Success:** success toast ("Meal with details recorded" or "Eating event recorded"); form resets.
+- **Validation error (no sodium):** save disabled; if forced, a destructive toast titled "Sodium required" / "Enter a sodium amount before saving."; hint text below button.
+- **Success:** success toast titled "Logged" with description "Meal with details recorded" (note present) or "Eating event recorded" (no note); form resets.
 - **Error (save failed):** destructive toast "Failed to record".
 - **Sodium conversion hint:** shown only when source ≠ sodium and calculated > 0.
 
 **Recent list:**
-- **Populated:** rows with timestamp + nutrient badges (sodium orange, sugar pink, potassium purple) + grams + truncated note.
+- **Populated:** rows with timestamp + nutrient badges (sodium orange, sugar pink, potassium purple) + grams + truncated note. Each row is keyboard-accessible: `role="button"`, `tabIndex={0}`, opening the inline edit form on Enter/Space (only when the event target is the row itself, so the inner delete button is unaffected). The per-row delete is a `Trash2` icon button that turns red on hover.
 - **Editing row:** row replaced by inline edit form (`InlineEditFormShell`) with grams/sodium+source/sugar/potassium/water + timestamp + note + Save/Cancel.
 - **Deleting row:** spinner / disabled while delete in flight (via `deletingId`).
-- **Empty:** (RecentEntriesList renders its own empty state when no records.)
+- **Empty:** `RecentEntriesList` returns `null` when there are no records — it renders nothing at all (no "Recent" header, no empty-state message).
 
 **ComposablePreview:**
 - **Empty list:** shows original text + "No records to save. Try again or add details manually."; "Confirm All" disabled.
@@ -709,7 +716,7 @@ Alcohol tab:
 - Water content: `manual:food_water_content` (`FOOD_WATER_SOURCE`)
 - Generic composable fallback: `composable`
 
-**`groupSource` values:** `manual_food_entry` (manual), `ai_food_parse` (AI-populated); broader set documented in db.ts also includes `ai_substance_lookup`, `manual`.
+**`groupSource` values:** `manual_food_entry` (manual), `ai_food_parse` (AI-populated). The food form writes one of these two. Note the db.ts type comment is out of date: it lists `"ai_food_parse" | "ai_substance_lookup" | "manual"` and omits `manual_food_entry`, the value the form actually persists for manual entries.
 
 **Optional trackers (`OPTIONAL_TRACKERS` / `OPTIONAL_TRACKER_DEFAULTS`):**
 - `sugar` — label "Sugar", unit `g`, icon `Candy`, color pink, **default ON**.
@@ -734,7 +741,7 @@ Alcohol tab:
 **Card theme tokens** (`CARD_THEMES`): `eating` (orange — card shell + Utensils icon + button), `salt` (amber/orange progress gradients + `progressExtended` orange→amber + `progressOverLimit` red), `sugar` (pink/rose + extended rose→fuchsia + red), `potassium` (purple/indigo gradient, no extended). Badge colors: sodium `text-orange-600`, sugar `text-pink-600`, potassium `text-purple-600`.
 
 **AI parse route (`/api/ai/parse`):**
-- Model: `CLAUDE_MODELS.quality` (Opus); `temperature: 0`; `max_tokens: 4096`; tools: `WEB_SEARCH_TOOL` + `parse_food_result`.
+- Model: `CLAUDE_MODELS.quality` (`claude-sonnet-4-6` / Sonnet); `temperature: 0`; `max_tokens: 4096`; tools: `WEB_SEARCH_TOOL` + `parse_food_result`.
 - Rate limit: 20 / window per IP.
 - Request: `{ input: string }` (1–500 chars).
 - Tool output fields: `water_ml`, `sodium_mg`, `sugar_g`, `potassium_mg`, `reasoning` (all required; nulls allowed).
@@ -743,7 +750,7 @@ Alcohol tab:
 - Response shape (to client): `{ water, salt (=sodium mg), measurement_type: "sodium", sugar, potassium, reasoning? }`.
 
 **AI nutrient-analysis route (`/api/ai/nutrient-analysis`):**
-- Model: Opus; `temperature: 0.2`; `max_tokens: 4096`; rate limit 10 / window.
+- Model: `CLAUDE_MODELS.quality` (`claude-sonnet-4-6` / Sonnet); `temperature: 0.2`; `max_tokens: 4096`; rate limit 10 / window.
 - Request: `windowDays` 1–90, optional `focus` (≤200), `foods[]` 1–500 (`description` 1–300, optional `grams` 0–10000), optional `conditions[]` (≤20), optional `medications[]` (≤40, with `phaseType: maintenance|titration`).
 - Finding `status` enum: `high` | `low` | `balanced`.
 - Response: `summary` (≤4000), `findings[]` (≤20, each: nutrient, status, detail ≤2000, exampleFoods ≤12), `caveats[]` (≤8).
@@ -756,7 +763,7 @@ Alcohol tab:
 
 **`EatingRecord` (`db.ts`):** `id, timestamp, grams?, note?, createdAt, updatedAt, deletedAt, deviceId, timezone, groupId?, originalInputText?, groupSource?`.
 
-**`SubstanceRecord`:** touched by the composable service (caffeine/alcohol), but not by the food form — relevant only for shared group transactions.
+**`SubstanceRecord`:** touched by the composable service (caffeine/alcohol), but not by the food form — relevant only for shared group transactions. `addComposableEntry` also accepts a `substance` (singular) and `substances` (plural) input path and, for a substance carrying a `volumeMl`, auto-creates a linked `water` intake from that volume. The food form never exercises these paths, but they share the same group transaction.
 
 **Service entry points used:**
 - `addComposableEntry(input, timestamp)` — creates the group (eating + intakes [+ substances]).
@@ -839,12 +846,12 @@ All writes mirror to Neon Postgres via the sync queue (`enqueueInsideTx` + `sche
 - **Record Reading** primary action — validates, persists, toasts, resets form.
 - **BP category classification** (ESH 2023 / 2018 ESC-ESH office scale; same scale Withings BPM devices use in Europe), evaluated highest-first, OR-based across systolic/diastolic.
 - **Pulse-pressure derivation & coloring** (header only).
-- **Recent readings list** — up to 3 most recent (card fetches 5, list slices to 3), each row showing time, position · arm · optional BPM · optional "irregular", the reading, and its `(category)` label in risk color.
+- **Recent readings list** — up to 3 most recent (card fetches 5, list slices to 3), each row showing time, then `{position} · {arm} arm` (the literal word "arm" is appended after the arm value, e.g. "sitting · left arm") · optional `{hr} BPM` · optional "irregular", the reading, and its `(category)` label in risk color.
 - **Inline edit** — tapping a recent row swaps it for an inline edit form (systolic, diastolic, heart rate, position select, arm select, irregular-heartbeat checkbox, time, note).
 - **Delete** with per-row spinner + toast.
 - **Offline-first persistence** — writes go straight to IndexedDB (Dexie) and queue a background sync push; no network needed to record.
-- **Loading skeleton** in header while the live query is undefined.
-- `EditBloodPressureDialog` (separate file) provides the same edit surface as a modal, consumed by History drawer and Analytics "Records" tab.
+- **Loading skeleton (dead code).** The card contains a header `isLoading ? (...)` branch that would render an `animate-pulse` placeholder, but `useBloodPressureRecords` passes `[]` as the `useLiveQuery` default result, so the hook returns `[]` (never `undefined`) before the query resolves. `isLoading = !recentRecords` is therefore always `false` (`![] === false`) and the header skeleton branch **never renders**. Only the route-level `BloodPressureCardSkel` skeleton is actually shown during page load.
+- `EditBloodPressureDialog` (separate file) provides a similar edit surface as a modal, consumed by History drawer and Analytics "Records" tab. **Note:** neither real consumer passes `onIrregularHeartbeatChange`, and the dialog only renders its "Irregular Heartbeat" Select when that handler is supplied — so in production the modal edit flow has **no irregular-heartbeat control** (it edits systolic, diastolic, heart rate, position, arm, time, and note only).
 
 ---
 
@@ -858,15 +865,15 @@ All writes mirror to Neon Postgres via the sync queue (`enqueueInsideTx` + `sche
 - **Tap "Set different time"** — expands a `datetime-local` input (max = now); only applied to the new record if expanded at submit time.
 - **Tap "Record Reading"** — runs Zod validation; on success persists and toasts success, then resets systolic/diastolic/heartRate inputs, `irregularHeartbeat→false`, collapses details, collapses time, resets custom time to now. Button is disabled while pending or while systolic OR diastolic is empty.
 - **Tap a recent entry row** — opens inline edit for that record (`openEdit`); row also keyboard-activatable via Enter/Space (role="button", tabIndex 0).
-- **In inline edit form:** edit systolic/diastolic/heart-rate inputs; change Position select; change Arm select; toggle "Irregular heartbeat" checkbox; change date/time; edit note; **Save** (persists, toast "Entry updated", closes) or **Cancel** (`closeEdit`, discards).
+- **In inline edit form:** edit systolic/diastolic/heart-rate inputs; change Position select (items "Sitting"/"Standing"); change Arm select (items labeled **"Left arm"/"Right arm"** here — differing from the modal dialog's plain "Left"/"Right"); toggle "Irregular heartbeat" checkbox; change date/time; edit note; **Save** (persists, toast "Entry updated", closes) or **Cancel** (`closeEdit`, discards).
 - **Tap the trash icon on a row** — deletes (soft-delete); shows row spinner; toast "Entry deleted" / "Blood pressure record removed". `stopPropagation` prevents opening edit.
-- **In `EditBloodPressureDialog` (modal variant):** same fields rendered as a Dialog with Cancel / Save Changes footer; closes on backdrop / Escape via `onOpenChange`; systolic auto-focused; focus handler can select-all on focus.
+- **In `EditBloodPressureDialog` (modal variant):** fields rendered as a Dialog with Cancel / Save Changes footer (no irregular-heartbeat control in production — see note above); closes on backdrop / Escape via `onOpenChange`; systolic auto-focused. Both real consumers pass `scrollOnFocus` as the shared `onFocus` handler (a scroll-into-view-on-focus behavior, not a select-all).
 
 ---
 
 ## States & presentations
 
-- **Loading (header skeleton):** when `recentRecords` is undefined, the latest-reading block renders an `animate-pulse` placeholder (rose `loadingBg` bar + muted bar). Route-level skeleton `BloodPressureCardSkel` mirrors the layout (two h-12 input blocks, BPM row, expander bar, record button).
+- **Loading (header skeleton — dead code):** the card has an `isLoading ? (...)` branch that would render an `animate-pulse` placeholder (rose `loadingBg` bar + muted bar), but because `useBloodPressureRecords` defaults the live query to `[]` (never `undefined`), `isLoading` is always `false` and this branch never renders. The actual load state shown is the route-level skeleton `BloodPressureCardSkel`, which mirrors the layout (two h-12 input blocks, BPM row, expander bar, record button).
 - **Empty (no readings):** header right side renders nothing (no latest reading, no category). Recent list returns `null` (hidden entirely) when `records` is empty.
 - **Default / populated:** header shows latest reading + category + optional BPM + pulse pressure; entry form shown; recent list shows up to 3 rows.
 - **Details collapsed (default):** only systolic/diastolic/heart-rate + "More options" + Record button visible.
@@ -879,11 +886,11 @@ All writes mirror to Neon Postgres via the sync queue (`enqueueInsideTx` + `sche
 - **Row editing:** the row is replaced in place by the inline edit form on a `bg-muted/30` rounded background.
 - **Row deleting:** trash icon becomes a spinner; button disabled for that row.
 - **Row hover/active:** clickable rows get `hover:bg-black/5 dark:hover:bg-white/5` / `active:bg-black/10`.
-- **Pulse-pressure abnormal:** value text turns red when `>60` or `<30`.
+- **Pulse-pressure abnormal:** value text turns red (`text-red-500 dark:text-red-400`) when `>60` or `<30`; otherwise `text-muted-foreground`.
 - **Category risk coloring:** label color varies by grade (green → lime → yellow → orange → red-600 → red-700) — see enum below.
 - **Disabled Record button:** when `addMutation.isPending` OR systolic empty OR diastolic empty.
 - **Offline/syncing:** no dedicated visual on this card; writes succeed locally and `schedulePush()` queues sync transparently.
-- **Modal dialog (`EditBloodPressureDialog`) open state:** `open` driven by `record !== null`; irregular-heartbeat row only rendered when `onIrregularHeartbeatChange` handler is supplied.
+- **Modal dialog (`EditBloodPressureDialog`) open state:** `open` driven by `record !== null`; irregular-heartbeat row only rendered when `onIrregularHeartbeatChange` handler is supplied — and since neither real consumer (History drawer, Analytics Records tab) passes that handler, the row is **never rendered in production**.
 
 ---
 
@@ -908,7 +915,7 @@ All writes mirror to Neon Postgres via the sync queue (`enqueueInsideTx` + `sche
 | `sys ≥ 120` or `dia ≥ 80` | Normal | `text-lime-600 / dark:text-lime-400` |
 | else | Optimal | `text-green-600 / dark:text-green-400` |
 
-**Pulse-pressure thresholds:** normal ≈ 40 mmHg; `> 60` elevated, `< 30` narrow → both render red, else muted.
+**Pulse-pressure thresholds:** normal ≈ 40 mmHg; `> 60` elevated, `< 30` narrow → both render red (`text-red-500 dark:text-red-400`), else muted (`text-muted-foreground`).
 
 **Validation ranges** (`BloodPressureFormSchema`, card add):
 - Systolic: integer, min 50, max 300, required ("Systolic is required").
@@ -944,11 +951,11 @@ All writes mirror to Neon Postgres via the sync queue (`enqueueInsideTx` + `sche
 - `note?: string`
 - sync/meta: `createdAt`, `updatedAt`, `deletedAt: number | null`, `deviceId`, `timezone` (added by `syncFields()`).
 
-**Dexie index:** `"id, timestamp, position, arm, updatedAt"`.
+**Dexie index:** `"id, timestamp, position, arm, updatedAt"` (repeated identically across schema versions 10–14, as Dexie requires the full schema each version). The `backfill` and `backfillTimezone` migrations also touch `bloodPressureRecords` (populating sync/timezone fields on existing rows).
 
-**Postgres mirror `blood_pressure_records`** (`src/db/schema.ts:120`) — field-for-field parity, with DB CHECK constraints: `position IN ('standing','sitting')`, `arm IN ('left','right')`; `user_id` FK to `usersSync.id`.
+**Postgres mirror `blood_pressure_records`** (`src/db/schema.ts:120`) — field-for-field parity, with DB CHECK constraints: `position IN ('standing','sitting')`, `arm IN ('left','right')`; `user_id` FK to `usersSync.id` (`onDelete: cascade`). Two indexes: `idx_bp_user_updated` on `(userId, updatedAt)` and `idx_bp_ts` on `timestamp`.
 
-**Service functions (`health-service.ts`):** `addBloodPressureRecord`, `getBloodPressureRecords(limit?)`, `getBloodPressureRecordsByDateRange`, `getLatestBloodPressureRecord`, `deleteBloodPressureRecord` (soft), `undoDeleteBloodPressureRecord`, `updateBloodPressureRecord`, `getBloodPressureRecordsPaginated`. All use `writeWithSync(...)` + `schedulePush()`.
+**Service functions (`health-service.ts`):** `addBloodPressureRecord`, `getBloodPressureRecords(limit?)`, `getBloodPressureRecordsByDateRange` (the only BP read that uses the `timestamp` index — a Dexie `.where("timestamp").between(start, end)` query; the other reads full-scan via `orderBy("timestamp")` + in-memory filter), `getLatestBloodPressureRecord`, `deleteBloodPressureRecord` (soft), `undoDeleteBloodPressureRecord`, `updateBloodPressureRecord`, `getBloodPressureRecordsPaginated`. The write functions use `writeWithSync(...)` + `schedulePush()`; reads filter `deletedAt === null`.
 
 **Hooks (`use-health-queries.ts`):** `useBloodPressureRecords(limit=5)` (live query, default `[]`), `useLatestBloodPressure()`, `useAddBloodPressure`, `useUpdateBloodPressure`, `useDeleteBloodPressure`. Param types `AddBloodPressureParams` / `UpdateBloodPressureParams`.
 
@@ -958,7 +965,7 @@ All writes mirror to Neon Postgres via the sync queue (`enqueueInsideTx` + `sche
 
 - **Add path validation** is Zod (`BloodPressureFormSchema`): integers only, systolic 50–300, diastolic 20–200, heart rate (if given) 20–250; both pressures required. On failure, per-field errors set + audit log; no submit.
 - **Heart rate is conditionally included** — only written when parsed and not NaN; spread conditionally so an empty field is omitted entirely (not stored as 0/null).
-- **Irregular heartbeat only stored when true** (`...(irregularHeartbeat && { irregularHeartbeat: true })`) on add; on update it's written through directly. So a record may have the field absent vs. `false`.
+- **Irregular heartbeat: "only when true" is a caller constraint, not the service.** The `addBloodPressureRecord` service writes `irregularHeartbeat` whenever it is `!== undefined` (`...(irregularHeartbeat !== undefined && { irregularHeartbeat })`), so passing `false` *would* persist `false`. The card add path, however, only ever passes `true` (it spreads `irregularHeartbeat && { irregularHeartbeat: true }`), so in practice the field is **absent-or-`true`**. On update it's written through directly. A record may therefore have the field absent vs. `false`.
 - **Inline-edit validation** is looser than add: rejects only NaN or `≤ 0` for sys/dia (and heart rate if provided), via toast "Invalid values" → returns `null` to abort. No min/max enforcement.
 - **Timestamp default:** `timestamp ?? Date.now()`. Custom time only applied when the time override is expanded at submit (`showTimeInput`). `dateTimeLocalToTimestamp` throws on invalid input (never NaN) — caught in edit to toast "Invalid date/time".
 - **Category is OR-based & highest-first:** a normal systolic does NOT cancel a high diastolic (e.g. 118/92 → Grade 1 hypertension).
@@ -974,7 +981,7 @@ All writes mirror to Neon Postgres via the sync queue (`enqueueInsideTx` + `sche
 ## Sub-components / variants
 
 - **`BloodPressureCard`** — the dashboard card: latest-reading header, entry form, expandable details, recent list, inline edit. (`blood-pressure-card.tsx`)
-- **`EditBloodPressureDialog`** — fully-controlled modal edit form variant (sys/dia/HR inputs, Position & Arm Selects, Irregular Select, datetime-local, note); used by History drawer & Analytics Records tab, not the card. (`edit-blood-pressure-dialog.tsx`)
+- **`EditBloodPressureDialog`** — fully-controlled modal edit form variant (sys/dia/HR inputs, Position & Arm Selects, datetime-local, note). It also defines an optional Irregular Heartbeat Select, but that row is gated behind an `onIrregularHeartbeatChange` prop that **neither real consumer passes**, so it does not appear in the live History drawer / Analytics Records tab flows. (`edit-blood-pressure-dialog.tsx`)
 - **`RecentEntriesList`** — shared "Recent" section: clickable rows, per-row delete with spinner, swaps in inline edit form for the editing row. (`recent-entries-list.tsx`)
 - **`InlineEditFormShell`** — wraps domain edit fields with timestamp + note inputs and Save/Cancel. (`recent-entries-list.tsx`)
 - **`CollapsibleTimeInputControlled`** — parent-controlled "Set different time" → datetime-local (max = now). (`collapsible-time-input.tsx`)
@@ -1011,18 +1018,18 @@ All writes mirror to Neon Postgres via the sync queue (`enqueueInsideTx` + `sche
 
 ## Features
 
-- **Latest-weight header stat.** Top-right of the card shows the most recent record's weight formatted `XX.XX kg` plus a relative/formatted timestamp (`formatDateTime`). Hidden when there are no records.
+- **Latest-weight header stat.** Top-right of the card shows the most recent record's weight formatted `XX.XX kg` plus an absolute calendar timestamp (`formatDateTime` → `"Mon DD, h:mm AM/PM"`, e.g. "Jan 15, 2:30 PM"; no relative "2h ago" formatting). Hidden when there are no records.
 - **Stepper entry.** Minus / Plus circular icon buttons (`h-14 w-14` rounded-full) adjust the pending weight by `settings.weightIncrement` (default **0.05 kg**).
 - **Direct keyboard input.** The big center value is an `InlineEdit` — tapping it turns the display into an editable text field (`inputMode="decimal"`, `pattern="[0-9]*[.]?[0-9]*"`) so the user can type an exact value.
 - **Rounding on blur.** When direct input loses focus, the typed value is clamped to `[0.1, 1000]` then snapped to the nearest `weightIncrement` multiple and re-rounded to 2 decimals.
 - **Pre-fill / carry-forward.** On load, pending weight is seeded from the latest record's weight (`D-03`). With no records, it defaults to **69** (`D-04`, `D-12`). After a successful record, the value is kept as the starting point for the next entry (no reset).
 - **Custom time entry.** Collapsible "Set different time" reveals a `datetime-local` input (max = now) so a weigh-in can be backdated; otherwise the record uses `Date.now()`.
-- **Record submission.** "Record Weight" button validates, persists to Dexie (offline-first), schedules a sync push, and shows a success toast (`"<value> kg logged successfully"`).
+- **Record submission.** "Record Weight" button validates, persists to Dexie (offline-first), then calls `schedulePush()` synchronously right after the local write (fires immediately, not batched on the card), and shows a success toast (`"<value> kg logged successfully"`).
 - **Recent history list.** Shows up to 3 of the latest 5 records, each as `timestamp · XX.XX kg`, with per-row delete and tap-to-edit-inline.
 - **Inline edit (in-card).** Tapping a Recent row opens an inline form (weight number input + datetime-local + optional note + Save/Cancel) without leaving the card.
 - **Inline delete with undo-capable service.** Soft-deletes a record (sets `deletedAt`); service exposes `undoDeleteWeightRecord` (restores `deletedAt: null`).
 - **Modal edit dialog (`EditWeightDialog`).** Full dialog with Weight / Time / Note fields used from History drawer and Analytics records tab (not from the dashboard card itself).
-- **Offline-first persistence + sync.** All writes go through `writeWithSync(...)` and call `schedulePush()` to mirror to Neon Postgres later.
+- **Offline-first persistence + sync.** All writes go through `writeWithSync(...)` and call `schedulePush()` (synchronously, right after the local write) to mirror to Neon Postgres.
 - **Live reactivity.** `useWeightRecords` is a Dexie `useLiveQuery`, so the header, stepper pre-fill, and Recent list update automatically when data changes (including from sync).
 
 ## User actions & interactions
@@ -1034,7 +1041,7 @@ All writes mirror to Neon Postgres via the sync queue (`enqueueInsideTx` + `sche
 - **Toggle "Set different time":** expands/collapses the `datetime-local` picker (label "When was this measured?"; button text toggles "Set different time" ↔ "Using custom time", chevron flips).
 - **Change custom time:** updates `customTime`; used only when the section is expanded (`showTimeInput`).
 - **Tap "Record Weight":** runs Zod validation; on success persists and toasts; resets the time section to collapsed + now, but keeps the weight value. Disabled while the add mutation is pending or pending is `null`.
-- **Tap a Recent row:** opens the inline edit form for that record (keyboard: Enter/Space on the focused row also opens it).
+- **Tap a Recent row:** opens the inline edit form for that record (keyboard: Enter/Space on the focused row also opens it — but only when the row element *itself* is focused, guarded by `if (e.target !== e.currentTarget) return;`, so pressing Enter/Space while a child like the delete button is focused does **not** open edit).
 - **Inline edit — change weight / time / note, Save:** parses + validates and updates the record (`"Entry updated"` toast); invalid weight → `"Invalid weight"` destructive toast and aborts; invalid date → `"Invalid date/time"` destructive toast.
 - **Inline edit — Cancel:** closes the form without saving.
 - **Tap Recent row delete (trash icon):** soft-deletes (`stopPropagation` so it doesn't open edit); shows a per-row spinner; toast `"Entry deleted" / "Weight record removed"`; error toast on failure.
@@ -1054,19 +1061,20 @@ All writes mirror to Neon Postgres via the sync queue (`enqueueInsideTx` + `sche
 - **Recent row — editing:** the tapped row is replaced by an inline form on a `bg-muted/30` rounded panel.
 - **Recent row — deleting:** that row's trash button shows a spinner and is disabled.
 - **Recent row — hover/active (when editable):** subtle background highlight (`hover:bg-black/5` / `dark:hover:bg-white/5`, active deeper).
-- **Offline / syncing:** no distinct UI on this card; writes succeed locally and queue a push. Live-query reflects synced changes when they land.
+- **Offline / syncing:** no distinct UI on this card; writes succeed locally and `schedulePush()` fires immediately after each write. Live-query reflects synced changes when they land.
 - **Success:** green-tinted toast variant on record; plain toast on edit/delete.
 - **Theme variant:** entire card uses the emerald/teal "weight" theme (see enums) in both light and dark mode.
 - **`EditWeightDialog` open/closed:** open when `record !== null`; closing via Cancel, backdrop, or Escape calls `onClose`. Weight input is `autoFocus`.
 
 ## Enums, options & configurable values
 
-- **Unit:** kilograms only — `kg`. Weight is stored "in kg" (per `WeightRecord` comment). **No lbs/pounds, no imperial/metric toggle exists in code.**
-- **`weightIncrement` (stepper step / rounding granularity):** default **0.05** kg. Settable via `setWeightIncrement`, sanitized by `sanitizeNumericInput(value, fallback=0.05, max=1, decimals=2)` → effective range roughly `(0, 1]`, 2-dp.
+- **Unit:** kilograms only — `kg`. Weight is stored "in kg" (per `WeightRecord` comment). The weight **card** has no lbs/pounds option and no imperial/metric toggle. (Repo-wide caveat: the help manual copy in `src/lib/help/manuals.ts` claims a "kilograms or pounds" + "optional target weight" setting under Settings → Tracking → Weight — that text is **stale**, no such setting exists; and the AI `voice-parse` route does an lbs→kg conversion in its prompt. Neither is wired to the card.)
+- **`weightIncrement` (stepper step / rounding granularity):** default **0.05** kg. Settable via `setWeightIncrement`, sanitized by `sanitizeNumericInput(value, min=0.05, max=1, precision=2)` → clamped to **`[0.05, 1]`**, 2-dp. The `0.05` arg is the hard floor `min` (not a "fallback"), though it doubles as the value returned on NaN/Infinity; a value of 0.05 is reachable and anything below is clamped up to it.
+- **Settings UI control for `weightIncrement`:** a dedicated `weight-settings-section.tsx` exposes the increment as a real numeric control labeled "Increment (kg)" with `min=0.05`, `max=1`, `step=0.05` (helper text "Amount added with each +/- tap (0.05-1.00 kg)"). The +/- spinners use `incrementSetting(..., 0.05, 1, ...)` / `decrementSetting(..., 0.05, 0.05, ...)` — floor **0.05**, ceiling **1**, decrement floor **0.05**.
 - **Value display format:** `value.toFixed(2)` → always 2 decimals (e.g. `69.05 kg`); placeholder `--` when null.
 - **Decrement floor:** **0.1 kg** (`Math.max(0.1, next)`).
 - **Direct-input clamp range:** `min = 0.1`, `max = 1000`.
-- **Validation bounds (Zod `WeightFormSchema`):** `weight` must be a number, `.positive()`, `.max(1000)`. Messages: `"Weight is required"` (invalid type), `"Weight must be positive"`, `"Weight seems too high"`.
+- **Validation bounds (Zod `WeightFormSchema`):** `weight` must be a number, `.positive()`, `.max(1000)`. Messages: `"Weight is required"` (invalid type), `"Weight must be positive"`, `"Weight seems too high"`. Note: because `pendingWeight` is guaranteed to be a `number` before submit (the `null` case is guarded out), the `"Weight is required"` (invalid-type) branch is effectively **unreachable** from the card UI — only `"Weight must be positive"` / `"Weight seems too high"` can actually fire.
 - **First-time fallback weight:** **69** kg.
 - **Recent query limit:** `useWeightRecords(5)` fetches 5; list renders `maxEntries = 3`.
 - **`InlineEdit` defaults:** `min = 0`, `max = 100000` (card overrides to 0.1 / 1000).
@@ -1097,9 +1105,9 @@ All writes mirror to Neon Postgres via the sync queue (`enqueueInsideTx` + `sche
 
 **Neon Postgres mirror `weight_records`** (`src/db/schema.ts`): `id` (pk), `userId` (fk → usersSync, cascade), `weight: real`, `timestamp: bigint`, `note: text`, `createdAt/updatedAt/deletedAt: bigint`, `deviceId: text`, `timezone: text`; index `idx_weight_user_updated` on `(userId, updatedAt)`.
 
-**Service functions used** (`health-service.ts`): `addWeightRecord(weight, timestamp?, note?)`, `getWeightRecords(limit?)` (filters `deletedAt === null`, newest first), `getLatestWeightRecord()`, `updateWeightRecord(id, {weight?, timestamp?, note?})`, `deleteWeightRecord(id)` (soft), `undoDeleteWeightRecord(id)`, plus pagination/date-range helpers (`getWeightRecordsByDateRange`, `getWeightRecordsPaginated`). All writes go through `writeWithSync("weightRecords", ...)` and `schedulePush()`.
+**Service functions used** (`health-service.ts`): `addWeightRecord(weight, timestamp?, note?)`, `getWeightRecords(limit?)` (filters `deletedAt === null`, newest first), `getLatestWeightRecord()`, `updateWeightRecord(id, {weight?, timestamp?, note?})`, `deleteWeightRecord(id)` (soft), `undoDeleteWeightRecord(id)`, plus pagination/date-range helpers (`getWeightRecordsByDateRange`, `getWeightRecordsPaginated`). All writes go through `writeWithSync("weightRecords", ...)` and `schedulePush()`. Note: `getLatestWeightRecord()` exists in the service but the **card never calls it** (it reads `recentRecords[0]`). This module also houses the blood-pressure CRUD (`addBloodPressureRecord`, etc.); this doc scopes only to the weight functions.
 
-**Hooks** (`use-health-queries.ts`): `useWeightRecords(limit=5)`, `useLatestWeight()`, `useAddWeight()`, `useUpdateWeight()`, `useDeleteWeight()` (mutations unwrap `ServiceResult`).
+**Hooks** (`use-health-queries.ts`): `useWeightRecords(limit=5)`, `useLatestWeight()`, `useAddWeight()`, `useUpdateWeight()`, `useDeleteWeight()` (mutations unwrap `ServiceResult`). Note: `useLatestWeight()` exists (returns the latest record or `null` via `getWeightRecords(1)`) but `WeightCard` does **not** call it — the card derives `latestWeight` from `recentRecords[0]` instead.
 
 ## Validation, edge cases & business rules
 
@@ -1123,7 +1131,7 @@ All writes mirror to Neon Postgres via the sync queue (`enqueueInsideTx` + `sche
 - `InlineEdit` — tap-to-type numeric display with clamp + round-on-blur; powers the center value.
 - `CollapsibleTimeInputControlled` — parent-controlled "Set different time" datetime panel (variant of `CollapsibleTimeInput`).
 - `RecentEntriesList` — shared Recent section (rows, delete buttons, click-to-edit), `maxEntries=3`.
-- `InlineEditFormShell` — shared inline edit form wrapper (children + timestamp + note + Save/Cancel).
+- `InlineEditFormShell` — shared inline edit form wrapper (children + timestamp + note + Save/Cancel). Supports a `labeled` prop (visible `<Label>`s) and an `idPrefix`; the weight card uses the **default unlabeled** variant (placeholder + `aria-label`, no `labeled` prop passed).
 - `CardShell` — themed card chrome (gradient, icon, label, header-right slot).
 - `useEditRecord` — generic open/populate/submit edit flow (timestamp/note + buildUpdates).
 - `useDeleteWithToast` — delete-with-spinner + toast flow (`deletingId`, `handleDelete`).
@@ -1159,7 +1167,7 @@ All writes mirror to Neon Postgres via the sync queue (`enqueueInsideTx` + `sche
 ## Features
 
 - **Card chrome (via `CardShell`).** Violet/purple themed gradient card with a `Droplet` icon, an uppercase "URINATION" label, and a right-aligned header slot.
-- **Header-right "last logged" timestamp.** When at least one record exists, shows the latest record's timestamp formatted by `formatDateTime` (e.g. "Jan 15, 2:30 PM"). Shows a pulsing skeleton while loading; renders nothing when there are no records.
+- **Header-right "last logged" timestamp.** When at least one record exists, shows the latest record's timestamp formatted by `formatDateTime` (e.g. "Jan 15, 2:30 PM"). The "latest record" is derived as `recentRecords?.[0]` (the newest active record from the same `useUrinationRecords(5)` live query — not a separate fetch). Shows a pulsing skeleton while loading; renders nothing when there are no records.
 - **Three quick-log buttons.** A 3-column grid of outline buttons — Small / Medium / Large — each writes a record immediately with `amountEstimate` set and `timestamp = now`, then fires a success toast. No confirmation step.
 - **Per-button submitting state.** While a quick-log write is in-flight, the tapped button shows a spinner and is dimmed (`opacity-70`); all three buttons are disabled until the write resolves.
 - **"Add details" expander.** A full-width ghost toggle (chevron up/down) that reveals/hides an inline details panel.
@@ -1171,7 +1179,7 @@ All writes mirror to Neon Postgres via the sync queue (`enqueueInsideTx` + `sche
 - **Recent entries list (`RecentEntriesList`).** Shows up to 3 most-recent active records (the card subscribes to the latest 5, list slices to 3) under a "Recent" header with a top border separator.
   - Each row shows: formatted timestamp, capitalized `amountEstimate` (if present), and a truncated note (if present).
   - Each row is tappable to open an inline edit form, and has a trash/delete icon button.
-- **Inline edit (`InlineEditFormShell`).** Tapping a recent row replaces it in place with an edit form: an Amount select + a date/time input + a note input + Save/Cancel.
+- **Inline edit (`InlineEditFormShell`).** Tapping a recent row replaces it in place with an edit form: an Amount select + a date/time input + a note input + Save/Cancel. The card uses the **unlabeled** variant (`labeled` defaults to `false`), so the timestamp/note inputs render with `aria-label`s and a "Note (optional)" placeholder rather than visible `<Label>`s.
 - **Delete with undo.** Deleting soft-deletes the record and shows an "Undo" toast for 5 seconds; undo reverses the soft-delete.
 - **Offline-first persistence.** All writes go to Dexie/IndexedDB immediately and are enqueued for background sync to Neon Postgres (`writeWithSync` + `schedulePush`).
 - **Live reactivity.** The recent list is a `useLiveQuery` over Dexie — it auto-updates after any add/edit/delete (including from other dashboard surfaces or sync).
@@ -1189,8 +1197,8 @@ All writes mirror to Neon Postgres via the sync queue (`enqueueInsideTx` + `sche
 | Type in **Note** textarea (details) | Sets free-text note (optional). |
 | Change **When** datetime-local (details) | Sets the record timestamp; cannot select a time after now (`max` = now). |
 | Tap **Record with details** | Writes a record with the chosen timestamp + (only if non-empty) amount + note; collapses the panel and resets amount to the default setting, note to empty, time to now; success/destructive toast. Button shows spinner while pending. |
-| Tap a **recent entry row** | Opens the inline edit form for that record in place (also openable via Enter/Space when row is focused). |
-| In inline edit: change **Amount** select | Updates the amount estimate for that record. |
+| Tap a **recent entry row** | Opens the inline edit form for that record in place (also openable via Enter/Space when the row itself is focused — the keydown handler only fires when `e.target === e.currentTarget`, so key events bubbling up from inner controls are ignored). |
+| In inline edit: change **Amount** select | Updates the amount estimate for that record. On save the value is mapped as `editAmountEstimate \|\| undefined`, so clearing the select to empty sends `amountEstimate: undefined` (the field is left out of the partial update) rather than the modal's `NONE_VALUE` sentinel. |
 | In inline edit: change **date/time** input | Updates the record timestamp. |
 | In inline edit: change **note** input | Updates the record note. |
 | In inline edit: tap **Save** | Validates the timestamp, builds `{ timestamp, amountEstimate?, note }` updates, persists, closes the form; toast "Entry updated"; invalid date → "Invalid date/time" destructive toast; failure → "Error — Could not update the entry". |
@@ -1260,16 +1268,16 @@ Note: `edit-urination-dialog.tsx` is a **modal** edit variant (`EditUrinationDia
 - `deleteUrinationRecord(id)` / `undoDeleteUrinationRecord(id)` → soft-delete / restore (sets/clears `deletedAt`).
 - `updateUrinationRecord(id, { timestamp?, amountEstimate?, note? })` → partial update, bumps `updatedAt`; returns "Record not found" for missing id.
 
-**Hooks (`use-urination-queries.ts`):** `useUrinationRecords(limit=10)`, `useUrinationRecordsByDateRange`, `useAddUrination`, `useUpdateUrination`, `useDeleteUrination` (undo-aware).
+**Hooks (`use-urination-queries.ts`):** `useUrinationRecords(limit=10)`, `useUrinationRecordsByDateRange`, `useAddUrination`, `useUpdateUrination`, `useDeleteUrination` (undo-aware). `useUrinationRecordsByDateRange` guards its inputs — it only runs the range query when `startTime < endTime`, otherwise it resolves to `[]` (`Promise.resolve([])`).
 
 ---
 
 ## Validation, edge cases & business rules
 
 - **No required fields beyond a timestamp.** Quick-log writes only `amountEstimate`. A record can have no amount and no note (e.g. a details submit with both blank still saves a valid timestamped event).
-- **Empty-string stripping.** `amountEstimate` and `note` are trimmed; empty results are omitted (the field stays absent on the record, not stored as `""`).
-- **Quick-log spread guard.** Details add uses `...(amount && {...})` / `...(note && {...})` so blank values aren't sent.
-- **Timestamp default & cap.** Add defaults `timestamp` to `Date.now()`. The details "When" input is capped at now (`max=getCurrentDateTimeLocal()`), discouraging future-dated entries; edit inputs are not similarly capped.
+- **Empty-string stripping (service-layer).** Trimming and empty-omission happen in `addUrinationRecord`/`updateRecord` (the service), not in the card. `amountEstimate` and `note` are trimmed there; empty results are omitted (the field stays absent on the record, not stored as `""`).
+- **Details spread guard (card-layer).** The details add uses `...(amount && {...})` / `...(note && {...})` so empty (falsy) values aren't sent. Note this guard passes the **raw** values — it does not trim, so a whitespace-only note (e.g. `"   "`) is truthy and *is* forwarded to the service, which then trims it to `""` and omits it. Net result matches the desired behaviour, but the stripping of whitespace-only values is done by the service, not the card guard.
+- **Timestamp default & cap.** Add defaults `timestamp` to `Date.now()`. The details "When" input is capped at now (`max=getCurrentDateTimeLocal()`), discouraging future-dated entries; the edit datetime inputs are **not** similarly capped — neither the inline `InlineEditFormShell` input nor the modal `EditEstimateEntryDialog` timestamp input sets a `max`.
 - **Edit timestamp validation.** `dateTimeLocalToTimestamp` throws on an unparseable value; `useEditRecord` catches it and shows "Invalid date/time" instead of crashing. `buildUpdates` returning `null` would abort silently (not used here).
 - **Soft delete, not hard delete.** Deletes set `deletedAt`; reads filter `deletedAt === null`. Provides the 5s undo window.
 - **Newest-first ordering** by `timestamp` (Dexie `orderBy("timestamp").reverse()`), then capped.
@@ -1325,8 +1333,8 @@ Note: `edit-urination-dialog.tsx` is a **modal** edit variant (`EditUrinationDia
 - **Header "latest timestamp" readout**: when at least one record exists, the card header right-side shows the formatted timestamp of the most recent record (e.g. "Jan 15, 2:30 PM"). Shows a pulsing skeleton while loading; nothing if there are no records.
 - **Recent entries list** (most recent 5 fetched, top 3 displayed) showing each record's timestamp, capitalized amount estimate (if present), and truncated note (if present).
 - **Inline edit** of any recent entry: tapping a row swaps it for an inline form (amount Select + datetime + note + Save/Cancel) without leaving the card.
-- **Delete with undo**: a trash icon per row soft-deletes the record and raises a 5-second "Record deleted" toast with an "Undo" action that restores it.
-- **Toast feedback** on every mutation: success toast on quick-log ("Defecation (small) recorded") and details submit ("Defecation recorded"); error toast on failure ("Failed to record"); "Entry updated" / error on edit; "Entry deleted" / error on delete.
+- **Delete with undo**: a trash icon per row soft-deletes the record and fires **two** toasts: a success toast (`title: "Entry deleted"`, `description: "Defecation record removed"`) and a separate 5-second undo toast (`title: "Record deleted"`) with an "Undo" action that restores it.
+- **Toast feedback** on every mutation: success toast on quick-log (`title: "Logged"`, `description: "Defecation (small) recorded"`) and details submit; error toast on failure (`description: "Failed to record"`); on edit, `title: "Entry updated"` (success, no description) / failure `title: "Error"`, `description: "Could not update the entry"`; on delete, the success/undo toast pair above with failure `title: "Error"`, `description: "Could not delete the entry"`.
 - **Offline-first**: all reads/writes go to IndexedDB (Dexie) and are queued for background sync to Neon Postgres; the card works fully offline.
 - **Live updates**: list re-renders automatically via `useLiveQuery` when the underlying table changes (e.g. an edit elsewhere, or a sync pull).
 - **Standalone edit dialog** (`EditDefecationDialog`) reused by the History drawer and the Analytics records tab for editing defecation records outside the dashboard card.
@@ -1341,9 +1349,9 @@ Note: `edit-urination-dialog.tsx` is a **modal** edit variant (`EditUrinationDia
 - **Type a note in the details panel** → free-text textarea (placeholder "e.g. consistency, urgency").
 - **Change the "When" datetime** → `datetime-local` input, `max` clamped to now.
 - **Tap "Record with details"** → parses the datetime, builds the record (omits amount when `__none__`/empty, omits note when blank), creates it; button shows a spinner while pending; on success the panel collapses and all fields reset (amount → settings default, note → empty, time → now).
-- **Tap a recent-entry row** → opens the inline edit form for that record (also keyboard-activatable: Enter/Space when the row is focused).
+- **Tap a recent-entry row** → opens the inline edit form for that record (also keyboard-activatable: Enter/Space when the row itself is focused — the handler only fires when `e.target === e.currentTarget`, so key events bubbling up from inner focusables are ignored). The row container gets `role="button"` / `tabIndex={0}` only when an edit handler (`onEdit`) is provided.
 - **In the inline edit form**: change amount Select, datetime, and note; **Save** submits the update (invalid datetime → "Invalid date/time" toast, abort); **Cancel** discards and closes the form.
-- **Tap the trash icon on a row** → soft-deletes (row shows spinner while deleting; click is `stopPropagation`'d so it doesn't open edit); raises an undo toast.
+- **Tap the trash icon on a row** → soft-deletes (row shows spinner while deleting; click is `stopPropagation`'d so it doesn't open edit); raises a success toast ("Entry deleted" / "Defecation record removed") and a separate undo toast.
 - **Tap "Undo" in the delete toast** (within 5s) → restores the soft-deleted record.
 - **In the standalone `EditDefecationDialog`** (History/Analytics): edit Time, Amount (with "No estimate"), Note; Save Changes / Cancel; closes on outside-click or Cancel.
 
@@ -1358,7 +1366,7 @@ Note: `edit-urination-dialog.tsx` is a **modal** edit variant (`EditUrinationDia
 - **Details panel collapsed/expanded**: collapsed by default; expanded shows muted-background bordered panel with amount/note/time fields and submit.
 - **Details submit pending** (`addMutation.isPending`): "Record with details" button shows a spinner and is disabled.
 - **Row default vs editing**: a row in edit mode is replaced by the inline form on a `bg-muted/30` rounded background; non-editing rows are clickable with hover/active tint.
-- **Row deleting** (`deletingId === record.id`): trash icon becomes a spinner and the button is disabled.
+- **Row deleting** (`deletingId === record.id`): trash icon becomes a spinner and the button is disabled. The delete button carries `aria-label="Delete entry"`.
 - **Success**: success-variant toast (green) on quick-log / details submit; default toast on edit/delete.
 - **Error / validation**: destructive-variant toast on mutation failure or invalid edit datetime.
 - **Offline / syncing**: no distinct in-card UI; writes succeed locally and queue for sync transparently.
@@ -1394,7 +1402,8 @@ Note: `edit-urination-dialog.tsx` is a **modal** edit variant (`EditUrinationDia
   - `note?: string` (stored only when non-empty)
   - `createdAt: number`, `updatedAt: number`, `deletedAt: number | null` (soft-delete), `deviceId: string`, `timezone: string` — sync/audit fields populated by `syncFields()`.
 - **Service ops** (`defecation-service.ts`): `addDefecationRecord(timestamp?, amountEstimate?, note?)`, `getDefecationRecords(limit?)`, `getDefecationRecordsByDateRange(start, end)`, `updateDefecationRecord(id, {timestamp?, amountEstimate?, note?})`, `deleteDefecationRecord(id)` (soft), `undoDeleteDefecationRecord(id)`. All writes go through `writeWithSync` + `schedulePush()`.
-- **Hooks** (`use-defecation-queries.ts`): `useDefecationRecords(limit=10)` and `useDefecationRecordsByDateRange` (live queries via `useLiveQuery`); `useAddDefecation`, `useUpdateDefecation`, `useDeleteDefecation` (mutations).
+- **Hooks** (`use-defecation-queries.ts`): `useDefecationRecords(limit=10)` and `useDefecationRecordsByDateRange` (live queries via `useLiveQuery`); `useAddDefecation`, `useUpdateDefecation`, `useDeleteDefecation` (mutations). `useDefecationRecordsByDateRange` short-circuits to `Promise.resolve([])` when `startTime >= endTime` (guards inverted ranges).
+- **Read internals** (`record-crud.ts`): `getActiveRecords` reads the **entire** table via `orderBy("timestamp").reverse().toArray()`, filters `deletedAt === null` in JS, then slices to `limit` — i.e. the limit is applied post-filter in memory, not via an indexed query. `getRecordsBetween` (backing the date-range read) uses a **half-open** `[start, end)` window (endTime exclusive, via Dexie `.between`) and filters soft-deleted rows.
 - **Settings read**: `settings.defecationDefaultAmount` (Zustand, persisted to localStorage).
 
 ---
@@ -1402,7 +1411,8 @@ Note: `edit-urination-dialog.tsx` is a **modal** edit variant (`EditUrinationDia
 ## Validation, edge cases & business rules
 
 - **Amount and note are both optional**; a record can be created with neither (a bare quick-log records only amount; a "No estimate" + empty-note details submit records only the timestamp).
-- **Trimming**: `addDefecationRecord` trims `amountEstimate` and `note`; empty-after-trim values are omitted entirely (the field is not written rather than stored as `""`).
+- **Trimming**: `addDefecationRecord` trims `amountEstimate` and `note`; empty-after-trim values are omitted entirely (the field is not written rather than stored as `""`). In practice the quick-log path passes hard-coded literals ("small"/"medium"/"large") with no whitespace, so trimming only matters for the (already-constrained) details/edit paths.
+- **Missing-record update**: `updateDefecationRecord` returns `err("Record not found")` for an id that isn't in the table (it does not silently succeed).
 - **`__none__` handling**: both the details panel and edit forms convert `__none__` to "no amount" (omitted/undefined) before writing.
 - **Timestamp parsing**: `dateTimeLocalToTimestamp` throws on an unparseable datetime (never returns `NaN`); the edit flow catches this and shows "Invalid date/time", aborting the save. The details panel does not guard against this (input is constrained by `datetime-local`).
 - **No future-dating in details panel**: "When" input `max` is now; the inline edit and standalone dialog datetime inputs are **not** max-clamped.
@@ -1410,7 +1420,7 @@ Note: `edit-urination-dialog.tsx` is a **modal** edit variant (`EditUrinationDia
 - **Soft delete**: deletes set `deletedAt` rather than removing the row; `getActiveRecords` filters out soft-deleted rows; undo clears `deletedAt`. Undo window is the 5s toast lifetime (the record stays soft-deleted in DB regardless).
 - **Default reset semantics**: after a details submit, amount resets to `settings.defecationDefaultAmount || ""` (falls back to empty string if the setting were unset).
 - **Capitalization**: amount estimate is displayed `capitalize` in the recent list (stored lowercase).
-- **Sync/timezone**: `syncFields()` stamps `deviceId` and `timezone`; records carry the device timezone for cross-device/day-start interpretation downstream.
+- **Sync/timezone**: `syncFields()` stamps the full set `createdAt`, `updatedAt`, `deletedAt: null`, `deviceId`, and `timezone`; records carry the device timezone for cross-device/day-start interpretation downstream. `getDeviceId()` returns the literal `"server"` when `window` is undefined (SSR), otherwise a persisted `crypto.randomUUID()` from localStorage.
 - **No daily limit / over-limit concept**: defecation has no target or threshold (theme defines `progressOverLimit` but the card renders no progress bar). Unlike water/salt cards, there is nothing to be "over".
 
 ---
@@ -1419,8 +1429,8 @@ Note: `edit-urination-dialog.tsx` is a **modal** edit variant (`EditUrinationDia
 
 - **`DefecationCard`** — the dashboard card itself (quick-log grid + details panel + recent list with inline edit).
 - **`CardShell`** — shared themed card chrome (gradient wrapper, icon+label header, `headerRight` slot for the latest-timestamp readout / skeleton).
-- **`RecentEntriesList`** — shared "Recent" section: renders up to 3 rows via `renderEntry`, swaps a row for `renderEditForm` when editing, delete button per row.
-- **`InlineEditFormShell`** — shared inline edit form (children slot for the amount Select, plus timestamp + note inputs and Save/Cancel).
+- **`RecentEntriesList`** — shared "Recent" section: renders up to 3 rows via `renderEntry`, swaps a row for `renderEditForm` when editing, delete button per row (`aria-label="Delete entry"`). Rows get `role="button"`/`tabIndex={0}` only when an `onEdit` handler is supplied, and the Enter/Space keyboard handler only fires when the row itself (not an inner focusable) is the event target.
+- **`InlineEditFormShell`** — shared inline edit form (children slot for the amount Select, plus timestamp + note inputs and Save/Cancel). The shell supports a `labeled` mode (renders visible `<Label>`s) and an `idPrefix` prop, but the defecation card uses the **unlabeled** default (placeholder + `aria-label` inputs).
 - **`EditDefecationDialog`** — standalone modal edit dialog (used by `history-drawer.tsx` and `analytics/records-tab.tsx`, **not** by the card, which uses inline editing). Thin wrapper over `EditEstimateEntryDialog`.
 - **`EditEstimateEntryDialog`** — shared "time + optional amount-estimate + note" modal (also used by urination); `allowNoEstimate` enables the `__none__` sentinel; accent `bg-stone-600 hover:bg-stone-700`, id prefix `edit-defecation`.
 - **`useEditRecord`** — generic open/populate/submit-with-toast hook backing the inline edit (extra field: `editAmountEstimate`).
@@ -1458,11 +1468,11 @@ Note: `edit-urination-dialog.tsx` is a **modal** edit variant (`EditUrinationDia
   1. **Today** — vertical list of per-metric rows.
   2. **This Week (Mon-Sun)** — a `grid-cols-[auto_repeat(7,1fr)]` table: a label column + 7 day columns.
 - Purely presentational/read-only: no buttons, inputs, or edit affordances. It reads live data and re-renders reactively.
-- Self-refreshes every 60 seconds via `useNowTick(60_000)` so the "today"/"week" window rolls over at the configured day-start hour without a page reload.
+- Self-refreshes every 60 seconds via `useNowTick()` (called with no argument; 60_000 ms is the hook's default interval param) so the "today"/"week" window rolls over at the configured day-start hour without a page reload.
 - All metric rows are gated/styled from a single per-metric theme registry (`CARD_THEMES`), so each metric carries a consistent icon + color across both sections.
 
 ### Today section (daily budget rows)
-Six possible rows, in this fixed order; each is one flex line (`icon · label(w-16) · bar/spacer(flex-1) · value block`):
+Six possible rows, in this fixed order; each is one flex line (`icon · label(w-16) · bar/spacer(flex-1) · value block`). Water/sodium/sugar use a stacked `flex-col` value block; potassium instead places its value as two sibling spans directly in the flex row (`{total}` then `/ {limit} mg`):
 1. **Water** — always shown.
 2. **Sodium** (key `salt`, label "Sodium") — always shown.
 3. **Sugar** — shown only if optional tracker `sugar` enabled.
@@ -1480,9 +1490,11 @@ Potassium (soft target) renders:
 - Banana icon, single-stage bar capped at 100% (never reds out, no buffer, no marker).
 - Value `total / limit mg` (raw total, NOT clamped to the limit).
 
+The two optional Today rows carry test hooks: the sugar row has `data-testid="metrics-sugar-row"` and the potassium row has `data-testid="metrics-potassium-row"` (used by tests, not user-facing).
+
 Caffeine / Alcohol render (no bar, no limit):
 - Coffee / Wine icon, a `flex-1` spacer instead of a bar.
-- Caffeine value: `<total> mg` (integer mg).
+- Caffeine value: `<total> mg` — the raw `caffeineTotal` (sum of `amountMg`) rendered verbatim with no rounding or `toLocaleString` (only the *weekly* caffeine cell applies `Math.round`); a non-integer or large `amountMg` would show as-is.
 - Alcohol value: `<total.toFixed(1)> std drinks` (1 decimal).
 - When the total is exactly 0, the value uses muted-foreground color instead of the theme color.
 
@@ -1503,10 +1515,11 @@ Caffeine / Alcohol render (no bar, no limit):
   - in extended zone (over target, within buffer) → orange (`text-orange-600 dark:text-orange-400`).
   - over extended (over target + buffer) → red (`text-red-600 dark:text-red-400`).
   - no data (0) and not future → faded muted (`text-muted-foreground/50`).
+- Cell classes are composed via `cn(...)`, so the per-state color/fade class and the today-column `font-semibold` bold can co-apply on the same cell (e.g. a no-data faded cell that is also today's column renders both muted-faded and bold).
 
 ### Computation / data flow
 - **Today totals**: water/salt/sugar/potassium via `useDailyIntakeTotal(type)` → `getDailyTotal` sums non-deleted `IntakeRecord.amount` with `timestamp >= getDayStartTimestamp(dayStartHour)`. Caffeine/alcohol via `useSubstanceRecordsByDateRange(dayStart, now, type)` then summed (`amountMg` for caffeine, `amountStandardDrinks` for alcohol).
-- **Weekly data**: per metric, `useIntakeRecordsByDateRange(weekStart, weekEnd, type)` / `useSubstanceRecordsByDateRange(...)`, then `bucketByDay(...)` floors each record into one of 7 buckets by `floor((timestamp - weekStart) / 86_400_000)`, summing the metric's accessor value into that bucket. Records outside `[0,7)` are dropped.
+- **Weekly data**: per metric, `useIntakeRecordsByDateRange(weekStart, weekEnd, type)` / `useSubstanceRecordsByDateRange(...)`, then `bucketByDay(...)` floors each record into one of 7 buckets by `floor((timestamp - weekStart) / 86_400_000)`, summing the metric's accessor value into that bucket. Records outside `[0,7)` are dropped. The substance range query uses the compound `[type+timestamp]` index when a `type` is supplied (else a plain `timestamp` index), and both ends of the range are inclusive (`between(start, end, true, true)`).
 - **Progress math** (water/salt/sugar): `computeTwoStageProgress(total, limit, buffer)` → `{ primaryPct, extendedPct, targetPct, isOverTarget, isOverExtended, isTwoStage, extendedCurrent, extendedTotal, maxAmount }`.
 - **Potassium pct**: `limit > 0 ? min(100, total/limit*100) : 0` (single-stage, clamped).
 
@@ -1519,7 +1532,7 @@ Caffeine / Alcohol render (no bar, no limit):
   - Logging/editing/deleting intake or substance records elsewhere (other dashboard cards, voice, AI parse) updates the totals here live via Dexie `useLiveQuery`.
   - Changing limits, buffers, `dayStartHour`, or optional-tracker toggles in Settings (Zustand `settings-store`) live-updates bar fills, value denominators, the day/week window, and which rows render.
   - The passage of time across the day-start boundary (every 60s tick) rolls the "today" and "this week" windows forward.
-- Accessibility: the section has `aria-label="Daily intake summary"` (role region); each budgeted bar has an `aria-label` (e.g. "Water intake progress"); icons are `aria-hidden`.
+- Accessibility: the section has `aria-label="Daily intake summary"` (role region); each progress bar has an `aria-label` — the water/sodium/sugar budgeted bars (e.g. "Water intake progress") and also the potassium soft-target bar ("Potassium intake progress"); icons are `aria-hidden`.
 
 ---
 
@@ -1609,7 +1622,7 @@ Reads: `type` ("caffeine"|"alcohol"), `amountMg` (caffeine), `amountStandardDrin
 ### Services
 - `getDailyTotal(type, dayStartHour)` — `intakeRecords` where `timestamp >= dayStart`, filtered `type` + `deletedAt === null`, summed `amount`.
 - `getRecordsByDateRange(start, end, type?)` — `intakeRecords` `timestamp.between(start,end)`, filtered `deletedAt === null` (+ optional type).
-- `getSubstanceRecordsByDateRange(start, end, type?)` — substance equivalent.
+- `getSubstanceRecordsByDateRange(start, end, type?)` — substance equivalent; when `type` is given it queries the compound `[type+timestamp]` index, otherwise the plain `timestamp` index, with inclusive bounds (`between(..., true, true)`), then filters `deletedAt === null`.
 
 ### Settings store (Zustand, persisted to localStorage)
 Reads: `dayStartHour`, `waterLimit`, `saltLimit`, `sugarLimit`, `potassiumLimit`, `waterExtendedBuffer`, `saltExtendedBuffer`, `sugarExtendedBuffer`, `optionalTrackers.{sugar,potassium}`.
@@ -1648,8 +1661,8 @@ Reads: `dayStartHour`, `waterLimit`, `saltLimit`, `sugarLimit`, `potassiumLimit`
 - Helper functions (module-local, not exported): `getWeekStartTimestamp(dayStartHour)`, `getTodayDayIndex(dayStartHour)`, `formatValue(value)` (locale string), `bucketByDay(records, weekStart, accessor)` (7-bucket day summation).
 - `computeTwoStageProgress` (`progress-utils.ts`) — budget/over-limit math returning `TwoStageProgress`.
 - `CARD_THEMES` (`card-themes.ts`) — per-metric label/icon/color/gradient registry (keys: water, salt, sugar, potassium, weight, bp, eating, urination, defecation, caffeine, alcohol).
-- `useOptionalTrackerEnabled` / `OPTIONAL_TRACKERS` (`optional-trackers.ts`) — sugar/potassium visibility gating (defaults sugar=true, potassium=false).
-- Data hooks: `useDailyIntakeTotal`, `useIntakeRecordsByDateRange`, `getDayStartTimestamp` (`use-intake-queries.ts`); `useSubstanceRecordsByDateRange` (`use-substance-queries.ts`); `useNowTick` (`use-now-tick.ts`, shared 60s interval).
+- `useOptionalTrackerEnabled` / `OPTIONAL_TRACKERS` (`optional-trackers.ts`) — sugar/potassium visibility gating (defaults sugar=true, potassium=false). A non-reactive snapshot variant `getOptionalTrackerEnabled` also exists in the same module (one-shot reads inside callbacks), but the widget uses only the reactive hook.
+- Data hooks: `useDailyIntakeTotal`, `useIntakeRecordsByDateRange`, `getDayStartTimestamp` (`use-intake-queries.ts`); `useSubstanceRecordsByDateRange` (`use-substance-queries.ts`); `useNowTick` (`use-now-tick.ts`, called with no argument so it uses its default 60s interval; the hook defensively clamps any non-finite or `≤ 0` interval back to `60_000` ms via `safeIntervalMs`).
 - Consumers / previews: `page.tsx` mounts it on the dashboard; `preview-registry.tsx` + `seedTextMetricsPreview` (`preview-data.ts`) render it in the in-app help manual; `text-metrics.dom.test.tsx` asserts the "Today"/"This Week (Mon-Sun)" headings and seeded-water rendering.
 
 
@@ -1661,6 +1674,8 @@ Reads: `dayStartHour`, `waterLimit`, `saltLimit`, `sugarLimit`, `potassiumLimit`
 - `src/components/recent-entries-list.tsx` — `RecentEntriesList` + `InlineEditFormShell`
 - `src/components/edit-intake-dialog.tsx` — `EditIntakeDialog` (water/sugar/sodium)
 - `src/components/edit-eating-dialog.tsx` — `EditEatingDialog`
+- `src/components/edit-weight-dialog.tsx` — `EditWeightDialog`
+- `src/components/edit-blood-pressure-dialog.tsx` — `EditBloodPressureDialog`
 - `src/components/edit-substance-dialog.tsx` — `EditSubstanceDialog` (caffeine/alcohol)
 - `src/components/edit-estimate-entry-dialog.tsx` — `EditEstimateEntryDialog` (shared base)
 - `src/components/edit-urination-dialog.tsx` — `EditUrinationDialog` (wraps base)
@@ -1680,7 +1695,7 @@ Reads: `dayStartHour`, `waterLimit`, `saltLimit`, `sugarLimit`, `potassiumLimit`
 
 ### `RecentEntriesList` (the row list)
 - Renders a top-border-separated section labeled **"Recent"** below a card's input controls.
-- Shows up to `maxEntries` rows (default **3**; cards pass their own slice via the query, e.g. cards fetch the last **5** records).
+- Shows up to `maxEntries` rows (default **3**; cards pass their own slice via the query — Urination/Eating cards request the last **5**, Weight/BP query hooks default to **5**, and Liquids uses the water query whose `getRecentRecords` default `limit` is **3**).
 - Each row's content columns are caller-supplied via `renderEntry(record)` — so the same shell renders water amounts, BP readings, weight, eating macros, urination estimates, etc.
 - Renders nothing at all (returns `null`) when `records` is `undefined` or empty.
 - Per-row **Delete** button (trash icon) on the right.
@@ -1710,16 +1725,18 @@ Reads: `dayStartHour`, `waterLimit`, `saltLimit`, `sugarLimit`, `potassiumLimit`
 - `ValidationError` is a typed error subclass; the dialog host catches it to show its message as a toast (vs. a generic error).
 
 ### `useDeleteWithToast`
-- Shared delete-with-spinner pattern. Tracks `deletingId`; `handleDelete(id)` sets the spinner, awaits the delete mutation, shows a success toast (caller-supplied message) or error toast, then clears the spinner.
+- Shared delete-with-spinner pattern. Tracks `deletingId`; `handleDelete(id)` sets the spinner, awaits the delete mutation, shows a success toast (fixed title **"Entry deleted"**, the caller-supplied message as the `description`) or an error toast ("Error" / "Could not delete the entry"), then clears the spinner.
 
 ### `useUndoDeleteMutation`
 - Shared soft-delete mutation that, on success, shows an **Undo** toast (~5s window) whose action reverses the soft-delete by calling the domain's undo function. Used for intake, urination, defecation, eating.
 
 ### Per-type edit dialogs (modal variants)
 - `EditIntakeDialog` — edits a water/sugar/sodium intake (amount + time + note); title, unit, accent color all derive from `record.type`.
-- `EditEatingDialog` — edits an eating record (time + "what I ate" note + optional grams).
-- `EditSubstanceDialog` — edits a caffeine or alcohol substance (time + description + amount; alcohol adds a volume field and a "standard drinks are derived" hint).
+- `EditEatingDialog` — edits an eating record (time + "what I ate" note + optional grams). The grams field only renders when an `onGramsChange` prop is supplied; neither current modal host (history-drawer nor records-tab) passes it, so in the modal editor the grams field never appears. (Inline grams editing in FoodSection uses a separate `editGrams` field, not this dialog prop.)
+- `EditSubstanceDialog` — edits a caffeine or alcohol substance (time + description + amount, with the amount input shown for both types; alcohol additionally adds a Volume (ml) field and a "standard drinks are derived" hint — volume is the only alcohol-only block).
 - `EditEstimateEntryDialog` — shared base for the "time + optional amount-estimate select + note" pattern.
+- `EditWeightDialog` — edits a weight record (weight + time + note); rendered by both the history drawer and the analytics records tab.
+- `EditBloodPressureDialog` — edits a BP record (systolic/diastolic/HR/position/arm + time + note); rendered by both the history drawer and the analytics records tab. Its irregular-heartbeat Yes/No Select is gated on an `onIrregularHeartbeatChange` prop that neither host wires, so that field is not editable in the dialog path.
 - `EditUrinationDialog` / `EditDefecationDialog` — thin wrappers over the base with domain titles, options, placeholders, accent colors.
 
 ---
@@ -1740,7 +1757,7 @@ Reads: `dayStartHour`, `waterLimit`, `saltLimit`, `sugarLimit`, `potassiumLimit`
 - **Cancel** → closes the inline form without saving (`closeEdit`).
 
 ### In the modal dialogs (history/analytics)
-- **Tap a record row** → opens the matching modal dialog (caffeine/alcohol open the substance dialog; in history-drawer caffeine/alcohol edits are explicitly skipped).
+- **Tap a record row** → opens the matching modal dialog. Caffeine/alcohol open the substance dialog **only in the analytics records-tab** (the sole host that renders `EditSubstanceDialog`); in the history drawer `openEdit` early-returns for those types, so they are not editable there at all.
 - Edit fields per type (amount/time/note, plus type extras).
 - **Save Changes** (submit) → validate + persist, close on success, toast "Entry updated".
 - **Cancel** / click backdrop / press Esc / `onOpenChange(false)` → close without saving.
@@ -1771,25 +1788,27 @@ Reads: `dayStartHour`, `waterLimit`, `saltLimit`, `sugarLimit`, `potassiumLimit`
 ### Inline form states
 - **Labeled vs. unlabeled** (visible labels vs. placeholder-only).
 - **Validation error:** destructive toast (e.g. "Invalid amount", "Invalid weight", "Invalid values", "Invalid date/time"); form stays open.
+- **Update failure (mutation rejects):** `useEditRecord` shows a generic destructive toast `{title: "Error", description: "Could not update the entry"}`.
 - **Success:** toast "Entry updated", form closes.
 - **Per-domain children variant:** different field sets per record type (see below).
 
 ### Dialog states
 - **Open** (`record !== null` / `open` true) vs. **closed**.
 - **Type-themed accent:** submit button tint and title vary by record type/source.
-- **Conditional fields:** alcohol shows a volume field + hint; caffeine hides volume; eating grams field only when `onGramsChange` provided; defecation shows a "No estimate" sentinel option (`allowNoEstimate`).
+- **Conditional fields:** the only alcohol-only block is the **Volume (ml)** field + derived-drinks hint; caffeine still renders the amount input (`min={0}`, step `1`) — only the volume block is hidden for caffeine. The eating grams field renders only when `onGramsChange` is provided (currently never wired in either modal host). Defecation shows a "No estimate" sentinel option (`allowNoEstimate`).
 - **Validation error toasts:** "Invalid amount", "Description required", "Invalid date/time", "ABV must be between 0 and 100", "Enter a volume greater than 0".
 
 ### Delete/undo states
 - **Spinner-while-deleting**, **success toast**, **error toast** ("Could not delete the entry").
-- **Undo toast:** title (e.g. "Record deleted" / domain message), Undo action button, auto-dismiss after **5000 ms**.
+- **Undo toast (card path only):** title is always the default **"Record deleted"** (all four consumers call `useUndoDeleteMutation` with no custom title), an Undo action button, auto-dismiss after **5000 ms**.
+- **Dialog-host delete (history drawer / records tab):** deletes show a hardcoded toast `{title: "Entry deleted", description: "Record removed"}` with **no Undo** — the 5s Undo toast is exclusive to the consumer-card path.
 
 ---
 
 ## Enums, options & configurable values
 
 ### `RecentEntriesList` props/defaults
-- `maxEntries` default `3`. Cards typically fetch last `5` (Urination/Weight/BP/Eating) or use water query default (Liquids).
+- `maxEntries` default `3`. Urination/Eating cards pass `5` explicitly; Weight/BP query hooks default to `5`; Liquids uses the water query (`useRecentIntakeRecords` → `getRecentRecords`) whose default `limit` is `3`.
 - `borderColor` — Tailwind class from the card theme (`CARD_THEMES[...].border`).
 - Hover classes: `hover:bg-black/5 dark:hover:bg-white/5`; active: `active:bg-black/10 dark:active:bg-white/10`.
 
@@ -1816,7 +1835,7 @@ Reads: `dayStartHour`, `waterLimit`, `saltLimit`, `sugarLimit`, `potassiumLimit`
 ### Blood Pressure enums (inline form + dialog)
 - `position`: `"sitting" | "standing"` (labels Sitting/Standing).
 - `arm`: `"left" | "right"` (labels Left arm/Right arm).
-- `irregularHeartbeat`: boolean (checkbox / Yes/No toggle).
+- `irregularHeartbeat`: boolean. Editable **only in the inline BP-card form** (a Checkbox). In the **dialog/adapter** path it is NOT editable: `FieldMap.bp` omits the field, the bp adapter never writes it, and `EditBloodPressureDialog`'s Yes/No Select is gated on an `onIrregularHeartbeatChange` prop that neither the history-drawer nor the records-tab passes — so the modal editors silently leave it unchanged.
 - BP categories (from `getBPCategory`): Optimal, Normal, High normal, Grade 1 hypertension, Grade 2 hypertension, plus higher grades — thresholds at systolic ≥120/130/140/160 or diastolic ≥80/85/90/100.
 
 ### Food sodium sources (eating inline form)
@@ -1832,7 +1851,7 @@ Reads: `dayStartHour`, `waterLimit`, `saltLimit`, `sugarLimit`, `potassiumLimit`
 - `EditableType`: `intake | weight | bp | eating | urination | defecation`. (Caffeine/alcohol use the separate substance dialog; in history-drawer they are not editable.)
 
 ### Undo toast
-- Auto-dismiss `duration: 5000` ms; default title "Record deleted".
+- Auto-dismiss `duration: 5000` ms; title is always the default "Record deleted" (no consumer passes a custom title).
 
 ### Field constraints (inputs)
 - Intake amount: `type=number min=1 step=1`, note `maxLength=200`.
@@ -1852,7 +1871,7 @@ Reads/writes the following Dexie tables / interfaces (`src/lib/db.ts`); each als
 - **EatingRecord** (`eatingRecords`): `timestamp, grams?, note?, groupId?, originalInputText?, groupSource?`. Edit may also sync linked intake records (sodium/sugar/potassium/water content) via the composable-entry group.
 - **UrinationRecord** (`urinationRecords`): `timestamp, amountEstimate? (string), note?`.
 - **DefecationRecord** (`defecationRecords`): `timestamp, amountEstimate? ("small"|"medium"|"large"), note?`.
-- **SubstanceRecord** (`substanceRecords`): `type ("caffeine"|"alcohol"), amountMg?, amountStandardDrinks?, abvPercent?, volumeMl?, description, source ("water_intake"|"eating"|"standalone"), aiEnriched?, timestamp, groupId?`. Edit writes `timestamp, description`, plus `amountMg` (caffeine) or `{abvPercent, volumeMl, amountStandardDrinks}` (alcohol).
+- **SubstanceRecord** (`substanceRecords`): `type ("caffeine"|"alcohol"), amountMg?, amountStandardDrinks?, abvPercent?, volumeMl?, description, source ("water_intake"|"eating"|"standalone"), aiEnriched?, timestamp, groupId?`. Edit writes `timestamp, description`, plus — *only when the amount input is non-blank* — `amountMg` (caffeine) or `{abvPercent, volumeMl, amountStandardDrinks}` (alcohol). If the amount field is left blank, no amount field is written, so timestamp/description can be edited without touching the amount.
 
 Mutations come from React Query hooks: `useUpdate{Intake,Weight,BloodPressure,Eating,Urination,Defecation}`, `useDelete{Intake,Eating,Urination,Defecation,Weight,BloodPressure}`, plus composable-group sync hooks (`useSyncLiquidEntrySubstances`, `useSyncEatingGroup`) for linked substance/intake records.
 
@@ -1865,9 +1884,9 @@ Mutations come from React Query hooks: `useUpdate{Intake,Weight,BloodPressure,Ea
 - **Delete vs. edit click conflict:** trash button calls `e.stopPropagation()` so deleting never opens the edit form.
 - **Keyboard activation guard:** row key handler ignores Enter/Space that originate from a child input (`e.target !== e.currentTarget`).
 - **Unique DOM ids:** `InlineEditFormShell` uses `useId()` so duplicate `idPrefix` values across mounted shells don't break `<label htmlFor>`.
-- **Timestamp parsing:** `dateTimeLocalToTimestamp` throws (never NaN) on invalid input; handlers catch it and surface "Invalid date/time". In adapters it is re-raised as `ValidationError`.
+- **Timestamp parsing:** `dateTimeLocalToTimestamp` throws (never NaN) on invalid input; handlers catch it and surface "Invalid date/time". In the dialog adapters the `parseTimestamp` helper wraps that thrown `Error` and re-raises it as `ValidationError("Invalid date/time")`.
 - **Amount validation:** intake amount must parse to a number > 0; weight must parse > 0; BP systolic/diastolic must parse > 0; HR (if present) must parse > 0.
-- **Note handling:** trimmed; blank becomes `undefined` (field omitted from the update). Note max 200 chars in the intake dialog.
+- **Note handling:** blank becomes `undefined` (field omitted from the update). Trimmed in the intake/eating/urination/defecation adapters and in all inline `useEditRecord` paths; the **weight** and **bp** dialog adapters (and the analytics records-tab weight/BP handlers) use `note || undefined` *without* trimming. Note max 200 chars in the intake dialog.
 - **Eating composable edit:** edits back-convert stored sodium-mg into the user's chosen input unit using `SODIUM_MULTIPLIERS`; disabled trackers (sugar/potassium) are omitted entirely so linked records are left untouched; clearing a substance field to blank/0 soft-deletes the linked record.
 - **Liquid composable edit:** caffeine/alcohol/sugar fields sync to linked `SubstanceRecord`/sugar intake; clearing a field (empty string) sets it to 0 → soft-deletes any existing linked substance; beverage name persists into `source` as `beverage:<name>` for plain beverages; preset/group-linked names live on the substance description.
 - **Alcohol math:** ABV % must be `0 < amt ≤ 100` AND volume > 0 before persisting; standard drinks are derived (`standardDrinksFromAbv(abv, volume)`, rounded to 2 dp). Legacy records without `abvPercent` back-derive ABV from `amountStandardDrinks` + `volumeMl`.
@@ -1875,7 +1894,7 @@ Mutations come from React Query hooks: `useUpdate{Intake,Weight,BloodPressure,Ea
 - **Stale async guard:** liquid/food `onOpen` uses an `openTokenRef` so a slow `fetchEntryGroup` result from a previously opened record is discarded if the user opened another.
 - **History-drawer caffeine/alcohol:** `openEdit` returns early for those types (no inline edit there); analytics records-tab does route them to the substance dialog.
 - **Timezone/day-start:** timestamps stored as Unix ms; `datetime-local` conversions are local-time based (`timestampToDateTimeLocal` / `dateTimeLocalToTimestamp`); quick-add time inputs cap at `getCurrentDateTimeLocal()` (no future entries).
-- **Soft-delete + undo:** deletes set `deletedAt`; the undo toast's action reverses it within ~5s; both delete and undo go through `ServiceResult`/`unwrap`.
+- **Soft-delete + undo:** deletes set `deletedAt`; both delete and undo go through `ServiceResult`/`unwrap`. The ~5s Undo toast is only offered on the **consumer-card** delete path (`useUndoDeleteMutation`); the history-drawer and records-tab delete paths show a plain "Entry deleted / Record removed" toast with no undo affordance.
 
 ---
 
@@ -1888,7 +1907,9 @@ Mutations come from React Query hooks: `useUpdate{Intake,Weight,BloodPressure,Ea
 - `useDeleteWithToast` — delete + spinner + success/error toast.
 - `useUndoDeleteMutation` — soft-delete + 5s Undo toast.
 - `EditIntakeDialog` — modal water/sugar/sodium editor (type-driven label/unit/accent).
-- `EditEatingDialog` — modal eating editor (time + note + optional grams).
+- `EditEatingDialog` — modal eating editor (time + note + optional grams; grams field dormant — never wired in either modal host).
+- `EditWeightDialog` — modal weight editor (weight + time + note); used by history drawer & records tab.
+- `EditBloodPressureDialog` — modal BP editor (systolic/diastolic/HR/position/arm + time + note); used by history drawer & records tab; irregular-heartbeat Select gated on an unwired prop, so not editable in the dialog path.
 - `EditSubstanceDialog` — modal caffeine/alcohol editor (alcohol adds volume + derived-drinks hint).
 - `EditEstimateEntryDialog` — shared base for time + amount-estimate select + note records.
 - `EditUrinationDialog` — base wrapper (violet accent, Small/Medium/Large).
@@ -1933,11 +1954,11 @@ Mutations come from React Query hooks: `useUpdate{Intake,Weight,BloodPressure,Ea
 - **Type filter tabs.** Horizontal scrollable filter bar; one tab per domain plus "All". Selecting a tab filters the visible list (client-side, applied after paging).
 - **Pagination ("Load More").** Client-side paging of `PAGE_SIZE = 30`. Page starts at 1; "Load More" increments the page, appending another 30 from the already-loaded (max 100 per table) dataset. Button only shows while `hasMore` is true.
 - **Per-row summary.** Each row shows a domain icon (coloured), an uppercase type label, a domain-formatted measurement string, the entry time (`formatTimeOnly`, e.g. "2:30 PM"), and Edit + Delete action buttons.
-- **Domain-specific measurement formatting** (see Validation): intake amount+unit+source label, weight in kg, BP "120/80 mmHg", eating note, urination/defecation amount-estimate · note, caffeine "desc · NN mg", alcohol "desc · N drinks".
+- **Domain-specific measurement formatting** (see Validation): intake amount+unit+source label, weight in kg, BP "120/80 mmHg", eating note, urination/defecation amount-estimate · note, caffeine "desc · NN mg", alcohol "desc · N drink(s)". Empty-value fallbacks: eating with no note, and urination/defecation with neither an estimate nor a note, all render an em-dash "—". Caffeine/alcohol with both description and amount empty fall back to the bare label "Caffeine" / "Alcohol". Alcohol pluralizes "drink" vs "drinks" by `amountStandardDrinks !== 1` (singular for exactly 1).
 - **Inline edit.** Tapping a row (or its Edit button) opens a domain-specific edit dialog pre-filled with the record's current values.
 - **Inline delete.** Trash button deletes the entry (soft-delete via the domain service), with a per-row spinner while in flight and a success/error toast.
 - **Empty state.** When no records match the current filter, shows a History icon + "No records yet" / "Start logging to see history here".
-- **Loading state.** While `historyData` is undefined and the drawer is open, shows a centered spinner.
+- **Loading state (dormant / unreachable).** The component has a centered-spinner branch gated on `open && !historyData`, but `useHistoryData` seeds `useLiveQuery` with a truthy `EMPTY_RESULT` default object, so `historyData` is never `undefined` (it is `EMPTY_RESULT` on first render and while pending). The spinner therefore never renders; during the initial load the **empty state** ("No records yet") shows until data arrives.
 - **Toasts.** Success ("Entry deleted" / "Entry updated") and error toasts on delete/edit; validation errors surface their message as a destructive toast.
 - **PIN protection removed.** A code comment notes PIN protection was removed in "phase 41"; `handleOpenChange` is now a passthrough.
 
@@ -1948,9 +1969,9 @@ Mutations come from React Query hooks: `useUpdate{Intake,Weight,BloodPressure,Ea
 - **Scroll the filter bar.** Tabs overflow horizontally (`overflow-x-auto`) so all tabs are reachable on narrow screens.
 - **Scroll the list.** The list body is independently scrollable (`flex-1 overflow-y-auto`); header (title + tabs) is pinned (`shrink-0`, `border-b`).
 - **Tap "Load More".** Loads the next 30 records (page + 1). Disabled/hidden when no more.
-- **Tap a row body.** Opens the edit dialog for that record (`onClick={onEdit}`, also `role="button"`, `tabIndex=0`, Enter/Space activate). Caffeine/alcohol rows are non-editable: `openEdit` early-returns for those types.
-- **Tap the Edit (pencil) button.** Same as tapping the row; the action cluster `stopPropagation`s so the two buttons don't double-fire.
-- **Tap the Delete (trash) button.** Immediately deletes (no confirmation dialog). Shows a spinner on that row's trash button (`isDeleting`) and disables it while pending.
+- **Tap a row body.** Opens the edit dialog for that record (`onClick={onEdit}`, also `role="button"`, `tabIndex=0`; the `onKeyDown` handler calls `preventDefault()` and `onEdit()` on Enter/Space). Caffeine/alcohol rows are non-editable: `openEdit` early-returns for those types.
+- **Tap the Edit (pencil) button.** Same as tapping the row; the action cluster `stopPropagation`s so the two buttons don't double-fire. The button carries a blue hover affordance (`hover:text-blue-600 hover:bg-blue-50` / dark variant) and `aria-label`/`title` "Edit entry".
+- **Tap the Delete (trash) button.** Immediately deletes (no confirmation dialog). Shows a spinner on that row's trash button (`isDeleting`) and disables it while pending. The button carries a red hover affordance (`hover:text-red-600 hover:bg-red-50` / dark variant) and `aria-label`/`title` "Delete entry".
 - **Edit dialog — change fields.** Per domain (amount/weight/systolic/diastolic/heartRate/position/arm/timestamp/note/amount-estimate). Inputs are controlled via `patchFields`.
 - **Edit dialog — submit ("Save Changes").** Validates, persists via the domain's React Query update mutation, closes the dialog, toasts "Entry updated". On `ValidationError`, keeps the dialog open and toasts the validation message (destructive). On any other error, toasts a generic "Could not update the entry".
 - **Edit dialog — Cancel / dismiss.** Closes without saving (`onClose` clears `editingRecord`).
@@ -1959,7 +1980,7 @@ Mutations come from React Query hooks: `useUpdate{Intake,Weight,BloodPressure,Ea
 ## States & presentations
 
 - **Closed.** Drawer not rendered; `allRecords` short-circuits to `[]` when `!open` (no data work while closed).
-- **Loading.** `open && !historyData` → centered `Loader2` spinner, py-12. (No skeleton rows; just the spinner.)
+- **Loading (dormant / unreachable).** A centered `Loader2` spinner (py-12) is coded behind `open && !historyData`, but `historyData` is never falsy — `useHistoryData` passes a truthy `EMPTY_RESULT` default to `useLiveQuery`, returned synchronously on first render and while pending. So this branch never executes; during initial load the **empty state** ("No records yet") renders instead until rows arrive. (No skeleton rows exist either way.)
 - **Empty (no matches).** `filteredRecords.length === 0` (after filtering the current page) → History icon (12×12, 30% opacity) + two-line empty message. Note: this triggers if the active filter has no matches even when other records exist.
 - **Populated.** Date-grouped sections, each with a Calendar-icon header, count pill, and rows under a top border.
 - **Has-more.** `allRecords.length > page * PAGE_SIZE` → "Load More" button with ChevronDown.
@@ -1992,7 +2013,7 @@ Mutations come from React Query hooks: `useUpdate{Intake,Weight,BloodPressure,Ea
 
 **`EditableType` (use-record-adapters):** `intake | weight | bp | eating | urination | defecation` (caffeine/alcohol are explicitly NOT editable here).
 
-**Intake sub-types (`IntakeRecord.type`):** `water | salt | sugar | potassium`. Units in rows: water → `ml`, sugar → `g`, salt/sodium → `mg` (potassium falls into the `salt` row branch → `mg`).
+**Intake sub-types (`IntakeRecord.type`):** `water | salt | sugar | potassium`. The row picks a theme key of `water`/`sugar`/else→`salt`, so anything that isn't water or sugar (i.e. both `salt` and `potassium`) renders under the `salt` theme. Units in rows: water → `ml`, sugar → `g`, else (salt **and** potassium) → `mg`. Because potassium falls into the `salt` branch, a potassium record is displayed with the **salt theme's label "Sodium"**, the Sparkles icon, and amber colour — it is not visually distinguished as potassium in the history row.
 
 **Card theme labels / icons / icon colours (`CARD_THEMES`):**
 - water — "Water", Droplets, sky-600/400; buttonBg `bg-sky-600 hover:bg-sky-700`
@@ -2007,7 +2028,7 @@ Mutations come from React Query hooks: `useUpdate{Intake,Weight,BloodPressure,Ea
 - caffeine — "Caffeine", Coffee, yellow-700/400 (display only)
 - alcohol — "Alcohol", Wine, fuchsia-600/400 (display only)
 
-**Pagination:** `PAGE_SIZE = 30`; initial `page = 1`. Loader `limit` default `100` per table (`useHistoryData(100)`).
+**Pagination:** `PAGE_SIZE = 30`; initial `page = 1`. The drawer calls `useHistoryData()` with **no argument**; the per-table cap of `100` comes from the hook's own `limit = 100` default, not an explicit `useHistoryData(100)` call.
 
 **Date group key format:** en-US, `{ weekday:"short", year:"numeric", month:"short", day:"numeric" }`.
 **Row time format:** en-US, `{ hour:"numeric", minute:"2-digit", hour12:true }`.
@@ -2015,22 +2036,23 @@ Mutations come from React Query hooks: `useUpdate{Intake,Weight,BloodPressure,Ea
 **BP edit dialog enums & input ranges:**
 - Position: `sitting | standing` (Select; labels "Sitting" / "Standing").
 - Arm: `left | right` (Select; "Left" / "Right").
-- Irregular heartbeat: `no | yes` (Select; only rendered if `onIrregularHeartbeatChange` is provided — NOT wired by the history drawer, so hidden here).
+- Irregular heartbeat: `no | yes` (Select; only rendered if `onIrregularHeartbeatChange` is provided — NOT wired by the history drawer, so hidden here). Beyond not wiring the callback, `FieldMap.bp` has **no** `irregularHeartbeat` key and `initEditingState` never populates it — so even if the select were rendered, the edit adapter has no irregular-heartbeat field to submit. The underlying `BloodPressureRecord.irregularHeartbeat` field is still stored; it is simply pass-through-untouched by edits made here.
 - Systolic input `min=60 max=300`; Diastolic `min=40 max=200`; Heart rate `min=30 max=250` (optional, placeholder "BPM").
 - sr-only hints: systolic "typically 90-180", diastolic "60-120", heart rate "60-100".
 
-**Intake edit dialog:** amount input `type=number min=1 step=1`; label "Amount (unit)" with unit from sub-type; note `maxLength=200`. Title "Edit {Water|Sugar|Sodium} Entry". Save button colour matches sub-type (sky/pink/amber).
+**Intake edit dialog:** `DialogDescription` "Update the amount, time, or note for this entry". Amount input `type=number min=1 step=1`, styled `text-lg h-12` and `autoFocus`, with an sr-only `aria-describedby` helper ("Enter the {amount description}"); label "Amount (unit)" with unit from sub-type; note `maxLength=200`. Title "Edit {Water|Sugar|Sodium} Entry". Save button colour matches sub-type (sky/pink/amber).
 
 **Weight edit dialog:** weight input `type=number min=0.1 step=0.1`; label "Weight (kg)". Save colour emerald.
 
 **Eating edit dialog:** time + "What I ate (optional)" Textarea (placeholder "e.g. Sandwich, apple") + optional grams input `min=1 max=10000` (grams only shown if `onGramsChange` passed — NOT wired here). Save colour orange.
 
 **Urination/Defecation edit dialogs (shared `EditEstimateEntryDialog`):**
+- Shared dialog chrome: `DialogDescription` "Update the time, amount estimate, or note"; the amount Select uses a "Select estimate" placeholder and an "Amount (optional)" label; the note Textarea is `min-h-[60px]`.
 - Urination amount options (inline in component): `small`→"Small", `medium`→"Medium", `large`→"Large". Note placeholder "e.g. colour, urgency". Accent violet. No "No estimate" option.
 - Defecation amount options (`DEFECATION_AMOUNT_OPTIONS`): `small`/`medium`/`large` (same labels). `allowNoEstimate` → prepends "No estimate" sentinel (`__none__` → stored as `""`). Note placeholder "e.g. consistency, urgency". Accent stone.
 - `URINATION_AMOUNT_OPTIONS` also defined in constants (same small/medium/large) though the urination dialog uses its own inline copy.
 
-**Liquid source labels (`getLiquidTypeLabel`, used for water-intake row source):** decodes `source` strings like `coffee:latte`→"Latte", `beverage:Juice`→"Juice", `juice:orange`→"Orange", `food:*`→note or "Food", `preset:{id}`→preset name (from `liquidPresets`) or "Beverage", `manual`/`preset:manual`→null. `liquidPresets` passed from settings store (defaults include Espresso, Double Espresso, Moka, Coffee, Tea, Beer, Wine, Spirit — see `DEFAULT_LIQUID_PRESETS`).
+**Liquid source labels (`getLiquidTypeLabel`, used for water-intake row source):** decodes `source` strings like `coffee:latte`→"Latte", bare `beverage`→"Beverage" and `beverage:Juice`→"Juice", bare `juice`→"Juice" and `juice:orange`→"Orange", `food`/`food:*`→note or "Food", `preset:{id}`→preset name (from `liquidPresets`) or "Beverage", `substance:{id}`→note (description) or "Drink", bare-prefixed `manual:*`→note or "Food". Returns `null` for `manual`, `preset:manual`, and any unrecognized source format (guards against raw strings leaking into the UI). `liquidPresets` passed from settings store (defaults include Espresso, Double Espresso, Moka, Coffee, Tea, Beer, Wine, Spirit — see `DEFAULT_LIQUID_PRESETS`).
 
 ## Data model touched
 
@@ -2059,7 +2081,7 @@ Common sync fields on every record: `createdAt`, `updatedAt`, `deletedAt` (null 
 
 ## Validation, edge cases & business rules
 
-- **Soft-delete model.** Deletes set `deletedAt`; the cursor/list queries filter out `deletedAt !== null`. The cursor fetch over-fetches (`limit + 1`, then drops soft-deleted) to compensate.
+- **Soft-delete model.** Deletes set `deletedAt`; the cursor/list queries filter out `deletedAt !== null`. The intake cursor fetch reads the **entire** table (`query.toArray()`), filters `deletedAt === null` **first**, then slices to `limit + 1` (the extra row drives `hasMore`). So there is no bounded "over-fetch"; soft-deletes are dropped before the slice. The net per-table cap of 100 for the drawer still holds.
 - **Edit validation (per domain, throws `ValidationError`):**
   - intake: `parseInt(amount)`; reject if NaN or ≤ 0 ("Invalid amount").
   - weight: `parseFloat(weight)`; reject if NaN or ≤ 0 ("Invalid weight").
@@ -2074,7 +2096,7 @@ Common sync fields on every record: `createdAt`, `updatedAt`, `deletedAt` (null 
 - **Caffeine & alcohol are display-only.** The `UnifiedRecord`/`RecordRow`/`FilterType` support them, but `useHistoryData` does not fetch `substanceRecords`, and `openEdit` early-returns for them — so in this drawer they never appear and are never editable. (Substance history lives elsewhere.)
 - **Delete has no confirmation.** Single tap deletes immediately (only the in-flight spinner guards double-taps via `disabled`).
 - **Row click vs action buttons.** The action button container `stopPropagation`s click events so tapping Edit/Delete doesn't also trigger the row's `onEdit`.
-- **`grams` / `irregularHeartbeat` optionality.** The eating grams field and BP irregular-heartbeat select are conditionally rendered on optional callbacks that the history drawer does not pass → hidden here, though the underlying records carry those fields.
+- **`grams` / `irregularHeartbeat` optionality.** The eating grams field and BP irregular-heartbeat select are conditionally rendered on optional callbacks that the history drawer does not pass → hidden here, though the underlying records carry those fields. For BP this is doubly disabled: `FieldMap.bp` does not include `irregularHeartbeat` and `initEditingState` never seeds it, so the edit state has no irregular-heartbeat value to surface or persist regardless of the select.
 - **Reactive consistency.** Because `useLiveQuery` re-runs on any table change, an edit/delete made elsewhere (or the one just made here) updates the list without manual invalidation.
 
 ## Sub-components / variants
@@ -2121,14 +2143,14 @@ Common sync fields on every record: `createdAt`, `updatedAt`, `deletedAt` (null 
 
 ### CARD_THEMES token map (`card-themes.ts`)
 - Provides a typed `CardTheme` record for **11 domain keys**: `water`, `salt`, `sugar`, `potassium`, `weight`, `bp`, `eating`, `urination`, `defecation`, `caffeine`, `alcohol`.
-- Each theme carries **20 token fields** (see Enums section) spanning chrome, buttons, outline, progress (3 states), hover, input (3 fields), loading, latest-value, active-toggle, icon (3 fields), label, and a `sectionId` anchor.
+- Each theme carries **19 token fields** (see Enums section) spanning chrome, buttons, outline, progress (3 states), hover, input (2 fields), loading, latest-value, active-toggle, icon, label, and a `sectionId` anchor. Note `outlineText` is defined on every theme but is **never read** by any consumer — it is a dead token (only `outlineBorder` is consumed, at `preset-tab.tsx`).
 - Exposes a `CardThemeKey` union type (`keyof typeof CARD_THEMES`) used app-wide for type-safe theme selection.
 - Drives **secondary surfaces** beyond the card body:
   - **Quick-nav footer** uses `icon`, `iconColor`, `iconBg`, `label`, `sectionId` per enabled item.
-  - **History rows** (`record-row.tsx`) pick `icon`, `iconColor`, `label` by record type.
+  - **History rows** (`record-row.tsx`) pick `icon`, `iconColor`, `label` by record type. For the unified `intake` type the mapping is `water`→water, `sugar`→sugar, and **everything else (incl. `salt`/`potassium`)**→`salt` (a salt fallback).
   - **History drawer** + **analytics records tab** map type → `buttonBg` for filter chips/accents.
   - **Text-metrics weekly grid** colors each numeric cell by `theme.latestValueColor` (under-target) and overrides to orange/red for extended/over-limit.
-- Theme reuse / aliasing: the Liquids card and its tabs reuse `water` (and `caffeine`/`alcohol` for the coffee/alcohol beverage tabs); the Food & Salt card composes `eating` (chrome) + `salt`/`sugar`/`potassium` (progress bars). `edit-substance-dialog` picks `caffeine` vs `alcohol` from a boolean.
+- Theme reuse / aliasing: the Liquids card's `TAB_THEMES` reuses `water` for **both** its `water` and `beverage` tabs (and `caffeine`/`alcohol` for the coffee/alcohol tabs); the Food & Salt card composes `eating` (chrome) + `salt`/`sugar`/`potassium` (progress bars). `edit-substance-dialog` picks `caffeine` vs `alcohol` from a boolean.
 
 ### Per-domain progress-state theming
 - Three progress visual states per theme: `progressGradient` (normal fill), `progressExtended` (over-target "extra" zone fill), `progressOverLimit` (`bg-red-500`, hard over-limit). Consumed via the custom `Progress` component (`indicatorClassName`, `extendedIndicatorClassName`, plus a `targetMarkerPct` marker).
@@ -2141,10 +2163,10 @@ Common sync fields on every record: `createdAt`, `updatedAt`, `deletedAt` (null 
 CardShell/themes are **presentational** — interaction lives in the consuming cards, but the shell and tokens define every interactive surface:
 
 - **Tap header-right slot content** — passive (shows latest stat / timestamp / skeleton); not interactive itself.
-- **Tap quick-nav footer icon** — calls `onScrollTo(sectionId)` to scroll-anchor to that domain's card section (`section-water`, `section-food-salt`, `section-bp`, `section-weight`, `section-urination`, `section-defecation`, etc.).
-- **Quick-add buttons** — themed via `buttonBg` (filled primary) or `outlineBorder`/`outlineText` (outline variant); on tap they log a record.
-- **Increment / decrement steppers** (water, beverage, weight) — round buttons themed with `hoverBg`; the central value uses `inputBg` container + `inputText`.
-- **Toggle selection** (active preset/size/position/arm/irregular-heartbeat) — the selected option gets `activeToggle` (tinted bg + border).
+- **Tap quick-nav footer icon** — calls `onScrollTo(sectionId)` to scroll-anchor to that domain's card section. Only **six** anchor elements actually exist in the DOM (`page.tsx`): `section-water`, `section-food-salt`, `section-bp`, `section-weight`, `section-urination`, `section-defecation`. The `sectionId` strings `section-salt`, `section-caffeine`, `section-alcohol` exist in the theme map but have **no matching element**, so they are not reachable scroll targets.
+- **Quick-add buttons** — themed via `buttonBg` (filled primary) or `outlineBorder` (outline variant, e.g. preset-tab's "Save as preset & log"); on tap they log a record. (Note: the `outlineText` token is defined but never read — outline buttons hard-code `text-muted-foreground` instead.)
+- **Increment / decrement steppers** (water, beverage, weight) — round buttons themed with `hoverBg`. Only the **water/beverage** tabs put the central value in an `inputBg` container with `inputText`; the **weight** card's center is an `InlineEdit` with hard-coded `text-4xl font-bold` (weight's `inputBg`/`inputText` tokens are `""` and are not applied).
+- **Toggle selection** (active preset/size/position/arm) — the selected option gets `activeToggle` (tinted bg + border). Exception: the BP card's "irregular heartbeat = Yes" toggle uses a hard-coded **red** active style (`bg-red-100 border-red-300 dark:bg-red-900/50 dark:border-red-700`), **not** `theme.activeToggle`.
 - **Submit / Save** — primary button uses `buttonBg`; inline edit forms pass `buttonClassName={theme.buttonBg}`.
 - **Expand / collapse "Add details"** — chevron toggles an optional detail panel (per card body, e.g. urination).
 - **Edit / Delete record** (history rows, inline edit) — themed icon color and save button.
@@ -2162,13 +2184,14 @@ CardShell + themes must support these states (rendered by the `headerRight` slot
 - **Empty (no records)** — `headerRight` renders `null` (no latest stat). Card body shows its quick-add controls.
 - **Over-target ("extended"/extra zone)** — progress shows `progressGradient` primary fill + `progressExtended` over-target fill; over-target text turns `text-orange-600 dark:text-orange-400`; an "X / Y extra" sub-line appears.
 - **Over-limit (`isOverExtended`)** — progress fills `progressOverLimit` (`bg-red-500`) at 100%, extended hidden, target marker hidden; text turns `text-red-600 dark:text-red-400`.
-- **Active / selected** — selected toggle/preset/size uses `activeToggle` tint + border.
+- **Active / selected** — selected toggle/preset/size uses `activeToggle` tint + border. (Exception: BP's "irregular heartbeat = Yes" toggle hard-codes a red active style instead of the theme token.)
 - **Submitting / pending** — quick-add buttons show a spinner (`Loader2 animate-spin`) and `opacity-70`; other options stay disabled (`disabled={submittingAmount !== null}`).
 - **Expanded / collapsed** — optional detail panel toggled by a chevron (`ChevronUp`/`ChevronDown`).
 - **Disabled** — buttons disabled while a sibling submit is in flight.
 - **Dark mode** — every token ships a `dark:` variant (gradients drop to `*-950/40`, borders to `*-800`, icon bg to `*-900/50`, etc.); the shell/themes are fully dark-mode aware.
 - **Future days (weekly grid)** — cells render `---` in `text-muted-foreground/50`; today's column is `font-semibold`.
 - **No-data cell (weekly grid)** — `text-muted-foreground/50`.
+- **Zero-total caffeine/alcohol rows (text-metrics)** — the caffeine and alcohol latest-value cells fall back to `text-muted-foreground` when the total is `0`, and only switch to `theme.latestValueColor` when the total is `> 0`.
 
 (Offline/syncing/global-error states are handled by the provider stack, not by CardShell itself; CardShell only reflects per-record loading via skeletons.)
 
@@ -2179,24 +2202,26 @@ CardShell + themes must support these states (rendered by the `headerRight` slot
 ### Domain theme keys (11) — `CardThemeKey`
 `water` · `salt` · `sugar` · `potassium` · `weight` · `bp` · `eating` · `urination` · `defecation` · `caffeine` · `alcohol`
 
-### `CardTheme` token fields (20 per theme)
-`label`, `icon`, `gradient`, `border`, `iconBg`, `iconColor`, `buttonBg`, `outlineBorder`, `outlineText`, `progressGradient`, `progressExtended`, `progressOverLimit`, `hoverBg`, `inputBg`, `inputText`, `loadingBg`, `latestValueColor`, `activeToggle`, `sectionId`.
+### `CardTheme` token fields (19 per theme)
+`label`, `icon`, `gradient`, `border`, `iconBg`, `iconColor`, `buttonBg`, `outlineBorder`, `outlineText`, `progressGradient`, `progressExtended`, `progressOverLimit`, `hoverBg`, `inputBg`, `inputText`, `loadingBg`, `latestValueColor`, `activeToggle`, `sectionId`. (`outlineText` is present on the interface but unconsumed — dead token.)
 
 ### Full per-domain token table (ACTUAL values from code)
 
+All `progressGradient` / `progressExtended` strings carry a leading `bg-gradient-to-r ` in code (e.g. `"bg-gradient-to-r from-sky-400 to-cyan-500"`); the table below shows the full class string.
+
 | key | label | icon (Lucide) | base hue | sectionId | progressGradient | progressExtended | progressOverLimit |
 |---|---|---|---|---|---|---|---|
-| `water` | Water | `Droplets` | sky→cyan | `section-water` | `from-sky-400 to-cyan-500` | `from-blue-500 to-indigo-600` | `bg-red-500` |
-| `salt` | Sodium | `Sparkles` | amber→orange | `section-salt` | `from-amber-400 to-orange-500` | `from-orange-600 to-amber-700` | `bg-red-500` |
-| `sugar` | Sugar | `Candy` | pink→rose | `section-food-salt` | `from-pink-400 to-rose-500` | `from-rose-600 to-fuchsia-700` | `bg-red-500` |
-| `potassium` | Potassium | `Banana` | purple→indigo | `section-food-salt` | `from-purple-400 to-indigo-500` | `""` (none) | `bg-red-500` |
+| `water` | Water | `Droplets` | sky→cyan | `section-water` | `bg-gradient-to-r from-sky-400 to-cyan-500` | `bg-gradient-to-r from-blue-500 to-indigo-600` | `bg-red-500` |
+| `salt` | Sodium | `Sparkles` | amber→orange | `section-salt` | `bg-gradient-to-r from-amber-400 to-orange-500` | `bg-gradient-to-r from-orange-600 to-amber-700` | `bg-red-500` |
+| `sugar` | Sugar | `Candy` | pink→rose | `section-food-salt` | `bg-gradient-to-r from-pink-400 to-rose-500` | `bg-gradient-to-r from-rose-600 to-fuchsia-700` | `bg-red-500` |
+| `potassium` | Potassium | `Banana` | purple→indigo | `section-food-salt` | `bg-gradient-to-r from-purple-400 to-indigo-500` | `""` (none) | `bg-red-500` |
 | `weight` | Weight | `Scale` | emerald→teal | `section-weight` | `""` | `""` | `bg-red-500` |
 | `bp` | Blood Pressure | `Heart` | rose→pink | `section-bp` | `""` | `""` | `bg-red-500` |
 | `eating` | Eating | `Utensils` | orange→amber | `section-food-salt` | `""` | `""` | `bg-red-500` |
 | `urination` | Urination | `Droplet` | violet→purple | `section-urination` | `""` | `""` | `bg-red-500` |
 | `defecation` | Defecation | `CircleDot` | stone→amber | `section-defecation` | `""` | `""` | `bg-red-500` |
-| `caffeine` | Caffeine | `Coffee` | yellow→amber | `section-caffeine` | `from-yellow-400 to-amber-500` | `""` | `bg-red-500` |
-| `alcohol` | Alcohol | `Wine` | fuchsia→pink | `section-alcohol` | `from-fuchsia-400 to-pink-500` | `""` | `bg-red-500` |
+| `caffeine` | Caffeine | `Coffee` | yellow→amber | `section-caffeine` | `bg-gradient-to-r from-yellow-400 to-amber-500` | `""` | `bg-red-500` |
+| `alcohol` | Alcohol | `Wine` | fuchsia→pink | `section-alcohol` | `bg-gradient-to-r from-fuchsia-400 to-pink-500` | `""` | `bg-red-500` |
 
 ### Detailed token values per domain (exact Tailwind classes)
 
@@ -2218,17 +2243,18 @@ CardShell + themes must support these states (rendered by the `headerRight` slot
 
 **defecation** — gradient `from-stone-50 to-amber-50 dark:from-stone-950/40 dark:to-amber-950/40` · border `border-stone-200 dark:border-stone-800` · iconBg `bg-stone-100 dark:bg-stone-900/50` · iconColor `text-stone-600 dark:text-stone-400` · buttonBg `bg-stone-600 hover:bg-stone-700` · hoverBg stone · loadingBg `bg-stone-200 dark:bg-stone-800` · latestValueColor `text-stone-700 dark:text-stone-300` · activeToggle `bg-stone-100 border-stone-300 ...` · progress/input tokens empty.
 
-**caffeine** — gradient `from-yellow-50 to-amber-50 dark:from-yellow-950/40 dark:to-amber-950/40` · border `border-yellow-200 dark:border-yellow-800` · iconBg `bg-yellow-100 dark:bg-yellow-900/50` · iconColor `text-yellow-700 dark:text-yellow-400` (note: 700 not 600) · buttonBg `bg-yellow-700 hover:bg-yellow-800` (note: 700/800, darker than other domains) · progressGradient `from-yellow-400 to-amber-500` · inputBg `bg-yellow-100/80 ...` · loadingBg `bg-yellow-200 dark:bg-yellow-800` · latestValueColor `text-yellow-700 dark:text-yellow-300` · activeToggle `bg-yellow-100 border-yellow-300 ...` · **no** `progressExtended`.
+**caffeine** — gradient `from-yellow-50 to-amber-50 dark:from-yellow-950/40 dark:to-amber-950/40` · border `border-yellow-200 dark:border-yellow-800` · iconBg `bg-yellow-100 dark:bg-yellow-900/50` · iconColor `text-yellow-700 dark:text-yellow-400` (note: 700 not 600) · buttonBg `bg-yellow-700 hover:bg-yellow-800` (note: 700/800, darker than other domains) · progressGradient `bg-gradient-to-r from-yellow-400 to-amber-500` · inputBg `bg-yellow-100/80 ...` · loadingBg `bg-yellow-200 dark:bg-yellow-800` · latestValueColor `text-yellow-700 dark:text-yellow-300` · activeToggle `bg-yellow-100 border-yellow-300 ...` · **no** `progressExtended`.
 
-**alcohol** — gradient `from-fuchsia-50 to-pink-50 dark:from-fuchsia-950/40 dark:to-pink-950/40` · border `border-fuchsia-200 dark:border-fuchsia-800` · iconBg `bg-fuchsia-100 dark:bg-fuchsia-900/50` · iconColor `text-fuchsia-600 dark:text-fuchsia-400` · buttonBg `bg-fuchsia-600 hover:bg-fuchsia-700` · progressGradient `from-fuchsia-400 to-pink-500` · inputBg `bg-fuchsia-100/80 ...` · loadingBg `bg-fuchsia-200 dark:bg-fuchsia-800` · latestValueColor `text-fuchsia-700 dark:text-fuchsia-300` · activeToggle `bg-fuchsia-100 border-fuchsia-300 ...` · **no** `progressExtended`.
+**alcohol** — gradient `from-fuchsia-50 to-pink-50 dark:from-fuchsia-950/40 dark:to-pink-950/40` · border `border-fuchsia-200 dark:border-fuchsia-800` · iconBg `bg-fuchsia-100 dark:bg-fuchsia-900/50` · iconColor `text-fuchsia-600 dark:text-fuchsia-400` · buttonBg `bg-fuchsia-600 hover:bg-fuchsia-700` · progressGradient `bg-gradient-to-r from-fuchsia-400 to-pink-500` · inputBg `bg-fuchsia-100/80 ...` · loadingBg `bg-fuchsia-200 dark:bg-fuchsia-800` · latestValueColor `text-fuchsia-700 dark:text-fuchsia-300` · activeToggle `bg-fuchsia-100 border-fuchsia-300 ...` · **no** `progressExtended`.
 
-### sectionId anchor values (scroll targets)
-`section-water`, `section-salt`, `section-food-salt` (shared by `sugar`/`potassium`/`eating`), `section-weight`, `section-bp`, `section-urination`, `section-defecation`, `section-caffeine`, `section-alcohol`.
+### sectionId values
+The theme map defines a `sectionId` per domain, but only **six** of these have a matching anchor element in the DOM (`page.tsx`) and are therefore live scroll targets: `section-water`, `section-food-salt` (shared by `sugar`/`potassium`/`eating`), `section-bp`, `section-weight`, `section-urination`, `section-defecation`. The remaining `sectionId` strings — `section-salt`, `section-caffeine`, `section-alcohol` — are present in `CARD_THEMES` but have no anchor element, so they are not reachable scroll targets.
 
 ### Quick-nav defaults (`quick-nav-defaults.ts`)
 - `DEFAULT_QUICK_NAV_ITEMS` (order = top-to-bottom on the dashboard): `water` (→ "Liquids") · `eating` (→ "Food & Salt") · `bp` · `weight` · `urination` · `defecation` — all `enabled: true`.
 - `QUICK_NAV_LABEL_OVERRIDES`: `water → "Liquids"`, `eating → "Food & Salt"` (footer reads these instead of the theme's raw label).
 - Footer `order` option: `"ltr" | "rtl"`; default footer `transitionDuration` = `0.2`.
+- **Persisted user default:** the settings store seeds `quickNavOrder: "rtl"` (not `"ltr"`), and the quick-nav settings UI labels RTL "(recommended)". So out of the box the footer renders right-to-left.
 
 ### Label overrides observed in card chrome
 - CardShell prop comment example: eating theme overridden to `"Food + Sodium"`.
@@ -2239,6 +2265,7 @@ CardShell + themes must support these states (rendered by the `headerRight` slot
 - Card classes: `relative overflow-hidden transition-all duration-300 bg-gradient-to-br`.
 - CardContent padding: `p-6`.
 - Header row: `flex items-center justify-between mb-4`; icon chip `p-2 rounded-lg`; icon `w-5 h-5`; label `font-semibold text-lg uppercase tracking-wide`.
+- These constants are exact only for the three cards that actually use `CardShell` (`weight`, `urination`, `defecation`). The cards that **re-implement** the chrome inline diverge: `liquids-card` inlines `bg-gradient-to-br` into a gradient/border template literal, and `food-salt-card`'s header uses `flex items-center gap-2 mb-4` (no `justify-between`, no `headerRight`).
 
 ---
 
@@ -2262,14 +2289,14 @@ CardShell + card-themes touch **no database tables directly** — they are pure 
 
 - **Label fallback:** CardShell renders `label ?? theme.label`; an explicit empty-string label would render empty (callers pass meaningful strings or omit).
 - **Empty token strings are intentional:** event-only domains (`weight`, `bp`, `eating`, `urination`, `defecation`) leave `progressGradient`/`progressExtended`/`inputBg`/`inputText` as `""` because they have no progress bars or stepper inputs; consumers must not assume those tokens are non-empty.
-- **`potassium`, `caffeine`, `alcohol` have no `progressExtended`** — they show a single gradient fill only (no over-target "extra" zone), so an over-target presentation for these falls back to the primary gradient (no extended band).
+- **`potassium`, `caffeine`, `alcohol` have no over-target extended fill** — `potassium` omits the `progressExtended` key entirely, while `caffeine`/`alcohol` set it to `""`. All three show a single gradient fill only (no over-target "extra" zone), so an over-target presentation falls back to the primary gradient (no extended band).
 - **Over-limit precedence:** `isOverExtended` (hard over-limit) wins over `isOverTarget`. When over-limit, progress fills `progressOverLimit` at 100%, hides the extended fill (`extendedValue → 0`) and target marker (`targetMarkerPct → 0`), and text switches to red. When over-target but not over-limit, text is orange and an "extra" sub-line renders.
 - **Shared sectionId is deliberate:** `sugar`, `potassium`, and `eating` all anchor to `section-food-salt` (they live in the combined Food & Salt card), so quick-nav for any of them scrolls to the same card.
 - **Footer filtering vs. ordering:** disabled `QuickNavItem`s are filtered out first, then RTL reversal is applied — so the user's configured order is preserved on both axes; the footer hides entirely when zero items are enabled.
 - **`caffeine` deliberately darker:** uses `yellow-700/800` for button + `yellow-700` icon (vs the `-600`/`-700` pattern elsewhere) for contrast against the pale yellow gradient.
-- **Theme reuse:** Liquids card and tabs reuse the `water` theme for chrome (label overridden to "Liquids"); beverage/coffee/alcohol tabs swap to `caffeine`/`alcohol` themes; `edit-substance-dialog` selects `caffeine` vs `alcohol` from `isCaffeine`. Any redesign must keep these aliases coherent.
+- **Theme reuse:** Liquids card and tabs reuse the `water` theme for chrome (label overridden to "Liquids"); its `TAB_THEMES` aliases **both** the `water` and `beverage` tabs to `water`, with only the coffee/alcohol tabs swapping to `caffeine`/`alcohol`; `edit-substance-dialog` selects `caffeine` vs `alcohol` from `record?.type === "caffeine"`. Any redesign must keep these aliases coherent.
 - **`as const` map:** `CARD_THEMES` is frozen as a const literal; `CardThemeKey` is derived from its keys, giving compile-time safety across all 15+ consumers.
-- **Dark-mode parity required:** every color token must ship a `dark:` variant; the weekly-grid and progress over-limit/extended states hard-code `text-orange-600 dark:text-orange-400` / `text-red-600 dark:text-red-400` outside the theme map.
+- **Dark-mode parity required:** every color token must ship a `dark:` variant; the weekly-grid and progress over-limit/extended states hard-code `text-orange-600 dark:text-orange-400` / `text-red-600 dark:text-red-400` outside the theme map. A few other surfaces also bypass the theme map: `text-metrics` over-extended bars use a literal `"bg-red-500"` (not `theme.progressOverLimit`), and the BP irregular-heartbeat "Yes" toggle hard-codes a red active style (not `theme.activeToggle`).
 
 ---
 
@@ -2281,16 +2308,16 @@ CardShell + card-themes touch **no database tables directly** — they are pure 
 - `urination-card.tsx` — Urination card; uses `CardShell` + `theme.urination`; headerRight shows latest timestamp; 3-col quick-log grid + "Add details".
 - `defecation-card.tsx` — Defecation card; uses `CardShell` + `theme.defecation`.
 - `blood-pressure-card.tsx` — BP card; **reproduces the chrome inline** (does not import CardShell) but consumes `theme.bp` tokens; headerRight shows latest reading + BP category color.
-- `food-salt-card.tsx` — Food & Salt card; **inline chrome** using `CARD_THEMES.eating`, with three progress bars themed `salt`/`sugar`/`potassium`; header label hard-coded "Food".
-- `liquids-card.tsx` — Liquids card; **inline chrome**, reuses `water` theme (label "Liquids"); maps tab → theme (`water`/`caffeine`/`alcohol`).
+- `food-salt-card.tsx` — Food & Salt card; **inline chrome** using `CARD_THEMES.eating`, with three progress bars themed `salt`/`sugar`/`potassium`; header label hard-coded "Food". Its header is **not** a faithful clone of CardShell's: it uses `flex items-center gap-2 mb-4` with **no `justify-between`** and **no `headerRight` slot** (the food card has no latest-stat header).
+- `liquids-card.tsx` — Liquids card; **inline chrome**, reuses `water` theme (label "Liquids"); maps tab → theme via `TAB_THEMES` (a 4-key map: `water`→water, `beverage`→water, `coffee`→caffeine, `alcohol`→alcohol — note **both** `water` and `beverage` tabs alias to `CARD_THEMES.water`). Its `Card` wrapper diverges from the canonical CardShell class list: it inlines `bg-gradient-to-br` together with `theme.gradient`/`theme.border` in a template literal (`` `bg-gradient-to-br ${theme.gradient} ${theme.border}` ``) rather than keeping `bg-gradient-to-br` as a static class.
 - `food-salt/food-section.tsx`, `liquids/water-tab.tsx`, `liquids/beverage-tab.tsx`, `liquids/preset-tab.tsx` — card-body sub-views that consume `buttonBg`, `hoverBg`, `inputBg`, `inputText`, `activeToggle`, and the three progress tokens.
 - `edit-substance-dialog.tsx` — substance edit dialog; picks `caffeine`/`alcohol` theme for its submit `buttonBg`.
 - `quick-nav-footer.tsx` — fixed bottom footer; renders one icon button per enabled `QuickNavItem` using `icon`/`iconColor`/`iconBg`/`label`/`sectionId`.
 - `settings/quick-nav-section.tsx` — settings UI to enable/disable/reorder quick-nav items (keyed by `CardThemeKey`).
 - `quick-nav-defaults.ts` — `DEFAULT_QUICK_NAV_ITEMS`, `QUICK_NAV_LABEL_OVERRIDES`, `QuickNavItem` interface.
-- `history/record-row.tsx` — single history row; picks `icon`/`iconColor`/`label` by record type.
+- `history/record-row.tsx` — single history row; picks `icon`/`iconColor`/`label` by record type. For the unified `intake` type it maps `water`→water, `sugar`→sugar, and all other intake types (incl. `salt`/`potassium`)→`salt` as a fallback.
 - `history-drawer.tsx` + `analytics/records-tab.tsx` — map record type → `buttonBg` for filter/accent colors.
-- `text-metrics.tsx` — weekly numeric grid; colors each cell by `theme.latestValueColor` with orange/red over-target/over-limit overrides; also renders water/salt/sugar/potassium progress bars with the themed gradients.
+- `text-metrics.tsx` — weekly numeric grid; colors each cell by `theme.latestValueColor` with orange/red over-target/over-limit overrides; also renders water/salt/sugar/potassium progress bars with the themed gradients. Its over-extended progress fill uses a **literal** `"bg-red-500"` for `indicatorClassName`, **not** `theme.progressOverLimit` (functionally the same value, but the token is not the source — unlike the food-salt/liquids consumers, which do read `theme.progressOverLimit`).
 
 
 ---
@@ -2316,10 +2343,11 @@ CardShell + card-themes touch **no database tables directly** — they are pure 
 ## Features
 
 - **Floating Voice-log launch bar** anchored to the bottom of the home screen (`/` only), above the QuickNav footer when present. Full-width button: a sky-tinted mic glyph chip + "Voice log" label. Slides away / fades in sync with the QuickNav footer scroll-hide behavior.
-- **Gated on auth** — the bar renders only when `useAuthGate()` returns true (auth ready+authenticated). Hidden entirely otherwise.
+- **Gated on auth** — the bar renders only when `useAuthGate()` returns true. `useAuthGate()` returns `!ready || authenticated`, i.e. true while auth is **not yet ready (loading)** OR authenticated — not strictly "ready AND authenticated"; the bar also renders during the pre-resolution loading window. Hidden entirely otherwise.
 - **Full-screen sheet** (`side="full"`) opens the Voice Panel; an `sr-only` "Voice log" title is provided for a11y.
 - **Recorder** with one large circular record/stop button, a live audio waveform canvas, an elapsed `mm:ss` timer, and a textual status line.
 - **Browser-codec negotiation** — picks the first supported MediaRecorder MIME type (`audio/webm;codecs=opus` → `audio/webm` → `audio/mp4` → `audio/mp4;codecs=mp4a.40.2`); covers Chrome/Edge/Firefox (webm/opus) and iOS Safari 14.3+ (mp4).
+- **Upload filename extension** — the panel derives the upload filename from the captured MIME type: `mp4`/`aac` → `clip.m4a`, `ogg` → `clip.ogg`, else `clip.webm`.
 - **Captured audio constraints** — `echoCancellation`, `noiseSuppression`, `autoGainControl` all enabled on `getUserMedia`.
 - **Three-stage pipeline:** transcribe → parse → review/commit, with per-stage status text:
   - "Transcribing with Groq Whisper…"
@@ -2331,7 +2359,7 @@ CardShell + card-themes touch **no database tables directly** — they are pure 
 - **Per-item review rows** — each item rendered with a domain color bar, an uppercase domain chip label, inline editable fields, and approve/reject icon buttons.
 - **Live counts** — header shows "Items (X approved · Y pending)".
 - **Bulk approve / reject** of all pending rows; **per-row** approve/reject toggle (re-tapping returns the row to pending).
-- **AI reasoning note** — if returned, shown as a muted left-bordered footnote below the item list (assumptions/estimates explanation).
+- **AI reasoning note** — if returned, shown as a muted left-bordered footnote below the item list (assumptions/estimates explanation). Reasoning is only emitted when `reasoning` is a **non-empty trimmed string**; whitespace-only reasoning becomes `undefined` (no footnote).
 - **Multi-item commit** — saves all approved rows, each into its proper Dexie domain via the appropriate mutation; failures are collected and surfaced.
 - **Partial-failure resilience** — a clean save closes the sheet & resets; any failure keeps the review state open (with toast listing up to 3 failures) so the user can retry.
 - **Unit conversions** are AI-side: lbs→kg, oz/cup/glass→ml, salt-g→sodium-mg, abv%+volume→standard drinks (client recomputes standard drinks too).
@@ -2365,7 +2393,7 @@ CardShell + card-themes touch **no database tables directly** — they are pure 
 - **Visible** — `y:0, opacity:1`, pointer-events enabled, focusable.
 - **Hidden** (scroll-hide active) — `y:"150%", opacity:0`, pointer-events off, removed from tab order, `aria-hidden`. Animated with configurable `transitionDuration` (default 0.2s, from settings `barTransitionDurationMs`).
 - **Bottom-offset variants** — sits `76px + safe-area-inset-bottom` above QuickNav when present, else just `safe-area-inset-bottom`.
-- **Not rendered** — when `useAuthGate()` is false, or when route ≠ `/`.
+- **Not rendered** — when `useAuthGate()` is false (auth ready AND unauthenticated; note it stays *true* during the loading window), or when route ≠ `/`.
 
 **VoiceRecorder state machine (`RecorderState`):** `idle | requesting | recording | processing | error`
 - **idle** — default mic icon button (variant `default`); status "Tap to record"; timer `00:00`.
@@ -2396,7 +2424,7 @@ CardShell + card-themes touch **no database tables directly** — they are pure 
 - "Reject all" / "Approve all" split buttons — disabled when `pendingCount === 0` or saving.
 - "Save N" full-width button — disabled when `approvedCount === 0` or saving; label shows count when >0.
 
-**Offline / failure presentations:** Network/transcribe/parse errors surface as destructive toast + inline destructive text; pipeline returns to `idle`. `apiFetch` returning a non-OK response throws with the server `error` message (e.g. "Transcribe failed (status)"). A null/short-circuit response (`apiFetch` returning falsy via auth redirect) silently returns to `idle`.
+**Offline / failure presentations:** Network/transcribe/parse errors surface as destructive toast + inline destructive text; pipeline returns to `idle`. A non-OK transcribe/parse response throws with the server `error` message; on a Groq failure the transcribe route returns HTTP 502 with `error: "Transcription service failed"` (the panel surfaces that message), and `"Transcribe failed (status)"` / `"Parse failed (status)"` is only the client fallback used when the server JSON lacks an `error` field. The panel's `if (!transcribeRes)` / `if (!parseRes)` → `setStage("idle")` branches are **dead code**: `apiFetch` is typed `Promise<Response>` and always returns a `Response` or throws — it never returns falsy and has no auth-redirect short-circuit, so no "silent return to idle via falsy response" path exists.
 
 ---
 
@@ -2445,7 +2473,7 @@ CardShell + card-themes touch **no database tables directly** — they are pure 
 **Pipeline / API constants:**
 - `MAX_ITEMS = 20` (response truncated to first 20).
 - `MAX_REASONING_CHARS = 1000` (reasoning truncated, not rejected).
-- Parse request transcript: 1–2000 chars (Zod `ParseRequestSchema`).
+- Parse request transcript: Zod `ParseRequestSchema` accepts 1–2000 chars, but `sanitizeForAI` then hard-truncates the (already PII-redacted, trimmed) transcript to a **500-char** cap before it reaches Claude — so the effective max sent to the model is 500, not 2000.
 - Parse model timeout: `REQUEST_TIMEOUT_MS = 60_000`; transcribe fetch timeout: `30_000`.
 - Parse rate limit: 20/window; transcribe rate limit: 30/window.
 - Transcribe: `MAX_AUDIO_BYTES = 20 MB`; allowed MIME prefixes `audio/`, `video/webm`, `video/mp4`; model `whisper-large-v3-turbo`; `temperature 0`, `response_format verbose_json`.
@@ -2468,12 +2496,12 @@ Each approved item is written via the matching domain mutation (sources tagged `
 - **water** → `useAddIntake` → `intakeRecords` (type `water`, amount=ml, source `voice`, optional note).
 - **salt** → `useAddIntake` → `intakeRecords` (type `salt`, amount=sodiumMg, source `voice`, optional note).
 - **food** → `useAddComposableEntry` (`groupSource: "ai_food_parse"`) → creates an `eatingRecords` row (note=description, optional grams) plus linked `intakeRecords` for each present nutrient: water (source `manual:food_water_content`), salt (`manual:sodium`), sugar (`manual:sugar`, gated on tracker), potassium (`manual:potassium`, gated on tracker).
-- **caffeine** → `useAddSubstance` → `substanceRecords` (type `caffeine`, amountMg, optional volumeMl, description). Volume may create a linked water intake (service-side).
+- **caffeine** → `useAddSubstance` → `substanceRecords` (type `caffeine`, amountMg, optional volumeMl, description). A linked water `intakeRecords` row is created service-side **only when `volumeMl` is truthy/non-zero** (`if (input.volumeMl)`), tagged `source: "substance:<substanceId>"`.
 - **alcohol** → `useAddSubstance` → `substanceRecords` (type `alcohol`, amountStandardDrinks [derived], abvPercent, volumeMl, description).
 - **urination** → `useAddUrination` → `urinationRecords` (optional amountEstimate, note default `"voice"`).
 - **defecation** → `useAddDefecation` → `defecationRecords` (optional amountEstimate, note default `"voice"`).
 
-Server-side parse/transcribe routes write no user records; they call `recordUsage(...)` (AI usage tracking: provider, model, route, tokens, duration, audioSeconds). After commit, `queryClient.invalidateQueries()` refreshes all caches.
+Server-side parse/transcribe routes write no user records; they call `recordUsage(...)` (AI usage tracking: provider, model, route, tokens, duration, audioSeconds). The **transcribe** route records usage on **both** outcomes — the Groq-error branch logs `status: "error"` and the success branch `status: "success"` (with `audioSeconds`). The **parse** route records usage **per Anthropic call** — once for the initial turn and again for the forced-tool follow-up turn, so a two-turn fallback records (and bills) twice. After commit, `queryClient.invalidateQueries()` refreshes all caches.
 
 Types: `VoiceParsedItem` discriminated union (`BloodPressureItem | WeightItem | WaterItem | SaltItem | FoodItem | CaffeineItem | AlcoholItem | UrinationItem | DefecationItem`), `VoiceParseResponse { items, reasoning? }`, `RowState { item, approved: boolean | null }`.
 
@@ -2481,16 +2509,16 @@ Types: `VoiceParsedItem` discriminated union (`BloodPressureItem | WeightItem | 
 
 ## Validation, edge cases & business rules
 
-- **Auth-gated rendering** — launch bar hidden until auth ready+authenticated.
+- **Auth-gated rendering** — launch bar rendered when `useAuthGate()` (`!ready || authenticated`) is true; hidden only once auth has resolved and the user is unauthenticated (it remains visible during the loading window).
 - **Two-turn tool fallback** — if Claude returns prose instead of calling `parse_voice_log`, the route retries with forced `tool_choice`. If still no tool block → 422 "AI response format invalid".
-- **Resilient extraction** — each item Zod-validated independently; malformed items dropped (logged), good ones kept. Fails only if `items` isn't an array, or items present but none survive. Reasoning over 1000 chars is truncated, never rejected (fix for prior whole-payload rejection).
+- **Resilient extraction** — each item Zod-validated independently; malformed items dropped, good ones kept. `extractVoiceItems` truncates the surviving items to the first `MAX_ITEMS = 20` (`items.slice(0, MAX_ITEMS)`) and returns a `dropped` count of how many failed validation; the route logs it (`[VALIDATION] voice-parse: dropped N malformed item(s)`) when `dropped > 0`. Fails only if `items` isn't an array, or items present but none survive. Reasoning over 1000 chars is truncated, never rejected (fix for prior whole-payload rejection).
 - **Empty-result vs failure** — empty `items` is a valid result (toast "No items detected"), distinct from a 422 format failure.
-- **Heart-rate orphans** — AI emits a `blood_pressure` item only if systolic+diastolic present; standalone HR is skipped (no HR-only item type).
+- **Heart-rate orphans** — AI emits a `blood_pressure` item only if systolic+diastolic present; standalone HR is skipped (no HR-only item type). This is enforced both prompt-side and by the Zod schema: the `blood_pressure` variant requires `systolic` and `diastolic` (HR is optional), so a standalone-HR item cannot validate and is dropped.
 - **Food vs water** — "glass of orange juice" → one food item carrying its own waterMl; AI must NOT also emit a separate water item. Plain "glass of water" → a water item, not food.
 - **Multi-intake split** — "I had X and Y" → one item per distinct intake.
 - **Sodium units** — values are mg of *sodium* not salt; AI converts salt grams (×400).
 - **Standard-drinks rule** — AI always returns both abvPercent and volumeMl; never "units"/"standard drinks". Client derives standard drinks (`standardDrinksFromAbv`, rounded to 0.1) for storage and live editor display.
-- **Optional-tracker enforcement** — sugar/potassium fields hidden in editor when disabled, and excluded from the composable-entry intakes on save even if the AI returned a value. Both hooks read unconditionally to keep hook order stable across item kinds.
+- **Optional-tracker enforcement** — sugar/potassium fields hidden in editor when disabled, and excluded from the composable-entry intakes on save even if the AI returned a value. The voice path uses the reactive `useOptionalTrackerEnabled` hook (read unconditionally for both trackers to keep hook order stable across item kinds); a separate non-reactive `getOptionalTrackerEnabled` snapshot exists in `optional-trackers.ts` but is not used here.
 - **Editor lock** — rows become read-only once approved/rejected (must un-toggle to edit) and during saving.
 - **Numeric parsing** — empty input on optional fields strips the key entirely (respecting `exactOptionalPropertyTypes`); non-finite parses fall back to 0 (`numberOrZero`).
 - **Commit gating** — Save no-ops if no approved rows; bulk/Save buttons disabled by pending/approved counts and `saving`.
@@ -2499,7 +2527,7 @@ Types: `VoiceParsedItem` discriminated union (`BloodPressureItem | WeightItem | 
 - **Codec fallback** — if no MediaRecorder MIME type is supported → error state, no recording.
 - **Audio guards (server)** — empty file → 400; >20MB → 413; disallowed MIME → 415; empty transcript → 422; Groq 401/403 → 400 with `INVALID_KEY`/provider hint ("Update it in Settings → AI features").
 - **Timeouts** — parse 60s → 504 "AI request timed out"; transcribe 30s abort → 504 "Transcription timed out".
-- **Input sanitization** — transcript run through `sanitizeForAI`; empty after sanitization → 400. Audit log lines emitted per call.
+- **Input sanitization** — transcript run through `sanitizeForAI` (PII redaction + trim + hard **500-char** truncation); empty after sanitization → 400. The 500-char cap overrides the Zod 1–2000 range as the effective length sent to the model. Audit log lines emitted per call.
 - **Rate limits** — 429 when exceeded (parse 20, transcribe 30 per window, per client IP).
 
 ---
@@ -2554,12 +2582,12 @@ Types: `VoiceParsedItem` discriminated union (`BloodPressureItem | WeightItem | 
 - Previous/next week chevrons shift the selected date by ±7 days.
 - Each day cell shows a 3-letter weekday label and the numeric day-of-month.
 - Selected day is highlighted (filled teal). The current real-world "today" gets a teal ring when not the selected day.
-- A caption line under the strip shows a friendly label: `Today, <Mon D, YYYY>`, `Yesterday, …`, `Tomorrow, …`, or `<Weekday Month D>, <Mon D, YYYY>` for arbitrary dates.
+- A caption line under the strip shows a friendly label of the form `<dateLabel>, <Mon D, YYYY>`. For today/tomorrow/yesterday `dateLabel` is just "Today"/"Tomorrow"/"Yesterday" (e.g. `Today, Jun 3, 2026`). For any other date `dateLabel` is the full localized `weekday: "long"` + `month: "short"` + `day: "numeric"` string — itself comma-joined — so the rendered caption repeats the month/day, e.g. `Monday, Jun 3, Jun 3, 2026`.
 
 ### Tab bar (MedTabBar / med-footer)
 - 5 tabs that switch the entire medications page sub-view: Schedule, Rx (prescriptions), Meds (compound list), Titrations, Settings. Each has an icon + label.
 - Active tab is teal-colored with a teal underline bar; inactive tabs are muted.
-- Persists active tab in a Zustand store so it survives within the session. Default tab is `schedule`.
+- Holds the active tab in a module-level Zustand store (plain `create`, **no `persist` middleware**) so it survives in-app navigation and component remounts, but is reset on a full page reload — it is not written to localStorage. Default tab is `schedule`.
 
 ### Daily progress summary (DoseProgressSummary) — today only
 - Computes N-of-M: total scheduled doses for the day, count taken, % handled.
@@ -2655,6 +2683,7 @@ Types: `VoiceParsedItem` discriminated union (`BloodPressureItem | WeightItem | 
 - **SkipReasonPicker:** modal with 5 preset buttons + custom input; "Ran out" preset gets an amber ring when the slot is out of inventory (`negative_stock` / `no_inventory`).
 - **RetroactiveTimePicker:** compact modal, centered native time input, Cancel + "Log Dose"; resets to default time each time it opens.
 - **BulkDoseEditDialog:** bottom drawer (max 85vh), time heading, scrollable dose list, three circular action buttons (SKIP ALL always enabled; UN-TAKE and EDIT RECORD disabled at 40% opacity unless any dose is taken).
+- **DoseDetailDialog:** bottom drawer opened by tapping a non-actionable row (taken/skipped, or any future-date row). Defined outside this unit's "Files covered" but reached from it. Its own circular action buttons are: SKIP (when not already skipped), TAKE or UNTAKE (UNTAKE shown when the dose is taken; TAKE on past dates opens a RetroactiveTimePicker), and — **today only** — RESCHEDULE, which reveals an inline time input and calls `rescheduleDose` to move the dose to a new time.
 
 ### Tab bar
 - **Active tab:** teal text + teal underline bar.
@@ -2685,7 +2714,7 @@ Types: `VoiceParsedItem` discriminated union (`BloodPressureItem | WeightItem | 
 
 **Food instructions** (`FoodInstruction`, db.ts): `"before" | "after" | "none"`. Rendered as `"-- before eating"` / `"-- after eating"`; `none` hidden.
 
-**Inventory warnings** (string codes set on a slot): `"negative_stock" | "no_inventory" | "odd_fraction"`.
+**Inventory warnings** (string codes set on a slot): `"negative_stock" | "no_inventory" | "odd_fraction"`. At most one survives per slot: `odd_fraction` is assigned first, but is **overwritten by `negative_stock`** if the dose would drive stock below zero (negative_stock wins).
 
 **Skip reason presets** (skip-reason-picker.tsx):
 `["Forgot", "Side effects", "Ran out", "Doctor advised", "Don't need this dose"]` + free-text custom.
@@ -2732,7 +2761,7 @@ Types: `VoiceParsedItem` discriminated union (`BloodPressureItem | WeightItem | 
 - `doseLogs` (take/untake/skip/reschedule/edit-time, single + bulk).
 - `inventoryTransactions` (pill deductions of type `consumed` linked by `doseLogId`).
 - `auditLogs` + `_syncQueue` (every mutation enqueues a sync upsert).
-- `phaseSchedules` (add/update/delete schedule — used by other tabs, defined in medication-schedule-service.ts).
+- `phaseSchedules` (add/update/delete schedule — used by other tabs, defined in medication-schedule-service.ts). That file also exposes read helpers used by the Rx/Settings tabs: `getDailySchedule(dayOfWeek)` (returns a `Map<time, ScheduleWithDetails[]>` of active prescriptions/phases for a weekday) and `getSchedulesForPhase(phaseId)`; both reads additionally filter `deletedAt === null` alongside `enabled === true`.
 
 **Key derived type — `DoseSlot`** (dose-schedule-service.ts): `prescriptionId, phaseId, scheduleId, scheduledDate (YYYY-MM-DD), scheduleTimeUTC (min from UTC midnight), localTime ("HH:MM"), dosageMg, unit, status, existingLog?, prescription, phase, schedule, inventory?, pillsPerDose?, inventoryWarning?`.
 
@@ -2748,7 +2777,7 @@ Types: `VoiceParsedItem` discriminated union (`BloodPressureItem | WeightItem | 
 - **Pre-creation cutoff:** no dose slots are shown for dates earlier than the prescription's `createdAt` date.
 - **Timezone-aware display:** `localTime` is derived from `scheduleTimeUTC` formatted into the device timezone (`getDeviceTimezone`). Slots are sorted by `localTime`.
 - **On-time vs late take:** today + within 30 min of scheduled = immediate log at current wall time; otherwise a retroactive time must be chosen. Past dates always require a chosen time.
-- **Pill math:** `pillsPerDose = round(dosageMg / inventory.strength, 4)`. If no inventory → warning `no_inventory` and "Dose logged -- no stock tracked". If the result is not a clean fraction → `odd_fraction`. If `currentStock - pillsPerDose < 0` → `negative_stock`.
+- **Pill math:** `pillsPerDose = round(dosageMg / inventory.strength, 4)`. If no inventory → warning `no_inventory` and "Dose logged -- no stock tracked". If the result is not a clean fraction → `odd_fraction`. If `currentStock - pillsPerDose < 0` → `negative_stock`. Only one warning is kept per slot: `odd_fraction` is set first and then overwritten by `negative_stock` if stock would go negative.
 - **Low-stock detection:** a prescription is "low stock" if `inventoryWarning === "negative_stock"`, OR `currentStock != null && refillAlertPills != null && currentStock <= refillAlertPills`. Listed by `genericName`.
 - **Skip-reason suggestion:** the picker pre-highlights "Ran out" (amber ring) when the slot is `negative_stock` or `no_inventory`.
 - **Custom skip reason:** trimmed; Submit disabled if empty/whitespace.
@@ -2775,7 +2804,7 @@ Types: `VoiceParsedItem` discriminated union (`BloodPressureItem | WeightItem | 
 - **PillIcon / PillIconWithBadge** — SVG pill renderer (5 shapes) with status badge overlay.
 - **showUndoToast** (undo-toast.tsx) — helper that fires a 5s toast with an Undo action.
 - **medication-ui-utils.ts** — `computeProgress`, `formatDoseAmount`, `formatPillCount`, phase-selection helpers, `getCurrentTimeHHMM`, haptics.
-- **dose-schedule-service.ts** — `getDailyDoseSchedule` (the live read powering this whole view) + range helper.
+- **dose-schedule-service.ts** — `getDailyDoseSchedule` (the live read powering this whole view) + `getDoseScheduleForDateRange`, a range helper that iterates each day in `[startDate, endDate]` (parsing each via `T12:00:00`), calls `getDailyDoseSchedule` per day, and returns a `Map<date, DoseSlot[]>` for history/calendar views (not used by this surface directly).
 
 
 ---
@@ -2814,14 +2843,14 @@ Types: `VoiceParsedItem` discriminated union (`BloodPressureItem | WeightItem | 
   - So flows range from 6 steps (new, scheduled) down to 3 steps (existing prescription: search → appearance → inventory).
 - **Header** shows the current step's friendly label and "Step X of N" (N = active step count, recomputed live).
 - **Segmented progress bar** — one teal/`muted` segment per active step; segments at/below the current index are teal (`bg-teal-500`).
-- **Per-step validation gate** — `Next`/`Save` runs the step's Zod schema; invalid blocks advance and surfaces inline errors.
+- **Per-step validation gate** — `Next`/`Save` runs the step's Zod schema; invalid blocks advance and surfaces inline errors. The `search` (brand-name), `schedule`, and `inventory` Zod failures also log a `validation_error` audit entry; the combination-drug validation failure (see below) is the one branch that surfaces an error **without** any audit log.
 - **AI medicine search** (Step 1) — sends the query + region context to `/api/ai/medicine-search`, which calls Claude (premium model, `temperature: 0`, forced tool use) and returns structured pharma data. Results auto-populate brand, generic, strengths, indications, contraindications, warnings, food instruction/note, pill color, pill shape, visual identification, combination-drug compounds.
 - **Region-aware search** — primary/secondary region from settings store are folded into the prompt ("focusing specifically on brands and availability in <country>" with secondary fallback).
 - **Query-driven auto-selection** — if the query contains an explicit dose (e.g. "Eliquis 5mg"), the matching `dosageStrength` is auto-selected; for combos, the matching numeric strength option is chosen.
 - **Combination-drug ("multi-compound") support** — toggle that switches single-strength entry for a per-ingredient name+mg editor; AI populates ingredient names and per-pill mg; preset chips for marketed strength options.
 - **Pill appearance designer** (Step 2) — live SVG pill preview (80px), 5 shape choices, 15 preset color swatches + custom hex color picker, free-text visual-identification notes.
 - **Indication & safety panel** (Step 3) — indication free-text with "AI Suggest" re-run, read-only contraindications/warnings panel (red/amber), food-timing selector, conditional food note, free-text notes.
-- **Dosage calculator** (Step 4) — preset dose-multiplier chips + custom dose input, live "X pills per dose = Ymg" computation, partial-pill detection, PRN toggle.
+- **Dosage calculator** (Step 4) — an "Each pill contains <contents>" line above the presets (`pillContents` = `formatCompoundFull` for combos, else the `dosageStrength` string), preset dose-multiplier chips + custom dose input, live "X pills per dose = Ymg" computation, partial-pill detection, PRN toggle.
 - **Schedule builder** (Step 5) — multiple time entries, each with a 7-day-of-week toggle row; add/remove time rows.
 - **Inventory & refill reminders** (Step 6) — current pill stock + two refill-alert thresholds (days-of-supply and pills-remaining).
 - **AI drug-conflict check on save** — for new prescriptions with other active meds, runs an interaction check; if any `AVOID`/`CAUTION` conflicts, shows a blocking warning overlay requiring explicit "Save Anyway".
@@ -2864,6 +2893,7 @@ Types: `VoiceParsedItem` discriminated union (`BloodPressureItem | WeightItem | 
 - **Additional notes textarea** — Rx-level notes.
 
 **Step 4 — Dosage**
+- **"Each pill contains <contents>" line** — read-only summary above the dose presets (shown when there is pill content): combo → `formatCompoundFull`, single → the `dosageStrength` string.
 - **Dose-multiplier preset buttons** (6) — tap to set `dosageAmount` (clears any custom dose). Labels differ by mode: single → "Nmg" (mult × strength); combo → "1 pill"/"N pills".
 - **Custom dose input** — single mode accepts mg (converted to a pill multiplier internally); combo mode accepts pills-per-dose directly. Entering a custom value supersedes the preset.
 - **"As needed (PRN)" toggle** — when on, the schedule step is removed from the flow.
@@ -2890,7 +2920,7 @@ Types: `VoiceParsedItem` discriminated union (`BloodPressureItem | WeightItem | 
 - **First step** — top-left shows Close (`X`); no bottom Back button.
 - **Mid/last step** — top-left shows Back (`ArrowLeft`); bottom Back button present.
 - **Last step** — bottom button becomes "Save Medication" (teal); shows spinner + disabled while saving.
-- **Validation-error** — `Next`/`Save` blocked; inline red error text under the offending field; logs a `validation_error` audit entry.
+- **Validation-error** — `Next`/`Save` blocked; inline red error text under the offending field; the `search`/`schedule`/`inventory` failures log a `validation_error` audit entry (the combination-drug failure does not).
 
 **Step 1 — Search**
 - **Signed-out** — search input, result card, and AI affordances hidden; manual brand/generic/strength entry only.
@@ -2977,17 +3007,19 @@ Writes (new prescription — `CreatePrescriptionInput` → `addPrescription`, bu
 - **Prescription** (`db.ts` `Prescription`): `id`, `genericName`, `indication`, `notes?`, `contraindications?[]`, `warnings?[]`, `compounds?[]`, `isActive=true`, audit/sync fields (`createdAt`, `updatedAt`, `deletedAt`, `deviceId`).
 - **MedicationPhase** (initial, `buildPhase`): `type="maintenance"`, `unit`, `startDate=now`, `foodInstruction`, `foodNote?`, `notes?`, `status="active"`.
 - **InventoryItem** (`buildInventory`): `prescriptionId`, `brandName`, `currentStock`, `strength`, `compounds?[]`, `unit`, `pillShape`, `pillColor`, `visualIdentification?`, `refillAlertDays?`, `refillAlertPills?`, `isActive=true`, `timezone`.
-- **PhaseSchedule[]** (`buildSchedules`): `phaseId`, `time` (HH:MM, deprecated display), `scheduleTimeUTC` (minutes from UTC midnight, computed from local time + device tz), `anchorTimezone`, `dosage`, `daysOfWeek[]`, `enabled=true`.
-- **InventoryTransaction** (`buildTransaction`) for the initial stock seed.
+- **PhaseSchedule[]** (`buildSchedules`): `phaseId`, `time` (HH:MM, deprecated display), `scheduleTimeUTC` (minutes from UTC midnight, computed from local time + device tz), `anchorTimezone`, `dosage`, `daysOfWeek[]`, `enabled=true`. (`PhaseSchedule` also defines an optional `unit?` display field, e.g. "mg", which `buildSchedules` leaves unset.)
+- **InventoryTransaction** (`buildTransaction`) for the initial stock seed — created **only when `currentStock > 0`**, typed `"refill"` with note `"Initial stock"`.
 
-Writes (existing prescription — `AddMedicationToPrescriptionInput` → `addMedicationToPrescription`): only a new **InventoryItem** (brand, stock, strength, unit, shape, color, visual ID, compounds, refill alerts) — no new phase/schedule/indication.
+**PRN / as-needed:** when `schedules` is empty, `addPrescription` persists **no MedicationPhase and no PhaseSchedules at all** (phase = null) — only the Prescription, InventoryItem, and (if stock > 0) the initial InventoryTransaction.
+
+Writes (existing prescription — `AddMedicationToPrescriptionInput` → `addMedicationToPrescription`): only a new **InventoryItem** (brand, stock, strength, unit, shape, color, visual ID, compounds, refill alerts) — no new phase/schedule/indication. **Activation rule:** the new brand is set `isActive: !hasActiveBrand`, i.e. it auto-activates only when the Rx currently has no active, non-archived, non-deleted brand; otherwise it is added inactive. It never archives the existing active brand or touches the phase/schedule. The audit entry records `activatedImmediately: !hasActiveBrand`.
 
 Form state interface `AddMedicationFormState` (28 fields) covers: `selectedPrescriptionId`, `searchQuery`, `searchResult`, `brandName`, `genericName`, `dosageStrength`, `isCombination`, `compounds[]`, `pillShape`, `pillColor`, `visualIdentification`, `indication`, `contraindications[]`, `warnings[]`, `foodInstruction`, `foodNote`, `notes`, `dosageAmount`, `customDosage`, `asNeeded`, `schedules[]`, `currentStock`, `refillAlertDays`, `refillAlertPills`.
 
 ## Validation, edge cases & business rules
 
-- **Required:** brand name (`SearchStepSchema`, "Medication name is required"). On validation the name falls back to a capitalized search query if brand is empty.
-- **Combination validation:** when `isCombination`, at least 2 compounds must each have a non-empty name AND strength > 0, else error "Enter a name and strength for both active ingredients".
+- **Required:** brand name (`SearchStepSchema`, "Medication name is required"). On validation the name falls back to a capitalized search query if brand is empty. A brand-name Zod failure also writes a `validation_error` audit log.
+- **Combination validation:** when `isCombination`, at least 2 compounds must each have a non-empty name AND strength > 0, else error "Enter a name and strength for both active ingredients". This is the only validation branch that does **not** write a `validation_error` audit log (the `search`/`schedule`/`inventory` Zod failures all do) — an asymmetry in the audit coverage.
 - **Schedule validation (`ScheduleEntrySchema`):** each entry needs a time, dosage > 0, and ≥1 day selected; errors are prefixed "Schedule N: ...".
 - **Inventory validation (`InventoryStepSchema`):** stock must be a number ≥ 0 (negative blocked; non-number → coerced to 0 before validation).
 - **Auto-capitalization:** `brandName` and `genericName` are title-cased on change and on query→brand fallback.
@@ -2995,7 +3027,7 @@ Form state interface `AddMedicationFormState` (28 fields) covers: `selectedPresc
 - **Combination dose math:** for combos, `strength` is the SUM of compound strengths (`compoundSum`) so `pillsPerDose = dosage / strength` is identical to single-compound; `compounds` stays purely descriptive/labeling.
 - **Dosage computation:** `finalDosage = customDosage ? parseFloat(customDosage) : dosageAmount`; `scheduleDosage = (finalDosage || 1) * strength`. Single-mode custom input is entered in mg but stored as a pill-multiplier (`mg / strength`); combo-mode custom input is pills directly.
 - **Partial-pill note** shown when pills-per-dose < 1.
-- **PRN behavior:** `asNeeded` removes the schedule step and saves with empty `schedules`.
+- **PRN behavior:** `asNeeded` removes the schedule step and saves with empty `schedules`; the service then persists **no MedicationPhase and no schedules** for the med (only Prescription + InventoryItem + optional initial transaction).
 - **Schedule filtering on save:** entries without a time or with no days are dropped before persisting.
 - **Generic name fallback on save:** if `genericName` empty, uses combo names (`formatCompoundNames`) for combos, else the brand name.
 - **Timezone:** schedule times stored as both local HH:MM and `scheduleTimeUTC` (minutes from UTC midnight) plus the `anchorTimezone`, so day-start/notification logic survives timezone changes.
@@ -3018,7 +3050,7 @@ Form state interface `AddMedicationFormState` (28 fields) covers: `selectedPresc
 - **`PillIcon`** — SVG renderer for the 5 pill shapes (also `PillIconWithBadge` for dose status, unused here).
 - **`useAddMedicationForm`** — form state container + per-step Zod validation + audit logging.
 - **`useMedicineSearch`** — React Query mutation wrapping the AI search endpoint; defines `MedicineSearchResult` and `MedicineSearchCancelledError`.
-- **`useInteractionCheck`** — conflict/lookup interaction checker with caching, abort, and 15s timeout.
+- **`useInteractionCheck`** — conflict/lookup interaction checker exposing `check`/`data`/`reset` plus `isLoading`/`error`, with lookup-mode caching (`getCached`/`setCache` from `interaction-cache`), abort, and a 15s timeout; a sibling `useRefreshInteractions` hook also lives in this file. The wizard only consumes `check`/`data`/`reset`.
 - **`medication-builders.ts`** — `buildPrescription` / `buildPhase` / `buildInventory` / `buildSchedules` / `buildTransaction` record factories.
 - **`compound-utils.ts`** — `compoundSum`, `isCombo`, `splitDose`, `scaleCompounds`, `formatCompoundShort/Full/Names`.
 - **`/api/ai/medicine-search`** — auth-gated, rate-limited Claude endpoint returning the structured pharma result.
@@ -3075,14 +3107,14 @@ Form state interface `AddMedicationFormState` (28 fields) covers: `selectedPresc
 ### Expanded compound card (`CompoundCardExpanded`)
 - Expanded body for one `Prescription` (mounted inside `prescription-card.tsx`). Four stacked sections:
   1. **Medicines** — list of this prescription's non-archived inventory items, sorted active-first then alphabetically. Each row: pill icon (size 24), brand name, "Active" badge if active, strength/compound line, stock text, "Low" badge if low, chevron. Tapping a row opens that item's `InventoryItemViewDrawer`.
-  2. **Schedule** — derived from the *effective phase* (`getEffectivePhase`: active titration overrides maintenance). Shows a "On titration" badge when the effective phase is a titration. If all schedules share the same dosage, collapses to one line: `<dose> <freq> at <times>` where freq = `daily` / `twice daily` / `Nx daily`. Otherwise one line per schedule (`<dose> at <time>`). Combination drugs render the per-compound split via `splitDose` + `formatCompoundShort`. Food instruction footnote when `foodInstruction !== "none"` ("Take before eating" / "Take after eating").
+  2. **Schedule** — derived from the *effective phase* (`getEffectivePhase`: active titration overrides maintenance). Shows a "On titration" badge when the effective phase is a titration. If all schedules share the same dosage, collapses to one line: `<dose> <freq> at <times>` where freq = `daily` / `twice daily` / `Nx daily`. Otherwise one line per schedule (`<dose> at <time>`). The displayed time comes from the **deprecated** `PhaseSchedule.time` field (not `scheduleTimeUTC`/`localTime`), so these schedule times are presented from a different source than the Today section, which uses `localTime`. Combination drugs render the per-compound split via `splitDose` + `formatCompoundShort`. Food instruction footnote when `foodInstruction !== "none"` ("Take before eating" / "Take after eating").
   3. **Today** — today's dose slots for this prescription (from `useDailyDoseSchedule`), each with a status icon, local time, dose amount, and status label.
   4. **Actions** — "Switch Brand" button (only if >1 brand) opening `BrandSwitchPicker`; "Prescription Details" button opening `PrescriptionViewDrawer`.
 - Stops click propagation so taps inside don't collapse the parent card.
 
 ### Brand switch picker (`BrandSwitchPicker`)
 - Modal dialog listing every non-archived brand for a prescription.
-- Each row: pill icon (size 28), brand name, strength/compound line + stock, "Active" check badge on the current active brand.
+- Each row: pill icon (size 28), brand name, strength/compound line and stock joined by a middot separator (`{strength}{unit} · {stockText}`), "Active" check badge on the current active brand.
 - Selecting a brand deactivates the current active item and activates the chosen one (two sequential mutations). Toasts "Brand switched → Switched to <brandName>". Selecting the already-active brand just closes the dialog (no-op).
 
 ### Pill icon (`PillIcon` / `PillIconWithBadge`)
@@ -3093,18 +3125,18 @@ Form state interface `AddMedicationFormState` (28 fields) covers: `selectedPresc
 - Free-text search bar to check an arbitrary substance (drug, supplement, food, e.g. "ibuprofen") against the user's **active prescriptions** via AI.
 - Submits on Enter. Clears with the X button.
 - Calls `useInteractionCheck` in `"lookup"` mode; sends only the active prescriptions' `genericName`s.
-- Results: grouped by medication; each interaction labeled `AVOID` / `CAUTION` / `OK` with a description, plus an optional one-line `summary` and `drugClass`.
+- Results: grouped by medication; each group's card header reads `"<query> vs <medicationName>"`; each interaction labeled `AVOID` / `CAUTION` / `OK` with a description, plus an optional one-line `summary` and `drugClass`.
 - Shows a green "No significant interactions found" panel when every returned interaction is `OK`.
 - 24-hour client-side localStorage cache for lookup results (`interaction-cache.ts`, key = trimmed+lowercased substance).
 
 ### Interactions section (`InteractionsSection`)
 - Per-prescription stored interactions panel (header "Interactions & Warnings" with shield icon).
 - Renders persisted `prescription.contraindications` (as `AVOID`) and `prescription.warnings` (as `CAUTION`, or `INFO` when the warning string starts with `"Drug class:"`).
-- "Refresh interactions" button (when AI gate is on) re-runs an AI conflict check of this prescription against all *other* active prescriptions and persists the result back onto the prescription. Disabled when there are no other active prescriptions.
+- "Refresh interactions" button (when AI gate is on) re-runs an AI conflict check of this prescription against all *other* active prescriptions and persists the result back onto the prescription. Each persisted contraindication/warning string is formatted `"<medication>: <description>"` (medication name prepended). Disabled when there are no other active prescriptions.
 - When signed-out AND no stored data: the whole section is hidden.
 
 ### Medicine search (`useMedicineSearch`)
-- AI lookup used by the add-medication wizard to auto-fill a new medication: brand names, local alternatives, generic name, dosage strengths, active ingredients, per-strength compound breakdowns, indications, food instruction, pill color/shape/description, drug class, visual identification, contraindications, warnings, and a generic-fallback flag.
+- AI lookup used by the add-medication wizard (and also by `edit-medication-drawer.tsx`) to auto-fill a medication: brand names, local alternatives, generic name, dosage strengths, active ingredients, per-strength compound breakdowns, indications, food instruction, pill color/shape/description, drug class, visual identification, contraindications, warnings, and a generic-fallback flag.
 - Region-aware: prepends the user's `primaryRegion` (and `secondaryRegion` as fallback) from settings to bias brand availability.
 
 ---
@@ -3170,7 +3202,7 @@ Form state interface `AddMedicationFormState` (28 fields) covers: `selectedPresc
 - **No schedules**: "No schedules configured".
 - **No effective phase**: Schedule section omitted entirely.
 - **No today slots**: Today section omitted.
-- **Today slot statuses** (icon + colored label): `taken` (emerald check), `skipped` (gray X), `pending` (muted minus), `missed` (amber clock).
+- **Today slot statuses** (icon + colored label): `taken` (emerald check), `skipped` (gray X), `pending` (muted minus), `missed` (amber clock). A `rescheduled` DoseLog maps to the `skipped` slot status (`deriveStatus`, "rescheduled slots show as handled"), so the Today section never shows a distinct rescheduled state.
 - **Single brand**: "Switch Brand" hidden.
 
 ### Brand switch picker
@@ -3179,6 +3211,7 @@ Form state interface `AddMedicationFormState` (28 fields) covers: `selectedPresc
 
 ### Interaction search
 - **Idle**: just the search input (no results panel).
+- **Results panel**: animates in/out via `AnimatePresence` (opacity + height).
 - **Has query**: X-clear button appears.
 - **Loading**: bordered panel, spinner + "Checking interactions…".
 - **Error**: red-bordered panel with the error message (local or fetch).
@@ -3192,9 +3225,9 @@ Form state interface `AddMedicationFormState` (28 fields) covers: `selectedPresc
 
 ### Interactions section
 - **Has data**: contraindication rows (`AVOID`, red), warning rows (`CAUTION`, amber; or `INFO`/muted for "Drug class:" prefixed warnings).
-- **No data + AI on**: dashed "No interaction data yet" panel with a "Refresh interactions" outline button.
+- **No data + AI on**: dashed "No interaction data yet" panel with a "Refresh interactions" outline button. (The refresh button — with its disabled/relabel logic — appears in both the has-data and the no-data branches; the same button markup is duplicated across both.)
 - **Refreshing**: spinner replaces the refresh icon.
-- **No other active prescriptions**: button disabled, relabeled "Add more prescriptions to check interactions".
+- **No other active prescriptions**: button disabled, relabeled "Add more prescriptions to check interactions" (applies in both the has-data and no-data branches).
 - **Signed-out + no stored data**: section hidden entirely.
 
 ### Pill icon
@@ -3207,9 +3240,9 @@ Form state interface `AddMedicationFormState` (28 fields) covers: `selectedPresc
 - **`PillShape`** (`db.ts`): `"round"` | `"oval"` | `"capsule"` | `"diamond"` | `"tablet"`. Default fallback in UI: `"round"`.
 - **Default pill color**: `#94a3b8` (slate) when `pillColor` absent.
 - **`PillIconWithBadge` status**: `"taken"` | `"skipped"` | `"rescheduled"` | `"pending"`. Badge colors: taken → emerald-500, skipped → gray-400, rescheduled → amber-500; pending → no badge.
-- **Pill icon geometry** (relative to `size`): round = r 0.8·half; oval = rx 0.9·half / ry 0.6·half; capsule = rect 0.8w×0.5h, rx 0.25; diamond = polygon; tablet = rect 0.7×0.7, rx 0.12. Default size 32 (collapsed card uses 36, expanded rows 24, brand picker 28).
+- **Pill icon geometry** (relative to `size`): round = r 0.8·half; oval = rx 0.9·half / ry 0.6·half; capsule = rect 0.8w×0.5h, rx 0.25; diamond = polygon; tablet = rect 0.7×0.7, rx 0.12. The function's default `size` is 32, but no compound-library caller relies on it — every call passes an explicit size (collapsed card 36, expanded rows 24, brand picker 28).
 - **`DoseStatus`** (`db.ts`): `"taken"` | `"skipped"` | `"rescheduled"` | `"pending"`.
-- **`DoseSlotStatus`** (`dose-schedule-service.ts`, used in Today section): `"taken"` | `"skipped"` | `"pending"` | `"missed"`.
+- **`DoseSlotStatus`** (`dose-schedule-service.ts`, used in Today section): `"taken"` | `"skipped"` | `"pending"` | `"missed"`. Note `deriveStatus` collapses a `rescheduled` DoseLog into `"skipped"`, so this enum has no `"rescheduled"` member even though `DoseStatus` does.
 - **`FoodInstruction`**: `"before"` | `"after"` | `"none"`. UI strings: before → "Take before eating", after → "Take after eating".
 - **`PhaseType`**: `"maintenance"` | `"titration"`. Titration overrides maintenance for the effective phase.
 - **`MedicationPhase.status`**: `"active"` | `"completed"` | `"cancelled"` | `"pending"`.
@@ -3229,7 +3262,7 @@ Form state interface `AddMedicationFormState` (28 fields) covers: `selectedPresc
 - **Interaction lookup cache TTL**: 24h (`24 * 60 * 60 * 1000`), localStorage prefix `interaction-cache:`.
 - **Rate limits**: interaction-check 5/window; medicine-search 15/window.
 - **AI model**: `CLAUDE_MODELS.premium`, `max_tokens` 2048, `temperature` 0, forced tool use.
-- **Region settings** (`settings-store.ts`): `primaryRegion` (default `""`), `secondaryRegion` (default `""`); values `"none"`/`"None"` treated as unset.
+- **Region settings** (`settings-store.ts`): `primaryRegion` (default `""`), `secondaryRegion` (default `""`). "Unset" handling is asymmetric (`use-medicine-search.ts`): `primaryRegion` is only treated as unset when it equals `"none"` (lowercase) — a capitalized `"None"` set as the primary region is **not** treated as unset; `secondaryRegion` is treated as unset when it equals either `"None"` or `"none"`.
 - **Medicine-search `foodInstruction` enum**: `"before"` | `"after"` | `"none"` (defaults `"none"`).
 - **Medicine-search request limits**: `query` 1–200 chars; `country` ≤100 chars.
 
@@ -3280,7 +3313,7 @@ Form state interface `AddMedicationFormState` (28 fields) covers: `selectedPresc
 - **Interaction search**: trims the query; empty → no-op; requires ≥1 active prescription (server also enforces `.min(1)`). PII stripped server-side via `sanitizeForAI` before the AI call. Only `genericName`s are sent (not brand/stock/personal data).
 - **Interaction cache**: keyed on trimmed+lowercased substance; 24h TTL; lookup results cached, conflict results not. All localStorage access wrapped in try/catch for SSR/quota safety.
 - **Timeout arming**: the 15s abort timer starts only *after* `apiFetch` resolves with a real Response — so a blocking sign-in modal doesn't consume the timeout. Sign-in dismissal returns null silently.
-- **Refresh interactions**: checks this prescription only against *other* active prescriptions (excludes self); disabled when none. Maps `AVOID`→contraindications, `CAUTION`→warnings, prepends `"Drug class: …"` to warnings, persists onto the prescription.
+- **Refresh interactions**: checks this prescription only against *other* active prescriptions (excludes self); disabled when none. Maps `AVOID`→contraindications, `CAUTION`→warnings — each stored as `"<medication>: <description>"` (medication name prefixed) — prepends `"Drug class: …"` to warnings, persists onto the prescription.
 - **Interactions section visibility**: hidden when signed-out and no stored data (nothing can populate it).
 - **AI tool-use enforcement**: both routes force `tool_choice` and re-validate the tool output with Zod; failures return 502 ("AI service unavailable") for interaction-check, or 422 with `fallbackToManual: true` for medicine-search.
 - **Medicine-search generic fallback**: when an exact brand can't be matched, `isGenericFallback` is set and the description reflects the generic equivalent.
@@ -3299,9 +3332,9 @@ Form state interface `AddMedicationFormState` (28 fields) covers: `selectedPresc
 - **`InteractionsSection`** — per-prescription stored contraindications/warnings with AI refresh.
 - **`PillIcon`** — SVG pill renderer (5 shapes × color × size).
 - **`PillIconWithBadge`** — `PillIcon` + dose-status overlay badge.
-- **`useInteractionCheck`** — lookup-mode hook with cache, abort, 15s timeout.
+- **`useInteractionCheck`** — lookup-mode hook with cache, 15s timeout, and abort (aborts any in-flight request before starting a new check, so a newer query supersedes an older pending one).
 - **`useRefreshInteractions`** — conflict-mode hook that persists results to a prescription.
-- **`useMedicineSearch`** — region-aware AI medication auto-fill (used by add-med wizard).
+- **`useMedicineSearch`** — region-aware AI medication auto-fill (used by the add-med wizard and the edit-medication drawer).
 - Helpers: `isCombo`, `splitDose`, `scaleCompounds`, `compoundSum`, `formatCompoundShort/Full/Names` (`compound-utils.ts`); `formatPillCount`, `getEffectivePhase`, `formatDoseAmount` (`medication-ui-utils.ts`); `getCached`/`setCache`/`clearCache` (`interaction-cache.ts`).
 
 
@@ -3327,7 +3360,7 @@ Form state interface `AddMedicationFormState` (28 fields) covers: `selectedPresc
 ## Features
 
 **List container (`PrescriptionsView`)**
-- Reads all prescriptions via `usePrescriptions()` (live IndexedDB query), then filters to **active only** (`p.isActive`) and **sorts alphabetically by `genericName`** (`localeCompare`). Soft-deleted records (`deletedAt` set) are already excluded by the service read.
+- Reads all prescriptions via `usePrescriptions()` (live IndexedDB query), then filters to **active only** (`p.isActive`) and **sorts alphabetically by `genericName`** (`localeCompare`). Soft-deleted prescription records (`deletedAt` set) are already excluded by the `getPrescriptions()` read (which itself returns **createdAt-desc** order before the view re-sorts in-memory by `genericName`). Note: the inventory/phase reads (`getInventoryForPrescription`, `getPhasesForPrescription`) do **not** filter `deletedAt` — they return all rows for the prescription id.
 - Renders cards in a **2-column CSS grid** (`grid-cols-2 gap-2`).
 - **Single-expand accordion behavior:** only one card may be expanded at a time (tracked by `expandedId`). Opening a card closes any other.
 - **Dynamic column-span layout (`spanMap`):** computes which cards should span both columns so the grid never leaves an awkward orphan when a card expands:
@@ -3341,21 +3374,22 @@ Form state interface `AddMedicationFormState` (28 fields) covers: `selectedPresc
 - **Generic name** (bold, truncated, single line).
 - **Indication** subtitle (only if `prescription.indication` present; truncated).
 - **Chevron** affordance that rotates 180° when expanded.
-- **Dosage chip** for the first scheduled slot today: plain `"{dosageMg}{unit}"` for single-compound drugs, or a per-compound split (`formatCompoundShort(splitDose(...))`, e.g. `49/51mg`) for combination drugs. Hidden if there is no dose today / no schedule.
+- **Dosage chip** for the **time-sorted earliest slot today** (`prescriptionSlots[0]`, where slots are sorted ascending by `localTime` in dose-schedule-service — relevant when doses have differing dosages): plain `"{dosageMg}{unit}"` for single-compound drugs, or a per-compound split (`formatCompoundShort(splitDose(...))`, e.g. `49/51mg`) for combination drugs. Hidden if there is no dose today / no schedule.
 - **Next-dose label** (see Enums) — "As needed", "No doses today", "All done", or `Next: HH:MM`.
 - **Status badges row:** titration badges + stock badges (see States).
-- **Active-medicine mini-card** (emerald-tinted), shown when an active, non-archived inventory item exists. Shows the pill icon (shape + color, with a count badge via `PillIconWithBadge`), the brand name, the strength/compound label, and a dose-amount line combining `formatDoseAmount(firstSlot)` with food-instruction text (e.g. `· before eating`) when the phase has a non-`none` `foodInstruction`. The mini-card is independently tappable.
+- **Active-medicine mini-card** (emerald-tinted), shown when an active, non-archived inventory item exists. Shows the pill icon (shape + color via `PillIconWithBadge`, invoked with only `shape`/`color`/`size` — **no badge actually renders** since no `status` prop is passed; `PillIconWithBadge`'s badge would be a dose-*status* glyph, not a count), the brand name, and the strength/compound label. A dose-amount line — `formatDoseAmount(firstSlot)` plus food-instruction text (e.g. `· before eating`) when the phase has a non-`none` `foodInstruction` — renders **only** when `firstSlot?.pillsPerDose != null && dosageMg != null` (so a PRN med or one with no slot today / no inventory strength shows the mini-card but no dose line). The mini-card is independently tappable.
 - `whileTap` scale-down micro-interaction (`scale: 0.98`) on the whole card.
 
 **Expanded body (`CompoundCardExpanded`)** — four sections separated by a top border:
-1. **Medicines (inventory):** every non-archived stocked brand for the prescription, sorted active-first then alphabetically by `brandName`. Each row: pill icon (shape/color), brand name, an **Active** outline badge if active, strength/compound label, stock text, optional **Low** badge, and a chevron. Empty → "No medicines added yet".
-2. **Schedule summary** (only if an effective phase exists): an **On titration** badge in the header when the effective phase is a titration. If all schedule rows share the same dosage it collapses to one line — `"{dose} {freq} at {times}"` where freq is `daily` / `twice daily` / `Nx daily` — otherwise one line per schedule (`{dose} at {time}`). Food instruction footnote ("Take before eating" / "Take after eating") when not `none`. Empty → "No schedules configured".
+1. **Medicines (inventory):** every non-archived stocked brand for the prescription, sorted active-first then alphabetically by `brandName`. The filter is `!item.isArchived` only — it is **not** a soft-delete filter, so a soft-deleted-but-not-archived inventory item could still appear (narrow exposure since soft-deleted prescriptions never reach the active list). Each row: pill icon (shape/color), brand name, an **Active** outline badge (`border-emerald-500 text-emerald-600`) if active, strength/compound label, stock text, optional **Low** badge, and a chevron. Empty → "No medicines added yet".
+2. **Schedule summary** (only if an effective phase exists): an **On titration** badge in the header when the effective phase is a titration. If all schedule rows share the same dosage it collapses to one line — `"{dose} {freq} at {times}"` where freq is `daily` / `twice daily` / `Nx daily` — otherwise one line per schedule (`{dose} at {time}`). The displayed times come from the **deprecated `s.time`** raw HH:MM string (`schedules.map(s => s.time)` / `at {s.time}`) — **not** `scheduleTimeUTC`/`localTime`, so unlike the "Today" rows (which normalize from `scheduleTimeUTC`) this section shows the un-normalized stored string. Food instruction footnote ("Take before eating" / "Take after eating") when not `none`; a defensive fallthrough renders the raw `foodInstruction` string for any other value (unreachable given the enum). Empty → "No schedules configured".
 3. **Today's dose status** (only if there are slots today): one row per slot with a status icon, the slot's `localTime`, the dose label, and the status word.
 4. **Actions:** **Switch Brand** button (only when >1 non-archived brand exists) and **Prescription Details** button (always).
 
 **Dose/label computation helpers**
-- `getEffectivePhase` — the phase that governs dosing *now*: active titration overrides maintenance; falls back to any active phase. Drives the dosage chip unit, food instruction, and "As needed" detection (`isAsNeeded = !effectivePhase`).
-- `getActiveTitrationPhase` / `getPendingTitrationPhase` — drive the titration badges.
+- `getEffectivePhase` — the phase that governs dosing *now*, resolved as a three-step chain: `getActiveTitrationPhase(phases)` → `getMaintenancePhase(phases)` → `phases.find(p => p.status === "active")` (any active phase). Drives the dosage chip unit, food instruction, and "As needed" detection (`isAsNeeded = !effectivePhase`).
+- `getMaintenancePhase` — itself a two-step: prefers an **active** maintenance phase, then falls back to any maintenance phase.
+- `getActiveTitrationPhase` / `getPendingTitrationPhase` — drive the titration badges (each requires `type === "titration"`, the matching status, and a non-null `titrationPlanId`).
 - Combination-drug labeling via `isCombo` / `splitDose` / `formatCompoundShort` / `formatPillCount`.
 
 ## User actions & interactions
@@ -3371,6 +3405,7 @@ Form state interface `AddMedicationFormState` (28 fields) covers: `selectedPresc
   - `addPrescription(input)` — creates prescription + (optional) initial maintenance phase + schedules + inventory item, plus an initial-stock refill transaction when `currentStock > 0`; writes a `prescription_added` audit entry; enqueues all for sync.
   - `updatePrescription(id, updates)` — partial update (id/createdAt excluded), bumps `updatedAt`, audit `prescription_updated` records the changed field names.
   - `deletePrescription(id)` — **soft delete** cascade: hard-deletes dose logs; soft-deletes inventory items (and hard-deletes their transactions), phases, schedules, and the prescription (`deletedAt`/`updatedAt` set); audit `prescription_deleted`; enqueues deletes for sync.
+  - `addMedicationToPrescription(...)` — a sibling mutation (reachable via this domain's hooks, `use-medication-queries.ts`) that adds a brand to an existing prescription; it backs the "Switch Brand" / Medicines-list flows rather than the card surface.
 
 ## States & presentations
 
@@ -3388,7 +3423,7 @@ Form state interface `AddMedicationFormState` (28 fields) covers: `selectedPresc
   - **Low** — solid amber badge when not negative and `currentStock <= refillAlertPills` (only if `refillAlertPills` defined).
 - **Active-medicine mini-card present vs absent:** shown only when an active, non-archived inventory item exists; absent otherwise (no placeholder).
 - **Expanded Medicines list:** active brand gets an emerald **Active** outline badge; low-stock brand gets a **Low** amber badge; negative stock renders stock text in red/medium; empty → "No medicines added yet".
-- **Per-dose status rows (Today):** color-coded icon + status word — taken (emerald check), skipped (gray X), pending (muted minus), missed (amber clock).
+- **Per-dose status rows (Today):** color-coded icon + status word — taken (emerald check), skipped (gray X), pending (muted minus), missed (amber clock). `deriveStatus` collapses a `rescheduled` dose log to slot status **`skipped`** ("rescheduled slots show as handled"), and maps a missing log on a past date to `missed` — so the row never renders a distinct "rescheduled" state even though `DoseStatus` defines one.
 - **Schedule section:** hidden entirely when no effective phase; "No schedules configured" when phase exists but has no schedule rows.
 - **Loading:** `usePrescriptions()` is a `useLiveQuery` seeded with an empty array default → renders the empty state until data resolves (no explicit skeleton/spinner). `useDailyDoseSchedule` may be `undefined` before resolving (coerced to `[]`).
 - **Offline/sync:** no offline-specific UI here; all reads are local IndexedDB. Mutations enqueue sync ops and call `schedulePush()` — sync status is not surfaced on these cards.
@@ -3404,6 +3439,7 @@ Form state interface `AddMedicationFormState` (28 fields) covers: `selectedPresc
 - **`DoseSlotStatus`** (dose-schedule-service) = `"taken" | "skipped" | "pending" | "missed"` — the four statuses the per-dose rows render.
 - **`TitrationPlanStatus`** = `"draft" | "active" | "completed" | "cancelled"`.
 - **`InventoryTransaction.type`** = `"refill" | "consumed" | "adjusted" | "initial"` (card creation uses `"refill"` for initial stock).
+- **`DoseSlot.inventoryWarning`** (computed per slot in dose-schedule-service) = `"no_inventory" | "odd_fraction" | "negative_stock"`. Computed but **not surfaced** anywhere on the card/expanded body (read-only at the surface).
 - **Next-dose labels:** `"As needed"`, `"No doses today"`, `"All done"`, `"Next: {HH:MM}"`.
 - **Frequency words (schedule summary):** `daily` (1/day), `twice daily` (2/day), `{n}x daily` (≥3/day).
 - **Badge label strings:** `On titration`, `Titration planned`, `Negative`, `Low`, `Active`.
@@ -3476,7 +3512,7 @@ Form state interface `AddMedicationFormState` (28 fields) covers: `selectedPresc
 
 ## Features
 
-- **Tab entry point.** Rendered as the `titrations` tab inside the Medications page tab bar (alongside `schedule`, `medications`, `prescriptions`, `settings`). Header line: "Manage dosage adjustments across prescriptions." plus a "New" button (Plus icon).
+- **Tab entry point.** Rendered as the `titrations` tab inside the Medications page tab bar (alongside `schedule`, `medications`, `prescriptions`, `settings`); the page only conditionally mounts `<TitrationsView />`. The header line ("Manage dosage adjustments across prescriptions.") and the "New" button (Plus icon) live inside `TitrationsView` itself, not the page-level tab bar.
 - **Plan list, grouped by status into three sections:**
   - **Active** — plans with `status === "active"` (only shown if non-empty).
   - **Planned** — plans with `status === "draft"` (only shown if non-empty).
@@ -3485,11 +3521,11 @@ Form state interface `AddMedicationFormState` (28 fields) covers: `selectedPresc
 - **Plan cards** (`TitrationPlanCard`): show title, a status badge, condition label, and a prescription count ("N prescription(s)"). Active cards get a highlighted (emerald) 2px border. If a `recommendedStartDate` exists, a short start-date label (e.g. "May 31") shows on the right next to a chevron.
 - **Inline warnings preview.** A plan's `warnings[]` (amber, with AlertTriangle icons) are shown on the card when the plan is active OR when the card is expanded.
 - **Expandable plan detail.** Tapping a card expands (animated height/opacity + chevron rotates 180°) to reveal: per-prescription phase rows, optional italic notes, and a lifecycle action bar.
-- **Per-prescription phase rows** (`PhaseEntryRow`): show the prescription's generic name, a phase-status badge (active / pending / other), and each schedule line (time, formatted dose, and day-of-week subset when not all 7 days).
+- **Per-prescription phase rows** (`PhaseEntryRow`): show the prescription's generic name, a phase-status badge (active / pending / other), and each schedule line (time, formatted dose, and day-of-week subset when not all 7 days). The displayed time is the **deprecated `s.time` HH:MM string** rendered verbatim — display still reads the legacy `time` field even though `scheduleTimeUTC` is the source of truth for writes. (Same for `MaintenanceRow` and the maintenance prefill panel.)
 - **Compound dose formatting.** For combination drugs (`isCombo`), doses are split via `splitDose(mg, compounds)` and rendered with `formatCompoundShort(...)`; otherwise plain `"{mg}{unit}"` (unit is typically "mg").
 - **Current Maintenance section.** Below the plans, lists every active prescription's current active maintenance phase as a read-only `MaintenanceRow`: generic name, total daily dose ("/day"), indication, and each schedule line (time, dose, day subset). Sorted by generic name (locale compare). Rows with no active maintenance phase / no schedules render nothing.
 - **Create plan** via drawer: title, start mode (immediate vs scheduled date), one-or-more prescription entries each with one-or-more dose schedules, free-text warning signs, and notes.
-- **Edit plan** via the same drawer (draft or active plans). Prefills title/notes/warnings/start and reloads each phase's schedules.
+- **Edit plan** via the same drawer (draft or active plans). Prefills title/notes/warnings/start and reloads each phase's schedules. Start-mode on prefill: if `recommendedStartDate` exists → the date field is populated and `startNow = false`; otherwise `startNow` defaults to `plan.status === "active"` (active plans with no scheduled date default back to "start immediately").
 - **AI warning-sign generation.** "AI Suggest" button (gated by auth) calls `/api/ai/titration-warnings`, which uses Claude (premium model, temperature 0, forced tool call) acting as a "clinical pharmacist assistant" to return 4–8 short patient-friendly warning sentences. Results are appended (newline-joined) to the warnings textarea; the user can still hand-edit.
 - **Maintenance prefill into a titration entry.** When a prescription with an active maintenance phase is selected in an entry, a blue "Current maintenance" panel shows its existing schedule with a "Copy to titration" button that copies those times/days/doses into the entry's titration schedules.
 - **Lifecycle transitions:**
@@ -3497,7 +3533,7 @@ Form state interface `AddMedicationFormState` (28 fields) covers: `selectedPresc
   - **Complete & Promote** (active → completed): copies each titration phase's schedules onto the prescription's maintenance phase (replacing old maintenance schedules), re-activates maintenance, copies titration's `unit` + `foodInstruction`, marks the titration phase completed (sets `endDate`). Confirmation dialog warns it "cannot be undone".
   - **Cancel** (active → cancelled): cancels active/pending plan phases (sets `endDate`), re-activates the most recently completed maintenance phase for each affected prescription. Confirmation dialog.
   - **Delete** (draft or cancelled only): soft-deletes the plan, its phases, and their schedules. Confirmation dialog.
-- **Audit logging.** Every mutation writes an audit entry (`phase_started`, `titration_plan_updated`, `phase_activated`, `phase_completed`) and enqueues a sync push.
+- **Audit logging.** Every mutation writes an audit entry (`phase_started`, `titration_plan_updated`, `phase_activated`, `phase_completed`) and enqueues a sync push. Note these are not four distinct lifecycle actions: **both Cancel and Delete reuse the `phase_completed` action type**, disambiguated only by a metadata `action` field (`titration_cancelled` vs `titration_deleted`).
 - **Offline-first + sync.** All reads/writes go to Dexie (IndexedDB) and enqueue sync-queue upserts inside the transaction; `schedulePush()` runs after each mutation. Live queries (`useLiveQuery`) keep the UI reactive.
 - **Dose-log remapping on edit.** When entries are replaced during edit, existing dose logs are remapped from old phase IDs to the new phase ID by matching `prescriptionId`, preserving dose history across re-saves.
 
@@ -3546,6 +3582,7 @@ Form state interface `AddMedicationFormState` (28 fields) covers: `selectedPresc
   - `completed` → gray tint.
   - `cancelled` → red tint.
 - **Phase-status badge variants (row):** `active` → emerald outline; `pending` → blue outline; anything else → muted.
+- **Lifecycle action-button colors:** **Activate** is teal (`bg-teal-600 hover:bg-teal-700`); **Complete & Promote** is emerald (`bg-emerald-600 hover:bg-emerald-700`); **Cancel** and **Delete** are red (red text/outline, with `bg-red-600 hover:bg-red-700` on the confirm action). Edit is a plain outline button.
 - **Maintenance prefill panel:** blue-tinted box labeled "Current maintenance" with clock-icon schedule lines and a "Copy to titration" button. Renders only if an active maintenance phase with schedules exists for the selected prescription.
 - **Drawer header:** "New Titration Plan" (create) vs "Edit Titration Plan" (edit).
 - **Drawer entries empty:** dashed-border hint "Add at least one prescription to this plan."
@@ -3566,7 +3603,7 @@ Form state interface `AddMedicationFormState` (28 fields) covers: `selectedPresc
 - **`PhaseType`** = `"maintenance" | "titration"` (db.ts).
 - **MedicationPhase `status`** = `"active" | "completed" | "cancelled" | "pending"` (db.ts).
 - **`FoodInstruction`** = `"before" | "after" | "none"` (db.ts); titration entry default = `"none"`.
-- **Day-of-week labels** `DAY_LABELS_LONG` = `["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]` (index 0 = Sunday); `daysOfWeek` arrays use these indices. "All 7 days" = `[0,1,2,3,4,5,6]`.
+- **Day-of-week labels** `DAY_LABELS_LONG` = `["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]` (index 0 = Sunday); `daysOfWeek` arrays use these indices. "All 7 days" = `[0,1,2,3,4,5,6]`. (Despite the `_LONG` name, these are the **short** 3-letter labels — the constant name is a misnomer in the source.)
 - **List groups (sections):** "Active" (active), "Planned" (draft), "Past" (completed + cancelled), "Current Maintenance".
 - **Plan status badge color map:** active=emerald solid; draft=blue; completed=gray; cancelled=red.
 - **Dosage unit:** hard-coded `"mg"` on submit (`unit: "mg"`); display unit comes from `phase.unit`.
@@ -3579,7 +3616,7 @@ Form state interface `AddMedicationFormState` (28 fields) covers: `selectedPresc
 - **AI endpoint config (`/api/ai/titration-warnings`):**
   - Model `CLAUDE_MODELS.premium`, `max_tokens: 1536`, `temperature: 0`, forced tool call `titration_warnings_result`.
   - Target output: "Aim for 4–8 warnings", one short sentence each, patient-friendly.
-  - Request schema fields per prescription: `genericName` (required), optional `currentDosage`, `newDosage`, `newSchedule[]`, `newTotalDaily`, `frequency`; optional `otherMedications[]` (`genericName`); optional `title` (max 200 chars).
+  - Request schema (route zod) fields per prescription: `genericName` (required), optional `currentDosage`, `newDosage`, `newSchedule[]`, `newTotalDaily`, `frequency`; optional `otherMedications[]` (`genericName`); optional `title` (max 200 chars). **This unit's client only ever sends `genericName`, `newSchedule`, `newTotalDaily`, and `frequency`** — `currentDosage` and `newDosage` are accepted by the schema but never populated by the titration drawer (dead for this unit).
   - Frequency string built as `"{N}x daily"` from schedule count; days rendered as "daily" (7 days) or comma-joined day labels.
   - Response schema: `{ warnings: string[] }`.
   - System prompt focus areas: dose-too-high symptoms, timing-specific concerns, drug-interaction concerns, frequency-change peak/trough effects, vital-sign thresholds (BP, HR), symptoms requiring immediate attention.
@@ -3603,7 +3640,7 @@ Form state interface `AddMedicationFormState` (28 fields) covers: `selectedPresc
 - `TitrationEntryInput`: `{ prescriptionId, schedules: { time, daysOfWeek[], dosage }[], unit, foodInstruction? }`.
 - `UpdateTitrationPlanInput`: `{ planId, title?, conditionLabel?, recommendedStartDate?, notes?, warnings?[], entries? }`.
 
-**Hooks (`use-medication-queries.ts`):** `useTitrationPlans`, `usePhasesForTitrationPlan`, `usePhasesForPrescription`, `useSchedulesForPhase`, `usePrescriptions`; mutations `useCreate/Update/Activate/Complete/Cancel/DeleteTitrationPlan`.
+**Hooks (`use-medication-queries.ts`):** `useTitrationPlans`, `usePhasesForTitrationPlan`, `usePhasesForPrescription`, `useSchedulesForPhase`, `usePrescriptions`; mutations `useCreate/Update/Activate/Complete/Cancel/DeleteTitrationPlan`. Note `usePrescriptions()` (backed by `getPrescriptions`) returns **all** non-deleted prescriptions — it is *not* active-filtered. `TitrationsView` applies the `isActive` filter itself before passing the list to the drawer and to the Current Maintenance section.
 
 ---
 
@@ -3615,7 +3652,7 @@ Form state interface `AddMedicationFormState` (28 fields) covers: `selectedPresc
 - **Start date guard:** if not starting immediately, `recommendedStartDate` is set only when the parsed date is finite (`new Date(startDate + "T00:00:00").getTime()`), avoiding NaN timestamps.
 - **Status on create:** `startImmediately` → plan `active` + phases `active`; otherwise plan `draft` + phases `pending`.
 - **Phase startDate:** immediate → `now`; scheduled → `recommendedStartDate ?? now`.
-- **Timezone handling:** schedule `scheduleTimeUTC` is computed from local HH:MM via `localHHMMStringToUTCMinutes(time, tz)` and `anchorTimezone` records the IANA zone at creation (offline-first / DST-safe).
+- **Timezone handling:** schedule `scheduleTimeUTC` is computed from local HH:MM via `localHHMMStringToUTCMinutes(time, tz)` and `anchorTimezone` records the IANA zone at creation (offline-first / DST-safe). Note this is for **writes** only — the row UIs (`PhaseEntryRow`, `MaintenanceRow`, prefill panel) still display the legacy `s.time` string directly, not a value derived from `scheduleTimeUTC`.
 - **Edit replaces all phases/schedules:** existing phases + schedules are soft-deleted and recreated; new phase status follows current plan status (`active` if plan active, else `pending`); new phase `startDate = plan.recommendedStartDate ?? now`.
 - **Dose-log preservation on edit:** logs are remapped old-phase→new-phase by `prescriptionId` so history survives a re-save.
 - **Complete & Promote:** finds each prescription's maintenance phase (prefers `active`, else first active/completed), soft-deletes its schedules, copies the titration schedules onto it (re-using `scheduleTimeUTC`), re-activates it, and copies the titration's `unit` + `foodInstruction`; titration phase → `completed` with `endDate`. Irreversible (per dialog copy).
@@ -3643,7 +3680,13 @@ Form state interface `AddMedicationFormState` (28 fields) covers: `selectedPresc
 - **`MaintenanceRow`** — read-only summary of a prescription's active maintenance schedule (total/day + per-time lines) in the Current Maintenance section.
 - **`useTitrationDrawerForm`** — form-state hook: title/start/notes/warnings/entries + entry/schedule helpers, `canSubmit`, `reset`, `prefillFromPlan`.
 - **`types.ts`** — `RxEntry` interface (string-dosage editing model) + `DAY_LABELS_LONG`.
-- **`titration-service.ts`** — all Dexie transactions: create/update/activate/complete/cancel/delete + reads (`getTitrationPlans`, `getActiveTitrationPlans`, `getPhasesForTitrationPlan`, `getConditionLabels`, `getActiveTitrationPhaseForPrescription`).
+- **`titration-service.ts`** — all Dexie transactions: create/update/activate/complete/cancel/delete + reads:
+  - `getTitrationPlans` — all non-deleted plans, `updatedAt` descending.
+  - `getTitrationPlanById` — single plan by id.
+  - `getActiveTitrationPlans` — only `status === "active"` non-deleted plans.
+  - `getPhasesForTitrationPlan` — non-deleted phases linked to a plan.
+  - `getConditionLabels` — sorted unique set of condition-label suggestions folding in **both** every plan's `conditionLabel` **and** every prescription's `indication` (not just plan labels).
+  - `getActiveTitrationPhaseForPrescription(prescriptionId)` — returns the active **titration** phase that overrides a given prescription's maintenance schedule (a `type:"titration"`, `status:"active"`, plan-linked, non-deleted phase), or `undefined` if none.
 - **`/api/ai/titration-warnings` route** — auth-gated Claude endpoint returning `{ warnings: string[] }` via a forced tool call (clinical-pharmacist system prompt).
 
 
@@ -3669,11 +3712,12 @@ Form state interface `AddMedicationFormState` (28 fields) covers: `selectedPresc
 
 ### Dose Detail Dialog (single dose)
 - Bottom drawer opened by tapping a non-actionable dose row (a dose that is `taken`, `skipped`, or a future/past slot — actionable today/past `pending`/`missed` rows use inline Take/Skip buttons instead).
-- Header shows the pill icon (shape + color from inventory), the brand name + scheduled strength + generic name in parentheses (e.g. `Vymada 100mg (Sacubitril/Valsartan)`), and — if a log exists — a status line: `Taken at {time}` (emerald) or `Skipped at {time}` (muted).
-- The header strength is the *scheduled dose split per compound* for a combination drug (via `formatCompoundShort(splitDose(...))`), not the full per-pill content; single-compound shows `{dosage}{unit}`.
+- Header shows the pill icon (shape + color from inventory), the brand name + scheduled strength + generic name in parentheses (e.g. for a combo `Vymada 49/51mg (Sacubitril/Valsartan)`; for a single-compound `Vymada 100mg (...)`), and — if a log exists — a status line: `Taken at {time}` (emerald) or `Skipped at {time}` (muted).
+- The header strength is the *scheduled dose split per compound* for a combination drug (via `formatCompoundShort(splitDose(...))`, e.g. `49/51mg`), never a bare summed `100mg`; single-compound shows the summed `{dosage}{unit}`.
+- The parenthetical is literally `prescription.genericName` (a stored string) — not derived/composed from compound names. It only reads "(Sacubitril/Valsartan)" if that exact string was stored as the generic name.
 - Info section lists:
   - `Scheduled for {localTime}, {weekday, month day}` (calendar icon).
-  - `Take {doseAmountLabel}` plus food instruction (`before eating` / `after eating`) and optional `foodNote` (info icon).
+  - `Take {doseAmountLabel}` plus food instruction (`before eating` / `after eating`) and optional `foodNote` (info icon). `doseAmountLabel` (`formatDoseAmount`) has three forms: a single-compound *with* inventory renders `{formatPillCount(pillsPerDose)} of {dosageMg}{unit}` (e.g. "½ tablet of 50mg"); a single-compound without inventory renders bare `{dosageMg}{unit}`; a combo renders the per-pill compound split (`{formatPillCount} of {compoundShort}`, or just `{compoundShort}` when no inventory).
   - For combination drugs: `{brandName}: {compound full breakdown} per pill`.
   - For a taken single-compound dose with inventory: `{brandName} {strength}{unit}`.
   - For a skipped dose with a stored reason: `Reason: {skipReason}`.
@@ -3713,7 +3757,7 @@ Form state interface `AddMedicationFormState` (28 fields) covers: `selectedPresc
 - `rescheduleDose` — marks old slot `rescheduled` (storing `rescheduledTo`), creates a new `pending` slot at the new time; reverses stock if old slot was taken; `dose_rescheduled` audit.
 - `editDoseTime` — rewrites only `actionTimestamp` of an already-taken dose (inventory untouched); validates time; `dose_time_edited` audit. Throws if dose isn't logged as taken.
 - `takeAllDoses` / `skipAllDoses` / `editAllDoseTimes` — batch wrappers; each entry runs in its own transaction so one failure doesn't block the rest; aggregate errors are reported.
-- Read helpers: `getDoseLogsForDate`, `getDoseLog`, `getDoseLogsWithDetailsForDate` (joins prescription/phase/schedule/active-inventory), and `getDailyDoseSchedule` (derives the day's slots + statuses at read time).
+- Read helpers (in `dose-log-service.ts`): `getDoseLogsForDate`, `getDoseLog`, `getDoseLogsWithDetailsForDate` (joins prescription/phase/schedule/active-inventory). `getDailyDoseSchedule` (derives the day's slots + statuses at read time) and `getDoseScheduleForDateRange(startDate, endDate)` (returns `Map<date, DoseSlot[]>` for history/calendar views) live in `dose-schedule-service.ts`.
 - Exported pill math: `calculatePillsConsumed(doseMg, pillStrengthMg)` and `isCleanFraction(pillsConsumed)`.
 
 ---
@@ -3730,7 +3774,7 @@ Form state interface `AddMedicationFormState` (28 fields) covers: `selectedPresc
 | Time-slot group | Tap **Edit All** | Opens Bulk Dose Edit Dialog. |
 | Dose Detail | Tap **SKIP** | Skips the dose (haptic), closes dialog. (No reason picker in this dialog — skips with no reason.) |
 | Dose Detail | Tap **TAKE** | Today → takes now + closes; past → opens Retroactive Time Picker. Haptic. |
-| Dose Detail | Tap **UNTAKE** | Reverses the taken dose, toasts "{generic} dose reversed", closes. Haptic. |
+| Dose Detail | Tap **UNTAKE** | Reverses the taken dose, toasts "{generic} dose reversed", closes. Skip haptic (`[30,50,30]`). |
 | Dose Detail | Tap **RESCHEDULE** | Reveals inline time input + Cancel/Confirm. |
 | Dose Detail reschedule | Enter time → **Confirm** | `rescheduleDose`, closes. Confirm disabled until a time entered. |
 | Dose Detail reschedule | **Cancel** | Returns to action buttons. |
@@ -3759,7 +3803,7 @@ Form state interface `AddMedicationFormState` (28 fields) covers: `selectedPresc
 Other states:
 - **Default / actionable** — inline Take + Skip buttons; non-actionable rows are tappable (cursor-pointer, hover) → open Detail.
 - **Empty** — when no slots for the day, `EmptySchedule` (Add-medication CTA) replaces the list.
-- **Next-upcoming highlight** — the next pending time slot gets a teal left-border + tinted background.
+- **Next-upcoming highlight** — the next upcoming time slot gets a teal left-border + tinted background. Only computed on today, and only for slots whose scheduled minutes are `>= now` and that still contain a `pending` dose (`missed` slots and already-past times are not picked).
 - **Overdue** — time-slot heading turns red when today, past its time, and still has pending doses.
 - **Late dose (today)** — Take on a dose >30 min past schedule routes through the time picker instead of logging immediately (`LATE_THRESHOLD_MINUTES = 30`).
 - **Disabled** — Bulk UN-TAKE / EDIT RECORD at 40% opacity when no taken doses; Reschedule Confirm and Skip-custom Submit disabled until valid input.
@@ -3767,7 +3811,7 @@ Other states:
 - **Inline expanded** — Dose Detail reschedule state replaces buttons with a time input.
 - **Success** — toasts confirm reverse/skip/time-update; Undo toast (5 s) after take.
 - **Future date** — slots shown read-only (no Take/Skip; Reschedule hidden in Detail since `isToday` false).
-- **Over-limit / extended (negative stock)** — taking is still allowed; stock goes negative; `inventoryWarning = "negative_stock"` surfaces low-stock warnings and nudges the "Ran out" skip suggestion.
+- **Over-limit / extended (negative stock)** — taking is still allowed; stock goes negative; `inventoryWarning = "negative_stock"` nudges the "Ran out" skip suggestion. ScheduleView's `lowStockWarnings` (passed to `DoseProgressSummary`) collects generic names where `inventoryWarning === "negative_stock"` **OR** `currentStock <= refillAlertPills`, so a low (but non-negative) stock can also surface a warning.
 - **No-inventory** — Take description reads "Dose logged — no stock tracked"; no decrement; also nudges "Ran out".
 - **Loading** — driven by `useLiveQuery` (Dexie); slots are `undefined` until first read, treated as empty.
 - **Offline / syncing** — all writes are local Dexie transactions; each enqueues a sync-queue entry and calls `schedulePush()` (deferred background sync). No explicit offline UI in these components.
@@ -3779,9 +3823,9 @@ Other states:
 - **DoseStatus** (`db.ts`): `"taken" | "skipped" | "rescheduled" | "pending"`.
 - **DoseSlotStatus** (`dose-schedule-service.ts`): `"taken" | "skipped" | "pending" | "missed"`.
 - **Skip reason presets** (`skip-reason-picker.tsx`): `["Forgot", "Side effects", "Ran out", "Doctor advised", "Don't need this dose"]` + custom free-text.
-- **Inventory warnings**: `"negative_stock" | "no_inventory" | "odd_fraction"`.
+- **Inventory warnings** (not a shared TS union — all are bare `string`): the `DoseSlot.inventoryWarning` field (set in `dose-schedule-service.ts`) takes `"negative_stock"`, `"no_inventory"`, or `"odd_fraction"`. `"odd_fraction"` is *also* used separately as an **audit** `warning` value inside `takeDose` — the same literal, two distinct uses.
 - **Audit actions** (`db.ts`): `"dose_taken"`, `"dose_untaken"`, `"dose_skipped"`, `"dose_rescheduled"`, `"dose_time_edited"`.
-- **Inventory transaction type used here**: `"consumed"` (negative amount on take, positive on untake/skip/reschedule).
+- **Inventory transaction type used here**: `"consumed"` (negative amount on take, positive on untake/skip/reschedule). The full `InventoryTransaction.type` union is wider — `"refill" | "consumed" | "adjusted" | "initial"` — but only `"consumed"` is written by these dose-logging flows.
 - **Late threshold**: `LATE_THRESHOLD_MINUTES = 30` (dose-row); Mark-All uses the same `> 30` min check.
 - **Undo toast duration**: `5000` ms.
 - **Clean fractions** (`isCleanFraction`): whole numbers, `0.25, 0.333, 0.5, 0.667, 0.75` (tolerance `0.01`); anything else flags `odd_fraction`.
@@ -3801,7 +3845,7 @@ Other states:
 - **doseLogs** (`DoseLog`): `id, prescriptionId, phaseId, scheduleId, inventoryItemId?, scheduledDate (YYYY-MM-DD), scheduledTime (HH:MM), status (DoseStatus), actionTimestamp?, rescheduledTo?, skipReason?, note?, timezone, createdAt, updatedAt, deletedAt, deviceId`. Lookup key = `prescriptionId + phaseId + scheduleId + scheduledDate + scheduledTime` (filtered `deletedAt === null`).
 - **inventoryItems** (`InventoryItem`): reads/writes `currentStock`; reads `strength` (pill-math denominator), `compounds?`, `pillShape`, `pillColor`, `brandName`, `unit`, `refillAlertPills`, `isActive`, `isArchived`.
 - **inventoryTransactions**: appended on take (`amount: -pillsConsumed`), untake/skip/reschedule (`amount: +pillsConsumed`), `type: "consumed"`, `doseLogId` link.
-- **auditLogs** (`AuditLog`): one entry per mutation with details `{prescriptionId, date, time, dosageMg, pillsConsumed, inventoryItemId, reason?/newTime?, warning?}`.
+- **auditLogs** (`AuditLog`): one entry per mutation with details `{prescriptionId, date, time, dosageMg, pillsConsumed, inventoryItemId, reason?, warning?}` for take/untake/skip/reschedule. The `dose_time_edited` entry carries a slimmer payload — just `{prescriptionId, date, time, newTime}` (no dosageMg / pillsConsumed).
 - **_syncQueue**: upsert entries enqueued inside each transaction for doseLogs / inventoryItems / inventoryTransactions / auditLogs; `schedulePush()` fires after.
 - **prescriptions / medicationPhases / phaseSchedules**: read-only joins for display (genericName, unit, foodInstruction, foodNote, dosage, daysOfWeek, scheduleTimeUTC).
 - **DoseSlot** (derived, not persisted): includes `localTime`, `dosageMg`, `status`, `existingLog?`, `pillsPerDose?`, `inventoryWarning?`, plus joined `prescription/phase/schedule/inventory`.
@@ -3838,7 +3882,7 @@ Other states:
 - **showUndoToast** — function (not component) firing a 5 s toast with an Undo action.
 - **DoseRow** — inline row with Take/Skip (actionable) or Edit (taken) and tap-to-open-detail; hosts its own retroactive/edit pickers.
 - **TimeSlotGroup** — groups rows by time; "Mark All" (pending) / "Edit All" (handled) headers; overdue/next-upcoming styling.
-- **ScheduleView** — orchestrator: groups slots, wires take/retroactive/skip/mark-all/edit-all/edit-time handlers, mounts SkipReasonPicker, mark-all RetroactiveTimePicker, and BulkDoseEditDialog.
+- **ScheduleView** — orchestrator: groups slots, wires take/retroactive/skip/mark-all/edit-all/edit-time handlers, mounts SkipReasonPicker, mark-all RetroactiveTimePicker, and BulkDoseEditDialog. It only *emits* `onDoseClick`; the **DoseDetailDialog itself is mounted by `app/medications/page.tsx`** (which owns `doseDetailOpen` / `selectedSlot`). ScheduleView also computes `lowStockWarnings` and feeds them to `DoseProgressSummary`.
 - **dose-log-service.ts** — atomic take/untake/skip/reschedule/edit + batch variants, inventory math (`calculatePillsConsumed`, `isCleanFraction`), audit + sync enqueue.
 - **dose-schedule-service.ts** — derives the day's `DoseSlot[]` (status + inventory warnings) from active prescriptions/phases/schedules/logs/inventory.
 - **use-medication-queries.ts** — React Query mutation hooks + Dexie live-read hooks exposing the above to components.
@@ -3878,12 +3922,13 @@ Other states:
 - **Edit a transaction.** Inline-edit the amount and/or note of `refill` or `adjusted` transactions; stock is recalculated from the full transaction set on save.
 - **Delete a transaction.** Soft-delete a `refill`/`adjusted` transaction (sets `deletedAt`); stock recalculated excluding it. Requires confirm dialog.
 - **Active-brand designation.** Exactly one brand per prescription should be `isActive`; only the active brand's stock is auto-deducted when doses are taken. Setting a brand active deactivates the previously active one.
+- **Switch-brand picker (second active-switch path).** Besides the Manage-tab "Set as active brand", a `BrandSwitchPicker` (opened via the "Switch Brand" button on the expanded card, shown only when there are multiple brands) deactivates the current active brand and activates the selected one (two sequential awaited updates), then fires a "Brand switched" toast.
 - **Archive / unarchive a brand.** Archiving hides the brand from the active list but keeps history; archiving an active brand also clears its `isActive`.
 - **Permanent delete.** An archived brand can be permanently soft-deleted (sets `deletedAt`), closing the drawer.
 - **Pill identity display.** Shows brand name, per-pill strength (or per-pill compound split for combos), pill color (capitalized), pill shape (capitalized + `PillIcon`), and optional markings/visual-identification text.
 - **Current dosing summary.** Shows whether the prescription's effective phase is `titration` or `maintenance`, and the dose unit.
-- **Auto-consumption from dose logs.** Outside this drawer, taking a dose writes a `consumed` transaction (negative amount, linked via `doseLogId`) against the active inventory item and decrements stock — visible afterward in this ledger.
-- **Stock recalculation engine.** `recalculateAllStock()` re-derives every item's cached `currentStock` from its transactions, tracks drift, writes a `stock_recalculated` audit log; `initStockRecalculation()` runs it fire-and-forget on app launch. `recalculateStockForItem(id)` does one item.
+- **Auto-consumption from dose logs.** Outside this drawer, taking a dose writes a `consumed` transaction (negative amount, linked via `doseLogId`) against the active inventory item and decrements stock — visible afterward in this ledger. Reversing a previously taken dose — `untakeDose`, `skipDose`, or `rescheduleDose` from a taken state — writes a positive (`+pillsConsumed`) `consumed` transaction that restores the stock.
+- **Stock recalculation engine.** `recalculateAllStock()` re-derives every item's cached `currentStock` from its transactions, tracks drift, writes a `stock_recalculated` audit log; `initStockRecalculation()` runs it fire-and-forget on app launch, and `debug-panel.tsx` exposes a manual "recalculate all stock" trigger as a second invocation site. `recalculateStockForItem(id)` does one item. Both recalc engines build on `getCurrentStock(id)`, a read-only derivation that sums **every** transaction for the item — it does **not** filter `deletedAt` (unlike the edit/delete recalc paths, which exclude soft-deleted rows).
 - **Audit trail.** Every mutation writes an `auditLogs` entry: `inventory_added`, `inventory_adjusted` (also used for transaction update/delete and stock adjust), `inventory_deleted`, `stock_recalculated`.
 - **Sync.** Every write enqueues the affected row(s) into the sync queue and calls `schedulePush()` to mirror to Neon Postgres.
 
@@ -3893,6 +3938,7 @@ Other states:
 
 **Entry point (medicine list row, compound-card-expanded):**
 - **Tap a medicine row** → opens the `InventoryItemViewDrawer` for that brand. Row shows pill icon, brand name, `Active` badge (if active), strength/compound, stock text, `Low` badge (if low), chevron.
+- **List ordering.** Archived items are filtered out of the row list entirely; remaining items are sorted active-brand-first, then alphabetically by `brandName`.
 
 **Drawer header:**
 - Shows `{brandName} {strength}{unit}` (or compound short form), and a subtitle: `For {genericName}` + ` · Active brand`/` · Not active` + ` · Archived` (if archived).
@@ -3932,7 +3978,7 @@ Other states:
 - **Low-supply.** List-row shows amber `Low` badge when `stock <= refillAlertPills` and `stock >= 0`.
 - **Negative stock.** Stock text in red/medium weight in the list row; still allowed and displayed (no clamp). Est. supply still computed.
 - **Fractional stock.** Rendered with fraction words/glyphs (`½ tablet`, `1¼ tablets`) instead of `N pills`.
-- **Transaction edit mode.** Row becomes a 2-input panel (amount + note) with Cancel/Save; non-editable types (`consumed`, `initial`) never enter this state and show no edit/delete buttons.
+- **Transaction edit mode.** Row becomes a 2-input panel (amount + note) with Cancel/Save; non-editable types never enter this state and show no edit/delete buttons. Only system-generated `consumed` rows occur in practice (the `initial` type is never produced).
 - **Titration vs maintenance pill.** Details "Current Dosing" badge: amber "On titration" vs blue "Maintenance".
 - **Success.** Refill resets the form to `30` / empty note; transaction edit collapses back to the read row; permanent delete closes the drawer. No toast surfaced in this component (mutations resolve silently).
 - **Offline / syncing.** Writes complete locally against Dexie immediately; sync queue + `schedulePush()` mirror later — UI is not blocked by network state.
@@ -3945,6 +3991,7 @@ Other states:
 - **`InventoryTransaction.type`:** `"refill" | "consumed" | "adjusted" | "initial"`.
   - Row labels: `refill` → "Refill", `consumed` → "Consumed", `initial` → "Initial", else → "Adjusted".
   - Editable types: `refill`, `adjusted` only.
+  - **`initial` is a dead branch in practice.** The type exists in the union and the row label maps it to "Initial", but no service ever writes a `type: "initial"` transaction (initial stock is seeded as a `refill`). The "Initial" label and its non-editability never actually render.
 - **`PillShape`:** `"round" | "oval" | "capsule" | "diamond" | "tablet"`.
 - **`adjustStock` type param:** `"refill" | "consumed" | "adjusted"`; default when omitted is `delta > 0 ? "refill" : "consumed"`.
 - **Refill amount input:** default `30`, `step="any"`, must be `> 0` to enable Add.
@@ -3979,9 +4026,9 @@ Other states:
 - `type` (enum above), `doseLogId?` (links a `consumed` tx to its dose)
 - `createdAt`, `updatedAt`, `deletedAt` (soft-delete), `deviceId`, `timezone`
 
-**Reads:** inventory items for a prescription (`getInventoryForPrescription`), active item (`getActiveInventoryForPrescription`), all items/active items, transactions for an item (newest-first via `sortBy("timestamp")` then `.reverse()`), effective phase + its schedules.
+**Reads:** inventory items for a prescription (`getInventoryForPrescription`), active item (`getActiveInventoryForPrescription`), all items/active items, transactions for an item (newest-first via `sortBy("timestamp")` then `.reverse()`), effective phase + its schedules. Note `getInventoryTransactions` does **not** filter `deletedAt` — it returns soft-deleted rows too; the drawer component filters them out at render (`transactions.filter(tx => tx.deletedAt === null)`).
 **Writes:** add/update/delete inventory item; adjustStock (item + transaction); update/delete transaction (recalcs item stock); recalc engines. All writes also append to `auditLogs` and enqueue to `_syncQueue`.
-**Cross-feature:** `dose-log-service.ts` writes `consumed` transactions and decrements active-item stock on dose-take. `prescription-service.ts` seeds an `"initial"`/refill `"Initial stock"` transaction when a prescription is created with `currentStock > 0`. Server mirror in `src/db/schema.ts` (must stay field-parity).
+**Cross-feature:** `dose-log-service.ts` writes `consumed` transactions and decrements active-item stock on dose-take (and writes positive reversing `consumed` transactions that restore stock on untake/skip/reschedule from a taken dose). `prescription-service.ts` seeds a `type: "refill"` transaction with note `"Initial stock"` when a prescription is created with `currentStock > 0` (it does **not** use the `"initial"` type — no code path ever writes a `type: "initial"` transaction). Server mirror in `src/db/schema.ts` (must stay field-parity).
 
 ---
 
@@ -3994,11 +4041,11 @@ Other states:
 - **Single active brand.** Setting active deactivates the prior active non-archived sibling first (two sequential awaited updates). Archiving an active brand auto-clears `isActive`.
 - **Activate only when eligible.** "Set as active brand" shown only when `!isActive && !isArchived`.
 - **Permanent delete gated.** Only offered for archived items; double-guarded by `confirm()`.
-- **Transaction edit/delete confirms.** Delete uses `window.confirm`; both only available for `refill`/`adjusted` (system-generated `consumed`/`initial` rows are immutable here).
+- **Transaction edit/delete confirms.** Delete uses `window.confirm`; both only available for `refill`/`adjusted` (system-generated `consumed` rows are immutable here; the `initial` type is in the union but never produced).
 - **Days-of-supply guards.** Returns `∞` unless there's an effective phase, ≥1 schedule, `strength > 0`, and `dailyPills > 0`; uses `Math.floor` (whole days, rounds down). Per-schedule weekly proration via `daysOfWeek.length / 7`.
 - **Low badge precondition.** `refillAlertPills` must be set; suppressed for negative stock (`stock >= 0` required).
 - **Stale-snapshot safety.** Drawer re-resolves the live item by id; falls back to the passed `item` if not found in the live list. Returns `null` (renders nothing) when `item` is null.
-- **Note trimming.** Refill note trimmed; empty trimmed note is omitted from the payload (not stored as empty string).
+- **Note trimming (refill only).** The refill form trims the note and omits an empty trimmed note from the payload (not stored as empty string). The transaction **edit** path does NOT trim — it stores the raw `editNote` via `editNote ? { note } : {}` truthiness, so a whitespace-only edit note would be saved.
 - **Soft-delete semantics.** Deletes set `deletedAt` and enqueue a `"delete"` sync op; reads filter `deletedAt === null`.
 - **Timezone/deviceId** stamped on every transaction/item via `syncFields()`.
 
@@ -4011,6 +4058,7 @@ Other states:
 - **`InventoryTab`** — current-stock + est-supply card, not-active info callout, "Log Refill" form, "History" transaction list.
 - **`TransactionRow`** — single ledger row with read mode (type label, signed colored amount, note, date, edit/delete buttons for editable types) and inline edit mode (amount + note inputs, Save/Cancel).
 - **`ManageTab`** — "Active Brand" block (conditional), "Archive Medicine" block (Archive/Unarchive), and conditional "Delete Permanently".
+- **`BrandSwitchPicker`** (`brand-switch-picker.tsx`) — alternate active-brand switcher opened from the expanded card's "Switch Brand" button; deactivates current active + activates the chosen brand, then toasts "Brand switched".
 - **`PillIcon`** — renders the pill silhouette from `pillShape` + `pillColor` (sizes 40 in Details, 24 in list row).
 - **Compound helpers** — `isCombo`, `formatCompoundShort`, `formatCompoundFull` render combination-tablet strengths (e.g. `49/51mg`).
 - **`formatPillCount`** — fractional pill → human-readable tablets string.
@@ -4024,6 +4072,7 @@ Other states:
 **Files covered:**
 - `src/components/medications/edit-medication-drawer.tsx` (the `PrescriptionViewDrawer` component + its three internal tabs: `ScheduleTab`, `DetailsTab`, `InfoTab`)
 - `src/hooks/use-medication-queries.ts` (read/mutation hooks the drawer consumes)
+- `src/hooks/use-medicine-search.ts` (`useMedicineSearch` — the AI contraindications/warnings fetch hook the Info tab imports on its own line)
 - `src/lib/medication-ui-utils.ts` (`getMaintenancePhase`, `getActiveTitrationPhase`)
 - `src/lib/phase-service.ts` (`CreatePhaseInput`, `UpdatePhaseInput`, `startNewPhase`, `updatePhase` semantics)
 - `src/lib/db.ts` (`Prescription`, `MedicationPhase`, `PhaseSchedule`, `FoodInstruction` interfaces)
@@ -4055,7 +4104,7 @@ Other states:
 - Toggle individual days per row.
 - Computes validity: counts `validRows` and whether `allRowsValid`.
 - Save persists via `updatePhase` (existing maintenance phase) or `startNewPhase` (if no maintenance phase exists yet — creates one of `type: "maintenance"` with `startDate: Date.now()`).
-- Saving a schedule triggers a downstream notification resync (the schedule mutation hooks call `resyncNotifications()` → `syncMedicationNotifications()`; phase saves rewrite schedules).
+- Saving a schedule here does **not** trigger a notification resync: the drawer saves via the phase mutations (`useUpdatePhase`/`useStartNewPhase`), which have no `onSuccess: resyncNotifications`. Only the schedule-level hooks (`useAddSchedule`/`useUpdateSchedule`/`useDeleteSchedule`) call `resyncNotifications()` → `syncMedicationNotifications()`, and those hooks are not used by this drawer. (`updatePhase`/`startNewPhase` rewrite the schedule rows directly but do not resync local notifications.)
 - Discard (reset) abandons unsaved edits and re-hydrates from the DB.
 
 ### Details tab (`DetailsTab`)
@@ -4119,7 +4168,7 @@ Other states:
 - **Live update:** re-selects the current record from the live `usePrescriptions()` list, so any tab's mutation reflects across the whole drawer.
 
 ### Schedule tab
-- **Active-titration banner:** amber callout (`bg-amber-50 dark:bg-amber-950/30`, `TrendingUp` icon) warning that titration overrides today's doses and these edits affect the baseline schedule that resumes after titration. Shown only when `activeTitration` exists.
+- **Active-titration banner:** amber callout (`bg-amber-50 dark:bg-amber-950/30`, `TrendingUp` icon) warning that titration overrides today's doses and these edits affect the baseline schedule that resumes after titration. Shown only when `activeTitration` exists. A *pending* (planned-but-not-running) titration produces **no** banner — the drawer only checks `getActiveTitrationPhase`, ignoring the sibling `getPendingTitrationPhase`/`getEffectivePhase` utils.
 - **Always-on hint:** muted instruction text steering formal dose changes to the Titrations tab.
 - **Empty schedule:** dashed-border placeholder "No doses scheduled. Add a time below." when `rows.length === 0`.
 - **Default / populated:** one bordered card per dose row (time input, dosage input, unit label, remove button, 7 day toggles).
@@ -4138,7 +4187,8 @@ Other states:
 ### Info tab
 - **Stored view (default):** Refresh button + Contraindications (red) and Warnings (amber) lists, or muted "No contraindications listed." / "No warnings listed." placeholders.
 - **Refreshing:** Refresh button shows `Loader2`; disabled while `isRefreshing || updatePrescription.isPending`.
-- **Review state (pending AI data):** teal-bordered card ("Review AI Information") listing new contraindications & warnings (or "None found."), with Reject / Edit / Accept buttons.
+- **Refresh failure (silent):** `handleRefresh` wraps the AI call in `try/catch`; on error it only logs `console.error("Failed to refresh AI data", e)` and returns to the stored view. There is no error toast or banner — a failed refresh is indistinguishable from a refresh that returned nothing.
+- **Review state (pending AI data):** teal-bordered card ("Review AI Information") listing new contraindications & warnings (or "None found."), with Reject / Edit / Accept buttons. The same title-casing/verbatim split as the stored view applies here: proposed contraindications are rendered title-cased, proposed warnings verbatim.
 - **Accepting:** Accept button → `Loader2` spinner; disabled while `updatePrescription.isPending`.
 - **Edit-AI state:** "Edit AI Information" heading, two textareas (red-labelled Contraindications, amber-labelled Warnings, 5 rows each), Cancel / Save buttons.
 - **Saving edits:** Save button → `Loader2` spinner; disabled while pending.
@@ -4199,17 +4249,17 @@ Other states:
 - (Not edited here: `compounds`, `createdAt`, `updatedAt`, `deletedAt`, `deviceId` — system/derived.)
 
 ### `MedicationPhase` (`db.ts`, table `medicationPhases`)
-- **Reads:** `type`, `status`, `unit`, `foodInstruction`, `titrationPlanId` (via `usePhasesForPrescription`).
+- **Reads:** `type`, `status`, `unit`, `foodInstruction`, `titrationPlanId`. `usePhasesForPrescription` returns the phase array; `unit`/`foodInstruction` are read off the single maintenance phase that `getMaintenancePhase(phases)` selects from it.
 - **Writes (Schedule save):** `unit`, `foodInstruction`, plus child schedules — via `updatePhase` (existing) or `startNewPhase` (creates a maintenance phase with `startDate: Date.now()`).
 
 ### `PhaseSchedule` (`db.ts`, table `phaseSchedules`)
-- **Reads:** `id`, `time`, `dosage`, `daysOfWeek` (via `useSchedulesForPhase`).
-- **Writes:** rows mapped to `{ id?, time, dosage: parseFloat(...), daysOfWeek }` and passed to `updatePhase`/`startNewPhase`, which add/update/delete schedule records and set `scheduleTimeUTC` / `anchorTimezone` server-side. Existing rows keep their `id`; new rows omit it.
+- **Reads:** `id`, `time`, `dosage`, `daysOfWeek` (via `useSchedulesForPhase`). Note `time` is the `@deprecated` HH:MM string field (kept for v10 DB record compatibility; the canonical field is `scheduleTimeUTC`), but the drawer still reads and writes `time`.
+- **Writes:** rows mapped to `{ id?, time, dosage: parseFloat(...), daysOfWeek }` and passed to `updatePhase`/`startNewPhase`, which add/update/delete schedule records and derive `scheduleTimeUTC` / `anchorTimezone` **client-side** inside `updatePhase`/`startNewPhase` (via `localHHMMStringToUTCMinutes(time, deviceTimezone)`) — not server-side. Existing rows keep their `id`; new rows omit it.
 
 ### Service / hook layer
 - Read hooks: `usePrescriptions`, `usePhasesForPrescription`, `useSchedulesForPhase`.
 - Mutation hooks: `useUpdatePrescription`, `useDeletePrescription`, `useUpdatePhase`, `useStartNewPhase`.
-- Info tab: `useMedicineSearch` (AI fetch, server route `/api/ai/medicine-search`).
+- Info tab: `useMedicineSearch` (AI fetch, server route `/api/ai/medicine-search`) — defined in `src/hooks/use-medicine-search.ts` (a separate file from the medication-queries hooks above).
 - Phase inputs (`phase-service.ts`): `UpdatePhaseInput` ( `id`, optional `unit`, `foodInstruction`, `status`, `schedules: { id?, time, daysOfWeek, dosage }[]`, …), `CreatePhaseInput` (`prescriptionId`, `type`, `unit`, `startDate`, `foodInstruction`, `schedules[]`, …).
 
 ---
@@ -4220,7 +4270,7 @@ Other states:
 - **All-or-nothing save:** Save requires `rows.length > 0` and **every** row valid (`allRowsValid`). This deliberately prevents a half-edited row from being silently dropped from the mutation (only `validRows` are written, so an invalid row would vanish — hence the guard).
 - **Dirty gating:** action bar (Discard/Save) is hidden until any edit. Save also requires `dirty`.
 - **Hydration vs. unsaved edits:** the Schedule `useEffect` returns early while `dirty`, so live DB changes never clobber in-progress edits.
-- **No maintenance phase yet:** Save creates one via `startNewPhase` (`type: "maintenance"`, `startDate: Date.now()`).
+- **No maintenance phase yet:** Save creates one via `startNewPhase` (`type: "maintenance"`, `startDate: Date.now()`). Side effect: `startNewPhase` auto-completes any currently-active phase for the prescription (sets the prior active phase to `status: "completed"` with an `endDate`) before activating the new one. It can also create a `pending` phase when `startDate > now`, but the drawer always passes `Date.now()`, so the new phase is always created `active`.
 - **Active titration override:** When a titration is active, today's actual doses follow the titration plan; edits here only affect the baseline maintenance schedule, which resumes after the titration ends (warning banner communicates this).
 - **Dosage parsing:** stored as `parseFloat(r.dosage)` (number); `step="any"` allows decimals/fractional mg.
 - **Day toggle ordering:** `daysOfWeek` always re-sorted ascending after a toggle.
@@ -4230,7 +4280,7 @@ Other states:
 - **Details re-sync on prop change:** `useEffect` resets all local Details fields and exits edit mode whenever the `prescription` prop changes.
 - **Info AI text normalization:** on Save-edits, both fields `split("\n")` → `trim()` → `filter(Boolean)`, so blank lines are dropped; contraindications are title-cased only on display, stored as-fetched/edited.
 - **Info empty results:** AI returning no items still renders "None found." in review and persists empty arrays on accept.
-- **Notification resync:** schedule-level mutations resync local medication notifications; phase saves rewrite schedule rows (the resync is wired through schedule mutation hooks).
+- **Notification resync:** This drawer's saves do **not** resync local medication notifications. Resync is wired only through the schedule-level hooks (`useAddSchedule`/`useUpdateSchedule`/`useDeleteSchedule` → `resyncNotifications()`), which this drawer does not call — it saves through the phase mutations (`useUpdatePhase`/`useStartNewPhase`), which rewrite the schedule rows but have no resync.
 
 ---
 
@@ -4275,7 +4325,7 @@ This is the primary, full-fidelity surface. It is organized into up to three bor
 1. **Dose Reminders** (icon: `Bell`, teal) — *gated*: the entire card is hidden unless `useAuthGate()` returns true (i.e. auth state is still loading OR the user is signed in). Contains:
    - **Enable Reminders** toggle (`Switch`) bound to `doseRemindersEnabled`.
    - A contextual helper sentence under the label that changes by capability/auth state (see States).
-   - **Follow-up reminders** select (only rendered when reminders are enabled): how many additional nudges to send if the dose is not confirmed. Helper text: "Additional reminders if dose not confirmed."
+   - **Follow-up reminders** select (only rendered when reminders are enabled): how many additional nudges to send if the dose is not confirmed. Helper text: "Additional reminders if dose not confirmed" (no trailing period).
    - **Reminder interval** select (only rendered when reminders enabled AND follow-up count > 0): minutes between follow-up nudges.
    - Toggling on triggers a real browser notification-permission request and a push subscription; toggling off unsubscribes. The toggle shows a disabled/busy state while this resolves.
 
@@ -4283,16 +4333,16 @@ This is the primary, full-fidelity surface. It is organized into up to three bor
    - **Time Format** select — "24-hour (14:00)" vs "12-hour (2:00 PM)", bound to `timeFormat`. Governs how dose/schedule times render across the medication UI.
 
 3. **Localization** (icon: `Globe`, teal):
-   - **Primary Region** — searchable country combobox (~195 ISO 3166-1 countries + a "Not Specified (Global Search)" sentinel). Used by AI to find local brand names/alternatives when adding a medication. Helper text explains this.
-   - **Secondary Region (Optional)** — same combobox, used as an AI fallback for alternatives.
+   - **Primary Region** — searchable country combobox (194 ISO 3166-1 countries + a "Not Specified (Global Search)" sentinel = 195 rows). Used by AI to find local brand names/alternatives when adding a medication. Helper text reads "This is used by the AI to search for local brand names and alternatives when adding a new medication."
+   - **Secondary Region (Optional)** — same combobox, used as an AI fallback for alternatives. Helper text reads "Used as a fallback for finding medication alternatives."
 
 The view header reads "Medication Settings" with subtitle "Configure preferences that apply to your prescriptions and search results." Bottom padding `pb-24` clears the medication tab bar.
 
 ### B. Medication Settings Section (global Settings → Medication accordion)
 A compact duplicate of the Localization controls only (no reminders, no display format). Icon: `Pill`, teal, heading "Medication". Two `Select` dropdowns (not comboboxes):
-- **Primary Region** — small fixed country list, defaults display to "US" when unset.
-- **Secondary Region (Optional)** — same list prefixed with a "None" option; displays "None" when unset.
-Each has muted helper text about finding/falling-back-to local medication alternatives. Both write the same `primaryRegion`/`secondaryRegion` store values as the rich view (the two surfaces are intentionally redundant but use different option sets — see Edge cases).
+- **Primary Region** — small fixed country list, defaults display to "US" when unset. Helper text: "Used to find local medication alternatives in search results."
+- **Secondary Region (Optional)** — same list prefixed with a "None" option; displays "None" when unset. Helper text: "Used as a fallback for finding medication alternatives."
+Both write the same `primaryRegion`/`secondaryRegion` store values as the rich view (the two surfaces are intentionally redundant but use different option sets — see Edge cases).
 
 ### C. Timezone Change Detection & Dialog (app-wide)
 - `useTimezoneDetection()` runs inside `TimezoneGuard` in the provider stack, so the dialog is global (not tied to the medications page).
@@ -4306,8 +4356,9 @@ Each has muted helper text about finding/falling-back-to local medication altern
 ### D. Local Dose Reminders & Refill Alerts (`medication-notification-service`)
 - Started/stopped by `useMedicationNotifications()` which is mounted on the medications page. Runs a `setInterval` every 60 s.
 - **Dose reminders:** every minute, for each enabled schedule whose `daysOfWeek` includes today's weekday, if the current local time is within `[0, 5]` minutes after the schedule time and not already notified today, it fires a "Time for your {HH:MM} medications" notification listing the medication name + dose, `requireInteraction: true`, deduped per `date-time-prescription` key (cleaned daily).
-- **Refill alerts:** on start, for each active prescription with an active phase + active (non-archived) inventory item, computes daily dosage (weighted by days-of-week / 7), daily pills, and `daysLeft = floor(stock / dailyPills)`. Fires a "Refill needed: {brand}" notification if `daysLeft <= refillAlertDays` OR `stock <= refillAlertPills`. Throttled to once per 12 h; deduped per prescription id.
+- **Refill alerts:** on start, for each active prescription with an active phase + active (non-archived) inventory item, computes daily dosage (weighted by days-of-week / 7), daily pills, and `daysLeft = floor(stock / dailyPills)`. Fires a "Refill needed: {brand}" notification (body `"{stock} pills left (~{daysLeft} days). Time to refill {brand} {strength}{unit}."`, where the strength substring comes from the inventory `strength`+`unit` or `formatCompoundShort` for combos — not the schedule dosage) if `daysLeft <= refillAlertDays` OR `stock <= refillAlertPills`. Throttled to once per 12 h; deduped per prescription id.
 - Compound (combo) meds render dose text via `formatCompoundShort(splitDose(...))`; single meds render `{dosage}{unit}`.
+- **Inventory-selection asymmetry:** the dose-reminder path picks the active non-archived inventory but **falls back to `activeInv[0]`** (first inventory found) for the med *name* if none is active; the refill path has **no such fallback** — it `continue`s (skips the prescription) when there is no active non-archived inventory.
 
 ### E. Server Push Sync (`usePushScheduleSync`)
 - Mounted via `useMedicationNotifications` (which calls `usePushScheduleSync`). No-ops when signed out.
@@ -4321,7 +4372,7 @@ Each has muted helper text about finding/falling-back-to local medication altern
 
 | Action | Where | Result |
 |---|---|---|
-| Toggle **Enable Reminders** on | Reminders card | Requests browser notification permission; if granted, subscribes to push and sets `doseRemindersEnabled=true`; toggle disabled while pending. If permission denied or subscription fails, silently reverts (toggle stays off). |
+| Toggle **Enable Reminders** on | Reminders card | Requests browser notification permission; if granted, subscribes to push and sets `doseRemindersEnabled=true`; toggle disabled while pending. If permission denied or subscription fails, the toggle stays off with no error toast (the handler `console.error`s thrown errors and `console.warn`s when the push subscription returns null — so it is UX-silent but not log-silent). |
 | Toggle **Enable Reminders** off | Reminders card | Unsubscribes from push, sets `doseRemindersEnabled=false`; the two sub-selects collapse. |
 | Select **Follow-up reminders** value | Reminders card | Sets `reminderFollowUpCount` (0/1/2/3). Choosing 0 ("None") hides the interval select. Syncs to `/api/push/settings`. |
 | Select **Reminder interval** value | Reminders card | Sets `reminderFollowUpInterval` (5/10/15/20/30 min). Syncs to `/api/push/settings`. |
@@ -4334,7 +4385,7 @@ Each has muted helper text about finding/falling-back-to local medication altern
 | Tap **Adjust Schedules** | Timezone dialog | Runs `recalculateScheduleTimezones`; button shows spinner + "Adjusting…"; on success closes + success toast; on failure shows destructive toast "Schedule adjustment failed" / "Your dose times have not changed. Try reopening the app." |
 | Tap **Not Now** | Timezone dialog | Sets a session-level dismissal flag and closes; won't re-prompt until reload/app restart. (Both buttons disabled while recalculating.) |
 | Receive dose reminder notification | OS | "Time for your {HH:MM} medications" with med list; `requireInteraction` keeps it visible. |
-| Receive refill notification | OS | "Refill needed: {brand}" with pills-left and ~days-left. |
+| Receive refill notification | OS | "Refill needed: {brand}" with body "{stock} pills left (~{daysLeft} days). Time to refill {brand} {strength}{unit}." |
 
 ---
 
@@ -4387,7 +4438,7 @@ Each has muted helper text about finding/falling-back-to local medication altern
 
 **Time format options:** `"24h"` → "24-hour (14:00)", `"12h"` → "12-hour (2:00 PM)".
 
-**Country list (rich combobox):** sentinel `{ value: "", label: "Not Specified (Global Search)", flag: "🌐" }` followed by ~195 ISO 3166-1 alpha-2 entries with flag emoji, alphabetical by label (Afghanistan `AF` … Zimbabwe `ZW`). Stored value = ISO code or `""`.
+**Country list (rich combobox):** sentinel `{ value: "", label: "Not Specified (Global Search)", flag: "🌐" }` followed by 194 ISO 3166-1 alpha-2 entries with flag emoji, alphabetical by label (Afghanistan `AF` … Zimbabwe `ZW`) — 195 rows total. Stored value = ISO code or `""`. Each `CommandItem` is keyed `country.value || "__global__"` and its `value` is the country **label**, so the search input filters on label text.
 
 **Country list (compact Settings section, divergent):** fixed short list — `US` United States, `UK` United Kingdom, `CA` Canada, `AU` Australia, `DE` Germany, `ZA` South Africa, `Other`; secondary adds a `None` option. (Note "UK"/"Other"/"None" don't match the rich view's ISO codes — see Edge cases.)
 
@@ -4399,7 +4450,7 @@ Each has muted helper text about finding/falling-back-to local medication altern
 - Notification options: dose `requireInteraction: true`, tag `dose-reminder-{time}`; refill tag `refill-{id}`.
 
 **Timezone constants (`timezone.ts`):**
-- `MIGRATION_TIMEZONE_CUTOFF` = `2026-02-12T00:00:00Z` (records before → `Africa/Johannesburg`, on/after → `Europe/Berlin`).
+- `MIGRATION_TIMEZONE_CUTOFF` = `2026-02-12T00:00:00Z` (records before → `Africa/Johannesburg`, on/after → `Europe/Berlin`). This constant and its helper `getTimezoneForTimestamp` are a **v11-migration backfill** path only — they are **not used by the settings or timezone-change runtime** described here.
 - SSR fallback timezone: `"UTC"`.
 - Minutes domain: schedule times stored as minutes-from-midnight-UTC, wrapped to `[0,1439]`.
 
@@ -4434,9 +4485,9 @@ Each has muted helper text about finding/falling-back-to local medication altern
 - **Session dismissal:** "Not Now" suppresses the dialog only until reload/app restart (module-level flag, not persisted).
 - **Detection fails silent:** any DB error during detection is swallowed so app startup never blocks.
 - **Reminders require auth + permission:** the card is hidden when signed-out (push needs auth); local timer checks no-op without `Notification` permission `granted`; toggle disabled when notifications unsupported.
-- **Permission denial is non-destructive:** if the user denies the browser prompt or push subscription fails, the toggle quietly stays off (no error toast).
+- **Permission denial is non-destructive:** if the user denies the browser prompt or push subscription fails, the toggle quietly stays off (no error toast). It is not fully silent at the log level, though — `useDoseReminderToggle` `console.error`s on thrown errors and `console.warn`s when `subscribeToPush()` returns null. (`supported` is computed as `typeof window !== "undefined" && isNotificationSupported()`.)
 - **Dose-due dedupe:** one notification per `{date}-{time}-{prescriptionId}`; keys pruned to today's date daily.
-- **Refill throttle:** at most once per 12 h; per-prescription dedupe within that window.
+- **Refill throttle:** at most once per 12 h; per-prescription dedupe within that window. A prescription with no active non-archived inventory is **skipped entirely** for refill alerts (no fallback to an archived/inactive item), unlike the dose-reminder path which falls back to the first inventory found for the med name.
 - **Refill trigger logic:** alerts when `daysLeft <= refillAlertDays` OR `stock <= refillAlertPills` (either threshold, if defined); `daysLeft` is `Infinity` when `dailyPills === 0`.
 - **Daily dosage weighting:** `dosage × (daysOfWeek.length / 7)` so non-daily schedules scale correctly.
 - **Two divergent region pickers:** the compact Settings section uses non-ISO values (`UK`, `Other`, `None`) while the rich view uses ISO codes + `""`. Editing region in one surface can surface a mismatched display in the other (the rich combobox falls back to its placeholder for unrecognized stored values). An alternative design should unify these on one canonical option set.
@@ -4506,7 +4557,7 @@ Each `KpiCard` shows: icon + label (muted), a large mono value, an optional tren
 A `useMemo` builds a string list. Each rule appends a sentence when its condition holds:
 - Systolic BP trending **upward**/**downward** (when ≥2 BP readings and trend direction is rising/falling).
 - Weight increased/decreased by `X.X kg` across the period (when ≥2 weight readings and |change| ≥ 0.1 kg).
-- Fluid intake below the `+500 ml` target on `M of N day(s)` (when `daysTotal > 0` and below > 0).
+- Fluid intake below the `+500 ml` target on `M of N day(s)` (when `daysTotal > 0` and below > 0). The observation/chart string hardcodes `+500 ml` (`FLUID_TARGET_ML`), but the underlying `daysAboveTarget` day-classification compares `intakeMl >= target` where `target = urinationEstimatedMl + 500` (i.e. output-relative, not a flat 500).
 - Average daily water (`N ml`) is below your `{waterGoal} ml` goal (when total water > 0 and avg < goal).
 - Average daily sodium (`N mg`) is above your `{saltLimit} mg` limit (when total salt > 0 and avg > limit).
 - Average daily sugar (`N g`) is above your `{sugarLimit} g` limit (when sugar enabled, total > 0, avg > limit).
@@ -4515,11 +4566,11 @@ A `useMemo` builds a string list. Each rule appends a sentence when its conditio
 ### Trend charts (Recharts)
 - **Blood Pressure** — `LineChart`, height 180. Two lines: systolic (`hsl(346 77% 50%)`) and diastolic (`hsl(330 65% 55%)`), strokeWidth 2, no dots. X-axis = `MMM D` date, Y-axis auto. Tooltip with custom card style. Only rendered when ≥1 BP reading.
 - **Weight** — `LineChart`, height 180. One line `weight` (`hsl(160 84% 39%)`), strokeWidth 2, dots r=3. Y-axis domain `["dataMin - 1", "dataMax + 1"]`. Tooltip formatter `X.X kg`. Only when ≥1 weight reading.
-- **Daily Fluid Balance** — `BarChart`, height 180. Bars `balance` (`hsl(199 89% 48%)`, radius `[2,2,0,0]`). X = `date.slice(5)` (MM-DD). Two reference lines: y=0 (border color) and y=500 (`hsl(160 84% 39%)`, dashed) marking the `FLUID_TARGET_ML` target. Tooltip formatter `N ml`. Only when ≥1 fluid-balance day.
+- **Daily Fluid Balance** — `BarChart`, height 180. Bars `balance` (`hsl(199 89% 48%)`, radius `[2,2,0,0]`). X = `date.slice(5)` (MM-DD). Two reference lines: y=0 (border color) and y=500 (`hsl(160 84% 39%)`, dashed) marking the `FLUID_TARGET_ML` visual target. Tooltip formatter `N ml`. Only when ≥1 fluid-balance day. (Note: the dashed line is a flat +500 marker, but the "days on target" count uses an output-relative per-day target — see business rules.)
 
 ### AI Insights card (AiInsightsCard)
 On-demand AI narrative of the last **30 days** of tracked data. Two flavours:
-- **Fast analysis** — synchronous Sonnet summary, returns in ~10s. Cached to IndexedDB on success.
+- **Fast analysis** — synchronous Sonnet summary (typically returns in seconds). Cached to IndexedDB on success. (The "~10s" figure is only a JSDoc code comment — it does **not** appear in any user-facing copy.) Fast mode never web-searches: the route sends only `[INSIGHT_TOOL]` (no web_search tool), with `max_tokens: 2048`, `temperature: 0.3`, and `tool_choice` forced to `analytics_insight`.
 - **Deep analysis** — Opus 4.6 + web search, submitted as an Anthropic batch job; returns minutes later (typically 3–10 min). User may close the page and return; job state survives reload via localStorage + server-side Postgres `insight_jobs`. On completion the server has already persisted the report and a sync pull surfaces it locally.
 
 Card content:
@@ -4550,7 +4601,7 @@ Card content:
 - Focus **Input** (when expanded) — placeholder `e.g. potassium, iron, fiber`, max 200 chars.
 - **Analyze** button — label varies: `Analyzing…` / `No food entries yet` / `Run another scan` / `Analyze nutrient balance`.
 - **Previous scans (N)** collapsible.
-- Confirm dialog ("What goes into this scan") — food-data checklist (count + what's excluded), Focus echo, medical-profile section, server-redaction footer.
+- Confirm dialog ("What goes into this scan") — food-data checklist (count + what's excluded), Focus echo (`Findings will lead with: {focus}` — shown only when `focus.trim() !== ""`, displaying the trimmed value), medical-profile section, server-redaction footer.
 - Reading dialog — summary + findings list (each: nutrient name + status badge + detail + "From: foods") + amber **Caveats** box + "Observational only — not medical advice" disclaimer.
 
 ---
@@ -4600,7 +4651,7 @@ Card content:
 - **Deep submitting:** Deep button shows spinner + `Submitting…`.
 - **Deep pending:** violet in-progress banner; Deep button shows spinner + `In progress`; Fast button disabled.
 - **Deep long-running** (> 15 min): banner copy swaps to "Taking longer than usual — still working in the background…".
-- **Deep completed:** success toast; result appears via live query; hook resets to idle.
+- **Deep completed:** only treated as completed when the body has status `completed` **and** non-empty `narrative` **and** `observations`; then success toast, result appears via live query, hook resets to idle. A `completed` body missing `narrative`/`observations` falls through to the "unrecognised shape → keep polling" branch rather than being surfaced as a (blank) completion.
 - **Deep failed / expired:** destructive toast ("Deep analysis failed" / "Deep analysis timed out"); resets to idle.
 - **Not-enough-data error:** toast "Not enough data".
 - **Deep job 404 on poll:** state → failed with "job was not found… may have been cleared".
@@ -4615,6 +4666,7 @@ Card content:
 - **Pending:** spinner + `Analyzing…`, button disabled, focus input disabled.
 - **Has scan:** preview row; button becomes `outline` "Run another scan".
 - **Error (429):** toast "Try again in a minute".
+- **Error (422):** raised when the model never returns the structured tool even after the server's retry (see below) — surfaced via the generic "Couldn't analyze your food log" toast.
 - **Error (other / network):** toast "Couldn't analyze your food log".
 - **Focus collapsed/expanded:** input hidden/shown; toggle label + chevron flip.
 - **Status badges** per finding: High (amber), Low (sky), Balanced (emerald).
@@ -4628,7 +4680,7 @@ Card content:
 ## Enums, options & configurable values
 
 ### Time scope presets (parent selector, `SCOPE_OPTIONS`)
-`24h`, `7d`, `30d`, `90d`, `All` → `TimeScope = "24h" | "7d" | "30d" | "90d" | "all"`. Mapped to ranges aligned to calendar-day boundaries; `all` → `start = 0`.
+`24h`, `7d`, `30d`, `90d`, `All` → `TimeScope = "24h" | "7d" | "30d" | "90d" | "all"`. Mapped to ranges aligned to calendar-day boundaries; `all` → `start = 0`. The selector ALSO renders a separate hardcoded **Custom** button (date-range inputs) that is *not* in `SCOPE_OPTIONS`; the page resolves `effectiveRange = customRange ?? scopeRange`, so a user-set custom range can also drive the tab.
 
 ### Insights window
 `INSIGHTS_WINDOW_DAYS = 30` (AI Insights always analyses a rolling 30-day window ending now). Nutrient card `WINDOW_DAYS = 30`.
@@ -4638,6 +4690,9 @@ Card content:
 
 ### Deep-job state machine (`DeepJobState`)
 `idle | submitting | pending | completed | failed | expired`. Poll interval `DEEP_POLL_INTERVAL_MS = 30_000`. Long-run threshold `DEEP_LONG_RUN_THRESHOLD_MS = 15 * 60 * 1000`. localStorage key `insight-deep-job-pending`.
+
+### Deep route server caps (`insights/deep/route.ts`)
+`DEEP_MAX_TOKENS = 4096`, `DEEP_WEB_SEARCH_MAX_USES = 12`. The deep system prompt **requires ≥2 `web_search` queries** before the model may call `analytics_insight`. Exactly **one pending deep job per user** is enforced by a DB unique index. The submission endpoint is rate-limited (`createRateLimiter(10)`); the polling endpoint is intentionally cheap and **not** rate-limited.
 
 ### Domains (`DOMAINS`)
 `water, salt, sugar, potassium, weight, bp, eating, urination, defecation, caffeine, alcohol, medication`.
@@ -4658,7 +4713,7 @@ water→"water intake", salt→"sodium intake", sugar→"sugar intake", potassiu
 `"high" | "low" | "balanced"` → badges High (amber) / Low (sky) / Balanced (emerald).
 
 ### Optional trackers
-`OptionalTrackerKey = "sugar" | "potassium"`. Defaults: `sugar: true`, `potassium: false`. Disabled trackers are dropped from snapshot, KPI grid, observations, and AI tracked-data list.
+`OptionalTrackerKey = "sugar" | "potassium"`. Defaults: `sugar: true`, `potassium: false`. Disabled trackers are dropped from snapshot, KPI grid, observations, and AI tracked-data list. Enabled state is read via the reactive `useOptionalTrackerEnabled(key)` hook; a non-reactive `getOptionalTrackerEnabled(key)` snapshot (reads `useSettingsStore.getState()`) also exists for one-shot reads inside callbacks.
 
 ### Intake goals / limits (defaults + clamps, from settings-store)
 - `waterLimit`: default **1000** ml (clamp 100–10000).
@@ -4673,7 +4728,7 @@ water→"water intake", salt→"sodium intake", sugar→"sugar intake", potassiu
 - Chart colors: systolic `hsl(346 77% 50%)`, diastolic `hsl(330 65% 55%)`, weight/target `hsl(160 84% 39%)`, fluid bar `hsl(199 89% 48%)`.
 
 ### AI Insights tooltip / model copy
-- Deep model named "Opus 4.6" in dialog copy. Fast described as ~10s; deep ~3–10 min, ~10–20× cost.
+- Deep model named "Opus 4.6" in dialog copy — and this is genuinely accurate, not just marketing: the deep route's backing model is really `claude-opus-4-6` (`CLAUDE_MODELS.premium`). No fast-mode timing text is rendered anywhere; only the deep amber box surfaces timing ("typically 3-10 minutes … roughly 10-20× the cost of a fast summary").
 - Tracked-data list items: Water intake; Salt / sodium intake; (Sugar intake); (Potassium intake); Blood pressure readings; Weight readings; Fluid balance (in vs. out); Correlations (salt vs. weight[, sugar vs. weight][, potassium vs. weight], caffeine & alcohol vs. blood pressure); "Your water goal, sodium limit[, sugar limit][ & potassium target]".
 
 ### Correlation lag defaults (`analytics-types`)
@@ -4685,6 +4740,9 @@ water→"water intake", salt→"sodium intake", sugar→"sugar intake", potassiu
 ### Insight response contract caps (`analytics-insights`)
 `summary` 1–4000 chars; `observations` ≤16 items, each 1–2000 chars; `sources` ≤30 URLs. Prompt asks for 2–4 sentence summary (3–5 deep), 3–6 observations (4–8 deep). `priorAssessments` ≤3.
 
+### Nutrient route schema caps (`nutrient-analysis/route.ts`)
+Request: `windowDays` 1–90; `focus` ≤200 chars; `foods` 1–500 items, each `description` 1–300 chars and `grams` 0–10000 (optional); `conditions` ≤20 (each ≤120); `medications` ≤40. Response: `summary` ≤4000; `findings` ≤20 (each `detail` ≤2000, `exampleFoods` ≤12 of ≤200 chars); `caveats` ≤8 (each ≤600).
+
 ---
 
 ## Data model touched
@@ -4694,7 +4752,7 @@ water→"water intake", salt→"sodium intake", sugar→"sugar intake", potassiu
 - `bloodPressureRecords` → `useBPTrend` (systolic/diastolic/heartRate/position, trend, avg).
 - `weightRecords` → `useWeightTrend` (readings, trend, avg/min/max).
 - Fluid balance derived from intake + urination → `useFluidBalance` (`daily[]`, `avgBalance`, `daysAboveTarget`, `daysTotal`).
-- `eatingRecords` (nutrient card) via `useEatingRecordsByDateRange` — uses `originalInputText`/`note` and `grams`.
+- `eatingRecords` (nutrient card) via `useEatingRecordsByDateRange` — uses `originalInputText`/`note` and `grams`. The hook guards `startTime < endTime`, returning `[]` (no query) when the range is empty/inverted.
 - `prescriptions` / `medicationPhases` / `phaseSchedules` via `buildMedicationSummary` (active rx → active phase → enabled, non-deleted schedules → dosages + day-of-week union → frequency string).
 - User profile (`useUserProfile`): `shareConditionsWithAI`, `conditions`, `shareMedicationsWithAI`.
 - Settings store: `waterLimit`, `saltLimit`, `sugarLimit`, `potassiumLimit`.
@@ -4722,6 +4780,7 @@ water→"water intake", salt→"sodium intake", sugar→"sugar intake", potassiu
 - **Correlation rules (prompt):** `pairedDays < 3` = insufficient, not "no relationship"; "correlation is not causation"; coefficient clamped −1…1; confidence clamped 0…1.
 - **AI safety prompt:** factual only, never diagnose or recommend treatment/medication/dosage; neutral non-alarming tone; if a reading is notable, state the number and suggest discussing with a healthcare provider; compare against most recent prior assessment when supplied.
 - **PII protection:** insights snapshot is aggregate-only by construction (no raw records/notes/timestamps). Nutrient scan sends only food descriptions + grams; server redacts emails/phones/ID-like sequences. Prior-assessment free text only sent on explicit opt-in.
+- **Nutrient route two-turn retry:** if the first model turn finishes with prose instead of a tool call, the server issues a **follow-up call** with `tool_choice` forced to `report_nutrient_analysis` to re-request the structured tool. Only if that second turn still has no tool block does it return **422** ("The AI didn't return a structured response"); a tool block whose input fails schema validation also returns 422 ("didn't match the expected shape").
 - **Source-link XSS guard:** model-generated URLs only become clickable anchors for `http:`/`https:`; `javascript:`/`data:`/unparseable schemes render as inert muted text with an "Unsafe URL scheme" title. Hostname pretty-print strips `www.`, falls back to raw URL.
 - **Deep job resilience:** polling treats non-404 failures as transient and keeps retrying; 404 → failed; unrecognised body shape → keep polling rather than wedge UI. Any pre-submit throw resets state to `idle` so the button is re-clickable. Long-run wording recomputes each minute via a forced tick.
 - **Malformed 200 from insights API** must fail loudly (not be cached as a blank insight). Cache write failures are swallowed so a paid result is never discarded over a storage error.
@@ -4773,13 +4832,13 @@ water→"water intake", salt→"sodium intake", sugar→"sugar intake", potassiu
 - **Weight vs Salt Intake** — salt (mg) overlaid against weight (kg); default lag **2 days** (`DEFAULT_SALT_WEIGHT_LAG_DAYS`).
 - **Weight vs Sugar Intake** — sugar (g) vs weight (kg); default lag **2 days**; only rendered when the **sugar** optional tracker is enabled.
 - **Weight vs Potassium Intake** — potassium (mg) vs weight (kg); default lag **2 days**; only rendered when the **potassium** optional tracker is enabled (default off).
-- **Caffeine vs Blood Pressure** — caffeine (mg) vs systolic BP (mmHg); **no lag**.
-- **Alcohol vs Blood Pressure** — alcohol (standard drinks) vs systolic BP (mmHg); **no lag**.
+- **Caffeine vs Blood Pressure** — caffeine (mg) vs systolic BP (mmHg); **no lag**. (Card `labelB` is the literal string `"Systolic BP"`, as is the Alcohol card's.)
+- **Alcohol vs Blood Pressure** — alcohol vs systolic BP (mmHg); **no lag**. Note the pre-built card hard-codes `unitA=" units"` inline, so its left Y-axis ticks read "… units" — this differs from the custom-comparison dropdown path, which uses `DOMAIN_UNITS.alcohol = " drinks"`. The two surfaces are inconsistent.
 - Each card shows: title, a `CorrelationChart` (dual Y-axis daily-mean overlay), a coefficient/strength/paired-day readout strip, and a one-line plain-language interpretation sentence.
 
 ### Fluid Balance card
 - Bar chart of **daily fluid balance** = water intake (ml) − estimated urination output (ml) per calendar day.
-- Horizontal **dashed target reference line** at +500 ml (`FLUID_TARGET_ML`) plus a zero baseline reference line.
+- Horizontal **dashed target reference line** at a flat +500 ml (`FLUID_TARGET_ML`, a private local constant in `correlations-tab.tsx`) plus a zero baseline reference line. Note this dashed line is a **constant 500** unrelated to the per-day variable `target` (estimated output + 500) used by the on-target footer stat.
 - Footer stats: **Avg X ml/day** (mean of daily balances, rounded) and **N/M days on target**.
 - Explanatory caption: "Balance = water intake − estimated urination output. Output is estimated from logged amount categories."
 - Urination output is *estimated*, not measured: derived from each urination record's `amountEstimate` category mapped via `URINATION_ESTIMATE_ML` (small=150, medium=300, large=500; default 300 ml when unset).
@@ -4795,6 +4854,7 @@ water→"water intake", salt→"sodium intake", sugar→"sugar intake", potassiu
 - Aggregates each series to **one value per calendar day (daily mean)** before plotting, merging on the local day key (`toLocalDateKey`) so a multi-event day shows once — consistent with the day-aligned coefficient.
 - X axis labels are short dates (e.g. "Jan 5"); Y axes tick-format with each domain's unit suffix.
 - Below the chart, a stat strip shows `r = X.XX`, a strength+direction label, `· N days`, and (when lag > 0) a `with N-day lag` note.
+- The `strengthLabel` helper emits the literal string `"No correlation"` for strength "none", or otherwise a capitalized-first-letter `"Strong|Moderate|Weak positive|negative"` (direction from `coefficient >= 0`).
 
 ### Computation pipeline
 - **Day alignment:** both series grouped by local calendar day, averaged per day (`mean`).
@@ -4834,10 +4894,10 @@ water→"water intake", salt→"sodium intake", sugar→"sugar intake", potassiu
 - **Moderate:** coefficient colored — emerald (positive) / rose (negative); qualifier "tend to".
 - **Strong:** coefficient colored emerald/rose; qualifier "clearly".
 - **Lag present:** stat strip appends `with N-day lag`; interpretation otherwise unchanged.
-- **Direction:** positive `r` → "increase together" (emerald); negative `r` → "move in opposite directions" (rose).
+- **Direction:** positive `r` → "increase together" (emerald); negative `r` → "move in opposite directions" (rose). The two helpers split at slightly different points: `interpretCorrelation` uses `coefficient > 0` (so an exact `r === 0` would map to "move in opposite directions"), while `strengthLabel` uses `coefficient >= 0` (so `r === 0` reads "positive"). This disagreement is practically unreachable — `r === 0` only occurs at strength "none", which produces a different sentence ("No meaningful relationship…") and the literal label `"No correlation"` — so it is cosmetic only.
 
 ### Fluid Balance card
-- **Empty:** when no fluid data (no daily rows), shows centered **"No fluid data for this period"** (height 200px), no footer stats.
+- **Empty:** the condition is `!data || data.value.daily.length === 0` — so this state also covers the transient `useLiveQuery` default/undefined (before data resolves), not only the "no daily rows" case. Shows centered **"No fluid data for this period"** (height 200px), no footer stats.
 - **Populated:** bar chart with per-day balance bars (blue), target dashed line at +500ml, zero baseline, footer avg + days-on-target stats, and caption.
 
 ### Custom Comparison
@@ -4879,6 +4939,7 @@ water→"water intake", salt→"sodium intake", sugar→"sugar intake", potassiu
 
 ### Per-domain display units (`DOMAIN_UNITS`)
 `water=" ml"`, `salt=" mg"`, `sugar=" g"`, `potassium=" mg"`, `weight=" kg"`, `bp=" mmHg"`, `eating=""`, `urination=" ml"`, `defecation=""`, `caffeine=" mg"`, `alcohol=" drinks"`, `medication=""`.
+- These units drive the **custom-comparison** dropdown path. The pre-built Alcohol-vs-BP card overrides this with a hard-coded inline `unitA=" units"` (not `" drinks"`), so the pre-built card's axis label differs from the custom path's.
 
 ### Per-domain plotted value (what the line actually charts)
 - water → `amount` (ml), salt → `amount` (mg), sugar → `amount` (g), potassium → `amount` (mg)
@@ -4905,7 +4966,7 @@ strong → "clearly", moderate → "tend to", weak → "slightly".
 - negative → rose (`text-rose-600 dark:text-rose-400`)
 
 ### Time-scope presets (`TimeScope`, shared selector)
-`"24h" | "7d" | "30d" | "90d" | "all"` — default scope on the page is **`7d`**. Custom range supported via two date inputs. Ranges snap to calendar-day boundaries (`startOfDay`/`endOfDay`) so daily grouping has no partial edge days.
+`"24h" | "7d" | "30d" | "90d" | "all"` — default scope on the page is **`7d`** (set in `analytics/page.tsx` via `useState<TimeScope>("7d")`). The `useTimeScopeRange` switch also has a `default` (fall-through) case that maps to 7d. Custom range supported via two date inputs. Ranges snap to calendar-day boundaries (`startOfDay`/`endOfDay`) so daily grouping has no partial edge days. The page computes `effectiveRange = customRange ?? scopeRange` and passes it to **all four** analytics tabs; the Correlations tab does not own the range selector.
 
 ### Default lags (`analytics-types.ts`)
 - `DEFAULT_SALT_WEIGHT_LAG_DAYS = 2`
@@ -4917,8 +4978,9 @@ strong → "clearly", moderate → "tend to", weak → "slightly".
 `min=0`, `max=14`, default `0`.
 
 ### Fluid-balance constants
-- `FLUID_TARGET_ML = 500` (UI reference line) — target = output + 500 ml/day.
-- `URINATION_ESTIMATE_ML = { small: 150, medium: 300, large: 500 }`, fallback `300`.
+- `FLUID_TARGET_ML = 500` — **not** exported from `analytics-types.ts`; it is a private module constant declared locally in `correlations-tab.tsx` (`= 500`) and duplicated separately in `summary-tab.tsx`. Drives only the flat dashed UI reference line.
+- The per-day `FluidBalanceDay.target` (= estimated output + 500 ml/day) is a *separate* value computed in the service (`analytics-service.ts`) and used only by the on-target footer stat.
+- `URINATION_ESTIMATE_ML = { small: 150, medium: 300, large: 500 }`, fallback `300` (`analytics-types.ts`).
 
 ### Statistical thresholds
 - `MIN_PAIRED_DAYS = 3` (chart) — coefficient hidden below this.
@@ -4947,9 +5009,12 @@ Read-only across these Dexie tables (via domain services, `src/lib/db.ts`):
 - **urinationRecords** (`amountEstimate?`, `timestamp`) — `amountEstimate` ∈ small/medium/large drives estimated ml.
 - **eatingRecords** (`timestamp`) — counted as 1/event.
 - **defecationRecords** (`timestamp`) — counted as 1/event.
-- **substanceRecords** (`type` "caffeine"|"alcohol", `amountMg?`, `amountStandardDrinks?`, `timestamp`) — queried via compound index `[type+timestamp]`.
+- **substanceRecords** (`type` "caffeine"|"alcohol", `amountMg?`, `amountStandardDrinks?`, `timestamp`; record also carries `volumeMl?`, `abvPercent?`, `description`, `source`, `aiEnriched?`, `sourceRecordId?` — unused by correlations) — queried via compound index `[type+timestamp]`.
 
-Types: `Domain`, `TimeRange`, `DataPoint {timestamp, value, label?}`, `CorrelationResult {coefficient, strength, seriesA, seriesB, pairs[], pairedDays, lagDays}`, `AnalyticsResult<T> {value, unit, period, dataPoints, meta?}`, `FluidBalanceDay`, `FluidBalanceResult`. No writes; medication/prescription tables are NOT touched here.
+Types: `Domain`, `TimeRange`, `DataPoint {timestamp, value, label?}`, `CorrelationResult {coefficient, strength, seriesA, seriesB, pairs[], pairedDays, lagDays}`, `AnalyticsResult<T> {value, unit, period, dataPoints, meta?}`, `FluidBalanceDay`, `FluidBalanceResult {daily, intraday, avgBalance, daysAboveTarget, daysTotal}`. No writes; medication/prescription tables are NOT touched here.
+
+- **`FluidBalanceResult.intraday`** — `fluidBalance` also computes an `intraday` running-cumulative-balance `DataPoint[]` series (all water/urination events merged chronologically with a running cumulative). The Correlations tab **never renders this** (only `daily` is used); it is produced-but-unused here.
+- **`SubstanceRecord`** carries more fields than correlations consume: beyond `amountMg` / `amountStandardDrinks`, it has `volumeMl`, `abvPercent`, `description`, `source`, `aiEnriched`, `sourceRecordId` (`db.ts`). None of these are charted by correlations.
 
 ---
 
@@ -4968,7 +5033,7 @@ Types: `Domain`, `TimeRange`, `DataPoint {timestamp, value, label?}`, `Correlati
 - **Optional-tracker gating is double-enforced:** both the pre-built card and the dropdown option disappear when the tracker is disabled; disabled-tracker data is never surfaced even if present.
 - **Rounding:** avg fluid balance is `Math.round`ed for display; coefficient shown to 2 decimals (`toFixed(2)`).
 - **Substance table fault tolerance:** missing `substanceRecords` table (older schema) is caught and treated as empty rather than erroring.
-- **Fluid-balance "on target" rule:** `daysAboveTarget` counts days where `intakeMl >= target` (target = estimated output + 500 ml).
+- **Fluid-balance "on target" rule:** `daysAboveTarget` counts days where `intakeMl >= target`, where `target` is the **per-day** value `urinationEstimatedMl + 500` computed in the service (`analytics-service.ts`). This differs from the chart's **flat dashed reference line**, which is a constant `FLUID_TARGET_ML` (500) unrelated to per-day output — the footer stat and the visual line use two different "target" notions.
 
 ---
 
@@ -5008,7 +5073,7 @@ Types: `Domain`, `TimeRange`, `DataPoint {timestamp, value, label?}`, `Correlati
 
 - **Unified cross-domain record list.** Fetches and merges 7 separate Dexie domains into one `UnifiedRecord[]` stream: water/salt/sugar/potassium intake, weight, blood pressure, eating, urination, defecation, and substances (caffeine + alcohol). Substances are split by `record.type` into two display types (`caffeine`, `alcohol`).
 - **Reverse-chronological sort.** All unified records are sorted by `timestamp` descending (newest first) via `getRecordTimestamp(b) - getRecordTimestamp(a)`.
-- **Day grouping.** Visible records are grouped into per-day buckets keyed by a localized date string (`"Wed, May 31, 2026"` style — `weekday: short, year: numeric, month: short, day: numeric`). Each group renders a date header with a Calendar icon and an entry-count pill (`N entry` / `N entries`, singular/plural aware).
+- **Day grouping.** Visible records are grouped into per-day buckets keyed by a localized date string (`"Wed, May 31, 2026"` style — `weekday: short, year: numeric, month: short, day: numeric`). Each group renders a date header with a `Calendar` icon (`w-4 h-4`) and an entry-count pill (`N entry` / `N entries`, singular/plural aware). The count is `dayRecords.length` — i.e. the number of records *currently visible after pagination slicing*, so a partially-loaded final day shows the visible count, not the day's true total.
 - **Domain filter bar.** A horizontally-scrollable row of filter pills (tabs) that narrows the list to one domain (or "All"). The selected pill is tinted with that domain's theme color.
 - **Optional-tracker gating.** Sugar and Potassium (`K`) filter pills are conditionally shown only when the corresponding optional tracker is enabled (`useOptionalTrackerEnabled("sugar" | "potassium")`).
 - **Client-side pagination ("Load More").** Shows `PAGE_SIZE = 50` records per page; a "Load More" button (with ChevronDown icon) appends the next 50. Paging is purely client-side slicing of the already-fetched, filtered array (`filteredRecords.slice(0, page * 50)`).
@@ -5047,7 +5112,7 @@ Types: `Domain`, `TimeRange`, `DataPoint {timestamp, value, label?}`, `Correlati
 - **Empty (no records in range):** centered `ClipboardList` icon (12×12, 30% opacity) above the text "No records in this time range". Shown whenever `filteredRecords.length === 0` (true both for a genuinely empty range and for a filter that matches nothing).
 - **Row hover:** subtle `hover:bg-muted/30` background; cursor pointer.
 - **Row deleting:** trash icon swaps to a spinning `Loader2`; delete button disabled.
-- **Has-more:** "Load More" button visible (centered, outline) when `visibleEnd < filteredRecords.length`.
+- **Has-more:** "Load More" button visible (centered, outline, with a `ChevronDown` `w-4 h-4` icon) when `visibleEnd < filteredRecords.length`.
 - **All-loaded:** "Load More" hidden when all filtered records are visible.
 - **Filter pill selected/active:** `default` variant + domain color background; others `outline` variant.
 - **Edit dialog open/closed:** dialog controlled by whether its `editing<Type>` state is non-null (`open={record !== null}`).
@@ -5081,27 +5146,27 @@ Per-row presentation differs by domain (icon, label, measurement) — see Sub-co
 
 **`UnifiedRecord.type` discriminants:** `intake | weight | bp | eating | urination | defecation | caffeine | alcohol` (note: caffeine & alcohol both come from the `substances` table, split on `SubstanceRecord.type`).
 
-**Domain theme labels (`CARD_THEMES[...].label`)** used in row type labels (uppercased): Water=`Water`, salt=`Sodium`, sugar=`Sugar`, potassium=`Potassium`, weight=`Weight`, bp=`Blood Pressure`, eating=`Eating`, urination=`Urination`, defecation=`Defecation`, caffeine=`Caffeine`, alcohol=`Alcohol`.
+**Domain theme labels (`CARD_THEMES[...].label`)** as defined in `CARD_THEMES`: Water=`Water`, salt=`Sodium`, sugar=`Sugar`, potassium=`Potassium`, weight=`Weight`, bp=`Blood Pressure`, eating=`Eating`, urination=`Urination`, defecation=`Defecation`, caffeine=`Caffeine`, alcohol=`Alcohol`. **Important:** `RecordRow` for intake records only branches on `water` / `sugar` / else (`themeKey = water ? "water" : sugar ? "sugar" : "salt"`), so there is **no potassium branch** — a potassium intake record actually renders with the **salt** theme (label `Sodium`, Sparkles icon). The `Potassium` theme exists in `CARD_THEMES` but is never used by the row.
 
 **Domain accent colors (`buttonBg`, used to tint selected filter pill):** water=sky-600, salt=amber-600, sugar=pink-600, potassium=purple-600, weight=emerald-600, bp=rose-600, eating=orange-600, urination=violet-600, defecation=stone-600, caffeine=yellow-700, alcohol=fuchsia-600.
 
-**Domain icons (lucide):** water=Droplets, salt=Sparkles, sugar=Candy, potassium=Banana, weight=Scale, bp=Heart, eating=Utensils, urination=Droplet, defecation=CircleDot, caffeine=Coffee, alcohol=Wine.
+**Domain icons (lucide):** water=Droplets, salt=Sparkles, sugar=Candy, potassium=Banana, weight=Scale, bp=Heart, eating=Utensils, urination=Droplet, defecation=CircleDot, caffeine=Coffee, alcohol=Wine. (Banana is the defined potassium icon but, as noted above, is never rendered for a potassium intake row — it falls back to salt's Sparkles.)
 
-**Measurement units shown in rows:** water=`ml`, salt=`mg`, sugar=`g`, potassium=`mg`, weight=`kg`, bp=`mmHg`, caffeine=`mg`, alcohol=`drink(s)`.
+**Measurement units shown in rows:** water=`ml`, salt=`mg`, sugar=`g`, weight=`kg`, bp=`mmHg`, caffeine=`mg`, alcohol=`drink(s)`. (Potassium intake also renders `mg` — but via the salt branch, since potassium has no dedicated row branch. The unit is coincidentally correct; the icon and label are wrong.)
 
 **BP edit dialog options & input ranges:**
 - Position: `sitting` | `standing`
 - Arm: `left` | `right`
-- Irregular heartbeat (conditional control): `no` | `yes`
-- Systolic input: `min=60`, `max=300` (helper text "typically 90–180")
-- Diastolic input: `min=40`, `max=200` (helper text "typically 60–120")
-- Heart rate input (optional): `min=30`, `max=250` (helper text "typically 60–100"), placeholder `BPM`
+- Irregular heartbeat: the dialog component *supports* a `no` | `yes` control, but it only renders when `onIrregularHeartbeatChange` is supplied. In the Records tab, `EditBloodPressureDialog` is rendered **without** the `irregularHeartbeat` / `onIrregularHeartbeatChange` props, so **this control never appears here** (and the field is never edited or written).
+- Systolic input: `min=60`, `max=300` (the "typically 90–180" text is an `sr-only` screen-reader description, not visible helper text)
+- Diastolic input: `min=40`, `max=200` (the "typically 60–120" text is `sr-only`, not visible)
+- Heart rate input (optional): `min=30`, `max=250` (the "typically 60–100" text is `sr-only`, not visible), placeholder `BPM`
 
-**Urination / Defecation amount-estimate options** (`URINATION_AMOUNT_OPTIONS`, `DEFECATION_AMOUNT_OPTIONS`): `small | medium | large` (labels "Small"/"Medium"/"Large"). Stored as a free-ish string; estimated volume mapping for analytics: `small=150ml`, `medium=300ml`, `large=500ml` (`URINATION_ESTIMATE_ML`).
+**Urination / Defecation amount-estimate options** (`URINATION_AMOUNT_OPTIONS`, `DEFECATION_AMOUNT_OPTIONS`): `small | medium | large` (labels "Small"/"Medium"/"Large"). Stored as a free-ish string; estimated volume mapping for analytics: `small=150ml`, `medium=300ml`, `large=500ml` (`URINATION_ESTIMATE_ML`). The **defecation** edit dialog additionally passes `allowNoEstimate`, which prepends a 4th **"No estimate"** sentinel option (maps to `""`); the urination dialog does not, so its Select has only Small/Medium/Large.
 
-**Alcohol edit:** amount field is **ABV %** (range `0 < abv ≤ 100`); requires a positive `volume` (ml); standard drinks are derived = `standardDrinksFromAbv(abv, vol)` rounded to 2 dp. Constants: `GRAMS_PER_STANDARD_DRINK = 10`, `ETHANOL_DENSITY_G_PER_ML = 0.789`.
+**Alcohol edit:** amount field is ABV (semantics: ABV %, range `0 < abv ≤ 100`; the on-screen field label is **"% ABV"**); requires a positive `volume` (ml); standard drinks are derived = `standardDrinksFromAbv(abv, vol)` rounded to 2 dp. Constants: `GRAMS_PER_STANDARD_DRINK = 10`, `ETHANOL_DENSITY_G_PER_ML = 0.789`.
 
-**Caffeine edit:** amount field is **mg** (`amountMg`, must be `≥ 0` if provided).
+**Caffeine edit:** amount field is in mg (`amountMg`, must be `≥ 0` if provided; the on-screen field label is **"Caffeine (mg)"**).
 
 **Time scopes (parent-provided range, `TimeScope`):** `24h | 7d | 30d | 90d | all` (default `7d`); a custom range can override. Records tab itself only consumes the resolved `{ start, end }`.
 
@@ -5115,7 +5180,7 @@ Reads (filtered by `[start, end]` via each service's `getXByDateRange`) and unif
 
 - **`intakeRecords` / `IntakeRecord`** — `id`, `type` (`water|salt|sugar|potassium`), `amount`, `timestamp`, `source`, `note`, `groupId`, plus sync fields (`createdAt`, `updatedAt`, `deletedAt`, `deviceId`, `timezone`). Edit writes `amount`, `timestamp`, `note`.
 - **`weightRecords` / `WeightRecord`** — `id`, `weight` (kg), `timestamp`, `note`. Edit writes `weight`, `timestamp`, `note`.
-- **`bloodPressureRecords` / `BloodPressureRecord`** — `systolic`, `diastolic`, `heartRate?`, `irregularHeartbeat?`, `position`, `arm`, `timestamp`, `note`. Edit writes `systolic`, `diastolic`, `heartRate?`, `position`, `arm`, `timestamp`, `note`.
+- **`bloodPressureRecords` / `BloodPressureRecord`** — `systolic`, `diastolic`, `heartRate?`, `irregularHeartbeat?`, `position`, `arm`, `timestamp`, `note`. Edit writes `systolic`, `diastolic`, `heartRate?`, `position`, `arm`, `timestamp`, `note` only — **`irregularHeartbeat` is never written** by the Records-tab BP submit handler.
 - **`eatingRecords` / `EatingRecord`** — `timestamp`, `grams?`, `note`. Edit writes `timestamp`, `note` only.
 - **`urinationRecords` / `UrinationRecord`** — `timestamp`, `amountEstimate?`, `note`. Edit writes `timestamp`, `amountEstimate`, `note`.
 - **`defecationRecords` / `DefecationRecord`** — `timestamp`, `amountEstimate?`, `note`. Edit writes `timestamp`, `amountEstimate`, `note`.
@@ -5137,6 +5202,7 @@ All deletes are **soft deletes** (set `deletedAt`); records carry sync metadata 
 - **Substance edit:** description **required** (trimmed, non-empty) else "Description required". Timestamp must parse. Amount optional, but if provided must be a number `≥ 0` else "Invalid amount".
   - **Alcohol-specific:** when an amount is given, ABV must be `> 0` and `≤ 100` (else "ABV must be between 0 and 100"), AND a positive volume is required (else "Enter a volume greater than 0"). `amountStandardDrinks` is then recomputed = `standardDrinksFromAbv(abv, vol)` rounded to 2 dp.
   - **Legacy alcohol records:** records logged before `abvPercent` existed are back-derived for display via `abvFromStandardDrinks(amountStandardDrinks, volumeMl)` (returns 0 if volume ≤ 0), shown rounded to 1 dp.
+- **HTML input min/step guards (secondary, client-side):** in addition to the JS-handler validation above, the numeric inputs carry native `min`/`step` constraints — intake amount `min=1 step=1`; weight `min=0.1 step=0.1`; substance amount `min=0` with `step=1` (caffeine) / `step=0.1` (alcohol); BP systolic/diastolic/heart-rate min/max as listed under Enums.
 - **Date parsing safety:** `parseDateTimeLocalOrNull` wraps `dateTimeLocalToTimestamp` in try/catch (it throws rather than returning NaN); a `null` result becomes the "Invalid date/time" toast.
 - **No delete confirmation:** delete is immediate; only safety is the soft-delete model (recoverable via sync history, not in this UI).
 - **Pagination is client-side:** all matching records for the range are loaded into memory first, then sliced — paging never re-queries Dexie. Large ranges fetch everything in the range up front.
@@ -5145,25 +5211,26 @@ All deletes are **soft deletes** (set `deletedAt`); records carry sync metadata 
 - **Day grouping uses device-local time** (`new Date(timestamp).toLocaleDateString`), not the app's configurable day-start-hour — a record just after midnight groups under the calendar date, regardless of day-start settings used elsewhere.
 - **Singular/plural:** entry-count pill says "1 entry" vs "N entries"; alcohol drinks say "1 drink" vs "N drinks".
 - **Measurement fallbacks:** eating with no note shows `—`; urination/defecation with no amount+note show `—`; caffeine/alcohol with no description+amount fall back to the bare label "Caffeine"/"Alcohol".
+- **Shared edit-form state:** all 7 edit dialogs share a single set of form-state variables (`editTimestamp`, `editNote`, etc.) on the container; opening any one edit primes those shared fields. Behavioral, not user-visible (only one dialog is open at a time).
 
 ---
 
 ## Sub-components / variants
 
 - **`RecordsTab`** (`records-tab.tsx`) — the container: filter bar, grouped list, paging, delete orchestration, and all 7 edit-dialog state machines.
-- **`RecordRow`** (`history/record-row.tsx`) — memoized single row. Layout: [domain icon] · [uppercase type label over measurement string] · [time `formatTimeOnly`] … [edit pencil] [delete trash/spinner]. Per-type measurement strings:
+- **`RecordRow`** (`history/record-row.tsx`) — memoized single row. The row body is `role="button"` `tabIndex={0}`. Layout: [domain icon] · [uppercase type label over measurement string] · [time `formatTimeOnly`] … [edit pencil] [delete trash/spinner]. The edit and delete buttons each carry `aria-label`/`title` ("Edit entry" / "Delete entry") and explicit hover theming — blue (`hover:text-blue-600`) for edit, red (`hover:text-red-600`) for delete. Per-type measurement strings:
   - intake water: `"{amount} ml · {sourceLabel}"` (source label resolved from liquid presets/note via `getLiquidTypeLabel`); salt: `"{amount} mg"`; sugar: `"{amount} g"`; potassium: `"{amount} mg"`.
   - weight: `"{weight} kg"`; bp: `"{systolic}/{diastolic} mmHg"`.
   - eating: the note, or `—`.
   - urination/defecation: `"{amountEstimate} · {note}"` (present parts joined), or `—`.
   - caffeine: `"{description} · {amountMg} mg"` or `"Caffeine"`.
   - alcohol: `"{description} · {N drink(s)}"` or `"Alcohol"`.
-- **`EditIntakeDialog`** — edit amount / time / note for water/salt/sugar/potassium.
+- **`EditIntakeDialog`** — edit amount / time / note. The dialog title, unit, and Save-button color branch only on `water` / `sugar` / else, so a **potassium** record (and a salt record) both open titled "Edit **Sodium** Entry" with unit `mg` and the amber (salt) Save button. Functionally editable but mislabeled as Sodium for potassium. Amount input has `min=1 step=1`.
 - **`EditWeightDialog`** — edit weight / time / note.
-- **`EditBloodPressureDialog`** — edit systolic / diastolic / heart rate / position / arm / (optional irregular-heartbeat) / time / note, with numeric min/max constraints.
-- **`EditEatingDialog`** — edit time / note only.
+- **`EditBloodPressureDialog`** — edit systolic / diastolic / heart rate / position / arm / time / note, with numeric min/max constraints. The dialog supports an optional irregular-heartbeat control, but the Records tab renders it without the `irregularHeartbeat` / `onIrregularHeartbeatChange` props, so that control is **not present in this feature** and `irregularHeartbeat` is not editable or written here.
+- **`EditEatingDialog`** — edit time / note only in this feature. The dialog component *also* exposes an optional **grams** field (rendered only when `onGramsChange` is passed, `min=1 max=10000`), but the Records tab never passes `onGramsChange`, so grams is **not editable here**.
 - **`EditUrinationDialog`** — edit time / amount estimate (Small/Medium/Large) / note.
-- **`EditDefecationDialog`** — edit time / amount estimate / note.
+- **`EditDefecationDialog`** — edit time / amount estimate / note. Passes `allowNoEstimate`, so its amount Select has a 4th "No estimate" option (→ `""`) that urination's does not.
 - **`EditSubstanceDialog`** — edit time / description / amount (mg for caffeine, ABV% for alcohol) / volume (alcohol).
 - **`useRecordsTabData`** (`use-records-tab-queries.ts`) — reactive hook: parallel `getXByDateRange` for all 7 domains, unify, sort desc; returns `{ data, deleteWeight, deleteBP, deleteSubstance }`.
 - **`history-types.ts` helpers** — `UnifiedRecord`/`FilterType` types; `getRecordTimestamp`, `getRecordId`, `groupRecordsByDate`, `filterRecords`.
@@ -5180,8 +5247,7 @@ All deletes are **soft deletes** (set `deletedAt`); records carry sync metadata 
 - `/home/ryan/repos/Personal/intake-tracker/src/lib/analytics-service.ts` (`adherenceRate`, `bpTrend`, `weightTrend`, `fluidBalance`, `getRecordsByDomain`)
 - `/home/ryan/repos/Personal/intake-tracker/src/lib/analytics-stats.ts` (`trend`/`computeTrend`, `detectAnomalies`)
 - `/home/ryan/repos/Personal/intake-tracker/src/lib/analytics-types.ts` (result/trend types, constants)
-- `/home/ryan/repos/Personal/intake-tracker/src/lib/prescription-service.ts` (`getPrescriptions`)
-- `/home/ryan/repos/Personal/intake-tracker/src/lib/phase-service.ts` (`getPhasesForPrescription`)
+- `/home/ryan/repos/Personal/intake-tracker/src/lib/medication-service.ts` — barrel the component actually imports `getPrescriptions` / `getPhasesForPrescription` from; it re-exports them from `prescription-service.ts` (`getPrescriptions`) and `phase-service.ts` (`getPhasesForPrescription`) respectively (where the implementations live)
 - `/home/ryan/repos/Personal/intake-tracker/src/lib/db.ts` (`Prescription`, `MedicationPhase`, `PhaseType`, `DoseStatus`, `FoodInstruction`)
 - Reference test: `/home/ryan/repos/Personal/intake-tracker/src/components/analytics/titration-tab.dom.test.tsx`
 
@@ -5195,12 +5261,12 @@ All deletes are **soft deletes** (set `deletedAt`); records carry sync metadata 
 - **Phase window derivation.** Each phase defines its own analysis range: `start = phase.startDate`, `end = phase.endDate ?? Date.now()`. An ongoing phase (no `endDate`) runs up to "now".
 - **Per-phase metrics computed (all scoped to that phase window):**
   - **Adherence rate** — ratio of doses taken vs scheduled slots during the phase window, for *this* prescription only (passes `rx.id` to `adherenceRate`). Rendered as a whole-number percentage.
-  - **Average blood pressure** — mean systolic / diastolic over the phase window, plus a trend direction (rising/falling/stable) for systolic, shown as an arrow. NOTE: BP/weight/fluid functions are queried by date range only (not by prescription), so they reflect *all* readings in that window regardless of which drug they belong to.
+  - **Average blood pressure** — mean systolic / diastolic over the phase window, plus a trend direction (rising/falling/stable) for **systolic only**, shown as an arrow. (`bpTrend` computes both `trend.systolic` and `trend.diastolic`, but the snapshot stores only `trend.systolic`; the diastolic trend is computed and discarded.) NOTE: BP/weight/fluid functions are queried by date range only (not by prescription), so they reflect *all* readings in that window regardless of which drug they belong to.
   - **Average weight** — mean weight (kg, 1 decimal) over the window, with a trend-direction arrow.
   - **Average fluid balance** — mean daily (intake ml − estimated urination output ml) over the window, in ml (rounded integer).
   - **Anomaly count** — number of weight data points whose z-score exceeds 2.0 (statistical outliers) within the phase window.
-- **Conditional metric rendering.** Each of the four metric cells only renders when it has meaningful data: adherence shows only if `adherenceTotal > 0`; Avg BP only if `bpAvg.systolic > 0`; Avg Weight only if `weightAvg > 0`; Avg Fluid Balance only if `fluidAvgBalance !== 0`. Anomaly line shows only if `anomalyCount > 0`.
-- **"Has data" gate.** A phase is considered to have data if adherence total > 0, OR any BP readings exist, OR any weight readings exist. If none, the phase card collapses to a single "No health data recorded during this phase" message instead of the metrics grid.
+- **Conditional metric rendering.** Each of the four metric cells only renders when it has meaningful data: adherence shows only if `adherenceTotal > 0`; Avg BP only if `bpAvg.systolic > 0`; Avg Weight only if `weightAvg > 0`; Avg Fluid Balance only if `fluidAvgBalance !== 0`. Anomaly line shows only if `anomalyCount > 0`. Note the adherence cell renders whenever `adherenceTotal > 0` *even when the computed rate is 0* (e.g. every slot skipped/missed) — that case shows a rose "0%" badge, not a blank.
+- **"Has data" gate.** A phase is considered to have data if adherence total > 0, OR any BP readings exist, OR any weight readings exist. The adherence side of the gate reads `adhResult.value.total` — the count of *scheduled* dose slots, independent of whether any were taken; a phase that had doses scheduled but none taken still counts as "has data" and renders the adherence cell at 0%. If none of the three conditions hold, the phase card collapses to a single "No health data recorded during this phase" message instead of the metrics grid.
 - **Collapsible prescription sections.** Each prescription is a Card with a clickable header that expands/collapses its list of phase cards. Active prescriptions default to expanded; inactive prescriptions default to collapsed.
 - **Phase type tagging.** Each phase card carries a pill badge for its `type` — `maintenance` (blue) or `titration` (amber).
 - **Active-phase emphasis.** A phase whose `status === "active"` gets a green-tinted card border/background and an animated pulsing green dot in its header.
@@ -5231,7 +5297,7 @@ All deletes are **soft deletes** (set `deletedAt`); records carry sync metadata 
 - **Prescription with no phases** — inside an expanded section: "No phases configured" muted text.
 - **Phase with no health data** — that phase card shows only its type badge, optional active dot, the date label, and "No health data recorded during this phase". Muted `bg-muted/30` styling.
 - **Phase with data (default)** — full metrics grid (2-column) rendering only the metrics that have data, with trend arrows, plus optional anomaly line.
-- **Active phase** — emerald border + emerald-tinted background + pulsing emerald dot.
+- **Active phase** — emerald border (`border-emerald-200 dark:border-emerald-800`) + emerald-tinted background (`bg-emerald-50/50 dark:bg-emerald-900/10`) + pulsing emerald dot. The emerald border/background apply **only to the full-data card**; if an active phase has no health data, its card stays `bg-muted/30` (the no-data branch never gets emerald styling) and only the pulsing emerald dot signals that it is active.
 - **Inactive prescription** — collapsed by default, "(inactive)" label in header.
 - **Active prescription** — expanded by default.
 - **Per-metric absent state** — individual metric cells silently omit themselves when their value is zero/empty (no placeholder dashes).
@@ -5250,13 +5316,13 @@ All deletes are **soft deletes** (set `deletedAt`); records carry sync metadata 
 - **Phase type** (`PhaseType`): `"maintenance"` | `"titration"`. Badge colors: maintenance = blue, titration = amber.
 - **Phase status** (`MedicationPhase.status`): `"active" | "completed" | "cancelled" | "pending"`. Only `"active"` drives the green emphasis + pulsing dot.
 - **Trend direction** (`TrendDirection.direction`): `"rising" | "falling" | "stable"`. Arrow icons: rising → `TrendingUp` (rose-500), falling → `TrendingDown` (emerald-500), stable → `Minus` (muted).
-- **Dose status** (`DoseStatus`, drives adherence): `"taken" | "skipped" | "rescheduled" | "pending"`. Adherence counts a slot as adherent only when `status === "taken"`.
+- **Dose-log status** (`DoseStatus`, the persisted enum): `"taken" | "skipped" | "rescheduled" | "pending"`. Adherence does **not** filter on this enum directly — `adherenceRate` filters over **`DoseSlot.status`** (`DoseSlotStatus = "taken" | "skipped" | "pending" | "missed"`), the per-slot status derived at read time by `getDoseScheduleForDateRange`. A `rescheduled` dose-log maps to slot status `"skipped"`, and a missing log on a past date becomes `"missed"`. Adherence counts a slot as adherent only when slot `status === "taken"`.
 - **Adherence color thresholds:** ≥90% emerald, ≥70% amber, otherwise rose. Displayed as `Math.round(rate * 100)%`.
 - **Trend confidence threshold** (`MIN_TREND_CONFIDENCE`): `0.3` — R² below this forces direction to `"stable"`.
 - **Trend slope deadband:** slope `> 0.01` → rising, `< -0.01` → falling, else stable.
 - **Anomaly z-score threshold:** `2.0` (default of `detectAnomalies`). Requires ≥2 points and nonzero standard deviation.
-- **Fluid-balance target rule:** `target = urinationEstimatedMl + 500` (500 ml above estimated output). (Computed in `fluidBalance`; tab surfaces only `avgBalance`.)
-- **Urination volume estimates** (`URINATION_ESTIMATE_ML`, feeds fluid balance): `small: 150`, `medium: 300`, `large: 500` ml.
+- **Fluid-balance target rule:** `target = urinationEstimatedMl + 500` (500 ml above estimated output). (Computed in `fluidBalance`; the function also returns `daysAboveTarget`, `daysTotal`, the full `daily[]` array, and an `intraday[]` running-cumulative series — but the tab surfaces only `avgBalance` and discards the rest.)
+- **Urination volume estimates** (`URINATION_ESTIMATE_ML`, feeds fluid balance): `small: 150`, `medium: 300`, `large: 500` ml. A record with a null/missing `amountEstimate` defaults to `"medium"`, and if the map lookup still misses the value falls back to a literal `300` ml.
 - **Date label format:** `toLocaleDateString("en-US", { month: "short", day: "numeric" })` → e.g. "May 20". Ongoing end → literal `"present"`.
 - **Units shown:** BP in `mmHg` (rendered as `systolic/diastolic`, both rounded to integers), weight in `kg` (1 decimal), fluid balance in `ml` (rounded integer), adherence as `%`.
 - **Food instruction** (`FoodInstruction` on phases, not displayed here but part of the model): `"before" | "after" | "none"`.
@@ -5290,7 +5356,7 @@ Internal shapes (not persisted): `PhaseSnapshot`, `PrescriptionReport` (defined 
 - **Trend significance:** linear regression over index-normalized points; needs ≥2 points; R² < 0.3 → "stable"; slope deadband ±0.01. Empty/single-point series → stable, 0 confidence.
 - **Anomalies:** z-score > 2.0 over weight points; needs ≥2 points and nonzero SD, else no anomalies.
 - **Default expand state** is driven by `prescription.isActive` (active → open).
-- **Timezone/day handling:** adherence groups by `yyyy-MM-dd` date strings derived from the range; fluid balance groups by local day key. Dose status "taken" is the only adherent state; "skipped"/"rescheduled"/"pending" count against the rate.
+- **Timezone/day handling:** adherence groups by `yyyy-MM-dd` date strings derived from the range; fluid balance groups by local day key. Slot status `"taken"` is the only adherent state; the slot universe that counts against the rate is `"skipped"`/`"pending"`/`"missed"` (a `rescheduled` dose-log surfaces as a `"skipped"` slot — `"rescheduled"` never appears as a slot status).
 - **Ordering:** prescriptions newest-created first; phases newest-created first (so the most recent phase appears at the top of each section, not chronological start order).
 - **Pluralization:** "anomaly" (1) vs "anomalies" (n≠1).
 - **No required user input / no forms** — nothing to validate from the user side.
@@ -5308,7 +5374,8 @@ Internal shapes (not persisted): `PhaseSnapshot`, `PrescriptionReport` (defined 
 - **`AdherenceBadge`** — mono percentage with threshold coloring (green/amber/rose).
 - **`TrendArrow`** — direction icon for rising (rose up) / falling (emerald down) / stable (muted minus).
 - **`formatDate(ts)`** — short "Mon D" date formatter.
-- **Service deps (not children but load-bearing):** `adherenceRate`, `bpTrend`, `weightTrend`, `fluidBalance`, `getRecordsByDomain` (analytics-service); `detectAnomalies`, `trend`/`computeTrend` (analytics-stats); `getPrescriptions`, `getPhasesForPrescription` (medication services).
+- **Service deps (not children but load-bearing):** `adherenceRate`, `bpTrend`, `weightTrend`, `fluidBalance`, `getRecordsByDomain` (analytics-service); `detectAnomalies`, `trend`/`computeTrend` (analytics-stats); `getPrescriptions`, `getPhasesForPrescription` (imported from the `medication-service` barrel, which re-exports from prescription-service / phase-service).
+- **Not used here:** `correlateTimeSeries` (with its `strong >0.7` / `moderate >0.4` / `weak >0.2` / `none` strength buckets and `pairedDays < 3` guard in `analytics-stats`) is **not** called by this tab — correlation analysis belongs to the Correlations tab, not Titration.
 
 
 ---
@@ -5355,7 +5422,7 @@ Sections, in order:
 4. **Weight** — average kg (1dp), min–max range (1dp), trend direction + slope (3dp). Fallback line when empty.
 5. **Fluid Balance** — average daily balance (ml, 0dp), days above target / days total. Fallback line when empty.
 6. **Medication Adherence** — overall rate as `%` (1dp), taken / total doses. Fallback line when empty.
-7. **Recent Records** — a grid table (`Date | Domain | Value`) gathered from 8 domains, last 10 per domain, re-sorted descending by formatted date, capped at 50 rows.
+7. **Recent Records** — a grid table (`Date | Domain | Value`) gathered from 8 domains, last 10 per domain, re-sorted descending by a **lexical `localeCompare` on the formatted date string** (`"MMM d, HH:mm"`) — i.e. alphabetical by month name + day, **not true chronological order** — then capped at 50 rows. The `Value` cell embeds the unit: it is rendered as `"<raw value> <domainUnit>"` (raw, unrounded value with the domain's unit string appended).
 - Page-break handling: section headers break when `y > 260`, body lines break when `y > 275`.
 - Footer page numbers (`Page i of N`) stamped on every page.
 - File name: `health-report-<startYYYY-MM-DD>-<endYYYY-MM-DD>.pdf`.
@@ -5383,6 +5450,7 @@ Sections, in order:
 ### Analytics queries (`use-analytics-queries.ts`)
 - `useTimeScopeRange(scope)` — memoized scope→range converter (the engine behind preset chips).
 - Reactive `useLiveQuery` hooks (re-run on Dexie changes) returning instant defaults to avoid loading flashes: `useFluidBalance`, `useAdherenceRate` (optional `prescriptionId`), `useBPTrend`, `useWeightTrend`, `useSaltVsWeight` / `useSugarVsWeight` / `usePotassiumVsWeight` (optional `lagDays`), `useCaffeineVsBP`, `useAlcoholVsBP`, `useCorrelation(domainA, domainB, range, lagDays?)`.
+- `useCorrelation` assembles its result object **inline** (not from a `DEFAULT_*` template), and sets its `dataPoints` to `result.seriesA` (series A only).
 
 ---
 
@@ -5455,7 +5523,7 @@ Sections, in order:
 
 **Trend directions (`TrendDirection.direction`):** `"rising" | "falling" | "stable"`.
 
-**Correlation strength (`CorrelationResult.strength`):** `"strong" | "moderate" | "weak" | "none"`.
+**Correlation strength (`CorrelationResult.strength`):** `"strong" | "moderate" | "weak" | "none"`, assigned from `absR = |coefficient|`: `absR > 0.7 → strong`, `> 0.4 → moderate`, `> 0.2 → weak`, else `none`.
 
 **Correlation lag defaults:** `DEFAULT_SALT_WEIGHT_LAG_DAYS = 2`, `DEFAULT_SUGAR_WEIGHT_LAG_DAYS = 2`, `DEFAULT_POTASSIUM_WEIGHT_LAG_DAYS = 2`. Meaningful correlation requires `pairedDays >= 3`.
 
@@ -5483,7 +5551,7 @@ Reads only (no writes to health tables); writes only the intro flag to the setti
 - **`DataPoint`** `{ timestamp: number; value: number; label?: string }`.
 - **`AnalyticsResult<T>`** `{ value, unit, period, dataPoints, meta? }`.
 - **Source Dexie tables** (read via service helpers behind `getRecordsByDomain`): `intakeRecords` (water/salt/sugar/potassium → `amount`, `timestamp`), `weightRecords` (`weight`, `timestamp`), `bloodPressureRecords` (`systolic`/`diastolic`/`heartRate`/`position`/`timestamp`), `urinationRecords` (`amountEstimate`, `timestamp`), `eatingRecords`, `defecationRecords`, `substanceRecords` (`amountMg` for caffeine, `amountStandardDrinks` for alcohol), and medication/adherence/phase data (via `adherenceRate`).
-- **Result types:** `FluidBalanceResult` (`daily[]`, `intraday[]`, `avgBalance`, `daysAboveTarget`, `daysTotal`), `AdherenceResult` (`rate`, `taken`, `total`, `daily[]`), `BPTrendResult` (`readings[]`, `trend.systolic/diastolic`, `avg`), `WeightTrendResult` (`readings[]`, `trend`, `avg`, `min`, `max`), `CorrelationResult` (`coefficient`, `strength`, `seriesA/B`, `pairs`, `pairedDays`, `lagDays`).
+- **Result types:** `FluidBalanceResult` (`daily[]`, `intraday[]`, `avgBalance`, `daysAboveTarget`, `daysTotal`) — where `intraday[]` is a chronologically-merged running cumulative-balance series across all intake + output events (intake adds `+value`, output subtracts `−value`), `AdherenceResult` (`rate`, `taken`, `total`, `daily[]`), `BPTrendResult` (`readings[]`, `trend.systolic/diastolic`, `avg`), `WeightTrendResult` (`readings[]`, `trend`, `avg`, `min`, `max`), `CorrelationResult` (`coefficient`, `strength`, `seriesA/B`, `pairs`, `pairedDays`, `lagDays`).
 - **Settings store:** `analyticsIntroSeen` (localStorage-persisted).
 
 ---
@@ -5496,13 +5564,13 @@ Reads only (no writes to health tables); writes only the intro flag to the setti
 - **Date input value formatting:** uses `toLocalDateKey` (local `getFullYear/Month/Date`, not `toISOString`) so the displayed day reflects the viewer's local calendar day.
 - **Effective range precedence:** `customRange ?? scopeRange` — a non-null custom range always overrides the preset.
 - **CSV empty guard:** `exportAllRecordsCSV` returns with no download when zero records; `exportToCSV` returns when `dataPoints` empty.
-- **CSV escaping:** fields containing `,`, `"`, or `\n` are quoted and embedded quotes doubled.
+- **CSV escaping:** data-row fields containing `,`, `"`, or `\n` are quoted and embedded quotes doubled. Note an asymmetry between the two CSV paths: `exportAllRecordsCSV` does **not** escape its header row (`headers.join(",")`, plain), whereas `exportToCSV` **does** escape headers (`headers.map(escapeCSVField)`). (In practice the all-records header is a fixed safe set, so it never needs escaping.)
 - **CSV ordering:** ascending by ISO timestamp string; **PDF table ordering:** descending by formatted-date string, then capped at 50.
 - **PDF emptiness:** still generates a full document; each section prints a "No … in this period." fallback when its dataset is empty.
 - **Medication exclusion:** `medication` has no single numeric value → returns `[]` in `getRecordsByDomain`, is excluded from CSV/PDF record domains (adherence is surfaced as its own PDF section, not as records).
 - **Urination volume:** never a real measurement — always estimated from category (`small/medium/large` → 150/300/500), defaulting to `medium`/300 when `amountEstimate` is missing.
 - **Correlation meaningfulness:** `pairedDays < 3` means the coefficient is not meaningful (consumer of `CorrelationResult` should treat it as unreliable).
-- **Fluid balance target rule:** daily `target = urinationEstimatedMl + 500` (intake target is 500 ml above estimated output); `balance = intakeMl − urinationEstimatedMl`.
+- **Fluid balance target rule:** daily `target = urinationEstimatedMl + 500` (intake target is 500 ml above estimated output); `balance = intakeMl − urinationEstimatedMl`. `daysAboveTarget` counts days where `intakeMl >= target` — an **inclusive** (`>=`) test, so a day exactly at target counts as "above".
 - **No loading state by design:** every live-query hook seeds a zeroed default object, so consumers render instantly and update reactively.
 - **Intro hydration guard:** dialog only opens after client mount (`mounted` flag) to avoid an SSR/hydration flash before the persisted store settles.
 - **Offline-first:** PDF/CSV generation and all analytics computation are 100% client-side; downloads use an in-memory `Blob` + object URL that is revoked after the click.
@@ -5519,7 +5587,8 @@ Reads only (no writes to health tables); writes only the intro flag to the setti
   - `exportToPDF(range)` — structured multi-section health-report PDF.
   - `exportAllRecordsCSV(range)` — single normalized all-domains CSV.
   - `exportToCSV(data, filename)` — generic single-`AnalyticsResult` CSV.
-  - `escapeCSVField` (re-exported as `_escapeCSVField` for tests), `dataPointsToCSVRows`, `triggerDownload`, `domainUnit` — internal helpers.
+  - `escapeCSVField` (re-exported as `_escapeCSVField` for tests), `triggerDownload`, `domainUnit` — internal helpers.
+  - `dataPointsToCSVRows` — defined but **dead code** (not referenced anywhere in `src/`); it is not part of the live export path.
 - **`use-analytics-queries.ts`** hooks — `useTimeScopeRange` (range engine for chips) plus the reactive data hooks (`useFluidBalance`, `useAdherenceRate`, `useBPTrend`, `useWeightTrend`, `useSaltVsWeight`, `useSugarVsWeight`, `usePotassiumVsWeight`, `useCaffeineVsBP`, `useAlcoholVsBP`, `useCorrelation`).
 - **`analytics/page.tsx`** — host that wires the control strip (`TimeRangeSelector` + `ExportControls` in one flex row) above a 4-tab `Tabs` shell, computes `effectiveRange = customRange ?? scopeRange`, and renders `AnalyticsIntroDialog`.
 
@@ -5623,7 +5692,7 @@ The engine is a service layer; user-facing actions flow through the analytics UI
 - **Adjust correlation lag (lagDays)** → re-runs `correlate`/`saltVsWeight`/etc. with the new lag; pairing and coefficient recompute.
 - **Filter adherence by prescription** → passes `prescriptionId` to `useAdherenceRate`; recomputes against that prescription's slots only.
 - **Tap "Generate Insights" (fast)** → `useGenerateInsights` builds the snapshot, throws `NotEnoughDataError` if empty (no network call), POSTs, validates, caches the report, returns the narrative.
-- **Tap "Deep Analysis"** → `useDeepInsightJob.submit()` builds the snapshot, POSTs to the deep endpoint, stores `jobId` in localStorage, begins 30s polling. Card shows submitting → pending → completed/failed.
+- **Tap "Deep Analysis"** → `useDeepInsightJob.submit()` builds the snapshot, POSTs to the deep endpoint, stores `jobId` in localStorage, begins 30s polling. Card shows submitting → pending → completed/failed. Any pre-submit throw (empty snapshot / `NotEnoughDataError`, Dexie read, fetch error, non-OK response) resets the state to `idle` (not `failed`) and re-throws the error, leaving the card re-clickable — so on the deep path `NotEnoughDataError` surfaces as idle + thrown error, distinct from the fast path.
 - **Opt in to share conditions / medications / previous summary** → toggles whether `profile.conditions`, `profile.medications`, and `priorAssessments` are attached to the snapshot.
 - **Close/reload the tab during a deep job** → polling resumes on mount from the localStorage `jobId`; the server-persisted report is pulled into the local cache via `schedulePull()` once complete.
 - **Dismiss a completed/failed deep banner** → `useDeepInsightJob.reset()` clears state and the stored job id.
@@ -5645,8 +5714,8 @@ The engine is a service layer; user-facing actions flow through the analytics UI
 - **Insights fast: errors** — `429` rate limit ("Rate limit exceeded"); `502` truncated (`code: RESPONSE_TRUNCATED`, "AI response was cut off…"); `502` "AI response format invalid"; `502` "Failed to generate insights".
 - **Deep job: submitting** — `{ status: "submitting" }` (button locked).
 - **Deep job: pending** — `{ status: "pending", jobId, startedAt }`; client polls every 30s; survives reload via localStorage.
-- **Deep job: completed** — `{ status: "completed", result: { narrative, observations, sources?, generatedAt } }`; triggers `schedulePull()`.
-- **Deep job: failed** — `{ status: "failed", error }` (batch errored, malformed/truncated output, validation failure, no results, job-not-found 404).
+- **Deep job: completed** — `{ status: "completed", result: { narrative, observations, generatedAt } }`; triggers `schedulePull()`. The poll endpoint also returns `sources` on the completed response, but the client hook reads only `narrative`/`observations`/`generatedAt` into the completed state and drops the poll-returned `sources`, relying on the sync pull to fetch the full report (incl. sources) from the server.
+- **Deep job: failed** — `{ status: "failed", error }` (batch errored, malformed/truncated output, validation failure, no results, job-not-found 404). The poll endpoint's `respondCompleted` adds two further terminal `failed` messages: "Job marked completed but has no result reference." (job flagged completed without a `resultReportId`) and "Cached result for this job is no longer available." (the referenced report can't be fetched).
 - **Deep job: expired** — `{ status: "expired", error: "Batch exceeded the 24-hour SLA without completing." }`.
 - **Deep job: conflict** — second submit while one pending → HTTP 409 `code: PENDING_JOB_EXISTS`.
 - **Offline / sync** — all local queries run fully offline against IndexedDB. AI insight endpoints require network; reports persist via `writeWithSync` and back up/sync like any record. Completed deep reports propagate to the device on the next/forced sync pull.
@@ -5701,7 +5770,7 @@ Query categories: `fluid` | `medication` | `vitals` | `correlation` | `custom`.
 - Rolling window: `INSIGHTS_WINDOW_DAYS = 30`.
 - Tool: `analytics_insight` (`INSIGHT_TOOL`). Forced (`tool_choice: { type: "tool" }`) on fast path; `auto` on deep path so web_search can run first.
 - Fast path: `CLAUDE_MODELS.quality`, `max_tokens: 2048`, `temperature: 0.3`, rate limit 10.
-- Deep path: `CLAUDE_MODELS.premium` (Opus), `DEEP_MAX_TOKENS = 4096`, `temperature: 0.3`, `WEB_SEARCH_TOOL` with `DEEP_WEB_SEARCH_MAX_USES = 12`, rate limit 10, mandatory ≥2 web searches.
+- Deep path: `CLAUDE_MODELS.premium` (Opus), `DEEP_MAX_TOKENS = 4096`, `temperature: 0.3`, `WEB_SEARCH_TOOL` (whose base default is `max_uses: 5`) spread-overridden at the deep route to `DEEP_WEB_SEARCH_MAX_USES = 12`, rate limit 10, mandatory ≥2 web searches.
 - Deep polling: `DEEP_POLL_INTERVAL_MS = 30_000`; localStorage key `insight-deep-job-pending`.
 - Batch SLA: `BATCH_SLA_MS = 24h`.
 - Response caps: `summary` 1–4000 chars; `observations` array max 16, each 1–2000 chars; `sources` max 30 URLs.
@@ -5713,7 +5782,7 @@ Query categories: `fluid` | `medication` | `vitals` | `correlation` | `custom`.
 `pending` | `completed` | `failed` | `expired`. Constants: `SERVER_DEVICE_ID = "server-deep-batch"`; deep report `mode = "deep"`; custom_id pattern `insight-<jobId>`.
 
 ### Day names (`DAY_NAMES`, for medication frequency)
-`Sun, Mon, Tue, Wed, Thu, Fri, Sat` (index 0–6). Frequency words: 1→"once", 2→"twice", N→"Nx"; "daily" when ≥7 distinct days.
+`Sun, Mon, Tue, Wed, Thu, Fri, Sat` (index 0–6). Frequency words come from `count = schedules.length` (number of enabled, non-deleted schedules): 1→"once", 2→"twice", N→"Nx". The `daily` flag uses `dayUnion.size >= 7` (union of `daysOfWeek` across those schedules); otherwise the explicit day list is rendered from that same union.
 
 ---
 
@@ -5726,7 +5795,7 @@ Query categories: `fluid` | `medication` | `vitals` | `correlation` | `custom`.
 - `urinationRecords` (`amountEstimate`, `timestamp`) via `urination-service`
 - `eatingRecords` (`timestamp`) via `eating-service`
 - `defecationRecords` (`timestamp`) via `defecation-service`
-- `substanceRecords` (`type`, `amountMg?`, `amountStandardDrinks?`, `timestamp`) — direct Dexie compound index `[type+timestamp]` (no substance-service yet; wrapped in try/catch for older schema versions)
+- `substanceRecords` (`type`, `amountMg?`, `amountStandardDrinks?`, `timestamp`) — read via an inline `db.substanceRecords` compound-index query (`[type+timestamp]`, wrapped in try/catch for older schema versions). A `substance-service.ts` with `getSubstanceRecordsByDateRange` does exist, but `analytics-service` keeps its own inline query and still carries a stale `// no substance-service exists yet` comment.
 - Dose schedule via `getDoseScheduleForDateRange` (status `taken` etc.) from `doseLogs`/`phaseSchedules`
 - `prescriptions` / `medicationPhases` / `phaseSchedules` (`getActivePrescriptions`, `getActivePhaseForPrescription`; schedule `dosage`, `daysOfWeek`, `enabled`, `deletedAt`, `unit`) for the medication summary
 
@@ -5758,7 +5827,8 @@ Query categories: `fluid` | `medication` | `vitals` | `correlation` | `custom`.
 - **Deep-job concurrency:** DB slot reserved *before* paying for the batch (prevents leaked paid batches on concurrent submit). Batch-create failure → delete the reserved job (releases lock for retry). Attach-failure → cancel the orphan batch + delete the job. Completion guarded by compare-and-set on `status='pending'`; CAS loser soft-deletes its orphan report and defers to the winner's persisted outcome.
 - **Polling is stateless:** the GET endpoint is the only mutator of job state; no cron/worker. Expiry computed lazily (`now - createdAt > 24h`). The window & personalisation are re-read from the saved `requestPayload`, never trusted from the poll request.
 - **Cache resilience:** a storage failure when caching a fast insight is swallowed (the user "paid tokens" for it); a malformed 200 must throw loudly, never cache a blank insight.
-- **Medication summary caps:** at most 40 meds; dose string dedupes & sorts dosages; frequency derived from union of `daysOfWeek` across enabled, non-deleted schedules.
+- **Usage telemetry:** both AI routes (fast endpoint and deep poll/finalisation endpoint) call `recordUsage` (provider/model/route/status/duration + token counts) wrapped in try/catch, so a telemetry write failure is logged but never turns a successful AI call into a 502.
+- **Medication summary caps:** at most 40 meds; dose string dedupes & sorts dosages; the once/twice/Nx frequency word comes from `schedules.length` (count of enabled, non-deleted schedules), while the `daily` flag and explicit day list come from the union of `daysOfWeek` across those schedules.
 
 ---
 
@@ -5803,11 +5873,12 @@ Query categories: `fluid` | `medication` | `vitals` | `correlation` | `custom`.
 
 ### Page chrome (from layout + nav-routes)
 - Route `/settings`. Header title **"Settings"**, subtitle **"Configure preferences"** (`nav-routes.ts`).
-- Rendered inside the global app container: `min-h-screen`, gradient background (`from-slate-50 to-slate-100` light / `from-slate-950 to-slate-900` dark), centered `max-w-lg`, `px-4 pt-6` (mobile-first single column).
+- Rendered inside the global app container: `min-h-screen`, gradient background (`from-slate-50 to-slate-100` light / `from-slate-950 to-slate-900` dark), centered `max-w-lg` (mobile-first single column). Note: `layout.tsx`'s `container mx-auto max-w-lg px-4 pt-6` div wraps only `<AppHeader />`; the page **content** (children, incl. settings) is wrapped by `SwipeNav` in a separate `container mx-auto max-w-lg px-4 pb-6` div (`pb-6`, not `pt-6`).
 - Shares the auto-hiding header/footer chrome of the rest of the app (driven by `scrollDurationMs` / `autoHideDelayMs` / `barTransitionDurationMs` settings).
 
 ### Account block (always at top, outside the accordion)
-- Reads auth state via `useAuth()` → `{ ready, authenticated, user }` (Neon Auth session, plus Capacitor token validation path).
+- Reads auth state via `useAuth()` → `{ ready, authenticated, user }` (Neon Auth session, plus Capacitor token validation path). The `user` object carries `{ id, email, name }`, where `name` falls back to the email (`"name" in user ? user.name : user.email`); the account block only surfaces `email`, so the `name` field is unused by this UI.
+- The Capacitor token path calls `/api/auth/validate`; on a failed/invalid response it calls `clearAuthToken()` (drops the stored native token).
 - Three mutually exclusive presentations: **loading**, **signed-out (marketing CTA)**, **signed-in (identity + sign out)**.
 - Signed-out state lists three locked benefits: AI food & drink parsing, Dose reminder notifications, Cloud sync across devices.
 - Signed-in state shows the user email and the provider label "Signed in via Neon Auth", plus a destructive Sign Out button.
@@ -5854,7 +5925,7 @@ Query categories: `fluid` | `medication` | `vitals` | `correlation` | `custom`.
 | Tap **About App** | Opens About dialog. |
 | Tap outside / Esc on About dialog | Closes dialog. |
 | Arrive from crash screen | `ReportBugDialog` auto-opens pre-filled with the captured error message + stack. |
-| Close the auto-opened report dialog | `onOpenChange` sets `open: false`; description retained in state until unmount. |
+| Close the auto-opened report dialog | `onOpenChange` sets `open: false`; the reset effect early-returns when `!open` (`if (!open) return`), so the `description` is retained in state until the **next open** (which resets it) or unmount. |
 | Toggle a sub-section `headerRight` control (per-section) | Section-specific (e.g. enabling sugar tracker reveals `SugarSettingsSection` in the Tracking group). |
 
 - All interactions are tap-based (mobile-first). No swipe/drag/long-press on the shell itself. Accordion/collapsible are keyboard-accessible via Radix (Enter/Space toggles, focus ring).
@@ -5870,7 +5941,7 @@ Query categories: `fluid` | `medication` | `vitals` | `correlation` | `custom`.
 
 ### Accordion group states
 - **Collapsed (default):** trigger row only — icon + bold label, chevron pointing down.
-- **Expanded:** content animates open (`animate-accordion-down`), chevron rotates 180° (`[data-state=open]>svg]:rotate-180`); children stacked.
+- **Expanded:** content animates open (`animate-accordion-down`), chevron rotates 180° (`[&[data-state=open]>svg]:rotate-180`); children stacked.
 - Trigger has `hover:no-underline` (overrides default accordion hover underline), `px-2 py-3`. Each group separated by bottom border (`border-b` from `AccordionItem`).
 
 ### Nested sub-section states
@@ -5954,7 +6025,7 @@ A flat reset to these defaults (full enum source for what "default" means here):
 - `waterLimit: 1000`, `saltLimit: 1500`, `sugarLimit: 30`, `potassiumLimit: 3500`
 - `waterExtendedBuffer: 500`, `saltExtendedBuffer: 500`, `sugarExtendedBuffer: 10`
 - `optionalTrackers: { sugar: true, potassium: false }`
-- `aiAuthSecret: ""`
+- `aiAuthSecret: ""` (note: in normal use this value is stored **obfuscated** via `setAiAuthSecret`/`obfuscateApiKey` and read back via `getDeobfuscatedAuthSecret`; `resetToDefaults` restores it to the raw `""`)
 - `theme: "system"` (enum: `light` | `dark` | `system`)
 - `dataRetentionDays: 90`, `dayStartHour: 2`
 - `showQuickNav: true`, `quickNavOrder: "rtl"` (enum: `ltr` | `rtl`), `quickNavItems: DEFAULT_QUICK_NAV_ITEMS`
@@ -5979,7 +6050,7 @@ This shell unit reads/writes very little data directly; it mostly composes child
 
 - **Zustand settings store** (`settings-store.ts`, persisted to `localStorage` key `intake-tracker-settings`, `version: 16`): the shell calls only `resetToDefaults()` (replaces entire state with `defaultSettings`). The full `Settings` interface is the surface restored. Child sections read/write individual fields.
 - **Optional-tracker flags** (`optionalTrackers.{sugar,potassium}` in the store) read via `useOptionalTrackerEnabled` to gate child rendering.
-- **Auth session** via `useAuth()` → Neon Auth `useSession()` (`session.user.{id,email,name}`), plus Capacitor token path (`getAuthToken`, `/api/auth/validate`). No persistence written by this unit.
+- **Auth session** via `useAuth()` → Neon Auth `useSession()` (`session.user.{id,email,name}`; `name` falls back to email when absent), plus Capacitor token path (`getAuthToken`, `/api/auth/validate`, which calls `clearAuthToken()` on failure). No persistence written by this unit beyond that native token clear.
 - **sessionStorage** `intake-tracker:crash-report` (read + delete) for the crash hand-off.
 - **Sync engine** side-effects on sign-out: `stopEngine()`, `detachLifecycleListeners()`, `useSyncStatusStore.setState({ lastError: null, isSyncing: false })`.
 - About metadata from build-time env vars: `NEXT_PUBLIC_APP_VERSION`, `NEXT_PUBLIC_GIT_SHA`, `NEXT_PUBLIC_VERCEL_ENV`.
@@ -6014,7 +6085,7 @@ No Dexie/IndexedDB tables are touched by the shell itself (child sections like D
 | `components/about-dialog.tsx` (`AboutDialog`) | "About App" dialog: app blurb, author note, version/environment/build metadata. |
 | `lib/sign-out.ts` (`handleSignOut`) | Tears down sync, clears sync status, races `signOut()` against 3s timeout, hard-redirects to `/auth`. |
 | `components/ui/accordion.tsx` | shadcn/Radix accordion primitives (`Accordion`, `AccordionItem/Trigger/Content`). |
-| `components/auth-guard.tsx` (`useAuth`) | Auth-state hook returning `{ ready, authenticated, user }` (Neon session + Capacitor token path). |
+| `components/auth-guard.tsx` (`useAuth`) | Auth-state hook returning `{ ready, authenticated, user }` (Neon session + Capacitor token path). The same file also exports `useAuthGate()` and a pass-through `AuthGuard` component (`return <>{children}</>`), but the settings shell uses neither — the settings page has no auth gate and always renders. |
 | `hooks/use-settings.ts` / `stores/settings-store.ts` | Zustand settings store; the shell uses `resetToDefaults()` → `defaultSettings`. |
 | `components/report-bug-dialog.tsx` (`ReportBugDialog`) | Bug/feature-request dialog; auto-opened pre-filled when navigated from a crash. |
 | `components/debug-panel.tsx` (`DebugPanel`) | Debug-group child content (diagnostics). |
@@ -6059,8 +6130,9 @@ Each section is an **ExpandableSettingsSection** (collapsible, default-collapsed
 - Increment (mg), Daily Limit (mg, sodium intake), Extended Buffer (mg).
 
 **Optional Trackers (ToggleLeft icon, indigo)**
-- Per-tracker on/off Switch rows for opt-in nutritional metrics (Sugar, Potassium). Each row: metric icon, label, description, Switch.
-- Disabling hides the tracker from forms, voice input, progress bars, weekly grid, analytics KPIs/correlations, AI insight snapshot, reports, and history filters; previously-logged data is preserved (not deleted). New entries are NOT persisted while disabled, even if AI returns a value.
+- Per-tracker on/off Switch rows for opt-in nutritional metrics (Sugar, Potassium). Each row: metric icon, label, description, Switch. Each row carries `data-testid="optional-tracker-row-{key}"` and the Switch has `aria-label="{label} tracking enabled/disabled"` (accessibility/testing hooks).
+- The on-screen helper copy reads: "Disabled trackers are hidden from forms, voice input, progress bars, reports and the AI summary; previously-logged data is preserved." (The fuller gating reach documented in `optional-trackers.ts` JSDoc — also covering weekly grid, analytics KPIs/correlations, AI insight snapshot, and history filters — is implemented in code but not all spelled out in the visible component text.)
+- Disabling hides the tracker across all those surfaces; previously-logged data is preserved (not deleted). New entries are NOT persisted while disabled, even if AI returns a value.
 - Enabling Sugar/Potassium conditionally reveals their dedicated limit sections below (`{sugarEnabled && <SugarSettingsSection/>}`, `{potassiumEnabled && <PotassiumSettingsSection/>}`).
 
 **Sugar Settings (Candy icon, pink)** — only rendered when the Sugar optional tracker is enabled.
@@ -6071,7 +6143,7 @@ Each section is an **ExpandableSettingsSection** (collapsible, default-collapsed
 
 **Weight Settings (Scale icon, emerald)**
 - Increment (kg) numeric control (per +/- tap on weight entry).
-- "Weight Graph Overlays" group: four GraphToggle switches choosing which reference event lines appear *by default* on the weight chart (still toggleable live on the chart): Eating, Urination, Defecation, Drinking. Each is a full-width button with label + description + an animated pill switch; active state tints the row border/background per-metric.
+- "Weight Graph Overlays" group: four GraphToggle switches — Eating, Urination, Defecation, Drinking. Each is a full-width button with label + description + an animated pill switch; active state tints the row border/background per-metric. **Note (dormant / write-only):** the section's UI copy says these choose which reference lines appear "by default" on the weight chart, but the four `weightGraphShow*` booleans these toggles write are read by **no chart or any other component** — a repo-wide grep finds them only in this writer and the store definition/default/setter. There is no weight-chart consumer, so flipping these currently has no visible effect (orphaned settings).
 
 **Liquid Presets (Droplets icon, blue)**
 - Full CRUD list of beverage presets used by the Liquids card tabs (Coffee/Alcohol/Beverage).
@@ -6089,20 +6161,20 @@ Each section is an **ExpandableSettingsSection** (collapsible, default-collapsed
 - Tap **−** button: decrement by `step`, clamped to `min` (`decrementSetting`).
 - Tap **+** button: increment by `step`, clamped to `max` (`incrementSetting`).
 - Type into the centered numeric `<input type=number>`: free-text edit of a local string; not yet saved.
-- **Blur** the input: `validateAndSave` parses; if valid and in `[min,max]` it saves and normalizes the displayed string; otherwise it reverts to the current stored value.
+- **Blur** the input: `validateAndSave` parses via `parseFloat` (decimals accepted at the UI layer); if valid and in `[min,max]` it saves and normalizes the displayed string; otherwise it reverts to the current stored value. Any rounding to integers happens later, at the store, in `sanitizeNumericInput`.
 - A `useEffect` keeps the local input string in sync if the store value changes externally (e.g. Reset to Defaults).
 
 **Day Settings:** open Select, choose an hour → `setDayStartHour(parseInt)` saves immediately.
 
 **Optional Trackers:** toggle a Switch → `setOptionalTracker(key, enabled)` saves immediately; flipping Sugar/Potassium mounts/unmounts its limit section in the same accordion.
 
-**Weight graph overlays:** tap a GraphToggle (whole row is the button, `aria-pressed`) → flips the boolean default immediately.
+**Weight graph overlays:** tap a GraphToggle (whole row is the button, `aria-pressed`) → flips the boolean immediately. (These booleans are currently write-only — nothing reads them yet, so the tap has no downstream effect.)
 
 **Liquid Presets:**
 - Tap **"Add Preset"** → reveals empty `PresetEditForm`.
 - Tap pencil (edit) on a row → replaces that row with `PresetEditForm` pre-filled.
 - Tap trash (delete, only on non-default rows) → replaces that row with an inline confirm ("Delete {name}?" + "Keep Preset" / "Delete Preset").
-- In the edit/add form: enter Name (required), pick Category (Coffee/Alcohol/Beverage), set Volume (ml), Water %, Caffeine/100ml, % ABV, Na/100ml. **Save** is disabled until Name is non-empty; trimmed name required. **Cancel** closes the form without saving. Saving an add appends a new preset (UUID id); saving an edit merges updates; confirm-delete removes the preset.
+- In the edit/add form: enter Name (required), pick Category (Coffee/Alcohol/Beverage), set Volume (ml), Water %, Caffeine/100ml, % ABV, Na/100ml. **Save** is disabled until Name is non-empty; trimmed name required. **Cancel** closes the form without saving. Saving an add appends a new preset (UUID id) — `addLiquidPreset` returns that new `id` (string); saving an edit merges updates; confirm-delete removes the preset.
 
 **Bathroom Defaults:** open either Select, choose Small/Medium/Large → `setUrinationDefaultAmount` / `setDefecationDefaultAmount` saves immediately.
 
@@ -6158,13 +6230,13 @@ All ranges below are enforced both at the UI (`min`/`max`/`step` props + `valida
 - `sugar`: label "Sugar", unit "g", Candy icon, pink. Desc: "Log total sugars per food entry. Helpful if you're watching added or hidden sugars."
 - `potassium`: label "Potassium", unit "mg", Banana icon, purple. Desc: "Estimate potassium per food entry. Values are rough — many foods aren't labelled for potassium."
 
-**Weight-graph overlay defaults (booleans, all default true):** `weightGraphShowEating`, `weightGraphShowUrination`, `weightGraphShowDefecation`, `weightGraphShowDrinking`. Active-tint colors: Eating orange, Urination violet, Defecation stone, Drinking sky.
+**Weight-graph overlay defaults (booleans, all default true):** `weightGraphShowEating`, `weightGraphShowUrination`, `weightGraphShowDefecation`, `weightGraphShowDrinking`. **Currently orphaned/write-only — no component reads them.** Active-tint colors (per-metric hue family, with explicit dark-mode variants such as `dark:bg-orange-900/50 dark:border-orange-700`): Eating orange, Urination violet, Defecation stone, Drinking sky.
 
-**Bathroom defaults:** `urinationDefaultAmount` default **"small"**, `defecationDefaultAmount` default **"medium"**. Enum each: `"small" | "medium" | "large"` (labels Small/Medium/Large; see `URINATION_AMOUNT_OPTIONS` / `DEFECATION_AMOUNT_OPTIONS`).
+**Bathroom defaults:** `urinationDefaultAmount` default **"small"**, `defecationDefaultAmount` default **"medium"**. Enum each: `"small" | "medium" | "large"` (labels Small/Medium/Large). Note: this settings component **hardcodes** the three `<SelectItem>` options inline; it does not import the `URINATION_AMOUNT_OPTIONS` / `DEFECATION_AMOUNT_OPTIONS` constants (those exist with matching values but are consumed by the urination/defecation cards, not here).
 
 **Liquid preset category tabs (enum):** `"coffee" | "alcohol" | "beverage"` (labels Coffee / Alcohol / Beverage).
 
-**Liquid preset form fields & defaults (new preset):** name "" (required), tab "coffee", defaultVolumeMl 250, caffeinePer100ml 0, alcoholPer100ml 0 (`% ABV`, step 0.5), saltPer100ml 0, waterContentPercent 100 (input min 0 max 100). `isDefault` false, `source` "manual" for new entries. Substance fields are only persisted when > 0 (spread-conditional).
+**Liquid preset form fields & defaults (new preset):** name "" (required), tab "coffee", defaultVolumeMl 250, caffeinePer100ml 0, alcoholPer100ml 0 (`% ABV`, step 0.5), saltPer100ml 0, waterContentPercent 100 (input min 0 max 100). `isDefault` false, `source` "manual" for new entries. Substance fields are only persisted when > 0 (spread-conditional). The form **always sets `source: "manual"`** and never sets or exposes the `aiConfidence` field — AI-sourced presets (`source: "ai"`) originate elsewhere, not from this CRUD UI.
 
 **Default seeded liquid presets (`DEFAULT_LIQUID_PRESETS`, all `isDefault: true`, `source: "manual"`):**
 - Coffee tab: Espresso (210 caff/100ml, 98% water, 30ml), Double Espresso (210, 98%, 60ml), Moka (130, 98%, 50ml), Coffee (38, 99%, 250ml), Tea (19, 99%, 250ml).
@@ -6198,7 +6270,7 @@ All reads/writes go through the Zustand store `useSettingsStore` (`src/stores/se
 - **Day-start hour** rolls the budget day over at the chosen hour: records logged after it count toward the new "today" — central to all daily limits.
 - **Optional tracker gating:** disabling a tracker stops persistence of new values and hides all surfaces but never deletes history; enabling/disabling Sugar/Potassium add/remove their limit sections live.
 - **Liquid presets:** name is required (trimmed, Save disabled while empty); only non-`isDefault` presets are deletable (no trash icon on defaults); delete requires inline confirm; substance fields persist only when > 0; new ids via `crypto.randomUUID()`.
-- **Weight-graph defaults** only seed the chart's initial overlay state; live chart toggles are independent and not written back here.
+- **Weight-graph defaults** are dormant: the toggles persist `weightGraphShow*` booleans, but nothing reads them — there is no weight-chart component that consumes these overlay flags, so they currently have no effect on any chart.
 - **Persistence/migration:** `migrateSettings` forward-migrates older stored blobs (e.g. v<14 seeds potassiumLimit 3500, v<15 seeds optionalTrackers, v<16 seeds the three extended buffers, v<13 seeds sugarLimit 30) so an upgrading user gets sane defaults for newly-added fields. `resetToDefaults` reverts the entire store (including every tracking value) at once.
 
 ---
@@ -6259,8 +6331,8 @@ Four sub-sections, all rendered inside one collapsible accordion item labeled **
 - Icon: `Navigation`, heading color `text-cyan-600 dark:text-cyan-400`. Heading: "Quick Navigation".
 - **Master toggle "Quick Nav Footer"** — On/Off button. Caption: "Show a footer bar to jump to sections". Controls `showQuickNav`.
 - When ON, reveals two more controls (hidden when OFF):
-  - **Footer Items list** (`Reorder.Group` from `motion/react`) — a draggable, reorderable vertical list of all 6 default sections. Each row shows: a grip handle (`GripVertical`), the section's themed icon in a colored chip (from `CARD_THEMES`), the section label, and a `Switch` to enable/disable that item. Disabled rows render at `opacity-50`. Caption: "Drag to reorder. Toggle to show/hide in the footer."
-  - **Icon Order dropdown** — `Select` with "Right to Left (recommended)" (`rtl`) and "Left to Right" (`ltr`). Caption: "RTL puts your most-used sections closest to your right thumb". Controls `quickNavOrder`.
+  - **Footer Items list** (`Reorder.Group` from `motion/react`) — a draggable, reorderable vertical list of all 6 default sections, under a "Footer Items" `Label` prefixed with a `GripVertical` icon. The list container is styled `rounded-lg border bg-background/50 p-2`. Each row shows: a grip handle (`GripVertical`), the section's themed icon in a colored chip (from `CARD_THEMES`), the section label, and a `Switch` to enable/disable that item. Disabled rows render at `opacity-50`. Caption: "Drag to reorder. Toggle to show/hide in the footer."
+  - **Icon Order dropdown** — under an "Icon Order" `Label` prefixed with an `ArrowRightLeft` icon; a `Select` with "Right to Left (recommended)" (`rtl`) and "Left to Right" (`ltr`). Caption: "RTL puts your most-used sections closest to your right thumb". Controls `quickNavOrder`.
 - The footer it configures (`QuickNavFooter`) renders enabled items as tap targets that smooth-scroll to the on-page section (`onScrollTo(sectionId)`); RTL reverses the visual order after filtering disabled items; if zero items are enabled the entire footer is hidden (returns `null`).
 
 ### 3. Animation Timing (`AnimationTimingSection`)
@@ -6269,7 +6341,7 @@ Four sub-sections, all rendered inside one collapsible accordion item labeled **
   - **Scroll Speed (ms)** — `scrollDurationMs`. How fast the page scrolls to a section. Caption: "How fast the page scrolls to a section (100-1000)".
   - **Auto-Hide Delay (ms)** — `autoHideDelayMs`. Delay before header/footer hide after a quick-nav scroll. Caption: "Delay before header/footer hide after scrolling (0-2000)".
   - **Bar Transition Speed (ms)** — `barTransitionDurationMs`. Header/footer slide-in/out speed. Caption: "How fast header/footer slide in and out (50-500)".
-- These feed `useScrollHide` (header + floating bars) and are converted ms→seconds (`/1000`) for the motion transition duration on the header and footer bars.
+- These feed `useScrollHide` (header + floating bars) and are converted ms→seconds (`/1000`) for the motion transition duration. `barTransitionDurationMs/1000` drives the slide transition on the header (`app-header.tsx`) and on the floating bars (`home-floating-bars.tsx`) — both the `QuickNavFooter` and the `VoiceLaunchBar`.
 
 ### 4. Swipe Navigation (`SwipeNavSection`)
 - Icon: `Hand`, heading color `text-violet-600 dark:text-violet-400`. Heading: "Swipe Navigation".
@@ -6303,7 +6375,7 @@ Four sub-sections, all rendered inside one collapsible accordion item labeled **
 
 **Page-level**
 - Tap **Reset to Defaults** → `resetToDefaults()` restores every setting to `defaultSettings`; toast confirms.
-- Expand/collapse the **Customization** accordion item (single-type accordion, `collapsible`) — only one accordion group open at a time across the page.
+- Expand/collapse the **Customization** accordion item (single-type accordion, `collapsible`) — only one accordion group open at a time across the page. Customization is one of many sibling groups on the Settings page (AI features, Data & Storage, Tracking, Customization, Medication, Privacy & Security, System, Help & Manual, Feedback, Debug).
 
 ---
 
@@ -6342,7 +6414,7 @@ Four sub-sections, all rendered inside one collapsible accordion item labeled **
   5. `urination` (enabled) → "Urination"
   6. `defecation` (enabled) → "Defecation"
 - Label overrides (`QUICK_NAV_LABEL_OVERRIDES`): `water → "Liquids"`, `eating → "Food & Salt"` (all others use `CARD_THEMES[id].label`).
-- `CardThemeKey` set (icon/color source, `CARD_THEMES`): `water` (Droplets, sky), `salt` (Sparkles, amber), `sugar` (Candy, pink), `potassium` (Banana, purple), `weight` (Scale, emerald), `bp` (Heart, rose), `eating` (Utensils, orange), `urination` (Droplet, violet), `defecation` (CircleDot, stone), `caffeine` (Coffee, yellow), `alcohol` (Wine, fuchsia). Each theme also carries `sectionId` (e.g. `section-water`, `section-food-salt`, `section-bp`, `section-weight`, `section-urination`, `section-defecation`) used as the scroll target.
+- `CardThemeKey` set (icon/color source, `CARD_THEMES`): `water` (Droplets, sky), `salt` (Sparkles, amber, label "Sodium"), `sugar` (Candy, pink), `potassium` (Banana, purple), `weight` (Scale, emerald), `bp` (Heart, rose), `eating` (Utensils, orange), `urination` (Droplet, violet), `defecation` (CircleDot, stone), `caffeine` (Coffee, yellow), `alcohol` (Wine, fuchsia). Each theme also carries `sectionId` (e.g. `section-water`, `section-food-salt`, `section-bp`, `section-weight`, `section-urination`, `section-defecation`) used as the scroll target. Note `sugar`, `potassium`, and `eating` all share `sectionId: "section-food-salt"` — so the `eating` quick-nav row scrolls to the shared food/salt section.
 
 ### Animation Timing (all in ms)
 - `scrollDurationMs`: default `300`; UI range **100–1000**, step **50**; store clamp `sanitizeNumericInput(v,100,1000)`. Increment min-clamp 100 / max-clamp 1000.
@@ -6386,12 +6458,12 @@ External lookups (read-only): `CARD_THEMES` (icons/colors/sectionIds), `QUICK_NA
 - **RTL ordering rule:** filtering of disabled items happens BEFORE the RTL reverse, so the configured order is preserved on both axes; only enabled items render.
 - **Empty footer rule:** if all items disabled, the footer hides entirely (returns `null`) even when `showQuickNav` is true.
 - **Theme hydration guard:** Select only sets `value` when `theme !== undefined`, avoiding a controlled/uncontrolled flip during SSR/first paint before next-themes resolves.
-- **Auto-hide sequencing:** `useScrollHide` uses a `navSeqRef` to ignore stale auto-hide timers if the user starts another quick-nav scroll; force-hide clears on scroll-up or reaching page bottom; the header always shows when at the bottom of the page.
-- **Swipe commit rule:** navigation commits when drag distance exceeds `width * (distancePct/100)` OR flick velocity exceeds the velocity threshold (in the correct direction) AND a prev/next route exists; at list edges, drag gets `RESISTANCE` rubber-banding and no commit.
-- **Swipe applies only on top-level routes** (`NAV_ROUTES`); elements marked `[data-no-swipe]` lock the gesture to vertical.
+- **Auto-hide sequencing:** `useScrollHide` uses a `navSeqRef` to ignore stale auto-hide timers if the user starts another quick-nav scroll; force-hide clears on scroll-up or reaching page bottom; the header always shows when at the bottom of the page. Two literal thresholds: "at bottom" is `scrollHeight - (innerHeight + scrollTop) <= 10` px, and scroll-down hiding only triggers once scrolled past 50 px (`current > 50`).
+- **Swipe commit rule:** navigation commits when drag distance exceeds `width * (distancePct/100)` OR flick velocity exceeds the velocity threshold (in the correct direction) AND a prev/next route exists; at list edges, drag gets `RESISTANCE` rubber-banding and no commit. The velocity direction is sign-specific: going to the previous route requires `offset.x > 0` and (`offset.x > threshold` OR `velocity.x > vThreshold`); going to the next route requires `offset.x < 0` and (`offset.x < -threshold` OR `velocity.x < -vThreshold`).
+- **Swipe applies only on top-level routes** (`NAV_ROUTES`); elements marked `[data-no-swipe]` lock the gesture to vertical. The swipe layer carries `style={{ touchAction: "pan-y" }}` so vertical scrolling stays native while horizontal pans drive navigation.
 - **Persist migrations** relevant here: v<5 seeds `quickNavItems` defaults; v<9 seeds swipe thresholds (28 / 500). Older stored blobs forward-migrate to v16.
 - **No required fields / no server validation** — every control has a safe default and reset path; there is no error/offline state because writes are synchronous to localStorage.
-- **Rounding:** numeric values are integers via integer steps (except weight increment elsewhere, not in this group); `validateAndSave` uses `parseFloat` then `.toString()`, so a typed decimal within range would be stored as-is (steps keep normal use on integers).
+- **Rounding:** numeric values are integers via integer steps (except weight increment elsewhere, not in this group). `validateAndSave` uses `parseFloat` then `.toString()`, but the store setters re-clamp through `sanitizeNumericInput(value, min, max)`, which (called with no `precision` argument) returns `Math.round(clamped)` — so a typed decimal within range is **rounded to an integer**, not stored as-is.
 
 ---
 
@@ -6446,8 +6518,8 @@ External lookups (read-only): `CARD_THEMES` (icons/colors/sectionIds), `QUICK_NA
 - **Status line** per provider, one of: loading ("Loading…"), configured ("Using your key ending in `<last4>`"), received-share ("Granted by `<grantorEmail>`"), or not-configured ("Not configured. Add a key, or ask someone to share theirs.").
 - **Add / replace key** inline form: password input, prefix-validated, console help link, "Stored encrypted on the server" note.
 - **Remove key** (only when configured) — red destructive button.
-- **Share your key** sub-section (`ShareControls`): grant a stored key to another user by email; choose provider; list current grants with revoke buttons.
-- **Usage (last 30 days)** sub-section (`UsageSummary`): per-provider call counts + token/audio breakdown for the user's own usage, plus consumption others incurred against the user's shared keys.
+- **Share your key** sub-section (`ShareControls`): grant a stored key to another user by email; choose provider; list current grants with revoke buttons. A permanent helper line under the input reads "They must have signed in at least once before you can share."
+- **Usage (last 30 days)** sub-section (`UsageSummary`): per-provider call counts for the user's own usage, plus consumption others incurred against the user's shared keys. The displayed token/audio breakdown is limited — only input/output tokens (Anthropic) and audio seconds (Groq) are rendered. `cacheReadTokens`, `cacheCreateTokens`, and the route-level `mine.byRoute` array are fetched/typed by the hook but **not displayed anywhere** in the UI.
 
 ### Medical-AI consent (`MedicalAiSection` — Settings → Privacy & Security; `MedicalContextSection` — Profile)
 - Two independent opt-in toggles: **Share conditions with AI insights** and **Share medications with AI insights**.
@@ -6460,7 +6532,7 @@ External lookups (read-only): `CARD_THEMES` (icons/colors/sectionIds), `QUICK_NA
 ### Security primitives (libraries, not directly user-facing)
 - **Server key vault** (`key-vault.ts`): AES-256-GCM, env-secret master key, AAD-bound to `userId:provider`, versioned blob format (`v1:` active, `v2:` reserved for KMS). Only the last 4 chars are ever stored in plaintext / exposed.
 - **Key resolution** (`ai-key-resolver.ts`): priority own-stored → shared-from-grantor → env-var (whitelist-only).
-- **PII redaction** (`security.ts` `sanitizeForAI` / `redactPii`): strips email, phone (intl + US), SSN, credit-card, DOB/date, 13-digit SA ID before any text leaves for an AI provider; caps to 500 chars.
+- **PII redaction** (`security.ts` `sanitizeForAI`, backed by the private `redactPii` helper): strips email, phone (intl + US), SSN, credit-card, DOB/date, 13-digit SA ID before any text leaves for an AI provider; caps to 500 chars. Applied across the AI routes (parse, substance-enrich, titration-warnings, nutrient-analysis, voice-parse, substance-lookup, medicine-search, interaction-check, …).
 - **Client crypto** (`crypto.ts`): AES-GCM encrypt/decrypt + PBKDF2 PIN hashing/verification + secure ID generation (used for local at-rest data encryption, separate from server key vault).
 - **Whitelist gate** (`auth-middleware.ts`): every AI/user route runs through `withAuth()`; `ALLOWED_EMAILS` enforced; distinguishes 401 (re-auth) from 403 (unapproved account).
 - **Usage audit**: `[AUDIT]` console logs on key set/clear and share grant/revoke; `ai_usage` row per call.
@@ -6530,15 +6602,16 @@ External lookups (read-only): `CARD_THEMES` (icons/colors/sectionIds), `QUICK_NA
 
 ### `ShareControls`
 - **No shareable key** (`!canShareAny`) → muted "Add a key above to share it with another user." (entire control hidden).
-- **Has key(s)** → email input + provider select + Share button.
+- **Has key(s)** → email input + provider select + Share button, with a permanent helper line below: "They must have signed in at least once before you can share."
 - **Has grants** → "Currently shared:" list with `granteeEmail · provider` and revoke button per row.
 - **No grants** → list section omitted.
 - **Share/Revoke pending** → respective buttons disabled.
+- **Share success toast** → "Shared with `<email>`" with description "They can now use your `<provider>` key."
 
 ### `UsageSummary`
 - **Loading** → "Loading usage…".
 - **Empty** → "No AI usage in the last `<windowDays>` days." (default 30).
-- **Populated** → per-provider blocks: capitalized provider name + "N call(s)"; Anthropic adds "· `in` in / `out` out tokens"; Groq adds "· `N` s of audio" (only if audioSeconds > 0).
+- **Populated** → per-provider blocks: capitalized provider name + "N call(s)"; Anthropic adds "· `in` in / `out` out tokens"; Groq adds "· `N` s of audio" (only if audioSeconds > 0). Only these fields render — `cacheReadTokens`, `cacheCreateTokens`, and the route-level `mine.byRoute` breakdown are fetched by the hook but never shown.
 - **As-grantor block** (only if others consumed your key) → "Consumption against your shared keys:" list, `granteeEmail · provider: N call(s)` (+ tokens for Anthropic).
 
 ### `AiInsightsConsentToggle`
@@ -6626,10 +6699,10 @@ External lookups (read-only): `CARD_THEMES` (icons/colors/sectionIds), `QUICK_NA
 - `id` serial PK, `timestamp`, `userId` (FK cascade), `keyOwnerId` (FK set-null), `keySource` (check `own_stored|shared_from|env_var`), `provider` (check `anthropic|groq`), `model`, `route`, `inputTokens`/`outputTokens`/`cacheReadTokens`/`cacheCreateTokens` (int, default 0), `audioSeconds` (nullable), `status` (check `success|error`), `durationMs`. Indexes on `(userId,timestamp)` and `(keyOwnerId,timestamp)`. Server-only.
 
 ### `userProfile` (schema.ts + `db.ts` `UserProfile`, Dexie-synced)
-- `conditions` (string[]), `shareConditionsWithAI` (bool), `shareMedicationsWithAI` (bool, default false), `aiInsightsConsentAt` (bigint number | null), plus sync metadata (`id`, `userId`, `createdAt`, `updatedAt`, `deletedAt`, `deviceId`). Consent fields read by `ai-insights-card.tsx` / `nutrient-analysis-card.tsx` to decide whether to attach `conditions` / medications to insight requests.
+- `conditions` (string[]), `shareConditionsWithAI` (bool), `shareMedicationsWithAI` (bool, default false), `aiInsightsConsentAt` (bigint number | null), plus sync metadata (`id`, `createdAt`, `updatedAt`, `deletedAt`, `deviceId`). The Dexie `UserProfile` interface has **no `userId`** — that column exists only on the server Postgres table (`schema.ts`), injected by the sync engine. Consent fields read by `analytics/ai-insights-card.tsx` / `analytics/nutrient-analysis-card.tsx` to decide whether to attach `conditions` / medications to insight requests.
 
 ### `neon_auth.users_sync`
-- Looked up by email (grant target) and by id (resolve grantor/grantee email). `ensureUserSynced` upserts the authenticated user so FKs resolve.
+- Looked up by email (grant target) and by id (resolve grantor/grantee email). `ensureUserSynced` upserts the authenticated user so FKs resolve. Its upsert failure is **swallowed (logged, non-fatal)** — read routes don't need the row, so only a downstream write route surfaces the FK error on its own insert.
 
 ### Hook query keys (`use-ai-keys.ts`)
 - `["user","api-keys"]`, `["user","api-keys","shares"]`, `["user","ai-usage", days]`. Set/delete invalidate keys (delete also invalidates shares); grant/revoke invalidate shares.
@@ -6646,15 +6719,17 @@ External lookups (read-only): `CARD_THEMES` (icons/colors/sectionIds), `QUICK_NA
 - **Key resolution priority:** own-stored → shared-from-grantor (ordered by `createdAt asc, grantorId asc`, iterates all shares; skips grantors whose key is gone — no LIMIT to avoid a stale grantor truncating a valid grant) → env-var (only if caller email is on `ALLOWED_EMAILS`). Otherwise throws `NoAiKeyError`.
 - **Sharing prerequisites:** grantor must have the provider key stored (`NO_OWN_KEY` 400); grantee must already exist in users_sync (`GRANTEE_NOT_FOUND` 404, "sign in once first"); cannot share with self (400).
 - **Revoke is bidirectional:** a user may delete a share as grantor (revoke access) OR as grantee (decline a received share) — the DELETE matches either direction for the given provider.
+- **Unresolvable email fallback:** when a grantor's email can't be resolved for a `received` share, the API substitutes the literal string `"(unknown)"`; the `asGrantor` grantee email likewise falls back to `"(unknown)"`.
 - **Duplicate share is a no-op** (`onConflictDoNothing` on composite PK).
+- **Share-list sort order differs per list:** `granted` shares are returned **ascending** by `createdAt`; `received` shares **descending** by `createdAt`.
 - **Consent is recorded once:** the first toggle-on with no prior consent records `aiInsightsConsentAt`; subsequent toggles save immediately. Nullish check (`!= null`) ensures both `null` and missing/undefined count as not-yet-consented.
 - **Toggling off doesn't clear consent timestamp** — re-enabling later won't re-prompt.
-- **Conditions normalisation:** trim, drop blanks, case-insensitive dedupe, clamp to 20, truncate each to 120 chars (enforced both in input `maxLength` and service `normalizeConditions`).
-- **Singleton profile:** newest active (non-deleted) row wins; values spread over `emptyProfile()` so rows written before a field existed still have defaults.
+- **Conditions normalisation:** in `normalizeConditions`, each item is trimmed and **truncated to 120 chars first**, blanks dropped, then case-insensitive dedupe, then the loop `break`s once 20 items are collected — silently dropping any overflow rather than erroring. (Input `maxLength` also enforces 120 chars at the UI.)
+- **Singleton profile:** multiple active rows can briefly exist after a concurrent multi-device first-write; the newest-updated active (non-deleted) row wins via a `b.updatedAt - a.updatedAt` sort. Values spread over `emptyProfile()` so rows written before a field existed still have defaults.
 - **Usage logging is fire-and-forget:** route handlers do not await `recordUsage`; failures are caught and logged with a sanitised message (DB errors can echo SQL/params, so only the message is logged). Lost rows on crash are acceptable.
 - **Usage aggregation only counts `status='success'`** rows within the window; "mine" = calls the user incurred (any key); "asGrantor" = others' calls against the user's key (`keyOwnerId = me AND userId <> me`).
-- **PII stripping is mandatory** before external AI text: `sanitizeForAI` redacts email/phone/SSN/card/date/SA-ID and caps to 500 chars; applied in parse, substance-enrich, titration-warnings routes.
-- **Whitelist gate** (`withAuth`): empty `ALLOWED_EMAILS` allows all; otherwise 403 for non-listed emails; emails lowercased for comparison. Supports both bearer-token (Capacitor) and cookie (web) sessions; bearer validation has a 5s timeout.
+- **PII stripping is mandatory** before external AI text: `sanitizeForAI` redacts email/phone/SSN/card/date/SA-ID and caps to 500 chars; applied across at least 8 AI routes — parse, substance-enrich, titration-warnings, nutrient-analysis, voice-parse, substance-lookup, medicine-search, interaction-check (non-exhaustive).
+- **Whitelist gate** (`withAuth`): empty `ALLOWED_EMAILS` allows all; otherwise 403 for non-listed emails; emails lowercased for comparison. Supports both bearer-token (Capacitor) and cookie (web) sessions; bearer validation has a 5s `AbortController` timeout. Bearer validation also **returns null (→401) when `NEON_AUTH_URL` is unset**, and validates the token upstream by sending it as the cookie header `__Secure-neon-auth.session_token=<token>` to the Neon Auth `get-session` endpoint.
 - **Browser storage is NOT encrypted at rest** (documented limitation in `security.ts`); `obfuscateApiKey` is XOR/base64 obfuscation only, explicitly "NOT encryption".
 - **Secure-context warnings** (`getSecurityWarnings`): warns if not HTTPS/localhost and if localStorage is unavailable (private browsing).
 
@@ -6677,7 +6752,7 @@ External lookups (read-only): `CARD_THEMES` (icons/colors/sectionIds), `QUICK_NA
 - **`useAiFetch`** — `apiFetch` wrapper for AI requests.
 - **`key-vault` (`encryptKey` / `decryptKey` / `lastFourOf`)** — server-side AES-256-GCM vault.
 - **`crypto` (`encrypt` / `decrypt` / `hashPin` / `verifyPin` / `generateSecureId`)** — client Web-Crypto utilities.
-- **`security` (`sanitizeForAI` / `redactPii` / `sanitizeReportText` / `sanitizeTextInput` / `sanitizeNumericInput` / `obfuscateApiKey` / `getSecurityWarnings`)** — PII + input + context utilities.
+- **`security` (`sanitizeForAI` / `sanitizeReportText` / `sanitizeTextInput` / `sanitizeNumericInput` / `obfuscateApiKey` / `getSecurityWarnings`)** — PII + input + context utilities. (`redactPii` is a private, non-exported internal helper used by `sanitizeForAI` / `sanitizeReportText`, not part of the public API.)
 - **`ai-key-resolver` (`resolveAiKey` / `NoAiKeyError`)** — server key-selection chain.
 - **`auth-middleware` (`withAuth`)** — per-route auth + whitelist gate.
 - **`usage-tracker` (`recordUsage` / `tokensFromAnthropic`)** — usage logging helpers.
@@ -6786,8 +6861,8 @@ This unit is two stacked sections inside one accordion ("Data & Storage"): **Sto
 ### MigrationWizard
 - **Backup gate:** tap "Download Backup" (downloads, sets hasDownloaded), or check "I have downloaded and saved my backup". "Proceed to Migration" enabled only when one of those is true.
 - **Upload progress:** tap "Show details / Hide details" to expand the per-table list; tap "Cancel" → opens CancelConfirmDialog. Dialog is **blocking** while uploading (Esc/overlay/close suppressed).
-- **Cancel confirm:** "Go Back" (dismiss) or "Cancel Migration" (destructive) → deletes uploaded server data, returns to Local.
-- **Completion:** tap "Done" → calls `completeMigration()`, closes wizard.
+- **Cancel confirm:** "Go Back" (dismiss) or "Cancel Migration" (destructive) → `POST /api/sync/cleanup` deletes uploaded server data, clears progress, and sets storage mode back to Local (phase → cancelled). If cleanup fails, the phase transitions to **error** (not cancelled) with the failure message.
+- **Completion:** heading "Migration Complete"; tap "Done" → calls `completeMigration()`, closes wizard. Elapsed duration is formatted conditionally: under 60s shows `"{s}s"`; otherwise `"{m}m {s}s"`.
 - **Error / Cancelled terminal screens:** tap "Close" to reset + dismiss.
 
 ---
@@ -6821,29 +6896,31 @@ This unit is two stacked sections inside one accordion ("Data & Storage"): **Sto
 - **Idle:** "Export Data".
 - **Pending:** disabled, label "Exporting...".
 - **Warning open (incomplete cloud copy):** amber panel with Cancel / "Export Anyway".
-- **Success / failure:** toast ("Export successful" / "Export failed: {msg}").
+- **Success / failure:** toast — title "Export successful" (desc "Your data has been downloaded") / title "Export failed" (desc "Failed to export data: {msg}").
 
 ### Import
 - **Idle:** "Import Data".
 - **File chosen:** amber merge-confirm panel.
 - **Pending:** disabled, label "Importing..." (button and Continue button).
 - **After import:** last-import summary line; conditional "Review conflicts" button.
-- **Success / failure:** toast ("Imported {n} records ({skipped} skipped[, {c} conflicts])" / "Import failed: {msg}").
+- **Success / failure:** toast — title "Import successful" (desc "Imported {n} records ({skipped} skipped[, {c} conflicts])") / title "Import failed" (desc "Failed to import data: {msg}").
+  - **Toast total under-counts:** the success desc's `{n}` sums only **16** `*Imported` fields (stops at `auditLogsImported`); it omits `userProfileImported` and `insightReportsImported`. So the toast total can be lower than the inline "Last import: {N} new" summary, which sums all 18.
 
 ### Clear All Data
 - **Default:** single red "Clear All Data" button.
 - **Confirming:** two-button row (Cancel / Confirm Delete, destructive).
-- **Success / failure:** toast ("Data cleared" / "Error: Failed to clear data: {msg}").
+- **Success / failure:** toast — title "Data cleared" (desc "All intake records have been deleted") / title "Error" (desc "Failed to clear data: {msg}").
 
 ### ConflictReviewDrawer
 - **Per-conflict toggle:** active choice button gets primary fill + leading Check icon.
 - **Applying:** "Apply Decisions" → disabled, label "Applying...".
-- **Resolved:** toast "{resolved} records updated"; drawer closes; last-import result cleared.
+- **Resolved:** toast — title "Conflicts resolved" (desc "{resolved} records updated"); drawer closes; last-import result cleared.
 
 ### MigrationWizard phases
 - **backup:** ShieldCheck icon, download button states ("Downloading…" while pending), checkbox, gated "Proceed".
 - **uploading:** progress bar (%), "Uploading {Table}…" / "Counting records…", "{x} / {y} records ({%})", expandable per-table list with done(green check)/uploading(spinner)/pending(grey circle) icons. Blocking modal.
-- **complete:** green CheckCircle2, "{n} records uploaded in {Xm Ys}", per-table record counts, "Done".
+  - **Per-table status precedence** (`tableStatus()`): a table with `progress` where `uploaded >= total && total >= 0 && lastBatchIndex >= 0` → "done"; a table with no progress yet → "uploading" if `tableIndex <= currentIndex`, else "pending"; otherwise the current index is "uploading", indexes below it "done", above it "pending".
+- **complete:** heading "Migration Complete", green CheckCircle2, "{n} records uploaded in {duration}" (duration is `"{s}s"` under 60s, else `"{m}m {s}s"`), per-table record counts, "Done".
 - **error:** destructive heading "Migration Error" + message + "Close".
 - **cancelled:** "Migration Cancelled" + "All uploaded data has been removed from the server." + "Close".
 
@@ -6860,7 +6937,7 @@ This unit is two stacked sections inside one accordion ("Data & Storage"): **Sto
 - **Encrypted backup shape:** `{ encrypted: true, payload, version }` (AES-GCM via PIN).
 - **MigrationPhase enum** (`migration-store.ts`): `"idle"` | `"backup"` | `"uploading"` | `"verifying"` | `"complete"` | `"cancelled"` | `"error"`.
 - **Per-table upload status** (`upload-progress-step.tsx`): `"pending"` | `"uploading"` | `"done"`.
-- **`TABLE_PUSH_ORDER`** (migration upload order, also used for the per-table progress/summary lists), 19 tables in FK-tier order:
+- **`TABLE_PUSH_ORDER`** (migration upload order, also used for the per-table progress/summary lists), 18 tables in FK-tier order:
   `prescriptions, titrationPlans, medicationPhases, phaseSchedules, inventoryItems, doseLogs, inventoryTransactions, dailyNotes, intakeRecords, substanceRecords, weightRecords, bloodPressureRecords, eatingRecords, urinationRecords, defecationRecords, auditLogs, userProfile, insightReports`.
 - **Tables counted for "records" total** (`use-storage-info.ts`, 16 tables): intakeRecords, weightRecords, bloodPressureRecords, eatingRecords, urinationRecords, defecationRecords, substanceRecords, prescriptions, medicationPhases, phaseSchedules, inventoryItems, inventoryTransactions, doseLogs, titrationPlans, dailyNotes, auditLogs. (Note: `userProfile` and `insightReports` are NOT in this count, so the displayed "records" can under-count what export writes.)
 - **Byte formatting thresholds** (`formatBytes`): `< 1024` → "B"; `< 1MB` → "KB" (1 decimal); else "MB" (1 decimal).
@@ -6882,7 +6959,7 @@ Reads/writes every Dexie table (`src/lib/db.ts`); export/import touch all 18 arr
 - **Import (`importBackup`)** writes via `bulkPut`:
   - **Health tables** (skip-existing-ids merge): intakeRecords, weightRecords, bloodPressureRecords, eatingRecords, urinationRecords, defecationRecords, substanceRecords.
   - **Medication/system tables** (conflict-aware merge): prescriptions, medicationPhases, phaseSchedules, inventoryItems, inventoryTransactions, doseLogs, titrationPlans, dailyNotes, auditLogs, userProfile, insightReports.
-- **`clearAllData()`** updates `db.intakeRecords` rows (sets `deletedAt`/`updatedAt`) and enqueues deletes into `db._syncQueue` (sync tombstones).
+- **`clearAllData()`** runs inside a `db.transaction("rw", intakeRecords, _syncQueue)`: for each non-tombstoned row (`if (record.deletedAt !== null) continue` skips already-deleted rows) it sets `deletedAt`/`updatedAt` and enqueues a delete into `db._syncQueue` (sync tombstones), then calls `schedulePush()`.
 - **`resolveConflicts()`** `db.table(table).put(backupRecord)` for `useBackup` rows.
 - **`ConflictRecord`** type: `{ table: string; id: string; current: Record<string,unknown>; backup: Record<string,unknown> }`.
 - **`ImportResult`** type: per-table `*Imported` counts + `skipped`, `conflicts[]`, `errors[]`, `success`.
@@ -6899,11 +6976,11 @@ Reads/writes every Dexie table (`src/lib/db.ts`); export/import touch all 18 arr
 - **Conflict detection scope:** only medication/system tables (+ userProfile/insightReports) raise conflicts; health tables silently skip existing ids. A conflict is raised only when an existing id has *content-different* data (sync-metadata fields ignored). Identical content → counted as `skipped`, no conflict.
 - **Content equality** (`isContentEqual`) ignores `createdAt/updatedAt/deletedAt/deviceId/timezone` and treats missing vs `undefined` as equal; compares via `JSON.stringify`.
 - **Conflict resolution default:** unset decisions default to **keep current** (`?? false`). Only `useBackup` rows are written; keep-current rows are no-ops.
-- **Clear All Data is a soft delete:** it tombstones intake records and enqueues sync deletes (a hard `.clear()` would be resurrected on the next pull). Despite the button label "Clear All Data" / toast "All intake records have been deleted", it only soft-deletes the **intakeRecords** table.
+- **Clear All Data is a soft delete:** it tombstones intake records and enqueues sync deletes (a hard `.clear()` would be resurrected on the next pull). It runs in a transaction over `intakeRecords` + `_syncQueue`, skips rows already tombstoned (`deletedAt !== null`), and calls `schedulePush()` afterward. Despite the button label "Clear All Data" / toast "All intake records have been deleted", it only soft-deletes the **intakeRecords** table.
 - **Migration backup gate:** cannot proceed to upload until the user downloads a backup or checks the acknowledgement.
 - **Migration is blocking while uploading:** modal cannot be dismissed (Esc/overlay/close suppressed) during the `uploading` phase.
-- **Migration cancel is destructive server-side:** confirming cancel deletes all uploaded data from the server and reverts to Local.
-- **Interrupted migration:** detected via `checkInterruptedMigration()` (presence of persisted progress in localStorage); surfaces "Resume Migration" instead of "Switch to Cloud Sync".
+- **Migration cancel is destructive server-side:** confirming cancel calls `apiFetch("/api/sync/cleanup", {method:"POST"})` to delete all uploaded data from the server, clears progress, and reverts to Local (phase → cancelled). If the cleanup request throws, the wizard moves to the **error** phase (showing the error message) instead of cancelled.
+- **Interrupted migration:** detected via `checkInterruptedMigration()` (`loadProgress() !== null`, i.e. presence of persisted progress under localStorage key `"intake-tracker-migration-progress"`); surfaces "Resume Migration" instead of "Switch to Cloud Sync".
 - **Storage API graceful degradation:** if `navigator.storage.estimate` is missing/throws, usage/quota stay null → "Storage info unavailable"; if Dexie counts throw, record count stays hidden.
 - **File input reset:** the hidden `<input type=file>` value is cleared after every import (success or cancel) so re-selecting the same file re-fires `onChange`.
 
@@ -6916,7 +6993,7 @@ Reads/writes every Dexie table (`src/lib/db.ts`); export/import touch all 18 arr
 - **`ConflictReviewDrawer`** — bottom-sheet for resolving per-record import conflicts (bulk + per-row keep/use-backup, diff fields).
 - **`useStorageInfo`** — hook computing formatted usage/quota (`navigator.storage.estimate`) + summed record count across 16 tables.
 - **`use-backup-queries`** (`useDownloadBackup` / `useUploadBackup` / `useResolveConflicts` / `useClearAllData`) — React Query mutations wrapping the backup service with success/error toasts.
-- **`backup-service`** — export/import/conflict engine: `exportBackup`, `downloadBackup`, `importBackup` (merge/replace, health vs conflict-aware tables), `resolveConflicts`, plus encrypted `exportEncryptedBackup` / `importEncryptedBackup`, and `getBackupStats`.
+- **`backup-service`** — export/import/conflict engine: `exportBackup`, `downloadBackup`, `importBackup` (merge/replace, health vs conflict-aware tables), `resolveConflicts`, plus encrypted `exportEncryptedBackup` / `importEncryptedBackup`, and `getBackupStats` (computes per-table counts across all 18 tables plus oldest/newest record over the 10 timestamp-bearing tables; **not surfaced by any covered UI**).
 - **`MigrationWizard`** — modal orchestrating the Local→Cloud migration phases.
   - **`BackupGateStep`** — forces a backup download/acknowledgement before migrating.
   - **`UploadProgressStep`** — progress bar + expandable per-table upload status (pending/uploading/done).
@@ -6973,7 +7050,7 @@ Reads/writes every Dexie table (`src/lib/db.ts`); export/import touch all 18 arr
 - Background polling: an initial check 3s after mount, then every 5 minutes, hitting `GET /api/version` with `cache: "no-store"`.
 - **Update-available banner** (in-section) when server version ≠ client version: sky-tinted card, "Update available", version detail, and an **Update** button (web only — reloads the page). In Capacitor mode the copy reads "v{serverVersion} available — update from Play Store" and the Update button is hidden.
 - **Check for Updates** button when no update is pending; shows a spinner + "Checking…" while in-flight; on completion toasts either "Update available" or "You're up to date · Running v{clientVersion}", or "Check failed" on error.
-- A separate global floating **`UpdateNotification`** banner (bottom-fixed) also consumes the same hook to prompt updates app-wide, with Update + dismiss (X) controls; dismissal hides it until the next detected update.
+- A separate global floating **`UpdateNotification`** banner (bottom-fixed) also consumes the same hook to prompt updates app-wide, with Update + dismiss (X) controls; dismissal hides it until the next detected update. Its title is "Update available" and its detail copy differs from the in-section card: web reads "v{serverVersion} is available — tap to refresh", Capacitor reads "v{serverVersion} available — update from Play Store" (Update button hidden in Capacitor).
 
 ### Help section (`HelpSection`)
 - Header "User manual" (BookOpen icon, sky text), descriptive paragraph, and an **Open the manual** button that navigates to `/help`.
@@ -7047,7 +7124,7 @@ Reads/writes every Dexie table (`src/lib/db.ts`); export/import touch all 18 arr
 - **Update available (web)** — sky card with version delta `v{server} available (you have v{client})` + Update button.
 - **Update available (Capacitor)** — sky card with Play Store copy, **no** Update button.
 - **Check failed** — destructive toast, returns to idle.
-- **Floating banner** — fixed bottom card (sky), slide-in animation, Update + dismiss; hidden when no update or dismissed.
+- **Floating banner** — fixed bottom card (sky), slide-in animation, Update + dismiss; hidden when no update or dismissed. Title "Update available"; web copy "v{server} is available — tap to refresh", Capacitor copy "v{server} available — update from Play Store" (Update button hidden in Capacitor).
 
 ### Report bug dialog
 - **Form (default)** — type toggle, textarea, optional dictate/AI controls, diagnostics collapsible, footer.
@@ -7100,13 +7177,14 @@ Reads/writes every Dexie table (`src/lib/db.ts`); export/import touch all 18 arr
 - `shakeToReportEnabled` — store default `true` (migration v10 force-enabled it).
 - `shakeThreshold` — store default `10`; **range 4–20**; UI step 1.
 - `shakeRequiredJolts` — store default `5`; **range 2–8**; UI step 1.
-- Hook defaults (used by global wiring fallback): `threshold = 8`, `requiredJolts = 3`, `windowMs = 800`, `cooldownMs = 3000`, sample throttle `60 ms`.
+- `useShakeGesture` hook defaults: `threshold = 8`, `requiredJolts = 3`, `windowMs = 800`, `cooldownMs = 3000`, sample throttle `60 ms`. **Note:** the global `ShakeToReport` mount always passes `threshold`/`requiredJolts` from the Zustand store (defaults 10 / 5), so those two hook defaults (8 / 3) are never actually used in production — only the `windowMs` / `cooldownMs` / throttle hook defaults are in effect, since the mount doesn't override them.
 - "Balanced/Sensitive" migration values seen in store: v11 set threshold 15 / jolts 3; v12 lowered threshold to 8.
 
 ### Bug-report diagnostics (`bug-report.ts`)
-- `MAX_REPORT_LOGS` = `25` (max attached error-log entries).
+- `MAX_REPORT_LOGS` = `25` (client cap on attached error-log entries). The server Zod schema is more permissive: it accepts up to 30 error logs and 40 env fields; the assembled issue body is capped at 60,000 chars (`ISSUE_BODY_MAX`) and any stack trace embedded in the body is trimmed to 1,200 chars (`STACK_MAX_IN_BODY`).
 - Standard env fields: App version, Build env (`NEXT_PUBLIC_VERCEL_ENV`, default "unknown"), Mode ("Capacitor (native)" / "Web"), DB version, Device ID, Timezone, Locale, Online (yes/no), User agent, Screen (`w×h @ Nx`), Viewport, Storage (`usage / quota`).
 - Extra AI-key fields appended in dialog: "AI: Anthropic key" + "AI: Groq key" → "configured" / "not configured".
+- **PII redaction** of all attached text (env + logs + description) runs **server-side only** (`redactPii`), covering emails, phone numbers, SSNs, credit-card numbers, date/DOB patterns, and 13-digit SA ID numbers — broader than the dialog's "ID-like numbers" wording implies.
 
 ---
 
@@ -7114,10 +7192,11 @@ Reads/writes every Dexie table (`src/lib/db.ts`); export/import touch all 18 arr
 
 - **No Dexie user-data tables are written** by these sections directly. They read:
   - `intakeRecords`, `weightRecords`, `bloodPressureRecords` — `checkExpiringRecords()` filters by `timestamp` for expiry notifications.
-  - `auditLogs`/error-log table via `getErrorLogs()` (`error-log-service`) — recent error logs for bug reports (fields: `timestamp`, `source`, `message`, `stack?`, `route?`).
+  - `_errorLogs` table via `getErrorLogs()` (`error-log-service`, `db._errorLogs.orderBy("timestamp").reverse().limit(limit)`) — recent error logs for bug reports (fields: `timestamp`, `source`, `message`, `stack?`, `route?`). (`auditLogs` is a separate, unrelated table.)
 - **localStorage**: `intake-tracker-mic-permission`, `intake-tracker-notifications`, plus Zustand-persisted settings (`shakeToReportEnabled`, `shakeThreshold`, `shakeRequiredJolts`).
 - **Server (Neon Postgres)**: push subscriptions via `POST /api/push/subscribe` / `unsubscribe` (the only server-side persisted data in this cluster).
 - **Server APIs**: `GET /api/version`, `POST /api/bug-report` (files GitHub issue, returns `{url, number}`), `POST /api/ai/voice-transcribe`.
+  - `POST /api/bug-report` is rate-limited to 10 requests/window (429 on exceed) and returns specific error codes on failure: `NO_GITHUB_TOKEN` (503), `BAD_REPO` (503), `BAD_TOKEN` (502, GitHub 401), `NO_ACCESS` (502, GitHub 403/404), `ISSUES_DISABLED` (502, GitHub 410). The client surfaces these as a generic "Could not file the report" toast.
 
 ---
 
@@ -7128,12 +7207,13 @@ Reads/writes every Dexie table (`src/lib/db.ts`); export/import touch all 18 arr
 - **Expiry Reminders toggle** — only mountable when notifications granted; save failures revert the optimistic toggle and toast.
 - **Version equality rule** — update available strictly when `serverVersion !== CLIENT_VERSION` (no semver comparison; any mismatch counts). Failed fetch → no update, logs error.
 - **Capacitor mode** — never calls `reload()`; surfaces Play Store copy and hides the Update button (`isCapacitorMode()` from `api-fetch`).
-- **Shake clamping** — threshold sanitized to 4–20, jolts to 2–8 (`sanitizeNumericInput` in store; `validateAndSave` reverts invalid input to the prior value). Shake detection uses acceleration *magnitude* deltas so tilting/reorientation does not trigger it (rotation-invariant); needs `requiredJolts` within an 800 ms window with a 3 s cooldown.
+- **Shake clamping** — threshold sanitized to 4–20, jolts to 2–8 (`sanitizeNumericInput` in store). `validateAndSave` is a generic helper that reverts invalid input to its `defaultValue` argument; the shake inputs pass the *current* store value (`settings.shakeThreshold` / `settings.shakeRequiredJolts`) as that argument, so in practice invalid input reverts to the current value. Shake detection uses acceleration *magnitude* deltas so tilting/reorientation does not trigger it (rotation-invariant); needs `requiredJolts` within an 800 ms window with a 3 s cooldown.
 - **iOS motion permission** — `DeviceMotionEvent.requestPermission` only exists on iOS 13+; elsewhere motion fires without a prompt. Enabling shake from settings requests it explicitly; globally it is requested on first pointer gesture. Denied → toast, stays off.
 - **Bug-report submit gating** — Submit disabled until description is non-empty AND diagnostics (env + logs) have finished loading (prevents filing empty diagnostics on a fast click).
-- **PII stripping** — all bug-report text (env + error logs) is stripped of emails, phone numbers, and ID-like numbers before sending (noted in UI; enforced server-side).
+- **PII stripping** — happens **only server-side** (`sanitizeReportText` → `redactPii` in `security.ts`), not in the browser. The client collectors (`collectEnvironmentInfo`, `collectRecentErrorLogs`) send raw values; the dialog UI *claims* text is "stripped before sending," but the redaction actually runs on the server before the report reaches GitHub. `redactPii` redacts emails (`[email]`), international + US phone numbers (`[phone]`), SSNs (`[ssn]`), credit-card numbers (`[card]`), date / date-of-birth patterns (`[date]`), and 13-digit South African ID numbers (`[id-number]`).
 - **AI/voice conditionals** — Dictate requires Groq key; "Improve with AI" requires Anthropic key; `effectiveUseAi = useAi && anthropicConfigured`.
-- **Dialog reset rule** — dialog resets only on closed→open transition (deps `[open]`), so late prop updates don't wipe a draft in progress.
+- **Dialog reset rule** — dialog resets only on closed→open transition (deps `[open]`), so late prop updates don't wipe a draft in progress. On each open it seeds `type` / `description` from the `defaultType` / `defaultDescription` props.
+- **Crash-prefill entry point** — the settings page reads a `sessionStorage` key `intake-tracker:crash-report` on mount (set by the ErrorBoundary crash screen's "Report this problem" button); if present it clears the key and opens `ReportBugDialog` with `defaultType="bug"` and a description pre-filled with the caught error message + stack.
 
 ---
 
@@ -7145,15 +7225,15 @@ Reads/writes every Dexie table (`src/lib/db.ts`); export/import touch all 18 arr
 - `UpdateNotification` — global floating update banner (Update + dismiss).
 - `HelpSection` — manual link block.
 - `ReportBugSection` — report entry point + shake toggle + sensitivity panel.
-- `ReportBugDialog` — full bug/feature filing form with diagnostics + manual promo.
+- `ReportBugDialog` — full bug/feature filing form with diagnostics + manual promo. Accepts `defaultType` and `defaultDescription` props that seed the form on each open (used by the crash-report prefill flow).
 - `ShakeToReport` — global shake-gesture mount opening the bug dialog.
 - `ExpandableSettingsSection` — generic collapsible used for "Shake sensitivity".
-- `usePermissions` — query/request/reset notification & microphone permissions.
+- `usePermissions` — query/request/reset notification & microphone permissions; also exposes `refreshPermissions()` (re-checks notification + mic state, localStorage-first then Permissions API) and an `isLoading` flag (true until the on-mount query resolves).
 - `useVersionCheck` — polling + check/apply/dismiss update logic.
 - `useNotificationSettings` — thin re-export of settings get/save + test notification.
 - `useShakeGesture` / `createShakeDetector` / `requestMotionPermission` — shake state machine + iOS motion permission.
 - `useSubmitBugReport` — React Query mutation hitting `/api/bug-report`.
-- `push-notification-service` — Notification API, expiry checks, push subscribe/unsubscribe.
+- `push-notification-service` — Notification API, expiry checks, push subscribe/unsubscribe. Named expiry-pipeline entry points: `checkExpiringRecords(retentionDays, warningDays=7)` (counts intake/weight/BP records inside the warning window), `notifyExpiringRecords()` (sends the reminder if any are expiring), `shouldCheckExpiry()` (gates on `enabled` + `checkIntervalHours` since `lastCheck`), `runExpiryCheck(retentionDays)` (runs the check and stamps `lastCheck`), and `showNotification()` (service-worker `showNotification` first, falling back to a direct `new Notification(...)` on desktop). The expiry reminder body reads "Records Expiring Soon" / "{N} records will be deleted in {daysUntilExpiry} days. Export your data to save them.", where `daysUntilExpiry` is derived from the oldest expiring record's retention deadline.
 - `bug-report` lib — env + error-log collection, shared request/response types, PII contract.
 - `settings-helpers` — `validateAndSave` / `incrementSetting` / `decrementSetting` for numeric inputs.
 
@@ -7187,7 +7267,7 @@ Reads/writes every Dexie table (`src/lib/db.ts`); export/import touch all 18 arr
 - Two stacked sections inside a `max-w-lg`, mobile container with bottom padding (`pb-10`, `space-y-6`):
   1. **Account** section — heading "Account" (muted, small, semibold). Renders either a signed-out blurb or the full `AccountSection`.
   2. **Medical context** section (`MedicalContextSection`).
-- Registered in nav as: path `/profile`, icon `CircleUser`, label "Profile", title "Profile", subtitle "Account & medical context". It is one of the five swipeable top-level tabs (Intake / Medications / Analytics / Settings / Profile).
+- Registered in nav as: path `/profile`, icon `CircleUser`, label "Profile", title "Profile", subtitle "Account & medical context". It is one of the five swipeable top-level tabs, registered in this `NAV_ROUTES` order: Profile / Intake / Meds / Analytics / Settings (the medications tab's registered label is `"Meds"`).
 
 ### Account state
 - **Signed out** (page-level `SignedOutBlurb`): a slate card titled "You're not signed in", subtext "Your profile works on this device offline. Signing in also unlocks:", followed by a 3-item benefits list and a full-width "Sign In" button that routes to `/auth`.
@@ -7208,15 +7288,15 @@ Reads/writes every Dexie table (`src/lib/db.ts`); export/import touch all 18 arr
 - Live profile data via `useUserProfile()` (Dexie `useLiveQuery`, blank profile until resolved).
 
 ### Per-field AI-sharing consent (`AiInsightsConsentToggle`)
-- Two toggles inside the conditions card (and mirrored in Settings → Privacy & Security via `MedicalAiSection`):
+- Two toggles inside the conditions card (and mirrored in Settings → Privacy & Security via `MedicalAiSection`). Because the same `AiInsightsConsentToggle` instances in both places read one Dexie singleton through the live query, toggling on the Profile page and in Settings stays in lockstep:
   - **Share conditions with AI insights** (`field="shareConditionsWithAI"`, `noun="conditions"`)
   - **Share medications with AI insights** (`field="shareMedicationsWithAI"`, `noun="medications"`)
-- Each toggle row: a `Label`, an `Info` (i) button opening an informational dialog, dynamic helper subtext, and a shadcn `Switch`.
+- Each toggle row: a `Label`, an `Info` (i) button opening an informational dialog, dynamic helper subtext, and a shadcn `Switch`. The `Label` and `Switch` are accessibly paired via `htmlFor`/`id` (`id={`toggle-${field}`}`).
 - Helper subtext is state-dependent:
   - enabled → "Your {noun} are included when generating AI insights."
   - disabled → "Your {noun} stay on this device and are not sent to the AI."
 - Below the toggles, a static note about medications: "Sharing medications sends your active prescriptions — name, dose, frequency, and how long the current titration or maintenance phase has run. Manage medications on the Medications page."
-- **One-time consent dialog**: the first time *any* sharing toggle is enabled, a consent dialog appears (it *is* the opt-in — nothing saves until "Enable insights" is pressed). A single `aiInsightsConsentAt` timestamp is recorded and covers *all* sharing toggles thereafter.
+- **One-time consent dialog**: the first time *any* sharing toggle is enabled, a consent dialog appears (it *is* the opt-in — nothing saves until "Enable insights" is pressed). Confirming writes `field=true` **and** `aiInsightsConsentAt` together in a single atomic `save(...)` (one upsert). The single `aiInsightsConsentAt` timestamp covers *all* sharing toggles thereafter.
 - **Informational re-open**: the `Info` button reopens the same disclaimer body in read-only "About AI insights" mode (single "Got it" button), regardless of consent state.
 
 ### Disclaimer body (shared between consent + info dialogs)
@@ -7227,6 +7307,7 @@ Three paragraphs (rendered as the dialog's accessible description):
 
 ### Downstream effect (consumers — context, not on this page)
 - `ai-insights-card.tsx`: `shareConditions = shareConditionsWithAI && conditions.length > 0`; `shareMedications = shareMedicationsWithAI`; `personalised = shareConditions || shareMedications`. When generating, the payload includes `conditions: profile.conditions` (if shared) and `includeMedications: true` (if shared). The card surfaces a "Your medical profile" summary with check/X rows showing whether conditions/medications are included.
+- `nutrient-analysis-card.tsx`: a second downstream consumer that mirrors the same `shareConditions` / `shareMedications` / `personalised` logic and renders its own "Your medical profile" check/X rows — both cards surface the sharing state, not just `ai-insights-card.tsx`.
 - Conditions appear in the AI prompt as: "User-reported medical conditions: {joined with '; '}." plus a do-not-diagnose instruction.
 - Medications, when shared, are summarised via `buildMedicationSummary()` into per-prescription lines (name, phase type, dose, frequency, days-on-phase).
 
@@ -7337,7 +7418,7 @@ Icons used on this page: `HeartPulse` (rose), `Plus`, `X`, `Info`, `LogIn`, `Spa
 - `useSaveProfile()` — `useMutation` wrapping `saveUserProfile` through `unwrap`.
 
 ### Read by (downstream, not written here)
-- `ai-insights-card.tsx` / `nutrient-analysis-card.tsx` read the three sharing flags + `conditions`.
+- `ai-insights-card.tsx` / `nutrient-analysis-card.tsx` each read the two boolean sharing flags (`shareConditionsWithAI`, `shareMedicationsWithAI`) + `conditions`. Neither card reads `aiInsightsConsentAt`.
 - `buildMedicationSummary()` reads active prescriptions/phases/schedules to build the medication snapshot only when `shareMedicationsWithAI` is on.
 
 ---
@@ -7351,7 +7432,7 @@ Icons used on this page: `HeartPulse` (rose), `Plus`, `X`, `Info`, `LogIn`, `Spa
 - **Consent gating**: nullish check `aiInsightsConsentAt != null` (both `null` and missing/`undefined` count as not-yet-consented; `!== null` alone would let `undefined` bypass the gate). Consent is recorded once and covers every sharing toggle thereafter; turning a toggle on never re-prompts after the first consent.
 - **Consent dialog is the opt-in**: turning a switch on pre-consent does not persist `field=true` until "Enable insights"; Cancel/dismiss leaves the switch off.
 - **Sharing is two-gated downstream**: conditions only flow to AI when `shareConditionsWithAI === true` AND `conditions.length > 0`; medications flow when `shareMedicationsWithAI === true` (medication content gathered live from active prescriptions, capped at 40).
-- **Data minimization**: only structured labels (short condition strings) and structured prescription summaries reach the AI — never raw records, notes, or free text. Identifying details are stripped server-side before any external AI call (per app-wide PII policy).
+- **Data minimization**: only structured labels (short condition strings) and structured prescription summaries reach the AI — never raw records, notes, or free text. Minimization on this path is purely *by construction* — the snapshot is aggregate numbers + short condition labels + structured med summaries, so no PII reaches the request to begin with. The insights route (`src/app/api/analytics/insights/route.ts`) does **not** run a server-side scrub/strip/sanitize step on this payload.
 - **Days-on-phase** (downstream): `max(0, floor((now - phase.startDate)/MS_PER_DAY))`.
 - **Timestamps** are Unix-ms (`Date.now()`); no day-start/timezone logic applies to the profile itself.
 
@@ -7368,7 +7449,7 @@ Icons used on this page: `HeartPulse` (rose), `Plus`, `X`, `Info`, `LogIn`, `Spa
 | `profile/ai-insights-consent-toggle.tsx` → `AiInsightsConsentToggle` | Reusable per-field opt-in switch with first-time consent dialog + info dialog. |
 | `profile/ai-insights-consent-toggle.tsx` → `DisclaimerBody` | Shared 3-paragraph disclaimer for consent + info dialogs. |
 | `profile/ai-insights-consent-toggle.tsx` → `fieldUpdate` | Builds a typed single-field `ProfileUpdates` without an unsafe computed-key cast. |
-| `settings/medical-ai-section.tsx` → `MedicalAiSection` | Settings → Privacy & Security mirror of both consent toggles (no condition editing). |
+| `settings/medical-ai-section.tsx` → `MedicalAiSection` | Settings → Privacy & Security mirror of both consent toggles (no condition editing). Has its own emerald "Medical conditions & AI" heading (`HeartPulse` icon) and footer copy: "Add or remove the conditions themselves on your Profile page. Medications come from your Medications page." |
 | `hooks/use-profile-queries.ts` | `useUserProfile` (live read) + `useSaveProfile` (mutation); re-exports limits/types. |
 | `lib/profile-service.ts` | CRUD, `emptyProfile`, `normalizeConditions`, limits, sync wiring. |
 
@@ -7420,13 +7501,14 @@ Icons used on this page: `HeartPulse` (rose), `Plus`, `X`, `Info`, `LogIn`, `Spa
 - **Invalid reset link state:** When the `token` param is missing, renders a "Invalid reset link" panel instead of the form, with a "Request a new link" button.
 - **Sign-out:** `handleSignOut()` stops the sync engine, detaches lifecycle listeners, resets sync-status store, races `signOut()` against a 3s timeout, then hard-redirects to `/auth`.
 - **Session hook `useAuth()`:** Returns `{ ready, authenticated, user }`. `user` = `{ id, email, name }` (name falls back to email). Bridges web cookie session and capacitor bearer-token session.
-- **Capacitor (native shell) bearer-token auth:** In capacitor mode, sign-in/up/social save a bearer token to localStorage; `useAuth` validates it against `/api/auth/validate`; `apiFetch` attaches `Authorization: Bearer <token>`.
+- **Capacitor (native shell) bearer-token auth:** In capacitor mode a bearer token is persisted (to a module-level in-memory `_token` cache **and** localStorage key `capacitor_auth_token`) on successful sign-in/up/social, via two different mechanisms: `signIn.email` and `signIn.social` are Proxy-wrapped in `auth-client.ts` to call `saveAuthToken` automatically, while `signUp` is **not** proxied — the sign-up form component itself calls `saveAuthToken(result.data.token)` inline before `router.replace("/")`. `useAuth` validates the token against `/api/auth/validate`; `apiFetch` attaches `Authorization: Bearer <token>` (token read memory-first via `getAuthToken`).
 - **Feature gate `useAuthGate()`:** Returns `!ready || authenticated` — used across the app to optimistically show AI features while session is still loading or when authenticated (gates AI parsing, voice, interactions, dose reminders).
 - **Header account control (`AuthButton`):** Shows a user-initial avatar when signed in, a generic user icon when not. Always navigates to `/profile`. Highlights when `/profile` is the active route.
 - **Profile account section:** Shows signed-in email + "Signed in via Neon Auth" + Sign Out; or a "Not signed in" upsell list + Sign In button.
 - **Server route protection (`withAuth`):** HOF wrapping API handlers; resolves user from bearer token (capacitor) or cookie session (web), enforces whitelist, upserts the user into `neon_auth.users_sync`, then calls the handler with `auth.userId` / `auth.email`.
 - **`users_sync` mirroring:** Every authenticated request upserts `{ id, email }` into `usersSync` so user-scoped FK inserts downstream find their parent row (Neon Auth hosted sync was never enabled on this DB).
 - **Validate endpoint (`GET /api/auth/validate`):** Returns `{ user: { id, email }, session: { userId } }` for a valid bearer/cookie session (used by capacitor `useAuth`).
+- **`apiFetch` failure logging:** Beyond attaching the bearer token, `apiFetch` records failed calls to the in-app error log (`captureFailure` → `error-log-service.logError("api-error", …)`) on any non-OK response and on network/fetch errors. Fire-and-forget (dynamic import, never blocks or throws); network errors are still re-thrown to the caller.
 - **Catch-all Neon Auth proxy (`/api/auth/[...path]`):** Single mount point proxying `sign-in/email`, `sign-up/email`, `sign-out`, `get-session`, `callback/google`, etc.
 - **Safety copy:** AuthShell footer always states "Your health data stays on your device. Sign in lets you sync across devices."
 
@@ -7448,7 +7530,7 @@ Icons used on this page: `HeartPulse` (rose), `Plus`, `X`, `Info`, `LogIn`, `Spa
 
 **Sign-up form (`/auth/sign-up`):**
 - Type into **Name (optional)**, **Email**, **Password** (`new-password`), **Confirm password** (`new-password`).
-- Submit (**Create account**) → validates email present, password present, passwords match; calls `signUp.email`; on success `router.replace("/")` + `router.refresh()`.
+- Submit (**Create account**) → validates email present, password present, passwords match; calls `signUp.email`; on success (in capacitor mode, first saves the returned bearer token via `saveAuthToken(result.data.token)`) → `router.replace("/")` + `router.refresh()`.
 - Tap **Sign in** link → `/auth`.
 
 **Forgot-password form (`/auth/forgot-password`):**
@@ -7582,7 +7664,7 @@ Icons used on this page: `HeartPulse` (rose), `Plus`, `X`, `Info`, `LogIn`, `Spa
 
 - **`neon_auth.users_sync` (`usersSync`, `src/db/schema.ts`):** `withAuth` upserts `{ id, email }` on every authenticated request (`onConflictDoUpdate` when email present, else `onConflictDoNothing`). Every user-scoped table FKs to `users_sync(id)`.
 - **Neon Auth session/user objects** (from `@neondatabase/auth`): `session.user.{ id, email, name }`.
-- **localStorage:** `capacitor_auth_token` (bearer token, capacitor only).
+- **Bearer token (capacitor only):** persisted to localStorage key `capacitor_auth_token` and mirrored in a module-level in-memory `_token` cache (`api-fetch.ts`); `getAuthToken` returns the memory copy first, falling back to localStorage.
 - **No Dexie tables** are written by the auth flow itself; auth gates downstream sync of all Dexie domains.
 - **`sync-status-store` (Zustand):** `handleSignOut` resets `{ lastError: null, isSyncing: false }`.
 - **Sync engine:** `handleSignOut` calls `stopEngine()` + `detachLifecycleListeners()`.
@@ -7625,7 +7707,7 @@ Icons used on this page: `HeartPulse` (rose), `Plus`, `X`, `Info`, `LogIn`, `Spa
 - `AuthGuard` — Currently a pass-through wrapper (`<>{children}</>`); kept for API stability.
 - `withAuth` — Server HOF: bearer/cookie resolution, whitelist, `users_sync` upsert.
 - `auth` (`neon-auth.ts`) — Server Neon Auth instance (createNeonAuth).
-- `authClient` / `signIn` / `signOut` (`auth-client.ts`) — Client Neon Auth + capacitor token proxies.
+- `authClient` / `signIn` / `signOut` (`auth-client.ts`) — Client Neon Auth. `signIn.email` and `signIn.social` are Proxy-wrapped to auto-save the capacitor bearer token; `signOut` clears it. `signUp` is exported un-proxied (the sign-up form saves the token inline instead).
 - `handleSignOut` — Stops sync, clears token, redirects.
 - `middleware` — OAuth verifier exchange + capacitor CORS + login redirect.
 - `[...path]` Neon Auth handler — Proxies all Neon Auth endpoints.
@@ -7668,7 +7750,7 @@ Icons used on this page: `HeartPulse` (rose), `Plus`, `X`, `Info`, `LogIn`, `Spa
 - **"Where to find it" pointer** — every manual states where the feature physically lives in the app (e.g. "Home screen → Water & drinks card", "Settings → AI features").
 - **Cross-references** — manuals reference each other by name in prose/callouts (e.g. food manual points to the AI manual; voice manual points to Privacy).
 - **Sticky top bar with back** — help pages render their own `HelpTopBar` (the global AppHeader hides on non-top-level routes); back uses `router.back()`.
-- **Two entry points outside Settings** — (1) Settings → "User manual" section ("Open the manual" button); (2) the shake / bug-report dialog's "Wanna read the manual?" panel ("Open the manual" button, which closes the dialog first).
+- **Two entry points** — (1) Settings → "Help & Manual" accordion group, whose `HelpSection` is headed "User manual" with descriptive body copy ("Step-by-step guides for every card, input and feature in the app…") and an "Open the manual" button; (2) the shake / bug-report dialog's "Wanna read the manual?" panel ("Open the manual" button, which closes the dialog first).
 - **Not-found handling** — an unknown `/help/<slug>` renders a centered "That manual could not be found." message and a "Back to the manual" button routing to `/help`.
 - **Helper API** — `getManual(slug)`, `getManualsByDomain()` (domain→manuals, empty groups filtered), `getManualPreview(slug)`, `HELP_INDEX_ICON` (BookOpen).
 
@@ -7690,7 +7772,7 @@ Icons used on this page: `HeartPulse` (rose), `Plus`, `X`, `Info`, `LogIn`, `Spa
   - Any writes the user makes inside the preview are discarded on unmount (preview DB deleted).
 
 **Entry points:**
-- Settings → "User manual" → tap **Open the manual** → `router.push("/help")`.
+- Settings → "Help & Manual" accordion group ("User manual" section) → tap **Open the manual** → `router.push("/help")`.
 - Shake / bug-report dialog → "Wanna read the manual?" → tap **Open the manual** → closes the dialog (`onOpenChange(false)`) then `router.push("/help")`.
 
 **Not-found:**
@@ -7747,7 +7829,7 @@ Icons used on this page: `HeartPulse` (rose), `Plus`, `X`, `Info`, `LogIn`, `Spa
 | ai | "AI & privacy" | "Optional smart helpers and your data." | Sparkles | `text-amber-600 dark:text-amber-400` |
 | system | "App & settings" | "Configuring the app." | SlidersHorizontal | `text-slate-600 dark:text-slate-400` |
 
-**Manuals (`MANUALS`, 14 total)** — slug · title · domain · icon · has-live-preview:
+**Manuals (`MANUALS`, 13 total)** — slug · title · domain · icon · has-live-preview:
 | slug | title | domain | icon | preview |
 |---|---|---|---|---|
 | how-it-works | "How Intake Tracker works" | getting-started | Compass | yes (`TextMetrics`) |
@@ -7802,17 +7884,17 @@ Icons used on this page: `HeartPulse` (rose), `Plus`, `X`, `Info`, `LogIn`, `Spa
 The help feature itself stores **nothing** — manuals and domains are static TypeScript data (`MANUALS`, `MANUAL_DOMAINS` in `manuals.ts`). It does not read or write the user's real DB.
 
 **Live-preview reads/writes (isolated preview DB only, never the real DB):**
-- `IntakeRecord` (intakeRecords) — fields used: `id, type, amount, timestamp, source, note` + `syncFields()` (water/salt/sugar entries).
-- `BloodPressureRecord` (bloodPressureRecords) — `systolic, diastolic, heartRate, position, arm, timestamp`.
+- `IntakeRecord` (intakeRecords) — fields used: `id, type, amount, timestamp, source, note` + `syncFields()` (water/salt/sugar entries). The model also has composable fields the previews could touch but the seeds don't set — `groupId`, `originalInputText`, `groupSource`, and a 4th `type` value `potassium`.
+- `BloodPressureRecord` (bloodPressureRecords) — `systolic, diastolic, heartRate, position, arm, timestamp` (model also carries `irregularHeartbeat?: boolean` and `note?`, which the BP seed does not set).
 - `WeightRecord` (weightRecords) — `weight, timestamp`.
-- `UrinationRecord` (urinationRecords) — `amountEstimate ("small"|"medium"|"large"), note, timestamp`.
-- `DefecationRecord` (defecationRecords) — `amountEstimate, note, timestamp`.
-- `SubstanceRecord` (substanceRecords) — `type ("caffeine"), amountMg, volumeMl, description, source ("standalone"), aiEnriched, timestamp`.
+- `UrinationRecord` (urinationRecords) — `amountEstimate, note, timestamp`. `amountEstimate` is typed `string?` (a loose optional string, not a union); the seed happens to use "small"/"medium"/"large".
+- `DefecationRecord` (defecationRecords) — `amountEstimate, note, timestamp`. Same loose `string?` type for `amountEstimate`.
+- `SubstanceRecord` (substanceRecords) — `type ("caffeine"), amountMg, volumeMl, description, source, aiEnriched, timestamp`. `source` is typed `'water_intake' | 'eating' | 'standalone'`; the seed uses `"standalone"`.
 - All seeds use `generateId()` + `syncFields()` from `@/lib/utils`.
 
 **DB plumbing (db.ts):**
 - `db` — module-level `AppDatabase` live binding, defaults to `realDb` (Dexie `IntakeTrackerDB`).
-- `createPreviewDatabase()` — new Dexie named `IntakeTrackerPreviewDB-<counter>`, schema `DB_SCHEMA_VERSION` with `PREVIEW_STORES`.
+- `createPreviewDatabase()` — new Dexie named `IntakeTrackerPreviewDB-<counter>`, schema `DB_SCHEMA_VERSION` (currently 21) with `PREVIEW_STORES`. (The `PREVIEW_STORES` doc-comment in db.ts still says "the current (v19) schema" — a stale in-code comment; the code uses `DB_SCHEMA_VERSION`.)
 - `setActiveDatabase(next)` / `resetActiveDatabase()` — swap/restore the `db` binding; every `import { db }` consumer follows automatically.
 
 **Sync engine:** `suspendEngine()` on preview mount, `resumeEngine()` on unmount (from `@/lib/sync-engine`) — keeps preview writes out of the sync queue.
@@ -7833,6 +7915,7 @@ The help feature itself stores **nothing** — manuals and domains are static Ty
   - `<ComponentPreview key={manual.slug}>` in ManualView forces a fresh harness per article.
 - **Top-bar rationale:** global AppHeader hides on non-top-level routes, so each help page supplies its own sticky bar; back uses `router.back()` (returns to wherever the user came from, not hard-coded to `/help`).
 - **Bug-dialog entry point** closes the dialog before navigating (avoids a stuck modal over the manual).
+- **Stale in-manual copy.** The `settings` manual's "Resetting" callout tells users this manual is reachable "from the \"How does this work?\" link in the shake / bug-report dialog" (`manuals.ts:596`), but the dialog actually renders the heading "Wanna read the manual?" + button "Open the manual" (`report-bug-dialog.tsx:365,380`). No "How does this work?" string exists in the dialog — the manual copy is out of date.
 - **AI/privacy disclaimers** are encoded as callouts (note/privacy tones) repeatedly across manuals (food sparkle, voice, ai-features, privacy) — copy states PII (emails, phone numbers, ID-like numbers) is stripped before any AI call and AI features only appear once a key is configured.
 - **Test contract** (`component-preview.dom.test.tsx`): asserts the seam end-to-end — seeded `118/76` appears for the BP preview, `250ml` for drinks, `pale`/`normal` for bathroom — proving the active-DB swap and real-hook reads work. The test mocks `useAuthGate` to `true` so `LiquidsCard`'s preset (AI) tab renders.
 
@@ -7848,7 +7931,7 @@ The help feature itself stores **nothing** — manuals and domains are static Ty
 - `ManualCallout` (`manual-callout.tsx`) — tinted aside; resolves tone → icon/label/colours.
 - `ComponentPreview` (`component-preview.tsx`) — isolated, seeded, interactive live-component harness with loading/ready/error + Reset.
 - `getManualPreview` / `MANUAL_PREVIEWS` (`preview-registry.tsx`) — slug → `{ render, seed }` registry of real components to preview.
-- `HelpSection` (`settings/help-section.tsx`) — Settings entry point ("User manual" → Open the manual).
+- `HelpSection` (`settings/help-section.tsx`) — Settings entry point, mounted inside the "Help & Manual" accordion group; h3 "User manual" + descriptive body copy ("Step-by-step guides for every card, input and feature in the app…") → "Open the manual" button.
 - Report-bug dialog manual panel (`report-bug-dialog.tsx`) — secondary entry point ("Wanna read the manual?").
 - `manuals.ts` exports — `MANUAL_DOMAINS`, `MANUALS`, `getManual`, `getManualsByDomain`, `HELP_INDEX_ICON`, and the `Manual` / `ManualDomain` / `ManualSection` / `Callout` / `CalloutTone` / `ManualDomainId` types.
 - `preview-data.ts` exports — `seedBloodPressurePreview`, `seedWeightPreview`, `seedLiquidsPreview`, `seedFoodSaltPreview`, `seedBathroomPreview`, `seedTextMetricsPreview`.
@@ -7887,7 +7970,7 @@ The help feature itself stores **nothing** — manuals and domains are static Ty
 
 ### Top App Header (`app-header.tsx`)
 - Sticky bar pinned to the top of the viewport (`sticky top-0 z-40`), only rendered on the five top-level routes (returns `null` on any non-top route, e.g. `/auth/*`, `/history`, `/help`).
-- Left block shows the current route's **title** (large bold) and **subtitle** (muted), looked up from `NAV_ROUTES` by matching `pathname`; falls back to the first route entry if no match.
+- Left block shows the current route's **title** (large bold) and **subtitle** (muted), looked up from `NAV_ROUTES` by matching `pathname`. (The code carries a `?? NAV_ROUTES[0]` fallback for no-match, but it is effectively dead for the title: the component already returns `null` before render on any non-top route, so the fallback title is never actually displayed.)
 - Right block is a horizontal cluster of icon tab buttons: an `AuthButton` (the `/profile` tab) followed by one ghost icon button per route (filtering out `/profile`, whose icon is replaced by the AuthButton).
 - The active route's button gets a highlighted pill background (`bg-primary/10 text-primary`) and a colored icon.
 - Tapping an inactive route button navigates via `router.push`; tapping the already-active one is a no-op.
@@ -7896,7 +7979,7 @@ The help feature itself stores **nothing** — manuals and domains are static Ty
 
 ### Auth Button (`auth-button.tsx`)
 - Doubles as the `/profile` route tab; always navigates to `/profile` on click (the profile page handles the signed-out case).
-- Three presentations based on auth state: **loading** (disabled ghost user icon, dimmed), **unauthenticated** (ghost `User` icon), **authenticated** (circular avatar badge showing the uppercase first letter of the user's email, default `"U"`).
+- Three presentations based on auth state: **loading** (disabled ghost user icon, dimmed), **unauthenticated** (ghost `User` icon), **authenticated** (circular avatar badge showing the uppercase first letter of the user's email, default `"U"`). The authenticated avatar is a fixed `w-7 h-7` rounded-full span with `text-sm font-semibold` that **always** carries the primary tint (`bg-primary/10 text-primary`) — that tint is part of the avatar itself, not gated on the active `/profile` state.
 - Carries the active highlight (`bg-primary/10 text-primary`) when `pathname === "/profile"`.
 
 ### Swipe Navigation (`swipe-nav.tsx`)
@@ -7906,6 +7989,7 @@ The help feature itself stores **nothing** — manuals and domains are static Ty
 - Direction lock: a gesture is classified as horizontal or vertical once it passes an 8px threshold; vertical gestures are ignored (page scrolls normally), horizontal gestures drive the swipe.
 - Live drag-peek: the page translates with the finger; an adjacent-route **skeleton preview** (from `page-skeletons.tsx`) is parked one viewport over on each side and shares the same `x` motion value, so it slides in from the edge as you drag.
 - Edge resistance: dragging past a non-existent neighbor (no prev/next) applies 0.25 resistance factor (rubber-band feel).
+- Tracks viewport width in state via a `resize` listener (`setWidth(window.innerWidth)`); the commit-threshold math resolves width through a `window.innerWidth || width || 1` fallback chain (the `|| 1` guards against a zero/undefined width).
 - Commit logic on release: navigates if drag distance exceeds the configurable distance threshold (% of viewport width) **or** flick velocity exceeds the configurable velocity threshold, in the correct direction with a neighbor present.
 - On commit, animates the page fully off-screen (tween, 0.18s) then calls `router.push`; on non-commit, springs/tweens back to center (0.22s).
 - After route change, the destination skeleton was already centered, so the real page just takes its place with no re-entry slide.
@@ -7920,12 +8004,12 @@ The help feature itself stores **nothing** — manuals and domains are static Ty
 - Two labels are overridden for the footer: `water` → "Liquids", `eating` → "Food & Salt" (to match on-screen card titles).
 - Order respects the user's configured item order; if `quickNavOrder === "rtl"` the enabled list is reversed (applied after filtering, preserving configured order on both axes).
 - Hides entirely when zero items are enabled (returns `null`).
-- Each button: stacked colored icon chip + tiny label, evenly distributed across the bar.
+- Each button: stacked colored icon chip + tiny label, evenly distributed across the bar. The chip background is the theme's `iconBg` (passed through as the item's `bgColor`, e.g. `bg-sky-100 dark:bg-sky-900/50`) and the icon uses the theme's `iconColor`.
 - Tapping a button scrolls to that section (custom eased smooth scroll), then auto-hides the chrome after a delay.
 - Slides down out of view (`y: 100%`) when chrome is hidden; respects bottom safe-area inset.
 
 ### Voice Launch Bar (`voice/voice-launch-bar.tsx`)
-- Fixed bar above the quick-nav footer (home page), a full-width "Voice log" button with a mic icon chip.
+- Fixed bar above the quick-nav footer (home page), a full-width "Voice log" button with a mic icon chip (`bg-sky-100 dark:bg-sky-900/50` chip, `text-sky-600 dark:text-sky-400` icon, `focus-visible:ring-inset`).
 - Only rendered when the AI auth gate passes (`useAuthGate`: shown while auth not-ready, or when authenticated).
 - Opens a full-screen Sheet hosting the `VoicePanel`; the sheet closes on commit.
 - Bottom offset adapts: sits ~76px above the footer when quick-nav is shown, else flush to the safe-area inset.
@@ -7943,14 +8027,14 @@ The help feature itself stores **nothing** — manuals and domains are static Ty
 - Dispatcher `PageSkeleton({ route })` selects the body by `route.path`: `/profile`, `/` (intake), `/medications`, `/analytics`, `/settings`.
 
 ### Scroll-Hide Behavior (`use-scroll-hide.ts`)
-- Hides header + footer chrome on scroll-down (past 50px), shows on scroll-up.
+- Hides header + footer chrome on scroll-down (past 50px), shows on scroll-up. The at-bottom override is folded directly into the header-hidden state itself — `setHeaderHidden(isScrollingDown && !isAtBottomRef.current)` — so scroll-down hiding is suppressed entirely while at the bottom (not just the separate force-hide clearing).
 - Always shows chrome when scrolled to (within 10px of) the bottom of the page.
 - Provides `handleQuickNav(sectionId)`: smooth-scrolls to the element, then after a configurable delay force-hides the chrome; sequence-guarded so rapid quick-nav taps don't fire stale hides; cleared if the user scrolls up or reaches bottom.
 - Returns `{ isHidden, handleQuickNav }`; `isHidden = headerHidden || forceHidden`.
 
 ### Keyboard-Aware Scroll (`use-keyboard-scroll.ts`)
 - `useKeyboardAwareScroll`: returns an `onFocus` handler that scrolls a focused input into view (`block: "center"`) after a 300ms delay (waits out the iOS keyboard animation).
-- `useVisualViewportScroll`: uses the Visual Viewport API; on viewport resize (keyboard open) scrolls the active focused input into view (100ms debounce); also scrolls on focus (300ms fallback); clears tracking on blur. Returns `onFocus` + `onBlur`.
+- `useVisualViewportScroll`: uses the Visual Viewport API; on viewport resize (keyboard open) scrolls the active focused input into view (100ms debounce); also scrolls on focus (300ms fallback). On blur it clears `activeInputRef` and the focus timeout, but **not** the pending resize timeout — so a queued resize-driven scroll can still fire after blur. Returns `onFocus` + `onBlur`.
 
 ---
 
@@ -8025,7 +8109,8 @@ The help feature itself stores **nothing** — manuals and domains are static Ty
 - Always decorative (`aria-hidden`); only visible during a drag-peek.
 
 **Boot/loading shell (layout-level, related chrome)**
-- Pre-hydration full-screen `#__boot_shell` with spinner, "Loading…" label; reveals a "Reset app" recovery link after 8s; fades out once `html.app-booted`.
+- Pre-hydration full-screen `#__boot_shell` with a CSS `itrk-spin` spinner (0.8s linear loop), "Loading…" label; reveals a "Reset app" recovery link after 8s; fades out (`200ms`) once `html.app-booted`.
+- A separate inline `BOOT_WATCHDOG` script runs even earlier: it records the load start time in `localStorage` and, if a prior load is detected as hung for >12s, redirects to `/recover.html` (which unregisters service workers + clears caches). This 12s watchdog redirect is distinct from the 8s "Reset app" link reveal.
 
 ---
 
@@ -8044,22 +8129,24 @@ The help feature itself stores **nothing** — manuals and domains are static Ty
 `water` (label "Liquids"), `eating` (label "Food & Salt"), `bp`, `weight`, `urination`, `defecation` — all `enabled: true` by default. Footer label overrides: `water` → "Liquids", `eating` → "Food & Salt".
 
 ### Card themes referenced by footer — `CARD_THEMES` keys, labels, icons, sectionIds
-| key | label | icon | sectionId | icon color |
+Icon colors are dual light/dark (`text-…-600 dark:text-…-400`, except caffeine which is `text-yellow-700 dark:text-yellow-400`). The footer renders each item's icon-chip background from `theme.iconBg` (e.g. `bg-sky-100 dark:bg-sky-900/50`) — this is passed through as the button's `bgColor`.
+
+| key | label | icon | sectionId | icon color (light / dark) |
 |---|---|---|---|---|
-| water | Water | `Droplets` | `section-water` | sky-600 |
-| salt | Sodium | `Sparkles` | `section-salt` | amber-600 |
-| sugar | Sugar | `Candy` | `section-food-salt` | pink-600 |
-| potassium | Potassium | `Banana` | `section-food-salt` | purple-600 |
-| weight | Weight | `Scale` | `section-weight` | emerald-600 |
-| bp | Blood Pressure | `Heart` | `section-bp` | rose-600 |
-| eating | Eating | `Utensils` | `section-food-salt` | orange-600 |
-| urination | Urination | `Droplet` | `section-urination` | violet-600 |
-| defecation | Defecation | `CircleDot` | `section-defecation` | stone-600 |
-| caffeine | Caffeine | `Coffee` | `section-caffeine` | yellow-700 |
-| alcohol | Alcohol | `Wine` | `section-alcohol` | fuchsia-600 |
+| water | Water | `Droplets` | `section-water` | sky-600 / sky-400 |
+| salt | Sodium | `Sparkles` | `section-salt` | amber-600 / amber-400 |
+| sugar | Sugar | `Candy` | `section-food-salt` | pink-600 / pink-400 |
+| potassium | Potassium | `Banana` | `section-food-salt` | purple-600 / purple-400 |
+| weight | Weight | `Scale` | `section-weight` | emerald-600 / emerald-400 |
+| bp | Blood Pressure | `Heart` | `section-bp` | rose-600 / rose-400 |
+| eating | Eating | `Utensils` | `section-food-salt` | orange-600 / orange-400 |
+| urination | Urination | `Droplet` | `section-urination` | violet-600 / violet-400 |
+| defecation | Defecation | `CircleDot` | `section-defecation` | stone-600 / stone-400 |
+| caffeine | Caffeine | `Coffee` | `section-caffeine` | yellow-700 / yellow-400 |
+| alcohol | Alcohol | `Wine` | `section-alcohol` | fuchsia-600 / fuchsia-400 |
 
 ### Medications tabs — `MedTab` (`med-footer.tsx`)
-`"schedule"` (CalendarDays, "Schedule") · `"prescriptions"` (ClipboardList, "Rx") · `"medications"` (Pill, "Meds") · `"titrations"` (TrendingUp, "Titrations") · `"settings"` (Settings, "Settings"). Default active tab: `"schedule"`. FAB shown only on `"schedule"`. Active tab color: teal-600 / teal-400 with a 0.5px bottom indicator.
+`"schedule"` (CalendarDays, "Schedule") · `"prescriptions"` (ClipboardList, "Rx") · `"medications"` (Pill, "Meds") · `"titrations"` (TrendingUp, "Titrations") · `"settings"` (Settings, "Settings"). Default active tab: `"schedule"`. FAB shown only on `"schedule"`. Active tab color: teal-600 / teal-400 with a 2px (`h-0.5`) bottom indicator. The bar breaks out of the page container with `-mx-4`, has a `bg-background/95 backdrop-blur-sm` bottom border; tabs hover to `text-foreground` and inactive tabs are `text-muted-foreground`.
 
 ### Swipe-nav internal constants (`swipe-nav.tsx`)
 - `DIRECTION_LOCK_THRESHOLD = 8` (px)
@@ -8095,7 +8182,7 @@ The help feature itself stores **nothing** — manuals and domains are static Ty
 - **No persistent data tables** (Dexie) are read or written by the chrome itself.
 - **Zustand `settings-store`** (localStorage, persist version 16): reads/writes `showQuickNav`, `quickNavOrder`, `quickNavItems`, `scrollDurationMs`, `autoHideDelayMs`, `barTransitionDurationMs`, `swipeNavDistanceThresholdPct`, `swipeNavVelocityThreshold`, `theme`.
 - **Zustand `medication-ui-store`** (ephemeral, not persisted): `activeTab: MedTab`, `wizardOpen: boolean` (+ setters) — shared between the medications page and the layout-level FAB.
-- **Auth** (`useAuth` from `auth-guard`): reads `ready`, `authenticated`, `user.email`/`user.name` for the AuthButton avatar and the AI gate.
+- **Auth** (`useAuth` from `auth-guard`): reads `ready`, `authenticated`, `user.email`/`user.name` for the AuthButton avatar and the AI gate. `user.name` is derived as `"name" in user ? user.name : user.email` — i.e. it falls back to the email when no name is present. In Capacitor mode `useAuth` also validates a stored token via an async `apiFetch("/api/auth/validate")` and, on success, sets a `capUser` ({ id, email }) that stands in for the web session (this is the broader auth surface the AuthButton and voice gate depend on, not chrome-specific).
 - **Routing**: `usePathname`, `useRouter` (push/prefetch) from `next/navigation`.
 - Static config: `NAV_ROUTES`, `CARD_THEMES`, `DEFAULT_QUICK_NAV_ITEMS`, `QUICK_NAV_LABEL_OVERRIDES`.
 
@@ -8115,10 +8202,10 @@ The help feature itself stores **nothing** — manuals and domains are static Ty
 - **RTL ordering rule:** filtering happens before reversal so the user's configured order is preserved on both axes.
 - **Voice bar AI gate:** shown when auth not-ready OR authenticated; hidden for the resolved-unauthenticated state. When chrome-hidden it is fully non-interactive (`disabled`, `tabIndex -1`, `aria-hidden`, `pointer-events-none`).
 - **FAB tab rule:** only on the medications `schedule` tab; wizard force-closed on route change but tab state preserved.
-- **Smooth scroll:** SSR-safe (no-op without `window.scrollTo`); `durationMs <= 0` jumps instantly; <1px distance resolves immediately; uses `easeInOutCubic`.
+- **Smooth scroll:** SSR-safe (no-op without `window.scrollTo`); `durationMs <= 0` jumps instantly; <1px distance resolves immediately; uses `easeInOutCubic`. Accepts an optional `offset` param (default `0`) subtracted from the target Y (target is floored at `0`).
 - **Safe-area:** footer and voice bar respect `env(safe-area-inset-bottom)` for home-indicator devices.
 - **Keyboard scroll:** all timeouts cleared on unmount/blur; visual-viewport path is a no-op when the API is unavailable.
-- **Settings thresholds** are clamped by `sanitizeNumericInput` on save (distance 10–60, velocity 100–2000) regardless of input.
+- **Settings thresholds:** the on-blur settings UI save (`validateAndSave`) does **not** clamp out-of-range input — if the parsed value falls outside `[min, max]` it **reverts to the previous/default value** instead. (Only the underlying store setter clamps, via `sanitizeNumericInput`.) Distance range 10–60, velocity range 100–2000.
 
 ---
 
@@ -8192,10 +8279,10 @@ The help feature itself stores **nothing** — manuals and domains are static Ty
 - Single dialog that files a GitHub issue directly from the app (no email, no leaving the app).
 - Two modes via a top toggle: **Bug** (Bug icon) and **Feature** (Lightbulb icon). Title, description label, placeholder, and dialog description copy all change with mode.
 - Free-text description (6-row textarea) — typed and/or voice-dictated.
-- **Voice dictation** (only when a Groq key is configured): "Dictate instead" button reveals an inline `VoiceRecorder`; the recording POSTs to `/api/ai/voice-transcribe` and the returned text is appended to both the description and a kept-separate `transcript` field (newline-joined to existing text).
-- **AI restructuring toggle "Improve with AI"** (only when an Anthropic key is configured): when on, Claude restructures raw prose into a clean title + summary + steps/expected/actual + severity hint. Form works fully with it off or absent.
+- **Voice dictation** (only when a Groq key is configured): "Dictate instead" button reveals an inline `VoiceRecorder`; the recording POSTs to `/api/ai/voice-transcribe` and the returned text is appended to both the description and a kept-separate `transcript` field (newline-joined to existing text). When a transcript is present, the server tags the issue body footer as "Filed via the in-app reporter **(voice-dictated)**".
+- **AI restructuring toggle "Improve with AI"** (only when an Anthropic key is configured): when on, Claude restructures raw prose into a structured issue via a forced `format_bug_report` tool call (`StructuredSchema`: `title`, `summary`, optional `stepsToReproduce[]`, `expected`, `actual`, `severity`). The server is robust to a missing tool block: if the first `messages.create` returns no `tool_use`, it retries once with `tool_choice: {type:"tool"}`; if still absent or schema-invalid it returns null and falls back to the plain template. The structured fields are assembled into the issue body as `## Steps to reproduce` / `## Expected` / `## Actual` and an `_Severity hint: …_` line. Form works fully with it off or absent.
 - **Diagnostics preview** — collapsible "What will be attached" showing live counts `(N env fields, M log entries)`; expands to a table of every environment field (label + mono value) plus a note about how many error-log entries are attached and that PII is stripped.
-- Auto-collected diagnostics attached to every report: environment info + up to 25 recent error-log entries, with AI-key status appended.
+- Auto-collected diagnostics attached to every report: environment info + recent error-log entries, with AI-key status appended. The **client** collects up to 25 entries (`MAX_REPORT_LOGS = 25`); the **server** schema independently accepts up to 30 (`errorLogs.max(30)`), so the two caps differ.
 - **Success state**: after filing, swaps the entire dialog body to a confirmation — "Report filed", "Issue #N was created on GitHub", an external link "View issue #N", and a "Done" button.
 - **"Wanna read the manual?" promo card** (sky-tinted, below the form): BookOpen heading + copy + "Open the manual" button that closes the dialog and routes to `/help`. Rationale baked into the code: a shake often means "how does this work?" not "this is broken".
 - Reachable from 3 entry points: Settings → Feedback section button, a device **shake** gesture, and the **crash screen** ("Report this problem").
@@ -8213,6 +8300,8 @@ The help feature itself stores **nothing** — manuals and domains are static Ty
 - Capacitor (native) mode: copy changes to "v{X} available — update from Play Store"; the Update button is hidden (can't self-reload a native build), dismiss remains.
 - Dismiss hides the banner for the session; a newly detected version un-dismisses it.
 - Settings has a parallel **App Updates section**: shows current vs. server version, an inline update card when available, and a "Check for updates" button that toasts "You're up to date" / "Update available" / "Check failed".
+  - Header text is **Capacitor-aware**: "App Version" on native vs. "App Updates" on web.
+  - Always shows a version footer: "Running v{client} · Checks automatically every 5 min".
 
 ### Error boundary (crash fallback)
 - Class component wrapping the entire app (`providers.tsx`); catches render errors below it.
@@ -8223,7 +8312,7 @@ The help feature itself stores **nothing** — manuals and domains are static Ty
 - Supports a custom `fallback` prop and a `withErrorBoundary(Component, fallback)` HOC for scoped boundaries.
 
 ### Toast system (global)
-- Imperative `toast(...)` API + `useToast()` hook backed by a module-level reducer/store (works outside React tree).
+- Imperative `toast(...)` API + `useToast()` hook backed by a module-level reducer/store (works outside React tree). `toast(...)` returns imperative handles `{ id, dismiss, update }`; `useToast()` also exposes a top-level `dismiss(toastId?)` for dismissing by id (or all toasts when called with no id).
 - Rendered by `<Toaster />` mounted in the root layout.
 - Three visual variants (default / destructive / success) plus optional action button, title, description, and a close (X) button.
 - Swipe-to-dismiss (Radix). One toast visible at a time (`TOAST_LIMIT = 1`).
@@ -8337,8 +8426,9 @@ The help feature itself stores **nothing** — manuals and domains are static Ty
 ### Bug report type (`BugReportType`)
 - `"bug"` | `"feature"`. Default `"bug"`.
 
-### AI structuring severity (server `StructuredSchema.severity`)
-- `"critical"` | `"high"` | `"medium"` | `"low"` (optional triage hint, AI-inferred).
+### AI structuring fields (server `StructuredSchema`)
+- `title` (1–140 chars), `summary` (1–2000 chars), optional `stepsToReproduce[]` (each ≤500, up to 20), optional `expected` (≤1000), optional `actual` (≤1000), optional `severity`.
+- `severity`: `"critical"` | `"high"` | `"medium"` | `"low"` (optional triage hint, AI-inferred).
 
 ### Shake gesture defaults (hook) vs. settings store
 - Hook defaults: `threshold = 8`, `requiredJolts = 3`, `windowMs = 800`, `cooldownMs = 3000`, sample throttle `60ms`.
@@ -8356,7 +8446,7 @@ The help feature itself stores **nothing** — manuals and domains are static Ty
 
 ### Diagnostics — environment fields collected (`collectEnvironmentInfo`)
 - App version, Build env, Mode (`Capacitor (native)` / `Web`), DB version (`DB_SCHEMA_VERSION`), Device ID, Timezone, Locale, Online (`yes`/`no`), User agent, Screen (`W×H @ Nx`), Viewport (`W×H`), Storage (`usage / quota`, human-formatted). Plus appended AI-key fields: "AI: Anthropic key" (configured/not), "AI: Groq key" (configured/not).
-- `MAX_REPORT_LOGS = 25` error-log entries.
+- `MAX_REPORT_LOGS = 25` error-log entries (client cap; server schema allows up to 30).
 - Storage formatting units: B, KB, MB, GB.
 
 ### GitHub labels applied by the in-app reporter
@@ -8365,7 +8455,7 @@ The help feature itself stores **nothing** — manuals and domains are static Ty
 - (Full taxonomy in `github-labels.ts`: type/status/priority/area/agent/source namespaces.)
 
 ### Server constants (`/api/bug-report`)
-- Default repo `RyRy79261/intake-tracker`; `ISSUE_BODY_MAX = 60000`; `STACK_MAX_IN_BODY = 1200`; rate limit 10 / window; AI model = `CLAUDE_MODELS.fast`, temp 0, max_tokens 1024, 60s timeout.
+- Target repo read from `GITHUB_REPO` env, falling back to `DEFAULT_REPO = RyRy79261/intake-tracker`; the slug is validated to be exactly `owner/repo` (else `BAD_REPO`). `ISSUE_BODY_MAX = 60000`; `STACK_MAX_IN_BODY = 1200`; rate limit 10 / window; AI model = `CLAUDE_MODELS.fast`, temp 0, max_tokens 1024, 60s timeout.
 
 ### Storage keys
 - `WELCOME_SEEN_KEY = "intake-tracker-welcome-seen"` (localStorage).
@@ -8378,7 +8468,7 @@ The help feature itself stores **nothing** — manuals and domains are static Ty
 - **No user-data Dexie tables written** by this unit. It reads the **error-log** store via `error-log-service` (`getErrorLogs`, `logError`, `rawConsoleError`) — Dexie-backed in-app debug log.
 - Reads `DB_SCHEMA_VERSION` (from `db.ts`) for diagnostics.
 - Reads device identity/timezone helpers: `getDeviceId()`, `getDeviceTimezone()`.
-- Reads Zustand `settings-store` fields: `shakeToReportEnabled`, `shakeThreshold`, `shakeRequiredJolts` (persisted to localStorage; with migrations at store versions 10/11/12 seeding these).
+- Reads Zustand `settings-store` fields: `shakeToReportEnabled`, `shakeThreshold`, `shakeRequiredJolts` (persisted to localStorage). Store migrations seed these in stages: `version < 10` sets `shakeToReportEnabled = true`; `version < 11` sets `shakeThreshold = 15` and `shakeRequiredJolts = 3`; `version < 12` re-sets `shakeThreshold = 8`. As a result a *migrating* user lands on threshold=8 / jolts=3, while a *fresh* user gets the store defaults threshold=10 / jolts=5 — the two paths diverge.
 - Reads AI-key status via `useApiKeyStatus()` (`anthropic.configured`, `groq.configured`).
 - POSTs `BugReportRequest` → `/api/bug-report` (server files GitHub issue via Octokit; optional Anthropic call). Response `BugReportResponse { url, number }`.
 - POSTs audio → `/api/ai/voice-transcribe`. Polls `/api/version`.
@@ -8393,10 +8483,12 @@ The help feature itself stores **nothing** — manuals and domains are static Ty
 - **Reporter reset semantics**: state resets only on closed→open transition; the effect depends only on `[open]` so late `defaultType`/`defaultDescription` prop changes can't wipe a draft the user is typing.
 - **Submit gating**: requires non-empty trimmed description AND `diagnosticsReady` (env and logs both loaded) AND not pending — prevents filing with empty diagnostics from a fast click.
 - **AI is additive/degrading**: `effectiveUseAi = useAi && anthropicConfigured`. If AI is off, no key, or the model call fails, the server falls back to a plain template (title = first line of description ≤100 chars, or "Bug report"/"Feature request").
-- **PII redaction (two passes)**: client strips and server re-strips via `sanitizeReportText` → `redactPii`: emails→`[email]`, intl & US phones→`[phone]`, SSN→`[ssn]`, credit cards→`[card]`, dates (YYYY-MM-DD, DD/MM/YYYY, MM/DD/YYYY)→`[date]`, SA 13-digit ID→`[id-number]`. AI prompt is told placeholders may appear and to leave them as-is.
+- **PII redaction (two passes)**: client strips and server re-strips via `sanitizeReportText` → `redactPii`: emails→`[email]`, intl & US phones→`[phone]`, SSN→`[ssn]`, credit cards→`[card]`, dates→`[date]` (two regexes: `\d{4}-\d{2}-\d{2}` for ISO, plus a single `\d{2}/\d{2}/\d{4}` that matches both DD/MM/YYYY and MM/DD/YYYY orderings indistinguishably), SA 13-digit ID→`[id-number]`. AI prompt is told placeholders may appear and to leave them as-is.
 - **Server limits**: description max 5000, transcript max 5000, env ≤40 fields, error logs ≤30; issue body capped at 60000; stack truncated to 1200 chars in body; backtick fences inside content are defused.
 - **Empty-after-sanitize** → server returns 400.
 - **Missing `GITHUB_TOKEN`** → 503 with code `NO_GITHUB_TOKEN`.
+- **Misconfigured repo slug** (not `owner/repo`) → 503 with code `BAD_REPO`.
+- **Typed GitHub error codes** mapped from Octokit failures: GitHub 401 → 502 `BAD_TOKEN`; GitHub 403/404 → 502 `NO_ACCESS`; GitHub 410 → 502 `ISSUES_DISABLED`; any other failure → generic 502.
 - **Rate limit** → 429.
 - **Shake detection**: magnitude-based (rotation-invariant) so tilting doesn't fire; requires ≥`requiredJolts` jolts within `windowMs` and respects `cooldownMs`; sample throttle 60ms; ignores null acceleration samples; paused while dialog open.
 - **iOS motion permission**: `requestPermission` only exists on iOS 13+; non-iOS returns "granted" without a prompt; on denial the Settings toggle shows a destructive toast and does NOT enable.
@@ -8490,6 +8582,7 @@ The help feature itself stores **nothing** — manuals and domains are static Ty
 - **Pull cycle** (`runPullCycle`): reads per-table keyset cursors `(updatedAt, id)` from `_syncMeta`, POSTs `{cursors}` to `/api/sync/pull`, applies each table's returned rows in an atomic `bulkPut` + cursor-advance transaction, and loops while *any* table reports `hasMore`.
 - **Clock-skew cursor clamp**: when a table drains but its newest rows fall inside the `SKEW_MARGIN_MS = 30000` window, the persisted cursor is clamped back to `serverTime - 30s` (id reset to `""`) so the next pull re-scans for concurrently-written rows. Not applied while `hasMore` is true (would re-fetch the same page forever).
 - On full drain: sets `lastPulledAt`, clears `lastError`, sets `initialSyncComplete = true`, and **invalidates all React Query caches** so every hook refetches.
+- **No pull backoff**: unlike push, a network/HTTP failure during pull only sets `lastError` and returns — it does **not** reschedule a retry. The next pull comes solely from a chained push or another trigger (online/visibility/startup).
 
 ### Engine — lifecycle / triggers
 - **Startup pull** kicked once on `startEngine()` (D-10).
@@ -8518,10 +8611,11 @@ The help feature itself stores **nothing** — manuals and domains are static Ty
 
 ### Settings — export gate (`DataManagementSection`)
 - Blocks/​warns on data export while `storageMode === "cloud-sync" && !initialSyncComplete` (this device may not yet hold the full cloud dataset → export would be incomplete). Shows a confirm-anyway warning dialog.
+- The component also (beyond the sync-incomplete export gate) gates **import** behind its own confirm dialog ("merge backup data with your existing data — new records added, duplicates skipped") and, after an import, surfaces a **conflict-review drawer** ("Review N conflicts") when the import reports conflicts.
 
 ### Server endpoints
-- **`POST /api/sync/push`**: batched LWW upsert/delete; returns `{accepted[], rejected[]}`.
-- **`POST /api/sync/pull`**: cursor-paginated per-table SELECT; returns `{result, serverTime}`.
+- **`POST /api/sync/push`**: batched LWW upsert/delete; returns `{accepted[], rejected[]}`. On a Zod validation 400 it logs the full `parsed.error.flatten()` to the **server logs** (`[sync/push] Zod validation failed`) but returns only a generic `{ error: "Invalid request" }` to the client.
+- **`POST /api/sync/pull`**: cursor-paginated per-table SELECT; returns `{result, serverTime}`. On a Zod validation 400 it returns `{ error: "Invalid request", details: parsed.error.flatten() }` to the **client** (asymmetric with push, which never leaks validation details to the client).
 - **`GET /api/sync/status`**: probes 5 high-signal tables, returns `{hasSyncedData: boolean}`.
 - **`POST /api/sync/cleanup`**: hard-deletes all of a user's server rows (FK-safe order) — used by migration/reset.
 - **`POST /api/sync/verify-hash`**: returns deterministic SHA-256 per-table hashes + row counts for integrity verification (migration flow).
@@ -8622,7 +8716,7 @@ The help feature itself stores **nothing** — manuals and domains are static Ty
 ### Zustand store (`sync-status-store.ts`, persist key `intake-tracker-sync-status`, version 2)
 - Persisted: `lastPushedAt: number|null`, `lastPulledAt: number|null`, `initialSyncComplete: boolean`.
 - Ephemeral (reset on reload): `isOnline: boolean` (default true), `isSyncing: boolean`, `queueDepth: number`, `lastError: string|null`.
-- Actions: `setOnline, setSyncing, setQueueDepth, setLastError, markPushed, markPulled`.
+- Actions: `setOnline, setSyncing, setQueueDepth, setLastError, markPushed, markPulled`. **Note:** `markPushed` / `markPulled` are effectively dead — the engine never calls them; it writes `lastPushedAt` / `lastPulledAt` via `setState` directly.
 - Migration v<2: `initialSyncComplete = (lastPulledAt != null)` for legacy users.
 
 ### Server (Neon Postgres via Drizzle) — `sync-payload.ts` schemas
@@ -8686,7 +8780,7 @@ The help feature itself stores **nothing** — manuals and domains are static Ty
 - **`SyncErrorBanner`** — dismissible bottom failure toast showing `lastError`.
 - **`SyncLifecycleMount`** — null-rendering mount that wires the engine to auth state.
 - **`StorageInfoSection`** (settings) — full sync-status panel: badge, full-copy state, last-synced, switch/resume/sign-in CTAs.
-- **`DataManagementSection`** (settings) — export gate warning the user when sync is incomplete.
+- **`DataManagementSection`** (settings) — export gate warning the user when sync is incomplete; also wraps the import confirm dialog and post-import conflict-review drawer.
 - **`useSyncLifecycle`** — starts/stops the engine on `authenticated × storageMode` changes.
 - **`useSyncAutoDetect`** — one-shot cold-start cloud-sync restore via `/api/sync/status`.
 - **`sync-queue.ts`** — `enqueue`, `enqueueInsideTx`, `writeWithSync`, `ack`, `getQueueDepth`.
@@ -8703,7 +8797,7 @@ The help feature itself stores **nothing** — manuals and domains are static Ty
 
 **Files covered:**
 - `/home/ryan/repos/Personal/intake-tracker/src/lib/db.ts` (Dexie / IndexedDB — client-side source of truth)
-- `/home/ryan/repos/Personal/intake-tracker/src/db/schema.ts` (Drizzle / Neon Postgres — server mirror, 29 tables)
+- `/home/ryan/repos/Personal/intake-tracker/src/db/schema.ts` (Drizzle / Neon Postgres — server mirror, 31 tables; the file's own header comment says "29", an undercount that omits `users_sync` and `insight_jobs`)
 - `/home/ryan/repos/Personal/intake-tracker/src/lib/constants.ts` (presets, BP categories, amount options)
 - `/home/ryan/repos/Personal/intake-tracker/src/lib/card-themes.ts` (per-domain theme keys + labels)
 - `/home/ryan/repos/Personal/intake-tracker/src/lib/quick-nav-defaults.ts` (footer nav defaults)
@@ -8716,7 +8810,7 @@ The help feature itself stores **nothing** — manuals and domains are static Ty
 
 ## Features
 
-- **Single source of truth, mirrored two ways.** All user data lives client-side in **Dexie/IndexedDB** (`db.ts`, current schema **v21**, exported as `DB_SCHEMA_VERSION = 21`). A **Neon Postgres** schema (`schema.ts`, 29 tables) mirrors it field-for-field for optional cloud sync; `src/__tests__/schema-parity.test.ts` fails the build if they drift. `userId` is the only Postgres-only column allowed.
+- **Single source of truth, mirrored two ways.** All user data lives client-side in **Dexie/IndexedDB** (`db.ts`, current schema **v21**, exported as `DB_SCHEMA_VERSION = 21`). A **Neon Postgres** schema (`schema.ts`, **31** `pgTable`/`neonAuth.table` definitions — 18 app tables + `users_sync` + `insight_jobs` + 4 push + 3 AI + 4 MCP) mirrors it field-for-field for optional cloud sync; `src/__tests__/schema-parity.test.ts` fails the build if they drift. `userId` is the only Postgres-only column allowed. (The schema.ts header comment says "29 tables" but undercounts — it omits `users_sync` and `insight_jobs`.)
 - **Soft-delete + sync scaffolding on every data table.** Every record carries `id`, `createdAt`, `updatedAt`, `deletedAt` (`null` = active, number = tombstone), and `deviceId`. Most also carry `timezone` (IANA string).
 - **18 synced data tables + 3 local-only system tables** in Dexie. Postgres additionally has 4 push-notification tables, 3 server-only AI tables, 4 MCP-connector tables, and 1 deep-research job table.
 - **Composable groups.** `intakeRecords`, `eatingRecords`, and `substanceRecords` share an optional `groupId` so multiple records (e.g. from one AI food parse) form one atomic, editable, deletable group. `originalInputText` + `groupSource` live on the primary record for AI re-run.
@@ -8752,11 +8846,11 @@ State the model must let the UI express:
 - **Active vs soft-deleted** — `deletedAt === null` (shown) vs a number (tombstoned/hidden but synced).
 - **AI-enriched vs estimated** — `substanceRecords.aiEnriched` true/false (refined vs default estimate); `liquidPreset.source` `manual` vs `ai` (+ optional `aiConfidence`).
 - **Optional tracker enabled/disabled** — sugar/potassium hidden from forms, voice editor, progress bars, weekly grid, analytics, history filter, AI snapshot when off.
-- **Over-limit / extended-buffer** — progress bars render a normal segment up to `limit`, a second-tone "extended" segment from `limit` to `limit + extendedBuffer`, then red beyond (`progressGradient` / `progressExtended` / `progressOverLimit` per theme; weight & BP themes have no progress gradients).
+- **Over-limit / extended-buffer** — progress bars render a normal segment up to `limit`, a second-tone "extended" segment from `limit` to `limit + extendedBuffer`, then red beyond (`progressGradient` / `progressExtended` / `progressOverLimit` per theme). Only `water`, `salt`, `sugar` define a non-empty `progressExtended`; `potassium` omits the key entirely, and `caffeine`, `alcohol`, `eating`, `urination`, `defecation`, `weight`, `bp` all set `progressExtended: ""`. `progressGradient` is non-empty for `water`, `salt`, `sugar`, `potassium`, `caffeine`, `alcohol`; `weight`, `bp`, `eating`, `urination`, `defecation` have an empty `progressGradient` (no progress bar).
 - **Blood-pressure category** — Optimal / Normal / High normal / Grade 1–3 hypertension, each with its own color (see enums).
 - **Dose status** — `pending` (actionable), `taken`, `skipped`, `rescheduled`.
 - **Phase / plan / inventory status** — active, completed, cancelled, pending, draft, archived.
-- **Sync status** (from `sync-status-store`) — `isSyncing`, `isOnline`/offline, `queueDepth`, `lastError` (null = healthy).
+- **Sync status** (from `sync-status-store`) — ephemeral runtime fields `isSyncing`, `isOnline`/offline, `queueDepth`, `lastError` (null = healthy), plus three persisted fields: `lastPushedAt`, `lastPulledAt` (last successful push/pull, Unix ms) and `initialSyncComplete` (true once a full pull-drain has completed on this device).
 - **Insight report mode** — `fast` (Sonnet, sync) vs `deep` (Opus + web search, async; carries `sources[]`); `personalised` true/false.
 - **Combination vs single-compound drug** — `compounds` present (length ≥ 2) vs absent.
 - **Irregular heartbeat flag** on a BP reading (boolean badge).
@@ -8802,7 +8896,7 @@ State the model must let the UI express:
 - `mcp_auth_codes.codeChallengeMethod`: `S256` \| `plain`.
 
 ### Card theme keys & labels (`card-themes.ts`) — 11 domains
-`water` (Water), `salt` (Sodium), `sugar` (Sugar), `potassium` (Potassium), `weight` (Weight), `bp` (Blood Pressure), `eating` (Eating), `urination` (Urination), `defecation` (Defecation), `caffeine` (Caffeine), `alcohol` (Alcohol). Each defines gradient/border/icon/progress colors. Footer label overrides: `water → "Liquids"`, `eating → "Food & Salt"`.
+`water` (Water), `salt` (Sodium), `sugar` (Sugar), `potassium` (Potassium), `weight` (Weight), `bp` (Blood Pressure), `eating` (Eating), `urination` (Urination), `defecation` (Defecation), `caffeine` (Caffeine), `alcohol` (Alcohol). Each `CardTheme` carries a full set of style fields: `label`, `icon`, `gradient`, `border`, `iconBg`, `iconColor`, `buttonBg`, `outlineBorder`, `outlineText`, `progressGradient`, `progressExtended`, `progressOverLimit`, `hoverBg`, `inputBg`, `inputText`, `loadingBg`, `latestValueColor`, `activeToggle`, `sectionId`. Footer label overrides: `water → "Liquids"`, `eating → "Food & Salt"`.
 
 ### Blood-pressure categories (`getBPCategory`, ESH 2023 scale, OR-based highest-first)
 | Category | Threshold (systolic OR diastolic) | Color |
@@ -8866,6 +8960,11 @@ State the model must let the UI express:
 | shakeRequiredJolts | 5 | 2–8 |
 | analyticsIntroSeen | false | — |
 
+**Other persisted `Settings` fields (no tracked numeric default/range, so omitted from the table above):**
+- `aiAuthSecret` — obfuscated secret used to authenticate against the server-side AI (matched to the server's `AI_AUTH_SECRET` env var); read back via `getDeobfuscatedAuthSecret`.
+- `liquidPresets: LiquidPreset[]` — the persisted, user-editable copy of `DEFAULT_LIQUID_PRESETS`, mutated via `addLiquidPreset` / `updateLiquidPreset` / `deleteLiquidPreset` CRUD.
+- `quickNavItems: QuickNavItem[]` — the persisted footer item list (order + per-item enabled state), seeded from `DEFAULT_QUICK_NAV_ITEMS`; separate from the `showQuickNav` / `quickNavOrder` flags.
+
 **Quick-nav default footer order** (`quick-nav-defaults.ts`): water, eating, bp, weight, urination, defecation (all enabled).
 
 ### Push-notification defaults (schema.ts)
@@ -8887,7 +8986,7 @@ State the model must let the UI express:
 7. **substanceRecords** — `type, amountMg?, amountStandardDrinks?, abvPercent?, volumeMl?, description, source, sourceRecordId?, aiEnriched?, timestamp, groupId?, originalInputText?, groupSource?` + tz.
 8. **prescriptions** — `genericName, indication, notes?, contraindications?[], warnings?[], compounds?[], isActive` (no tz).
 9. **medicationPhases** — `prescriptionId, type, unit, startDate, endDate?, foodInstruction, foodNote?, notes?, status, titrationPlanId?` (no tz).
-10. **phaseSchedules** — `phaseId, time(deprecated), scheduleTimeUTC, anchorTimezone, dosage, daysOfWeek[], enabled, unit?` (no plain tz).
+10. **phaseSchedules** — `phaseId, time(deprecated), scheduleTimeUTC, anchorTimezone, dosage, daysOfWeek[], enabled, unit?` (no plain tz). Index: `id, phaseId, time, enabled, updatedAt` — the deprecated `time` field is still an index key.
 11. **inventoryItems** — `prescriptionId, brandName, currentStock?(deprecated), strength, compounds?[], unit, pillShape, pillColor, visualIdentification?, refillAlertDays?, refillAlertPills?, isActive, isArchived?` + tz.
 12. **inventoryTransactions** — `inventoryItemId, timestamp, amount, note?, type, doseLogId?` + tz.
 13. **doseLogs** — `prescriptionId, phaseId, scheduleId, inventoryItemId?, scheduledDate (YYYY-MM-DD), scheduledTime, status, actionTimestamp?, rescheduledTo?, skipReason?, note?` + tz.
@@ -8934,13 +9033,13 @@ State the model must let the UI express:
 ## Sub-components / variants
 
 - **`db.ts`** — Dexie schema v10→v21, all 18+3 table definitions, migration upgrade functions, preview-database swap (`createPreviewDatabase` / `setActiveDatabase` / `resetActiveDatabase`), `DB_SCHEMA_VERSION`.
-- **`schema.ts`** — Drizzle Postgres mirror (29 tables), CHECK constraints (the canonical enum guards), indexes, FK graph, `users_sync` auth mirror.
+- **`schema.ts`** — Drizzle Postgres mirror (31 tables), CHECK constraints (the canonical enum guards), indexes, FK graph, `users_sync` auth mirror.
 - **`constants.ts`** — FOOD_PRESETS, DEFAULT_SODIUM_PRESETS, DEFAULT_LIQUID_PRESETS, URINATION/DEFECATION_AMOUNT_OPTIONS, `getBPCategory`, type interfaces.
 - **`card-themes.ts`** — `CARD_THEMES` (11 domains) + `CardThemeKey` type; per-domain colors/icons/labels/progress styles.
 - **`quick-nav-defaults.ts`** — `DEFAULT_QUICK_NAV_ITEMS`, `QUICK_NAV_LABEL_OVERRIDES`, `QuickNavItem`.
 - **`sync-topology.ts`** — `TABLE_PUSH_ORDER` (18-table FK-ordered list), `TableName` union; FK parent→child graph.
 - **`settings-store.ts`** — Zustand persisted `Settings` + `SettingsActions`, `defaultSettings`, `SubstanceConfig`, `migrateSettings`, all clamp ranges.
-- **`sync-status-store.ts`** (referenced) — runtime sync state: `isSyncing`, `isOnline`, `queueDepth`, `lastError`.
+- **`sync-status-store.ts`** (referenced) — sync state: ephemeral `isSyncing`, `isOnline`, `queueDepth`, `lastError` (reset on reload) + persisted `lastPushedAt`, `lastPulledAt`, `initialSyncComplete`.
 
 
 ---
@@ -8966,7 +9065,7 @@ State the model must let the UI express:
 
 - **Persisted settings store** (`useSettingsStore`, Zustand + `persist` middleware) keyed in localStorage under `"intake-tracker-settings"`, JSON storage, schema `version: 16` (`SETTINGS_PERSIST_VERSION = 16`).
 - **Forward migration** (`migrateSettings`) upgrades any older persisted blob to v16 (seeds new fields, deletes removed ones).
-- **Numeric sanitization** — every numeric setter runs `sanitizeNumericInput(value, min, max, precision?)`: parses, rejects NaN/Infinity (returns `min`), clamps to `[min,max]`, rounds to integer (or to `precision` decimals when given).
+- **Numeric sanitization** — most numeric setters run `sanitizeNumericInput(value, min, max, precision?)`: parses, rejects NaN/Infinity (returns `min`), clamps to `[min,max]`, rounds to integer (or to `precision` decimals when given). Exception: `setReminderFollowUpCount` / `setReminderFollowUpInterval` are raw `set()` with **no** sanitize (constrained only by their Select UI). All non-numeric setters (toggles, enums, region, theme, quick-nav, storage mode, optional trackers, substance config, etc.) are also plain `set()`.
 - **Increment controls** for fast +/- entry on the dashboard: water (ml), salt (mg), weight (kg).
 - **Daily limits** that drive progress bars and over-limit coloring: water, salt (sodium), sugar, potassium.
 - **Extended buffers** — a second-tone progress segment from `limit` up to `limit + buffer` before the bar turns red; `0` disables the second stage. Applies to water, salt, sugar (not potassium).
@@ -8984,7 +9083,7 @@ State the model must let the UI express:
 - **Storage mode** — local-only vs cloud-sync (mirrors Dexie to Neon Postgres).
 - **Shake to report** — shake gesture opens bug/feature dialog; tunable jolt threshold + jolts required.
 - **Substance config** — caffeine/alcohol enable + named types with default mg/drinks/volume (defaults only; no live UI setter consumer found).
-- **AI auth secret** — obfuscated server-AI shared secret (legacy field; current AI keys UI uses server-stored provider keys instead).
+- **AI auth secret** — obfuscated server-AI shared secret. **Fully dead**: neither `aiAuthSecret` nor `getDeobfuscatedAuthSecret` has any caller in the repo; current AI keys UI uses server-stored provider keys instead.
 - **One-time flags** — `analyticsIntroSeen` (analytics intro dialog).
 - **Reset to defaults** — restores the entire store to `defaultSettings`.
 - **Data management** (adjacent, not in store) — export/import/clear all Dexie data; import is merge-only with conflict review.
@@ -9022,9 +9121,9 @@ State the model must let the UI express:
 - **Numeric input**: default (current value), editing (uncommitted string), validation-revert (out-of-range blur snaps to default), disabled +/- at min/max bounds.
 - **Optional-tracker dependent sections**: Sugar/Potassium settings sections only render when their tracker is enabled.
 - **Quick Nav**: footer-off state hides item list + order Select; per-item disabled = dimmed; drag = `cursor-grab`/`active:cursor-grabbing`.
-- **Dose reminders**: hidden entirely when signed out (`useAuthGate`); switch disabled + helper "Notifications not supported in this browser" when unsupported; helper "Sign in to enable push reminders across devices" when signed out & off; follow-up interval row hidden when count = 0.
-- **AI keys section**: `!ready` → renders null; unauthenticated → "Sign in to manage AI keys" card; per-provider: loading ("Loading…"), configured ("Using your key ending in <last4>"), shared ("Granted by <email>"), not-configured ("Not configured…"); editing form vs view (Add/Replace + Remove buttons); usage loading/empty/populated.
-- **Storage section**: badge "Cloud Sync" (green) vs "Local only" (secondary); cloud states: full-copy (`CheckCircle2` "Full copy of your data on this device"), downloading (spinner), offline-waiting (`CloudOff`); "Last synced <datetime>"; local+signed-out → sign-in CTA; local+authenticated → "Switch to Cloud Sync" or "Resume Migration"; estimated usage / "Storage info unavailable"; record count.
+- **Dose reminders**: hidden entirely when signed out (`useAuthGate`); switch disabled + helper "Notifications not supported in this browser" when unsupported; helper "Sign in to enable push reminders across devices" when signed out & off; default helper "Get push notifications when medications are due" when supported and (signed-in or already enabled); follow-up interval row hidden when count = 0.
+- **AI keys section**: `!ready` → renders null; unauthenticated → "Sign in to manage AI keys" card; per-provider: loading ("Loading…"), configured ("Using your key ending in <last4>"), shared ("Granted by <email>"), not-configured ("Not configured…"); editing form vs view (Add/Replace + Remove buttons); usage summary: loading ("Loading usage…"), empty ("No AI usage in the last N days."), populated.
+- **Storage section**: badge "Cloud Sync" (green) vs "Local only" (secondary); cloud states: full-copy (`CheckCircle2` "Full copy of your data on this device"), downloading (spinner + "Downloading your full data to this device…"), offline-waiting (`CloudOff` + "Waiting to download your data (offline)"); "Last synced <datetime>"; local+signed-out → sign-in CTA; local+authenticated → "Switch to Cloud Sync" or "Resume Migration"; estimated usage / "Storage info unavailable"; record count.
 - **Data export**: idle / "Exporting…"; incomplete-cloud warning panel (amber) with Cancel / Export Anyway.
 - **Data import**: idle / "Importing…"; merge-confirm panel (amber) Cancel / Continue Import; result line "X new, Y skipped, Z conflicts" with "Review N conflicts" button when conflicts exist.
 - **Clear data**: default button → two-button confirm (Cancel / Confirm Delete, destructive).
@@ -9051,9 +9150,9 @@ Every persisted field in `Settings` (defaults from `defaultSettings`, ranges fro
 | `sugarExtendedBuffer` | number (g) | `10` | 0–500 | 5 | second-tone zone above sugar limit |
 | `optionalTrackers.sugar` | boolean | `true` | true/false | — | show/persist sugar tracker |
 | `optionalTrackers.potassium` | boolean | `false` | true/false | — | show/persist potassium tracker |
-| `aiAuthSecret` | string (obfuscated `obf:`) | `""` | free text | — | legacy server-AI shared secret |
+| `aiAuthSecret` | string (obfuscated `obf:`) | `""` | free text | — | dead server-AI shared secret — `aiAuthSecret`/`getDeobfuscatedAuthSecret` have zero callers |
 | `theme` | `"light"\|"dark"\|"system"` | `"system"` | 3 options | — | color theme (UI uses next-themes) |
-| `dataRetentionDays` | number (days) | `90` | 0–365 (0 = keep forever) | — | data retention window |
+| `dataRetentionDays` | number (days) | `90` | 0–365 (0 = keep forever) | — | dead/unwired — stored & clamped but no consumer; no pruning routine reads it |
 | `dayStartHour` | number (0–23) | `2` | 0–23 | — | hour "today" begins for budgets |
 | `showQuickNav` | boolean | `true` | true/false | — | show footer quick-nav |
 | `quickNavOrder` | `"ltr"\|"rtl"` | `"rtl"` | 2 options | — | footer icon direction |
@@ -9080,20 +9179,21 @@ Every persisted field in `Settings` (defaults from `defaultSettings`, ranges fro
 | `secondaryRegion` | string | `""` | ISO-3166 + "None" | — | fallback region |
 | `timeFormat` | `"12h"\|"24h"` | `"24h"` | 2 options | — | clock display format |
 | `doseRemindersEnabled` | boolean | `false` | true/false | — | push dose reminders |
-| `reminderFollowUpCount` | number | `2` | 0,1,2,3 (Select) | — | extra reminders if unconfirmed |
-| `reminderFollowUpInterval` | number (min) | `10` | 5,10,15,20,30 (Select) | — | minutes between follow-ups |
+| `reminderFollowUpCount` | number | `2` | 0,1,2,3 (Select-constrained only; setter is raw `set()`, **not** sanitized) | — | extra reminders if unconfirmed |
+| `reminderFollowUpInterval` | number (min) | `10` | 5,10,15,20,30 (Select-constrained only; setter is raw `set()`, **not** sanitized) | — | minutes between follow-ups |
 | `substanceConfig` | `SubstanceConfig` | see below | enable + typed list | — | caffeine/alcohol tracking config |
 
 **`QuickNavItem`** (`{ id: CardThemeKey; enabled: boolean }`), `DEFAULT_QUICK_NAV_ITEMS` (order = top-to-bottom on dashboard):
 `water` (label override "Liquids"), `eating` (label override "Food & Salt"), `bp` ("Blood Pressure"), `weight` ("Weight"), `urination` ("Urination"), `defecation` ("Defecation") — all `enabled: true`.
 
 **`CardThemeKey`** (full set, drives quick-nav identities & icons): `water` (Water/Droplets), `salt` (Sodium/Sparkles), `sugar` (Sugar/Candy), `potassium` (Potassium/Banana), `weight` (Weight/Scale), `bp` (Blood Pressure/Heart), `eating` (Eating/Utensils), `urination` (Urination/Droplet), `defecation` (Defecation/CircleDot), `caffeine` (Caffeine/Coffee), `alcohol` (Alcohol/Wine).
+Each `CardTheme` also carries a `progressExtended` second-tone gradient token — the actual class the extended-buffer feature renders for the buffer zone above the limit. Only `water`, `salt`, and `sugar` define it (the three trackers with extended buffers); `potassium`/`weight`/`bp`/`eating`/`urination`/`defecation`/`caffeine`/`alcohol` leave it as an empty string.
 
 **`OPTIONAL_TRACKERS`** registry (`src/lib/optional-trackers.ts`):
 - `sugar` — label "Sugar", unit "g", default ON, icon Candy (pink). Desc: "Log total sugars per food entry…"
 - `potassium` — label "Potassium", unit "mg", default OFF, icon Banana (purple). Desc: "Estimate potassium per food entry. Values are rough…"
 
-**`LiquidPreset`** shape: `{ id, name, tab: "coffee"|"alcohol"|"beverage", defaultVolumeMl, waterContentPercent (0–100, default 100), caffeinePer100ml?, alcoholPer100ml? (ABV %), saltPer100ml?, isDefault, source: "manual"|"ai", aiConfidence? }`.
+**`LiquidPreset`** shape: `{ id, name, tab: "coffee"|"alcohol"|"beverage", defaultVolumeMl, waterContentPercent (0–100, default 100), caffeinePer100ml?, alcoholPer100ml? (stored as ABV %), saltPer100ml?, isDefault, source: "manual"|"ai", aiConfidence? }`. Edit form labels the alcohol input "% ABV", but the substance summary line renders it as "Nstd alc/100ml" (literal "std" — a wording quirk that mislabels the stored ABV value).
 
 **`DEFAULT_LIQUID_PRESETS`** (8): Espresso (coffee, 210 mg/100ml, 98% water, 30ml), Double Espresso (210, 98%, 60ml), Moka (130, 98%, 50ml), Coffee (38, 99%, 250ml), Tea (19, 99%, 250ml), Beer (alcohol, 5% ABV, 93% water, 330ml), Wine (12% ABV, 87%, 150ml), Spirit (40% ABV, 60%, 45ml).
 
@@ -9122,7 +9222,7 @@ Every persisted field in `Settings` (defaults from `defaultSettings`, ranges fro
 ## Data model touched
 
 - **Reads/writes:** `localStorage["intake-tracker-settings"]` via Zustand `persist` (JSON, versioned). No Dexie table for settings themselves.
-- **Indirectly governs Dexie/Neon data** (`src/lib/db.ts`, `src/db/schema.ts`): optional-tracker toggles gate whether `intakeRecords` of `type: "sugar"/"potassium"` get persisted; `storageMode` toggles the sync engine mirroring all Dexie tables to Neon Postgres; `dataRetentionDays` governs pruning; default amounts seed `urinationRecords`/`defecationRecords`; liquid/substance presets feed liquid & substance entry forms.
+- **Indirectly governs Dexie/Neon data** (`src/lib/db.ts`, `src/db/schema.ts`): optional-tracker toggles gate whether `intakeRecords` of `type: "sugar"/"potassium"` get persisted; `storageMode` toggles the sync engine mirroring all Dexie tables to Neon Postgres; default amounts seed `urinationRecords`/`defecationRecords`; liquid/substance presets feed liquid & substance entry forms. (`dataRetentionDays` is stored and clamped but **dead** — it has zero consumers and governs nothing; see below.)
 - **Data management** (`data-management-section.tsx`) reads/writes all Dexie tables on export/import/clear via `use-backup-queries` (`ImportResult` covers intake, weight, bp, eating, urination, defecation, substance, prescriptions, phases, schedules, inventoryItems, inventoryTransactions, doseLogs, titrationPlans, dailyNotes, auditLogs, userProfile, insightReports).
 - **AI keys / dose reminders / cloud sync** touch server-side Neon Postgres (provider keys, push subscriptions, mirrored records), not this localStorage store.
 
@@ -9134,7 +9234,7 @@ Every persisted field in `Settings` (defaults from `defaultSettings`, ranges fro
 - **`validateAndSave`** (UI blur): if parsed value is NaN or outside `[min,max]`, **reverts to the default**, not the clamped value; otherwise saves and reflects the parsed value.
 - **`incrementSetting`/`decrementSetting`**: step then clamp to max/min respectively; the decrement call passes `min` as the third arg (note water/salt limit decrement floors at 100, increments cap at 10000, etc.).
 - **Extended buffer = 0** disables the second progress stage (bar goes limit → red directly).
-- **`aiAuthSecret`** is stored obfuscated: setter wraps with `obfuscateApiKey` (XOR with `intake-tracker-v1`, base64, `obf:` prefix); `getDeobfuscatedAuthSecret` reverses it. This is obfuscation, **not encryption**.
+- **`aiAuthSecret`** is stored obfuscated: setter wraps with `obfuscateApiKey` (XOR with `intake-tracker-v1`, base64, `obf:` prefix); `getDeobfuscatedAuthSecret` reverses it. This is obfuscation, **not encryption**. Note it is **fully dead** — neither the field nor `getDeobfuscatedAuthSecret` is read anywhere in the repo.
 - **`dayStartHour`** (0–23) reclassifies records: entries logged after this hour count toward "today"; useful past midnight. `formatHour` special-cases 0 → "12:00 AM (midnight)", 12 → "12:00 PM (noon)".
 - **Optional trackers**: disabling not only hides UI but **stops persisting new entries of that type** (even AI-returned values); existing records preserved.
 - **Theme dual-source**: store has `theme` but `AppearanceSection` reads/writes `next-themes`; the store field can drift from the active theme.
@@ -9143,7 +9243,7 @@ Every persisted field in `Settings` (defaults from `defaultSettings`, ranges fro
 - **Storage mode** is not a free toggle — switching to cloud-sync runs the migration wizard and requires sign-in; `local` is the safe default. Export in cloud-sync mode before initial sync completes warns of an incomplete file (`exportMayBeIncomplete = storageMode === "cloud-sync" && !initialSyncComplete`).
 - **Import is merge-only** (`mode: "merge"`): adds new records, skips duplicates, surfaces conflicts for manual review.
 - **Shake-to-report** enabling requests device-motion permission (`requestMotionPermission`); denial shows a destructive toast and leaves it off.
-- **Persist migration** (`migrateSettings`) is forward-only and cumulative; key steps: v0 deletes `perplexityApiKey`/`aiAuthSecret`; <2 seeds liquid presets; <3 migrates old preset `type`/`substancePer100ml` to `tab`/`caffeinePer100ml`/`alcoholPer100ml` + `waterContentPercent: 100`, deletes `coffeeDefaultType`/`utilityOrder`; <5 seeds quick-nav items; <7 deletes `experimentalFeatures`; <8 seeds `storageMode: "local"`; <9 seeds swipe thresholds (28 / 500); <10 deletes `dismissedInsights`, seeds `shakeToReportEnabled: true`; <11 seeds shake (15 / 3); <12 sets `shakeThreshold: 8`; <13 seeds `sugarLimit: 30`; <14 seeds `potassiumLimit: 3500`; <15 seeds `optionalTrackers {sugar:true, potassium:false}`; <16 seeds extended buffers (500/500/10). (Note: current `defaultSettings` shake values are 10/5, diverging from the migration-seeded historical values.)
+- **Persist migration** (`migrateSettings`) is forward-only and cumulative; key steps: `version === 0` (strict equality — fires only for exactly-v0 blobs) deletes `perplexityApiKey`/`aiAuthSecret`; <2 seeds liquid presets; <3 migrates old preset `type`/`substancePer100ml` to `tab`/`caffeinePer100ml`/`alcoholPer100ml` + `waterContentPercent: 100`, deletes `coffeeDefaultType`/`utilityOrder`; <5 seeds quick-nav items; <7 deletes `experimentalFeatures`; <8 seeds `storageMode: "local"`; <9 seeds swipe thresholds (28 / 500); <10 deletes `dismissedInsights`, seeds `shakeToReportEnabled: true`; <11 seeds shake (15 / 3); <12 sets `shakeThreshold: 8`; <13 seeds `sugarLimit: 30`; <14 seeds `potassiumLimit: 3500`; <15 seeds `optionalTrackers {sugar:true, potassium:false}`; <16 seeds extended buffers (500/500/10). (Note: current `defaultSettings` shake values are 10/5, diverging from the migration-seeded historical values.)
 - **`resetToDefaults()`** replaces the whole state with `defaultSettings` (also drops any user liquid presets back to the 8 defaults).
 
 ---
@@ -9209,7 +9309,7 @@ Every persisted field in `Settings` (defaults from `defaultSettings`, ranges fro
 ## Features
 
 ### A. Medication dose reminders (Web Push, server-driven — the primary path)
-- **Subscribe/unsubscribe** to Web Push via the browser `PushManager`, syncing the subscription (endpoint + p256dh + auth keys) to Neon Postgres keyed by Neon-Auth `userId`.
+- **Subscribe/unsubscribe** to Web Push via the browser `PushManager`, syncing the subscription (endpoint + p256dh + auth keys — **no timezone**) to Neon Postgres keyed by Neon-Auth `userId`.
 - **Per-user dose schedule sync:** the app computes the day's dose slots (`useDailyDoseSchedule`) and POSTs a flattened schedule (time slot × day-of-week × medication label list) to the server, where it is mirrored into `push_schedules`.
 - **Timezone capture:** the client's IANA timezone (`Intl.DateTimeFormat().resolvedOptions().timeZone`) is sent with each schedule sync and stored on the subscription so server-side dispatch uses the user's local time.
 - **Server dispatch** (`/api/push/send`, cron-secret gated): for every subscribed user, computes their current local `HH:MM`, weekday, and date; finds dose slots due *now* that haven't been sent today; sends a Web Push; logs to `push_sent_log` (follow-up index 0).
@@ -9220,13 +9320,14 @@ Every persisted field in `Settings` (defaults from `defaultSettings`, ranges fro
 - **Service-worker rendering:** the SW `push` handler shows the notification with the app icon, `requireInteraction: true`, and stores the deep-link URL; `notificationclick` focuses an existing `/medications` window (and navigates it) or opens a new one.
 
 ### B. Medication reminders (in-app polling fallback — `medication-notification-service.ts`)
-- Runs a **60-second `setInterval` loop** while the app is open; on start it immediately runs once.
-- **Dose check:** every minute, finds active prescriptions → active phases → enabled schedules whose `daysOfWeek` includes today and whose scheduled time is within a **0–5 minute window** of now; fires a single grouped local notification listing all due meds. Dedupes per `{date}-{time}-{prescriptionId}` so a dose fires once per day.
-- **Refill check:** runs at most once per **12 hours**; for each active prescription with an active inventory, computes days-of-supply remaining and alerts when stock ≤ `refillAlertDays` (in days) or ≤ `refillAlertPills` (in pills). Dedupes per prescription id.
+- On start, runs **both a dose check and a refill check once**, then starts a **60-second `setInterval` loop** whose callback re-runs **only the dose check** (`checkDoseReminders()`); the refill check does **not** re-fire inside the loop.
+- **Dose check:** every minute, finds active prescriptions → active phases → enabled schedules whose `daysOfWeek` includes today and whose scheduled time is within a **0–5 minute window** of now; fires a single grouped local notification listing all due meds (title `Time for your {HH:MM} medications`, body = comma-joined med names, tag `dose-reminder-{HH:MM}`, `requireInteraction: true`). Dedupes per `{date}-{time}-{prescriptionId}` so a dose fires once per day.
+- **Refill check:** runs **once at startup** (not on the loop), and is itself throttled to at most once per **12 hours** — so within a single open session it never re-fires; the 12 h throttle only matters across separate app sessions. For each active prescription with an active inventory, computes days-of-supply remaining and alerts when stock ≤ `refillAlertDays` (in days) or ≤ `refillAlertPills` (in pills). The alert is title `Refill needed: {brandName}`, body `{stock} pills left (~{daysLeft} days). Time to refill {brandName} {strength}.`, tag `refill-{id}` (not sticky — `requireInteraction` defaults false). Dedupes per prescription id.
 - Dedupe state and last-check timestamps persisted to `localStorage` (`intake-tracker-med-notifications`); the notified-doses list is pruned to today's keys each run.
 
 ### C. Native local notifications (Capacitor — installed app only)
 - When running as a native (Capacitor) app, requests native local-notification permission and **pre-schedules** repeating weekly notifications (one per schedule × day-of-week) directly on the OS, so reminders fire even when the app is closed and offline.
+- **Soft-delete filtering:** the sync only includes schedules where `enabled && deletedAt === null`, phases where `status === "active" && deletedAt === null`, and prescriptions where `isActive && deletedAt === null` — soft-deleted (`deletedAt`) rows are excluded.
 - Cancels all previously-pending notifications and re-schedules from scratch on each sync. Uses `allowWhileIdle: true`. Weekday is offset (`dow + 1`) to match Capacitor's 1=Sunday convention vs the app's 0=Sunday.
 - Title `Time for {genericName}`, body `Take {dose} of {genericName}`.
 
@@ -9252,7 +9353,7 @@ Every persisted field in `Settings` (defaults from `defaultSettings`, ranges fro
 - **Select "Follow-up reminders"** → options None / 1 / 2 / 3 follow-ups; change syncs to server settings.
 - **Select "Reminder interval"** (only when follow-up count > 0) → Every 5 / 10 / 15 / 20 / 30 minutes; syncs to server.
 - **Select "Time Format"** → 24-hour (14:00) / 12-hour (2:00 PM) (display preference; affects how times render).
-- **Primary / Secondary Region comboboxes** (searchable country picker, ~195 countries + "Not Specified (Global Search)") — used by AI medicine search, co-located in this view.
+- **Primary / Secondary Region comboboxes** (searchable country picker, **196 countries** + "Not Specified (Global Search)" = 197 entries) — used by AI medicine search, co-located in this view.
 
 ### Settings → Permissions section
 - **"Enable" notification permission** (PermissionBadge) → triggers `requestNotificationPermission`; success toast on grant, error toast on failure.
@@ -9275,7 +9376,7 @@ Every persisted field in `Settings` (defaults from `defaultSettings`, ranges fro
 
 ### Dose-reminders toggle row (Medication Settings)
 - **Unsupported browser:** helper text "Notifications not supported in this browser"; Switch disabled.
-- **Signed out + not enabled:** helper text "Sign in to enable push reminders across devices"; the entire Dose Reminders card is hidden when the auth gate is closed (push needs auth).
+- **Signed out + not enabled:** helper text "Sign in to enable push reminders across devices"; the entire Dose Reminders card is hidden when the auth gate is closed (push needs auth). The gate (`useAuthGate()` returns `!ready || authenticated`) keeps the card **visible while auth is still loading** (`ready === false`); it is hidden strictly when auth is ready **and** not authenticated.
 - **Default (supported, signed in, off):** helper "Get push notifications when medications are due".
 - **Toggling (in flight):** Switch disabled until subscribe/unsubscribe resolves.
 - **Enabled / active:** Switch on; reveals the Follow-up count select.
@@ -9284,7 +9385,7 @@ Every persisted field in `Settings` (defaults from `defaultSettings`, ranges fro
 - **Permission denied after prompt:** toggle stays OFF (no error surfaced inline).
 
 ### Permissions section
-- **PermissionBadge states:** `granted` → green "Enabled" with check icon; `denied` → red "Blocked" + optional "Reset"; `unavailable` → grey "Not available"; `prompt` → "Enable" button.
+- **PermissionBadge states:** `granted` → green "Enabled" with check icon; `denied` → red "Blocked" + optional "Reset"; `unavailable` → grey "Not available"; `prompt` → "Enable" button. (`getPermissionLabel()` separately maps `prompt → "Not set"`, but PermissionBadge surfaces the "Enable" button rather than that label.)
 - **Expiry Reminders:** only visible when notifications granted; button shows "On" (default variant) / "Off" (outline); "Test" ghost button appears only when On.
 - **Toasts:** success (enabled/disabled/test sent), destructive (request failed / save failed / test failed).
 
@@ -9302,7 +9403,8 @@ Every persisted field in `Settings` (defaults from `defaultSettings`, ranges fro
 ### Notification visual states (system-rendered)
 - **Initial dose reminder** vs **follow-up reminder** differ by title prefix ("Time for…" vs "Reminder:…").
 - **requireInteraction:** dose pushes are sticky (`requireInteraction: true`); expiry/test notifications are not.
-- Notifications with the same `tag` (`dose-{HH:MM}`) collapse/replace each other.
+- Notifications with the same `tag` collapse/replace each other. Note the **push** dose path uses `dose-{HH:MM}` while the **in-app** dose reminder uses a *different* tag `dose-reminder-{HH:MM}`, so in-app and push dose notifications do **not** collapse together.
+- **In-app refill alert** is **not** sticky (`requireInteraction` defaults to false); the in-app dose reminder, like the push dose path, **is** sticky (`requireInteraction: true`).
 
 ---
 
@@ -9351,7 +9453,8 @@ Every persisted field in `Settings` (defaults from `defaultSettings`, ranges fro
 - `HH:MM` 24-hour, zod-validated `^\d{2}:\d{2}$`.
 
 ### Notification payload fields
-- `title`, `body`, `tag` (`dose-{HH:MM}` / `expiry-reminder` / `test-notification`), `url` (default `/medications?tab=schedule`), `icon` (`/icons/icon-192.svg`), `requireInteraction`.
+- `title`, `body`, `tag`, `url` (default `/medications?tab=schedule`), `icon` (`/icons/icon-192.svg`), `requireInteraction`.
+- **Tags by path:** push dose reminder `dose-{HH:MM}`; in-app dose reminder `dose-reminder-{HH:MM}`; in-app refill alert `refill-{id}`; expiry reminder `expiry-reminder`; test notification `test-notification`.
 
 ### Refill-alert thresholds (per inventory item)
 - `refillAlertDays` (days-of-supply threshold) and/or `refillAlertPills` (pill-count threshold) — either may trigger.
@@ -9361,7 +9464,7 @@ Every persisted field in `Settings` (defaults from `defaultSettings`, ranges fro
 ## Data model touched
 
 ### Neon Postgres (server, `schema.ts` / `push-db.ts`)
-- **`push_subscriptions`** — `id`, `userId` (unique, FK→usersSync, cascade), `endpoint`, `p256dh`, `authKey`, `timezone` (default "UTC"), `createdAt`, `updatedAt`. One row per user (upsert on conflict by userId).
+- **`push_subscriptions`** — `id`, `userId` (unique, FK→usersSync, cascade), `endpoint`, `p256dh`, `authKey`, `timezone` (default "UTC"), `createdAt`, `updatedAt`. One row per user (upsert on conflict by userId). The `/api/push/subscribe` body carries only `endpoint` + `keys`; `timezone` is written **exclusively** by `/api/push/sync-schedule` (`updateTimezone`), so a user who subscribes but never syncs a schedule keeps `timezone = 'UTC'`.
 - **`push_schedules`** — `id`, `userId` (FK), `timeSlot`, `dayOfWeek`, `medicationsJson`; unique index on (userId, timeSlot, dayOfWeek). Full replace on sync (delete-all then insert).
 - **`push_sent_log`** — `id`, `userId` (FK), `timeSlot`, `sentDate` (date), `followUpIndex` (default 0), `sentAt`; unique index on (userId, timeSlot, sentDate, followUpIndex). Prevents duplicate sends.
 - **`push_settings`** — `userId` (PK, FK), `enabled` (default true), `followUpCount` (default 2), `followUpIntervalMinutes` (default 10), `dayStartHour` (default 2).
@@ -9380,7 +9483,7 @@ Every persisted field in `Settings` (defaults from `defaultSettings`, ranges fro
 
 ## Validation, edge cases & business rules
 
-- **Auth requirement:** all push subscription/schedule/settings/check routes run under `withAuth()` (Neon-Auth cookie session, no Bearer token). `/api/push/send` instead requires a `Bearer {CRON_SECRET}` header (cron-only). The Dose Reminders settings card is hidden entirely when signed out.
+- **Auth requirement:** all push subscription/schedule/settings/check routes run under `withAuth()`, which accepts **either** an `Authorization: Bearer {token}` header **or** a Neon-Auth cookie session — the web path uses the cookie, while `apiFetch` in Capacitor/native mode attaches the Bearer token. `/api/push/send` instead requires a `Bearer {CRON_SECRET}` header (cron-only). The Dose Reminders settings card is hidden entirely when signed out.
 - **Permission gating:** every notification path no-ops unless `Notification.permission === "granted"`. Subscribe no-ops if `serviceWorker`/`PushManager` unavailable.
 - **VAPID key:** subscribe converts `NEXT_PUBLIC_VAPID_PUBLIC_KEY` from URL-safe base64 to `Uint8Array`; `userVisibleOnly: true`.
 - **Re-subscribe safety:** subscribe re-sends an existing subscription to the server (covers server-side loss); unsubscribe tolerates a missing subscription.
@@ -9404,7 +9507,7 @@ Every persisted field in `Settings` (defaults from `defaultSettings`, ranges fro
 - **`medication-notification-service.ts`** — in-app 60 s polling loop for dose reminders + 12 h refill alerts (start/stop lifecycle).
 - **`local-notifications.ts`** — Capacitor native pre-scheduled weekly local notifications (installed-app path).
 - **`push-sender.ts`** — server `web-push` VAPID sender; returns `{success, statusCode}`, flags 410.
-- **`push-db.ts`** — Neon SQL CRUD: save/delete subscription, sync schedules, get/save settings, due/follow-up queries, sent-log, timezone get/update, all-subscribed-user-ids.
+- **`push-db.ts`** — Neon SQL CRUD: save/delete subscription, sync schedules, get/save settings, due/follow-up queries (per-user `getDueNotificationsForUser`), sent-log, timezone get/update, all-subscribed-user-ids. Also exports a **global, all-user `getDueNotifications(currentTime, dayOfWeek, today)`** that is **dead/legacy** — neither the `send` nor `check` route imports it; both use the per-user variant.
 - **`use-push-schedule-sync.ts`** — `usePushScheduleSync` (schedule + settings sync, 60 s `/check` ping) and `useDoseReminderToggle` (`{handleToggle, toggling, supported}`).
 - **`use-medication-notifications.ts`** — mounts/unmounts the polling loop + schedule sync.
 - **`use-notification-queries.ts`** — `useNotificationSettings` re-export (`getSettings`, `saveSettings`, `sendTest`) for the expiry UI.
@@ -9450,26 +9553,26 @@ Every persisted field in `Settings` (defaults from `defaultSettings`, ranges fro
 ### Backup / Export
 - **Full-dataset export** to a single JSON `Blob` (`application/json`). Covers all 18 Dexie tables plus a `settings` snapshot read from `localStorage` key `intake-tracker-settings` (`{ state }` Zustand persisted object).
 - Tables exported: intakeRecords, weightRecords, bloodPressureRecords, eatingRecords, urinationRecords, defecationRecords, substanceRecords, prescriptions, medicationPhases, phaseSchedules, inventoryItems, inventoryTransactions, doseLogs, titrationPlans, dailyNotes, auditLogs, userProfile, insightReports.
-- **Backup envelope metadata:** `version` (`CURRENT_BACKUP_VERSION = 5`), `exportedAt` (ISO string), optional `appVersion`.
+- **Backup envelope metadata:** `version` (`CURRENT_BACKUP_VERSION = 5`) and `exportedAt` (ISO string). `appVersion` is declared optional on the `BackupData` interface but `exportBackup()` never sets it, so it is always absent from real exports.
 - **JSON is pretty-printed** (`JSON.stringify(data, null, 2)`).
 - **Auto-generated filename:** `intake-tracker-backup-<YYYY-MM-DD>.json` (date portion of `new Date().toISOString()`).
 - **Browser download** via temporary `<a download>` element + `URL.createObjectURL` / `revokeObjectURL`.
-- **Encrypted export** (`exportEncryptedBackup(pin)`): exports plaintext blob, then AES-GCM encrypts the JSON string with a PIN-derived key. Produces an `EncryptedBackup` envelope `{ encrypted: true, payload: EncryptedData, version: 5 }`.
+- **Encrypted export** (`exportEncryptedBackup(pin)`) — engine-only, **no UI**. The function exists (exports plaintext blob, then AES-GCM encrypts the JSON string with a PIN-derived key; produces an `EncryptedBackup` envelope `{ encrypted: true, payload: EncryptedData, version: 5 }`) but it is not referenced by any component or hook — there is no PIN-entry field and no "encrypt" toggle, so it is unreachable from the current UI (used only by tests).
 - **Audit logging:** every export writes an audit entry (`data_export`) with per-table counts; encrypted export logs `"Exported encrypted backup"`.
 
 ### Restore / Import
 - **Import from file** (`importBackup(file, mode)`), default mode `"merge"`.
-- **Two import modes:**
+- **Two import modes (engine):**
   - **merge** — never clears existing data; adds new records, skips duplicates; runs conflict detection on medication/system tables.
-  - **replace** — clears all 18 tables first, then bulk-imports everything with no ID/conflict checks.
+  - **replace** — clears all 18 tables first, then bulk-imports everything with no ID/conflict checks. **Engine-only / not user-reachable:** the sole UI caller (`handleConfirmImport`) hard-codes `mode: "merge"`, so no UI path triggers replace.
 - **Per-table validation** — every record validated through its Zod schema (`BACKUP_VALIDATORS`); invalid records are counted as `skipped`, never imported.
 - **Legacy-format upgrade** — old version-1 backups (`{ version, records }` with no `intakeRecords`) are transparently reshaped into the current `BackupData` form (records → intakeRecords; empty weight/BP arrays).
 - **Encrypted-backup detection** — a plaintext import of an encrypted file returns an informative error (`"This backup is encrypted. Please use importEncryptedBackup() with your PIN."`); inverse guard exists for `importEncryptedBackup` on non-encrypted files.
-- **Encrypted import** (`importEncryptedBackup(file, pin, mode)`): decrypts payload, rebuilds a `File`, delegates to `importBackup`.
+- **Encrypted import** (`importEncryptedBackup(file, pin, mode)`) — engine-only, **no UI**. The function exists (decrypts payload, rebuilds a `File`, delegates to `importBackup`) but, like `exportEncryptedBackup` and the entire `crypto.ts` PIN path, it is not referenced by any component or hook — unreachable from the current UI (used only by tests).
 - **Conflict detection (merge mode)** — for medication/system tables + userProfile + insightReports, existing-ID records are content-compared (ignoring sync metadata); identical → skipped, different → recorded as a `ConflictRecord` (NOT auto-overwritten).
-- **Conflict resolution** (`resolveConflicts`) — applies user decisions; `useBackup: true` overwrites the local record via `table.put`, else keeps current. Logs `"Resolved N conflicts (M kept current)"`.
+- **Conflict resolution** (`resolveConflicts`) — applies user decisions; `useBackup: true` overwrites the local record via `table.put`. "Keep current" (`useBackup: false`) is a literal **no-op** — those entries are skipped with no DB write. Logs `"Resolved N conflicts (M kept current)"`.
 - **Per-table import counts** in `ImportResult` (one `*Imported` counter per table) plus `skipped`, `conflicts[]`, `errors[]`, `success`.
-- **Clear all data** (`useClearAllData` → `clearAllData()`): destructive wipe of intake records (settings page).
+- **Clear all data** (`useClearAllData` → `clearAllData()`): a **soft-delete with tombstones** of the `intakeRecords` table only (sets `deletedAt`/`updatedAt`, enqueues `delete` sync ops, then `schedulePush()`) — not a hard `.clear()`, and it touches no other table. The soft-delete tombstones exist so the next sync pull does not resurrect the records. It writes **no** audit-log entry.
 
 ### Cloud-Sync Migration (local → cloud)
 - **One-time migration** of all local IndexedDB tables to Neon Postgres, switching `storageMode` from `"local"` to `"cloud-sync"`.
@@ -9482,13 +9585,13 @@ Every persisted field in `Settings` (defaults from `defaultSettings`, ranges fro
 - **Persistent resumable progress** — written to `localStorage` key `intake-tracker-migration-progress` after every batch; survives reload/crash.
 - **Auto-resume on app load** — `MigrationGuard` (mounted in `providers.tsx`) detects interrupted progress and reopens the wizard in resume mode.
 - **Resume logic** — skips fully-uploaded tables, restarts partially-uploaded tables at `lastBatchIndex + 1`, restores `queueId` counter.
-- **Integrity verification** (`verifyMigration`) — client computes deterministic SHA-256 per table, compares to server hashes from `POST /api/sync/verify-hash`; records per-table `{ clientHash, serverHash, match }`; returns whether ALL match.
+- **Integrity verification** (`verifyMigration`) — DORMANT / test-only. The function exists (client computes deterministic SHA-256 per table, compares to server hashes from `POST /api/sync/verify-hash`; records per-table `{ clientHash, serverHash, match }`; returns whether ALL match), but it is **not wired into the production flow**: the wizard never enters the `verifying` phase, never calls `verifyMigration`, and `completeMigration` finalizes **without** verifying. `verifyMigration` / `setVerificationResult` / the `verificationResults` state are exercised only by unit tests. There is no verify screen, button, or pass/fail UI.
 - **Cancel & rollback** (`cancelMigration`) — calls `POST /api/sync/cleanup` to delete all uploaded server rows, clears local progress, resets `storageMode` to `"local"`, sets phase `cancelled`.
 - **Completion** (`completeMigration`) — sets `storageMode` `"cloud-sync"`, marks `lastPushedAt` (`markPushed`), clears progress, phase `complete`.
 - **Completion summary** — total records uploaded + elapsed duration (`Ns` or `Nm Ss`), per-table counts.
 
 ### Storage info (Settings)
-- Shows sync status badge (Cloud Sync vs Local only), full-copy/downloading/offline state, last-synced timestamp, estimated storage usage/quota (`navigator.storage.estimate`), total record count.
+- Shows sync status badge (Cloud Sync vs Local only), full-copy/downloading/offline state, last-synced timestamp, estimated storage usage/quota (`navigator.storage.estimate`), total record count. The displayed total record count (`useStorageInfo`) sums only **16** tables (intakeRecords…auditLogs) — it excludes `userProfile` and `insightReports`, so the shown count can be lower than the true dataset size.
 - Entry points: "Switch to Cloud Sync", "Resume Migration", or "Sign In" depending on auth + interrupted state.
 - **Incomplete-export guard** — when `storageMode === "cloud-sync"` and `initialSyncComplete === false`, exporting warns that this device may not yet hold the full cloud dataset.
 
@@ -9504,7 +9607,7 @@ Every persisted field in `Settings` (defaults from `defaultSettings`, ranges fro
 - **After import** → a result panel shows `Last import: N new, M skipped, K conflicts`. If `K > 0`, a **"Review K conflicts"** button appears.
 - **Tap "Review conflicts"** → opens the Conflict Review Drawer.
 - **Tap "Clear All Data"** → swaps the button row to inline **Cancel** / **Confirm Delete**.
-  - **Tap "Confirm Delete"** → wipes data, collapses the confirm row.
+  - **Tap "Confirm Delete"** → soft-deletes the `intakeRecords` table (tombstones + enqueued delete ops; no other table affected), collapses the confirm row.
 
 ### Conflict Review Drawer
 - **Tap "Keep All Current"** / **"Use All Backup"** → bulk-sets every conflict's decision.
@@ -9545,7 +9648,7 @@ Every persisted field in `Settings` (defaults from `defaultSettings`, ranges fro
 - **complete** — green CheckCircle2 hero, "Migration Complete", `N records uploaded in <duration>`, per-table list (rows with `total === 0` hidden), Done button.
 - **error** — destructive heading "Migration Error", error message text, Close link.
 - **cancelled** — "Migration Cancelled", "All uploaded data has been removed from the server.", Close link.
-- (`verifying` is a defined phase value but not rendered as a distinct wizard screen.)
+- (`verifying` is a defined phase value but is **never set** in the production flow and not rendered as a distinct wizard screen. Integrity verification — `verifyMigration` / `verificationResults` — is dormant/test-only and has no UI; `completeMigration` finalizes without it.)
 
 ### Per-table upload row status (`tableStatus`)
 - **pending** — outline Circle (muted).
@@ -9559,7 +9662,7 @@ Every persisted field in `Settings` (defaults from `defaultSettings`, ranges fro
 - **Pending** — buttons disabled, labels swap to `Exporting...` / `Importing...`.
 - **Last-import result** — bordered panel; conditional "Review N conflicts" button.
 - **Clear-all** — default single button vs expanded Cancel/Confirm-Delete row.
-- **Toasts:** Export success/fail, Import success/fail (`Imported N records (M skipped, K conflicts)`), Conflicts resolved (`N records updated`), Resolution failed, Data cleared, Clear error — variants `success` / `destructive`.
+- **Toasts:** Export success/fail, Import success/fail (`Imported N records (M skipped, K conflicts)`), Conflicts resolved (`N records updated`), Resolution failed, Data cleared, Clear error — variants `success` / `destructive`. Note: the import-success toast total sums only **16** `*Imported` counters (it omits `userProfileImported` and `insightReportsImported`), so the toast undercounts when those two tables import. The inline "Last import: N new" panel sums all 18 and is accurate.
 
 ### Storage info states
 - **Local only** — secondary "Local only" badge; shows Switch-to-Cloud / Resume / Sign-In CTA.
@@ -9569,7 +9672,7 @@ Every persisted field in `Settings` (defaults from `defaultSettings`, ranges fro
   - **Offline waiting** (offline, not complete) — CloudOff, "Waiting to download your data (offline)".
 - **Last synced** line when `lastPushedAt` set.
 - **Estimated usage** — `usage of quota` or "Storage info unavailable".
-- **Record count** — `N records` (localized) or hidden when null.
+- **Record count** — `N records` (localized) or hidden when null. `N` sums only 16 tables (excludes `userProfile`/`insightReports`).
 
 ### Conflict drawer states
 - Header badge `N Conflicts Found` (amber AlertTriangle).
@@ -9581,12 +9684,12 @@ Every persisted field in `Settings` (defaults from `defaultSettings`, ranges fro
 ## Enums, options & configurable values
 
 - **Backup version:** `CURRENT_BACKUP_VERSION = 5`.
-- **Import modes:** `"merge"` (default) | `"replace"`.
+- **Import modes:** `"merge"` (default) | `"replace"`. Only `"merge"` is reachable from the UI; `"replace"` is an engine capability with no UI trigger (the import handler hard-codes `"merge"`).
 - **Migration phases:** `idle`, `backup`, `uploading`, `verifying`, `complete`, `cancelled`, `error`.
 - **`storageMode`:** `"local"` (default) | `"cloud-sync"`.
 - **Batch size:** `BATCH_SIZE = 100`.
 - **Max retries:** `MAX_RETRIES = 3`; backoff `2^attempt * 1000ms`.
-- **Verify select chunk (server):** `SELECT_CHUNK_SIZE = 200`.
+- **Server select chunk sizes:** verify-hash route `SELECT_CHUNK_SIZE = 200`; push route `SELECT_CHUNK_SIZE = 100` (distinct value), and the push route additionally caps each request to **500** ops via Zod `.max(500)`.
 - **localStorage keys:** settings `intake-tracker-settings`; migration progress `intake-tracker-migration-progress`.
 - **Fields ignored in content-equality / diffs:** `createdAt`, `updatedAt`, `deletedAt`, `deviceId`, `timezone`.
 - **Conflict-diff display:** first **3** changed fields, then `+N more`; id shown as first **8** chars.
@@ -9597,6 +9700,7 @@ Every persisted field in `Settings` (defaults from `defaultSettings`, ranges fro
 - **Duration format:** `<N>s` under 60s, else `<N>m <N>s`.
 - **Storage byte formatting:** `B` / `KB` (1 dp) / `MB` (1 dp).
 - **Dexie schema version (current):** `DB_SCHEMA_VERSION = 21` (versions 14–21 defined; Dexie multiplies by 10 internally).
+- **Audit actions used by this unit:** `data_export`, `data_import` (also used for conflict resolution). The `AuditAction` type union also defines a `data_clear` member, but it is **never emitted** by this unit's code — `clearAllData` writes no audit entry, so `data_clear` is currently dead within backup/migration.
 - **Validator field literals** (from Zod schemas):
   - intakeRecords `type`: `water` | `salt` | `sugar`.
   - substanceRecords `type`: `caffeine` | `alcohol`.
@@ -9637,7 +9741,7 @@ Reads/writes all 18 Dexie tables (`src/lib/db.ts`) and the localStorage settings
 - **Percentage guard** — `totalRecords === 0` ⇒ `0%` (no divide-by-zero).
 - **Empty-table progress** — tables with zero records still record `{ total: 0, uploaded: 0, lastBatchIndex: -1 }` and are hidden in the completion summary.
 - **Push retry** — non-2xx retried up to 3 times with backoff; final failure throws `Push failed after N attempts: <status> <text>` → error phase.
-- **Audit trail** — exports, imports, and conflict resolutions all write audit-log entries.
+- **Audit trail** — exports, imports, and conflict resolutions all write audit-log entries. Clear-all (`clearAllData`) is intentionally **un-audited** — it writes no `logAudit` entry.
 
 ---
 
@@ -9654,9 +9758,9 @@ Reads/writes all 18 Dexie tables (`src/lib/db.ts`) and the localStorage settings
 - `ConflictReviewDrawer` — bulk + per-record keep/use-backup resolution.
 - `useDownloadBackup` / `useUploadBackup` / `useResolveConflicts` / `useClearAllData` — React Query mutations with toasts.
 - `exportBackup` / `exportEncryptedBackup` / `downloadBackup` / `generateBackupFilename` — export helpers.
-- `importBackup` / `importEncryptedBackup` / `resolveConflicts` / `getBackupStats` — import/restore helpers.
+- `importBackup` / `importEncryptedBackup` / `resolveConflicts` / `getBackupStats` — import/restore helpers. (`getBackupStats` is dead UI-wise: exported and tested but consumed by no component — the storage card uses `useStorageInfo`, not `getBackupStats`. `importEncryptedBackup` is also unwired, per above.)
 - `startMigration` / `resumeMigration` / `completeMigration` / `cancelMigration` / `verifyMigration` / `checkInterruptedMigration` — migration engine.
-- `crypto.ts` (`encrypt` / `decrypt`) — AES-GCM PIN encryption for encrypted backups.
+- `crypto.ts` (`encrypt` / `decrypt`) — AES-GCM PIN encryption for encrypted backups. Dormant: only consumed by the unwired `exportEncryptedBackup` / `importEncryptedBackup` engine functions and tests; no UI path reaches it.
 - `BACKUP_SCHEMAS` / `BACKUP_VALIDATORS` — per-table Zod schemas + boolean validators.
 - `useStorageInfo` — storage estimate + total record count.
 
@@ -9691,6 +9795,7 @@ Reads/writes all 18 Dexie tables (`src/lib/db.ts`) and the localStorage settings
 - **Multiple notes per day.** No uniqueness constraint — a day (and a day+prescription pair) can hold any number of notes.
 - **Soft-delete aware.** Every note carries `deletedAt`; the model supports tombstoning rather than hard deletion (consistent with all sync-backed tables), though no delete hook is exposed yet (see gaps below).
 - **Backup round-trip.** Notes are included in JSON export/import; the import summary in Settings counts `dailyNotesImported`.
+- **Diagnostic surfaces.** Beyond the import-summary count, the `dailyNotes` row count is read into the device storage-usage total (`src/hooks/use-storage-info.ts` line 48) and the table appears in the Debug panel's per-table list (`src/components/debug-panel.tsx` line 101). These are diagnostic read surfaces, not part of the journaling feature itself.
 - **Multi-device sync.** Notes mirror to Neon Postgres (`daily_notes`) and back, ordered correctly relative to their FK parents.
 
 ## User actions & interactions
@@ -9756,9 +9861,13 @@ Reads/writes all 18 Dexie tables (`src/lib/db.ts`) and the localStorage settings
 
 **Postgres mirror — `daily_notes` (`src/db/schema.ts` 574–599):** columns `id` (pk), `user_id` (FK → `usersSync.id`, `onDelete: cascade`), `date` (not null), `prescription_id` (FK → `prescriptions.id`), `dose_log_id` (FK → `doseLogs.id`), `note` (not null), `created_at`/`updated_at` (bigint, not null), `deleted_at` (bigint, nullable), `device_id` (not null), `timezone` (not null). Indexes: `idx_daily_notes_user_updated (user_id, updated_at)`, `idx_daily_notes_date (date)`, `idx_daily_notes_prescription (prescription_id)`.
 
-**Backup schema — `dailyNoteSchema` (`src/lib/backup-schemas.ts` 137–142):** `baseRecord` (id + optional sync fields) extended with `date: string`, `note: string`, `.passthrough()` (unknown keys preserved for forward-compat). Registered in `backupTableSchemas.dailyNotes` and `tableValidators.dailyNotes`.
+**Backup schema — `dailyNoteSchema` (`src/lib/backup-schemas.ts` 137–142):** `baseRecord` (id + optional sync fields) extended with `date: string`, `note: string`, `.passthrough()` (unknown keys preserved for forward-compat). Registered in `BACKUP_SCHEMAS.dailyNotes` (line 201) and `BACKUP_VALIDATORS.dailyNotes` (line 228).
 
 **Sync push order (`src/lib/sync-topology.ts`):** `dailyNotes` sits in Tier 5 (after `doseLogs`, alongside `inventoryTransactions`) because it can FK-reference both `prescriptions` and `doseLogs`, so its parents must push first.
+
+**Live sync pipeline surfaces (`src/lib/sync-payload.ts`):** beyond topology ordering, the table is wired through the full push/pull pipeline — a Drizzle insert row-schema `dailyNotesRowSchema` (built from `schema.dailyNotes` with `userId` omitted, lines 80–82), a sync op-envelope literal (lines 171–172), the pull table map (line 234), and a pull/apply entry (line 286). The server-side `/api/sync/cleanup` route also lists `dailyNotes` in its tombstone-purge set (`src/app/api/sync/cleanup/route.ts` line 19).
+
+**Parity enforcement (`src/__tests__/schema-parity.test.ts` line 70):** a build-failing unit test asserts `dailyNotes` is present in the Dexie/Postgres parity set — this is the guard behind the field-for-field parity requirement.
 
 ## Validation, edge cases & business rules
 
@@ -9822,7 +9931,7 @@ The six sections (in order):
 - Reads the device-local `_errorLogs` Dexie table live (`useLiveQuery`), newest-first, capped at 200 rows.
 - Header shows "Error Logs (N)" where N = count after filtering.
 - **Source filter** dropdown (see enums) — "All sources" or a single source.
-- **Export** button: serializes ALL error logs (not just the 200 shown, not filtered) to a pretty-printed JSON blob and triggers a file download named `error-logs-<ISO-datetime-to-seconds>.json`. Disabled when there are zero logs.
+- **Export** button: serializes ALL error logs (not just the 200 shown, not filtered) to a pretty-printed JSON blob and triggers a file download named `error-logs-<ISO-datetime-to-seconds>.json`. The JSON is an envelope object `{ exportedAt, appVersion, logs }` (not a bare array); `exportedAt` is an ISO timestamp and `appVersion` is `CLIENT_VERSION`. Disabled when there are zero logs.
 - **Clear** button → two-step confirm (Clear → Confirm/Cancel). Confirm wipes the entire `_errorLogs` table. Disabled when zero logs.
 - Each row shows: timestamp (locale string), the source (color-coded, monospace), and the message (monospace, wrapped). A chevron appears only when the row has expandable detail (stack / componentStack / route / userAgent present).
 - **Expand a row** to reveal: Route (mono), Stack (`<pre>` block), Component stack (`<pre>`, prefixed "Component stack:"), and User agent (UA: …). Multiple rows can be expanded independently (a `Set` of ids).
@@ -9850,13 +9959,13 @@ The six sections (in order):
 - On open (and via **Refresh** button) reads SW registration + cache + push state in parallel.
 - Displays SW state rows: Supported, Registered, Scope, Script URL, Controller, Active state, Waiting state, Installing state, Caches (comma-joined names or "none"). Conditional rows only render when their value exists.
 - SW maintenance actions (4 buttons):
-  - **Force update check** → `reg.update()`, toast "Update check requested"; disabled if not registered.
+  - **Force update check** → `reg.update()`, toast "Update check requested" on success; disabled if not registered. If no registration is found at click time, short-circuits with toast "No service worker registered"; on error shows a destructive "Update failed" toast (with the error message).
   - **Skip waiting** → posts `{ type: "SKIP_WAITING" }` to the waiting worker; toast confirms or "No waiting worker"; disabled if no waiting worker.
   - **Clear caches** → deletes all Cache Storage entries; toast "Caches cleared — N cache(s) deleted"; disabled if no caches.
-  - **Unregister** (red/destructive text) → unregisters all SW registrations; toast "N registration(s) removed"; disabled if not registered.
+  - **Unregister** (red/destructive text) → unregisters all SW registrations; toast is a title+description pair (title "Service workers unregistered", description "N registration(s) removed"); disabled if not registered.
 - **Push** sub-block (separated by a top border, `BellRing` icon): rows for Push supported, Permission, Subscribed, Endpoint (conditional).
 - **Send test notification** → dynamically imports `push-notification-service` and calls `sendTestNotification()`; toast success/failure; disabled unless permission === "granted".
-- All actions show a `busy` state (spinning `RefreshCw` on the Refresh button) and disable while busy.
+- Most actions show a `busy` state (spinning `RefreshCw` on the Refresh button) and disable while busy. **Exception:** Skip waiting does NOT set `busy` (no `setBusy(true)`), so it isn't gated by the global busy spinner — it is disabled only by `!sw.waitingState`.
 
 ### 4. Audit Log Viewer (`debug-panel.tsx` → `AuditLogViewer`)
 - Reads `auditLogs` table live, newest-first, capped at 100.
@@ -9868,8 +9977,8 @@ The six sections (in order):
 
 ### 5. Stock Management (`debug-panel.tsx` → `StockManagement`)
 - Two actions for medication inventory integrity:
-  - **Recalculate All Stock** → calls `recalculateAllStock()`; spinner while running. Result card shows "Recalculation Result: X items updated, Y drifted" and lists each drifted item as `brandName: oldStock → newStock` (amber colored "Drifted Items").
-  - **Compare Cached vs Derived** → for each active inventory item, compares the stored `currentStock` against the freshly `getCurrentStock()`-derived value. Renders a card listing `brandName  cached: A | derived: B`, flagging mismatches `(DRIFT)` in amber when `|cached − derived| > 0.001`.
+  - **Recalculate All Stock** → calls `recalculateAllStock()`; spinner while running. Result card shows "Recalculation Result: X items updated, Y drifted"; only when there is at least one drifted item does it render the (amber) "Drifted Items:" heading followed by each drifted item as `brandName: oldStock → newStock` (oldStock is `currentStock ?? 0`). When zero drift, the card shows only the summary line. Beyond persisting recomputed stock, `recalculateAllStock()` has side effects: it enqueues sync (`_syncQueue`), calls `schedulePush()`, and writes a `stock_recalculated` audit log (with `totalItems`, `driftedCount`, `driftedItems`).
+  - **Compare Cached vs Derived** → for each active inventory item, compares the stored `currentStock` (null-coalesced via `currentStock ?? 0`) against the freshly `getCurrentStock()`-derived value. Renders a card with a header `Stock Comparison (N active items)`, then lists each item as `brandName  cached: A | derived: B`, flagging mismatches `(DRIFT)` in amber when `|cached − derived| > 0.001`.
 - Reads only active inventory items (`isActive === 1`).
 
 ### 6. Raw Record Viewer (`debug-panel.tsx` → `RawRecordViewer`)
@@ -9912,18 +10021,18 @@ The six sections (in order):
 
 - **Collapsed section (default):** header button with `ChevronRight`; body hidden.
 - **Expanded section:** `ChevronDown`; body rendered. Only one at a time.
-- **Loading / async:** SW diagnostics show `busy` (spinning Refresh icon, action buttons disabled). Stock "Recalculate" shows a spinning `RefreshCw` icon while `isRecalculating`. "Compare" disabled while `isLoadingComparisons`.
+- **Loading / async:** SW diagnostics show `busy` (spinning Refresh icon, action buttons disabled) for Refresh, Force update check, Clear caches, and Unregister; Skip waiting is the one action that never sets `busy`. Stock "Recalculate" shows a spinning `RefreshCw` icon while `isRecalculating`. "Compare" disabled while `isLoadingComparisons`.
 - **Live-updating:** Error Logs, Audit Logs, Raw Records and active-inventory query are `useLiveQuery` — re-render automatically as the underlying Dexie data changes.
 - **Empty states:** Error Logs "No errors captured."; Audit Logs "No audit logs found."; Raw Records "No records in this table." (centered, muted, text-xs).
 - **Confirm states:** Clear / Clear All swap into an inline Confirm (destructive variant) + Cancel (ghost) pair.
 - **Disabled states:** Export/Clear disabled when zero error logs; Force update / Unregister disabled when no SW registered; Skip waiting disabled when no waiting worker; Clear caches disabled when no caches; Send test notification disabled unless push permission === "granted".
-- **Success/feedback:** SW actions emit toasts (e.g. "Caches cleared — N cache(s) deleted", "SKIP_WAITING posted to waiting worker", "Update check requested", "Service workers unregistered — N removed", "Test notification sent"). Environment Copy → transient "Copied" label (2s).
+- **Success/feedback:** SW actions emit toasts (e.g. "Caches cleared — N cache(s) deleted", "SKIP_WAITING posted to waiting worker", "Update check requested", and the Unregister title+description pair "Service workers unregistered" / "N registration(s) removed", "Test notification sent"). Environment Copy → transient "Copied" label (2s).
 - **Error/destructive feedback:** SW action failures emit destructive-variant toasts with the error message. Notification failure → "Notification failed — Check permission and service worker".
 - **Offline/online:** Environment "Online" row reflects `navigator.onLine` live. Storage row shows "—" if estimate unavailable.
 - **Unsupported environment:** SW "Supported"/"Registered" → "no"; Push "Permission" → "unsupported" when Notifications API absent; conditional rows simply omitted.
-- **Drift highlight:** Stock comparisons and recalc drift rows render amber (`text-amber-600 dark:text-amber-400`) when drift detected; non-drift rows neutral.
+- **Drift highlight:** In **Compare Cached vs Derived**, per-item rows render amber (`text-amber-600 dark:text-amber-400`) and append `(DRIFT)` when `|cached − derived| > 0.001`; non-drift rows neutral. In **Recalculate All Stock**, only the "Drifted Items:" heading is amber — the per-item drift rows render plain `font-mono` (no per-row `> 0.001` color gate; that gate is comparison-only).
 - **Color-coded error sources:** see SOURCE_COLOR enum below.
-- **Capacitor/native vs Web:** Environment "Mode" row reflects `isCapacitorMode()`.
+- **Capacitor/native vs Web:** Environment "Mode" row reflects `isCapacitorMode()`. Note this is not a Capacitor runtime probe — `isCapacitorMode()` returns the truthiness of the `NEXT_PUBLIC_API_BASE_URL` env var.
 
 ---
 
@@ -9949,7 +10058,7 @@ The six sections (in order):
 ### Audit actions (`AuditAction`, db.ts) — full set (filter shows "All Actions" + these)
 `ai_parse_request`, `ai_parse_success`, `ai_parse_error`, `data_export`, `data_import`, `data_clear`, `settings_change`, `api_key_set`, `api_key_clear`, `pin_set`, `pin_verify_success`, `pin_verify_failure`, `dose_taken`, `dose_skipped`, `dose_rescheduled`, `dose_time_edited`, `prescription_added`, `prescription_updated`, `inventory_adjusted`, `phase_activated`, `validation_error`, `dose_untaken`, `prescription_deleted`, `phase_completed`, `phase_started`, `stock_recalculated`, `inventory_added`, `inventory_deleted`, `titration_plan_updated`, `timezone_adjusted`.
 
-> NOTE: The `AUDIT_ACTIONS` array in `debug-panel.tsx` currently lists 26 of these and is missing `dose_time_edited`, `titration_plan_updated`, and `timezone_adjusted` (the full `AuditAction` type has 30). An alternative design should source the dropdown from the type, not the hand-maintained array.
+> NOTE: The `AUDIT_ACTIONS` array in `debug-panel.tsx` currently lists 27 of these and is missing `dose_time_edited`, `titration_plan_updated`, and `timezone_adjusted` (the full `AuditAction` type has 30). An alternative design should source the dropdown from the type, not the hand-maintained array.
 
 ### Raw record table picker (`TABLE_NAMES`, debug-panel.tsx) — 14 tables
 `intakeRecords`, `weightRecords`, `bloodPressureRecords`, `eatingRecords`, `urinationRecords`, `defecationRecords`, `prescriptions`, `medicationPhases`, `phaseSchedules`, `inventoryItems`, `inventoryTransactions`, `doseLogs`, `dailyNotes`, `auditLogs`. (Default selection = first entry, `intakeRecords`.)
@@ -9967,7 +10076,7 @@ The six sections (in order):
 - Locale (`navigator.language`)
 - Screen (`width×height @ DPRx`)
 - Viewport (`innerWidth×innerHeight`)
-- Storage (`usage / quota`, formatted B/KB/MB/GB to 1 decimal)
+- Storage (`usage / quota`, formatted via `formatBytes`: bare `"N B"` with no decimal for values < 1024; KB/MB/GB to 1 decimal; `"—"` when the byte value is null)
 - User agent
 
 ### Service Worker state fields
@@ -10000,7 +10109,7 @@ The six sections (in order):
 
 - **`_errorLogs`** (`ErrorLogEntry`, db.ts; Dexie v17+, store key `id, timestamp, source`): READ (live, export) + WRITE (capture via `logError`) + CLEAR. Fields: `id`, `timestamp`, `source` (`ErrorLogSource`), `message`, `stack?`, `componentStack?`, `route?`, `userAgent?`, `appVersion?`. Local-only; excluded from sync/backup.
 - **`auditLogs`** (`AuditLog`, db.ts): READ (live, top 100 newest) + CLEAR. Fields: `id`, `timestamp`, `action` (`AuditAction`), `details?` (JSON string), `createdAt`, `updatedAt`, `deletedAt`, `deviceId`, `timezone`.
-- **`inventoryItems`** (`InventoryItem`, db.ts): READ active items (`isActive === 1`); fields used: `id`, `brandName`, `currentStock`, `isActive`. Stock recalc WRITES `currentStock` + `updatedAt` and enqueues sync (`_syncQueue`).
+- **`inventoryItems`** (`InventoryItem`, db.ts): READ active items (`isActive === 1`); fields used: `id`, `brandName`, `currentStock`, `isActive`. Stock recalc WRITES `currentStock` + `updatedAt`, enqueues sync (`_syncQueue`), calls `schedulePush()`, and writes a `stock_recalculated` audit log (`totalItems`, `driftedCount`, `driftedItems`).
 - **`inventoryTransactions` / `doseLogs`**: read indirectly via `getCurrentStock()` to derive true stock.
 - **All 14 picker tables**: READ-only via `db.table(name)` in Raw Record Viewer.
 - Reads `DB_SCHEMA_VERSION` constant; reads settings store (`dayStartHour`).
@@ -10016,7 +10125,7 @@ The six sections (in order):
 - **Reentrancy:** `writingDepth` guard + captured original console refs prevent the capture pipeline from recursing through its own patched console; `rawConsoleError` is the escape hatch used by the ErrorBoundary.
 - **LRU trim** runs only when count > 500; deletes exactly the overflow count of oldest rows.
 - **Export** is uncapped and unfiltered (full table), unlike the 200-row live view; filename is ISO datetime sliced to seconds.
-- **Drift detection** uses absolute difference > 0.001 (float tolerance), not strict equality.
+- **Drift detection** uses absolute difference > 0.001 (float tolerance), not strict equality. This epsilon gates the amber `(DRIFT)` highlight in **Compare Cached vs Derived**, and the inclusion of an item in the recalc `items[]` drift list (`recalculateAllStock`).
 - **Raw viewer sort fallback:** if `orderBy("updatedAt")` throws (missing index), falls back to in-memory sort by `updatedAt ?? timestamp ?? createdAt`.
 - **SSR/Server safety:** capture install and most reads no-op when `window`/`navigator` undefined.
 - **Clipboard** writes are wrapped in try/catch (fail silently in non-secure contexts).
@@ -10043,7 +10152,7 @@ The six sections (in order):
 # 45 — In-app MCP Server (Claude.ai Custom Connector)
 
 **Files covered:**
-- `src/lib/mcp/tools.ts` — read-only MCP tool registry (7 tools)
+- `src/lib/mcp/tools.ts` — read-only MCP tool registry (8 tools)
 - `src/lib/mcp/queries.ts` — Drizzle read queries backing the tools
 - `src/lib/mcp/scopes.ts` — OAuth scope set + parsing
 - `src/lib/mcp/oauth.ts` — OAuth 2.1 + DCR + PKCE primitives (client/code/token lifecycle)
@@ -10063,7 +10172,7 @@ The six sections (in order):
 - `src/app/auth/sign-in-form.tsx` — consumes `callbackURL` to return user to authorize endpoint
 - `next.config.*` — rewrites `/.well-known/*` → `/api/mcp/well-known/*`; CSP `form-action 'self'`
 
-**Purpose:** A self-hosted OAuth-2.1 authorization server + Model Context Protocol (MCP) server baked into the PWA. It lets claude.ai's "Custom Connectors" feature read (never write) the single user's health data through 7 read-only tools, after the user signs in via the existing Neon Auth (Google/email) flow and approves a consent screen. The only user-facing surfaces are an HTML **consent screen** and an HTML **authorization-error / redirect page**; everything else is machine-to-machine JSON.
+**Purpose:** A self-hosted OAuth-2.1 authorization server + Model Context Protocol (MCP) server baked into the PWA. It lets claude.ai's "Custom Connectors" feature read (never write) the single user's health data through 8 read-only tools, after the user signs in via the existing Neon Auth (Google/email) flow and approves a consent screen. The only user-facing surfaces are an HTML **consent screen** and an HTML **authorization-error / redirect page**; everything else is machine-to-machine JSON.
 
 ---
 
@@ -10072,12 +10181,12 @@ The six sections (in order):
 ### MCP server (the connector itself)
 - Exposes a **Streamable HTTP** MCP transport at `/api/mcp/mcp` (SSE transport `/api/mcp/sse` is **disabled**, `disableSse: true`).
 - Server identity advertised as `serverInfo: { name: "intake-tracker", version: "1.0.0" }`.
-- Registers **7 read-only tools** (no write/update/delete tools exist — the model cannot mutate state even if it tries).
+- Registers **8 read-only tools** (no write/update/delete tools exist — the model cannot mutate state even if it tries).
 - Every tool: validates input with Zod, extracts `userId` from the verified bearer token, runs a user-scoped Drizzle query, writes a fire-and-forget audit row, and returns an MCP `content: [{ type: "text", text: <JSON> }]` response.
 - Hard `maxDuration = 60` seconds per request.
 
-### The 7 tools
-1. **`get_today_summary`** (title "Today's summary", no input) — totals for water/salt/sugar/potassium since the user's day-start hour, latest blood-pressure reading, latest weight, and counts of doses logged today grouped by status.
+### The 8 tools
+1. **`get_today_summary`** (title "Today's summary", no input) — totals for water/salt/sugar/potassium since the user's day-start hour, latest blood-pressure reading, latest weight, and counts of doses logged today grouped by status. Returns a fixed-shape object: `{ day_started_at, now, intake: { water_ml, salt_mg, sugar_g, potassium_mg }, latest_blood_pressure, latest_weight, doses[] }` (note the unit-suffixed intake keys).
 2. **`query_intake_history`** (title "Intake history") — individual intake records in a time range, filterable by `type` or `'all'`. Returns `id, type, amount, timestamp, source, note`.
 3. **`query_weight_history`** (title "Weight history") — weight readings (kg) in range, oldest first, capped at 5000. Returns `id, weight, timestamp, note`.
 4. **`query_blood_pressure_history`** (title "Blood pressure history") — BP readings in range, oldest first, capped 5000. Returns `id, systolic, diastolic, heartRate, irregularHeartbeat, position, arm, timestamp, note`.
@@ -10104,7 +10213,7 @@ The six sections (in order):
 - **Opaque, hashed tokens** — only SHA-256 hashes persisted; plaintext lives only in HTTP responses/headers.
 - **Constant-time comparison** (`timingSafeEqual`) for client-secret and PKCE checks.
 - **Redirect-URI allowlist** for DCR — only claude.ai / *.claude.ai / anthropic.com / *.anthropic.com over HTTPS, or loopback (localhost/127.0.0.1/[::1]) over http/https for dev.
-- **PII redaction in audit** — free-form fields (notes, food descriptions) are never logged; only safe primitives via `argsForAudit`.
+- **PII redaction in audit** — free-form fields (notes, food descriptions) are never logged; only safe primitives via `argsForAudit`. In practice only `query_intake_history` passes explicitly-redacted audit args `{type, start_ms, end_ms}`; the weight/BP/eating tools pass their full `args` to the audit row (harmless — those args contain only the unix-ms date range, no free-form text).
 - **Per-request bearer memoization** (WeakMap) — whitelist pre-flight and `verifyToken` share one DB lookup.
 
 ---
@@ -10128,7 +10237,7 @@ The only human-facing surfaces are inside the OAuth authorize flow. Everything e
 - **Refresh access token** (`POST /oauth/token`, `refresh_token` grant).
 - **Call a tool** (`POST /api/mcp/mcp` JSON-RPC with `Authorization: Bearer <token>`).
 - **Terminate session** (`DELETE /api/mcp/mcp` — part of Streamable HTTP spec).
-- **Preflight** (`OPTIONS` on every endpoint → 204 with CORS headers).
+- **Preflight** (`OPTIONS` → 204 with CORS headers) on the cross-origin-fetched endpoints — the `[transport]`, token, register, and both well-known routes. The **authorize** endpoint exports only `GET`/`POST` (it is browser-navigated, not a cross-origin fetch target) and has **no** `OPTIONS` handler.
 - **Discover metadata** (`GET /.well-known/oauth-authorization-server`, `/.well-known/oauth-protected-resource`).
 
 ---
@@ -10256,7 +10365,7 @@ Two HTML pages and several machine-readable response states.
 ## Data model touched
 
 ### Server-only MCP tables (`src/db/schema.ts`, Neon Postgres, NOT in Dexie sync)
-- **`mcp_oauth_clients`** — `client_id` (PK), `client_secret_hash`, `client_name`, `redirect_uris[]`, `token_endpoint_auth_method`, `scope`, `created_at`, `last_used_at`.
+- **`mcp_oauth_clients`** — `client_id` (PK), `client_secret_hash`, `client_name`, `redirect_uris[]`, `token_endpoint_auth_method`, `scope`, `created_at`, `last_used_at` (column exists but is currently **inert** — `registerClient` never sets it and no code path updates it).
 - **`mcp_auth_codes`** — `code` (PK), `client_id` (FK→clients, cascade), `user_id` (FK→users_sync, cascade), `redirect_uri`, `code_challenge`, `code_challenge_method`, `scope`, `expires_at`, `consumed_at`, `created_at`. Indexed on client + expires.
 - **`mcp_access_tokens`** — `token_hash` (PK), `refresh_token_hash` (unique), `client_id` (FK), `user_id` (FK), `scope`, `expires_at`, `refresh_expires_at`, `revoked_at`, `created_at`, `last_used_at`. Indexed on user + expires.
 - **`mcp_audit_log`** — `id` (serial PK), `timestamp` (tz, default now), `user_id` (FK), `client_id`, `tool`, `args_json`, `status`, `error_message`, `duration_ms`. Indexed on (user, timestamp).
@@ -10286,14 +10395,14 @@ All reads are **SELECT-only**; the only writes the feature performs are to its o
 - **Truncation:** queries fetch `MAX_ROWS + 1`; if over 5000, slice to 5000 and return `truncated: true`.
 - **Auth-code consumption is atomic & single-use:** the row is marked `consumed_at` only if code present, unconsumed, correct client, correct `redirect_uri`, and not expired — so a wrong-client/expired attempt does **not** burn the code (legit client can retry). **PKCE is checked AFTER consume**: a PKCE mismatch burns the code (an attacker likely intercepted it, so no retry path).
 - **Refresh tokens are NOT rotated** (deliberate): the same refresh token stays valid for the full 30-day window; only the access token is re-minted in place. Rationale in code: strict single-use rotation locked out the single legitimate client on parallel/lost refreshes. Residual race: concurrent refresh → last-writer-wins on `token_hash`; the "loser" gets a 401 on its next call and self-heals by refreshing again. Never locks the user out.
-- **Access-token lookup:** rejects revoked or expired tokens; best-effort `last_used_at` touch (failures ignored).
+- **Access-token lookup:** rejects revoked or expired tokens. On every successful bearer lookup (the read path) `lookupAccessToken` fires a best-effort, fire-and-forget `last_used_at` touch on `mcp_access_tokens`; failures are swallowed and never block the request.
 - **`purgeExpired()`** helper deletes expired auth codes and tokens whose **refresh** has expired (not by access-token `expiresAt`, since the row still carries a usable refresh token). Not wired to a cron yet.
 - **Whitelist:** empty `ALLOWED_EMAILS` ⇒ everyone allowed; otherwise case-insensitive membership; missing email ⇒ denied. Re-checked on every MCP request (403 if newly removed).
 - **Origin correctness:** request forwarded-headers WIN over `VERCEL_URL` — the deployment-hash URL is gated by Vercel SSO and would 403 the OAuth redirect; the custom domain (forwarded host) is the correct issuer.
 - **CSP workaround:** consent POST cannot 302 cross-origin (`form-action 'self'` blocks redirect targets per CSP3); the route returns an HTML page with meta-refresh + JS replace + anchor fallback instead.
 - **Sign-in callbackURL safety:** `safeCallbackUrl` only accepts same-origin relative paths (must start with `/`, reject `//` protocol-relative and absolute URLs) — prevents open-redirect.
 - **DELETE in CORS preflight:** explicitly allowed because the Streamable HTTP spec uses DELETE for session termination; omitting it would make browsers block it.
-- **Defence-in-depth joins:** `list_recent_doses` and `get_inventory_status` scope the prescription join by `user_id` + `deletedAt IS NULL` even though FKs already prevent cross-user references.
+- **Defence-in-depth joins:** `list_recent_doses` and `get_inventory_status` scope the prescription join by `user_id` + `deletedAt IS NULL` even though FKs already prevent cross-user references. Both use a **`leftJoin`** (not inner join): a dose/inventory row whose prescription is soft-deleted or otherwise mismatched is still returned, but with `genericName: null` rather than being dropped from the result.
 - **Error opacity:** MCP clients never see internal exception text; only the audit log captures it.
 - **PKCE S256 only:** authorize Zod is `z.literal("S256")`; metadata advertises only S256; the `plain` branch in `consumeAuthCode` is dead for new codes (kept for legacy DB rows).
 - **Substance attachment:** eating history collects distinct non-null `groupId`s from the capped food rows, then fetches matching (non-deleted, user-scoped) substance rows in one `inArray` query.
@@ -10329,7 +10438,8 @@ All reads are **SELECT-only**; the only writes the feature performs are to its o
 - `src/lib/substance-service.ts` — Dexie CRUD for `substanceRecords` + water-intake linking.
 - `src/app/api/ai/substance-lookup/route.ts` — per-100ml lookup (caffeine mg / alcohol ABV) from a beverage name.
 - `src/app/api/ai/substance-lookup/schema.ts` — Zod + tool schema for the lookup response.
-- `src/app/api/ai/substance-enrich/route.ts` — AI enrichment of a free-text "Other" caffeine/alcohol entry.
+- `src/app/api/ai/substance-enrich/route.ts` — AI enrichment route for a free-text caffeine/alcohol description (no live UI caller; reached only by the dormant runner below).
+- `src/lib/substance-enrich.ts` — `runSubstanceEnrichment()`, the dormant/test-only background Pass-2 enrichment runner that re-estimates v12-migrated records via the substance-enrich route.
 - `src/hooks/use-substance-queries.ts` — React/Dexie live-query + mutation hooks.
 - `src/lib/alcohol-units.ts` — metric standard-drink / ethanol math.
 - `src/components/liquids/preset-tab.tsx` — primary entry surface (Coffee & Alcohol tabs of the Liquids card).
@@ -10340,7 +10450,7 @@ All reads are **SELECT-only**; the only writes the feature performs are to its o
 - `src/components/analytics/correlations-tab.tsx` — caffeine/alcohol vs BP correlations.
 - `src/components/history/record-row.tsx` — substance rows in unified history.
 - `src/lib/composable-entry-service.ts` — multi-substance composable group writes + `syncLiquidEntrySubstances`.
-- `src/lib/db.ts` (`SubstanceRecord`, v12 migration), `src/db/schema.ts` (`substance_records`), `src/lib/constants.ts` (`LiquidPreset`, `DEFAULT_LIQUID_PRESETS`), `src/lib/card-themes.ts` (caffeine/alcohol themes).
+- `src/lib/db.ts` (`SubstanceRecord`, v12 migration adds the store, v15 adds the `groupId` index), `src/db/schema.ts` (`substance_records`), `src/lib/constants.ts` (`LiquidPreset`, `DEFAULT_LIQUID_PRESETS`), `src/lib/card-themes.ts` (caffeine/alcohol themes).
 
 **Purpose:** Track caffeine (mg) and alcohol (ABV % → metric standard drinks) consumed via beverages, computed from a per-100ml concentration × the drink volume. Substances are logged alongside the liquid they ride in (the drink's volume also counts as water intake), backed by presets and optional AI lookup/enrichment, and surfaced in history, analytics totals, and BP correlations.
 
@@ -10350,20 +10460,20 @@ All reads are **SELECT-only**; the only writes the feature performs are to its o
 
 - **Two substance types:** `caffeine` (tracked in milligrams) and `alcohol` (tracked as metric standard drinks, derived from ABV % + volume). No other types exist.
 - **Per-100ml model.** The user/preset/AI supplies a *concentration*: caffeine mg per 100 ml, or alcohol ABV % (label %). The logged amount is computed from concentration × actual volume.
-  - Caffeine: `amountMg = round((volumeMl / 100) × caffeinePer100ml)`.
+  - Caffeine: `amountMg = round((volumeMl / 100) × caffeinePer100ml)` on the entry surface and inline-sync paths. (The analytics Edit-Substance dialog path stores the caffeine amount as raw `parseFloat(amt)` with **no** `Math.round`.)
   - Alcohol: `amountStandardDrinks = standardDrinksFromAbv(abv, volumeMl)` rounded to 1 dp for entry, 2 dp on edit; `abvPercent` and `volumeMl` are stored alongside.
 - **Liquid integration (fluid balance).** When a substance carries a volume, the *full drink volume* is recorded as a `water` intake record (caffeine/alcohol does NOT reduce the water count). Linkage is by `source: "substance:<id>"` (standalone service path) or by shared `groupId` (composable path).
 - **Presets** (`LiquidPreset`, scoped to `tab`: `coffee` | `alcohol` | `beverage`). Each preset holds a name, default volume, water-content %, and an optional `caffeinePer100ml` / `alcoholPer100ml` / `saltPer100ml`. Ships with defaults (espresso, coffee, tea, beer, wine, spirit…). Users add (Save-as-preset) and long-press-delete presets.
 - **AI lookup** (`/api/ai/substance-lookup`): type a beverage name → Claude (with web_search) returns `substancePer100ml`, `defaultVolumeMl`, `beverageName`, `waterContentPercent`, `reasoning`. Branded items use web search; generic items answered from model knowledge.
-- **AI enrichment** (`/api/ai/substance-enrich`): free-text description of a caffeine/alcohol item → returns total caffeine mg + volume, or alcohol ABV %, volume, derived standard drinks + ethanol grams. (Backs voice/"Other" flows; falls back to manual on failure via `fallbackToManual`.)
+- **AI enrichment** (`/api/ai/substance-enrich`): free-text description of a caffeine/alcohol item → returns total caffeine mg + volume, or alcohol ABV %, volume, derived standard drinks + ethanol grams. This route is **not consumed by any live UI/voice flow**; its only caller is the dormant background Pass-2 runner `runSubstanceEnrichment()` (`src/lib/substance-enrich.ts`), which re-estimates v12-migrated records (`source='water_intake'`, `aiEnriched=false`). The runner itself is not wired into any component/`useEffect` — only its test suite calls it — so this enrichment is currently a test-only/dormant capability. The route still returns `fallbackToManual: true` on a 422, but no UI degrades to manual entry off it.
 - **Calculated preview.** Live string in the entry surface, e.g. `"95 mg caffeine"` or `"12% ABV (1.8 std drinks)"`, or `"330 mg salt"` if only salt present.
 - **Manual entry** without AI (signed-out users): enter volume + concentration + name, log directly.
-- **Edit** any logged substance: time, description, amount (mg or ABV %), and—alcohol only—volume (re-derives standard drinks). Liquid-linked entries are editable inline from the Liquids card; standalone/analytics records via the edit dialog.
+- **Edit** any logged substance: time, description, amount (mg or ABV %), and—alcohol only—volume (re-derives standard drinks). Liquid-linked entries are editable inline from the Liquids card; standalone/analytics records via the edit dialog. (On the analytics dialog path the caffeine mg amount is stored raw via `parseFloat`, not rounded.)
 - **Soft-delete** with cascade: deleting a substance also soft-deletes its linked water intake record(s).
 - **Analytics:** daily/range caffeine-mg total + mg avg/day; alcohol drinks total + drinks avg/day; caffeine-vs-BP and alcohol-vs-BP correlation cards; substance rows in the Records list filterable by type.
 - **History:** caffeine/alcohol records appear in the unified history feed with type icon, description, and amount label.
-- **AI re-run support:** `originalInputText` + `groupSource` stored on the primary record so the AI estimate can be regenerated.
-- **Migration backfill (v12):** legacy water-intake notes containing caffeine/alcohol keywords were converted into `SubstanceRecord`s with default amounts (`aiEnriched: false`).
+- **AI re-run support (fields only):** `originalInputText` + `groupSource` are stored on the primary record so an AI estimate could be regenerated. The fields are persisted, but no substance-specific re-run UI was found in this file set (the food/eating UI surfaces a re-run flow); for substances this is a latent capability, not a wired user-facing action here.
+- **Migration backfill (v12):** the v12 migration added the `substanceRecords` store and converted legacy water-intake notes containing caffeine/alcohol keywords into `SubstanceRecord`s with default amounts (`aiEnriched: false`). Note the v12 store definition does **not** include the `groupId` index — `groupId` was added to `substanceRecords` later, in **v15** (composable-entry support).
 
 ---
 
@@ -10373,7 +10483,7 @@ In the **Liquids card → Coffee / Alcohol tab** (`PresetTab`, `tab="coffee"|"al
 - **Tap a preset** → loads its volume, concentration, water-content %, name into the form; highlights as selected.
 - **Tap the selected preset again** → deselects and clears the form.
 - **Long-press a preset (500 ms)** → opens a delete-confirmation AlertDialog ("Delete <name>? This preset will be permanently removed." / Cancel / Delete). The subsequent click is suppressed so long-press never also selects.
-- **"Show all (N)"** → expands the preset grid when more than 8 presets exist (otherwise shows first 6).
+- **"Show all (N)"** → with ≤8 presets ALL presets are shown and no button appears; only when `presets.length > 8` and the grid is collapsed does it slice to the first 6 and render the "Show all (N)" button, which expands to the full list.
 - **Type in the AI search box** (signed-in only) + **tap the Sparkles button or press Enter** → calls substance-lookup; populates volume, concentration, name, water-content; sets `aiLookupUsed`. Shows a spinner (`Loader2`) while loading.
 - **Edit Volume (ml)** and **per-100ml/ABV** number inputs → recomputes the preview; editing either clears the selected-preset highlight.
 - **Edit beverage Name** (always visible, even signed-out) → labels the entry.
@@ -10382,15 +10492,15 @@ In the **Liquids card → Coffee / Alcohol tab** (`PresetTab`, `tab="coffee"|"al
 - **Tap "Save as preset & log"** (signed-in, name present, AI lookup used) → creates a new preset (source `ai`/`manual`) then logs; toasts "Saved & Logged". Disabled until AI lookup populates data; otherwise hint: "Use AI lookup to populate substance data".
 
 In the **Liquids card recent-entries list** (water entries, may be substance-linked):
-- **Tap edit** on an entry → inline form pre-fills amount, beverage name, caffeine mg, alcohol ABV %, and sugar g (resolved from the linked substance group / preset). **Save** runs `syncLiquidEntrySubstances` to create/update/soft-delete the linked caffeine/alcohol/sugar records. Clearing a field to empty soft-deletes that linked record.
+- **Tap edit** on an entry → inline form pre-fills amount, beverage name, caffeine mg, alcohol ABV %, and sugar g (resolved from the linked substance group / preset). The **Sugar (g)** field is gated on the optional-tracker toggle `useOptionalTrackerEnabled("sugar")`; when sugar tracking is disabled the field is hidden and `sugarG` is passed to the sync as `null`, which leaves any existing linked sugar record untouched (no create/update/delete). **Save** runs `syncLiquidEntrySubstances` to create/update/soft-delete the linked caffeine/alcohol/sugar records. Clearing a field to empty soft-deletes that linked record.
 - **Tap delete** on an entry → removes the water entry (and the substance link cascade where applicable).
 
 In **Analytics → Records tab** / **Edit Substance dialog**:
-- **Tap a substance row** → opens `EditSubstanceDialog`: edit Time (`datetime-local`), Description, amount (Caffeine mg | % ABV), and—alcohol only—Volume (ml). Save / Cancel.
+- **Tap a substance row** → opens `EditSubstanceDialog`: edit Time (`datetime-local`), Description, amount (Caffeine mg | % ABV), and—alcohol only—Volume (ml). "Save Changes" / Cancel.
 - **Delete** a substance record from the row.
-- **Filter** the records list by `all` / `caffeine` / `alcohol` (among other domains).
+- **Filter** the records list by `all` / `caffeine` / `alcohol` — the substance tabs are a subset of the larger `FilterType` union (`all/water/salt/sugar/potassium/weight/bp/eating/urination/defecation/caffeine/alcohol`), and which tabs render is further gated by `visibleFilterTabs` (optional-tracker settings).
 
-In **voice / "Other"** flows: free-text descriptions are sent to substance-enrich and the parsed values pre-fill an entry for confirmation.
+There is **no live voice / "Other" flow that calls substance-enrich.** Voice creates substances via `addSubstance` using values produced by the **food-parse** AI, never the substance-enrich route. The substance-enrich route is reached only by the dormant background runner `runSubstanceEnrichment()` (see Features), not by any interactive surface.
 
 ---
 
@@ -10415,7 +10525,7 @@ In **voice / "Other"** flows: free-text descriptions are sent to substance-enric
 - **History rows:** caffeine row = yellow/amber `Coffee` icon + "<description> · <mg> mg" (fallback "Caffeine"); alcohol row = fuchsia/pink `Wine` icon + "<description> · <n> drink(s)" with singular/plural (fallback "Alcohol").
 - **Offline / sync:** all writes go to Dexie immediately and enqueue to `_syncQueue`; `schedulePush()` is best-effort. No blocking sync UI in this unit.
 - **AI rate-limited (429):** lookup 15 req/window, enrich 30 req/window → "Rate limit exceeded. Please try again later."
-- **AI validation/format failure (422):** lookup → "AI response validation failed"; enrich → `{ error, fallbackToManual: true }` so the UI degrades to manual entry.
+- **AI validation/format failure (422):** lookup → "AI response validation failed"; enrich → `{ error, fallbackToManual: true }`. (The `fallbackToManual` flag is returned but unused — the only enrich caller is the dormant background runner, which ignores it; no UI degrades to manual entry off this route.)
 
 ---
 
@@ -10423,7 +10533,7 @@ In **voice / "Other"** flows: free-text descriptions are sent to substance-enric
 
 - **Substance types:** `'caffeine' | 'alcohol'` (DB check constraint `IN ('caffeine','alcohol')`).
 - **Record source:** `'water_intake' | 'eating' | 'standalone'` (DB check; service default `standalone`).
-- **`groupSource` values (free text, conventional):** `"ai_food_parse"` | `"ai_substance_lookup"` | `"manual"` (also `preset:<id>` and `manual` written by the entry surface).
+- **`groupSource` values (free text, conventional):** `"ai_food_parse"` is written by the food-parse path. The entry surface (PresetTab) always writes the `preset:<id>` form — `preset:${selectedPresetId ?? "manual"}`, i.e. `preset:<id>` for a selected preset or the literal `preset:manual` when none is selected — never a bare `"manual"`. The `"ai_substance_lookup"` value appears only as a type-comment in `db.ts` and is never written by any code path.
 - **Preset `tab`:** `'coffee' | 'alcohol' | 'beverage'`. Caffeine maps to `coffee`/`beverage`; alcohol to `alcohol`.
 - **AI lookup type mapping (PresetTab):** `coffee → caffeine`, `alcohol → alcohol`, `beverage → caffeine` (default).
 - **Default caffeine presets** (`caffeinePer100ml`, `waterContentPercent`, `defaultVolumeMl`):
@@ -10440,6 +10550,7 @@ In **voice / "Other"** flows: free-text descriptions are sent to substance-enric
 - **Per-100ml input label:** coffee "per 100ml (mg caffeine)", alcohol "% ABV", beverage "per 100ml (mg)".
 - **Preset-grid collapse threshold:** > 8 presets collapses to 6 with "Show all".
 - **Long-press threshold:** 500 ms.
+- **Default description fallbacks:** new caffeine/alcohol records created by inline sync default `description` to `"Drink"` when none is supplied; the PresetTab description fallback is by tab — `"Coffee"` (coffee), `"Drink"` (alcohol), `"Beverage"` (beverage) — used when both the beverage name and AI search text are empty.
 - **Alcohol unit constants:** `GRAMS_PER_STANDARD_DRINK = 10` (WHO metric standard drink), `ETHANOL_DENSITY_G_PER_ML = 0.789`.
 - **AI lookup schema bounds:** `substancePer100ml` 0–500, `defaultVolumeMl` 1–5000, `waterContentPercent` 0–100.
 - **AI enrich caffeine bounds:** `caffeineMg` 0–2000, `volumeMl` 0–5000, `reasoning` ≤1000 chars.
@@ -10453,8 +10564,8 @@ In **voice / "Other"** flows: free-text descriptions are sent to substance-enric
 - **AI reference water content (prompt):** black coffee ~99, beer ~93, wine ~87, spirits ~60.
 - **Card theme colors:** caffeine = yellow/amber + `Coffee` icon; alcohol = fuchsia/pink + `Wine` icon. (`CARD_THEMES.caffeine`, `CARD_THEMES.alcohol`.)
 - **v12 migration defaults:** caffeine keywords [coffee, espresso, tea, caffeine, matcha, latte, cappuccino] → mg {coffee 95, espresso 63, tea 47, latte 95, cappuccino 95, matcha 70} / ml {coffee 250, espresso 30, tea 250, latte 350, cappuccino 250, matcha 250}; alcohol keywords [beer, wine, whiskey, whisky, vodka, gin, rum, cocktail, spirit, alcohol, brandy] → drinks {beer 1, wine 1, cocktail 1.5}.
-- **Analytics filter tabs (substance subset):** `{ value: "caffeine", label: "Caffeine" }`, `{ value: "alcohol", label: "Alcohol" }` (plus all/other domains).
-- **Correlation unit suffixes:** caffeine " mg", alcohol " drinks".
+- **Analytics filter tabs (substance subset):** `{ value: "caffeine", label: "Caffeine" }`, `{ value: "alcohol", label: "Alcohol" }`. These are a subset of the full `FilterType` union (`all/water/salt/sugar/potassium/weight/bp/eating/urination/defecation/caffeine/alcohol`, `src/lib/history-types.ts`); the visible tabs are gated by `visibleFilterTabs` (optional-tracker settings).
+- **Correlation unit suffixes:** the dedicated **Caffeine vs Blood Pressure** card uses `unitA=" mg"`; the dedicated **Alcohol vs Blood Pressure** card uses `unitA=" units"`. The `" drinks"` suffix exists only in the generic `DOMAIN_UNITS` map used by the configurable correlation explorer, not on the dedicated alcohol card.
 
 ---
 
@@ -10466,7 +10577,7 @@ In **voice / "Other"** flows: free-text descriptions are sent to substance-enric
 - `description` (required), `source` `'water_intake'|'eating'|'standalone'`, `sourceRecordId?` (FK → `intakeRecords.id`, no cascade), `aiEnriched?`.
 - `timestamp`, `createdAt`, `updatedAt`, `deletedAt` (soft-delete), `deviceId`, `timezone` (sync metadata via `syncFields()`).
 - `groupId?` (links composable group records), `originalInputText?` (primary record only, AI re-run), `groupSource?`.
-- **Dexie indexes:** `id, [type+timestamp], type, timestamp, source, sourceRecordId, groupId, updatedAt`.
+- **Dexie indexes (current schema):** `id, [type+timestamp], type, timestamp, source, sourceRecordId, groupId, updatedAt`. The `groupId` index was added in **v15**; the original v12 store definition omitted it.
 - **Server indexes/checks:** `idx_substance_user_updated`, `idx_substance_type_ts`, `idx_substance_group`; type/source/ABV-range check constraints.
 
 **Also writes/reads:**
@@ -10479,12 +10590,14 @@ In **voice / "Other"** flows: free-text descriptions are sent to substance-enric
 ## Validation, edge cases & business rules
 
 - **Standard-drink math:** `ethanolGrams = volumeMl × (abvPercent/100) × 0.789`; `standardDrinks = ethanolGrams / 10`; `abvFromStandardDrinks` inverts it (returns 0 for non-positive volume). Used to back-fill ABV for legacy records that stored only `amountStandardDrinks` + `volumeMl`.
-- **Rounding:** caffeine mg `Math.round`; standard drinks 1 dp on entry, 2 dp on edit/sync; ethanol grams to 1 dp in enrich response; salt/sugar `Math.round`.
+- **Rounding:** caffeine mg `Math.round` on the entry surface and inline-sync paths (the analytics Edit-Substance dialog stores raw `parseFloat`, no rounding); standard drinks 1 dp on entry, 2 dp on edit/sync; ethanol grams to 1 dp in enrich response; salt/sugar `Math.round`.
 - **Alcohol edit requires volume:** editing an alcohol amount requires ABV in (0,100] AND a volume > 0, else validation toast; standard drinks can't be derived otherwise.
 - **Water double-count guard:** in composable entries, `volumeMl` is included on the substance only when no explicit water intake exists (`waterAmount <= 0`), otherwise the service would auto-create a duplicate water record.
 - **Full volume = water:** caffeine/alcohol content never reduces the water amount; `waterContentPercent` is captured/stored on presets/AI but the full drink volume counts as water.
+- **Volume gates the water link (standalone path):** in `addSubstanceRecord` the linked water `IntakeRecord` is created only when `input.volumeMl` is truthy. A falsy / `0` / `undefined` volume skips the water record (and the whole intake transaction), persisting only the substance record.
 - **Soft-delete cascade:** deleting a substance soft-deletes water intakes whose `source = "substance:<id>"`; queries filter `deletedAt === null`.
 - **Inline sync rules (`syncLiquidEntrySubstances`):** each of caffeineMg/alcoholAbv/sugarG, when `> 0`, updates the first existing record of that type or creates one; when set to 0/cleared, soft-deletes the existing record; duplicate extras of a type are soft-deleted; if the intake has no `groupId` and the patch introduces a substance, a group is created.
+  - **Volume nuance:** when **updating** an existing caffeine/alcohol record the sync writes `volumeMl` only if that record already had one (`existing.volumeMl !== undefined`); a newly **created** caffeine/alcohol record always gets `volumeMl: patch.volumeMl`.
 - **Backward-compat single vs multi:** one substance → singular `entry.substance`; multiple → `entry.substances[]`; legacy records may lack `abvPercent` (derived) or `groupId` (resolved via preset lookup).
 - **AI unit discipline (critical):** alcohol `substancePer100ml`/`abvPercent` MUST be label ABV %, never grams or ml of ethanol; conversion to standard drinks happens server-side only. Caffeine is per-100ml mg; metric units only (no oz/cups/US standard drinks). Prompts enforce this; a forced-tool follow-up call retries if the model didn't emit the structured tool.
 - **Input sanitization:** queries/descriptions run through `sanitizeForAI`; empty-after-sanitize → 400. PII-safe by design (server holds the key).
@@ -10498,13 +10611,14 @@ In **voice / "Other"** flows: free-text descriptions are sent to substance-enric
 
 - `PresetTab` (`tab="coffee"|"alcohol"|"beverage"`) — preset grid + AI search + manual volume/concentration entry + log/save actions (the primary surface).
 - `LiquidsCard` — host with 4 tabs (Water / Beverage / Coffee / Alcohol) and the inline edit form for liquid-linked caffeine/alcohol/sugar.
-- `EditSubstanceDialog` — standalone substance edit (time/description/amount, alcohol adds volume), type-aware labels & steps.
+- `EditSubstanceDialog` — standalone substance edit (time/description/amount, alcohol adds volume), type-aware labels & steps; submit button labelled "Save Changes", Cancel closes.
 - `substance-service.ts` — `addSubstanceRecord`, `getSubstanceRecords`, `getSubstanceRecordsByDateRange`, `deleteSubstanceRecord` (cascade), `updateSubstanceRecord`, `getUnenrichedSubstanceRecords`.
 - `use-substance-queries.ts` — `useSubstanceRecords`, `useSubstanceRecordsByDateRange`, `useAddSubstance`, `useDeleteSubstance`, `useUpdateSubstance`.
-- `composable-entry-service.ts` — multi-substance group writes + `syncLiquidEntrySubstances` (create/update/soft-delete linked caffeine/alcohol/sugar around a liquid).
+- `composable-entry-service.ts` — `addComposableEntry` (multi-substance group writes) + `syncLiquidEntrySubstances` (create/update/soft-delete linked caffeine/alcohol/sugar around a liquid); also `deleteEntryGroup` / `undoDeleteEntryGroup` (group-level soft-delete + undo across intake/eating/substance) and `deleteSingleGroupRecord` / `undoDeleteSingleRecord` (single-record soft-delete + undo within a group). `recalculateFromCurrentValues` is a deferred stub (Phase 13/14) that always returns an error.
 - `alcohol-units.ts` — `ethanolGrams`, `standardDrinksFromAbv`, `abvFromStandardDrinks`, constants.
 - `substance-lookup/route.ts` + `schema.ts` — per-100ml lookup API + `substance_lookup_result` tool/Zod schema.
-- `substance-enrich/route.ts` — free-text enrichment API (`caffeine_enrichment` / `alcohol_enrichment` tools).
+- `substance-enrich/route.ts` — free-text enrichment API (`caffeine_enrichment` / `alcohol_enrichment` tools). Consumed only by the dormant runner below (no live UI caller).
+- `substance-enrich.ts` — `runSubstanceEnrichment()`, the background Pass-2 enrichment runner (dormant / test-only): batches of 5 records with a 1 s inter-batch delay, best-effort skip on any non-OK response, enriching caffeine only when `data.caffeineMg !== undefined` and alcohol only when `data.standardDrinks !== undefined`. Not invoked by any component/`useEffect`.
 - `analytics/records-tab.tsx` — substance rows, type filter, edit/delete wiring.
 - `analytics/summary-tab.tsx` — caffeine mg + alcohol drinks totals/averages.
 - `analytics/correlations-tab.tsx` — caffeine-vs-BP & alcohol-vs-BP cards.

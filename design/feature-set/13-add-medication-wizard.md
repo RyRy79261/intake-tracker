@@ -32,14 +32,14 @@
   - So flows range from 6 steps (new, scheduled) down to 3 steps (existing prescription: search → appearance → inventory).
 - **Header** shows the current step's friendly label and "Step X of N" (N = active step count, recomputed live).
 - **Segmented progress bar** — one teal/`muted` segment per active step; segments at/below the current index are teal (`bg-teal-500`).
-- **Per-step validation gate** — `Next`/`Save` runs the step's Zod schema; invalid blocks advance and surfaces inline errors.
+- **Per-step validation gate** — `Next`/`Save` runs the step's Zod schema; invalid blocks advance and surfaces inline errors. The `search` (brand-name), `schedule`, and `inventory` Zod failures also log a `validation_error` audit entry; the combination-drug validation failure (see below) is the one branch that surfaces an error **without** any audit log.
 - **AI medicine search** (Step 1) — sends the query + region context to `/api/ai/medicine-search`, which calls Claude (premium model, `temperature: 0`, forced tool use) and returns structured pharma data. Results auto-populate brand, generic, strengths, indications, contraindications, warnings, food instruction/note, pill color, pill shape, visual identification, combination-drug compounds.
 - **Region-aware search** — primary/secondary region from settings store are folded into the prompt ("focusing specifically on brands and availability in <country>" with secondary fallback).
 - **Query-driven auto-selection** — if the query contains an explicit dose (e.g. "Eliquis 5mg"), the matching `dosageStrength` is auto-selected; for combos, the matching numeric strength option is chosen.
 - **Combination-drug ("multi-compound") support** — toggle that switches single-strength entry for a per-ingredient name+mg editor; AI populates ingredient names and per-pill mg; preset chips for marketed strength options.
 - **Pill appearance designer** (Step 2) — live SVG pill preview (80px), 5 shape choices, 15 preset color swatches + custom hex color picker, free-text visual-identification notes.
 - **Indication & safety panel** (Step 3) — indication free-text with "AI Suggest" re-run, read-only contraindications/warnings panel (red/amber), food-timing selector, conditional food note, free-text notes.
-- **Dosage calculator** (Step 4) — preset dose-multiplier chips + custom dose input, live "X pills per dose = Ymg" computation, partial-pill detection, PRN toggle.
+- **Dosage calculator** (Step 4) — an "Each pill contains <contents>" line above the presets (`pillContents` = `formatCompoundFull` for combos, else the `dosageStrength` string), preset dose-multiplier chips + custom dose input, live "X pills per dose = Ymg" computation, partial-pill detection, PRN toggle.
 - **Schedule builder** (Step 5) — multiple time entries, each with a 7-day-of-week toggle row; add/remove time rows.
 - **Inventory & refill reminders** (Step 6) — current pill stock + two refill-alert thresholds (days-of-supply and pills-remaining).
 - **AI drug-conflict check on save** — for new prescriptions with other active meds, runs an interaction check; if any `AVOID`/`CAUTION` conflicts, shows a blocking warning overlay requiring explicit "Save Anyway".
@@ -82,6 +82,7 @@
 - **Additional notes textarea** — Rx-level notes.
 
 **Step 4 — Dosage**
+- **"Each pill contains <contents>" line** — read-only summary above the dose presets (shown when there is pill content): combo → `formatCompoundFull`, single → the `dosageStrength` string.
 - **Dose-multiplier preset buttons** (6) — tap to set `dosageAmount` (clears any custom dose). Labels differ by mode: single → "Nmg" (mult × strength); combo → "1 pill"/"N pills".
 - **Custom dose input** — single mode accepts mg (converted to a pill multiplier internally); combo mode accepts pills-per-dose directly. Entering a custom value supersedes the preset.
 - **"As needed (PRN)" toggle** — when on, the schedule step is removed from the flow.
@@ -108,7 +109,7 @@
 - **First step** — top-left shows Close (`X`); no bottom Back button.
 - **Mid/last step** — top-left shows Back (`ArrowLeft`); bottom Back button present.
 - **Last step** — bottom button becomes "Save Medication" (teal); shows spinner + disabled while saving.
-- **Validation-error** — `Next`/`Save` blocked; inline red error text under the offending field; logs a `validation_error` audit entry.
+- **Validation-error** — `Next`/`Save` blocked; inline red error text under the offending field; the `search`/`schedule`/`inventory` failures log a `validation_error` audit entry (the combination-drug failure does not).
 
 **Step 1 — Search**
 - **Signed-out** — search input, result card, and AI affordances hidden; manual brand/generic/strength entry only.
@@ -195,17 +196,19 @@ Writes (new prescription — `CreatePrescriptionInput` → `addPrescription`, bu
 - **Prescription** (`db.ts` `Prescription`): `id`, `genericName`, `indication`, `notes?`, `contraindications?[]`, `warnings?[]`, `compounds?[]`, `isActive=true`, audit/sync fields (`createdAt`, `updatedAt`, `deletedAt`, `deviceId`).
 - **MedicationPhase** (initial, `buildPhase`): `type="maintenance"`, `unit`, `startDate=now`, `foodInstruction`, `foodNote?`, `notes?`, `status="active"`.
 - **InventoryItem** (`buildInventory`): `prescriptionId`, `brandName`, `currentStock`, `strength`, `compounds?[]`, `unit`, `pillShape`, `pillColor`, `visualIdentification?`, `refillAlertDays?`, `refillAlertPills?`, `isActive=true`, `timezone`.
-- **PhaseSchedule[]** (`buildSchedules`): `phaseId`, `time` (HH:MM, deprecated display), `scheduleTimeUTC` (minutes from UTC midnight, computed from local time + device tz), `anchorTimezone`, `dosage`, `daysOfWeek[]`, `enabled=true`.
-- **InventoryTransaction** (`buildTransaction`) for the initial stock seed.
+- **PhaseSchedule[]** (`buildSchedules`): `phaseId`, `time` (HH:MM, deprecated display), `scheduleTimeUTC` (minutes from UTC midnight, computed from local time + device tz), `anchorTimezone`, `dosage`, `daysOfWeek[]`, `enabled=true`. (`PhaseSchedule` also defines an optional `unit?` display field, e.g. "mg", which `buildSchedules` leaves unset.)
+- **InventoryTransaction** (`buildTransaction`) for the initial stock seed — created **only when `currentStock > 0`**, typed `"refill"` with note `"Initial stock"`.
 
-Writes (existing prescription — `AddMedicationToPrescriptionInput` → `addMedicationToPrescription`): only a new **InventoryItem** (brand, stock, strength, unit, shape, color, visual ID, compounds, refill alerts) — no new phase/schedule/indication.
+**PRN / as-needed:** when `schedules` is empty, `addPrescription` persists **no MedicationPhase and no PhaseSchedules at all** (phase = null) — only the Prescription, InventoryItem, and (if stock > 0) the initial InventoryTransaction.
+
+Writes (existing prescription — `AddMedicationToPrescriptionInput` → `addMedicationToPrescription`): only a new **InventoryItem** (brand, stock, strength, unit, shape, color, visual ID, compounds, refill alerts) — no new phase/schedule/indication. **Activation rule:** the new brand is set `isActive: !hasActiveBrand`, i.e. it auto-activates only when the Rx currently has no active, non-archived, non-deleted brand; otherwise it is added inactive. It never archives the existing active brand or touches the phase/schedule. The audit entry records `activatedImmediately: !hasActiveBrand`.
 
 Form state interface `AddMedicationFormState` (28 fields) covers: `selectedPrescriptionId`, `searchQuery`, `searchResult`, `brandName`, `genericName`, `dosageStrength`, `isCombination`, `compounds[]`, `pillShape`, `pillColor`, `visualIdentification`, `indication`, `contraindications[]`, `warnings[]`, `foodInstruction`, `foodNote`, `notes`, `dosageAmount`, `customDosage`, `asNeeded`, `schedules[]`, `currentStock`, `refillAlertDays`, `refillAlertPills`.
 
 ## Validation, edge cases & business rules
 
-- **Required:** brand name (`SearchStepSchema`, "Medication name is required"). On validation the name falls back to a capitalized search query if brand is empty.
-- **Combination validation:** when `isCombination`, at least 2 compounds must each have a non-empty name AND strength > 0, else error "Enter a name and strength for both active ingredients".
+- **Required:** brand name (`SearchStepSchema`, "Medication name is required"). On validation the name falls back to a capitalized search query if brand is empty. A brand-name Zod failure also writes a `validation_error` audit log.
+- **Combination validation:** when `isCombination`, at least 2 compounds must each have a non-empty name AND strength > 0, else error "Enter a name and strength for both active ingredients". This is the only validation branch that does **not** write a `validation_error` audit log (the `search`/`schedule`/`inventory` Zod failures all do) — an asymmetry in the audit coverage.
 - **Schedule validation (`ScheduleEntrySchema`):** each entry needs a time, dosage > 0, and ≥1 day selected; errors are prefixed "Schedule N: ...".
 - **Inventory validation (`InventoryStepSchema`):** stock must be a number ≥ 0 (negative blocked; non-number → coerced to 0 before validation).
 - **Auto-capitalization:** `brandName` and `genericName` are title-cased on change and on query→brand fallback.
@@ -213,7 +216,7 @@ Form state interface `AddMedicationFormState` (28 fields) covers: `selectedPresc
 - **Combination dose math:** for combos, `strength` is the SUM of compound strengths (`compoundSum`) so `pillsPerDose = dosage / strength` is identical to single-compound; `compounds` stays purely descriptive/labeling.
 - **Dosage computation:** `finalDosage = customDosage ? parseFloat(customDosage) : dosageAmount`; `scheduleDosage = (finalDosage || 1) * strength`. Single-mode custom input is entered in mg but stored as a pill-multiplier (`mg / strength`); combo-mode custom input is pills directly.
 - **Partial-pill note** shown when pills-per-dose < 1.
-- **PRN behavior:** `asNeeded` removes the schedule step and saves with empty `schedules`.
+- **PRN behavior:** `asNeeded` removes the schedule step and saves with empty `schedules`; the service then persists **no MedicationPhase and no schedules** for the med (only Prescription + InventoryItem + optional initial transaction).
 - **Schedule filtering on save:** entries without a time or with no days are dropped before persisting.
 - **Generic name fallback on save:** if `genericName` empty, uses combo names (`formatCompoundNames`) for combos, else the brand name.
 - **Timezone:** schedule times stored as both local HH:MM and `scheduleTimeUTC` (minutes from UTC midnight) plus the `anchorTimezone`, so day-start/notification logic survives timezone changes.
@@ -236,7 +239,7 @@ Form state interface `AddMedicationFormState` (28 fields) covers: `selectedPresc
 - **`PillIcon`** — SVG renderer for the 5 pill shapes (also `PillIconWithBadge` for dose status, unused here).
 - **`useAddMedicationForm`** — form state container + per-step Zod validation + audit logging.
 - **`useMedicineSearch`** — React Query mutation wrapping the AI search endpoint; defines `MedicineSearchResult` and `MedicineSearchCancelledError`.
-- **`useInteractionCheck`** — conflict/lookup interaction checker with caching, abort, and 15s timeout.
+- **`useInteractionCheck`** — conflict/lookup interaction checker exposing `check`/`data`/`reset` plus `isLoading`/`error`, with lookup-mode caching (`getCached`/`setCache` from `interaction-cache`), abort, and a 15s timeout; a sibling `useRefreshInteractions` hook also lives in this file. The wizard only consumes `check`/`data`/`reset`.
 - **`medication-builders.ts`** — `buildPrescription` / `buildPhase` / `buildInventory` / `buildSchedules` / `buildTransaction` record factories.
 - **`compound-utils.ts`** — `compoundSum`, `isCombo`, `splitDose`, `scaleCompounds`, `formatCompoundShort/Full/Names`.
 - **`/api/ai/medicine-search`** — auth-gated, rate-limited Claude endpoint returning the structured pharma result.

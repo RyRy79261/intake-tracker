@@ -2,7 +2,7 @@
 
 **Files covered:**
 - `/home/ryan/repos/Personal/intake-tracker/src/lib/db.ts` (Dexie / IndexedDB — client-side source of truth)
-- `/home/ryan/repos/Personal/intake-tracker/src/db/schema.ts` (Drizzle / Neon Postgres — server mirror, 29 tables)
+- `/home/ryan/repos/Personal/intake-tracker/src/db/schema.ts` (Drizzle / Neon Postgres — server mirror, 31 tables; the file's own header comment says "29", an undercount that omits `users_sync` and `insight_jobs`)
 - `/home/ryan/repos/Personal/intake-tracker/src/lib/constants.ts` (presets, BP categories, amount options)
 - `/home/ryan/repos/Personal/intake-tracker/src/lib/card-themes.ts` (per-domain theme keys + labels)
 - `/home/ryan/repos/Personal/intake-tracker/src/lib/quick-nav-defaults.ts` (footer nav defaults)
@@ -15,7 +15,7 @@
 
 ## Features
 
-- **Single source of truth, mirrored two ways.** All user data lives client-side in **Dexie/IndexedDB** (`db.ts`, current schema **v21**, exported as `DB_SCHEMA_VERSION = 21`). A **Neon Postgres** schema (`schema.ts`, 29 tables) mirrors it field-for-field for optional cloud sync; `src/__tests__/schema-parity.test.ts` fails the build if they drift. `userId` is the only Postgres-only column allowed.
+- **Single source of truth, mirrored two ways.** All user data lives client-side in **Dexie/IndexedDB** (`db.ts`, current schema **v21**, exported as `DB_SCHEMA_VERSION = 21`). A **Neon Postgres** schema (`schema.ts`, **31** `pgTable`/`neonAuth.table` definitions — 18 app tables + `users_sync` + `insight_jobs` + 4 push + 3 AI + 4 MCP) mirrors it field-for-field for optional cloud sync; `src/__tests__/schema-parity.test.ts` fails the build if they drift. `userId` is the only Postgres-only column allowed. (The schema.ts header comment says "29 tables" but undercounts — it omits `users_sync` and `insight_jobs`.)
 - **Soft-delete + sync scaffolding on every data table.** Every record carries `id`, `createdAt`, `updatedAt`, `deletedAt` (`null` = active, number = tombstone), and `deviceId`. Most also carry `timezone` (IANA string).
 - **18 synced data tables + 3 local-only system tables** in Dexie. Postgres additionally has 4 push-notification tables, 3 server-only AI tables, 4 MCP-connector tables, and 1 deep-research job table.
 - **Composable groups.** `intakeRecords`, `eatingRecords`, and `substanceRecords` share an optional `groupId` so multiple records (e.g. from one AI food parse) form one atomic, editable, deletable group. `originalInputText` + `groupSource` live on the primary record for AI re-run.
@@ -51,11 +51,11 @@ State the model must let the UI express:
 - **Active vs soft-deleted** — `deletedAt === null` (shown) vs a number (tombstoned/hidden but synced).
 - **AI-enriched vs estimated** — `substanceRecords.aiEnriched` true/false (refined vs default estimate); `liquidPreset.source` `manual` vs `ai` (+ optional `aiConfidence`).
 - **Optional tracker enabled/disabled** — sugar/potassium hidden from forms, voice editor, progress bars, weekly grid, analytics, history filter, AI snapshot when off.
-- **Over-limit / extended-buffer** — progress bars render a normal segment up to `limit`, a second-tone "extended" segment from `limit` to `limit + extendedBuffer`, then red beyond (`progressGradient` / `progressExtended` / `progressOverLimit` per theme; weight & BP themes have no progress gradients).
+- **Over-limit / extended-buffer** — progress bars render a normal segment up to `limit`, a second-tone "extended" segment from `limit` to `limit + extendedBuffer`, then red beyond (`progressGradient` / `progressExtended` / `progressOverLimit` per theme). Only `water`, `salt`, `sugar` define a non-empty `progressExtended`; `potassium` omits the key entirely, and `caffeine`, `alcohol`, `eating`, `urination`, `defecation`, `weight`, `bp` all set `progressExtended: ""`. `progressGradient` is non-empty for `water`, `salt`, `sugar`, `potassium`, `caffeine`, `alcohol`; `weight`, `bp`, `eating`, `urination`, `defecation` have an empty `progressGradient` (no progress bar).
 - **Blood-pressure category** — Optimal / Normal / High normal / Grade 1–3 hypertension, each with its own color (see enums).
 - **Dose status** — `pending` (actionable), `taken`, `skipped`, `rescheduled`.
 - **Phase / plan / inventory status** — active, completed, cancelled, pending, draft, archived.
-- **Sync status** (from `sync-status-store`) — `isSyncing`, `isOnline`/offline, `queueDepth`, `lastError` (null = healthy).
+- **Sync status** (from `sync-status-store`) — ephemeral runtime fields `isSyncing`, `isOnline`/offline, `queueDepth`, `lastError` (null = healthy), plus three persisted fields: `lastPushedAt`, `lastPulledAt` (last successful push/pull, Unix ms) and `initialSyncComplete` (true once a full pull-drain has completed on this device).
 - **Insight report mode** — `fast` (Sonnet, sync) vs `deep` (Opus + web search, async; carries `sources[]`); `personalised` true/false.
 - **Combination vs single-compound drug** — `compounds` present (length ≥ 2) vs absent.
 - **Irregular heartbeat flag** on a BP reading (boolean badge).
@@ -101,7 +101,7 @@ State the model must let the UI express:
 - `mcp_auth_codes.codeChallengeMethod`: `S256` \| `plain`.
 
 ### Card theme keys & labels (`card-themes.ts`) — 11 domains
-`water` (Water), `salt` (Sodium), `sugar` (Sugar), `potassium` (Potassium), `weight` (Weight), `bp` (Blood Pressure), `eating` (Eating), `urination` (Urination), `defecation` (Defecation), `caffeine` (Caffeine), `alcohol` (Alcohol). Each defines gradient/border/icon/progress colors. Footer label overrides: `water → "Liquids"`, `eating → "Food & Salt"`.
+`water` (Water), `salt` (Sodium), `sugar` (Sugar), `potassium` (Potassium), `weight` (Weight), `bp` (Blood Pressure), `eating` (Eating), `urination` (Urination), `defecation` (Defecation), `caffeine` (Caffeine), `alcohol` (Alcohol). Each `CardTheme` carries a full set of style fields: `label`, `icon`, `gradient`, `border`, `iconBg`, `iconColor`, `buttonBg`, `outlineBorder`, `outlineText`, `progressGradient`, `progressExtended`, `progressOverLimit`, `hoverBg`, `inputBg`, `inputText`, `loadingBg`, `latestValueColor`, `activeToggle`, `sectionId`. Footer label overrides: `water → "Liquids"`, `eating → "Food & Salt"`.
 
 ### Blood-pressure categories (`getBPCategory`, ESH 2023 scale, OR-based highest-first)
 | Category | Threshold (systolic OR diastolic) | Color |
@@ -165,6 +165,11 @@ State the model must let the UI express:
 | shakeRequiredJolts | 5 | 2–8 |
 | analyticsIntroSeen | false | — |
 
+**Other persisted `Settings` fields (no tracked numeric default/range, so omitted from the table above):**
+- `aiAuthSecret` — obfuscated secret used to authenticate against the server-side AI (matched to the server's `AI_AUTH_SECRET` env var); read back via `getDeobfuscatedAuthSecret`.
+- `liquidPresets: LiquidPreset[]` — the persisted, user-editable copy of `DEFAULT_LIQUID_PRESETS`, mutated via `addLiquidPreset` / `updateLiquidPreset` / `deleteLiquidPreset` CRUD.
+- `quickNavItems: QuickNavItem[]` — the persisted footer item list (order + per-item enabled state), seeded from `DEFAULT_QUICK_NAV_ITEMS`; separate from the `showQuickNav` / `quickNavOrder` flags.
+
 **Quick-nav default footer order** (`quick-nav-defaults.ts`): water, eating, bp, weight, urination, defecation (all enabled).
 
 ### Push-notification defaults (schema.ts)
@@ -186,7 +191,7 @@ State the model must let the UI express:
 7. **substanceRecords** — `type, amountMg?, amountStandardDrinks?, abvPercent?, volumeMl?, description, source, sourceRecordId?, aiEnriched?, timestamp, groupId?, originalInputText?, groupSource?` + tz.
 8. **prescriptions** — `genericName, indication, notes?, contraindications?[], warnings?[], compounds?[], isActive` (no tz).
 9. **medicationPhases** — `prescriptionId, type, unit, startDate, endDate?, foodInstruction, foodNote?, notes?, status, titrationPlanId?` (no tz).
-10. **phaseSchedules** — `phaseId, time(deprecated), scheduleTimeUTC, anchorTimezone, dosage, daysOfWeek[], enabled, unit?` (no plain tz).
+10. **phaseSchedules** — `phaseId, time(deprecated), scheduleTimeUTC, anchorTimezone, dosage, daysOfWeek[], enabled, unit?` (no plain tz). Index: `id, phaseId, time, enabled, updatedAt` — the deprecated `time` field is still an index key.
 11. **inventoryItems** — `prescriptionId, brandName, currentStock?(deprecated), strength, compounds?[], unit, pillShape, pillColor, visualIdentification?, refillAlertDays?, refillAlertPills?, isActive, isArchived?` + tz.
 12. **inventoryTransactions** — `inventoryItemId, timestamp, amount, note?, type, doseLogId?` + tz.
 13. **doseLogs** — `prescriptionId, phaseId, scheduleId, inventoryItemId?, scheduledDate (YYYY-MM-DD), scheduledTime, status, actionTimestamp?, rescheduledTo?, skipReason?, note?` + tz.
@@ -233,10 +238,10 @@ State the model must let the UI express:
 ## Sub-components / variants
 
 - **`db.ts`** — Dexie schema v10→v21, all 18+3 table definitions, migration upgrade functions, preview-database swap (`createPreviewDatabase` / `setActiveDatabase` / `resetActiveDatabase`), `DB_SCHEMA_VERSION`.
-- **`schema.ts`** — Drizzle Postgres mirror (29 tables), CHECK constraints (the canonical enum guards), indexes, FK graph, `users_sync` auth mirror.
+- **`schema.ts`** — Drizzle Postgres mirror (31 tables), CHECK constraints (the canonical enum guards), indexes, FK graph, `users_sync` auth mirror.
 - **`constants.ts`** — FOOD_PRESETS, DEFAULT_SODIUM_PRESETS, DEFAULT_LIQUID_PRESETS, URINATION/DEFECATION_AMOUNT_OPTIONS, `getBPCategory`, type interfaces.
 - **`card-themes.ts`** — `CARD_THEMES` (11 domains) + `CardThemeKey` type; per-domain colors/icons/labels/progress styles.
 - **`quick-nav-defaults.ts`** — `DEFAULT_QUICK_NAV_ITEMS`, `QUICK_NAV_LABEL_OVERRIDES`, `QuickNavItem`.
 - **`sync-topology.ts`** — `TABLE_PUSH_ORDER` (18-table FK-ordered list), `TableName` union; FK parent→child graph.
 - **`settings-store.ts`** — Zustand persisted `Settings` + `SettingsActions`, `defaultSettings`, `SubstanceConfig`, `migrateSettings`, all clamp ranges.
-- **`sync-status-store.ts`** (referenced) — runtime sync state: `isSyncing`, `isOnline`, `queueDepth`, `lastError`.
+- **`sync-status-store.ts`** (referenced) — sync state: ephemeral `isSyncing`, `isOnline`, `queueDepth`, `lastError` (reset on reload) + persisted `lastPushedAt`, `lastPulledAt`, `initialSyncComplete`.

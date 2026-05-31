@@ -32,12 +32,12 @@
 - Previous/next week chevrons shift the selected date by ±7 days.
 - Each day cell shows a 3-letter weekday label and the numeric day-of-month.
 - Selected day is highlighted (filled teal). The current real-world "today" gets a teal ring when not the selected day.
-- A caption line under the strip shows a friendly label: `Today, <Mon D, YYYY>`, `Yesterday, …`, `Tomorrow, …`, or `<Weekday Month D>, <Mon D, YYYY>` for arbitrary dates.
+- A caption line under the strip shows a friendly label of the form `<dateLabel>, <Mon D, YYYY>`. For today/tomorrow/yesterday `dateLabel` is just "Today"/"Tomorrow"/"Yesterday" (e.g. `Today, Jun 3, 2026`). For any other date `dateLabel` is the full localized `weekday: "long"` + `month: "short"` + `day: "numeric"` string — itself comma-joined — so the rendered caption repeats the month/day, e.g. `Monday, Jun 3, Jun 3, 2026`.
 
 ### Tab bar (MedTabBar / med-footer)
 - 5 tabs that switch the entire medications page sub-view: Schedule, Rx (prescriptions), Meds (compound list), Titrations, Settings. Each has an icon + label.
 - Active tab is teal-colored with a teal underline bar; inactive tabs are muted.
-- Persists active tab in a Zustand store so it survives within the session. Default tab is `schedule`.
+- Holds the active tab in a module-level Zustand store (plain `create`, **no `persist` middleware**) so it survives in-app navigation and component remounts, but is reset on a full page reload — it is not written to localStorage. Default tab is `schedule`.
 
 ### Daily progress summary (DoseProgressSummary) — today only
 - Computes N-of-M: total scheduled doses for the day, count taken, % handled.
@@ -133,6 +133,7 @@
 - **SkipReasonPicker:** modal with 5 preset buttons + custom input; "Ran out" preset gets an amber ring when the slot is out of inventory (`negative_stock` / `no_inventory`).
 - **RetroactiveTimePicker:** compact modal, centered native time input, Cancel + "Log Dose"; resets to default time each time it opens.
 - **BulkDoseEditDialog:** bottom drawer (max 85vh), time heading, scrollable dose list, three circular action buttons (SKIP ALL always enabled; UN-TAKE and EDIT RECORD disabled at 40% opacity unless any dose is taken).
+- **DoseDetailDialog:** bottom drawer opened by tapping a non-actionable row (taken/skipped, or any future-date row). Defined outside this unit's "Files covered" but reached from it. Its own circular action buttons are: SKIP (when not already skipped), TAKE or UNTAKE (UNTAKE shown when the dose is taken; TAKE on past dates opens a RetroactiveTimePicker), and — **today only** — RESCHEDULE, which reveals an inline time input and calls `rescheduleDose` to move the dose to a new time.
 
 ### Tab bar
 - **Active tab:** teal text + teal underline bar.
@@ -163,7 +164,7 @@
 
 **Food instructions** (`FoodInstruction`, db.ts): `"before" | "after" | "none"`. Rendered as `"-- before eating"` / `"-- after eating"`; `none` hidden.
 
-**Inventory warnings** (string codes set on a slot): `"negative_stock" | "no_inventory" | "odd_fraction"`.
+**Inventory warnings** (string codes set on a slot): `"negative_stock" | "no_inventory" | "odd_fraction"`. At most one survives per slot: `odd_fraction` is assigned first, but is **overwritten by `negative_stock`** if the dose would drive stock below zero (negative_stock wins).
 
 **Skip reason presets** (skip-reason-picker.tsx):
 `["Forgot", "Side effects", "Ran out", "Doctor advised", "Don't need this dose"]` + free-text custom.
@@ -210,7 +211,7 @@
 - `doseLogs` (take/untake/skip/reschedule/edit-time, single + bulk).
 - `inventoryTransactions` (pill deductions of type `consumed` linked by `doseLogId`).
 - `auditLogs` + `_syncQueue` (every mutation enqueues a sync upsert).
-- `phaseSchedules` (add/update/delete schedule — used by other tabs, defined in medication-schedule-service.ts).
+- `phaseSchedules` (add/update/delete schedule — used by other tabs, defined in medication-schedule-service.ts). That file also exposes read helpers used by the Rx/Settings tabs: `getDailySchedule(dayOfWeek)` (returns a `Map<time, ScheduleWithDetails[]>` of active prescriptions/phases for a weekday) and `getSchedulesForPhase(phaseId)`; both reads additionally filter `deletedAt === null` alongside `enabled === true`.
 
 **Key derived type — `DoseSlot`** (dose-schedule-service.ts): `prescriptionId, phaseId, scheduleId, scheduledDate (YYYY-MM-DD), scheduleTimeUTC (min from UTC midnight), localTime ("HH:MM"), dosageMg, unit, status, existingLog?, prescription, phase, schedule, inventory?, pillsPerDose?, inventoryWarning?`.
 
@@ -226,7 +227,7 @@
 - **Pre-creation cutoff:** no dose slots are shown for dates earlier than the prescription's `createdAt` date.
 - **Timezone-aware display:** `localTime` is derived from `scheduleTimeUTC` formatted into the device timezone (`getDeviceTimezone`). Slots are sorted by `localTime`.
 - **On-time vs late take:** today + within 30 min of scheduled = immediate log at current wall time; otherwise a retroactive time must be chosen. Past dates always require a chosen time.
-- **Pill math:** `pillsPerDose = round(dosageMg / inventory.strength, 4)`. If no inventory → warning `no_inventory` and "Dose logged -- no stock tracked". If the result is not a clean fraction → `odd_fraction`. If `currentStock - pillsPerDose < 0` → `negative_stock`.
+- **Pill math:** `pillsPerDose = round(dosageMg / inventory.strength, 4)`. If no inventory → warning `no_inventory` and "Dose logged -- no stock tracked". If the result is not a clean fraction → `odd_fraction`. If `currentStock - pillsPerDose < 0` → `negative_stock`. Only one warning is kept per slot: `odd_fraction` is set first and then overwritten by `negative_stock` if stock would go negative.
 - **Low-stock detection:** a prescription is "low stock" if `inventoryWarning === "negative_stock"`, OR `currentStock != null && refillAlertPills != null && currentStock <= refillAlertPills`. Listed by `genericName`.
 - **Skip-reason suggestion:** the picker pre-highlights "Ran out" (amber ring) when the slot is `negative_stock` or `no_inventory`.
 - **Custom skip reason:** trimmed; Submit disabled if empty/whitespace.
@@ -253,4 +254,4 @@
 - **PillIcon / PillIconWithBadge** — SVG pill renderer (5 shapes) with status badge overlay.
 - **showUndoToast** (undo-toast.tsx) — helper that fires a 5s toast with an Undo action.
 - **medication-ui-utils.ts** — `computeProgress`, `formatDoseAmount`, `formatPillCount`, phase-selection helpers, `getCurrentTimeHHMM`, haptics.
-- **dose-schedule-service.ts** — `getDailyDoseSchedule` (the live read powering this whole view) + range helper.
+- **dose-schedule-service.ts** — `getDailyDoseSchedule` (the live read powering this whole view) + `getDoseScheduleForDateRange`, a range helper that iterates each day in `[startDate, endDate]` (parsing each via `T12:00:00`), calls `getDailyDoseSchedule` per day, and returns a `Map<date, DoseSlot[]>` for history/calendar views (not used by this surface directly).

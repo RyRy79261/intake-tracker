@@ -26,11 +26,11 @@
   1. **Today** — vertical list of per-metric rows.
   2. **This Week (Mon-Sun)** — a `grid-cols-[auto_repeat(7,1fr)]` table: a label column + 7 day columns.
 - Purely presentational/read-only: no buttons, inputs, or edit affordances. It reads live data and re-renders reactively.
-- Self-refreshes every 60 seconds via `useNowTick(60_000)` so the "today"/"week" window rolls over at the configured day-start hour without a page reload.
+- Self-refreshes every 60 seconds via `useNowTick()` (called with no argument; 60_000 ms is the hook's default interval param) so the "today"/"week" window rolls over at the configured day-start hour without a page reload.
 - All metric rows are gated/styled from a single per-metric theme registry (`CARD_THEMES`), so each metric carries a consistent icon + color across both sections.
 
 ### Today section (daily budget rows)
-Six possible rows, in this fixed order; each is one flex line (`icon · label(w-16) · bar/spacer(flex-1) · value block`):
+Six possible rows, in this fixed order; each is one flex line (`icon · label(w-16) · bar/spacer(flex-1) · value block`). Water/sodium/sugar use a stacked `flex-col` value block; potassium instead places its value as two sibling spans directly in the flex row (`{total}` then `/ {limit} mg`):
 1. **Water** — always shown.
 2. **Sodium** (key `salt`, label "Sodium") — always shown.
 3. **Sugar** — shown only if optional tracker `sugar` enabled.
@@ -48,9 +48,11 @@ Potassium (soft target) renders:
 - Banana icon, single-stage bar capped at 100% (never reds out, no buffer, no marker).
 - Value `total / limit mg` (raw total, NOT clamped to the limit).
 
+The two optional Today rows carry test hooks: the sugar row has `data-testid="metrics-sugar-row"` and the potassium row has `data-testid="metrics-potassium-row"` (used by tests, not user-facing).
+
 Caffeine / Alcohol render (no bar, no limit):
 - Coffee / Wine icon, a `flex-1` spacer instead of a bar.
-- Caffeine value: `<total> mg` (integer mg).
+- Caffeine value: `<total> mg` — the raw `caffeineTotal` (sum of `amountMg`) rendered verbatim with no rounding or `toLocaleString` (only the *weekly* caffeine cell applies `Math.round`); a non-integer or large `amountMg` would show as-is.
 - Alcohol value: `<total.toFixed(1)> std drinks` (1 decimal).
 - When the total is exactly 0, the value uses muted-foreground color instead of the theme color.
 
@@ -71,10 +73,11 @@ Caffeine / Alcohol render (no bar, no limit):
   - in extended zone (over target, within buffer) → orange (`text-orange-600 dark:text-orange-400`).
   - over extended (over target + buffer) → red (`text-red-600 dark:text-red-400`).
   - no data (0) and not future → faded muted (`text-muted-foreground/50`).
+- Cell classes are composed via `cn(...)`, so the per-state color/fade class and the today-column `font-semibold` bold can co-apply on the same cell (e.g. a no-data faded cell that is also today's column renders both muted-faded and bold).
 
 ### Computation / data flow
 - **Today totals**: water/salt/sugar/potassium via `useDailyIntakeTotal(type)` → `getDailyTotal` sums non-deleted `IntakeRecord.amount` with `timestamp >= getDayStartTimestamp(dayStartHour)`. Caffeine/alcohol via `useSubstanceRecordsByDateRange(dayStart, now, type)` then summed (`amountMg` for caffeine, `amountStandardDrinks` for alcohol).
-- **Weekly data**: per metric, `useIntakeRecordsByDateRange(weekStart, weekEnd, type)` / `useSubstanceRecordsByDateRange(...)`, then `bucketByDay(...)` floors each record into one of 7 buckets by `floor((timestamp - weekStart) / 86_400_000)`, summing the metric's accessor value into that bucket. Records outside `[0,7)` are dropped.
+- **Weekly data**: per metric, `useIntakeRecordsByDateRange(weekStart, weekEnd, type)` / `useSubstanceRecordsByDateRange(...)`, then `bucketByDay(...)` floors each record into one of 7 buckets by `floor((timestamp - weekStart) / 86_400_000)`, summing the metric's accessor value into that bucket. Records outside `[0,7)` are dropped. The substance range query uses the compound `[type+timestamp]` index when a `type` is supplied (else a plain `timestamp` index), and both ends of the range are inclusive (`between(start, end, true, true)`).
 - **Progress math** (water/salt/sugar): `computeTwoStageProgress(total, limit, buffer)` → `{ primaryPct, extendedPct, targetPct, isOverTarget, isOverExtended, isTwoStage, extendedCurrent, extendedTotal, maxAmount }`.
 - **Potassium pct**: `limit > 0 ? min(100, total/limit*100) : 0` (single-stage, clamped).
 
@@ -87,7 +90,7 @@ Caffeine / Alcohol render (no bar, no limit):
   - Logging/editing/deleting intake or substance records elsewhere (other dashboard cards, voice, AI parse) updates the totals here live via Dexie `useLiveQuery`.
   - Changing limits, buffers, `dayStartHour`, or optional-tracker toggles in Settings (Zustand `settings-store`) live-updates bar fills, value denominators, the day/week window, and which rows render.
   - The passage of time across the day-start boundary (every 60s tick) rolls the "today" and "this week" windows forward.
-- Accessibility: the section has `aria-label="Daily intake summary"` (role region); each budgeted bar has an `aria-label` (e.g. "Water intake progress"); icons are `aria-hidden`.
+- Accessibility: the section has `aria-label="Daily intake summary"` (role region); each progress bar has an `aria-label` — the water/sodium/sugar budgeted bars (e.g. "Water intake progress") and also the potassium soft-target bar ("Potassium intake progress"); icons are `aria-hidden`.
 
 ---
 
@@ -177,7 +180,7 @@ Reads: `type` ("caffeine"|"alcohol"), `amountMg` (caffeine), `amountStandardDrin
 ### Services
 - `getDailyTotal(type, dayStartHour)` — `intakeRecords` where `timestamp >= dayStart`, filtered `type` + `deletedAt === null`, summed `amount`.
 - `getRecordsByDateRange(start, end, type?)` — `intakeRecords` `timestamp.between(start,end)`, filtered `deletedAt === null` (+ optional type).
-- `getSubstanceRecordsByDateRange(start, end, type?)` — substance equivalent.
+- `getSubstanceRecordsByDateRange(start, end, type?)` — substance equivalent; when `type` is given it queries the compound `[type+timestamp]` index, otherwise the plain `timestamp` index, with inclusive bounds (`between(..., true, true)`), then filters `deletedAt === null`.
 
 ### Settings store (Zustand, persisted to localStorage)
 Reads: `dayStartHour`, `waterLimit`, `saltLimit`, `sugarLimit`, `potassiumLimit`, `waterExtendedBuffer`, `saltExtendedBuffer`, `sugarExtendedBuffer`, `optionalTrackers.{sugar,potassium}`.
@@ -216,6 +219,6 @@ Reads: `dayStartHour`, `waterLimit`, `saltLimit`, `sugarLimit`, `potassiumLimit`
 - Helper functions (module-local, not exported): `getWeekStartTimestamp(dayStartHour)`, `getTodayDayIndex(dayStartHour)`, `formatValue(value)` (locale string), `bucketByDay(records, weekStart, accessor)` (7-bucket day summation).
 - `computeTwoStageProgress` (`progress-utils.ts`) — budget/over-limit math returning `TwoStageProgress`.
 - `CARD_THEMES` (`card-themes.ts`) — per-metric label/icon/color/gradient registry (keys: water, salt, sugar, potassium, weight, bp, eating, urination, defecation, caffeine, alcohol).
-- `useOptionalTrackerEnabled` / `OPTIONAL_TRACKERS` (`optional-trackers.ts`) — sugar/potassium visibility gating (defaults sugar=true, potassium=false).
-- Data hooks: `useDailyIntakeTotal`, `useIntakeRecordsByDateRange`, `getDayStartTimestamp` (`use-intake-queries.ts`); `useSubstanceRecordsByDateRange` (`use-substance-queries.ts`); `useNowTick` (`use-now-tick.ts`, shared 60s interval).
+- `useOptionalTrackerEnabled` / `OPTIONAL_TRACKERS` (`optional-trackers.ts`) — sugar/potassium visibility gating (defaults sugar=true, potassium=false). A non-reactive snapshot variant `getOptionalTrackerEnabled` also exists in the same module (one-shot reads inside callbacks), but the widget uses only the reactive hook.
+- Data hooks: `useDailyIntakeTotal`, `useIntakeRecordsByDateRange`, `getDayStartTimestamp` (`use-intake-queries.ts`); `useSubstanceRecordsByDateRange` (`use-substance-queries.ts`); `useNowTick` (`use-now-tick.ts`, called with no argument so it uses its default 60s interval; the hook defensively clamps any non-finite or `≤ 0` interval back to `60_000` ms via `safeIntervalMs`).
 - Consumers / previews: `page.tsx` mounts it on the dashboard; `preview-registry.tsx` + `seedTextMetricsPreview` (`preview-data.ts`) render it in the in-app help manual; `text-metrics.dom.test.tsx` asserts the "Today"/"This Week (Mon-Sun)" headings and seeded-water rendering.

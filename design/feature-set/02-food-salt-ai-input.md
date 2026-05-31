@@ -31,9 +31,9 @@
 - **Manual detail fields** (always visible): Weight (g, optional), Sodium (required, with measurement-source select), Sugar (g, optional — only if sugar tracker on), Potassium (mg, optional — only if potassium tracker on), Water content (ml, optional).
 - **Sodium measurement conversion:** the entered number is multiplied by a source factor to derive stored sodium-mg. A live hint shows `= <calculated>mg sodium` whenever source ≠ Sodium and the result > 0.
 - **Record with details** button — persists. If any intake fields or AI-population exist, writes a composable group; otherwise writes a plain eating record (note/grams only).
-- **Recent entries list** — last 5 eating records, each showing timestamp, linked sodium (`mg`), linked sugar (`g sugar`, if tracker on), linked potassium (`mg K`, if tracker on), grams, and note. Per-row edit + delete.
+- **Recent entries list** — the hook fetches the last 5 eating records, but `RecentEntriesList` is rendered without `maxEntries`, so it falls back to its default of **3** and only the 3 most recent rows are displayed. Each shows timestamp, linked sodium (`mg`), linked sugar (`g sugar`, if tracker on), linked potassium (`mg K`, if tracker on), grams, and note. The whole row is the edit affordance (no pencil icon); a `Trash2` delete button sits at the row's right edge.
 - **Inline edit form** — edits timestamp, note, weight, sodium (+source), sugar, potassium, water content; reconciles the linked group via `syncEatingGroup`.
-- **Delete with undo** — soft-delete with a toast offering Undo (~5s window).
+- **Delete with undo** — soft-delete. Two toasts fire: a 5s "Record deleted" toast with an **Undo** action, plus a separate non-undo "Entry deleted / Eating record removed" confirmation toast.
 
 ### Composable group model
 - One submit can create up to: 1 eating record + N intake records (`salt`, `sugar`, `potassium`, `water`), all sharing one `groupId` and a `groupSource`.
@@ -60,9 +60,9 @@
 | Change Sodium source select | Switches multiplier (sodium 1.0 / salt 0.39 / msg 0.12). |
 | Enter Sugar (g) / Potassium (mg) | Optional; only when tracker enabled; rounded to int, saved only if > 0. |
 | Enter Water content (ml) | Optional; rounded, creates a linked water intake (`manual:food_water_content`) carrying the food note. |
-| Tap "Record with details" | Saves. Blocked (with toast) if no sodium. Composable group if intakes/AI present, else plain eating record. Success toast + form reset. |
-| Tap edit (pencil) on a recent row | Opens inline edit form; back-fills sodium (back-converted to input units via source multiplier), sugar, potassium, water, grams, note, timestamp. |
-| Edit & Save in inline form | `syncEatingGroup` upserts/soft-deletes linked records; a `groupId` is generated if the record had none and any nutrient > 0. |
+| Tap "Record with details" | Saves. Blocked if no sodium, with a destructive toast titled "Sodium required" / "Enter a sodium amount before saving." Composable group if intakes/AI present, else plain eating record. Success → toast titled "Logged" + form reset. |
+| Click a recent row (or press Enter/Space on it) | The whole row is the edit affordance — there is no pencil icon. Clicking it (or keyboard-activating the focused row, only when the event target is the row itself) opens the inline edit form; back-fills sodium (back-converted to input units via source multiplier), sugar, potassium, water, grams, note, timestamp. |
+| Edit & Save in inline form | `syncEatingGroup` upserts/soft-deletes linked records; a `groupId` is generated if the record had none and any nutrient > 0. Success → "Entry updated" toast; failure → destructive "Error / Could not update the entry" toast; an unparseable timestamp → destructive "Invalid date/time" toast (save aborts). |
 | Cancel inline edit | Closes form, discards changes; stale async group fetches are ignored via `openTokenRef`. |
 | Tap delete on a recent row | Soft-deletes the eating record; undo toast (~5s). |
 | Tap X on a preview row (ComposablePreview) | Removes that record from the preview list (stops propagation). |
@@ -91,16 +91,16 @@
 - **Parsing:** food input `disabled`; Sparkles → spinner; button disabled.
 - **AI-populated:** fields filled; `aiPopulated` flag changes save to a composable group with `groupSource: "ai_food_parse"` and stores `originalInputText`.
 - **Submitting:** save button shows spinner; disabled.
-- **Validation error (no sodium):** save disabled; destructive toast if forced; hint text below button.
-- **Success:** success toast ("Meal with details recorded" or "Eating event recorded"); form resets.
+- **Validation error (no sodium):** save disabled; if forced, a destructive toast titled "Sodium required" / "Enter a sodium amount before saving."; hint text below button.
+- **Success:** success toast titled "Logged" with description "Meal with details recorded" (note present) or "Eating event recorded" (no note); form resets.
 - **Error (save failed):** destructive toast "Failed to record".
 - **Sodium conversion hint:** shown only when source ≠ sodium and calculated > 0.
 
 **Recent list:**
-- **Populated:** rows with timestamp + nutrient badges (sodium orange, sugar pink, potassium purple) + grams + truncated note.
+- **Populated:** rows with timestamp + nutrient badges (sodium orange, sugar pink, potassium purple) + grams + truncated note. Each row is keyboard-accessible: `role="button"`, `tabIndex={0}`, opening the inline edit form on Enter/Space (only when the event target is the row itself, so the inner delete button is unaffected). The per-row delete is a `Trash2` icon button that turns red on hover.
 - **Editing row:** row replaced by inline edit form (`InlineEditFormShell`) with grams/sodium+source/sugar/potassium/water + timestamp + note + Save/Cancel.
 - **Deleting row:** spinner / disabled while delete in flight (via `deletingId`).
-- **Empty:** (RecentEntriesList renders its own empty state when no records.)
+- **Empty:** `RecentEntriesList` returns `null` when there are no records — it renders nothing at all (no "Recent" header, no empty-state message).
 
 **ComposablePreview:**
 - **Empty list:** shows original text + "No records to save. Try again or add details manually."; "Confirm All" disabled.
@@ -130,7 +130,7 @@
 - Water content: `manual:food_water_content` (`FOOD_WATER_SOURCE`)
 - Generic composable fallback: `composable`
 
-**`groupSource` values:** `manual_food_entry` (manual), `ai_food_parse` (AI-populated); broader set documented in db.ts also includes `ai_substance_lookup`, `manual`.
+**`groupSource` values:** `manual_food_entry` (manual), `ai_food_parse` (AI-populated). The food form writes one of these two. Note the db.ts type comment is out of date: it lists `"ai_food_parse" | "ai_substance_lookup" | "manual"` and omits `manual_food_entry`, the value the form actually persists for manual entries.
 
 **Optional trackers (`OPTIONAL_TRACKERS` / `OPTIONAL_TRACKER_DEFAULTS`):**
 - `sugar` — label "Sugar", unit `g`, icon `Candy`, color pink, **default ON**.
@@ -155,7 +155,7 @@
 **Card theme tokens** (`CARD_THEMES`): `eating` (orange — card shell + Utensils icon + button), `salt` (amber/orange progress gradients + `progressExtended` orange→amber + `progressOverLimit` red), `sugar` (pink/rose + extended rose→fuchsia + red), `potassium` (purple/indigo gradient, no extended). Badge colors: sodium `text-orange-600`, sugar `text-pink-600`, potassium `text-purple-600`.
 
 **AI parse route (`/api/ai/parse`):**
-- Model: `CLAUDE_MODELS.quality` (Opus); `temperature: 0`; `max_tokens: 4096`; tools: `WEB_SEARCH_TOOL` + `parse_food_result`.
+- Model: `CLAUDE_MODELS.quality` (`claude-sonnet-4-6` / Sonnet); `temperature: 0`; `max_tokens: 4096`; tools: `WEB_SEARCH_TOOL` + `parse_food_result`.
 - Rate limit: 20 / window per IP.
 - Request: `{ input: string }` (1–500 chars).
 - Tool output fields: `water_ml`, `sodium_mg`, `sugar_g`, `potassium_mg`, `reasoning` (all required; nulls allowed).
@@ -164,7 +164,7 @@
 - Response shape (to client): `{ water, salt (=sodium mg), measurement_type: "sodium", sugar, potassium, reasoning? }`.
 
 **AI nutrient-analysis route (`/api/ai/nutrient-analysis`):**
-- Model: Opus; `temperature: 0.2`; `max_tokens: 4096`; rate limit 10 / window.
+- Model: `CLAUDE_MODELS.quality` (`claude-sonnet-4-6` / Sonnet); `temperature: 0.2`; `max_tokens: 4096`; rate limit 10 / window.
 - Request: `windowDays` 1–90, optional `focus` (≤200), `foods[]` 1–500 (`description` 1–300, optional `grams` 0–10000), optional `conditions[]` (≤20), optional `medications[]` (≤40, with `phaseType: maintenance|titration`).
 - Finding `status` enum: `high` | `low` | `balanced`.
 - Response: `summary` (≤4000), `findings[]` (≤20, each: nutrient, status, detail ≤2000, exampleFoods ≤12), `caveats[]` (≤8).
@@ -177,7 +177,7 @@
 
 **`EatingRecord` (`db.ts`):** `id, timestamp, grams?, note?, createdAt, updatedAt, deletedAt, deviceId, timezone, groupId?, originalInputText?, groupSource?`.
 
-**`SubstanceRecord`:** touched by the composable service (caffeine/alcohol), but not by the food form — relevant only for shared group transactions.
+**`SubstanceRecord`:** touched by the composable service (caffeine/alcohol), but not by the food form — relevant only for shared group transactions. `addComposableEntry` also accepts a `substance` (singular) and `substances` (plural) input path and, for a substance carrying a `volumeMl`, auto-creates a linked `water` intake from that volume. The food form never exercises these paths, but they share the same group transaction.
 
 **Service entry points used:**
 - `addComposableEntry(input, timestamp)` — creates the group (eating + intakes [+ substances]).

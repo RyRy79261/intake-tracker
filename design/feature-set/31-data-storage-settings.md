@@ -98,8 +98,8 @@ This unit is two stacked sections inside one accordion ("Data & Storage"): **Sto
 ### MigrationWizard
 - **Backup gate:** tap "Download Backup" (downloads, sets hasDownloaded), or check "I have downloaded and saved my backup". "Proceed to Migration" enabled only when one of those is true.
 - **Upload progress:** tap "Show details / Hide details" to expand the per-table list; tap "Cancel" → opens CancelConfirmDialog. Dialog is **blocking** while uploading (Esc/overlay/close suppressed).
-- **Cancel confirm:** "Go Back" (dismiss) or "Cancel Migration" (destructive) → deletes uploaded server data, returns to Local.
-- **Completion:** tap "Done" → calls `completeMigration()`, closes wizard.
+- **Cancel confirm:** "Go Back" (dismiss) or "Cancel Migration" (destructive) → `POST /api/sync/cleanup` deletes uploaded server data, clears progress, and sets storage mode back to Local (phase → cancelled). If cleanup fails, the phase transitions to **error** (not cancelled) with the failure message.
+- **Completion:** heading "Migration Complete"; tap "Done" → calls `completeMigration()`, closes wizard. Elapsed duration is formatted conditionally: under 60s shows `"{s}s"`; otherwise `"{m}m {s}s"`.
 - **Error / Cancelled terminal screens:** tap "Close" to reset + dismiss.
 
 ---
@@ -133,29 +133,31 @@ This unit is two stacked sections inside one accordion ("Data & Storage"): **Sto
 - **Idle:** "Export Data".
 - **Pending:** disabled, label "Exporting...".
 - **Warning open (incomplete cloud copy):** amber panel with Cancel / "Export Anyway".
-- **Success / failure:** toast ("Export successful" / "Export failed: {msg}").
+- **Success / failure:** toast — title "Export successful" (desc "Your data has been downloaded") / title "Export failed" (desc "Failed to export data: {msg}").
 
 ### Import
 - **Idle:** "Import Data".
 - **File chosen:** amber merge-confirm panel.
 - **Pending:** disabled, label "Importing..." (button and Continue button).
 - **After import:** last-import summary line; conditional "Review conflicts" button.
-- **Success / failure:** toast ("Imported {n} records ({skipped} skipped[, {c} conflicts])" / "Import failed: {msg}").
+- **Success / failure:** toast — title "Import successful" (desc "Imported {n} records ({skipped} skipped[, {c} conflicts])") / title "Import failed" (desc "Failed to import data: {msg}").
+  - **Toast total under-counts:** the success desc's `{n}` sums only **16** `*Imported` fields (stops at `auditLogsImported`); it omits `userProfileImported` and `insightReportsImported`. So the toast total can be lower than the inline "Last import: {N} new" summary, which sums all 18.
 
 ### Clear All Data
 - **Default:** single red "Clear All Data" button.
 - **Confirming:** two-button row (Cancel / Confirm Delete, destructive).
-- **Success / failure:** toast ("Data cleared" / "Error: Failed to clear data: {msg}").
+- **Success / failure:** toast — title "Data cleared" (desc "All intake records have been deleted") / title "Error" (desc "Failed to clear data: {msg}").
 
 ### ConflictReviewDrawer
 - **Per-conflict toggle:** active choice button gets primary fill + leading Check icon.
 - **Applying:** "Apply Decisions" → disabled, label "Applying...".
-- **Resolved:** toast "{resolved} records updated"; drawer closes; last-import result cleared.
+- **Resolved:** toast — title "Conflicts resolved" (desc "{resolved} records updated"); drawer closes; last-import result cleared.
 
 ### MigrationWizard phases
 - **backup:** ShieldCheck icon, download button states ("Downloading…" while pending), checkbox, gated "Proceed".
 - **uploading:** progress bar (%), "Uploading {Table}…" / "Counting records…", "{x} / {y} records ({%})", expandable per-table list with done(green check)/uploading(spinner)/pending(grey circle) icons. Blocking modal.
-- **complete:** green CheckCircle2, "{n} records uploaded in {Xm Ys}", per-table record counts, "Done".
+  - **Per-table status precedence** (`tableStatus()`): a table with `progress` where `uploaded >= total && total >= 0 && lastBatchIndex >= 0` → "done"; a table with no progress yet → "uploading" if `tableIndex <= currentIndex`, else "pending"; otherwise the current index is "uploading", indexes below it "done", above it "pending".
+- **complete:** heading "Migration Complete", green CheckCircle2, "{n} records uploaded in {duration}" (duration is `"{s}s"` under 60s, else `"{m}m {s}s"`), per-table record counts, "Done".
 - **error:** destructive heading "Migration Error" + message + "Close".
 - **cancelled:** "Migration Cancelled" + "All uploaded data has been removed from the server." + "Close".
 
@@ -172,7 +174,7 @@ This unit is two stacked sections inside one accordion ("Data & Storage"): **Sto
 - **Encrypted backup shape:** `{ encrypted: true, payload, version }` (AES-GCM via PIN).
 - **MigrationPhase enum** (`migration-store.ts`): `"idle"` | `"backup"` | `"uploading"` | `"verifying"` | `"complete"` | `"cancelled"` | `"error"`.
 - **Per-table upload status** (`upload-progress-step.tsx`): `"pending"` | `"uploading"` | `"done"`.
-- **`TABLE_PUSH_ORDER`** (migration upload order, also used for the per-table progress/summary lists), 19 tables in FK-tier order:
+- **`TABLE_PUSH_ORDER`** (migration upload order, also used for the per-table progress/summary lists), 18 tables in FK-tier order:
   `prescriptions, titrationPlans, medicationPhases, phaseSchedules, inventoryItems, doseLogs, inventoryTransactions, dailyNotes, intakeRecords, substanceRecords, weightRecords, bloodPressureRecords, eatingRecords, urinationRecords, defecationRecords, auditLogs, userProfile, insightReports`.
 - **Tables counted for "records" total** (`use-storage-info.ts`, 16 tables): intakeRecords, weightRecords, bloodPressureRecords, eatingRecords, urinationRecords, defecationRecords, substanceRecords, prescriptions, medicationPhases, phaseSchedules, inventoryItems, inventoryTransactions, doseLogs, titrationPlans, dailyNotes, auditLogs. (Note: `userProfile` and `insightReports` are NOT in this count, so the displayed "records" can under-count what export writes.)
 - **Byte formatting thresholds** (`formatBytes`): `< 1024` → "B"; `< 1MB` → "KB" (1 decimal); else "MB" (1 decimal).
@@ -194,7 +196,7 @@ Reads/writes every Dexie table (`src/lib/db.ts`); export/import touch all 18 arr
 - **Import (`importBackup`)** writes via `bulkPut`:
   - **Health tables** (skip-existing-ids merge): intakeRecords, weightRecords, bloodPressureRecords, eatingRecords, urinationRecords, defecationRecords, substanceRecords.
   - **Medication/system tables** (conflict-aware merge): prescriptions, medicationPhases, phaseSchedules, inventoryItems, inventoryTransactions, doseLogs, titrationPlans, dailyNotes, auditLogs, userProfile, insightReports.
-- **`clearAllData()`** updates `db.intakeRecords` rows (sets `deletedAt`/`updatedAt`) and enqueues deletes into `db._syncQueue` (sync tombstones).
+- **`clearAllData()`** runs inside a `db.transaction("rw", intakeRecords, _syncQueue)`: for each non-tombstoned row (`if (record.deletedAt !== null) continue` skips already-deleted rows) it sets `deletedAt`/`updatedAt` and enqueues a delete into `db._syncQueue` (sync tombstones), then calls `schedulePush()`.
 - **`resolveConflicts()`** `db.table(table).put(backupRecord)` for `useBackup` rows.
 - **`ConflictRecord`** type: `{ table: string; id: string; current: Record<string,unknown>; backup: Record<string,unknown> }`.
 - **`ImportResult`** type: per-table `*Imported` counts + `skipped`, `conflicts[]`, `errors[]`, `success`.
@@ -211,11 +213,11 @@ Reads/writes every Dexie table (`src/lib/db.ts`); export/import touch all 18 arr
 - **Conflict detection scope:** only medication/system tables (+ userProfile/insightReports) raise conflicts; health tables silently skip existing ids. A conflict is raised only when an existing id has *content-different* data (sync-metadata fields ignored). Identical content → counted as `skipped`, no conflict.
 - **Content equality** (`isContentEqual`) ignores `createdAt/updatedAt/deletedAt/deviceId/timezone` and treats missing vs `undefined` as equal; compares via `JSON.stringify`.
 - **Conflict resolution default:** unset decisions default to **keep current** (`?? false`). Only `useBackup` rows are written; keep-current rows are no-ops.
-- **Clear All Data is a soft delete:** it tombstones intake records and enqueues sync deletes (a hard `.clear()` would be resurrected on the next pull). Despite the button label "Clear All Data" / toast "All intake records have been deleted", it only soft-deletes the **intakeRecords** table.
+- **Clear All Data is a soft delete:** it tombstones intake records and enqueues sync deletes (a hard `.clear()` would be resurrected on the next pull). It runs in a transaction over `intakeRecords` + `_syncQueue`, skips rows already tombstoned (`deletedAt !== null`), and calls `schedulePush()` afterward. Despite the button label "Clear All Data" / toast "All intake records have been deleted", it only soft-deletes the **intakeRecords** table.
 - **Migration backup gate:** cannot proceed to upload until the user downloads a backup or checks the acknowledgement.
 - **Migration is blocking while uploading:** modal cannot be dismissed (Esc/overlay/close suppressed) during the `uploading` phase.
-- **Migration cancel is destructive server-side:** confirming cancel deletes all uploaded data from the server and reverts to Local.
-- **Interrupted migration:** detected via `checkInterruptedMigration()` (presence of persisted progress in localStorage); surfaces "Resume Migration" instead of "Switch to Cloud Sync".
+- **Migration cancel is destructive server-side:** confirming cancel calls `apiFetch("/api/sync/cleanup", {method:"POST"})` to delete all uploaded data from the server, clears progress, and reverts to Local (phase → cancelled). If the cleanup request throws, the wizard moves to the **error** phase (showing the error message) instead of cancelled.
+- **Interrupted migration:** detected via `checkInterruptedMigration()` (`loadProgress() !== null`, i.e. presence of persisted progress under localStorage key `"intake-tracker-migration-progress"`); surfaces "Resume Migration" instead of "Switch to Cloud Sync".
 - **Storage API graceful degradation:** if `navigator.storage.estimate` is missing/throws, usage/quota stay null → "Storage info unavailable"; if Dexie counts throw, record count stays hidden.
 - **File input reset:** the hidden `<input type=file>` value is cleared after every import (success or cancel) so re-selecting the same file re-fires `onChange`.
 
@@ -228,7 +230,7 @@ Reads/writes every Dexie table (`src/lib/db.ts`); export/import touch all 18 arr
 - **`ConflictReviewDrawer`** — bottom-sheet for resolving per-record import conflicts (bulk + per-row keep/use-backup, diff fields).
 - **`useStorageInfo`** — hook computing formatted usage/quota (`navigator.storage.estimate`) + summed record count across 16 tables.
 - **`use-backup-queries`** (`useDownloadBackup` / `useUploadBackup` / `useResolveConflicts` / `useClearAllData`) — React Query mutations wrapping the backup service with success/error toasts.
-- **`backup-service`** — export/import/conflict engine: `exportBackup`, `downloadBackup`, `importBackup` (merge/replace, health vs conflict-aware tables), `resolveConflicts`, plus encrypted `exportEncryptedBackup` / `importEncryptedBackup`, and `getBackupStats`.
+- **`backup-service`** — export/import/conflict engine: `exportBackup`, `downloadBackup`, `importBackup` (merge/replace, health vs conflict-aware tables), `resolveConflicts`, plus encrypted `exportEncryptedBackup` / `importEncryptedBackup`, and `getBackupStats` (computes per-table counts across all 18 tables plus oldest/newest record over the 10 timestamp-bearing tables; **not surfaced by any covered UI**).
 - **`MigrationWizard`** — modal orchestrating the Local→Cloud migration phases.
   - **`BackupGateStep`** — forces a backup download/acknowledgement before migrating.
   - **`UploadProgressStep`** — progress bar + expandable per-table upload status (pending/uploading/done).

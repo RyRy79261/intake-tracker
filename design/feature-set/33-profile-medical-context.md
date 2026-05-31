@@ -25,7 +25,7 @@
 - Two stacked sections inside a `max-w-lg`, mobile container with bottom padding (`pb-10`, `space-y-6`):
   1. **Account** section — heading "Account" (muted, small, semibold). Renders either a signed-out blurb or the full `AccountSection`.
   2. **Medical context** section (`MedicalContextSection`).
-- Registered in nav as: path `/profile`, icon `CircleUser`, label "Profile", title "Profile", subtitle "Account & medical context". It is one of the five swipeable top-level tabs (Intake / Medications / Analytics / Settings / Profile).
+- Registered in nav as: path `/profile`, icon `CircleUser`, label "Profile", title "Profile", subtitle "Account & medical context". It is one of the five swipeable top-level tabs, registered in this `NAV_ROUTES` order: Profile / Intake / Meds / Analytics / Settings (the medications tab's registered label is `"Meds"`).
 
 ### Account state
 - **Signed out** (page-level `SignedOutBlurb`): a slate card titled "You're not signed in", subtext "Your profile works on this device offline. Signing in also unlocks:", followed by a 3-item benefits list and a full-width "Sign In" button that routes to `/auth`.
@@ -46,15 +46,15 @@
 - Live profile data via `useUserProfile()` (Dexie `useLiveQuery`, blank profile until resolved).
 
 ### Per-field AI-sharing consent (`AiInsightsConsentToggle`)
-- Two toggles inside the conditions card (and mirrored in Settings → Privacy & Security via `MedicalAiSection`):
+- Two toggles inside the conditions card (and mirrored in Settings → Privacy & Security via `MedicalAiSection`). Because the same `AiInsightsConsentToggle` instances in both places read one Dexie singleton through the live query, toggling on the Profile page and in Settings stays in lockstep:
   - **Share conditions with AI insights** (`field="shareConditionsWithAI"`, `noun="conditions"`)
   - **Share medications with AI insights** (`field="shareMedicationsWithAI"`, `noun="medications"`)
-- Each toggle row: a `Label`, an `Info` (i) button opening an informational dialog, dynamic helper subtext, and a shadcn `Switch`.
+- Each toggle row: a `Label`, an `Info` (i) button opening an informational dialog, dynamic helper subtext, and a shadcn `Switch`. The `Label` and `Switch` are accessibly paired via `htmlFor`/`id` (`id={`toggle-${field}`}`).
 - Helper subtext is state-dependent:
   - enabled → "Your {noun} are included when generating AI insights."
   - disabled → "Your {noun} stay on this device and are not sent to the AI."
 - Below the toggles, a static note about medications: "Sharing medications sends your active prescriptions — name, dose, frequency, and how long the current titration or maintenance phase has run. Manage medications on the Medications page."
-- **One-time consent dialog**: the first time *any* sharing toggle is enabled, a consent dialog appears (it *is* the opt-in — nothing saves until "Enable insights" is pressed). A single `aiInsightsConsentAt` timestamp is recorded and covers *all* sharing toggles thereafter.
+- **One-time consent dialog**: the first time *any* sharing toggle is enabled, a consent dialog appears (it *is* the opt-in — nothing saves until "Enable insights" is pressed). Confirming writes `field=true` **and** `aiInsightsConsentAt` together in a single atomic `save(...)` (one upsert). The single `aiInsightsConsentAt` timestamp covers *all* sharing toggles thereafter.
 - **Informational re-open**: the `Info` button reopens the same disclaimer body in read-only "About AI insights" mode (single "Got it" button), regardless of consent state.
 
 ### Disclaimer body (shared between consent + info dialogs)
@@ -65,6 +65,7 @@ Three paragraphs (rendered as the dialog's accessible description):
 
 ### Downstream effect (consumers — context, not on this page)
 - `ai-insights-card.tsx`: `shareConditions = shareConditionsWithAI && conditions.length > 0`; `shareMedications = shareMedicationsWithAI`; `personalised = shareConditions || shareMedications`. When generating, the payload includes `conditions: profile.conditions` (if shared) and `includeMedications: true` (if shared). The card surfaces a "Your medical profile" summary with check/X rows showing whether conditions/medications are included.
+- `nutrient-analysis-card.tsx`: a second downstream consumer that mirrors the same `shareConditions` / `shareMedications` / `personalised` logic and renders its own "Your medical profile" check/X rows — both cards surface the sharing state, not just `ai-insights-card.tsx`.
 - Conditions appear in the AI prompt as: "User-reported medical conditions: {joined with '; '}." plus a do-not-diagnose instruction.
 - Medications, when shared, are summarised via `buildMedicationSummary()` into per-prescription lines (name, phase type, dose, frequency, days-on-phase).
 
@@ -175,7 +176,7 @@ Icons used on this page: `HeartPulse` (rose), `Plus`, `X`, `Info`, `LogIn`, `Spa
 - `useSaveProfile()` — `useMutation` wrapping `saveUserProfile` through `unwrap`.
 
 ### Read by (downstream, not written here)
-- `ai-insights-card.tsx` / `nutrient-analysis-card.tsx` read the three sharing flags + `conditions`.
+- `ai-insights-card.tsx` / `nutrient-analysis-card.tsx` each read the two boolean sharing flags (`shareConditionsWithAI`, `shareMedicationsWithAI`) + `conditions`. Neither card reads `aiInsightsConsentAt`.
 - `buildMedicationSummary()` reads active prescriptions/phases/schedules to build the medication snapshot only when `shareMedicationsWithAI` is on.
 
 ---
@@ -189,7 +190,7 @@ Icons used on this page: `HeartPulse` (rose), `Plus`, `X`, `Info`, `LogIn`, `Spa
 - **Consent gating**: nullish check `aiInsightsConsentAt != null` (both `null` and missing/`undefined` count as not-yet-consented; `!== null` alone would let `undefined` bypass the gate). Consent is recorded once and covers every sharing toggle thereafter; turning a toggle on never re-prompts after the first consent.
 - **Consent dialog is the opt-in**: turning a switch on pre-consent does not persist `field=true` until "Enable insights"; Cancel/dismiss leaves the switch off.
 - **Sharing is two-gated downstream**: conditions only flow to AI when `shareConditionsWithAI === true` AND `conditions.length > 0`; medications flow when `shareMedicationsWithAI === true` (medication content gathered live from active prescriptions, capped at 40).
-- **Data minimization**: only structured labels (short condition strings) and structured prescription summaries reach the AI — never raw records, notes, or free text. Identifying details are stripped server-side before any external AI call (per app-wide PII policy).
+- **Data minimization**: only structured labels (short condition strings) and structured prescription summaries reach the AI — never raw records, notes, or free text. Minimization on this path is purely *by construction* — the snapshot is aggregate numbers + short condition labels + structured med summaries, so no PII reaches the request to begin with. The insights route (`src/app/api/analytics/insights/route.ts`) does **not** run a server-side scrub/strip/sanitize step on this payload.
 - **Days-on-phase** (downstream): `max(0, floor((now - phase.startDate)/MS_PER_DAY))`.
 - **Timestamps** are Unix-ms (`Date.now()`); no day-start/timezone logic applies to the profile itself.
 
@@ -206,6 +207,6 @@ Icons used on this page: `HeartPulse` (rose), `Plus`, `X`, `Info`, `LogIn`, `Spa
 | `profile/ai-insights-consent-toggle.tsx` → `AiInsightsConsentToggle` | Reusable per-field opt-in switch with first-time consent dialog + info dialog. |
 | `profile/ai-insights-consent-toggle.tsx` → `DisclaimerBody` | Shared 3-paragraph disclaimer for consent + info dialogs. |
 | `profile/ai-insights-consent-toggle.tsx` → `fieldUpdate` | Builds a typed single-field `ProfileUpdates` without an unsafe computed-key cast. |
-| `settings/medical-ai-section.tsx` → `MedicalAiSection` | Settings → Privacy & Security mirror of both consent toggles (no condition editing). |
+| `settings/medical-ai-section.tsx` → `MedicalAiSection` | Settings → Privacy & Security mirror of both consent toggles (no condition editing). Has its own emerald "Medical conditions & AI" heading (`HeartPulse` icon) and footer copy: "Add or remove the conditions themselves on your Profile page. Medications come from your Medications page." |
 | `hooks/use-profile-queries.ts` | `useUserProfile` (live read) + `useSaveProfile` (mutation); re-exports limits/types. |
 | `lib/profile-service.ts` | CRUD, `emptyProfile`, `normalizeConditions`, limits, sync wiring. |

@@ -33,8 +33,8 @@
 - **Status line** per provider, one of: loading ("Loading…"), configured ("Using your key ending in `<last4>`"), received-share ("Granted by `<grantorEmail>`"), or not-configured ("Not configured. Add a key, or ask someone to share theirs.").
 - **Add / replace key** inline form: password input, prefix-validated, console help link, "Stored encrypted on the server" note.
 - **Remove key** (only when configured) — red destructive button.
-- **Share your key** sub-section (`ShareControls`): grant a stored key to another user by email; choose provider; list current grants with revoke buttons.
-- **Usage (last 30 days)** sub-section (`UsageSummary`): per-provider call counts + token/audio breakdown for the user's own usage, plus consumption others incurred against the user's shared keys.
+- **Share your key** sub-section (`ShareControls`): grant a stored key to another user by email; choose provider; list current grants with revoke buttons. A permanent helper line under the input reads "They must have signed in at least once before you can share."
+- **Usage (last 30 days)** sub-section (`UsageSummary`): per-provider call counts for the user's own usage, plus consumption others incurred against the user's shared keys. The displayed token/audio breakdown is limited — only input/output tokens (Anthropic) and audio seconds (Groq) are rendered. `cacheReadTokens`, `cacheCreateTokens`, and the route-level `mine.byRoute` array are fetched/typed by the hook but **not displayed anywhere** in the UI.
 
 ### Medical-AI consent (`MedicalAiSection` — Settings → Privacy & Security; `MedicalContextSection` — Profile)
 - Two independent opt-in toggles: **Share conditions with AI insights** and **Share medications with AI insights**.
@@ -47,7 +47,7 @@
 ### Security primitives (libraries, not directly user-facing)
 - **Server key vault** (`key-vault.ts`): AES-256-GCM, env-secret master key, AAD-bound to `userId:provider`, versioned blob format (`v1:` active, `v2:` reserved for KMS). Only the last 4 chars are ever stored in plaintext / exposed.
 - **Key resolution** (`ai-key-resolver.ts`): priority own-stored → shared-from-grantor → env-var (whitelist-only).
-- **PII redaction** (`security.ts` `sanitizeForAI` / `redactPii`): strips email, phone (intl + US), SSN, credit-card, DOB/date, 13-digit SA ID before any text leaves for an AI provider; caps to 500 chars.
+- **PII redaction** (`security.ts` `sanitizeForAI`, backed by the private `redactPii` helper): strips email, phone (intl + US), SSN, credit-card, DOB/date, 13-digit SA ID before any text leaves for an AI provider; caps to 500 chars. Applied across the AI routes (parse, substance-enrich, titration-warnings, nutrient-analysis, voice-parse, substance-lookup, medicine-search, interaction-check, …).
 - **Client crypto** (`crypto.ts`): AES-GCM encrypt/decrypt + PBKDF2 PIN hashing/verification + secure ID generation (used for local at-rest data encryption, separate from server key vault).
 - **Whitelist gate** (`auth-middleware.ts`): every AI/user route runs through `withAuth()`; `ALLOWED_EMAILS` enforced; distinguishes 401 (re-auth) from 403 (unapproved account).
 - **Usage audit**: `[AUDIT]` console logs on key set/clear and share grant/revoke; `ai_usage` row per call.
@@ -117,15 +117,16 @@
 
 ### `ShareControls`
 - **No shareable key** (`!canShareAny`) → muted "Add a key above to share it with another user." (entire control hidden).
-- **Has key(s)** → email input + provider select + Share button.
+- **Has key(s)** → email input + provider select + Share button, with a permanent helper line below: "They must have signed in at least once before you can share."
 - **Has grants** → "Currently shared:" list with `granteeEmail · provider` and revoke button per row.
 - **No grants** → list section omitted.
 - **Share/Revoke pending** → respective buttons disabled.
+- **Share success toast** → "Shared with `<email>`" with description "They can now use your `<provider>` key."
 
 ### `UsageSummary`
 - **Loading** → "Loading usage…".
 - **Empty** → "No AI usage in the last `<windowDays>` days." (default 30).
-- **Populated** → per-provider blocks: capitalized provider name + "N call(s)"; Anthropic adds "· `in` in / `out` out tokens"; Groq adds "· `N` s of audio" (only if audioSeconds > 0).
+- **Populated** → per-provider blocks: capitalized provider name + "N call(s)"; Anthropic adds "· `in` in / `out` out tokens"; Groq adds "· `N` s of audio" (only if audioSeconds > 0). Only these fields render — `cacheReadTokens`, `cacheCreateTokens`, and the route-level `mine.byRoute` breakdown are fetched by the hook but never shown.
 - **As-grantor block** (only if others consumed your key) → "Consumption against your shared keys:" list, `granteeEmail · provider: N call(s)` (+ tokens for Anthropic).
 
 ### `AiInsightsConsentToggle`
@@ -213,10 +214,10 @@
 - `id` serial PK, `timestamp`, `userId` (FK cascade), `keyOwnerId` (FK set-null), `keySource` (check `own_stored|shared_from|env_var`), `provider` (check `anthropic|groq`), `model`, `route`, `inputTokens`/`outputTokens`/`cacheReadTokens`/`cacheCreateTokens` (int, default 0), `audioSeconds` (nullable), `status` (check `success|error`), `durationMs`. Indexes on `(userId,timestamp)` and `(keyOwnerId,timestamp)`. Server-only.
 
 ### `userProfile` (schema.ts + `db.ts` `UserProfile`, Dexie-synced)
-- `conditions` (string[]), `shareConditionsWithAI` (bool), `shareMedicationsWithAI` (bool, default false), `aiInsightsConsentAt` (bigint number | null), plus sync metadata (`id`, `userId`, `createdAt`, `updatedAt`, `deletedAt`, `deviceId`). Consent fields read by `ai-insights-card.tsx` / `nutrient-analysis-card.tsx` to decide whether to attach `conditions` / medications to insight requests.
+- `conditions` (string[]), `shareConditionsWithAI` (bool), `shareMedicationsWithAI` (bool, default false), `aiInsightsConsentAt` (bigint number | null), plus sync metadata (`id`, `createdAt`, `updatedAt`, `deletedAt`, `deviceId`). The Dexie `UserProfile` interface has **no `userId`** — that column exists only on the server Postgres table (`schema.ts`), injected by the sync engine. Consent fields read by `analytics/ai-insights-card.tsx` / `analytics/nutrient-analysis-card.tsx` to decide whether to attach `conditions` / medications to insight requests.
 
 ### `neon_auth.users_sync`
-- Looked up by email (grant target) and by id (resolve grantor/grantee email). `ensureUserSynced` upserts the authenticated user so FKs resolve.
+- Looked up by email (grant target) and by id (resolve grantor/grantee email). `ensureUserSynced` upserts the authenticated user so FKs resolve. Its upsert failure is **swallowed (logged, non-fatal)** — read routes don't need the row, so only a downstream write route surfaces the FK error on its own insert.
 
 ### Hook query keys (`use-ai-keys.ts`)
 - `["user","api-keys"]`, `["user","api-keys","shares"]`, `["user","ai-usage", days]`. Set/delete invalidate keys (delete also invalidates shares); grant/revoke invalidate shares.
@@ -233,15 +234,17 @@
 - **Key resolution priority:** own-stored → shared-from-grantor (ordered by `createdAt asc, grantorId asc`, iterates all shares; skips grantors whose key is gone — no LIMIT to avoid a stale grantor truncating a valid grant) → env-var (only if caller email is on `ALLOWED_EMAILS`). Otherwise throws `NoAiKeyError`.
 - **Sharing prerequisites:** grantor must have the provider key stored (`NO_OWN_KEY` 400); grantee must already exist in users_sync (`GRANTEE_NOT_FOUND` 404, "sign in once first"); cannot share with self (400).
 - **Revoke is bidirectional:** a user may delete a share as grantor (revoke access) OR as grantee (decline a received share) — the DELETE matches either direction for the given provider.
+- **Unresolvable email fallback:** when a grantor's email can't be resolved for a `received` share, the API substitutes the literal string `"(unknown)"`; the `asGrantor` grantee email likewise falls back to `"(unknown)"`.
 - **Duplicate share is a no-op** (`onConflictDoNothing` on composite PK).
+- **Share-list sort order differs per list:** `granted` shares are returned **ascending** by `createdAt`; `received` shares **descending** by `createdAt`.
 - **Consent is recorded once:** the first toggle-on with no prior consent records `aiInsightsConsentAt`; subsequent toggles save immediately. Nullish check (`!= null`) ensures both `null` and missing/undefined count as not-yet-consented.
 - **Toggling off doesn't clear consent timestamp** — re-enabling later won't re-prompt.
-- **Conditions normalisation:** trim, drop blanks, case-insensitive dedupe, clamp to 20, truncate each to 120 chars (enforced both in input `maxLength` and service `normalizeConditions`).
-- **Singleton profile:** newest active (non-deleted) row wins; values spread over `emptyProfile()` so rows written before a field existed still have defaults.
+- **Conditions normalisation:** in `normalizeConditions`, each item is trimmed and **truncated to 120 chars first**, blanks dropped, then case-insensitive dedupe, then the loop `break`s once 20 items are collected — silently dropping any overflow rather than erroring. (Input `maxLength` also enforces 120 chars at the UI.)
+- **Singleton profile:** multiple active rows can briefly exist after a concurrent multi-device first-write; the newest-updated active (non-deleted) row wins via a `b.updatedAt - a.updatedAt` sort. Values spread over `emptyProfile()` so rows written before a field existed still have defaults.
 - **Usage logging is fire-and-forget:** route handlers do not await `recordUsage`; failures are caught and logged with a sanitised message (DB errors can echo SQL/params, so only the message is logged). Lost rows on crash are acceptable.
 - **Usage aggregation only counts `status='success'`** rows within the window; "mine" = calls the user incurred (any key); "asGrantor" = others' calls against the user's key (`keyOwnerId = me AND userId <> me`).
-- **PII stripping is mandatory** before external AI text: `sanitizeForAI` redacts email/phone/SSN/card/date/SA-ID and caps to 500 chars; applied in parse, substance-enrich, titration-warnings routes.
-- **Whitelist gate** (`withAuth`): empty `ALLOWED_EMAILS` allows all; otherwise 403 for non-listed emails; emails lowercased for comparison. Supports both bearer-token (Capacitor) and cookie (web) sessions; bearer validation has a 5s timeout.
+- **PII stripping is mandatory** before external AI text: `sanitizeForAI` redacts email/phone/SSN/card/date/SA-ID and caps to 500 chars; applied across at least 8 AI routes — parse, substance-enrich, titration-warnings, nutrient-analysis, voice-parse, substance-lookup, medicine-search, interaction-check (non-exhaustive).
+- **Whitelist gate** (`withAuth`): empty `ALLOWED_EMAILS` allows all; otherwise 403 for non-listed emails; emails lowercased for comparison. Supports both bearer-token (Capacitor) and cookie (web) sessions; bearer validation has a 5s `AbortController` timeout. Bearer validation also **returns null (→401) when `NEON_AUTH_URL` is unset**, and validates the token upstream by sending it as the cookie header `__Secure-neon-auth.session_token=<token>` to the Neon Auth `get-session` endpoint.
 - **Browser storage is NOT encrypted at rest** (documented limitation in `security.ts`); `obfuscateApiKey` is XOR/base64 obfuscation only, explicitly "NOT encryption".
 - **Secure-context warnings** (`getSecurityWarnings`): warns if not HTTPS/localhost and if localStorage is unavailable (private browsing).
 
@@ -264,7 +267,7 @@
 - **`useAiFetch`** — `apiFetch` wrapper for AI requests.
 - **`key-vault` (`encryptKey` / `decryptKey` / `lastFourOf`)** — server-side AES-256-GCM vault.
 - **`crypto` (`encrypt` / `decrypt` / `hashPin` / `verifyPin` / `generateSecureId`)** — client Web-Crypto utilities.
-- **`security` (`sanitizeForAI` / `redactPii` / `sanitizeReportText` / `sanitizeTextInput` / `sanitizeNumericInput` / `obfuscateApiKey` / `getSecurityWarnings`)** — PII + input + context utilities.
+- **`security` (`sanitizeForAI` / `sanitizeReportText` / `sanitizeTextInput` / `sanitizeNumericInput` / `obfuscateApiKey` / `getSecurityWarnings`)** — PII + input + context utilities. (`redactPii` is a private, non-exported internal helper used by `sanitizeForAI` / `sanitizeReportText`, not part of the public API.)
 - **`ai-key-resolver` (`resolveAiKey` / `NoAiKeyError`)** — server key-selection chain.
 - **`auth-middleware` (`withAuth`)** — per-route auth + whitelist gate.
 - **`usage-tracker` (`recordUsage` / `tokensFromAnthropic`)** — usage logging helpers.

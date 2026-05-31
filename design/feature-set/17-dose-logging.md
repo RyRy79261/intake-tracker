@@ -18,11 +18,12 @@
 
 ### Dose Detail Dialog (single dose)
 - Bottom drawer opened by tapping a non-actionable dose row (a dose that is `taken`, `skipped`, or a future/past slot — actionable today/past `pending`/`missed` rows use inline Take/Skip buttons instead).
-- Header shows the pill icon (shape + color from inventory), the brand name + scheduled strength + generic name in parentheses (e.g. `Vymada 100mg (Sacubitril/Valsartan)`), and — if a log exists — a status line: `Taken at {time}` (emerald) or `Skipped at {time}` (muted).
-- The header strength is the *scheduled dose split per compound* for a combination drug (via `formatCompoundShort(splitDose(...))`), not the full per-pill content; single-compound shows `{dosage}{unit}`.
+- Header shows the pill icon (shape + color from inventory), the brand name + scheduled strength + generic name in parentheses (e.g. for a combo `Vymada 49/51mg (Sacubitril/Valsartan)`; for a single-compound `Vymada 100mg (...)`), and — if a log exists — a status line: `Taken at {time}` (emerald) or `Skipped at {time}` (muted).
+- The header strength is the *scheduled dose split per compound* for a combination drug (via `formatCompoundShort(splitDose(...))`, e.g. `49/51mg`), never a bare summed `100mg`; single-compound shows the summed `{dosage}{unit}`.
+- The parenthetical is literally `prescription.genericName` (a stored string) — not derived/composed from compound names. It only reads "(Sacubitril/Valsartan)" if that exact string was stored as the generic name.
 - Info section lists:
   - `Scheduled for {localTime}, {weekday, month day}` (calendar icon).
-  - `Take {doseAmountLabel}` plus food instruction (`before eating` / `after eating`) and optional `foodNote` (info icon).
+  - `Take {doseAmountLabel}` plus food instruction (`before eating` / `after eating`) and optional `foodNote` (info icon). `doseAmountLabel` (`formatDoseAmount`) has three forms: a single-compound *with* inventory renders `{formatPillCount(pillsPerDose)} of {dosageMg}{unit}` (e.g. "½ tablet of 50mg"); a single-compound without inventory renders bare `{dosageMg}{unit}`; a combo renders the per-pill compound split (`{formatPillCount} of {compoundShort}`, or just `{compoundShort}` when no inventory).
   - For combination drugs: `{brandName}: {compound full breakdown} per pill`.
   - For a taken single-compound dose with inventory: `{brandName} {strength}{unit}`.
   - For a skipped dose with a stored reason: `Reason: {skipReason}`.
@@ -62,7 +63,7 @@
 - `rescheduleDose` — marks old slot `rescheduled` (storing `rescheduledTo`), creates a new `pending` slot at the new time; reverses stock if old slot was taken; `dose_rescheduled` audit.
 - `editDoseTime` — rewrites only `actionTimestamp` of an already-taken dose (inventory untouched); validates time; `dose_time_edited` audit. Throws if dose isn't logged as taken.
 - `takeAllDoses` / `skipAllDoses` / `editAllDoseTimes` — batch wrappers; each entry runs in its own transaction so one failure doesn't block the rest; aggregate errors are reported.
-- Read helpers: `getDoseLogsForDate`, `getDoseLog`, `getDoseLogsWithDetailsForDate` (joins prescription/phase/schedule/active-inventory), and `getDailyDoseSchedule` (derives the day's slots + statuses at read time).
+- Read helpers (in `dose-log-service.ts`): `getDoseLogsForDate`, `getDoseLog`, `getDoseLogsWithDetailsForDate` (joins prescription/phase/schedule/active-inventory). `getDailyDoseSchedule` (derives the day's slots + statuses at read time) and `getDoseScheduleForDateRange(startDate, endDate)` (returns `Map<date, DoseSlot[]>` for history/calendar views) live in `dose-schedule-service.ts`.
 - Exported pill math: `calculatePillsConsumed(doseMg, pillStrengthMg)` and `isCleanFraction(pillsConsumed)`.
 
 ---
@@ -79,7 +80,7 @@
 | Time-slot group | Tap **Edit All** | Opens Bulk Dose Edit Dialog. |
 | Dose Detail | Tap **SKIP** | Skips the dose (haptic), closes dialog. (No reason picker in this dialog — skips with no reason.) |
 | Dose Detail | Tap **TAKE** | Today → takes now + closes; past → opens Retroactive Time Picker. Haptic. |
-| Dose Detail | Tap **UNTAKE** | Reverses the taken dose, toasts "{generic} dose reversed", closes. Haptic. |
+| Dose Detail | Tap **UNTAKE** | Reverses the taken dose, toasts "{generic} dose reversed", closes. Skip haptic (`[30,50,30]`). |
 | Dose Detail | Tap **RESCHEDULE** | Reveals inline time input + Cancel/Confirm. |
 | Dose Detail reschedule | Enter time → **Confirm** | `rescheduleDose`, closes. Confirm disabled until a time entered. |
 | Dose Detail reschedule | **Cancel** | Returns to action buttons. |
@@ -108,7 +109,7 @@
 Other states:
 - **Default / actionable** — inline Take + Skip buttons; non-actionable rows are tappable (cursor-pointer, hover) → open Detail.
 - **Empty** — when no slots for the day, `EmptySchedule` (Add-medication CTA) replaces the list.
-- **Next-upcoming highlight** — the next pending time slot gets a teal left-border + tinted background.
+- **Next-upcoming highlight** — the next upcoming time slot gets a teal left-border + tinted background. Only computed on today, and only for slots whose scheduled minutes are `>= now` and that still contain a `pending` dose (`missed` slots and already-past times are not picked).
 - **Overdue** — time-slot heading turns red when today, past its time, and still has pending doses.
 - **Late dose (today)** — Take on a dose >30 min past schedule routes through the time picker instead of logging immediately (`LATE_THRESHOLD_MINUTES = 30`).
 - **Disabled** — Bulk UN-TAKE / EDIT RECORD at 40% opacity when no taken doses; Reschedule Confirm and Skip-custom Submit disabled until valid input.
@@ -116,7 +117,7 @@ Other states:
 - **Inline expanded** — Dose Detail reschedule state replaces buttons with a time input.
 - **Success** — toasts confirm reverse/skip/time-update; Undo toast (5 s) after take.
 - **Future date** — slots shown read-only (no Take/Skip; Reschedule hidden in Detail since `isToday` false).
-- **Over-limit / extended (negative stock)** — taking is still allowed; stock goes negative; `inventoryWarning = "negative_stock"` surfaces low-stock warnings and nudges the "Ran out" skip suggestion.
+- **Over-limit / extended (negative stock)** — taking is still allowed; stock goes negative; `inventoryWarning = "negative_stock"` nudges the "Ran out" skip suggestion. ScheduleView's `lowStockWarnings` (passed to `DoseProgressSummary`) collects generic names where `inventoryWarning === "negative_stock"` **OR** `currentStock <= refillAlertPills`, so a low (but non-negative) stock can also surface a warning.
 - **No-inventory** — Take description reads "Dose logged — no stock tracked"; no decrement; also nudges "Ran out".
 - **Loading** — driven by `useLiveQuery` (Dexie); slots are `undefined` until first read, treated as empty.
 - **Offline / syncing** — all writes are local Dexie transactions; each enqueues a sync-queue entry and calls `schedulePush()` (deferred background sync). No explicit offline UI in these components.
@@ -128,9 +129,9 @@ Other states:
 - **DoseStatus** (`db.ts`): `"taken" | "skipped" | "rescheduled" | "pending"`.
 - **DoseSlotStatus** (`dose-schedule-service.ts`): `"taken" | "skipped" | "pending" | "missed"`.
 - **Skip reason presets** (`skip-reason-picker.tsx`): `["Forgot", "Side effects", "Ran out", "Doctor advised", "Don't need this dose"]` + custom free-text.
-- **Inventory warnings**: `"negative_stock" | "no_inventory" | "odd_fraction"`.
+- **Inventory warnings** (not a shared TS union — all are bare `string`): the `DoseSlot.inventoryWarning` field (set in `dose-schedule-service.ts`) takes `"negative_stock"`, `"no_inventory"`, or `"odd_fraction"`. `"odd_fraction"` is *also* used separately as an **audit** `warning` value inside `takeDose` — the same literal, two distinct uses.
 - **Audit actions** (`db.ts`): `"dose_taken"`, `"dose_untaken"`, `"dose_skipped"`, `"dose_rescheduled"`, `"dose_time_edited"`.
-- **Inventory transaction type used here**: `"consumed"` (negative amount on take, positive on untake/skip/reschedule).
+- **Inventory transaction type used here**: `"consumed"` (negative amount on take, positive on untake/skip/reschedule). The full `InventoryTransaction.type` union is wider — `"refill" | "consumed" | "adjusted" | "initial"` — but only `"consumed"` is written by these dose-logging flows.
 - **Late threshold**: `LATE_THRESHOLD_MINUTES = 30` (dose-row); Mark-All uses the same `> 30` min check.
 - **Undo toast duration**: `5000` ms.
 - **Clean fractions** (`isCleanFraction`): whole numbers, `0.25, 0.333, 0.5, 0.667, 0.75` (tolerance `0.01`); anything else flags `odd_fraction`.
@@ -150,7 +151,7 @@ Other states:
 - **doseLogs** (`DoseLog`): `id, prescriptionId, phaseId, scheduleId, inventoryItemId?, scheduledDate (YYYY-MM-DD), scheduledTime (HH:MM), status (DoseStatus), actionTimestamp?, rescheduledTo?, skipReason?, note?, timezone, createdAt, updatedAt, deletedAt, deviceId`. Lookup key = `prescriptionId + phaseId + scheduleId + scheduledDate + scheduledTime` (filtered `deletedAt === null`).
 - **inventoryItems** (`InventoryItem`): reads/writes `currentStock`; reads `strength` (pill-math denominator), `compounds?`, `pillShape`, `pillColor`, `brandName`, `unit`, `refillAlertPills`, `isActive`, `isArchived`.
 - **inventoryTransactions**: appended on take (`amount: -pillsConsumed`), untake/skip/reschedule (`amount: +pillsConsumed`), `type: "consumed"`, `doseLogId` link.
-- **auditLogs** (`AuditLog`): one entry per mutation with details `{prescriptionId, date, time, dosageMg, pillsConsumed, inventoryItemId, reason?/newTime?, warning?}`.
+- **auditLogs** (`AuditLog`): one entry per mutation with details `{prescriptionId, date, time, dosageMg, pillsConsumed, inventoryItemId, reason?, warning?}` for take/untake/skip/reschedule. The `dose_time_edited` entry carries a slimmer payload — just `{prescriptionId, date, time, newTime}` (no dosageMg / pillsConsumed).
 - **_syncQueue**: upsert entries enqueued inside each transaction for doseLogs / inventoryItems / inventoryTransactions / auditLogs; `schedulePush()` fires after.
 - **prescriptions / medicationPhases / phaseSchedules**: read-only joins for display (genericName, unit, foodInstruction, foodNote, dosage, daysOfWeek, scheduleTimeUTC).
 - **DoseSlot** (derived, not persisted): includes `localTime`, `dosageMg`, `status`, `existingLog?`, `pillsPerDose?`, `inventoryWarning?`, plus joined `prescription/phase/schedule/inventory`.
@@ -187,7 +188,7 @@ Other states:
 - **showUndoToast** — function (not component) firing a 5 s toast with an Undo action.
 - **DoseRow** — inline row with Take/Skip (actionable) or Edit (taken) and tap-to-open-detail; hosts its own retroactive/edit pickers.
 - **TimeSlotGroup** — groups rows by time; "Mark All" (pending) / "Edit All" (handled) headers; overdue/next-upcoming styling.
-- **ScheduleView** — orchestrator: groups slots, wires take/retroactive/skip/mark-all/edit-all/edit-time handlers, mounts SkipReasonPicker, mark-all RetroactiveTimePicker, and BulkDoseEditDialog.
+- **ScheduleView** — orchestrator: groups slots, wires take/retroactive/skip/mark-all/edit-all/edit-time handlers, mounts SkipReasonPicker, mark-all RetroactiveTimePicker, and BulkDoseEditDialog. It only *emits* `onDoseClick`; the **DoseDetailDialog itself is mounted by `app/medications/page.tsx`** (which owns `doseDetailOpen` / `selectedSlot`). ScheduleView also computes `lowStockWarnings` and feeds them to `DoseProgressSummary`.
 - **dose-log-service.ts** — atomic take/untake/skip/reschedule/edit + batch variants, inventory math (`calculatePillsConsumed`, `isCleanFraction`), audit + sync enqueue.
 - **dose-schedule-service.ts** — derives the day's `DoseSlot[]` (status + inventory warnings) from active prescriptions/phases/schedules/logs/inventory.
 - **use-medication-queries.ts** — React Query mutation hooks + Dexie live-read hooks exposing the above to components.

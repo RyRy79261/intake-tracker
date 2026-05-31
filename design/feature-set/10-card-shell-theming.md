@@ -23,14 +23,14 @@
 
 ### CARD_THEMES token map (`card-themes.ts`)
 - Provides a typed `CardTheme` record for **11 domain keys**: `water`, `salt`, `sugar`, `potassium`, `weight`, `bp`, `eating`, `urination`, `defecation`, `caffeine`, `alcohol`.
-- Each theme carries **20 token fields** (see Enums section) spanning chrome, buttons, outline, progress (3 states), hover, input (3 fields), loading, latest-value, active-toggle, icon (3 fields), label, and a `sectionId` anchor.
+- Each theme carries **19 token fields** (see Enums section) spanning chrome, buttons, outline, progress (3 states), hover, input (2 fields), loading, latest-value, active-toggle, icon, label, and a `sectionId` anchor. Note `outlineText` is defined on every theme but is **never read** by any consumer — it is a dead token (only `outlineBorder` is consumed, at `preset-tab.tsx`).
 - Exposes a `CardThemeKey` union type (`keyof typeof CARD_THEMES`) used app-wide for type-safe theme selection.
 - Drives **secondary surfaces** beyond the card body:
   - **Quick-nav footer** uses `icon`, `iconColor`, `iconBg`, `label`, `sectionId` per enabled item.
-  - **History rows** (`record-row.tsx`) pick `icon`, `iconColor`, `label` by record type.
+  - **History rows** (`record-row.tsx`) pick `icon`, `iconColor`, `label` by record type. For the unified `intake` type the mapping is `water`→water, `sugar`→sugar, and **everything else (incl. `salt`/`potassium`)**→`salt` (a salt fallback).
   - **History drawer** + **analytics records tab** map type → `buttonBg` for filter chips/accents.
   - **Text-metrics weekly grid** colors each numeric cell by `theme.latestValueColor` (under-target) and overrides to orange/red for extended/over-limit.
-- Theme reuse / aliasing: the Liquids card and its tabs reuse `water` (and `caffeine`/`alcohol` for the coffee/alcohol beverage tabs); the Food & Salt card composes `eating` (chrome) + `salt`/`sugar`/`potassium` (progress bars). `edit-substance-dialog` picks `caffeine` vs `alcohol` from a boolean.
+- Theme reuse / aliasing: the Liquids card's `TAB_THEMES` reuses `water` for **both** its `water` and `beverage` tabs (and `caffeine`/`alcohol` for the coffee/alcohol tabs); the Food & Salt card composes `eating` (chrome) + `salt`/`sugar`/`potassium` (progress bars). `edit-substance-dialog` picks `caffeine` vs `alcohol` from a boolean.
 
 ### Per-domain progress-state theming
 - Three progress visual states per theme: `progressGradient` (normal fill), `progressExtended` (over-target "extra" zone fill), `progressOverLimit` (`bg-red-500`, hard over-limit). Consumed via the custom `Progress` component (`indicatorClassName`, `extendedIndicatorClassName`, plus a `targetMarkerPct` marker).
@@ -43,10 +43,10 @@
 CardShell/themes are **presentational** — interaction lives in the consuming cards, but the shell and tokens define every interactive surface:
 
 - **Tap header-right slot content** — passive (shows latest stat / timestamp / skeleton); not interactive itself.
-- **Tap quick-nav footer icon** — calls `onScrollTo(sectionId)` to scroll-anchor to that domain's card section (`section-water`, `section-food-salt`, `section-bp`, `section-weight`, `section-urination`, `section-defecation`, etc.).
-- **Quick-add buttons** — themed via `buttonBg` (filled primary) or `outlineBorder`/`outlineText` (outline variant); on tap they log a record.
-- **Increment / decrement steppers** (water, beverage, weight) — round buttons themed with `hoverBg`; the central value uses `inputBg` container + `inputText`.
-- **Toggle selection** (active preset/size/position/arm/irregular-heartbeat) — the selected option gets `activeToggle` (tinted bg + border).
+- **Tap quick-nav footer icon** — calls `onScrollTo(sectionId)` to scroll-anchor to that domain's card section. Only **six** anchor elements actually exist in the DOM (`page.tsx`): `section-water`, `section-food-salt`, `section-bp`, `section-weight`, `section-urination`, `section-defecation`. The `sectionId` strings `section-salt`, `section-caffeine`, `section-alcohol` exist in the theme map but have **no matching element**, so they are not reachable scroll targets.
+- **Quick-add buttons** — themed via `buttonBg` (filled primary) or `outlineBorder` (outline variant, e.g. preset-tab's "Save as preset & log"); on tap they log a record. (Note: the `outlineText` token is defined but never read — outline buttons hard-code `text-muted-foreground` instead.)
+- **Increment / decrement steppers** (water, beverage, weight) — round buttons themed with `hoverBg`. Only the **water/beverage** tabs put the central value in an `inputBg` container with `inputText`; the **weight** card's center is an `InlineEdit` with hard-coded `text-4xl font-bold` (weight's `inputBg`/`inputText` tokens are `""` and are not applied).
+- **Toggle selection** (active preset/size/position/arm) — the selected option gets `activeToggle` (tinted bg + border). Exception: the BP card's "irregular heartbeat = Yes" toggle uses a hard-coded **red** active style (`bg-red-100 border-red-300 dark:bg-red-900/50 dark:border-red-700`), **not** `theme.activeToggle`.
 - **Submit / Save** — primary button uses `buttonBg`; inline edit forms pass `buttonClassName={theme.buttonBg}`.
 - **Expand / collapse "Add details"** — chevron toggles an optional detail panel (per card body, e.g. urination).
 - **Edit / Delete record** (history rows, inline edit) — themed icon color and save button.
@@ -64,13 +64,14 @@ CardShell + themes must support these states (rendered by the `headerRight` slot
 - **Empty (no records)** — `headerRight` renders `null` (no latest stat). Card body shows its quick-add controls.
 - **Over-target ("extended"/extra zone)** — progress shows `progressGradient` primary fill + `progressExtended` over-target fill; over-target text turns `text-orange-600 dark:text-orange-400`; an "X / Y extra" sub-line appears.
 - **Over-limit (`isOverExtended`)** — progress fills `progressOverLimit` (`bg-red-500`) at 100%, extended hidden, target marker hidden; text turns `text-red-600 dark:text-red-400`.
-- **Active / selected** — selected toggle/preset/size uses `activeToggle` tint + border.
+- **Active / selected** — selected toggle/preset/size uses `activeToggle` tint + border. (Exception: BP's "irregular heartbeat = Yes" toggle hard-codes a red active style instead of the theme token.)
 - **Submitting / pending** — quick-add buttons show a spinner (`Loader2 animate-spin`) and `opacity-70`; other options stay disabled (`disabled={submittingAmount !== null}`).
 - **Expanded / collapsed** — optional detail panel toggled by a chevron (`ChevronUp`/`ChevronDown`).
 - **Disabled** — buttons disabled while a sibling submit is in flight.
 - **Dark mode** — every token ships a `dark:` variant (gradients drop to `*-950/40`, borders to `*-800`, icon bg to `*-900/50`, etc.); the shell/themes are fully dark-mode aware.
 - **Future days (weekly grid)** — cells render `---` in `text-muted-foreground/50`; today's column is `font-semibold`.
 - **No-data cell (weekly grid)** — `text-muted-foreground/50`.
+- **Zero-total caffeine/alcohol rows (text-metrics)** — the caffeine and alcohol latest-value cells fall back to `text-muted-foreground` when the total is `0`, and only switch to `theme.latestValueColor` when the total is `> 0`.
 
 (Offline/syncing/global-error states are handled by the provider stack, not by CardShell itself; CardShell only reflects per-record loading via skeletons.)
 
@@ -81,24 +82,26 @@ CardShell + themes must support these states (rendered by the `headerRight` slot
 ### Domain theme keys (11) — `CardThemeKey`
 `water` · `salt` · `sugar` · `potassium` · `weight` · `bp` · `eating` · `urination` · `defecation` · `caffeine` · `alcohol`
 
-### `CardTheme` token fields (20 per theme)
-`label`, `icon`, `gradient`, `border`, `iconBg`, `iconColor`, `buttonBg`, `outlineBorder`, `outlineText`, `progressGradient`, `progressExtended`, `progressOverLimit`, `hoverBg`, `inputBg`, `inputText`, `loadingBg`, `latestValueColor`, `activeToggle`, `sectionId`.
+### `CardTheme` token fields (19 per theme)
+`label`, `icon`, `gradient`, `border`, `iconBg`, `iconColor`, `buttonBg`, `outlineBorder`, `outlineText`, `progressGradient`, `progressExtended`, `progressOverLimit`, `hoverBg`, `inputBg`, `inputText`, `loadingBg`, `latestValueColor`, `activeToggle`, `sectionId`. (`outlineText` is present on the interface but unconsumed — dead token.)
 
 ### Full per-domain token table (ACTUAL values from code)
 
+All `progressGradient` / `progressExtended` strings carry a leading `bg-gradient-to-r ` in code (e.g. `"bg-gradient-to-r from-sky-400 to-cyan-500"`); the table below shows the full class string.
+
 | key | label | icon (Lucide) | base hue | sectionId | progressGradient | progressExtended | progressOverLimit |
 |---|---|---|---|---|---|---|---|
-| `water` | Water | `Droplets` | sky→cyan | `section-water` | `from-sky-400 to-cyan-500` | `from-blue-500 to-indigo-600` | `bg-red-500` |
-| `salt` | Sodium | `Sparkles` | amber→orange | `section-salt` | `from-amber-400 to-orange-500` | `from-orange-600 to-amber-700` | `bg-red-500` |
-| `sugar` | Sugar | `Candy` | pink→rose | `section-food-salt` | `from-pink-400 to-rose-500` | `from-rose-600 to-fuchsia-700` | `bg-red-500` |
-| `potassium` | Potassium | `Banana` | purple→indigo | `section-food-salt` | `from-purple-400 to-indigo-500` | `""` (none) | `bg-red-500` |
+| `water` | Water | `Droplets` | sky→cyan | `section-water` | `bg-gradient-to-r from-sky-400 to-cyan-500` | `bg-gradient-to-r from-blue-500 to-indigo-600` | `bg-red-500` |
+| `salt` | Sodium | `Sparkles` | amber→orange | `section-salt` | `bg-gradient-to-r from-amber-400 to-orange-500` | `bg-gradient-to-r from-orange-600 to-amber-700` | `bg-red-500` |
+| `sugar` | Sugar | `Candy` | pink→rose | `section-food-salt` | `bg-gradient-to-r from-pink-400 to-rose-500` | `bg-gradient-to-r from-rose-600 to-fuchsia-700` | `bg-red-500` |
+| `potassium` | Potassium | `Banana` | purple→indigo | `section-food-salt` | `bg-gradient-to-r from-purple-400 to-indigo-500` | `""` (none) | `bg-red-500` |
 | `weight` | Weight | `Scale` | emerald→teal | `section-weight` | `""` | `""` | `bg-red-500` |
 | `bp` | Blood Pressure | `Heart` | rose→pink | `section-bp` | `""` | `""` | `bg-red-500` |
 | `eating` | Eating | `Utensils` | orange→amber | `section-food-salt` | `""` | `""` | `bg-red-500` |
 | `urination` | Urination | `Droplet` | violet→purple | `section-urination` | `""` | `""` | `bg-red-500` |
 | `defecation` | Defecation | `CircleDot` | stone→amber | `section-defecation` | `""` | `""` | `bg-red-500` |
-| `caffeine` | Caffeine | `Coffee` | yellow→amber | `section-caffeine` | `from-yellow-400 to-amber-500` | `""` | `bg-red-500` |
-| `alcohol` | Alcohol | `Wine` | fuchsia→pink | `section-alcohol` | `from-fuchsia-400 to-pink-500` | `""` | `bg-red-500` |
+| `caffeine` | Caffeine | `Coffee` | yellow→amber | `section-caffeine` | `bg-gradient-to-r from-yellow-400 to-amber-500` | `""` | `bg-red-500` |
+| `alcohol` | Alcohol | `Wine` | fuchsia→pink | `section-alcohol` | `bg-gradient-to-r from-fuchsia-400 to-pink-500` | `""` | `bg-red-500` |
 
 ### Detailed token values per domain (exact Tailwind classes)
 
@@ -120,17 +123,18 @@ CardShell + themes must support these states (rendered by the `headerRight` slot
 
 **defecation** — gradient `from-stone-50 to-amber-50 dark:from-stone-950/40 dark:to-amber-950/40` · border `border-stone-200 dark:border-stone-800` · iconBg `bg-stone-100 dark:bg-stone-900/50` · iconColor `text-stone-600 dark:text-stone-400` · buttonBg `bg-stone-600 hover:bg-stone-700` · hoverBg stone · loadingBg `bg-stone-200 dark:bg-stone-800` · latestValueColor `text-stone-700 dark:text-stone-300` · activeToggle `bg-stone-100 border-stone-300 ...` · progress/input tokens empty.
 
-**caffeine** — gradient `from-yellow-50 to-amber-50 dark:from-yellow-950/40 dark:to-amber-950/40` · border `border-yellow-200 dark:border-yellow-800` · iconBg `bg-yellow-100 dark:bg-yellow-900/50` · iconColor `text-yellow-700 dark:text-yellow-400` (note: 700 not 600) · buttonBg `bg-yellow-700 hover:bg-yellow-800` (note: 700/800, darker than other domains) · progressGradient `from-yellow-400 to-amber-500` · inputBg `bg-yellow-100/80 ...` · loadingBg `bg-yellow-200 dark:bg-yellow-800` · latestValueColor `text-yellow-700 dark:text-yellow-300` · activeToggle `bg-yellow-100 border-yellow-300 ...` · **no** `progressExtended`.
+**caffeine** — gradient `from-yellow-50 to-amber-50 dark:from-yellow-950/40 dark:to-amber-950/40` · border `border-yellow-200 dark:border-yellow-800` · iconBg `bg-yellow-100 dark:bg-yellow-900/50` · iconColor `text-yellow-700 dark:text-yellow-400` (note: 700 not 600) · buttonBg `bg-yellow-700 hover:bg-yellow-800` (note: 700/800, darker than other domains) · progressGradient `bg-gradient-to-r from-yellow-400 to-amber-500` · inputBg `bg-yellow-100/80 ...` · loadingBg `bg-yellow-200 dark:bg-yellow-800` · latestValueColor `text-yellow-700 dark:text-yellow-300` · activeToggle `bg-yellow-100 border-yellow-300 ...` · **no** `progressExtended`.
 
-**alcohol** — gradient `from-fuchsia-50 to-pink-50 dark:from-fuchsia-950/40 dark:to-pink-950/40` · border `border-fuchsia-200 dark:border-fuchsia-800` · iconBg `bg-fuchsia-100 dark:bg-fuchsia-900/50` · iconColor `text-fuchsia-600 dark:text-fuchsia-400` · buttonBg `bg-fuchsia-600 hover:bg-fuchsia-700` · progressGradient `from-fuchsia-400 to-pink-500` · inputBg `bg-fuchsia-100/80 ...` · loadingBg `bg-fuchsia-200 dark:bg-fuchsia-800` · latestValueColor `text-fuchsia-700 dark:text-fuchsia-300` · activeToggle `bg-fuchsia-100 border-fuchsia-300 ...` · **no** `progressExtended`.
+**alcohol** — gradient `from-fuchsia-50 to-pink-50 dark:from-fuchsia-950/40 dark:to-pink-950/40` · border `border-fuchsia-200 dark:border-fuchsia-800` · iconBg `bg-fuchsia-100 dark:bg-fuchsia-900/50` · iconColor `text-fuchsia-600 dark:text-fuchsia-400` · buttonBg `bg-fuchsia-600 hover:bg-fuchsia-700` · progressGradient `bg-gradient-to-r from-fuchsia-400 to-pink-500` · inputBg `bg-fuchsia-100/80 ...` · loadingBg `bg-fuchsia-200 dark:bg-fuchsia-800` · latestValueColor `text-fuchsia-700 dark:text-fuchsia-300` · activeToggle `bg-fuchsia-100 border-fuchsia-300 ...` · **no** `progressExtended`.
 
-### sectionId anchor values (scroll targets)
-`section-water`, `section-salt`, `section-food-salt` (shared by `sugar`/`potassium`/`eating`), `section-weight`, `section-bp`, `section-urination`, `section-defecation`, `section-caffeine`, `section-alcohol`.
+### sectionId values
+The theme map defines a `sectionId` per domain, but only **six** of these have a matching anchor element in the DOM (`page.tsx`) and are therefore live scroll targets: `section-water`, `section-food-salt` (shared by `sugar`/`potassium`/`eating`), `section-bp`, `section-weight`, `section-urination`, `section-defecation`. The remaining `sectionId` strings — `section-salt`, `section-caffeine`, `section-alcohol` — are present in `CARD_THEMES` but have no anchor element, so they are not reachable scroll targets.
 
 ### Quick-nav defaults (`quick-nav-defaults.ts`)
 - `DEFAULT_QUICK_NAV_ITEMS` (order = top-to-bottom on the dashboard): `water` (→ "Liquids") · `eating` (→ "Food & Salt") · `bp` · `weight` · `urination` · `defecation` — all `enabled: true`.
 - `QUICK_NAV_LABEL_OVERRIDES`: `water → "Liquids"`, `eating → "Food & Salt"` (footer reads these instead of the theme's raw label).
 - Footer `order` option: `"ltr" | "rtl"`; default footer `transitionDuration` = `0.2`.
+- **Persisted user default:** the settings store seeds `quickNavOrder: "rtl"` (not `"ltr"`), and the quick-nav settings UI labels RTL "(recommended)". So out of the box the footer renders right-to-left.
 
 ### Label overrides observed in card chrome
 - CardShell prop comment example: eating theme overridden to `"Food + Sodium"`.
@@ -141,6 +145,7 @@ CardShell + themes must support these states (rendered by the `headerRight` slot
 - Card classes: `relative overflow-hidden transition-all duration-300 bg-gradient-to-br`.
 - CardContent padding: `p-6`.
 - Header row: `flex items-center justify-between mb-4`; icon chip `p-2 rounded-lg`; icon `w-5 h-5`; label `font-semibold text-lg uppercase tracking-wide`.
+- These constants are exact only for the three cards that actually use `CardShell` (`weight`, `urination`, `defecation`). The cards that **re-implement** the chrome inline diverge: `liquids-card` inlines `bg-gradient-to-br` into a gradient/border template literal, and `food-salt-card`'s header uses `flex items-center gap-2 mb-4` (no `justify-between`, no `headerRight`).
 
 ---
 
@@ -164,14 +169,14 @@ CardShell + card-themes touch **no database tables directly** — they are pure 
 
 - **Label fallback:** CardShell renders `label ?? theme.label`; an explicit empty-string label would render empty (callers pass meaningful strings or omit).
 - **Empty token strings are intentional:** event-only domains (`weight`, `bp`, `eating`, `urination`, `defecation`) leave `progressGradient`/`progressExtended`/`inputBg`/`inputText` as `""` because they have no progress bars or stepper inputs; consumers must not assume those tokens are non-empty.
-- **`potassium`, `caffeine`, `alcohol` have no `progressExtended`** — they show a single gradient fill only (no over-target "extra" zone), so an over-target presentation for these falls back to the primary gradient (no extended band).
+- **`potassium`, `caffeine`, `alcohol` have no over-target extended fill** — `potassium` omits the `progressExtended` key entirely, while `caffeine`/`alcohol` set it to `""`. All three show a single gradient fill only (no over-target "extra" zone), so an over-target presentation falls back to the primary gradient (no extended band).
 - **Over-limit precedence:** `isOverExtended` (hard over-limit) wins over `isOverTarget`. When over-limit, progress fills `progressOverLimit` at 100%, hides the extended fill (`extendedValue → 0`) and target marker (`targetMarkerPct → 0`), and text switches to red. When over-target but not over-limit, text is orange and an "extra" sub-line renders.
 - **Shared sectionId is deliberate:** `sugar`, `potassium`, and `eating` all anchor to `section-food-salt` (they live in the combined Food & Salt card), so quick-nav for any of them scrolls to the same card.
 - **Footer filtering vs. ordering:** disabled `QuickNavItem`s are filtered out first, then RTL reversal is applied — so the user's configured order is preserved on both axes; the footer hides entirely when zero items are enabled.
 - **`caffeine` deliberately darker:** uses `yellow-700/800` for button + `yellow-700` icon (vs the `-600`/`-700` pattern elsewhere) for contrast against the pale yellow gradient.
-- **Theme reuse:** Liquids card and tabs reuse the `water` theme for chrome (label overridden to "Liquids"); beverage/coffee/alcohol tabs swap to `caffeine`/`alcohol` themes; `edit-substance-dialog` selects `caffeine` vs `alcohol` from `isCaffeine`. Any redesign must keep these aliases coherent.
+- **Theme reuse:** Liquids card and tabs reuse the `water` theme for chrome (label overridden to "Liquids"); its `TAB_THEMES` aliases **both** the `water` and `beverage` tabs to `water`, with only the coffee/alcohol tabs swapping to `caffeine`/`alcohol`; `edit-substance-dialog` selects `caffeine` vs `alcohol` from `record?.type === "caffeine"`. Any redesign must keep these aliases coherent.
 - **`as const` map:** `CARD_THEMES` is frozen as a const literal; `CardThemeKey` is derived from its keys, giving compile-time safety across all 15+ consumers.
-- **Dark-mode parity required:** every color token must ship a `dark:` variant; the weekly-grid and progress over-limit/extended states hard-code `text-orange-600 dark:text-orange-400` / `text-red-600 dark:text-red-400` outside the theme map.
+- **Dark-mode parity required:** every color token must ship a `dark:` variant; the weekly-grid and progress over-limit/extended states hard-code `text-orange-600 dark:text-orange-400` / `text-red-600 dark:text-red-400` outside the theme map. A few other surfaces also bypass the theme map: `text-metrics` over-extended bars use a literal `"bg-red-500"` (not `theme.progressOverLimit`), and the BP irregular-heartbeat "Yes" toggle hard-codes a red active style (not `theme.activeToggle`).
 
 ---
 
@@ -183,13 +188,13 @@ CardShell + card-themes touch **no database tables directly** — they are pure 
 - `urination-card.tsx` — Urination card; uses `CardShell` + `theme.urination`; headerRight shows latest timestamp; 3-col quick-log grid + "Add details".
 - `defecation-card.tsx` — Defecation card; uses `CardShell` + `theme.defecation`.
 - `blood-pressure-card.tsx` — BP card; **reproduces the chrome inline** (does not import CardShell) but consumes `theme.bp` tokens; headerRight shows latest reading + BP category color.
-- `food-salt-card.tsx` — Food & Salt card; **inline chrome** using `CARD_THEMES.eating`, with three progress bars themed `salt`/`sugar`/`potassium`; header label hard-coded "Food".
-- `liquids-card.tsx` — Liquids card; **inline chrome**, reuses `water` theme (label "Liquids"); maps tab → theme (`water`/`caffeine`/`alcohol`).
+- `food-salt-card.tsx` — Food & Salt card; **inline chrome** using `CARD_THEMES.eating`, with three progress bars themed `salt`/`sugar`/`potassium`; header label hard-coded "Food". Its header is **not** a faithful clone of CardShell's: it uses `flex items-center gap-2 mb-4` with **no `justify-between`** and **no `headerRight` slot** (the food card has no latest-stat header).
+- `liquids-card.tsx` — Liquids card; **inline chrome**, reuses `water` theme (label "Liquids"); maps tab → theme via `TAB_THEMES` (a 4-key map: `water`→water, `beverage`→water, `coffee`→caffeine, `alcohol`→alcohol — note **both** `water` and `beverage` tabs alias to `CARD_THEMES.water`). Its `Card` wrapper diverges from the canonical CardShell class list: it inlines `bg-gradient-to-br` together with `theme.gradient`/`theme.border` in a template literal (`` `bg-gradient-to-br ${theme.gradient} ${theme.border}` ``) rather than keeping `bg-gradient-to-br` as a static class.
 - `food-salt/food-section.tsx`, `liquids/water-tab.tsx`, `liquids/beverage-tab.tsx`, `liquids/preset-tab.tsx` — card-body sub-views that consume `buttonBg`, `hoverBg`, `inputBg`, `inputText`, `activeToggle`, and the three progress tokens.
 - `edit-substance-dialog.tsx` — substance edit dialog; picks `caffeine`/`alcohol` theme for its submit `buttonBg`.
 - `quick-nav-footer.tsx` — fixed bottom footer; renders one icon button per enabled `QuickNavItem` using `icon`/`iconColor`/`iconBg`/`label`/`sectionId`.
 - `settings/quick-nav-section.tsx` — settings UI to enable/disable/reorder quick-nav items (keyed by `CardThemeKey`).
 - `quick-nav-defaults.ts` — `DEFAULT_QUICK_NAV_ITEMS`, `QUICK_NAV_LABEL_OVERRIDES`, `QuickNavItem` interface.
-- `history/record-row.tsx` — single history row; picks `icon`/`iconColor`/`label` by record type.
+- `history/record-row.tsx` — single history row; picks `icon`/`iconColor`/`label` by record type. For the unified `intake` type it maps `water`→water, `sugar`→sugar, and all other intake types (incl. `salt`/`potassium`)→`salt` as a fallback.
 - `history-drawer.tsx` + `analytics/records-tab.tsx` — map record type → `buttonBg` for filter/accent colors.
-- `text-metrics.tsx` — weekly numeric grid; colors each cell by `theme.latestValueColor` with orange/red over-target/over-limit overrides; also renders water/salt/sugar/potassium progress bars with the themed gradients.
+- `text-metrics.tsx` — weekly numeric grid; colors each cell by `theme.latestValueColor` with orange/red over-target/over-limit overrides; also renders water/salt/sugar/potassium progress bars with the themed gradients. Its over-extended progress fill uses a **literal** `"bg-red-500"` for `indicatorClassName`, **not** `theme.progressOverLimit` (functionally the same value, but the token is not the source — unlike the food-salt/liquids consumers, which do read `theme.progressOverLimit`).

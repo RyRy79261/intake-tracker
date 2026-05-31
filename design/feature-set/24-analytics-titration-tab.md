@@ -6,8 +6,7 @@
 - `/home/ryan/repos/Personal/intake-tracker/src/lib/analytics-service.ts` (`adherenceRate`, `bpTrend`, `weightTrend`, `fluidBalance`, `getRecordsByDomain`)
 - `/home/ryan/repos/Personal/intake-tracker/src/lib/analytics-stats.ts` (`trend`/`computeTrend`, `detectAnomalies`)
 - `/home/ryan/repos/Personal/intake-tracker/src/lib/analytics-types.ts` (result/trend types, constants)
-- `/home/ryan/repos/Personal/intake-tracker/src/lib/prescription-service.ts` (`getPrescriptions`)
-- `/home/ryan/repos/Personal/intake-tracker/src/lib/phase-service.ts` (`getPhasesForPrescription`)
+- `/home/ryan/repos/Personal/intake-tracker/src/lib/medication-service.ts` — barrel the component actually imports `getPrescriptions` / `getPhasesForPrescription` from; it re-exports them from `prescription-service.ts` (`getPrescriptions`) and `phase-service.ts` (`getPhasesForPrescription`) respectively (where the implementations live)
 - `/home/ryan/repos/Personal/intake-tracker/src/lib/db.ts` (`Prescription`, `MedicationPhase`, `PhaseType`, `DoseStatus`, `FoodInstruction`)
 - Reference test: `/home/ryan/repos/Personal/intake-tracker/src/components/analytics/titration-tab.dom.test.tsx`
 
@@ -21,12 +20,12 @@
 - **Phase window derivation.** Each phase defines its own analysis range: `start = phase.startDate`, `end = phase.endDate ?? Date.now()`. An ongoing phase (no `endDate`) runs up to "now".
 - **Per-phase metrics computed (all scoped to that phase window):**
   - **Adherence rate** — ratio of doses taken vs scheduled slots during the phase window, for *this* prescription only (passes `rx.id` to `adherenceRate`). Rendered as a whole-number percentage.
-  - **Average blood pressure** — mean systolic / diastolic over the phase window, plus a trend direction (rising/falling/stable) for systolic, shown as an arrow. NOTE: BP/weight/fluid functions are queried by date range only (not by prescription), so they reflect *all* readings in that window regardless of which drug they belong to.
+  - **Average blood pressure** — mean systolic / diastolic over the phase window, plus a trend direction (rising/falling/stable) for **systolic only**, shown as an arrow. (`bpTrend` computes both `trend.systolic` and `trend.diastolic`, but the snapshot stores only `trend.systolic`; the diastolic trend is computed and discarded.) NOTE: BP/weight/fluid functions are queried by date range only (not by prescription), so they reflect *all* readings in that window regardless of which drug they belong to.
   - **Average weight** — mean weight (kg, 1 decimal) over the window, with a trend-direction arrow.
   - **Average fluid balance** — mean daily (intake ml − estimated urination output ml) over the window, in ml (rounded integer).
   - **Anomaly count** — number of weight data points whose z-score exceeds 2.0 (statistical outliers) within the phase window.
-- **Conditional metric rendering.** Each of the four metric cells only renders when it has meaningful data: adherence shows only if `adherenceTotal > 0`; Avg BP only if `bpAvg.systolic > 0`; Avg Weight only if `weightAvg > 0`; Avg Fluid Balance only if `fluidAvgBalance !== 0`. Anomaly line shows only if `anomalyCount > 0`.
-- **"Has data" gate.** A phase is considered to have data if adherence total > 0, OR any BP readings exist, OR any weight readings exist. If none, the phase card collapses to a single "No health data recorded during this phase" message instead of the metrics grid.
+- **Conditional metric rendering.** Each of the four metric cells only renders when it has meaningful data: adherence shows only if `adherenceTotal > 0`; Avg BP only if `bpAvg.systolic > 0`; Avg Weight only if `weightAvg > 0`; Avg Fluid Balance only if `fluidAvgBalance !== 0`. Anomaly line shows only if `anomalyCount > 0`. Note the adherence cell renders whenever `adherenceTotal > 0` *even when the computed rate is 0* (e.g. every slot skipped/missed) — that case shows a rose "0%" badge, not a blank.
+- **"Has data" gate.** A phase is considered to have data if adherence total > 0, OR any BP readings exist, OR any weight readings exist. The adherence side of the gate reads `adhResult.value.total` — the count of *scheduled* dose slots, independent of whether any were taken; a phase that had doses scheduled but none taken still counts as "has data" and renders the adherence cell at 0%. If none of the three conditions hold, the phase card collapses to a single "No health data recorded during this phase" message instead of the metrics grid.
 - **Collapsible prescription sections.** Each prescription is a Card with a clickable header that expands/collapses its list of phase cards. Active prescriptions default to expanded; inactive prescriptions default to collapsed.
 - **Phase type tagging.** Each phase card carries a pill badge for its `type` — `maintenance` (blue) or `titration` (amber).
 - **Active-phase emphasis.** A phase whose `status === "active"` gets a green-tinted card border/background and an animated pulsing green dot in its header.
@@ -57,7 +56,7 @@
 - **Prescription with no phases** — inside an expanded section: "No phases configured" muted text.
 - **Phase with no health data** — that phase card shows only its type badge, optional active dot, the date label, and "No health data recorded during this phase". Muted `bg-muted/30` styling.
 - **Phase with data (default)** — full metrics grid (2-column) rendering only the metrics that have data, with trend arrows, plus optional anomaly line.
-- **Active phase** — emerald border + emerald-tinted background + pulsing emerald dot.
+- **Active phase** — emerald border (`border-emerald-200 dark:border-emerald-800`) + emerald-tinted background (`bg-emerald-50/50 dark:bg-emerald-900/10`) + pulsing emerald dot. The emerald border/background apply **only to the full-data card**; if an active phase has no health data, its card stays `bg-muted/30` (the no-data branch never gets emerald styling) and only the pulsing emerald dot signals that it is active.
 - **Inactive prescription** — collapsed by default, "(inactive)" label in header.
 - **Active prescription** — expanded by default.
 - **Per-metric absent state** — individual metric cells silently omit themselves when their value is zero/empty (no placeholder dashes).
@@ -76,13 +75,13 @@
 - **Phase type** (`PhaseType`): `"maintenance"` | `"titration"`. Badge colors: maintenance = blue, titration = amber.
 - **Phase status** (`MedicationPhase.status`): `"active" | "completed" | "cancelled" | "pending"`. Only `"active"` drives the green emphasis + pulsing dot.
 - **Trend direction** (`TrendDirection.direction`): `"rising" | "falling" | "stable"`. Arrow icons: rising → `TrendingUp` (rose-500), falling → `TrendingDown` (emerald-500), stable → `Minus` (muted).
-- **Dose status** (`DoseStatus`, drives adherence): `"taken" | "skipped" | "rescheduled" | "pending"`. Adherence counts a slot as adherent only when `status === "taken"`.
+- **Dose-log status** (`DoseStatus`, the persisted enum): `"taken" | "skipped" | "rescheduled" | "pending"`. Adherence does **not** filter on this enum directly — `adherenceRate` filters over **`DoseSlot.status`** (`DoseSlotStatus = "taken" | "skipped" | "pending" | "missed"`), the per-slot status derived at read time by `getDoseScheduleForDateRange`. A `rescheduled` dose-log maps to slot status `"skipped"`, and a missing log on a past date becomes `"missed"`. Adherence counts a slot as adherent only when slot `status === "taken"`.
 - **Adherence color thresholds:** ≥90% emerald, ≥70% amber, otherwise rose. Displayed as `Math.round(rate * 100)%`.
 - **Trend confidence threshold** (`MIN_TREND_CONFIDENCE`): `0.3` — R² below this forces direction to `"stable"`.
 - **Trend slope deadband:** slope `> 0.01` → rising, `< -0.01` → falling, else stable.
 - **Anomaly z-score threshold:** `2.0` (default of `detectAnomalies`). Requires ≥2 points and nonzero standard deviation.
-- **Fluid-balance target rule:** `target = urinationEstimatedMl + 500` (500 ml above estimated output). (Computed in `fluidBalance`; tab surfaces only `avgBalance`.)
-- **Urination volume estimates** (`URINATION_ESTIMATE_ML`, feeds fluid balance): `small: 150`, `medium: 300`, `large: 500` ml.
+- **Fluid-balance target rule:** `target = urinationEstimatedMl + 500` (500 ml above estimated output). (Computed in `fluidBalance`; the function also returns `daysAboveTarget`, `daysTotal`, the full `daily[]` array, and an `intraday[]` running-cumulative series — but the tab surfaces only `avgBalance` and discards the rest.)
+- **Urination volume estimates** (`URINATION_ESTIMATE_ML`, feeds fluid balance): `small: 150`, `medium: 300`, `large: 500` ml. A record with a null/missing `amountEstimate` defaults to `"medium"`, and if the map lookup still misses the value falls back to a literal `300` ml.
 - **Date label format:** `toLocaleDateString("en-US", { month: "short", day: "numeric" })` → e.g. "May 20". Ongoing end → literal `"present"`.
 - **Units shown:** BP in `mmHg` (rendered as `systolic/diastolic`, both rounded to integers), weight in `kg` (1 decimal), fluid balance in `ml` (rounded integer), adherence as `%`.
 - **Food instruction** (`FoodInstruction` on phases, not displayed here but part of the model): `"before" | "after" | "none"`.
@@ -116,7 +115,7 @@ Internal shapes (not persisted): `PhaseSnapshot`, `PrescriptionReport` (defined 
 - **Trend significance:** linear regression over index-normalized points; needs ≥2 points; R² < 0.3 → "stable"; slope deadband ±0.01. Empty/single-point series → stable, 0 confidence.
 - **Anomalies:** z-score > 2.0 over weight points; needs ≥2 points and nonzero SD, else no anomalies.
 - **Default expand state** is driven by `prescription.isActive` (active → open).
-- **Timezone/day handling:** adherence groups by `yyyy-MM-dd` date strings derived from the range; fluid balance groups by local day key. Dose status "taken" is the only adherent state; "skipped"/"rescheduled"/"pending" count against the rate.
+- **Timezone/day handling:** adherence groups by `yyyy-MM-dd` date strings derived from the range; fluid balance groups by local day key. Slot status `"taken"` is the only adherent state; the slot universe that counts against the rate is `"skipped"`/`"pending"`/`"missed"` (a `rescheduled` dose-log surfaces as a `"skipped"` slot — `"rescheduled"` never appears as a slot status).
 - **Ordering:** prescriptions newest-created first; phases newest-created first (so the most recent phase appears at the top of each section, not chronological start order).
 - **Pluralization:** "anomaly" (1) vs "anomalies" (n≠1).
 - **No required user input / no forms** — nothing to validate from the user side.
@@ -134,4 +133,5 @@ Internal shapes (not persisted): `PhaseSnapshot`, `PrescriptionReport` (defined 
 - **`AdherenceBadge`** — mono percentage with threshold coloring (green/amber/rose).
 - **`TrendArrow`** — direction icon for rising (rose up) / falling (emerald down) / stable (muted minus).
 - **`formatDate(ts)`** — short "Mon D" date formatter.
-- **Service deps (not children but load-bearing):** `adherenceRate`, `bpTrend`, `weightTrend`, `fluidBalance`, `getRecordsByDomain` (analytics-service); `detectAnomalies`, `trend`/`computeTrend` (analytics-stats); `getPrescriptions`, `getPhasesForPrescription` (medication services).
+- **Service deps (not children but load-bearing):** `adherenceRate`, `bpTrend`, `weightTrend`, `fluidBalance`, `getRecordsByDomain` (analytics-service); `detectAnomalies`, `trend`/`computeTrend` (analytics-stats); `getPrescriptions`, `getPhasesForPrescription` (imported from the `medication-service` barrel, which re-exports from prescription-service / phase-service).
+- **Not used here:** `correlateTimeSeries` (with its `strong >0.7` / `moderate >0.4` / `weak >0.2` / `none` strength buckets and `pairedDays < 3` guard in `analytics-stats`) is **not** called by this tab — correlation analysis belongs to the Correlations tab, not Titration.

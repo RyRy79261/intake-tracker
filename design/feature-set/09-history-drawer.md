@@ -31,11 +31,11 @@
 - **Type filter tabs.** Horizontal scrollable filter bar; one tab per domain plus "All". Selecting a tab filters the visible list (client-side, applied after paging).
 - **Pagination ("Load More").** Client-side paging of `PAGE_SIZE = 30`. Page starts at 1; "Load More" increments the page, appending another 30 from the already-loaded (max 100 per table) dataset. Button only shows while `hasMore` is true.
 - **Per-row summary.** Each row shows a domain icon (coloured), an uppercase type label, a domain-formatted measurement string, the entry time (`formatTimeOnly`, e.g. "2:30 PM"), and Edit + Delete action buttons.
-- **Domain-specific measurement formatting** (see Validation): intake amount+unit+source label, weight in kg, BP "120/80 mmHg", eating note, urination/defecation amount-estimate · note, caffeine "desc · NN mg", alcohol "desc · N drinks".
+- **Domain-specific measurement formatting** (see Validation): intake amount+unit+source label, weight in kg, BP "120/80 mmHg", eating note, urination/defecation amount-estimate · note, caffeine "desc · NN mg", alcohol "desc · N drink(s)". Empty-value fallbacks: eating with no note, and urination/defecation with neither an estimate nor a note, all render an em-dash "—". Caffeine/alcohol with both description and amount empty fall back to the bare label "Caffeine" / "Alcohol". Alcohol pluralizes "drink" vs "drinks" by `amountStandardDrinks !== 1` (singular for exactly 1).
 - **Inline edit.** Tapping a row (or its Edit button) opens a domain-specific edit dialog pre-filled with the record's current values.
 - **Inline delete.** Trash button deletes the entry (soft-delete via the domain service), with a per-row spinner while in flight and a success/error toast.
 - **Empty state.** When no records match the current filter, shows a History icon + "No records yet" / "Start logging to see history here".
-- **Loading state.** While `historyData` is undefined and the drawer is open, shows a centered spinner.
+- **Loading state (dormant / unreachable).** The component has a centered-spinner branch gated on `open && !historyData`, but `useHistoryData` seeds `useLiveQuery` with a truthy `EMPTY_RESULT` default object, so `historyData` is never `undefined` (it is `EMPTY_RESULT` on first render and while pending). The spinner therefore never renders; during the initial load the **empty state** ("No records yet") shows until data arrives.
 - **Toasts.** Success ("Entry deleted" / "Entry updated") and error toasts on delete/edit; validation errors surface their message as a destructive toast.
 - **PIN protection removed.** A code comment notes PIN protection was removed in "phase 41"; `handleOpenChange` is now a passthrough.
 
@@ -46,9 +46,9 @@
 - **Scroll the filter bar.** Tabs overflow horizontally (`overflow-x-auto`) so all tabs are reachable on narrow screens.
 - **Scroll the list.** The list body is independently scrollable (`flex-1 overflow-y-auto`); header (title + tabs) is pinned (`shrink-0`, `border-b`).
 - **Tap "Load More".** Loads the next 30 records (page + 1). Disabled/hidden when no more.
-- **Tap a row body.** Opens the edit dialog for that record (`onClick={onEdit}`, also `role="button"`, `tabIndex=0`, Enter/Space activate). Caffeine/alcohol rows are non-editable: `openEdit` early-returns for those types.
-- **Tap the Edit (pencil) button.** Same as tapping the row; the action cluster `stopPropagation`s so the two buttons don't double-fire.
-- **Tap the Delete (trash) button.** Immediately deletes (no confirmation dialog). Shows a spinner on that row's trash button (`isDeleting`) and disables it while pending.
+- **Tap a row body.** Opens the edit dialog for that record (`onClick={onEdit}`, also `role="button"`, `tabIndex=0`; the `onKeyDown` handler calls `preventDefault()` and `onEdit()` on Enter/Space). Caffeine/alcohol rows are non-editable: `openEdit` early-returns for those types.
+- **Tap the Edit (pencil) button.** Same as tapping the row; the action cluster `stopPropagation`s so the two buttons don't double-fire. The button carries a blue hover affordance (`hover:text-blue-600 hover:bg-blue-50` / dark variant) and `aria-label`/`title` "Edit entry".
+- **Tap the Delete (trash) button.** Immediately deletes (no confirmation dialog). Shows a spinner on that row's trash button (`isDeleting`) and disables it while pending. The button carries a red hover affordance (`hover:text-red-600 hover:bg-red-50` / dark variant) and `aria-label`/`title` "Delete entry".
 - **Edit dialog — change fields.** Per domain (amount/weight/systolic/diastolic/heartRate/position/arm/timestamp/note/amount-estimate). Inputs are controlled via `patchFields`.
 - **Edit dialog — submit ("Save Changes").** Validates, persists via the domain's React Query update mutation, closes the dialog, toasts "Entry updated". On `ValidationError`, keeps the dialog open and toasts the validation message (destructive). On any other error, toasts a generic "Could not update the entry".
 - **Edit dialog — Cancel / dismiss.** Closes without saving (`onClose` clears `editingRecord`).
@@ -57,7 +57,7 @@
 ## States & presentations
 
 - **Closed.** Drawer not rendered; `allRecords` short-circuits to `[]` when `!open` (no data work while closed).
-- **Loading.** `open && !historyData` → centered `Loader2` spinner, py-12. (No skeleton rows; just the spinner.)
+- **Loading (dormant / unreachable).** A centered `Loader2` spinner (py-12) is coded behind `open && !historyData`, but `historyData` is never falsy — `useHistoryData` passes a truthy `EMPTY_RESULT` default to `useLiveQuery`, returned synchronously on first render and while pending. So this branch never executes; during initial load the **empty state** ("No records yet") renders instead until rows arrive. (No skeleton rows exist either way.)
 - **Empty (no matches).** `filteredRecords.length === 0` (after filtering the current page) → History icon (12×12, 30% opacity) + two-line empty message. Note: this triggers if the active filter has no matches even when other records exist.
 - **Populated.** Date-grouped sections, each with a Calendar-icon header, count pill, and rows under a top border.
 - **Has-more.** `allRecords.length > page * PAGE_SIZE` → "Load More" button with ChevronDown.
@@ -90,7 +90,7 @@
 
 **`EditableType` (use-record-adapters):** `intake | weight | bp | eating | urination | defecation` (caffeine/alcohol are explicitly NOT editable here).
 
-**Intake sub-types (`IntakeRecord.type`):** `water | salt | sugar | potassium`. Units in rows: water → `ml`, sugar → `g`, salt/sodium → `mg` (potassium falls into the `salt` row branch → `mg`).
+**Intake sub-types (`IntakeRecord.type`):** `water | salt | sugar | potassium`. The row picks a theme key of `water`/`sugar`/else→`salt`, so anything that isn't water or sugar (i.e. both `salt` and `potassium`) renders under the `salt` theme. Units in rows: water → `ml`, sugar → `g`, else (salt **and** potassium) → `mg`. Because potassium falls into the `salt` branch, a potassium record is displayed with the **salt theme's label "Sodium"**, the Sparkles icon, and amber colour — it is not visually distinguished as potassium in the history row.
 
 **Card theme labels / icons / icon colours (`CARD_THEMES`):**
 - water — "Water", Droplets, sky-600/400; buttonBg `bg-sky-600 hover:bg-sky-700`
@@ -105,7 +105,7 @@
 - caffeine — "Caffeine", Coffee, yellow-700/400 (display only)
 - alcohol — "Alcohol", Wine, fuchsia-600/400 (display only)
 
-**Pagination:** `PAGE_SIZE = 30`; initial `page = 1`. Loader `limit` default `100` per table (`useHistoryData(100)`).
+**Pagination:** `PAGE_SIZE = 30`; initial `page = 1`. The drawer calls `useHistoryData()` with **no argument**; the per-table cap of `100` comes from the hook's own `limit = 100` default, not an explicit `useHistoryData(100)` call.
 
 **Date group key format:** en-US, `{ weekday:"short", year:"numeric", month:"short", day:"numeric" }`.
 **Row time format:** en-US, `{ hour:"numeric", minute:"2-digit", hour12:true }`.
@@ -113,22 +113,23 @@
 **BP edit dialog enums & input ranges:**
 - Position: `sitting | standing` (Select; labels "Sitting" / "Standing").
 - Arm: `left | right` (Select; "Left" / "Right").
-- Irregular heartbeat: `no | yes` (Select; only rendered if `onIrregularHeartbeatChange` is provided — NOT wired by the history drawer, so hidden here).
+- Irregular heartbeat: `no | yes` (Select; only rendered if `onIrregularHeartbeatChange` is provided — NOT wired by the history drawer, so hidden here). Beyond not wiring the callback, `FieldMap.bp` has **no** `irregularHeartbeat` key and `initEditingState` never populates it — so even if the select were rendered, the edit adapter has no irregular-heartbeat field to submit. The underlying `BloodPressureRecord.irregularHeartbeat` field is still stored; it is simply pass-through-untouched by edits made here.
 - Systolic input `min=60 max=300`; Diastolic `min=40 max=200`; Heart rate `min=30 max=250` (optional, placeholder "BPM").
 - sr-only hints: systolic "typically 90-180", diastolic "60-120", heart rate "60-100".
 
-**Intake edit dialog:** amount input `type=number min=1 step=1`; label "Amount (unit)" with unit from sub-type; note `maxLength=200`. Title "Edit {Water|Sugar|Sodium} Entry". Save button colour matches sub-type (sky/pink/amber).
+**Intake edit dialog:** `DialogDescription` "Update the amount, time, or note for this entry". Amount input `type=number min=1 step=1`, styled `text-lg h-12` and `autoFocus`, with an sr-only `aria-describedby` helper ("Enter the {amount description}"); label "Amount (unit)" with unit from sub-type; note `maxLength=200`. Title "Edit {Water|Sugar|Sodium} Entry". Save button colour matches sub-type (sky/pink/amber).
 
 **Weight edit dialog:** weight input `type=number min=0.1 step=0.1`; label "Weight (kg)". Save colour emerald.
 
 **Eating edit dialog:** time + "What I ate (optional)" Textarea (placeholder "e.g. Sandwich, apple") + optional grams input `min=1 max=10000` (grams only shown if `onGramsChange` passed — NOT wired here). Save colour orange.
 
 **Urination/Defecation edit dialogs (shared `EditEstimateEntryDialog`):**
+- Shared dialog chrome: `DialogDescription` "Update the time, amount estimate, or note"; the amount Select uses a "Select estimate" placeholder and an "Amount (optional)" label; the note Textarea is `min-h-[60px]`.
 - Urination amount options (inline in component): `small`→"Small", `medium`→"Medium", `large`→"Large". Note placeholder "e.g. colour, urgency". Accent violet. No "No estimate" option.
 - Defecation amount options (`DEFECATION_AMOUNT_OPTIONS`): `small`/`medium`/`large` (same labels). `allowNoEstimate` → prepends "No estimate" sentinel (`__none__` → stored as `""`). Note placeholder "e.g. consistency, urgency". Accent stone.
 - `URINATION_AMOUNT_OPTIONS` also defined in constants (same small/medium/large) though the urination dialog uses its own inline copy.
 
-**Liquid source labels (`getLiquidTypeLabel`, used for water-intake row source):** decodes `source` strings like `coffee:latte`→"Latte", `beverage:Juice`→"Juice", `juice:orange`→"Orange", `food:*`→note or "Food", `preset:{id}`→preset name (from `liquidPresets`) or "Beverage", `manual`/`preset:manual`→null. `liquidPresets` passed from settings store (defaults include Espresso, Double Espresso, Moka, Coffee, Tea, Beer, Wine, Spirit — see `DEFAULT_LIQUID_PRESETS`).
+**Liquid source labels (`getLiquidTypeLabel`, used for water-intake row source):** decodes `source` strings like `coffee:latte`→"Latte", bare `beverage`→"Beverage" and `beverage:Juice`→"Juice", bare `juice`→"Juice" and `juice:orange`→"Orange", `food`/`food:*`→note or "Food", `preset:{id}`→preset name (from `liquidPresets`) or "Beverage", `substance:{id}`→note (description) or "Drink", bare-prefixed `manual:*`→note or "Food". Returns `null` for `manual`, `preset:manual`, and any unrecognized source format (guards against raw strings leaking into the UI). `liquidPresets` passed from settings store (defaults include Espresso, Double Espresso, Moka, Coffee, Tea, Beer, Wine, Spirit — see `DEFAULT_LIQUID_PRESETS`).
 
 ## Data model touched
 
@@ -157,7 +158,7 @@ Common sync fields on every record: `createdAt`, `updatedAt`, `deletedAt` (null 
 
 ## Validation, edge cases & business rules
 
-- **Soft-delete model.** Deletes set `deletedAt`; the cursor/list queries filter out `deletedAt !== null`. The cursor fetch over-fetches (`limit + 1`, then drops soft-deleted) to compensate.
+- **Soft-delete model.** Deletes set `deletedAt`; the cursor/list queries filter out `deletedAt !== null`. The intake cursor fetch reads the **entire** table (`query.toArray()`), filters `deletedAt === null` **first**, then slices to `limit + 1` (the extra row drives `hasMore`). So there is no bounded "over-fetch"; soft-deletes are dropped before the slice. The net per-table cap of 100 for the drawer still holds.
 - **Edit validation (per domain, throws `ValidationError`):**
   - intake: `parseInt(amount)`; reject if NaN or ≤ 0 ("Invalid amount").
   - weight: `parseFloat(weight)`; reject if NaN or ≤ 0 ("Invalid weight").
@@ -172,7 +173,7 @@ Common sync fields on every record: `createdAt`, `updatedAt`, `deletedAt` (null 
 - **Caffeine & alcohol are display-only.** The `UnifiedRecord`/`RecordRow`/`FilterType` support them, but `useHistoryData` does not fetch `substanceRecords`, and `openEdit` early-returns for them — so in this drawer they never appear and are never editable. (Substance history lives elsewhere.)
 - **Delete has no confirmation.** Single tap deletes immediately (only the in-flight spinner guards double-taps via `disabled`).
 - **Row click vs action buttons.** The action button container `stopPropagation`s click events so tapping Edit/Delete doesn't also trigger the row's `onEdit`.
-- **`grams` / `irregularHeartbeat` optionality.** The eating grams field and BP irregular-heartbeat select are conditionally rendered on optional callbacks that the history drawer does not pass → hidden here, though the underlying records carry those fields.
+- **`grams` / `irregularHeartbeat` optionality.** The eating grams field and BP irregular-heartbeat select are conditionally rendered on optional callbacks that the history drawer does not pass → hidden here, though the underlying records carry those fields. For BP this is doubly disabled: `FieldMap.bp` does not include `irregularHeartbeat` and `initEditingState` never seeds it, so the edit state has no irregular-heartbeat value to surface or persist regardless of the select.
 - **Reactive consistency.** Because `useLiveQuery` re-runs on any table change, an edit/delete made elsewhere (or the one just made here) updates the list without manual invalidation.
 
 ## Sub-components / variants

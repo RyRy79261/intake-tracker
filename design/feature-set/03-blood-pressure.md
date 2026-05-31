@@ -35,12 +35,12 @@
 - **Record Reading** primary action — validates, persists, toasts, resets form.
 - **BP category classification** (ESH 2023 / 2018 ESC-ESH office scale; same scale Withings BPM devices use in Europe), evaluated highest-first, OR-based across systolic/diastolic.
 - **Pulse-pressure derivation & coloring** (header only).
-- **Recent readings list** — up to 3 most recent (card fetches 5, list slices to 3), each row showing time, position · arm · optional BPM · optional "irregular", the reading, and its `(category)` label in risk color.
+- **Recent readings list** — up to 3 most recent (card fetches 5, list slices to 3), each row showing time, then `{position} · {arm} arm` (the literal word "arm" is appended after the arm value, e.g. "sitting · left arm") · optional `{hr} BPM` · optional "irregular", the reading, and its `(category)` label in risk color.
 - **Inline edit** — tapping a recent row swaps it for an inline edit form (systolic, diastolic, heart rate, position select, arm select, irregular-heartbeat checkbox, time, note).
 - **Delete** with per-row spinner + toast.
 - **Offline-first persistence** — writes go straight to IndexedDB (Dexie) and queue a background sync push; no network needed to record.
-- **Loading skeleton** in header while the live query is undefined.
-- `EditBloodPressureDialog` (separate file) provides the same edit surface as a modal, consumed by History drawer and Analytics "Records" tab.
+- **Loading skeleton (dead code).** The card contains a header `isLoading ? (...)` branch that would render an `animate-pulse` placeholder, but `useBloodPressureRecords` passes `[]` as the `useLiveQuery` default result, so the hook returns `[]` (never `undefined`) before the query resolves. `isLoading = !recentRecords` is therefore always `false` (`![] === false`) and the header skeleton branch **never renders**. Only the route-level `BloodPressureCardSkel` skeleton is actually shown during page load.
+- `EditBloodPressureDialog` (separate file) provides a similar edit surface as a modal, consumed by History drawer and Analytics "Records" tab. **Note:** neither real consumer passes `onIrregularHeartbeatChange`, and the dialog only renders its "Irregular Heartbeat" Select when that handler is supplied — so in production the modal edit flow has **no irregular-heartbeat control** (it edits systolic, diastolic, heart rate, position, arm, time, and note only).
 
 ---
 
@@ -54,15 +54,15 @@
 - **Tap "Set different time"** — expands a `datetime-local` input (max = now); only applied to the new record if expanded at submit time.
 - **Tap "Record Reading"** — runs Zod validation; on success persists and toasts success, then resets systolic/diastolic/heartRate inputs, `irregularHeartbeat→false`, collapses details, collapses time, resets custom time to now. Button is disabled while pending or while systolic OR diastolic is empty.
 - **Tap a recent entry row** — opens inline edit for that record (`openEdit`); row also keyboard-activatable via Enter/Space (role="button", tabIndex 0).
-- **In inline edit form:** edit systolic/diastolic/heart-rate inputs; change Position select; change Arm select; toggle "Irregular heartbeat" checkbox; change date/time; edit note; **Save** (persists, toast "Entry updated", closes) or **Cancel** (`closeEdit`, discards).
+- **In inline edit form:** edit systolic/diastolic/heart-rate inputs; change Position select (items "Sitting"/"Standing"); change Arm select (items labeled **"Left arm"/"Right arm"** here — differing from the modal dialog's plain "Left"/"Right"); toggle "Irregular heartbeat" checkbox; change date/time; edit note; **Save** (persists, toast "Entry updated", closes) or **Cancel** (`closeEdit`, discards).
 - **Tap the trash icon on a row** — deletes (soft-delete); shows row spinner; toast "Entry deleted" / "Blood pressure record removed". `stopPropagation` prevents opening edit.
-- **In `EditBloodPressureDialog` (modal variant):** same fields rendered as a Dialog with Cancel / Save Changes footer; closes on backdrop / Escape via `onOpenChange`; systolic auto-focused; focus handler can select-all on focus.
+- **In `EditBloodPressureDialog` (modal variant):** fields rendered as a Dialog with Cancel / Save Changes footer (no irregular-heartbeat control in production — see note above); closes on backdrop / Escape via `onOpenChange`; systolic auto-focused. Both real consumers pass `scrollOnFocus` as the shared `onFocus` handler (a scroll-into-view-on-focus behavior, not a select-all).
 
 ---
 
 ## States & presentations
 
-- **Loading (header skeleton):** when `recentRecords` is undefined, the latest-reading block renders an `animate-pulse` placeholder (rose `loadingBg` bar + muted bar). Route-level skeleton `BloodPressureCardSkel` mirrors the layout (two h-12 input blocks, BPM row, expander bar, record button).
+- **Loading (header skeleton — dead code):** the card has an `isLoading ? (...)` branch that would render an `animate-pulse` placeholder (rose `loadingBg` bar + muted bar), but because `useBloodPressureRecords` defaults the live query to `[]` (never `undefined`), `isLoading` is always `false` and this branch never renders. The actual load state shown is the route-level skeleton `BloodPressureCardSkel`, which mirrors the layout (two h-12 input blocks, BPM row, expander bar, record button).
 - **Empty (no readings):** header right side renders nothing (no latest reading, no category). Recent list returns `null` (hidden entirely) when `records` is empty.
 - **Default / populated:** header shows latest reading + category + optional BPM + pulse pressure; entry form shown; recent list shows up to 3 rows.
 - **Details collapsed (default):** only systolic/diastolic/heart-rate + "More options" + Record button visible.
@@ -75,11 +75,11 @@
 - **Row editing:** the row is replaced in place by the inline edit form on a `bg-muted/30` rounded background.
 - **Row deleting:** trash icon becomes a spinner; button disabled for that row.
 - **Row hover/active:** clickable rows get `hover:bg-black/5 dark:hover:bg-white/5` / `active:bg-black/10`.
-- **Pulse-pressure abnormal:** value text turns red when `>60` or `<30`.
+- **Pulse-pressure abnormal:** value text turns red (`text-red-500 dark:text-red-400`) when `>60` or `<30`; otherwise `text-muted-foreground`.
 - **Category risk coloring:** label color varies by grade (green → lime → yellow → orange → red-600 → red-700) — see enum below.
 - **Disabled Record button:** when `addMutation.isPending` OR systolic empty OR diastolic empty.
 - **Offline/syncing:** no dedicated visual on this card; writes succeed locally and `schedulePush()` queues sync transparently.
-- **Modal dialog (`EditBloodPressureDialog`) open state:** `open` driven by `record !== null`; irregular-heartbeat row only rendered when `onIrregularHeartbeatChange` handler is supplied.
+- **Modal dialog (`EditBloodPressureDialog`) open state:** `open` driven by `record !== null`; irregular-heartbeat row only rendered when `onIrregularHeartbeatChange` handler is supplied — and since neither real consumer (History drawer, Analytics Records tab) passes that handler, the row is **never rendered in production**.
 
 ---
 
@@ -104,7 +104,7 @@
 | `sys ≥ 120` or `dia ≥ 80` | Normal | `text-lime-600 / dark:text-lime-400` |
 | else | Optimal | `text-green-600 / dark:text-green-400` |
 
-**Pulse-pressure thresholds:** normal ≈ 40 mmHg; `> 60` elevated, `< 30` narrow → both render red, else muted.
+**Pulse-pressure thresholds:** normal ≈ 40 mmHg; `> 60` elevated, `< 30` narrow → both render red (`text-red-500 dark:text-red-400`), else muted (`text-muted-foreground`).
 
 **Validation ranges** (`BloodPressureFormSchema`, card add):
 - Systolic: integer, min 50, max 300, required ("Systolic is required").
@@ -140,11 +140,11 @@
 - `note?: string`
 - sync/meta: `createdAt`, `updatedAt`, `deletedAt: number | null`, `deviceId`, `timezone` (added by `syncFields()`).
 
-**Dexie index:** `"id, timestamp, position, arm, updatedAt"`.
+**Dexie index:** `"id, timestamp, position, arm, updatedAt"` (repeated identically across schema versions 10–14, as Dexie requires the full schema each version). The `backfill` and `backfillTimezone` migrations also touch `bloodPressureRecords` (populating sync/timezone fields on existing rows).
 
-**Postgres mirror `blood_pressure_records`** (`src/db/schema.ts:120`) — field-for-field parity, with DB CHECK constraints: `position IN ('standing','sitting')`, `arm IN ('left','right')`; `user_id` FK to `usersSync.id`.
+**Postgres mirror `blood_pressure_records`** (`src/db/schema.ts:120`) — field-for-field parity, with DB CHECK constraints: `position IN ('standing','sitting')`, `arm IN ('left','right')`; `user_id` FK to `usersSync.id` (`onDelete: cascade`). Two indexes: `idx_bp_user_updated` on `(userId, updatedAt)` and `idx_bp_ts` on `timestamp`.
 
-**Service functions (`health-service.ts`):** `addBloodPressureRecord`, `getBloodPressureRecords(limit?)`, `getBloodPressureRecordsByDateRange`, `getLatestBloodPressureRecord`, `deleteBloodPressureRecord` (soft), `undoDeleteBloodPressureRecord`, `updateBloodPressureRecord`, `getBloodPressureRecordsPaginated`. All use `writeWithSync(...)` + `schedulePush()`.
+**Service functions (`health-service.ts`):** `addBloodPressureRecord`, `getBloodPressureRecords(limit?)`, `getBloodPressureRecordsByDateRange` (the only BP read that uses the `timestamp` index — a Dexie `.where("timestamp").between(start, end)` query; the other reads full-scan via `orderBy("timestamp")` + in-memory filter), `getLatestBloodPressureRecord`, `deleteBloodPressureRecord` (soft), `undoDeleteBloodPressureRecord`, `updateBloodPressureRecord`, `getBloodPressureRecordsPaginated`. The write functions use `writeWithSync(...)` + `schedulePush()`; reads filter `deletedAt === null`.
 
 **Hooks (`use-health-queries.ts`):** `useBloodPressureRecords(limit=5)` (live query, default `[]`), `useLatestBloodPressure()`, `useAddBloodPressure`, `useUpdateBloodPressure`, `useDeleteBloodPressure`. Param types `AddBloodPressureParams` / `UpdateBloodPressureParams`.
 
@@ -154,7 +154,7 @@
 
 - **Add path validation** is Zod (`BloodPressureFormSchema`): integers only, systolic 50–300, diastolic 20–200, heart rate (if given) 20–250; both pressures required. On failure, per-field errors set + audit log; no submit.
 - **Heart rate is conditionally included** — only written when parsed and not NaN; spread conditionally so an empty field is omitted entirely (not stored as 0/null).
-- **Irregular heartbeat only stored when true** (`...(irregularHeartbeat && { irregularHeartbeat: true })`) on add; on update it's written through directly. So a record may have the field absent vs. `false`.
+- **Irregular heartbeat: "only when true" is a caller constraint, not the service.** The `addBloodPressureRecord` service writes `irregularHeartbeat` whenever it is `!== undefined` (`...(irregularHeartbeat !== undefined && { irregularHeartbeat })`), so passing `false` *would* persist `false`. The card add path, however, only ever passes `true` (it spreads `irregularHeartbeat && { irregularHeartbeat: true }`), so in practice the field is **absent-or-`true`**. On update it's written through directly. A record may therefore have the field absent vs. `false`.
 - **Inline-edit validation** is looser than add: rejects only NaN or `≤ 0` for sys/dia (and heart rate if provided), via toast "Invalid values" → returns `null` to abort. No min/max enforcement.
 - **Timestamp default:** `timestamp ?? Date.now()`. Custom time only applied when the time override is expanded at submit (`showTimeInput`). `dateTimeLocalToTimestamp` throws on invalid input (never NaN) — caught in edit to toast "Invalid date/time".
 - **Category is OR-based & highest-first:** a normal systolic does NOT cancel a high diastolic (e.g. 118/92 → Grade 1 hypertension).
@@ -170,7 +170,7 @@
 ## Sub-components / variants
 
 - **`BloodPressureCard`** — the dashboard card: latest-reading header, entry form, expandable details, recent list, inline edit. (`blood-pressure-card.tsx`)
-- **`EditBloodPressureDialog`** — fully-controlled modal edit form variant (sys/dia/HR inputs, Position & Arm Selects, Irregular Select, datetime-local, note); used by History drawer & Analytics Records tab, not the card. (`edit-blood-pressure-dialog.tsx`)
+- **`EditBloodPressureDialog`** — fully-controlled modal edit form variant (sys/dia/HR inputs, Position & Arm Selects, datetime-local, note). It also defines an optional Irregular Heartbeat Select, but that row is gated behind an `onIrregularHeartbeatChange` prop that **neither real consumer passes**, so it does not appear in the live History drawer / Analytics Records tab flows. (`edit-blood-pressure-dialog.tsx`)
 - **`RecentEntriesList`** — shared "Recent" section: clickable rows, per-row delete with spinner, swaps in inline edit form for the editing row. (`recent-entries-list.tsx`)
 - **`InlineEditFormShell`** — wraps domain edit fields with timestamp + note inputs and Save/Cancel. (`recent-entries-list.tsx`)
 - **`CollapsibleTimeInputControlled`** — parent-controlled "Set different time" → datetime-local (max = now). (`collapsible-time-input.tsx`)

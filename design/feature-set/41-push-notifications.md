@@ -26,7 +26,7 @@
 ## Features
 
 ### A. Medication dose reminders (Web Push, server-driven — the primary path)
-- **Subscribe/unsubscribe** to Web Push via the browser `PushManager`, syncing the subscription (endpoint + p256dh + auth keys) to Neon Postgres keyed by Neon-Auth `userId`.
+- **Subscribe/unsubscribe** to Web Push via the browser `PushManager`, syncing the subscription (endpoint + p256dh + auth keys — **no timezone**) to Neon Postgres keyed by Neon-Auth `userId`.
 - **Per-user dose schedule sync:** the app computes the day's dose slots (`useDailyDoseSchedule`) and POSTs a flattened schedule (time slot × day-of-week × medication label list) to the server, where it is mirrored into `push_schedules`.
 - **Timezone capture:** the client's IANA timezone (`Intl.DateTimeFormat().resolvedOptions().timeZone`) is sent with each schedule sync and stored on the subscription so server-side dispatch uses the user's local time.
 - **Server dispatch** (`/api/push/send`, cron-secret gated): for every subscribed user, computes their current local `HH:MM`, weekday, and date; finds dose slots due *now* that haven't been sent today; sends a Web Push; logs to `push_sent_log` (follow-up index 0).
@@ -37,13 +37,14 @@
 - **Service-worker rendering:** the SW `push` handler shows the notification with the app icon, `requireInteraction: true`, and stores the deep-link URL; `notificationclick` focuses an existing `/medications` window (and navigates it) or opens a new one.
 
 ### B. Medication reminders (in-app polling fallback — `medication-notification-service.ts`)
-- Runs a **60-second `setInterval` loop** while the app is open; on start it immediately runs once.
-- **Dose check:** every minute, finds active prescriptions → active phases → enabled schedules whose `daysOfWeek` includes today and whose scheduled time is within a **0–5 minute window** of now; fires a single grouped local notification listing all due meds. Dedupes per `{date}-{time}-{prescriptionId}` so a dose fires once per day.
-- **Refill check:** runs at most once per **12 hours**; for each active prescription with an active inventory, computes days-of-supply remaining and alerts when stock ≤ `refillAlertDays` (in days) or ≤ `refillAlertPills` (in pills). Dedupes per prescription id.
+- On start, runs **both a dose check and a refill check once**, then starts a **60-second `setInterval` loop** whose callback re-runs **only the dose check** (`checkDoseReminders()`); the refill check does **not** re-fire inside the loop.
+- **Dose check:** every minute, finds active prescriptions → active phases → enabled schedules whose `daysOfWeek` includes today and whose scheduled time is within a **0–5 minute window** of now; fires a single grouped local notification listing all due meds (title `Time for your {HH:MM} medications`, body = comma-joined med names, tag `dose-reminder-{HH:MM}`, `requireInteraction: true`). Dedupes per `{date}-{time}-{prescriptionId}` so a dose fires once per day.
+- **Refill check:** runs **once at startup** (not on the loop), and is itself throttled to at most once per **12 hours** — so within a single open session it never re-fires; the 12 h throttle only matters across separate app sessions. For each active prescription with an active inventory, computes days-of-supply remaining and alerts when stock ≤ `refillAlertDays` (in days) or ≤ `refillAlertPills` (in pills). The alert is title `Refill needed: {brandName}`, body `{stock} pills left (~{daysLeft} days). Time to refill {brandName} {strength}.`, tag `refill-{id}` (not sticky — `requireInteraction` defaults false). Dedupes per prescription id.
 - Dedupe state and last-check timestamps persisted to `localStorage` (`intake-tracker-med-notifications`); the notified-doses list is pruned to today's keys each run.
 
 ### C. Native local notifications (Capacitor — installed app only)
 - When running as a native (Capacitor) app, requests native local-notification permission and **pre-schedules** repeating weekly notifications (one per schedule × day-of-week) directly on the OS, so reminders fire even when the app is closed and offline.
+- **Soft-delete filtering:** the sync only includes schedules where `enabled && deletedAt === null`, phases where `status === "active" && deletedAt === null`, and prescriptions where `isActive && deletedAt === null` — soft-deleted (`deletedAt`) rows are excluded.
 - Cancels all previously-pending notifications and re-schedules from scratch on each sync. Uses `allowWhileIdle: true`. Weekday is offset (`dow + 1`) to match Capacitor's 1=Sunday convention vs the app's 0=Sunday.
 - Title `Time for {genericName}`, body `Take {dose} of {genericName}`.
 
@@ -69,7 +70,7 @@
 - **Select "Follow-up reminders"** → options None / 1 / 2 / 3 follow-ups; change syncs to server settings.
 - **Select "Reminder interval"** (only when follow-up count > 0) → Every 5 / 10 / 15 / 20 / 30 minutes; syncs to server.
 - **Select "Time Format"** → 24-hour (14:00) / 12-hour (2:00 PM) (display preference; affects how times render).
-- **Primary / Secondary Region comboboxes** (searchable country picker, ~195 countries + "Not Specified (Global Search)") — used by AI medicine search, co-located in this view.
+- **Primary / Secondary Region comboboxes** (searchable country picker, **196 countries** + "Not Specified (Global Search)" = 197 entries) — used by AI medicine search, co-located in this view.
 
 ### Settings → Permissions section
 - **"Enable" notification permission** (PermissionBadge) → triggers `requestNotificationPermission`; success toast on grant, error toast on failure.
@@ -92,7 +93,7 @@
 
 ### Dose-reminders toggle row (Medication Settings)
 - **Unsupported browser:** helper text "Notifications not supported in this browser"; Switch disabled.
-- **Signed out + not enabled:** helper text "Sign in to enable push reminders across devices"; the entire Dose Reminders card is hidden when the auth gate is closed (push needs auth).
+- **Signed out + not enabled:** helper text "Sign in to enable push reminders across devices"; the entire Dose Reminders card is hidden when the auth gate is closed (push needs auth). The gate (`useAuthGate()` returns `!ready || authenticated`) keeps the card **visible while auth is still loading** (`ready === false`); it is hidden strictly when auth is ready **and** not authenticated.
 - **Default (supported, signed in, off):** helper "Get push notifications when medications are due".
 - **Toggling (in flight):** Switch disabled until subscribe/unsubscribe resolves.
 - **Enabled / active:** Switch on; reveals the Follow-up count select.
@@ -101,7 +102,7 @@
 - **Permission denied after prompt:** toggle stays OFF (no error surfaced inline).
 
 ### Permissions section
-- **PermissionBadge states:** `granted` → green "Enabled" with check icon; `denied` → red "Blocked" + optional "Reset"; `unavailable` → grey "Not available"; `prompt` → "Enable" button.
+- **PermissionBadge states:** `granted` → green "Enabled" with check icon; `denied` → red "Blocked" + optional "Reset"; `unavailable` → grey "Not available"; `prompt` → "Enable" button. (`getPermissionLabel()` separately maps `prompt → "Not set"`, but PermissionBadge surfaces the "Enable" button rather than that label.)
 - **Expiry Reminders:** only visible when notifications granted; button shows "On" (default variant) / "Off" (outline); "Test" ghost button appears only when On.
 - **Toasts:** success (enabled/disabled/test sent), destructive (request failed / save failed / test failed).
 
@@ -119,7 +120,8 @@
 ### Notification visual states (system-rendered)
 - **Initial dose reminder** vs **follow-up reminder** differ by title prefix ("Time for…" vs "Reminder:…").
 - **requireInteraction:** dose pushes are sticky (`requireInteraction: true`); expiry/test notifications are not.
-- Notifications with the same `tag` (`dose-{HH:MM}`) collapse/replace each other.
+- Notifications with the same `tag` collapse/replace each other. Note the **push** dose path uses `dose-{HH:MM}` while the **in-app** dose reminder uses a *different* tag `dose-reminder-{HH:MM}`, so in-app and push dose notifications do **not** collapse together.
+- **In-app refill alert** is **not** sticky (`requireInteraction` defaults to false); the in-app dose reminder, like the push dose path, **is** sticky (`requireInteraction: true`).
 
 ---
 
@@ -168,7 +170,8 @@
 - `HH:MM` 24-hour, zod-validated `^\d{2}:\d{2}$`.
 
 ### Notification payload fields
-- `title`, `body`, `tag` (`dose-{HH:MM}` / `expiry-reminder` / `test-notification`), `url` (default `/medications?tab=schedule`), `icon` (`/icons/icon-192.svg`), `requireInteraction`.
+- `title`, `body`, `tag`, `url` (default `/medications?tab=schedule`), `icon` (`/icons/icon-192.svg`), `requireInteraction`.
+- **Tags by path:** push dose reminder `dose-{HH:MM}`; in-app dose reminder `dose-reminder-{HH:MM}`; in-app refill alert `refill-{id}`; expiry reminder `expiry-reminder`; test notification `test-notification`.
 
 ### Refill-alert thresholds (per inventory item)
 - `refillAlertDays` (days-of-supply threshold) and/or `refillAlertPills` (pill-count threshold) — either may trigger.
@@ -178,7 +181,7 @@
 ## Data model touched
 
 ### Neon Postgres (server, `schema.ts` / `push-db.ts`)
-- **`push_subscriptions`** — `id`, `userId` (unique, FK→usersSync, cascade), `endpoint`, `p256dh`, `authKey`, `timezone` (default "UTC"), `createdAt`, `updatedAt`. One row per user (upsert on conflict by userId).
+- **`push_subscriptions`** — `id`, `userId` (unique, FK→usersSync, cascade), `endpoint`, `p256dh`, `authKey`, `timezone` (default "UTC"), `createdAt`, `updatedAt`. One row per user (upsert on conflict by userId). The `/api/push/subscribe` body carries only `endpoint` + `keys`; `timezone` is written **exclusively** by `/api/push/sync-schedule` (`updateTimezone`), so a user who subscribes but never syncs a schedule keeps `timezone = 'UTC'`.
 - **`push_schedules`** — `id`, `userId` (FK), `timeSlot`, `dayOfWeek`, `medicationsJson`; unique index on (userId, timeSlot, dayOfWeek). Full replace on sync (delete-all then insert).
 - **`push_sent_log`** — `id`, `userId` (FK), `timeSlot`, `sentDate` (date), `followUpIndex` (default 0), `sentAt`; unique index on (userId, timeSlot, sentDate, followUpIndex). Prevents duplicate sends.
 - **`push_settings`** — `userId` (PK, FK), `enabled` (default true), `followUpCount` (default 2), `followUpIntervalMinutes` (default 10), `dayStartHour` (default 2).
@@ -197,7 +200,7 @@
 
 ## Validation, edge cases & business rules
 
-- **Auth requirement:** all push subscription/schedule/settings/check routes run under `withAuth()` (Neon-Auth cookie session, no Bearer token). `/api/push/send` instead requires a `Bearer {CRON_SECRET}` header (cron-only). The Dose Reminders settings card is hidden entirely when signed out.
+- **Auth requirement:** all push subscription/schedule/settings/check routes run under `withAuth()`, which accepts **either** an `Authorization: Bearer {token}` header **or** a Neon-Auth cookie session — the web path uses the cookie, while `apiFetch` in Capacitor/native mode attaches the Bearer token. `/api/push/send` instead requires a `Bearer {CRON_SECRET}` header (cron-only). The Dose Reminders settings card is hidden entirely when signed out.
 - **Permission gating:** every notification path no-ops unless `Notification.permission === "granted"`. Subscribe no-ops if `serviceWorker`/`PushManager` unavailable.
 - **VAPID key:** subscribe converts `NEXT_PUBLIC_VAPID_PUBLIC_KEY` from URL-safe base64 to `Uint8Array`; `userVisibleOnly: true`.
 - **Re-subscribe safety:** subscribe re-sends an existing subscription to the server (covers server-side loss); unsubscribe tolerates a missing subscription.
@@ -221,7 +224,7 @@
 - **`medication-notification-service.ts`** — in-app 60 s polling loop for dose reminders + 12 h refill alerts (start/stop lifecycle).
 - **`local-notifications.ts`** — Capacitor native pre-scheduled weekly local notifications (installed-app path).
 - **`push-sender.ts`** — server `web-push` VAPID sender; returns `{success, statusCode}`, flags 410.
-- **`push-db.ts`** — Neon SQL CRUD: save/delete subscription, sync schedules, get/save settings, due/follow-up queries, sent-log, timezone get/update, all-subscribed-user-ids.
+- **`push-db.ts`** — Neon SQL CRUD: save/delete subscription, sync schedules, get/save settings, due/follow-up queries (per-user `getDueNotificationsForUser`), sent-log, timezone get/update, all-subscribed-user-ids. Also exports a **global, all-user `getDueNotifications(currentTime, dayOfWeek, today)`** that is **dead/legacy** — neither the `send` nor `check` route imports it; both use the per-user variant.
 - **`use-push-schedule-sync.ts`** — `usePushScheduleSync` (schedule + settings sync, 60 s `/check` ping) and `useDoseReminderToggle` (`{handleToggle, toggling, supported}`).
 - **`use-medication-notifications.ts`** — mounts/unmounts the polling loop + schedule sync.
 - **`use-notification-queries.ts`** — `useNotificationSettings` re-export (`getSettings`, `saveSettings`, `sendTest`) for the expiry UI.

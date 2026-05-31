@@ -20,7 +20,7 @@
 
 ## Features
 
-- **Tab entry point.** Rendered as the `titrations` tab inside the Medications page tab bar (alongside `schedule`, `medications`, `prescriptions`, `settings`). Header line: "Manage dosage adjustments across prescriptions." plus a "New" button (Plus icon).
+- **Tab entry point.** Rendered as the `titrations` tab inside the Medications page tab bar (alongside `schedule`, `medications`, `prescriptions`, `settings`); the page only conditionally mounts `<TitrationsView />`. The header line ("Manage dosage adjustments across prescriptions.") and the "New" button (Plus icon) live inside `TitrationsView` itself, not the page-level tab bar.
 - **Plan list, grouped by status into three sections:**
   - **Active** — plans with `status === "active"` (only shown if non-empty).
   - **Planned** — plans with `status === "draft"` (only shown if non-empty).
@@ -29,11 +29,11 @@
 - **Plan cards** (`TitrationPlanCard`): show title, a status badge, condition label, and a prescription count ("N prescription(s)"). Active cards get a highlighted (emerald) 2px border. If a `recommendedStartDate` exists, a short start-date label (e.g. "May 31") shows on the right next to a chevron.
 - **Inline warnings preview.** A plan's `warnings[]` (amber, with AlertTriangle icons) are shown on the card when the plan is active OR when the card is expanded.
 - **Expandable plan detail.** Tapping a card expands (animated height/opacity + chevron rotates 180°) to reveal: per-prescription phase rows, optional italic notes, and a lifecycle action bar.
-- **Per-prescription phase rows** (`PhaseEntryRow`): show the prescription's generic name, a phase-status badge (active / pending / other), and each schedule line (time, formatted dose, and day-of-week subset when not all 7 days).
+- **Per-prescription phase rows** (`PhaseEntryRow`): show the prescription's generic name, a phase-status badge (active / pending / other), and each schedule line (time, formatted dose, and day-of-week subset when not all 7 days). The displayed time is the **deprecated `s.time` HH:MM string** rendered verbatim — display still reads the legacy `time` field even though `scheduleTimeUTC` is the source of truth for writes. (Same for `MaintenanceRow` and the maintenance prefill panel.)
 - **Compound dose formatting.** For combination drugs (`isCombo`), doses are split via `splitDose(mg, compounds)` and rendered with `formatCompoundShort(...)`; otherwise plain `"{mg}{unit}"` (unit is typically "mg").
 - **Current Maintenance section.** Below the plans, lists every active prescription's current active maintenance phase as a read-only `MaintenanceRow`: generic name, total daily dose ("/day"), indication, and each schedule line (time, dose, day subset). Sorted by generic name (locale compare). Rows with no active maintenance phase / no schedules render nothing.
 - **Create plan** via drawer: title, start mode (immediate vs scheduled date), one-or-more prescription entries each with one-or-more dose schedules, free-text warning signs, and notes.
-- **Edit plan** via the same drawer (draft or active plans). Prefills title/notes/warnings/start and reloads each phase's schedules.
+- **Edit plan** via the same drawer (draft or active plans). Prefills title/notes/warnings/start and reloads each phase's schedules. Start-mode on prefill: if `recommendedStartDate` exists → the date field is populated and `startNow = false`; otherwise `startNow` defaults to `plan.status === "active"` (active plans with no scheduled date default back to "start immediately").
 - **AI warning-sign generation.** "AI Suggest" button (gated by auth) calls `/api/ai/titration-warnings`, which uses Claude (premium model, temperature 0, forced tool call) acting as a "clinical pharmacist assistant" to return 4–8 short patient-friendly warning sentences. Results are appended (newline-joined) to the warnings textarea; the user can still hand-edit.
 - **Maintenance prefill into a titration entry.** When a prescription with an active maintenance phase is selected in an entry, a blue "Current maintenance" panel shows its existing schedule with a "Copy to titration" button that copies those times/days/doses into the entry's titration schedules.
 - **Lifecycle transitions:**
@@ -41,7 +41,7 @@
   - **Complete & Promote** (active → completed): copies each titration phase's schedules onto the prescription's maintenance phase (replacing old maintenance schedules), re-activates maintenance, copies titration's `unit` + `foodInstruction`, marks the titration phase completed (sets `endDate`). Confirmation dialog warns it "cannot be undone".
   - **Cancel** (active → cancelled): cancels active/pending plan phases (sets `endDate`), re-activates the most recently completed maintenance phase for each affected prescription. Confirmation dialog.
   - **Delete** (draft or cancelled only): soft-deletes the plan, its phases, and their schedules. Confirmation dialog.
-- **Audit logging.** Every mutation writes an audit entry (`phase_started`, `titration_plan_updated`, `phase_activated`, `phase_completed`) and enqueues a sync push.
+- **Audit logging.** Every mutation writes an audit entry (`phase_started`, `titration_plan_updated`, `phase_activated`, `phase_completed`) and enqueues a sync push. Note these are not four distinct lifecycle actions: **both Cancel and Delete reuse the `phase_completed` action type**, disambiguated only by a metadata `action` field (`titration_cancelled` vs `titration_deleted`).
 - **Offline-first + sync.** All reads/writes go to Dexie (IndexedDB) and enqueue sync-queue upserts inside the transaction; `schedulePush()` runs after each mutation. Live queries (`useLiveQuery`) keep the UI reactive.
 - **Dose-log remapping on edit.** When entries are replaced during edit, existing dose logs are remapped from old phase IDs to the new phase ID by matching `prescriptionId`, preserving dose history across re-saves.
 
@@ -90,6 +90,7 @@
   - `completed` → gray tint.
   - `cancelled` → red tint.
 - **Phase-status badge variants (row):** `active` → emerald outline; `pending` → blue outline; anything else → muted.
+- **Lifecycle action-button colors:** **Activate** is teal (`bg-teal-600 hover:bg-teal-700`); **Complete & Promote** is emerald (`bg-emerald-600 hover:bg-emerald-700`); **Cancel** and **Delete** are red (red text/outline, with `bg-red-600 hover:bg-red-700` on the confirm action). Edit is a plain outline button.
 - **Maintenance prefill panel:** blue-tinted box labeled "Current maintenance" with clock-icon schedule lines and a "Copy to titration" button. Renders only if an active maintenance phase with schedules exists for the selected prescription.
 - **Drawer header:** "New Titration Plan" (create) vs "Edit Titration Plan" (edit).
 - **Drawer entries empty:** dashed-border hint "Add at least one prescription to this plan."
@@ -110,7 +111,7 @@
 - **`PhaseType`** = `"maintenance" | "titration"` (db.ts).
 - **MedicationPhase `status`** = `"active" | "completed" | "cancelled" | "pending"` (db.ts).
 - **`FoodInstruction`** = `"before" | "after" | "none"` (db.ts); titration entry default = `"none"`.
-- **Day-of-week labels** `DAY_LABELS_LONG` = `["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]` (index 0 = Sunday); `daysOfWeek` arrays use these indices. "All 7 days" = `[0,1,2,3,4,5,6]`.
+- **Day-of-week labels** `DAY_LABELS_LONG` = `["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]` (index 0 = Sunday); `daysOfWeek` arrays use these indices. "All 7 days" = `[0,1,2,3,4,5,6]`. (Despite the `_LONG` name, these are the **short** 3-letter labels — the constant name is a misnomer in the source.)
 - **List groups (sections):** "Active" (active), "Planned" (draft), "Past" (completed + cancelled), "Current Maintenance".
 - **Plan status badge color map:** active=emerald solid; draft=blue; completed=gray; cancelled=red.
 - **Dosage unit:** hard-coded `"mg"` on submit (`unit: "mg"`); display unit comes from `phase.unit`.
@@ -123,7 +124,7 @@
 - **AI endpoint config (`/api/ai/titration-warnings`):**
   - Model `CLAUDE_MODELS.premium`, `max_tokens: 1536`, `temperature: 0`, forced tool call `titration_warnings_result`.
   - Target output: "Aim for 4–8 warnings", one short sentence each, patient-friendly.
-  - Request schema fields per prescription: `genericName` (required), optional `currentDosage`, `newDosage`, `newSchedule[]`, `newTotalDaily`, `frequency`; optional `otherMedications[]` (`genericName`); optional `title` (max 200 chars).
+  - Request schema (route zod) fields per prescription: `genericName` (required), optional `currentDosage`, `newDosage`, `newSchedule[]`, `newTotalDaily`, `frequency`; optional `otherMedications[]` (`genericName`); optional `title` (max 200 chars). **This unit's client only ever sends `genericName`, `newSchedule`, `newTotalDaily`, and `frequency`** — `currentDosage` and `newDosage` are accepted by the schema but never populated by the titration drawer (dead for this unit).
   - Frequency string built as `"{N}x daily"` from schedule count; days rendered as "daily" (7 days) or comma-joined day labels.
   - Response schema: `{ warnings: string[] }`.
   - System prompt focus areas: dose-too-high symptoms, timing-specific concerns, drug-interaction concerns, frequency-change peak/trough effects, vital-sign thresholds (BP, HR), symptoms requiring immediate attention.
@@ -147,7 +148,7 @@
 - `TitrationEntryInput`: `{ prescriptionId, schedules: { time, daysOfWeek[], dosage }[], unit, foodInstruction? }`.
 - `UpdateTitrationPlanInput`: `{ planId, title?, conditionLabel?, recommendedStartDate?, notes?, warnings?[], entries? }`.
 
-**Hooks (`use-medication-queries.ts`):** `useTitrationPlans`, `usePhasesForTitrationPlan`, `usePhasesForPrescription`, `useSchedulesForPhase`, `usePrescriptions`; mutations `useCreate/Update/Activate/Complete/Cancel/DeleteTitrationPlan`.
+**Hooks (`use-medication-queries.ts`):** `useTitrationPlans`, `usePhasesForTitrationPlan`, `usePhasesForPrescription`, `useSchedulesForPhase`, `usePrescriptions`; mutations `useCreate/Update/Activate/Complete/Cancel/DeleteTitrationPlan`. Note `usePrescriptions()` (backed by `getPrescriptions`) returns **all** non-deleted prescriptions — it is *not* active-filtered. `TitrationsView` applies the `isActive` filter itself before passing the list to the drawer and to the Current Maintenance section.
 
 ---
 
@@ -159,7 +160,7 @@
 - **Start date guard:** if not starting immediately, `recommendedStartDate` is set only when the parsed date is finite (`new Date(startDate + "T00:00:00").getTime()`), avoiding NaN timestamps.
 - **Status on create:** `startImmediately` → plan `active` + phases `active`; otherwise plan `draft` + phases `pending`.
 - **Phase startDate:** immediate → `now`; scheduled → `recommendedStartDate ?? now`.
-- **Timezone handling:** schedule `scheduleTimeUTC` is computed from local HH:MM via `localHHMMStringToUTCMinutes(time, tz)` and `anchorTimezone` records the IANA zone at creation (offline-first / DST-safe).
+- **Timezone handling:** schedule `scheduleTimeUTC` is computed from local HH:MM via `localHHMMStringToUTCMinutes(time, tz)` and `anchorTimezone` records the IANA zone at creation (offline-first / DST-safe). Note this is for **writes** only — the row UIs (`PhaseEntryRow`, `MaintenanceRow`, prefill panel) still display the legacy `s.time` string directly, not a value derived from `scheduleTimeUTC`.
 - **Edit replaces all phases/schedules:** existing phases + schedules are soft-deleted and recreated; new phase status follows current plan status (`active` if plan active, else `pending`); new phase `startDate = plan.recommendedStartDate ?? now`.
 - **Dose-log preservation on edit:** logs are remapped old-phase→new-phase by `prescriptionId` so history survives a re-save.
 - **Complete & Promote:** finds each prescription's maintenance phase (prefers `active`, else first active/completed), soft-deletes its schedules, copies the titration schedules onto it (re-using `scheduleTimeUTC`), re-activates it, and copies the titration's `unit` + `foodInstruction`; titration phase → `completed` with `endDate`. Irreversible (per dialog copy).
@@ -187,5 +188,11 @@
 - **`MaintenanceRow`** — read-only summary of a prescription's active maintenance schedule (total/day + per-time lines) in the Current Maintenance section.
 - **`useTitrationDrawerForm`** — form-state hook: title/start/notes/warnings/entries + entry/schedule helpers, `canSubmit`, `reset`, `prefillFromPlan`.
 - **`types.ts`** — `RxEntry` interface (string-dosage editing model) + `DAY_LABELS_LONG`.
-- **`titration-service.ts`** — all Dexie transactions: create/update/activate/complete/cancel/delete + reads (`getTitrationPlans`, `getActiveTitrationPlans`, `getPhasesForTitrationPlan`, `getConditionLabels`, `getActiveTitrationPhaseForPrescription`).
+- **`titration-service.ts`** — all Dexie transactions: create/update/activate/complete/cancel/delete + reads:
+  - `getTitrationPlans` — all non-deleted plans, `updatedAt` descending.
+  - `getTitrationPlanById` — single plan by id.
+  - `getActiveTitrationPlans` — only `status === "active"` non-deleted plans.
+  - `getPhasesForTitrationPlan` — non-deleted phases linked to a plan.
+  - `getConditionLabels` — sorted unique set of condition-label suggestions folding in **both** every plan's `conditionLabel` **and** every prescription's `indication` (not just plan labels).
+  - `getActiveTitrationPhaseForPrescription(prescriptionId)` — returns the active **titration** phase that overrides a given prescription's maintenance schedule (a `type:"titration"`, `status:"active"`, plan-linked, non-deleted phase), or `undefined` if none.
 - **`/api/ai/titration-warnings` route** — auth-gated Claude endpoint returning `{ warnings: string[] }` via a forced tool call (clinical-pharmacist system prompt).

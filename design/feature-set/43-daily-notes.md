@@ -26,6 +26,7 @@
 - **Multiple notes per day.** No uniqueness constraint — a day (and a day+prescription pair) can hold any number of notes.
 - **Soft-delete aware.** Every note carries `deletedAt`; the model supports tombstoning rather than hard deletion (consistent with all sync-backed tables), though no delete hook is exposed yet (see gaps below).
 - **Backup round-trip.** Notes are included in JSON export/import; the import summary in Settings counts `dailyNotesImported`.
+- **Diagnostic surfaces.** Beyond the import-summary count, the `dailyNotes` row count is read into the device storage-usage total (`src/hooks/use-storage-info.ts` line 48) and the table appears in the Debug panel's per-table list (`src/components/debug-panel.tsx` line 101). These are diagnostic read surfaces, not part of the journaling feature itself.
 - **Multi-device sync.** Notes mirror to Neon Postgres (`daily_notes`) and back, ordered correctly relative to their FK parents.
 
 ## User actions & interactions
@@ -91,9 +92,13 @@
 
 **Postgres mirror — `daily_notes` (`src/db/schema.ts` 574–599):** columns `id` (pk), `user_id` (FK → `usersSync.id`, `onDelete: cascade`), `date` (not null), `prescription_id` (FK → `prescriptions.id`), `dose_log_id` (FK → `doseLogs.id`), `note` (not null), `created_at`/`updated_at` (bigint, not null), `deleted_at` (bigint, nullable), `device_id` (not null), `timezone` (not null). Indexes: `idx_daily_notes_user_updated (user_id, updated_at)`, `idx_daily_notes_date (date)`, `idx_daily_notes_prescription (prescription_id)`.
 
-**Backup schema — `dailyNoteSchema` (`src/lib/backup-schemas.ts` 137–142):** `baseRecord` (id + optional sync fields) extended with `date: string`, `note: string`, `.passthrough()` (unknown keys preserved for forward-compat). Registered in `backupTableSchemas.dailyNotes` and `tableValidators.dailyNotes`.
+**Backup schema — `dailyNoteSchema` (`src/lib/backup-schemas.ts` 137–142):** `baseRecord` (id + optional sync fields) extended with `date: string`, `note: string`, `.passthrough()` (unknown keys preserved for forward-compat). Registered in `BACKUP_SCHEMAS.dailyNotes` (line 201) and `BACKUP_VALIDATORS.dailyNotes` (line 228).
 
 **Sync push order (`src/lib/sync-topology.ts`):** `dailyNotes` sits in Tier 5 (after `doseLogs`, alongside `inventoryTransactions`) because it can FK-reference both `prescriptions` and `doseLogs`, so its parents must push first.
+
+**Live sync pipeline surfaces (`src/lib/sync-payload.ts`):** beyond topology ordering, the table is wired through the full push/pull pipeline — a Drizzle insert row-schema `dailyNotesRowSchema` (built from `schema.dailyNotes` with `userId` omitted, lines 80–82), a sync op-envelope literal (lines 171–172), the pull table map (line 234), and a pull/apply entry (line 286). The server-side `/api/sync/cleanup` route also lists `dailyNotes` in its tombstone-purge set (`src/app/api/sync/cleanup/route.ts` line 19).
+
+**Parity enforcement (`src/__tests__/schema-parity.test.ts` line 70):** a build-failing unit test asserts `dailyNotes` is present in the Dexie/Postgres parity set — this is the guard behind the field-for-field parity requirement.
 
 ## Validation, edge cases & business rules
 

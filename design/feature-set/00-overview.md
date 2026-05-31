@@ -64,8 +64,12 @@ shared status scale answers *"how am I doing?"*.
 
 Eleven `CARD_THEMES` keys exist (`water · salt · sugar · potassium · weight · bp · eating ·
 urination · defecation · caffeine · alcohol`); `eating` is the chrome of the combined Food card
-that hosts the salt/sugar/potassium budget bars. Several hues collide for color-vision-deficient
-users (`weight↔medication` <8°; the three blues `water`/`urination`/`primary`; the warm cluster
+that hosts the salt/sugar/potassium budget bars. Note: not all keys are backed by a `--<domain>`
+HSL CSS-var token — only nine are (`water · salt · weight · bp · eating · urination · defecation ·
+caffeine · alcohol`), plus `--medication`. `sugar` and `potassium` are **Tailwind-class-only** in
+`CARD_THEMES` (gradient classes `from-pink-* to-rose-*` / `from-purple-* to-indigo-*`), so their
+hues above are gradient descriptions, not single degree values like the var-backed domains. Several hues collide for color-vision-deficient
+users (`weight↔medication` exactly 8° apart — 160° vs 168°; the three blues `water`/`urination`/`primary`; the warm cluster
 `salt`/`eating`/`caffeine`) — alternatives **must distinguish colliding domains by icon + label,
 not hue**, and must not grow the hue count.
 
@@ -92,8 +96,10 @@ each, but every one must remain present and functional.
   datetime-local + note + Save/Cancel). Delete has a ~5s **Undo** toast (unit 08).
 - **Modal/dialog editors.** History drawer and Analytics records tab edit the same records through
   full modal dialogs via a unified adapter (unit 08, 09, 23).
-- **Segmented controls / toggles.** Active preset / size / arm / position / Bristol type / day-of-week
-  selectors render as tap-the-option segmented chips, never dropdowns or free-text (units 03, 05, 06).
+- **Segmented controls / toggles.** Active preset / size / arm / position / amount-estimate
+  (small/medium/large) / day-of-week selectors render as tap-the-option segmented chips, never
+  dropdowns or free-text (units 03, 05, 06). Defecation consistency/urgency is captured only via a
+  free-text note — there is no Bristol scale.
 - **Wizards.** Multi-step bottom-drawer flows for *setup* only — the Add-Medication wizard
   (branch-point first step, then progressive disclosure, segmented progress bar, per-step Zod
   validation, 3–6 dynamic steps) and the cloud-sync migration wizard (units 13, 42). Wizards are
@@ -233,7 +239,8 @@ dropdown), card shapes, chart styling, and overall mood.
    offline/syncing/synced/sync-failed/conflict/stale/over-target/over-limit/success/validation/
    disabled/dark). Design each one — do not ship only the happy path.
 4. **Every enum / option / configurable value** in "Enums, options & configurable values" (e.g. BP
-   categories, Bristol types 1–7, amount-estimate options, dose states taken/skipped/missed/pending,
+   categories — the 6-tier ESH grade scale Optimal / Normal / High normal / Grade 1–3 hypertension —
+   amount-estimate options small/medium/large, stored dose states taken/skipped/rescheduled/pending,
    frequency presets, day-parts, settings ranges). The UI must be able to represent exactly these
    values — no more, no less.
 5. **Every validation rule and edge case** in "Validation, edge cases & business rules."

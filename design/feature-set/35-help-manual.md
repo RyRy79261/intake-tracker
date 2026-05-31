@@ -32,7 +32,7 @@
 - **"Where to find it" pointer** — every manual states where the feature physically lives in the app (e.g. "Home screen → Water & drinks card", "Settings → AI features").
 - **Cross-references** — manuals reference each other by name in prose/callouts (e.g. food manual points to the AI manual; voice manual points to Privacy).
 - **Sticky top bar with back** — help pages render their own `HelpTopBar` (the global AppHeader hides on non-top-level routes); back uses `router.back()`.
-- **Two entry points outside Settings** — (1) Settings → "User manual" section ("Open the manual" button); (2) the shake / bug-report dialog's "Wanna read the manual?" panel ("Open the manual" button, which closes the dialog first).
+- **Two entry points** — (1) Settings → "Help & Manual" accordion group, whose `HelpSection` is headed "User manual" with descriptive body copy ("Step-by-step guides for every card, input and feature in the app…") and an "Open the manual" button; (2) the shake / bug-report dialog's "Wanna read the manual?" panel ("Open the manual" button, which closes the dialog first).
 - **Not-found handling** — an unknown `/help/<slug>` renders a centered "That manual could not be found." message and a "Back to the manual" button routing to `/help`.
 - **Helper API** — `getManual(slug)`, `getManualsByDomain()` (domain→manuals, empty groups filtered), `getManualPreview(slug)`, `HELP_INDEX_ICON` (BookOpen).
 
@@ -54,7 +54,7 @@
   - Any writes the user makes inside the preview are discarded on unmount (preview DB deleted).
 
 **Entry points:**
-- Settings → "User manual" → tap **Open the manual** → `router.push("/help")`.
+- Settings → "Help & Manual" accordion group ("User manual" section) → tap **Open the manual** → `router.push("/help")`.
 - Shake / bug-report dialog → "Wanna read the manual?" → tap **Open the manual** → closes the dialog (`onOpenChange(false)`) then `router.push("/help")`.
 
 **Not-found:**
@@ -111,7 +111,7 @@
 | ai | "AI & privacy" | "Optional smart helpers and your data." | Sparkles | `text-amber-600 dark:text-amber-400` |
 | system | "App & settings" | "Configuring the app." | SlidersHorizontal | `text-slate-600 dark:text-slate-400` |
 
-**Manuals (`MANUALS`, 14 total)** — slug · title · domain · icon · has-live-preview:
+**Manuals (`MANUALS`, 13 total)** — slug · title · domain · icon · has-live-preview:
 | slug | title | domain | icon | preview |
 |---|---|---|---|---|
 | how-it-works | "How Intake Tracker works" | getting-started | Compass | yes (`TextMetrics`) |
@@ -166,17 +166,17 @@
 The help feature itself stores **nothing** — manuals and domains are static TypeScript data (`MANUALS`, `MANUAL_DOMAINS` in `manuals.ts`). It does not read or write the user's real DB.
 
 **Live-preview reads/writes (isolated preview DB only, never the real DB):**
-- `IntakeRecord` (intakeRecords) — fields used: `id, type, amount, timestamp, source, note` + `syncFields()` (water/salt/sugar entries).
-- `BloodPressureRecord` (bloodPressureRecords) — `systolic, diastolic, heartRate, position, arm, timestamp`.
+- `IntakeRecord` (intakeRecords) — fields used: `id, type, amount, timestamp, source, note` + `syncFields()` (water/salt/sugar entries). The model also has composable fields the previews could touch but the seeds don't set — `groupId`, `originalInputText`, `groupSource`, and a 4th `type` value `potassium`.
+- `BloodPressureRecord` (bloodPressureRecords) — `systolic, diastolic, heartRate, position, arm, timestamp` (model also carries `irregularHeartbeat?: boolean` and `note?`, which the BP seed does not set).
 - `WeightRecord` (weightRecords) — `weight, timestamp`.
-- `UrinationRecord` (urinationRecords) — `amountEstimate ("small"|"medium"|"large"), note, timestamp`.
-- `DefecationRecord` (defecationRecords) — `amountEstimate, note, timestamp`.
-- `SubstanceRecord` (substanceRecords) — `type ("caffeine"), amountMg, volumeMl, description, source ("standalone"), aiEnriched, timestamp`.
+- `UrinationRecord` (urinationRecords) — `amountEstimate, note, timestamp`. `amountEstimate` is typed `string?` (a loose optional string, not a union); the seed happens to use "small"/"medium"/"large".
+- `DefecationRecord` (defecationRecords) — `amountEstimate, note, timestamp`. Same loose `string?` type for `amountEstimate`.
+- `SubstanceRecord` (substanceRecords) — `type ("caffeine"), amountMg, volumeMl, description, source, aiEnriched, timestamp`. `source` is typed `'water_intake' | 'eating' | 'standalone'`; the seed uses `"standalone"`.
 - All seeds use `generateId()` + `syncFields()` from `@/lib/utils`.
 
 **DB plumbing (db.ts):**
 - `db` — module-level `AppDatabase` live binding, defaults to `realDb` (Dexie `IntakeTrackerDB`).
-- `createPreviewDatabase()` — new Dexie named `IntakeTrackerPreviewDB-<counter>`, schema `DB_SCHEMA_VERSION` with `PREVIEW_STORES`.
+- `createPreviewDatabase()` — new Dexie named `IntakeTrackerPreviewDB-<counter>`, schema `DB_SCHEMA_VERSION` (currently 21) with `PREVIEW_STORES`. (The `PREVIEW_STORES` doc-comment in db.ts still says "the current (v19) schema" — a stale in-code comment; the code uses `DB_SCHEMA_VERSION`.)
 - `setActiveDatabase(next)` / `resetActiveDatabase()` — swap/restore the `db` binding; every `import { db }` consumer follows automatically.
 
 **Sync engine:** `suspendEngine()` on preview mount, `resumeEngine()` on unmount (from `@/lib/sync-engine`) — keeps preview writes out of the sync queue.
@@ -197,6 +197,7 @@ The help feature itself stores **nothing** — manuals and domains are static Ty
   - `<ComponentPreview key={manual.slug}>` in ManualView forces a fresh harness per article.
 - **Top-bar rationale:** global AppHeader hides on non-top-level routes, so each help page supplies its own sticky bar; back uses `router.back()` (returns to wherever the user came from, not hard-coded to `/help`).
 - **Bug-dialog entry point** closes the dialog before navigating (avoids a stuck modal over the manual).
+- **Stale in-manual copy.** The `settings` manual's "Resetting" callout tells users this manual is reachable "from the \"How does this work?\" link in the shake / bug-report dialog" (`manuals.ts:596`), but the dialog actually renders the heading "Wanna read the manual?" + button "Open the manual" (`report-bug-dialog.tsx:365,380`). No "How does this work?" string exists in the dialog — the manual copy is out of date.
 - **AI/privacy disclaimers** are encoded as callouts (note/privacy tones) repeatedly across manuals (food sparkle, voice, ai-features, privacy) — copy states PII (emails, phone numbers, ID-like numbers) is stripped before any AI call and AI features only appear once a key is configured.
 - **Test contract** (`component-preview.dom.test.tsx`): asserts the seam end-to-end — seeded `118/76` appears for the BP preview, `250ml` for drinks, `pale`/`normal` for bathroom — proving the active-DB swap and real-hook reads work. The test mocks `useAuthGate` to `true` so `LiquidsCard`'s preset (AI) tab renders.
 
@@ -212,7 +213,7 @@ The help feature itself stores **nothing** — manuals and domains are static Ty
 - `ManualCallout` (`manual-callout.tsx`) — tinted aside; resolves tone → icon/label/colours.
 - `ComponentPreview` (`component-preview.tsx`) — isolated, seeded, interactive live-component harness with loading/ready/error + Reset.
 - `getManualPreview` / `MANUAL_PREVIEWS` (`preview-registry.tsx`) — slug → `{ render, seed }` registry of real components to preview.
-- `HelpSection` (`settings/help-section.tsx`) — Settings entry point ("User manual" → Open the manual).
+- `HelpSection` (`settings/help-section.tsx`) — Settings entry point, mounted inside the "Help & Manual" accordion group; h3 "User manual" + descriptive body copy ("Step-by-step guides for every card, input and feature in the app…") → "Open the manual" button.
 - Report-bug dialog manual panel (`report-bug-dialog.tsx`) — secondary entry point ("Wanna read the manual?").
 - `manuals.ts` exports — `MANUAL_DOMAINS`, `MANUALS`, `getManual`, `getManualsByDomain`, `HELP_INDEX_ICON`, and the `Manual` / `ManualDomain` / `ManualSection` / `Callout` / `CalloutTone` / `ManualDomainId` types.
 - `preview-data.ts` exports — `seedBloodPressurePreview`, `seedWeightPreview`, `seedLiquidsPreview`, `seedFoodSaltPreview`, `seedBathroomPreview`, `seedTextMetricsPreview`.

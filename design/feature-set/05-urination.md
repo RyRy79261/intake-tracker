@@ -25,7 +25,7 @@
 ## Features
 
 - **Card chrome (via `CardShell`).** Violet/purple themed gradient card with a `Droplet` icon, an uppercase "URINATION" label, and a right-aligned header slot.
-- **Header-right "last logged" timestamp.** When at least one record exists, shows the latest record's timestamp formatted by `formatDateTime` (e.g. "Jan 15, 2:30 PM"). Shows a pulsing skeleton while loading; renders nothing when there are no records.
+- **Header-right "last logged" timestamp.** When at least one record exists, shows the latest record's timestamp formatted by `formatDateTime` (e.g. "Jan 15, 2:30 PM"). The "latest record" is derived as `recentRecords?.[0]` (the newest active record from the same `useUrinationRecords(5)` live query — not a separate fetch). Shows a pulsing skeleton while loading; renders nothing when there are no records.
 - **Three quick-log buttons.** A 3-column grid of outline buttons — Small / Medium / Large — each writes a record immediately with `amountEstimate` set and `timestamp = now`, then fires a success toast. No confirmation step.
 - **Per-button submitting state.** While a quick-log write is in-flight, the tapped button shows a spinner and is dimmed (`opacity-70`); all three buttons are disabled until the write resolves.
 - **"Add details" expander.** A full-width ghost toggle (chevron up/down) that reveals/hides an inline details panel.
@@ -37,7 +37,7 @@
 - **Recent entries list (`RecentEntriesList`).** Shows up to 3 most-recent active records (the card subscribes to the latest 5, list slices to 3) under a "Recent" header with a top border separator.
   - Each row shows: formatted timestamp, capitalized `amountEstimate` (if present), and a truncated note (if present).
   - Each row is tappable to open an inline edit form, and has a trash/delete icon button.
-- **Inline edit (`InlineEditFormShell`).** Tapping a recent row replaces it in place with an edit form: an Amount select + a date/time input + a note input + Save/Cancel.
+- **Inline edit (`InlineEditFormShell`).** Tapping a recent row replaces it in place with an edit form: an Amount select + a date/time input + a note input + Save/Cancel. The card uses the **unlabeled** variant (`labeled` defaults to `false`), so the timestamp/note inputs render with `aria-label`s and a "Note (optional)" placeholder rather than visible `<Label>`s.
 - **Delete with undo.** Deleting soft-deletes the record and shows an "Undo" toast for 5 seconds; undo reverses the soft-delete.
 - **Offline-first persistence.** All writes go to Dexie/IndexedDB immediately and are enqueued for background sync to Neon Postgres (`writeWithSync` + `schedulePush`).
 - **Live reactivity.** The recent list is a `useLiveQuery` over Dexie — it auto-updates after any add/edit/delete (including from other dashboard surfaces or sync).
@@ -55,8 +55,8 @@
 | Type in **Note** textarea (details) | Sets free-text note (optional). |
 | Change **When** datetime-local (details) | Sets the record timestamp; cannot select a time after now (`max` = now). |
 | Tap **Record with details** | Writes a record with the chosen timestamp + (only if non-empty) amount + note; collapses the panel and resets amount to the default setting, note to empty, time to now; success/destructive toast. Button shows spinner while pending. |
-| Tap a **recent entry row** | Opens the inline edit form for that record in place (also openable via Enter/Space when row is focused). |
-| In inline edit: change **Amount** select | Updates the amount estimate for that record. |
+| Tap a **recent entry row** | Opens the inline edit form for that record in place (also openable via Enter/Space when the row itself is focused — the keydown handler only fires when `e.target === e.currentTarget`, so key events bubbling up from inner controls are ignored). |
+| In inline edit: change **Amount** select | Updates the amount estimate for that record. On save the value is mapped as `editAmountEstimate \|\| undefined`, so clearing the select to empty sends `amountEstimate: undefined` (the field is left out of the partial update) rather than the modal's `NONE_VALUE` sentinel. |
 | In inline edit: change **date/time** input | Updates the record timestamp. |
 | In inline edit: change **note** input | Updates the record note. |
 | In inline edit: tap **Save** | Validates the timestamp, builds `{ timestamp, amountEstimate?, note }` updates, persists, closes the form; toast "Entry updated"; invalid date → "Invalid date/time" destructive toast; failure → "Error — Could not update the entry". |
@@ -126,16 +126,16 @@ Note: `edit-urination-dialog.tsx` is a **modal** edit variant (`EditUrinationDia
 - `deleteUrinationRecord(id)` / `undoDeleteUrinationRecord(id)` → soft-delete / restore (sets/clears `deletedAt`).
 - `updateUrinationRecord(id, { timestamp?, amountEstimate?, note? })` → partial update, bumps `updatedAt`; returns "Record not found" for missing id.
 
-**Hooks (`use-urination-queries.ts`):** `useUrinationRecords(limit=10)`, `useUrinationRecordsByDateRange`, `useAddUrination`, `useUpdateUrination`, `useDeleteUrination` (undo-aware).
+**Hooks (`use-urination-queries.ts`):** `useUrinationRecords(limit=10)`, `useUrinationRecordsByDateRange`, `useAddUrination`, `useUpdateUrination`, `useDeleteUrination` (undo-aware). `useUrinationRecordsByDateRange` guards its inputs — it only runs the range query when `startTime < endTime`, otherwise it resolves to `[]` (`Promise.resolve([])`).
 
 ---
 
 ## Validation, edge cases & business rules
 
 - **No required fields beyond a timestamp.** Quick-log writes only `amountEstimate`. A record can have no amount and no note (e.g. a details submit with both blank still saves a valid timestamped event).
-- **Empty-string stripping.** `amountEstimate` and `note` are trimmed; empty results are omitted (the field stays absent on the record, not stored as `""`).
-- **Quick-log spread guard.** Details add uses `...(amount && {...})` / `...(note && {...})` so blank values aren't sent.
-- **Timestamp default & cap.** Add defaults `timestamp` to `Date.now()`. The details "When" input is capped at now (`max=getCurrentDateTimeLocal()`), discouraging future-dated entries; edit inputs are not similarly capped.
+- **Empty-string stripping (service-layer).** Trimming and empty-omission happen in `addUrinationRecord`/`updateRecord` (the service), not in the card. `amountEstimate` and `note` are trimmed there; empty results are omitted (the field stays absent on the record, not stored as `""`).
+- **Details spread guard (card-layer).** The details add uses `...(amount && {...})` / `...(note && {...})` so empty (falsy) values aren't sent. Note this guard passes the **raw** values — it does not trim, so a whitespace-only note (e.g. `"   "`) is truthy and *is* forwarded to the service, which then trims it to `""` and omits it. Net result matches the desired behaviour, but the stripping of whitespace-only values is done by the service, not the card guard.
+- **Timestamp default & cap.** Add defaults `timestamp` to `Date.now()`. The details "When" input is capped at now (`max=getCurrentDateTimeLocal()`), discouraging future-dated entries; the edit datetime inputs are **not** similarly capped — neither the inline `InlineEditFormShell` input nor the modal `EditEstimateEntryDialog` timestamp input sets a `max`.
 - **Edit timestamp validation.** `dateTimeLocalToTimestamp` throws on an unparseable value; `useEditRecord` catches it and shows "Invalid date/time" instead of crashing. `buildUpdates` returning `null` would abort silently (not used here).
 - **Soft delete, not hard delete.** Deletes set `deletedAt`; reads filter `deletedAt === null`. Provides the 5s undo window.
 - **Newest-first ordering** by `timestamp` (Dexie `orderBy("timestamp").reverse()`), then capped.

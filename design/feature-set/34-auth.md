@@ -43,13 +43,14 @@
 - **Invalid reset link state:** When the `token` param is missing, renders a "Invalid reset link" panel instead of the form, with a "Request a new link" button.
 - **Sign-out:** `handleSignOut()` stops the sync engine, detaches lifecycle listeners, resets sync-status store, races `signOut()` against a 3s timeout, then hard-redirects to `/auth`.
 - **Session hook `useAuth()`:** Returns `{ ready, authenticated, user }`. `user` = `{ id, email, name }` (name falls back to email). Bridges web cookie session and capacitor bearer-token session.
-- **Capacitor (native shell) bearer-token auth:** In capacitor mode, sign-in/up/social save a bearer token to localStorage; `useAuth` validates it against `/api/auth/validate`; `apiFetch` attaches `Authorization: Bearer <token>`.
+- **Capacitor (native shell) bearer-token auth:** In capacitor mode a bearer token is persisted (to a module-level in-memory `_token` cache **and** localStorage key `capacitor_auth_token`) on successful sign-in/up/social, via two different mechanisms: `signIn.email` and `signIn.social` are Proxy-wrapped in `auth-client.ts` to call `saveAuthToken` automatically, while `signUp` is **not** proxied — the sign-up form component itself calls `saveAuthToken(result.data.token)` inline before `router.replace("/")`. `useAuth` validates the token against `/api/auth/validate`; `apiFetch` attaches `Authorization: Bearer <token>` (token read memory-first via `getAuthToken`).
 - **Feature gate `useAuthGate()`:** Returns `!ready || authenticated` — used across the app to optimistically show AI features while session is still loading or when authenticated (gates AI parsing, voice, interactions, dose reminders).
 - **Header account control (`AuthButton`):** Shows a user-initial avatar when signed in, a generic user icon when not. Always navigates to `/profile`. Highlights when `/profile` is the active route.
 - **Profile account section:** Shows signed-in email + "Signed in via Neon Auth" + Sign Out; or a "Not signed in" upsell list + Sign In button.
 - **Server route protection (`withAuth`):** HOF wrapping API handlers; resolves user from bearer token (capacitor) or cookie session (web), enforces whitelist, upserts the user into `neon_auth.users_sync`, then calls the handler with `auth.userId` / `auth.email`.
 - **`users_sync` mirroring:** Every authenticated request upserts `{ id, email }` into `usersSync` so user-scoped FK inserts downstream find their parent row (Neon Auth hosted sync was never enabled on this DB).
 - **Validate endpoint (`GET /api/auth/validate`):** Returns `{ user: { id, email }, session: { userId } }` for a valid bearer/cookie session (used by capacitor `useAuth`).
+- **`apiFetch` failure logging:** Beyond attaching the bearer token, `apiFetch` records failed calls to the in-app error log (`captureFailure` → `error-log-service.logError("api-error", …)`) on any non-OK response and on network/fetch errors. Fire-and-forget (dynamic import, never blocks or throws); network errors are still re-thrown to the caller.
 - **Catch-all Neon Auth proxy (`/api/auth/[...path]`):** Single mount point proxying `sign-in/email`, `sign-up/email`, `sign-out`, `get-session`, `callback/google`, etc.
 - **Safety copy:** AuthShell footer always states "Your health data stays on your device. Sign in lets you sync across devices."
 
@@ -71,7 +72,7 @@
 
 **Sign-up form (`/auth/sign-up`):**
 - Type into **Name (optional)**, **Email**, **Password** (`new-password`), **Confirm password** (`new-password`).
-- Submit (**Create account**) → validates email present, password present, passwords match; calls `signUp.email`; on success `router.replace("/")` + `router.refresh()`.
+- Submit (**Create account**) → validates email present, password present, passwords match; calls `signUp.email`; on success (in capacitor mode, first saves the returned bearer token via `saveAuthToken(result.data.token)`) → `router.replace("/")` + `router.refresh()`.
 - Tap **Sign in** link → `/auth`.
 
 **Forgot-password form (`/auth/forgot-password`):**
@@ -205,7 +206,7 @@
 
 - **`neon_auth.users_sync` (`usersSync`, `src/db/schema.ts`):** `withAuth` upserts `{ id, email }` on every authenticated request (`onConflictDoUpdate` when email present, else `onConflictDoNothing`). Every user-scoped table FKs to `users_sync(id)`.
 - **Neon Auth session/user objects** (from `@neondatabase/auth`): `session.user.{ id, email, name }`.
-- **localStorage:** `capacitor_auth_token` (bearer token, capacitor only).
+- **Bearer token (capacitor only):** persisted to localStorage key `capacitor_auth_token` and mirrored in a module-level in-memory `_token` cache (`api-fetch.ts`); `getAuthToken` returns the memory copy first, falling back to localStorage.
 - **No Dexie tables** are written by the auth flow itself; auth gates downstream sync of all Dexie domains.
 - **`sync-status-store` (Zustand):** `handleSignOut` resets `{ lastError: null, isSyncing: false }`.
 - **Sync engine:** `handleSignOut` calls `stopEngine()` + `detachLifecycleListeners()`.
@@ -248,7 +249,7 @@
 - `AuthGuard` — Currently a pass-through wrapper (`<>{children}</>`); kept for API stability.
 - `withAuth` — Server HOF: bearer/cookie resolution, whitelist, `users_sync` upsert.
 - `auth` (`neon-auth.ts`) — Server Neon Auth instance (createNeonAuth).
-- `authClient` / `signIn` / `signOut` (`auth-client.ts`) — Client Neon Auth + capacitor token proxies.
+- `authClient` / `signIn` / `signOut` (`auth-client.ts`) — Client Neon Auth. `signIn.email` and `signIn.social` are Proxy-wrapped to auto-save the capacitor bearer token; `signOut` clears it. `signUp` is exported un-proxied (the sign-up form saves the token inline instead).
 - `handleSignOut` — Stops sync, clears token, redirects.
 - `middleware` — OAuth verifier exchange + capacitor CORS + login redirect.
 - `[...path]` Neon Auth handler — Proxies all Neon Auth endpoints.

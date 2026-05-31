@@ -28,7 +28,7 @@
 
 ### Top App Header (`app-header.tsx`)
 - Sticky bar pinned to the top of the viewport (`sticky top-0 z-40`), only rendered on the five top-level routes (returns `null` on any non-top route, e.g. `/auth/*`, `/history`, `/help`).
-- Left block shows the current route's **title** (large bold) and **subtitle** (muted), looked up from `NAV_ROUTES` by matching `pathname`; falls back to the first route entry if no match.
+- Left block shows the current route's **title** (large bold) and **subtitle** (muted), looked up from `NAV_ROUTES` by matching `pathname`. (The code carries a `?? NAV_ROUTES[0]` fallback for no-match, but it is effectively dead for the title: the component already returns `null` before render on any non-top route, so the fallback title is never actually displayed.)
 - Right block is a horizontal cluster of icon tab buttons: an `AuthButton` (the `/profile` tab) followed by one ghost icon button per route (filtering out `/profile`, whose icon is replaced by the AuthButton).
 - The active route's button gets a highlighted pill background (`bg-primary/10 text-primary`) and a colored icon.
 - Tapping an inactive route button navigates via `router.push`; tapping the already-active one is a no-op.
@@ -37,7 +37,7 @@
 
 ### Auth Button (`auth-button.tsx`)
 - Doubles as the `/profile` route tab; always navigates to `/profile` on click (the profile page handles the signed-out case).
-- Three presentations based on auth state: **loading** (disabled ghost user icon, dimmed), **unauthenticated** (ghost `User` icon), **authenticated** (circular avatar badge showing the uppercase first letter of the user's email, default `"U"`).
+- Three presentations based on auth state: **loading** (disabled ghost user icon, dimmed), **unauthenticated** (ghost `User` icon), **authenticated** (circular avatar badge showing the uppercase first letter of the user's email, default `"U"`). The authenticated avatar is a fixed `w-7 h-7` rounded-full span with `text-sm font-semibold` that **always** carries the primary tint (`bg-primary/10 text-primary`) — that tint is part of the avatar itself, not gated on the active `/profile` state.
 - Carries the active highlight (`bg-primary/10 text-primary`) when `pathname === "/profile"`.
 
 ### Swipe Navigation (`swipe-nav.tsx`)
@@ -47,6 +47,7 @@
 - Direction lock: a gesture is classified as horizontal or vertical once it passes an 8px threshold; vertical gestures are ignored (page scrolls normally), horizontal gestures drive the swipe.
 - Live drag-peek: the page translates with the finger; an adjacent-route **skeleton preview** (from `page-skeletons.tsx`) is parked one viewport over on each side and shares the same `x` motion value, so it slides in from the edge as you drag.
 - Edge resistance: dragging past a non-existent neighbor (no prev/next) applies 0.25 resistance factor (rubber-band feel).
+- Tracks viewport width in state via a `resize` listener (`setWidth(window.innerWidth)`); the commit-threshold math resolves width through a `window.innerWidth || width || 1` fallback chain (the `|| 1` guards against a zero/undefined width).
 - Commit logic on release: navigates if drag distance exceeds the configurable distance threshold (% of viewport width) **or** flick velocity exceeds the configurable velocity threshold, in the correct direction with a neighbor present.
 - On commit, animates the page fully off-screen (tween, 0.18s) then calls `router.push`; on non-commit, springs/tweens back to center (0.22s).
 - After route change, the destination skeleton was already centered, so the real page just takes its place with no re-entry slide.
@@ -61,12 +62,12 @@
 - Two labels are overridden for the footer: `water` → "Liquids", `eating` → "Food & Salt" (to match on-screen card titles).
 - Order respects the user's configured item order; if `quickNavOrder === "rtl"` the enabled list is reversed (applied after filtering, preserving configured order on both axes).
 - Hides entirely when zero items are enabled (returns `null`).
-- Each button: stacked colored icon chip + tiny label, evenly distributed across the bar.
+- Each button: stacked colored icon chip + tiny label, evenly distributed across the bar. The chip background is the theme's `iconBg` (passed through as the item's `bgColor`, e.g. `bg-sky-100 dark:bg-sky-900/50`) and the icon uses the theme's `iconColor`.
 - Tapping a button scrolls to that section (custom eased smooth scroll), then auto-hides the chrome after a delay.
 - Slides down out of view (`y: 100%`) when chrome is hidden; respects bottom safe-area inset.
 
 ### Voice Launch Bar (`voice/voice-launch-bar.tsx`)
-- Fixed bar above the quick-nav footer (home page), a full-width "Voice log" button with a mic icon chip.
+- Fixed bar above the quick-nav footer (home page), a full-width "Voice log" button with a mic icon chip (`bg-sky-100 dark:bg-sky-900/50` chip, `text-sky-600 dark:text-sky-400` icon, `focus-visible:ring-inset`).
 - Only rendered when the AI auth gate passes (`useAuthGate`: shown while auth not-ready, or when authenticated).
 - Opens a full-screen Sheet hosting the `VoicePanel`; the sheet closes on commit.
 - Bottom offset adapts: sits ~76px above the footer when quick-nav is shown, else flush to the safe-area inset.
@@ -84,14 +85,14 @@
 - Dispatcher `PageSkeleton({ route })` selects the body by `route.path`: `/profile`, `/` (intake), `/medications`, `/analytics`, `/settings`.
 
 ### Scroll-Hide Behavior (`use-scroll-hide.ts`)
-- Hides header + footer chrome on scroll-down (past 50px), shows on scroll-up.
+- Hides header + footer chrome on scroll-down (past 50px), shows on scroll-up. The at-bottom override is folded directly into the header-hidden state itself — `setHeaderHidden(isScrollingDown && !isAtBottomRef.current)` — so scroll-down hiding is suppressed entirely while at the bottom (not just the separate force-hide clearing).
 - Always shows chrome when scrolled to (within 10px of) the bottom of the page.
 - Provides `handleQuickNav(sectionId)`: smooth-scrolls to the element, then after a configurable delay force-hides the chrome; sequence-guarded so rapid quick-nav taps don't fire stale hides; cleared if the user scrolls up or reaches bottom.
 - Returns `{ isHidden, handleQuickNav }`; `isHidden = headerHidden || forceHidden`.
 
 ### Keyboard-Aware Scroll (`use-keyboard-scroll.ts`)
 - `useKeyboardAwareScroll`: returns an `onFocus` handler that scrolls a focused input into view (`block: "center"`) after a 300ms delay (waits out the iOS keyboard animation).
-- `useVisualViewportScroll`: uses the Visual Viewport API; on viewport resize (keyboard open) scrolls the active focused input into view (100ms debounce); also scrolls on focus (300ms fallback); clears tracking on blur. Returns `onFocus` + `onBlur`.
+- `useVisualViewportScroll`: uses the Visual Viewport API; on viewport resize (keyboard open) scrolls the active focused input into view (100ms debounce); also scrolls on focus (300ms fallback). On blur it clears `activeInputRef` and the focus timeout, but **not** the pending resize timeout — so a queued resize-driven scroll can still fire after blur. Returns `onFocus` + `onBlur`.
 
 ---
 
@@ -166,7 +167,8 @@
 - Always decorative (`aria-hidden`); only visible during a drag-peek.
 
 **Boot/loading shell (layout-level, related chrome)**
-- Pre-hydration full-screen `#__boot_shell` with spinner, "Loading…" label; reveals a "Reset app" recovery link after 8s; fades out once `html.app-booted`.
+- Pre-hydration full-screen `#__boot_shell` with a CSS `itrk-spin` spinner (0.8s linear loop), "Loading…" label; reveals a "Reset app" recovery link after 8s; fades out (`200ms`) once `html.app-booted`.
+- A separate inline `BOOT_WATCHDOG` script runs even earlier: it records the load start time in `localStorage` and, if a prior load is detected as hung for >12s, redirects to `/recover.html` (which unregisters service workers + clears caches). This 12s watchdog redirect is distinct from the 8s "Reset app" link reveal.
 
 ---
 
@@ -185,22 +187,24 @@
 `water` (label "Liquids"), `eating` (label "Food & Salt"), `bp`, `weight`, `urination`, `defecation` — all `enabled: true` by default. Footer label overrides: `water` → "Liquids", `eating` → "Food & Salt".
 
 ### Card themes referenced by footer — `CARD_THEMES` keys, labels, icons, sectionIds
-| key | label | icon | sectionId | icon color |
+Icon colors are dual light/dark (`text-…-600 dark:text-…-400`, except caffeine which is `text-yellow-700 dark:text-yellow-400`). The footer renders each item's icon-chip background from `theme.iconBg` (e.g. `bg-sky-100 dark:bg-sky-900/50`) — this is passed through as the button's `bgColor`.
+
+| key | label | icon | sectionId | icon color (light / dark) |
 |---|---|---|---|---|
-| water | Water | `Droplets` | `section-water` | sky-600 |
-| salt | Sodium | `Sparkles` | `section-salt` | amber-600 |
-| sugar | Sugar | `Candy` | `section-food-salt` | pink-600 |
-| potassium | Potassium | `Banana` | `section-food-salt` | purple-600 |
-| weight | Weight | `Scale` | `section-weight` | emerald-600 |
-| bp | Blood Pressure | `Heart` | `section-bp` | rose-600 |
-| eating | Eating | `Utensils` | `section-food-salt` | orange-600 |
-| urination | Urination | `Droplet` | `section-urination` | violet-600 |
-| defecation | Defecation | `CircleDot` | `section-defecation` | stone-600 |
-| caffeine | Caffeine | `Coffee` | `section-caffeine` | yellow-700 |
-| alcohol | Alcohol | `Wine` | `section-alcohol` | fuchsia-600 |
+| water | Water | `Droplets` | `section-water` | sky-600 / sky-400 |
+| salt | Sodium | `Sparkles` | `section-salt` | amber-600 / amber-400 |
+| sugar | Sugar | `Candy` | `section-food-salt` | pink-600 / pink-400 |
+| potassium | Potassium | `Banana` | `section-food-salt` | purple-600 / purple-400 |
+| weight | Weight | `Scale` | `section-weight` | emerald-600 / emerald-400 |
+| bp | Blood Pressure | `Heart` | `section-bp` | rose-600 / rose-400 |
+| eating | Eating | `Utensils` | `section-food-salt` | orange-600 / orange-400 |
+| urination | Urination | `Droplet` | `section-urination` | violet-600 / violet-400 |
+| defecation | Defecation | `CircleDot` | `section-defecation` | stone-600 / stone-400 |
+| caffeine | Caffeine | `Coffee` | `section-caffeine` | yellow-700 / yellow-400 |
+| alcohol | Alcohol | `Wine` | `section-alcohol` | fuchsia-600 / fuchsia-400 |
 
 ### Medications tabs — `MedTab` (`med-footer.tsx`)
-`"schedule"` (CalendarDays, "Schedule") · `"prescriptions"` (ClipboardList, "Rx") · `"medications"` (Pill, "Meds") · `"titrations"` (TrendingUp, "Titrations") · `"settings"` (Settings, "Settings"). Default active tab: `"schedule"`. FAB shown only on `"schedule"`. Active tab color: teal-600 / teal-400 with a 0.5px bottom indicator.
+`"schedule"` (CalendarDays, "Schedule") · `"prescriptions"` (ClipboardList, "Rx") · `"medications"` (Pill, "Meds") · `"titrations"` (TrendingUp, "Titrations") · `"settings"` (Settings, "Settings"). Default active tab: `"schedule"`. FAB shown only on `"schedule"`. Active tab color: teal-600 / teal-400 with a 2px (`h-0.5`) bottom indicator. The bar breaks out of the page container with `-mx-4`, has a `bg-background/95 backdrop-blur-sm` bottom border; tabs hover to `text-foreground` and inactive tabs are `text-muted-foreground`.
 
 ### Swipe-nav internal constants (`swipe-nav.tsx`)
 - `DIRECTION_LOCK_THRESHOLD = 8` (px)
@@ -236,7 +240,7 @@
 - **No persistent data tables** (Dexie) are read or written by the chrome itself.
 - **Zustand `settings-store`** (localStorage, persist version 16): reads/writes `showQuickNav`, `quickNavOrder`, `quickNavItems`, `scrollDurationMs`, `autoHideDelayMs`, `barTransitionDurationMs`, `swipeNavDistanceThresholdPct`, `swipeNavVelocityThreshold`, `theme`.
 - **Zustand `medication-ui-store`** (ephemeral, not persisted): `activeTab: MedTab`, `wizardOpen: boolean` (+ setters) — shared between the medications page and the layout-level FAB.
-- **Auth** (`useAuth` from `auth-guard`): reads `ready`, `authenticated`, `user.email`/`user.name` for the AuthButton avatar and the AI gate.
+- **Auth** (`useAuth` from `auth-guard`): reads `ready`, `authenticated`, `user.email`/`user.name` for the AuthButton avatar and the AI gate. `user.name` is derived as `"name" in user ? user.name : user.email` — i.e. it falls back to the email when no name is present. In Capacitor mode `useAuth` also validates a stored token via an async `apiFetch("/api/auth/validate")` and, on success, sets a `capUser` ({ id, email }) that stands in for the web session (this is the broader auth surface the AuthButton and voice gate depend on, not chrome-specific).
 - **Routing**: `usePathname`, `useRouter` (push/prefetch) from `next/navigation`.
 - Static config: `NAV_ROUTES`, `CARD_THEMES`, `DEFAULT_QUICK_NAV_ITEMS`, `QUICK_NAV_LABEL_OVERRIDES`.
 
@@ -256,10 +260,10 @@
 - **RTL ordering rule:** filtering happens before reversal so the user's configured order is preserved on both axes.
 - **Voice bar AI gate:** shown when auth not-ready OR authenticated; hidden for the resolved-unauthenticated state. When chrome-hidden it is fully non-interactive (`disabled`, `tabIndex -1`, `aria-hidden`, `pointer-events-none`).
 - **FAB tab rule:** only on the medications `schedule` tab; wizard force-closed on route change but tab state preserved.
-- **Smooth scroll:** SSR-safe (no-op without `window.scrollTo`); `durationMs <= 0` jumps instantly; <1px distance resolves immediately; uses `easeInOutCubic`.
+- **Smooth scroll:** SSR-safe (no-op without `window.scrollTo`); `durationMs <= 0` jumps instantly; <1px distance resolves immediately; uses `easeInOutCubic`. Accepts an optional `offset` param (default `0`) subtracted from the target Y (target is floored at `0`).
 - **Safe-area:** footer and voice bar respect `env(safe-area-inset-bottom)` for home-indicator devices.
 - **Keyboard scroll:** all timeouts cleared on unmount/blur; visual-viewport path is a no-op when the API is unavailable.
-- **Settings thresholds** are clamped by `sanitizeNumericInput` on save (distance 10–60, velocity 100–2000) regardless of input.
+- **Settings thresholds:** the on-blur settings UI save (`validateAndSave`) does **not** clamp out-of-range input — if the parsed value falls outside `[min, max]` it **reverts to the previous/default value** instead. (Only the underlying store setter clamps, via `sanitizeNumericInput`.) Distance range 10–60, velocity range 100–2000.
 
 ---
 

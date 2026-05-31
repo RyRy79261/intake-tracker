@@ -1,7 +1,7 @@
 # 45 — In-app MCP Server (Claude.ai Custom Connector)
 
 **Files covered:**
-- `src/lib/mcp/tools.ts` — read-only MCP tool registry (7 tools)
+- `src/lib/mcp/tools.ts` — read-only MCP tool registry (8 tools)
 - `src/lib/mcp/queries.ts` — Drizzle read queries backing the tools
 - `src/lib/mcp/scopes.ts` — OAuth scope set + parsing
 - `src/lib/mcp/oauth.ts` — OAuth 2.1 + DCR + PKCE primitives (client/code/token lifecycle)
@@ -21,7 +21,7 @@
 - `src/app/auth/sign-in-form.tsx` — consumes `callbackURL` to return user to authorize endpoint
 - `next.config.*` — rewrites `/.well-known/*` → `/api/mcp/well-known/*`; CSP `form-action 'self'`
 
-**Purpose:** A self-hosted OAuth-2.1 authorization server + Model Context Protocol (MCP) server baked into the PWA. It lets claude.ai's "Custom Connectors" feature read (never write) the single user's health data through 7 read-only tools, after the user signs in via the existing Neon Auth (Google/email) flow and approves a consent screen. The only user-facing surfaces are an HTML **consent screen** and an HTML **authorization-error / redirect page**; everything else is machine-to-machine JSON.
+**Purpose:** A self-hosted OAuth-2.1 authorization server + Model Context Protocol (MCP) server baked into the PWA. It lets claude.ai's "Custom Connectors" feature read (never write) the single user's health data through 8 read-only tools, after the user signs in via the existing Neon Auth (Google/email) flow and approves a consent screen. The only user-facing surfaces are an HTML **consent screen** and an HTML **authorization-error / redirect page**; everything else is machine-to-machine JSON.
 
 ---
 
@@ -30,12 +30,12 @@
 ### MCP server (the connector itself)
 - Exposes a **Streamable HTTP** MCP transport at `/api/mcp/mcp` (SSE transport `/api/mcp/sse` is **disabled**, `disableSse: true`).
 - Server identity advertised as `serverInfo: { name: "intake-tracker", version: "1.0.0" }`.
-- Registers **7 read-only tools** (no write/update/delete tools exist — the model cannot mutate state even if it tries).
+- Registers **8 read-only tools** (no write/update/delete tools exist — the model cannot mutate state even if it tries).
 - Every tool: validates input with Zod, extracts `userId` from the verified bearer token, runs a user-scoped Drizzle query, writes a fire-and-forget audit row, and returns an MCP `content: [{ type: "text", text: <JSON> }]` response.
 - Hard `maxDuration = 60` seconds per request.
 
-### The 7 tools
-1. **`get_today_summary`** (title "Today's summary", no input) — totals for water/salt/sugar/potassium since the user's day-start hour, latest blood-pressure reading, latest weight, and counts of doses logged today grouped by status.
+### The 8 tools
+1. **`get_today_summary`** (title "Today's summary", no input) — totals for water/salt/sugar/potassium since the user's day-start hour, latest blood-pressure reading, latest weight, and counts of doses logged today grouped by status. Returns a fixed-shape object: `{ day_started_at, now, intake: { water_ml, salt_mg, sugar_g, potassium_mg }, latest_blood_pressure, latest_weight, doses[] }` (note the unit-suffixed intake keys).
 2. **`query_intake_history`** (title "Intake history") — individual intake records in a time range, filterable by `type` or `'all'`. Returns `id, type, amount, timestamp, source, note`.
 3. **`query_weight_history`** (title "Weight history") — weight readings (kg) in range, oldest first, capped at 5000. Returns `id, weight, timestamp, note`.
 4. **`query_blood_pressure_history`** (title "Blood pressure history") — BP readings in range, oldest first, capped 5000. Returns `id, systolic, diastolic, heartRate, irregularHeartbeat, position, arm, timestamp, note`.
@@ -62,7 +62,7 @@
 - **Opaque, hashed tokens** — only SHA-256 hashes persisted; plaintext lives only in HTTP responses/headers.
 - **Constant-time comparison** (`timingSafeEqual`) for client-secret and PKCE checks.
 - **Redirect-URI allowlist** for DCR — only claude.ai / *.claude.ai / anthropic.com / *.anthropic.com over HTTPS, or loopback (localhost/127.0.0.1/[::1]) over http/https for dev.
-- **PII redaction in audit** — free-form fields (notes, food descriptions) are never logged; only safe primitives via `argsForAudit`.
+- **PII redaction in audit** — free-form fields (notes, food descriptions) are never logged; only safe primitives via `argsForAudit`. In practice only `query_intake_history` passes explicitly-redacted audit args `{type, start_ms, end_ms}`; the weight/BP/eating tools pass their full `args` to the audit row (harmless — those args contain only the unix-ms date range, no free-form text).
 - **Per-request bearer memoization** (WeakMap) — whitelist pre-flight and `verifyToken` share one DB lookup.
 
 ---
@@ -86,7 +86,7 @@ The only human-facing surfaces are inside the OAuth authorize flow. Everything e
 - **Refresh access token** (`POST /oauth/token`, `refresh_token` grant).
 - **Call a tool** (`POST /api/mcp/mcp` JSON-RPC with `Authorization: Bearer <token>`).
 - **Terminate session** (`DELETE /api/mcp/mcp` — part of Streamable HTTP spec).
-- **Preflight** (`OPTIONS` on every endpoint → 204 with CORS headers).
+- **Preflight** (`OPTIONS` → 204 with CORS headers) on the cross-origin-fetched endpoints — the `[transport]`, token, register, and both well-known routes. The **authorize** endpoint exports only `GET`/`POST` (it is browser-navigated, not a cross-origin fetch target) and has **no** `OPTIONS` handler.
 - **Discover metadata** (`GET /.well-known/oauth-authorization-server`, `/.well-known/oauth-protected-resource`).
 
 ---
@@ -214,7 +214,7 @@ Two HTML pages and several machine-readable response states.
 ## Data model touched
 
 ### Server-only MCP tables (`src/db/schema.ts`, Neon Postgres, NOT in Dexie sync)
-- **`mcp_oauth_clients`** — `client_id` (PK), `client_secret_hash`, `client_name`, `redirect_uris[]`, `token_endpoint_auth_method`, `scope`, `created_at`, `last_used_at`.
+- **`mcp_oauth_clients`** — `client_id` (PK), `client_secret_hash`, `client_name`, `redirect_uris[]`, `token_endpoint_auth_method`, `scope`, `created_at`, `last_used_at` (column exists but is currently **inert** — `registerClient` never sets it and no code path updates it).
 - **`mcp_auth_codes`** — `code` (PK), `client_id` (FK→clients, cascade), `user_id` (FK→users_sync, cascade), `redirect_uri`, `code_challenge`, `code_challenge_method`, `scope`, `expires_at`, `consumed_at`, `created_at`. Indexed on client + expires.
 - **`mcp_access_tokens`** — `token_hash` (PK), `refresh_token_hash` (unique), `client_id` (FK), `user_id` (FK), `scope`, `expires_at`, `refresh_expires_at`, `revoked_at`, `created_at`, `last_used_at`. Indexed on user + expires.
 - **`mcp_audit_log`** — `id` (serial PK), `timestamp` (tz, default now), `user_id` (FK), `client_id`, `tool`, `args_json`, `status`, `error_message`, `duration_ms`. Indexed on (user, timestamp).
@@ -244,14 +244,14 @@ All reads are **SELECT-only**; the only writes the feature performs are to its o
 - **Truncation:** queries fetch `MAX_ROWS + 1`; if over 5000, slice to 5000 and return `truncated: true`.
 - **Auth-code consumption is atomic & single-use:** the row is marked `consumed_at` only if code present, unconsumed, correct client, correct `redirect_uri`, and not expired — so a wrong-client/expired attempt does **not** burn the code (legit client can retry). **PKCE is checked AFTER consume**: a PKCE mismatch burns the code (an attacker likely intercepted it, so no retry path).
 - **Refresh tokens are NOT rotated** (deliberate): the same refresh token stays valid for the full 30-day window; only the access token is re-minted in place. Rationale in code: strict single-use rotation locked out the single legitimate client on parallel/lost refreshes. Residual race: concurrent refresh → last-writer-wins on `token_hash`; the "loser" gets a 401 on its next call and self-heals by refreshing again. Never locks the user out.
-- **Access-token lookup:** rejects revoked or expired tokens; best-effort `last_used_at` touch (failures ignored).
+- **Access-token lookup:** rejects revoked or expired tokens. On every successful bearer lookup (the read path) `lookupAccessToken` fires a best-effort, fire-and-forget `last_used_at` touch on `mcp_access_tokens`; failures are swallowed and never block the request.
 - **`purgeExpired()`** helper deletes expired auth codes and tokens whose **refresh** has expired (not by access-token `expiresAt`, since the row still carries a usable refresh token). Not wired to a cron yet.
 - **Whitelist:** empty `ALLOWED_EMAILS` ⇒ everyone allowed; otherwise case-insensitive membership; missing email ⇒ denied. Re-checked on every MCP request (403 if newly removed).
 - **Origin correctness:** request forwarded-headers WIN over `VERCEL_URL` — the deployment-hash URL is gated by Vercel SSO and would 403 the OAuth redirect; the custom domain (forwarded host) is the correct issuer.
 - **CSP workaround:** consent POST cannot 302 cross-origin (`form-action 'self'` blocks redirect targets per CSP3); the route returns an HTML page with meta-refresh + JS replace + anchor fallback instead.
 - **Sign-in callbackURL safety:** `safeCallbackUrl` only accepts same-origin relative paths (must start with `/`, reject `//` protocol-relative and absolute URLs) — prevents open-redirect.
 - **DELETE in CORS preflight:** explicitly allowed because the Streamable HTTP spec uses DELETE for session termination; omitting it would make browsers block it.
-- **Defence-in-depth joins:** `list_recent_doses` and `get_inventory_status` scope the prescription join by `user_id` + `deletedAt IS NULL` even though FKs already prevent cross-user references.
+- **Defence-in-depth joins:** `list_recent_doses` and `get_inventory_status` scope the prescription join by `user_id` + `deletedAt IS NULL` even though FKs already prevent cross-user references. Both use a **`leftJoin`** (not inner join): a dose/inventory row whose prescription is soft-deleted or otherwise mismatched is still returned, but with `genericName: null` rather than being dropped from the result.
 - **Error opacity:** MCP clients never see internal exception text; only the audit log captures it.
 - **PKCE S256 only:** authorize Zod is `z.literal("S256")`; metadata advertises only S256; the `plain` branch in `consumeAuthCode` is dead for new codes (kept for legacy DB rows).
 - **Substance attachment:** eating history collects distinct non-null `groupId`s from the capped food rows, then fetches matching (non-deleted, user-scoped) substance rows in one `inArray` query.

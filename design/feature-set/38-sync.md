@@ -60,6 +60,7 @@
 - **Pull cycle** (`runPullCycle`): reads per-table keyset cursors `(updatedAt, id)` from `_syncMeta`, POSTs `{cursors}` to `/api/sync/pull`, applies each table's returned rows in an atomic `bulkPut` + cursor-advance transaction, and loops while *any* table reports `hasMore`.
 - **Clock-skew cursor clamp**: when a table drains but its newest rows fall inside the `SKEW_MARGIN_MS = 30000` window, the persisted cursor is clamped back to `serverTime - 30s` (id reset to `""`) so the next pull re-scans for concurrently-written rows. Not applied while `hasMore` is true (would re-fetch the same page forever).
 - On full drain: sets `lastPulledAt`, clears `lastError`, sets `initialSyncComplete = true`, and **invalidates all React Query caches** so every hook refetches.
+- **No pull backoff**: unlike push, a network/HTTP failure during pull only sets `lastError` and returns — it does **not** reschedule a retry. The next pull comes solely from a chained push or another trigger (online/visibility/startup).
 
 ### Engine — lifecycle / triggers
 - **Startup pull** kicked once on `startEngine()` (D-10).
@@ -88,10 +89,11 @@
 
 ### Settings — export gate (`DataManagementSection`)
 - Blocks/​warns on data export while `storageMode === "cloud-sync" && !initialSyncComplete` (this device may not yet hold the full cloud dataset → export would be incomplete). Shows a confirm-anyway warning dialog.
+- The component also (beyond the sync-incomplete export gate) gates **import** behind its own confirm dialog ("merge backup data with your existing data — new records added, duplicates skipped") and, after an import, surfaces a **conflict-review drawer** ("Review N conflicts") when the import reports conflicts.
 
 ### Server endpoints
-- **`POST /api/sync/push`**: batched LWW upsert/delete; returns `{accepted[], rejected[]}`.
-- **`POST /api/sync/pull`**: cursor-paginated per-table SELECT; returns `{result, serverTime}`.
+- **`POST /api/sync/push`**: batched LWW upsert/delete; returns `{accepted[], rejected[]}`. On a Zod validation 400 it logs the full `parsed.error.flatten()` to the **server logs** (`[sync/push] Zod validation failed`) but returns only a generic `{ error: "Invalid request" }` to the client.
+- **`POST /api/sync/pull`**: cursor-paginated per-table SELECT; returns `{result, serverTime}`. On a Zod validation 400 it returns `{ error: "Invalid request", details: parsed.error.flatten() }` to the **client** (asymmetric with push, which never leaks validation details to the client).
 - **`GET /api/sync/status`**: probes 5 high-signal tables, returns `{hasSyncedData: boolean}`.
 - **`POST /api/sync/cleanup`**: hard-deletes all of a user's server rows (FK-safe order) — used by migration/reset.
 - **`POST /api/sync/verify-hash`**: returns deterministic SHA-256 per-table hashes + row counts for integrity verification (migration flow).
@@ -192,7 +194,7 @@
 ### Zustand store (`sync-status-store.ts`, persist key `intake-tracker-sync-status`, version 2)
 - Persisted: `lastPushedAt: number|null`, `lastPulledAt: number|null`, `initialSyncComplete: boolean`.
 - Ephemeral (reset on reload): `isOnline: boolean` (default true), `isSyncing: boolean`, `queueDepth: number`, `lastError: string|null`.
-- Actions: `setOnline, setSyncing, setQueueDepth, setLastError, markPushed, markPulled`.
+- Actions: `setOnline, setSyncing, setQueueDepth, setLastError, markPushed, markPulled`. **Note:** `markPushed` / `markPulled` are effectively dead — the engine never calls them; it writes `lastPushedAt` / `lastPulledAt` via `setState` directly.
 - Migration v<2: `initialSyncComplete = (lastPulledAt != null)` for legacy users.
 
 ### Server (Neon Postgres via Drizzle) — `sync-payload.ts` schemas
@@ -256,7 +258,7 @@
 - **`SyncErrorBanner`** — dismissible bottom failure toast showing `lastError`.
 - **`SyncLifecycleMount`** — null-rendering mount that wires the engine to auth state.
 - **`StorageInfoSection`** (settings) — full sync-status panel: badge, full-copy state, last-synced, switch/resume/sign-in CTAs.
-- **`DataManagementSection`** (settings) — export gate warning the user when sync is incomplete.
+- **`DataManagementSection`** (settings) — export gate warning the user when sync is incomplete; also wraps the import confirm dialog and post-import conflict-review drawer.
 - **`useSyncLifecycle`** — starts/stops the engine on `authenticated × storageMode` changes.
 - **`useSyncAutoDetect`** — one-shot cold-start cloud-sync restore via `/api/sync/status`.
 - **`sync-queue.ts`** — `enqueue`, `enqueueInsideTx`, `writeWithSync`, `ack`, `getQueueDepth`.

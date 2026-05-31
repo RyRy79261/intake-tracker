@@ -50,10 +50,10 @@
 - Single dialog that files a GitHub issue directly from the app (no email, no leaving the app).
 - Two modes via a top toggle: **Bug** (Bug icon) and **Feature** (Lightbulb icon). Title, description label, placeholder, and dialog description copy all change with mode.
 - Free-text description (6-row textarea) — typed and/or voice-dictated.
-- **Voice dictation** (only when a Groq key is configured): "Dictate instead" button reveals an inline `VoiceRecorder`; the recording POSTs to `/api/ai/voice-transcribe` and the returned text is appended to both the description and a kept-separate `transcript` field (newline-joined to existing text).
-- **AI restructuring toggle "Improve with AI"** (only when an Anthropic key is configured): when on, Claude restructures raw prose into a clean title + summary + steps/expected/actual + severity hint. Form works fully with it off or absent.
+- **Voice dictation** (only when a Groq key is configured): "Dictate instead" button reveals an inline `VoiceRecorder`; the recording POSTs to `/api/ai/voice-transcribe` and the returned text is appended to both the description and a kept-separate `transcript` field (newline-joined to existing text). When a transcript is present, the server tags the issue body footer as "Filed via the in-app reporter **(voice-dictated)**".
+- **AI restructuring toggle "Improve with AI"** (only when an Anthropic key is configured): when on, Claude restructures raw prose into a structured issue via a forced `format_bug_report` tool call (`StructuredSchema`: `title`, `summary`, optional `stepsToReproduce[]`, `expected`, `actual`, `severity`). The server is robust to a missing tool block: if the first `messages.create` returns no `tool_use`, it retries once with `tool_choice: {type:"tool"}`; if still absent or schema-invalid it returns null and falls back to the plain template. The structured fields are assembled into the issue body as `## Steps to reproduce` / `## Expected` / `## Actual` and an `_Severity hint: …_` line. Form works fully with it off or absent.
 - **Diagnostics preview** — collapsible "What will be attached" showing live counts `(N env fields, M log entries)`; expands to a table of every environment field (label + mono value) plus a note about how many error-log entries are attached and that PII is stripped.
-- Auto-collected diagnostics attached to every report: environment info + up to 25 recent error-log entries, with AI-key status appended.
+- Auto-collected diagnostics attached to every report: environment info + recent error-log entries, with AI-key status appended. The **client** collects up to 25 entries (`MAX_REPORT_LOGS = 25`); the **server** schema independently accepts up to 30 (`errorLogs.max(30)`), so the two caps differ.
 - **Success state**: after filing, swaps the entire dialog body to a confirmation — "Report filed", "Issue #N was created on GitHub", an external link "View issue #N", and a "Done" button.
 - **"Wanna read the manual?" promo card** (sky-tinted, below the form): BookOpen heading + copy + "Open the manual" button that closes the dialog and routes to `/help`. Rationale baked into the code: a shake often means "how does this work?" not "this is broken".
 - Reachable from 3 entry points: Settings → Feedback section button, a device **shake** gesture, and the **crash screen** ("Report this problem").
@@ -71,6 +71,8 @@
 - Capacitor (native) mode: copy changes to "v{X} available — update from Play Store"; the Update button is hidden (can't self-reload a native build), dismiss remains.
 - Dismiss hides the banner for the session; a newly detected version un-dismisses it.
 - Settings has a parallel **App Updates section**: shows current vs. server version, an inline update card when available, and a "Check for updates" button that toasts "You're up to date" / "Update available" / "Check failed".
+  - Header text is **Capacitor-aware**: "App Version" on native vs. "App Updates" on web.
+  - Always shows a version footer: "Running v{client} · Checks automatically every 5 min".
 
 ### Error boundary (crash fallback)
 - Class component wrapping the entire app (`providers.tsx`); catches render errors below it.
@@ -81,7 +83,7 @@
 - Supports a custom `fallback` prop and a `withErrorBoundary(Component, fallback)` HOC for scoped boundaries.
 
 ### Toast system (global)
-- Imperative `toast(...)` API + `useToast()` hook backed by a module-level reducer/store (works outside React tree).
+- Imperative `toast(...)` API + `useToast()` hook backed by a module-level reducer/store (works outside React tree). `toast(...)` returns imperative handles `{ id, dismiss, update }`; `useToast()` also exposes a top-level `dismiss(toastId?)` for dismissing by id (or all toasts when called with no id).
 - Rendered by `<Toaster />` mounted in the root layout.
 - Three visual variants (default / destructive / success) plus optional action button, title, description, and a close (X) button.
 - Swipe-to-dismiss (Radix). One toast visible at a time (`TOAST_LIMIT = 1`).
@@ -195,8 +197,9 @@
 ### Bug report type (`BugReportType`)
 - `"bug"` | `"feature"`. Default `"bug"`.
 
-### AI structuring severity (server `StructuredSchema.severity`)
-- `"critical"` | `"high"` | `"medium"` | `"low"` (optional triage hint, AI-inferred).
+### AI structuring fields (server `StructuredSchema`)
+- `title` (1–140 chars), `summary` (1–2000 chars), optional `stepsToReproduce[]` (each ≤500, up to 20), optional `expected` (≤1000), optional `actual` (≤1000), optional `severity`.
+- `severity`: `"critical"` | `"high"` | `"medium"` | `"low"` (optional triage hint, AI-inferred).
 
 ### Shake gesture defaults (hook) vs. settings store
 - Hook defaults: `threshold = 8`, `requiredJolts = 3`, `windowMs = 800`, `cooldownMs = 3000`, sample throttle `60ms`.
@@ -214,7 +217,7 @@
 
 ### Diagnostics — environment fields collected (`collectEnvironmentInfo`)
 - App version, Build env, Mode (`Capacitor (native)` / `Web`), DB version (`DB_SCHEMA_VERSION`), Device ID, Timezone, Locale, Online (`yes`/`no`), User agent, Screen (`W×H @ Nx`), Viewport (`W×H`), Storage (`usage / quota`, human-formatted). Plus appended AI-key fields: "AI: Anthropic key" (configured/not), "AI: Groq key" (configured/not).
-- `MAX_REPORT_LOGS = 25` error-log entries.
+- `MAX_REPORT_LOGS = 25` error-log entries (client cap; server schema allows up to 30).
 - Storage formatting units: B, KB, MB, GB.
 
 ### GitHub labels applied by the in-app reporter
@@ -223,7 +226,7 @@
 - (Full taxonomy in `github-labels.ts`: type/status/priority/area/agent/source namespaces.)
 
 ### Server constants (`/api/bug-report`)
-- Default repo `RyRy79261/intake-tracker`; `ISSUE_BODY_MAX = 60000`; `STACK_MAX_IN_BODY = 1200`; rate limit 10 / window; AI model = `CLAUDE_MODELS.fast`, temp 0, max_tokens 1024, 60s timeout.
+- Target repo read from `GITHUB_REPO` env, falling back to `DEFAULT_REPO = RyRy79261/intake-tracker`; the slug is validated to be exactly `owner/repo` (else `BAD_REPO`). `ISSUE_BODY_MAX = 60000`; `STACK_MAX_IN_BODY = 1200`; rate limit 10 / window; AI model = `CLAUDE_MODELS.fast`, temp 0, max_tokens 1024, 60s timeout.
 
 ### Storage keys
 - `WELCOME_SEEN_KEY = "intake-tracker-welcome-seen"` (localStorage).
@@ -236,7 +239,7 @@
 - **No user-data Dexie tables written** by this unit. It reads the **error-log** store via `error-log-service` (`getErrorLogs`, `logError`, `rawConsoleError`) — Dexie-backed in-app debug log.
 - Reads `DB_SCHEMA_VERSION` (from `db.ts`) for diagnostics.
 - Reads device identity/timezone helpers: `getDeviceId()`, `getDeviceTimezone()`.
-- Reads Zustand `settings-store` fields: `shakeToReportEnabled`, `shakeThreshold`, `shakeRequiredJolts` (persisted to localStorage; with migrations at store versions 10/11/12 seeding these).
+- Reads Zustand `settings-store` fields: `shakeToReportEnabled`, `shakeThreshold`, `shakeRequiredJolts` (persisted to localStorage). Store migrations seed these in stages: `version < 10` sets `shakeToReportEnabled = true`; `version < 11` sets `shakeThreshold = 15` and `shakeRequiredJolts = 3`; `version < 12` re-sets `shakeThreshold = 8`. As a result a *migrating* user lands on threshold=8 / jolts=3, while a *fresh* user gets the store defaults threshold=10 / jolts=5 — the two paths diverge.
 - Reads AI-key status via `useApiKeyStatus()` (`anthropic.configured`, `groq.configured`).
 - POSTs `BugReportRequest` → `/api/bug-report` (server files GitHub issue via Octokit; optional Anthropic call). Response `BugReportResponse { url, number }`.
 - POSTs audio → `/api/ai/voice-transcribe`. Polls `/api/version`.
@@ -251,10 +254,12 @@
 - **Reporter reset semantics**: state resets only on closed→open transition; the effect depends only on `[open]` so late `defaultType`/`defaultDescription` prop changes can't wipe a draft the user is typing.
 - **Submit gating**: requires non-empty trimmed description AND `diagnosticsReady` (env and logs both loaded) AND not pending — prevents filing with empty diagnostics from a fast click.
 - **AI is additive/degrading**: `effectiveUseAi = useAi && anthropicConfigured`. If AI is off, no key, or the model call fails, the server falls back to a plain template (title = first line of description ≤100 chars, or "Bug report"/"Feature request").
-- **PII redaction (two passes)**: client strips and server re-strips via `sanitizeReportText` → `redactPii`: emails→`[email]`, intl & US phones→`[phone]`, SSN→`[ssn]`, credit cards→`[card]`, dates (YYYY-MM-DD, DD/MM/YYYY, MM/DD/YYYY)→`[date]`, SA 13-digit ID→`[id-number]`. AI prompt is told placeholders may appear and to leave them as-is.
+- **PII redaction (two passes)**: client strips and server re-strips via `sanitizeReportText` → `redactPii`: emails→`[email]`, intl & US phones→`[phone]`, SSN→`[ssn]`, credit cards→`[card]`, dates→`[date]` (two regexes: `\d{4}-\d{2}-\d{2}` for ISO, plus a single `\d{2}/\d{2}/\d{4}` that matches both DD/MM/YYYY and MM/DD/YYYY orderings indistinguishably), SA 13-digit ID→`[id-number]`. AI prompt is told placeholders may appear and to leave them as-is.
 - **Server limits**: description max 5000, transcript max 5000, env ≤40 fields, error logs ≤30; issue body capped at 60000; stack truncated to 1200 chars in body; backtick fences inside content are defused.
 - **Empty-after-sanitize** → server returns 400.
 - **Missing `GITHUB_TOKEN`** → 503 with code `NO_GITHUB_TOKEN`.
+- **Misconfigured repo slug** (not `owner/repo`) → 503 with code `BAD_REPO`.
+- **Typed GitHub error codes** mapped from Octokit failures: GitHub 401 → 502 `BAD_TOKEN`; GitHub 403/404 → 502 `NO_ACCESS`; GitHub 410 → 502 `ISSUES_DISABLED`; any other failure → generic 502.
 - **Rate limit** → 429.
 - **Shake detection**: magnitude-based (rotation-invariant) so tilting doesn't fire; requires ≥`requiredJolts` jolts within `windowMs` and respects `cooldownMs`; sample throttle 60ms; ignores null acceleration samples; paused while dialog open.
 - **iOS motion permission**: `requestPermission` only exists on iOS 13+; non-iOS returns "granted" without a prompt; on denial the Settings toggle shows a destructive toast and does NOT enable.

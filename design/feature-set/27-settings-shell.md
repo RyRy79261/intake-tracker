@@ -20,11 +20,12 @@
 
 ### Page chrome (from layout + nav-routes)
 - Route `/settings`. Header title **"Settings"**, subtitle **"Configure preferences"** (`nav-routes.ts`).
-- Rendered inside the global app container: `min-h-screen`, gradient background (`from-slate-50 to-slate-100` light / `from-slate-950 to-slate-900` dark), centered `max-w-lg`, `px-4 pt-6` (mobile-first single column).
+- Rendered inside the global app container: `min-h-screen`, gradient background (`from-slate-50 to-slate-100` light / `from-slate-950 to-slate-900` dark), centered `max-w-lg` (mobile-first single column). Note: `layout.tsx`'s `container mx-auto max-w-lg px-4 pt-6` div wraps only `<AppHeader />`; the page **content** (children, incl. settings) is wrapped by `SwipeNav` in a separate `container mx-auto max-w-lg px-4 pb-6` div (`pb-6`, not `pt-6`).
 - Shares the auto-hiding header/footer chrome of the rest of the app (driven by `scrollDurationMs` / `autoHideDelayMs` / `barTransitionDurationMs` settings).
 
 ### Account block (always at top, outside the accordion)
-- Reads auth state via `useAuth()` → `{ ready, authenticated, user }` (Neon Auth session, plus Capacitor token validation path).
+- Reads auth state via `useAuth()` → `{ ready, authenticated, user }` (Neon Auth session, plus Capacitor token validation path). The `user` object carries `{ id, email, name }`, where `name` falls back to the email (`"name" in user ? user.name : user.email`); the account block only surfaces `email`, so the `name` field is unused by this UI.
+- The Capacitor token path calls `/api/auth/validate`; on a failed/invalid response it calls `clearAuthToken()` (drops the stored native token).
 - Three mutually exclusive presentations: **loading**, **signed-out (marketing CTA)**, **signed-in (identity + sign out)**.
 - Signed-out state lists three locked benefits: AI food & drink parsing, Dose reminder notifications, Cloud sync across devices.
 - Signed-in state shows the user email and the provider label "Signed in via Neon Auth", plus a destructive Sign Out button.
@@ -71,7 +72,7 @@
 | Tap **About App** | Opens About dialog. |
 | Tap outside / Esc on About dialog | Closes dialog. |
 | Arrive from crash screen | `ReportBugDialog` auto-opens pre-filled with the captured error message + stack. |
-| Close the auto-opened report dialog | `onOpenChange` sets `open: false`; description retained in state until unmount. |
+| Close the auto-opened report dialog | `onOpenChange` sets `open: false`; the reset effect early-returns when `!open` (`if (!open) return`), so the `description` is retained in state until the **next open** (which resets it) or unmount. |
 | Toggle a sub-section `headerRight` control (per-section) | Section-specific (e.g. enabling sugar tracker reveals `SugarSettingsSection` in the Tracking group). |
 
 - All interactions are tap-based (mobile-first). No swipe/drag/long-press on the shell itself. Accordion/collapsible are keyboard-accessible via Radix (Enter/Space toggles, focus ring).
@@ -87,7 +88,7 @@
 
 ### Accordion group states
 - **Collapsed (default):** trigger row only — icon + bold label, chevron pointing down.
-- **Expanded:** content animates open (`animate-accordion-down`), chevron rotates 180° (`[data-state=open]>svg]:rotate-180`); children stacked.
+- **Expanded:** content animates open (`animate-accordion-down`), chevron rotates 180° (`[&[data-state=open]>svg]:rotate-180`); children stacked.
 - Trigger has `hover:no-underline` (overrides default accordion hover underline), `px-2 py-3`. Each group separated by bottom border (`border-b` from `AccordionItem`).
 
 ### Nested sub-section states
@@ -171,7 +172,7 @@ A flat reset to these defaults (full enum source for what "default" means here):
 - `waterLimit: 1000`, `saltLimit: 1500`, `sugarLimit: 30`, `potassiumLimit: 3500`
 - `waterExtendedBuffer: 500`, `saltExtendedBuffer: 500`, `sugarExtendedBuffer: 10`
 - `optionalTrackers: { sugar: true, potassium: false }`
-- `aiAuthSecret: ""`
+- `aiAuthSecret: ""` (note: in normal use this value is stored **obfuscated** via `setAiAuthSecret`/`obfuscateApiKey` and read back via `getDeobfuscatedAuthSecret`; `resetToDefaults` restores it to the raw `""`)
 - `theme: "system"` (enum: `light` | `dark` | `system`)
 - `dataRetentionDays: 90`, `dayStartHour: 2`
 - `showQuickNav: true`, `quickNavOrder: "rtl"` (enum: `ltr` | `rtl`), `quickNavItems: DEFAULT_QUICK_NAV_ITEMS`
@@ -196,7 +197,7 @@ This shell unit reads/writes very little data directly; it mostly composes child
 
 - **Zustand settings store** (`settings-store.ts`, persisted to `localStorage` key `intake-tracker-settings`, `version: 16`): the shell calls only `resetToDefaults()` (replaces entire state with `defaultSettings`). The full `Settings` interface is the surface restored. Child sections read/write individual fields.
 - **Optional-tracker flags** (`optionalTrackers.{sugar,potassium}` in the store) read via `useOptionalTrackerEnabled` to gate child rendering.
-- **Auth session** via `useAuth()` → Neon Auth `useSession()` (`session.user.{id,email,name}`), plus Capacitor token path (`getAuthToken`, `/api/auth/validate`). No persistence written by this unit.
+- **Auth session** via `useAuth()` → Neon Auth `useSession()` (`session.user.{id,email,name}`; `name` falls back to email when absent), plus Capacitor token path (`getAuthToken`, `/api/auth/validate`, which calls `clearAuthToken()` on failure). No persistence written by this unit beyond that native token clear.
 - **sessionStorage** `intake-tracker:crash-report` (read + delete) for the crash hand-off.
 - **Sync engine** side-effects on sign-out: `stopEngine()`, `detachLifecycleListeners()`, `useSyncStatusStore.setState({ lastError: null, isSyncing: false })`.
 - About metadata from build-time env vars: `NEXT_PUBLIC_APP_VERSION`, `NEXT_PUBLIC_GIT_SHA`, `NEXT_PUBLIC_VERCEL_ENV`.
@@ -231,7 +232,7 @@ No Dexie/IndexedDB tables are touched by the shell itself (child sections like D
 | `components/about-dialog.tsx` (`AboutDialog`) | "About App" dialog: app blurb, author note, version/environment/build metadata. |
 | `lib/sign-out.ts` (`handleSignOut`) | Tears down sync, clears sync status, races `signOut()` against 3s timeout, hard-redirects to `/auth`. |
 | `components/ui/accordion.tsx` | shadcn/Radix accordion primitives (`Accordion`, `AccordionItem/Trigger/Content`). |
-| `components/auth-guard.tsx` (`useAuth`) | Auth-state hook returning `{ ready, authenticated, user }` (Neon session + Capacitor token path). |
+| `components/auth-guard.tsx` (`useAuth`) | Auth-state hook returning `{ ready, authenticated, user }` (Neon session + Capacitor token path). The same file also exports `useAuthGate()` and a pass-through `AuthGuard` component (`return <>{children}</>`), but the settings shell uses neither — the settings page has no auth gate and always renders. |
 | `hooks/use-settings.ts` / `stores/settings-store.ts` | Zustand settings store; the shell uses `resetToDefaults()` → `defaultSettings`. |
 | `components/report-bug-dialog.tsx` (`ReportBugDialog`) | Bug/feature-request dialog; auto-opened pre-filled when navigated from a crash. |
 | `components/debug-panel.tsx` (`DebugPanel`) | Debug-group child content (diagnostics). |

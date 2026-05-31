@@ -3,6 +3,7 @@
 **Files covered:**
 - `src/components/medications/edit-medication-drawer.tsx` (the `PrescriptionViewDrawer` component + its three internal tabs: `ScheduleTab`, `DetailsTab`, `InfoTab`)
 - `src/hooks/use-medication-queries.ts` (read/mutation hooks the drawer consumes)
+- `src/hooks/use-medicine-search.ts` (`useMedicineSearch` — the AI contraindications/warnings fetch hook the Info tab imports on its own line)
 - `src/lib/medication-ui-utils.ts` (`getMaintenancePhase`, `getActiveTitrationPhase`)
 - `src/lib/phase-service.ts` (`CreatePhaseInput`, `UpdatePhaseInput`, `startNewPhase`, `updatePhase` semantics)
 - `src/lib/db.ts` (`Prescription`, `MedicationPhase`, `PhaseSchedule`, `FoodInstruction` interfaces)
@@ -34,7 +35,7 @@
 - Toggle individual days per row.
 - Computes validity: counts `validRows` and whether `allRowsValid`.
 - Save persists via `updatePhase` (existing maintenance phase) or `startNewPhase` (if no maintenance phase exists yet — creates one of `type: "maintenance"` with `startDate: Date.now()`).
-- Saving a schedule triggers a downstream notification resync (the schedule mutation hooks call `resyncNotifications()` → `syncMedicationNotifications()`; phase saves rewrite schedules).
+- Saving a schedule here does **not** trigger a notification resync: the drawer saves via the phase mutations (`useUpdatePhase`/`useStartNewPhase`), which have no `onSuccess: resyncNotifications`. Only the schedule-level hooks (`useAddSchedule`/`useUpdateSchedule`/`useDeleteSchedule`) call `resyncNotifications()` → `syncMedicationNotifications()`, and those hooks are not used by this drawer. (`updatePhase`/`startNewPhase` rewrite the schedule rows directly but do not resync local notifications.)
 - Discard (reset) abandons unsaved edits and re-hydrates from the DB.
 
 ### Details tab (`DetailsTab`)
@@ -98,7 +99,7 @@
 - **Live update:** re-selects the current record from the live `usePrescriptions()` list, so any tab's mutation reflects across the whole drawer.
 
 ### Schedule tab
-- **Active-titration banner:** amber callout (`bg-amber-50 dark:bg-amber-950/30`, `TrendingUp` icon) warning that titration overrides today's doses and these edits affect the baseline schedule that resumes after titration. Shown only when `activeTitration` exists.
+- **Active-titration banner:** amber callout (`bg-amber-50 dark:bg-amber-950/30`, `TrendingUp` icon) warning that titration overrides today's doses and these edits affect the baseline schedule that resumes after titration. Shown only when `activeTitration` exists. A *pending* (planned-but-not-running) titration produces **no** banner — the drawer only checks `getActiveTitrationPhase`, ignoring the sibling `getPendingTitrationPhase`/`getEffectivePhase` utils.
 - **Always-on hint:** muted instruction text steering formal dose changes to the Titrations tab.
 - **Empty schedule:** dashed-border placeholder "No doses scheduled. Add a time below." when `rows.length === 0`.
 - **Default / populated:** one bordered card per dose row (time input, dosage input, unit label, remove button, 7 day toggles).
@@ -117,7 +118,8 @@
 ### Info tab
 - **Stored view (default):** Refresh button + Contraindications (red) and Warnings (amber) lists, or muted "No contraindications listed." / "No warnings listed." placeholders.
 - **Refreshing:** Refresh button shows `Loader2`; disabled while `isRefreshing || updatePrescription.isPending`.
-- **Review state (pending AI data):** teal-bordered card ("Review AI Information") listing new contraindications & warnings (or "None found."), with Reject / Edit / Accept buttons.
+- **Refresh failure (silent):** `handleRefresh` wraps the AI call in `try/catch`; on error it only logs `console.error("Failed to refresh AI data", e)` and returns to the stored view. There is no error toast or banner — a failed refresh is indistinguishable from a refresh that returned nothing.
+- **Review state (pending AI data):** teal-bordered card ("Review AI Information") listing new contraindications & warnings (or "None found."), with Reject / Edit / Accept buttons. The same title-casing/verbatim split as the stored view applies here: proposed contraindications are rendered title-cased, proposed warnings verbatim.
 - **Accepting:** Accept button → `Loader2` spinner; disabled while `updatePrescription.isPending`.
 - **Edit-AI state:** "Edit AI Information" heading, two textareas (red-labelled Contraindications, amber-labelled Warnings, 5 rows each), Cancel / Save buttons.
 - **Saving edits:** Save button → `Loader2` spinner; disabled while pending.
@@ -178,17 +180,17 @@
 - (Not edited here: `compounds`, `createdAt`, `updatedAt`, `deletedAt`, `deviceId` — system/derived.)
 
 ### `MedicationPhase` (`db.ts`, table `medicationPhases`)
-- **Reads:** `type`, `status`, `unit`, `foodInstruction`, `titrationPlanId` (via `usePhasesForPrescription`).
+- **Reads:** `type`, `status`, `unit`, `foodInstruction`, `titrationPlanId`. `usePhasesForPrescription` returns the phase array; `unit`/`foodInstruction` are read off the single maintenance phase that `getMaintenancePhase(phases)` selects from it.
 - **Writes (Schedule save):** `unit`, `foodInstruction`, plus child schedules — via `updatePhase` (existing) or `startNewPhase` (creates a maintenance phase with `startDate: Date.now()`).
 
 ### `PhaseSchedule` (`db.ts`, table `phaseSchedules`)
-- **Reads:** `id`, `time`, `dosage`, `daysOfWeek` (via `useSchedulesForPhase`).
-- **Writes:** rows mapped to `{ id?, time, dosage: parseFloat(...), daysOfWeek }` and passed to `updatePhase`/`startNewPhase`, which add/update/delete schedule records and set `scheduleTimeUTC` / `anchorTimezone` server-side. Existing rows keep their `id`; new rows omit it.
+- **Reads:** `id`, `time`, `dosage`, `daysOfWeek` (via `useSchedulesForPhase`). Note `time` is the `@deprecated` HH:MM string field (kept for v10 DB record compatibility; the canonical field is `scheduleTimeUTC`), but the drawer still reads and writes `time`.
+- **Writes:** rows mapped to `{ id?, time, dosage: parseFloat(...), daysOfWeek }` and passed to `updatePhase`/`startNewPhase`, which add/update/delete schedule records and derive `scheduleTimeUTC` / `anchorTimezone` **client-side** inside `updatePhase`/`startNewPhase` (via `localHHMMStringToUTCMinutes(time, deviceTimezone)`) — not server-side. Existing rows keep their `id`; new rows omit it.
 
 ### Service / hook layer
 - Read hooks: `usePrescriptions`, `usePhasesForPrescription`, `useSchedulesForPhase`.
 - Mutation hooks: `useUpdatePrescription`, `useDeletePrescription`, `useUpdatePhase`, `useStartNewPhase`.
-- Info tab: `useMedicineSearch` (AI fetch, server route `/api/ai/medicine-search`).
+- Info tab: `useMedicineSearch` (AI fetch, server route `/api/ai/medicine-search`) — defined in `src/hooks/use-medicine-search.ts` (a separate file from the medication-queries hooks above).
 - Phase inputs (`phase-service.ts`): `UpdatePhaseInput` ( `id`, optional `unit`, `foodInstruction`, `status`, `schedules: { id?, time, daysOfWeek, dosage }[]`, …), `CreatePhaseInput` (`prescriptionId`, `type`, `unit`, `startDate`, `foodInstruction`, `schedules[]`, …).
 
 ---
@@ -199,7 +201,7 @@
 - **All-or-nothing save:** Save requires `rows.length > 0` and **every** row valid (`allRowsValid`). This deliberately prevents a half-edited row from being silently dropped from the mutation (only `validRows` are written, so an invalid row would vanish — hence the guard).
 - **Dirty gating:** action bar (Discard/Save) is hidden until any edit. Save also requires `dirty`.
 - **Hydration vs. unsaved edits:** the Schedule `useEffect` returns early while `dirty`, so live DB changes never clobber in-progress edits.
-- **No maintenance phase yet:** Save creates one via `startNewPhase` (`type: "maintenance"`, `startDate: Date.now()`).
+- **No maintenance phase yet:** Save creates one via `startNewPhase` (`type: "maintenance"`, `startDate: Date.now()`). Side effect: `startNewPhase` auto-completes any currently-active phase for the prescription (sets the prior active phase to `status: "completed"` with an `endDate`) before activating the new one. It can also create a `pending` phase when `startDate > now`, but the drawer always passes `Date.now()`, so the new phase is always created `active`.
 - **Active titration override:** When a titration is active, today's actual doses follow the titration plan; edits here only affect the baseline maintenance schedule, which resumes after the titration ends (warning banner communicates this).
 - **Dosage parsing:** stored as `parseFloat(r.dosage)` (number); `step="any"` allows decimals/fractional mg.
 - **Day toggle ordering:** `daysOfWeek` always re-sorted ascending after a toggle.
@@ -209,7 +211,7 @@
 - **Details re-sync on prop change:** `useEffect` resets all local Details fields and exits edit mode whenever the `prescription` prop changes.
 - **Info AI text normalization:** on Save-edits, both fields `split("\n")` → `trim()` → `filter(Boolean)`, so blank lines are dropped; contraindications are title-cased only on display, stored as-fetched/edited.
 - **Info empty results:** AI returning no items still renders "None found." in review and persists empty arrays on accept.
-- **Notification resync:** schedule-level mutations resync local medication notifications; phase saves rewrite schedule rows (the resync is wired through schedule mutation hooks).
+- **Notification resync:** This drawer's saves do **not** resync local medication notifications. Resync is wired only through the schedule-level hooks (`useAddSchedule`/`useUpdateSchedule`/`useDeleteSchedule` → `resyncNotifications()`), which this drawer does not call — it saves through the phase mutations (`useUpdatePhase`/`useStartNewPhase`), which rewrite the schedule rows but have no resync.
 
 ---
 

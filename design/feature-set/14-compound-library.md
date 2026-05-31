@@ -47,14 +47,14 @@
 ### Expanded compound card (`CompoundCardExpanded`)
 - Expanded body for one `Prescription` (mounted inside `prescription-card.tsx`). Four stacked sections:
   1. **Medicines** — list of this prescription's non-archived inventory items, sorted active-first then alphabetically. Each row: pill icon (size 24), brand name, "Active" badge if active, strength/compound line, stock text, "Low" badge if low, chevron. Tapping a row opens that item's `InventoryItemViewDrawer`.
-  2. **Schedule** — derived from the *effective phase* (`getEffectivePhase`: active titration overrides maintenance). Shows a "On titration" badge when the effective phase is a titration. If all schedules share the same dosage, collapses to one line: `<dose> <freq> at <times>` where freq = `daily` / `twice daily` / `Nx daily`. Otherwise one line per schedule (`<dose> at <time>`). Combination drugs render the per-compound split via `splitDose` + `formatCompoundShort`. Food instruction footnote when `foodInstruction !== "none"` ("Take before eating" / "Take after eating").
+  2. **Schedule** — derived from the *effective phase* (`getEffectivePhase`: active titration overrides maintenance). Shows a "On titration" badge when the effective phase is a titration. If all schedules share the same dosage, collapses to one line: `<dose> <freq> at <times>` where freq = `daily` / `twice daily` / `Nx daily`. Otherwise one line per schedule (`<dose> at <time>`). The displayed time comes from the **deprecated** `PhaseSchedule.time` field (not `scheduleTimeUTC`/`localTime`), so these schedule times are presented from a different source than the Today section, which uses `localTime`. Combination drugs render the per-compound split via `splitDose` + `formatCompoundShort`. Food instruction footnote when `foodInstruction !== "none"` ("Take before eating" / "Take after eating").
   3. **Today** — today's dose slots for this prescription (from `useDailyDoseSchedule`), each with a status icon, local time, dose amount, and status label.
   4. **Actions** — "Switch Brand" button (only if >1 brand) opening `BrandSwitchPicker`; "Prescription Details" button opening `PrescriptionViewDrawer`.
 - Stops click propagation so taps inside don't collapse the parent card.
 
 ### Brand switch picker (`BrandSwitchPicker`)
 - Modal dialog listing every non-archived brand for a prescription.
-- Each row: pill icon (size 28), brand name, strength/compound line + stock, "Active" check badge on the current active brand.
+- Each row: pill icon (size 28), brand name, strength/compound line and stock joined by a middot separator (`{strength}{unit} · {stockText}`), "Active" check badge on the current active brand.
 - Selecting a brand deactivates the current active item and activates the chosen one (two sequential mutations). Toasts "Brand switched → Switched to <brandName>". Selecting the already-active brand just closes the dialog (no-op).
 
 ### Pill icon (`PillIcon` / `PillIconWithBadge`)
@@ -65,18 +65,18 @@
 - Free-text search bar to check an arbitrary substance (drug, supplement, food, e.g. "ibuprofen") against the user's **active prescriptions** via AI.
 - Submits on Enter. Clears with the X button.
 - Calls `useInteractionCheck` in `"lookup"` mode; sends only the active prescriptions' `genericName`s.
-- Results: grouped by medication; each interaction labeled `AVOID` / `CAUTION` / `OK` with a description, plus an optional one-line `summary` and `drugClass`.
+- Results: grouped by medication; each group's card header reads `"<query> vs <medicationName>"`; each interaction labeled `AVOID` / `CAUTION` / `OK` with a description, plus an optional one-line `summary` and `drugClass`.
 - Shows a green "No significant interactions found" panel when every returned interaction is `OK`.
 - 24-hour client-side localStorage cache for lookup results (`interaction-cache.ts`, key = trimmed+lowercased substance).
 
 ### Interactions section (`InteractionsSection`)
 - Per-prescription stored interactions panel (header "Interactions & Warnings" with shield icon).
 - Renders persisted `prescription.contraindications` (as `AVOID`) and `prescription.warnings` (as `CAUTION`, or `INFO` when the warning string starts with `"Drug class:"`).
-- "Refresh interactions" button (when AI gate is on) re-runs an AI conflict check of this prescription against all *other* active prescriptions and persists the result back onto the prescription. Disabled when there are no other active prescriptions.
+- "Refresh interactions" button (when AI gate is on) re-runs an AI conflict check of this prescription against all *other* active prescriptions and persists the result back onto the prescription. Each persisted contraindication/warning string is formatted `"<medication>: <description>"` (medication name prepended). Disabled when there are no other active prescriptions.
 - When signed-out AND no stored data: the whole section is hidden.
 
 ### Medicine search (`useMedicineSearch`)
-- AI lookup used by the add-medication wizard to auto-fill a new medication: brand names, local alternatives, generic name, dosage strengths, active ingredients, per-strength compound breakdowns, indications, food instruction, pill color/shape/description, drug class, visual identification, contraindications, warnings, and a generic-fallback flag.
+- AI lookup used by the add-medication wizard (and also by `edit-medication-drawer.tsx`) to auto-fill a medication: brand names, local alternatives, generic name, dosage strengths, active ingredients, per-strength compound breakdowns, indications, food instruction, pill color/shape/description, drug class, visual identification, contraindications, warnings, and a generic-fallback flag.
 - Region-aware: prepends the user's `primaryRegion` (and `secondaryRegion` as fallback) from settings to bias brand availability.
 
 ---
@@ -142,7 +142,7 @@
 - **No schedules**: "No schedules configured".
 - **No effective phase**: Schedule section omitted entirely.
 - **No today slots**: Today section omitted.
-- **Today slot statuses** (icon + colored label): `taken` (emerald check), `skipped` (gray X), `pending` (muted minus), `missed` (amber clock).
+- **Today slot statuses** (icon + colored label): `taken` (emerald check), `skipped` (gray X), `pending` (muted minus), `missed` (amber clock). A `rescheduled` DoseLog maps to the `skipped` slot status (`deriveStatus`, "rescheduled slots show as handled"), so the Today section never shows a distinct rescheduled state.
 - **Single brand**: "Switch Brand" hidden.
 
 ### Brand switch picker
@@ -151,6 +151,7 @@
 
 ### Interaction search
 - **Idle**: just the search input (no results panel).
+- **Results panel**: animates in/out via `AnimatePresence` (opacity + height).
 - **Has query**: X-clear button appears.
 - **Loading**: bordered panel, spinner + "Checking interactions…".
 - **Error**: red-bordered panel with the error message (local or fetch).
@@ -164,9 +165,9 @@
 
 ### Interactions section
 - **Has data**: contraindication rows (`AVOID`, red), warning rows (`CAUTION`, amber; or `INFO`/muted for "Drug class:" prefixed warnings).
-- **No data + AI on**: dashed "No interaction data yet" panel with a "Refresh interactions" outline button.
+- **No data + AI on**: dashed "No interaction data yet" panel with a "Refresh interactions" outline button. (The refresh button — with its disabled/relabel logic — appears in both the has-data and the no-data branches; the same button markup is duplicated across both.)
 - **Refreshing**: spinner replaces the refresh icon.
-- **No other active prescriptions**: button disabled, relabeled "Add more prescriptions to check interactions".
+- **No other active prescriptions**: button disabled, relabeled "Add more prescriptions to check interactions" (applies in both the has-data and no-data branches).
 - **Signed-out + no stored data**: section hidden entirely.
 
 ### Pill icon
@@ -179,9 +180,9 @@
 - **`PillShape`** (`db.ts`): `"round"` | `"oval"` | `"capsule"` | `"diamond"` | `"tablet"`. Default fallback in UI: `"round"`.
 - **Default pill color**: `#94a3b8` (slate) when `pillColor` absent.
 - **`PillIconWithBadge` status**: `"taken"` | `"skipped"` | `"rescheduled"` | `"pending"`. Badge colors: taken → emerald-500, skipped → gray-400, rescheduled → amber-500; pending → no badge.
-- **Pill icon geometry** (relative to `size`): round = r 0.8·half; oval = rx 0.9·half / ry 0.6·half; capsule = rect 0.8w×0.5h, rx 0.25; diamond = polygon; tablet = rect 0.7×0.7, rx 0.12. Default size 32 (collapsed card uses 36, expanded rows 24, brand picker 28).
+- **Pill icon geometry** (relative to `size`): round = r 0.8·half; oval = rx 0.9·half / ry 0.6·half; capsule = rect 0.8w×0.5h, rx 0.25; diamond = polygon; tablet = rect 0.7×0.7, rx 0.12. The function's default `size` is 32, but no compound-library caller relies on it — every call passes an explicit size (collapsed card 36, expanded rows 24, brand picker 28).
 - **`DoseStatus`** (`db.ts`): `"taken"` | `"skipped"` | `"rescheduled"` | `"pending"`.
-- **`DoseSlotStatus`** (`dose-schedule-service.ts`, used in Today section): `"taken"` | `"skipped"` | `"pending"` | `"missed"`.
+- **`DoseSlotStatus`** (`dose-schedule-service.ts`, used in Today section): `"taken"` | `"skipped"` | `"pending"` | `"missed"`. Note `deriveStatus` collapses a `rescheduled` DoseLog into `"skipped"`, so this enum has no `"rescheduled"` member even though `DoseStatus` does.
 - **`FoodInstruction`**: `"before"` | `"after"` | `"none"`. UI strings: before → "Take before eating", after → "Take after eating".
 - **`PhaseType`**: `"maintenance"` | `"titration"`. Titration overrides maintenance for the effective phase.
 - **`MedicationPhase.status`**: `"active"` | `"completed"` | `"cancelled"` | `"pending"`.
@@ -201,7 +202,7 @@
 - **Interaction lookup cache TTL**: 24h (`24 * 60 * 60 * 1000`), localStorage prefix `interaction-cache:`.
 - **Rate limits**: interaction-check 5/window; medicine-search 15/window.
 - **AI model**: `CLAUDE_MODELS.premium`, `max_tokens` 2048, `temperature` 0, forced tool use.
-- **Region settings** (`settings-store.ts`): `primaryRegion` (default `""`), `secondaryRegion` (default `""`); values `"none"`/`"None"` treated as unset.
+- **Region settings** (`settings-store.ts`): `primaryRegion` (default `""`), `secondaryRegion` (default `""`). "Unset" handling is asymmetric (`use-medicine-search.ts`): `primaryRegion` is only treated as unset when it equals `"none"` (lowercase) — a capitalized `"None"` set as the primary region is **not** treated as unset; `secondaryRegion` is treated as unset when it equals either `"None"` or `"none"`.
 - **Medicine-search `foodInstruction` enum**: `"before"` | `"after"` | `"none"` (defaults `"none"`).
 - **Medicine-search request limits**: `query` 1–200 chars; `country` ≤100 chars.
 
@@ -252,7 +253,7 @@
 - **Interaction search**: trims the query; empty → no-op; requires ≥1 active prescription (server also enforces `.min(1)`). PII stripped server-side via `sanitizeForAI` before the AI call. Only `genericName`s are sent (not brand/stock/personal data).
 - **Interaction cache**: keyed on trimmed+lowercased substance; 24h TTL; lookup results cached, conflict results not. All localStorage access wrapped in try/catch for SSR/quota safety.
 - **Timeout arming**: the 15s abort timer starts only *after* `apiFetch` resolves with a real Response — so a blocking sign-in modal doesn't consume the timeout. Sign-in dismissal returns null silently.
-- **Refresh interactions**: checks this prescription only against *other* active prescriptions (excludes self); disabled when none. Maps `AVOID`→contraindications, `CAUTION`→warnings, prepends `"Drug class: …"` to warnings, persists onto the prescription.
+- **Refresh interactions**: checks this prescription only against *other* active prescriptions (excludes self); disabled when none. Maps `AVOID`→contraindications, `CAUTION`→warnings — each stored as `"<medication>: <description>"` (medication name prefixed) — prepends `"Drug class: …"` to warnings, persists onto the prescription.
 - **Interactions section visibility**: hidden when signed-out and no stored data (nothing can populate it).
 - **AI tool-use enforcement**: both routes force `tool_choice` and re-validate the tool output with Zod; failures return 502 ("AI service unavailable") for interaction-check, or 422 with `fallbackToManual: true` for medicine-search.
 - **Medicine-search generic fallback**: when an exact brand can't be matched, `isGenericFallback` is set and the description reflects the generic equivalent.
@@ -271,7 +272,7 @@
 - **`InteractionsSection`** — per-prescription stored contraindications/warnings with AI refresh.
 - **`PillIcon`** — SVG pill renderer (5 shapes × color × size).
 - **`PillIconWithBadge`** — `PillIcon` + dose-status overlay badge.
-- **`useInteractionCheck`** — lookup-mode hook with cache, abort, 15s timeout.
+- **`useInteractionCheck`** — lookup-mode hook with cache, 15s timeout, and abort (aborts any in-flight request before starting a new check, so a newer query supersedes an older pending one).
 - **`useRefreshInteractions`** — conflict-mode hook that persists results to a prescription.
-- **`useMedicineSearch`** — region-aware AI medication auto-fill (used by add-med wizard).
+- **`useMedicineSearch`** — region-aware AI medication auto-fill (used by the add-med wizard and the edit-medication drawer).
 - Helpers: `isCombo`, `splitDose`, `scaleCompounds`, `compoundSum`, `formatCompoundShort/Full/Names` (`compound-utils.ts`); `formatPillCount`, `getEffectivePhase`, `formatDoseAmount` (`medication-ui-utils.ts`); `getCached`/`setCache`/`clearCache` (`interaction-cache.ts`).
