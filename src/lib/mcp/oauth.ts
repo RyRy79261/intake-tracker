@@ -258,12 +258,15 @@ export async function issueAccessToken(input: {
     refreshExpiresAt: now + TOKEN_TTL.REFRESH_TOKEN_MS,
     createdAt: now,
   });
-  // Best-effort last-used touch on the client; ignore failures.
-  void db
-    .update(mcpOauthClients)
-    .set({ lastUsedAt: now })
-    .where(eq(mcpOauthClients.clientId, input.clientId))
-    .catch(() => {});
+  // Best-effort last-used touch on the client; ignore failures. Wrap in
+  // Promise.resolve so it never throws synchronously regardless of the driver
+  // (fire-and-forget; the query builder isn't guaranteed to expose `.catch`).
+  void Promise.resolve(
+    db
+      .update(mcpOauthClients)
+      .set({ lastUsedAt: now })
+      .where(eq(mcpOauthClients.clientId, input.clientId)),
+  ).catch(() => {});
   return {
     accessToken,
     refreshToken,
@@ -332,12 +335,14 @@ export async function rotateRefreshToken(
     }
     const row = updated[0]!;
 
-    // Best-effort last-used touch on the client; ignore failures.
-    void db
-      .update(mcpOauthClients)
-      .set({ lastUsedAt: now })
-      .where(eq(mcpOauthClients.clientId, clientId))
-      .catch(() => {});
+    // Best-effort last-used touch on the client; ignore failures. Wrap in
+    // Promise.resolve so it never throws synchronously regardless of the driver.
+    void Promise.resolve(
+      db
+        .update(mcpOauthClients)
+        .set({ lastUsedAt: now })
+        .where(eq(mcpOauthClients.clientId, clientId)),
+    ).catch(() => {});
 
     return {
       ok: true,
