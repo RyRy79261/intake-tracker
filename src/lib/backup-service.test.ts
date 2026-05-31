@@ -12,23 +12,19 @@
  * This file covers the things they don't:
  *   - JSON parse failures (truncated, empty, non-object).
  *   - Schema-invalid backups (missing/wrong-typed fields).
- *   - The encrypted-vs-plain crossover in both importers.
  *   - Legacy v1 backup shape (records[] instead of intakeRecords[]).
  *   - Merge-mode conflict detection vs same-content skip.
  *   - Replace mode actually clearing existing rows.
  *   - resolveConflicts overwrite / keep semantics.
  *   - getBackupStats on empty + populated databases.
  *   - generateBackupFilename format.
- *   - importEncryptedBackup with the wrong PIN never corrupts the DB.
  */
 
 import { describe, it, expect, vi } from "vitest";
 import { db } from "@/lib/db";
 import {
   exportBackup,
-  exportEncryptedBackup,
   importBackup,
-  importEncryptedBackup,
   resolveConflicts,
   getBackupStats,
   generateBackupFilename,
@@ -134,36 +130,6 @@ describe("backup-service: importBackup schema validation", () => {
     expect(res.success).toBe(true);
     if (!res.success) return;
     expect(res.data.errors).toContain("Invalid backup file format");
-  });
-});
-
-describe("backup-service: importBackup encrypted-vs-plain crossover", () => {
-  it("surfaces a helpful error when an encrypted backup is passed to importBackup", async () => {
-    const body = JSON.stringify({
-      encrypted: true,
-      payload: { iv: "x", salt: "y", data: "z", version: 1 },
-      version: 5,
-    });
-    const res = await importBackup(makeFile(body));
-    expect(res.success).toBe(true);
-    if (!res.success) return;
-    expect(res.data.errors[0]).toMatch(/encrypted.*importEncryptedBackup/i);
-    expect(res.data.success).toBe(false);
-  });
-
-  it("surfaces 'not an encrypted backup' when a plain backup is passed to importEncryptedBackup", async () => {
-    const body = makeBackupJson();
-    const res = await importEncryptedBackup(makeFile(body), "any-pin");
-    expect(res.success).toBe(true);
-    if (!res.success) return;
-    expect(res.data.errors.join(" ")).toMatch(/not an encrypted backup/i);
-  });
-
-  it("surfaces 'Invalid JSON format' when importEncryptedBackup receives garbage", async () => {
-    const res = await importEncryptedBackup(makeFile("{{{"), "any-pin");
-    expect(res.success).toBe(true);
-    if (!res.success) return;
-    expect(res.data.errors).toContain("Invalid JSON format");
   });
 });
 
@@ -432,93 +398,3 @@ describe("backup-service: exportBackup", () => {
   });
 });
 
-describe("backup-service: encrypted round-trip and wrong-PIN handling", () => {
-  // src/lib/crypto.ts's isCryptoAvailable() guard requires globalThis.window,
-  // and exportBackup → logAudit → getDeviceId reads globalThis.localStorage
-  // once window is present. The node vitest env provides neither even though
-  // crypto.subtle is available on globalThis. Shim both for the test, mirroring
-  // the helper in src/lib/crypto.test.ts and extending it for localStorage.
-  async function withWindow<T>(fn: () => Promise<T>): Promise<T> {
-    const hadWindow = "window" in globalThis;
-    const hadLocalStorage = "localStorage" in globalThis;
-    if (!hadWindow) {
-      (globalThis as { window?: unknown }).window = {
-        crypto: globalThis.crypto,
-      };
-    }
-    if (!hadLocalStorage) {
-      const store = new Map<string, string>();
-      (globalThis as { localStorage?: unknown }).localStorage = {
-        getItem: (k: string) => store.get(k) ?? null,
-        setItem: (k: string, v: string) => store.set(k, v),
-        removeItem: (k: string) => store.delete(k),
-        clear: () => store.clear(),
-        get length() {
-          return store.size;
-        },
-        key: (i: number) => Array.from(store.keys())[i] ?? null,
-      };
-    }
-    try {
-      return await fn();
-    } finally {
-      if (!hadWindow) delete (globalThis as { window?: unknown }).window;
-      if (!hadLocalStorage)
-        delete (globalThis as { localStorage?: unknown }).localStorage;
-    }
-  }
-
-  it("export → wrong-PIN import surfaces an error AND leaves the DB intact", async () => {
-    await withWindow(async () => {
-      // Seed pre-existing local data we want to prove isn't corrupted by the
-      // failed decryption attempt.
-      await db.intakeRecords.add(
-        makeIntakeRecord({ id: "untouched", amount: 7 })
-      );
-
-      const encryptedBlob = await exportEncryptedBackup("correct-pin");
-      const encryptedFile = new File(
-        [await encryptedBlob.text()],
-        "backup.json",
-        { type: "application/json" }
-      );
-
-      const res = await importEncryptedBackup(
-        encryptedFile,
-        "wrong-pin",
-        "merge"
-      );
-      expect(res.success).toBe(true);
-      if (!res.success) return;
-      // Decryption failure should surface in errors, not throw, and import
-      // counters should all be zero.
-      expect(res.data.errors.length).toBeGreaterThan(0);
-      expect(res.data.intakeImported).toBe(0);
-
-      // And the pre-existing record is still there with original content.
-      expect((await db.intakeRecords.get("untouched"))?.amount).toBe(7);
-    });
-  });
-
-  it("export → correct-PIN import imports the backup contents", async () => {
-    await withWindow(async () => {
-      await db.intakeRecords.add(makeIntakeRecord({ id: "enc-1", amount: 42 }));
-      const encryptedBlob = await exportEncryptedBackup("vault");
-      const encryptedFile = new File(
-        [await encryptedBlob.text()],
-        "backup.json",
-        { type: "application/json" }
-      );
-
-      // Clear the table so we can prove the import re-added the record.
-      await db.intakeRecords.clear();
-
-      const res = await importEncryptedBackup(encryptedFile, "vault", "merge");
-      expect(res.success).toBe(true);
-      if (!res.success) return;
-      expect(res.data.errors).toEqual([]);
-      expect(res.data.intakeImported).toBe(1);
-      expect((await db.intakeRecords.get("enc-1"))?.amount).toBe(42);
-    });
-  });
-});

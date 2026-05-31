@@ -85,11 +85,6 @@ beforeEach(() => {
       if (url === "/api/sync/push") {
         return new Response(JSON.stringify({ ok: true }), { status: 200 });
       }
-      if (url === "/api/sync/verify-hash") {
-        return new Response(JSON.stringify({ hashes: {}, rowCounts: {} }), {
-          status: 200,
-        });
-      }
       if (url === "/api/sync/cleanup") {
         return new Response(JSON.stringify({ deleted: {} }), { status: 200 });
       }
@@ -250,78 +245,6 @@ describe("migration-service", () => {
       expect(localStorage.getItem(PROGRESS_KEY)).toBeNull();
       expect(useSettingsStore.getState().storageMode).toBe("local");
       expect(useMigrationStore.getState().phase).toBe("cancelled");
-    });
-  });
-
-  describe("hash computation", () => {
-    it("produces deterministic SHA-256 for known input (sorted keys, null-normalized)", async () => {
-      const { verifyMigration } = await import("@/lib/migration-service");
-
-      await db.intakeRecords.add(
-        makeIntakeRecord("ir-hash-1", { amount: 250 }),
-      );
-
-      vi.stubGlobal(
-        "fetch",
-        vi.fn(async (url: string) => {
-          if (url === "/api/sync/verify-hash") {
-            return new Response(
-              JSON.stringify({ hashes: {}, rowCounts: {} }),
-              { status: 200 },
-            );
-          }
-          return new Response(JSON.stringify({ ok: true }), { status: 200 });
-        }),
-      );
-
-      await verifyMigration();
-
-      const store = useMigrationStore.getState();
-      const irResult = store.verificationResults["intakeRecords"];
-      expect(irResult).toBeDefined();
-      expect(irResult!.clientHash).toMatch(/^[a-f0-9]{64}$/);
-
-      useMigrationStore.getState().reset();
-      await verifyMigration();
-      const irResult2 =
-        useMigrationStore.getState().verificationResults["intakeRecords"];
-      expect(irResult2!.clientHash).toBe(irResult!.clientHash);
-    });
-  });
-
-  describe("empty table handling", () => {
-    it("hash of empty table is hash of '[]'", async () => {
-      const { verifyMigration } = await import("@/lib/migration-service");
-
-      vi.stubGlobal(
-        "fetch",
-        vi.fn(async (url: string) => {
-          if (url === "/api/sync/verify-hash") {
-            return new Response(
-              JSON.stringify({ hashes: {}, rowCounts: {} }),
-              { status: 200 },
-            );
-          }
-          return new Response(JSON.stringify({ ok: true }), { status: 200 });
-        }),
-      );
-
-      await verifyMigration();
-
-      const store = useMigrationStore.getState();
-      const allHashes = Object.values(store.verificationResults).map(
-        (r) => r.clientHash,
-      );
-      const uniqueHashes = new Set(allHashes);
-      expect(uniqueHashes.size).toBe(1);
-
-      const emptyHash = allHashes[0]!;
-      const encoded = new TextEncoder().encode("[]");
-      const hashBuffer = await crypto.subtle.digest("SHA-256", encoded);
-      const expectedHash = Array.from(new Uint8Array(hashBuffer))
-        .map((b) => b.toString(16).padStart(2, "0"))
-        .join("");
-      expect(emptyHash).toBe(expectedHash);
     });
   });
 

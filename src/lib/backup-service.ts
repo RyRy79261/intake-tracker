@@ -31,7 +31,6 @@ import {
 } from "@/lib/db";
 import { ok, err, type ServiceResult } from "@/lib/service-result";
 import { logAudit } from "@/lib/audit";
-import { encrypt, decrypt, type EncryptedData } from "@/lib/crypto";
 import { BACKUP_VALIDATORS } from "@/lib/backup-schemas";
 
 export interface BackupData {
@@ -92,12 +91,6 @@ export interface ImportResult {
 }
 
 const CURRENT_BACKUP_VERSION = 5;
-
-export interface EncryptedBackup {
-  encrypted: true;
-  payload: EncryptedData;
-  version: number;
-}
 
 function emptyImportResult(): ImportResult {
   return {
@@ -272,78 +265,6 @@ export async function downloadBackup(): Promise<ServiceResult<void>> {
 }
 
 /**
- * Export all health data as an encrypted JSON blob.
- * The backup data is encrypted with the user's PIN using AES-GCM.
- */
-export async function exportEncryptedBackup(pin: string): Promise<Blob> {
-  const plainBlob = await exportBackup();
-  const json = await plainBlob.text();
-  const payload = await encrypt(json, pin);
-
-  const encryptedBackup: EncryptedBackup = {
-    encrypted: true,
-    payload,
-    version: CURRENT_BACKUP_VERSION,
-  };
-
-  logAudit("data_export", "Exported encrypted backup");
-
-  return new Blob([JSON.stringify(encryptedBackup, null, 2)], {
-    type: "application/json",
-  });
-}
-
-/**
- * Import an encrypted backup file using the user's PIN.
- * Decrypts the payload, then delegates to normal import logic.
- */
-export async function importEncryptedBackup(
-  file: File,
-  pin: string,
-  mode: "merge" | "replace" = "merge"
-): Promise<ServiceResult<ImportResult>> {
-  try {
-    const text = await file.text();
-    let outer: unknown;
-
-    try {
-      outer = JSON.parse(text);
-    } catch {
-      const result = emptyImportResult();
-      result.errors.push("Invalid JSON format");
-      return ok(result);
-    }
-
-    if (
-      !outer ||
-      typeof outer !== "object" ||
-      !(outer as Record<string, unknown>).encrypted
-    ) {
-      const result = emptyImportResult();
-      result.errors.push(
-        "File is not an encrypted backup. Use importBackup() for unencrypted files."
-      );
-      return ok(result);
-    }
-
-    const encryptedBackup = outer as EncryptedBackup;
-    const decryptedJson = await decrypt(encryptedBackup.payload, pin);
-
-    // Create a new File from the decrypted JSON and delegate to importBackup
-    const decryptedFile = new File([decryptedJson], file.name, {
-      type: "application/json",
-    });
-    return importBackup(decryptedFile, mode);
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unknown decryption error";
-    const result = emptyImportResult();
-    result.errors.push(message);
-    return ok(result);
-  }
-}
-
-/**
  * Validate backup data structure
  */
 function validateBackupData(data: unknown): data is BackupData {
@@ -438,18 +359,6 @@ export async function importBackup(
       data = JSON.parse(text);
     } catch {
       result.errors.push("Invalid JSON format");
-      return ok(result);
-    }
-
-    // Detect encrypted backup and return informative error
-    if (
-      data &&
-      typeof data === "object" &&
-      (data as Record<string, unknown>).encrypted === true
-    ) {
-      result.errors.push(
-        "This backup is encrypted. Please use importEncryptedBackup() with your PIN."
-      );
       return ok(result);
     }
 

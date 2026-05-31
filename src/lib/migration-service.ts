@@ -33,28 +33,6 @@ function clearProgress(): void {
   localStorage.removeItem(PROGRESS_KEY);
 }
 
-function deterministicJson(rows: Record<string, unknown>[]): string {
-  return JSON.stringify(rows, (_, value) =>
-    value === undefined
-      ? null
-      : value && typeof value === "object" && !Array.isArray(value)
-        ? Object.keys(value)
-            .sort()
-            .reduce<Record<string, unknown>>((acc, k) => {
-              acc[k] = (value as Record<string, unknown>)[k];
-              return acc;
-            }, {})
-        : value,
-  );
-}
-
-async function sha256Hex(data: string): Promise<string> {
-  const encoded = new TextEncoder().encode(data);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", encoded);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -178,52 +156,6 @@ export async function startMigration(): Promise<void> {
     store.setPhase("error");
     store.setError(error instanceof Error ? error.message : String(error));
     console.log("[migration] upload error:", error instanceof Error ? error.message : error);
-  }
-}
-
-export async function verifyMigration(): Promise<boolean> {
-  const store = useMigrationStore.getState();
-
-  try {
-    const res = await apiFetch("/api/sync/verify-hash", { method: "POST" });
-    if (!res.ok) {
-      throw new Error(`Verify-hash request failed: ${res.status}`);
-    }
-
-    const { hashes: serverHashes } = (await res.json()) as {
-      hashes: Record<string, string>;
-      rowCounts: Record<string, number>;
-    };
-
-    let allMatch = true;
-
-    for (const tableName of TABLE_PUSH_ORDER) {
-      const records = await db.table(tableName).toArray();
-      const sorted = records
-        .slice()
-        .sort((a: Record<string, unknown>, b: Record<string, unknown>) =>
-          String(a.id ?? "").localeCompare(String(b.id ?? "")),
-        );
-
-      const json = deterministicJson(sorted);
-      const clientHash = await sha256Hex(json);
-      const serverHash = serverHashes[tableName] ?? "";
-      const match = clientHash === serverHash;
-
-      if (!match) allMatch = false;
-
-      store.setVerificationResult(tableName, { clientHash, serverHash, match });
-      console.log(
-        `[migration] verify ${tableName}: ${match ? "match" : "MISMATCH"}`,
-      );
-    }
-
-    return allMatch;
-  } catch (error) {
-    store.setPhase("error");
-    store.setError(error instanceof Error ? error.message : String(error));
-    console.log("[migration] verification error:", error instanceof Error ? error.message : error);
-    return false;
   }
 }
 
