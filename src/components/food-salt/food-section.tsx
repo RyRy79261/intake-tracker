@@ -572,7 +572,7 @@ export function FoodSection() {
                   {formatDateTime(record.timestamp)}
                 </span>
                 {record.note && (
-                  <span className="text-xs text-muted-foreground/70 truncate">
+                  <span className="text-xs text-muted-foreground/70 truncate min-w-0">
                     {record.note}
                   </span>
                 )}
