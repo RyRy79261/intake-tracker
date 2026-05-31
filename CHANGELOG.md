@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.30.0](https://github.com/RyRy79261/intake-tracker/compare/v1.29.0...v1.30.0) (2026-05-31)
+
+
+### Features
+
+* split dashboard recent food entries into two rows ([#189](https://github.com/RyRy79261/intake-tracker/issues/189)) ([033ec6d](https://github.com/RyRy79261/intake-tracker/commit/033ec6d5dffa0d946c21a67de4d858ec9587fda5))
+
+
+### Bug Fixes
+
+* correct CLAUDE_MODELS premium ID from claude-opus-4-6 to claude-opus-4-8 ([#187](https://github.com/RyRy79261/intake-tracker/issues/187)) ([01b9636](https://github.com/RyRy79261/intake-tracker/commit/01b963668fcac5f5e05b4bf3ada3f035ef1e59cd))
+
 ## [1.29.0](https://github.com/RyRy79261/intake-tracker/compare/v1.28.0...v1.29.0) (2026-05-30)
 
 
