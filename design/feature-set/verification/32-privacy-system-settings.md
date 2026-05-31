@@ -1,0 +1,62 @@
+# Verification — 32-privacy-system-settings
+
+**Verdict:** minor-gaps  ·  checked 88 claims, verified 82.
+
+This doc is unusually accurate. Most enum members, defaults, thresholds, storage keys, labels, and
+flow descriptions match the source digit-for-digit. The handful of issues below are mostly low/medium:
+one wrong Dexie table name, one misleading "global wiring fallback" claim about hook defaults, and a
+nuance about where PII stripping actually runs (server-only, not client).
+
+## Inaccuracies
+
+| severity | doc claim | code reality | file:line |
+|---|---|---|---|
+| medium | Data model: error logs read from "`auditLogs`/error-log table via `getErrorLogs()`" (line 186). | Error logs come from the `_errorLogs` Dexie table, not `auditLogs`. `getErrorLogs` queries `db._errorLogs.orderBy("timestamp").reverse().limit(limit)`. `auditLogs` is unrelated. | `src/lib/error-log-service.ts:111-113` |
+| medium | "Hook defaults (used by global wiring fallback): threshold = 8, requiredJolts = 3, windowMs = 800, cooldownMs = 3000, sample throttle 60 ms" (line 172). | The hook defaults exist, but the *global wiring* (`ShakeToReport`) always passes `threshold`/`requiredJolts` from the Zustand store (defaults 10 / 5), so the 8/3 hook fallbacks are never used there. Only `windowMs`/`cooldownMs`/throttle defaults are actually in effect, since the global mount does not override them. Calling 8/3 the "global wiring fallback" is misleading — the store values win. | `src/components/shake-to-report.tsx:17-27`; `src/hooks/use-shake-gesture.ts:119-126`; `src/stores/settings-store.ts:218-220` |
+| low | PII stripping "all bug-report text (env + error logs) is stripped of emails, phone numbers, and ID-like numbers before sending (noted in UI; enforced server-side)" (line 203); data model says "enforced server-side" (line 188 area). | The client collectors (`collectEnvironmentInfo`, `collectRecentErrorLogs`) do NOT strip PII — they send raw values. Stripping happens only on the server (`sanitizeReportText` → `redactPii`). The dialog UI *claims* text is "stripped … before sending," but no client-side stripping occurs. The doc's parenthetical "enforced server-side" is correct; the lead phrasing "stripped … before sending" is technically true only because the server strips before it reaches GitHub, not before it leaves the browser. | `src/lib/bug-report.ts:76-136` (no redaction); `src/lib/security.ts:106-140`; `src/app/api/bug-report/route.ts:204-226,310` |
+| low | "ID-like numbers" stripped (lines 177, 203). | `redactPii` strips more than emails/phones/IDs: it also redacts SSN, credit-card numbers, and date-of-birth patterns (→ `[ssn]`, `[card]`, `[date]`), plus a 13-digit SA ID (`[id-number]`). Doc's "ID-like numbers" undersells the full redaction set (matches the dialog's own wording but understates code). | `src/lib/security.ts:108-122` |
+| low | Shake clamping: "`validateAndSave` reverts invalid input to the prior value" (line 200). | `validateAndSave` reverts to the `defaultValue` argument passed in, which the caller supplies as the *current* store value (`settings.shakeThreshold` / `settings.shakeRequiredJolts`) — so in practice it reverts to the current value, not a fixed default. The wording "prior value" is correct here, but the helper's own contract is "revert to default" — accurate as wired, just worth noting the helper is generic. | `src/lib/settings-helpers.ts:6-22`; `src/components/settings/report-bug-section.tsx:101-110,145-154` |
+
+## Omissions
+
+| severity | missing behavior/state/enum | file:line |
+|---|---|---|
+| low | `usePermissions` also exposes `refreshPermissions()` (re-checks notification + mic state, localStorage-first then Permissions API) and `isLoading`. Doc lists query/request/reset but not refresh/isLoading. | `src/hooks/use-permissions.ts:60,175-214,230-237` |
+| low | `push-notification-service` exposes additional expiry-pipeline functions not surfaced in this cluster's doc: `checkExpiringRecords`, `notifyExpiringRecords`, `shouldCheckExpiry` (gates on `checkIntervalHours`), `runExpiryCheck`, and `showNotification` (SW-first with direct-Notification fallback). Doc mentions expiry checks broadly but omits these named entry points and the SW-vs-direct fallback. | `src/lib/push-notification-service.ts:49-84,97-238` |
+| low | `notifyExpiringRecords` message/body content and `daysUntilExpiry` computation, and the expiry notification body text ("N records will be deleted in X days…"), are not described. | `src/lib/push-notification-service.ts:130-155` |
+| low | The settings page can pre-open `ReportBugDialog` from a crash via `sessionStorage` key `intake-tracker:crash-report` (ErrorBoundary "Report this problem" flow), passing `defaultType="bug"` + a pre-filled stack. Doc mentions dialog reset-on-open but not the crash-prefill entry point. | `src/app/settings/page.tsx:39,53-68,139-144` |
+| low | `ReportBugDialog` accepts `defaultType` and `defaultDescription` props and resets state from them on open. Doc covers the `[open]`-only reset rule but not the props themselves. | `src/components/report-bug-dialog.tsx:46-58,79-93` |
+| low | `UpdateNotification` floating banner web copy is "v{serverVersion} is available — tap to refresh" (web) vs "v{serverVersion} available — update from Play Store" (Capacitor). Doc describes the in-section card's web copy ("v{server} available (you have v{client})") but the floating banner uses different web wording. | `src/components/update-notification.tsx:36-39` |
+| low | The bug-report server route returns specific error codes/statuses (NO_GITHUB_TOKEN 503, BAD_REPO 503, BAD_TOKEN 502, NO_ACCESS 502, ISSUES_DISABLED 502, rate-limit 429) and rate-limits to 10/window. Doc only says "fails with toast." | `src/app/api/bug-report/route.ts:110,280-297,334-383` |
+| low | Diagnostics caps differ between client and server: client attaches up to `MAX_REPORT_LOGS = 25` logs; server Zod schema allows up to 30 error logs and 40 env fields, body capped at 60,000 chars, stack trimmed to 1,200 in body. Doc states the 25 client cap but not the server limits. | `src/lib/bug-report.ts:18`; `src/app/api/bug-report/route.ts:26-27,48-50` |
+
+## Spot-confirmed
+
+- PermissionBadge states: granted→"Enabled"+CheckCircle2, denied→"Blocked"+X (+optional Reset ghost), unavailable→"Not available", prompt→outline "Enable" button. `src/components/permission-badge.tsx:17-54`
+- `PermissionState = "granted" | "denied" | "prompt" | "unavailable"`; `getPermissionLabel` maps granted/denied/prompt/unavailable → Enabled/Blocked/Not set/Not available; `canRequestPermission` true only for `"prompt"`. `src/hooks/use-permissions.ts:12,243-261`
+- `NotificationPermissionState = "granted" | "denied" | "default"`; `"default"` mapped to `"prompt"` in usePermissions. `src/lib/push-notification-service.ts:10`; `src/hooks/use-permissions.ts:71`
+- `MotionPermissionResult = "granted" | "denied" | "unsupported"`. `src/hooks/use-shake-gesture.ts:10`
+- `BugReportType = "bug" | "feature"`. `src/lib/bug-report.ts:15`
+- Mic localStorage key `intake-tracker-mic-permission` (only stores granted/denied); `NotAllowedError`→denied(cached), other errors→prompt(not cached); Reset removes cache → prompt. `src/hooks/use-permissions.ts:20,29,134-227`
+- Expiry Reminders row renders only when `permissions.notifications === "granted"`, `bg-muted/30`, toggle `default` when On / `outline` when Off, Test only when On. `src/components/settings/permissions-section.tsx:96-155`
+- `CLIENT_VERSION = NEXT_PUBLIC_APP_VERSION || "0.0.0"`; `CHECK_INTERVAL_MS = 5*60*1000`; initial check `setTimeout(3000)`; fetch `/api/version` with `cache: "no-store"`; `hasUpdate = serverVersion !== CLIENT_VERSION`; `applyUpdate` skips reload in Capacitor; `dismissUpdate` masks via `&& !dismissed`. `src/hooks/use-version-check.ts:6-7,29-34,42,51-55,62-68,77`
+- `/api/version` returns `{ version (||"0.0.0"), gitSha (||"local"), environment (||"development") }`. `src/app/api/version/route.ts:4-8`
+- AppUpdatesSection header "App Version" (Capacitor) vs "App Updates" (web); footnote "Running v{clientVersion} · Checks automatically every 5 min"; Capacitor update copy "v{serverVersion} available — update from Play Store", Update button hidden in Capacitor. `src/components/settings/app-updates-section.tsx:26,37-51,97-99`
+- NotificationSettings defaults: `enabled:false, lastCheck:null, checkIntervalHours:24`; key `intake-tracker-notifications`; expiry warningDays default 7; tags `expiry-reminder`/`test-notification`; default icon `/icons/icon-192.svg`. `src/lib/push-notification-service.ts:60,99,148,161,168,176-180`
+- Store defaults: `shakeToReportEnabled:true`, `shakeThreshold:10`, `shakeRequiredJolts:5`; setters clamp 4–20 and 2–8 via `sanitizeNumericInput`. Migrations: v10 forces shake enabled; v11 sets threshold 15 / jolts 3; v12 lowers threshold to 8. `src/stores/settings-store.ts:218-220,429-432,308-318`
+- Shake UI ranges/steps: threshold min 4 max 20 step 1; jolts min 2 max 8 step 1; helper text "(4-20)" and "~0.8s … (2-8)". `src/components/settings/report-bug-section.tsx:96-181`
+- `createShakeDetector` uses acceleration *magnitude* deltas (`Math.abs(mag - lastMagnitude) > threshold`), rolling `windowMs` (default 800), `cooldownMs` (default 3000), throttle 60 ms; rotation-invariant per the comment. `src/hooks/use-shake-gesture.ts:66-103,139,144-153`
+- iOS motion: `motionPermissionNeeded`/`requestMotionPermission` — only iOS 13+ has `DeviceMotionEvent.requestPermission`; elsewhere returns "granted" without prompt; ShakeToReport requests once on first `pointerdown`. `src/hooks/use-shake-gesture.ts:17-42`; `src/components/shake-to-report.tsx:33-40`
+- ReportBugDialog: type toggle Bug/Feature swaps title/label/placeholder/footer; textarea rows=6; dictate shown only when `groqConfigured`; "Improve with AI" shown only when `anthropicConfigured`; `effectiveUseAi = useAi && anthropicConfigured`; diagnostics collapsible "What will be attached (N env fields, M log entries)"; submit gated by `description.trim().length>0 && !isPending && diagnosticsReady`; success shows "Report filed" + issue #N + external link; reset deps `[open]` only. `src/components/report-bug-dialog.tsx:64-130,170-356`
+- Bug-report env fields: App version, Build env (`NEXT_PUBLIC_VERCEL_ENV ?? "unknown"`), Mode (Capacitor/Web), DB version, Device ID, Timezone, Locale, Online (yes/no), User agent, Screen (`w×h @ Nx`), Viewport, Storage (`usage / quota`); AI-key fields appended in dialog ("configured"/"not configured"). `src/lib/bug-report.ts:76-114`; `src/components/report-bug-dialog.tsx:133-142`
+- `MAX_REPORT_LOGS = 25`; `BugReportErrorLog` fields timestamp/source/message/stack?/route?. `src/lib/bug-report.ts:18,25-31,118-129`
+- Server files GitHub issue via Octokit; returns `{ url, number }`; `sanitizeReportText` redacts PII server-side (defence in depth). `src/app/api/bug-report/route.ts:343-350,204-226`
+- ExpandableSettingsSection: ChevronDown rotates 180° when open; accordion-up/down animation; default collapsed. `src/components/settings/expandable-settings-section.tsx:40-51`
+- HelpSection: BookOpen + "User manual" header (sky text), "Open the manual" → `router.push("/help")`. `src/components/settings/help-section.tsx:12-29`
+- ShakeToReport mounted in providers; UpdateNotification mounted in layout. `src/app/providers.tsx:96`; `src/app/layout.tsx:102`
+- Push subscribe/unsubscribe hit `/api/push/subscribe` and `/api/push/unsubscribe` (only server-persisted data in cluster). `src/lib/push-notification-service.ts:290,327`
+
+## Low-confidence / could-not-verify
+
+- Doc line 135 (Offline): "Version check fails silently/errors (no `/api/version`)". `checkForUpdates` does catch and `console.error` then returns false, and the section button path catches → "Check failed" toast. The background poller swallows errors silently. Both behaviors are consistent with the doc; the "fails silently" phrasing accurately describes the background poller and the floating banner. Confirmed enough — no contradiction found. `src/hooks/use-version-check.ts:44-48`
+- Doc's claim that the bug-report submit "requires network (fails with toast otherwise)" — the mutation will reject on a failed fetch and the dialog's `onError` toasts "Could not file the report". Behavior matches; the exact offline error message depends on `apiFetch`/network and was not exhaustively traced. `src/components/report-bug-dialog.tsx:155-161`; `src/hooks/use-bug-report.ts:18-26`

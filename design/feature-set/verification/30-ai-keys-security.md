@@ -1,0 +1,76 @@
+# Verification — 30-ai-keys-security
+
+**Verdict:** minor-gaps  ·  checked 118 claims, verified 110.
+
+This document is unusually accurate. Every status string, toast, validation
+threshold, enum, schema column, check constraint, index, and business-rule
+claim was confirmed digit-for-digit against source. The handful of issues are
+low/medium-severity wording imprecisions and a small set of omitted UI
+behaviors.
+
+## Inaccuracies
+
+| severity | doc claim | code reality | file:line |
+|----------|-----------|--------------|-----------|
+| medium | "`sanitizeForAI` … applied in parse, substance-enrich, titration-warnings routes" (line 243) and "parse, substance-enrich, titration-warnings routes" (line 50) — phrasing reads as the exhaustive set | `sanitizeForAI` is applied in **at least 8** AI routes: `parse`, `substance-enrich`, `titration-warnings`, `nutrient-analysis`, `voice-parse`, `substance-lookup`, `medicine-search`, `interaction-check`. The three named are a non-exhaustive subset. | `src/app/api/ai/nutrient-analysis/route.ts:140,194,204`; `voice-parse/route.ts:90`; `substance-lookup/route.ts:92`; `medicine-search/route.ts:162`; `interaction-check/route.ts:135` |
+| low | "`security` (`sanitizeForAI` / `redactPii` / …)" listed as a sub-component/variant, and line 50 cites "`security.ts` `sanitizeForAI` / `redactPii`" as the redaction surface | `redactPii` is a **private, non-exported** helper (`function redactPii`). It is not part of the module's public API; callers use `sanitizeForAI` / `sanitizeReportText`. | `src/lib/security.ts:106` (no `export`) |
+| low | `userProfile` "sync metadata (`id`, `userId`, `createdAt`, `updatedAt`, `deletedAt`, `deviceId`)" presented as Dexie-synced fields (line 216) | The Dexie `UserProfile` interface has **no `userId`** field — only id/conditions/share*/aiInsightsConsentAt/createdAt/updatedAt/deletedAt/deviceId. `userId` exists only on the server Postgres table (`schema.ts`), injected by the sync engine. Minor: doc lumps a server-only column into the Dexie shape. | `src/lib/db.ts:383-393` (no userId); `src/db/schema.ts:650-652` (userId server-only) |
+| low | "Usage (last 30 days) sub-section … per-provider call counts + **token/audio breakdown**" and States §`UsageSummary` describe per-provider token output (line 37, 128) | Correct as far as it goes, but the UI **only renders input/output tokens for anthropic and audioSeconds for groq**. `cacheReadTokens`, `cacheCreateTokens`, and the entire `mine.byRoute` array are fetched by the hook but never displayed. (Counts toward omissions below.) | `src/components/settings/ai-keys-section.tsx:374-393`; hook returns them at `src/hooks/use-ai-keys.ts:144-155` |
+
+## Omissions
+
+| severity | missing behavior/state/enum | file:line |
+|----------|-----------------------------|-----------|
+| low | `mine.byRoute` (route-level breakdown) and `cacheReadTokens`/`cacheCreateTokens` are fetched and typed in the usage hook but **not rendered anywhere** in `UsageSummary`. Doc implies a fuller breakdown than the UI shows. | `src/hooks/use-ai-keys.ts:149-155`; `ai-keys-section.tsx:357-418` |
+| low | `ShareControls` shows a permanent helper line under the input: "They must have signed in at least once before you can share." Doc covers the GRANTEE_NOT_FOUND toast but omits this always-present inline hint. | `src/components/settings/ai-keys-section.tsx:321-323` |
+| low | Share grant success toast also sets a `description`: "They can now use your `<provider>` key." (doc line 76 captures it, but the State table omits it — minor, already covered in Actions). | `src/components/settings/ai-keys-section.tsx:253-257` |
+| low | `received` shares are sorted **desc by createdAt**, `granted` shares **asc by createdAt** (different orderings per list). Doc does not mention sort order of either list. | `src/app/api/user/api-keys/shares/route.ts:70,80` |
+| low | `getEmailById` / grantor-email resolution falls back to literal string `"(unknown)"` when a grantor's email can't be resolved; `asGrantor` grantee email likewise falls back to `"(unknown)"`. Doc does not mention the unknown-fallback. | `src/app/api/user/api-keys/shares/route.ts:99`; `src/app/api/user/ai-usage/route.ts:113` |
+| low | `ensureUserSynced` upsert failure is **swallowed** (logged, non-fatal) for read routes; only a downstream write surfaces the FK error. Doc mentions `ensureUserSynced` exists (line 219) but not its non-fatal failure semantics. | `src/lib/auth-middleware.ts:81-94` |
+| low | `validateBearerToken` returns null (→401) when `NEON_AUTH_URL` is unset, and uses the cookie header `__Secure-neon-auth.session_token=<token>` to validate a bearer token upstream. Doc mentions the 5s timeout but not the env-gate or the cookie-shaped upstream call. | `src/lib/auth-middleware.ts:40-45,49-52` |
+| low | `normalizeConditions` slices each item to `MAX_CONDITION_LENGTH` **before** dedupe/clamp, and `break`s at `MAX_CONDITIONS` (silently drops the overflow rather than erroring). Doc describes the rule (line 239) but not that truncation precedes dedupe. | `src/lib/profile-service.ts:46-59` |
+| low | `getUserProfile` can briefly see multiple active rows after concurrent multi-device first-write; "newest-updated wins" via `b.updatedAt - a.updatedAt` sort. Doc states the singleton rule (line 240) accurately; this just confirms the tie-break mechanism. | `src/lib/profile-service.ts:66-75` |
+
+## Spot-confirmed
+
+- **Auth gating of `AiKeysSection`**: `!ready` → `return null`; `!authenticated` → amber "AI features" header + muted "Sign in to manage AI keys" card; authenticated → full panel. `ai-keys-section.tsx:423-481`.
+- **Intro copy** verbatim "AI features run through your own provider keys, billed directly by Anthropic and Groq … Keys are encrypted at rest on the server." `ai-keys-section.tsx:452-456`.
+- **PROVIDERS table** exact: anthropic (Sparkles, `text-amber-500`, prefix `sk-ant-`, placeholder `sk-ant-…`, `console.anthropic.com/settings/keys`, label `console.anthropic.com`, desc "Powers food & drink parsing, substance lookup, medicine search.") and groq (Mic, `text-purple-500`, prefix `gsk_`, placeholder `gsk_…`, `console.groq.com/keys`, label `console.groq.com`, desc "Powers voice transcription (Whisper)."). `ai-keys-section.tsx:33-56`.
+- **Status lines** exact: "Loading…", "Using your key ending in `<last4 || ????>`", "Granted by `<grantorEmail>`", "Not configured. Add a key, or ask someone to share theirs." `ai-keys-section.tsx:113-136`.
+- **Save validation/toasts**: empty→"Enter a key" destructive; wrong prefix→"Invalid `<name>` key"/"`<name>` keys start with `<prefix>`"; success→"`<name>` key saved" success + clears+closes; failure→"Failed to save `<name>` key"; button label flips to "Saving…", disabled when pending or empty. `ai-keys-section.tsx:71-97,176-182`.
+- **Remove**: only when `entry?.configured`; "`<name>` key removed"/"Failed to remove…"; disabled while pending; red destructive styling. `ai-keys-section.tsx:99-110,206-217`.
+- **Console link** `target="_blank" rel="noopener noreferrer"`. `ai-keys-section.tsx:166-169`.
+- **ShareControls**: `!canShareAny` hides everything behind muted "Add a key above to share it with another user."; provider `<select>` only renders options for owned keys; auto-correct effect switches provider; grant success "Shared with `<email>`"/"They can now use your `<provider>` key."; revoke "Share revoked"/"Revoke failed"; Share disabled when pending or empty; current-shares list keyed `granteeId:provider` with `granteeEmail · provider`. `ai-keys-section.tsx:224-355`.
+- **UsageSummary**: "Loading usage…"; empty "No AI usage in the last `<windowDays ?? 30>` days."; per-provider "N call(s)", anthropic "· in/out tokens", groq "· N s of audio" only if `audioSeconds > 0` (`Math.round`); as-grantor block only when `byGrantee.length > 0` with "Consumption against your shared keys:". `ai-keys-section.tsx:357-418`.
+- **Consent toggle logic**: `hasConsented = profile.aiInsightsConsentAt != null` (nullish, catches undefined); first enable w/o consent → `setDialog("consent")`, no save; confirm → `save({...fieldUpdate(true), aiInsightsConsentAt: Date.now()})`; already-consented ON / any OFF → immediate save; dialog states `null | "consent" | "info"`; titles "Share `<noun>` with AI?" vs "About AI insights"; footers Cancel+"Enable insights" vs "Got it"; info button aria-label "About AI insights". `ai-insights-consent-toggle.tsx:73-155`.
+- **Sub-label copy** enabled/disabled verbatim. `ai-insights-consent-toggle.tsx:115-119`.
+- **DisclaimerBody** three paragraphs (sharing intent / guesses can be wrong / not a diagnosis, never replaces a professional). `ai-insights-consent-toggle.tsx:44-64`.
+- **MedicalAiSection** mounts the two toggles with exact labels/nouns + helper "Add or remove the conditions themselves on your Profile page. Medications come from your Medications page." `medical-ai-section.tsx:18-32`.
+- **MedicalContextSection conditions**: dedupe case-insensitive silently clears draft; `>= MAX_CONDITIONS` → "Limit reached"/"You can add up to 20 conditions."; input `maxLength={MAX_CONDITION_LENGTH}`; Enter or "+" adds; add disabled `!draft.trim()`; empty state italic "No conditions added yet."; chip remove "X". Helper copy "Sharing medications sends your active prescriptions — name, dose, frequency, and how long the current titration or maintenance phase has run." `medical-context-section.tsx:30-145`.
+- **Constants**: `MAX_CONDITIONS=20`, `MAX_CONDITION_LENGTH=120` (`profile-service.ts:21-23`). PUT `z.string().min(8).max(500)` (`api-keys/route.ts:27`). Share `z.string().email().max(320)` (`shares/route.ts:27`). Usage days default 30 clamp 1–365 (`ai-usage/route.ts:29-30`). `sanitizeForAI` cap 500 (`security.ts:130`); `sanitizeReportText` default 8000 (`security.ts:137`); `sanitizeNumericInput` min 0/max 100000 (`security.ts:56`); `sanitizeTextInput` default 500 (`security.ts:68`).
+- **Crypto constants** (client): AES-GCM, 256-bit, IV 12, salt 16, PBKDF2 100000 SHA-256, version 1. `crypto.ts:17-21,105`.
+- **Key-vault constants** (server): `aes-256-gcm`, IV 12, key 32; `API_KEY_ENCRYPTION_SECRET` accepts 64-char hex or base64 → 32 bytes; blob `v1:` active, `v2:` reserved KMS throwing "not yet implemented"; `lastFourOf` = `slice(-4)`. `key-vault.ts:30-32,44-56,101-115`.
+- **OBFUSCATION_KEY = "intake-tracker-v1"**, `obf:` prefix, XOR not encryption. `security.ts:16,18-33`.
+- **AI status flags**: `authConfigured` = `!!DATABASE_URL`, `serverAnthropicKeyConfigured`, `serverGroqKeyConfigured`, top-level `timestamp` and `environment` = `NODE_ENV`. `status/route.ts:11-18`.
+- **Key resolution priority**: own_stored → shared_from (ordered `asc(createdAt), asc(grantorId)`, iterates all share rows with no LIMIT, skips grantors whose key is gone) → env_var (only if `ALLOWED_EMAILS` non-empty AND email listed, lowercased) → `NoAiKeyError`. `ai-key-resolver.ts:65-135`.
+- **Schema `userApiKeys`**: PK `userId` FK users_sync cascade; `anthropicKeyEncrypted`, `anthropicLast4`, `groqKeyEncrypted`, `groqLast4`, `createdAt`/`updatedAt` timestamptz defaultNow notNull. `schema.ts:870-880`.
+- **Schema `userKeyShares`**: composite PK (grantorId, granteeId, provider), both FK cascade, provider check `IN ('anthropic','groq')`, `granteeEmail` notNull, `createdAt` timestamptz, index `idx_user_key_shares_grantee` on (granteeId, provider). `schema.ts:888-911`.
+- **Schema `aiUsage`**: serial PK, timestamp defaultNow, userId FK cascade, keyOwnerId FK set-null, keySource check `own_stored|shared_from|env_var`, provider check, model, route, input/output/cacheRead/cacheCreate int default 0, audioSeconds nullable int, status check `success|error`, durationMs nullable int; indexes (userId,timestamp) and (keyOwnerId,timestamp). `schema.ts:919-960`.
+- **Schema `userProfile`**: conditions text[] notNull, shareConditionsWithAI notNull, shareMedicationsWithAI notNull default false, aiInsightsConsentAt bigint nullable, createdAt/updatedAt bigint notNull, deletedAt bigint nullable, deviceId notNull. `schema.ts:646-671`.
+- **PUT upsert / DELETE null-out**: insert with `onConflictDoUpdate` on userId; DELETE sets encrypted+last4 to `sql\`NULL\`` keeping the row; `[AUDIT]` logs on set/clear. `api-keys/route.ts:90-166`.
+- **503 on missing secret**: encrypt throws → "Server encryption is not configured" 503. `api-keys/route.ts:79-85`.
+- **Share prereqs**: NO_OWN_KEY 400, GRANTEE_NOT_FOUND 404 "must sign in once first", self-share 400, `onConflictDoNothing` duplicate, `[AUDIT]` grant; revoke is bidirectional via `or(grantor=me&grantee=x , grantee=me&grantor=x)`. `shares/route.ts:126-211`.
+- **Usage aggregation**: only `status='success'` within window; mine = `userId=me`; asGrantor = `key_owner_id=me AND user_id<>me`. `ai-usage/route.ts:45-92`.
+- **`recordUsage` fire-and-forget**: `void db.insert(...).catch(...)` logging only the sanitized `message`. `usage-tracker.ts:30-57`.
+- **`withAuth` gate**: empty `ALLOWED_EMAILS` allows all; non-listed → 403 `accountUnapproved:true`; missing session → 401 `requiresAuth:true`; emails lowercased; bearer (Capacitor) + cookie (web); bearer 5s `AbortController` timeout. `auth-middleware.ts:113-191`.
+- **AccountSection**: not-ready spinner; unauthenticated "Not signed in" + unlock list (AI food & drink parsing / Dose reminder notifications / Cloud sync) + "Sign In" → `router.push("/auth")`; authenticated email + "Sign Out" via `handleSignOut`. `account-section.tsx:13-73`. (Doc said "/auth" — confirmed.)
+- **Consent fields consumed** by both `nutrient-analysis-card.tsx:204-205` and `ai-insights-card.tsx:261-262` to decide whether to attach conditions/medications. (Doc cites these as `ai-insights-card.tsx`/`nutrient-analysis-card.tsx`; actual path `src/components/analytics/`.)
+- **Hook query keys**: `["user","api-keys"]`, `["user","api-keys","shares"]`, `["user","ai-usage", days]`; set invalidates keys; delete invalidates keys + shares; grant/revoke invalidate shares. `use-ai-keys.ts:18-20,48-51,63-66,109-112,131-133`.
+- **`useAiFetch`** is a thin `useCallback` wrapper over `apiFetch`. `use-ai-fetch.ts:6-16`.
+- **Insight report `mode` enum** `"fast" | "deep"` nullable (treated as fast). `schema.ts:699,706-709`.
+
+## Low-confidence / could-not-verify
+
+- The doc's claim that `aiInsightsConsentAt` is a "bigint number" (line 216) is correct on the Postgres side (`bigint({ mode: "number" })`, `schema.ts:659`) and `number | null` in Dexie (`db.ts:388`) — confirmed, not low-confidence; noting only that "bigint" describes the column type while the JS surface is a plain number.
+- "Encryption-secret rotation invalidates all stored keys (no auto re-encryption)" (line 231) is asserted in `key-vault.ts` header comments (`key-vault.ts:22-26`) as design intent; there is no runtime re-encryption code to contradict it, but it is a documented-behavior claim rather than an executable path — accepted as accurate by the comment + absence of rotation logic.
+- The doc lists env vars `NEXT_PUBLIC_API_BASE_URL` and `NEON_AUTH_URL` (line 197). `NEON_AUTH_URL` confirmed (`auth-middleware.ts:40`). `NEXT_PUBLIC_API_BASE_URL` is referenced inside `apiFetch` (not in the files listed); not re-verified here but plausible — out of this unit's direct scope.
