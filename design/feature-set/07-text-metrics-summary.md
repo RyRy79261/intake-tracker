@@ -117,6 +117,7 @@ Caffeine / Alcohol render (no bar, no limit):
 ## Enums, options & configurable values
 
 ### Metrics rendered (Today rows, in order)
+
 | Metric | Key | Label (Today) | Icon | Unit | Bar type | Always shown? |
 |---|---|---|---|---|---|---|
 | Water | `water` | "Water" | Droplets | ml | two-stage | yes |

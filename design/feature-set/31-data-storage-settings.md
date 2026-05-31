@@ -54,7 +54,7 @@ This unit is two stacked sections inside one accordion ("Data & Storage"): **Sto
 - All 18 data arrays: intakeRecords, weightRecords, bloodPressureRecords, eatingRecords, urinationRecords, defecationRecords, substanceRecords, prescriptions, medicationPhases, phaseSchedules, inventoryItems, inventoryTransactions, doseLogs, titrationPlans, dailyNotes, auditLogs, userProfile, insightReports.
 - `settings` object: the persisted Zustand settings state from `localStorage["intake-tracker-settings"]`.
 - Filename pattern: `intake-tracker-backup-YYYY-MM-DD.json`.
-- An **encrypted** variant exists (`exportEncryptedBackup` / `importEncryptedBackup`, AES-GCM with a PIN; payload shape `{ encrypted: true, payload, version }`) — wired in code but not exposed by these UI components today.
+- There is **no encrypted-backup variant** — the former `exportEncryptedBackup` / `importEncryptedBackup` engine functions and `src/lib/crypto.ts` (AES-GCM PIN path) were removed. Export and import are plaintext JSON only.
 
 ### ConflictReviewDrawer
 - Bottom Drawer titled "{N} Conflicts Found" (AlertTriangle icon, amber) + description "Review each conflict and choose which version to keep."
@@ -141,7 +141,7 @@ This unit is two stacked sections inside one accordion ("Data & Storage"): **Sto
 - **Pending:** disabled, label "Importing..." (button and Continue button).
 - **After import:** last-import summary line; conditional "Review conflicts" button.
 - **Success / failure:** toast — title "Import successful" (desc "Imported {n} records ({skipped} skipped[, {c} conflicts])") / title "Import failed" (desc "Failed to import data: {msg}").
-  - **Toast total under-counts:** the success desc's `{n}` sums only **16** `*Imported` fields (stops at `auditLogsImported`); it omits `userProfileImported` and `insightReportsImported`. So the toast total can be lower than the inline "Last import: {N} new" summary, which sums all 18.
+  - **Toast total:** the success desc's `{n}` sums all **18** `*Imported` fields (including `userProfileImported` and `insightReportsImported`), matching the inline "Last import: {N} new" summary.
 
 ### Clear All Data
 - **Default:** single red "Clear All Data" button.
@@ -171,8 +171,7 @@ This unit is two stacked sections inside one accordion ("Data & Storage"): **Sto
 - **`storageMode`** (`settings-store.ts`): `"local"` | `"cloud-sync"`. Default `"local"`.
 - **Import mode** (UI only uses `"merge"`; service supports both): `"merge"` | `"replace"`.
 - **Backup version constant:** `CURRENT_BACKUP_VERSION = 5`.
-- **Encrypted backup shape:** `{ encrypted: true, payload, version }` (AES-GCM via PIN).
-- **MigrationPhase enum** (`migration-store.ts`): `"idle"` | `"backup"` | `"uploading"` | `"verifying"` | `"complete"` | `"cancelled"` | `"error"`.
+- **MigrationPhase enum** (`migration-store.ts`): `"idle"` | `"backup"` | `"uploading"` | `"complete"` | `"cancelled"` | `"error"`.
 - **Per-table upload status** (`upload-progress-step.tsx`): `"pending"` | `"uploading"` | `"done"`.
 - **`TABLE_PUSH_ORDER`** (migration upload order, also used for the per-table progress/summary lists), 18 tables in FK-tier order:
   `prescriptions, titrationPlans, medicationPhases, phaseSchedules, inventoryItems, doseLogs, inventoryTransactions, dailyNotes, intakeRecords, substanceRecords, weightRecords, bloodPressureRecords, eatingRecords, urinationRecords, defecationRecords, auditLogs, userProfile, insightReports`.
@@ -209,7 +208,7 @@ Reads/writes every Dexie table (`src/lib/db.ts`); export/import touch all 18 arr
 - **Export incompleteness guard:** export reads only local IndexedDB; in `cloud-sync` before `initialSyncComplete`, the file may be partial → warning panel ("Cloud Sync hasn't finished downloading all your data…") forces an explicit "Export Anyway".
 - **Record-count vs export mismatch:** the "{N} records" display excludes `userProfile` and `insightReports`, so it can be lower than what export actually writes.
 - **Import is non-destructive in merge mode:** merge never clears; only adds/updates. **Replace** mode (`importBackup(file,"replace")`) clears all 18 tables first — not reachable from current UI.
-- **Validation pipeline:** invalid JSON → error "Invalid JSON format"; encrypted file via plain import → error directing to `importEncryptedBackup()`; legacy v1 (`{records}` shape) is auto-upgraded to the new shape; structural validation requires numeric `version` + string `exportedAt`, and any present array field must be an array; per-record `BACKUP_VALIDATORS` reject malformed rows (counted as `skipped`).
+- **Validation pipeline:** invalid JSON → error "Invalid JSON format"; legacy v1 (`{records}` shape) is auto-upgraded to the new shape; structural validation requires numeric `version` + string `exportedAt`, and any present array field must be an array; per-record `BACKUP_VALIDATORS` reject malformed rows (counted as `skipped`).
 - **Conflict detection scope:** only medication/system tables (+ userProfile/insightReports) raise conflicts; health tables silently skip existing ids. A conflict is raised only when an existing id has *content-different* data (sync-metadata fields ignored). Identical content → counted as `skipped`, no conflict.
 - **Content equality** (`isContentEqual`) ignores `createdAt/updatedAt/deletedAt/deviceId/timezone` and treats missing vs `undefined` as equal; compares via `JSON.stringify`.
 - **Conflict resolution default:** unset decisions default to **keep current** (`?? false`). Only `useBackup` rows are written; keep-current rows are no-ops.
@@ -230,12 +229,12 @@ Reads/writes every Dexie table (`src/lib/db.ts`); export/import touch all 18 arr
 - **`ConflictReviewDrawer`** — bottom-sheet for resolving per-record import conflicts (bulk + per-row keep/use-backup, diff fields).
 - **`useStorageInfo`** — hook computing formatted usage/quota (`navigator.storage.estimate`) + summed record count across 16 tables.
 - **`use-backup-queries`** (`useDownloadBackup` / `useUploadBackup` / `useResolveConflicts` / `useClearAllData`) — React Query mutations wrapping the backup service with success/error toasts.
-- **`backup-service`** — export/import/conflict engine: `exportBackup`, `downloadBackup`, `importBackup` (merge/replace, health vs conflict-aware tables), `resolveConflicts`, plus encrypted `exportEncryptedBackup` / `importEncryptedBackup`, and `getBackupStats` (computes per-table counts across all 18 tables plus oldest/newest record over the 10 timestamp-bearing tables; **not surfaced by any covered UI**).
+- **`backup-service`** — export/import/conflict engine: `exportBackup`, `downloadBackup`, `importBackup` (merge/replace, health vs conflict-aware tables), `resolveConflicts`, and `getBackupStats` (computes per-table counts across all 18 tables plus oldest/newest record over the 10 timestamp-bearing tables; **not surfaced by any covered UI**).
 - **`MigrationWizard`** — modal orchestrating the Local→Cloud migration phases.
   - **`BackupGateStep`** — forces a backup download/acknowledgement before migrating.
   - **`UploadProgressStep`** — progress bar + expandable per-table upload status (pending/uploading/done).
   - **`CompletionSummaryStep`** — success screen with per-table uploaded counts + elapsed duration.
   - **`CancelConfirmDialog`** — destructive confirm that wipes uploaded server data and reverts to Local.
 - **`sync-status-store`** — persisted sync timestamps + `initialSyncComplete`; ephemeral online/syncing/queue/error.
-- **`migration-store`** — migration phase, current table index, per-table progress, verification results.
+- **`migration-store`** — migration phase, current table index, per-table progress, error state.
 - **`TABLE_PUSH_ORDER`** (`sync-topology`) — FK-ordered table list driving upload + summary lists.

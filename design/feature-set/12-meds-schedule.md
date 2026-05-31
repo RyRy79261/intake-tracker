@@ -32,7 +32,7 @@
 - Previous/next week chevrons shift the selected date by ±7 days.
 - Each day cell shows a 3-letter weekday label and the numeric day-of-month.
 - Selected day is highlighted (filled teal). The current real-world "today" gets a teal ring when not the selected day.
-- A caption line under the strip shows a friendly label of the form `<dateLabel>, <Mon D, YYYY>`. For today/tomorrow/yesterday `dateLabel` is just "Today"/"Tomorrow"/"Yesterday" (e.g. `Today, Jun 3, 2026`). For any other date `dateLabel` is the full localized `weekday: "long"` + `month: "short"` + `day: "numeric"` string — itself comma-joined — so the rendered caption repeats the month/day, e.g. `Monday, Jun 3, Jun 3, 2026`.
+- A caption line under the strip shows a friendly label of the form `<dateLabel>, <Mon D, YYYY>`. For today/tomorrow/yesterday `dateLabel` is just "Today"/"Tomorrow"/"Yesterday" (e.g. `Today, Jun 3, 2026`). For any other date `dateLabel` is the full localized `weekday: "long"` + `month: "short"` + `day: "numeric"` string — itself comma-joined — so the rendered caption repeats the month/day, e.g. `Wednesday, Jun 3, Jun 3, 2026`.
 
 ### Tab bar (MedTabBar / med-footer)
 - 5 tabs that switch the entire medications page sub-view: Schedule, Rx (prescriptions), Meds (compound list), Titrations, Settings. Each has an icon + label.

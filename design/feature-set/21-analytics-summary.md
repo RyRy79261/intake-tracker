@@ -214,7 +214,7 @@ water→"water intake", salt→"sodium intake", sugar→"sugar intake", potassiu
 
 ### AI Insights tooltip / model copy
 - Deep model named "Opus 4.6" in dialog copy — and this is genuinely accurate, not just marketing: the deep route's backing model is really `claude-opus-4-6` (`CLAUDE_MODELS.premium`). No fast-mode timing text is rendered anywhere; only the deep amber box surfaces timing ("typically 3-10 minutes … roughly 10-20× the cost of a fast summary").
-- Tracked-data list items: Water intake; Salt / sodium intake; (Sugar intake); (Potassium intake); Blood pressure readings; Weight readings; Fluid balance (in vs. out); Correlations (salt vs. weight[, sugar vs. weight][, potassium vs. weight], caffeine & alcohol vs. blood pressure); "Your water goal, sodium limit[, sugar limit][ & potassium target]".
+- Tracked-data list items: Water intake; Salt / sodium intake; (Sugar intake); (Potassium intake); Blood pressure readings; Weight readings; Fluid balance (in vs. out); Correlations (salt vs. weight\[, sugar vs. weight]\[, potassium vs. weight], caffeine & alcohol vs. blood pressure); "Your water goal, sodium limit\[, sugar limit]\[ & potassium target]".
 
 ### Correlation lag defaults (`analytics-types`)
 `DEFAULT_SALT_WEIGHT_LAG_DAYS = 2`, `DEFAULT_SUGAR_WEIGHT_LAG_DAYS = 2`, `DEFAULT_POTASSIUM_WEIGHT_LAG_DAYS = 2`.

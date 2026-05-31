@@ -21,7 +21,10 @@ if (versionPropsFile.canRead()) {
 //   storePassword  / ANDROID_KEYSTORE_PASSWORD keystore password
 //   keyAlias       / ANDROID_KEY_ALIAS         signing key alias
 //   keyPassword    / ANDROID_KEY_PASSWORD      signing key password
-def keystorePropertiesFile = file('keystore.properties')
+// `file(...)` would resolve against this module dir (android/app/); the keystore
+// file is documented and git-ignored at the project root (android/keystore.properties),
+// so resolve it via rootProject to match.
+def keystorePropertiesFile = rootProject.file('keystore.properties')
 def keystoreProperties = new Properties()
 def hasKeystoreProps = keystorePropertiesFile.canRead()
 if (hasKeystoreProps) {

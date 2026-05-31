@@ -1,14 +1,14 @@
 # 24 — Analytics: Titration Timeline
 
 **Files covered:**
-- `/home/ryan/repos/Personal/intake-tracker/src/components/analytics/titration-tab.tsx` (the tab and all its sub-components)
-- `/home/ryan/repos/Personal/intake-tracker/src/app/analytics/page.tsx` (mount point, tab shell, time-range plumbing)
-- `/home/ryan/repos/Personal/intake-tracker/src/lib/analytics-service.ts` (`adherenceRate`, `bpTrend`, `weightTrend`, `fluidBalance`, `getRecordsByDomain`)
-- `/home/ryan/repos/Personal/intake-tracker/src/lib/analytics-stats.ts` (`trend`/`computeTrend`, `detectAnomalies`)
-- `/home/ryan/repos/Personal/intake-tracker/src/lib/analytics-types.ts` (result/trend types, constants)
-- `/home/ryan/repos/Personal/intake-tracker/src/lib/medication-service.ts` — barrel the component actually imports `getPrescriptions` / `getPhasesForPrescription` from; it re-exports them from `prescription-service.ts` (`getPrescriptions`) and `phase-service.ts` (`getPhasesForPrescription`) respectively (where the implementations live)
-- `/home/ryan/repos/Personal/intake-tracker/src/lib/db.ts` (`Prescription`, `MedicationPhase`, `PhaseType`, `DoseStatus`, `FoodInstruction`)
-- Reference test: `/home/ryan/repos/Personal/intake-tracker/src/components/analytics/titration-tab.dom.test.tsx`
+- `src/components/analytics/titration-tab.tsx` (the tab and all its sub-components)
+- `src/app/analytics/page.tsx` (mount point, tab shell, time-range plumbing)
+- `src/lib/analytics-service.ts` (`adherenceRate`, `bpTrend`, `weightTrend`, `fluidBalance`, `getRecordsByDomain`)
+- `src/lib/analytics-stats.ts` (`trend`/`computeTrend`, `detectAnomalies`)
+- `src/lib/analytics-types.ts` (result/trend types, constants)
+- `src/lib/medication-service.ts` — barrel the component actually imports `getPrescriptions` / `getPhasesForPrescription` from; it re-exports them from `prescription-service.ts` (`getPrescriptions`) and `phase-service.ts` (`getPhasesForPrescription`) respectively (where the implementations live)
+- `src/lib/db.ts` (`Prescription`, `MedicationPhase`, `PhaseType`, `DoseStatus`, `FoodInstruction`)
+- Reference test: `src/components/analytics/titration-tab.dom.test.tsx`
 
 **Purpose:** The Titration tab of the Analytics screen presents a per-prescription, per-phase report that overlays each medication phase's date window with the health outcomes recorded during that window (adherence, blood pressure, weight, fluid balance, anomaly count). It exists to let a single user see "what happened to my body while I was on this dose/phase" — a dose-change-vs-outcome timeline.
 

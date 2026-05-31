@@ -1,7 +1,7 @@
 # 41 — Push & Medication Notifications
 
 **Files covered:**
-- `src/lib/push-notification-service.ts` (browser Notification API, permission, expiry alerts, push subscribe/unsubscribe)
+- `src/lib/push-notification-service.ts` (browser Notification API, permission, expiry-settings scaffold (no dispatcher), test notification, push subscribe/unsubscribe)
 - `src/lib/medication-notification-service.ts` (in-app dose-reminder + refill-alert polling loop)
 - `src/lib/local-notifications.ts` (Capacitor native local notifications for installed app)
 - `src/lib/push-sender.ts` (server-side web-push VAPID sender)
@@ -19,7 +19,7 @@
 - `src/db/schema.ts` (push_subscriptions, push_schedules, push_sent_log, push_settings)
 - `src/stores/settings-store.ts` (dose-reminder preferences)
 
-**Purpose:** Delivers two distinct reminder systems — (1) **medication dose reminders** (server-driven Web Push, plus an in-app polling fallback and a Capacitor native-notification path) and (2) **local data-expiry reminders** (browser Notification API). It covers permission requests, push subscribe/unsubscribe, per-user schedule sync, timezone-aware server dispatch with follow-up nags, and the settings UI to configure all of it.
+**Purpose:** Delivers **medication dose reminders** (server-driven Web Push, plus an in-app polling fallback and a Capacitor native-notification path). It covers permission requests, push subscribe/unsubscribe, per-user schedule sync, timezone-aware server dispatch with follow-up nags, and the settings UI to configure all of it. A legacy **data-expiry reminder** path (browser Notification API) is reduced to a dormant settings toggle + a test-notification button — the expiry-check/dispatch chain was removed, so no expiry notifications are actually sent.
 
 ---
 
@@ -48,11 +48,10 @@
 - Cancels all previously-pending notifications and re-schedules from scratch on each sync. Uses `allowWhileIdle: true`. Weekday is offset (`dow + 1`) to match Capacitor's 1=Sunday convention vs the app's 0=Sunday.
 - Title `Time for {genericName}`, body `Take {dose} of {genericName}`.
 
-### D. Data-expiry reminders (local, browser Notification API)
-- Computes records approaching deletion: counts intake / weight / blood-pressure records falling inside the warning window (older than `retentionDays − warningDays`, still within retention).
-- Fires a single local notification: *"{N} records will be deleted in {days} days. Export your data to save them."* (tag `expiry-reminder`).
-- Throttled by a configurable check interval (default 24 h) tracked via `lastCheck` in `localStorage`.
-- **Test notification** button sends a "Notifications are working correctly!" sample.
+### D. Data-expiry reminders (local, browser Notification API) — settings scaffold only
+- **The actual expiry-check / dispatch chain was removed.** There is no `runExpiryCheck` / `notifyExpiringRecords` (or equivalent) routine: nothing computes records approaching deletion or fires an "N records will be deleted" notification, and the `retentionDays` / `warningDays` inputs and `dataRetentionDays` setting that drove it are gone. No expiry reminders are ever sent.
+- What remains is a dormant settings scaffold in `push-notification-service.ts`: a persisted `NotificationSettings` blob (`enabled`, `lastCheck`, `checkIntervalHours` default 24 h) with `getNotificationSettings` / `saveNotificationSettings` / `shouldCheckExpiry` helpers, plus the Settings → Permissions "Expiry Reminders" On/Off toggle that flips `enabled`. The toggle persists state but has no dispatcher consuming it.
+- **Test notification** button sends a "Notifications are working correctly!" sample (`sendTestNotification`) — the only notification this path actually fires.
 
 ### E. Permissions & diagnostics
 - Request/inspect the browser notification permission (`granted` / `denied` / `default`).
@@ -143,12 +142,11 @@
 - `followUpIntervalMinutes` — default **10**.
 - `dayStartHour` — default **2** (hard-coded to 2 on writes from `/api/push/settings`).
 
-### Expiry-notification settings (`NotificationSettings`, localStorage)
+### Expiry-notification settings (`NotificationSettings`, localStorage) — scaffold only, no dispatcher
 - `enabled` — default **false**.
 - `lastCheck` — default **null**.
 - `checkIntervalHours` — default **24**.
-- `warningDays` parameter — default **7**.
-- `retentionDays` source: `dataRetentionDays` store default **90** (sanitized 0–365).
+- (The `warningDays` / `retentionDays` inputs and the `dataRetentionDays` store setting that fed the removed expiry-check are gone; only the three fields above remain, and nothing consumes them beyond the On/Off toggle.)
 
 ### In-app polling constants (`medication-notification-service.ts`)
 - Dose-due window: **0 to 5 minutes** past scheduled time.
@@ -171,7 +169,7 @@
 
 ### Notification payload fields
 - `title`, `body`, `tag`, `url` (default `/medications?tab=schedule`), `icon` (`/icons/icon-192.svg`), `requireInteraction`.
-- **Tags by path:** push dose reminder `dose-{HH:MM}`; in-app dose reminder `dose-reminder-{HH:MM}`; in-app refill alert `refill-{id}`; expiry reminder `expiry-reminder`; test notification `test-notification`.
+- **Tags by path:** push dose reminder `dose-{HH:MM}`; in-app dose reminder `dose-reminder-{HH:MM}`; in-app refill alert `refill-{id}`; test notification `test-notification`. (No expiry-reminder tag — that dispatch was removed.)
 
 ### Refill-alert thresholds (per inventory item)
 - `refillAlertDays` (days-of-supply threshold) and/or `refillAlertPills` (pill-count threshold) — either may trigger.
@@ -188,7 +186,7 @@
 
 ### IndexedDB / Dexie (read for reminder computation)
 - `prescriptions` (read `isActive`, `genericName`, `compounds`, `id`), `medicationPhases` (read `status: "active"`, `unit`, `prescriptionId`), `phaseSchedules` (read `enabled`, `daysOfWeek`, `time`, `scheduleTimeUTC`, `dosage`, `deletedAt`), `inventoryItems` (read `currentStock`, `strength`, `unit`, `brandName`, `isActive`, `isArchived`, `refillAlertDays`, `refillAlertPills`, `compounds`).
-- `intakeRecords`, `weightRecords`, `bloodPressureRecords` (read `timestamp` for expiry counting).
+- (The removed expiry-check used to read `timestamp` from `intakeRecords` / `weightRecords` / `bloodPressureRecords` to count expiring records; with the dispatch gone, the notification paths no longer read these for expiry.)
 
 ### localStorage keys
 - `intake-tracker-notifications` (expiry settings), `intake-tracker-med-notifications` (in-app dedupe state), `intake-tracker-mic-permission` (mic only). Dose-reminder prefs live in the persisted Zustand settings store.
@@ -210,7 +208,7 @@
 - **Refill math:** `dailyDosage = Σ(dosage × daysOfWeek.length/7)`; `dailyPills = dailyDosage / strength`; `daysLeft = floor(stock / dailyPills)` (Infinity when no daily usage). Alerts if `daysLeft ≤ refillAlertDays` OR `stock ≤ refillAlertPills`. Refill check throttled to once / 12 h.
 - **Compound (combo) meds:** dose text rendered via `formatCompoundShort(splitDose(...))` when `isCombo`, else `{dosage}{unit}`.
 - **Schedule sync debounce:** client hashes `{entries, followUpCount, followUpInterval}` and skips re-sync when unchanged; if no `daysOfWeek` specified, defaults to all 7 days; multiple meds at the same time slot are grouped into one comma-joined label.
-- **Expiry window:** counts records with `timestamp < (now − (retentionDays − warningDays))` and `≥ (now − retentionDays)`; days-until-expiry derived from oldest expiring record; no notification when zero expiring. Throttled by `checkIntervalHours` via `lastCheck`.
+- **Expiry window:** removed. The retention-window computation and expiry notification no longer exist; `checkIntervalHours` / `lastCheck` persist in `NotificationSettings` but nothing reads them to dispatch.
 - **Expired subscription (410):** removed server-side; no user-facing error.
 - **Icons:** PNG preferred; badge deliberately omitted (Android needs a monochrome PNG; SVG badges render as white circles). Default icon `/icons/icon-192.svg`.
 - **SW message origin check:** `SKIP_WAITING` honoured only from same-origin clients.
@@ -220,7 +218,7 @@
 
 ## Sub-components / variants
 
-- **`push-notification-service.ts`** — browser Notification API wrapper: support check, permission, `showNotification` (SW-first w/ direct fallback), expiry check/notify, expiry settings persistence, push subscribe/unsubscribe.
+- **`push-notification-service.ts`** — browser Notification API wrapper: support check, permission, `showNotification` (SW-first w/ direct fallback), `sendTestNotification`, expiry-settings persistence (`getNotificationSettings` / `saveNotificationSettings` / `shouldCheckExpiry` — scaffold only, no expiry dispatcher), push subscribe/unsubscribe.
 - **`medication-notification-service.ts`** — in-app 60 s polling loop for dose reminders + 12 h refill alerts (start/stop lifecycle).
 - **`local-notifications.ts`** — Capacitor native pre-scheduled weekly local notifications (installed-app path).
 - **`push-sender.ts`** — server `web-push` VAPID sender; returns `{success, statusCode}`, flags 410.

@@ -26,7 +26,7 @@
 - **Cross-domain unified feed.** Merges six record domains into one list: water/salt/sugar/potassium intake, weight, blood pressure, eating, urination, defecation. (The `UnifiedRecord` type and filter set also model `caffeine` and `alcohol` substances, but the drawer's loader currently does NOT fetch substance records — see Edge cases.)
 - **Reactive data.** Data comes from `useHistoryData()` which uses Dexie `useLiveQuery`; the list auto-refreshes whenever any underlying table changes (add/edit/delete from anywhere in the app), no manual refetch.
 - **Reverse-chronological sort.** All records are merged and sorted by `timestamp` descending (newest first) before paging.
-- **Date grouping.** Records are grouped under a date header using a locale key formatted `"Mon, Jan 15, 2026"` (`weekday: short, year: numeric, month: short, day: numeric`, en-US). Each header shows the date + a count pill ("N entries" / "1 entry").
+- **Date grouping.** Records are grouped under a date header using a locale key formatted `"Thu, Jan 15, 2026"` (`weekday: short, year: numeric, month: short, day: numeric`, en-US). Each header shows the date + a count pill ("N entries" / "1 entry").
 - **Per-day entry count pill.** Rounded muted pill next to each date showing the number of entries that day, with singular/plural wording.
 - **Type filter tabs.** Horizontal scrollable filter bar; one tab per domain plus "All". Selecting a tab filters the visible list (client-side, applied after paging).
 - **Pagination ("Load More").** Client-side paging of `PAGE_SIZE = 30`. Page starts at 1; "Load More" increments the page, appending another 30 from the already-loaded (max 100 per table) dataset. Button only shows while `hasMore` is true.

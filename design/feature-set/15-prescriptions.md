@@ -63,7 +63,8 @@
   - `addPrescription(input)` — creates prescription + (optional) initial maintenance phase + schedules + inventory item, plus an initial-stock refill transaction when `currentStock > 0`; writes a `prescription_added` audit entry; enqueues all for sync.
   - `updatePrescription(id, updates)` — partial update (id/createdAt excluded), bumps `updatedAt`, audit `prescription_updated` records the changed field names.
   - `deletePrescription(id)` — **soft delete** cascade: hard-deletes dose logs; soft-deletes inventory items (and hard-deletes their transactions), phases, schedules, and the prescription (`deletedAt`/`updatedAt` set); audit `prescription_deleted`; enqueues deletes for sync.
-  - `addMedicationToPrescription(...)` — a sibling mutation (reachable via this domain's hooks, `use-medication-queries.ts`) that adds a brand to an existing prescription; it backs the "Switch Brand" / Medicines-list flows rather than the card surface.
+  - `addMedicationToPrescription(...)` — a sibling mutation (reachable via this domain's hooks, `use-medication-queries.ts`, defined in `phase-service.ts`) that **adds a new brand** to an existing prescription (auto-activating it only when no other active brand exists); it backs the add-medication flow, **not** the "Switch Brand" flow.
+  - **"Switch Brand" mutation owner:** the deactivate/activate is owned by `BrandSwitchPicker` itself, not `compound-card-expanded` (which only opens the picker) and not a dedicated service function. In `handleSelect`, the picker calls the `useUpdateInventoryItem()` hook twice via `mutateAsync` — first `{ isActive: false }` on the current active brand, then `{ isActive: true }` on the selected brand — then toasts "Brand switched". No `prescription-service`/`phase-service` function is involved.
 
 ## States & presentations
 

@@ -159,6 +159,7 @@
 ## Enums, options & configurable values
 
 ### Providers (`PROVIDERS` in `ai-keys-section.tsx`)
+
 | id | name | description | icon | iconColor | prefix | placeholder | consoleUrl | consoleLabel |
 |----|------|-------------|------|-----------|--------|-------------|------------|--------------|
 | `anthropic` | Anthropic | "Powers food & drink parsing, substance lookup, medicine search." | `Sparkles` | `text-amber-500` | `sk-ant-` | `sk-ant-…` | console.anthropic.com/settings/keys | console.anthropic.com |

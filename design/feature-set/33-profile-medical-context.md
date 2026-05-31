@@ -1,19 +1,19 @@
 # 33 — Profile & Medical Context
 
 **Files covered:**
-- `/home/ryan/repos/Personal/intake-tracker/src/app/profile/page.tsx`
-- `/home/ryan/repos/Personal/intake-tracker/src/components/profile/medical-context-section.tsx`
-- `/home/ryan/repos/Personal/intake-tracker/src/components/profile/ai-insights-consent-toggle.tsx`
-- `/home/ryan/repos/Personal/intake-tracker/src/hooks/use-profile-queries.ts`
-- `/home/ryan/repos/Personal/intake-tracker/src/lib/profile-service.ts`
-- `/home/ryan/repos/Personal/intake-tracker/src/components/settings/account-section.tsx` (account state, reused on this page)
-- `/home/ryan/repos/Personal/intake-tracker/src/components/settings/medical-ai-section.tsx` (mirror of consent toggles in Settings → Privacy & Security)
-- `/home/ryan/repos/Personal/intake-tracker/src/lib/db.ts` (`UserProfile` interface, L383–393)
-- `/home/ryan/repos/Personal/intake-tracker/src/db/schema.ts` (`userProfile` pgTable, L646–671)
-- `/home/ryan/repos/Personal/intake-tracker/src/lib/analytics-insights.ts` (consumer: `MedicationSchema`/`ProfileSchema`, prompt builder)
-- `/home/ryan/repos/Personal/intake-tracker/src/lib/analytics-snapshot.ts` (`buildMedicationSummary`, consumer)
-- `/home/ryan/repos/Personal/intake-tracker/src/components/analytics/ai-insights-card.tsx` (consumer of the consent flags)
-- `/home/ryan/repos/Personal/intake-tracker/src/lib/nav-routes.ts` (route registration)
+- `src/app/profile/page.tsx`
+- `src/components/profile/medical-context-section.tsx`
+- `src/components/profile/ai-insights-consent-toggle.tsx`
+- `src/hooks/use-profile-queries.ts`
+- `src/lib/profile-service.ts`
+- `src/components/settings/account-section.tsx` (account state, reused on this page)
+- `src/components/settings/medical-ai-section.tsx` (mirror of consent toggles in Settings → Privacy & Security)
+- `src/lib/db.ts` (`UserProfile` interface, L383–393)
+- `src/db/schema.ts` (`userProfile` pgTable, L646–671)
+- `src/lib/analytics-insights.ts` (consumer: `MedicationSchema`/`ProfileSchema`, prompt builder)
+- `src/lib/analytics-snapshot.ts` (`buildMedicationSummary`, consumer)
+- `src/components/analytics/ai-insights-card.tsx` (consumer of the consent flags)
+- `src/lib/nav-routes.ts` (route registration)
 
 **Purpose:** The Profile page is a top-level swipeable route that shows the user's account/auth state and lets them capture self-reported medical conditions and grant per-category AI-sharing consent. Conditions stay device-local (synced/backed up like any record) and only reach the AI when the user explicitly opts in; the consent flow records a one-time consent timestamp and frames the data as clinical context for AI insights, never a diagnosis.
 

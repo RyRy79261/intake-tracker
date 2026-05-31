@@ -43,7 +43,7 @@
 - Edit view (toggled by Edit button): editable **Active** switch, **Name** (`genericName`), **Reason for use** (`indication`), **Notes** (`Textarea`, 3 rows).
 - The Active toggle behaves differently per mode: in read mode it persists immediately on change; in edit mode it only updates local state until the explicit Save.
 - Save persists name, indication, notes, isActive via `useUpdatePrescription`.
-- Delete shows a native `confirm()` dialog, then permanently deletes the prescription **and all its history**, and closes the drawer.
+- Delete shows a native `confirm()` dialog, then **soft-deletes** the prescription **and its history** (sets `deletedAt` on the prescription, phases, schedules, and inventory items; dose logs and inventory transactions are hard-deleted), and closes the drawer. The confirm copy reads "cannot be undone" — there is no in-app undo — but the records are soft-deleted (recoverable via sync history), not erased.
 
 ### Info tab (`InfoTab`)
 - Shows stored **Contraindications** (red heading) and **Warnings** (amber heading) lists, or empty placeholders.
@@ -176,7 +176,7 @@
 - **Reads:** `id`, `genericName`, `indication`, `notes`, `isActive`, `contraindications?: string[]`, `warnings?: string[]`.
 - **Writes (Details):** `genericName`, `indication`, `notes`, `isActive` (via `useUpdatePrescription`).
 - **Writes (Info):** `contraindications`, `warnings`.
-- **Deletes:** entire prescription + history (via `useDeletePrescription`).
+- **Deletes:** prescription + history (via `useDeletePrescription`) — soft-delete of the prescription/phases/schedules/inventory (`deletedAt`), hard-delete of dose logs + inventory transactions.
 - (Not edited here: `compounds`, `createdAt`, `updatedAt`, `deletedAt`, `deviceId` — system/derived.)
 
 ### `MedicationPhase` (`db.ts`, table `medicationPhases`)
@@ -206,7 +206,7 @@
 - **Dosage parsing:** stored as `parseFloat(r.dosage)` (number); `step="any"` allows decimals/fractional mg.
 - **Day toggle ordering:** `daysOfWeek` always re-sorted ascending after a toggle.
 - **Schedule sort:** rows hydrate sorted ascending by string time.
-- **Delete is destructive + irreversible:** guarded by native `confirm("Permanently delete this prescription and all its history? This cannot be undone.")`; deletes cascade to history; closes drawer on success. No in-app undo.
+- **Delete is destructive (soft-delete, no in-app undo):** guarded by native `confirm("Permanently delete this prescription and all its history? This cannot be undone.")`; the cascade **soft-deletes** the prescription, phases, schedules, and inventory items (`deletedAt`) and **hard-deletes** dose logs + inventory transactions; closes drawer on success. No in-app undo, but soft-deleted rows remain recoverable via sync history (matching `deletePrescription` in 15-prescriptions.md).
 - **Active toggle dual behavior:** immediate persist in read mode, deferred (committed on Save) in edit mode — a subtle UX rule to avoid double writes during an edit session.
 - **Details re-sync on prop change:** `useEffect` resets all local Details fields and exits edit mode whenever the `prescription` prop changes.
 - **Info AI text normalization:** on Save-edits, both fields `split("\n")` → `trim()` → `filter(Boolean)`, so blank lines are dropped; contraindications are title-cased only on display, stored as-fetched/edited.

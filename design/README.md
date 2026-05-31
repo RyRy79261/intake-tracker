@@ -2,12 +2,12 @@
 
 This folder holds the app's design recreated with [Pencil](https://pencil.dev)
 via its **headless CLI** (`@pencil.dev/cli`). The `.pen` files are the source of
-truth; they are edited only through the Pencil CLI / MCP tools (their contents
+truth; they are edited only through the Pencil CLI (their contents
 are encrypted — do not `cat`/`grep` them).
 
 ## Layout
 
-```
+```text
 design/
   intake-tracker.pen     # master canvas — all screens (the deliverable)
   screens/*.pen          # per-screen working files

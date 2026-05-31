@@ -101,7 +101,7 @@ State the model must let the UI express:
 - `mcp_auth_codes.codeChallengeMethod`: `S256` \| `plain`.
 
 ### Card theme keys & labels (`card-themes.ts`) — 11 domains
-`water` (Water), `salt` (Sodium), `sugar` (Sugar), `potassium` (Potassium), `weight` (Weight), `bp` (Blood Pressure), `eating` (Eating), `urination` (Urination), `defecation` (Defecation), `caffeine` (Caffeine), `alcohol` (Alcohol). Each `CardTheme` carries a full set of style fields: `label`, `icon`, `gradient`, `border`, `iconBg`, `iconColor`, `buttonBg`, `outlineBorder`, `outlineText`, `progressGradient`, `progressExtended`, `progressOverLimit`, `hoverBg`, `inputBg`, `inputText`, `loadingBg`, `latestValueColor`, `activeToggle`, `sectionId`. Footer label overrides: `water → "Liquids"`, `eating → "Food & Salt"`.
+`water` (Water), `salt` (Sodium), `sugar` (Sugar), `potassium` (Potassium), `weight` (Weight), `bp` (Blood Pressure), `eating` (Eating), `urination` (Urination), `defecation` (Defecation), `caffeine` (Caffeine), `alcohol` (Alcohol). Each `CardTheme` carries a full set of style fields: `label`, `icon`, `gradient`, `border`, `iconBg`, `iconColor`, `buttonBg`, `outlineBorder`, `progressGradient`, `progressExtended`, `progressOverLimit`, `hoverBg`, `inputBg`, `inputText`, `loadingBg`, `latestValueColor`, `activeToggle`, `sectionId`. Footer label overrides: `water → "Liquids"`, `eating → "Food & Salt"`.
 
 ### Blood-pressure categories (`getBPCategory`, ESH 2023 scale, OR-based highest-first)
 | Category | Threshold (systolic OR diastolic) | Color |
@@ -141,7 +141,6 @@ State the model must let the UI express:
 | sugarExtendedBuffer (g) | 10 | 0–500 |
 | optionalTrackers | `{ sugar: true, potassium: false }` | — |
 | theme | `system` | `light` \| `dark` \| `system` |
-| dataRetentionDays | 90 | 0–365 (0 = forever) |
 | dayStartHour | 2 | 0–23 |
 | showQuickNav | true | — |
 | quickNavOrder | `rtl` | `ltr` \| `rtl` |

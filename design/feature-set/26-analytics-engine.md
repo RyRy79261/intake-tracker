@@ -1,19 +1,19 @@
 # 26 — Analytics Engine (Services)
 
 **Files covered:**
-- `/home/ryan/repos/Personal/intake-tracker/src/lib/analytics-service.ts`
-- `/home/ryan/repos/Personal/intake-tracker/src/lib/analytics-registry.ts`
-- `/home/ryan/repos/Personal/intake-tracker/src/lib/analytics-stats.ts`
-- `/home/ryan/repos/Personal/intake-tracker/src/lib/analytics-snapshot.ts`
-- `/home/ryan/repos/Personal/intake-tracker/src/lib/analytics-types.ts`
-- `/home/ryan/repos/Personal/intake-tracker/src/lib/analytics-insights.ts`
-- `/home/ryan/repos/Personal/intake-tracker/src/lib/insight-report-service.ts`
-- `/home/ryan/repos/Personal/intake-tracker/src/lib/server/insight-job-service.ts`
-- `/home/ryan/repos/Personal/intake-tracker/src/hooks/use-analytics-queries.ts`
-- `/home/ryan/repos/Personal/intake-tracker/src/hooks/use-insights.ts`
-- `/home/ryan/repos/Personal/intake-tracker/src/app/api/analytics/insights/route.ts`
-- `/home/ryan/repos/Personal/intake-tracker/src/app/api/analytics/insights/deep/route.ts`
-- `/home/ryan/repos/Personal/intake-tracker/src/app/api/analytics/insights/jobs/[id]/route.ts`
+- `src/lib/analytics-service.ts`
+- `src/lib/analytics-registry.ts`
+- `src/lib/analytics-stats.ts`
+- `src/lib/analytics-snapshot.ts`
+- `src/lib/analytics-types.ts`
+- `src/lib/analytics-insights.ts`
+- `src/lib/insight-report-service.ts`
+- `src/lib/server/insight-job-service.ts`
+- `src/hooks/use-analytics-queries.ts`
+- `src/hooks/use-insights.ts`
+- `src/app/api/analytics/insights/route.ts`
+- `src/app/api/analytics/insights/deep/route.ts`
+- `src/app/api/analytics/insights/jobs/[id]/route.ts`
 
 **Purpose:** The headless computation layer behind the analytics/history UI. It normalizes every tracked health domain into a uniform `DataPoint` time series, runs a registry of pre-built analytical queries (fluid balance, adherence, BP/weight trends, lagged correlations) plus statistics primitives (moving average, linear-regression trend, Pearson correlation, anomaly detection), reduces them to a privacy-safe numeric snapshot, and orchestrates a two-tier AI "Insights" narrative (fast sync Sonnet + async deep Opus-with-web-search batch jobs) persisted as a history of reports.
 

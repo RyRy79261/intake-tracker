@@ -1,22 +1,22 @@
 # 05 — Urination card
 
 **Files covered:**
-- `/home/ryan/repos/Personal/intake-tracker/src/components/urination-card.tsx`
-- `/home/ryan/repos/Personal/intake-tracker/src/components/edit-urination-dialog.tsx`
-- `/home/ryan/repos/Personal/intake-tracker/src/hooks/use-urination-queries.ts`
-- `/home/ryan/repos/Personal/intake-tracker/src/lib/urination-service.ts`
-- `/home/ryan/repos/Personal/intake-tracker/src/lib/constants.ts` (`URINATION_AMOUNT_OPTIONS`)
-- `/home/ryan/repos/Personal/intake-tracker/src/lib/card-themes.ts` (`urination` theme)
-- `/home/ryan/repos/Personal/intake-tracker/src/components/card-shell.tsx` (outer chrome)
-- `/home/ryan/repos/Personal/intake-tracker/src/components/recent-entries-list.tsx` (`RecentEntriesList`, `InlineEditFormShell`)
-- `/home/ryan/repos/Personal/intake-tracker/src/components/edit-estimate-entry-dialog.tsx` (`EditEstimateEntryDialog`, wrapped by the modal variant)
-- `/home/ryan/repos/Personal/intake-tracker/src/hooks/use-edit-record.ts`
-- `/home/ryan/repos/Personal/intake-tracker/src/hooks/use-delete-with-toast.ts`
-- `/home/ryan/repos/Personal/intake-tracker/src/hooks/use-undo-delete-mutation.ts`
-- `/home/ryan/repos/Personal/intake-tracker/src/lib/record-crud.ts` (shared soft-delete CRUD)
-- `/home/ryan/repos/Personal/intake-tracker/src/lib/db.ts` (`UrinationRecord` interface)
-- `/home/ryan/repos/Personal/intake-tracker/src/stores/settings-store.ts` (`urinationDefaultAmount`)
-- Rendered on the dashboard at `/home/ryan/repos/Personal/intake-tracker/src/app/page.tsx` inside `<div id="section-urination">`.
+- `src/components/urination-card.tsx`
+- `src/components/edit-urination-dialog.tsx`
+- `src/hooks/use-urination-queries.ts`
+- `src/lib/urination-service.ts`
+- `src/lib/constants.ts` (`URINATION_AMOUNT_OPTIONS`)
+- `src/lib/card-themes.ts` (`urination` theme)
+- `src/components/card-shell.tsx` (outer chrome)
+- `src/components/recent-entries-list.tsx` (`RecentEntriesList`, `InlineEditFormShell`)
+- `src/components/edit-estimate-entry-dialog.tsx` (`EditEstimateEntryDialog`, wrapped by the modal variant)
+- `src/hooks/use-edit-record.ts`
+- `src/hooks/use-delete-with-toast.ts`
+- `src/hooks/use-undo-delete-mutation.ts`
+- `src/lib/record-crud.ts` (shared soft-delete CRUD)
+- `src/lib/db.ts` (`UrinationRecord` interface)
+- `src/stores/settings-store.ts` (`urinationDefaultAmount`)
+- Rendered on the dashboard at `src/app/page.tsx` inside `<div id="section-urination">`.
 
 **Purpose:** A dashboard health card for one-tap logging of urination events with an optional coarse volume estimate (small/medium/large). It supports instant quick-log, an expandable details form (amount + free-text note + custom time), and an inline-editable "Recent" list of the last few entries, all stored offline-first in IndexedDB with background sync.
 

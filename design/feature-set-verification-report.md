@@ -148,7 +148,7 @@ There are exactly **3 high-severity inaccuracies** and **0 high-severity omissio
 - **Inacc:** "Loading. `open && !historyData` → centered spinner" presented as reachable → `useHistoryData` seeds `useLiveQuery` with truthy `EMPTY_RESULT`, so `historyData` is never undefined; spinner branch is **unreachable**, and the empty state ("No records yet") shows during initial load instead. → `use-history-queries.ts:35-52`; `history-drawer.tsx:96,244-247`.
 
 ### Unit 10 — card-shell-theming
-- **Inacc:** `progressGradient`/`progressExtended` token values listed as e.g. `from-sky-400 to-cyan-500` → every value is prefixed `bg-gradient-to-r ` in code (e.g. `"bg-gradient-to-r from-sky-400 to-cyan-500"`); doc drops the prefix throughout. → `card-themes.ts:49-50,70-71,91-92,112,237,258`.
+- **Inacc:** `progressGradient`/`progressExtended` token values listed as e.g. `from-sky-400 to-cyan-500` → every value is prefixed with `bg-gradient-to-r` (plus a trailing space) in code (e.g. `"bg-gradient-to-r from-sky-400 to-cyan-500"`); doc drops the prefix throughout. → `card-themes.ts:49-50,70-71,91-92,112,237,258`.
 - **Inacc:** `outlineText` listed as a real consumed token → `outlineText` is defined on all 11 themes but **never read** anywhere in `src/` (only `outlineBorder` is consumed). Dead/unused. → consumer: `preset-tab.tsx:607` (outlineBorder only).
 
 ### Unit 11 — voice-entry
@@ -239,7 +239,7 @@ design decision (e.g. whether to document a dead feature or have engineering rem
 
 ### Tier B — Dead / orphaned features presented as live (collapse duplicates; flag to eng)
 7. **[Re-check] Units 28 + 40:** the **weight-graph overlay booleans** (`weightGraphShow*`) and **`dataRetentionDays`** are write-only/dead — no consumer. Stop describing them as functional; route to engineering (see §6).
-8. **[Quick] Unit 10:** `outlineText` is a **dead token** (defined, never read) — remove from the "consumed tokens" list. Also prefix every `progressGradient`/`progressExtended` value with `bg-gradient-to-r `.
+8. **[Quick] Unit 10:** `outlineText` is a **dead token** (defined, never read) — remove from the "consumed tokens" list. Also prefix every `progressGradient`/`progressExtended` value with `bg-gradient-to-r` (followed by a space).
 9. **[Re-check] Units 03 + 08 + 23:** the **irregular-heartbeat Select in `EditBloodPressureDialog` never renders** (no consumer passes `onIrregularHeartbeatChange`); BP edit never writes `irregularHeartbeat`. Mark the control as not-wired in the BP/edit/records docs. Also add the missing `EditWeightDialog`/`EditBloodPressureDialog` to unit 08's coverage.
 
 ### Tier C — Unreachable states from `useLiveQuery` truthy defaults

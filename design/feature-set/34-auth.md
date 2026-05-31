@@ -222,7 +222,7 @@
 - **Whitelist enforcement is server-side only** (`withAuth` via `ALLOWED_EMAILS`); forms only friendly-map the resulting error. If `ALLOWED_EMAILS` is empty, no whitelist restriction is applied (`allowedEmails.length > 0` guard). Email comparison is lowercased + trimmed.
 - **User-enumeration prevention:** Forgot-password shows success regardless of account existence; whitelist is enforced at the API boundary, not in the forgot form.
 - **Reset token:** Read from URL query param; missing token short-circuits to the invalid-link panel. Min length 8 enforced before submit.
-- **Bearer validation:** Empty/whitespace token rejected; requires `Bearer ` prefix; upstream session shape must include `user.id` + `user.email` (else warns + rejects). Network/timeout failures return `null` ⇒ 401.
+- **Bearer validation:** Empty/whitespace token rejected; requires a `Bearer` prefix (with trailing space); upstream session shape must include `user.id` + `user.email` (else warns + rejects). Network/timeout failures return `null` ⇒ 401.
 - **`ensureUserSynced` is non-fatal:** Failures logged, not thrown — read routes don't need the row; a write route surfaces the FK error itself.
 - **Cookie secret fallback:** `neon-auth.ts` pads a 32-char placeholder so the module is import-safe in tests/dev; real use (sign-in, getSession) still fails because nothing signed with the placeholder validates. Production MUST set `NEON_AUTH_COOKIE_SECRET`.
 - **Middleware scoping:** Neon Auth verifier-exchange middleware runs ONLY for `/auth` + `/auth/*` (so public MCP endpoints stay unauthenticated); CORS layer runs for `/api/*` from allowed capacitor origins (204 on OPTIONS preflight).

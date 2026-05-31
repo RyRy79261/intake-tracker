@@ -204,7 +204,9 @@ Install as a PWA:
 Or install the native build from the Google Play Store (Capacitor wrapper). The
 signed release pipeline is documented in
 [`docs/android-release.md`](docs/android-release.md) — publishing a GitHub
-release builds a signed AAB and uploads it to Play automatically.
+release builds a signed AAB and attaches it to the release. The Play upload step
+only runs when the `PLAY_SERVICE_ACCOUNT_JSON` secret is configured; without it
+the release still succeeds and the Play upload is skipped.
 
 ### iOS
 

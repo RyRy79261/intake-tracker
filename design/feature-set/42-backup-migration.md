@@ -4,8 +4,8 @@
 - `src/lib/backup-service.ts` — export/import/restore engine for all 18 data tables (+ settings)
 - `src/lib/backup-schemas.ts` — Zod validators for every backup table shape
 - `src/hooks/use-backup-queries.ts` — React Query mutations (download, upload, resolve conflicts, clear all)
-- `src/lib/migration-service.ts` — local → cloud-sync migration engine (batched upload, verify, resume, cancel)
-- `src/stores/migration-store.ts` — Zustand store for migration phase/progress/verification state
+- `src/lib/migration-service.ts` — local → cloud-sync migration engine (batched upload, resume, cancel)
+- `src/stores/migration-store.ts` — Zustand store for migration phase/progress/error state
 - `src/components/migration/migration-wizard.tsx` — wizard dialog shell + phase router
 - `src/components/migration/backup-gate-step.tsx` — "back up first" gate before migration
 - `src/components/migration/upload-progress-step.tsx` — per-table upload progress UI
@@ -15,12 +15,11 @@
 - `src/components/settings/data-management-section.tsx` — Export / Import / Clear-all UI in Settings
 - `src/components/settings/storage-info-section.tsx` — Storage card: mode, usage, record count, migration entry points
 - `src/components/settings/conflict-review-drawer.tsx` — per-conflict keep/use-backup resolution drawer
-- `src/lib/crypto.ts` — AES-GCM encryption used by encrypted backups
 - `src/lib/sync-topology.ts` — `TABLE_PUSH_ORDER` (FK-safe table ordering) used by migration
 - `src/hooks/use-storage-info.ts` — storage estimate + record count
-- Supporting APIs: `src/app/api/sync/push/route.ts`, `src/app/api/sync/verify-hash/route.ts`, `src/app/api/sync/cleanup/route.ts`
+- Supporting APIs: `src/app/api/sync/push/route.ts`, `src/app/api/sync/cleanup/route.ts` (a `src/app/api/sync/verify-hash/route.ts` file still exists but is no longer called by the migration flow — see below)
 
-**Purpose:** Lets the single user export their entire local health dataset to a JSON file (optionally PIN-encrypted), import/restore it back with merge or replace semantics and interactive conflict resolution, and one-time migrate their local-only IndexedDB data up to cloud sync via a resumable, verified, batched upload wizard.
+**Purpose:** Lets the single user export their entire local health dataset to a JSON file, import/restore it back with merge or replace semantics and interactive conflict resolution, and one-time migrate their local-only IndexedDB data up to cloud sync via a resumable, batched upload wizard.
 
 ---
 
@@ -33,8 +32,8 @@
 - **JSON is pretty-printed** (`JSON.stringify(data, null, 2)`).
 - **Auto-generated filename:** `intake-tracker-backup-<YYYY-MM-DD>.json` (date portion of `new Date().toISOString()`).
 - **Browser download** via temporary `<a download>` element + `URL.createObjectURL` / `revokeObjectURL`.
-- **Encrypted export** (`exportEncryptedBackup(pin)`) — engine-only, **no UI**. The function exists (exports plaintext blob, then AES-GCM encrypts the JSON string with a PIN-derived key; produces an `EncryptedBackup` envelope `{ encrypted: true, payload: EncryptedData, version: 5 }`) but it is not referenced by any component or hook — there is no PIN-entry field and no "encrypt" toggle, so it is unreachable from the current UI (used only by tests).
-- **Audit logging:** every export writes an audit entry (`data_export`) with per-table counts; encrypted export logs `"Exported encrypted backup"`.
+- **Encrypted export — removed.** The former `exportEncryptedBackup(pin)` engine function and the `src/lib/crypto.ts` AES-GCM PIN path were deleted; there is no encrypted-backup export (and never was any UI for it). Export is plaintext JSON only.
+- **Audit logging:** every export writes an audit entry (`data_export`) with per-table counts.
 
 ### Restore / Import
 - **Import from file** (`importBackup(file, mode)`), default mode `"merge"`.
@@ -43,8 +42,7 @@
   - **replace** — clears all 18 tables first, then bulk-imports everything with no ID/conflict checks. **Engine-only / not user-reachable:** the sole UI caller (`handleConfirmImport`) hard-codes `mode: "merge"`, so no UI path triggers replace.
 - **Per-table validation** — every record validated through its Zod schema (`BACKUP_VALIDATORS`); invalid records are counted as `skipped`, never imported.
 - **Legacy-format upgrade** — old version-1 backups (`{ version, records }` with no `intakeRecords`) are transparently reshaped into the current `BackupData` form (records → intakeRecords; empty weight/BP arrays).
-- **Encrypted-backup detection** — a plaintext import of an encrypted file returns an informative error (`"This backup is encrypted. Please use importEncryptedBackup() with your PIN."`); inverse guard exists for `importEncryptedBackup` on non-encrypted files.
-- **Encrypted import** (`importEncryptedBackup(file, pin, mode)`) — engine-only, **no UI**. The function exists (decrypts payload, rebuilds a `File`, delegates to `importBackup`) but, like `exportEncryptedBackup` and the entire `crypto.ts` PIN path, it is not referenced by any component or hook — unreachable from the current UI (used only by tests).
+- **Encrypted import — removed** along with `crypto.ts`; there is no `importEncryptedBackup` and no PIN path. Import accepts plaintext JSON only.
 - **Conflict detection (merge mode)** — for medication/system tables + userProfile + insightReports, existing-ID records are content-compared (ignoring sync metadata); identical → skipped, different → recorded as a `ConflictRecord` (NOT auto-overwritten).
 - **Conflict resolution** (`resolveConflicts`) — applies user decisions; `useBackup: true` overwrites the local record via `table.put`. "Keep current" (`useBackup: false`) is a literal **no-op** — those entries are skipped with no DB write. Logs `"Resolved N conflicts (M kept current)"`.
 - **Per-table import counts** in `ImportResult` (one `*Imported` counter per table) plus `skipped`, `conflicts[]`, `errors[]`, `success`.
@@ -61,7 +59,7 @@
 - **Persistent resumable progress** — written to `localStorage` key `intake-tracker-migration-progress` after every batch; survives reload/crash.
 - **Auto-resume on app load** — `MigrationGuard` (mounted in `providers.tsx`) detects interrupted progress and reopens the wizard in resume mode.
 - **Resume logic** — skips fully-uploaded tables, restarts partially-uploaded tables at `lastBatchIndex + 1`, restores `queueId` counter.
-- **Integrity verification** (`verifyMigration`) — DORMANT / test-only. The function exists (client computes deterministic SHA-256 per table, compares to server hashes from `POST /api/sync/verify-hash`; records per-table `{ clientHash, serverHash, match }`; returns whether ALL match), but it is **not wired into the production flow**: the wizard never enters the `verifying` phase, never calls `verifyMigration`, and `completeMigration` finalizes **without** verifying. `verifyMigration` / `setVerificationResult` / the `verificationResults` state are exercised only by unit tests. There is no verify screen, button, or pass/fail UI.
+- **Integrity verification — removed.** The former `verifyMigration` engine function, the `verifying` migration phase, and the `verificationResults` / `VerificationResult` store state were all deleted. Migration no longer hash-verifies uploaded tables; `completeMigration` finalizes straight from `uploading`. (The `src/app/api/sync/verify-hash/route.ts` endpoint file still exists but is dead — nothing in the client calls it.)
 - **Cancel & rollback** (`cancelMigration`) — calls `POST /api/sync/cleanup` to delete all uploaded server rows, clears local progress, resets `storageMode` to `"local"`, sets phase `cancelled`.
 - **Completion** (`completeMigration`) — sets `storageMode` `"cloud-sync"`, marks `lastPushedAt` (`markPushed`), clears progress, phase `complete`.
 - **Completion summary** — total records uploaded + elapsed duration (`Ns` or `Nm Ss`), per-table counts.
@@ -118,13 +116,13 @@
 ## States & presentations
 
 ### Migration wizard phases (`MigrationPhase`)
-`idle` | `backup` | `uploading` | `verifying` | `complete` | `cancelled` | `error`
+`idle` | `backup` | `uploading` | `complete` | `cancelled` | `error`
 - **backup** — ShieldCheck (amber) hero, backup-gate copy, download button, ack checkbox, proceed button (disabled until gate satisfied).
 - **uploading** — title "Uploading data", current-table subline (`Uploading <Table>…` or `Counting records…`), `uploaded / total records (percentage%)` (tabular-nums), `<Progress>` bar (h-3), Show/Hide details toggle, Cancel button. **Blocking** (cannot dismiss).
 - **complete** — green CheckCircle2 hero, "Migration Complete", `N records uploaded in <duration>`, per-table list (rows with `total === 0` hidden), Done button.
 - **error** — destructive heading "Migration Error", error message text, Close link.
 - **cancelled** — "Migration Cancelled", "All uploaded data has been removed from the server.", Close link.
-- (`verifying` is a defined phase value but is **never set** in the production flow and not rendered as a distinct wizard screen. Integrity verification — `verifyMigration` / `verificationResults` — is dormant/test-only and has no UI; `completeMigration` finalizes without it.)
+- (There is no `verifying` phase or integrity-verification screen — `completeMigration` finalizes directly from `uploading`.)
 
 ### Per-table upload row status (`tableStatus`)
 - **pending** — outline Circle (muted).
@@ -138,7 +136,7 @@
 - **Pending** — buttons disabled, labels swap to `Exporting...` / `Importing...`.
 - **Last-import result** — bordered panel; conditional "Review N conflicts" button.
 - **Clear-all** — default single button vs expanded Cancel/Confirm-Delete row.
-- **Toasts:** Export success/fail, Import success/fail (`Imported N records (M skipped, K conflicts)`), Conflicts resolved (`N records updated`), Resolution failed, Data cleared, Clear error — variants `success` / `destructive`. Note: the import-success toast total sums only **16** `*Imported` counters (it omits `userProfileImported` and `insightReportsImported`), so the toast undercounts when those two tables import. The inline "Last import: N new" panel sums all 18 and is accurate.
+- **Toasts:** Export success/fail, Import success/fail (`Imported N records (M skipped, K conflicts)`), Conflicts resolved (`N records updated`), Resolution failed, Data cleared, Clear error — variants `success` / `destructive`. The import-success toast total sums all **18** `*Imported` counters (including `userProfileImported` and `insightReportsImported`), matching the inline "Last import: N new" panel.
 
 ### Storage info states
 - **Local only** — secondary "Local only" badge; shows Switch-to-Cloud / Resume / Sign-In CTA.
@@ -161,17 +159,16 @@
 
 - **Backup version:** `CURRENT_BACKUP_VERSION = 5`.
 - **Import modes:** `"merge"` (default) | `"replace"`. Only `"merge"` is reachable from the UI; `"replace"` is an engine capability with no UI trigger (the import handler hard-codes `"merge"`).
-- **Migration phases:** `idle`, `backup`, `uploading`, `verifying`, `complete`, `cancelled`, `error`.
+- **Migration phases:** `idle`, `backup`, `uploading`, `complete`, `cancelled`, `error`.
 - **`storageMode`:** `"local"` (default) | `"cloud-sync"`.
 - **Batch size:** `BATCH_SIZE = 100`.
 - **Max retries:** `MAX_RETRIES = 3`; backoff `2^attempt * 1000ms`.
-- **Server select chunk sizes:** verify-hash route `SELECT_CHUNK_SIZE = 200`; push route `SELECT_CHUNK_SIZE = 100` (distinct value), and the push route additionally caps each request to **500** ops via Zod `.max(500)`.
+- **Server select chunk size:** push route `SELECT_CHUNK_SIZE = 100`, and the push route caps each request to **500** ops via Zod `.max(500)`. (The dead verify-hash route still defines `SELECT_CHUNK_SIZE = 200` but is no longer part of the migration flow.)
 - **localStorage keys:** settings `intake-tracker-settings`; migration progress `intake-tracker-migration-progress`.
 - **Fields ignored in content-equality / diffs:** `createdAt`, `updatedAt`, `deletedAt`, `deviceId`, `timezone`.
 - **Conflict-diff display:** first **3** changed fields, then `+N more`; id shown as first **8** chars.
 - **`TABLE_PUSH_ORDER` (18 tables, FK-safe):** prescriptions, titrationPlans, medicationPhases, phaseSchedules, inventoryItems, doseLogs, inventoryTransactions, dailyNotes, intakeRecords, substanceRecords, weightRecords, bloodPressureRecords, eatingRecords, urinationRecords, defecationRecords, auditLogs, userProfile, insightReports.
 - **Server cleanup `DELETION_ORDER` (reverse FK, 16 tables):** doseLogs, inventoryTransactions, inventoryItems, phaseSchedules, medicationPhases, titrationPlans, prescriptions, substanceRecords, auditLogs, dailyNotes, defecationRecords, urinationRecords, eatingRecords, bloodPressureRecords, weightRecords, intakeRecords.
-- **Encryption (AES-GCM):** `KEY_LENGTH = 256`, `IV_LENGTH = 12`, `SALT_LENGTH = 16`, `PBKDF2_ITERATIONS = 100000`, hash `SHA-256`; `EncryptedData.version = 1`.
 - **Backup filename pattern:** `intake-tracker-backup-<YYYY-MM-DD>.json`; MIME `application/json`; file picker `accept=".json"`.
 - **Duration format:** `<N>s` under 60s, else `<N>m <N>s`.
 - **Storage byte formatting:** `B` / `KB` (1 dp) / `MB` (1 dp).
@@ -189,9 +186,9 @@
 Reads/writes all 18 Dexie tables (`src/lib/db.ts`) and the localStorage settings snapshot:
 - **Health tables (skip-based merge):** intakeRecords, weightRecords, bloodPressureRecords, eatingRecords, urinationRecords, defecationRecords, substanceRecords.
 - **Medication/system tables (conflict-aware merge):** prescriptions, medicationPhases, phaseSchedules, inventoryItems, inventoryTransactions, doseLogs, titrationPlans, dailyNotes, auditLogs, userProfile, insightReports.
-- **Key interfaces:** `BackupData`, `EncryptedBackup`, `ImportResult`, `ConflictRecord` (`backup-service.ts`); `EncryptedData` (`crypto.ts`); `MigrationPhase`, `TableProgress`, `VerificationResult`, `MigrationState` (`migration-store.ts`); `PersistedProgress` (`migration-service.ts`); `PushOp` (`sync-payload.ts`).
+- **Key interfaces:** `BackupData`, `ImportResult`, `ConflictRecord` (`backup-service.ts`); `MigrationPhase`, `TableProgress`, `MigrationState` (`migration-store.ts`); `PersistedProgress` (`migration-service.ts`); `PushOp` (`sync-payload.ts`).
 - **Common record shape:** every record has `id: string` plus optional sync metadata (`createdAt`, `updatedAt`, `deletedAt`, `deviceId`, `timezone`). Backup schemas use `.passthrough()` so unknown/forward-compatible fields survive round-trips.
-- **Server side:** Neon Postgres via Drizzle (`schemaByTableName`); migration pushes to `/api/sync/push`, verifies via `/api/sync/verify-hash`, rolls back via `/api/sync/cleanup` (all `withAuth`, scoped by `userId`).
+- **Server side:** Neon Postgres via Drizzle (`schemaByTableName`); migration pushes to `/api/sync/push` and rolls back via `/api/sync/cleanup` (both `withAuth`, scoped by `userId`). The `/api/sync/verify-hash` route file still exists but is no longer called (verification was removed).
 - **Stores:** `settings-store` (`storageMode`, `setStorageMode`), `sync-status-store` (`lastPushedAt`, `markPushed`, `initialSyncComplete`, `isOnline`), `migration-store`.
 
 ---
@@ -202,8 +199,6 @@ Reads/writes all 18 Dexie tables (`src/lib/db.ts`) and the localStorage settings
 - **All record arrays optional** — older backups can omit any table; missing arrays treated as `[]`.
 - **Finite-number enforcement** — Zod `finiteNumber` rejects `NaN`/`±Infinity` (fixes a real bug vs old `typeof === "number"`); `deletedAt` must be `number | null` when present.
 - **Invalid JSON** → `"Invalid JSON format"` error, no throw (returns `ok(result)`).
-- **Encrypted/plaintext mismatch** → informative error, no partial import.
-- **Decryption failure** (wrong PIN/corrupt) → `"Decryption failed - incorrect PIN or corrupted data"`.
 - **Merge never deletes;** replace clears all 18 tables first (irreversible).
 - **Content-equality ignores sync metadata** — identical content (different timestamps) = skip, not conflict.
 - **Conflicts are not auto-applied** — merge records them; user must explicitly resolve. Replace mode never produces conflicts.
@@ -211,7 +206,6 @@ Reads/writes all 18 Dexie tables (`src/lib/db.ts`) and the localStorage settings
 - **Migration ordering is FK-correct** in both directions (push parent-first, delete child-first).
 - **Resume correctness** — fully-uploaded tables skipped; partial tables resume at `lastBatchIndex + 1`; `queueId` reconstructed from sum of uploaded.
 - **Upload is blocking** — wizard cannot be dismissed mid-upload (no outside-click/Esc/X).
-- **Verification is deterministic** — both sides sort by `id`, serialize with sorted object keys + `undefined → null`, SHA-256; `userId` stripped server-side before hashing.
 - **Incomplete-export guard** — cloud-sync + `!initialSyncComplete` ⇒ warn before export (local copy may be partial).
 - **Cancel performs true rollback** — server rows deleted, local progress cleared, mode reverted to local.
 - **Percentage guard** — `totalRecords === 0` ⇒ `0%` (no divide-by-zero).
@@ -233,9 +227,8 @@ Reads/writes all 18 Dexie tables (`src/lib/db.ts`) and the localStorage settings
 - `StorageInfoSection` — storage mode/usage/count + migration entry points.
 - `ConflictReviewDrawer` — bulk + per-record keep/use-backup resolution.
 - `useDownloadBackup` / `useUploadBackup` / `useResolveConflicts` / `useClearAllData` — React Query mutations with toasts.
-- `exportBackup` / `exportEncryptedBackup` / `downloadBackup` / `generateBackupFilename` — export helpers.
-- `importBackup` / `importEncryptedBackup` / `resolveConflicts` / `getBackupStats` — import/restore helpers. (`getBackupStats` is dead UI-wise: exported and tested but consumed by no component — the storage card uses `useStorageInfo`, not `getBackupStats`. `importEncryptedBackup` is also unwired, per above.)
-- `startMigration` / `resumeMigration` / `completeMigration` / `cancelMigration` / `verifyMigration` / `checkInterruptedMigration` — migration engine.
-- `crypto.ts` (`encrypt` / `decrypt`) — AES-GCM PIN encryption for encrypted backups. Dormant: only consumed by the unwired `exportEncryptedBackup` / `importEncryptedBackup` engine functions and tests; no UI path reaches it.
+- `exportBackup` / `downloadBackup` / `generateBackupFilename` — export helpers.
+- `importBackup` / `resolveConflicts` / `getBackupStats` — import/restore helpers. (`getBackupStats` is dead UI-wise: exported and tested but consumed by no component — the storage card uses `useStorageInfo`, not `getBackupStats`.)
+- `startMigration` / `resumeMigration` / `completeMigration` / `cancelMigration` / `checkInterruptedMigration` — migration engine.
 - `BACKUP_SCHEMAS` / `BACKUP_VALIDATORS` — per-table Zod schemas + boolean validators.
 - `useStorageInfo` — storage estimate + total record count.

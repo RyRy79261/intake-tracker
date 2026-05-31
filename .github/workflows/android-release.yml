@@ -22,12 +22,41 @@ jobs:
       PLAY_TRACK: ${{ vars.PLAY_TRACK || 'beta' }}
       PACKAGE_NAME: dev.ryanjnoble.intaketracker
     steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event.inputs.tag || github.event.release.tag_name }}
+      # Validate the checkout ref. For manual runs, the user-supplied `tag` input
+      # is otherwise passed straight to actions/checkout — without this gate a
+      # manual run could build+sign+upload an arbitrary branch or SHA. We require
+      # the input to resolve to an existing `refs/tags/<tag>` and fail otherwise.
+      - name: Resolve and validate checkout ref
+        id: ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            REF="$RELEASE_TAG"
+          else
+            REF="$INPUT_TAG"
+          fi
+          if [ -z "$REF" ]; then
+            echo "::error::No tag could be determined for this run."
+            exit 1
+          fi
+          # Verify the tag actually exists in this repo. `gh api` exits non-zero
+          # (404) for an unknown tag, which fails the job before any build/sign.
+          if ! gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${REF}" >/dev/null 2>&1; then
+            echo "::error::Tag '${REF}' does not exist (refs/tags/${REF} not found). Refusing to build."
+            exit 1
+          fi
+          echo "ref=${REF}" >> "$GITHUB_OUTPUT"
 
-      - uses: pnpm/action-setup@v5
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ steps.ref.outputs.ref }}
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: '22'
           cache: 'pnpm'
@@ -60,21 +89,32 @@ jobs:
       - name: Sync web assets to Android
         run: npx cap sync android
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
         with:
           distribution: 'temurin'
           java-version: '21'
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
 
       - name: Decode upload keystore
         id: keystore
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
-            echo "::error::ANDROID_KEYSTORE_BASE64 secret is not set — cannot produce a signed release. See docs/android-release.md"
+          # Fail fast if ANY signing secret is missing — a partial set would
+          # produce an unsigned/unusable release that silently fails downstream.
+          missing=""
+          for var in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -z "${!var}" ]; then
+              missing="${missing} ${var}"
+            fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing required signing secret(s):${missing} — cannot produce a signed release. See docs/android-release.md"
             exit 1
           fi
           echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/upload-keystore.jks"
@@ -104,7 +144,7 @@ jobs:
 
       - name: Attach artifacts to GitHub release
         if: github.event_name == 'release'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: ${{ github.event.release.tag_name }}
           files: |
@@ -137,7 +177,7 @@ jobs:
 
       - name: Upload to Google Play (${{ env.PLAY_TRACK }})
         if: steps.play.outputs.enabled == 'true'
-        uses: r0adkll/upload-google-play@v1
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: ${{ env.PACKAGE_NAME }}
