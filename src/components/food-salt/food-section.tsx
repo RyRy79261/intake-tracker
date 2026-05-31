@@ -559,36 +559,50 @@ export function FoodSection() {
         onEdit={openEdit}
         editingId={editingRecord?.id ?? null}
         borderColor={theme.border}
-        renderEntry={(record) => (
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="text-muted-foreground shrink-0">
-              {formatDateTime(record.timestamp)}
-            </span>
-            {record.groupId && groupSodiumMap.get(record.groupId) ? (
-              <span className="text-xs font-medium text-orange-600 dark:text-orange-400">
-                {groupSodiumMap.get(record.groupId)}mg
-              </span>
-            ) : null}
-            {sugarEnabled && record.groupId && groupSugarMap.get(record.groupId) ? (
-              <span className="text-xs font-medium text-pink-600 dark:text-pink-400">
-                {groupSugarMap.get(record.groupId)}g sugar
-              </span>
-            ) : null}
-            {potassiumEnabled && record.groupId && groupPotassiumMap.get(record.groupId) ? (
-              <span className="text-xs font-medium text-purple-600 dark:text-purple-400">
-                {groupPotassiumMap.get(record.groupId)}mg K
-              </span>
-            ) : null}
-            {record.grams && (
-              <span className="text-xs font-medium">{record.grams}g</span>
-            )}
-            {record.note && (
-              <span className="text-xs text-muted-foreground/70 truncate">
-                {record.note}
-              </span>
-            )}
-          </div>
-        )}
+        renderEntry={(record) => {
+          const sodium = record.groupId ? groupSodiumMap.get(record.groupId) : undefined;
+          const sugar = sugarEnabled && record.groupId ? groupSugarMap.get(record.groupId) : undefined;
+          const potassium = potassiumEnabled && record.groupId ? groupPotassiumMap.get(record.groupId) : undefined;
+          const hasMetrics = Boolean(sodium || sugar || potassium || record.grams);
+          return (
+            <div className="flex flex-col gap-1 min-w-0 w-full">
+              {/* Row 1: when + note */}
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-muted-foreground shrink-0">
+                  {formatDateTime(record.timestamp)}
+                </span>
+                {record.note && (
+                  <span className="text-xs text-muted-foreground/70 truncate min-w-0">
+                    {record.note}
+                  </span>
+                )}
+              </div>
+              {/* Row 2: nutrition metrics */}
+              {hasMetrics && (
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0">
+                  {sodium ? (
+                    <span className="text-xs font-medium text-orange-600 dark:text-orange-400">
+                      {sodium}mg
+                    </span>
+                  ) : null}
+                  {sugar ? (
+                    <span className="text-xs font-medium text-pink-600 dark:text-pink-400">
+                      {sugar}g sugar
+                    </span>
+                  ) : null}
+                  {potassium ? (
+                    <span className="text-xs font-medium text-purple-600 dark:text-purple-400">
+                      {potassium}mg K
+                    </span>
+                  ) : null}
+                  {record.grams && (
+                    <span className="text-xs font-medium">{record.grams}g</span>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        }}
         renderEditForm={() => (
           <InlineEditFormShell timestamp={editTimestamp} onTimestampChange={setEditTimestamp} note={editNote} onNoteChange={setEditNote} onSave={() => handleEditSubmit()} onCancel={closeEdit} buttonClassName={theme.buttonBg}>
             <div className="space-y-1">
