@@ -22,8 +22,8 @@ critically — MCP tools unavailable to subagents. **The headless CLI removes ex
 those blockers**: it is scriptable, workflow-native, and needs no running desktop app.
 This makes a clean, rigorous rebuild viable.
 
-**Reference implementation:** `ryry79261/noble-and-co` (cloned at
-`/home/ryan/repos/Personal/noble-and-co`) already uses this CLI well. Its pattern:
+**Reference implementation:** `ryry79261/noble-and-co`
+already uses this CLI well. Its pattern:
 a research-grounded **design brief** (`docs/design/<date>-<project>-design-brief.md`) →
 a single committed `design/<project>.pen` → iterative `design/exports/*.png` reviews →
 `design/images/` assets, with the CLI used as a global tool (not a repo dependency). We

@@ -1,9 +1,9 @@
 # Briefing — Port the Pencil design-system capture + generation workflow to **Camp 404**
 
 **Audience:** the Camp 404 team (and/or its Claude Code agent).
-**Reference implementation:** `intake-tracker` (`/home/ryan/repos/Personal/intake-tracker`,
+**Reference implementation:** `intake-tracker` (local checkout,
 branch `claude/pencil-cli-integration`). Every path in §1–§8 is real and current there.
-**Target:** `camp-404` (`/home/ryan/repos/Personal/camp-404`) — mapped to its real files in §9.
+**Target:** `camp-404` — mapped to its real files in §9.
 
 **Status of the reference impl (honest) — read this before trusting the word "recreation":**
 the *tooling* is built and verified, but be clear-eyed about what the Pencil step actually does:

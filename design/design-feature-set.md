@@ -8796,13 +8796,13 @@ Icon colors are dual light/dark (`text-…-600 dark:text-…-400`, except caffei
 # 39 — Data Model & Enums (Canonical)
 
 **Files covered:**
-- `/home/ryan/repos/Personal/intake-tracker/src/lib/db.ts` (Dexie / IndexedDB — client-side source of truth)
-- `/home/ryan/repos/Personal/intake-tracker/src/db/schema.ts` (Drizzle / Neon Postgres — server mirror, 31 tables; the file's own header comment says "29", an undercount that omits `users_sync` and `insight_jobs`)
-- `/home/ryan/repos/Personal/intake-tracker/src/lib/constants.ts` (presets, BP categories, amount options)
-- `/home/ryan/repos/Personal/intake-tracker/src/lib/card-themes.ts` (per-domain theme keys + labels)
-- `/home/ryan/repos/Personal/intake-tracker/src/lib/quick-nav-defaults.ts` (footer nav defaults)
-- `/home/ryan/repos/Personal/intake-tracker/src/lib/sync-topology.ts` (table push order / FK graph)
-- `/home/ryan/repos/Personal/intake-tracker/src/stores/settings-store.ts` (all persisted preferences + defaults + ranges)
+- `src/lib/db.ts` (Dexie / IndexedDB — client-side source of truth)
+- `src/db/schema.ts` (Drizzle / Neon Postgres — server mirror, 31 tables; the file's own header comment says "29", an undercount that omits `users_sync` and `insight_jobs`)
+- `src/lib/constants.ts` (presets, BP categories, amount options)
+- `src/lib/card-themes.ts` (per-domain theme keys + labels)
+- `src/lib/quick-nav-defaults.ts` (footer nav defaults)
+- `src/lib/sync-topology.ts` (table push order / FK graph)
+- `src/stores/settings-store.ts` (all persisted preferences + defaults + ranges)
 
 **Purpose:** The canonical reference for every data table, interface, field, type, enum, status value, preset, default, and limit across the entire app. This is the spec a design-generator must respect so that every screen, form, picker, badge, and progress bar can represent exactly the values the data layer supports — no more, no less.
 

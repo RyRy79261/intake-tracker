@@ -665,10 +665,10 @@ The full intake-tracker corpus is the worked example this playbook abstracts. Th
 
 **Worked §8 source-harvest instances (real defects the audit surfaced):** a backup-import toast that under-counts (sums 16 of 18 counters); dead `dataRetentionDays` + write-only weight-graph overlay booleans; the dead `outlineText` theme token (defined on all themes, read nowhere); dormant migration integrity-verify + encrypted-backup PIN flows (test-only); unreachable UI states from `useLiveQuery` truthy defaults; an inert DB column; the stale "17 tables" comment (there are 18). The 3 HIGH findings: Opus-vs-Sonnet model misname (unit 02), fabricated Bristol scale (unit 00), substance-enrich misattribution (unit 46).
 
-**Files (all absolute paths):**
-- `/home/ryan/repos/Personal/intake-tracker/design/feature-set/00-overview.md` — the 7-section overview frame
-- `/home/ryan/repos/Personal/intake-tracker/design/feature-set/01-liquids-water-input.md` (and `02`, `03`, `13`, `39`) — per-unit template across card / Reading-card / wizard / data-model variants; §4.3 worked excerpts
-- `/home/ryan/repos/Personal/intake-tracker/design/design-feature-set.md` — assembled master brief (10,610 lines; banner + header confirm assembly shape; note no assembler script exists — see §6)
-- `/home/ryan/repos/Personal/intake-tracker/design/feature-set/verification/01-liquids-water-input.md` (and `31`, plus `00…46`) — per-unit adversarial reports
-- `/home/ryan/repos/Personal/intake-tracker/design/feature-set-verification-report.md` — master verification report (47 units, 4,220 claims, 94.8% verified, 0 significant-gaps)
-- `/home/ryan/repos/Personal/intake-tracker/docs/design/camp-404-design-system-port-briefing.md` — the port briefing this composes with (§9 = the Camp 404 parameterization source; performs visual verification only)
+**Files (repo-relative paths):**
+- `design/feature-set/00-overview.md` — the 7-section overview frame
+- `design/feature-set/01-liquids-water-input.md` (and `02`, `03`, `13`, `39`) — per-unit template across card / Reading-card / wizard / data-model variants; §4.3 worked excerpts
+- `design/design-feature-set.md` — assembled master brief (10,610 lines; banner + header confirm assembly shape; note no assembler script exists — see §6)
+- `design/feature-set/verification/01-liquids-water-input.md` (and `31`, plus `00…46`) — per-unit adversarial reports
+- `design/feature-set-verification-report.md` — master verification report (47 units, 4,220 claims, 94.8% verified, 0 significant-gaps)
+- `docs/design/camp-404-design-system-port-briefing.md` — the port briefing this composes with (§9 = the Camp 404 parameterization source; performs visual verification only)
