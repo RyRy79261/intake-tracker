@@ -8,7 +8,6 @@ import {
   getEntryGroup,
   deleteSingleGroupRecord,
   undoDeleteSingleRecord,
-  recalculateFromCurrentValues,
   syncLiquidEntrySubstances,
   type ComposableEntryInput,
 } from "@/lib/composable-entry-service";
@@ -633,8 +632,6 @@ describe("composable-entry-service", () => {
     });
   });
 
-  // ─── recalculateFromCurrentValues (stub) ────────────────────────────
-
   describe("syncLiquidEntrySubstances", () => {
     it("creates caffeine substance + groupId when entry has none", async () => {
       const intake = makeIntakeRecord({ type: "water", amount: 300, source: "manual" });
@@ -791,25 +788,6 @@ describe("composable-entry-service", () => {
 
       const updated = await db.intakeRecords.get(intake.id);
       expect(updated?.groupId).toBeUndefined();
-    });
-  });
-
-  describe("recalculateFromCurrentValues", () => {
-    it("Test 28: returns err with 'Not implemented' message and no side effects", async () => {
-      const { groupId } = await seedComposableGroup({
-        eating: { note: "No recalc" },
-        intakes: [{ type: "water", amount: 100 }],
-      });
-
-      const result = await recalculateFromCurrentValues(groupId);
-      expect(result.success).toBe(false);
-      if (result.success) return;
-      expect(result.error).toContain("Not implemented");
-
-      // Verify no side effects — records unchanged
-      const group = await getEntryGroup(groupId);
-      expect(group!.eatings).toHaveLength(1);
-      expect(group!.intakes).toHaveLength(1);
     });
   });
 });

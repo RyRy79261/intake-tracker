@@ -812,13 +812,3 @@ export async function syncLiquidEntrySubstances(
     return err("Failed to sync liquid entry substances", e);
   }
 }
-
-// ─── recalculateFromCurrentValues (stub) ──────────────────────────────
-
-export async function recalculateFromCurrentValues(
-  groupId: string,
-): Promise<ServiceResult<void>> {
-  return err(
-    "Not implemented — deferred to Phase 13/14. Requires preset data and recalculation logic not yet available.",
-  );
-}

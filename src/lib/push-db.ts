@@ -29,42 +29,6 @@ export async function deletePushSubscription(userId: string): Promise<void> {
   await sql`DELETE FROM push_subscriptions WHERE user_id = ${userId}`;
 }
 
-// ----- Due Notifications -----
-
-/**
- * Get subscriptions that have a dose schedule matching the current time slot
- * and haven't already been sent the initial notification today.
- */
-export async function getDueNotifications(
-  currentTime: string,
-  dayOfWeek: number,
-  today: string
-) {
-  const sql = getSQL();
-  return sql`
-    SELECT
-      s.user_id,
-      s.endpoint,
-      s.p256dh,
-      s.auth_key,
-      d.time_slot,
-      d.medications_json
-    FROM push_subscriptions s
-    JOIN push_schedules d ON d.user_id = s.user_id
-    JOIN push_settings ps ON ps.user_id = s.user_id
-    WHERE d.time_slot = ${currentTime}
-      AND d.day_of_week = ${dayOfWeek}
-      AND ps.enabled = true
-      AND NOT EXISTS (
-        SELECT 1 FROM push_sent_log l
-        WHERE l.user_id = s.user_id
-          AND l.time_slot = d.time_slot
-          AND l.sent_date = ${today}
-          AND l.follow_up_index = 0
-      )
-  `;
-}
-
 // ----- Follow-up Notifications -----
 
 /**

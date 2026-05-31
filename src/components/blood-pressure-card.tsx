@@ -62,7 +62,6 @@ export function BloodPressureCard() {
   const [customTime, setCustomTime] = useState(getCurrentDateTimeLocal());
 
   const recentRecords = useBloodPressureRecords(5);
-  const isLoading = !recentRecords;
   const addMutation = useAddBloodPressure();
   const deleteMutation = useDeleteBloodPressure();
   const updateMutation = useUpdateBloodPressure();
@@ -197,12 +196,7 @@ export function BloodPressureCard() {
             </div>
             <span className="font-semibold text-lg uppercase tracking-wide">{theme.label}</span>
           </div>
-          {isLoading ? (
-            <div className="animate-pulse text-right">
-              <div className={cn("h-6 w-20 rounded ml-auto", theme.loadingBg)} />
-              <div className="h-4 w-16 bg-muted rounded mt-1 ml-auto" />
-            </div>
-          ) : latestReading ? (
+          {latestReading ? (
             <div className="text-right">
               <p className={cn("text-lg font-bold", theme.latestValueColor)}>
                 {formatBPReading(latestReading)} <span className="text-sm font-normal">mmHg</span>

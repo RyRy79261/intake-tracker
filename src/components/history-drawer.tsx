@@ -17,7 +17,7 @@ import { EditUrinationDialog } from "@/components/edit-urination-dialog";
 import { EditDefecationDialog } from "@/components/edit-defecation-dialog";
 import { RecordRow } from "@/components/history/record-row";
 import { useSettings } from "@/hooks/use-settings";
-import { History, Loader2, ChevronDown, Calendar } from "lucide-react";
+import { History, ChevronDown, Calendar } from "lucide-react";
 import {
   type UnifiedRecord,
   type FilterType,
@@ -93,7 +93,6 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
     [allRecords, page],
   );
   const hasMore = allRecords.length > page * PAGE_SIZE;
-  const isLoading = open && !historyData;
 
   // Handle open change (PIN protection removed in phase 41)
   const handleOpenChange = useCallback((newOpen: boolean) => {
@@ -241,11 +240,7 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
           </DrawerHeader>
 
           <div className="flex-1 overflow-y-auto p-6">
-            {isLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : filteredRecords.length === 0 ? (
+            {filteredRecords.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
                 <History className="w-12 h-12 mx-auto mb-4 opacity-30" />
                 <p>No records yet</p>
