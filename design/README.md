@@ -2,8 +2,9 @@
 
 This folder holds the app's design recreated with [Pencil](https://pencil.dev)
 via its **headless CLI** (`@pencil.dev/cli`). The `.pen` files are the source of
-truth; they are edited only through the Pencil CLI (their contents
-are encrypted — do not `cat`/`grep` them).
+truth. They are plain JSON on disk (Pencil format v2.11), but Pencil maintains
+internal node/variable bookkeeping, so write them only through the Pencil CLI or
+the non-destructive `scripts/pencil/merge-pens.mjs` — never hand-edit them.
 
 ## Layout
 

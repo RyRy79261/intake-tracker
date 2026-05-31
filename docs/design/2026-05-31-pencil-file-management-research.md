@@ -10,6 +10,14 @@ singleton-canvas corruption when two `pencil` processes run at once. We currentl
 ~12-16 one-file-per-screen `.pen` files, which is unwieldy because the desktop app has no
 file explorer.
 
+> **UPDATE (resolved, post-research):** the open "is `.pen` encrypted on disk?" question
+> below (the *"do this check first"* TODO) has since been answered empirically: **CLI-written
+> `.pen` files are plain, pretty-printed JSON** (Pencil format v2.11), not encrypted. Only the
+> Pencil *MCP server* asserts they are opaque. The non-destructive `scripts/pencil/merge-pens.mjs`
+> tool relies on this and reads/writes them as JSON. See `docs/design/pen-merge-tool.md`. Treat
+> the "encrypted-on-disk" statements in the rest of this document as the pre-check hypothesis
+> they were, now superseded.
+
 ---
 
 ## TL;DR — Recommendation
@@ -38,9 +46,11 @@ is why the answer is "a handful of domain files," not "one mega-file" — it bou
 blast radius of every regen and keeps each agent pass small enough to stay faithful.
 
 Evidence strength: the *format supports many frames per file* is **well-documented**. The
-*singleton-canvas corruption* and *encrypted-on-disk* behaviors are **observed / inferred,
-undocumented by the vendor** — treat them as hard constraints we engineer around, not
-vendor-blessed guarantees.
+*singleton-canvas corruption* is **observed / inferred, undocumented by the vendor** — treat
+it as a hard constraint we engineer around, not a vendor-blessed guarantee. The
+*encrypted-on-disk* hypothesis was later **refuted** — CLI-written `.pen` files are plain
+JSON (see the UPDATE above and `docs/design/pen-merge-tool.md`); only the MCP server claims
+they are opaque.
 
 ---
 
