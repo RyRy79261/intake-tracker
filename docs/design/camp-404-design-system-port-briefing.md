@@ -1,13 +1,27 @@
-# Briefing — Port the Pencil design-system capture/recreation workflow to **Camp 404**
+# Briefing — Port the Pencil design-system capture + generation workflow to **Camp 404**
 
 **Audience:** the Camp 404 team (and/or its Claude Code agent).
 **Reference implementation:** `intake-tracker` (`/home/ryan/repos/Personal/intake-tracker`,
 branch `claude/pencil-cli-integration`). Every path in §1–§8 is real and current there.
 **Target:** `camp-404` (`/home/ryan/repos/Personal/camp-404`) — mapped to its real files in §9.
 
-**Status of the reference impl (honest):** the *tooling* is built and verified; the full
-screen recreation in intake-tracker is **mid-flight**, and one step — *does Pencil cleanly
-re-open a hand-merged `.pen`* — is **not yet live-verified** (see §11). Prove that early.
+**Status of the reference impl (honest) — read this before trusting the word "recreation":**
+the *tooling* is built and verified, but be clear-eyed about what the Pencil step actually does:
+
+- **The Pencil CLI GENERATES; it does not TRACE.** Even with the exact screenshot *and* exact
+  tokens in the prompt, it re-draws a *new approximation* — it drifts on colors, gradients,
+  spacing, and element placement, and can drop or invent features. **It does not produce a
+  faithful pixel-clone of an existing UI, and no amount of prompt-tuning makes it one.** This
+  workflow is genuinely good for **capturing clean references, extracting tokens, and
+  generating design *candidates* / alternatives / a fast starting point** — it is **not** a
+  reliable way to replicate an existing screen 1:1. (We learned this the hard way: early
+  "faithful" claims here were wrong.)
+- **For a truly faithful recreation**, you need a *deterministic* approach — extract the real
+  rendered DOM (geometry + computed styles + text, via Playwright) and build the `.pen` frames
+  from that, instead of asking the AI to redraw a picture. That exporter is **not built here**;
+  treat pixel-faithful 1:1 recreation as **out of scope** for this generate-from-prompt workflow.
+- Mechanics still pending live proof: *does Pencil cleanly re-open a hand-merged `.pen`* —
+  **not yet live-verified** (see §11). Prove that early.
 
 > **Read order:** §1 (pipeline) → **§8 (Pitfalls)** → **§9 (Camp 404 specifics)** → §10
 > (steps). The pitfalls and the Camp-404 differences are where the time goes.
@@ -27,8 +41,10 @@ design brief → extract tokens (from code) → Playwright capture (SEEDED, clea
    → verify each export vs its reference → implement components from exports + tokens
 ```
 
-Screenshots provide fidelity; extracted tokens keep colors/spacing exact; the merge tool
-gives one openable file instead of dozens.
+Screenshots + extracted tokens *ground* the generation so output lands closer to the real
+app — but the agent **re-draws from them, it does not trace them**, so expect drift (see the
+Status note above and §6/§8.5). The screenshots are the fidelity *reference you check against*,
+not a guarantee of fidelity. The merge tool then gives one openable file instead of dozens.
 
 ---
 
@@ -105,8 +121,11 @@ Prompt rules:
 - **Pass exact tokens** (§5/§9) as backup. **State the theme** (Camp 404 = dark).
 - **Forbid invented chrome explicitly** — Pencil adds a status bar / 9:41 clock / battery /
   bottom tab bar your app doesn't have.
-- It's **generate-from-prompt = approximation, not a pixel clone**. Always `--export` and
-  compare side-by-side. Never claim "faithful" without looking.
+- It's **generate-from-prompt = approximation, not a pixel clone** (see the Status note). The
+  prompt rules above push it *closer*, but it will still drift and occasionally drop/invent
+  features — this is a limit of the mechanism, not a tuning gap. Always `--export` and compare
+  side-by-side; never claim "faithful" without looking. **If you need 1:1 fidelity, this step
+  is the wrong tool** — use the deterministic DOM→`.pen` approach (out of scope here).
 
 ---
 
@@ -137,8 +156,11 @@ but it packs within 8192² and warns instead of overlapping.
 3. **`.pen` is plain JSON on disk** despite the MCP "encrypted" claim → read/merge directly;
    git-diffs are real; don't mark binary.
 4. **Pencil invents phone chrome** → forbid it in every prompt.
-5. **Generate-from-prompt drifts** (color/gradient/order/size) → anchor to screenshots +
-   exact tokens; verify side-by-side; don't over-claim (we did, early — it was wrong).
+5. **Generate-from-prompt drifts and is NOT faithful** (color/gradient/order/size, dropped/
+   invented features) — a **hard limit of the mechanism** (it redraws, doesn't trace), not a
+   tuning gap. Anchor to screenshots + exact tokens, verify side-by-side, don't over-claim (we
+   did, early — it was wrong). For true 1:1 recreation use a deterministic DOM→`.pen` exporter
+   (out of scope here); use *this* workflow to generate candidates/alternatives, not clones.
 6. **Full-page shots render `position:fixed` bars through content** → hide `.fixed` (§4.4).
 7. **Empty data → useless refs** → seed first.
 8. **Intro banners block the page** → dismiss before capturing.
