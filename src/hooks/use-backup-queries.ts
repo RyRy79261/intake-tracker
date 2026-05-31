@@ -53,7 +53,9 @@ export function useUploadBackup() {
         data.doseLogsImported +
         data.titrationPlansImported +
         data.dailyNotesImported +
-        data.auditLogsImported;
+        data.auditLogsImported +
+        data.userProfileImported +
+        data.insightReportsImported;
       toast({
         title: "Import successful",
         description: `Imported ${total} records (${data.skipped} skipped${data.conflicts.length > 0 ? `, ${data.conflicts.length} conflicts` : ""})`,

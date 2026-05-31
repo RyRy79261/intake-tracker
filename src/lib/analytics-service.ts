@@ -35,7 +35,8 @@ import {
 
 /**
  * Query substance records by date range. This is an exception to the
- * "no db imports" rule -- no substance-service exists yet.
+ * "no db imports" rule -- it reads Dexie directly (with a try/catch fallback
+ * for older schema versions) rather than delegating to substance-service.
  */
 async function getSubstanceRecordsByDateRange(
   type: "caffeine" | "alcohol",

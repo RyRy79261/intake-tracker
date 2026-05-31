@@ -58,9 +58,6 @@ export interface Settings {
   // Theme preference
   theme: "light" | "dark" | "system";
 
-  // Data retention (days, 0 = keep forever)
-  dataRetentionDays: number;
-
   // Day start hour for budget tracking (0-23, default 2 = 2am)
   // Records after this hour count toward "today's" budget
   dayStartHour: number;
@@ -83,11 +80,6 @@ export interface Settings {
   // Tracking defaults
   urinationDefaultAmount: "small" | "medium" | "large";
   defecationDefaultAmount: "small" | "medium" | "large";
-  // Weight graph defaults
-  weightGraphShowEating: boolean;
-  weightGraphShowUrination: boolean;
-  weightGraphShowDefecation: boolean;
-  weightGraphShowDrinking: boolean;
 
   // Liquid presets (beverage CRUD)
   liquidPresets: LiquidPreset[];
@@ -136,7 +128,6 @@ interface SettingsActions {
   setAiAuthSecret: (secret: string) => void;
   getDeobfuscatedAuthSecret: () => string;
   setTheme: (theme: "light" | "dark" | "system") => void;
-  setDataRetentionDays: (days: number) => void;
   setDayStartHour: (hour: number) => void;
   setShowQuickNav: (value: boolean) => void;
   setQuickNavOrder: (order: "ltr" | "rtl") => void;
@@ -148,10 +139,6 @@ interface SettingsActions {
   setSwipeNavVelocityThreshold: (value: number) => void;
   setUrinationDefaultAmount: (value: "small" | "medium" | "large") => void;
   setDefecationDefaultAmount: (value: "small" | "medium" | "large") => void;
-  setWeightGraphShowEating: (value: boolean) => void;
-  setWeightGraphShowUrination: (value: boolean) => void;
-  setWeightGraphShowDefecation: (value: boolean) => void;
-  setWeightGraphShowDrinking: (value: boolean) => void;
   addLiquidPreset: (preset: Omit<LiquidPreset, "id">) => string;
   updateLiquidPreset: (id: string, updates: Partial<Omit<LiquidPreset, "id">>) => void;
   deleteLiquidPreset: (id: string) => void;
@@ -195,7 +182,6 @@ const defaultSettings: Settings = {
   },
   aiAuthSecret: "",
   theme: "system",
-  dataRetentionDays: 90, // Default: keep 90 days of data
   dayStartHour: 2, // Default: 2am - day starts at 2am for budget tracking
   showQuickNav: true,
   quickNavOrder: "rtl" as const,
@@ -207,10 +193,6 @@ const defaultSettings: Settings = {
   swipeNavVelocityThreshold: 500,
   urinationDefaultAmount: "small" as const,
   defecationDefaultAmount: "medium" as const,
-  weightGraphShowEating: true,
-  weightGraphShowUrination: true,
-  weightGraphShowDefecation: true,
-  weightGraphShowDrinking: true,
   liquidPresets: DEFAULT_LIQUID_PRESETS,
   weightIncrement: 0.05,
   storageMode: "local" as const,
@@ -374,10 +356,7 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
       getDeobfuscatedAuthSecret: () => deobfuscateApiKey(get().aiAuthSecret),
       
       setTheme: (theme) => set({ theme }),
-      
-      setDataRetentionDays: (days) => 
-        set({ dataRetentionDays: sanitizeNumericInput(days, 0, 365) }),
-      
+
       setDayStartHour: (hour) =>
         set({ dayStartHour: sanitizeNumericInput(hour, 0, 23) }),
 
@@ -397,10 +376,6 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
 
       setUrinationDefaultAmount: (value) => set({ urinationDefaultAmount: value }),
       setDefecationDefaultAmount: (value) => set({ defecationDefaultAmount: value }),
-      setWeightGraphShowEating: (value) => set({ weightGraphShowEating: value }),
-      setWeightGraphShowUrination: (value) => set({ weightGraphShowUrination: value }),
-      setWeightGraphShowDefecation: (value) => set({ weightGraphShowDefecation: value }),
-      setWeightGraphShowDrinking: (value) => set({ weightGraphShowDrinking: value }),
 
       // Analytics intro
       setAnalyticsIntroSeen: (seen) => set({ analyticsIntroSeen: seen }),

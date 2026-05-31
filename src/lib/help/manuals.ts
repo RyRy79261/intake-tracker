@@ -593,7 +593,7 @@ export const MANUALS: Manual[] = [
         body: "Reset to Defaults, at the bottom of the page, restores every preference to its original value. It does not delete any of your logged data — only your settings.",
         callout: {
           tone: "tip",
-          text: "This manual is reachable from Settings → Help & Manual, and from the \"How does this work?\" link in the shake / bug-report dialog.",
+          text: "This manual is reachable from Settings → Help & Manual, and from the \"Wanna read the manual?\" prompt (the \"Open the manual\" button) in the shake / bug-report dialog.",
         },
       },
     ],

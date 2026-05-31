@@ -163,7 +163,7 @@ async function seedDashboard(page: Page) {
   }
 
   // Blood pressure — two readings (different values) for a small trend.
-  for (const [s, d] of [['128', '82'], ['134', '86']]) {
+  for (const [s, d] of [['128', '82'], ['134', '86']] as const) {
     try {
       const bp = page.locator('#section-bp');
       await bp.scrollIntoViewIfNeeded();

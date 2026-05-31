@@ -8,7 +8,7 @@
  * - `schedulePush(delayMs?)`: debounced push (3s default). Collapses rapid
  *   writes into one flush.
  * - `runPushCycle()`: collects queue rows in TABLE_PUSH_ORDER, POSTs to
- *   /api/sync/push (≤200 ops/cycle), acks on success, applies server
+ *   /api/sync/push (≤PUSH_BATCH_CAP=50 ops/cycle), acks on success, applies server
  *   updatedAt only when `local.updatedAt <= server` (D-12 rule 4 + Pitfall 3),
  *   schedules a pull. On failure, increments attempts and reschedules via
  *   nextBackoff().

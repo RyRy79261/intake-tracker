@@ -1,8 +1,9 @@
 /**
- * Postgres schema — single source of truth for all 29 tables.
+ * Postgres schema — single source of truth for all 30 tables.
  *
  * Mirrors src/lib/db.ts Dexie interfaces exactly (18 app tables),
  * includes 4 push notification tables that replace scripts/push-migration.sql,
+ * 1 server-only AI insight-jobs table (insight_jobs) with no Dexie counterpart,
  * 3 server-only AI tables (user_api_keys, user_key_shares, ai_usage), and
  * 4 server-only MCP-connector tables (mcp_oauth_clients, mcp_auth_codes,
  * mcp_access_tokens, mcp_audit_log) that have no Dexie counterpart.

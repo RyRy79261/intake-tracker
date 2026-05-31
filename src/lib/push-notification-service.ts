@@ -3,7 +3,6 @@
  * Uses the browser's Notification API for local notifications.
  */
 
-import { db } from "@/lib/db";
 import { ok, err, type ServiceResult } from "@/lib/service-result";
 import { apiFetch } from "@/lib/api-fetch";
 
@@ -84,77 +83,6 @@ export async function showNotification(
 }
 
 /**
- * Check for records expiring soon
- */
-export interface ExpiringRecordsInfo {
-  totalExpiring: number;
-  intakeExpiring: number;
-  weightExpiring: number;
-  bpExpiring: number;
-  oldestExpiringDate: Date | null;
-}
-
-export async function checkExpiringRecords(
-  retentionDays: number,
-  warningDays: number = 7
-): Promise<ExpiringRecordsInfo> {
-  const now = Date.now();
-  const cutoffTime = now - retentionDays * 24 * 60 * 60 * 1000;
-  const warningTime = now - (retentionDays - warningDays) * 24 * 60 * 60 * 1000;
-
-  // Get records that are approaching expiration (within warning window)
-  const [intakeRecords, weightRecords, bpRecords] = await Promise.all([
-    db.intakeRecords.filter((r) => r.timestamp < warningTime && r.timestamp >= cutoffTime).toArray(),
-    db.weightRecords.filter((r) => r.timestamp < warningTime && r.timestamp >= cutoffTime).toArray(),
-    db.bloodPressureRecords.filter((r) => r.timestamp < warningTime && r.timestamp >= cutoffTime).toArray(),
-  ]);
-
-  const allTimestamps = [
-    ...intakeRecords.map((r) => r.timestamp),
-    ...weightRecords.map((r) => r.timestamp),
-    ...bpRecords.map((r) => r.timestamp),
-  ];
-
-  return {
-    totalExpiring: allTimestamps.length,
-    intakeExpiring: intakeRecords.length,
-    weightExpiring: weightRecords.length,
-    bpExpiring: bpRecords.length,
-    oldestExpiringDate: allTimestamps.length > 0 ? new Date(Math.min(...allTimestamps)) : null,
-  };
-}
-
-/**
- * Notify user about expiring records
- */
-export async function notifyExpiringRecords(
-  retentionDays: number,
-  warningDays: number = 7
-): Promise<boolean> {
-  if (getNotificationPermission() !== "granted") {
-    return false;
-  }
-
-  const info = await checkExpiringRecords(retentionDays, warningDays);
-
-  if (info.totalExpiring === 0) {
-    return false;
-  }
-
-  const daysUntilExpiry = info.oldestExpiringDate
-    ? Math.ceil((info.oldestExpiringDate.getTime() + retentionDays * 24 * 60 * 60 * 1000 - Date.now()) / (24 * 60 * 60 * 1000))
-    : warningDays;
-
-  const sent = await showNotification("Records Expiring Soon", {
-    body: `${info.totalExpiring} records will be deleted in ${daysUntilExpiry} days. Export your data to save them.`,
-    tag: "expiry-reminder",
-    requireInteraction: false,
-  });
-
-  return sent;
-}
-
-/**
  * Send a test notification
  */
 export async function sendTestNotification(): Promise<boolean> {
@@ -224,17 +152,6 @@ export function shouldCheckExpiry(): boolean {
   
   const hoursSinceLastCheck = (Date.now() - settings.lastCheck) / (1000 * 60 * 60);
   return hoursSinceLastCheck >= settings.checkIntervalHours;
-}
-
-/**
- * Run the expiry check and update last check time
- */
-export async function runExpiryCheck(retentionDays: number): Promise<boolean> {
-  if (!shouldCheckExpiry()) return false;
-
-  saveNotificationSettings({ lastCheck: Date.now() });
-
-  return notifyExpiringRecords(retentionDays);
 }
 
 // ----- Push Subscription Management -----

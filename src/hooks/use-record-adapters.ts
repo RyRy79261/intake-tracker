@@ -39,6 +39,7 @@ export type FieldMap = {
     heartRate: string;
     position: "sitting" | "standing";
     arm: "left" | "right";
+    irregularHeartbeat?: boolean;
     timestamp: string;
     note: string;
   };
@@ -96,6 +97,7 @@ export function initEditingState<K extends EditableType>(
           heartRate: r.heartRate?.toString() || "",
           position: r.position,
           arm: r.arm,
+          irregularHeartbeat: r.irregularHeartbeat ?? false,
           timestamp: ts,
           note,
         },
@@ -209,6 +211,7 @@ export function useRecordAdapters(): RecordAdapters {
               ...(heartRate !== undefined && { heartRate }),
               position: fields.position,
               arm: fields.arm,
+              irregularHeartbeat: fields.irregularHeartbeat ?? false,
               timestamp,
               ...(note !== undefined && { note }),
             },

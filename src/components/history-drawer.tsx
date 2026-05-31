@@ -329,6 +329,8 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
         onPositionChange={(v) => patchFields<"bp">({ position: v })}
         arm={bpEdit?.fields.arm ?? "left"}
         onArmChange={(v) => patchFields<"bp">({ arm: v })}
+        irregularHeartbeat={bpEdit?.fields.irregularHeartbeat ?? false}
+        onIrregularHeartbeatChange={(v) => patchFields<"bp">({ irregularHeartbeat: v })}
         timestamp={bpEdit?.fields.timestamp ?? ""}
         onTimestampChange={(v) => patchFields<"bp">({ timestamp: v })}
         note={bpEdit?.fields.note ?? ""}

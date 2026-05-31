@@ -158,6 +158,7 @@ export function RecordsTab({ range }: RecordsTabProps) {
   const [editHeartRate, setEditHeartRate] = useState("");
   const [editPosition, setEditPosition] = useState<"sitting" | "standing">("sitting");
   const [editArm, setEditArm] = useState<"left" | "right">("left");
+  const [editIrregularHeartbeat, setEditIrregularHeartbeat] = useState(false);
   const [editAmountUrination, setEditAmountUrination] = useState("");
   const [editAmountDefecation, setEditAmountDefecation] = useState("");
   const [editDescription, setEditDescription] = useState("");
@@ -211,6 +212,7 @@ export function RecordsTab({ range }: RecordsTabProps) {
       setEditHeartRate(unified.record.heartRate?.toString() || "");
       setEditPosition(unified.record.position);
       setEditArm(unified.record.arm);
+      setEditIrregularHeartbeat(unified.record.irregularHeartbeat ?? false);
     } else if (unified.type === "eating") {
       setEditingEating(unified.record);
     } else if (unified.type === "urination") {
@@ -284,11 +286,11 @@ export function RecordsTab({ range }: RecordsTabProps) {
     if (newTimestamp === null) { toast({ title: "Invalid date/time", variant: "destructive" }); return; }
     try {
       const bpNoteVal = editNote || undefined;
-      await updateBPMutation.mutateAsync({ id: editingBP.id, updates: { systolic: newSystolic, diastolic: newDiastolic, ...(newHeartRate !== undefined && { heartRate: newHeartRate }), position: editPosition, arm: editArm, timestamp: newTimestamp, ...(bpNoteVal !== undefined && { note: bpNoteVal }) } });
+      await updateBPMutation.mutateAsync({ id: editingBP.id, updates: { systolic: newSystolic, diastolic: newDiastolic, ...(newHeartRate !== undefined && { heartRate: newHeartRate }), position: editPosition, arm: editArm, irregularHeartbeat: editIrregularHeartbeat, timestamp: newTimestamp, ...(bpNoteVal !== undefined && { note: bpNoteVal }) } });
       setEditingBP(null);
       toast({ title: "Entry updated" });
     } catch { toast({ title: "Error", description: "Could not update the entry", variant: "destructive" }); }
-  }, [editingBP, editSystolic, editDiastolic, editHeartRate, editPosition, editArm, editTimestamp, editNote, toast, updateBPMutation]);
+  }, [editingBP, editSystolic, editDiastolic, editHeartRate, editPosition, editArm, editIrregularHeartbeat, editTimestamp, editNote, toast, updateBPMutation]);
 
   const handleEditEatingSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -491,6 +493,8 @@ export function RecordsTab({ range }: RecordsTabProps) {
         onPositionChange={setEditPosition}
         arm={editArm}
         onArmChange={setEditArm}
+        irregularHeartbeat={editIrregularHeartbeat}
+        onIrregularHeartbeatChange={setEditIrregularHeartbeat}
         timestamp={editTimestamp}
         onTimestampChange={setEditTimestamp}
         note={editNote}

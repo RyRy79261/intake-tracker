@@ -3,7 +3,8 @@
  *
  * Supported grants:
  *   - authorization_code (with PKCE)
- *   - refresh_token (rotates the refresh token on every use)
+ *   - refresh_token (issues a fresh access token; the refresh token itself is
+ *     stable and reused — see rotateRefreshToken in src/lib/mcp/oauth.ts)
  */
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";

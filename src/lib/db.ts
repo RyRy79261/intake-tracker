@@ -906,7 +906,7 @@ realDb.version(20).stores({
 export const DB_SCHEMA_VERSION = 21;
 
 /**
- * Store definitions for a preview database — the current (v19) schema in a
+ * Store definitions for a preview database — the current (v21) schema in a
  * single version. A preview database is created empty and discarded, so it
  * needs no migration history.
  */

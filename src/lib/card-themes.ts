@@ -22,7 +22,6 @@ export interface CardTheme {
   iconColor: string;
   buttonBg: string;
   outlineBorder: string;
-  outlineText: string;
   progressGradient: string;
   progressExtended: string;
   progressOverLimit: string;
@@ -45,7 +44,6 @@ export const CARD_THEMES = {
     iconColor: "text-sky-600 dark:text-sky-400",
     buttonBg: "bg-sky-600 hover:bg-sky-700",
     outlineBorder: "border-sky-200 dark:border-sky-800",
-    outlineText: "text-sky-700 dark:text-sky-300",
     progressGradient: "bg-gradient-to-r from-sky-400 to-cyan-500",
     progressExtended: "bg-gradient-to-r from-blue-500 to-indigo-600",
     progressOverLimit: "bg-red-500",
@@ -66,7 +64,6 @@ export const CARD_THEMES = {
     iconColor: "text-amber-600 dark:text-amber-400",
     buttonBg: "bg-amber-600 hover:bg-amber-700",
     outlineBorder: "border-amber-200 dark:border-amber-800",
-    outlineText: "text-amber-700 dark:text-amber-300",
     progressGradient: "bg-gradient-to-r from-amber-400 to-orange-500",
     progressExtended: "bg-gradient-to-r from-orange-600 to-amber-700",
     progressOverLimit: "bg-red-500",
@@ -87,7 +84,6 @@ export const CARD_THEMES = {
     iconColor: "text-pink-600 dark:text-pink-400",
     buttonBg: "bg-pink-600 hover:bg-pink-700",
     outlineBorder: "border-pink-200 dark:border-pink-800",
-    outlineText: "text-pink-700 dark:text-pink-300",
     progressGradient: "bg-gradient-to-r from-pink-400 to-rose-500",
     progressExtended: "bg-gradient-to-r from-rose-600 to-fuchsia-700",
     progressOverLimit: "bg-red-500",
@@ -108,7 +104,6 @@ export const CARD_THEMES = {
     iconColor: "text-purple-600 dark:text-purple-400",
     buttonBg: "bg-purple-600 hover:bg-purple-700",
     outlineBorder: "border-purple-200 dark:border-purple-800",
-    outlineText: "text-purple-700 dark:text-purple-300",
     progressGradient: "bg-gradient-to-r from-purple-400 to-indigo-500",
     progressOverLimit: "bg-red-500",
     hoverBg: "hover:bg-purple-100 hover:border-purple-300 dark:hover:bg-purple-900/50",
@@ -128,7 +123,6 @@ export const CARD_THEMES = {
     iconColor: "text-emerald-600 dark:text-emerald-400",
     buttonBg: "bg-emerald-600 hover:bg-emerald-700",
     outlineBorder: "border-emerald-200 dark:border-emerald-800",
-    outlineText: "text-emerald-700 dark:text-emerald-300",
     progressGradient: "",
     progressExtended: "",
     progressOverLimit: "bg-red-500",
@@ -149,7 +143,6 @@ export const CARD_THEMES = {
     iconColor: "text-rose-600 dark:text-rose-400",
     buttonBg: "bg-rose-600 hover:bg-rose-700",
     outlineBorder: "border-rose-200 dark:border-rose-800",
-    outlineText: "text-rose-700 dark:text-rose-300",
     progressGradient: "",
     progressExtended: "",
     progressOverLimit: "bg-red-500",
@@ -170,7 +163,6 @@ export const CARD_THEMES = {
     iconColor: "text-orange-600 dark:text-orange-400",
     buttonBg: "bg-orange-600 hover:bg-orange-700",
     outlineBorder: "border-orange-200 dark:border-orange-800",
-    outlineText: "text-orange-700 dark:text-orange-300",
     progressGradient: "",
     progressExtended: "",
     progressOverLimit: "bg-red-500",
@@ -191,7 +183,6 @@ export const CARD_THEMES = {
     iconColor: "text-violet-600 dark:text-violet-400",
     buttonBg: "bg-violet-600 hover:bg-violet-700",
     outlineBorder: "border-violet-200 dark:border-violet-800",
-    outlineText: "text-violet-700 dark:text-violet-300",
     progressGradient: "",
     progressExtended: "",
     progressOverLimit: "bg-red-500",
@@ -212,7 +203,6 @@ export const CARD_THEMES = {
     iconColor: "text-stone-600 dark:text-stone-400",
     buttonBg: "bg-stone-600 hover:bg-stone-700",
     outlineBorder: "border-stone-200 dark:border-stone-800",
-    outlineText: "text-stone-700 dark:text-stone-300",
     progressGradient: "",
     progressExtended: "",
     progressOverLimit: "bg-red-500",
@@ -233,7 +223,6 @@ export const CARD_THEMES = {
     iconColor: "text-yellow-700 dark:text-yellow-400",
     buttonBg: "bg-yellow-700 hover:bg-yellow-800",
     outlineBorder: "border-yellow-200 dark:border-yellow-800",
-    outlineText: "text-yellow-700 dark:text-yellow-300",
     progressGradient: "bg-gradient-to-r from-yellow-400 to-amber-500",
     progressExtended: "",
     progressOverLimit: "bg-red-500",
@@ -254,7 +243,6 @@ export const CARD_THEMES = {
     iconColor: "text-fuchsia-600 dark:text-fuchsia-400",
     buttonBg: "bg-fuchsia-600 hover:bg-fuchsia-700",
     outlineBorder: "border-fuchsia-200 dark:border-fuchsia-800",
-    outlineText: "text-fuchsia-700 dark:text-fuchsia-300",
     progressGradient: "bg-gradient-to-r from-fuchsia-400 to-pink-500",
     progressExtended: "",
     progressOverLimit: "bg-red-500",
