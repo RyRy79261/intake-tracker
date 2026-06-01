@@ -73,21 +73,22 @@ export function usePermissions() {
 
       // Check microphone permission
       // First check localStorage (more reliable on mobile PWAs)
-      let microphoneState: PermissionState = getStoredMicPermission() || "prompt";
-      
+      const storedMic = getStoredMicPermission();
+      let microphoneState: PermissionState = storedMic ?? "prompt";
+
       // If not stored, try to query the permission API
-      if (!getStoredMicPermission() && typeof navigator !== "undefined" && navigator.permissions) {
+      if (!storedMic && typeof navigator !== "undefined" && navigator.permissions) {
         try {
           const micPermission = await navigator.permissions.query({
             name: "microphone" as PermissionName,
           });
-          
+
           // Only trust the query if it's not "prompt" (which is the default/unknown state)
           if (micPermission.state !== "prompt") {
             microphoneState = micPermission.state;
             storeMicPermission(microphoneState);
           }
-          
+
           // Listen for permission changes
           micPermission.addEventListener("change", () => {
             const newState = micPermission.state === "prompt" ? "prompt" : micPermission.state;
@@ -139,13 +140,13 @@ export function usePermissions() {
     try {
       // Request microphone access - this triggers the permission prompt
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      
+
       // Stop all tracks after getting permission
       stream.getTracks().forEach((track) => track.stop());
 
       // Store the granted state in localStorage for reliability
       storeMicPermission("granted");
-      
+
       setPermissions((prev) => ({
         ...prev,
         microphone: "granted",
@@ -156,12 +157,12 @@ export function usePermissions() {
       // Permission denied or error
       const isDenied = error instanceof DOMException && error.name === "NotAllowedError";
       const newState: PermissionState = isDenied ? "denied" : "prompt";
-      
+
       // Store denied state in localStorage
       if (isDenied) {
         storeMicPermission("denied");
       }
-      
+
       setPermissions((prev) => ({
         ...prev,
         microphone: newState,
@@ -192,7 +193,7 @@ export function usePermissions() {
       }));
       return;
     }
-    
+
     // Fall back to permissions API if no stored value
     if (typeof navigator !== "undefined" && navigator.permissions) {
       try {

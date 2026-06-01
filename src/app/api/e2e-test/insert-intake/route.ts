@@ -4,10 +4,7 @@ import { db as drizzleDb } from "@/lib/drizzle";
 import { intakeRecords } from "@/db/schema";
 
 export const POST = withAuth(async ({ request, auth }) => {
-  if (
-    process.env.NODE_ENV === "production" &&
-    process.env.ENABLE_E2E_TEST_ROUTES !== "true"
-  ) {
+  if (process.env.ENABLE_E2E_TEST_ROUTES !== "true") {
     return NextResponse.json({ error: "Not available" }, { status: 404 });
   }
 

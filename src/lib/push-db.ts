@@ -92,7 +92,7 @@ export async function getFollowUpNotifications(
     JOIN push_settings ps ON ps.user_id = l.user_id
     WHERE l.sent_date = ${today}
       AND l.follow_up_index = ${followUpIndex - 1}
-      AND l.sent_at <= NOW() - (${intervalMinutes} || ' minutes')::INTERVAL
+      AND l.sent_at <= NOW() - (${intervalMinutes} * INTERVAL '1 minute')
       AND ps.enabled = true
       AND NOT EXISTS (
         SELECT 1 FROM push_sent_log l2
