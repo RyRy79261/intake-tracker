@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import {
   Dialog,
   DialogContent,
@@ -80,6 +81,19 @@ export function AboutDialog() {
           <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-muted/50">
             <span className="text-sm text-muted-foreground">Build</span>
             <span className="text-sm font-mono text-muted-foreground">{shortSha}</span>
+          </div>
+          <div className="pt-1 space-y-2 text-center">
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Not a medical device. Does not diagnose, treat, or prevent any
+              condition. Consult a healthcare professional for medical advice.
+            </p>
+            <Link
+              href="/privacy"
+              onClick={() => setOpen(false)}
+              className="inline-block text-xs text-muted-foreground underline underline-offset-4"
+            >
+              Privacy Policy &amp; Disclaimer
+            </Link>
           </div>
         </div>
       </DialogContent>

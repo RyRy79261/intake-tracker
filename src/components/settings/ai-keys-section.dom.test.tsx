@@ -59,7 +59,7 @@ describe("AiKeysSection", () => {
     mockUseAuth.mockReturnValue({
       ready: true,
       authenticated: true,
-      user: { id: "u1", email: "ryanjnoble@gmail.com", name: "Ryan" },
+      user: { id: "u1", email: "user@example.com", name: "Ryan" },
     });
     vi.stubGlobal(
       "fetch",
@@ -85,7 +85,7 @@ describe("AiKeysSection", () => {
     mockUseAuth.mockReturnValue({
       ready: true,
       authenticated: true,
-      user: { id: "u1", email: "ryanjnoble@gmail.com", name: "Ryan" },
+      user: { id: "u1", email: "user@example.com", name: "Ryan" },
     });
     vi.stubGlobal(
       "fetch",

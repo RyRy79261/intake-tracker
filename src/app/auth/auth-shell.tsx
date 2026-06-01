@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -36,6 +37,11 @@ export function AuthShell({
         <p className="px-6 pt-4 text-center text-xs text-muted-foreground">
           Your health data stays on your device. Sign in lets you sync across
           devices.
+        </p>
+        <p className="px-6 pt-2 text-center text-xs text-muted-foreground">
+          <Link href="/privacy" className="underline underline-offset-4">
+            Privacy Policy &amp; Disclaimer
+          </Link>
         </p>
       </div>
     </div>
