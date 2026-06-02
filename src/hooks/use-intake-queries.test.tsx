@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { ReactNode } from "react";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClientProvider } from "@tanstack/react-query";
 
@@ -33,6 +33,10 @@ function makeWrapper() {
 }
 
 describe("use-intake-queries read hooks", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("useIntakeTotal sums non-deleted records of a type within 24h", async () => {
     const now = Date.now();
     await seedDatabase({
@@ -60,6 +64,16 @@ describe("use-intake-queries read hooks", () => {
   });
 
   it("useDailyIntakeTotal counts only records since the configured day start", async () => {
+    // Pin the clock to local midday so a record "1 hour ago" is unambiguously
+    // within the current day-start window (default day start is 2am). Without
+    // this, the test is wall-clock flaky: when it runs between the day-start
+    // hour and one hour after it (e.g. ~02:05 local, which is when CI's
+    // UTC+2 timezone jobs run), "now - 1h" falls *before* the 2am day start
+    // and the record is correctly excluded — yielding 0 instead of 1000.
+    // Only Date is faked so fake-indexeddb transactions and waitFor's
+    // real-timer polling keep working.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 5, 2, 12, 0, 0));
     const now = Date.now();
     await seedDatabase({
       intakeRecords: [
