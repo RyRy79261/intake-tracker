@@ -43,13 +43,15 @@ export function DeleteAccountDialog({
     setBusy(true);
     try {
       await deleteAccount(); // redirects to /auth on success
-    } catch {
+    } catch (e) {
       setBusy(false);
       toast({
         variant: "destructive",
         title: "Couldn't delete account",
         description:
-          "Something went wrong and your account was not fully deleted. Please try again.",
+          e instanceof Error
+            ? e.message
+            : "Something went wrong and your account was not fully deleted. Please try again.",
       });
     }
   }

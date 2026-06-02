@@ -1,14 +1,18 @@
 "use client";
 
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   deleteRecordsInRange,
+  olderThanDays,
+  ALL_TIME,
   type DeleteRange,
 } from "@/lib/data-deletion-service";
-import { queryClient } from "@/lib/query-client";
 import { unwrap } from "@/lib/service-result";
 import { useToast } from "@/hooks/use-toast";
 
+// Re-exported so components can build deletion presets without importing the
+// service layer directly (no-restricted-imports).
+export { olderThanDays, ALL_TIME };
 export type { DeleteRange };
 
 /**
@@ -17,6 +21,7 @@ export type { DeleteRange };
  */
 export function useDeleteDataInRange() {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (range: DeleteRange) =>
       unwrap(await deleteRecordsInRange(range)),

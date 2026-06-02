@@ -41,8 +41,12 @@ export function StorageInfoSection() {
   const [switchOpen, setSwitchOpen] = useState(false);
   const [switching, setSwitching] = useState(false);
   const { switchToLocalAndWipeCloud } = useAccountActions();
+  const canSwitchToLocal = initialSyncComplete && isOnline && !switching;
 
   async function handleSwitchToLocal() {
+    // Preconditions can flip after the dialog opens (e.g. going offline);
+    // re-check before starting the (destructive) wipe.
+    if (!initialSyncComplete || !isOnline || switching) return;
     setSwitching(true);
     try {
       await switchToLocalAndWipeCloud();
@@ -241,7 +245,7 @@ export function StorageInfoSection() {
                 e.preventDefault();
                 void handleSwitchToLocal();
               }}
-              disabled={switching}
+              disabled={!canSwitchToLocal}
             >
               {switching ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

@@ -16,6 +16,7 @@
  * IMPORTANT: import only from server code (API routes). It pulls in the
  * Drizzle/Neon client.
  */
+import "server-only";
 import { eq, or, type SQL } from "drizzle-orm";
 import { db } from "@/lib/drizzle";
 import { schemaByTableName, type TableName } from "@/lib/sync-payload";

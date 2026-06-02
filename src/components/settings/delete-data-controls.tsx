@@ -13,9 +13,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useDeleteDataInRange, type DeleteRange } from "@/hooks/use-data-deletion";
-
-const DAY_MS = 24 * 60 * 60 * 1000;
+import {
+  useDeleteDataInRange,
+  olderThanDays,
+  ALL_TIME,
+  type DeleteRange,
+} from "@/hooks/use-data-deletion";
 
 interface Preset {
   label: string;
@@ -28,22 +31,22 @@ interface Preset {
 const PRESETS: Preset[] = [
   {
     label: "Older than 1 year",
-    range: () => ({ from: null, to: Date.now() - 365 * DAY_MS }),
+    range: () => olderThanDays(365),
     describe: "all records logged more than a year ago",
   },
   {
     label: "Older than 90 days",
-    range: () => ({ from: null, to: Date.now() - 90 * DAY_MS }),
+    range: () => olderThanDays(90),
     describe: "all records logged more than 90 days ago",
   },
   {
     label: "Older than 30 days",
-    range: () => ({ from: null, to: Date.now() - 30 * DAY_MS }),
+    range: () => olderThanDays(30),
     describe: "all records logged more than 30 days ago",
   },
   {
     label: "All data",
-    range: () => ({ from: null, to: null }),
+    range: () => ALL_TIME,
     describe: "every record you've logged",
   },
 ];
