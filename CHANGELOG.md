@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.32.0](https://github.com/RyRy79261/intake-tracker/compare/v1.31.0...v1.32.0) (2026-06-02)
+
+
+### Features
+
+* add data & account deletion flows with time-framed record wipe ([#199](https://github.com/RyRy79261/intake-tracker/issues/199)) ([cf2ed74](https://github.com/RyRy79261/intake-tracker/commit/cf2ed74baf6f444cd510b2cd550ccb88d3aa8250))
+
 ## [1.31.0](https://github.com/RyRy79261/intake-tracker/compare/v1.30.0...v1.31.0) (2026-06-01)
 
 
