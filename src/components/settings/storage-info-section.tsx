@@ -2,19 +2,33 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { HardDrive, Cloud, CloudOff, Upload, LogIn, CheckCircle2, Loader2 } from "lucide-react";
+import { HardDrive, Cloud, CloudOff, Upload, LogIn, CheckCircle2, Loader2, Download } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useStorageInfo } from "@/hooks/use-storage-info";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useSyncStatusStore } from "@/stores/sync-status-store";
 import { useAuth } from "@/components/auth-guard";
+import { useToast } from "@/hooks/use-toast";
+import { useAccountActions } from "@/hooks/use-account-actions";
 // eslint-disable-next-line no-restricted-imports
 import { checkInterruptedMigration } from "@/lib/migration-service";
 import { MigrationWizard } from "@/components/migration/migration-wizard";
+import { DeleteDataControls } from "@/components/settings/delete-data-controls";
 
 export function StorageInfoSection() {
   const router = useRouter();
+  const { toast } = useToast();
   const { ready, authenticated } = useAuth();
   const { storageUsage, storageQuota, totalRecords } = useStorageInfo();
   const storageMode = useSettingsStore((s) => s.storageMode);
@@ -24,6 +38,31 @@ export function StorageInfoSection() {
   const [wizardOpen, setWizardOpen] = useState(false);
   const [resumeMode, setResumeMode] = useState(false);
   const [hasInterrupted, setHasInterrupted] = useState(false);
+  const [switchOpen, setSwitchOpen] = useState(false);
+  const [switching, setSwitching] = useState(false);
+  const { switchToLocalAndWipeCloud } = useAccountActions();
+
+  async function handleSwitchToLocal() {
+    setSwitching(true);
+    try {
+      await switchToLocalAndWipeCloud();
+      setSwitchOpen(false);
+      toast({
+        title: "Switched to local-only",
+        description:
+          "Your data was downloaded to this device and the cloud copy was deleted.",
+      });
+    } catch {
+      toast({
+        variant: "destructive",
+        title: "Couldn't switch to local",
+        description:
+          "Your data was not changed. Check your connection and try again.",
+      });
+    } finally {
+      setSwitching(false);
+    }
+  }
 
   useEffect(() => {
     setHasInterrupted(checkInterruptedMigration());
@@ -84,6 +123,26 @@ export function StorageInfoSection() {
           <p className="text-xs text-muted-foreground">
             Last synced {new Date(lastPushedAt).toLocaleString()}
           </p>
+        )}
+
+        {storageMode === "cloud-sync" && (
+          <div className="space-y-1">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              disabled={!initialSyncComplete || !isOnline}
+              onClick={() => setSwitchOpen(true)}
+            >
+              <Download className="h-3 w-3" />
+              Switch to Local only
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              {initialSyncComplete
+                ? "Keeps a full copy on this device and deletes the cloud copy."
+                : "Available once your full data has finished downloading."}
+            </p>
+          </div>
         )}
 
         {storageMode === "local" && ready && !authenticated && (
@@ -147,6 +206,10 @@ export function StorageInfoSection() {
             </p>
           </div>
         )}
+
+        <div className="pt-2 border-t">
+          <DeleteDataControls />
+        </div>
       </div>
 
       <MigrationWizard
@@ -154,6 +217,40 @@ export function StorageInfoSection() {
         onOpenChange={setWizardOpen}
         resume={resumeMode}
       />
+
+      <AlertDialog
+        open={switchOpen}
+        onOpenChange={(next) => {
+          if (!switching) setSwitchOpen(next);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Switch to local-only?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Your full dataset will be downloaded to this device, then the copy
+              stored in the cloud will be permanently deleted. Your account and
+              login stay active, and the data on this device is kept. You can
+              re-enable cloud sync later.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={switching}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                void handleSwitchToLocal();
+              }}
+              disabled={switching}
+            >
+              {switching ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
+              {switching ? "Switching…" : "Download & switch"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

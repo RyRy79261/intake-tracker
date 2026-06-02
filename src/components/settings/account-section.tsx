@@ -1,14 +1,17 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Loader2, LogIn, LogOut, Sparkles, Bell, CloudUpload } from "lucide-react";
+import { Loader2, LogIn, LogOut, Sparkles, Bell, CloudUpload, Trash2 } from "lucide-react";
 import { useAuth } from "@/components/auth-guard";
 import { handleSignOut } from "@/lib/sign-out";
+import { DeleteAccountDialog } from "@/components/settings/delete-account-dialog";
 
 export function AccountSection() {
   const { ready, authenticated, user } = useAuth();
   const router = useRouter();
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   if (!ready) {
     return (
@@ -70,6 +73,23 @@ export function AccountSection() {
         <LogOut className="w-4 h-4" />
         Sign Out
       </Button>
+
+      <div className="pt-2 mt-1 border-t">
+        <Button
+          variant="ghost"
+          className="w-full justify-start gap-2 text-muted-foreground hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30"
+          onClick={() => setDeleteOpen(true)}
+        >
+          <Trash2 className="w-4 h-4" />
+          Delete Account
+        </Button>
+        <p className="px-3 pt-1 text-xs text-muted-foreground">
+          Erases all your data from our servers and removes your login. The copy
+          on this device is kept.
+        </p>
+      </div>
+
+      <DeleteAccountDialog open={deleteOpen} onOpenChange={setDeleteOpen} />
     </div>
   );
 }
