@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.31.0](https://github.com/RyRy79261/intake-tracker/compare/v1.30.0...v1.31.0) (2026-06-01)
+
+
+### Features
+
+* add privacy policy page and legal disclaimers ([#192](https://github.com/RyRy79261/intake-tracker/issues/192)) ([ba5ce97](https://github.com/RyRy79261/intake-tracker/commit/ba5ce9745c2f281833916d54c2049daa056d33bc))
+
 ## [1.30.0](https://github.com/RyRy79261/intake-tracker/compare/v1.29.0...v1.30.0) (2026-05-31)
 
 
