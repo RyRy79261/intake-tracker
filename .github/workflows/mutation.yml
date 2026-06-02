@@ -39,7 +39,7 @@ jobs:
           # after checkout, so leaving the GITHUB_TOKEN on disk gains
           # nothing and widens the blast radius if a step is compromised.
           persist-credentials: false
-      - uses: pnpm/action-setup@v5
+      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v6
         with:
           node-version: '22'
