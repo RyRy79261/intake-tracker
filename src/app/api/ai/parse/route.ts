@@ -29,7 +29,7 @@ const AIParseResponseSchema = z.object({
 });
 
 const SYSTEM_PROMPT = `You are a nutrition lookup assistant. Given a food or drink description, return:
-- water_ml: water content in millilitres (ml)
+- water_ml: fluid/water content in millilitres (ml). For a DRINK (anything consumed as a liquid — water, juice, cordial, soft drinks, an ice lolly/popsicle, a smoothie), this is the TOTAL liquid volume consumed. Dissolved sugar, sodium and other solutes are carried *within* that liquid and do NOT displace it — never subtract them from the volume. A "60 ml ice lolly" is ~60 ml of fluid that happens to contain ~10 g of dissolved sugar, NOT 50 ml of water plus 10 ml of sugar. Report water_ml ≈ 60 and sugar_g ≈ 10 independently.
 - sodium_mg: sodium content in milligrams (mg) -- NOT salt (NaCl). If a label or source reports salt in grams, convert: sodium_mg = salt_g * 1000 / 2.5.
 - sugar_g: total sugars in grams (g) -- the sum of naturally-occurring and added sugars, as reported on a nutrition label's "of which sugars" line. A rough estimate is fine.
 - potassium_mg: potassium content in milligrams (mg). Many labels do not report potassium; estimate from typical food composition tables (USDA / EFSA) when no label value is available. A rough estimate is fine -- potassium varies widely between foods and exact values are unattainable.
@@ -47,10 +47,10 @@ Process:
 2. If the item is a basic generic item with well-known values (plain water, milk, espresso, etc.), you may answer from your own knowledge.
 3. After research, call the parse_food_result tool with the final numbers. The tool MUST be called -- do not return free text only.
 
-Reference values for water content:
-- Water, tea, black coffee: ~100% water
-- Milk: ~87%, juice: ~85-90%, soft drinks: ~90%, beer: ~93%, wine: ~87%, spirits: ~60%
-- Fresh produce varies (watermelon 92%, cucumber 96%, apple 86%)
+Water content — IMPORTANT distinction between drinks and solid foods:
+- DRINKS (you swallow a defined volume of liquid): water_ml = the FULL liquid volume. The body receives that whole volume as fluid; dissolved sugar, salt, caffeine or alcohol travel inside it and do not reduce it. A 250 ml glass of juice → water_ml ≈ 250 (NOT ~215), a 330 ml can of cola → ~330, a 60 ml ice lolly → ~60, a 250 ml glass of milk → ~250. The only common drink where the volume genuinely overstates hydration is high-proof spirits (the ethanol fraction is not water) — for neat spirits use roughly volume × water-fraction (~60% for 40% ABV).
+- SOLID / SEMI-SOLID FOODS (no defined liquid volume — fruit, bread, a cooked dish): estimate the water they contribute from their mass and typical water-by-weight fraction. Watermelon ~92%, cucumber ~96%, apple ~86%, bread ~35%, cooked rice ~70%.
+- Never carve dissolved sugar or sodium out of a drink's volume. Track them as separate masses (sugar_g, sodium_mg) over the SAME liquid.
 
 Reference values for sodium (per typical serving):
 - Plain fresh produce: 1-10 mg / 100 g
@@ -88,7 +88,8 @@ const PARSE_RESULT_TOOL = {
     properties: {
       water_ml: {
         type: ["number", "null"],
-        description: "Water content in millilitres. Null if it cannot be estimated.",
+        description:
+          "Fluid content in millilitres. For a drink, this is the FULL liquid volume consumed — dissolved sugar/sodium do not reduce it (a 60 ml lolly with 10 g sugar is ~60 ml, not 50). For solid food, estimate water contributed by its mass. Null if it cannot be estimated.",
       },
       sodium_mg: {
         type: ["number", "null"],
