@@ -1,3 +1,4 @@
+import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { resolveAiKey, type ResolvedKey } from "@/lib/ai-key-resolver";
 

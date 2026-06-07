@@ -1,8 +1,25 @@
+import path from "node:path";
 import { defineConfig } from "vitest/config";
 import tsconfigPaths from "vite-tsconfig-paths";
 
+// `server-only` / `client-only` are build-time bundler markers (React-team
+// packages that Next.js resolves via the `react-server` export condition). They
+// have no resolver under vitest's node environment, so alias both specifiers to
+// an empty stub. The boundary they enforce is validated by `next build` and
+// `bundle-security.test.ts`, not by unit tests.
+const BUNDLER_MARKER_STUB = path.resolve(
+  process.cwd(),
+  "src/__tests__/helpers/bundler-markers-stub.ts",
+);
+
 export default defineConfig({
   plugins: [tsconfigPaths()],
+  resolve: {
+    alias: {
+      "server-only": BUNDLER_MARKER_STUB,
+      "client-only": BUNDLER_MARKER_STUB,
+    },
+  },
   // tsconfig has jsx:"preserve" (Next.js handles the transform); vitest uses
   // esbuild directly, so opt into the automatic JSX runtime here for tests.
   esbuild: { jsx: "automatic" },

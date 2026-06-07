@@ -1,3 +1,5 @@
+import "server-only";
+
 /**
  * Resolve which API key to use for an AI request.
  *

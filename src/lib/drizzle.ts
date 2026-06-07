@@ -1,3 +1,5 @@
+import "server-only";
+
 /**
  * Drizzle client (Neon HTTP driver).
  *
