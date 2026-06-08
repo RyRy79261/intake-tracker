@@ -670,14 +670,16 @@ describe("Coverage job produces delta PR comments for src changes (CIOP-02)", ()
 });
 
 describe("Build job caches .next/cache to speed up repeat builds (CIOP-03)", () => {
-  it("build job uses actions/cache@v5 to cache .next/cache", () => {
+  it("build job uses actions/cache to cache .next/cache", () => {
     // Without caching the Next.js build cache, every CI run rebuilds from
     // scratch, adding ~30-60 seconds to the build job on unchanged code.
+    // Version-agnostic: Dependabot bumps actions/cache (v5 -> v6 -> ...) and
+    // pinning the major here would fail the structural test on every bump.
     const buildBlock = extractJobBlock("build", raw);
     expect(
       buildBlock,
-      "build job must use actions/cache@v5"
-    ).toContain("actions/cache@v5");
+      "build job must use actions/cache"
+    ).toMatch(/actions\/cache@v\d+/);
     expect(
       buildBlock,
       "build job cache path must include .next/cache"
