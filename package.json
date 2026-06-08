@@ -91,7 +91,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.3",
-    "@commitlint/config-conventional": "^20.5.0",
+    "@commitlint/config-conventional": "^21.0.2",
     "@next/env": "16.2.6",
     "@playwright/test": "^1.58.2",
     "@serwist/turbopack": "^9.5.11",
