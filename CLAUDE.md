@@ -71,7 +71,7 @@ API routes handle server-side Claude API calls (key never exposed to client). PI
 
 ### Auth
 
-**Neon Auth** (`@neondatabase/auth`) for authentication (email/password + Google social via `/api/auth/callback/google`). Whitelist enforcement via `ALLOWED_EMAILS` env var checked in `src/lib/auth-middleware.ts`. E2E tests seed a session via `e2e/global-setup.ts` using `E2E_TEST_EMAIL` / `E2E_TEST_PASSWORD` and persist `playwright/.auth/user.json`.
+**Neon Auth** (`@neondatabase/auth`) for authentication (email/password + Google social via `/api/auth/callback/google`). Whitelist enforcement via `ALLOWED_EMAILS` env var checked in `src/lib/auth-middleware.ts`. E2E tests seed a session via `e2e/global-setup.ts` using `NEON_AUTH_TEST_EMAIL` / `NEON_AUTH_TEST_PASSWORD` and persist `playwright/.auth/user.json`. These two vars (and every other secret the e2e webServer needs) MUST be listed in `turbo.json`'s `globalEnv` — turbo runs in `strict` env mode, so any var not declared there is stripped from the task and never reaches `globalSetup` or the spawned Next server in CI (locally `playwright.config.ts`'s `loadEnvConfig()` masks this by repopulating from `.env.local`).
 
 ### UI
 
