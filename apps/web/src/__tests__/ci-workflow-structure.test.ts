@@ -46,7 +46,7 @@ beforeAll(() => {
 // ---------------------------------------------------------------------------
 function extractJobBlock(jobName: string, yaml: string): string {
   // Collect all top-level job header offsets: "  <name>:" at column 0+2 spaces
-  const jobHeaderPattern = /^  ([a-z][a-z0-9-]+):/gm;
+  const jobHeaderPattern = /^ {2}([a-z][a-z0-9-]+):/gm;
   const boundaries: Array<{ name: string; start: number }> = [];
   let m: RegExpExecArray | null;
   while ((m = jobHeaderPattern.exec(yaml)) !== null) {
@@ -196,8 +196,8 @@ describe("Dual-TZ jobs execute tests in both required timezones (CIPL-03)", () =
 
   it("dual-TZ jobs are defined as separate jobs (not a matrix or single job)", () => {
     // Each timezone job reports independently in the GitHub status check UI.
-    expect(raw).toMatch(/^  test-tz-sa:/m);
-    expect(raw).toMatch(/^  test-tz-de:/m);
+    expect(raw).toMatch(/^ {2}test-tz-sa:/m);
+    expect(raw).toMatch(/^ {2}test-tz-de:/m);
     // They must not share a job definition via matrix
     const saBlock = extractJobBlock("test-tz-sa", raw);
     const deBlock = extractJobBlock("test-tz-de", raw);
@@ -224,7 +224,7 @@ describe("data-integrity job runs integrity tests unconditionally on every PR (D
     // If this job is removed, no integrity test runs on PRs — removing it must
     // be caught immediately rather than silently skipping the DATA-05 gate.
     expect(raw, "data-integrity job must be defined").toMatch(
-      /^  data-integrity:/m
+      /^ {2}data-integrity:/m
     );
   });
 
@@ -298,7 +298,7 @@ describe("E2E job runs Playwright tests with Chromium in CI and blocks merge (E2
   it("e2e job is defined in the workflow", () => {
     // If the e2e job is missing, E2E tests never run in CI and regressions
     // in UI flows can be merged silently.
-    expect(raw, "e2e job must be defined").toMatch(/^  e2e:/m);
+    expect(raw, "e2e job must be defined").toMatch(/^ {2}e2e:/m);
   });
 
   it("e2e job installs Playwright Chromium for headless browser execution", () => {
@@ -382,7 +382,7 @@ describe("Supply-chain job verifies config drift and audits dependencies (SCHN-0
     // If the supply-chain job is removed, no config drift or vulnerability
     // check runs on PRs and SCHN-01..03 settings could be silently deleted.
     expect(raw, "supply-chain job must be defined").toMatch(
-      /^  supply-chain:/m
+      /^ {2}supply-chain:/m
     );
   });
 
@@ -480,7 +480,7 @@ describe("schema-migration job applies Drizzle migrations to an ephemeral Neon b
     // D-17 requires a dynamic migration-applyability gate. If this job is
     // removed, PRs can merge schema changes that fail against a real Postgres.
     expect(raw, "schema-migration job must be defined").toMatch(
-      /^  schema-migration:/m
+      /^ {2}schema-migration:/m
     );
   });
 
@@ -570,7 +570,7 @@ describe("Path filtering gates expensive jobs on src/bench changes (CIOP-01)", (
   it("changes job is defined and uses dorny/paths-filter@v4", () => {
     // Without the changes job, all downstream gating logic collapses and every
     // job runs unconditionally, defeating the purpose of path-based filtering.
-    expect(raw, "changes job must be defined").toMatch(/^  changes:/m);
+    expect(raw, "changes job must be defined").toMatch(/^ {2}changes:/m);
     const changesBlock = extractJobBlock("changes", raw);
     expect(
       changesBlock,
@@ -632,7 +632,7 @@ describe("Coverage job produces delta PR comments for src changes (CIOP-02)", ()
   it("coverage job is defined in the workflow", () => {
     // If the coverage job is removed, no coverage delta comments appear on PRs
     // and regressions in test coverage go undetected before merge.
-    expect(raw, "coverage job must be defined").toMatch(/^  coverage:/m);
+    expect(raw, "coverage job must be defined").toMatch(/^ {2}coverage:/m);
   });
 
   it("coverage job runs pnpm test:coverage to generate coverage data", () => {
@@ -715,7 +715,7 @@ describe("Benchmark job runs in CI gated on bench-relevant file changes (BNCH-01
     // If the benchmark job is removed, pnpm bench --compare never runs in CI
     // and performance regressions in migration chains or backup round-trips
     // go undetected before merge.
-    expect(raw, "benchmark job must be defined").toMatch(/^  benchmark:/m);
+    expect(raw, "benchmark job must be defined").toMatch(/^ {2}benchmark:/m);
   });
 
   it("benchmark job runs pnpm bench with --run and --compare flags", () => {
