@@ -1,1 +1,0 @@
-ALTER TABLE "push_subscriptions" ADD COLUMN "timezone" text DEFAULT 'UTC' NOT NULL;

@@ -1,2 +1,0 @@
-ALTER TABLE "insight_jobs" ALTER COLUMN "batch_id" DROP NOT NULL;--> statement-breakpoint
-ALTER TABLE "insight_jobs" ADD CONSTRAINT "insight_jobs_result_report_id_insight_reports_id_fk" FOREIGN KEY ("result_report_id") REFERENCES "public"."insight_reports"("id") ON DELETE set null ON UPDATE no action;

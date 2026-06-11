@@ -1,0 +1,78 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "ui": "tui",
+  "globalDependencies": ["**/.env.*local", ".env"],
+  "globalEnv": [
+    "NODE_ENV",
+    "DATABASE_URL",
+    "DATABASE_URL_UNPOOLED",
+    "NEON_AUTH_URL",
+    "NEON_AUTH_BASE_URL",
+    "NEON_AUTH_COOKIE_SECRET",
+    "NEON_API_KEY",
+    "NEON_PROJECT_ID",
+    "ANTHROPIC_API_KEY",
+    "GROQ_API_KEY",
+    "ALLOWED_EMAILS",
+    "ALLOW_DEV_FALLBACK",
+    "CRON_SECRET",
+    "PGCRYPTO_KEY",
+    "VAPID_PRIVATE_KEY",
+    "NEXT_PUBLIC_VAPID_PUBLIC_KEY",
+    "NEXT_PUBLIC_API_BASE_URL",
+    "NEXT_PUBLIC_APP_VERSION",
+    "NEXT_PUBLIC_GIT_SHA",
+    "NEXT_PUBLIC_VERCEL_ENV",
+    "VERCEL_ENV",
+    "VERCEL_GIT_COMMIT_SHA",
+    "CAPACITOR_BUILD",
+    "MOBILE_BUILD",
+    "NEON_AUTH_TEST_EMAIL",
+    "NEON_AUTH_TEST_PASSWORD",
+    "ENABLE_E2E_TEST_ROUTES"
+  ],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", "!.next/cache/**", "dist/**", "out/**"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "lint": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "typecheck": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "test": {
+      "outputs": []
+    },
+    "test:coverage": {
+      "outputs": ["coverage/**"]
+    },
+    "test:integration": {
+      "cache": false
+    },
+    "test:mutation": {
+      "cache": false,
+      "outputs": ["reports/**"]
+    },
+    "test:e2e": {
+      "cache": false,
+      "dependsOn": ["^build"]
+    },
+    "bench": {
+      "cache": false
+    },
+    "db:generate": {
+      "cache": false
+    },
+    "db:migrate": {
+      "cache": false
+    }
+  }
+}

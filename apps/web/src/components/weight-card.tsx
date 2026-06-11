@@ -1,0 +1,283 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Minus, Plus, Check, Loader2 } from "lucide-react";
+import { z } from "zod";
+import { cn } from "@/lib/utils";
+import { CARD_THEMES } from "@/lib/card-themes";
+import { CardShell } from "@/components/card-shell";
+import { logAudit } from "@/lib/audit";
+import { InlineEdit } from "@/components/ui/inline-edit";
+import { Skeleton } from "@/components/ui/skeleton";
+
+const WeightFormSchema = z.object({
+  weight: z.number({ error: "Weight is required" })
+    .positive("Weight must be positive")
+    .max(1000, "Weight seems too high"),
+});
+import { CollapsibleTimeInputControlled } from "@/components/collapsible-time-input";
+import { RecentEntriesList, InlineEditFormShell } from "@/components/recent-entries-list";
+import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
+import { useEditRecord } from "@/hooks/use-edit-record";
+import { useSettings } from "@/hooks/use-settings";
+import { useToast } from "@/hooks/use-toast";
+import { type WeightRecord } from "@/lib/db";
+import { useWeightRecords, useAddWeight, useDeleteWeight, useUpdateWeight } from "@/hooks/use-health-queries";
+import {
+  getCurrentDateTimeLocal,
+  dateTimeLocalToTimestamp,
+  formatDateTime,
+} from "@/lib/date-utils";
+
+const theme = CARD_THEMES.weight;
+
+export function WeightCard() {
+  const { toast } = useToast();
+  const settings = useSettings();
+  const [pendingWeight, setPendingWeight] = useState<number | null>(null);
+  const [showTimeInput, setShowTimeInput] = useState(false);
+  const [customTime, setCustomTime] = useState(getCurrentDateTimeLocal());
+
+  const recentRecords = useWeightRecords(5);
+  const isLoading = recentRecords === undefined;
+  const addMutation = useAddWeight();
+  const deleteMutation = useDeleteWeight();
+  const updateMutation = useUpdateWeight();
+  const { deletingId, handleDelete } = useDeleteWithToast(deleteMutation, "Weight record removed");
+
+  // Pre-fill with latest weight when records load.
+  // recentRecords is undefined until Dexie resolves — no timing race.
+  useEffect(() => {
+    if (pendingWeight !== null) return;           // D-14: keep current value
+    if (recentRecords === undefined) return;       // Still loading — wait
+    if (recentRecords.length > 0) {
+      const latest = recentRecords[0];
+      if (latest) setPendingWeight(latest.weight); // D-03: use last recorded
+    } else {
+      setPendingWeight(69);                        // D-04, D-12: first-time fallback
+    }
+  }, [recentRecords, pendingWeight]);
+
+  // Extra edit field
+  const [editWeight, setEditWeight] = useState("");
+
+  const {
+    editingRecord,
+    editTimestamp,
+    editNote,
+    setEditTimestamp,
+    setEditNote,
+    openEdit,
+    closeEdit,
+    handleEditSubmit,
+  } = useEditRecord<WeightRecord>({
+    onOpen: (record) => setEditWeight(record.weight.toString()),
+    buildUpdates: (timestamp, note) => {
+      const newWeight = parseFloat(editWeight);
+      if (isNaN(newWeight) || newWeight <= 0) {
+        toast({ title: "Invalid weight", variant: "destructive" });
+        return null;
+      }
+      return { weight: newWeight, timestamp, note };
+    },
+    mutateAsync: updateMutation.mutateAsync,
+  });
+
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const latestWeight = recentRecords?.[0];
+
+  const handleDecrement = () => {
+    setPendingWeight((prev) => {
+      if (prev === null) return null;
+      const next = Math.round((prev - settings.weightIncrement) * 100) / 100;
+      return Math.max(0.1, next);
+    });
+  };
+
+  const handleIncrement = () => {
+    setPendingWeight((prev) => {
+      if (prev === null) return null;
+      return Math.round((prev + settings.weightIncrement) * 100) / 100;
+    });
+  };
+
+  const handleSubmit = async () => {
+    if (pendingWeight === null) return;
+    const parsed = WeightFormSchema.safeParse({ weight: pendingWeight });
+    if (!parsed.success) {
+      const errors: Record<string, string> = {};
+      for (const issue of parsed.error.issues) {
+        const field = issue.path[0];
+        if (field && typeof field === "string") errors[field] = issue.message;
+      }
+      setFieldErrors(errors);
+      logAudit("validation_error", JSON.stringify({ form: "weight", errors: parsed.error.flatten() }).slice(0, 100));
+      return;
+    }
+    setFieldErrors({});
+
+    try {
+      const timestamp = showTimeInput ? dateTimeLocalToTimestamp(customTime) : undefined;
+      await addMutation.mutateAsync({ weight: pendingWeight, ...(timestamp !== undefined && { timestamp }) });
+      toast({
+        title: "Weight recorded",
+        description: `${pendingWeight.toFixed(2)} kg logged successfully`,
+        variant: "success",
+      });
+      // Keep current value as starting point for next entry
+      setShowTimeInput(false);
+      setCustomTime(getCurrentDateTimeLocal());
+    } catch (error) {
+      console.error("Failed to record weight:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to record weight",
+        variant: "destructive",
+      });
+    }
+  };
+
+  return (
+    <CardShell
+      theme={theme}
+      headerRight={
+        isLoading ? (
+          <div className="animate-pulse text-right">
+            <div className={cn("h-6 w-16 rounded ml-auto", theme.loadingBg)} />
+            <div className="h-4 w-24 bg-muted rounded mt-1 ml-auto" />
+          </div>
+        ) : latestWeight ? (
+          <div className="text-right">
+            <p className={cn("text-lg font-bold", theme.latestValueColor)}>
+              {latestWeight.weight.toFixed(2)} kg
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {formatDateTime(latestWeight.timestamp)}
+            </p>
+          </div>
+        ) : null
+      }
+    >
+      {/* Increment/Decrement Input Section */}
+      {isLoading ? (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <Skeleton className="h-14 w-14 rounded-full shrink-0" />
+            <div className="flex-1 text-center">
+              <Skeleton className="h-10 w-32 mx-auto rounded" />
+            </div>
+            <Skeleton className="h-14 w-14 rounded-full shrink-0" />
+          </div>
+          <Skeleton className="h-11 w-full rounded-md" />
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            {/* Minus Button */}
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handleDecrement}
+              disabled={pendingWeight === null || pendingWeight <= settings.weightIncrement}
+              className={cn("h-14 w-14 shrink-0 rounded-full transition-all", theme.hoverBg)}
+              aria-label="Decrease weight"
+            >
+              <Minus className="w-6 h-6" />
+            </Button>
+
+            {/* Center Display — tap to type (D-01, D-02) */}
+            <div className="flex-1 text-center">
+              <InlineEdit
+                value={pendingWeight}
+                onValueChange={setPendingWeight}
+                formatDisplay={(v) => v?.toFixed(2) ?? "--"}
+                suffix="kg"
+                displayClassName="text-4xl font-bold tabular-nums"
+                suffixClassName="text-lg text-muted-foreground ml-1"
+                roundOnBlur={(v) => {
+                  const increment = settings.weightIncrement;
+                  const rounded = Math.round(v / increment) * increment;
+                  return Math.round(rounded * 100) / 100;
+                }}
+                type="text"
+                inputMode="decimal"
+                pattern="[0-9]*[.]?[0-9]*"
+                min={0.1}
+                max={1000}
+                aria-label="Weight in kilograms"
+                data-testid="weight-direct-input"
+              />
+            </div>
+
+            {/* Plus Button */}
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handleIncrement}
+              disabled={pendingWeight === null}
+              className={cn("h-14 w-14 shrink-0 rounded-full transition-all", theme.hoverBg)}
+              aria-label="Increase weight"
+            >
+              <Plus className="w-6 h-6" />
+            </Button>
+          </div>
+
+          {fieldErrors.weight && (
+            <p className="text-sm text-destructive text-center">{fieldErrors.weight}</p>
+          )}
+
+          <CollapsibleTimeInputControlled
+            value={customTime}
+            onChange={setCustomTime}
+            expanded={showTimeInput}
+            onToggle={() => setShowTimeInput(!showTimeInput)}
+            id="weight-time"
+          />
+
+          <Button
+            onClick={handleSubmit}
+            disabled={addMutation.isPending || pendingWeight === null}
+            className={cn("w-full h-11", theme.buttonBg)}
+          >
+            {addMutation.isPending ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Recording...
+              </>
+            ) : (
+              <>
+                <Check className="w-4 h-4 mr-2" />
+                Record Weight
+              </>
+            )}
+          </Button>
+        </div>
+      )}
+
+      {/* Recent History */}
+      <RecentEntriesList
+        records={recentRecords}
+        deletingId={deletingId}
+        onDelete={handleDelete}
+        onEdit={openEdit}
+        editingId={editingRecord?.id ?? null}
+        borderColor={theme.border}
+        renderEntry={(record) => (
+          <>
+            <span className="text-muted-foreground">{formatDateTime(record.timestamp)}</span>
+            <div className="flex items-center gap-2">
+              <span className="font-medium">{record.weight.toFixed(2)} kg</span>
+            </div>
+          </>
+        )}
+        renderEditForm={() => (
+          <InlineEditFormShell timestamp={editTimestamp} onTimestampChange={setEditTimestamp} note={editNote} onNoteChange={setEditNote} onSave={() => handleEditSubmit()} onCancel={closeEdit} buttonClassName={theme.buttonBg}>
+            <Input type="number" step="0.01" placeholder="Weight (kg)" value={editWeight} onChange={(e) => setEditWeight(e.target.value)} className="h-8 text-sm" />
+          </InlineEditFormShell>
+        )}
+      />
+    </CardShell>
+  );
+}

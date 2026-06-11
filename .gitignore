@@ -99,3 +99,6 @@ coverage/
 .cache/
 tmp/
 .stryker-tmp/
+
+# Turborepo local task cache / logs
+.turbo/

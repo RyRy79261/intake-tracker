@@ -1,0 +1,218 @@
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { withAuth } from "@/lib/auth-middleware";
+import { sanitizeForAI } from "@/lib/security";
+import { getClaudeClientForUser, CLAUDE_MODELS } from "@/app/api/ai/_shared/claude-client";
+import { parseJsonBody, zodErrorResponse } from "@/app/api/_shared/validation";
+import { createRateLimiter, getClientIp } from "@/app/api/_shared/rate-limit";
+import { recordUsage, tokensFromAnthropic } from "@/app/api/ai/_shared/usage-tracker";
+import { aiErrorResponse } from "@/app/api/ai/_shared/ai-error-response";
+
+// --- Zod Schemas (co-located per user decision) ---
+
+const MedicineSearchRequestSchema = z.object({
+  query: z.string().min(1, "Query is required").max(200, "Query too long"),
+  country: z.string().max(100).optional(),
+});
+
+const CompoundStrengthSchema = z.object({
+  name: z.string(),
+  strength: z.number(),
+});
+
+const StrengthOptionSchema = z.object({
+  label: z.string(),
+  compounds: z.array(CompoundStrengthSchema).default([]),
+});
+
+const MedicineSearchResponseSchema = z.object({
+  brandNames: z.array(z.string()).default([]),
+  localAlternatives: z.array(z.string()).default([]),
+  genericName: z.string().default(""),
+  dosageStrengths: z.array(z.string()).default([]),
+  activeIngredients: z.array(z.string()).default([]),
+  strengthOptions: z.array(StrengthOptionSchema).default([]),
+  commonIndications: z.array(z.string()).default([]),
+  foodInstruction: z.enum(["before", "after", "none"]).default("none"),
+  foodNote: z.string().optional(),
+  pillColor: z.string().default(""),
+  pillShape: z.string().default(""),
+  pillDescription: z.string().default(""),
+  drugClass: z.string().default(""),
+  visualIdentification: z.string().optional(),
+  contraindications: z.array(z.string()).default([]),
+  warnings: z.array(z.string()).default([]),
+  isGenericFallback: z.boolean().default(false),
+});
+
+// --- System Prompt ---
+
+const SYSTEM_PROMPT = `You are a pharmaceutical information assistant. When given a medication name or active ingredient, respond with information about the medication using the medicine_search_result tool. Pay special attention to looking up the physical appearance of the pill (its color and shape) and country specific brand names.
+
+If the user searches for a specific brand name, you MUST provide the physical description for that specific brand and include the searched brand name in the response. If you cannot find information for that exact brand and must fall back to generic information, explicitly mention that the physical description and details are for the generic equivalent.
+
+Be precise with medical information. If you're uncertain about food instructions, default to "none".
+For pill appearance, research the most common commercially available form of the medication.
+
+COMBINATION DRUGS: Many medications combine two or more active ingredients in one tablet (e.g. sacubitril/valsartan sold as Entresto or Vymada, or amlodipine/valsartan). For EVERY medication:
+- "activeIngredients": list each active ingredient by name. A single-ingredient drug has exactly one entry; a combination drug has two or more.
+- "strengthOptions": one entry per marketed strength of the searched brand. Each entry has a "label" (how the strength is printed on the box, e.g. "100 (49/51 mg)" or "75 mg") and a "compounds" array giving the per-tablet milligram amount of EACH active ingredient. For a combination tablet sold as "Vymada 100", compounds is [{"name":"Sacubitril","strength":49},{"name":"Valsartan","strength":51}]. For a single-ingredient tablet, compounds has one entry whose strength equals the tablet strength.
+Always populate "activeIngredients" and "strengthOptions" — they are required.`;
+
+// --- Tool Definition ---
+
+const MEDICINE_SEARCH_TOOL = {
+  name: "medicine_search_result" as const,
+  description: "Return pharmaceutical information for a medication",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      brandNames: { type: "array", items: { type: "string" } },
+      localAlternatives: { type: "array", items: { type: "string" } },
+      genericName: { type: "string" },
+      dosageStrengths: { type: "array", items: { type: "string" } },
+      activeIngredients: {
+        type: "array",
+        items: { type: "string" },
+        description: "Each active ingredient name; one entry for a single-ingredient drug, two or more for a combination drug",
+      },
+      strengthOptions: {
+        type: "array",
+        description: "One entry per marketed strength, with the per-tablet mg of each active ingredient",
+        items: {
+          type: "object",
+          properties: {
+            label: { type: "string" },
+            compounds: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  name: { type: "string" },
+                  strength: { type: "number" },
+                },
+                required: ["name", "strength"],
+                additionalProperties: false,
+              },
+            },
+          },
+          required: ["label", "compounds"],
+          additionalProperties: false,
+        },
+      },
+      commonIndications: { type: "array", items: { type: "string" } },
+      foodInstruction: { type: "string", enum: ["before", "after", "none"] },
+      foodNote: { type: "string", description: "Optional detail about food interaction" },
+      pillColor: { type: "string" },
+      pillShape: { type: "string" },
+      pillDescription: { type: "string" },
+      drugClass: { type: "string" },
+      visualIdentification: { type: "string", description: "Detailed notes on physical markings" },
+      contraindications: { type: "array", items: { type: "string" } },
+      warnings: { type: "array", items: { type: "string" } },
+      isGenericFallback: { type: "boolean" },
+    },
+    required: [
+      "brandNames", "localAlternatives", "genericName", "dosageStrengths",
+      "activeIngredients", "strengthOptions",
+      "commonIndications", "foodInstruction", "foodNote", "pillColor",
+      "pillShape", "pillDescription", "drugClass", "visualIdentification",
+      "contraindications", "warnings", "isGenericFallback",
+    ],
+    additionalProperties: false,
+  },
+};
+
+const rateLimiter = createRateLimiter(15);
+
+export const POST = withAuth(async ({ request, auth }) => {
+  try {
+    const ip = getClientIp(request);
+
+    if (!rateLimiter.check(ip)) {
+      return NextResponse.json(
+        { error: "Rate limit exceeded. Please try again later." },
+        { status: 429 }
+      );
+    }
+
+    const json = await parseJsonBody(request);
+    if (!json.ok) return json.response;
+
+    // Validate request body with Zod
+    const parsed = MedicineSearchRequestSchema.safeParse(json.body);
+    if (!parsed.success) {
+      return zodErrorResponse("Medicine search request validation failed", parsed.error);
+    }
+
+    const { query, country } = parsed.data;
+
+    console.log(`[AUDIT] Medicine search request from user: ${auth.userId}`);
+
+    let client;
+    let resolved;
+    try {
+      ({ client, resolved } = await getClaudeClientForUser(auth.userId!, auth.email));
+    } catch (e) {
+      const mapped = aiErrorResponse(e);
+      if (mapped) return mapped;
+      throw e;
+    }
+
+    const sanitized = sanitizeForAI(query.trim());
+    const sanitizedCountry = country ? sanitizeForAI(country.trim()) : "";
+
+    const prompt = sanitizedCountry
+      ? `Look up this medication and provide detailed pharmaceutical information, focusing specifically on brands and availability in ${sanitizedCountry}: "${sanitized}"`
+      : `Look up this medication and provide detailed pharmaceutical information: "${sanitized}"`;
+
+    const startedAt = Date.now();
+    const response = await client.messages.create({
+      model: CLAUDE_MODELS.premium,
+      max_tokens: 2048,
+      temperature: 0,
+      system: SYSTEM_PROMPT,
+      tools: [MEDICINE_SEARCH_TOOL],
+      tool_choice: { type: "tool", name: "medicine_search_result" },
+      messages: [{ role: "user", content: prompt }],
+    });
+    recordUsage({
+      userId: auth.userId!,
+      keyOwnerId: resolved.keyOwnerId,
+      keySource: resolved.source,
+      provider: "anthropic",
+      model: CLAUDE_MODELS.premium,
+      route: "/api/ai/medicine-search",
+      status: "success",
+      durationMs: Date.now() - startedAt,
+      ...tokensFromAnthropic(response.usage),
+    });
+
+    const toolBlock = response.content.find(b => b.type === "tool_use");
+    if (!toolBlock || toolBlock.type !== "tool_use") {
+      return NextResponse.json(
+        { error: "AI response format invalid", fallbackToManual: true },
+        { status: 422 }
+      );
+    }
+
+    const validated = MedicineSearchResponseSchema.safeParse(toolBlock.input);
+    if (!validated.success) {
+      console.error("[VALIDATION] Medicine search response validation failed:", JSON.stringify(validated.error.flatten()));
+      return NextResponse.json(
+        { error: "AI response format invalid", fallbackToManual: true },
+        { status: 422 }
+      );
+    }
+
+    return NextResponse.json(validated.data);
+  } catch (error) {
+    const mapped = aiErrorResponse(error);
+    if (mapped) return mapped;
+    console.error("Medicine search error:", error);
+    return NextResponse.json(
+      { error: "Failed to process request" },
+      { status: 502 }
+    );
+  }
+});

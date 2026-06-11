@@ -1,0 +1,203 @@
+"use client"
+
+import * as React from "react"
+import { Drawer as DrawerPrimitive } from "vaul"
+
+import { cn } from "@/lib/utils"
+
+const Drawer = ({
+  shouldScaleBackground = true,
+  // Vaul's input repositioning yanks the whole sheet upward by the keyboard
+  // height, which can push fields at the top of the drawer off-screen. We
+  // keep it off and scroll the focused field into view ourselves (see
+  // DrawerContent below).
+  repositionInputs = false,
+  open,
+  onOpenChange,
+  ...props
+}: React.ComponentProps<typeof DrawerPrimitive.Root>) => {
+  const id = React.useId();
+  const hasPushedState = React.useRef(false);
+
+  React.useEffect(() => {
+    if (open === undefined) return;
+
+    if (open && !hasPushedState.current) {
+      window.history.pushState({ drawerId: id }, "");
+      hasPushedState.current = true;
+    } else if (!open && hasPushedState.current) {
+      if (window.history.state?.drawerId === id) {
+        window.history.back();
+      }
+      hasPushedState.current = false;
+    }
+  }, [open, id]);
+
+  React.useEffect(() => {
+    const handlePopState = () => {
+      if (open && onOpenChange && hasPushedState.current) {
+        if (window.history.state?.drawerId !== id) {
+          onOpenChange(false);
+          hasPushedState.current = false;
+        }
+      }
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [open, onOpenChange, id]);
+
+  return (
+    <DrawerPrimitive.Root
+      shouldScaleBackground={shouldScaleBackground}
+      repositionInputs={repositionInputs}
+      {...(open !== undefined && { open })}
+      {...(onOpenChange !== undefined && { onOpenChange })}
+      {...props}
+    />
+  );
+}
+Drawer.displayName = "Drawer"
+
+const DrawerTrigger = DrawerPrimitive.Trigger
+
+const DrawerPortal = DrawerPrimitive.Portal
+
+const DrawerClose = DrawerPrimitive.Close
+
+const DrawerOverlay = React.forwardRef<
+  React.ElementRef<typeof DrawerPrimitive.Overlay>,
+  React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Overlay>
+>(({ className, ...props }, ref) => (
+  <DrawerPrimitive.Overlay
+    ref={ref}
+    className={cn("fixed inset-0 z-50 bg-black/80", className)}
+    {...props}
+  />
+))
+DrawerOverlay.displayName = DrawerPrimitive.Overlay.displayName
+
+interface DrawerContentProps
+  extends React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Content> {
+  /** Direction the drawer opens from - affects styling */
+  direction?: "top" | "bottom" | "left" | "right";
+  /** Whether to show the drag handle (default true for bottom, false for sides) */
+  showHandle?: boolean;
+}
+
+const DrawerContent = React.forwardRef<
+  React.ElementRef<typeof DrawerPrimitive.Content>,
+  DrawerContentProps
+>(({ className, children, direction = "bottom", showHandle, onFocus, ...props }, ref) => {
+  // Default showHandle based on direction
+  const shouldShowHandle = showHandle ?? direction === "bottom";
+
+  // Direction-specific styles
+  const directionStyles = {
+    bottom: "inset-x-0 bottom-0 mt-24 flex h-auto flex-col rounded-t-[10px] border-t",
+    top: "inset-x-0 top-0 mb-24 flex h-auto flex-col rounded-b-[10px] border-b",
+    right: "inset-y-0 right-0 h-full w-3/4 sm:max-w-sm flex flex-col border-l",
+    left: "inset-y-0 left-0 h-full w-3/4 sm:max-w-sm flex flex-col border-r",
+  };
+
+  // When a form field inside the drawer is focused, scroll it into view once
+  // the on-screen keyboard has finished animating in, so the user can always
+  // see what they're typing.
+  const handleFocus = (e: React.FocusEvent<HTMLDivElement>) => {
+    onFocus?.(e);
+    const target = e.target as HTMLElement;
+    if (
+      target.tagName === "INPUT" ||
+      target.tagName === "TEXTAREA" ||
+      target.tagName === "SELECT"
+    ) {
+      window.setTimeout(() => {
+        target.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 300);
+    }
+  };
+
+  return (
+    <DrawerPortal>
+      <DrawerOverlay />
+      <DrawerPrimitive.Content
+        ref={ref}
+        onFocus={handleFocus}
+        className={cn(
+          "fixed z-50 bg-background outline-hidden",
+          directionStyles[direction],
+          className
+        )}
+        {...props}
+      >
+        {shouldShowHandle && (
+          <div className="mx-auto mt-4 h-2 w-[100px] rounded-full bg-muted" />
+        )}
+        {children}
+      </DrawerPrimitive.Content>
+    </DrawerPortal>
+  );
+})
+DrawerContent.displayName = "DrawerContent"
+
+const DrawerHeader = ({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) => (
+  <div
+    className={cn("grid gap-1.5 p-4 text-center sm:text-left", className)}
+    {...props}
+  />
+)
+DrawerHeader.displayName = "DrawerHeader"
+
+const DrawerFooter = ({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) => (
+  <div
+    className={cn("mt-auto flex flex-col gap-2 p-4", className)}
+    {...props}
+  />
+)
+DrawerFooter.displayName = "DrawerFooter"
+
+const DrawerTitle = React.forwardRef<
+  React.ElementRef<typeof DrawerPrimitive.Title>,
+  React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Title>
+>(({ className, ...props }, ref) => (
+  <DrawerPrimitive.Title
+    ref={ref}
+    className={cn(
+      "text-lg font-semibold leading-none tracking-tight",
+      className
+    )}
+    {...props}
+  />
+))
+DrawerTitle.displayName = DrawerPrimitive.Title.displayName
+
+const DrawerDescription = React.forwardRef<
+  React.ElementRef<typeof DrawerPrimitive.Description>,
+  React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Description>
+>(({ className, ...props }, ref) => (
+  <DrawerPrimitive.Description
+    ref={ref}
+    className={cn("text-sm text-muted-foreground", className)}
+    {...props}
+  />
+))
+DrawerDescription.displayName = DrawerPrimitive.Description.displayName
+
+export {
+  Drawer,
+  DrawerPortal,
+  DrawerOverlay,
+  DrawerTrigger,
+  DrawerClose,
+  DrawerContent,
+  DrawerHeader,
+  DrawerFooter,
+  DrawerTitle,
+  DrawerDescription,
+}

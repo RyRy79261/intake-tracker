@@ -1,0 +1,41 @@
+"use client";
+
+import { useSettingsStore } from "@/stores/settings-store";
+
+export function useSettings() {
+  const settings = useSettingsStore();
+  return settings;
+}
+
+export function useWaterSettings() {
+  const increment = useSettingsStore((s) => s.waterIncrement);
+  const limit = useSettingsStore((s) => s.waterLimit);
+  const setIncrement = useSettingsStore((s) => s.setWaterIncrement);
+  const setLimit = useSettingsStore((s) => s.setWaterLimit);
+
+  return { increment, limit, setIncrement, setLimit };
+}
+
+export function useSaltSettings() {
+  const increment = useSettingsStore((s) => s.saltIncrement);
+  const limit = useSettingsStore((s) => s.saltLimit);
+  const setIncrement = useSettingsStore((s) => s.setSaltIncrement);
+  const setLimit = useSettingsStore((s) => s.setSaltLimit);
+
+  return { increment, limit, setIncrement, setLimit };
+}
+
+export function useSugarSettings() {
+  const limit = useSettingsStore((s) => s.sugarLimit);
+  const setLimit = useSettingsStore((s) => s.setSugarLimit);
+
+  return { limit, setLimit };
+}
+
+export function usePotassiumSettings() {
+  const limit = useSettingsStore((s) => s.potassiumLimit);
+  const setLimit = useSettingsStore((s) => s.setPotassiumLimit);
+
+  return { limit, setLimit };
+}
+
