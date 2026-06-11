@@ -49,8 +49,12 @@ export async function setupTestDb(): Promise<TestDbContext> {
     )
   `);
 
-  // Apply Drizzle migrations (raw SQL files from drizzle/ folder)
-  const migrationsDir = path.resolve(process.cwd(), "drizzle");
+  // Apply Drizzle migrations (raw SQL files from the @intake/db package).
+  // Integration tests run with cwd = apps/web; migrations live in packages/db.
+  const migrationsDir = path.resolve(
+    process.cwd(),
+    "../../packages/db/migrations",
+  );
   const sqlFiles = fs.readdirSync(migrationsDir)
     .filter((f) => f.endsWith(".sql"))
     .sort();

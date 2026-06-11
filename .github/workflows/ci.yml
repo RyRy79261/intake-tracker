@@ -119,14 +119,14 @@ jobs:
       - run: pnpm typecheck
       - name: Verify drizzle migrations are up-to-date with the schema
         run: |
-          pnpm --filter @intake/web exec drizzle-kit generate
-          if [ -n "$(git status --porcelain apps/web/drizzle/)" ]; then
+          pnpm db:generate
+          if [ -n "$(git status --porcelain packages/db/migrations/)" ]; then
             echo "::error::Drizzle migrations are out of date. Run 'pnpm db:generate' locally and commit the result."
-            git status --porcelain apps/web/drizzle/
-            git diff apps/web/drizzle/ | head -100
+            git status --porcelain packages/db/migrations/
+            git diff packages/db/migrations/ | head -100
             exit 1
           fi
-          echo "apps/web/drizzle/ is up-to-date with the schema"
+          echo "packages/db/migrations/ is up-to-date with the schema"
 
   test-tz-sa:
     needs: [changes, security]
