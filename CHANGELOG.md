@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.32.1](https://github.com/RyRy79261/intake-tracker/compare/v1.32.0...v1.32.1) (2026-06-07)
+
+
+### Bug Fixes
+
+* **ai:** dissolved sugar/sodium must not displace a drink's fluid volume ([#201](https://github.com/RyRy79261/intake-tracker/issues/201)) ([d9c02d2](https://github.com/RyRy79261/intake-tracker/commit/d9c02d2d74cd6be8e811f690dcb30cfc7e941259))
+
 ## [1.32.0](https://github.com/RyRy79261/intake-tracker/compare/v1.31.0...v1.32.0) (2026-06-02)
 
 
