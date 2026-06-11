@@ -1,0 +1,74 @@
+{
+  "files": [
+    {
+      "filepath": "src/__tests__/bench/backup.bench.ts",
+      "groups": [
+        {
+          "fullName": "src/__tests__/bench/backup.bench.ts > backup round-trip",
+          "benchmarks": [
+            {
+              "id": "-1222129167_0_0",
+              "name": "export + import all 16 tables",
+              "rank": 1,
+              "rme": 8.975365393958468,
+              "samples": [],
+              "totalTime": 2028.8677410000007,
+              "min": 26.838418000000047,
+              "max": 77.75772899999993,
+              "hz": 22.179858790509492,
+              "period": 45.085949800000016,
+              "mean": 45.085949800000016,
+              "variance": 181.272538011661,
+              "sd": 13.463749032556311,
+              "sem": 2.007057204586196,
+              "df": 44,
+              "critical": 2.0162,
+              "moe": 4.046628735886689,
+              "p75": 56.006147000000055,
+              "p99": 77.75772899999993,
+              "p995": 77.75772899999993,
+              "p999": 77.75772899999993,
+              "sampleCount": 45,
+              "median": 41.24566299999992
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "filepath": "src/__tests__/bench/migration.bench.ts",
+      "groups": [
+        {
+          "fullName": "src/__tests__/bench/migration.bench.ts > migration chain v10-v15",
+          "benchmarks": [
+            {
+              "id": "1200514005_0_0",
+              "name": "full migration chain: open db at v10 then upgrade to v15",
+              "rank": 1,
+              "rme": 3.1416932579735115,
+              "samples": [],
+              "totalTime": 2002.2540449999997,
+              "min": 2.301851999999826,
+              "max": 14.107098999999948,
+              "hz": 285.6780344274445,
+              "period": 3.500444134615384,
+              "mean": 3.500444134615384,
+              "variance": 1.800767931314928,
+              "sd": 1.3419269470857675,
+              "sem": 0.056108784375684055,
+              "df": 571,
+              "critical": 1.96,
+              "moe": 0.10997321737634075,
+              "p75": 3.954074999999989,
+              "p99": 8.097670999999991,
+              "p995": 9.30894000000012,
+              "p999": 14.107098999999948,
+              "sampleCount": 572,
+              "median": 2.9214869999998996
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

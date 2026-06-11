@@ -1,2 +1,0 @@
-ALTER TABLE "intake_records" DROP CONSTRAINT "intake_records_type_check";--> statement-breakpoint
-ALTER TABLE "intake_records" ADD CONSTRAINT "intake_records_type_check" CHECK ("intake_records"."type" IN ('water','salt','sugar','potassium'));

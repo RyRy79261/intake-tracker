@@ -1,0 +1,121 @@
+#!/usr/bin/env tsx
+/**
+ * Post-migration smoke check for the schema-migration CI job (Phase 42 D-17).
+ *
+ * Uses @neondatabase/serverless (the project's existing Neon HTTP driver)
+ * to verify that `pnpm db:migrate` produced the expected schema shape on the
+ * ephemeral Neon branch referenced by DATABASE_URL.
+ *
+ * Does NOT use psql. The Ubuntu CI runner does not reliably ship with the
+ * postgresql-client package, and the Neon pooled HTTP endpoint is not a
+ * standard libpq target in all cases. @neondatabase/serverless is the
+ * single DB client used throughout this project — keep it consistent.
+ *
+ * Exit codes:
+ *   0  all checks passed
+ *   1  any check failed (error printed to stderr)
+ */
+import { neon } from "@neondatabase/serverless";
+
+// Pinned expected count: 21 app+push tables + 3 AI-keys/usage tables added
+// in migration 0004 (user_api_keys, user_key_shares, ai_usage) + 4 MCP
+// custom-connector tables added in migration 0012 (mcp_oauth_clients,
+// mcp_auth_codes, mcp_access_tokens, mcp_audit_log) + 1 insight_reports
+// table added in migration 0013 + 1 insight_jobs table (server-only
+// deep-research batch tracking) added in migration 0014 = 30.
+// (18 Dexie-mirrored app tables incl. user_profile + insight_reports + 4
+// push tables + 3 AI + 4 MCP + 1 insight_jobs.)
+// drizzle-kit 0.31.x stores its __drizzle_migrations journal in the
+// "drizzle" schema, not "public".
+const EXPECTED_TABLE_COUNT = 30;
+
+// Representative tables spot-checked by name. Five is enough to catch
+// a schema that happened to have the right COUNT but the wrong shape
+// (e.g., someone deleted intake_records and added a placeholder). The
+// MCP entry guards the connector tables added in 0012; insight_reports
+// guards the AI-insights cache table added in 0013.
+const SPOT_CHECK_TABLES = [
+  "intake_records",
+  "push_schedules",
+  "prescriptions",
+  "mcp_oauth_clients",
+  "insight_reports",
+] as const;
+
+async function main(): Promise<void> {
+  const url = process.env.DATABASE_URL;
+  if (!url) {
+    throw new Error(
+      "DATABASE_URL not set — this script must run with an active Neon branch URL in env"
+    );
+  }
+  const sql = neon(url);
+
+  // 1) Count public tables.
+  const countRows = (await sql.query(
+    `SELECT COUNT(*)::int AS count FROM information_schema.tables WHERE table_schema = 'public'`
+  )) as Array<{ count: number }>;
+  const count = countRows[0]?.count ?? 0;
+  if (count !== EXPECTED_TABLE_COUNT) {
+    const listRows = (await sql.query(
+      `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name`
+    )) as Array<{ table_name: string }>;
+    console.error(
+      `::error::Expected ${EXPECTED_TABLE_COUNT} public tables after migration, found ${count}`
+    );
+    console.error("Public tables found:");
+    for (const r of listRows) console.error(`  - ${r.table_name}`);
+    process.exit(1);
+  }
+  console.log(`Verified: ${count} public tables (expected ${EXPECTED_TABLE_COUNT})`);
+
+  // 2) Spot-check specific tables.
+  for (const name of SPOT_CHECK_TABLES) {
+    const existsRows = (await sql.query(
+      `SELECT EXISTS (
+         SELECT 1 FROM information_schema.tables
+         WHERE table_schema = 'public' AND table_name = $1
+       ) AS exists`,
+      [name]
+    )) as Array<{ exists: boolean }>;
+    if (!existsRows[0]?.exists) {
+      console.error(
+        `::error::Expected table public.${name} does not exist after migration`
+      );
+      process.exit(1);
+    }
+    console.log(`Verified: public.${name} exists`);
+  }
+
+  // 3) Confirm the user_id FK on intake_records targets neon_auth.users_sync.
+  // Catches the "FK created against public.users_sync instead" class of bug.
+  const fkRows = (await sql.query(
+    `SELECT ccu.table_schema || '.' || ccu.table_name AS target
+     FROM information_schema.table_constraints tc
+     JOIN information_schema.constraint_column_usage ccu
+       ON tc.constraint_name = ccu.constraint_name
+     JOIN information_schema.key_column_usage kcu
+       ON tc.constraint_name = kcu.constraint_name
+     WHERE tc.constraint_type = 'FOREIGN KEY'
+       AND tc.table_schema = 'public'
+       AND tc.table_name = 'intake_records'
+       AND kcu.column_name = 'user_id'
+     LIMIT 1`
+  )) as Array<{ target: string }>;
+  const fkTarget = fkRows[0]?.target;
+  if (fkTarget !== "neon_auth.users_sync") {
+    console.error(
+      `::error::intake_records.user_id FK targets '${fkTarget ?? "(none)"}', expected 'neon_auth.users_sync'`
+    );
+    process.exit(1);
+  }
+  console.log("Verified: intake_records.user_id -> neon_auth.users_sync");
+
+  console.log("");
+  console.log("All schema checks passed.");
+}
+
+main().catch((err) => {
+  console.error("verify-schema failed:", err);
+  process.exit(1);
+});

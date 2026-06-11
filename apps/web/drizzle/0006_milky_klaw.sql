@@ -1,0 +1,2 @@
+ALTER TABLE "substance_records" ADD COLUMN "abv_percent" real;--> statement-breakpoint
+ALTER TABLE "substance_records" ADD CONSTRAINT "substance_records_abv_percent_range" CHECK ("substance_records"."abv_percent" IS NULL OR ("substance_records"."abv_percent" >= 0 AND "substance_records"."abv_percent" <= 100));

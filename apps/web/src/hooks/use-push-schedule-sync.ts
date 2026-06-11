@@ -1,0 +1,207 @@
+"use client";
+
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useSettingsStore } from "@/stores/settings-store";
+import { apiFetch } from "@/lib/api-fetch";
+import { useDailyDoseSchedule } from "@/hooks/use-medication-queries";
+import { useAuth } from "@/components/auth-guard";
+import {
+  subscribeToPush,
+  unsubscribeFromPush,
+  requestNotificationPermission,
+  isNotificationSupported,
+} from "@/lib/push-notification-service";
+import type { CompoundStrength } from "@/lib/db";
+import { isCombo, splitDose, formatCompoundShort } from "@/lib/compound-utils";
+import { toLocalDateKey } from "@/lib/date-utils";
+
+// Auth note: all push endpoints run under withAuth() on the server (see
+// plan 41-01). Since Neon Auth uses cookie sessions, same-origin fetch
+// carries the credential automatically — no Bearer token plumbing.
+
+function getTodayDateStr(): string {
+  return toLocalDateKey();
+}
+
+interface ScheduleEntry {
+  timeSlot: string;
+  dayOfWeek: number;
+  medicationsJson: string;
+}
+
+/**
+ * Build schedule entries from DoseSlot array.
+ * Groups by localTime and expands daysOfWeek into individual entries.
+ */
+function buildScheduleEntries(
+  slots: Array<{
+    localTime: string;
+    prescription: { genericName: string; compounds?: CompoundStrength[] };
+    dosageMg: number;
+    unit: string;
+    schedule: { daysOfWeek?: number[] };
+  }>
+): ScheduleEntry[] {
+  const entries: ScheduleEntry[] = [];
+  const byTime = new Map<string, typeof slots>();
+
+  for (const slot of slots) {
+    const existing = byTime.get(slot.localTime);
+    if (existing) {
+      existing.push(slot);
+    } else {
+      byTime.set(slot.localTime, [slot]);
+    }
+  }
+
+  byTime.forEach((timeSlots, timeSlot) => {
+    const medicationsJson = timeSlots
+      .map((s) => {
+        const dose = isCombo(s.prescription)
+          ? formatCompoundShort(splitDose(s.dosageMg, s.prescription.compounds), s.unit)
+          : `${s.dosageMg}${s.unit}`;
+        return `${s.prescription.genericName} ${dose}`;
+      })
+      .join(", ");
+
+    // Collect unique days from all schedules at this time
+    const daysSet = new Set<number>();
+    for (const s of timeSlots) {
+      if (s.schedule.daysOfWeek) {
+        for (const d of s.schedule.daysOfWeek) {
+          daysSet.add(d);
+        }
+      }
+    }
+
+    // If no daysOfWeek specified, assume all 7 days
+    const days = daysSet.size > 0 ? Array.from(daysSet) : [0, 1, 2, 3, 4, 5, 6];
+
+    for (const dayOfWeek of days) {
+      entries.push({ timeSlot, dayOfWeek, medicationsJson });
+    }
+  });
+
+  return entries;
+}
+
+/**
+ * Hook that syncs dose schedule to server when push reminders are enabled.
+ * Runs on mount and when schedule data changes. Debounced via schedule hash.
+ * No-ops when the user is not signed in (push subscriptions require auth).
+ */
+export function usePushScheduleSync(): void {
+  const doseRemindersEnabled = useSettingsStore((s) => s.doseRemindersEnabled);
+  const followUpCount = useSettingsStore((s) => s.reminderFollowUpCount);
+  const followUpInterval = useSettingsStore((s) => s.reminderFollowUpInterval);
+  const { authenticated } = useAuth();
+
+  const todayStr = getTodayDateStr();
+  const slots = useDailyDoseSchedule(todayStr);
+
+  const lastHashRef = useRef<string>("");
+
+  const syncSchedule = useCallback(async (entries: ScheduleEntry[]) => {
+    try {
+      await apiFetch("/api/push/sync-schedule", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ schedules: entries, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
+      });
+    } catch (error) {
+      console.warn("[push-schedule-sync] Failed to sync schedule:", error);
+    }
+  }, []);
+
+  const lastSettingsHashRef = useRef<string>("");
+
+  useEffect(() => {
+    if (!authenticated) return;
+    if (!doseRemindersEnabled) return;
+    if (!slots || slots.length === 0) return;
+
+    const entries = buildScheduleEntries(slots);
+
+    // Debounce: only sync if schedule actually changed
+    const hash = JSON.stringify({ entries, followUpCount, followUpInterval });
+    if (hash === lastHashRef.current) return;
+    lastHashRef.current = hash;
+
+    syncSchedule(entries);
+  }, [authenticated, slots, doseRemindersEnabled, followUpCount, followUpInterval, syncSchedule]);
+
+  // Periodic ping to /api/push/check every 60s
+  useEffect(() => {
+    if (!doseRemindersEnabled) return;
+
+    const ping = () => {
+      apiFetch("/api/push/check", { method: "POST" }).catch((err) =>
+        console.warn("[push/check] ping failed:", err)
+      );
+    };
+
+    ping();
+    const id = setInterval(ping, 60_000);
+    return () => clearInterval(id);
+  }, [doseRemindersEnabled]);
+
+  // Sync follow-up settings to server when they change
+  useEffect(() => {
+    if (!doseRemindersEnabled) return;
+
+    const hash = JSON.stringify({ followUpCount, followUpInterval });
+    if (hash === lastSettingsHashRef.current) return;
+    lastSettingsHashRef.current = hash;
+
+    apiFetch("/api/push/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        followUpCount,
+        followUpIntervalMinutes: followUpInterval,
+      }),
+    }).catch((err) =>
+      console.warn("[push/settings] sync failed:", err)
+    );
+  }, [doseRemindersEnabled, followUpCount, followUpInterval]);
+}
+
+/**
+ * Hook that provides a toggle handler for dose reminders.
+ * Wraps push subscription/unsubscription logic so components
+ * don't need to import service files directly.
+ */
+export function useDoseReminderToggle() {
+  const setDoseRemindersEnabled = useSettingsStore((s) => s.setDoseRemindersEnabled);
+  const [toggling, setToggling] = useState(false);
+  const supported = typeof window !== "undefined" && isNotificationSupported();
+
+  const handleToggle = useCallback(async (enabled: boolean) => {
+    setToggling(true);
+    try {
+      if (enabled) {
+        const permResult = await requestNotificationPermission();
+        if (!permResult.success || permResult.data !== "granted") {
+          return;
+        }
+        const subscription = await subscribeToPush();
+        if (!subscription) {
+          console.warn("[dose-reminders] Push subscription failed");
+          return;
+        }
+        setDoseRemindersEnabled(true);
+      } else {
+        await unsubscribeFromPush();
+        setDoseRemindersEnabled(false);
+      }
+    } catch (error) {
+      console.error("[dose-reminders] Toggle failed:", error);
+    } finally {
+      setToggling(false);
+    }
+  }, [setDoseRemindersEnabled]);
+
+  return { handleToggle, toggling, supported };
+}
