@@ -240,10 +240,10 @@ jobs:
           key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
       - name: Install Playwright browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: npx playwright install chromium --with-deps
+        run: pnpm --filter @intake/web exec playwright install chromium --with-deps
       - name: Install Playwright system deps
         if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: npx playwright install-deps chromium
+        run: pnpm --filter @intake/web exec playwright install-deps chromium
       - name: Create Neon test branch
         id: neon-branch
         uses: neondatabase/create-branch-action@v5

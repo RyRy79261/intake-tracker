@@ -62,10 +62,12 @@ function extractJobBlock(jobName: string, yaml: string): string {
 }
 
 describe("CI workflow gates PRs with required checks (CIPL-01)", () => {
-  it("workflow triggers only on pull_request to main and staging branches", () => {
-    // Requirement: every PR to main or staging must be validated (not pushes to arbitrary branches)
+  it("workflow triggers on pull_request to main and staging (+ migration branches)", () => {
+    // Requirement: every PR to main or staging must be validated. (The Turborepo
+    // migration also temporarily triggers on the refactor/* stack branches.)
     expect(raw).toContain("pull_request:");
-    expect(raw).toContain("branches: [main, staging]");
+    expect(raw).toContain("- main");
+    expect(raw).toContain("- staging");
   });
 
   it("required check jobs are all present in the workflow", () => {
@@ -154,7 +156,7 @@ describe("Build job runs bundle security scan after production build (CIPL-02)",
     const buildBlock = extractJobBlock("build", raw);
     const buildPos = buildBlock.indexOf("pnpm build");
     const scanPos = buildBlock.indexOf(
-      "pnpm exec vitest run src/__tests__/bundle-security.test.ts"
+      "vitest run src/__tests__/bundle-security.test.ts"
     );
     expect(buildPos, "pnpm build step must be present in build job").toBeGreaterThan(-1);
     expect(scanPos, "bundle security scan step must be present in build job").toBeGreaterThan(-1);
@@ -181,7 +183,7 @@ describe("Dual-TZ jobs execute tests in both required timezones (CIPL-03)", () =
     expect(
       saBlock,
       "test-tz-sa must invoke pnpm test:tz:sa"
-    ).toContain("pnpm test:tz:sa");
+    ).toContain("test:tz:sa");
   });
 
   it("test-tz-de job runs pnpm test:tz:de (Europe/Berlin)", () => {
@@ -189,7 +191,7 @@ describe("Dual-TZ jobs execute tests in both required timezones (CIPL-03)", () =
     expect(
       deBlock,
       "test-tz-de must invoke pnpm test:tz:de"
-    ).toContain("pnpm test:tz:de");
+    ).toContain("test:tz:de");
   });
 
   it("dual-TZ jobs are defined as separate jobs (not a matrix or single job)", () => {
@@ -234,7 +236,7 @@ describe("data-integrity job runs integrity tests unconditionally on every PR (D
     expect(
       block,
       "data-integrity job must invoke pnpm exec vitest run src/__tests__/integrity/"
-    ).toContain("pnpm exec vitest run src/__tests__/integrity/");
+    ).toContain("vitest run src/__tests__/integrity/");
   });
 
   it("data-integrity job uses Node 22 and frozen-lockfile install (consistent with other jobs)", () => {
@@ -513,7 +515,7 @@ describe("schema-migration job applies Drizzle migrations to an ephemeral Neon b
     expect(
       block,
       "schema-migration must invoke the TS verify script"
-    ).toContain("pnpm tsx scripts/verify-schema.ts");
+    ).toContain("tsx scripts/verify-schema.ts");
   });
 
   it("schema-migration job does NOT shell out to psql", () => {
@@ -723,8 +725,8 @@ describe("Benchmark job runs in CI gated on bench-relevant file changes (BNCH-01
     const block = extractJobBlock("benchmark", raw);
     expect(
       block,
-      "benchmark job must invoke pnpm bench"
-    ).toContain("pnpm bench");
+      "benchmark job must invoke vitest bench"
+    ).toContain("vitest bench");
     expect(
       block,
       "benchmark job must pass --run flag"
