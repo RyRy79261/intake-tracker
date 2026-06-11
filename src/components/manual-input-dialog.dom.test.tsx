@@ -102,7 +102,10 @@ describe("ManualInputDialog", () => {
     fireEvent.submit(form!);
 
     // zod flags the missing amount; the error renders below the input.
-    const error = await screen.findByText("Required", {
+    // zod 4: the schema's `error` message ("Amount is required") covers the
+    // missing/undefined case too — zod 3 ignored `invalid_type_error` for
+    // undefined and fell back to its default "Required" message.
+    const error = await screen.findByText("Amount is required", {
       selector: "p.text-destructive",
     });
     expect(error).toBeInTheDocument();

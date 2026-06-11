@@ -21,7 +21,7 @@ export const ScheduleEntrySchema = z.object({
 
 export const InventoryStepSchema = z.object({
   currentStock: z
-    .number({ invalid_type_error: "Stock must be a number" })
+    .number({ error: "Stock must be a number" })
     .min(0, "Stock cannot be negative"),
 });
 

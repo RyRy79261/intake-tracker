@@ -44,3 +44,24 @@ Drizzle `pgTable`s, `sync-topology` `TABLE_PUSH_ORDER`, `sync-payload` union)
 are kept in parity by tests split across `packages/db` and `apps/web`. Unify
 them behind a single generated registry in `@intake/types` so 100% of the
 parity check becomes package-level. See proposal §13.1.
+
+## zod 4 — clear deprecated APIs
+
+**Deferred (2026-06-08, zod 3 → 4 migration).** zod 4 is fully adopted and the
+suite is green, but several v4-**deprecated** (not removed) APIs still work with
+identical behavior and were left in place to keep the bump focused:
+
+- **`.flatten()` → `z.flattenError(err)`** — ~20 call sites (the shared
+  `api/_shared/validation.ts` 400-helper, sync/push/settings/pull routes, AI
+  routes, and client audit logging in the form cards). Output shape is identical
+  (`{ formErrors, fieldErrors }`).
+- **`z.string().url()` → `z.url()`** and **`z.string().email()` → `z.email()`** —
+  mcp oauth routes, `push/subscribe`, `analytics-insights`, `api-keys/shares`.
+  ⚠️ `z.url()` validation is **stricter** in v4 — re-check the
+  `ai-insights-card` `javascript:`/`data:` scheme behavior when switching.
+- Optionally tighten the migrated form schemas to the function-form
+  `error: (issue) => issue.input === undefined ? "X is required" : "X must be a number"`
+  to message wrong-type separately from missing (currently a single message,
+  fine because the inputs are always `number | undefined`).
+
+**Trigger:** a dedicated zod-deprecation cleanup PR.
