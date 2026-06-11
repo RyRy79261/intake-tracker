@@ -7,7 +7,7 @@
  *     a fixed auth context. It also catches handler errors and renders a
  *     generic 500 — the route has no try/catch, so this reproduces the
  *     Next.js runtime's behaviour for an uncaught error.
- *   - Mock @/lib/drizzle with a controllable stub `db`. Selects here end in
+ *   - Mock @intake/db/client with a controllable stub `db`. Selects here end in
  *     orderBy(...) (GET) or limit(...) (POST); inserts end in
  *     onConflictDoNothing(); deletes end in where(...).
  *   - Mock @neondatabase/serverless's `neon` so the raw user-lookup
@@ -69,7 +69,7 @@ vi.mock("@/lib/auth-middleware", () => ({
   },
 }));
 
-vi.mock("@/lib/drizzle", () => {
+vi.mock("@intake/db/client", () => {
   function nextSelect() {
     if (drizzleShouldThrow) {
       return Promise.reject(new Error("DB_FAILURE postgres://user:pw@host/db"));

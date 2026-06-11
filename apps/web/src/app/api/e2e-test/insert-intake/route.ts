@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { withAuth } from "@/lib/auth-middleware";
-import { db as drizzleDb } from "@/lib/drizzle";
-import { intakeRecords } from "@/db/schema";
+import { db as drizzleDb } from "@intake/db/client";
+import { intakeRecords } from "@intake/db/schema";
 
 export const POST = withAuth(async ({ request, auth }) => {
   if (

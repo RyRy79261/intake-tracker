@@ -13,7 +13,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vites
 import { NextRequest } from "next/server";
 import { eq } from "drizzle-orm";
 import { setupTestDb, type TestDbContext } from "@/__tests__/helpers/test-db";
-import * as schema from "@/db/schema";
+import * as schema from "@intake/db/schema";
 
 let ctx: TestDbContext;
 let POST: (req: NextRequest) => Promise<Response>;
@@ -42,7 +42,7 @@ beforeAll(async () => {
   }));
 
   // Mock drizzle to return our real test DB instance
-  vi.mock("@/lib/drizzle", () => ({
+  vi.mock("@intake/db/client", () => ({
     db: ctx.db,
   }));
 

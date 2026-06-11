@@ -15,7 +15,9 @@ import { join } from "node:path";
  * This test fails the build the moment that ordering breaks.
  */
 
-const DRIZZLE_DIR = join(process.cwd(), "drizzle");
+// Migrations live in the @intake/db package (packages/db/migrations); this
+// repo-invariant test runs from apps/web, so reach across the workspace.
+const DRIZZLE_DIR = join(process.cwd(), "..", "..", "packages", "db", "migrations");
 
 interface JournalEntry {
   idx: number;

@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { createHash } from "crypto";
 import { eq, gt, and } from "drizzle-orm";
 import { withAuth } from "@/lib/auth-middleware";
-import { db } from "@/lib/drizzle";
-import { schemaByTableName, type TableName } from "@/lib/sync-payload";
+import { db } from "@intake/db/client";
+import { schemaByTableName, type TableName } from "@intake/db/sync-payload";
 
 export const maxDuration = 60;
 

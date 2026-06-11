@@ -14,7 +14,7 @@
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import pg from "pg";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
-import * as schema from "@/db/schema";
+import * as schema from "@intake/db/schema";
 import * as fs from "node:fs";
 import * as path from "node:path";
 

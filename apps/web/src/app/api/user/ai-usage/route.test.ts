@@ -7,7 +7,7 @@
  *     bubble to Next.js, which renders a generic 500; the mock reproduces
  *     that by catching and returning a generic 500 so the error path is
  *     testable in isolation.
- *   - Mock @/lib/drizzle with a controllable stub `db` whose chained
+ *   - Mock @intake/db/client with a controllable stub `db` whose chained
  *     select()/from()/where()/groupBy() resolves to per-test rows.
  *   - Mock @neondatabase/serverless's `neon` so the raw-SQL "asGrantor"
  *     query returns controllable rows without a real database.
@@ -64,7 +64,7 @@ vi.mock("@/lib/auth-middleware", () => ({
   },
 }));
 
-vi.mock("@/lib/drizzle", () => {
+vi.mock("@intake/db/client", () => {
   // Chainable builder: select().from().where().groupBy() -> Promise<rows>.
   function makeChain() {
     const chain: Record<string, unknown> = {};

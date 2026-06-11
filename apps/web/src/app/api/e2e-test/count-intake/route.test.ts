@@ -6,7 +6,7 @@
  *
  * Strategy:
  *   - Mock @/lib/auth-middleware so withAuth injects a fixed userId.
- *   - Mock @/lib/drizzle with a controllable `select().from().where()` chain
+ *   - Mock @intake/db/client with a controllable `select().from().where()` chain
  *     that resolves to a `[{ count }]` row.
  *   - Use vi.stubEnv to flip NODE_ENV / ENABLE_E2E_TEST_ROUTES per case.
  */
@@ -38,7 +38,7 @@ vi.mock("@/lib/auth-middleware", () => ({
   },
 }));
 
-vi.mock("@/lib/drizzle", () => {
+vi.mock("@intake/db/client", () => {
   const db = {
     select: (_proj: unknown) => ({
       from: (_table: unknown) => ({

@@ -4,7 +4,7 @@
  * Strategy mirrors src/__tests__/sync-pull-route.test.ts:
  *   - Mock @/lib/auth-middleware so withAuth becomes a pass-through HOF that
  *     injects a fixed authenticated context.
- *   - Mock @/lib/drizzle with a controllable stub `db` whose
+ *   - Mock @intake/db/client with a controllable stub `db` whose
  *     `.select().from(table).where().orderBy().limit()` chain returns
  *     per-table rows. The route chunks at SELECT_CHUNK_SIZE (200), so the
  *     stub returns whatever rows the test seeds in a single page.
@@ -49,7 +49,7 @@ vi.mock("@/lib/auth-middleware", () => ({
   },
 }));
 
-vi.mock("@/lib/drizzle", () => {
+vi.mock("@intake/db/client", () => {
   const db = {
     select: () => ({
       from: (table: unknown) => ({
@@ -128,7 +128,7 @@ describe("sync-verify-hash-route", () => {
 
   it("returns a 64-char hex SHA-256 hash and a count for every table", async () => {
     const { POST } = await import("@/app/api/sync/verify-hash/route");
-    const { schemaByTableName } = await import("@/lib/sync-payload");
+    const { schemaByTableName } = await import("@intake/db/sync-payload");
 
     const res = await POST(makeRequest());
     expect(res.status).toBe(200);
@@ -151,7 +151,7 @@ describe("sync-verify-hash-route", () => {
   });
 
   it("hashes seeded rows deterministically and excludes userId from the digest", async () => {
-    const { schemaByTableName } = await import("@/lib/sync-payload");
+    const { schemaByTableName } = await import("@intake/db/sync-payload");
     // userId is present on the DB rows but MUST be stripped before hashing.
     const dbRows: StubRow[] = [
       { id: "a", userId: "user-test", amount: 250, updatedAt: 1000 },
@@ -182,7 +182,7 @@ describe("sync-verify-hash-route", () => {
   });
 
   it("produces an identical hash regardless of key order within a row", async () => {
-    const { schemaByTableName } = await import("@/lib/sync-payload");
+    const { schemaByTableName } = await import("@intake/db/sync-payload");
 
     // Same logical row, keys in a different insertion order.
     rowsByTableRef.set(schemaByTableName.weightRecords, [

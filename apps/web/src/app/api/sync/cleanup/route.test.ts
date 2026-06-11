@@ -4,7 +4,7 @@
  * Strategy mirrors src/__tests__/sync-push-route.test.ts:
  *   - Mock @/lib/auth-middleware so withAuth becomes a pass-through HOF that
  *     injects a fixed authenticated context.
- *   - Mock @/lib/drizzle with a controllable stub `db` whose `.delete()`
+ *   - Mock @intake/db/client with a controllable stub `db` whose `.delete()`
  *     chain records the table order and returns a per-table rowCount.
  *   - Dynamically import the route AFTER the mocks are registered.
  */
@@ -47,7 +47,7 @@ vi.mock("@/lib/auth-middleware", () => ({
   },
 }));
 
-vi.mock("@/lib/drizzle", () => {
+vi.mock("@intake/db/client", () => {
   const db = {
     delete: (table: unknown) => ({
       where: async (_cond: unknown) => {
@@ -106,7 +106,7 @@ describe("sync-cleanup-route", () => {
 
   it("deletes every table in FK-safe order (children before parents)", async () => {
     const { POST } = await import("@/app/api/sync/cleanup/route");
-    const { schemaByTableName } = await import("@/lib/sync-payload");
+    const { schemaByTableName } = await import("@intake/db/sync-payload");
 
     const res = await POST(makeRequest());
     expect(res.status).toBe(200);
@@ -123,7 +123,7 @@ describe("sync-cleanup-route", () => {
   });
 
   it("returns per-table deleted counts from the DB rowCount", async () => {
-    const { schemaByTableName } = await import("@/lib/sync-payload");
+    const { schemaByTableName } = await import("@intake/db/sync-payload");
     rowCountByTableRef.set(schemaByTableName.intakeRecords, 7);
     rowCountByTableRef.set(schemaByTableName.doseLogs, 3);
 

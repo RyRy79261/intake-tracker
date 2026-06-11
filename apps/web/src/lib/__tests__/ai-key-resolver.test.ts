@@ -5,7 +5,7 @@
  *   3. Env-var key if email is whitelisted.
  *   4. Otherwise NoAiKeyError.
  *
- * Mocks `@/lib/drizzle` so no real database is touched; each test stubs the
+ * Mocks `@intake/db/client` so no real database is touched; each test stubs the
  * select chain to return the rows that simulate the desired DB state.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
@@ -20,7 +20,7 @@ vi.mock("@/lib/__tests__/ai-key-resolver-mock-state", () => ({
   mockState: { rowsByCall: [] as Array<Record<string, unknown>[]>, idx: 0 },
 }));
 
-vi.mock("@/lib/drizzle", async () => {
+vi.mock("@intake/db/client", async () => {
   const { mockState } = await import("@/lib/__tests__/ai-key-resolver-mock-state");
   const nextRows = async () => {
     const rows = mockState.rowsByCall[mockState.idx] ?? [];

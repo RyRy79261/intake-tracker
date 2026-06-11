@@ -41,13 +41,13 @@
 import { NextResponse } from "next/server";
 import { and, asc, eq, gt, or } from "drizzle-orm";
 import { withAuth } from "@/lib/auth-middleware";
-import { db as drizzleDb } from "@/lib/drizzle";
+import { db as drizzleDb } from "@intake/db/client";
 import {
   PULL_SOFT_CAP,
   pullBodySchema,
   schemaByTableName,
   type TableName,
-} from "@/lib/sync-payload";
+} from "@intake/db/sync-payload";
 
 export const maxDuration = 60;
 

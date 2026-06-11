@@ -9,8 +9,8 @@
  * (note bodies, food descriptions) are NOT logged. The redaction policy is
  * tool-specific — pass `argsForAudit` containing only safe primitives.
  */
-import { db } from "@/lib/drizzle";
-import { mcpAuditLog } from "@/db/schema";
+import { db } from "@intake/db/client";
+import { mcpAuditLog } from "@intake/db/schema";
 
 export interface AuditEvent {
   userId: string;

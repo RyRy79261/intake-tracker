@@ -6,7 +6,7 @@
  *     injects `auth.userId = "user-test"` into the handler context. This
  *     avoids depending on the real Neon Auth session machinery, which is
  *     already covered by src/__tests__/auth-middleware.test.ts.
- *   - Mock @/lib/drizzle by intercepting the module and returning a stub
+ *   - Mock @intake/db/client by intercepting the module and returning a stub
  *     `db` with controllable `select().from().where().limit()` and
  *     `insert().values().onConflictDoUpdate()` behaviour per test.
  *   - Dynamically import the route module AFTER mocks are registered so
@@ -62,7 +62,7 @@ vi.mock("@/lib/auth-middleware", () => ({
 // Mock the drizzle client. The route issues:
 //   drizzleDb.select().from(table).where(...).limit(1)   -> existingRows[op.row.id]
 //   drizzleDb.insert(table).values(v).onConflictDoUpdate({ set }) -> captured
-vi.mock("@/lib/drizzle", () => {
+vi.mock("@intake/db/client", () => {
   const db = {
     select: () => ({
       from: (_table: unknown) => ({

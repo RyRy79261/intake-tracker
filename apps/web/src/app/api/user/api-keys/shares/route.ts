@@ -3,8 +3,8 @@ import { z } from "zod";
 import { and, asc, desc, eq, or } from "drizzle-orm";
 import { neon } from "@neondatabase/serverless";
 import { withAuth } from "@/lib/auth-middleware";
-import { db } from "@/lib/drizzle";
-import { userApiKeys, userKeyShares } from "@/db/schema";
+import { db } from "@intake/db/client";
+import { userApiKeys, userKeyShares } from "@intake/db/schema";
 import { parseJsonBody, zodErrorResponse } from "@/app/api/_shared/validation";
 
 /**

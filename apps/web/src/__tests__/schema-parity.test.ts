@@ -20,7 +20,7 @@
 import { describe, it, expect } from "vitest";
 import { getTableColumns } from "drizzle-orm";
 import type { Table } from "drizzle-orm";
-import * as drizzleSchema from "@/db/schema";
+import * as drizzleSchema from "@intake/db/schema";
 import { extractDexieSchema, type DexieTableSchema } from "@/__tests__/dexie-schema-extractor";
 
 // Computed once at module load — zero IO redundancy across parameterized tests.

@@ -2,7 +2,7 @@
  * Integration-style tests for the OAuth code-exchange + refresh-token
  * rotation flow.
  *
- * We mock `@/lib/drizzle` with an in-memory table store so we can drive the
+ * We mock `@intake/db/client` with an in-memory table store so we can drive the
  * full code-issue / consume / refresh path against the same `db` object the
  * production code uses.
  */
@@ -58,7 +58,7 @@ vi.mock("drizzle-orm", async () => {
   };
 });
 
-vi.mock("@/db/schema", async () => {
+vi.mock("@intake/db/schema", async () => {
   // Build per-column markers so eq/isNull above can resolve column → row key.
   const mark = (table: string, keys: string[]) => {
     const t: Record<string, { name: string; _key: string }> = {};
@@ -106,7 +106,7 @@ vi.mock("@/db/schema", async () => {
   };
 });
 
-vi.mock("@/lib/drizzle", () => {
+vi.mock("@intake/db/client", () => {
   // The transaction stub is degenerate — there is no real isolation in the
   // in-memory map, so commits are immediate and rollback on a thrown error
   // is best-effort (we don't try to undo prior mutations). That's fine for

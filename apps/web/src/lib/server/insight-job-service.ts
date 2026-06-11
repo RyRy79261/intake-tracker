@@ -16,12 +16,12 @@
  * a row's status after creation.
  */
 import { and, eq } from "drizzle-orm";
-import { db } from "@/lib/drizzle";
+import { db } from "@intake/db/client";
 import {
   insightJobs,
   insightReports,
   usersSync,
-} from "@/db/schema";
+} from "@intake/db/schema";
 import { generateId } from "@/lib/utils";
 
 const SERVER_DEVICE_ID = "server-deep-batch";

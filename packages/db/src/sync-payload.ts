@@ -31,7 +31,7 @@
 // match the ZodObject type emitted by `createInsertSchema`.
 import { z } from "zod/v4";
 import { createInsertSchema } from "drizzle-zod";
-import * as schema from "@/db/schema";
+import * as schema from "./schema";
 
 // ─────────────────────────────────────────────────────────────────────────
 // Per-table row schemas

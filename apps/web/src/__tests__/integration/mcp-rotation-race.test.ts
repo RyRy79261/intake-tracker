@@ -28,14 +28,14 @@ import {
   setupTestDb,
   type TestDbContext,
 } from "@/__tests__/helpers/test-db";
-import * as schema from "@/db/schema";
+import * as schema from "@intake/db/schema";
 
 let ctx: TestDbContext;
 let oauth: typeof import("@/lib/mcp/oauth");
 
 beforeAll(async () => {
   ctx = await setupTestDb();
-  vi.mock("@/lib/drizzle", () => ({ db: ctx.db }));
+  vi.mock("@intake/db/client", () => ({ db: ctx.db }));
   oauth = await import("@/lib/mcp/oauth");
 }, 60_000);
 

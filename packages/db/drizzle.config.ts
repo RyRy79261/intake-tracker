@@ -6,18 +6,21 @@ loadEnvConfig(process.cwd());
 /**
  * Drizzle Kit configuration — Phase 42.
  *
- * Schema source of truth: src/db/schema.ts (23 tables: 16 Dexie-mirrored + 4 push + 3 AI keys/usage).
- * Migrations live in /drizzle/ and are committed to the repo.
+ * Schema source of truth: src/schema.ts (the @intake/db package).
+ * Migrations live in packages/db/migrations/ and are committed to the repo.
  *
- * Usage:
+ * Usage (from packages/db, e.g. `pnpm --filter @intake/db db:generate`):
  *   pnpm exec drizzle-kit generate  # emit SQL from schema.ts
- *   pnpm exec drizzle-kit migrate   # apply pending migrations to DATABASE_URL
+ *
+ * Production migrations are still applied by apps/web/scripts/migrate.ts
+ * (drizzle-orm/neon-http migrator) reading this `out` folder — the migrator
+ * switch to `drizzle-kit migrate` is a deferred follow-up.
  *
  * NEVER use `drizzle-kit push` in this project (D-14 in 42-CONTEXT.md).
  */
 export default defineConfig({
-  schema: "./src/db/schema.ts",
-  out: "./drizzle",
+  schema: "./src/schema.ts",
+  out: "./migrations",
   dialect: "postgresql",
   // NOTE: drizzle-kit 0.31.x dropped the "neon-http" driver option. For Neon
   // Postgres, we omit the driver field — drizzle-kit connects via the standard
