@@ -88,7 +88,7 @@ export function SyncPulseIndicator() {
   const animated = state === "syncing";
 
   return (
-    <div className="pointer-events-none fixed left-0 top-0 z-[2147483647]">
+    <div className="pointer-events-none fixed left-0 top-0 z-2147483647">
       {/* Tap target sits in the dead corner; only a quarter of the dot shows. */}
       <button
         type="button"
@@ -118,7 +118,7 @@ export function SyncPulseIndicator() {
         role="status"
         aria-hidden={!labelVisible}
         className={cn(
-          "absolute left-4 top-1 whitespace-nowrap rounded-md bg-slate-900/85 px-2 py-0.5 text-[10px] font-medium text-white shadow-sm backdrop-blur-sm transition-all duration-300 dark:bg-slate-100/90 dark:text-slate-900",
+          "absolute left-4 top-1 whitespace-nowrap rounded-md bg-slate-900/85 px-2 py-0.5 text-[10px] font-medium text-white shadow-xs backdrop-blur-xs transition-all duration-300 dark:bg-slate-100/90 dark:text-slate-900",
           labelVisible ? "translate-x-0 opacity-100" : "-translate-x-1 opacity-0",
         )}
       >

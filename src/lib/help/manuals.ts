@@ -187,7 +187,7 @@ export const MANUALS: Manual[] = [
         steps: [
           "Open the Water tab on the card.",
           "Tap the add button to log one serving. The serving size comes from Settings → Tracking → Water.",
-          "Tap again for more — the ring fills as you approach your daily limit.",
+          "Tap again for more — the ring-3 fills as you approach your daily limit.",
         ],
       },
       {

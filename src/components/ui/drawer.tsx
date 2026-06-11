@@ -124,7 +124,7 @@ const DrawerContent = React.forwardRef<
         ref={ref}
         onFocus={handleFocus}
         className={cn(
-          "fixed z-50 bg-background outline-none",
+          "fixed z-50 bg-background outline-hidden",
           directionStyles[direction],
           className
         )}

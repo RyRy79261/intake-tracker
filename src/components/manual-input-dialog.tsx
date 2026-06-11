@@ -18,7 +18,7 @@ import { logAudit } from "@/lib/audit";
 import { Clock, ChevronDown, ChevronUp, StickyNote } from "lucide-react";
 
 const IntakeFormSchema = z.object({
-  amount: z.number({ invalid_type_error: "Amount is required" })
+  amount: z.number({ error: "Amount is required" })
     .positive("Amount must be positive"),
   note: z.string().max(200, "Note too long").optional(),
 });

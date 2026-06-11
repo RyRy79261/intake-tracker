@@ -46,7 +46,7 @@ export function FoodSaltCard() {
   return (
     <Card
       className={cn(
-        "relative overflow-hidden transition-all duration-300 bg-gradient-to-br",
+        "relative overflow-hidden transition-all duration-300 bg-linear-to-br",
         CARD_THEMES.eating.gradient,
         CARD_THEMES.eating.border
       )}

@@ -412,7 +412,7 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
 
       {/* Action bar — pinned to bottom of the sheet body */}
       {hasItems && (
-        <div className="-mx-6 -mb-6 shrink-0 border-t bg-background/95 px-3 pt-3 backdrop-blur"
+        <div className="-mx-6 -mb-6 shrink-0 border-t bg-background/95 px-3 pt-3 backdrop-blur-sm"
           style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom, 0px))" }}
         >
           <div className="flex">

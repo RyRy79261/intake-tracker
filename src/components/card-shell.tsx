@@ -24,7 +24,7 @@ export function CardShell({ theme, label, headerRight, children }: CardShellProp
   return (
     <Card
       className={cn(
-        "relative overflow-hidden transition-all duration-300 bg-gradient-to-br",
+        "relative overflow-hidden transition-all duration-300 bg-linear-to-br",
         theme.gradient,
         theme.border,
       )}

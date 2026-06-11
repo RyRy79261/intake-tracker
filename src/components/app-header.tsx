@@ -29,7 +29,7 @@ export function AppHeader() {
 
   return (
     <motion.header
-      className="sticky top-0 z-40 -mx-4 px-4 py-4 mb-2 bg-gradient-to-b from-slate-50 to-slate-50/95 dark:from-slate-950 dark:to-slate-950/95 backdrop-blur-sm flex items-center justify-between"
+      className="sticky top-0 z-40 -mx-4 px-4 py-4 mb-2 bg-linear-to-b from-slate-50 to-slate-50/95 dark:from-slate-950 dark:to-slate-950/95 backdrop-blur-xs flex items-center justify-between"
       animate={{ y: isHidden ? "-100%" : 0 }}
       transition={{ duration: transitionDuration, ease: "easeInOut" }}
     >

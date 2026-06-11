@@ -1,3 +1,4 @@
+import "client-only";
 import Dexie, { type EntityTable } from "dexie";
 import {
   getTimezoneForTimestamp,

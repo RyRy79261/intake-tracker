@@ -194,7 +194,7 @@ export function TitrationDrawer({
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent className="max-h-[90dvh] flex flex-col outline-none">
+      <DrawerContent className="max-h-[90dvh] flex flex-col outline-hidden">
         <DrawerHeader className="border-b shrink-0">
           <DrawerTitle>{isEditing ? "Edit Titration Plan" : "New Titration Plan"}</DrawerTitle>
         </DrawerHeader>

@@ -105,7 +105,7 @@ function ScanPreview({
           </span>
           {record.focus && (
             <span
-              className="shrink-0 inline-flex items-center rounded-full bg-violet-100 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300 px-1.5 py-0.5 text-[10px] font-medium truncate max-w-[10rem]"
+              className="shrink-0 inline-flex items-center rounded-full bg-violet-100 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300 px-1.5 py-0.5 text-[10px] font-medium truncate max-w-40"
               title={`Focus: ${record.focus}`}
             >
               {record.focus}

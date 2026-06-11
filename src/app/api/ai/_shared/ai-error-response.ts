@@ -1,3 +1,4 @@
+import "server-only";
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { NoAiKeyError } from "@/lib/ai-key-resolver";

@@ -81,7 +81,7 @@ export function TimeRangeSelector({
             key={opt.value}
             variant={!showCustom && scope === opt.value ? "default" : "outline"}
             size="sm"
-            className="text-xs flex-1 min-w-[3rem]"
+            className="text-xs flex-1 min-w-12"
             onClick={() => handleScopeClick(opt.value)}
           >
             {opt.label}
@@ -90,7 +90,7 @@ export function TimeRangeSelector({
         <Button
           variant={showCustom ? "default" : "outline"}
           size="sm"
-          className="text-xs flex-1 min-w-[3rem]"
+          className="text-xs flex-1 min-w-12"
           onClick={handleCustomClick}
         >
           Custom
@@ -105,7 +105,7 @@ export function TimeRangeSelector({
             onChange={(e) => handleStartChange(e.target.value)}
             className={cn(
               "flex-1 rounded-md border border-input bg-background px-2 py-1 text-sm",
-              "focus:outline-none focus:ring-2 focus:ring-ring"
+              "focus:outline-hidden focus:ring-2 focus:ring-ring"
             )}
           />
           <span className="text-muted-foreground">to</span>
@@ -115,7 +115,7 @@ export function TimeRangeSelector({
             onChange={(e) => handleEndChange(e.target.value)}
             className={cn(
               "flex-1 rounded-md border border-input bg-background px-2 py-1 text-sm",
-              "focus:outline-none focus:ring-2 focus:ring-ring"
+              "focus:outline-hidden focus:ring-2 focus:ring-ring"
             )}
           />
         </div>

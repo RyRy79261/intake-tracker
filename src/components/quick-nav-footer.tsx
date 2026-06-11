@@ -50,7 +50,7 @@ export function QuickNavFooter({
 
   return (
     <motion.footer
-      className="fixed bottom-0 left-0 right-0 z-40 border-t bg-gradient-to-t from-slate-50 to-slate-50/95 dark:from-slate-950 dark:to-slate-950/95 backdrop-blur-sm"
+      className="fixed bottom-0 left-0 right-0 z-40 border-t bg-linear-to-t from-slate-50 to-slate-50/95 dark:from-slate-950 dark:to-slate-950/95 backdrop-blur-xs"
       style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
       animate={{ y: hidden ? "100%" : 0 }}
       transition={{ duration: transitionDuration, ease: "easeInOut" }}
@@ -64,7 +64,7 @@ export function QuickNavFooter({
               className={cn(
                 "flex flex-col items-center gap-1 w-14 px-1 py-1.5 rounded-xl transition-colors",
                 "hover:bg-muted/80 active:scale-95 active:bg-muted",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
               )}
               title={item.label}
             >

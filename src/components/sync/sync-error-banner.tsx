@@ -16,11 +16,11 @@ export function SyncErrorBanner() {
 
   return (
     <div className="fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-md animate-in slide-in-from-bottom-4 duration-300">
-      <div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive shadow-lg backdrop-blur-sm dark:border-destructive/20 dark:bg-destructive/20">
+      <div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive shadow-lg backdrop-blur-xs dark:border-destructive/20 dark:bg-destructive/20">
         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
         <div className="flex-1 min-w-0">
           <p className="font-medium">Sync failed</p>
-          <p className="mt-0.5 text-xs opacity-80 break-words">{lastError}</p>
+          <p className="mt-0.5 text-xs opacity-80 wrap-break-word">{lastError}</p>
         </div>
         <button
           onClick={() => setDismissed(true)}

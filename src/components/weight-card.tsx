@@ -13,7 +13,7 @@ import { InlineEdit } from "@/components/ui/inline-edit";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const WeightFormSchema = z.object({
-  weight: z.number({ invalid_type_error: "Weight is required" })
+  weight: z.number({ error: "Weight is required" })
     .positive("Weight must be positive")
     .max(1000, "Weight seems too high"),
 });

@@ -1,3 +1,4 @@
+import "server-only";
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/neon-auth";
 import { db } from "@/lib/drizzle";

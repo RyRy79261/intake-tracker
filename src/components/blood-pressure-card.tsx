@@ -19,9 +19,9 @@ function pulsePressureColor(pp: number) {
 }
 
 const BloodPressureFormSchema = z.object({
-  systolic: z.number({ invalid_type_error: "Systolic is required" })
+  systolic: z.number({ error: "Systolic is required" })
     .int("Must be a whole number").min(50, "Too low").max(300, "Too high"),
-  diastolic: z.number({ invalid_type_error: "Diastolic is required" })
+  diastolic: z.number({ error: "Diastolic is required" })
     .int("Must be a whole number").min(20, "Too low").max(200, "Too high"),
   heartRate: z.number().int("Must be a whole number").min(20, "Too low").max(250, "Too high").optional(),
 });
@@ -187,7 +187,7 @@ export function BloodPressureCard() {
 
   return (
     <>
-    <Card className={cn("relative overflow-hidden transition-all duration-300 bg-gradient-to-br", theme.gradient, theme.border)}>
+    <Card className={cn("relative overflow-hidden transition-all duration-300 bg-linear-to-br", theme.gradient, theme.border)}>
       <CardContent className="p-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
