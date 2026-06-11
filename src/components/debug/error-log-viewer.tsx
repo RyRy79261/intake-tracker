@@ -199,7 +199,7 @@ export function ErrorLogViewer() {
                         {log.source}
                       </span>
                     </div>
-                    <div className="font-mono break-words whitespace-pre-wrap mt-0.5">
+                    <div className="font-mono wrap-break-word whitespace-pre-wrap mt-0.5">
                       {log.message}
                     </div>
                   </div>

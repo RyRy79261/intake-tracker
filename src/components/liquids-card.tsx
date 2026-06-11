@@ -216,7 +216,7 @@ export function LiquidsCard() {
     <Card
       className={cn(
         "relative overflow-hidden transition-all duration-300",
-        `bg-gradient-to-br ${theme.gradient} ${theme.border}`
+        `bg-linear-to-br ${theme.gradient} ${theme.border}`
       )}
     >
       <CardContent className="p-6">

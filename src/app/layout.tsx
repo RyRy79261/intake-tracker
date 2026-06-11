@@ -90,7 +90,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: BOOT_SHELL_FALLBACK_TIMER }} />
         <SerwistProvider swUrl="/serwist/sw.js" disable={swDisabled} options={{ scope: "/" }}>
           <Providers>
-            <main className="min-h-screen overflow-x-clip bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
+            <main className="min-h-screen overflow-x-clip bg-linear-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
               <div className="container mx-auto max-w-lg px-4 pt-6">
                 <AppHeader />
               </div>

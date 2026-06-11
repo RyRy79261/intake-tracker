@@ -16,7 +16,7 @@ export function HelpTopBar({
   onBack: () => void;
 }) {
   return (
-    <div className="sticky top-0 z-40 -mx-4 mb-2 flex items-center gap-2 bg-gradient-to-b from-slate-50 to-slate-50/95 px-4 py-4 backdrop-blur-sm dark:from-slate-950 dark:to-slate-950/95">
+    <div className="sticky top-0 z-40 -mx-4 mb-2 flex items-center gap-2 bg-linear-to-b from-slate-50 to-slate-50/95 px-4 py-4 backdrop-blur-xs dark:from-slate-950 dark:to-slate-950/95">
       <Button
         variant="ghost"
         size="icon"

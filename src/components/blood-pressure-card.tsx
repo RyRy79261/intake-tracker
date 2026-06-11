@@ -187,7 +187,7 @@ export function BloodPressureCard() {
 
   return (
     <>
-    <Card className={cn("relative overflow-hidden transition-all duration-300 bg-gradient-to-br", theme.gradient, theme.border)}>
+    <Card className={cn("relative overflow-hidden transition-all duration-300 bg-linear-to-br", theme.gradient, theme.border)}>
       <CardContent className="p-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">

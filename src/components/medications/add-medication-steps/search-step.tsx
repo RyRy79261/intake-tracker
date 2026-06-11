@@ -57,7 +57,7 @@ export function SearchStep({
         <div>
           <Label className="text-sm font-medium mb-1.5 block">Assign to prescription</Label>
           <select
-            className="flex h-9 w-full rounded-md border border-input bg-background text-foreground px-3 py-1 text-sm shadow-sm"
+            className="flex h-9 w-full rounded-md border border-input bg-background text-foreground px-3 py-1 text-sm shadow-xs"
             value={selectedPrescriptionId}
             onChange={(e) => onSelectPrescription(e.target.value)}
           >
