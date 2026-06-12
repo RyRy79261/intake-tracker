@@ -12,5 +12,8 @@
  *     their enums and unions (the canonical client data model). Mirrored
  *     field-for-field by `@intake/db/schema`; the parity is enforced by
  *     apps/web's `schema-parity.test.ts` (its extractor parses this very file).
+ *   "@intake/types/service" — the `ServiceResult` / `PaginatedResult` contract
+ *     types (the runtime `ok`/`err`/`unwrap` helpers live in `@intake/core`).
  */
 export * from "./records";
+export * from "./service";

@@ -96,3 +96,39 @@ proposal's full Phase 2:
   (build-time `server-only`) is already active; these are earlier-feedback /
   defense-in-depth. **Trigger:** a boundary-hardening PR (the Capacitor export
   scan rides with the mobile milestone).
+
+## Phase 3 (`packages/types` + `packages/core`) — deferred extractions
+
+**Deferred (2026-06-12, "split + defer" scope chosen by the owner).** Phase 3
+shipped as two structural-move PRs — 3a (`@intake/types`) and 3b
+(`@intake/core`, the *cleanly-pure* logic only). Re-export shims at the original
+`@/lib/*` / `@/hooks/*` paths keep every importer unchanged. Deferred:
+
+- **Wall-clock injection (Phase 3.1) — the "purity wall".** Two functions read
+  `new Date(...)` and so could not move to the I/O-free `@intake/core`:
+  `correlateTimeSeries` (`analytics-stats.ts`) and `buildInsightsPrompt`
+  (`analytics-insights.ts`). They stay in `apps/web` until a focused follow-up
+  refactors them to take an injected `now`/`tz`, threading it through the
+  analytics-service + insights API-route call sites. **Trigger:** Phase 3.1.
+- **`migrateSettings` extraction.** Listed as pure in the map, but it references
+  the app constants `DEFAULT_LIQUID_PRESETS` / `DEFAULT_QUICK_NAV_ITEMS` and
+  returns `Settings & SettingsActions` (the Zustand store type). Moving it
+  cleanly would drag `constants.ts`, `quick-nav-defaults.ts` and the `Settings`
+  type into packages — out of scope for a "clean" 3b. **Trigger:** fold into
+  Phase 3.1, or a settings-package pass.
+- **`obfuscateApiKey` / `deobfuscateApiKey`.** Pure, but use `btoa`/`atob`
+  (WebWorker/DOM globals). `@intake/core`'s tsconfig ships **no DOM lib** as a
+  structural purity guard, so these stay in `apps/web/src/lib/security.ts`
+  (only the four DOM-free sanitize/redact fns moved to `@intake/core/security`).
+- **Dedicated `@intake/core` purity ESLint rule.** Browser globals are already
+  blocked structurally (DOM-free tsconfig). A `no-restricted-syntax` rule to
+  also ban `Date.now()` / `new Date()` / `Math.random()` (which live in the
+  ES2022 lib and so typecheck fine) is **not** added — consistent with the
+  deferred package-lint task (above). **Trigger:** the ESLint-ratchet PR, or
+  Phase 3.1 (where the wall-clock readers are removed anyway).
+- **Importer rewrites off the `@/lib/*` shims.** Both phases kept thin re-export
+  shims so importers resolve unchanged. Migrating the ~164 `@/lib/db`,
+  34 `@/lib/service-result`, 16 `@/lib/compound-utils`, etc. importers to the
+  `@intake/*` package paths is a later, purely-mechanical cleanup (no behavior
+  change). **Trigger:** an importer-rewrite sweep, low priority.
+

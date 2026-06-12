@@ -69,6 +69,9 @@ importers:
       '@capacitor/network':
         specifier: ^8.0.1
         version: 8.0.1(@capacitor/core@8.4.0)
+      '@intake/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@intake/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -340,6 +343,19 @@ importers:
       vitest:
         specifier: ^4.1.8
         version: 4.1.8(@types/node@22.19.7)(@vitest/coverage-v8@4.1.8)(jsdom@29.1.1(@noble/hashes@2.2.0))(msw@2.14.6(@types/node@22.19.7)(typescript@6.0.3))(vite@7.3.1(@types/node@22.19.7)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.22.4)(yaml@2.9.0))
+
+  packages/core:
+    dependencies:
+      '@intake/types':
+        specifier: workspace:*
+        version: link:../types
+    devDependencies:
+      '@intake/typescript-config':
+        specifier: workspace:*
+        version: link:../typescript-config
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
 
   packages/db:
     dependencies:

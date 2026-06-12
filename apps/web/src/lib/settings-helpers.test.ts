@@ -23,6 +23,14 @@ describe("validateAndSave", () => {
     expect(inputSetter).toHaveBeenCalledWith("10");
   });
 
+  it("rejects partial-numeric input instead of saving the prefix", () => {
+    const setter = vi.fn();
+    const inputSetter = vi.fn();
+    validateAndSave("12abc", 0, 100, 10, setter, inputSetter);
+    expect(setter).toHaveBeenCalledWith(10);
+    expect(inputSetter).toHaveBeenCalledWith("10");
+  });
+
   it("reverts to default for a value below min", () => {
     const setter = vi.fn();
     validateAndSave("-5", 0, 100, 10, setter, vi.fn());
