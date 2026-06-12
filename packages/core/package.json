@@ -1,0 +1,26 @@
+{
+  "name": "@intake/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./alcohol": "./src/alcohol-units.ts",
+    "./compound": "./src/compound-utils.ts",
+    "./progress": "./src/progress-utils.ts",
+    "./settings": "./src/settings-helpers.ts",
+    "./service": "./src/service-result.ts",
+    "./security": "./src/security.ts",
+    "./shake": "./src/shake-detector.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@intake/types": "workspace:*"
+  },
+  "devDependencies": {
+    "@intake/typescript-config": "workspace:*",
+    "typescript": "^6.0.3"
+  }
+}

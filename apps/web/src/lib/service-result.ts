@@ -1,23 +1,6 @@
-export type ServiceResult<T> =
-  | { success: true; data: T }
-  | { success: false; error: string; details?: unknown };
-
-export function ok<T>(data: T): ServiceResult<T> {
-  return { success: true, data };
-}
-
-export function err<T = never>(error: string, details?: unknown): ServiceResult<T> {
-  return { success: false, error, details };
-}
-
-export function unwrap<T>(result: ServiceResult<T>): T {
-  if (result.success) return result.data;
-  throw new Error(result.error);
-}
-
-/** A page of records plus enough metadata to drive "load more" pagination. */
-export interface PaginatedResult<T> {
-  records: T[];
-  hasMore: boolean;
-  total: number;
-}
+// Moved in Phase 3b: the ServiceResult/PaginatedResult contract types live in
+// @intake/types/service and the ok/err/unwrap runtime helpers in
+// @intake/core/service. Re-exported here so existing `@/lib/service-result`
+// importers resolve unchanged.
+export type { ServiceResult, PaginatedResult } from "@intake/types/service";
+export { ok, err, unwrap } from "@intake/core/service";
