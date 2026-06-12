@@ -37,11 +37,11 @@ function importSources(code: string): string[] {
   const sources: string[] = [];
   let m: RegExpExecArray | null;
   const staticFrom = /(?:import|export)[\s\S]*?from\s*["']([^"']+)["']/g;
-  while ((m = staticFrom.exec(code)) !== null) sources.push(m[1]);
+  while ((m = staticFrom.exec(code)) !== null) if (m[1]) sources.push(m[1]);
   const sideEffect = /import\s*["']([^"']+)["']/g;
-  while ((m = sideEffect.exec(code)) !== null) sources.push(m[1]);
+  while ((m = sideEffect.exec(code)) !== null) if (m[1]) sources.push(m[1]);
   const dynamic = /(?:import|require)\s*\(\s*["']([^"']+)["']/g;
-  while ((m = dynamic.exec(code)) !== null) sources.push(m[1]);
+  while ((m = dynamic.exec(code)) !== null) if (m[1]) sources.push(m[1]);
   return sources;
 }
 
