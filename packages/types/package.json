@@ -1,0 +1,17 @@
+{
+  "name": "@intake/types",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./records": "./src/records.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@intake/typescript-config": "workspace:*",
+    "typescript": "^6.0.3"
+  }
+}

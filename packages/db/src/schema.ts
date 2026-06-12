@@ -1,7 +1,7 @@
 /**
  * Postgres schema — single source of truth for all 29 tables.
  *
- * Mirrors src/lib/db.ts Dexie interfaces exactly (18 app tables),
+ * Mirrors the @intake/types/records Dexie interfaces exactly (18 app tables),
  * includes 4 push notification tables that replace scripts/push-migration.sql,
  * 3 server-only AI tables (user_api_keys, user_key_shares, ai_usage), and
  * 4 server-only MCP-connector tables (mcp_oauth_clients, mcp_auth_codes,
@@ -306,7 +306,7 @@ export const prescriptions = pgTable(
     // Combination-drug active ingredients (mirrors Dexie CompoundStrength[]).
     compounds: jsonb("compounds").$type<{ name: string; strength: number }[]>(),
     isActive: boolean("is_active").notNull(),
-    // NOTE: no timezone column — Prescription interface in src/lib/db.ts omits it.
+    // NOTE: no timezone column — Prescription interface in @intake/types/records omits it.
     createdAt: bigint("created_at", { mode: "number" }).notNull(),
     updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
     deletedAt: bigint("deleted_at", { mode: "number" }),
@@ -509,7 +509,7 @@ export const doseLogs = pgTable(
     rescheduledTo: text("rescheduled_to"),
     skipReason: text("skip_reason"),
     note: text("note"),
-    // DoseLog DOES have a timezone column (line 269 of src/lib/db.ts).
+    // DoseLog DOES have a timezone column (see the DoseLog interface in @intake/types/records).
     timezone: text("timezone").notNull(),
     createdAt: bigint("created_at", { mode: "number" }).notNull(),
     updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
@@ -615,7 +615,7 @@ export const auditLogs = pgTable(
     timezone: text("timezone").notNull(),
   },
   (t) => ({
-    // All 29 AuditAction values copied verbatim from src/lib/db.ts lines 24-54.
+    // All 29 AuditAction values copied verbatim from the AuditAction type in @intake/types/records.
     actionCheck: check(
       "audit_logs_action_check",
       sql`${t.action} IN (
@@ -638,7 +638,7 @@ export const auditLogs = pgTable(
 );
 
 // ─────────────────────────────────────────────────────────────────────────
-// User medical profile — mirrors the UserProfile interface in src/lib/db.ts.
+// User medical profile — mirrors the UserProfile interface in @intake/types/records.
 // Treated as a per-user singleton by the app, but stored as a normal synced
 // table (globally-unique `id`). No `timezone` column — UserProfile omits it.
 // ─────────────────────────────────────────────────────────────────────────
@@ -672,7 +672,7 @@ export const userProfile = pgTable(
 
 // ─────────────────────────────────────────────────────────────────────────
 // Cached AI analytics insight reports — mirrors the InsightReport interface
-// in src/lib/db.ts. One row per generated "AI Insights" summary. No
+// in @intake/types/records. One row per generated "AI Insights" summary. No
 // `timezone` column — InsightReport omits it.
 // ─────────────────────────────────────────────────────────────────────────
 

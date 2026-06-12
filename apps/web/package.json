@@ -33,6 +33,7 @@
     "@capacitor/local-notifications": "^8.1.0",
     "@capacitor/network": "^8.0.1",
     "@intake/db": "workspace:*",
+    "@intake/types": "workspace:*",
     "@modelcontextprotocol/sdk": "1.29.0",
     "@neondatabase/auth": "0.4.1-beta",
     "@neondatabase/serverless": "^1.1.0",

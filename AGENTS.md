@@ -10,9 +10,10 @@ The server schema (`src/db/schema.ts`) is mirrored to Neon Postgres through
 numbered Drizzle migrations in `drizzle/`. Generate with `pnpm db:generate`,
 apply with `pnpm db:migrate`. Never run `drizzle-kit push`.
 
-`src/db/schema.ts` must stay field-for-field in parity with the Dexie
-interfaces in `src/lib/db.ts` — `src/__tests__/schema-parity.test.ts` fails
-the build otherwise.
+`@intake/db/schema` (`packages/db/src/schema.ts`) must stay field-for-field in
+parity with the Dexie record interfaces in `@intake/types/records`
+(`packages/types/src/records.ts`) — `apps/web/src/__tests__/schema-parity.test.ts`
+fails the build otherwise.
 
 ### The timestamp footgun
 

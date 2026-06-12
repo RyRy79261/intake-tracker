@@ -2,8 +2,8 @@
  * Schema parity gate — Dexie ↔ Drizzle drift detector.
  *
  * This test runs as part of `pnpm test` and therefore in every CI run. It fails
- * when Dexie (src/lib/db.ts v15 interfaces) and Drizzle (src/db/schema.ts) fall
- * out of sync — which is the moment a future phase adds a field to one side
+ * when Dexie (@intake/types/records interfaces) and Drizzle (@intake/db/schema)
+ * fall out of sync — which is the moment a future phase adds a field to one side
  * without the other.
  *
  * The comparator is STRUCTURAL (field name presence) — not type-based. Union
@@ -48,7 +48,7 @@ function getDrizzleColumnNames(table: Table): string[] {
 // ─────────────────────────────────────────────────────────────────────────
 
 describe("Dexie schema extractor sanity", () => {
-  it("extracts exactly 18 Dexie tables from src/lib/db.ts", () => {
+  it("extracts exactly 18 Dexie tables from @intake/types/records", () => {
     expect(DEXIE_TABLES).toHaveLength(18);
   });
 
@@ -121,7 +121,7 @@ describe("Dexie ↔ Drizzle schema parity", () => {
       const drizzleTable = getDrizzleTable(tableName);
       expect(
         drizzleTable,
-        `Missing Drizzle export: drizzleSchema.${tableName} — add pgTable("...") to src/db/schema.ts`,
+        `Missing Drizzle export: drizzleSchema.${tableName} — add pgTable("...") to @intake/db/schema`,
       ).toBeDefined();
     },
   );
@@ -142,7 +142,7 @@ describe("Dexie ↔ Drizzle schema parity", () => {
         `${tableName}: Dexie field(s) missing from Drizzle columns. ` +
           `Missing: [${missing.join(", ")}]. ` +
           `Drizzle has: [${Array.from(drizzleCols).join(", ")}]. ` +
-          `Fix: add the missing column(s) to src/db/schema.ts and run pnpm db:generate`,
+          `Fix: add the missing column(s) to @intake/db/schema and run pnpm db:generate`,
       ).toEqual([]);
     },
   );
@@ -164,8 +164,8 @@ describe("Dexie ↔ Drizzle schema parity", () => {
         extras,
         `${tableName}: Drizzle has column(s) not in Dexie interface and not in the exemption list ` +
           `(only 'userId' is exempt). Extra: [${extras.join(", ")}]. ` +
-          `Fix: add the field to the Dexie interface in src/lib/db.ts ` +
-          `OR remove the column from src/db/schema.ts`,
+          `Fix: add the field to the Dexie interface in @intake/types/records ` +
+          `OR remove the column from @intake/db/schema`,
       ).toEqual([]);
     },
   );
