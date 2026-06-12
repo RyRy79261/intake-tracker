@@ -131,3 +131,24 @@ shipped as two structural-move PRs — 3a (`@intake/types`) and 3b
   34 `@/lib/service-result`, 16 `@/lib/compound-utils`, etc. importers to the
   `@intake/*` package paths is a later, purely-mechanical cleanup (no behavior
   change). **Trigger:** an importer-rewrite sweep, low priority.
+
+- **`sanitizeTextInput` regex sanitizer (`@intake/core/security`).** The
+  `.replace(/<[^>]*>/g, '')` HTML-tag strip carries two **real but low-risk**
+  CodeQL findings that the Phase 3b move relocated verbatim from
+  `apps/web/src/lib/security.ts` (pre-existing app debt, NOT introduced by the
+  migration; surfaced as "new" only because the code changed files):
+  - `js/incomplete-multi-character-sanitization` (high) — an *unclosed* tag
+    survives (`"x<script"` → `"x<script"`, since the regex requires a closing
+    `>`).
+  - `js/polynomial-redos` (high) — `<[^>]*>` backtracks O(n²) on pathological
+    input like `"<<<<…"` (many `<`, no `>`).
+  There is **no regex-only fix for both**: requiring `>` (to correctly preserve
+  text like `"5 < 10"`) is exactly what causes the O(n²); stripping more
+  aggressively over-strips legitimate `<`; looping reintroduces the ReDoS.
+  Practical risk is low for this app — the output is stored / AI-bound text,
+  never rendered as raw HTML (React auto-escapes on display), and it is
+  single-user on the user's own input. **Trigger:** the boundary/security-
+  hardening PR — replace the regex with a vetted HTML-sanitization approach (or
+  a small pure linear+complete tag stripper with tests), then the two alerts
+  resolve. Until then CodeQL reports them on `@intake/core/security` (non-
+  required check; does not block merge). See PR #218 discussion.
