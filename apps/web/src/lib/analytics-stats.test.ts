@@ -153,6 +153,44 @@ describe("correlateTimeSeries", () => {
     // With lag, A[day0] correlates with B[day2], etc.
     expect(result.strength).toBe("strong");
   });
+
+  it("buckets days by the injected timezone, not the host-local zone", () => {
+    // Two timestamps 1h apart straddling UTC midnight. Absolute (Date.UTC) so
+    // the test is itself timezone-independent.
+    const ts1 = Date.UTC(2026, 0, 1, 23, 30); // 2026-01-01 23:30 UTC
+    const ts2 = Date.UTC(2026, 0, 2, 0, 30); // 2026-01-02 00:30 UTC
+    const seriesA = [
+      { timestamp: ts1, value: 1 },
+      { timestamp: ts2, value: 3 },
+    ];
+    const seriesB = [
+      { timestamp: ts1, value: 10 },
+      { timestamp: ts2, value: 30 },
+    ];
+    // UTC: the two points fall on different calendar days -> 2 paired days.
+    expect(correlateTimeSeries(seriesA, seriesB, 0, "UTC").pairedDays).toBe(2);
+    // America/New_York (UTC-5): both are on 2026-01-01 (18:30, 19:30) and get
+    // averaged into a single day -> 1 paired day. Proves the tz drives bucketing.
+    expect(
+      correlateTimeSeries(seriesA, seriesB, 0, "America/New_York").pairedDays,
+    ).toBe(1);
+  });
+
+  it("defaults to UTC bucketing when no timezone is given", () => {
+    const ts1 = Date.UTC(2026, 0, 1, 23, 30);
+    const ts2 = Date.UTC(2026, 0, 2, 0, 30);
+    const seriesA = [
+      { timestamp: ts1, value: 1 },
+      { timestamp: ts2, value: 3 },
+    ];
+    const seriesB = [
+      { timestamp: ts1, value: 10 },
+      { timestamp: ts2, value: 30 },
+    ];
+    expect(correlateTimeSeries(seriesA, seriesB).pairedDays).toBe(
+      correlateTimeSeries(seriesA, seriesB, 0, "UTC").pairedDays,
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------

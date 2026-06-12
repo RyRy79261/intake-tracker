@@ -10,6 +10,7 @@ import { getDefecationRecordsByDateRange } from "@/lib/defecation-service";
 import { getDoseScheduleForDateRange } from "@/lib/dose-schedule-service";
 import { db, type SubstanceRecord } from "@/lib/db";
 import { trend as computeTrend, correlateTimeSeries } from "@/lib/analytics-stats";
+import { getDeviceTimezone } from "@/lib/timezone";
 import type {
   Domain,
   TimeRange,
@@ -184,7 +185,9 @@ export async function correlate(
     getRecordsByDomain(domainA, range),
     getRecordsByDomain(domainB, range),
   ]);
-  return correlateTimeSeries(seriesA, seriesB, lagDays);
+  // Anchor day-bucketing to the viewer's zone so correlations are deterministic
+  // (no dependency on the server/runtime's local timezone).
+  return correlateTimeSeries(seriesA, seriesB, lagDays, getDeviceTimezone());
 }
 
 // ---------------------------------------------------------------------------

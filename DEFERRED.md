@@ -104,12 +104,20 @@ shipped as two structural-move PRs — 3a (`@intake/types`) and 3b
 (`@intake/core`, the *cleanly-pure* logic only). Re-export shims at the original
 `@/lib/*` / `@/hooks/*` paths keep every importer unchanged. Deferred:
 
-- **Wall-clock injection (Phase 3.1) — the "purity wall".** Two functions read
-  `new Date(...)` and so could not move to the I/O-free `@intake/core`:
-  `correlateTimeSeries` (`analytics-stats.ts`) and `buildInsightsPrompt`
-  (`analytics-insights.ts`). They stay in `apps/web` until a focused follow-up
-  refactors them to take an injected `now`/`tz`, threading it through the
-  analytics-service + insights API-route call sites. **Trigger:** Phase 3.1.
+- ~~**Wall-clock injection (Phase 3.1) — the "purity wall".**~~ **DONE (Phase
+  3.1).** `correlateTimeSeries` now takes an injected `timezone` (default
+  `"UTC"`) and was moved to `@intake/core/analytics-stats` (its bucketing uses
+  `Intl.DateTimeFormat` in that zone; the lag-shift uses UTC calendar
+  arithmetic). The sole production caller (`analytics-service.correlate`) passes
+  `getDeviceTimezone()`. `buildInsightsPrompt` turned out **already pure**
+  (`new Date(numberTs).toISOString()` is UTC-deterministic) — left byte-for-byte
+  in `apps/web`; it rides with the future `@intake/ai-prompts` extraction
+  because it is AI-prompt-coupled, **not** because of any wall-clock issue.
+- **`analytics-insights.ts` schema/prompt split → Phase 4 (`@intake/ai-prompts`).**
+  Its pure zod schemas + `buildInsightsPrompt` are entangled with the AI
+  artifacts (`INSIGHT_TOOL`, `INSIGHTS_SYSTEM_PROMPT`) and `Domain`-label
+  helpers. Splitting now is high churn across ~8 importers for zero purity gain;
+  it belongs with the prompts package. **Trigger:** Phase 4.
 - **`migrateSettings` extraction.** Listed as pure in the map, but it references
   the app constants `DEFAULT_LIQUID_PRESETS` / `DEFAULT_QUICK_NAV_ITEMS` and
   returns `Settings & SettingsActions` (the Zustand store type). Moving it
@@ -120,15 +128,19 @@ shipped as two structural-move PRs — 3a (`@intake/types`) and 3b
   (WebWorker/DOM globals). `@intake/core`'s tsconfig ships **no DOM lib** as a
   structural purity guard, so these stay in `apps/web/src/lib/security.ts`
   (only the four DOM-free sanitize/redact fns moved to `@intake/core/security`).
-- **Dedicated `@intake/core` purity ESLint rule.** Browser globals are already
-  blocked structurally (DOM-free tsconfig). A `no-restricted-syntax` rule to
-  also ban `Date.now()` / `new Date()` / `Math.random()` (which live in the
-  ES2022 lib and so typecheck fine) is **not** added — consistent with the
-  deferred package-lint task (above). **Trigger:** the ESLint-ratchet PR, or
-  Phase 3.1 (where the wall-clock readers are removed anyway).
-- **Importer rewrites off the `@/lib/*` shims.** Both phases kept thin re-export
+- ~~**Dedicated `@intake/core` purity ESLint rule.**~~ **DONE (Phase 3.1).**
+  `packages/core/eslint.config.mjs` is a standalone, purity-only flat config
+  (deliberately NOT spreading `@intake/eslint-config`, whose base runs the
+  deferred-strict rules at `error`). It bans `Date.now()`, bare `new Date()`,
+  `Math.random()`, and `fetch()` via `no-restricted-syntax` (allowing
+  `new Date(arg)`). `turbo run lint` / CI's `pnpm lint` job pick up the new
+  `lint` script automatically. (The general package-lint task for the other
+  packages — running the full ratcheted ruleset — remains deferred to the
+  ESLint-ratchet PR.)
+- **Importer rewrites off the `@/lib/*` shims.** Every phase kept thin re-export
   shims so importers resolve unchanged. Migrating the ~164 `@/lib/db`,
-  34 `@/lib/service-result`, 16 `@/lib/compound-utils`, etc. importers to the
-  `@intake/*` package paths is a later, purely-mechanical cleanup (no behavior
-  change). **Trigger:** an importer-rewrite sweep, low priority.
+  34 `@/lib/service-result`, 16 `@/lib/compound-utils`, 29 `@/lib/analytics-types`,
+  4 `@/lib/analytics-stats`, etc. importers to the `@intake/*` package paths is a
+  later, purely-mechanical cleanup (no behavior change). **Trigger:** an
+  importer-rewrite sweep, low priority.
 

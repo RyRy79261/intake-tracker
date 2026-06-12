@@ -17,3 +17,4 @@
  */
 export * from "./records";
 export * from "./service";
+export * from "./analytics";
