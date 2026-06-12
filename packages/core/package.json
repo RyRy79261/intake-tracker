@@ -11,16 +11,21 @@
     "./settings": "./src/settings-helpers.ts",
     "./service": "./src/service-result.ts",
     "./security": "./src/security.ts",
-    "./shake": "./src/shake-detector.ts"
+    "./shake": "./src/shake-detector.ts",
+    "./analytics-stats": "./src/analytics-stats.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src"
   },
   "dependencies": {
-    "@intake/types": "workspace:*"
+    "@intake/types": "workspace:*",
+    "simple-statistics": "^7.9.0"
   },
   "devDependencies": {
     "@intake/typescript-config": "workspace:*",
-    "typescript": "^6.0.3"
+    "eslint": "^10.4.1",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.60.1"
   }
 }
