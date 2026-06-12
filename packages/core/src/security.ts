@@ -24,11 +24,18 @@ export function sanitizeNumericInput(value: string | number, min = 0, max = 1000
 // Sanitize text input to prevent injection
 export function sanitizeTextInput(text: string, maxLength = 500): string {
   if (!text || typeof text !== 'string') return '';
-  // Remove any HTML tags and limit length
-  return text
-    .replace(/<[^>]*>/g, '')
-    .trim()
-    .slice(0, maxLength);
+  // Strip HTML tags, looping until the string stabilizes. A single pass is an
+  // incomplete sanitizer: removing a matched tag can splice the surrounding
+  // text into a brand-new tag (e.g. "<<div>>" or "<scr<script>ipt>"), which a
+  // one-shot replace leaves behind. Repeating until no match remains closes
+  // that gap (js/incomplete-multi-character-sanitization).
+  let stripped = text;
+  let previous: string;
+  do {
+    previous = stripped;
+    stripped = stripped.replace(/<[^>]*>/g, '');
+  } while (stripped !== previous);
+  return stripped.trim().slice(0, maxLength);
 }
 
 // Strip potential PII patterns from a string. Shared by sanitizeForAI and
