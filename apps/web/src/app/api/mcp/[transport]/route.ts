@@ -19,8 +19,8 @@
 import { createMcpHandler, withMcpAuth } from "mcp-handler";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { eq } from "drizzle-orm";
-import { db } from "@/lib/drizzle";
-import { usersSync } from "@/db/schema";
+import { db } from "@intake/db/client";
+import { usersSync } from "@intake/db/schema";
 import { lookupAccessToken } from "@/lib/mcp/oauth";
 import { registerReadOnlyTools } from "@/lib/mcp/tools";
 import { isEmailAllowed } from "@/lib/mcp/whitelist";

@@ -90,7 +90,7 @@ vi.mock("@/lib/auth-middleware", () => ({
   },
 }));
 
-vi.mock("@/lib/drizzle", () => {
+vi.mock("@intake/db/client", () => {
   const db = {
     select: () => ({
       from: () => ({

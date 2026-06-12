@@ -23,8 +23,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/neon-auth";
-import { db } from "@/lib/drizzle";
-import { usersSync } from "@/db/schema";
+import { db } from "@intake/db/client";
+import { usersSync } from "@intake/db/schema";
 import { sql } from "drizzle-orm";
 import { getClient, issueAuthCode } from "@/lib/mcp/oauth";
 import { parseScopeString, serialiseScopes } from "@/lib/mcp/scopes";

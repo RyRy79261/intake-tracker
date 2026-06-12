@@ -10,7 +10,7 @@
  *
  * Strategy:
  *   - Mock @/lib/auth-middleware so withAuth injects a fixed userId.
- *   - Mock @/lib/drizzle with an `insert().values()` chain that records the
+ *   - Mock @intake/db/client with an `insert().values()` chain that records the
  *     written row, or rejects when configured to.
  *   - Use vi.stubEnv to flip the guard env vars.
  */
@@ -40,7 +40,7 @@ vi.mock("@/lib/auth-middleware", () => ({
   },
 }));
 
-vi.mock("@/lib/drizzle", () => {
+vi.mock("@intake/db/client", () => {
   const db = {
     insert: (_table: unknown) => ({
       values: (row: Record<string, unknown>) => {

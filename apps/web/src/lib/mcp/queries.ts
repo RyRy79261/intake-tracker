@@ -12,7 +12,7 @@
  * as a `truncated` flag so the model knows to narrow the window.
  */
 import { and, asc, desc, eq, gte, isNull, lte, sql, inArray } from "drizzle-orm";
-import { db } from "@/lib/drizzle";
+import { db } from "@intake/db/client";
 import {
   intakeRecords,
   weightRecords,
@@ -25,7 +25,7 @@ import {
   inventoryItems,
   doseLogs,
   pushSettings,
-} from "@/db/schema";
+} from "@intake/db/schema";
 
 const MAX_ROWS = 5000;
 const DEFAULT_DAY_START_HOUR = 2;

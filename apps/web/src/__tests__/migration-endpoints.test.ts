@@ -36,7 +36,7 @@ vi.mock("@/lib/auth-middleware", () => ({
   },
 }));
 
-vi.mock("@/lib/drizzle", () => {
+vi.mock("@intake/db/client", () => {
   function getTableName(table: Record<string, unknown>): string {
     return (table._name as string) ?? "unknown";
   }
@@ -78,7 +78,7 @@ vi.mock("@/lib/drizzle", () => {
   return { db: selectProxy };
 });
 
-vi.mock("@/lib/sync-payload", async () => {
+vi.mock("@intake/db/sync-payload", async () => {
   const tableNames = [
     "intakeRecords", "weightRecords", "bloodPressureRecords",
     "eatingRecords", "urinationRecords", "defecationRecords",

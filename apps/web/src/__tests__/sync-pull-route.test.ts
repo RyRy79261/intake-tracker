@@ -7,7 +7,7 @@
  *     matches the sync-push-route.test.ts pattern and keeps these tests
  *     independent of the real Neon Auth session machinery (already covered
  *     by src/__tests__/auth-middleware.test.ts).
- *   - Mock @/lib/drizzle by intercepting the module and returning a stub
+ *   - Mock @intake/db/client by intercepting the module and returning a stub
  *     `db.select().from(table).where(cond).orderBy(_).limit(n)` chain that
  *     records every `where` condition so tests can assert user_id scoping.
  *   - Dynamically import the route module AFTER mocks are registered so
@@ -61,7 +61,7 @@ vi.mock("@/lib/auth-middleware", () => ({
   },
 }));
 
-vi.mock("@/lib/drizzle", () => {
+vi.mock("@intake/db/client", () => {
   const db = {
     select: () => ({
       from: (table: unknown) => ({
@@ -108,7 +108,7 @@ describe("sync-pull-route", () => {
 
   it("user_id scoped: every Drizzle SELECT includes eq(table.userId, auth.userId!)", async () => {
     const { POST } = await import("@/app/api/sync/pull/route");
-    const { schemaByTableName } = await import("@/lib/sync-payload");
+    const { schemaByTableName } = await import("@intake/db/sync-payload");
 
     const res = await POST(makePullRequest({ cursors: {} }));
     expect(res.status).toBe(200);
@@ -180,7 +180,7 @@ describe("sync-pull-route", () => {
 
   it("returns rows with updated_at > cursor, ordered ASC", async () => {
     const { POST } = await import("@/app/api/sync/pull/route");
-    const { schemaByTableName } = await import("@/lib/sync-payload");
+    const { schemaByTableName } = await import("@intake/db/sync-payload");
 
     // Seed intakeRecords with rows already sorted ASC by updatedAt — the
     // route must return them in the same order (the stub honours what the
@@ -213,7 +213,7 @@ describe("sync-pull-route", () => {
 
   it("accepts a compound { updatedAt, id } keyset cursor", async () => {
     const { POST } = await import("@/app/api/sync/pull/route");
-    const { schemaByTableName } = await import("@/lib/sync-payload");
+    const { schemaByTableName } = await import("@intake/db/sync-payload");
 
     const intakeRows: StubRow[] = [
       { id: "b", updatedAt: 1000, deletedAt: null },
@@ -241,7 +241,7 @@ describe("sync-pull-route", () => {
   it("soft-caps per table at PULL_SOFT_CAP (500) and sets hasMore=true when exceeded", async () => {
     const { POST } = await import("@/app/api/sync/pull/route");
     const { schemaByTableName, PULL_SOFT_CAP } = await import(
-      "@/lib/sync-payload"
+      "@intake/db/sync-payload"
     );
 
     // Return PULL_SOFT_CAP + 1 rows — the route queries with
@@ -267,7 +267,7 @@ describe("sync-pull-route", () => {
 
   it("includes tombstones (deletedAt != null) in response", async () => {
     const { POST } = await import("@/app/api/sync/pull/route");
-    const { schemaByTableName } = await import("@/lib/sync-payload");
+    const { schemaByTableName } = await import("@intake/db/sync-payload");
 
     const tombstone: StubRow = {
       id: "deleted-1",
@@ -330,7 +330,7 @@ describe("sync-pull-route", () => {
       },
     }));
     // Re-mock drizzle for the fresh module graph.
-    vi.doMock("@/lib/drizzle", () => ({
+    vi.doMock("@intake/db/client", () => ({
       db: {
         select: () => ({
           from: () => ({

@@ -7,12 +7,12 @@
  * authorize-endpoint has already verified via session cookie.
  */
 import { eq, and, gte, isNull, lt } from "drizzle-orm";
-import { db } from "@/lib/drizzle";
+import { db } from "@intake/db/client";
 import {
   mcpAccessTokens,
   mcpAuthCodes,
   mcpOauthClients,
-} from "@/db/schema";
+} from "@intake/db/schema";
 import {
   generateOpaqueToken,
   hashToken,

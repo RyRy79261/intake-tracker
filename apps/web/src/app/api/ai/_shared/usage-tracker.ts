@@ -7,8 +7,8 @@
  * response. Lost rows on crash are acceptable.
  */
 
-import { db } from "@/lib/drizzle";
-import { aiUsage } from "@/db/schema";
+import { db } from "@intake/db/client";
+import { aiUsage } from "@intake/db/schema";
 import type { AiProvider, KeySource } from "@/lib/ai-key-resolver";
 
 export interface UsageRecord {

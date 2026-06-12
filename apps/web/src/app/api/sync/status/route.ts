@@ -10,14 +10,14 @@
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { withAuth } from "@/lib/auth-middleware";
-import { db as drizzleDb } from "@/lib/drizzle";
+import { db as drizzleDb } from "@intake/db/client";
 import {
   intakeRecords,
   weightRecords,
   prescriptions,
   doseLogs,
   auditLogs,
-} from "@/db/schema";
+} from "@intake/db/schema";
 
 const PROBE_TABLES = [
   intakeRecords,

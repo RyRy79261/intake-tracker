@@ -4,7 +4,7 @@
  * Strategy mirrors src/__tests__/sync-pull-route.test.ts:
  *   - Mock @/lib/auth-middleware so withAuth becomes a pass-through HOF that
  *     injects a fixed authenticated context.
- *   - Mock @/lib/drizzle with a controllable stub `db` whose
+ *   - Mock @intake/db/client with a controllable stub `db` whose
  *     `.select().from(table).where().limit(1)` chain returns per-table rows
  *     so tests can drive the "has previously synced" probe.
  *   - Dynamically import the route AFTER the mocks are registered.
@@ -50,7 +50,7 @@ vi.mock("@/lib/auth-middleware", () => ({
   },
 }));
 
-vi.mock("@/lib/drizzle", () => {
+vi.mock("@intake/db/client", () => {
   const db = {
     select: (_proj: unknown) => ({
       from: (table: unknown) => ({
@@ -102,7 +102,7 @@ describe("sync-status-route", () => {
   });
 
   it("returns hasSyncedData: true when a probe table has a row", async () => {
-    const { weightRecords } = await import("@/db/schema");
+    const { weightRecords } = await import("@intake/db/schema");
     rowsByTableRef.set(weightRecords, [{ id: "w-1" }]);
 
     const { GET } = await import("@/app/api/sync/status/route");
@@ -116,7 +116,7 @@ describe("sync-status-route", () => {
   it("short-circuits on the first table that has data", async () => {
     // intakeRecords is the first PROBE_TABLE — a hit there must stop the loop
     // before any later table is queried.
-    const { intakeRecords } = await import("@/db/schema");
+    const { intakeRecords } = await import("@intake/db/schema");
     rowsByTableRef.set(intakeRecords, [{ id: "i-1" }]);
 
     const { GET } = await import("@/app/api/sync/status/route");

@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { and, eq, gte, sql as drizzleSql } from "drizzle-orm";
 import { neon } from "@neondatabase/serverless";
 import { withAuth } from "@/lib/auth-middleware";
-import { db } from "@/lib/drizzle";
-import { aiUsage } from "@/db/schema";
+import { db } from "@intake/db/client";
+import { aiUsage } from "@intake/db/schema";
 
 /**
  * GET /api/user/ai-usage

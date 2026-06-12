@@ -16,8 +16,8 @@ import "server-only";
  */
 
 import { eq, and, asc } from "drizzle-orm";
-import { db } from "@/lib/drizzle";
-import { userApiKeys, userKeyShares } from "@/db/schema";
+import { db } from "@intake/db/client";
+import { userApiKeys, userKeyShares } from "@intake/db/schema";
 import { decryptKey } from "@/lib/key-vault";
 
 export type AiProvider = "anthropic" | "groq";

@@ -1,0 +1,9 @@
+{
+  "extends": "@intake/typescript-config/base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts", "drizzle.config.ts"],
+  "exclude": ["node_modules", "migrations"]
+}

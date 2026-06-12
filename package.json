@@ -20,7 +20,7 @@
     "test:mutation": "pnpm --filter @intake/web test:mutation",
     "test:tz": "pnpm --filter @intake/web test:tz",
     "bench": "pnpm --filter @intake/web bench",
-    "db:generate": "pnpm --filter @intake/web db:generate",
+    "db:generate": "pnpm --filter @intake/db db:generate",
     "db:migrate": "pnpm --filter @intake/web db:migrate",
     "seed:dev": "pnpm --filter @intake/web seed:dev",
     "prepare": "husky"

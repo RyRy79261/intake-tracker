@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { eq, sql } from "drizzle-orm";
 import { withAuth } from "@/lib/auth-middleware";
-import { db } from "@/lib/drizzle";
-import { userApiKeys } from "@/db/schema";
+import { db } from "@intake/db/client";
+import { userApiKeys } from "@intake/db/schema";
 import { encryptKey, lastFourOf, type KeyVaultAad } from "@/lib/key-vault";
 import { parseJsonBody, zodErrorResponse } from "@/app/api/_shared/validation";
 

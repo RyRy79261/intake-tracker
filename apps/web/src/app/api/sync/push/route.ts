@@ -40,13 +40,13 @@
 import { NextResponse } from "next/server";
 import { eq, and, inArray } from "drizzle-orm";
 import { withAuth } from "@/lib/auth-middleware";
-import { db as drizzleDb } from "@/lib/drizzle";
-import { usersSync } from "@/db/schema";
+import { db as drizzleDb } from "@intake/db/client";
+import { usersSync } from "@intake/db/schema";
 import {
   pushBodySchema,
   schemaByTableName,
   type TableName,
-} from "@/lib/sync-payload";
+} from "@intake/db/sync-payload";
 
 export const maxDuration = 60;
 

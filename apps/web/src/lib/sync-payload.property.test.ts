@@ -36,7 +36,7 @@
  */
 import { describe, it, expect } from "vitest";
 import fc from "fast-check";
-import { pushBodySchema, pullBodySchema } from "@/lib/sync-payload";
+import { pushBodySchema, pullBodySchema } from "@intake/db/sync-payload";
 
 // ─────────────────────────────────────────────────────────────────────────
 // Arbitraries

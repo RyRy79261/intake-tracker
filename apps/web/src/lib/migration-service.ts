@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { TABLE_PUSH_ORDER, type TableName } from "@/lib/sync-topology";
-import type { PushOp } from "@/lib/sync-payload";
+import type { PushOp } from "@intake/db/sync-payload";
 import { apiFetch } from "@/lib/api-fetch";
 import { useMigrationStore } from "@/stores/migration-store";
 import { useSettingsStore } from "@/stores/settings-store";

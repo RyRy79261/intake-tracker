@@ -24,7 +24,7 @@ import { NextRequest } from "next/server";
 // observe the route's error-handling surface, not the happy path.
 // ─────────────────────────────────────────────────────────────────────────
 
-vi.mock("@/lib/drizzle", () => ({
+vi.mock("@intake/db/client", () => ({
   db: {
     insert: () => ({ values: async () => undefined }),
     update: () => ({

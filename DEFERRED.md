@@ -65,3 +65,34 @@ identical behavior and were left in place to keep the bump focused:
   fine because the inputs are always `number | undefined`).
 
 **Trigger:** a dedicated zod-deprecation cleanup PR.
+
+## Phase 2 (`packages/db`) — migrator switch + boundary hardening
+
+**Deferred (2026-06-12, `packages/db` extraction).** Phase 2 was scoped down to
+a pure structural move (schema + Drizzle client + sync-payload → `@intake/db`,
+migrations → `packages/db/migrations`, ~45 importers rewritten to the granular
+`@intake/db/{client,schema,sync-payload}` subpaths). The boundary is enforced by
+build-time `server-only` (the `@intake/db` barrel + `@intake/db/client` are
+poisoned; the build fails if a client component pulls them). Deferred from the
+proposal's full Phase 2:
+
+- **Migrator switch** — keep `apps/web/scripts/migrate.ts` (drizzle-orm
+  `neon-http` migrator, run by `vercel-build`), just re-pointed at
+  `packages/db/migrations`, so prod-deploy behavior is **unchanged**. The
+  proposal's `drizzle-kit migrate` + `DATABASE_URL_UNPOOLED` + decoupled
+  `migrate-prod.yml` is its own follow-up (needs the unpooled endpoint
+  provisioned; changes how prod migrations run). Owner chose to defer to shrink
+  blast radius (2026-06-12).
+- **`packages/db` lint task** — the 4 moved files are typechecked
+  (`@intake/db#typecheck`) but no longer linted (they left `apps/web/src`). A
+  package `lint` task wasn't added because the shared `@intake/eslint-config`
+  base runs the deferred strict rules (e.g. `no-explicit-any`) at `error`, not
+  the app's `warn`. **Trigger:** fold into the ESLint ratchet PR above (mirror
+  the warn-downgrades or fix the files), then add `lint: eslint src` + an
+  `eslint.config.mjs` to `packages/db`.
+- **Boundary-scan hardening (§13.2 measures 4–6)** — lint-level layering via
+  `dependency-cruiser`/`eslint-plugin-boundaries`, expanded `bundle-security`
+  patterns, and scanning the Capacitor `out/` export. Primary enforcement
+  (build-time `server-only`) is already active; these are earlier-feedback /
+  defense-in-depth. **Trigger:** a boundary-hardening PR (the Capacitor export
+  scan rides with the mobile milestone).

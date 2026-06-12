@@ -18,8 +18,8 @@
  */
 import "server-only";
 import { eq, or, type SQL } from "drizzle-orm";
-import { db } from "@/lib/drizzle";
-import { schemaByTableName, type TableName } from "@/lib/sync-payload";
+import { db } from "@intake/db/client";
+import { schemaByTableName, type TableName } from "@intake/db/sync-payload";
 import {
   pushSubscriptions,
   pushSchedules,
@@ -32,7 +32,7 @@ import {
   mcpAccessTokens,
   mcpAuthCodes,
   mcpAuditLog,
-} from "@/db/schema";
+} from "@intake/db/schema";
 
 /**
  * FK-safe delete order for the 18 synced tables (children before parents).

@@ -27,7 +27,7 @@ import { NextRequest } from "next/server";
 // ─────────────────────────────────────────────────────────────────────────
 
 const stored: Array<Record<string, unknown>> = [];
-vi.mock("@/lib/drizzle", () => ({
+vi.mock("@intake/db/client", () => ({
   db: {
     insert: () => ({
       values: async (row: Record<string, unknown>) => {
