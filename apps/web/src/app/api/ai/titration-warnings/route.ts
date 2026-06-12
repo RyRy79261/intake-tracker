@@ -6,6 +6,7 @@ import { getClaudeClientForUser, CLAUDE_MODELS } from "@/app/api/ai/_shared/clau
 import { parseJsonBody, zodErrorResponse } from "@/app/api/_shared/validation";
 import { recordUsage, tokensFromAnthropic } from "@/app/api/ai/_shared/usage-tracker";
 import { aiErrorResponse } from "@/app/api/ai/_shared/ai-error-response";
+import { TITRATION_WARNINGS_TOOL, SYSTEM_PROMPT } from "@intake/ai-prompts/titration-warnings";
 
 const RequestSchema = z.object({
   prescriptions: z
@@ -33,37 +34,6 @@ const RequestSchema = z.object({
 const ResponseSchema = z.object({
   warnings: z.array(z.string()),
 });
-
-// --- Tool Definition ---
-
-const TITRATION_WARNINGS_TOOL = {
-  name: "titration_warnings_result" as const,
-  description: "Return warning signs to watch during medication titration",
-  input_schema: {
-    type: "object" as const,
-    properties: {
-      warnings: {
-        type: "array",
-        items: { type: "string" },
-      },
-    },
-    required: ["warnings"],
-    additionalProperties: false,
-  },
-};
-
-const SYSTEM_PROMPT = `You are a clinical pharmacist assistant. Given a list of medications involved in a dosage titration (with schedule details including times, amounts, and frequency), provide a concise list of warning signs the patient should watch for during the titration period.
-
-Focus on:
-- Symptoms that indicate the new dosage is too high or causing adverse effects
-- Timing-specific concerns (e.g., evening doses causing insomnia, morning doses causing drowsiness)
-- Drug interaction concerns when multiple medications change simultaneously or are taken at the same time
-- Frequency changes (e.g., going from 1x to 2x daily -- peak/trough effects)
-- Vital sign thresholds to watch (blood pressure, heart rate, etc.)
-- Symptoms requiring immediate medical attention
-
-Use the titration_warnings_result tool to return the warnings.
-Keep each warning to one short sentence. Aim for 4-8 warnings. Be practical and patient-friendly, not overly clinical.`;
 
 export const POST = withAuth(async ({ request, auth }) => {
   try {
