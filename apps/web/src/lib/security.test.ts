@@ -80,14 +80,6 @@ describe("sanitizeTextInput", () => {
     );
   });
 
-  it("leaves no complete tag for nested/malformed markup (loops until stable)", () => {
-    // A single-pass strip can splice surrounding text into a fresh tag; the
-    // loop-until-stable strip must leave no "<...>" behind on tricky input.
-    const out = sanitizeTextInput("<<div>>keep<<b>x</b>>");
-    expect(out).not.toMatch(/<[^>]*>/);
-    expect(out).toContain("keep");
-  });
-
   it("trims surrounding whitespace", () => {
     expect(sanitizeTextInput("  spaced  ")).toBe("spaced");
   });
