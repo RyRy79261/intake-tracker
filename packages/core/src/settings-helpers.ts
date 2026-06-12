@@ -11,8 +11,12 @@ export function validateAndSave(
   setter: (value: number) => void,
   inputSetter: (value: string) => void
 ) {
-  const parsed = parseFloat(inputValue);
-  if (!isNaN(parsed) && parsed >= min && parsed <= max) {
+  // Use Number() (not parseFloat) so partial inputs like "12abc" or "1e2foo"
+  // are rejected — parseFloat would accept the numeric prefix and silently save
+  // the wrong value. Only fully numeric, non-empty input is persisted.
+  const trimmed = inputValue.trim();
+  const parsed = Number(trimmed);
+  if (trimmed !== "" && Number.isFinite(parsed) && parsed >= min && parsed <= max) {
     setter(parsed);
     inputSetter(parsed.toString());
   } else {

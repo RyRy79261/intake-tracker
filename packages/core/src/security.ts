@@ -21,14 +21,30 @@ export function sanitizeNumericInput(value: string | number, min = 0, max = 1000
   return Math.round(clamped);
 }
 
-// Sanitize text input to prevent injection
+// Sanitize text input to prevent injection.
 export function sanitizeTextInput(text: string, maxLength = 500): string {
   if (!text || typeof text !== 'string') return '';
-  // Remove any HTML tags and limit length
-  return text
-    .replace(/<[^>]*>/g, '')
-    .trim()
-    .slice(0, maxLength);
+  // Strip markup with a single linear left-to-right scan: copy text up to each
+  // '<', then jump past the matching '>' (or, if there is none, drop the rest).
+  // This is O(n) with no regex backtracking — unlike `replace(/<[^>]*>/g, '')`,
+  // which backtracks quadratically on inputs like "<<<<…" (ReDoS) and leaves
+  // unterminated tags such as "<script" behind (incomplete sanitization). Here
+  // no tag, closed or unclosed, can survive. (Resolves CodeQL js/polynomial-redos
+  // and js/incomplete-multi-character-sanitization on this function.)
+  let out = '';
+  let i = 0;
+  while (i < text.length) {
+    const lt = text.indexOf('<', i);
+    if (lt === -1) {
+      out += text.slice(i);
+      break;
+    }
+    out += text.slice(i, lt);
+    const gt = text.indexOf('>', lt + 1);
+    if (gt === -1) break; // unterminated tag — drop the remainder
+    i = gt + 1;
+  }
+  return out.trim().slice(0, maxLength);
 }
 
 // Strip potential PII patterns from a string. Shared by sanitizeForAI and

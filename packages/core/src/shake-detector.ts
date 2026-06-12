@@ -56,7 +56,7 @@ export function createShakeDetector(config: ShakeDetectorConfig) {
       jolts = jolts.filter((t) => now - t <= config.windowMs);
       if (
         jolts.length >= config.requiredJolts &&
-        now - lastShakeAt > config.cooldownMs
+        now - lastShakeAt >= config.cooldownMs
       ) {
         lastShakeAt = now;
         jolts = [];

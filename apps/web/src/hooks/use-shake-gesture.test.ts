@@ -75,6 +75,16 @@ describe("createShakeDetector", () => {
     expect(triggers).toEqual([180, 3320]);
   });
 
+  it("fires for a shake exactly at the cooldown boundary", () => {
+    // First shake at 180; cooldownMs is the *minimum* gap, so a shake whose
+    // 3rd jolt lands at 180 + 3000 = 3180 must be allowed (>= not >).
+    const triggers = run(BASE, [
+      0, 60, 120, 180, // first shake -> fires at 180
+      3060, 3120, 3180, // 3rd jolt exactly cooldownMs after -> fires
+    ]);
+    expect(triggers).toEqual([180, 3180]);
+  });
+
   it("ignores reorientation that keeps total acceleration constant", () => {
     // Gravity (~9.8 m/s²) redistributing across the axes as the device is
     // tilted: every sample has the same magnitude but different per-axis

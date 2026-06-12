@@ -80,6 +80,20 @@ describe("sanitizeTextInput", () => {
     );
   });
 
+  it("drops an unterminated tag (no '<...' survives)", () => {
+    // The linear scan removes "<" through the next ">" or, lacking one, the
+    // remainder — so an unclosed "<script" cannot survive (complete sanitizer).
+    expect(sanitizeTextInput("keep<script")).toBe("keep");
+    expect(sanitizeTextInput("a<<b")).toBe("a");
+  });
+
+  it("handles many '<' without pathological slowdown (no ReDoS)", () => {
+    // A naive /<[^>]*>/g backtracks O(n^2) here; the linear scan is O(n).
+    const result = sanitizeTextInput("<".repeat(100000));
+    expect(result).toBe("");
+    expect(result).not.toMatch(/<[^>]*>/);
+  });
+
   it("trims surrounding whitespace", () => {
     expect(sanitizeTextInput("  spaced  ")).toBe("spaced");
   });
