@@ -46,7 +46,7 @@ const nextConfig = {
   reactStrictMode: true,
   // Internal @intake/* packages are consumed as raw TS source (JIT). Grows as
   // core, ui, ai-prompts are extracted in later phases.
-  transpilePackages: ["@intake/db"],
+  transpilePackages: ["@intake/db", "@intake/types"],
   // Pin the Turbopack root to the monorepo root so module resolution + the
   // version require above are scoped correctly (silences the inferred-root warning).
   turbopack: {

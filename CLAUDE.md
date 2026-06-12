@@ -28,7 +28,7 @@ When adding a new Dexie version, you must repeat all existing store definitions 
 
 ### Database Migrations (Drizzle / Neon Postgres)
 
-The sync engine mirrors every Dexie table to Neon Postgres. The server schema lives in `src/db/schema.ts` and must stay field-for-field in parity with the Dexie interfaces in `src/lib/db.ts` — `src/__tests__/schema-parity.test.ts` fails the build otherwise.
+The sync engine mirrors every Dexie table to Neon Postgres. The server schema lives in `@intake/db/schema` (`packages/db/src/schema.ts`) and must stay field-for-field in parity with the Dexie record interfaces in `@intake/types/records` (`packages/types/src/records.ts`) — `apps/web/src/__tests__/schema-parity.test.ts` fails the build otherwise.
 
 Workflow: edit `src/db/schema.ts`, run `pnpm db:generate` (emits a numbered SQL file + snapshot under `drizzle/`), commit the generated files. `pnpm db:migrate` applies them. **Never** run `drizzle-kit push`.
 

@@ -33,6 +33,7 @@ jobs:
               - '.github/**'
             bench:
               - 'apps/web/src/lib/db.ts'
+              - 'packages/types/src/records.ts'
               - 'apps/web/src/__tests__/migration/**'
               - 'apps/web/src/__tests__/integrity/**'
               - 'apps/web/src/lib/backup-service.ts'

@@ -72,6 +72,9 @@ importers:
       '@intake/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@intake/types':
+        specifier: workspace:*
+        version: link:../../packages/types
       '@modelcontextprotocol/sdk':
         specifier: 1.29.0
         version: 1.29.0(zod@4.4.3)
@@ -389,6 +392,15 @@ importers:
       typescript-eslint:
         specifier: ^8.60.1
         version: 8.60.1(eslint@10.4.1(jiti@2.7.0))(typescript@6.0.3)
+
+  packages/types:
+    devDependencies:
+      '@intake/typescript-config':
+        specifier: workspace:*
+        version: link:../typescript-config
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
 
   packages/typescript-config: {}
 

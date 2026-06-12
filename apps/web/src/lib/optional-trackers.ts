@@ -11,8 +11,8 @@
  *
  * Adding a new optional tracker requires:
  *   1. Add the key to `OptionalTrackerKey` and an entry to `OPTIONAL_TRACKERS`.
- *   2. Add the tracker's `IntakeRecord` `type` to `src/lib/db.ts`,
- *      `src/db/schema.ts`, and a Drizzle migration.
+ *   2. Add the tracker's `IntakeRecord` `type` to `@intake/types/records`,
+ *      `@intake/db/schema`, and a Drizzle migration.
  *   3. Gate every UI / analytics surface on `useOptionalTrackerEnabled(key)`.
  *   4. Seed the default in the settings-store migration.
  */

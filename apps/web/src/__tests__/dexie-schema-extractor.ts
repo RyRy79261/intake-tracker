@@ -1,9 +1,11 @@
 /**
  * Dexie schema extractor — TypeScript compiler API walker.
  *
- * Reads src/lib/db.ts without executing it and extracts:
- *   - The canonical Dexie table name list (from db.version(...).stores({...}))
+ * Reads the Dexie record interfaces (packages/types/src/records.ts) without
+ * executing them and extracts:
  *   - Per-table interface field lists (property names only, no type info)
+ *   (The canonical Dexie table NAME list still comes from the static
+ *    TABLE_TO_INTERFACE map below — the stores({...}) blocks stay in db.ts.)
  *
  * Used by src/__tests__/schema-parity.test.ts to drive the Dexie ↔ Drizzle
  * field comparison. Zero runtime exposure — test-only module.
@@ -36,8 +38,9 @@ export interface DexieTableSchema {
  * Static mapping from Dexie table name (camelCase, as keyed in db.version().stores())
  * to the TypeScript interface name (PascalCase singular) exported from db.ts.
  *
- * Must be kept in sync with src/lib/db.ts. If the extractor throws on a new table,
- * add the mapping here AND add the corresponding Drizzle table in src/db/schema.ts.
+ * Must be kept in sync with the record interfaces in @intake/types/records. If the
+ * extractor throws on a new table, add the mapping here AND add the corresponding
+ * Drizzle table in @intake/db/schema.
  */
 const TABLE_TO_INTERFACE: Record<string, string> = {
   intakeRecords: "IntakeRecord",
@@ -60,17 +63,25 @@ const TABLE_TO_INTERFACE: Record<string, string> = {
   insightReports: "InsightReport",
 };
 
-/** Default path to db.ts — resolved relative to this file's location in src/__tests__/ */
-// process.cwd() in Vitest is the project root; from there db.ts is at src/lib/db.ts.
-// We prefer cwd() over __dirname/import.meta because Vitest may transform the file
-// and change the effective __dirname. The project root is always the anchor.
-const DB_TS_DEFAULT_PATH = path.resolve(process.cwd(), "src/lib/db.ts");
+/**
+ * Default path to the Dexie record interfaces. They moved out of `src/lib/db.ts`
+ * into `@intake/types/records` in Phase 3a (the Dexie runtime stayed in db.ts),
+ * so the extractor parses the records file directly. process.cwd() in Vitest is
+ * the app project root (apps/web); the package sits two levels up. We prefer
+ * cwd() over __dirname/import.meta because Vitest may transform the file and
+ * change the effective __dirname — the project root is always the anchor.
+ */
+const DB_TS_DEFAULT_PATH = path.resolve(
+  process.cwd(),
+  "../../packages/types/src/records.ts",
+);
 
 /**
- * Walk src/lib/db.ts using the TypeScript compiler API and return one
- * DexieTableSchema per table declared in the static TABLE_TO_INTERFACE mapping.
+ * Walk the records file (packages/types/src/records.ts) using the TypeScript
+ * compiler API and return one DexieTableSchema per table declared in the static
+ * TABLE_TO_INTERFACE mapping.
  *
- * @param dbTsPath - Optional override for the path to db.ts.
+ * @param dbTsPath - Optional override for the path to the records file.
  * @throws Error with format "Cannot resolve Dexie interface for table '<tableName>'..."
  *   when the expected interface is absent from the parsed file.
  */
