@@ -1,0 +1,63 @@
+name: Migrate production database
+
+# Decoupled production migrator (Phase 5c). Applies committed Drizzle migrations
+# to the production Neon database via `drizzle-kit migrate` over the DIRECT
+# (unpooled) endpoint. This replaces the migration that `vercel-build` used to
+# run inline (apps/web/scripts/migrate.ts) — making the migration step visible
+# and independent of the deploy instead of buried in the build log.
+#
+# GATED on owner setup (see DEFERRED.md):
+#   1. Provision the `DATABASE_URL_UNPOOLED` repo secret = Neon's direct,
+#      non-pooler endpoint (host WITHOUT the `-pooler` segment).
+#   2. One-time validation on a Neon preview branch (a copy of prod history):
+#      confirm `drizzle-kit migrate` recognizes the existing __drizzle_migrations
+#      entries by hash (no re-apply) before this ever points at prod.
+#   3. Use the manual `workflow_dispatch` below to prove a green run on prod;
+#      verify __drizzle_migrations afterwards. ONLY THEN retire the inline
+#      vercel-build migrate step + apps/web/scripts/migrate.ts (separate PR).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/db/migrations/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Never cancel an in-flight migration: a half-applied migration is far worse
+# than a queued one. Serialize runs instead.
+concurrency:
+  group: migrate-prod
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    # Bound a hung migration (e.g. a stuck advisory lock) instead of letting it
+    # run to the 6h default. With cancel-in-progress:false this only times out
+    # the single in-flight job, never a half-applied migration mid-statement.
+    timeout-minutes: 10
+    steps:
+      - name: Harden runner (egress audit)
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - name: Apply migrations to production (direct endpoint)
+        env:
+          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DATABASE_URL_UNPOOLED:-}" ]; then
+            echo "::error::DATABASE_URL_UNPOOLED is not set. Provision Neon's DIRECT (non-pooler) endpoint as a repo secret before enabling production migrations — see DEFERRED.md."
+            exit 1
+          fi
+          pnpm --filter @intake/db db:migrate

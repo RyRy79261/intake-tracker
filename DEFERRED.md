@@ -197,3 +197,71 @@ at every `@/components/ui/*` and `@/hooks/*` path (zero importer churn). Deferre
   `packages/ui` rather than the `apps/web` shim layer. Purely mechanical, no
   behaviour change. **Trigger:** the importer-rewrite sweep (low priority).
 
+## Phase 5 — mobile scaffold folded into Milestone M
+
+**Deferred (2026-06-13, owner decision).** The proposal's Phase 5 included an
+`apps/mobile` Capacitor scaffold + "burn the `cap-build.js` hack". A scoping
+spike found this can't be cleanly completed or verified outside the full mobile
+build, so **all mobile work moves to Milestone M** (the Android/Play rebuild),
+done as one coherent effort. Phase 5 is therefore just **5a** (CI finalize —
+done) + **5c** (migrator switch — owner-gated). Findings to carry into M:
+
+- **`output: "export"` is blocked by the `app/api/**` route handlers, not by
+  middleware.** A local `next build` with `output:export` and no stash fails on
+  the first dynamic route handler (`/api/ai/status`: *"export const dynamic =
+  force-static not configured with output: export"*). There is **no clean
+  per-route fix** — `export const dynamic` must be a static string literal, so it
+  can't be env-gated to `force-static` only for the mobile build. The mobile
+  shell never calls these routes (it uses the remote `NEXT_PUBLIC_API_BASE_URL`),
+  so excluding the whole `api/` dir is correct — but Next has no native
+  "exclude-this-dir-from-export" flag, which is exactly why `cap-build.js` renames
+  `api/` → the private `_api-server-only` folder during the export. The
+  camp-404 "no-rename" pattern assumed *no api routes in the mobile build*, which
+  doesn't hold here. **M must design a real api-exclusion mechanism** (crash-safe
+  stash, a dedicated mobile route tree, or a Next-native exclusion) and verify a
+  clean `output:export` build, **then** `cap add android` fresh + signed build +
+  on-device + Play.
+- **Next 16 demoted `middleware`** to a deprecation warning (use `proxy`); it is
+  no longer a hard `output:export` blocker. Consider migrating `middleware.ts` →
+  `proxy` as part of M (or its own small chore).
+- **Capacitor version drift:** `android/capacitor.settings.gradle` (a generated
+  DO-NOT-EDIT file) still references `@capacitor+android@8.3.4` while
+  `package.json` declares `^8.4.0`. A `cap sync` after the `android/` move
+  regenerates it with correct paths — do NOT hand-edit it.
+- Mobile-only deps to relocate to `apps/mobile` in M: `@capacitor/cli` +
+  `@capacitor/android` (native tooling). KEEP `@capacitor/{core,local-notifications,network}`
+  in `apps/web` — the web code imports them (×2 each).
+- Re-root `android-release.yml` paths to `apps/mobile` (the `node scripts/cap-build.js`
+  step at ~:56 is already broken post-phase-1, so it's not a working baseline).
+
+## Phase 5c — migrator cutover (gated on owner infra)
+
+**In progress (2026-06-13, draft PR).** The draft lands the *mechanism* only —
+`@intake/db db:migrate` = `drizzle-kit migrate`, the `DATABASE_URL_UNPOOLED ??
+DATABASE_URL` config fallback, and `migrate-prod.yml` (push:main on
+`packages/db/migrations/**` + `workflow_dispatch`, never-cancel concurrency,
+empty-secret hard-fail). It touches **no production path** — `vercel-build` still
+runs `apps/web/scripts/migrate.ts`, and CI still uses it via the root
+`db:migrate` passthrough. The **cutover** is deferred until the owner completes
+the gate, in this strict order:
+
+1. **OWNER:** provision `DATABASE_URL_UNPOOLED` (Neon's DIRECT/non-pooler
+   endpoint) as a GitHub Actions repo secret (and confirm it in the Vercel env).
+2. **OWNER:** one-time Neon **preview-branch** validation — copy prod history to
+   a preview branch, point `drizzle-kit migrate` at its unpooled URL, confirm it
+   recognizes the existing `__drizzle_migrations` (0000–0017) by hash (no
+   re-apply) then applies cleanly. NEVER `drizzle-kit push`.
+3. Merge the draft, then `workflow_dispatch` `migrate-prod.yml` to prove a green
+   run on prod; manually verify `SELECT * FROM __drizzle_migrations` shows
+   0017's hash (don't trust the success log).
+4. **ONLY THEN (separate cutover PR):** strip `apps/web` `vercel-build` to plain
+   `next build`; repoint `ci.yml` `db:migrate` call sites + the root passthrough
+   to `@intake/db`; **last**, delete `apps/web/scripts/migrate.ts`; update the
+   stale CLAUDE.md "Database Migrations" section. Deleting the legacy script or
+   stripping vercel-build *before* a proven migrate-prod run would let prod ship
+   against an un-migrated schema.
+
+The journal timestamp footgun is **past** (max `when ≈ 2026-06-07 < today`), so
+the migrator switch is orthogonal to it — but the cutover PR must still verify
+the next real prod migration actually applies.
+

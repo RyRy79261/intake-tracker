@@ -11,10 +11,15 @@ loadEnvConfig(process.cwd());
  *
  * Usage (from packages/db, e.g. `pnpm --filter @intake/db db:generate`):
  *   pnpm exec drizzle-kit generate  # emit SQL from schema.ts
+ *   pnpm exec drizzle-kit migrate   # apply pending migrations (Phase 5c)
  *
- * Production migrations are still applied by apps/web/scripts/migrate.ts
- * (drizzle-orm/neon-http migrator) reading this `out` folder — the migrator
- * switch to `drizzle-kit migrate` is a deferred follow-up.
+ * Phase 5c adds `db:migrate` = `drizzle-kit migrate`, run in production by the
+ * decoupled `migrate-prod.yml` workflow against `DATABASE_URL_UNPOOLED` (Neon's
+ * DIRECT endpoint — `drizzle-kit migrate` opens a TCP session for transactional
+ * DDL/advisory locks, which the pooled PgBouncer endpoint can't serve safely).
+ * The cutover (retiring apps/web/scripts/migrate.ts + the `vercel-build` migrate
+ * step) is gated on the owner provisioning the unpooled secret + a one-time Neon
+ * preview-branch validation — see DEFERRED.md.
  *
  * NEVER use `drizzle-kit push` in this project (D-14 in 42-CONTEXT.md).
  */
@@ -30,7 +35,12 @@ export default defineConfig({
   // driver: "neon-http" — removed per plan acceptance criteria grep check;
   // if operator needs to re-enable, pin drizzle-kit to 0.28.x or older.
   dbCredentials: {
-    url: process.env.DATABASE_URL!,
+    // Prefer Neon's DIRECT (unpooled) endpoint for `drizzle-kit migrate` —
+    // transactional DDL + advisory locks need a real session, not the pooled
+    // PgBouncer transaction-mode endpoint. Falls back to DATABASE_URL so CI
+    // (ephemeral Neon branches, which expose a direct URL as DATABASE_URL) and
+    // `drizzle-kit generate` (no connection) keep working unchanged.
+    url: process.env.DATABASE_URL_UNPOOLED ?? process.env.DATABASE_URL!,
   },
   verbose: true,
   strict: true,
