@@ -2,13 +2,9 @@ name: CI
 
 on:
   pull_request:
-    # Runs on PRs to main/staging AND to the stacked Turborepo migration branches
-    # so each phase in the stack is validated. The migration-branch trigger is
-    # temporary — drop it once the stack lands on main.
     branches:
       - main
       - staging
-      - "refactor/turborepo-monorepo-plan**"
 
 jobs:
   changes:
@@ -218,12 +214,8 @@ jobs:
   e2e:
     # Auth is Neon Auth (cookie session). E2E uses Playwright globalSetup to seed
     # a session via Neon Auth.
-    # Full browser e2e is an ~11-min, env/timing-sensitive smoke test. During the
-    # Turborepo migration it runs only on PRs that target main (the cutover) —
-    # the per-phase safety net is the green core (unit, integration, build,
-    # schema-migration). Drop the base_ref gate once the stack lands on main.
     needs: [changes, secrets-check, security]
-    if: needs.changes.outputs.src == 'true' && needs.secrets-check.outputs.neon == 'true' && github.base_ref == 'main'
+    if: needs.changes.outputs.src == 'true' && needs.secrets-check.outputs.neon == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Harden runner (egress audit)
