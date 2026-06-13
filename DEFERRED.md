@@ -176,3 +176,24 @@ validation. Deferred:
   not introduced in the mechanical move. **Trigger:** when prompt versioning is
   actually needed.
 
+## Phase 4b (`packages/ui`) — deferred cleanups
+
+**Deferred (2026-06-13, `@intake/ui` extraction).** Phase 4b moved the 25 shadcn
+primitives, the toast trio + `use-now-tick`, `cn`, and the Tailwind v4
+design-system (`@theme`/`:root`/`.dark`) into `@intake/ui`, with re-export shims
+at every `@/components/ui/*` and `@/hooks/*` path (zero importer churn). Deferred:
+
+- **Prune now-indirect app deps.** `apps/web/package.json` still lists
+  `class-variance-authority`, `clsx`, `tailwind-merge`, `cmdk`, `vaul`,
+  `tw-animate-css`, and `@radix-ui/react-{slot,accordion,toast}` — now used only
+  *through* `@intake/ui` (zero direct app importers outside the shims).
+  Deliberately left to avoid churning the app's dep surface in a structural move;
+  pnpm dedupes to a single resolved copy, so this is bloat, not a bug.
+  (`lucide-react` ×113 and `motion` ×10 stay — used directly.) **Trigger:** a
+  dep-hygiene sweep (fold in with the importer-rewrite sweep).
+- **Repoint importers off the `@/components/ui/*` + `@/hooks/*` shims** to the
+  `@intake/ui/*` package paths, and update `components.json` aliases
+  (`components`/`utils`) so `shadcn add` scaffolds new primitives into
+  `packages/ui` rather than the `apps/web` shim layer. Purely mechanical, no
+  behaviour change. **Trigger:** the importer-rewrite sweep (low priority).
+
