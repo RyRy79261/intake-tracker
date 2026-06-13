@@ -32,6 +32,12 @@ jobs:
   mutation:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    # Stryker config, the baseline script, and the .stryker-tmp report all live
+    # in apps/web after the Turborepo move, so run every step from there. (`uses:`
+    # steps like checkout/setup are unaffected — this only applies to `run:`.)
+    defaults:
+      run:
+        working-directory: apps/web
     steps:
       - uses: actions/checkout@v6
         with:
@@ -105,7 +111,7 @@ jobs:
         with:
           name: stryker-html-report
           path: |
-            .stryker-tmp/mutation/
-            stryker.log
+            apps/web/.stryker-tmp/mutation/
+            apps/web/stryker.log
           retention-days: 14
           if-no-files-found: warn

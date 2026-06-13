@@ -62,12 +62,19 @@ function extractJobBlock(jobName: string, yaml: string): string {
 }
 
 describe("CI workflow gates PRs with required checks (CIPL-01)", () => {
-  it("workflow triggers on pull_request to main and staging (+ migration branches)", () => {
-    // Requirement: every PR to main or staging must be validated. (The Turborepo
-    // migration also temporarily triggers on the refactor/* stack branches.)
+  it("workflow triggers on pull_request to main and staging", () => {
+    // Requirement: every PR to main or staging must be validated.
     expect(raw).toContain("pull_request:");
     expect(raw).toContain("- main");
     expect(raw).toContain("- staging");
+  });
+
+  it("does NOT trigger on the temporary Turborepo migration branches", () => {
+    // The 'refactor/turborepo-monorepo-plan**' trigger was scaffolding for the
+    // stacked-PR migration; it was dropped in Phase 5a once the stack landed on
+    // main. This guard prevents it (or any refactor/* branch trigger) from being
+    // reintroduced, which would re-run full CI on every intra-stack push.
+    expect(raw).not.toContain("refactor/turborepo");
   });
 
   it("required check jobs are all present in the workflow", () => {
@@ -612,6 +619,16 @@ describe("Path filtering gates expensive jobs on src/bench changes (CIOP-01)", (
       e2eBlock,
       "e2e must gate on needs.changes.outputs.src == 'true'"
     ).toContain("needs.changes.outputs.src");
+  });
+
+  it("e2e job is NOT gated on base_ref (the temporary migration gate is gone)", () => {
+    // During the stacked migration, e2e ran only on PRs targeting main
+    // (`github.base_ref == 'main'`). That gate was dropped in Phase 5a so e2e
+    // runs on every src PR again. Guard against reintroducing the base_ref gate.
+    const e2eBlock = extractJobBlock("e2e", raw);
+    expect(e2eBlock, "e2e must not be gated on github.base_ref").not.toContain(
+      "base_ref"
+    );
   });
 
   it("benchmark job depends on changes and gates on bench output", () => {
