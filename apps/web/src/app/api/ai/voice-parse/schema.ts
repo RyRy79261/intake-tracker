@@ -69,67 +69,10 @@ export type VoiceParsedItem = z.infer<typeof ItemSchema>;
 export const MAX_ITEMS = 20;
 const MAX_REASONING_CHARS = 1000;
 
-export const PARSE_TOOL = {
-  name: "parse_voice_log" as const,
-  description:
-    "Return a structured list of health log items extracted from a voice transcript.",
-  input_schema: {
-    type: "object" as const,
-    properties: {
-      items: {
-        type: "array",
-        description: "Ordered list of extracted items. Empty if nothing parseable.",
-        items: {
-          type: "object",
-          properties: {
-            kind: {
-              type: "string",
-              enum: [
-                "blood_pressure",
-                "weight",
-                "water",
-                "salt",
-                "food",
-                "caffeine",
-                "alcohol",
-                "urination",
-                "defecation",
-              ],
-            },
-            // Fields are union — Anthropic tool input schemas don't enforce
-            // discriminated unions, so we list everything and validate
-            // server-side with Zod.
-            systolic: { type: "number" },
-            diastolic: { type: "number" },
-            heartRate: { type: "number" },
-            position: { type: "string", enum: ["sitting", "standing"] },
-            arm: { type: "string", enum: ["left", "right"] },
-            weightKg: { type: "number" },
-            ml: { type: "number" },
-            sodiumMg: { type: "number" },
-            description: { type: "string" },
-            grams: { type: "number" },
-            waterMl: { type: "number" },
-            sugarG: { type: "number" },
-            potassiumMg: { type: "number" },
-            caffeineMg: { type: "number" },
-            abvPercent: { type: "number" },
-            volumeMl: { type: "number" },
-            amountEstimate: { type: "string", enum: ["small", "medium", "large"] },
-            note: { type: "string" },
-          },
-          required: ["kind"],
-        },
-      },
-      reasoning: {
-        type: "string",
-        description: "Brief (one or two sentences) explanation of estimates and assumptions.",
-      },
-    },
-    required: ["items"],
-    additionalProperties: false,
-  },
-};
+// Tool definition moved to @intake/ai-prompts in Phase 4a; re-exported so the
+// route handler and this module's tests resolve `PARSE_TOOL` unchanged. The zod
+// schema + extractVoiceItems below stay here (route-level validation/parsing).
+export { PARSE_TOOL } from "@intake/ai-prompts/voice-parse";
 
 export type VoiceExtractResult =
   | { ok: true; items: VoiceParsedItem[]; reasoning?: string; dropped: number }

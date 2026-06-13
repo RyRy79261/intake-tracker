@@ -32,6 +32,7 @@
     "@capacitor/core": "^8.4.0",
     "@capacitor/local-notifications": "^8.1.0",
     "@capacitor/network": "^8.0.1",
+    "@intake/ai-prompts": "workspace:*",
     "@intake/core": "workspace:*",
     "@intake/db": "workspace:*",
     "@intake/types": "workspace:*",

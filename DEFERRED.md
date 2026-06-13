@@ -113,11 +113,13 @@ shipped as two structural-move PRs — 3a (`@intake/types`) and 3b
   (`new Date(numberTs).toISOString()` is UTC-deterministic) — left byte-for-byte
   in `apps/web`; it rides with the future `@intake/ai-prompts` extraction
   because it is AI-prompt-coupled, **not** because of any wall-clock issue.
-- **`analytics-insights.ts` schema/prompt split → Phase 4 (`@intake/ai-prompts`).**
-  Its pure zod schemas + `buildInsightsPrompt` are entangled with the AI
-  artifacts (`INSIGHT_TOOL`, `INSIGHTS_SYSTEM_PROMPT`) and `Domain`-label
-  helpers. Splitting now is high churn across ~8 importers for zero purity gain;
-  it belongs with the prompts package. **Trigger:** Phase 4.
+- ~~**`analytics-insights.ts` schema/prompt split → Phase 4 (`@intake/ai-prompts`).**~~
+  **DONE (Phase 4a).** The whole module moved to
+  `@intake/ai-prompts/analytics-insights` (zod schemas + `INSIGHT_TOOL` +
+  `INSIGHTS_SYSTEM_PROMPT` + `buildInsightsPrompt`), its `DOMAINS`/`Domain`
+  import repointed to `@intake/types/analytics`, and the deep-mode
+  `DEEP_SYSTEM_PROMPT` folded in beside its `${INSIGHTS_SYSTEM_PROMPT}` base. A
+  re-export shim at `@/lib/analytics-insights` keeps all importers unchanged.
 - **`migrateSettings` extraction.** Listed as pure in the map, but it references
   the app constants `DEFAULT_LIQUID_PRESETS` / `DEFAULT_QUICK_NAV_ITEMS` and
   returns `Settings & SettingsActions` (the Zustand store type). Moving it
@@ -143,4 +145,34 @@ shipped as two structural-move PRs — 3a (`@intake/types`) and 3b
   4 `@/lib/analytics-stats`, etc. importers to the `@intake/*` package paths is a
   later, purely-mechanical cleanup (no behavior change). **Trigger:** an
   importer-rewrite sweep, low priority.
+
+## Phase 4a (`packages/ai-prompts`) — deferred extractions
+
+**Deferred (2026-06-12, `@intake/ai-prompts` extraction).** Phase 4a moved the
+SDK-free prompt/tool artifacts — the `CLAUDE_MODELS` + `WEB_SEARCH_TOOL`
+registry, the `analytics-insights` module, and every `api/ai/**` route's system
+prompt + tool-def — into `@intake/ai-prompts` (consumed raw via
+`transpilePackages`, depends only on `@intake/types` + `zod`). The route handlers
+keep the SDK client, key vault, usage tracker, and zod request/response
+validation. Deferred:
+
+- **`api/bug-report` system prompt.** `bug-report` is **not** an `api/ai` route
+  (it formats a GitHub issue), so its inline `SYSTEM_PROMPT` was left in place —
+  the proposal scopes `@intake/ai-prompts` to "the ~10 `api/ai/**` routes". It
+  consumes `CLAUDE_MODELS.fast` via the `claude-client` re-export. **Trigger:**
+  fold in if/when the prompts package is broadened beyond `api/ai`.
+- **Groq (`voice-transcribe`) prompt strings.** `GROQ_MODEL` + its
+  `DOMAIN_PROMPT` belong to the non-Anthropic transcription path and stay
+  app-side; `@intake/ai-prompts` is the Claude/Anthropic registry. **Trigger:** a
+  provider-agnostic prompts pass, if ever wanted.
+- **Prompt-text consolidation.** Several routes restate the same unit-reference
+  guidance (ABV/sugar/potassium/water values) and `analytics-insights` vs
+  `nutrient-analysis` each declare their own `MedicationSchema`. These were
+  carried **verbatim** (a mechanical move must not change a prompt string, which
+  would shift AI output). Consolidating them is a separate, test-gated
+  follow-up. **Trigger:** a prompt-dedup PR.
+- **`PROMPT_VERSIONS`.** The proposal envisions a `PROMPT_VERSIONS` registry for
+  auditing/versioning prompts; it is net-new (no concept exists today) and was
+  not introduced in the mechanical move. **Trigger:** when prompt versioning is
+  actually needed.
 

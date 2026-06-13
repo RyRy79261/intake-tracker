@@ -1,0 +1,30 @@
+{
+  "name": "@intake/ai-prompts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./models": "./src/models.ts",
+    "./analytics-insights": "./src/analytics-insights.ts",
+    "./parse": "./src/parse.ts",
+    "./medicine-search": "./src/medicine-search.ts",
+    "./substance-lookup": "./src/substance-lookup.ts",
+    "./substance-enrich": "./src/substance-enrich.ts",
+    "./interaction-check": "./src/interaction-check.ts",
+    "./nutrient-analysis": "./src/nutrient-analysis.ts",
+    "./titration-warnings": "./src/titration-warnings.ts",
+    "./voice-parse": "./src/voice-parse.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@intake/types": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@intake/typescript-config": "workspace:*",
+    "typescript": "^6.0.3"
+  }
+}
