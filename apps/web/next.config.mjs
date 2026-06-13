@@ -44,13 +44,13 @@ const securityHeaders = [
 const nextConfig = {
   output: isCapacitorBuild ? "export" : undefined,
   reactStrictMode: true,
-  // Internal @intake/* packages are consumed as raw TS source (JIT). Grows as
-  // ui is extracted in a later phase.
+  // Internal @intake/* packages are consumed as raw TS source (JIT).
   transpilePackages: [
     "@intake/ai-prompts",
     "@intake/core",
     "@intake/db",
     "@intake/types",
+    "@intake/ui",
   ],
   // Pin the Turbopack root to the monorepo root so module resolution + the
   // version require above are scoped correctly (silences the inferred-root warning).

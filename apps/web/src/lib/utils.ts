@@ -1,11 +1,10 @@
-import { type ClassValue, clsx } from "clsx";
-import { twMerge } from "tailwind-merge";
 import { getDeviceTimezone } from "@/lib/timezone";
 import { type LiquidPreset } from "@/lib/constants";
 
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
+// `cn` moved to @intake/ui in Phase 4b (it's the class helper every UI
+// primitive needs). Re-exported here so all `@/lib/utils` importers — cn-only
+// and the few that pull cn alongside an app helper below — resolve unchanged.
+export { cn } from "@intake/ui/lib/utils";
 
 export function formatAmount(amount: number, unit: string): string {
   if (unit === "ml" && amount >= 1000) {

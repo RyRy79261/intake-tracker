@@ -36,6 +36,7 @@
     "@intake/core": "workspace:*",
     "@intake/db": "workspace:*",
     "@intake/types": "workspace:*",
+    "@intake/ui": "workspace:*",
     "@modelcontextprotocol/sdk": "1.29.0",
     "@neondatabase/auth": "0.4.1-beta",
     "@neondatabase/serverless": "^1.1.0",
