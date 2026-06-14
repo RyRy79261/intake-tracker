@@ -19,7 +19,9 @@ function getState(): MedNotificationState {
   try {
     const stored = localStorage.getItem(MED_NOTIFICATION_KEY);
     if (stored) return JSON.parse(stored);
-  } catch {}
+  } catch {
+    // localStorage unavailable or corrupt — fall through to the default state.
+  }
   return { lastDoseCheck: null, lastRefillCheck: null, notifiedDoses: [], notifiedRefills: [] };
 }
 
@@ -28,7 +30,9 @@ function saveState(updates: Partial<MedNotificationState>): void {
   const current = getState();
   try {
     localStorage.setItem(MED_NOTIFICATION_KEY, JSON.stringify({ ...current, ...updates }));
-  } catch {}
+  } catch {
+    // Best-effort persistence — ignore quota/availability errors.
+  }
 }
 
 async function showDoseReminder(

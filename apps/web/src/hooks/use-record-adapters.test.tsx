@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from "vitest";
-import { ReactNode } from "react";
+import type { ReactNode } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { renderHook } from "@testing-library/react";
 import {

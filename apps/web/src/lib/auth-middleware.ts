@@ -1,5 +1,6 @@
 import "server-only";
-import { NextRequest, NextResponse } from "next/server";
+import type { NextRequest} from "next/server";
+import { NextResponse } from "next/server";
 import { auth } from "@/lib/neon-auth";
 import { db } from "@intake/db/client";
 import { usersSync } from "@intake/db/schema";

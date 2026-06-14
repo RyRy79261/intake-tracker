@@ -4,7 +4,8 @@
  * Reached via the rewrite in next.config.js from
  * `/.well-known/oauth-authorization-server`.
  */
-import { NextRequest, NextResponse } from "next/server";
+import type { NextRequest} from "next/server";
+import { NextResponse } from "next/server";
 import { buildOAuthUrls, getPublicOrigin } from "@/lib/mcp/origin";
 import { SUPPORTED_SCOPES } from "@/lib/mcp/scopes";
 import { corsPreflight, withCors } from "@/lib/mcp/cors";
