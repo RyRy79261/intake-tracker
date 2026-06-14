@@ -6,7 +6,8 @@
  *   - capping client_name length
  *   - forcing token_endpoint_auth_method ∈ {none, client_secret_basic, client_secret_post}
  */
-import { NextRequest, NextResponse } from "next/server";
+import type { NextRequest} from "next/server";
+import { NextResponse } from "next/server";
 import { z } from "zod";
 import { isAllowedRedirectUri, registerClient } from "@/lib/mcp/oauth";
 import { corsPreflight, withCors } from "@/lib/mcp/cors";

@@ -11,6 +11,7 @@
  *
  * Pattern mirrors `src/__tests__/integration/sync-push-integration.test.ts`.
  */
+import * as nodeCrypto from "node:crypto";
 import {
   describe,
   it,
@@ -198,7 +199,7 @@ describe("MCP OAuth integration (real Postgres)", () => {
 
       // Authorize: mint a code as the authorize handler would.
       const verifier = "v".repeat(64);
-      const challenge = require("node:crypto")
+      const challenge = nodeCrypto
         .createHash("sha256")
         .update(verifier)
         .digest("base64url");
@@ -286,7 +287,7 @@ describe("MCP OAuth integration (real Postgres)", () => {
         tokenEndpointAuthMethod: "none",
       });
       const verifier = "v".repeat(64);
-      const challenge = require("node:crypto")
+      const challenge = nodeCrypto
         .createHash("sha256")
         .update(verifier)
         .digest("base64url");

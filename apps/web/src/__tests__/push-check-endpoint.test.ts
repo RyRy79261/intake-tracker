@@ -27,7 +27,12 @@ vi.mock("@/lib/push-db", () => ({
 }));
 
 vi.mock("@/lib/auth-middleware", () => ({
-  withAuth: (handler: Function) => {
+  withAuth: (
+    handler: (ctx: {
+      request: NextRequest;
+      auth: { success: boolean; userId: string };
+    }) => unknown,
+  ) => {
     return async (request: NextRequest) => {
       return handler({
         request,

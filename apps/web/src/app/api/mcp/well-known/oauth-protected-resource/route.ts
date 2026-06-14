@@ -5,7 +5,8 @@
  * `/.well-known/oauth-protected-resource`. Tells MCP clients (claude.ai)
  * which authorization server to talk to.
  */
-import { NextRequest, NextResponse } from "next/server";
+import type { NextRequest} from "next/server";
+import { NextResponse } from "next/server";
 import { buildOAuthUrls, getPublicOrigin } from "@/lib/mcp/origin";
 import { SUPPORTED_SCOPES } from "@/lib/mcp/scopes";
 import { corsPreflight, withCors } from "@/lib/mcp/cors";
