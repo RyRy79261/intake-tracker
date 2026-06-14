@@ -12,14 +12,14 @@ import {
   Check,
   X,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@intake/ui/card";
+import { Button } from "@intake/ui/button";
+import { Input } from "@intake/ui/input";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+} from "@intake/ui/collapsible";
 import {
   Dialog,
   DialogContent,
@@ -27,8 +27,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { useToast } from "@/hooks/use-toast";
+} from "@intake/ui/dialog";
+import { useToast } from "@intake/ui/use-toast";
 import { useEatingRecordsByDateRange } from "@/hooks/use-eating-queries";
 import { useUserProfile } from "@/hooks/use-profile-queries";
 import { buildMedicationSummary } from "@/lib/analytics-snapshot";

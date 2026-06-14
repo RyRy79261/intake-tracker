@@ -1,10 +1,10 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@intake/ui/tabs";
+import { Card, CardContent } from "@intake/ui/card";
+import { Input } from "@intake/ui/input";
+import { Label } from "@intake/ui/label";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { Droplets, Coffee, Wine } from "lucide-react";
 import { WaterTab } from "@/components/liquids/water-tab";
@@ -19,7 +19,7 @@ import {
   useSugarTotalsByGroupIds,
 } from "@/hooks/use-intake-queries";
 import { useSettings } from "@/hooks/use-settings";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@intake/ui/use-toast";
 import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
 import { useEditRecord } from "@/hooks/use-edit-record";
 import { useSyncLiquidEntrySubstances, fetchEntryGroup } from "@/hooks/use-composable-entry";
@@ -27,7 +27,7 @@ import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import { cn, formatAmount, getLiquidTypeLabel } from "@/lib/utils";
 import { formatTimeOnly } from "@/lib/date-utils";
 import { type IntakeRecord } from "@/lib/db";
-import { abvFromStandardDrinks } from "@/lib/alcohol-units";
+import { abvFromStandardDrinks } from "@intake/core/alcohol";
 
 const TAB_THEMES = {
   water: CARD_THEMES.water,

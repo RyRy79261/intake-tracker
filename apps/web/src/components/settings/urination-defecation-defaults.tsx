@@ -1,13 +1,13 @@
 "use client";
 
-import { Label } from "@/components/ui/label";
+import { Label } from "@intake/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@intake/ui/select";
 import { Droplets } from "lucide-react";
 import { useSettings } from "@/hooks/use-settings";
 import { ExpandableSettingsSection } from "@/components/settings/expandable-settings-section";

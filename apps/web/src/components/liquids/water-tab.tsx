@@ -1,16 +1,16 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
+import { Button } from "@intake/ui/button";
+import { Progress } from "@intake/ui/progress";
 import { Minus, Plus, Check } from "lucide-react";
 import { cn, formatAmount } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { ManualInputDialog } from "@/components/manual-input-dialog";
 import { useSettings } from "@/hooks/use-settings";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@intake/ui/use-toast";
 import { useIntake } from "@/hooks/use-intake-queries";
-import { computeTwoStageProgress } from "@/lib/progress-utils";
+import { computeTwoStageProgress } from "@intake/core/progress";
 
 const theme = CARD_THEMES.water;
 const unit = "ml";

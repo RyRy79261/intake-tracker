@@ -1,13 +1,13 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Button } from "@intake/ui/button";
+import { Input } from "@intake/ui/input";
+import { Label } from "@intake/ui/label";
 import {
   Collapsible,
   CollapsibleTrigger,
   CollapsibleContent,
-} from "@/components/ui/collapsible";
+} from "@intake/ui/collapsible";
 import { Utensils, Droplets, Sparkles, X, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 

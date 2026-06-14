@@ -9,7 +9,7 @@ import {
   makeIntakeRecord,
   makeWeightRecord,
 } from "@/__tests__/fixtures/db-fixtures";
-import type { TimeRange } from "@/lib/analytics-types";
+import type { TimeRange } from "@intake/types/analytics";
 
 // Recharts' ResponsiveContainer observes element size; jsdom has no
 // ResizeObserver, so provide a no-op stand-in for the charts to mount.

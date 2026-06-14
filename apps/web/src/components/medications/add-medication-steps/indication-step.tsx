@@ -1,9 +1,9 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@intake/ui/button";
+import { Input } from "@intake/ui/input";
+import { Label } from "@intake/ui/label";
+import { Textarea } from "@intake/ui/textarea";
 import { Loader2, Search } from "lucide-react";
 import { useAuthGate } from "@/components/auth-guard";
 import { cn } from "@/lib/utils";

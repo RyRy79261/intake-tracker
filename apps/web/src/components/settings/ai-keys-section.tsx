@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { Sparkles, Mic, KeyRound, Share2, Activity, Trash2, Plus } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { useToast } from "@/hooks/use-toast";
+import { Button } from "@intake/ui/button";
+import { Input } from "@intake/ui/input";
+import { Label } from "@intake/ui/label";
+import { useToast } from "@intake/ui/use-toast";
 import { useAuth } from "@/components/auth-guard";
 import {
   useApiKeyStatus,

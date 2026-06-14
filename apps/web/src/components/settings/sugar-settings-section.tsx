@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Label } from "@/components/ui/label";
+import { Label } from "@intake/ui/label";
 import { Candy } from "lucide-react";
-import { NumericInput } from "@/components/ui/numeric-input";
+import { NumericInput } from "@intake/ui/numeric-input";
 import { useSettings } from "@/hooks/use-settings";
-import { validateAndSave, incrementSetting, decrementSetting } from "@/lib/settings-helpers";
+import { validateAndSave, incrementSetting, decrementSetting } from "@intake/core/settings";
 import { ExpandableSettingsSection } from "@/components/settings/expandable-settings-section";
 
 export function SugarSettingsSection() {

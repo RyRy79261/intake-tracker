@@ -1,5 +1,6 @@
 import { db, type PhaseSchedule, type Prescription, type MedicationPhase, type InventoryItem } from "@/lib/db";
-import { ok, err, type ServiceResult } from "@/lib/service-result";
+import { ok, err } from "@intake/core/service";
+import type { ServiceResult } from "@intake/types/service";
 import { syncFields } from "@/lib/utils";
 import { getDeviceTimezone, localHHMMStringToUTCMinutes } from "@/lib/timezone";
 import { buildAuditEntry } from "@/lib/audit-service";

@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 import { motion } from "motion/react";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card } from "@intake/ui/card";
+import { Badge } from "@intake/ui/badge";
 import { PillIconWithBadge } from "@/components/medications/pill-icon";
 import { formatPillCount } from "@/lib/medication-ui-utils";
-import { isCombo, formatCompoundShort } from "@/lib/compound-utils";
+import { isCombo, formatCompoundShort } from "@intake/core/compound";
 import { InventoryItemViewDrawer } from "@/components/medications/inventory-item-view-drawer";
 import type { InventoryItem, Prescription } from "@/lib/db";
 

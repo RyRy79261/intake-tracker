@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { Button } from "@intake/ui/button";
 import { ManualView } from "@/components/help/manual-view";
 import { getManual } from "@/lib/help/manuals";
 

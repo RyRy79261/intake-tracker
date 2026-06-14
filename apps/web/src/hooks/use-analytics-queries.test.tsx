@@ -18,7 +18,7 @@ import {
   makeBloodPressureRecord,
   makeUrinationRecord,
 } from "@/__tests__/fixtures/db-fixtures";
-import type { TimeRange } from "@/lib/analytics-types";
+import type { TimeRange } from "@intake/types/analytics";
 
 function makeWrapper() {
   const client = makeTestQueryClient();

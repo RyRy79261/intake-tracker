@@ -1,13 +1,13 @@
 "use client";
 
-import { Label } from "@/components/ui/label";
+import { Label } from "@intake/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@intake/ui/select";
 import { Sun, Moon, Monitor } from "lucide-react";
 import { useTheme } from "next-themes";
 

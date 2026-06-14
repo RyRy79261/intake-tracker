@@ -10,7 +10,7 @@ import {
   deleteEatingRecord,
   undoDeleteEatingRecord,
 } from "@/lib/eating-service";
-import { unwrap } from "@/lib/service-result";
+import { unwrap } from "@intake/core/service";
 import { useUndoDeleteMutation } from "@/hooks/use-undo-delete-mutation";
 
 export type AddEatingParams = {

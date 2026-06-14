@@ -6,7 +6,7 @@ import {
   getNotificationPermission,
   requestNotificationPermission,
 } from "@/lib/push-notification-service";
-import { unwrap } from "@/lib/service-result";
+import { unwrap } from "@intake/core/service";
 
 export type PermissionState = "granted" | "denied" | "prompt" | "unavailable";
 

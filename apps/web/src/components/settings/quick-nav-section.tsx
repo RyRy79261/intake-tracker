@@ -1,16 +1,16 @@
 "use client";
 
 import { Reorder } from "motion/react";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
+import { Button } from "@intake/ui/button";
+import { Label } from "@intake/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
+} from "@intake/ui/select";
+import { Switch } from "@intake/ui/switch";
 import { Navigation, ArrowRightLeft, GripVertical } from "lucide-react";
 import { useSettings } from "@/hooks/use-settings";
 import { CARD_THEMES } from "@/lib/card-themes";

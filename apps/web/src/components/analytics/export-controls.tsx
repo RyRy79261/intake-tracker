@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import { Download, FileText } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
+import { Button } from "@intake/ui/button";
+import { useToast } from "@intake/ui/use-toast";
 import { exportToPDF, exportAllRecordsCSV } from "@/lib/export-service";
-import type { TimeRange } from "@/lib/analytics-types";
+import type { TimeRange } from "@intake/types/analytics";
 
 interface ExportControlsProps {
   range: TimeRange;

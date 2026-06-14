@@ -6,8 +6,8 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+} from "@intake/ui/dialog";
+import { Button } from "@intake/ui/button";
 import { useState, useEffect } from "react";
 
 interface RetroactiveTimePickerProps {

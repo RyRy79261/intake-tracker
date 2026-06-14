@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Drawer, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
+import { Drawer, DrawerContent, DrawerTitle } from "@intake/ui/drawer";
 import { PillIconWithBadge } from "@/components/medications/pill-icon";
 import { useUntakeDose, useSkipAllDoses, useEditAllDoseTimes } from "@/hooks/use-medication-queries";
 import { hapticTake, hapticSkip, formatDoseAmount, getCurrentTimeHHMM } from "@/lib/medication-ui-utils";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "@intake/ui/use-toast";
 import { X, RotateCcw, Clock } from "lucide-react";
 import { RetroactiveTimePicker } from "@/components/medications/retroactive-time-picker";
 import type { DoseSlot } from "@/hooks/use-medication-queries";

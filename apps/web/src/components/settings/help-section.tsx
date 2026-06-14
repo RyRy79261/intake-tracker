@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { BookOpen } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@intake/ui/button";
 
 export function HelpSection() {
   const router = useRouter();

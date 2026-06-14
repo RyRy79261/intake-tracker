@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@intake/ui/card";
+import { Button } from "@intake/ui/button";
 import {
   ChevronDown,
   ChevronRight,
@@ -22,7 +22,7 @@ import {
   getRecordsByDomain,
 } from "@/lib/analytics-service";
 import { detectAnomalies } from "@/lib/analytics-stats";
-import type { TimeRange, TrendDirection } from "@/lib/analytics-types";
+import type { TimeRange, TrendDirection } from "@intake/types/analytics";
 import type { Prescription, MedicationPhase, PhaseType } from "@/lib/db";
 import { cn } from "@/lib/utils";
 

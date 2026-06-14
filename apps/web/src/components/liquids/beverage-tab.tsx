@@ -1,22 +1,22 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
+import { Button } from "@intake/ui/button";
+import { Input } from "@intake/ui/input";
+import { Label } from "@intake/ui/label";
+import { Progress } from "@intake/ui/progress";
 import { Minus, Plus, Check } from "lucide-react";
 import { cn, formatAmount } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { ManualInputDialog } from "@/components/manual-input-dialog";
 import { useSettings } from "@/hooks/use-settings";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@intake/ui/use-toast";
 import { useIntake } from "@/hooks/use-intake-queries";
 import {
   useAddComposableEntry,
   type ComposableEntryInput,
 } from "@/hooks/use-composable-entry";
-import { computeTwoStageProgress } from "@/lib/progress-utils";
+import { computeTwoStageProgress } from "@intake/core/progress";
 
 /** Parse the optional sugar field into rounded grams (0 when empty/invalid). */
 function parseSugarGrams(value: string): number {

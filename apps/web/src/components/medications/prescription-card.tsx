@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card } from "@intake/ui/card";
+import { Badge } from "@intake/ui/badge";
 import { CompoundCardExpanded } from "@/components/medications/compound-card-expanded";
 import { InventoryItemViewDrawer } from "@/components/medications/inventory-item-view-drawer";
 import { ChevronDown } from "lucide-react";
@@ -14,7 +14,7 @@ import {
   getActiveTitrationPhase,
   getPendingTitrationPhase,
 } from "@/lib/medication-ui-utils";
-import { isCombo, splitDose, formatCompoundShort } from "@/lib/compound-utils";
+import { isCombo, splitDose, formatCompoundShort } from "@intake/core/compound";
 import {
   usePhasesForPrescription,
   useInventoryForPrescription,

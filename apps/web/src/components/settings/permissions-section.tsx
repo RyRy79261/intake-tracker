@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@intake/ui/button";
 import { ShieldCheck, Bell, Mic } from "lucide-react";
 import { PermissionBadge } from "@/components/permission-badge";
 import { usePermissions } from "@/hooks/use-permissions";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@intake/ui/use-toast";
 import { useNotificationSettings } from "@/hooks/use-notification-queries";
 
 export function PermissionsSection() {

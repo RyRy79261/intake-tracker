@@ -1,6 +1,6 @@
 "use client";
 
-import { AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
+import { AccordionItem, AccordionTrigger, AccordionContent } from "@intake/ui/accordion";
 import { type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 

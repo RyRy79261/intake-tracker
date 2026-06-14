@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@intake/ui/button";
 import { DoseRow } from "@/components/medications/dose-row";
 import { cn } from "@/lib/utils";
 import type { DoseSlot } from "@/hooks/use-medication-queries";

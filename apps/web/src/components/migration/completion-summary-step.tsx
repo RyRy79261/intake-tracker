@@ -1,7 +1,7 @@
 "use client";
 
 import { CheckCircle2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@intake/ui/button";
 import { useMigrationStore } from "@/stores/migration-store";
 import { TABLE_PUSH_ORDER } from "@/lib/sync-topology";
 

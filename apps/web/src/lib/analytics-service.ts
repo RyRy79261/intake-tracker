@@ -22,13 +22,13 @@ import type {
   BPTrendResult,
   WeightTrendResult,
   CorrelationResult,
-} from "@/lib/analytics-types";
+} from "@intake/types/analytics";
 import {
   URINATION_ESTIMATE_ML,
   DEFAULT_SALT_WEIGHT_LAG_DAYS,
   DEFAULT_SUGAR_WEIGHT_LAG_DAYS,
   DEFAULT_POTASSIUM_WEIGHT_LAG_DAYS,
-} from "@/lib/analytics-types";
+} from "@intake/types/analytics";
 
 // ---------------------------------------------------------------------------
 // Internal helpers

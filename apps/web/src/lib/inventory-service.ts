@@ -6,7 +6,8 @@
  */
 
 import { db, type InventoryItem, type InventoryTransaction } from "@/lib/db";
-import { ok, err, type ServiceResult } from "@/lib/service-result";
+import { ok, err } from "@intake/core/service";
+import type { ServiceResult } from "@intake/types/service";
 import { syncFields } from "@/lib/utils";
 import { buildAuditEntry, writeAuditLog } from "@/lib/audit-service";
 import { buildTransaction } from "@/lib/medication-builders";

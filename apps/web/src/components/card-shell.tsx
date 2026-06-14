@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent } from "@intake/ui/card";
 import { cn } from "@/lib/utils";
 import { type CardTheme } from "@/lib/card-themes";
 

@@ -17,8 +17,8 @@ import {
   getSubstanceRecordsByDateRange,
   deleteSubstanceRecord,
 } from "@/lib/substance-service";
-import { unwrap } from "@/lib/service-result";
-import type { TimeRange } from "@/lib/analytics-types";
+import { unwrap } from "@intake/core/service";
+import type { TimeRange } from "@intake/types/analytics";
 
 /**
  * Hook providing all domain records within a time range as a unified sorted array.

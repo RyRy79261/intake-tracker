@@ -18,7 +18,7 @@ import {
   type RecordTable,
   type SodiumKind,
 } from "@/lib/composable-entry-service";
-import { unwrap } from "@/lib/service-result";
+import { unwrap } from "@intake/core/service";
 import { showUndoToast } from "@/components/medications/undo-toast";
 
 export type { ComposableEntryInput, ComposableEntryResult, EntryGroup, RecordTable, SodiumKind };

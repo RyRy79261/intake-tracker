@@ -1,7 +1,7 @@
 "use client";
 
 import { Cat } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@intake/ui/button";
 
 interface EmptyScheduleProps {
   onAddMed?: () => void;

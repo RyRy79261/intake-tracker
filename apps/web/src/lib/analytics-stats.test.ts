@@ -6,7 +6,7 @@ import {
   detectAnomalies,
   computeRegression,
 } from "@/lib/analytics-stats";
-import type { DataPoint } from "@/lib/analytics-types";
+import type { DataPoint } from "@intake/types/analytics";
 
 // ---------------------------------------------------------------------------
 // Helpers

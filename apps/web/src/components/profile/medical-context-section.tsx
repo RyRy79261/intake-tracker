@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import { HeartPulse, Plus, X } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { useToast } from "@/hooks/use-toast";
+import { Card, CardContent, CardHeader, CardTitle } from "@intake/ui/card";
+import { Button } from "@intake/ui/button";
+import { Input } from "@intake/ui/input";
+import { useToast } from "@intake/ui/use-toast";
 import {
   useUserProfile,
   useSaveProfile,

@@ -1,7 +1,8 @@
 "use client";
 
 import { useMutation } from "@tanstack/react-query";
-import { unwrap, type ServiceResult } from "@/lib/service-result";
+import { unwrap } from "@intake/core/service";
+import type { ServiceResult } from "@intake/types/service";
 import { showUndoToast } from "@/components/medications/undo-toast";
 
 /**

@@ -5,12 +5,12 @@ import {
   Drawer,
   DrawerContent,
   DrawerTitle,
-} from "@/components/ui/drawer";
-import { Button } from "@/components/ui/button";
+} from "@intake/ui/drawer";
+import { Button } from "@intake/ui/button";
 import { useMedicineSearch, MedicineSearchCancelledError } from "@/hooks/use-medicine-search";
 import { useAuthGate } from "@/components/auth-guard";
 import { useAddPrescription, usePrescriptions, useAddMedicationToPrescription, usePhasesForPrescription } from "@/hooks/use-medication-queries";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@intake/ui/use-toast";
 import type { PillShape, MedicationPhase, CompoundStrength } from "@/lib/db";
 import { ArrowLeft, ArrowRight, Loader2, Check, X } from "lucide-react";
 import { useInteractionCheck } from "@/hooks/use-interaction-check";
@@ -28,7 +28,7 @@ import { ScheduleStep } from "@/components/medications/add-medication-steps/sche
 import { InventoryStep } from "@/components/medications/add-medication-steps/inventory-step";
 import { ConflictCheckOverlay, type ConflictCheckState } from "@/components/medications/add-medication-steps/conflict-check-overlay";
 import { PILL_SHAPES, COLOR_NAME_MAP } from "@/components/medications/add-medication-steps/types";
-import { compoundSum, formatCompoundNames } from "@/lib/compound-utils";
+import { compoundSum, formatCompoundNames } from "@intake/core/compound";
 
 const STEPS: WizardStep[] = ["search", "appearance", "indication", "dosage", "schedule", "inventory"];
 const STEP_LABELS: Record<WizardStep, string> = {

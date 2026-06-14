@@ -6,9 +6,9 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+} from "@intake/ui/dialog";
+import { Button } from "@intake/ui/button";
+import { Input } from "@intake/ui/input";
 import { cn } from "@/lib/utils";
 
 const PRESET_REASONS = [

@@ -13,8 +13,8 @@ import {
   saveInsightReport,
 } from "@/lib/insight-report-service";
 import { schedulePull } from "@/lib/sync-engine";
-import type { PriorAssessment } from "@/lib/analytics-insights";
-import type { TimeRange } from "@/lib/analytics-types";
+import type { PriorAssessment } from "@intake/ai-prompts/analytics-insights";
+import type { TimeRange } from "@intake/types/analytics";
 import type { InsightReport } from "@/lib/db";
 
 export interface InsightsResult {

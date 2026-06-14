@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type * as JsPdfMod from "jspdf";
-import type { AnalyticsResult, DataPoint } from "@/lib/analytics-types";
+import type { AnalyticsResult, DataPoint } from "@intake/types/analytics";
 
 // Mock jsPDF so exportToPDF's `doc.save()` is captured instead of triggering a
 // real file download. The factory wraps the real implementation so autoTable

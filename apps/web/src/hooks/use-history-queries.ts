@@ -8,7 +8,7 @@ import { getWeightRecords, deleteWeightRecord, getBloodPressureRecords, deleteBl
 import { getEatingRecords } from "@/lib/eating-service";
 import { getUrinationRecords } from "@/lib/urination-service";
 import { getDefecationRecords } from "@/lib/defecation-service";
-import { unwrap } from "@/lib/service-result";
+import { unwrap } from "@intake/core/service";
 
 export interface HistoryDataResult {
   intakeRecords: IntakeRecord[];

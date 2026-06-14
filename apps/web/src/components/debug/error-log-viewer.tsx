@@ -7,15 +7,15 @@ import {
   clearErrorLogs,
   exportErrorLogs,
 } from "@/lib/error-log-service";
-import { Button } from "@/components/ui/button";
+import { Button } from "@intake/ui/button";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { ScrollArea } from "@/components/ui/scroll-area";
+} from "@intake/ui/select";
+import { ScrollArea } from "@intake/ui/scroll-area";
 import {
   AlertOctagon,
   ChevronDown,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@intake/ui/use-toast";
 
 interface DeleteMutation {
   mutateAsync: (id: string) => Promise<unknown>;

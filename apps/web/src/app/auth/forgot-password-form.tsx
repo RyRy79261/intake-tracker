@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Button } from "@intake/ui/button";
+import { Input } from "@intake/ui/input";
+import { Label } from "@intake/ui/label";
 import { authClient } from "@/lib/auth-client";
 
 /**

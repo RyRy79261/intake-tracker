@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@intake/ui/collapsible";
 import { ChevronDown, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 

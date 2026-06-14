@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { PillIconWithBadge } from "@/components/medications/pill-icon";
-import { Button } from "@/components/ui/button";
+import { Button } from "@intake/ui/button";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDoseAmount, getCurrentTimeHHMM } from "@/lib/medication-ui-utils";

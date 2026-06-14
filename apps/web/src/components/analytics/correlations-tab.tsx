@@ -1,16 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@intake/ui/card";
+import { Button } from "@intake/ui/button";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
+} from "@intake/ui/select";
+import { Input } from "@intake/ui/input";
 import { BarChart3, ArrowRightLeft } from "lucide-react";
 import {
   useSaltVsWeight,
@@ -21,7 +21,7 @@ import {
   useCorrelation,
   useFluidBalance,
 } from "@/hooks/use-analytics-queries";
-import type { TimeRange, Domain, CorrelationResult, AnalyticsResult } from "@/lib/analytics-types";
+import type { TimeRange, Domain, CorrelationResult, AnalyticsResult } from "@intake/types/analytics";
 import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import { CorrelationChart } from "@/components/analytics/correlation-chart";
 import {

@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@intake/ui/drawer";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@intake/ui/tabs";
+import { Button } from "@intake/ui/button";
+import { Input } from "@intake/ui/input";
 import { PillIcon } from "@/components/medications/pill-icon";
 import {
   usePhasesForPrescription,
@@ -18,7 +18,7 @@ import {
   useDeleteInventoryTransaction,
 } from "@/hooks/use-medication-queries";
 import { getEffectivePhase } from "@/lib/medication-ui-utils";
-import { isCombo, formatCompoundShort, formatCompoundFull } from "@/lib/compound-utils";
+import { isCombo, formatCompoundShort, formatCompoundFull } from "@intake/core/compound";
 import type { Prescription, InventoryItem } from "@/lib/db";
 import { Loader2, Archive, ArchiveRestore, Plus, Pencil, Trash2, Check, X, CheckCircle2 } from "lucide-react";
 

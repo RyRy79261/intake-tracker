@@ -4,7 +4,7 @@ import { screen } from "@testing-library/react";
 
 import { CorrelationChart } from "@/components/analytics/correlation-chart";
 import { renderWithProviders } from "@/__tests__/react-test-utils";
-import type { CorrelationResult, DataPoint } from "@/lib/analytics-types";
+import type { CorrelationResult, DataPoint } from "@intake/types/analytics";
 
 // Recharts' ResponsiveContainer observes element size; jsdom has no
 // ResizeObserver, so provide a no-op stand-in for the chart to mount.

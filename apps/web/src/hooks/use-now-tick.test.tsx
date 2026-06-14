@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { useNowTick } from "@/hooks/use-now-tick";
+import { useNowTick } from "@intake/ui/use-now-tick";
 
 describe("useNowTick", () => {
   beforeEach(() => {

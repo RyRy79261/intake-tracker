@@ -1,8 +1,8 @@
 "use client";
 
 import { ShieldAlert, RefreshCw, Loader2 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@intake/ui/badge";
+import { Button } from "@intake/ui/button";
 import { useRefreshInteractions } from "@/hooks/use-interaction-check";
 import { usePrescriptions } from "@/hooks/use-medication-queries";
 import { useAuthGate } from "@/components/auth-guard";

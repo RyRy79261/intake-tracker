@@ -9,7 +9,7 @@ import {
   makeIntakeRecord,
   makeWeightRecord,
 } from "@/__tests__/fixtures/db-fixtures";
-import type { TimeRange } from "@/lib/analytics-types";
+import type { TimeRange } from "@intake/types/analytics";
 
 const DAY_MS = 86_400_000;
 const RANGE: TimeRange = { start: 0, end: Date.now() + DAY_MS };

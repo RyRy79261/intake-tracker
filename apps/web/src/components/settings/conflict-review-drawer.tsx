@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { AlertTriangle, Check } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@intake/ui/button";
 import {
   Drawer,
   DrawerContent,
@@ -10,7 +10,7 @@ import {
   DrawerTitle,
   DrawerDescription,
   DrawerFooter,
-} from "@/components/ui/drawer";
+} from "@intake/ui/drawer";
 import { useResolveConflicts, type ConflictRecord } from "@/hooks/use-backup-queries";
 
 interface ConflictReviewDrawerProps {

@@ -1,16 +1,16 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+import { Button } from "@intake/ui/button";
+import { Input } from "@intake/ui/input";
+import { Label } from "@intake/ui/label";
+import { Switch } from "@intake/ui/switch";
 import { Loader2, Search } from "lucide-react";
 import { useAuthGate } from "@/components/auth-guard";
 import type { Prescription, CompoundStrength } from "@/lib/db";
 import type { AddMedicationFormState } from "@/hooks/use-add-medication-form";
 import type { MedicineStrengthOption } from "@/hooks/use-medicine-search";
 import { cn } from "@/lib/utils";
-import { compoundSum, formatCompoundShort } from "@/lib/compound-utils";
+import { compoundSum, formatCompoundShort } from "@intake/core/compound";
 import type { FieldChange } from "@/components/medications/add-medication-steps/types";
 
 export function SearchStep({

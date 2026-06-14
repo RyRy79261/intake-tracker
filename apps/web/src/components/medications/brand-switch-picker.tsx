@@ -5,16 +5,16 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@intake/ui/dialog";
 import { PillIcon } from "@/components/medications/pill-icon";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@intake/ui/badge";
 import { formatPillCount } from "@/lib/medication-ui-utils";
-import { isCombo, formatCompoundShort } from "@/lib/compound-utils";
+import { isCombo, formatCompoundShort } from "@intake/core/compound";
 import {
   useInventoryForPrescription,
   useUpdateInventoryItem,
 } from "@/hooks/use-medication-queries";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@intake/ui/use-toast";
 import { Check } from "lucide-react";
 
 interface BrandSwitchPickerProps {

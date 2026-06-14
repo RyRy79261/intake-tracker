@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { db } from "@/lib/db";
 import { getDeviceTimezone, clearTimezoneCache } from "@/lib/timezone";
 import { recalculateScheduleTimezones } from "@/lib/timezone-recalculation-service";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@intake/ui/use-toast";
 
 // ---------------------------------------------------------------------------
 // Session-level dismissal flag (D-07)

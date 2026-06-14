@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowLeft } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@intake/ui/button";
 
 /**
  * Sticky header for the /help pages. The global AppHeader hides itself on

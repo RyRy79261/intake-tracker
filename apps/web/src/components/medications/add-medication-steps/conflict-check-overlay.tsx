@@ -1,7 +1,7 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@intake/ui/badge";
+import { Button } from "@intake/ui/button";
 import { AlertTriangle, Loader2 } from "lucide-react";
 
 export type ConflictCheckState = "idle" | "checking" | "warning" | "unavailable";

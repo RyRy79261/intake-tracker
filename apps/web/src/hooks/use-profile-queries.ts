@@ -8,7 +8,7 @@ import {
   emptyProfile,
   type ProfileUpdates,
 } from "@/lib/profile-service";
-import { unwrap } from "@/lib/service-result";
+import { unwrap } from "@intake/core/service";
 import type { UserProfile } from "@/lib/db";
 
 export { MAX_CONDITIONS, MAX_CONDITION_LENGTH } from "@/lib/profile-service";

@@ -6,7 +6,7 @@ import {
   INSIGHTS_WINDOW_DAYS,
   type IntakeGoals,
 } from "@/lib/analytics-snapshot";
-import type { AnalyticsInsightsRequest } from "@/lib/analytics-insights";
+import type { AnalyticsInsightsRequest } from "@intake/ai-prompts/analytics-insights";
 import { db } from "@/lib/db";
 import {
   makeIntakeRecord,

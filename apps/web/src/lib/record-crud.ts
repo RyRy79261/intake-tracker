@@ -1,5 +1,6 @@
 import type { EntityTable, Table, UpdateSpec } from "dexie";
-import { ok, err, type ServiceResult } from "@/lib/service-result";
+import { ok, err } from "@intake/core/service";
+import type { ServiceResult } from "@intake/types/service";
 import { writeWithSync } from "@/lib/sync-queue";
 import { schedulePush } from "@/lib/sync-engine";
 import type { TableName } from "@/lib/sync-topology";

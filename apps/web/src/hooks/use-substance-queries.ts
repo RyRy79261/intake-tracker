@@ -10,7 +10,7 @@ import {
   updateSubstanceRecord,
   type AddSubstanceInput,
 } from "@/lib/substance-service";
-import { unwrap } from "@/lib/service-result";
+import { unwrap } from "@intake/core/service";
 import type { SubstanceRecord } from "@/lib/db";
 
 /**

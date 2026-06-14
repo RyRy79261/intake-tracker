@@ -20,8 +20,8 @@ import {
 import { db } from "@/lib/db";
 import { getActivePrescriptions } from "@/lib/prescription-service";
 import { getActivePhaseForPrescription } from "@/lib/phase-service";
-import type { TimeRange, TrendDirection } from "@/lib/analytics-types";
-import type { AnalyticsInsightsRequest } from "@/lib/analytics-insights";
+import type { TimeRange, TrendDirection } from "@intake/types/analytics";
+import type { AnalyticsInsightsRequest } from "@intake/ai-prompts/analytics-insights";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 

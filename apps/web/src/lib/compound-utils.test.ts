@@ -7,7 +7,7 @@ import {
   formatCompoundShort,
   formatCompoundFull,
   formatCompoundNames,
-} from "@/lib/compound-utils";
+} from "@intake/core/compound";
 import type { CompoundStrength } from "@/lib/db";
 
 const entresto: CompoundStrength[] = [

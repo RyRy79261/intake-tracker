@@ -1,5 +1,6 @@
 import { db, type Prescription, type MedicationPhase, type InventoryItem, type PhaseSchedule, type PillShape, type FoodInstruction, type CompoundStrength } from "@/lib/db";
-import { ok, err, type ServiceResult } from "@/lib/service-result";
+import { ok, err } from "@intake/core/service";
+import type { ServiceResult } from "@intake/types/service";
 import { buildAuditEntry } from "@/lib/audit-service";
 import { buildPrescription, buildPhase, buildInventory, buildSchedules, buildTransaction } from "@/lib/medication-builders";
 import { enqueueInsideTx } from "@/lib/sync-queue";

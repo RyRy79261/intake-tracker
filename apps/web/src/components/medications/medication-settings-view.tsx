@@ -4,21 +4,21 @@ import { useState } from "react";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useDoseReminderToggle } from "@/hooks/use-push-schedule-sync";
 import { useAuth, useAuthGate } from "@/components/auth-guard";
-import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
+import { Label } from "@intake/ui/label";
+import { Button } from "@intake/ui/button";
+import { Switch } from "@intake/ui/switch";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@intake/ui/select";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@/components/ui/popover";
+} from "@intake/ui/popover";
 import {
   Command,
   CommandEmpty,
@@ -26,7 +26,7 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-} from "@/components/ui/command";
+} from "@intake/ui/command";
 import { Bell, Check, ChevronsUpDown, Clock, Globe } from "lucide-react";
 import { cn } from "@/lib/utils";
 

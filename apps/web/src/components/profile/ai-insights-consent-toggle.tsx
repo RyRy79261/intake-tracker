@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { Info } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+import { Button } from "@intake/ui/button";
+import { Label } from "@intake/ui/label";
+import { Switch } from "@intake/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -12,7 +12,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from "@/components/ui/dialog";
+} from "@intake/ui/dialog";
 import {
   useUserProfile,
   useSaveProfile,

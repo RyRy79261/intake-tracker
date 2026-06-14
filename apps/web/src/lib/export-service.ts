@@ -13,7 +13,7 @@ import {
   weightTrend,
   getRecordsByDomain,
 } from "@/lib/analytics-service";
-import type { TimeRange, Domain, AnalyticsResult } from "@/lib/analytics-types";
+import type { TimeRange, Domain, AnalyticsResult } from "@intake/types/analytics";
 
 // ---------------------------------------------------------------------------
 // CSV helpers

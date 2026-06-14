@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { motion } from "motion/react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@intake/ui/button";
 import { cn } from "@/lib/utils";
 import { AuthButton } from "@/components/auth-button";
 import { NAV_ROUTES } from "@/lib/nav-routes";

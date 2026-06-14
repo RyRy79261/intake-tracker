@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Trash2, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@intake/ui/button";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -12,7 +12,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+} from "@intake/ui/alert-dialog";
 import {
   useDeleteDataInRange,
   olderThanDays,

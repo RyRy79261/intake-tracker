@@ -11,14 +11,14 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Card, CardContent, CardHeader, CardTitle } from "@intake/ui/card";
+import { Button } from "@intake/ui/button";
+import { Checkbox } from "@intake/ui/checkbox";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+} from "@intake/ui/collapsible";
 import {
   Dialog,
   DialogContent,
@@ -26,8 +26,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { useToast } from "@/hooks/use-toast";
+} from "@intake/ui/dialog";
+import { useToast } from "@intake/ui/use-toast";
 import { useSettingsStore } from "@/stores/settings-store";
 import {
   useGenerateInsights,

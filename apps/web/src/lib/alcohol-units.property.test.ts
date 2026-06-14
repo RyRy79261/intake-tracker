@@ -40,7 +40,7 @@ import {
   ethanolGrams,
   standardDrinksFromAbv,
   abvFromStandardDrinks,
-} from "@/lib/alcohol-units";
+} from "@intake/core/alcohol";
 
 // Realistic input ranges: ABV is bounded by 0–95% in real-world
 // products; volumes by ~5 ml (a sip) to 5 000 ml (a bucket). Restrict

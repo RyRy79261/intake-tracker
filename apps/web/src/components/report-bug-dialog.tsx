@@ -9,16 +9,16 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+} from "@intake/ui/dialog";
+import { Button } from "@intake/ui/button";
+import { Textarea } from "@intake/ui/textarea";
+import { Label } from "@intake/ui/label";
+import { Switch } from "@intake/ui/switch";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+} from "@intake/ui/collapsible";
 import {
   Bug,
   Lightbulb,
@@ -33,7 +33,7 @@ import {
 import { VoiceRecorder } from "@/components/voice/voice-recorder";
 import { useApiKeyStatus } from "@/hooks/use-ai-keys";
 import { useSubmitBugReport } from "@/hooks/use-bug-report";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@intake/ui/use-toast";
 import { apiFetch } from "@/lib/api-fetch";
 import {
   collectEnvironmentInfo,

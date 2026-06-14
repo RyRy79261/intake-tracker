@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Cat, ChevronDown, Plus } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@intake/ui/button";
 import { MedicationCard } from "@/components/medications/compound-card";
 import { InteractionSearch } from "@/components/medications/interaction-search";
 import { useAuthGate } from "@/components/auth-guard";

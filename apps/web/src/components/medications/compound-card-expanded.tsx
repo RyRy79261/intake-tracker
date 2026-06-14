@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@intake/ui/badge";
+import { Button } from "@intake/ui/button";
 import { PillIcon } from "@/components/medications/pill-icon";
 import { formatPillCount, getEffectivePhase } from "@/lib/medication-ui-utils";
-import { isCombo, splitDose, formatCompoundShort } from "@/lib/compound-utils";
+import { isCombo, splitDose, formatCompoundShort } from "@intake/core/compound";
 import {
   useInventoryForPrescription,
   usePhasesForPrescription,

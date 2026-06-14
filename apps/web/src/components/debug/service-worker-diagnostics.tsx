@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@intake/ui/button";
 import { Cog, RefreshCw, BellRing } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@intake/ui/use-toast";
 
 interface SWState {
   supported: boolean;

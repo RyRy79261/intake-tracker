@@ -1,17 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@intake/ui/button";
+import { Input } from "@intake/ui/input";
+import { Label } from "@intake/ui/label";
+import { Textarea } from "@intake/ui/textarea";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@intake/ui/select";
 import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
@@ -19,7 +19,7 @@ import { CardShell } from "@/components/card-shell";
 import { RecentEntriesList, InlineEditFormShell } from "@/components/recent-entries-list";
 import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
 import { useEditRecord } from "@/hooks/use-edit-record";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@intake/ui/use-toast";
 import { type UrinationRecord } from "@/lib/db";
 import { useUrinationRecords, useAddUrination, useDeleteUrination, useUpdateUrination } from "@/hooks/use-urination-queries";
 import {

@@ -1,7 +1,7 @@
 import { Capacitor } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
 import { db } from "@/lib/db";
-import { isCombo, splitDose, formatCompoundShort } from "@/lib/compound-utils";
+import { isCombo, splitDose, formatCompoundShort } from "@intake/core/compound";
 
 export async function initLocalNotifications(): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
