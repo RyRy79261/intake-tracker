@@ -74,9 +74,9 @@ export default [
       ],
       "@typescript-eslint/no-explicit-any": "warn",
       "@typescript-eslint/no-require-imports": "warn",
-      "@typescript-eslint/no-empty-object-type": "warn",
+      "@typescript-eslint/no-empty-object-type": "error",
       "@typescript-eslint/no-unsafe-function-type": "warn",
-      "no-regex-spaces": "warn",
+      "no-regex-spaces": "error",
       "no-empty": "warn",
       // Promoted to error (May 2026 audit).
       "react-hooks/rules-of-hooks": "error",

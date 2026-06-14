@@ -388,7 +388,6 @@ export async function runPullCycle(): Promise<void> {
   useSyncStatusStore.setState({ isSyncing: true });
 
   try {
-    // eslint-disable-next-line no-constant-condition
     while (true) {
       const cursors: Record<string, { updatedAt: number; id: string }> = {};
       for (const tn of TABLE_PUSH_ORDER) {

@@ -65,7 +65,6 @@ import { WeightCard } from "@/components/weight-card";
 import { UrinationCard } from "@/components/urination-card";
 import { DefecationCard } from "@/components/defecation-card";
 import { renderWithFixtures } from "@/__tests__/react-test-utils";
-// eslint-disable-next-line no-restricted-imports
 import { db } from "@/lib/db";
 
 const server = setupServer(
