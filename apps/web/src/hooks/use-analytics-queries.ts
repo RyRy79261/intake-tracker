@@ -25,7 +25,7 @@ import type {
   BPTrendResult,
   WeightTrendResult,
   CorrelationResult,
-} from "@/lib/analytics-types";
+} from "@intake/types/analytics";
 
 // ---------------------------------------------------------------------------
 // Default values (eliminate loading states -- instant render)

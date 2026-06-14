@@ -32,4 +32,4 @@ export { CLAUDE_MODELS, WEB_SEARCH_TOOL } from "@intake/ai-prompts/models";
 export {
   GRAMS_PER_STANDARD_DRINK,
   ETHANOL_DENSITY_G_PER_ML,
-} from "@/lib/alcohol-units";
+} from "@intake/core/alcohol";

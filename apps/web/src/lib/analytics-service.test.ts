@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { IntakeRecord, WeightRecord, BloodPressureRecord, UrinationRecord } from "@/lib/db";
 import type { DoseSlot } from "@/lib/dose-schedule-service";
-import type { TimeRange } from "@/lib/analytics-types";
+import type { TimeRange } from "@intake/types/analytics";
 
 // ---------------------------------------------------------------------------
 // Mocks — must be declared before imports that use them

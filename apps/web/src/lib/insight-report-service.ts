@@ -8,7 +8,8 @@
  */
 
 import { db, type InsightReport } from "@/lib/db";
-import { ok, err, type ServiceResult } from "@/lib/service-result";
+import { ok, err } from "@intake/core/service";
+import type { ServiceResult } from "@intake/types/service";
 import { generateId, getDeviceId } from "@/lib/utils";
 import { writeWithSync } from "@/lib/sync-queue";
 import { schedulePush } from "@/lib/sync-engine";

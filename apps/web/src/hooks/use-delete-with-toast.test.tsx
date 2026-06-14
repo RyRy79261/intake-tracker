@@ -5,7 +5,7 @@ import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
 
 // Mock the toast module so the hook's destructured `toast` is observable.
 const { toastSpy } = vi.hoisted(() => ({ toastSpy: vi.fn() }));
-vi.mock("@/hooks/use-toast", () => ({
+vi.mock("@intake/ui/use-toast", () => ({
   useToast: () => ({ toast: toastSpy }),
   toast: toastSpy,
 }));

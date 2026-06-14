@@ -2,7 +2,7 @@
 
 import { Suspense, useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@intake/ui/tabs";
 import { TimeRangeSelector } from "@/components/analytics/time-range-selector";
 import { RecordsTab } from "@/components/analytics/records-tab";
 import { SummaryTab } from "@/components/analytics/summary-tab";
@@ -11,7 +11,7 @@ import { TitrationTab } from "@/components/analytics/titration-tab";
 import { ExportControls } from "@/components/analytics/export-controls";
 import { AnalyticsIntroDialog } from "@/components/analytics/analytics-intro-dialog";
 import { useTimeScopeRange } from "@/hooks/use-analytics-queries";
-import type { TimeScope, TimeRange } from "@/lib/analytics-types";
+import type { TimeScope, TimeRange } from "@intake/types/analytics";
 
 type AnalyticsTab = "summary" | "correlations" | "records" | "titration";
 

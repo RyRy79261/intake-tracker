@@ -1,18 +1,18 @@
 "use client";
 
 import { Check, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Button } from "@intake/ui/button";
+import { Input } from "@intake/ui/input";
+import { Label } from "@intake/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@intake/ui/select";
 import { cn } from "@/lib/utils";
-import { standardDrinksFromAbv } from "@/lib/alcohol-units";
+import { standardDrinksFromAbv } from "@intake/core/alcohol";
 import {
   VOICE_ITEM_COLOR,
   VOICE_ITEM_LABEL,

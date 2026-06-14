@@ -7,8 +7,8 @@ import {
   DrawerDescription,
   DrawerHeader,
   DrawerTitle,
-} from "@/components/ui/drawer";
-import { Button } from "@/components/ui/button";
+} from "@intake/ui/drawer";
+import { Button } from "@intake/ui/button";
 import { EditIntakeDialog } from "@/components/edit-intake-dialog";
 import { EditWeightDialog } from "@/components/edit-weight-dialog";
 import { EditBloodPressureDialog } from "@/components/edit-blood-pressure-dialog";
@@ -32,7 +32,7 @@ import { useHistoryData } from "@/hooks/use-history-queries";
 import { useDeleteEating } from "@/hooks/use-eating-queries";
 import { useDeleteUrination } from "@/hooks/use-urination-queries";
 import { useDeleteDefecation } from "@/hooks/use-defecation-queries";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@intake/ui/use-toast";
 import { useKeyboardAwareScroll } from "@/hooks/use-keyboard-scroll";
 import { cn } from "@/lib/utils";
 import {

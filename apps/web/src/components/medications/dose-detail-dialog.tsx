@@ -5,15 +5,15 @@ import {
   Drawer,
   DrawerContent,
   DrawerTitle,
-} from "@/components/ui/drawer";
-import { Button } from "@/components/ui/button";
+} from "@intake/ui/drawer";
+import { Button } from "@intake/ui/button";
 import { PillIcon } from "@/components/medications/pill-icon";
 import { useTakeDose, useUntakeDose, useSkipDose, useRescheduleDose } from "@/hooks/use-medication-queries";
 import { hapticTake, hapticSkip, formatDoseAmount } from "@/lib/medication-ui-utils";
-import { isCombo, splitDose, formatCompoundShort, formatCompoundFull } from "@/lib/compound-utils";
+import { isCombo, splitDose, formatCompoundShort, formatCompoundFull } from "@intake/core/compound";
 import { Info, X, RotateCcw, Clock, Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "@intake/ui/use-toast";
 import { RetroactiveTimePicker } from "@/components/medications/retroactive-time-picker";
 import type { DoseSlot } from "@/hooks/use-medication-queries";
 

@@ -4,7 +4,7 @@ import {
   isCombo,
   splitDose,
   formatCompoundShort,
-} from "@/lib/compound-utils";
+} from "@intake/core/compound";
 
 /**
  * The maintenance ("baseline") phase for a prescription — what the Rx says when

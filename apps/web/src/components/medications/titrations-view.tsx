@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@intake/ui/button";
 import { Plus, TrendingUp } from "lucide-react";
 import { usePrescriptions, useTitrationPlans } from "@/hooks/use-medication-queries";
 import type { TitrationPlan } from "@/lib/db";

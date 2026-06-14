@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, type FormEvent } from "react";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@intake/ui/use-toast";
 import {
   timestampToDateTimeLocal,
   dateTimeLocalToTimestamp,

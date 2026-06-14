@@ -1,7 +1,7 @@
 "use client";
 
 import { Component, type ReactNode } from "react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@intake/ui/button";
 import { AlertTriangle, RefreshCw, Home, Bug } from "lucide-react";
 
 /** Read on the settings page to pre-fill the bug reporter after a crash. */

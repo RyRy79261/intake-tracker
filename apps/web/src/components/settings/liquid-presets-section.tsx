@@ -1,17 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Label } from "@intake/ui/label";
+import { Input } from "@intake/ui/input";
+import { Button } from "@intake/ui/button";
+import { Badge } from "@intake/ui/badge";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@intake/ui/select";
 import { Plus, Trash2, Droplets, Pencil } from "lucide-react";
 import { useSettingsStore, type LiquidPreset } from "@/stores/settings-store";
 import { ExpandableSettingsSection } from "@/components/settings/expandable-settings-section";

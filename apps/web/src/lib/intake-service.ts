@@ -1,5 +1,6 @@
 import { db, type IntakeRecord } from "@/lib/db";
-import { ok, err, type ServiceResult, type PaginatedResult } from "@/lib/service-result";
+import { ok, err } from "@intake/core/service";
+import type { ServiceResult, PaginatedResult } from "@intake/types/service";
 import { generateId, syncFields } from "@/lib/utils";
 import { writeWithSync, enqueueInsideTx } from "@/lib/sync-queue";
 import { schedulePush } from "@/lib/sync-engine";

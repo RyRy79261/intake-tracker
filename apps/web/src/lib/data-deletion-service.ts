@@ -14,7 +14,8 @@
 import { db } from "@/lib/db";
 import { TABLE_PUSH_ORDER } from "@/lib/sync-topology";
 import { enqueueInsideTx } from "@/lib/sync-queue";
-import { ok, err, type ServiceResult } from "@/lib/service-result";
+import { ok, err } from "@intake/core/service";
+import type { ServiceResult } from "@intake/types/service";
 
 const PROFILE_TABLE = "userProfile";
 const DELETABLE_TABLES = TABLE_PUSH_ORDER.filter((t) => t !== PROFILE_TABLE);

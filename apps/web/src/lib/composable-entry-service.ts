@@ -1,10 +1,11 @@
 import { db } from "@/lib/db";
 import type { IntakeRecord, EatingRecord, SubstanceRecord } from "@/lib/db";
-import { ok, err, type ServiceResult } from "@/lib/service-result";
+import { ok, err } from "@intake/core/service";
+import type { ServiceResult } from "@intake/types/service";
 import { syncFields } from "@/lib/utils";
 import { enqueueInsideTx } from "@/lib/sync-queue";
 import { schedulePush } from "@/lib/sync-engine";
-import { standardDrinksFromAbv } from "@/lib/alcohol-units";
+import { standardDrinksFromAbv } from "@intake/core/alcohol";
 
 const COMPOSABLE_TABLES = [db.intakeRecords, db.eatingRecords, db.substanceRecords] as const;
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@intake/ui/button";
 import { Download, Upload, Trash2, AlertTriangle } from "lucide-react";
 import {
   useDownloadBackup,

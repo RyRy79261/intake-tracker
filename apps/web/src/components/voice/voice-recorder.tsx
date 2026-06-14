@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@intake/ui/button";
 import { Mic, Square, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 

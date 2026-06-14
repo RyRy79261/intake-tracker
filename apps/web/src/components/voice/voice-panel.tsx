@@ -2,9 +2,9 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { Check, Mic, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useToast } from "@/hooks/use-toast";
+import { Button } from "@intake/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@intake/ui/card";
+import { useToast } from "@intake/ui/use-toast";
 import { VoiceRecorder } from "@/components/voice/voice-recorder";
 import { ParsedItemRow } from "@/components/voice/parsed-item-row";
 import { useAddIntake } from "@/hooks/use-intake-queries";
@@ -15,7 +15,7 @@ import { useAddSubstance } from "@/hooks/use-substance-queries";
 import { useAddComposableEntry, type ComposableEntryInput } from "@/hooks/use-composable-entry";
 import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import type { VoiceParsedItem, VoiceParseResponse } from "@/lib/voice-types";
-import { standardDrinksFromAbv } from "@/lib/alcohol-units";
+import { standardDrinksFromAbv } from "@intake/core/alcohol";
 import { apiFetch } from "@/lib/api-fetch";
 import { useQueryClient } from "@tanstack/react-query";
 

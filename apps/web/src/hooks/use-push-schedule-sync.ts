@@ -12,7 +12,7 @@ import {
   isNotificationSupported,
 } from "@/lib/push-notification-service";
 import type { CompoundStrength } from "@/lib/db";
-import { isCombo, splitDose, formatCompoundShort } from "@/lib/compound-utils";
+import { isCombo, splitDose, formatCompoundShort } from "@intake/core/compound";
 import { toLocalDateKey } from "@/lib/date-utils";
 
 // Auth note: all push endpoints run under withAuth() on the server (see

@@ -1,16 +1,16 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@intake/ui/button";
+import { Input } from "@intake/ui/input";
 import { Minus, Plus, Check, Loader2 } from "lucide-react";
 import { z } from "zod";
 import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { CardShell } from "@/components/card-shell";
 import { logAudit } from "@/lib/audit";
-import { InlineEdit } from "@/components/ui/inline-edit";
-import { Skeleton } from "@/components/ui/skeleton";
+import { InlineEdit } from "@intake/ui/inline-edit";
+import { Skeleton } from "@intake/ui/skeleton";
 
 const WeightFormSchema = z.object({
   weight: z.number({ error: "Weight is required" })
@@ -22,7 +22,7 @@ import { RecentEntriesList, InlineEditFormShell } from "@/components/recent-entr
 import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
 import { useEditRecord } from "@/hooks/use-edit-record";
 import { useSettings } from "@/hooks/use-settings";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@intake/ui/use-toast";
 import { type WeightRecord } from "@/lib/db";
 import { useWeightRecords, useAddWeight, useDeleteWeight, useUpdateWeight } from "@/hooks/use-health-queries";
 import {

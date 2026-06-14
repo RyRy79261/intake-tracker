@@ -4,7 +4,8 @@
  */
 
 import { db } from "@/lib/db";
-import { ok, err, type ServiceResult } from "@/lib/service-result";
+import { ok, err } from "@intake/core/service";
+import type { ServiceResult } from "@intake/types/service";
 import { apiFetch } from "@/lib/api-fetch";
 
 export type NotificationPermissionState = "granted" | "denied" | "default";

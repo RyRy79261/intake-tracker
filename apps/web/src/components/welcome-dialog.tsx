@@ -9,8 +9,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+} from "@intake/ui/dialog";
+import { Button } from "@intake/ui/button";
 import { Droplets, Smartphone, Hand, LifeBuoy } from "lucide-react";
 import { WELCOME_SEEN_KEY } from "@/lib/constants";
 

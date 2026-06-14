@@ -1,13 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@intake/ui/drawer";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@intake/ui/tabs";
+import { Button } from "@intake/ui/button";
+import { Input } from "@intake/ui/input";
+import { Switch } from "@intake/ui/switch";
+import { Label } from "@intake/ui/label";
+import { Textarea } from "@intake/ui/textarea";
 import {
   usePhasesForPrescription,
   useSchedulesForPhase,

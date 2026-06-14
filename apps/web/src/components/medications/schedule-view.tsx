@@ -4,7 +4,7 @@ import { useMemo, useState, useCallback } from "react";
 import { useDailyDoseSchedule, useTakeDose, useUntakeDose, useSkipDose, useTakeAllDoses, useEditDoseTime } from "@/hooks/use-medication-queries";
 import type { DoseSlot } from "@/hooks/use-medication-queries";
 import { hapticTake, hapticSkip, getCurrentTimeHHMM } from "@/lib/medication-ui-utils";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "@intake/ui/use-toast";
 import { showUndoToast } from "@/components/medications/undo-toast";
 import { DoseProgressSummary } from "@/components/medications/dose-progress-summary";
 import { TimeSlotGroup } from "@/components/medications/time-slot-group";

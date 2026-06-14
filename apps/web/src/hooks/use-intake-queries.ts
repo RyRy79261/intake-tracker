@@ -17,10 +17,10 @@ import {
   getSugarTotalsByGroupIds,
   getPotassiumTotalsByGroupIds,
 } from "@/lib/intake-service";
-import { unwrap } from "@/lib/service-result";
+import { unwrap } from "@intake/core/service";
 import { useUndoDeleteMutation } from "@/hooks/use-undo-delete-mutation";
 import { useSettingsStore } from "@/stores/settings-store";
-import { useNowTick } from "@/hooks/use-now-tick";
+import { useNowTick } from "@intake/ui/use-now-tick";
 
 // Re-exported from the canonical home in date-utils so existing consumers
 // (e.g. text-metrics) keep importing it from the intake hooks module.

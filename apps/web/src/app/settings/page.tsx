@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Accordion } from "@/components/ui/accordion";
+import { Button } from "@intake/ui/button";
+import { Accordion } from "@intake/ui/accordion";
 import { RotateCcw, Activity, Palette, Pill, Database, Shield, Bug, Download, Sparkles, MessageSquare, BookOpen } from "lucide-react";
 import { useSettings } from "@/hooks/use-settings";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@intake/ui/use-toast";
 import { DebugPanel } from "@/components/debug-panel";
 import { AboutDialog } from "@/components/about-dialog";
 import { SettingsAccordionGroup } from "@/components/settings/settings-accordion-group";

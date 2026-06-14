@@ -2,7 +2,7 @@
 
 import { useVersionCheck } from "@/hooks/use-version-check";
 import { isCapacitorMode } from "@/lib/api-fetch";
-import { Button } from "@/components/ui/button";
+import { Button } from "@intake/ui/button";
 import { RefreshCw, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 

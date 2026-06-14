@@ -1,7 +1,7 @@
 "use client";
 
-import { Card, CardContent } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
+import { Card, CardContent } from "@intake/ui/card";
+import { Progress } from "@intake/ui/progress";
 import { Utensils } from "lucide-react";
 import { cn, formatAmount } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
@@ -9,7 +9,7 @@ import { useIntake } from "@/hooks/use-intake-queries";
 import { useSettings } from "@/hooks/use-settings";
 import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import { FoodSection } from "@/components/food-salt/food-section";
-import { computeTwoStageProgress } from "@/lib/progress-utils";
+import { computeTwoStageProgress } from "@intake/core/progress";
 
 export function FoodSaltCard() {
   const saltIntake = useIntake("salt");

@@ -2,20 +2,20 @@
 
 import { useState, useEffect } from "react";
 import { Bug, Smartphone, SlidersHorizontal } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
-import { NumericInput } from "@/components/ui/numeric-input";
+import { Button } from "@intake/ui/button";
+import { Switch } from "@intake/ui/switch";
+import { Label } from "@intake/ui/label";
+import { NumericInput } from "@intake/ui/numeric-input";
 import { ReportBugDialog } from "@/components/report-bug-dialog";
 import { ExpandableSettingsSection } from "@/components/settings/expandable-settings-section";
 import { useSettings } from "@/hooks/use-settings";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@intake/ui/use-toast";
 import { requestMotionPermission } from "@/hooks/use-shake-gesture";
 import {
   validateAndSave,
   incrementSetting,
   decrementSetting,
-} from "@/lib/settings-helpers";
+} from "@intake/core/settings";
 
 export function ReportBugSection() {
   const [open, setOpen] = useState(false);

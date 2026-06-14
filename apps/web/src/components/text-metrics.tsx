@@ -7,12 +7,12 @@ import {
   useIntakeRecordsByDateRange,
 } from "@/hooks/use-intake-queries";
 import { useSubstanceRecordsByDateRange } from "@/hooks/use-substance-queries";
-import { useNowTick } from "@/hooks/use-now-tick";
+import { useNowTick } from "@intake/ui/use-now-tick";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import { CARD_THEMES } from "@/lib/card-themes";
-import { Progress } from "@/components/ui/progress";
-import { computeTwoStageProgress } from "@/lib/progress-utils";
+import { Progress } from "@intake/ui/progress";
+import { computeTwoStageProgress } from "@intake/core/progress";
 import { Droplets, Sparkles, Coffee, Wine, Candy, Banana } from "lucide-react";
 import { cn } from "@/lib/utils";
 

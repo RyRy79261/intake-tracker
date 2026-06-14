@@ -25,7 +25,7 @@ import {
   Minus,
   BarChart3,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@intake/ui/card";
 import {
   useBPTrend,
   useWeightTrend,
@@ -36,7 +36,7 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { AiInsightsCard } from "@/components/analytics/ai-insights-card";
 import { NutrientAnalysisCard } from "@/components/analytics/nutrient-analysis-card";
 import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
-import type { TimeRange, TrendDirection } from "@/lib/analytics-types";
+import type { TimeRange, TrendDirection } from "@intake/types/analytics";
 
 const TOOLTIP_STYLE = {
   backgroundColor: "hsl(var(--card))",

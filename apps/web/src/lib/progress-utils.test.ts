@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeTwoStageProgress } from "@/lib/progress-utils";
+import { computeTwoStageProgress } from "@intake/core/progress";
 
 describe("computeTwoStageProgress", () => {
   it("returns zeros when target is 0", () => {

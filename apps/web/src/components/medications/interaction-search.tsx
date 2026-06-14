@@ -7,8 +7,8 @@ import {
   X,
   ShieldCheck,
 } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+import { Input } from "@intake/ui/input";
+import { Badge } from "@intake/ui/badge";
 import { useInteractionCheck } from "@/hooks/use-interaction-check";
 import { usePrescriptions } from "@/hooks/use-medication-queries";
 import { AnimatePresence, motion } from "motion/react";

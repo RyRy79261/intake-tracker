@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { ChevronDown, ChevronUp, CheckCircle2, Loader2, Circle } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
+import { Button } from "@intake/ui/button";
+import { Progress } from "@intake/ui/progress";
 import { useMigrationStore, type TableProgress } from "@/stores/migration-store";
 import { TABLE_PUSH_ORDER } from "@/lib/sync-topology";
 

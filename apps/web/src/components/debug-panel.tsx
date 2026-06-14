@@ -7,21 +7,21 @@ import {
   recalculateAllStock,
   getCurrentStock,
 } from "@/lib/inventory-service";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Button } from "@intake/ui/button";
+import { Card } from "@intake/ui/card";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@intake/ui/select";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import { ScrollArea } from "@/components/ui/scroll-area";
+} from "@intake/ui/collapsible";
+import { ScrollArea } from "@intake/ui/scroll-area";
 import {
   Dialog,
   DialogContent,
@@ -29,7 +29,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
+} from "@intake/ui/dialog";
 import {
   Bug,
   ChevronDown,

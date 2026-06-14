@@ -1,15 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@intake/ui/button";
+import { Input } from "@intake/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@intake/ui/select";
 import { Clock, Plus, X } from "lucide-react";
 import { usePhasesForPrescription, useSchedulesForPhase } from "@/hooks/use-medication-queries";
 import type { Prescription } from "@/lib/db";

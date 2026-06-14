@@ -1,16 +1,16 @@
 "use client";
 
 import { useState, useCallback, useMemo, useRef } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Button } from "@intake/ui/button";
+import { Input } from "@intake/ui/input";
+import { Label } from "@intake/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@intake/ui/select";
 import { Loader2, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
@@ -36,7 +36,7 @@ import {
   usePotassiumTotalsByGroupIds,
 } from "@/hooks/use-intake-queries";
 import { useEditRecord } from "@/hooks/use-edit-record";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@intake/ui/use-toast";
 import { type EatingRecord } from "@/lib/db";
 import {
   getCurrentDateTimeLocal,

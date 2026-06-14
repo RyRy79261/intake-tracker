@@ -10,7 +10,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+} from "@intake/ui/alert-dialog";
 
 // ---------------------------------------------------------------------------
 // Helpers

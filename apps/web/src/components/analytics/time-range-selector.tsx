@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@intake/ui/button";
 import { cn } from "@/lib/utils";
 import { toLocalDateKey } from "@/lib/date-utils";
-import type { TimeScope, TimeRange } from "@/lib/analytics-types";
+import type { TimeScope, TimeRange } from "@intake/types/analytics";
 
 const SCOPE_OPTIONS: { value: TimeScope; label: string }[] = [
   { value: "24h", label: "24h" },

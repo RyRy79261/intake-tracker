@@ -30,7 +30,7 @@ import { screen, waitFor } from "@testing-library/react";
 import { RecordsTab } from "@/components/analytics/records-tab";
 import { renderWithFixtures } from "@/__tests__/react-test-utils";
 import { makeIntakeRecord, makeWeightRecord } from "@/__tests__/fixtures/db-fixtures";
-import type { TimeRange } from "@/lib/analytics-types";
+import type { TimeRange } from "@intake/types/analytics";
 
 const DAY_MS = 86_400_000;
 

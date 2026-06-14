@@ -1,7 +1,7 @@
 "use client";
 
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@intake/ui/label";
+import { Textarea } from "@intake/ui/textarea";
 import { PillIcon } from "@/components/medications/pill-icon";
 import { cn } from "@/lib/utils";
 import type { AddMedicationFormState } from "@/hooks/use-add-medication-form";

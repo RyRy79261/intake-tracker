@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@intake/ui/button";
 import { Info, Clipboard, ClipboardCheck } from "lucide-react";
 import { isCapacitorMode } from "@/lib/api-fetch";
 import { getDeviceId } from "@/lib/utils";

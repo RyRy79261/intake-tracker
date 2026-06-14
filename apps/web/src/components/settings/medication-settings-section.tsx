@@ -2,8 +2,8 @@
 
 import { useSettingsStore } from "@/stores/settings-store";
 import { Pill } from "lucide-react";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@intake/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@intake/ui/select";
 
 const COUNTRIES = [
   { value: "US", label: "United States" },

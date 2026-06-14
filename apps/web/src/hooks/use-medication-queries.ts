@@ -66,7 +66,7 @@ import {
   deleteInventoryTransaction,
 } from "@/lib/medication-service";
 import type { Prescription, PhaseSchedule, InventoryItem } from "@/lib/db";
-import { unwrap } from "@/lib/service-result";
+import { unwrap } from "@intake/core/service";
 
 // Re-export types so components import from hooks, not services
 export type { DoseLogWithDetails, DoseSlot, CreatePhaseInput, CreateTitrationPlanInput };

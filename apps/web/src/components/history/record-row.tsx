@@ -1,7 +1,7 @@
 "use client";
 
 import { memo } from "react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@intake/ui/button";
 import { Trash2, Loader2, Pencil } from "lucide-react";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { type UnifiedRecord } from "@/lib/history-types";

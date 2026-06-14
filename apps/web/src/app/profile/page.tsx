@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { LogIn, Sparkles, Bell, CloudUpload } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@intake/ui/button";
 import { useAuth } from "@/components/auth-guard";
 import { AccountSection } from "@/components/settings/account-section";
 import { MedicalContextSection } from "@/components/profile/medical-context-section";

@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@intake/ui/button";
 import { CheckCircle2, X } from "lucide-react";
 import { type PermissionState } from "@/hooks/use-permissions";
 

@@ -29,7 +29,8 @@ import {
   type UserProfile,
   type InsightReport,
 } from "@/lib/db";
-import { ok, err, type ServiceResult } from "@/lib/service-result";
+import { ok, err } from "@intake/core/service";
+import type { ServiceResult } from "@intake/types/service";
 import { logAudit } from "@/lib/audit";
 import { encrypt, decrypt, type EncryptedData } from "@/lib/crypto";
 import { BACKUP_VALIDATORS } from "@/lib/backup-schemas";

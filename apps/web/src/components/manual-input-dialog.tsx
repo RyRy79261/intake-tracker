@@ -8,10 +8,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+} from "@intake/ui/dialog";
+import { Button } from "@intake/ui/button";
+import { Input } from "@intake/ui/input";
+import { Label } from "@intake/ui/label";
 import { z } from "zod";
 import { cn } from "@/lib/utils";
 import { logAudit } from "@/lib/audit";
@@ -22,7 +22,7 @@ const IntakeFormSchema = z.object({
     .positive("Amount must be positive"),
   note: z.string().max(200, "Note too long").optional(),
 });
-import { Textarea } from "@/components/ui/textarea";
+import { Textarea } from "@intake/ui/textarea";
 import {
   getCurrentDateTimeLocal,
   dateTimeLocalToTimestamp,

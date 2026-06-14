@@ -4,7 +4,7 @@ import {
   incrementSetting,
   decrementSetting,
   formatHour,
-} from "@/lib/settings-helpers";
+} from "@intake/core/settings";
 
 describe("validateAndSave", () => {
   it("saves a valid in-range value", () => {

@@ -3,8 +3,8 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { HardDrive, Cloud, CloudOff, Upload, LogIn, CheckCircle2, Loader2, Download } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@intake/ui/badge";
+import { Button } from "@intake/ui/button";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -14,12 +14,12 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+} from "@intake/ui/alert-dialog";
 import { useStorageInfo } from "@/hooks/use-storage-info";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useSyncStatusStore } from "@/stores/sync-status-store";
 import { useAuth } from "@/components/auth-guard";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@intake/ui/use-toast";
 import { useAccountActions } from "@/hooks/use-account-actions";
 // eslint-disable-next-line no-restricted-imports
 import { checkInterruptedMigration } from "@/lib/migration-service";

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { Button } from "@intake/ui/button";
 import { Loader2, LogIn, LogOut, Sparkles, Bell, CloudUpload, Trash2 } from "lucide-react";
 import { useAuth } from "@/components/auth-guard";
 import { handleSignOut } from "@/lib/sign-out";

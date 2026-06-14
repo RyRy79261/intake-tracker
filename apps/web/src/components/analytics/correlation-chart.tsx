@@ -10,7 +10,7 @@ import {
   Tooltip,
   CartesianGrid,
 } from "recharts";
-import type { CorrelationResult, DataPoint } from "@/lib/analytics-types";
+import type { CorrelationResult, DataPoint } from "@intake/types/analytics";
 import { cn } from "@/lib/utils";
 import { toLocalDateKey } from "@/lib/date-utils";
 

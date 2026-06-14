@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useMemo, useRef, useCallback } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
+import { Button } from "@intake/ui/button";
+import { Input } from "@intake/ui/input";
+import { Label } from "@intake/ui/label";
+import { Progress } from "@intake/ui/progress";
 import { Sparkles, Loader2 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
 import { cn } from "@/lib/utils";
@@ -13,7 +13,7 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { useSettings } from "@/hooks/use-settings";
 import { useIntake } from "@/hooks/use-intake-queries";
 import { useAddComposableEntry, type ComposableEntryInput } from "@/hooks/use-composable-entry";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@intake/ui/use-toast";
 import { useAuthGate } from "@/components/auth-guard";
 import {
   AlertDialog,
@@ -24,10 +24,10 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+} from "@intake/ui/alert-dialog";
 import type { LiquidPreset } from "@/lib/constants";
-import { standardDrinksFromAbv } from "@/lib/alcohol-units";
-import { computeTwoStageProgress } from "@/lib/progress-utils";
+import { standardDrinksFromAbv } from "@intake/core/alcohol";
+import { computeTwoStageProgress } from "@intake/core/progress";
 
 interface PresetTabProps {
   tab: "coffee" | "alcohol" | "beverage";

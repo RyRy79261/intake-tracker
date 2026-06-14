@@ -6,7 +6,7 @@ import {
   INSIGHT_TOOL,
   InsightResponseSchema,
   type AnalyticsInsightsRequest,
-} from "@/lib/analytics-insights";
+} from "@intake/ai-prompts/analytics-insights";
 import {
   getClaudeClientForUser,
   CLAUDE_MODELS,

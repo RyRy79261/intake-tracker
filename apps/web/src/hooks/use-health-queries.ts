@@ -12,7 +12,7 @@ import {
   updateBloodPressureRecord,
   deleteBloodPressureRecord,
 } from "@/lib/health-service";
-import { unwrap } from "@/lib/service-result";
+import { unwrap } from "@intake/core/service";
 
 // ============================================================================
 // Mutation Parameter Types

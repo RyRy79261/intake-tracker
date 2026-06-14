@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Card } from "@intake/ui/card";
+import { Badge } from "@intake/ui/badge";
+import { Button } from "@intake/ui/button";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,7 +15,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+} from "@intake/ui/alert-dialog";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -38,7 +38,7 @@ import {
 import type { MedicationPhase, TitrationPlan } from "@/lib/db";
 import { cn } from "@/lib/utils";
 import { DAY_LABELS_LONG } from "@/components/medications/titrations/types";
-import { isCombo, splitDose, formatCompoundShort } from "@/lib/compound-utils";
+import { isCombo, splitDose, formatCompoundShort } from "@intake/core/compound";
 
 export function TitrationPlanCard({
   plan, onEdit,

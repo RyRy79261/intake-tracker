@@ -1,8 +1,8 @@
 "use client";
 
 import { ToggleLeft } from "lucide-react";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+import { Label } from "@intake/ui/label";
+import { Switch } from "@intake/ui/switch";
 import { useSettingsStore } from "@/stores/settings-store";
 import { ExpandableSettingsSection } from "@/components/settings/expandable-settings-section";
 import {

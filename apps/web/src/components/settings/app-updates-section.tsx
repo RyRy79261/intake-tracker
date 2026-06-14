@@ -1,9 +1,9 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@intake/ui/button";
 import { Smartphone, RefreshCw, Loader2 } from "lucide-react";
 import { useVersionCheck } from "@/hooks/use-version-check";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@intake/ui/use-toast";
 import { isCapacitorMode } from "@/lib/api-fetch";
 
 export function AppUpdatesSection() {

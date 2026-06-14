@@ -5,7 +5,7 @@ import {
   INSIGHT_TOOL,
   DEEP_SYSTEM_PROMPT,
   buildInsightsPrompt,
-} from "@/lib/analytics-insights";
+} from "@intake/ai-prompts/analytics-insights";
 import { parseJsonBody, zodErrorResponse } from "@/app/api/_shared/validation";
 import { createRateLimiter, getClientIp } from "@/app/api/_shared/rate-limit";
 import {
