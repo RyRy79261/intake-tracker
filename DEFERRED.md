@@ -197,3 +197,35 @@ at every `@/components/ui/*` and `@/hooks/*` path (zero importer churn). Deferre
   `packages/ui` rather than the `apps/web` shim layer. Purely mechanical, no
   behaviour change. **Trigger:** the importer-rewrite sweep (low priority).
 
+## Phase 5 — outcome (CI finalize done; migrator switch dropped; mobile → Milestone M)
+
+**Resolved (2026-06-14).** Phase 5's final scope is just the CI cleanup. The other
+two workstreams are intentionally *not* doing what the proposal originally planned:
+
+- **Migrator switch — ABANDONED (not deferred). 🛑** The proposal (§13.3, §10.4,
+  §8.3, §9 Phase-5 row) planned to retire `apps/web/scripts/migrate.ts` for a
+  decoupled `migrate-prod.yml` (`drizzle-kit migrate` on `push:main` against
+  `DATABASE_URL_UNPOOLED`). That is an **anti-pattern for this project's Vercel↔Neon
+  setup**: Vercel provisions a **Neon branch DB per preview deployment** (forked
+  from prod's schema; a PR's new migrations are the delta), and only that PR's
+  `vercel-build` (`pnpm db:migrate && next build`) can apply them to that preview
+  branch. A `push:main`-only workflow migrates prod *after merge* — it never touches
+  preview branches (→ previews on an un-migrated schema) and is redundant with
+  `vercel-build`'s prod migration. **Decision: keep `scripts/migrate.ts` in
+  `vercel-build` unchanged; Vercel manages migrations for preview AND prod. No
+  `migrate-prod.yml`, no `DATABASE_URL_UNPOOLED` secret.** Proposal §13.3 is
+  superseded; PR #223 was closed unmerged. The migrate.ts timestamp footgun (§11.2)
+  remains but is dormant (past the crossover; self-heals as long as `_journal.json`
+  is never hand-edited). LESSON: don't clone the sibling repos' infra patterns
+  blindly — the decoupled migrator fits ops-board, not intake-tracker's
+  Vercel-provisioned-branch model.
+- **`apps/mobile` scaffold + `cap-build.js` removal → Milestone M.** Burning the
+  `cap-build.js` stash can't be cleanly validated outside the full mobile build:
+  `output:export` fails on the `app/api/**` route handlers (Next 16 demoted
+  *middleware* to a deprecation warning, but dynamic route handlers still 400 under
+  export), and there's no clean per-route opt-out, so the whole `apps/mobile` move +
+  the export-exclusion redesign + `cap sync`/gradle/device validation are done
+  together in Milestone M. **Trigger:** the Android/Play milestone.
+- **Turbo remote cache (`TURBO_TOKEN`/`TURBO_TEAM`)** — deferred indefinitely; low
+  value for a single-dev, one-app monorepo where CI cold-installs per job.
+
