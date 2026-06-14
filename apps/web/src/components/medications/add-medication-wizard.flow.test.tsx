@@ -31,11 +31,12 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
+import type * as AuthGuardMod from "@/components/auth-guard";
 
 // Open the auth gate so the wizard renders its AI search input.
 // useAuthGate uses useAuth().authenticated, so mock the upstream hook.
 vi.mock("@/components/auth-guard", async (importActual) => {
-  const actual = await importActual<typeof import("@/components/auth-guard")>();
+  const actual = await importActual<typeof AuthGuardMod>();
   return {
     ...actual,
     useAuthGate: () => true,

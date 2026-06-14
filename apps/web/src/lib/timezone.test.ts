@@ -9,7 +9,7 @@ describe("clearTimezoneCache", () => {
     originalDateTimeFormat = Intl.DateTimeFormat;
     // Ensure `window` exists so getDeviceTimezone() reads from Intl API
     if (!hadWindow) {
-      (globalThis as any).window = {};
+      (globalThis as { window?: unknown }).window = {};
     }
     // Always start with a clean cache
     clearTimezoneCache();
@@ -22,7 +22,7 @@ describe("clearTimezoneCache", () => {
     clearTimezoneCache();
     // Remove the window shim if we added it
     if (!hadWindow) {
-      delete (globalThis as any).window;
+      delete (globalThis as { window?: unknown }).window;
     }
   });
 

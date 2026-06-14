@@ -217,18 +217,19 @@ describe("composable-entry-service", () => {
       // Monkey-patch crypto.randomUUID to return the existing id on the second call
       const originalRandomUUID = crypto.randomUUID.bind(crypto);
       let callCount = 0;
-      (crypto as any).randomUUID = (): string => {
+      const patchedRandomUUID = ((): string => {
         callCount++;
         // First call = groupId, second call = eating record, third call = intake record
         if (callCount === 3) return existingRecord.id;
         return originalRandomUUID();
-      };
+      }) as typeof crypto.randomUUID;
+      (crypto as { randomUUID: typeof crypto.randomUUID }).randomUUID = patchedRandomUUID;
 
       try {
         const result = await addComposableEntry(input);
         expect(result.success).toBe(false);
       } finally {
-        (crypto as any).randomUUID = originalRandomUUID;
+        (crypto as { randomUUID: typeof crypto.randomUUID }).randomUUID = originalRandomUUID;
       }
 
       // Verify no eating records were created (transaction rolled back)

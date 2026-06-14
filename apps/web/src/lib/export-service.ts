@@ -13,7 +13,7 @@ import {
   weightTrend,
   getRecordsByDomain,
 } from "@/lib/analytics-service";
-import type { TimeRange, Domain, AnalyticsResult, DataPoint } from "@/lib/analytics-types";
+import type { TimeRange, Domain, AnalyticsResult } from "@/lib/analytics-types";
 
 // ---------------------------------------------------------------------------
 // CSV helpers
@@ -25,14 +25,6 @@ function escapeCSVField(field: string): string {
     return `"${field.replace(/"/g, '""')}"`;
   }
   return field;
-}
-
-function dataPointsToCSVRows(points: DataPoint[]): string[][] {
-  return points.map((p) => [
-    new Date(p.timestamp).toISOString(),
-    String(p.value),
-    ...(p.label ? [p.label] : []),
-  ]);
 }
 
 function triggerDownload(blob: Blob, filename: string): void {

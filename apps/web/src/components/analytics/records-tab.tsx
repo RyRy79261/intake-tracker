@@ -28,6 +28,7 @@ import {
 } from "@/lib/db";
 import {
   type FilterType,
+  type UnifiedRecord,
   getRecordId,
   groupRecordsByDate,
   filterRecords,
@@ -174,7 +175,7 @@ export function RecordsTab({ range }: RecordsTabProps) {
   const dateGroups = Array.from(groupedRecords.entries());
 
   // Delete handler
-  const handleDelete = useCallback(async (unified: import("@/lib/history-types").UnifiedRecord) => {
+  const handleDelete = useCallback(async (unified: UnifiedRecord) => {
     const id = getRecordId(unified);
     setDeletingId(id);
     try {
@@ -194,7 +195,7 @@ export function RecordsTab({ range }: RecordsTabProps) {
   }, [toast, deleteMutation, deleteWeight, deleteBP, deleteEatingMutation, deleteUrinationMutation, deleteDefecationMutation, deleteSubstance]);
 
   // Edit openers
-  const openEdit = useCallback((unified: import("@/lib/history-types").UnifiedRecord) => {
+  const openEdit = useCallback((unified: UnifiedRecord) => {
     setEditTimestamp(timestampToDateTimeLocal(unified.record.timestamp));
     setEditNote((unified.record as unknown as { note?: string }).note || "");
 

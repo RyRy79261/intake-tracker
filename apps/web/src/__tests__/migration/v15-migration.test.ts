@@ -1,10 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { db } from "@/lib/db";
-import {
-  makeIntakeRecord,
-  makeEatingRecord,
-  makeSubstanceRecord,
-} from "@/__tests__/fixtures/db-fixtures";
+import { makeIntakeRecord } from "@/__tests__/fixtures/db-fixtures";
 
 describe("v15 migration: groupId index on intakeRecords, eatingRecords, substanceRecords", () => {
   it("existing v14 intakeRecords survive v15 upgrade with all data intact", async () => {

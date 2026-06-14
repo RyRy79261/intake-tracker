@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import { db } from "@/lib/db";
 import {
   makeIntakeRecord,
@@ -77,7 +77,7 @@ describe("SCHM-03: event-sourced inventory", () => {
     const rx = makePrescription({ id: "rx-stock-1" });
     const item = makeInventoryItem(rx.id, { id: "item-stock-1" });
     // Ensure currentStock is not set
-    const { currentStock, ...itemWithoutStock } = item as any;
+    const { currentStock: _currentStock, ...itemWithoutStock } = item;
     await db.prescriptions.add(rx);
     await db.inventoryItems.add(itemWithoutStock);
     const retrieved = await db.inventoryItems.get("item-stock-1");

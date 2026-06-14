@@ -39,6 +39,7 @@
  */
 import { NextResponse } from "next/server";
 import { eq, and, inArray } from "drizzle-orm";
+import { type PgColumn, type PgTable } from "drizzle-orm/pg-core";
 import { withAuth } from "@/lib/auth-middleware";
 import { db as drizzleDb } from "@intake/db/client";
 import { usersSync } from "@intake/db/schema";
@@ -53,7 +54,7 @@ export const maxDuration = 60;
 const MAX_FUTURE_MS = 60_000;
 const SELECT_CHUNK_SIZE = 100;
 
-function sanitizeRow(obj: Record<string, any>): Record<string, any> {
+function sanitizeRow(obj: Record<string, unknown>): Record<string, unknown> {
   for (const key of Object.keys(obj)) {
     if (obj[key] === undefined || obj[key] === "") {
       obj[key] = null;
@@ -64,10 +65,10 @@ function sanitizeRow(obj: Record<string, any>): Record<string, any> {
 
 function extractDbError(err: unknown): string {
   if (!(err instanceof Error)) return String(err);
-  const cause = (err as any).cause;
+  const cause = (err as { cause?: unknown }).cause;
   if (cause instanceof Error) {
-    const code = (cause as any).code ?? "";
-    const detail = (cause as any).detail ?? "";
+    const code = (cause as { code?: string }).code ?? "";
+    const detail = (cause as { detail?: string }).detail ?? "";
     return [cause.message, code && `code=${code}`, detail && `detail=${detail}`]
       .filter(Boolean)
       .join(" | ");
@@ -136,12 +137,13 @@ export const POST = withAuth(async ({ request, auth }) => {
             .from(table)
             .where(
               and(
-                inArray((table as any).id, chunk),
-                eq((table as any).userId, auth.userId!),
+                inArray((table as { id: PgColumn }).id, chunk),
+                eq((table as { userId: PgColumn }).userId, auth.userId!),
               ),
             );
           for (const r of rows) {
-            existingById.set((r as any).id as string, r as any);
+            const row = r as { id: string; updatedAt: number; deletedAt: number | null };
+            existingById.set(row.id, row);
           }
         }
       } catch (selectErr) {
@@ -192,11 +194,11 @@ export const POST = withAuth(async ({ request, auth }) => {
           clampedUpdatedAt === serverRow.updatedAt;
 
         if (!serverRow || clampedUpdatedAt > serverRow.updatedAt || tombstoneTieBreak) {
-          const rowWithoutUserId: Record<string, any> = { ...op.row };
+          const rowWithoutUserId: Record<string, unknown> = { ...op.row };
           delete rowWithoutUserId.userId;
           sanitizeRow(rowWithoutUserId);
 
-          const writeValues: Record<string, any> = {
+          const writeValues: Record<string, unknown> = {
             ...rowWithoutUserId,
             userId: auth.userId!,
             updatedAt: clampedUpdatedAt,
@@ -204,11 +206,11 @@ export const POST = withAuth(async ({ request, auth }) => {
 
           const { id: _id, ...setValues } = writeValues;
           try {
-            await (drizzleDb as any)
-              .insert(table)
+            await drizzleDb
+              .insert(table as PgTable)
               .values(writeValues)
               .onConflictDoUpdate({
-                target: (table as any).id,
+                target: (table as { id: PgColumn }).id,
                 set: setValues,
               });
             accepted.push({

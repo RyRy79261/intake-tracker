@@ -1,7 +1,6 @@
 import {
   db,
   type TitrationPlan,
-  type TitrationPlanStatus,
   type MedicationPhase,
   type PhaseSchedule,
 } from "@/lib/db";

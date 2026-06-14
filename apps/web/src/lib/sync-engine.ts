@@ -478,8 +478,8 @@ export async function runPullCycle(): Promise<void> {
           nextId = lastId;
         }
 
-        await db.transaction("rw", [db.table(tn), db._syncMeta] as any, async () => {
-          await (db.table(tn) as any).bulkPut(rows);
+        await db.transaction("rw", [db.table(tn), db._syncMeta], async () => {
+          await db.table(tn).bulkPut(rows);
           await db._syncMeta.put({
             tableName: tn,
             lastPulledUpdatedAt: nextUpdatedAt,
@@ -611,7 +611,15 @@ export function startEngine(): void {
 
   if (process.env.NODE_ENV !== "production") {
     if (typeof window !== "undefined") {
-      (window as any).__syncEngine = {
+      (
+        window as Window & {
+          __syncEngine?: {
+            pushNow: () => Promise<void>;
+            pullNow: () => Promise<void>;
+            getQueueDepth: typeof getQueueDepth;
+          };
+        }
+      ).__syncEngine = {
         pushNow: () => runPushCycle(),
         pullNow: () => runPullCycle(),
         getQueueDepth,

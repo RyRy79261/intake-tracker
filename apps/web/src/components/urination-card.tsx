@@ -82,7 +82,7 @@ export function UrinationCard() {
         description: `Urination (${amountValue}) recorded`,
         variant: "success",
       });
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "Failed to record",
@@ -110,7 +110,7 @@ export function UrinationCard() {
       setAmount(settings.urinationDefaultAmount);
       setNote("");
       setDetailTime(getCurrentDateTimeLocal());
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "Failed to record",

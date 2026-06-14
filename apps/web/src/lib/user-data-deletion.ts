@@ -18,6 +18,7 @@
  */
 import "server-only";
 import { eq, or, type SQL } from "drizzle-orm";
+import { type PgColumn, type PgTable } from "drizzle-orm/pg-core";
 import { db } from "@intake/db/client";
 import { schemaByTableName, type TableName } from "@intake/db/sync-payload";
 import {
@@ -60,9 +61,9 @@ const SYNCED_DELETION_ORDER: TableName[] = [
   "insightReports",
 ];
 
-// Drizzle's table refs are heavily generic; the cleanup route uses the same
-// `as any` shape to delete by `userId` across many tables.
-async function del(table: any, where: SQL | undefined): Promise<number> {
+// Drizzle's table refs are heavily generic; we accept the base `PgTable` so a
+// single helper can delete by `userId` across many tables.
+async function del(table: PgTable, where: SQL | undefined): Promise<number> {
   const result = await db.delete(table).where(where);
   return result.rowCount ?? 0;
 }
@@ -71,7 +72,7 @@ async function del(table: any, where: SQL | undefined): Promise<number> {
 async function deleteSyncedData(userId: string): Promise<Record<string, number>> {
   const deleted: Record<string, number> = {};
   for (const name of SYNCED_DELETION_ORDER) {
-    const table = schemaByTableName[name] as any;
+    const table = schemaByTableName[name] as PgTable & { userId: PgColumn };
     deleted[name] = await del(table, eq(table.userId, userId));
   }
   return deleted;

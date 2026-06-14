@@ -816,7 +816,7 @@ export async function syncLiquidEntrySubstances(
 // ─── recalculateFromCurrentValues (stub) ──────────────────────────────
 
 export async function recalculateFromCurrentValues(
-  groupId: string,
+  _groupId: string,
 ): Promise<ServiceResult<void>> {
   return err(
     "Not implemented — deferred to Phase 13/14. Requires preset data and recalculation logic not yet available.",
