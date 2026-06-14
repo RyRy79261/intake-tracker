@@ -146,7 +146,7 @@ export function BloodPressureCard() {
         if (field && typeof field === "string") errors[field] = issue.message;
       }
       setFieldErrors(errors);
-      logAudit("validation_error", JSON.stringify({ form: "blood_pressure", errors: parsed.error.flatten() }).slice(0, 100));
+      logAudit("validation_error", JSON.stringify({ form: "blood_pressure", errors: z.flattenError(parsed.error) }).slice(0, 100));
       return;
     }
     setFieldErrors({});

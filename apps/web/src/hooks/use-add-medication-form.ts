@@ -186,7 +186,7 @@ export function useAddMedicationForm(): UseAddMedicationFormReturn {
             "validation_error",
             JSON.stringify({
               form: "medication_wizard_search",
-              errors: parsed.error.flatten(),
+              errors: z.flattenError(parsed.error),
             }).slice(0, 1000),
           );
           return false;
@@ -223,7 +223,7 @@ export function useAddMedicationForm(): UseAddMedicationFormReturn {
               "validation_error",
               JSON.stringify({
                 form: "medication_wizard_schedule",
-                errors: parsed.error.flatten(),
+                errors: z.flattenError(parsed.error),
               }).slice(0, 1000),
             );
             return false;
@@ -245,7 +245,7 @@ export function useAddMedicationForm(): UseAddMedicationFormReturn {
             "validation_error",
             JSON.stringify({
               form: "medication_wizard_inventory",
-              errors: parsed.error.flatten(),
+              errors: z.flattenError(parsed.error),
             }).slice(0, 1000),
           );
           return false;

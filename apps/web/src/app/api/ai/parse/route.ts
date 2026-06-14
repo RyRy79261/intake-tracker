@@ -159,7 +159,7 @@ export const POST = withAuth(async ({ request, auth }) => {
       reasoning: toolInput.reasoning,
     });
     if (!validated.success) {
-      console.error("[VALIDATION] AI response validation failed:", JSON.stringify(validated.error.flatten()));
+      console.error("[VALIDATION] AI response validation failed:", JSON.stringify(z.flattenError(validated.error)));
       return NextResponse.json(
         { error: "AI response format invalid", fallbackToManual: true },
         { status: 422 }

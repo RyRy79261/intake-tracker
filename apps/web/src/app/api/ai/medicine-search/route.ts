@@ -121,7 +121,7 @@ export const POST = withAuth(async ({ request, auth }) => {
 
     const validated = MedicineSearchResponseSchema.safeParse(toolBlock.input);
     if (!validated.success) {
-      console.error("[VALIDATION] Medicine search response validation failed:", JSON.stringify(validated.error.flatten()));
+      console.error("[VALIDATION] Medicine search response validation failed:", JSON.stringify(z.flattenError(validated.error)));
       return NextResponse.json(
         { error: "AI response format invalid", fallbackToManual: true },
         { status: 422 }

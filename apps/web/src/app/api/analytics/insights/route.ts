@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import type Anthropic from "@anthropic-ai/sdk";
 import { withAuth } from "@/lib/auth-middleware";
 import {
@@ -144,7 +145,7 @@ export const POST = withAuth(async ({ request, auth }) => {
     if (!validated.success) {
       console.error(
         "[analytics/insights] AI response validation failed:",
-        JSON.stringify(validated.error.flatten()),
+        JSON.stringify(z.flattenError(validated.error)),
         { stopReason: response.stop_reason },
       );
       return NextResponse.json(

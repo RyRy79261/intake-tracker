@@ -117,7 +117,7 @@ export const POST = withAuth(async ({ request, auth }) => {
 
     const validated = ResponseSchema.safeParse(toolBlock.input);
     if (!validated.success) {
-      console.error("[VALIDATION] Titration warnings response validation failed:", JSON.stringify(validated.error.flatten()));
+      console.error("[VALIDATION] Titration warnings response validation failed:", JSON.stringify(z.flattenError(validated.error)));
       return NextResponse.json(
         { error: "AI service unavailable" },
         { status: 502 },

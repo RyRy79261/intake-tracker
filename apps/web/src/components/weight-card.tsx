@@ -113,7 +113,7 @@ export function WeightCard() {
         if (field && typeof field === "string") errors[field] = issue.message;
       }
       setFieldErrors(errors);
-      logAudit("validation_error", JSON.stringify({ form: "weight", errors: parsed.error.flatten() }).slice(0, 100));
+      logAudit("validation_error", JSON.stringify({ form: "weight", errors: z.flattenError(parsed.error) }).slice(0, 100));
       return;
     }
     setFieldErrors({});

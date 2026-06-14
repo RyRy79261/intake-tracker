@@ -24,7 +24,7 @@ import { parseJsonBody, zodErrorResponse } from "@/app/api/_shared/validation";
  */
 
 const PostSchema = z.object({
-  granteeEmail: z.string().email().max(320),
+  granteeEmail: z.email().max(320),
   provider: z.enum(["anthropic", "groq"]),
 });
 

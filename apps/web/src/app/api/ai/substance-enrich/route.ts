@@ -167,7 +167,7 @@ export const POST = withAuth(async ({ request, auth }) => {
       if (!validated.success) {
         console.error(
           "[VALIDATION] Caffeine enrichment validation failed:",
-          JSON.stringify(validated.error.flatten())
+          JSON.stringify(z.flattenError(validated.error))
         );
         return NextResponse.json(
           { error: "AI response format invalid", fallbackToManual: true },
@@ -181,7 +181,7 @@ export const POST = withAuth(async ({ request, auth }) => {
     if (!validated.success) {
       console.error(
         "[VALIDATION] Alcohol enrichment validation failed:",
-        JSON.stringify(validated.error.flatten())
+        JSON.stringify(z.flattenError(validated.error))
       );
       return NextResponse.json(
         { error: "AI response format invalid", fallbackToManual: true },

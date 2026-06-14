@@ -140,7 +140,7 @@ export const POST = withAuth(async ({ request, auth }) => {
     if (!validated.success) {
       console.error(
         "[VALIDATION] Substance lookup response failed:",
-        JSON.stringify(validated.error.flatten())
+        JSON.stringify(z.flattenError(validated.error))
       );
       return NextResponse.json({ error: "AI response validation failed" }, { status: 422 });
     }

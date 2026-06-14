@@ -127,7 +127,7 @@ const PriorAssessmentSchema = z.object({
   observations: z.array(z.string().min(1).max(2000)).max(16),
   // URLs from the prior deep report's web_search citations. Sent back so
   // the model can avoid re-fetching sources it already grounded against.
-  sources: z.array(z.string().url()).max(30).optional(),
+  sources: z.array(z.url()).max(30).optional(),
 });
 
 export type PriorAssessment = z.infer<typeof PriorAssessmentSchema>;
@@ -182,7 +182,7 @@ export type AnalyticsInsightsRequest = z.infer<
 export const InsightResponseSchema = z.object({
   summary: z.string().min(1).max(4000),
   observations: z.array(z.string().min(1).max(2000)).max(16),
-  sources: z.array(z.string().url()).max(30).optional(),
+  sources: z.array(z.url()).max(30).optional(),
 });
 
 export const INSIGHT_TOOL = {

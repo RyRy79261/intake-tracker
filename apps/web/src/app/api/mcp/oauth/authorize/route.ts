@@ -40,7 +40,7 @@ export const dynamic = "force-dynamic";
 const querySchema = z.object({
   response_type: z.literal("code"),
   client_id: z.string().min(1),
-  redirect_uri: z.string().url(),
+  redirect_uri: z.url(),
   code_challenge: z.string().min(43).max(128),
   code_challenge_method: z.literal("S256").default("S256"),
   state: z.string().min(1).max(512),

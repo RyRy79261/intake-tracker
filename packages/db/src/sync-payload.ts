@@ -269,8 +269,12 @@ export const PULL_SOFT_CAP = 500;
  * Enum of every syncable table name — derived from the push discriminated
  * union above so the pull-side schema and the push-side schema always agree
  * on what "a valid table" means.
+ *
+ * Exported so the sync-table parity guard (sync-payload.property.test.ts) can
+ * assert this list, the push union, `schemaByTableName`, and the topology /
+ * test-side lists never drift apart.
  */
-const tableNameSchema = z.enum([
+export const tableNameSchema = z.enum([
   "intakeRecords",
   "weightRecords",
   "bloodPressureRecords",
