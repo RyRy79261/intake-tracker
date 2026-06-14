@@ -239,13 +239,10 @@ benchmarks. **Schema-parity / drift testing is split** (see §13.1): the
    jobs** (gitleaks/dependency-review, codeql, mutation, benchmark, integration,
    coverage, tz-matrix, supply-chain grep, ci-pass aggregate) with updated path filters.
 2. **neon-pr-cleanup.yml** — unchanged (already byte-identical to camp-404's).
-3. **migrate-prod.yml (NEW)** — adopt ops-board's **decoupled** production migration
-   Action (`push:main` on `packages/db/migrations/**`, gated on `DATABASE_URL_UNPOOLED`,
-   `concurrency` no-cancel). **Runs standard `drizzle-kit migrate`** (the custom
-   `scripts/migrate.ts` is retired — see §13.3), validated once on a Neon preview
-   branch that existing `__drizzle_migrations` history is recognized. Makes the
-   silent-skip footgun **visible** instead of buried in `vercel-build`; `apps/web`
-   `vercel-build` becomes plain `next build`.
+3. ~~**migrate-prod.yml (NEW)**~~ **🛑 SUPERSEDED (2026-06-14) — see §13.3.** Keep
+   `scripts/migrate.ts` in `vercel-build` (Vercel migrates the per-PR Neon preview
+   branch *and* prod); a `push:main`-only workflow would leave preview branches
+   un-migrated. No `migrate-prod.yml`, no `DATABASE_URL_UNPOOLED` secret.
 4. **codeql.yml** — works unchanged.
 5. **commitlint.yml** — unchanged (husky stays at root).
 6. **mutation.yml** — `pnpm --filter @intake/web test:mutation`; re-point baseline paths.
@@ -280,7 +277,7 @@ Each phase ends green on the full suite and is independently revertable.
 | **2 — packages/db** | Move the strongly-precedented server layer | `schema.ts` → `packages/db` (keeps server-only); **`import "server-only"` in the package barrel** + a client-safe `@intake/db/sync-payload` export that does not pull the server schema; `drizzle.ts`→`index.ts` (factory + back-compat `db` proxy); `drizzle/`→`migrations/` **byte-identical**; **retire `scripts/migrate.ts` → `drizzle-kit migrate` + `DATABASE_URL_UNPOOLED`** (preview-validated, §13.3); add package-level `@intake/types`↔Drizzle parity test + journal test; rewrite 45 importers; wire CI db-filter | **HIGH** — client-bundle boundary + migrator switch converge here |
 | **3 — packages/types + core** | The layering spine | split 22 interfaces out of `db.ts` (Dexie runtime stays in app); move pure logic to `core`; **refactor wall-clock readers to injected `now`/`tz`**; ship strict purity test; rewrite importers; keep all hooks/stores/QueryClient in app | **MED-HIGH** — db.ts split touches 164 importers |
 | **4 — packages/ui + ai-prompts** | Additive, lower-coupling extractions | flatten 25 primitives + ~8 widgets into `ui`; move `globals.css` v4 `@theme` + `@source`; keep Outfit `next/font` in `apps/web/layout.tsx` (never in a package); keep `next-themes` app-side; extract prompts/tools/model-ids into `ai-prompts` | **MEDIUM** — mostly mechanical (Tailwind done in P0); verify `@source` + `"use client"` survive |
-| **5 — CI/CD finalize + mobile scaffold** | Finish the turbo-native workflows; stand up the clean mobile shell | finalize turbo-native `ci.yml` (preserve all intake-only jobs); add decoupled `migrate-prod.yml` (`drizzle-kit migrate`); enable Vercel skip-unaffected; **scaffold `apps/mobile` in the clean camp-404 shape** (webDir `../web/out`, `MOBILE_BUILD=1 next build` gating `output:export`, **no `cap-build.js` hack**) | **MEDIUM** — structural; the full Play-Store mobile rebuild is its own milestone |
+| **5 — CI/CD finalize + mobile scaffold** | Finish the turbo-native workflows; stand up the clean mobile shell | finalize turbo-native `ci.yml` (preserve all intake-only jobs); ~~add decoupled `migrate-prod.yml`~~ (**🛑 dropped — see §13.3; migrations stay in `vercel-build`**); enable Vercel skip-unaffected; **scaffold `apps/mobile` in the clean camp-404 shape** (webDir `../web/out`, `MOBILE_BUILD=1 next build` gating `output:export`, **no `cap-build.js` hack**) | **MEDIUM** — structural; the full Play-Store mobile rebuild is its own milestone |
 | **M — Mobile rebuild (dedicated milestone)** | Ship the Android app properly to Google Play | `cap add android` fresh; keep `@capacitor/local-notifications`; re-root + harden `android-release.yml` (keep the Play pipeline); bundle-security scan the shipped `out/` export; Play service-account + store listing; validate the export build end-to-end | **HIGH** — first proper store release; see §13.4 |
 
 ---
@@ -296,9 +293,11 @@ Each phase ends green on the full suite and is independently revertable.
    flat / Tailwind v4 / zod 4 + the dependency targets in §7) before restructuring.
 3. **`src/` layout → keep `apps/web/src/` with `@/* → ./src/*`.** Move the tree
    wholesale; a documented, deliberate divergence from the refs' no-`src` layout.
-4. **Migrator → standard `drizzle-kit migrate` + `DATABASE_URL_UNPOOLED`**, run in a
-   decoupled `migrate-prod.yml`. Retire the custom `scripts/migrate.ts`. Gated on a
-   one-time Neon preview-branch validation (§13.3).
+4. ~~**Migrator → standard `drizzle-kit migrate` + `DATABASE_URL_UNPOOLED`** in a
+   decoupled `migrate-prod.yml`; retire `scripts/migrate.ts`.~~ **🛑 REVERSED
+   (2026-06-14) — see §13.3.** Keep `scripts/migrate.ts` in `vercel-build`: Vercel
+   provisions a Neon branch DB per preview deploy, so migrations must run in the
+   build (a decoupled prod-only workflow would skip preview branches).
 5. **App-store target → Android / Google Play only** for now; keep the existing Play
    pipeline, structure `apps/mobile` so iOS can be added later (§13.4).
 6. **Boundary hardening → in scope.** Add `server-only`/`client-only` tripwires to the
@@ -430,6 +429,29 @@ Measures (land tripwires in Phase 0 while flat; rest through the move):
    to users' devices; a leak there is permanent and public. Highest-stakes surface.
 
 ### 13.3 Migrator switch (why, and how safely)
+
+> **🛑 SUPERSEDED (2026-06-14) — do NOT implement this. It is an anti-pattern for
+> this project's Vercel↔Neon setup; `scripts/migrate.ts` stays in `vercel-build`.**
+>
+> The decoupled `migrate-prod.yml` (a `push:main` GitHub workflow running
+> `drizzle-kit migrate`) was inspired by the ops-board sibling, but it only
+> migrates **prod, after merge**. The Vercel–Neon integration provisions a **Neon
+> branch DB per preview deployment** (forked from prod's schema; a PR's new
+> migrations are the delta). Only that PR's **`vercel-build`** (`pnpm db:migrate &&
+> next build`) can apply those migrations to that preview branch during the deploy —
+> a `push:main` workflow never touches preview branches, so previews would run
+> against an un-migrated schema, and it is redundant with `vercel-build`'s prod
+> migration. (Corroboration in-repo: `neon-pr-cleanup.yml` deletes a
+> `preview/<head>` branch per PR; CI's e2e / schema-migration jobs migrate their own
+> ephemeral Neon branches via `pnpm db:migrate`.)
+>
+> **Decision: keep `apps/web/scripts/migrate.ts` (neon-http over the pooled
+> `DATABASE_URL`, run by `vercel-build`) — Vercel manages migrations for preview AND
+> prod. No `migrate-prod.yml`, no `DATABASE_URL_UNPOOLED` secret.** The migrate.ts
+> timestamp footgun (§11.2) stays but is dormant (past the crossover; self-heals as
+> long as `_journal.json` is never hand-edited). The original §13.3 rationale below
+> is retained for history only. This also supersedes §10 decision 4, §8 item 3, and
+> the migrate-prod parts of the Phase 5 row in §9.
 
 `scripts/migrate.ts` is custom **only because of the Neon connection method** — it
 migrates over the `drizzle-orm/neon-http` HTTP driver (the same driver the app uses at
