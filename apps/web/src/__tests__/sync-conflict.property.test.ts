@@ -97,7 +97,7 @@ vi.mock("@intake/db/client", () => {
         where: () => Promise.resolve(Object.values(existingRows)),
       }),
     }),
-    insert: (table: unknown) => ({
+    insert: (_table: unknown) => ({
       values: (v: ServerRow) => ({
         onConflictDoUpdate: async ({ set }: { target: unknown; set: Partial<ServerRow> }) => {
           // Mirror Postgres' ON CONFLICT DO UPDATE: prefer `set` values

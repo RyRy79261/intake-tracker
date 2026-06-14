@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
+import { type PgColumn } from "drizzle-orm/pg-core";
 import { withAuth } from "@/lib/auth-middleware";
 import { db } from "@intake/db/client";
 import { schemaByTableName, type TableName } from "@intake/db/sync-payload";
@@ -33,7 +34,7 @@ export const POST = withAuth(async ({ auth }) => {
       const table = schemaByTableName[tableName];
       const result = await db
         .delete(table)
-        .where(eq((table as any).userId, auth.userId!));
+        .where(eq((table as { userId: PgColumn }).userId, auth.userId!));
 
       deleted[tableName] = result.rowCount ?? 0;
     }

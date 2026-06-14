@@ -10,7 +10,7 @@ export function isOnline(): boolean {
 function isCapacitor(): boolean {
   return (
     typeof window !== "undefined" &&
-    !!(window as any).Capacitor
+    !!(window as { Capacitor?: unknown }).Capacitor
   );
 }
 

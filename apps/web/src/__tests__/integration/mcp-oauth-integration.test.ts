@@ -27,10 +27,12 @@ import {
   type TestDbContext,
 } from "@/__tests__/helpers/test-db";
 import * as schema from "@intake/db/schema";
+import type * as OauthMod from "@/lib/mcp/oauth";
+import type * as TokensMod from "@/lib/mcp/tokens";
 
 let ctx: TestDbContext;
-let oauth: typeof import("@/lib/mcp/oauth");
-let tokens: typeof import("@/lib/mcp/tokens");
+let oauth: typeof OauthMod;
+let tokens: typeof TokensMod;
 
 beforeAll(async () => {
   ctx = await setupTestDb();

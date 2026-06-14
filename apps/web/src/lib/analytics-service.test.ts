@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { IntakeRecord, WeightRecord, BloodPressureRecord, UrinationRecord, SubstanceRecord } from "@/lib/db";
+import type { IntakeRecord, WeightRecord, BloodPressureRecord, UrinationRecord } from "@/lib/db";
 import type { DoseSlot } from "@/lib/dose-schedule-service";
 import type { TimeRange } from "@/lib/analytics-types";
 
@@ -59,7 +59,6 @@ import {
   alcoholVsBP,
   getRecordsByDomain,
   groupByDay,
-  correlate,
 } from "@/lib/analytics-service";
 
 import { getRecordsByDateRange as mockGetIntake } from "@/lib/intake-service";

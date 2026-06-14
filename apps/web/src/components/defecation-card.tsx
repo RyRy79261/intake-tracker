@@ -82,7 +82,7 @@ export function DefecationCard() {
         description: `Defecation (${amountValue}) recorded`,
         variant: "success",
       });
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "Failed to record",
@@ -111,7 +111,7 @@ export function DefecationCard() {
       setAmount(settings.defecationDefaultAmount || "");
       setNote("");
       setDetailTime(getCurrentDateTimeLocal());
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "Failed to record",

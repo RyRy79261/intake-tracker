@@ -22,6 +22,7 @@
  * stack (zero Privy / PIN imports).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type * as ReactModule from "react";
 
 type SessionUser = { id: string; email?: string; name?: string };
 type SessionResult = {
@@ -46,7 +47,7 @@ vi.mock("@/lib/auth-client", () => ({
 }));
 
 vi.mock("react", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("react")>();
+  const actual = await importOriginal<typeof ReactModule>();
   return {
     ...actual,
     useState: (init: unknown) => [init, vi.fn()],

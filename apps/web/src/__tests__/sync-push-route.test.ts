@@ -28,15 +28,12 @@ import { NextRequest } from "next/server";
 // Controllable stubs driving the drizzle mock
 // ────────────────────────────────────────────────────────────────────────
 
-type ServerRow = {
-  id: string;
-  userId: string;
-  updatedAt: number;
-  deletedAt: number | null;
-} | undefined;
-
-let existingRows: Record<string, any> = {};
-const insertCalls: { table: unknown; values: any; set: any }[] = [];
+let existingRows: Record<string, Record<string, unknown>> = {};
+const insertCalls: {
+  table: unknown;
+  values: Record<string, unknown>;
+  set: Record<string, unknown>;
+}[] = [];
 
 function resetDbState() {
   existingRows = {};
@@ -73,10 +70,15 @@ vi.mock("@intake/db/client", () => {
       }),
     }),
     insert: (table: unknown) => ({
-      values: (v: any) => ({
-        onConflictDoUpdate: async ({ set }: { target: unknown; set: any }) => {
+      values: (v: Record<string, unknown>) => ({
+        onConflictDoUpdate: async ({
+          set,
+        }: {
+          target: unknown;
+          set: Record<string, unknown>;
+        }) => {
           insertCalls.push({ table, values: v, set });
-          existingRows[v.id] = { ...v };
+          existingRows[v.id as string] = { ...v };
           return undefined;
         },
         onConflictDoNothing: async () => undefined,

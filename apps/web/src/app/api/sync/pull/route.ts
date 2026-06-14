@@ -40,6 +40,7 @@
  */
 import { NextResponse } from "next/server";
 import { and, asc, eq, gt, or } from "drizzle-orm";
+import { type PgColumn, type PgTable } from "drizzle-orm/pg-core";
 import { withAuth } from "@/lib/auth-middleware";
 import { db as drizzleDb } from "@intake/db/client";
 import {
@@ -76,7 +77,11 @@ export const POST = withAuth(async ({ request, auth }) => {
           typeof rawCursor === "number" ? rawCursor : rawCursor?.updatedAt ?? 0;
         const cursorId =
           typeof rawCursor === "number" ? "" : rawCursor?.id ?? "";
-        const table = schemaByTableName[tableName] as any;
+        const table = schemaByTableName[tableName] as PgTable & {
+          id: PgColumn;
+          userId: PgColumn;
+          updatedAt: PgColumn;
+        };
 
         // `updatedAt > cursor` OR `(updatedAt = cursor AND id > cursorId)` —
         // the tuple comparison keeps pagination correct when many rows share

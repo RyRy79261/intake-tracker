@@ -67,12 +67,12 @@ export default [
       // Next.js rules (from @next/eslint-plugin-next, ESLint-10 native).
       ...nextPlugin.configs.recommended.rules,
       ...nextPlugin.configs["core-web-vitals"].rules,
-      // Deferred strict rules — ride at warn pending a cleanup pass (DEFERRED.md).
+      // Promoted to error (B2 cleanup pass, June 2026 — DEFERRED.md).
       "@typescript-eslint/no-unused-vars": [
-        "warn",
+        "error",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
-      "@typescript-eslint/no-explicit-any": "warn",
+      "@typescript-eslint/no-explicit-any": "error",
       "@typescript-eslint/no-require-imports": "error",
       "@typescript-eslint/no-empty-object-type": "error",
       "@typescript-eslint/no-unsafe-function-type": "error",

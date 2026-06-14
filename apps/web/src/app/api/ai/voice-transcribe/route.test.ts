@@ -15,6 +15,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { NextRequest } from "next/server";
+import type * as AiKeyResolverMod from "@/lib/ai-key-resolver";
 
 vi.mock("@/lib/auth-middleware", () => ({
   withAuth: (
@@ -35,7 +36,7 @@ vi.mock("@/lib/auth-middleware", () => ({
 // is stubbed — NoAiKeyError must remain the real class because
 // ai-error-response.ts does `error instanceof NoAiKeyError`.
 vi.mock("@/lib/ai-key-resolver", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/ai-key-resolver")>();
+  const actual = await importOriginal<typeof AiKeyResolverMod>();
   return {
     ...actual,
     resolveAiKey: vi.fn(async () => ({

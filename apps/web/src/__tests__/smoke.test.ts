@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { db } from "@/lib/db";
+import { db, type IntakeRecord } from "@/lib/db";
 
 describe("test infrastructure", () => {
   it("can open and read an empty database", async () => {
@@ -13,7 +13,7 @@ describe("test infrastructure", () => {
       type: "water",
       amount: 250,
       timestamp: Date.now(),
-    } as any);
+    } as unknown as IntakeRecord);
     const record = await db.intakeRecords.get("smoke-test-id");
     expect(record).toBeDefined();
     expect(record?.amount).toBe(250);

@@ -5,7 +5,6 @@ import {
   isNotificationSupported,
   getNotificationPermission,
   requestNotificationPermission,
-  type NotificationPermissionState,
 } from "@/lib/push-notification-service";
 import { unwrap } from "@/lib/service-result";
 

@@ -162,7 +162,7 @@ realDb.version(10).stores(V10_STORES).upgrade(async (trans) => {
 
   // Helper: backfill sync fields on all records in a table
   const backfill = async (tableName: string, timestampField = "timestamp") => {
-    await trans.table(tableName).toCollection().modify((record: any) => {
+    await trans.table(tableName).toCollection().modify((record: Record<string, unknown>) => {
       if (record.createdAt == null) {
         record.createdAt = record[timestampField] ?? record.createdAt ?? now;
       }

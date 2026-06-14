@@ -338,7 +338,7 @@ function PrescriptionSection({ report }: { report: PrescriptionReport }) {
 // Main tab component
 // ---------------------------------------------------------------------------
 
-export function TitrationTab({ range }: { range: TimeRange }) {
+export function TitrationTab({ range: _range }: { range: TimeRange }) {
   const reports = useTitrationData();
 
   if (!reports) {

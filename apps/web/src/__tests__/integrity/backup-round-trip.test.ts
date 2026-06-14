@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
+import { type Table } from "dexie";
 import { db } from "@/lib/db";
 import { exportBackup, importBackup, type BackupData } from "@/lib/backup-service";
 import {
@@ -48,7 +49,7 @@ describe("backup round-trip: deep field equality", () => {
     const invItem = makeInventoryItem(prescription.id);
 
     // Build records map -- intakeRecords has 2 records (water + salt) to verify multi-record survival
-    const fixtures: Record<string, { records: unknown[]; table: any }> = {
+    const fixtures: Record<string, { records: unknown[]; table: Table<unknown> }> = {
       intakeRecords: { records: [makeIntakeRecord(), makeIntakeRecord({ type: "salt", amount: 500 })], table: db.intakeRecords },
       weightRecords: { records: [makeWeightRecord()], table: db.weightRecords },
       bloodPressureRecords: { records: [makeBloodPressureRecord()], table: db.bloodPressureRecords },
@@ -96,7 +97,7 @@ describe("backup round-trip: deep field equality", () => {
       const restored = await table.toArray();
       for (const original of originals) {
         const originalWithId = original as { id: string };
-        const match = restored.find((r: any) => r.id === originalWithId.id);
+        const match = restored.find((r) => (r as { id: string }).id === originalWithId.id);
         expect(match, [
           `x [Backup Round-Trip]: Record ${originalWithId.id} missing from ${tableName} after round-trip`,
           `  Fix: Check exportBackup() and importBackup() in src/lib/backup-service.ts`,
@@ -131,7 +132,7 @@ describe("backup round-trip: deep field equality", () => {
 
     // Our fixture record should exist by ID
     const restored = await db.auditLogs.toArray();
-    const match = restored.find((r: any) => r.id === fixtureAuditLog.id);
+    const match = restored.find((r) => r.id === fixtureAuditLog.id);
     expect(match, [
       `x [Backup Round-Trip]: Fixture audit log ${fixtureAuditLog.id} missing after round-trip`,
       `  Fix: Audit log export/import may be filtering records incorrectly`,
@@ -173,7 +174,7 @@ describe("backup round-trip: deep field equality", () => {
 
     // Verify each by ID with deep equality
     for (const original of [water, salt]) {
-      const match = restored.find((r: any) => r.id === original.id);
+      const match = restored.find((r) => r.id === original.id);
       expect(match, [
         `x [Backup Round-Trip]: Record ${original.id} (type=${original.type}) missing from intakeRecords`,
         `  Fix: Check exportBackup() handles multiple records per table correctly`,

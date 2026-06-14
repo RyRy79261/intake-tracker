@@ -8,6 +8,8 @@
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { createHash } from "node:crypto";
+import type * as DrizzleOrm from "drizzle-orm";
+import type * as OAuthMod from "@/lib/mcp/oauth";
 
 // ────────────────────────────────────────────────────────────────────────
 // In-memory db stub
@@ -22,20 +24,12 @@ function tableFor(ref: unknown): Row[] {
   return tables.get(ref)!;
 }
 
-function matchesAll(row: Row, conds: Array<(r: Row) => boolean>): boolean {
-  return conds.every((c) => c(row));
-}
-
-interface Where {
-  __conds: Array<(r: Row) => boolean>;
-}
-
 // Sentinel objects representing each "and/eq/isNull" predicate. The
 // drizzle-orm mock just records the predicate as a function; the test
 // doesn't care about the SQL shape.
 vi.mock("drizzle-orm", async () => {
   const actual =
-    await vi.importActual<typeof import("drizzle-orm")>("drizzle-orm");
+    await vi.importActual<typeof DrizzleOrm>("drizzle-orm");
   return {
     ...actual,
     eq: (column: { name?: string; _key?: string }, value: unknown) => ({
@@ -188,7 +182,7 @@ vi.mock("@intake/db/client", () => {
 // Now import the SUT (after mocks).
 // ────────────────────────────────────────────────────────────────────────
 
-let oauth: typeof import("@/lib/mcp/oauth");
+let oauth: typeof OAuthMod;
 
 beforeEach(async () => {
   tables.clear();

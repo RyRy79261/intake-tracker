@@ -13,6 +13,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { NoAiKeyError } from "@/lib/ai-key-resolver";
+import type * as InsightJobServiceMod from "@/lib/server/insight-job-service";
 
 // ── Controllable stubs ───────────────────────────────────────────────────
 
@@ -94,9 +95,9 @@ vi.mock("@/app/api/ai/_shared/claude-client", () => ({
 }));
 
 vi.mock("@/lib/server/insight-job-service", async () => {
-  const actual = await vi.importActual<
-    typeof import("@/lib/server/insight-job-service")
-  >("@/lib/server/insight-job-service");
+  const actual = await vi.importActual<typeof InsightJobServiceMod>(
+    "@/lib/server/insight-job-service",
+  );
   return {
     ...actual,
     createInsightJob: async (input: unknown) => {

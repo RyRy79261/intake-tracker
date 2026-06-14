@@ -46,6 +46,7 @@
  */
 import { describe, it, expect, vi, beforeAll } from "vitest";
 import axe from "axe-core";
+import type * as AuthGuardModule from "@/components/auth-guard";
 
 beforeAll(() => {
   if (!Element.prototype.hasPointerCapture) {
@@ -64,7 +65,7 @@ beforeAll(() => {
 
 // Auth gate open for the food card so the AI input renders too.
 vi.mock("@/components/auth-guard", async (importActual) => {
-  const actual = await importActual<typeof import("@/components/auth-guard")>();
+  const actual = await importActual<typeof AuthGuardModule>();
   return { ...actual, useAuthGate: () => true };
 });
 

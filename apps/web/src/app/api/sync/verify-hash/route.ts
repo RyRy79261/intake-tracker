@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createHash } from "crypto";
 import { eq, gt, and } from "drizzle-orm";
+import { type PgColumn } from "drizzle-orm/pg-core";
 import { withAuth } from "@/lib/auth-middleware";
 import { db } from "@intake/db/client";
 import { schemaByTableName, type TableName } from "@intake/db/sync-payload";
@@ -37,16 +38,18 @@ export const POST = withAuth(async ({ auth }) => {
 
       hash.update("[");
       for (;;) {
-        const conditions = [eq((table as any).userId, auth.userId!)];
+        const conditions = [
+          eq((table as { userId: PgColumn }).userId, auth.userId!),
+        ];
         if (cursor) {
-          conditions.push(gt((table as any).id, cursor));
+          conditions.push(gt((table as { id: PgColumn }).id, cursor));
         }
 
         const rows = await db
           .select()
           .from(table)
           .where(and(...conditions))
-          .orderBy((table as any).id)
+          .orderBy((table as { id: PgColumn }).id)
           .limit(SELECT_CHUNK_SIZE);
 
         for (const row of rows) {
@@ -57,7 +60,7 @@ export const POST = withAuth(async ({ auth }) => {
         }
 
         if (rows.length < SELECT_CHUNK_SIZE) break;
-        cursor = (rows[rows.length - 1] as any).id as string;
+        cursor = (rows[rows.length - 1] as { id: string }).id;
       }
       hash.update("]");
 

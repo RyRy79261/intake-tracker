@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type * as JsPdfMod from "jspdf";
 import type { AnalyticsResult, DataPoint } from "@/lib/analytics-types";
 
 // Mock jsPDF so exportToPDF's `doc.save()` is captured instead of triggering a
@@ -6,7 +7,7 @@ import type { AnalyticsResult, DataPoint } from "@/lib/analytics-types";
 // and all PDF rendering still run for real.
 const pdfSaves: Array<{ filename: string; dataUri: string }> = [];
 vi.mock("jspdf", async () => {
-  const actual = await vi.importActual<typeof import("jspdf")>("jspdf");
+  const actual = await vi.importActual<typeof JsPdfMod>("jspdf");
   const Real = actual.jsPDF;
   const Wrapped = function WrappedJsPDF(...args: unknown[]) {
     const Ctor = Real as unknown as new (...a: unknown[]) => InstanceType<

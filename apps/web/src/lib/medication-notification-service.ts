@@ -1,4 +1,4 @@
-import { db, type Prescription, type MedicationPhase, type InventoryItem } from "@/lib/db";
+import { db } from "@/lib/db";
 import { showNotification, getNotificationPermission } from "@/lib/push-notification-service";
 import { getSchedulesForPhase } from "@/lib/medication-schedule-service";
 import { isCombo, splitDose, formatCompoundShort } from "@/lib/compound-utils";
