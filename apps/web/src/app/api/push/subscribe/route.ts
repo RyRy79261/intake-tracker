@@ -5,7 +5,7 @@ import { savePushSubscription } from "@/lib/push-db";
 import { parseJsonBody, zodErrorResponse } from "@/app/api/_shared/validation";
 
 const SubscribeSchema = z.object({
-  endpoint: z.string().url(),
+  endpoint: z.url(),
   keys: z.object({
     p256dh: z.string().min(1),
     auth: z.string().min(1),

@@ -36,7 +36,13 @@
  */
 import { describe, it, expect } from "vitest";
 import fc from "fast-check";
-import { pushBodySchema, pullBodySchema } from "@intake/db/sync-payload";
+import {
+  pushBodySchema,
+  pullBodySchema,
+  schemaByTableName,
+  tableNameSchema,
+} from "@intake/db/sync-payload";
+import { TABLE_PUSH_ORDER } from "@/lib/sync-topology";
 
 // ─────────────────────────────────────────────────────────────────────────
 // Arbitraries
@@ -60,6 +66,7 @@ const KNOWN_TABLES = [
   "substanceRecords",
   "titrationPlans",
   "userProfile",
+  "insightReports",
 ] as const;
 
 // Minimal valid row shape for the intakeRecords table — used as the
@@ -413,4 +420,56 @@ describe("pullBodySchema — property invariants", () => {
     const result = pullBodySchema.safeParse({ cursors: {} });
     expect(result.success).toBe(true);
   });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// Syncable-table list parity (drift guard)
+//
+// The set of syncable tables is hand-maintained in FOUR independent places.
+// They MUST stay identical — a table present in one but missing from another
+// is a silent sync hole. This regression class already bit once: `KNOWN_TABLES`
+// in this very file was missing `insightReports`, so PUSH-3 could (rarely)
+// generate "insightReports" as a supposedly-"unknown" table and assert it
+// rejects, even though the schema accepts it.
+//
+//   1. schemaByTableName       — the map the push/pull routes look tables up in
+//                                (SOURCE OF TRUTH; a table absent here can't sync)
+//   2. tableNameSchema (enum)  — the pull-side cursor-key allowlist
+//   3. TABLE_PUSH_ORDER        — the FK parent-before-child push ordering
+//   4. KNOWN_TABLES            — this test's own arbitrary generator alphabet
+//
+// (The push-side discriminated union shares this file with #1 and #2 and is
+// documented as the source `tableNameSchema` is derived from; its `tableName`
+// literals are exercised directly by PUSH-1/PUSH-3 above.)
+// ─────────────────────────────────────────────────────────────────────────
+
+describe("syncable-table list parity (drift guard)", () => {
+  const canonical = [...Object.keys(schemaByTableName)].sort();
+
+  const LISTS: Record<string, readonly string[]> = {
+    "tableNameSchema enum (pull-side allowlist)": tableNameSchema.options,
+    "TABLE_PUSH_ORDER (sync-topology.ts)": TABLE_PUSH_ORDER,
+    "KNOWN_TABLES (this test file)": KNOWN_TABLES,
+  };
+
+  it("schemaByTableName has the expected 18 syncable tables", () => {
+    // Pins the canonical count so adding/removing a synced table is a
+    // deliberate, reviewed change rather than a silent drift.
+    expect(canonical).toHaveLength(18);
+  });
+
+  it.each(Object.entries(LISTS))(
+    "%s is set-equal to schemaByTableName",
+    (name, list) => {
+      const missing = canonical.filter((t) => !list.includes(t));
+      const extra = [...list].filter((t) => !canonical.includes(t)).sort();
+      expect(
+        { missing, extra },
+        `${name} drifted from schemaByTableName (the source of truth).\n` +
+          `  Missing here (present in canonical): ${missing.join(", ") || "none"}\n` +
+          `  Extra here (absent from canonical):  ${extra.join(", ") || "none"}\n` +
+          `  Fix: reconcile the list so it matches Object.keys(schemaByTableName).`,
+      ).toEqual({ missing: [], extra: [] });
+    },
+  );
 });

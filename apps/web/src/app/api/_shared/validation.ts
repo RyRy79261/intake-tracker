@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import type { ZodError } from "zod";
+import { z, type ZodError } from "zod";
 
 /**
  * Build a 400 response for a Zod validation failure.
@@ -13,7 +13,7 @@ export function zodErrorResponse(
   context: string,
   error: ZodError<unknown>,
 ): NextResponse {
-  console.error(`[VALIDATION] ${context}:`, JSON.stringify(error.flatten()));
+  console.error(`[VALIDATION] ${context}:`, JSON.stringify(z.flattenError(error)));
   return NextResponse.json({ error: "Invalid request" }, { status: 400 });
 }
 

@@ -15,7 +15,7 @@ export const POST = withAuth(async ({ request, auth }) => {
     const parsed = SettingsSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "Invalid request", details: parsed.error.flatten() },
+        { error: "Invalid request", details: z.flattenError(parsed.error) },
         { status: 400 }
       );
     }

@@ -39,6 +39,7 @@
  * from sync routes — keeps PHI out of logs by default).
  */
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { and, asc, eq, gt, or } from "drizzle-orm";
 import { type PgColumn, type PgTable } from "drizzle-orm/pg-core";
 import { withAuth } from "@/lib/auth-middleware";
@@ -58,7 +59,7 @@ export const POST = withAuth(async ({ request, auth }) => {
     const parsed = pullBodySchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "Invalid request", details: parsed.error.flatten() },
+        { error: "Invalid request", details: z.flattenError(parsed.error) },
         { status: 400 },
       );
     }

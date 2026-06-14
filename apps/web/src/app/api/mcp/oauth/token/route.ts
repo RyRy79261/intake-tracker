@@ -25,7 +25,7 @@ export function OPTIONS() {
 const codeGrantSchema = z.object({
   grant_type: z.literal("authorization_code"),
   code: z.string().min(1),
-  redirect_uri: z.string().url(),
+  redirect_uri: z.url(),
   client_id: z.string().min(1),
   client_secret: z.string().optional(),
   code_verifier: z.string().min(43).max(128),

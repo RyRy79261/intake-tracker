@@ -69,7 +69,7 @@ function sourceLabel(url: string): string {
 }
 
 /**
- * Anchor-safety guard: `z.string().url()` accepts `javascript:` and `data:`
+ * Anchor-safety guard: `z.url()` accepts `javascript:` and `data:`
  * schemes, which we would NEVER want to render as a clickable link given
  * the URL is model-generated. Only http(s) survives as an anchor; anything
  * else falls back to plain text so the source still shows but cannot be

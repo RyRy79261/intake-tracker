@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import type Anthropic from "@anthropic-ai/sdk";
 import { withAuth } from "@/lib/auth-middleware";
 import {
@@ -258,7 +259,7 @@ export const GET = withAuth(async ({ request, auth }) => {
         )
       : -1;
     console.error(
-      `[analytics/insights/jobs] response validation failed: summaryLen=${summaryLen} obsCount=${obsCount} obsMaxLen=${obsMaxLen} fields=${JSON.stringify(validated.error.flatten().fieldErrors)}`,
+      `[analytics/insights/jobs] response validation failed: summaryLen=${summaryLen} obsCount=${obsCount} obsMaxLen=${obsMaxLen} fields=${JSON.stringify(z.flattenError(validated.error).fieldErrors)}`,
     );
     await failInsightJob(job.id, err);
     return NextResponse.json({

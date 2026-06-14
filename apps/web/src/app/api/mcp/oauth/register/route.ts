@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 
 const bodySchema = z.object({
   client_name: z.string().min(1).max(200).default("claude.ai"),
-  redirect_uris: z.array(z.string().url()).min(1).max(10),
+  redirect_uris: z.array(z.url()).min(1).max(10),
   token_endpoint_auth_method: z
     .enum(["none", "client_secret_basic", "client_secret_post"])
     .default("none"),

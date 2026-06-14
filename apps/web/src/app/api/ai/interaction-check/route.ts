@@ -130,7 +130,7 @@ export const POST = withAuth(async ({ request, auth }) => {
 
     const validated = InteractionResultSchema.safeParse(toolBlock.input);
     if (!validated.success) {
-      console.error("[VALIDATION] Interaction check response validation failed:", JSON.stringify(validated.error.flatten()));
+      console.error("[VALIDATION] Interaction check response validation failed:", JSON.stringify(z.flattenError(validated.error)));
       return NextResponse.json(
         { error: "AI service unavailable" },
         { status: 502 }

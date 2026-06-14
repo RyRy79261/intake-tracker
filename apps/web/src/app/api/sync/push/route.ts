@@ -38,6 +38,7 @@
  * (contains PHI — timestamps, food descriptions, medication names).
  */
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { eq, and, inArray } from "drizzle-orm";
 import { type PgColumn, type PgTable } from "drizzle-orm/pg-core";
 import { withAuth } from "@/lib/auth-middleware";
@@ -85,7 +86,7 @@ export const POST = withAuth(async ({ request, auth }) => {
     const body = await request.json();
     const parsed = pushBodySchema.safeParse(body);
     if (!parsed.success) {
-      console.error("[sync/push] Zod validation failed:", JSON.stringify(parsed.error.flatten(), null, 2));
+      console.error("[sync/push] Zod validation failed:", JSON.stringify(z.flattenError(parsed.error), null, 2));
       return NextResponse.json(
         { error: "Invalid request" },
         { status: 400 },
