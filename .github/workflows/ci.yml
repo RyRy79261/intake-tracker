@@ -243,7 +243,7 @@ jobs:
         run: pnpm --filter @intake/web exec playwright install-deps chromium
       - name: Create Neon test branch
         id: neon-branch
-        uses: neondatabase/create-branch-action@v5
+        uses: neondatabase/create-branch-action@v6
         with:
           api_key: ${{ secrets.NEON_API_KEY }}
           project_id: ${{ secrets.NEON_PROJECT_ID }}
@@ -301,7 +301,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Create Neon test branch
         id: neon-branch
-        uses: neondatabase/create-branch-action@v5
+        uses: neondatabase/create-branch-action@v6
         with:
           api_key: ${{ secrets.NEON_API_KEY }}
           project_id: ${{ secrets.NEON_PROJECT_ID }}
