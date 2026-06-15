@@ -66,8 +66,8 @@
     "vaul": "^1.1.2"
   },
   "peerDependencies": {
-    "react": "^19.2.6",
-    "react-dom": "^19.2.6"
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
   },
   "devDependencies": {
     "@intake/typescript-config": "workspace:*",
