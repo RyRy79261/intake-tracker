@@ -497,8 +497,8 @@ describe("schema-migration job applies Drizzle migrations to an ephemeral Neon b
     const block = extractJobBlock("schema-migration", raw);
     expect(
       block,
-      "schema-migration must use neondatabase/create-branch-action@v5"
-    ).toContain("neondatabase/create-branch-action@v5");
+      "schema-migration must use neondatabase/create-branch-action@v6"
+    ).toContain("neondatabase/create-branch-action@v6");
     expect(
       block,
       "schema-migration must use neondatabase/delete-branch-action@v3"
