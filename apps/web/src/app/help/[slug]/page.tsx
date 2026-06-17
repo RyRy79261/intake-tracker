@@ -1,26 +1,19 @@
-"use client";
+import { MANUALS } from "@/lib/help/manuals";
+import { ManualPageClient } from "@/app/help/[slug]/manual-page-client";
 
-import { useParams, useRouter } from "next/navigation";
-import { Button } from "@intake/ui/button";
-import { ManualView } from "@/components/help/manual-view";
-import { getManual } from "@/lib/help/manuals";
+// Pre-render every known manual slug. Required for `output: export` (the
+// Capacitor build) — a dynamic segment with no params can't be statically
+// emitted — and a free SSG win on the hosted web build too. Every slug is a
+// compile-time constant in MANUALS, so the set is fully known at build.
+export function generateStaticParams() {
+  return MANUALS.map((m) => ({ slug: m.slug }));
+}
 
-export default function ManualPage() {
-  const params = useParams<{ slug: string }>();
-  const router = useRouter();
-  const slug = typeof params.slug === "string" ? params.slug : "";
-  const manual = getManual(slug);
-
-  if (!manual) {
-    return (
-      <div className="space-y-3 py-16 text-center">
-        <p className="text-sm text-muted-foreground">
-          That manual could not be found.
-        </p>
-        <Button onClick={() => router.push("/help")}>Back to the manual</Button>
-      </div>
-    );
-  }
-
-  return <ManualView manual={manual} />;
+export default async function ManualPage({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}) {
+  const { slug } = await params;
+  return <ManualPageClient slug={slug} />;
 }

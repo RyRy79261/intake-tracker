@@ -86,6 +86,7 @@ Thumbs.db
 !.env.example
 node_modules/
 .next/
+out/
 dist/
 build/
 __pycache__/
@@ -102,3 +103,7 @@ tmp/
 
 # Turborepo local task cache / logs
 .turbo/
+
+# Transient Capacitor build stash (cap-build.js)
+.cap-api-stash/
+.cap-middleware-stash.ts
