@@ -3,12 +3,14 @@ name: Android Release
 on:
   release:
     types: [published]
-  # Allow manual re-runs (e.g. to retry a Play upload) against an existing tag.
+  # Allow manual runs: pass an existing tag to (re)build it, or leave blank to
+  # build the branch the workflow is dispatched from (useful for validating
+  # pipeline changes before cutting a release).
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing release tag to (re)build, e.g. v1.28.0"
-        required: true
+        description: "Existing release tag to (re)build, e.g. v1.28.0 (blank = current branch)"
+        required: false
         type: string
 
 jobs:
@@ -24,7 +26,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.inputs.tag || github.event.release.tag_name }}
+          ref: ${{ github.event.inputs.tag || github.event.release.tag_name || github.ref_name }}
 
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v6
@@ -45,19 +47,20 @@ jobs:
           VERSION_CODE=$((MAJOR * 10000 + MINOR * 100 + PATCH))
           echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
 
-      - name: Write version.properties for Gradle
-        run: |
-          cat > android/app/version.properties <<EOF
-          VERSION_CODE=${{ steps.version.outputs.version_code }}
-          VERSION_NAME=${{ steps.version.outputs.version }}
-          EOF
-
+      # cap-build.js writes android/app/version.properties from the root
+      # package.json version, builds the static export (apps/web/out), and runs
+      # from apps/web (where next.config.mjs + the Capacitor CLI/plugins live).
       - name: Build Capacitor static export
+        working-directory: apps/web
         run: node scripts/cap-build.js
         env:
           NEXT_PUBLIC_API_BASE_URL: https://intake-tracker.ryanjnoble.dev
 
+      # capacitor.config.ts lives in apps/web with `android.path: ../../android`,
+      # so cap (run here) discovers plugins from apps/web/package.json and syncs
+      # the export into the root android/ project.
       - name: Sync web assets to Android
+        working-directory: apps/web
         run: npx cap sync android
 
       - uses: actions/setup-java@v5
@@ -101,6 +104,16 @@ jobs:
           mv "$APK_SRC" "$APK_OUT"
           echo "aab=$AAB_OUT" >> "$GITHUB_OUTPUT"
           echo "apk=$APK_OUT" >> "$GITHUB_OUTPUT"
+
+      # Always expose the signed APK as a run artifact — gives an installable
+      # build to download from any run (incl. workflow_dispatch on a branch),
+      # not just published releases.
+      - name: Upload signed APK as run artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: intake-tracker-apk-v${{ steps.version.outputs.version }}
+          path: ${{ steps.artifacts.outputs.apk }}
+          if-no-files-found: error
 
       - name: Attach artifacts to GitHub release
         if: github.event_name == 'release'

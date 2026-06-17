@@ -18,9 +18,11 @@ release.
 
 On every published GitHub release the `Android Release` workflow:
 
-1. Builds the static web export (`scripts/cap-build.js`) and syncs it into the
-   Android project (`npx cap sync android`).
-2. Derives `versionCode`/`versionName` from `package.json`
+1. Builds the static web export (`apps/web/scripts/cap-build.js`, run from
+   `apps/web`) and syncs it into the root `android/` project (`npx cap sync
+   android` from `apps/web` — `capacitor.config.ts` lives in `apps/web` and
+   points at `../../android`).
+2. Derives `versionCode`/`versionName` from the **root** `package.json`
    (`major*10000 + minor*100 + patch`).
 3. Decodes the upload keystore from the `ANDROID_KEYSTORE_BASE64` secret.
 4. Builds a **signed AAB** (`bundleRelease`) and a **signed APK**
@@ -154,9 +156,10 @@ keyPassword=your-key-password
 Then:
 
 ```bash
-node scripts/cap-build.js     # build + export web assets
-npx cap sync android
-cd android
+cd apps/web
+node scripts/cap-build.js     # build + export web assets (writes ../../android/app/version.properties)
+npx cap sync android          # syncs into the root android/ project
+cd ../../android
 ./gradlew bundleRelease       # -> app/build/outputs/bundle/release/app-release.aab
 ./gradlew assembleRelease     # -> app/build/outputs/apk/release/app-release.apk
 ```

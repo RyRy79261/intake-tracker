@@ -62,37 +62,47 @@ const nextConfig = {
     NEXT_PUBLIC_GIT_SHA: process.env.VERCEL_GIT_COMMIT_SHA || "local",
     NEXT_PUBLIC_VERCEL_ENV: process.env.VERCEL_ENV || "development",
   },
-  async rewrites() {
-    // MCP custom connector: OAuth metadata is required to live at
-    // /.well-known/* (RFC 8414 + RFC 9728) but Next.js's app router does not
-    // route dotted folders. Rewrite to non-dotted internal paths.
-    const mcpWellKnown = [
-      {
-        source: "/.well-known/oauth-authorization-server",
-        destination: "/api/mcp/well-known/oauth-authorization-server",
-      },
-      {
-        source: "/.well-known/oauth-protected-resource",
-        destination: "/api/mcp/well-known/oauth-protected-resource",
-      },
-    ];
-    // Retire the old next-pwa worker: the active SW now lives at
-    // /serwist/sw.js. Any request to the legacy /sw.js URL (from previously
-    // installed clients or stale cached HTML) gets a self-destructing worker
-    // that clears caches and unregisters itself.
-    return [
-      ...mcpWellKnown,
-      { source: "/sw.js", destination: "/sw-kill.js" },
-    ];
-  },
-  async headers() {
-    return [
-      {
-        source: "/:path*",
-        headers: securityHeaders,
-      },
-    ];
-  },
+  // `rewrites` and `headers` are server features that `output: export` cannot
+  // emit, so they are omitted from the Capacitor static bundle. They still
+  // apply to the hosted web app (which the Capacitor shell calls for every
+  // /api/* request via NEXT_PUBLIC_API_BASE_URL), so the MCP .well-known
+  // rewrite, the legacy /sw.js kill-switch, and the security headers are all
+  // served by the deployed backend — not needed inside the bundled APK.
+  ...(isCapacitorBuild
+    ? {}
+    : {
+        async rewrites() {
+          // MCP custom connector: OAuth metadata is required to live at
+          // /.well-known/* (RFC 8414 + RFC 9728) but Next.js's app router does
+          // not route dotted folders. Rewrite to non-dotted internal paths.
+          const mcpWellKnown = [
+            {
+              source: "/.well-known/oauth-authorization-server",
+              destination: "/api/mcp/well-known/oauth-authorization-server",
+            },
+            {
+              source: "/.well-known/oauth-protected-resource",
+              destination: "/api/mcp/well-known/oauth-protected-resource",
+            },
+          ];
+          // Retire the old next-pwa worker: the active SW now lives at
+          // /serwist/sw.js. Any request to the legacy /sw.js URL (from
+          // previously installed clients or stale cached HTML) gets a
+          // self-destructing worker that clears caches and unregisters itself.
+          return [
+            ...mcpWellKnown,
+            { source: "/sw.js", destination: "/sw-kill.js" },
+          ];
+        },
+        async headers() {
+          return [
+            {
+              source: "/:path*",
+              headers: securityHeaders,
+            },
+          ];
+        },
+      }),
 };
 
 export default withSerwist(nextConfig);
