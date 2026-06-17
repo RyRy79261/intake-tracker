@@ -122,4 +122,20 @@ describe("e2e-test/count-intake-route", () => {
     const body = (await res.json()) as { count: number };
     expect(body.count).toBe(0);
   });
+
+  it("propagates the failure when the count query rejects", async () => {
+    vi.stubEnv("NODE_ENV", "test");
+    // Arm the error-injection seam in the db mock: the select().where()
+    // chain now rejects instead of resolving.
+    selectShouldThrow = new Error("boom");
+
+    const { POST } = await import("@/app/api/e2e-test/count-intake/route");
+
+    // The route awaits the query without a try/catch, so the rejection
+    // surfaces out of the handler (Next.js then renders its own 500). The
+    // raw "boom" message is never wrapped into a JSON body by this route.
+    await expect(POST(makeRequest())).rejects.toThrow("boom");
+    // The query was reached (guard passed, filter applied) before it threw.
+    expect(lastWhereCond).not.toBeNull();
+  });
 });

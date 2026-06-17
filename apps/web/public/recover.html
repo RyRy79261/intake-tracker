@@ -55,8 +55,25 @@
   <script>
     (function () {
       var params = new URLSearchParams(location.search);
-      var target = params.get('return') || '/';
-      if (!target.startsWith('/') || target.startsWith('//')) target = '/';
+      // Validate the `return` target as a SAME-ORIGIN path. Resolving against
+      // the current origin and accepting only same-origin results rebuilds a
+      // clean relative path and rejects every redirect/XSS vector: absolute
+      // URLs, protocol-relative `//evil`, backslash tricks `/\evil` (browsers
+      // normalize `\`→`/`), and `javascript:`/`data:` schemes all fail the
+      // origin check. The naive `startsWith('/')` guard this replaces let
+      // `/\evil.com` through (CodeQL js/xss + open-redirect).
+      var target = '/';
+      var requested = params.get('return');
+      if (requested) {
+        try {
+          var url = new URL(requested, location.origin);
+          if (url.origin === location.origin) {
+            target = url.pathname + url.search + url.hash;
+          }
+        } catch (e) {
+          target = '/';
+        }
+      }
 
       var status = document.getElementById('status');
       var report = document.getElementById('report');
