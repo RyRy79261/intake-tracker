@@ -11,7 +11,24 @@ permissions:
 jobs:
   release-please:
     runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.rp.outputs.release_created }}
+      tag_name: ${{ steps.rp.outputs.tag_name }}
     steps:
       - uses: googleapis/release-please-action@v5
+        id: rp
         with:
           release-type: node
+
+  # Build + attach the signed Android APK + AAB to the release release-please
+  # just created. This runs in the SAME workflow run (triggered by push to main,
+  # a real event), so GITHUB_TOKEN can attach to the release — unlike
+  # `on: release` in android-release.yml, which never fires for a release that
+  # GITHUB_TOKEN itself created (GitHub's workflow loop-prevention). No PAT needed.
+  android:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    uses: ./.github/workflows/android-release.yml
+    with:
+      tag: ${{ needs.release-please.outputs.tag_name }}
+    secrets: inherit
