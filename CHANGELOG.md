@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.32.2](https://github.com/RyRy79261/intake-tracker/compare/v1.32.1...v1.32.2) (2026-06-17)
+
+
+### Bug Fixes
+
+* **android:** repair the Capacitor APK pipeline after the monorepo migration ([#238](https://github.com/RyRy79261/intake-tracker/issues/238)) ([f43f24b](https://github.com/RyRy79261/intake-tracker/commit/f43f24be3d64f64b17303b82c392a8c58e18a409))
+* **security:** resolve open CodeQL alerts (XSS/open-redirect, clear-text logging, dead conditionals) ([#239](https://github.com/RyRy79261/intake-tracker/issues/239)) ([5d8779b](https://github.com/RyRy79261/intake-tracker/commit/5d8779b3e91e0204d13d856e7d8a1b262344cecf))
+
 ## [1.32.1](https://github.com/RyRy79261/intake-tracker/compare/v1.32.0...v1.32.1) (2026-06-07)
 
 
