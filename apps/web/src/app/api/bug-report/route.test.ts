@@ -193,6 +193,37 @@ describe("POST /api/bug-report", () => {
     );
   });
 
+  it("falls back to the plain template when the Claude client cannot be obtained", async () => {
+    // structureWithAi swallows a getClaudeClientForUser failure and degrades
+    // to the plain template, so the report is still filed without ever
+    // reaching messages.create.
+    claudeClientThrows = new Error("no anthropic key configured");
+
+    const { POST } = await import("@/app/api/bug-report/route");
+    // Use a distinct client IP so this case gets its own rate-limit bucket
+    // and doesn't push the shared default IP over the per-window limit.
+    const req = new NextRequest("https://example.test/api/bug-report", {
+      method: "POST",
+      body: JSON.stringify({ ...validBody(), useAi: true }),
+      headers: {
+        "content-type": "application/json",
+        "x-forwarded-for": "203.0.113.7",
+      },
+    });
+    const res = await POST(req);
+
+    // Client-factory failure is non-fatal — the issue is still filed.
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { number: number };
+    expect(body.number).toBe(42);
+    // The model call is never reached because the client was never built.
+    expect(messagesCreateCalls).toHaveLength(0);
+    // Template title is derived from the first line of the description.
+    expect(String(lastOctokitCreateArgs!.title)).toContain(
+      "The water counter resets",
+    );
+  });
+
   it("uses the feature label set for a feature request", async () => {
     const { POST } = await import("@/app/api/bug-report/route");
     const res = await POST(

@@ -27,6 +27,9 @@
 *.jks.base64.txt
 upload-keystore.*
 android/keystore.properties
+
+# Generated VAPID keypair (scripts/generate-vapid-keys.js) — contains a private key
+vapid-keys.env
 play-service-account*.json
 
 # Debug

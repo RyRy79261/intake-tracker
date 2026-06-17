@@ -225,6 +225,25 @@ describe("/api/user/api-keys/shares", () => {
     expect(serialized).not.toContain("DB_FAILURE");
   });
 
+  it("GET error path: a raw-SQL failure during grantor-email lookup yields a generic 500, no raw leak", async () => {
+    // Drizzle selects succeed so the route advances to grantor-email
+    // resolution, which goes through the raw neon() tagged template…
+    drizzleResults = [
+      [],
+      [{ grantorId: "user-alice", provider: "anthropic", createdAt: new Date() }],
+    ];
+    // …and that raw call blows up.
+    rawSqlShouldThrow = true;
+
+    const { GET } = await import("@/app/api/user/api-keys/shares/route");
+    const res = await GET(getRequest());
+
+    expect(res.status).toBe(500);
+    const serialized = JSON.stringify(await res.json());
+    expect(serialized).not.toContain("postgres://");
+    expect(serialized).not.toContain("raw pg connection failed");
+  });
+
   // ── POST ────────────────────────────────────────────────────────────────
 
   it("POST happy path: creates a share, persisting the grantee email lowercased", async () => {

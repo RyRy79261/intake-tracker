@@ -272,6 +272,28 @@ describe("POST /api/analytics/insights/deep", () => {
     ]);
   });
 
+  it("still releases the reservation and returns 502 when cancelling the orphaned batch also fails", async () => {
+    // attach fails → the route tries to cancel the now-orphaned batch, but
+    // that cancel call ALSO blows up. The route wraps the cancel in .catch,
+    // so the failure must be swallowed: it still deletes the pending job and
+    // returns the generic 502 rather than crashing or leaking the raw error.
+    attachReturns = false;
+    batchCancelThrows = new Error("anthropic cancel 500: secret-internal-detail");
+
+    const { POST } = await import("@/app/api/analytics/insights/deep/route");
+    const res = await POST(makeRequest(validBody()));
+
+    expect(res.status).toBe(502);
+    // The cancel was attempted (and threw) ...
+    expect(batchesCancelCalls).toEqual(["msgbatch_test_123"]);
+    // ... but the route recovered: reservation released, no orphaned lock left.
+    expect(deleteCalls).toEqual([{ jobId: "job-test-1", userId: "user-test" }]);
+
+    // The generic error body must not leak the raw underlying error text.
+    const body = (await res.json()) as { error: string };
+    expect(body.error).not.toContain("secret-internal-detail");
+  });
+
   it("returns 409 / PENDING_JOB_EXISTS when the user already has a pending deep job", async () => {
     const { PendingJobConflictError } = await import(
       "@/lib/server/insight-job-service"
