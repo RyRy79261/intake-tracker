@@ -23,6 +23,19 @@ on:
         description: "Release tag to build and attach the APK + AAB to"
         required: true
         type: string
+    # Declared so the caller (release-please.yml) can pass exactly these
+    # secrets explicitly instead of `secrets: inherit` (least privilege).
+    secrets:
+      ANDROID_KEYSTORE_BASE64:
+        required: true
+      ANDROID_KEYSTORE_PASSWORD:
+        required: true
+      ANDROID_KEY_ALIAS:
+        required: true
+      ANDROID_KEY_PASSWORD:
+        required: true
+      PLAY_SERVICE_ACCOUNT_JSON:
+        required: false
 
 jobs:
   build-and-publish:
@@ -46,7 +59,11 @@ jobs:
       # Empty for a bare branch dispatch (build-only validation, no attach).
       - name: Resolve release tag
         id: tag
-        run: echo "name=${{ inputs.tag || github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
+        env:
+          # Pass the expression through an env var (not interpolated into the
+          # shell source) so a crafted tag can't inject shell syntax.
+          RESOLVED_TAG: ${{ inputs.tag || github.event.release.tag_name }}
+        run: printf 'name=%s\n' "$RESOLVED_TAG" >> "$GITHUB_OUTPUT"
 
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v6

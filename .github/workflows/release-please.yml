@@ -31,4 +31,12 @@ jobs:
     uses: ./.github/workflows/android-release.yml
     with:
       tag: ${{ needs.release-please.outputs.tag_name }}
-    secrets: inherit
+    # Pass only the secrets android-release needs (least privilege) rather than
+    # `secrets: inherit`. These are declared in android-release.yml's
+    # workflow_call.secrets block.
+    secrets:
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
