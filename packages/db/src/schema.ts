@@ -1069,3 +1069,29 @@ export const mcpAuditLog = pgTable(
     userTsIdx: index("idx_mcp_audit_user_ts").on(t.userId, t.timestamp),
   }),
 );
+
+// Native (Capacitor) Google sign-in bridge — server-only (no Dexie mirror).
+//
+// After the Neon Auth OAuth exchange completes INSIDE the system-browser Custom
+// Tab (where the PKCE challenge cookie lives), the /auth/native-bridge page mints
+// a one-time `code` bound to the resulting Neon session token and hands ONLY the
+// code back to the app via a verified HTTPS App Link (never the token in a URL).
+// The app exchanges it (POST /api/auth/native-claim) for the session token and
+// uses it on the existing Bearer path. Single-use + short-lived: the row is
+// deleted on claim and ignored past `expiresAt` (~60s). The session token lives
+// here only for that window; the row is removed the instant it is claimed.
+export const nativeAuthCodes = pgTable(
+  "native_auth_codes",
+  {
+    code: text("code").primaryKey(),
+    sessionToken: text("session_token").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => usersSync.id, { onDelete: "cascade" }),
+    expiresAt: bigint("expires_at", { mode: "number" }).notNull(),
+    createdAt: bigint("created_at", { mode: "number" }).notNull(),
+  },
+  (t) => ({
+    expiresIdx: index("idx_native_auth_codes_expires").on(t.expiresAt),
+  }),
+);

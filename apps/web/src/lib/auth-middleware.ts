@@ -36,7 +36,7 @@ function extractBearerToken(request: NextRequest): string | null {
   return token.length > 0 ? token : null;
 }
 
-async function validateBearerToken(
+export async function validateBearerToken(
   token: string
 ): Promise<{ userId: string; email: string } | null> {
   const baseUrl = process.env.NEON_AUTH_URL;

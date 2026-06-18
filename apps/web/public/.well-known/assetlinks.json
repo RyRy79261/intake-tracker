@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "dev.ryanjnoble.intaketracker",
+      "sha256_cert_fingerprints": [
+        "07:8E:0B:5A:DB:9C:9F:7B:8A:71:D4:C7:35:F2:49:06:31:04:76:F2:18:A2:EB:24:62:58:F3:09:06:65:96:FA"
+      ]
+    }
+  }
+]
