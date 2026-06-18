@@ -28,19 +28,11 @@ if (!process.env.NEXT_PUBLIC_API_BASE_URL) {
   process.env.NEXT_PUBLIC_API_BASE_URL = 'https://intake-tracker.ryanjnoble.dev';
 }
 
-// Paths after the monorepo migration: this script lives in apps/web/scripts,
-// the Next app in apps/web, and the native Android project at the repo root.
+// This script lives in apps/web/scripts and builds the Next app in apps/web.
+// It ONLY produces the static export (apps/web/out). The Android version
+// stamping (version.properties) and `cap sync` now live in @intake/native
+// (apps/native/scripts/sync.mjs), run after this export completes.
 const appDir = path.join(__dirname, '..'); // apps/web
-const repoRoot = path.join(__dirname, '..', '..', '..'); // monorepo root
-
-// Version is the single-source-of-truth root package.json (release-please owns
-// it) — matching .github/workflows/android-release.yml. apps/web's own
-// package.json is 0.0.0 and must NOT be used here.
-const pkg = require(path.join(repoRoot, 'package.json'));
-const versionParts = pkg.version.split('.');
-const versionCode = parseInt(versionParts[0]) * 10000 + parseInt(versionParts[1]) * 100 + parseInt(versionParts[2]);
-const versionPropsPath = path.join(repoRoot, 'android', 'app', 'version.properties');
-fs.writeFileSync(versionPropsPath, `VERSION_NAME=${pkg.version}\nVERSION_CODE=${versionCode}\n`);
 
 stash();
 try {

@@ -1,0 +1,19 @@
+{
+  "name": "@intake/native",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Capacitor native shell (Android) for Intake Tracker. Wraps the @intake/web static export; owns capacitor.config.ts, the android/ project, and native plugin discovery.",
+  "scripts": {
+    "sync": "node scripts/sync.mjs",
+    "cap": "cap"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.4.0",
+    "@capacitor/core": "^8.4.0",
+    "@capacitor/local-notifications": "^8.1.0",
+    "@capacitor/network": "^8.0.1"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.4.0"
+  }
+}

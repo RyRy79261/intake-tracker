@@ -4,13 +4,15 @@ This document describes how Intake Tracker is built, signed, and shipped to the
 Google Play Store.
 
 The app is a Next.js PWA wrapped in [Capacitor](https://capacitorjs.com/). The
-`android/` directory is the native Android project. CI builds a **signed Android
-App Bundle (`.aab`)** and uploads it to Google Play on every published GitHub
-release.
+Capacitor shell — `capacitor.config.ts` and the `android/` native project —
+lives in its own workspace package, **`apps/native`** (`@intake/native`), which
+wraps the `@intake/web` static export. CI builds a **signed Android App Bundle
+(`.aab`)** + APK and attaches them to every published GitHub release (and
+uploads to Google Play when configured).
 
 - **Application ID:** `dev.ryanjnoble.intaketracker`
 - **Workflow:** [`.github/workflows/android-release.yml`](../.github/workflows/android-release.yml)
-- **Signing config:** [`android/app/build.gradle`](../android/app/build.gradle)
+- **Signing config:** [`apps/native/android/app/build.gradle`](../apps/native/android/app/build.gradle)
 
 ---
 
@@ -18,10 +20,11 @@ release.
 
 On every published GitHub release the `Android Release` workflow:
 
-1. Builds the static web export (`apps/web/scripts/cap-build.js`, run from
-   `apps/web`) and syncs it into the root `android/` project (`npx cap sync
-   android` from `apps/web` — `capacitor.config.ts` lives in `apps/web` and
-   points at `../../android`).
+1. Builds the static web export from `apps/web` (`apps/web/scripts/cap-build.js`
+   → `apps/web/out`), then runs `apps/native/scripts/sync.mjs` from `apps/native`
+   — it stamps `apps/native/android/app/version.properties` from the root
+   `package.json` and runs `cap sync` to copy the export (`webDir: ../web/out`)
+   into `apps/native/android` and refresh native plugins.
 2. Derives `versionCode`/`versionName` from the **root** `package.json`
    (`major*10000 + minor*100 + patch`).
 3. Decodes the upload keystore from the `ANDROID_KEYSTORE_BASE64` secret.
@@ -143,7 +146,7 @@ version bumps — Play rejects re-uploads of an existing `versionCode`.
 
 ## Local release builds
 
-To produce a signed bundle locally, create `android/keystore.properties`
+To produce a signed bundle locally, create `apps/native/android/keystore.properties`
 (git-ignored):
 
 ```properties
@@ -156,10 +159,9 @@ keyPassword=your-key-password
 Then:
 
 ```bash
-cd apps/web
-node scripts/cap-build.js     # build + export web assets (writes ../../android/app/version.properties)
-npx cap sync android          # syncs into the root android/ project
-cd ../../android
+pnpm --filter @intake/web cap:export    # build the static export -> apps/web/out
+pnpm --filter @intake/native sync       # stamp version.properties + cap sync into apps/native/android
+cd apps/native/android
 ./gradlew bundleRelease       # -> app/build/outputs/bundle/release/app-release.aab
 ./gradlew assembleRelease     # -> app/build/outputs/apk/release/app-release.apk
 ```

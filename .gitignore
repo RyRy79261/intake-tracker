@@ -26,7 +26,7 @@
 *.keystore
 *.jks.base64.txt
 upload-keystore.*
-android/keystore.properties
+apps/native/android/keystore.properties
 
 # Generated VAPID keypair (scripts/generate-vapid-keys.js) — contains a private key
 vapid-keys.env
