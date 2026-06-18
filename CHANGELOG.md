@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.32.3](https://github.com/RyRy79261/intake-tracker/compare/v1.32.2...v1.32.3) (2026-06-18)
+
+
+### Bug Fixes
+
+* **ci:** auto-build + attach the Android APK on every release-please release ([#241](https://github.com/RyRy79261/intake-tracker/issues/241)) ([4975f6a](https://github.com/RyRy79261/intake-tracker/commit/4975f6a6b9c00f797e5b7b576f0408de0cb6fa41))
+* **mobile:** load the live site in the Capacitor shell so in-app auth works ([#242](https://github.com/RyRy79261/intake-tracker/issues/242)) ([33ffbd4](https://github.com/RyRy79261/intake-tracker/commit/33ffbd454b402a25b1abd89a41469995f8cc767a))
+
 ## [1.32.2](https://github.com/RyRy79261/intake-tracker/compare/v1.32.1...v1.32.2) (2026-06-17)
 
 
