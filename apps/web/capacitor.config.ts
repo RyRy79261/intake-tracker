@@ -28,7 +28,10 @@ const config: CapacitorConfig = {
     // Capacitor opens off-origin hosts in the external browser and the cookie
     // never returns. NOTE: Google may still refuse OAuth in an embedded WebView
     // (disallowed_useragent) — verify on-device; email/password is unaffected.
-    allowNavigation: ['*.neon.tech', 'accounts.google.com', '*.google.com'],
+    // Scoped to the specific OAuth nav hosts (least privilege). `*.neon.tech`
+    // stays a wildcard because the Neon Auth endpoint subdomain is a generated,
+    // rotatable id (ep-<id>.neonauth.<region>.aws.neon.tech).
+    allowNavigation: ['*.neon.tech', 'accounts.google.com', 'oauth2.googleapis.com'],
   },
 };
 
