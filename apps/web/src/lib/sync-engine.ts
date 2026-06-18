@@ -275,6 +275,7 @@ export async function runPushCycle(): Promise<void> {
         queueId: number;
         tableName: string;
         error: string;
+        code?: string;
       }>;
     };
     const accepted = body.accepted ?? [];
@@ -287,6 +288,7 @@ export async function runPushCycle(): Promise<void> {
     await applyServerAck(accepted, queueRowsById);
     await ack(accepted.map((a) => a.queueId));
 
+    let droppedInvalid = 0;
     if (rejected.length > 0) {
       const firstErr = rejected[0]!;
       const detail = `${firstErr.tableName}: ${firstErr.error}`;
@@ -294,14 +296,25 @@ export async function runPushCycle(): Promise<void> {
         `[sync] ${rejected.length} op(s) rejected:`,
         rejected.map((r) => `${r.tableName}: ${r.error}`),
       );
+      // `code: "invalid"` means the row failed server-side schema validation.
+      // It can never succeed (the schema won't change), so retrying it forever
+      // just keeps the error banner up and re-sends it in every batch. Drop it
+      // from the queue (the local Dexie row is untouched). Other rejections —
+      // transient DB write failures — get an attempts bump so backoff applies.
+      const dropIds: number[] = [];
       for (const r of rejected) {
         const q = queueRowsById.get(r.queueId);
-        if (q?.id != null) {
+        if (q?.id == null) continue;
+        if (r.code === "invalid") {
+          dropIds.push(q.id);
+        } else {
           await db._syncQueue.update(q.id, {
             attempts: (q.attempts ?? 0) + 1,
           });
         }
       }
+      if (dropIds.length > 0) await ack(dropIds);
+      droppedInvalid = dropIds.length;
       useSyncStatusStore.setState({
         lastError: `${rejected.length} record(s) failed: ${detail}`,
         lastPushedAt: Date.now(),
@@ -320,9 +333,11 @@ export async function runPushCycle(): Promise<void> {
     schedulePull();
 
     // Re-drain: if new records arrived while the push was in flight, flush
-    // them immediately. Only re-drain when this cycle actually acked items —
-    // otherwise the same un-acked ops would loop forever.
-    if (accepted.length > 0) {
+    // them immediately. Re-drain whenever this cycle made forward progress —
+    // either it acked items, or it dropped permanently-invalid ops (a batch
+    // of only-invalid ops that wedged the queue must keep draining). Without
+    // progress we must NOT re-drain, or the same un-acked ops loop forever.
+    if (accepted.length > 0 || droppedInvalid > 0) {
       const remaining = await getQueueDepth();
       if (remaining > 0) {
         schedulePush(0);

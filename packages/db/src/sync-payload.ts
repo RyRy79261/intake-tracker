@@ -202,6 +202,24 @@ export const pushBodySchema = z.object({
   ops: z.array(opSchema).max(500),
 });
 
+/**
+ * Per-op schema, exported so the push route can validate each op
+ * INDIVIDUALLY instead of rejecting the entire batch when one row is
+ * malformed. A single bad record (e.g. a NaN that JSON-serialised to null in
+ * a notNull column) must never wedge the whole sync queue — it gets
+ * quarantined into the `rejected` array while every other op still applies.
+ */
+export const opSchema_ = opSchema;
+
+/**
+ * Outer envelope only — validates that `ops` is an array within the DoS cap,
+ * WITHOUT validating each op's row shape. The route pairs this with per-op
+ * `opSchema_` validation so malformed rows are isolated, not fatal.
+ */
+export const pushEnvelopeSchema = z.object({
+  ops: z.array(z.unknown()).max(500),
+});
+
 // ─────────────────────────────────────────────────────────────────────────
 // Type exports
 // ─────────────────────────────────────────────────────────────────────────
