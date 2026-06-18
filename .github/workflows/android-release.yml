@@ -12,6 +12,30 @@ on:
         description: "Existing release tag to (re)build, e.g. v1.28.0 (blank = current branch)"
         required: false
         type: string
+  # Called by release-please.yml right after it publishes a release. A release
+  # created with the default GITHUB_TOKEN does NOT fire the `release` event (its
+  # loop-prevention), so `on: release` never runs for release-please releases.
+  # Invoking this as a reusable workflow in release-please's own run builds and
+  # attaches the APK without needing a PAT.
+  workflow_call:
+    inputs:
+      tag:
+        description: "Release tag to build and attach the APK + AAB to"
+        required: true
+        type: string
+    # Declared so the caller (release-please.yml) can pass exactly these
+    # secrets explicitly instead of `secrets: inherit` (least privilege).
+    secrets:
+      ANDROID_KEYSTORE_BASE64:
+        required: true
+      ANDROID_KEYSTORE_PASSWORD:
+        required: true
+      ANDROID_KEY_ALIAS:
+        required: true
+      ANDROID_KEY_PASSWORD:
+        required: true
+      PLAY_SERVICE_ACCOUNT_JSON:
+        required: false
 
 jobs:
   build-and-publish:
@@ -26,7 +50,20 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.inputs.tag || github.event.release.tag_name || github.ref_name }}
+          # `inputs.tag` covers both workflow_dispatch and workflow_call; falls
+          # back to the release tag, then to the dispatched branch.
+          ref: ${{ inputs.tag || github.event.release.tag_name || github.ref_name }}
+
+      # Resolve the release tag (if any) once. Non-empty for: release events,
+      # workflow_call from release-please, and workflow_dispatch given a tag.
+      # Empty for a bare branch dispatch (build-only validation, no attach).
+      - name: Resolve release tag
+        id: tag
+        env:
+          # Pass the expression through an env var (not interpolated into the
+          # shell source) so a crafted tag can't inject shell syntax.
+          RESOLVED_TAG: ${{ inputs.tag || github.event.release.tag_name }}
+        run: printf 'name=%s\n' "$RESOLVED_TAG" >> "$GITHUB_OUTPUT"
 
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v6
@@ -116,10 +153,10 @@ jobs:
           if-no-files-found: error
 
       - name: Attach artifacts to GitHub release
-        if: github.event_name == 'release'
+        if: steps.tag.outputs.name != ''
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ github.event.release.tag_name }}
+          tag_name: ${{ steps.tag.outputs.name }}
           files: |
             ${{ steps.artifacts.outputs.aab }}
             ${{ steps.artifacts.outputs.apk }}
