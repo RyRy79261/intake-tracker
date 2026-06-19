@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.33.0](https://github.com/RyRy79261/intake-tracker/compare/v1.32.4...v1.33.0) (2026-06-19)
+
+
+### Features
+
+* **mobile:** in-app native Google sign-in (Custom Tab + App Link bridge) ([#248](https://github.com/RyRy79261/intake-tracker/issues/248)) ([d6c8fdf](https://github.com/RyRy79261/intake-tracker/commit/d6c8fdf9a7be9ef061bff4350e2a754bba714214))
+
 ## [1.32.4](https://github.com/RyRy79261/intake-tracker/compare/v1.32.3...v1.32.4) (2026-06-19)
 
 
