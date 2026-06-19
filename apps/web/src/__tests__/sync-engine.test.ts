@@ -594,6 +594,47 @@ describe("sync-engine", () => {
     expect(err).toContain("schema mismatch");
   });
 
+  it("push: validation-rejected ops (code 'invalid') are dropped from the queue, not retried", async () => {
+    installDom();
+    __startEngineForTests();
+
+    // One permanently-invalid op. Before the fix it would 400 the batch and
+    // loop forever; now the server returns it in `rejected` with code
+    // "invalid" and the client drops it so the queue can drain.
+    const bad = makeIntake({ id: "bad-1" });
+    await db.intakeRecords.bulkAdd([bad]);
+    await enqueue("intakeRecords", "bad-1", "upsert");
+
+    const queueBefore = await db._syncQueue.toArray();
+    const badQueueId = queueBefore.find((q) => q.recordId === "bad-1")!.id!;
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          jsonResponse({
+            accepted: [],
+            rejected: [
+              {
+                queueId: badQueueId,
+                tableName: "intakeRecords",
+                error: "Record failed validation and cannot be synced",
+                code: "invalid",
+              },
+            ],
+          }),
+      ) as unknown as Mock,
+    );
+
+    await runPushCycle();
+
+    // The invalid op was removed from the queue (dropped, not retried).
+    const after = await db._syncQueue.toArray();
+    expect(after).toHaveLength(0);
+    // The local Dexie row is untouched — only the sync queue entry is dropped.
+    expect(await db.intakeRecords.get("bad-1")).toBeTruthy();
+  });
+
   it("pull: network error sets lastError without throwing or stalling", async () => {
     installDom();
     __startEngineForTests();

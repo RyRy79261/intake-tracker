@@ -78,7 +78,7 @@ function SettingsContent() {
   return (
     <>
       <div className="pb-6">
-        <AccountSection />
+        <AccountSection showDeleteAccount />
       </div>
 
       <Accordion type="single" collapsible className="pb-8">

@@ -8,7 +8,12 @@ import { useAuth } from "@/components/auth-guard";
 import { handleSignOut } from "@/lib/sign-out";
 import { DeleteAccountDialog } from "@/components/settings/delete-account-dialog";
 
-export function AccountSection() {
+/**
+ * @param showDeleteAccount - When true, renders the destructive "Delete Account"
+ *   action. Off by default so it only appears where we explicitly want it
+ *   (Settings), not on the profile page.
+ */
+export function AccountSection({ showDeleteAccount = false }: { showDeleteAccount?: boolean } = {}) {
   const { ready, authenticated, user } = useAuth();
   const router = useRouter();
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -74,22 +79,26 @@ export function AccountSection() {
         Sign Out
       </Button>
 
-      <div className="pt-2 mt-1 border-t">
-        <Button
-          variant="ghost"
-          className="w-full justify-start gap-2 text-muted-foreground hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30"
-          onClick={() => setDeleteOpen(true)}
-        >
-          <Trash2 className="w-4 h-4" />
-          Delete Account
-        </Button>
-        <p className="px-3 pt-1 text-xs text-muted-foreground">
-          Erases all your data from our servers and removes your login. The copy
-          on this device is kept.
-        </p>
-      </div>
+      {showDeleteAccount && (
+        <>
+          <div className="pt-2 mt-1 border-t">
+            <Button
+              variant="ghost"
+              className="w-full justify-start gap-2 text-muted-foreground hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30"
+              onClick={() => setDeleteOpen(true)}
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete Account
+            </Button>
+            <p className="px-3 pt-1 text-xs text-muted-foreground">
+              Erases all your data from our servers and removes your login. The copy
+              on this device is kept.
+            </p>
+          </div>
 
-      <DeleteAccountDialog open={deleteOpen} onOpenChange={setDeleteOpen} />
+          <DeleteAccountDialog open={deleteOpen} onOpenChange={setDeleteOpen} />
+        </>
+      )}
     </div>
   );
 }

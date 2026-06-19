@@ -7,9 +7,15 @@
  *     never trusts a client-supplied userId; every DB write stamps
  *     `auth.userId!` on the row and every SELECT includes
  *     `eq(table.userId, auth.userId!)` so cross-user access is impossible.
- *   - Body is validated by `pushBodySchema` (drizzle-zod discriminated union
- *     keyed by tableName, with `.omit({userId: true})` on every row schema).
- *     Malformed payloads → 400 with generic error (no schema detail exposed).
+ *   - The OUTER envelope (`{ ops: [...] }`, ≤500) is validated by
+ *     `pushEnvelopeSchema`; a non-array body or oversized batch → 400.
+ *   - Each op is then validated INDIVIDUALLY against `opSchema_` (drizzle-zod
+ *     discriminated union keyed by tableName, with `.omit({userId: true})` on
+ *     every row schema). A single malformed row is quarantined into the
+ *     `rejected` array (code "invalid") rather than 400-ing the whole batch —
+ *     otherwise one poisoned record wedges the client's queue forever, since
+ *     it just re-sends the same failing batch every cycle. No schema detail is
+ *     exposed to the client (only logged server-side).
  *   - Batch size capped at 500 ops via Zod `.max(500)` — blocks DoS payloads
  *     before any DB round trip.
  *
@@ -45,8 +51,10 @@ import { withAuth } from "@/lib/auth-middleware";
 import { db as drizzleDb } from "@intake/db/client";
 import { usersSync } from "@intake/db/schema";
 import {
-  pushBodySchema,
+  pushEnvelopeSchema,
+  opSchema_,
   schemaByTableName,
+  type PushOp,
   type TableName,
 } from "@intake/db/sync-payload";
 
@@ -84,14 +92,52 @@ function extractDbError(err: unknown): string {
 export const POST = withAuth(async ({ request, auth }) => {
   try {
     const body = await request.json();
-    const parsed = pushBodySchema.safeParse(body);
-    if (!parsed.success) {
-      console.error("[sync/push] Zod validation failed:", JSON.stringify(z.flattenError(parsed.error), null, 2));
+    // Validate the OUTER envelope only (ops is an array within the DoS cap).
+    // A non-array body or an oversized batch is a malformed request → 400.
+    const envelope = pushEnvelopeSchema.safeParse(body);
+    if (!envelope.success) {
+      console.error("[sync/push] Envelope validation failed:", JSON.stringify(z.flattenError(envelope.error), null, 2));
       return NextResponse.json(
         { error: "Invalid request" },
         { status: 400 },
       );
     }
+
+    // Validate each op INDIVIDUALLY. One malformed row (e.g. a NaN that
+    // serialised to null in a notNull column) must not 400 the whole batch —
+    // doing so wedges the entire sync queue forever, because the client just
+    // re-sends the same poisoned batch on every cycle. Instead, quarantine the
+    // bad op into `rejected` (code "invalid", so the client can drop it) and
+    // let every valid op apply.
+    const validOps: PushOp[] = [];
+    const rejected: Array<{
+      queueId: number;
+      tableName: string;
+      error: string;
+      code?: string;
+    }> = [];
+    for (const rawOp of envelope.data.ops) {
+      const parsedOp = opSchema_.safeParse(rawOp);
+      if (parsedOp.success) {
+        validOps.push(parsedOp.data);
+      } else {
+        const raw = (rawOp ?? {}) as Record<string, unknown>;
+        const queueId = typeof raw.queueId === "number" ? raw.queueId : -1;
+        const tableName =
+          typeof raw.tableName === "string" ? raw.tableName : "unknown";
+        console.error(
+          `[sync/push] Op rejected (invalid shape): table=${tableName} queueId=${queueId} — ${JSON.stringify(z.flattenError(parsedOp.error))}`,
+        );
+        rejected.push({
+          queueId,
+          tableName,
+          error: "Record failed validation and cannot be synced",
+          code: "invalid",
+        });
+      }
+    }
+
+    const parsed = { data: { ops: validOps } };
 
     // Ensure the user exists in neon_auth.users_sync before any FK-dependent
     // inserts. Neon Auth replicates users asynchronously — on preview branches
@@ -103,11 +149,6 @@ export const POST = withAuth(async ({ request, auth }) => {
 
     const serverNow = Date.now();
     const accepted: Array<{ queueId: number; serverUpdatedAt: number }> = [];
-    const rejected: Array<{
-      queueId: number;
-      tableName: string;
-      error: string;
-    }> = [];
 
     const opsByTable = new Map<
       TableName,

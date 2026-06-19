@@ -338,6 +338,46 @@ describe("sync-push-route", () => {
     expect(insertCalls[0]!.set.userId).not.toBe("attacker");
   });
 
+  it("isolates a malformed op: rejects it but applies the valid ones (no batch-wide 400)", async () => {
+    const { POST } = await import("@/app/api/sync/push/route");
+    const req = makePushRequest({
+      ops: [
+        // Malformed: `amount` must be a number — a NaN serialises to null and
+        // a notNull column would 400 the WHOLE batch under atomic validation.
+        {
+          queueId: 1,
+          tableName: "intakeRecords",
+          op: "upsert",
+          row: validIntakeRow({ id: "bad", amount: null }),
+        },
+        // Valid op behind the bad one must still apply.
+        {
+          queueId: 2,
+          tableName: "intakeRecords",
+          op: "upsert",
+          row: validIntakeRow({ id: "good", updatedAt: 3000 }),
+        },
+      ],
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      accepted: { queueId: number; serverUpdatedAt: number }[];
+      rejected: { queueId: number; tableName: string; error: string; code?: string }[];
+    };
+    expect(body.accepted).toEqual([{ queueId: 2, serverUpdatedAt: 3000 }]);
+    expect(body.rejected).toHaveLength(1);
+    expect(body.rejected[0]).toMatchObject({
+      queueId: 1,
+      tableName: "intakeRecords",
+      code: "invalid",
+    });
+    // The valid op was written; the bad one was not.
+    expect(insertCalls).toHaveLength(1);
+    expect(insertCalls[0]!.values.id).toBe("good");
+  });
+
   it("rejects oversized batch", async () => {
     const validOp = {
       queueId: 1,

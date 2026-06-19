@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api-fetch";
+import { useAuth } from "@/components/auth-guard";
 
 export type AiProvider = "anthropic" | "groq";
 
@@ -28,9 +29,15 @@ async function asJson<T>(res: Response): Promise<T> {
 }
 
 export function useApiKeyStatus() {
+  // These endpoints require a session; firing them while signed out (e.g. on
+  // /auth, or before the session resolves on first paint) 401s with
+  // "No active session", which apiFetch records into the in-app error log.
+  // Gate on auth so the query only runs once we know there's a session.
+  const { authenticated } = useAuth();
   return useQuery<KeyStatus>({
     queryKey: KEYS_QUERY_KEY,
     queryFn: async () => asJson<KeyStatus>(await apiFetch("/api/user/api-keys")),
+    enabled: authenticated,
   });
 }
 
@@ -82,10 +89,12 @@ export interface KeyShares {
 }
 
 export function useKeyShares() {
+  const { authenticated } = useAuth();
   return useQuery<KeyShares>({
     queryKey: SHARES_QUERY_KEY,
     queryFn: async () =>
       asJson<KeyShares>(await apiFetch("/api/user/api-keys/shares")),
+    enabled: authenticated,
   });
 }
 
@@ -168,9 +177,11 @@ export interface AiUsage {
 }
 
 export function useAiUsage(days: number = 30) {
+  const { authenticated } = useAuth();
   return useQuery<AiUsage>({
     queryKey: [...USAGE_QUERY_KEY, days],
     queryFn: async () =>
       asJson<AiUsage>(await apiFetch(`/api/user/ai-usage?days=${days}`)),
+    enabled: authenticated,
   });
 }
