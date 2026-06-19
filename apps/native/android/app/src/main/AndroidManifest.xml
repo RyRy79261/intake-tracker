@@ -22,6 +22,21 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Verified HTTPS App Link for the native Google sign-in return
+                 trip. /auth/native-done (carrying a one-time code) opens the app
+                 directly instead of a browser tab. autoVerify checks
+                 https://intake-tracker.ryanjnoble.dev/.well-known/assetlinks.json
+                 against this app's signing certificate. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="intake-tracker.ryanjnoble.dev"
+                    android:pathPrefix="/auth/native-done" />
+            </intent-filter>
+
         </activity>
 
         <provider
