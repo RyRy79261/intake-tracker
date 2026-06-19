@@ -84,21 +84,23 @@ jobs:
           VERSION_CODE=$((MAJOR * 10000 + MINOR * 100 + PATCH))
           echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
 
-      # cap-build.js writes android/app/version.properties from the root
-      # package.json version, builds the static export (apps/web/out), and runs
-      # from apps/web (where next.config.mjs + the Capacitor CLI/plugins live).
+      # Build the static export (apps/web/out) from apps/web, where
+      # next.config.mjs lives. cap-build.js only produces the export now —
+      # version stamping + cap sync moved to @intake/native (next step).
       - name: Build Capacitor static export
         working-directory: apps/web
         run: node scripts/cap-build.js
         env:
           NEXT_PUBLIC_API_BASE_URL: https://intake-tracker.ryanjnoble.dev
 
-      # capacitor.config.ts lives in apps/web with `android.path: ../../android`,
-      # so cap (run here) discovers plugins from apps/web/package.json and syncs
-      # the export into the root android/ project.
+      # capacitor.config.ts + the android/ project now live in @intake/native.
+      # sync.mjs stamps android/app/version.properties from the ROOT package.json,
+      # then `cap sync` copies apps/web/out (webDir ../web/out) into the android
+      # project and refreshes native plugins (discovered from apps/native's
+      # package.json + the includePlugins allowlist).
       - name: Sync web assets to Android
-        working-directory: apps/web
-        run: npx cap sync android
+        working-directory: apps/native
+        run: node scripts/sync.mjs
 
       - uses: actions/setup-java@v5
         with:
@@ -121,7 +123,7 @@ jobs:
           echo "path=$RUNNER_TEMP/upload-keystore.jks" >> "$GITHUB_OUTPUT"
 
       - name: Build signed AAB and APK
-        working-directory: android
+        working-directory: apps/native/android
         env:
           ANDROID_KEYSTORE_FILE: ${{ steps.keystore.outputs.path }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -133,10 +135,10 @@ jobs:
         id: artifacts
         run: |
           VERSION=${{ steps.version.outputs.version }}
-          AAB_SRC=android/app/build/outputs/bundle/release/app-release.aab
-          APK_SRC=android/app/build/outputs/apk/release/app-release.apk
-          AAB_OUT="android/app/build/outputs/bundle/release/intake-tracker-v${VERSION}.aab"
-          APK_OUT="android/app/build/outputs/apk/release/intake-tracker-v${VERSION}.apk"
+          AAB_SRC=apps/native/android/app/build/outputs/bundle/release/app-release.aab
+          APK_SRC=apps/native/android/app/build/outputs/apk/release/app-release.apk
+          AAB_OUT="apps/native/android/app/build/outputs/bundle/release/intake-tracker-v${VERSION}.aab"
+          APK_OUT="apps/native/android/app/build/outputs/apk/release/intake-tracker-v${VERSION}.apk"
           mv "$AAB_SRC" "$AAB_OUT"
           mv "$APK_SRC" "$APK_OUT"
           echo "aab=$AAB_OUT" >> "$GITHUB_OUTPUT"
