@@ -64,6 +64,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    import("@/lib/native-auth-return").then((m) => m.initNativeAuthReturn());
+  }, []);
+
+  useEffect(() => {
     import("@/lib/error-log-service").then((m) => m.installErrorCapture());
   }, []);
 

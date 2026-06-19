@@ -22,12 +22,13 @@ import { neon } from "@neondatabase/serverless";
 // custom-connector tables added in migration 0012 (mcp_oauth_clients,
 // mcp_auth_codes, mcp_access_tokens, mcp_audit_log) + 1 insight_reports
 // table added in migration 0013 + 1 insight_jobs table (server-only
-// deep-research batch tracking) added in migration 0014 = 30.
+// deep-research batch tracking) added in migration 0014 + 1 native_auth_codes
+// table (server-only native Google sign-in bridge) added in migration 0018 = 31.
 // (18 Dexie-mirrored app tables incl. user_profile + insight_reports + 4
-// push tables + 3 AI + 4 MCP + 1 insight_jobs.)
+// push tables + 3 AI + 4 MCP + 1 insight_jobs + 1 native_auth_codes.)
 // drizzle-kit 0.31.x stores its __drizzle_migrations journal in the
 // "drizzle" schema, not "public".
-const EXPECTED_TABLE_COUNT = 30;
+const EXPECTED_TABLE_COUNT = 31;
 
 // Representative tables spot-checked by name. Five is enough to catch
 // a schema that happened to have the right COUNT but the wrong shape
@@ -40,6 +41,7 @@ const SPOT_CHECK_TABLES = [
   "prescriptions",
   "mcp_oauth_clients",
   "insight_reports",
+  "native_auth_codes",
 ] as const;
 
 async function main(): Promise<void> {

@@ -6,6 +6,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Button } from "@intake/ui/button";
 import { Input } from "@intake/ui/input";
 import { Label } from "@intake/ui/label";
+import { Capacitor } from "@capacitor/core";
 import { signIn, useSession } from "@/lib/auth-client";
 import { isCapacitorMode } from "@/lib/api-fetch";
 
@@ -82,6 +83,16 @@ export function SignInForm() {
     setError(null);
     setLoading(true);
     try {
+      if (Capacitor.isNativePlatform()) {
+        // Native app: open the hosted Google flow in the system browser (Google
+        // blocks OAuth in the WebView). The App Link return — handled by
+        // initNativeAuthReturn — claims the session and reloads, so we just stop
+        // the spinner once the Custom Tab is open.
+        const { startNativeGoogleSignIn } = await import("@/lib/native-auth-return");
+        await startNativeGoogleSignIn();
+        setLoading(false);
+        return;
+      }
       await signIn.social({ provider: "google", callbackURL });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Google sign in failed");

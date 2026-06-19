@@ -30,6 +30,8 @@ const config: CapacitorConfig = {
   // the native plugins to include. @capacitor/android (platform) and
   // @capacitor/core (runtime) are always included and are not listed here.
   includePlugins: [
+    '@capacitor/app',
+    '@capacitor/browser',
     '@capacitor/local-notifications',
     '@capacitor/network',
   ],
