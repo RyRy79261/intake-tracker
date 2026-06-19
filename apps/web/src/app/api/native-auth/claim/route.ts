@@ -12,6 +12,7 @@
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
+import { createRateLimiter, getClientIp } from "@/app/api/_shared/rate-limit";
 import { claimNativeAuthCode } from "@/lib/native-auth-bridge";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +21,19 @@ const NO_STORE = { "Cache-Control": "no-store", Pragma: "no-cache" } as const;
 
 const schema = z.object({ code: z.string().min(1).max(512) });
 
+// Best-effort, per-instance limiter (resets on cold start — see _shared/rate-limit).
+// The code is a 256-bit, 60s, single-use credential, so this is defense-in-depth
+// + consistency with the other public endpoints, not the primary guard.
+const rateLimiter = createRateLimiter(10);
+
 export async function POST(request: NextRequest) {
+  if (!rateLimiter.check(getClientIp(request))) {
+    return NextResponse.json(
+      { error: "rate_limited" },
+      { status: 429, headers: NO_STORE },
+    );
+  }
+
   let raw: unknown;
   try {
     raw = await request.json();
