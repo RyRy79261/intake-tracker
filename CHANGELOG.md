@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.32.4](https://github.com/RyRy79261/intake-tracker/compare/v1.32.3...v1.32.4) (2026-06-19)
+
+
+### Bug Fixes
+
+* scope Delete Account to Settings and harden sync against malformed records ([#246](https://github.com/RyRy79261/intake-tracker/issues/246)) ([d3ec3f3](https://github.com/RyRy79261/intake-tracker/commit/d3ec3f3bc587424940d5c2da2f875a1db0f1f00f))
+
 ## [1.32.3](https://github.com/RyRy79261/intake-tracker/compare/v1.32.2...v1.32.3) (2026-06-18)
 
 
