@@ -77,11 +77,13 @@ jobs:
         run: |
           VERSION=$(node -p "require('./package.json').version")
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          # Generate versionCode from semver: major*10000 + minor*100 + patch
+          # versionCode from semver: major*1000000 + minor*1000 + patch — kept in
+          # sync with apps/native/scripts/sync.mjs, which writes the authoritative
+          # value into version.properties that build.gradle actually reads.
           MAJOR=$(echo "$VERSION" | cut -d. -f1)
           MINOR=$(echo "$VERSION" | cut -d. -f2)
           PATCH=$(echo "$VERSION" | cut -d. -f3)
-          VERSION_CODE=$((MAJOR * 10000 + MINOR * 100 + PATCH))
+          VERSION_CODE=$((MAJOR * 1000000 + MINOR * 1000 + PATCH))
           echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
 
       # Build the static export (apps/web/out) from apps/web, where

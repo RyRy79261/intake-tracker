@@ -17,8 +17,10 @@ const repoRoot = join(here, '..', '..', '..'); // monorepo root
 // owns it). apps/web + apps/native are 0.0.0 and must NOT be used here.
 const { version } = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8'));
 const [major, minor, patch] = version.split('.').map(Number);
-// versionCode = major*10000 + minor*100 + patch (matches android-release.yml).
-const versionCode = major * 10000 + minor * 100 + patch;
+// versionCode = major*1000000 + minor*1000 + patch (matches android-release.yml).
+// Widened from *10000/*100, which collided at minor/patch >= 100; the new scheme
+// stays monotonically above already-released codes (v1.33.0 = 13300 < 1033000).
+const versionCode = major * 1000000 + minor * 1000 + patch;
 writeFileSync(
   join(nativeDir, 'android', 'app', 'version.properties'),
   `VERSION_NAME=${version}\nVERSION_CODE=${versionCode}\n`,

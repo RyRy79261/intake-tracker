@@ -67,9 +67,15 @@ android {
                 storePassword releaseStorePassword
                 keyAlias releaseKeyAlias
                 keyPassword releaseKeyPassword
-                // App Bundles for Play default to v1+v2; v2 also satisfies APK installs.
-                enableV1Signing true
+                // minSdk is 24, so v1 (JAR) signing is unnecessary — drop it and
+                // rely on v2 + v3 (v3 enables future signing-key rotation) + v4
+                // (incremental install). The signing KEY is unchanged, so existing
+                // installs update normally and the App Link cert fingerprint stays
+                // identical (assetlinks.json need not change).
+                enableV1Signing false
                 enableV2Signing true
+                enableV3Signing true
+                enableV4Signing true
             }
         }
     }
