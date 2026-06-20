@@ -6,7 +6,7 @@
  * has minted a session there, the /auth/native-bridge page calls
  * {@link mintNativeAuthCode} and hands ONLY the resulting code back to the app
  * via a verified HTTPS App Link — never the session token in a URL. The app then
- * POSTs the code to /api/auth/native-claim, which calls
+ * POSTs the code to /api/native-auth/claim, which calls
  * {@link claimNativeAuthCode} to atomically trade it for the session token (for
  * the app's existing Authorization: Bearer path).
  *

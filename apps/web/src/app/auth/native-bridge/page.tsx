@@ -24,11 +24,17 @@ export default function NativeSignInBridge() {
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
+    // Surface the error UI promptly if the mint server accepts then hangs,
+    // instead of leaving the Custom Tab on a static screen until the OS socket
+    // timeout fires. The catch below already handles the resulting AbortError.
+    const timer = setTimeout(() => controller.abort(), 10_000);
     (async () => {
       try {
         const res = await fetch("/api/native-auth/mint", {
           method: "POST",
           credentials: "include",
+          signal: controller.signal,
         });
         if (!res.ok) {
           if (!cancelled) setError("Sign-in didn't complete. Please try again from the app.");
@@ -47,10 +53,13 @@ export default function NativeSignInBridge() {
         window.location.replace(link);
       } catch {
         if (!cancelled) setError("Something went wrong finishing sign-in.");
+      } finally {
+        clearTimeout(timer);
       }
     })();
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, []);
 

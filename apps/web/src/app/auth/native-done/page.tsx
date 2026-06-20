@@ -6,10 +6,11 @@
  * When the app is installed and the App Link is verified, Android intercepts
  * this URL and opens the app directly (this web page never renders). It only
  * renders as a FALLBACK — opened in a browser when App Link verification didn't
- * take (e.g. a sideloaded install where autoVerify failed). In that case we tell
- * the user to return to the app; the app surfaces a manual code-entry recovery
- * (the `?code=` is intentionally not auto-actioned here — a web page must never
- * complete the sign-in).
+ * take (e.g. a sideloaded install where autoVerify failed). In that case it just
+ * tells the user to return to the app; the `?code=` is intentionally NOT
+ * auto-actioned here — a web page must never complete the sign-in. There is no
+ * web-side code-entry recovery by design; if the App Link never resolves on a
+ * device, email/password sign-in still works in the WebView.
  */
 export default function NativeSignInDone() {
   return (
