@@ -48,7 +48,7 @@ jobs:
       PLAY_TRACK: ${{ vars.PLAY_TRACK || 'beta' }}
       PACKAGE_NAME: dev.ryanjnoble.intaketracker
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           # `inputs.tag` covers both workflow_dispatch and workflow_call; falls
           # back to the release tag, then to the dispatched branch.
