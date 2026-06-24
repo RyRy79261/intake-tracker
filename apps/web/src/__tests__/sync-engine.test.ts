@@ -26,6 +26,7 @@ import {
   __resetEngineForTests,
   __startEngineForTests,
   attachLifecycleListeners,
+  MAX_PUSH_ATTEMPTS,
   runPullCycle,
   runPushCycle,
   schedulePush,
@@ -633,6 +634,92 @@ describe("sync-engine", () => {
     expect(after).toHaveLength(0);
     // The local Dexie row is untouched — only the sync queue entry is dropped.
     expect(await db.intakeRecords.get("bad-1")).toBeTruthy();
+  });
+
+  it("push: a non-'invalid' rejection is dropped once it exhausts MAX_PUSH_ATTEMPTS, so it can't wedge the queue forever", async () => {
+    installDom();
+    __startEngineForTests();
+
+    // A record the server keeps rejecting with a *real DB write failure* (no
+    // `code: "invalid"`) — e.g. a CHECK violation or a column missing from the
+    // deployed table. Without a retry cap it would sit in the queue forever,
+    // pinning queueDepth > 0 so the engine reports "Syncing…" indefinitely.
+    const stuck = makeIntake({ id: "stuck-1" });
+    await db.intakeRecords.bulkAdd([stuck]);
+    await enqueue("intakeRecords", "stuck-1", "upsert");
+
+    const queueBefore = await db._syncQueue.toArray();
+    const stuckQueueId = queueBefore.find((q) => q.recordId === "stuck-1")!.id!;
+    // Simulate having already failed up to one attempt below the cap, so this
+    // cycle's bump reaches MAX_PUSH_ATTEMPTS and trips the drop.
+    await db._syncQueue.update(stuckQueueId, {
+      attempts: MAX_PUSH_ATTEMPTS - 1,
+    });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          jsonResponse({
+            accepted: [],
+            rejected: [
+              {
+                queueId: stuckQueueId,
+                tableName: "intakeRecords",
+                error: "Server rejected the write",
+              },
+            ],
+          }),
+      ) as unknown as Mock,
+    );
+
+    await runPushCycle();
+
+    // The op exhausted its retry budget → dropped so the queue can reach empty.
+    const after = await db._syncQueue.toArray();
+    expect(after).toHaveLength(0);
+    // The local Dexie row is preserved — only the queue entry is dropped.
+    expect(await db.intakeRecords.get("stuck-1")).toBeTruthy();
+    // queueDepth reflects the now-empty queue so the indicator can settle.
+    expect(useSyncStatusStore.getState().queueDepth).toBe(0);
+  });
+
+  it("push: a non-'invalid' rejection below the retry cap is kept and bumped (not dropped)", async () => {
+    installDom();
+    __startEngineForTests();
+
+    const pending = makeIntake({ id: "pending-1" });
+    await db.intakeRecords.bulkAdd([pending]);
+    await enqueue("intakeRecords", "pending-1", "upsert");
+
+    const queueBefore = await db._syncQueue.toArray();
+    const pendingQueueId = queueBefore.find(
+      (q) => q.recordId === "pending-1",
+    )!.id!;
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          jsonResponse({
+            accepted: [],
+            rejected: [
+              {
+                queueId: pendingQueueId,
+                tableName: "intakeRecords",
+                error: "Server rejected the write",
+              },
+            ],
+          }),
+      ) as unknown as Mock,
+    );
+
+    await runPushCycle();
+
+    // Still queued (transient failures keep retrying), attempts bumped to 1.
+    const after = await db._syncQueue.toArray();
+    expect(after).toHaveLength(1);
+    expect(after[0]!.attempts).toBe(1);
   });
 
   it("pull: network error sets lastError without throwing or stalling", async () => {
