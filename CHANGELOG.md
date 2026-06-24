@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.33.1](https://github.com/RyRy79261/intake-tracker/compare/v1.33.0...v1.33.1) (2026-06-24)
+
+
+### Bug Fixes
+
+* **android:** disable Auto Backup of on-device health data (allowBackup=false) ([#253](https://github.com/RyRy79261/intake-tracker/issues/253)) ([fbd77aa](https://github.com/RyRy79261/intake-tracker/commit/fbd77aa793b35b06c0f271ba05d0260caa288f30))
+* **mobile:** harden native OAuth bridge (post-merge review follow-ups) ([#250](https://github.com/RyRy79261/intake-tracker/issues/250)) ([130b380](https://github.com/RyRy79261/intake-tracker/commit/130b3805a2c82d1d70a90cb2d6c28dea408da4b9))
+
 ## [1.33.0](https://github.com/RyRy79261/intake-tracker/compare/v1.32.4...v1.33.0) (2026-06-19)
 
 
