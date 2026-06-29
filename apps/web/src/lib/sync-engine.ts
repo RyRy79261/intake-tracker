@@ -56,6 +56,21 @@ export const BACKOFF_CAP_MS = 60_000;
 export const JITTER_RATIO = 0.2;
 /** Cursor clock-skew margin (Pattern 7: 30s). */
 export const SKEW_MARGIN_MS = 30_000;
+/**
+ * Max attempts before a *server-rejected* op is dropped from the queue.
+ *
+ * A rejection without `code: "invalid"` is treated as transient (a DB write
+ * failure that might clear next time). But some are permanent — a CHECK
+ * violation, or a column the deployed Postgres table is missing (schema
+ * drift). A permanent one that is only bumped, never dropped, keeps
+ * `queueDepth > 0` forever, so the engine reports "Syncing…" indefinitely and
+ * no save ever appears to settle. After this many failed attempts we give up
+ * on the op (its local Dexie row is untouched) so the queue can reach empty.
+ *
+ * Only applies to per-op server rejections — whole-batch network/HTTP failures
+ * retry forever (an outage must never silently discard the user's writes).
+ */
+export const MAX_PUSH_ATTEMPTS = 8;
 
 // ─────────────────────────────────────────────────────────────────────────
 // Module-local mutable state (NOT exported — keeps the engine a singleton
@@ -288,7 +303,7 @@ export async function runPushCycle(): Promise<void> {
     await applyServerAck(accepted, queueRowsById);
     await ack(accepted.map((a) => a.queueId));
 
-    let droppedInvalid = 0;
+    let droppedCount = 0;
     if (rejected.length > 0) {
       const firstErr = rejected[0]!;
       const detail = `${firstErr.tableName}: ${firstErr.error}`;
@@ -296,30 +311,51 @@ export async function runPushCycle(): Promise<void> {
         `[sync] ${rejected.length} op(s) rejected:`,
         rejected.map((r) => `${r.tableName}: ${r.error}`),
       );
-      // `code: "invalid"` means the row failed server-side schema validation.
-      // It can never succeed (the schema won't change), so retrying it forever
-      // just keeps the error banner up and re-sends it in every batch. Drop it
-      // from the queue (the local Dexie row is untouched). Other rejections —
-      // transient DB write failures — get an attempts bump so backoff applies.
+      // An op is DROPPED (acked out of the queue; its local Dexie row stays) when
+      // it can never succeed and would otherwise wedge the queue forever:
+      //   1. `code: "invalid"` — failed server-side schema validation. The
+      //      schema won't change, so it can never apply.
+      //   2. A non-"invalid" rejection (a real DB write failure) that has now
+      //      failed MAX_PUSH_ATTEMPTS times. These look transient but, when
+      //      permanent (a CHECK violation or schema drift), an un-dropped op
+      //      keeps queueDepth > 0 so the engine shows "Syncing…" forever and no
+      //      save ever settles. Once the retry budget is spent we give up.
+      // Everything else gets an attempts bump so exponential backoff applies.
       const dropIds: number[] = [];
+      let bumpedCount = 0;
+      let maxBumpedAttempts = 0;
       for (const r of rejected) {
         const q = queueRowsById.get(r.queueId);
         if (q?.id == null) continue;
-        if (r.code === "invalid") {
+        const nextAttempts = (q.attempts ?? 0) + 1;
+        if (r.code === "invalid" || nextAttempts >= MAX_PUSH_ATTEMPTS) {
+          if (r.code !== "invalid") {
+            console.error(
+              `[sync] giving up on op after ${nextAttempts} attempts: ${r.tableName} queueId=${r.queueId} — ${r.error}`,
+            );
+          }
           dropIds.push(q.id);
         } else {
-          await db._syncQueue.update(q.id, {
-            attempts: (q.attempts ?? 0) + 1,
-          });
+          await db._syncQueue.update(q.id, { attempts: nextAttempts });
+          bumpedCount++;
+          if (nextAttempts > maxBumpedAttempts) maxBumpedAttempts = nextAttempts;
         }
       }
       if (dropIds.length > 0) await ack(dropIds);
-      droppedInvalid = dropIds.length;
+      droppedCount = dropIds.length;
       useSyncStatusStore.setState({
         lastError: `${rejected.length} record(s) failed: ${detail}`,
         lastPushedAt: Date.now(),
         queueDepth: await getQueueDepth(),
       });
+
+      // Ops we bumped (not dropped) are still pending. Schedule a backoff retry
+      // so they keep trying autonomously until they apply or exhaust the retry
+      // budget. Without this a rejected op sits untouched until the next manual
+      // write happens to flush it, leaving the indicator stuck on "Syncing…".
+      if (bumpedCount > 0) {
+        schedulePush(nextBackoff(maxBumpedAttempts));
+      }
     } else {
       useSyncStatusStore.setState({
         lastPushedAt: Date.now(),
@@ -334,10 +370,10 @@ export async function runPushCycle(): Promise<void> {
 
     // Re-drain: if new records arrived while the push was in flight, flush
     // them immediately. Re-drain whenever this cycle made forward progress —
-    // either it acked items, or it dropped permanently-invalid ops (a batch
-    // of only-invalid ops that wedged the queue must keep draining). Without
+    // either it acked items, or it dropped un-syncable ops (a batch of only
+    // un-syncable ops that wedged the queue must keep draining). Without
     // progress we must NOT re-drain, or the same un-acked ops loop forever.
-    if (accepted.length > 0 || droppedInvalid > 0) {
+    if (accepted.length > 0 || droppedCount > 0) {
       const remaining = await getQueueDepth();
       if (remaining > 0) {
         schedulePush(0);
@@ -401,6 +437,13 @@ export async function runPullCycle(): Promise<void> {
 
   pullInFlight = true;
   useSyncStatusStore.setState({ isSyncing: true });
+
+  // Tracks whether this cycle actually wrote any rows to Dexie. Used to avoid a
+  // blanket React Query invalidation on no-op pulls — every push chains a pull,
+  // so during a burst of writes (e.g. a multi-item voice log) we'd otherwise
+  // refetch every query repeatedly even when the server returned nothing new,
+  // making expensive views (analytics/insights) thrash.
+  let appliedAnyRows = false;
 
   try {
     while (true) {
@@ -501,6 +544,7 @@ export async function runPullCycle(): Promise<void> {
             lastPulledId: nextId,
           });
         });
+        appliedAnyRows = true;
       }
 
       if (!anyHasMore) break;
@@ -517,8 +561,13 @@ export async function runPullCycle(): Promise<void> {
     });
 
     // Invalidate React Query caches so every hook re-fetches the freshly
-    // pulled rows (D-10 downstream effect).
-    queryClient.invalidateQueries();
+    // pulled rows (D-10 downstream effect) — but only when this cycle actually
+    // applied rows. A no-op pull (no new server data) has nothing to surface,
+    // so skipping the invalidation avoids a needless refetch storm during
+    // write-heavy bursts (Dexie's own useLiveQuery hooks still react to writes).
+    if (appliedAnyRows) {
+      queryClient.invalidateQueries();
+    }
   } finally {
     pullInFlight = false;
     useSyncStatusStore.setState({ isSyncing: false });
