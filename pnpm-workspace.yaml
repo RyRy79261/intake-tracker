@@ -34,9 +34,17 @@ auditConfig:
     - GHSA-23c5-xmqv-rm74
     # picomatch ReDoS — via tailwindcss>chokidar>anymatch, override not honored in lockfile.
     - GHSA-c2c7-rcm5-vvqj
+    # dompurify (Dependabot #75) — no fix published as of 2026-07-01; the latest
+    # release (3.4.11, which the override pins to) does not resolve it. Suppress
+    # until upstream ships a patch, then remove this entry.
+    - GHSA-x4vx-rjvf-j5p4
 
 # Transitive vulnerability overrides (Phase 23 - pnpm audit --fix)
+# 2026-07-01 Dependabot batch: ranged keys target only the vulnerable versions and
+# bump within-major to the first patched release (verified to exist + satisfy
+# minimumReleaseAge). See PR for the per-package advisory mapping.
 overrides:
+  '@babel/core@<=7.29.0': '>=7.29.6 <8.0.0'
   '@isaacs/brace-expansion@<=5.0.0': '>=5.0.1'
   ajv@>=6.0.0 <6.14.0: '>=6.14.0 <7.0.0'
   ajv@>=7.0.0-alpha.0 <8.18.0: '>=8.18.0'
@@ -44,25 +52,43 @@ overrides:
   # Force the patched Better Auth (transitive via @neondatabase/auth) — the tree
   # otherwise resolves better-auth@1.4.9, flagged high severity by
   # GHSA-p6v2-xcpg-h6xw (rate-limiter IPv6 bypass). Matches the sibling repos.
+  # NOTE: GHSA-wxw3-q3m9-c3jr (Dependabot #55) is only fixed in better-auth 1.6.2,
+  # which breaks @neondatabase/auth@0.4.1-beta's exact better-auth@1.4.18 pin.
+  # Deferred pending a Neon Auth release on the 1.6.x line — do NOT bump blindly.
   better-auth: '~1.4.18'
   bn.js@>=5.0.0 <5.2.3: '>=5.2.3'
-  brace-expansion@<1.1.13: '>=1.1.13'
+  brace-expansion@<1.1.13: '>=1.1.13 <2.0.0'
   brace-expansion@>=2.0.0 <2.0.3: '>=2.0.3'
-  flatted@<3.4.0: '>=3.4.0'
-  flatted@<=3.4.1: '>=3.4.2'
+  brace-expansion@>=5.0.0 <5.0.6: '>=5.0.6'
+  defu@<=6.1.4: '>=6.1.5'
+  # dompurify: bump to latest 3.4.x. GHSA-x4vx-rjvf-j5p4 (#75) has no published fix
+  # and is suppressed via auditConfig.ignoreCves above.
+  dompurify@<3.4.11: '>=3.4.11'
+  # esbuild is pre-1.0 (each minor is a breaking boundary); keep the <=0.24.2 copy
+  # inside the 0.25.x line rather than an unbounded bump.
+  esbuild@<=0.24.2: '>=0.25.0 <0.26.0'
+  esbuild@>=0.27.3 <0.28.1: '>=0.28.1 <0.29.0'
+  fast-uri@<=3.1.1: '>=3.1.2 <4.0.0'
+  flatted@<=3.4.1: '>=3.4.2 <4.0.0'
   glob@>=10.2.0 <10.5.0: '>=10.5.0'
-  h3@<1.15.6: '>=1.15.6'
-  h3@<1.15.9: '>=1.15.9'
-  h3@<=1.15.8: '>=1.15.9'
-  hono@<4.11.10: '>=4.11.10'
-  hono@<4.12.4: '>=4.12.4'
-  hono@<4.12.7: '>=4.12.7'
-  minimatch@<3.1.4: '>=3.1.4'
+  h3@<1.15.9: '>=1.15.9 <2.0.0'
+  # Consolidates the former <4.11.10 / <4.12.4 / <4.12.7 hono pins.
+  hono@<4.12.25: '>=4.12.25'
+  lodash@<4.18.0: '>=4.18.0'
+  minimatch@<3.1.4: '>=3.1.4 <4.0.0'
   minimatch@>=5.0.0 <5.1.8: '>=5.1.8'
   minimatch@>=9.0.0 <9.0.7: '>=9.0.7'
   minimatch@>=10.0.0 <10.2.3: '>=10.2.3'
-  picomatch@<2.3.2: '>=2.3.2'
+  picomatch@<2.3.2: '>=2.3.2 <3.0.0'
   picomatch@>=4.0.0 <4.0.4: '>=4.0.4'
-  serialize-javascript@<7.0.5: '>=7.0.5'
-  serialize-javascript@<=7.0.2: '>=7.0.3'
+  postcss@<8.5.10: '>=8.5.10'
+  qs@>=6.11.1 <=6.15.1: '>=6.15.2'
+  serialize-javascript@<7.0.5: '>=7.0.5 <8.0.0'
   socket.io-parser@>=4.0.0 <4.2.6: '>=4.2.6'
+  tar@<=7.5.15: '>=7.5.16'
+  ua-parser-js@>=2.0.1 <2.0.10: '>=2.0.10'
+  # Two majors present; keep each within its own line (7.x -> 7.28.0, 8.x -> 8.5.0).
+  # Upper bounds are REQUIRED: an unbounded value lets the 7.x consumer jump to 8.x.
+  undici@>=7.0.0 <8.0.0: '>=7.28.0 <8.0.0'
+  undici@>=8.0.0: '>=8.5.0 <9.0.0'
+  vite@<7.3.5: '>=7.3.5 <8.0.0'
