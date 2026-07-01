@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.33.2](https://github.com/RyRy79261/intake-tracker/compare/v1.33.1...v1.33.2) (2026-07-01)
+
+
+### Bug Fixes
+
+* **deps:** patch 48 Dependabot transitive alerts via pnpm overrides ([#265](https://github.com/RyRy79261/intake-tracker/issues/265)) ([500f9d7](https://github.com/RyRy79261/intake-tracker/commit/500f9d78ebf9cced7675746061b006a6bba08228))
+
 ## [1.33.1](https://github.com/RyRy79261/intake-tracker/compare/v1.33.0...v1.33.1) (2026-06-29)
 
 
