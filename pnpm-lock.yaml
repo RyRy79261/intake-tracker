@@ -12,7 +12,7 @@ overrides:
   axios@>=1.0.0 <=1.13.4: '>=1.13.5'
   better-auth: ~1.4.18
   bn.js@>=5.0.0 <5.2.3: '>=5.2.3'
-  brace-expansion@<1.1.13: '>=1.1.13'
+  brace-expansion@<1.1.13: '>=1.1.13 <2.0.0'
   brace-expansion@>=2.0.0 <2.0.3: '>=2.0.3'
   brace-expansion@>=5.0.0 <5.0.6: '>=5.0.6'
   defu@<=6.1.4: '>=6.1.5'
@@ -20,24 +20,20 @@ overrides:
   esbuild@<=0.24.2: '>=0.25.0 <0.26.0'
   esbuild@>=0.27.3 <0.28.1: '>=0.28.1 <0.29.0'
   fast-uri@<=3.1.1: '>=3.1.2 <4.0.0'
-  flatted@<3.4.0: '>=3.4.0'
-  flatted@<=3.4.1: '>=3.4.2'
+  flatted@<=3.4.1: '>=3.4.2 <4.0.0'
   glob@>=10.2.0 <10.5.0: '>=10.5.0'
-  h3@<1.15.6: '>=1.15.6'
-  h3@<1.15.9: '>=1.15.9'
-  h3@<=1.15.8: '>=1.15.9'
+  h3@<1.15.9: '>=1.15.9 <2.0.0'
   hono@<4.12.25: '>=4.12.25'
   lodash@<4.18.0: '>=4.18.0'
-  minimatch@<3.1.4: '>=3.1.4'
+  minimatch@<3.1.4: '>=3.1.4 <4.0.0'
   minimatch@>=5.0.0 <5.1.8: '>=5.1.8'
   minimatch@>=9.0.0 <9.0.7: '>=9.0.7'
   minimatch@>=10.0.0 <10.2.3: '>=10.2.3'
-  picomatch@<2.3.2: '>=2.3.2'
+  picomatch@<2.3.2: '>=2.3.2 <3.0.0'
   picomatch@>=4.0.0 <4.0.4: '>=4.0.4'
   postcss@<8.5.10: '>=8.5.10'
   qs@>=6.11.1 <=6.15.1: '>=6.15.2'
-  serialize-javascript@<7.0.5: '>=7.0.5'
-  serialize-javascript@<=7.0.2: '>=7.0.3'
+  serialize-javascript@<7.0.5: '>=7.0.5 <8.0.0'
   socket.io-parser@>=4.0.0 <4.2.6: '>=4.2.6'
   tar@<=7.5.15: '>=7.5.16'
   ua-parser-js@>=2.0.1 <2.0.10: '>=2.0.10'
@@ -4184,6 +4180,9 @@ packages:
       react-native-b4a:
         optional: true
 
+  balanced-match@1.0.2:
+    resolution: {integrity: sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw==}
+
   balanced-match@4.0.4:
     resolution: {integrity: sha512-BLrgEcRTwX2o6gGxGOCNyMvGSp35YofuYzw9h1IMTRmKqttAZZVU67bdb9Pr2vUHA8+j3i2tJfjO6C6+4myGTA==}
     engines: {node: 18 || 20 || >=22}
@@ -4346,6 +4345,9 @@ packages:
     resolution: {integrity: sha512-apC2+fspHGI3mMKj+dGevkGo/tCqVB8jMb6i+OX+E29p0Iposz07fABkRIfVUPNd5A5VbuOz1bZbnmkKLYF+wQ==}
     engines: {node: '>= 5.10.0'}
 
+  brace-expansion@1.1.15:
+    resolution: {integrity: sha512-EwOCDEex4quD37XhqM3omwtMoJjr//isUZz1JopUNWms+4Z2ViyM/k1YIRePpoVNnQhENnxtFjLaxNHrT7xIUg==}
+
   brace-expansion@5.0.6:
     resolution: {integrity: sha512-kLpxurY4Z4r9sgMsyG0Z9uzsBlgiU/EFKhj/h91/8yHu0edo7XuixOIH3VcJ8kkxs6/jPzoI6U9Vj3WqbMQ94g==}
     engines: {node: 18 || 20 || >=22}
@@ -4494,6 +4496,9 @@ packages:
   compress-commons@7.0.1:
     resolution: {integrity: sha512-g0S8KAD8qf4+V//pr3BfB1aBnARLXNz2Gx+jmHU0LEriUuoQUOPOulVquHKTJ8+EAIIO7fhseNDr9wK5Q9FKBQ==}
     engines: {node: '>=18'}
+
+  concat-map@0.0.1:
+    resolution: {integrity: sha512-/Srv4dswyQNBfohGpz9o6Yb3Gz3SrUDqBH5rTuhGR7ahtlbYKnVxw2bCFMRljaA7EXHaXZ8wsHdodFvbkhKmqg==}
 
   content-disposition@1.1.0:
     resolution: {integrity: sha512-5jRCH9Z/+DRP7rkvY83B+yGIGX96OYdJmzngqnw2SBSxqCFPd0w2km3s5iawpGX8krnwSGmF0FW5Nhr0Hfai3g==}
@@ -6061,6 +6066,9 @@ packages:
     resolution: {integrity: sha512-MULkVLfKGYDFYejP07QOurDLLQpcjk7Fw+7jXS2R2czRQzR56yHRveU5NDJEOviH+hETZKSkIk5c+T23GjFUMg==}
     engines: {node: 18 || 20 || >=22}
 
+  minimatch@3.1.5:
+    resolution: {integrity: sha512-VgjWUsnnT6n+NUk6eZq77zeFdpW2LWDzP6zFGrCbHXiYNul5Dzqk2HHQ5uFH2DNW5Xbp8+jVzaeNt94ssEEl4w==}
+
   minimist@1.2.8:
     resolution: {integrity: sha512-2yyAR8qBkN3YuheJanUpWC5U3bb5osDywNB8RzDVlDwDHbocAJveqqj1u8+SVD7jkWT4yvsHCpWqqWqAxb0zCA==}
 
@@ -6376,6 +6384,10 @@ packages:
 
   picocolors@1.1.1:
     resolution: {integrity: sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==}
+
+  picomatch@2.3.2:
+    resolution: {integrity: sha512-V7+vQEJ06Z+c5tSye8S+nHUfI51xoXIXjHQ99cQtKUkQqqO1kO/KCJUfZXuB47h/YBlDhah2H3hdUGXn8ie0oA==}
+    engines: {node: '>=8.6'}
 
   picomatch@4.0.4:
     resolution: {integrity: sha512-QP88BAKvMam/3NxH6vj2o21R6MjxZUAd6nlwAS/pnGvN9IVLocLHxGYIzFhg6fUQ+5th6P4dv4eW9jX3DSIj7A==}
@@ -11163,6 +11175,8 @@ snapshots:
 
   b4a@1.8.1: {}
 
+  balanced-match@1.0.2: {}
+
   balanced-match@4.0.4: {}
 
   bare-events@2.9.1: {}
@@ -11283,6 +11297,11 @@ snapshots:
   bplist-parser@0.3.2:
     dependencies:
       big-integer: 1.6.52
+
+  brace-expansion@1.1.15:
+    dependencies:
+      balanced-match: 1.0.2
+      concat-map: 0.0.1
 
   brace-expansion@5.0.6:
     dependencies:
@@ -11434,6 +11453,8 @@ snapshots:
       is-stream: 4.0.1
       normalize-path: 3.0.0
       readable-stream: 4.7.0
+
+  concat-map@0.0.1: {}
 
   content-disposition@1.1.0: {}
 
@@ -12093,7 +12114,7 @@ snapshots:
       hasown: 2.0.2
       is-core-module: 2.16.1
       is-glob: 4.0.3
-      minimatch: 10.2.4
+      minimatch: 3.1.5
       object.fromentries: 2.0.8
       object.groupby: 1.0.3
       object.values: 1.2.1
@@ -12120,7 +12141,7 @@ snapshots:
       hasown: 2.0.2
       is-core-module: 2.16.1
       is-glob: 4.0.3
-      minimatch: 10.2.4
+      minimatch: 3.1.5
       object.fromentries: 2.0.8
       object.groupby: 1.0.3
       object.values: 1.2.1
@@ -12146,7 +12167,7 @@ snapshots:
       hasown: 2.0.2
       jsx-ast-utils: 3.3.5
       language-tags: 1.0.9
-      minimatch: 10.2.4
+      minimatch: 3.1.5
       object.fromentries: 2.0.8
       safe-regex-test: 1.1.0
       string.prototype.includes: 2.0.1
@@ -12174,7 +12195,7 @@ snapshots:
       estraverse: 5.3.0
       hasown: 2.0.4
       jsx-ast-utils: 3.3.5
-      minimatch: 10.2.5
+      minimatch: 3.1.5
       object.entries: 1.1.9
       object.fromentries: 2.0.8
       object.values: 1.2.1
@@ -13134,7 +13155,7 @@ snapshots:
   micromatch@4.0.8:
     dependencies:
       braces: 3.0.3
-      picomatch: 4.0.4
+      picomatch: 2.3.2
 
   mime-db@1.54.0: {}
 
@@ -13153,6 +13174,10 @@ snapshots:
   minimatch@10.2.5:
     dependencies:
       brace-expansion: 5.0.6
+
+  minimatch@3.1.5:
+    dependencies:
+      brace-expansion: 1.1.15
 
   minimist@1.2.8: {}
 
@@ -13467,6 +13492,8 @@ snapshots:
       split2: 4.2.0
 
   picocolors@1.1.1: {}
+
+  picomatch@2.3.2: {}
 
   picomatch@4.0.4: {}
 
