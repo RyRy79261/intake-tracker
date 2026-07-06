@@ -26,9 +26,9 @@
     "prepare": "husky"
   },
   "devDependencies": {
-    "@commitlint/config-conventional": "^21.0.2",
+    "@commitlint/config-conventional": "^21.2.0",
     "husky": "^9.1.7",
-    "turbo": "^2.9.18",
+    "turbo": "^2.10.3",
     "typescript": "^6.0.3"
   }
 }
