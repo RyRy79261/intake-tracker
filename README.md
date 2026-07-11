@@ -16,6 +16,7 @@ free but I can make it easier to set it up yourself and use it.
 - **Salt intake tracking**: Keep sodium under control (target: <1500mg/day)
 - **Food water calculator**: Calculate water content from fruits and vegetables
 - **AI-powered input**: Use natural language to log intake via Anthropic Claude API
+- **Voice logging**: Dictate everything in one go — transcribed by Groq-hosted Whisper, parsed into reviewable structured entries by Claude ([how it works](docs/VOICE_PIPELINE.md))
 - **Claude custom connector (MCP)**: Attach your data to a Claude chat as a read-only MCP server — ask Claude "what was my average BP last week?" or "list my active medications" ([setup](#claude-custom-connector-mcp))
 - **Neon Auth**: Email/password authentication with whitelist-based access control
 - **Offline support**: Works without internet connection as a PWA
@@ -110,6 +111,10 @@ NEON_AUTH_COOKIE_SECRET=generate-with-openssl-rand-base64-32
 
 # Anthropic Claude AI (for natural language parsing)
 ANTHROPIC_API_KEY=sk-ant-your-api-key-here
+
+# Groq (for voice transcription via Whisper) — optional; users can also
+# store their own key under Settings → AI features
+GROQ_API_KEY=gsk_your-api-key-here
 
 # Whitelist - comma-separated emails allowed to use the app
 ALLOWED_EMAILS=you@example.com,friend@example.com

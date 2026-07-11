@@ -63,11 +63,19 @@ Each data domain has a service file in `src/lib/` (e.g., `intake-service.ts`, `m
 ### API Routes (`src/app/api/`)
 
 - `POST /api/ai/parse` — Sends food/drink descriptions to Anthropic Claude API for nutritional parsing
+- `POST /api/ai/voice-transcribe` — Relays recorded audio to Groq-hosted Whisper (`whisper-large-v3-turbo`) and returns the transcript
+- `POST /api/ai/voice-parse` — Extracts a structured multi-item health log (BP, weight, water, salt, food, caffeine, alcohol, urination, defecation) from a voice transcript via Claude tool use; see `docs/VOICE_PIPELINE.md`
 - `POST /api/ai/medicine-search` — AI-assisted medicine lookup
 - `POST /api/ai/substance-lookup` — AI-powered beverage substance per-100ml lookup
+- `POST /api/ai/substance-enrich` — Enriches caffeine/alcohol "Other" entries (Opus + web search)
+- `POST /api/ai/nutrient-analysis` — Nutrient analysis with web search
+- `POST /api/ai/interaction-check` — Medication interaction check
+- `POST /api/ai/titration-warnings` — AI warnings for titration plans
 - `GET /api/ai/status` — Health check for AI service
 
-API routes handle server-side Claude API calls (key never exposed to client). PII is stripped before sending to external APIs.
+API routes handle server-side Claude API calls (key never exposed to client). PII is stripped before sending to external APIs. Shared prompt/tool definitions live in `packages/ai-prompts` (`@intake/ai-prompts`); per-route Zod validation stays in each route's `schema.ts`. Keys resolve per user via `src/lib/ai-key-resolver.ts` (own stored key → shared key → env var): Anthropic for text/parsing routes, Groq for transcription.
+
+The full voice pipeline (recording → Whisper transcription → structured Claude parse → approve/reject review UI → Dexie writes) is documented in `docs/VOICE_PIPELINE.md`.
 
 ### Auth
 
