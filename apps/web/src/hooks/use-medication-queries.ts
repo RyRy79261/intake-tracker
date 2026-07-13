@@ -101,6 +101,26 @@ export function usePhasesForPrescription(prescriptionId: string | undefined) {
   );
 }
 
+/**
+ * Loading-aware companion to `usePhasesForPrescription`: `false` until the
+ * phases query first resolves, then `true`. `usePhasesForPrescription` returns
+ * its `[]` default while loading — indistinguishable from "genuinely no
+ * phases" — so callers that must not treat a still-loading scheduled
+ * prescription as as-needed (e.g. the PRN button) gate on this. No default, so
+ * `useLiveQuery` yields `undefined` until the first result.
+ */
+export function usePhasesLoaded(prescriptionId: string | undefined): boolean {
+  return (
+    useLiveQuery(
+      () =>
+        prescriptionId
+          ? getPhasesForPrescription(prescriptionId).then(() => true)
+          : Promise.resolve(true),
+      [prescriptionId],
+    ) === true
+  );
+}
+
 export function useInventoryForPrescription(prescriptionId: string | undefined) {
   return useLiveQuery(
     () => prescriptionId ? getInventoryForPrescription(prescriptionId) : [],

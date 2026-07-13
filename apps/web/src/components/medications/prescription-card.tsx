@@ -19,10 +19,12 @@ import {
 import { isCombo, splitDose, formatCompoundShort } from "@intake/core/compound";
 import {
   usePhasesForPrescription,
+  usePhasesLoaded,
   useInventoryForPrescription,
   useDailyDoseSchedule,
   useLogPrnDose,
 } from "@/hooks/use-medication-queries";
+import { useToast } from "@intake/ui/use-toast";
 import type { Prescription } from "@/lib/db";
 import { toLocalDateKey } from "@/lib/date-utils";
 
@@ -45,8 +47,10 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
   const expanded = controlledExpanded ?? internalExpanded;
   const toggleExpanded = onToggleExpanded ?? (() => setInternalExpanded((v) => !v));
 
+  const { toast } = useToast();
   const todayDateStr = getTodayDateStr();
   const phases = usePhasesForPrescription(prescription.id);
+  const phasesLoaded = usePhasesLoaded(prescription.id);
   const inventoryItems = useInventoryForPrescription(prescription.id);
   const allSlots = useDailyDoseSchedule(todayDateStr);
 
@@ -76,20 +80,33 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
   const firstPending = pendingSlots.length > 0 ? pendingSlots[0] : undefined;
   const nextDoseTime = firstPending?.localTime ?? null;
 
-  const isAsNeeded = !effectivePhase;
+  // Gate on phasesLoaded: usePhasesForPrescription returns [] while loading, so
+  // without this a scheduled prescription would briefly look as-needed and a
+  // fast click could log a PRN dose against the wrong regimen.
+  const isAsNeeded = phasesLoaded && !effectivePhase;
 
   const handleLogPrnDose = (time: string) => {
-    logPrn.mutate({
-      prescriptionId: prescription.id,
-      date: todayDateStr,
-      time,
-      // Default an as-needed dose to one pill of the tracked inventory's
-      // strength; with no inventory, just log the event (no stock decrement).
-      ...(activeInventory && {
-        doseMg: activeInventory.strength,
-        dosageMg: activeInventory.strength,
-      }),
-    });
+    logPrn.mutate(
+      {
+        prescriptionId: prescription.id,
+        date: todayDateStr,
+        time,
+        // Default an as-needed dose to one pill of the tracked inventory's
+        // strength; with no inventory, just log the event (no stock decrement).
+        ...(activeInventory && {
+          doseMg: activeInventory.strength,
+          dosageMg: activeInventory.strength,
+        }),
+      },
+      {
+        onSuccess: () =>
+          toast({ title: `${prescription.genericName} dose logged` }),
+        // RetroactiveTimePicker closes on confirm, so a silent failure would
+        // look successful — surface it.
+        onError: () =>
+          toast({ title: "Failed to log dose", variant: "destructive" }),
+      },
+    );
   };
 
   let nextDoseLabel: string;

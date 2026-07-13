@@ -220,6 +220,22 @@ describe("logPrnDose", () => {
       expect(result.data.actionTimestamp).toBe(expected.getTime());
     }
   });
+
+  it("falls back to a finite actionTimestamp for a malformed time", async () => {
+    const { rx } = await seedFullPrescription();
+
+    const result = await logPrnDose({
+      prescriptionId: rx.id,
+      date: DATE,
+      time: "not-a-time",
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      // Never persist NaN — a bad time falls back to now.
+      expect(Number.isFinite(result.data.actionTimestamp)).toBe(true);
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------

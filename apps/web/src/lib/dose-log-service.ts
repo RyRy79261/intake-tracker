@@ -362,10 +362,16 @@ export async function logPrnDose(
   try {
     const { prescriptionId, date, time, doseMg, dosageMg, note } = input;
 
-    const [h, m] = time.split(":").map(Number);
-    const takenAt = new Date(date + "T00:00:00");
-    takenAt.setHours(h ?? 0, m ?? 0, 0, 0);
-    const actionTimestamp = takenAt.getTime();
+    const [hStr, mStr] = time.split(":");
+    const h = Number(hStr);
+    const m = Number(mStr);
+    const takenAt = new Date(`${date}T00:00:00`);
+    takenAt.setHours(h, m, 0, 0);
+    const parsed = takenAt.getTime();
+    // A malformed date/time makes setHours(NaN,…) produce an Invalid Date whose
+    // getTime() is NaN — never persist that. Fall back to now so
+    // actionTimestamp is always a finite number.
+    const actionTimestamp = Number.isFinite(parsed) ? parsed : Date.now();
 
     const log = await db.transaction(
       "rw",
