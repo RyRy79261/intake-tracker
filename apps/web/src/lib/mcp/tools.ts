@@ -252,7 +252,7 @@ export function registerReadOnlyTools(server: McpServer): void {
     {
       title: "List active medications",
       description:
-        "All active prescriptions with their currently-active phase and enabled schedules.",
+        "All active prescriptions with their currently-active phase and enabled schedules. For schedule times, scheduleTimeUTC (minutes from UTC midnight) + anchorTimezone are authoritative; the legacy `time` string is deprecated.",
       inputSchema: {},
     },
     async (_args, ctx) =>
@@ -266,7 +266,7 @@ export function registerReadOnlyTools(server: McpServer): void {
     {
       title: "Recent doses",
       description:
-        "The most recent dose log entries (taken / skipped / rescheduled / pending) joined with prescription names.",
+        "The most recent dose log entries (taken / skipped / rescheduled / pending) joined with prescription names. genericName resolves even for archived (soft-deleted) prescriptions; the `archived` field is true for those, false for active, and null if the prescription was hard-deleted.",
       inputSchema: {
         limit: z
           .number()

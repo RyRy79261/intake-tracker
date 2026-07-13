@@ -17,6 +17,10 @@ type WeightInsert = typeof schema.weightRecords.$inferInsert;
 type SubstanceInsert = typeof schema.substanceRecords.$inferInsert;
 type IntakeInsert = typeof schema.intakeRecords.$inferInsert;
 type EatingInsert = typeof schema.eatingRecords.$inferInsert;
+type PrescriptionInsert = typeof schema.prescriptions.$inferInsert;
+type MedicationPhaseInsert = typeof schema.medicationPhases.$inferInsert;
+type PhaseScheduleInsert = typeof schema.phaseSchedules.$inferInsert;
+type DoseLogInsert = typeof schema.doseLogs.$inferInsert;
 
 let counter = 0;
 function uid(prefix: string): string {
@@ -24,15 +28,19 @@ function uid(prefix: string): string {
   return `${prefix}-${counter}`;
 }
 
-/** NOT NULL sync columns shared by every record table. */
-function syncColumns(ts: number) {
+/** NOT NULL sync columns without `timezone` (medication-domain tables). */
+function baseSync(ts: number) {
   return {
     createdAt: ts,
     updatedAt: ts,
     deletedAt: null as number | null,
     deviceId: "test-device",
-    timezone: "UTC",
   };
+}
+
+/** NOT NULL sync columns for record tables that carry a `timezone` column. */
+function syncColumns(ts: number) {
+  return { ...baseSync(ts), timezone: "UTC" };
 }
 
 /**
@@ -114,6 +122,97 @@ export function eatingFixture(
     timestamp: ts,
     grams: 100,
     note: null,
+    ...syncColumns(ts),
+    ...overrides,
+  };
+}
+
+// ── Medication domain (FK chain: prescription → phase → schedule → dose) ──
+// These tables have no `timezone` column, so they use baseSync (except
+// dose_logs, which does carry timezone).
+
+/** A prescriptions insert row. `isActive` true, live by default. */
+export function prescriptionFixture(
+  userId: string,
+  overrides: Partial<PrescriptionInsert> = {},
+): PrescriptionInsert {
+  const ts = overrides.updatedAt ?? Date.now();
+  return {
+    id: uid("presc"),
+    userId,
+    genericName: "Furosemide",
+    indication: "Heart failure",
+    isActive: true,
+    ...baseSync(ts),
+    ...overrides,
+  };
+}
+
+/** A medication_phases insert row. FK: prescriptionId → prescriptions.id. */
+export function medicationPhaseFixture(
+  userId: string,
+  prescriptionId: string,
+  overrides: Partial<MedicationPhaseInsert> = {},
+): MedicationPhaseInsert {
+  const ts = Date.now();
+  return {
+    id: uid("phase"),
+    userId,
+    prescriptionId,
+    type: "maintenance",
+    unit: "mg",
+    startDate: ts,
+    foodInstruction: "none",
+    status: "active",
+    ...baseSync(ts),
+    ...overrides,
+  };
+}
+
+/** A phase_schedules insert row. FK: phaseId → medication_phases.id. */
+export function phaseScheduleFixture(
+  userId: string,
+  phaseId: string,
+  overrides: Partial<PhaseScheduleInsert> = {},
+): PhaseScheduleInsert {
+  const ts = Date.now();
+  return {
+    id: uid("sched"),
+    userId,
+    phaseId,
+    time: "08:00",
+    scheduleTimeUTC: 360,
+    anchorTimezone: "UTC",
+    dosage: 1,
+    daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
+    enabled: true,
+    unit: "mg",
+    ...baseSync(ts),
+    ...overrides,
+  };
+}
+
+/**
+ * A dose_logs insert row. `refs` must reference existing prescription/phase/
+ * schedule rows (all three FKs are NOT NULL). dose_logs carries a `timezone`
+ * column, so it uses syncColumns.
+ */
+export function doseLogFixture(
+  userId: string,
+  refs: { prescriptionId: string; phaseId: string; scheduleId: string },
+  overrides: Partial<DoseLogInsert> = {},
+): DoseLogInsert {
+  const ts = Date.now();
+  return {
+    id: uid("dose"),
+    userId,
+    prescriptionId: refs.prescriptionId,
+    phaseId: refs.phaseId,
+    scheduleId: refs.scheduleId,
+    scheduledDate: "2026-07-13",
+    scheduledTime: "08:00",
+    status: "taken",
+    actionTimestamp: ts,
     ...syncColumns(ts),
     ...overrides,
   };

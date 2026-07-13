@@ -433,7 +433,12 @@ export async function listMedications(userId: string) {
           .select({
             id: phaseSchedules.id,
             phaseId: phaseSchedules.phaseId,
+            // `time` is a deprecated local wall-clock string; scheduleTimeUTC
+            // (minutes-from-midnight UTC) + anchorTimezone are authoritative.
+            // Kept for back-compat.
             time: phaseSchedules.time,
+            scheduleTimeUTC: phaseSchedules.scheduleTimeUTC,
+            anchorTimezone: phaseSchedules.anchorTimezone,
             dosage: phaseSchedules.dosage,
             unit: phaseSchedules.unit,
             daysOfWeek: phaseSchedules.daysOfWeek,
@@ -475,18 +480,23 @@ export async function listRecentDoses(userId: string, limit: number) {
       skipReason: doseLogs.skipReason,
       note: doseLogs.note,
       genericName: prescriptions.genericName,
+      // Three-state: null = prescription hard-deleted (no matching row),
+      // true = soft-deleted (archived), false = live. A bare
+      // `deletedAt IS NOT NULL` would wrongly report a hard-gone (unmatched
+      // left-join) prescription as false/live, since NULL IS NOT NULL = FALSE.
+      archived: sql<
+        boolean | null
+      >`CASE WHEN ${prescriptions.id} IS NULL THEN NULL ELSE (${prescriptions.deletedAt} IS NOT NULL) END`,
     })
     .from(doseLogs)
-    // Scope the join by user + soft-delete so we never surface a dose
-    // joined against a prescription that belongs to another user (FKs
-    // prevent it today, but the explicit predicate is defence in depth)
-    // or a soft-deleted prescription.
+    // Resolve the name even for a SOFT-deleted prescription — historic doses
+    // referencing an archived prescription should still show its name. Keep the
+    // userId scope so a dose can never resolve to another user's name.
     .leftJoin(
       prescriptions,
       and(
         eq(doseLogs.prescriptionId, prescriptions.id),
         eq(prescriptions.userId, userId),
-        isNull(prescriptions.deletedAt),
       ),
     )
     .where(and(eq(doseLogs.userId, userId), isNull(doseLogs.deletedAt)))

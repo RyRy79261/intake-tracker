@@ -37,6 +37,10 @@ import {
   substanceFixture,
   intakeFixture,
   eatingFixture,
+  prescriptionFixture,
+  medicationPhaseFixture,
+  phaseScheduleFixture,
+  doseLogFixture,
 } from "@/__tests__/helpers/mcp-query-fixtures";
 import * as schema from "@intake/db/schema";
 import type * as QueriesMod from "@/lib/mcp/queries";
@@ -83,13 +87,39 @@ afterAll(async () => {
 }, 30_000);
 
 beforeEach(async () => {
+  // Delete in FK-dependency order (children before parents).
   await ctx.db.delete(schema.weightRecords);
-  // substance_records.sourceRecordId FKs intake_records — clear substances
-  // before intake to avoid an FK violation.
-  await ctx.db.delete(schema.substanceRecords);
+  await ctx.db.delete(schema.substanceRecords); // FK → intake
   await ctx.db.delete(schema.intakeRecords);
   await ctx.db.delete(schema.eatingRecords);
+  await ctx.db.delete(schema.inventoryTransactions); // FK → inventoryItems, doseLogs
+  await ctx.db.delete(schema.doseLogs); // FK → prescription/phase/schedule/inventory
+  await ctx.db.delete(schema.inventoryItems); // FK → prescriptions
+  await ctx.db.delete(schema.phaseSchedules); // FK → phases
+  await ctx.db.delete(schema.medicationPhases); // FK → prescriptions
+  await ctx.db.delete(schema.prescriptions);
+  await ctx.db.delete(schema.titrationPlans);
+  await ctx.db.delete(schema.urinationRecords);
 });
+
+/** Seed a prescription → phase → schedule chain; returns the FK refs. */
+async function seedMedChain(
+  userId: string,
+  prescriptionOverrides: Parameters<typeof prescriptionFixture>[1] = {},
+) {
+  const presc = prescriptionFixture(userId, prescriptionOverrides);
+  await ctx.db.insert(schema.prescriptions).values(presc);
+  const phase = medicationPhaseFixture(userId, presc.id);
+  await ctx.db.insert(schema.medicationPhases).values(phase);
+  const sched = phaseScheduleFixture(userId, phase.id);
+  await ctx.db.insert(schema.phaseSchedules).values(sched);
+  return {
+    prescriptionId: presc.id,
+    phaseId: phase.id,
+    scheduleId: sched.id,
+    presc,
+  };
+}
 
 describe("MCP query fns — queryWeightHistory (real Postgres)", () => {
   it("is user-scoped: never returns another user's rows", async () => {
@@ -386,5 +416,84 @@ describe("MCP query fns — queryEatingHistory (real Postgres)", () => {
     );
 
     expect(items.map((r) => r.note)).toEqual(["mine"]);
+  });
+});
+
+describe("MCP query fns — listRecentDoses name resolution (real Postgres)", () => {
+  it("resolves a live prescription's name with archived=false", async () => {
+    const refs = await seedMedChain(ctx.testUserId, {
+      genericName: "Bisoprolol",
+    });
+    await ctx.db
+      .insert(schema.doseLogs)
+      .values(doseLogFixture(ctx.testUserId, refs));
+
+    const { doses } = await queries.listRecentDoses(ctx.testUserId, 50);
+
+    expect(doses).toHaveLength(1);
+    expect(doses[0]?.genericName).toBe("Bisoprolol");
+    expect(doses[0]?.archived).toBe(false);
+  });
+
+  it("resolves a SOFT-deleted prescription's name with archived=true", async () => {
+    const refs = await seedMedChain(ctx.testUserId, {
+      genericName: "Spironolactone",
+      deletedAt: Date.now(),
+    });
+    await ctx.db
+      .insert(schema.doseLogs)
+      .values(doseLogFixture(ctx.testUserId, refs));
+
+    const { doses } = await queries.listRecentDoses(ctx.testUserId, 50);
+
+    expect(doses).toHaveLength(1);
+    expect(doses[0]?.genericName).toBe("Spironolactone");
+    expect(doses[0]?.archived).toBe(true);
+  });
+
+  it("returns archived=null and no name for an unmatched (another user's) prescription", async () => {
+    // The chain is OTHER_USER's; a testUser-owned dose references those ids
+    // (FKs check existence, not ownership). The userId-scoped join must find no
+    // match — no name leak — and archived must be null, NOT false. A bare
+    // `deletedAt IS NOT NULL` would return false here (NULL IS NOT NULL = FALSE).
+    const refs = await seedMedChain(OTHER_USER_ID, { genericName: "Secret" });
+    await ctx.db
+      .insert(schema.doseLogs)
+      .values(doseLogFixture(ctx.testUserId, refs));
+
+    const { doses } = await queries.listRecentDoses(ctx.testUserId, 50);
+
+    expect(doses).toHaveLength(1);
+    expect(doses[0]?.genericName).toBeNull();
+    expect(doses[0]?.archived).toBeNull();
+  });
+
+  it("excludes tombstoned dose logs", async () => {
+    const refs = await seedMedChain(ctx.testUserId);
+    await ctx.db.insert(schema.doseLogs).values([
+      doseLogFixture(ctx.testUserId, refs, { note: "live" }),
+      doseLogFixture(ctx.testUserId, refs, {
+        note: "gone",
+        deletedAt: Date.now(),
+      }),
+    ]);
+
+    const { doses } = await queries.listRecentDoses(ctx.testUserId, 50);
+
+    expect(doses.map((d) => d.note)).toEqual(["live"]);
+  });
+});
+
+describe("MCP query fns — listMedications schedule times (real Postgres)", () => {
+  it("returns authoritative scheduleTimeUTC + anchorTimezone alongside deprecated time", async () => {
+    await seedMedChain(ctx.testUserId, { genericName: "Vymada" });
+
+    const { medications } = await queries.listMedications(ctx.testUserId);
+
+    expect(medications).toHaveLength(1);
+    const sched = medications[0]?.active_phases[0]?.schedules[0];
+    expect(sched?.time).toBe("08:00");
+    expect(sched?.scheduleTimeUTC).toBe(360);
+    expect(sched?.anchorTimezone).toBe("UTC");
   });
 });
