@@ -42,15 +42,37 @@ html.app-booted #__boot_shell{opacity:0;pointer-events:none}
 
 const BOOT_SHELL_FALLBACK_TIMER = `setTimeout(function(){var s=document.getElementById('__boot_shell');if(s&&!document.documentElement.classList.contains('app-booted'))s.classList.add('show-recover');},8000);`;
 
+const APP_DESCRIPTION =
+  "A comprehensive personal medical tracker for logging hydration, nutrition, vitals, and medications.";
+
 export const metadata: Metadata = {
-  title: "Intake Tracker",
-  description:
-    "A comprehensive personal medical tracker for logging hydration, nutrition, vitals, and medications.",
+  // Absolute base so the file-convention opengraph-image / twitter-image URLs
+  // resolve for crawlers (WhatsApp/Slack/X). Same origin as APP_ORIGIN in
+  // auth/native-bridge — hardcoded, so no new env var / turbo globalEnv entry.
+  metadataBase: new URL("https://intake-tracker.ryanjnoble.dev"),
+  title: { default: "Intake Tracker", template: "%s · Intake Tracker" },
+  applicationName: "Intake Tracker",
+  description: APP_DESCRIPTION,
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
     title: "Intake Tracker",
+  },
+  alternates: { canonical: "/" },
+  openGraph: {
+    type: "website",
+    siteName: "Intake Tracker",
+    url: "/",
+    title: "Intake Tracker — hydration, nutrition, vitals & meds",
+    description: APP_DESCRIPTION,
+    // og:image is auto-added from app/opengraph-image.tsx
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Intake Tracker",
+    description: APP_DESCRIPTION,
+    // twitter:image is auto-added from app/twitter-image.tsx
   },
 };
 
