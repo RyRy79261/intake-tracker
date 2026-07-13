@@ -218,8 +218,10 @@ export async function getDoseLogsWithDetailsForDate(date: string): Promise<DoseL
   const result: DoseLogWithDetails[] = [];
   for (const log of logs) {
     const prescription = prescriptionMap.get(log.prescriptionId);
-    const phase = phaseMap.get(log.phaseId);
-    const schedule = scheduleMap.get(log.scheduleId);
+    // phaseId/scheduleId are absent for PRN doses — those fall through the
+    // `prescription && phase && schedule` guard below and are excluded here.
+    const phase = log.phaseId ? phaseMap.get(log.phaseId) : undefined;
+    const schedule = log.scheduleId ? scheduleMap.get(log.scheduleId) : undefined;
     const inventory = inventoryMap.get(log.prescriptionId);
 
     if (prescription && phase && schedule) {

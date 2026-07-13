@@ -493,18 +493,23 @@ export const doseLogs = pgTable(
     prescriptionId: text("prescription_id")
       .notNull()
       .references(() => prescriptions.id),
-    phaseId: text("phase_id")
-      .notNull()
-      .references(() => medicationPhases.id),
-    scheduleId: text("schedule_id")
-      .notNull()
-      .references(() => phaseSchedules.id),
+    // Nullable for PRN ("as needed") doses, which have no phase/schedule. The
+    // kindFieldsCheck below still requires both for scheduled doses.
+    phaseId: text("phase_id").references(() => medicationPhases.id),
+    scheduleId: text("schedule_id").references(() => phaseSchedules.id),
     inventoryItemId: text("inventory_item_id").references(
       () => inventoryItems.id,
     ),
     scheduledDate: text("scheduled_date").notNull(),
     scheduledTime: text("scheduled_time").notNull(),
     status: text("status").notNull(),
+    // 'scheduled' = logged against a phase schedule; 'prn' = an as-needed dose
+    // (e.g. furosemide) with no phase/schedule. NOT NULL DEFAULT backfills
+    // every existing server row, so kind is always present server-side.
+    kind: text("kind").notNull().default("scheduled"),
+    // Optional explicit dose (mg) for a PRN dose when it isn't derivable from
+    // the linked inventory item + quantity.
+    doseMg: real("dose_mg"),
     actionTimestamp: bigint("action_timestamp", { mode: "number" }),
     rescheduledTo: text("rescheduled_to"),
     skipReason: text("skip_reason"),
@@ -520,6 +525,15 @@ export const doseLogs = pgTable(
     statusCheck: check(
       "dose_logs_status_check",
       sql`${t.status} IN ('taken','skipped','rescheduled','pending')`,
+    ),
+    kindCheck: check(
+      "dose_logs_kind_check",
+      sql`${t.kind} IN ('scheduled','prn')`,
+    ),
+    // A scheduled dose must carry both phase and schedule; a PRN dose need not.
+    kindFieldsCheck: check(
+      "dose_logs_kind_fields_check",
+      sql`${t.kind} = 'prn' OR (${t.phaseId} IS NOT NULL AND ${t.scheduleId} IS NOT NULL)`,
     ),
     userUpdatedIdx: index("idx_dose_logs_user_updated").on(
       t.userId,

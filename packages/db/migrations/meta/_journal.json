@@ -134,6 +134,13 @@
       "when": 1781797699476,
       "tag": "0018_lazy_jackal",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1783948231861,
+      "tag": "0019_uneven_ben_urich",
+      "breakpoints": true
     }
   ]
 }

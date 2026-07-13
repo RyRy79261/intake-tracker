@@ -154,6 +154,9 @@ export type PillShape = "round" | "oval" | "capsule" | "diamond" | "tablet";
 export type FoodInstruction = "before" | "after" | "none";
 export type DoseStatus = "taken" | "skipped" | "rescheduled" | "pending";
 
+/** How a dose was logged: against a phase schedule, or as-needed (PRN). */
+export type DoseKind = "scheduled" | "prn";
+
 /**
  * One active ingredient of a combination drug, with its per-pill (or
  * per-reference-dose) strength. Combination tablets like Entresto/Vymada
@@ -301,12 +304,17 @@ export interface DailyNote {
 export interface DoseLog {
   id: string;
   prescriptionId: string;
-  phaseId: string;
-  scheduleId: string;
+  /** Absent for PRN doses (kind='prn'), which have no phase/schedule. */
+  phaseId?: string;
+  scheduleId?: string;
   inventoryItemId?: string;
   scheduledDate: string;
   scheduledTime: string;
   status: DoseStatus;
+  /** 'scheduled' (default) = from a phase schedule; 'prn' = as-needed. */
+  kind?: DoseKind;
+  /** Optional explicit dose (mg) for a PRN dose when not derivable from inventory. */
+  doseMg?: number;
   actionTimestamp?: number;
   rescheduledTo?: string;
   skipReason?: string;
