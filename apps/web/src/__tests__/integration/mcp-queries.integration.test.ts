@@ -35,6 +35,7 @@ import {
 import {
   weightFixture,
   substanceFixture,
+  intakeFixture,
 } from "@/__tests__/helpers/mcp-query-fixtures";
 import * as schema from "@intake/db/schema";
 import type * as QueriesMod from "@/lib/mcp/queries";
@@ -82,7 +83,10 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await ctx.db.delete(schema.weightRecords);
+  // substance_records.sourceRecordId FKs intake_records — clear substances
+  // before intake to avoid an FK violation.
   await ctx.db.delete(schema.substanceRecords);
+  await ctx.db.delete(schema.intakeRecords);
 });
 
 describe("MCP query fns — queryWeightHistory (real Postgres)", () => {
@@ -261,5 +265,87 @@ describe("MCP query fns — querySubstanceHistory (real Postgres)", () => {
     });
 
     expect(items.map((r) => r.description)).toEqual(["b"]);
+  });
+});
+
+describe("MCP query fns — queryIntakeHistory linkage (real Postgres)", () => {
+  it("hydrates substance:<id> water rows and exposes groupId/groupSource, leaving plain rows null", async () => {
+    const sub = substanceFixture(ctx.testUserId, {
+      type: "alcohol",
+      description: "Negroni",
+      abvPercent: 24,
+      amountStandardDrinks: 2,
+      amountMg: null,
+    });
+    await ctx.db.insert(schema.substanceRecords).values(sub);
+    await ctx.db.insert(schema.intakeRecords).values([
+      intakeFixture(ctx.testUserId, {
+        amount: 90,
+        source: `substance:${sub.id}`,
+        groupId: "grp-9",
+        groupSource: "voice",
+        timestamp: 100,
+      }),
+      intakeFixture(ctx.testUserId, {
+        amount: 250,
+        source: "manual",
+        timestamp: 200,
+      }),
+    ]);
+
+    const { items } = await queries.queryIntakeHistory(
+      ctx.testUserId,
+      "all",
+      FULL_RANGE,
+    );
+
+    expect(items).toHaveLength(2);
+    const [drink, plain] = items;
+    // Water amount is untouched — totals stay honest.
+    expect(drink?.amount).toBe(90);
+    expect(drink?.groupId).toBe("grp-9");
+    expect(drink?.groupSource).toBe("voice");
+    expect(drink?.substance).toMatchObject({
+      substanceType: "alcohol",
+      description: "Negroni",
+      abvPercent: 24,
+      amountStandardDrinks: 2,
+      amountMg: null,
+    });
+    expect(plain?.substance).toBeNull();
+  });
+
+  it("does not hydrate a tombstoned substance", async () => {
+    const sub = substanceFixture(ctx.testUserId, { deletedAt: Date.now() });
+    await ctx.db.insert(schema.substanceRecords).values(sub);
+    await ctx.db.insert(schema.intakeRecords).values(
+      intakeFixture(ctx.testUserId, { source: `substance:${sub.id}` }),
+    );
+
+    const { items } = await queries.queryIntakeHistory(
+      ctx.testUserId,
+      "all",
+      FULL_RANGE,
+    );
+
+    expect(items).toHaveLength(1);
+    expect(items[0]?.substance).toBeNull();
+  });
+
+  it("does not hydrate another user's substance (scope guard)", async () => {
+    const sub = substanceFixture(OTHER_USER_ID);
+    await ctx.db.insert(schema.substanceRecords).values(sub);
+    await ctx.db.insert(schema.intakeRecords).values(
+      intakeFixture(ctx.testUserId, { source: `substance:${sub.id}` }),
+    );
+
+    const { items } = await queries.queryIntakeHistory(
+      ctx.testUserId,
+      "all",
+      FULL_RANGE,
+    );
+
+    expect(items).toHaveLength(1);
+    expect(items[0]?.substance).toBeNull();
   });
 });

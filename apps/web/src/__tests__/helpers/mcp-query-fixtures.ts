@@ -15,6 +15,7 @@ import type * as schema from "@intake/db/schema";
 
 type WeightInsert = typeof schema.weightRecords.$inferInsert;
 type SubstanceInsert = typeof schema.substanceRecords.$inferInsert;
+type IntakeInsert = typeof schema.intakeRecords.$inferInsert;
 
 let counter = 0;
 function uid(prefix: string): string {
@@ -71,6 +72,30 @@ export function substanceFixture(
     description: "Espresso",
     source: "standalone",
     timestamp: ts,
+    ...syncColumns(ts),
+    ...overrides,
+  };
+}
+
+/**
+ * An intake_records insert row. Defaults to a 250 ml manual water entry; pass
+ * `source: "substance:<id>"` to model the water half of a decomposed drink,
+ * or `type`/`amount` for salt/sugar/potassium. `type` is CHECK-constrained to
+ * 'water' | 'salt' | 'sugar' | 'potassium'.
+ */
+export function intakeFixture(
+  userId: string,
+  overrides: Partial<IntakeInsert> = {},
+): IntakeInsert {
+  const ts = overrides.timestamp ?? Date.now();
+  return {
+    id: uid("intake"),
+    userId,
+    type: "water",
+    amount: 250,
+    timestamp: ts,
+    source: "manual",
+    note: null,
     ...syncColumns(ts),
     ...overrides,
   };

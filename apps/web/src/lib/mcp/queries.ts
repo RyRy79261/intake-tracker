@@ -173,6 +173,8 @@ export async function queryIntakeHistory(
       timestamp: intakeRecords.timestamp,
       source: intakeRecords.source,
       note: intakeRecords.note,
+      groupId: intakeRecords.groupId,
+      groupSource: intakeRecords.groupSource,
     })
     .from(intakeRecords)
     .where(
@@ -187,7 +189,71 @@ export async function queryIntakeHistory(
     .orderBy(asc(intakeRecords.timestamp))
     .limit(MAX_ROWS + 1);
 
-  return capRows(rows);
+  const capped = capRows(rows);
+
+  // Rows whose source is `substance:<id>` are the water half of a decomposed
+  // drink (e.g. an espresso martini → a water intake row + a caffeine + an
+  // alcohol substance, one groupId). Hydrate those rows with their linked
+  // substance so callers can tell which water is a drink — and read its
+  // caffeine mg / alcohol ABV — without a second query or regex. The water
+  // amounts themselves are untouched, so totals stay honest.
+  const SUBSTANCE_PREFIX = "substance:";
+  const substanceIdOf = (source: string | null): string | null =>
+    source?.startsWith(SUBSTANCE_PREFIX)
+      ? source.slice(SUBSTANCE_PREFIX.length)
+      : null;
+
+  const substanceIds = Array.from(
+    new Set(
+      capped.items
+        .map((r) => substanceIdOf(r.source))
+        .filter((id): id is string => !!id),
+    ),
+  );
+
+  const substanceById = new Map<
+    string,
+    {
+      substanceType: string;
+      description: string;
+      abvPercent: number | null;
+      amountStandardDrinks: number | null;
+      amountMg: number | null;
+    }
+  >();
+  if (substanceIds.length > 0) {
+    const linked = await db
+      .select({
+        id: substanceRecords.id,
+        substanceType: substanceRecords.type,
+        description: substanceRecords.description,
+        abvPercent: substanceRecords.abvPercent,
+        amountStandardDrinks: substanceRecords.amountStandardDrinks,
+        amountMg: substanceRecords.amountMg,
+      })
+      .from(substanceRecords)
+      .where(
+        and(
+          eq(substanceRecords.userId, userId),
+          inArray(substanceRecords.id, substanceIds),
+          isNull(substanceRecords.deletedAt),
+        ),
+      );
+    for (const { id, ...rest } of linked) {
+      substanceById.set(id, rest);
+    }
+  }
+
+  return {
+    ...capped,
+    items: capped.items.map((r) => {
+      const sid = substanceIdOf(r.source);
+      return {
+        ...r,
+        substance: sid ? substanceById.get(sid) ?? null : null,
+      };
+    }),
+  };
 }
 
 export async function queryWeightHistory(userId: string, range: DateRange) {
