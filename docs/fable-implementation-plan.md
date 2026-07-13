@@ -42,7 +42,7 @@ All 8 Workstream-A items, both Workstream-B items, all 5 Workstream-C items, and
 
 **PR-A0 — MCP query-fn test harness** · infra prerequisite · **M**
 - No existing test exercises `queries.ts`/`tools.ts`; the mcp/ suite covers only OAuth/tokens/scopes/whitelist, and the Dexie-based service tests are not a template for these Neon/Drizzle query fns. This is the real cost the "new query-fn tests" line hid.
-- **Infra decision — seed a real in-process Postgres, not a db mock.** A4's `CASE`/`archived` logic and A5's `COALESCE(SUM(...))`/NULL-over-zero-rows semantics are precisely what a hand-rolled db mock would paper over; the harness must evaluate **real SQL**. **Recommend pglite** (in-process Postgres, no Docker/CI service) that applies the committed drizzle schema/migrations from `packages/db/migrations/`, seeds per-test fixture rows, and hands the drizzle `db` to each query fn. Fallback: Testcontainers Postgres or a throwaway Neon branch if pglite can't run a required extension.
+- **Infra decision — seed a real Postgres, not a db mock.** A4's `CASE`/`archived` logic and A5's `COALESCE(SUM(...))`/NULL-over-zero-rows semantics are precisely what a hand-rolled db mock would paper over; the harness must evaluate **real SQL**. **Implemented by reusing the repo's existing Testcontainers Postgres harness** (`apps/web/src/__tests__/helpers/test-db.ts` + `vitest.integration.config.ts`) — it already spins up real Postgres 16 with the committed migrations applied, so no pglite / new dependency was added (the pglite recommendation was superseded once the existing infra was found). Seeds per-test fixture rows and hands the drizzle `db` to each query fn via a top-level `vi.mock('@intake/db/client')`.
 - Deliver a reusable `withSeededDb(fixtures, fn)` helper + one smoke test against an existing query fn (`queryWeightHistory`) to lock the pattern (range guard, `MAX_ROWS+1` truncation, `isNull(deletedAt)`, user scope, audit row). Every Group-1 query-fn test builds on this helper.
 - No product code, no schema/parity change. Gate: helper green, smoke test green.
 
@@ -71,7 +71,7 @@ Replicate the range-tool boilerplate from `query_weight_history` (export `queryX
 
 **PR-A4 — dose names through tombstones + authoritative schedule times** · delivers A4 + A6 · **S** · *tests depend on PR-A0*
 - A4 (`listRecentDoses`, join `queries.ts:412–419`): remove **only** `isNull(prescriptions.deletedAt)` from the leftJoin; **keep** `eq(prescriptions.userId, userId)` (cross-user name leak otherwise). Add derived `archived` with a **null-preserving `CASE`**:
-  ```
+  ```ts
   archived: sql`CASE WHEN ${prescriptions.id} IS NULL THEN NULL
                     ELSE (${prescriptions.deletedAt} IS NOT NULL) END`
   ```
@@ -147,7 +147,7 @@ Replicate the range-tool boilerplate from `query_weight_history` (export `queryX
 
 ## Sequencing & parallelization
 
-```
+```text
 Track 0 (infra — must land first for Group 1 tests):
   PR-A0  (query-fn harness)
 
@@ -187,7 +187,7 @@ Track 3 (UI event-time — parallel, independent files):
 
 | PR | Extra gates |
 |---|---|
-| A0 | pglite (or fallback) fixture applies committed drizzle schema; `withSeededDb` helper + `queryWeightHistory` smoke test green (range guard, `MAX_ROWS+1`/`truncated`, `isNull(deletedAt)`, user scope, audit row). No product/schema change. |
+| A0 | Testcontainers Postgres (reused `test-db.ts`) applies committed drizzle schema; fixture builders + `queryWeightHistory` smoke test green (range guard, `MAX_ROWS+1`/`truncated`, `isNull(deletedAt)`, user scope). No product/schema change. |
 | A1, A2, A4, A5, A7 | New query-fn tests **on the A0 harness** (range guard, `MAX_ROWS+1`/`truncated`, `isNull(deletedAt)`, user scope, **audit row written**). Update `docs/mcp-connector.md` table + tool-count line to the reconciled value. schema-parity/journal **untouched** (assert no diff). |
 | A3 | Confirm A1 merged first; description repointed; substance import retained; **tool count unchanged** (field removed, not tool). |
 | A4 | Cross-user name cannot leak (userId scope retained in join). **`CASE` yields `null` for hard-gone, `true` soft-deleted, `false` live** — assert all three, and that a bare `IS NOT NULL` is not used. |
