@@ -19,10 +19,13 @@ import {
   bloodPressureRecords,
   eatingRecords,
   substanceRecords,
+  urinationRecords,
   prescriptions,
+  titrationPlans,
   medicationPhases,
   phaseSchedules,
   inventoryItems,
+  inventoryTransactions,
   doseLogs,
   pushSettings,
 } from "@intake/db/schema";
@@ -329,47 +332,13 @@ export async function queryEatingHistory(userId: string, range: DateRange) {
     )
     .orderBy(asc(eatingRecords.timestamp))
     .limit(MAX_ROWS + 1);
-  const capped = capRows(rows);
-
-  // Attach substance records (caffeine / alcohol) linked via groupId.
-  const groupIds = Array.from(
-    new Set(capped.items.map((r) => r.groupId).filter((g): g is string => !!g)),
-  );
-  let substances: Array<{
-    groupId: string | null;
-    type: string;
-    amountMg: number | null;
-    amountStandardDrinks: number | null;
-    abvPercent: number | null;
-    volumeMl: number | null;
-    description: string;
-    timestamp: number;
-  }> = [];
-  if (groupIds.length > 0) {
-    substances = await db
-      .select({
-        groupId: substanceRecords.groupId,
-        type: substanceRecords.type,
-        amountMg: substanceRecords.amountMg,
-        amountStandardDrinks: substanceRecords.amountStandardDrinks,
-        abvPercent: substanceRecords.abvPercent,
-        volumeMl: substanceRecords.volumeMl,
-        description: substanceRecords.description,
-        timestamp: substanceRecords.timestamp,
-      })
-      .from(substanceRecords)
-      .where(
-        and(
-          eq(substanceRecords.userId, userId),
-          inArray(substanceRecords.groupId, groupIds),
-          isNull(substanceRecords.deletedAt),
-        ),
-      );
-  }
-  return {
-    ...capped,
-    substances,
-  };
+  // Each row keeps its groupId so callers can correlate a food entry with its
+  // decomposed substances. We deliberately do NOT embed substances here: the
+  // old join only matched substances whose groupId appeared on an *eating*
+  // record, so standalone drinks never surfaced and the field returned []
+  // misleadingly. query_substance_history is the single source of truth for
+  // caffeine/alcohol (see its tool description).
+  return capRows(rows);
 }
 
 export async function querySubstanceHistory(
@@ -467,7 +436,12 @@ export async function listMedications(userId: string) {
           .select({
             id: phaseSchedules.id,
             phaseId: phaseSchedules.phaseId,
+            // `time` is a deprecated local wall-clock string; scheduleTimeUTC
+            // (minutes-from-midnight UTC) + anchorTimezone are authoritative.
+            // Kept for back-compat.
             time: phaseSchedules.time,
+            scheduleTimeUTC: phaseSchedules.scheduleTimeUTC,
+            anchorTimezone: phaseSchedules.anchorTimezone,
             dosage: phaseSchedules.dosage,
             unit: phaseSchedules.unit,
             daysOfWeek: phaseSchedules.daysOfWeek,
@@ -509,18 +483,23 @@ export async function listRecentDoses(userId: string, limit: number) {
       skipReason: doseLogs.skipReason,
       note: doseLogs.note,
       genericName: prescriptions.genericName,
+      // Three-state: null = prescription hard-deleted (no matching row),
+      // true = soft-deleted (archived), false = live. A bare
+      // `deletedAt IS NOT NULL` would wrongly report a hard-gone (unmatched
+      // left-join) prescription as false/live, since NULL IS NOT NULL = FALSE.
+      archived: sql<
+        boolean | null
+      >`CASE WHEN ${prescriptions.id} IS NULL THEN NULL ELSE (${prescriptions.deletedAt} IS NOT NULL) END`,
     })
     .from(doseLogs)
-    // Scope the join by user + soft-delete so we never surface a dose
-    // joined against a prescription that belongs to another user (FKs
-    // prevent it today, but the explicit predicate is defence in depth)
-    // or a soft-deleted prescription.
+    // Resolve the name even for a SOFT-deleted prescription — historic doses
+    // referencing an archived prescription should still show its name. Keep the
+    // userId scope so a dose can never resolve to another user's name.
     .leftJoin(
       prescriptions,
       and(
         eq(doseLogs.prescriptionId, prescriptions.id),
         eq(prescriptions.userId, userId),
-        isNull(prescriptions.deletedAt),
       ),
     )
     .where(and(eq(doseLogs.userId, userId), isNull(doseLogs.deletedAt)))
@@ -535,9 +514,26 @@ export async function getInventoryStatus(userId: string) {
       id: inventoryItems.id,
       prescriptionId: inventoryItems.prescriptionId,
       brandName: inventoryItems.brandName,
-      currentStock: inventoryItems.currentStock,
+      // Authoritative stock = signed SUM of this item's non-deleted inventory
+      // transactions (amounts are already signed: refill/initial positive,
+      // consumed negative, adjustments either way — mirrors getCurrentStock in
+      // inventory-service). Cast to int so pg returns a number, not a bigint
+      // string. SUM over ZERO rows is NULL, so a legacy item with no
+      // transactions falls through to the deprecated currentStock, then 0. An
+      // item whose transactions net to zero yields SUM=0 and correctly reports
+      // 0 (a real balance). Negative stock is legal (over-consumed) — no clamp.
+      stock: sql<number>`COALESCE(
+        (SELECT SUM(${inventoryTransactions.amount})::int
+           FROM ${inventoryTransactions}
+          WHERE ${inventoryTransactions.inventoryItemId} = ${inventoryItems.id}
+            AND ${inventoryTransactions.userId} = ${userId}
+            AND ${inventoryTransactions.deletedAt} IS NULL),
+        ${inventoryItems.currentStock},
+        0
+      )`,
       strength: inventoryItems.strength,
       unit: inventoryItems.unit,
+      compounds: inventoryItems.compounds,
       refillAlertPills: inventoryItems.refillAlertPills,
       refillAlertDays: inventoryItems.refillAlertDays,
       isActive: inventoryItems.isActive,
@@ -560,6 +556,50 @@ export async function getInventoryStatus(userId: string) {
       ),
     );
   return { inventory: rows };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Elimination + titration queries
+// ─────────────────────────────────────────────────────────────────────────
+
+export async function queryUrinationHistory(userId: string, range: DateRange) {
+  const rows = await db
+    .select({
+      id: urinationRecords.id,
+      timestamp: urinationRecords.timestamp,
+      // Free-text volume category (e.g. 'small' | 'normal' | 'large'), nullable.
+      amountEstimate: urinationRecords.amountEstimate,
+      note: urinationRecords.note,
+    })
+    .from(urinationRecords)
+    .where(
+      and(
+        eq(urinationRecords.userId, userId),
+        gte(urinationRecords.timestamp, range.start),
+        lte(urinationRecords.timestamp, range.end),
+        isNull(urinationRecords.deletedAt),
+      ),
+    )
+    .orderBy(asc(urinationRecords.timestamp))
+    .limit(MAX_ROWS + 1);
+  return capRows(rows);
+}
+
+export async function listTitrationPlans(userId: string) {
+  const plans = await db
+    .select({
+      id: titrationPlans.id,
+      title: titrationPlans.title,
+      conditionLabel: titrationPlans.conditionLabel,
+      recommendedStartDate: titrationPlans.recommendedStartDate,
+      status: titrationPlans.status,
+      notes: titrationPlans.notes,
+      warnings: titrationPlans.warnings,
+    })
+    .from(titrationPlans)
+    .where(and(eq(titrationPlans.userId, userId), isNull(titrationPlans.deletedAt)))
+    .orderBy(desc(titrationPlans.updatedAt));
+  return { titration_plans: plans };
 }
 
 // ─────────────────────────────────────────────────────────────────────────
