@@ -263,7 +263,6 @@ jobs:
           NEON_AUTH_COOKIE_SECRET: ${{ secrets.NEON_AUTH_COOKIE_SECRET }}
           NEON_AUTH_TEST_EMAIL: ${{ secrets.NEON_AUTH_TEST_EMAIL }}
           NEON_AUTH_TEST_PASSWORD: ${{ secrets.NEON_AUTH_TEST_PASSWORD }}
-          ALLOWED_EMAILS: ${{ secrets.NEON_AUTH_TEST_EMAIL }}
           ENABLE_E2E_TEST_ROUTES: "true"
         run: pnpm test:e2e
       - name: Delete Neon test branch

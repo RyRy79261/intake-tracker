@@ -57,13 +57,16 @@ next-env.d.ts
 /public/workbox-*.js.map
 /public/worker-*.js
 
-# Playwright
-/test-results/
-/playwright-report/
-/blob-report/
-/playwright/.cache/
-/playwright/.auth/
-e2e/.auth/
+# Playwright — unanchored so the monorepo app path (apps/web/…) is covered too;
+# root-anchored rules like /playwright-report/ do NOT match apps/web/. This
+# matters most for **/playwright/.auth/ — user.json is a live, impersonatable
+# Neon Auth session cookie that must never be committed.
+**/test-results/
+**/playwright-report/
+**/blob-report/
+**/playwright/.cache/
+**/playwright/.auth/
+**/e2e/.auth/
 .claude/worktrees/
 .entire/
 

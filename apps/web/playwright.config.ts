@@ -13,8 +13,8 @@ loadEnvConfig(process.cwd());
  */
 export default defineConfig({
   testDir: './e2e',
-  /* Phase 41: globalSetup signs in once via /auth and persists session */
-  globalSetup: require.resolve('./e2e/global-setup'),
+  /* Auth runs as a `setup` project (e2e/auth.setup.ts) so login failures show
+     up in the report/trace; the chromium project depends on it below. */
   /* Run tests in files in parallel */
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
@@ -32,8 +32,8 @@ export default defineConfig({
     /* Base URL to use in actions like `await page.goto('/')`. */
     baseURL: 'http://localhost:3000',
 
-    /* Reuse the authenticated session captured by globalSetup */
-    storageState: 'playwright/.auth/user.json',
+    /* storageState lives on the chromium project (below), not globally, so the
+       setup project itself runs without trying to load the not-yet-written file. */
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
@@ -44,11 +44,16 @@ export default defineConfig({
 
   /* Configure projects for major browsers */
   projects: [
+    /* Signs in once and writes playwright/.auth/user.json. */
+    { name: 'setup', testMatch: /.*\.setup\.ts/ },
     {
       name: 'chromium',
       use: {
         ...devices['Desktop Chrome'],
+        /* Reuse the authenticated session created by the setup project. */
+        storageState: 'playwright/.auth/user.json',
       },
+      dependencies: ['setup'],
     },
   ],
 
@@ -67,7 +72,6 @@ export default defineConfig({
           NEON_AUTH_COOKIE_SECRET: process.env.NEON_AUTH_COOKIE_SECRET ?? '',
           NEON_AUTH_TEST_EMAIL: process.env.NEON_AUTH_TEST_EMAIL ?? '',
           NEON_AUTH_TEST_PASSWORD: process.env.NEON_AUTH_TEST_PASSWORD ?? '',
-          ALLOWED_EMAILS: process.env.ALLOWED_EMAILS ?? '',
           ENABLE_E2E_TEST_ROUTES: process.env.ENABLE_E2E_TEST_ROUTES ?? '',
         },
       }
@@ -84,7 +88,6 @@ export default defineConfig({
           NEON_AUTH_COOKIE_SECRET: process.env.NEON_AUTH_COOKIE_SECRET ?? '',
           NEON_AUTH_TEST_EMAIL: process.env.NEON_AUTH_TEST_EMAIL ?? '',
           NEON_AUTH_TEST_PASSWORD: process.env.NEON_AUTH_TEST_PASSWORD ?? '',
-          ALLOWED_EMAILS: process.env.ALLOWED_EMAILS ?? '',
           ENABLE_E2E_TEST_ROUTES: process.env.ENABLE_E2E_TEST_ROUTES ?? '',
         },
       },
