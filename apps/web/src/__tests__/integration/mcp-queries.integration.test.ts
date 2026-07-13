@@ -36,6 +36,7 @@ import {
   weightFixture,
   substanceFixture,
   intakeFixture,
+  eatingFixture,
 } from "@/__tests__/helpers/mcp-query-fixtures";
 import * as schema from "@intake/db/schema";
 import type * as QueriesMod from "@/lib/mcp/queries";
@@ -87,6 +88,7 @@ beforeEach(async () => {
   // before intake to avoid an FK violation.
   await ctx.db.delete(schema.substanceRecords);
   await ctx.db.delete(schema.intakeRecords);
+  await ctx.db.delete(schema.eatingRecords);
 });
 
 describe("MCP query fns — queryWeightHistory (real Postgres)", () => {
@@ -347,5 +349,42 @@ describe("MCP query fns — queryIntakeHistory linkage (real Postgres)", () => {
 
     expect(items).toHaveLength(1);
     expect(items[0]?.substance).toBeNull();
+  });
+});
+
+describe("MCP query fns — queryEatingHistory (real Postgres)", () => {
+  it("returns food rows with groupId and no embedded substances field", async () => {
+    await ctx.db.insert(schema.eatingRecords).values([
+      eatingFixture(ctx.testUserId, {
+        grams: 150,
+        groupId: "grp-1",
+        timestamp: 100,
+      }),
+      eatingFixture(ctx.testUserId, { grams: 200, timestamp: 200 }),
+    ]);
+
+    const result = await queries.queryEatingHistory(ctx.testUserId, FULL_RANGE);
+
+    expect(result.items).toHaveLength(2);
+    expect(result.items[0]?.groupId).toBe("grp-1");
+    // A3: the misleading groupId-only substances join was removed —
+    // query_substance_history is the source of truth now.
+    expect(result).not.toHaveProperty("substances");
+    expect(result.truncated).toBe(false);
+  });
+
+  it("is user-scoped and excludes tombstoned rows", async () => {
+    await ctx.db.insert(schema.eatingRecords).values([
+      eatingFixture(ctx.testUserId, { note: "mine" }),
+      eatingFixture(ctx.testUserId, { note: "deleted", deletedAt: Date.now() }),
+      eatingFixture(OTHER_USER_ID, { note: "theirs" }),
+    ]);
+
+    const { items } = await queries.queryEatingHistory(
+      ctx.testUserId,
+      FULL_RANGE,
+    );
+
+    expect(items.map((r) => r.note)).toEqual(["mine"]);
   });
 });

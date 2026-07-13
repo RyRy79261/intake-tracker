@@ -329,47 +329,13 @@ export async function queryEatingHistory(userId: string, range: DateRange) {
     )
     .orderBy(asc(eatingRecords.timestamp))
     .limit(MAX_ROWS + 1);
-  const capped = capRows(rows);
-
-  // Attach substance records (caffeine / alcohol) linked via groupId.
-  const groupIds = Array.from(
-    new Set(capped.items.map((r) => r.groupId).filter((g): g is string => !!g)),
-  );
-  let substances: Array<{
-    groupId: string | null;
-    type: string;
-    amountMg: number | null;
-    amountStandardDrinks: number | null;
-    abvPercent: number | null;
-    volumeMl: number | null;
-    description: string;
-    timestamp: number;
-  }> = [];
-  if (groupIds.length > 0) {
-    substances = await db
-      .select({
-        groupId: substanceRecords.groupId,
-        type: substanceRecords.type,
-        amountMg: substanceRecords.amountMg,
-        amountStandardDrinks: substanceRecords.amountStandardDrinks,
-        abvPercent: substanceRecords.abvPercent,
-        volumeMl: substanceRecords.volumeMl,
-        description: substanceRecords.description,
-        timestamp: substanceRecords.timestamp,
-      })
-      .from(substanceRecords)
-      .where(
-        and(
-          eq(substanceRecords.userId, userId),
-          inArray(substanceRecords.groupId, groupIds),
-          isNull(substanceRecords.deletedAt),
-        ),
-      );
-  }
-  return {
-    ...capped,
-    substances,
-  };
+  // Each row keeps its groupId so callers can correlate a food entry with its
+  // decomposed substances. We deliberately do NOT embed substances here: the
+  // old join only matched substances whose groupId appeared on an *eating*
+  // record, so standalone drinks never surfaced and the field returned []
+  // misleadingly. query_substance_history is the single source of truth for
+  // caffeine/alcohol (see its tool description).
+  return capRows(rows);
 }
 
 export async function querySubstanceHistory(

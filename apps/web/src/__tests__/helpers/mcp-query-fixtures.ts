@@ -16,6 +16,7 @@ import type * as schema from "@intake/db/schema";
 type WeightInsert = typeof schema.weightRecords.$inferInsert;
 type SubstanceInsert = typeof schema.substanceRecords.$inferInsert;
 type IntakeInsert = typeof schema.intakeRecords.$inferInsert;
+type EatingInsert = typeof schema.eatingRecords.$inferInsert;
 
 let counter = 0;
 function uid(prefix: string): string {
@@ -95,6 +96,23 @@ export function intakeFixture(
     amount: 250,
     timestamp: ts,
     source: "manual",
+    note: null,
+    ...syncColumns(ts),
+    ...overrides,
+  };
+}
+
+/** An eating_records insert row (food log entry). `grams` is nullable. */
+export function eatingFixture(
+  userId: string,
+  overrides: Partial<EatingInsert> = {},
+): EatingInsert {
+  const ts = overrides.timestamp ?? Date.now();
+  return {
+    id: uid("eating"),
+    userId,
+    timestamp: ts,
+    grams: 100,
     note: null,
     ...syncColumns(ts),
     ...overrides,

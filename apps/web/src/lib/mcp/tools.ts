@@ -205,7 +205,7 @@ export function registerReadOnlyTools(server: McpServer): void {
     {
       title: "Eating history",
       description:
-        "Food log entries in the given time range, with linked caffeine/alcohol substances. Capped at 5000 rows.",
+        "Food log entries in the given time range, oldest first. Each row includes groupId; use query_substance_history for the caffeine/alcohol substances (standalone drinks are not linked here). Capped at 5000 rows.",
       inputSchema: dateRangeShape,
     },
     async (args, ctx) =>

@@ -273,7 +273,7 @@ the existing patterns from `src/lib/analytics-service.ts` and
 | `query_intake_history` | water/salt by day or hour over [start, end] | `intakeRecords` |
 | `query_weight_history` | weight points + 7-day avg over [start, end] | `weightRecords` |
 | `query_blood_pressure_history` | systolic/diastolic/HR points + 7-day avg | `bloodPressureRecords` |
-| `query_eating_history` | food log entries with parsed substances | `eatingRecords` + `substanceRecords` |
+| `query_eating_history` | food log entries; `groupId` links to substances (query separately) | `eatingRecords` |
 | `query_substance_history` | caffeine/alcohol records (mg, standard drinks, ABV%) over [start, end], filterable by type | `substanceRecords` |
 | `list_medications` | active prescriptions + current phase + schedule | `prescriptions` + `medicationPhases` + `phaseSchedules` |
 | `list_recent_doses` | last N dose log entries with prescription names | `doseLogs` |
