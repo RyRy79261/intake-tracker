@@ -185,6 +185,86 @@ test.describe('Medications', () => {
     await expect(page.locator('text=/\\d+ pills/')).toBeVisible({ timeout: 5000 });
   });
 
+  test('should create an as-needed (PRN) medication and log a dose via "Log dose now"', async ({ page }) => {
+    // Fail loudly on any client-side error — this is exactly the class of
+    // interaction bug (transient button state, silent save failure) that
+    // driving the real app catches and isolated component tests miss.
+    const consoleErrors: string[] = [];
+    page.on('console', (msg) => {
+      if (msg.type() === 'error') consoleErrors.push(msg.text());
+    });
+
+    await page.route('/api/ai/medicine-search', async route => {
+      await route.fulfill({
+        json: {
+          brandNames: ['Furosemide'],
+          genericName: 'Furosemide',
+          dosageStrengths: ['40mg'],
+          commonIndications: ['Fluid overload'],
+          foodInstruction: 'none',
+          foodNote: '',
+          pillColor: 'white',
+          pillShape: 'round',
+          pillDescription: 'A white round pill',
+          drugClass: 'Diuretic',
+        },
+      });
+    });
+
+    await page.goto('/medications');
+    await expect(page.locator('text=Medications').first()).toBeVisible();
+
+    // === Create an AS-NEEDED medication via the wizard ===
+    await page.click('button:has-text("Add a prescription")');
+    await expect(page.locator('text=Search Medicine')).toBeVisible();
+    await page.fill('input[placeholder="e.g. Aviolix, Clopidogrel..."]', 'Furosemide 40mg');
+    await page.keyboard.press('Enter');
+    await expect(page.locator('text=Found: Furosemide')).toBeVisible();
+
+    // Appearance
+    await page.click('button:has-text("Next")');
+    await expect(page.locator('text=Pill Appearance')).toBeVisible();
+    // Indication
+    await page.click('button:has-text("Next")');
+    await expect(page.locator('text=Indication & Notes')).toBeVisible();
+    // Dosage — flip the "As needed (PRN)" switch so no schedule is required
+    await page.click('button:has-text("Next")');
+    await expect(page.locator('text=Dosage')).toBeVisible();
+    await page.getByRole('switch').click();
+
+    // As-needed skips the Schedule step → Next lands on Inventory
+    await page.click('button:has-text("Next")');
+    await expect(page.locator('text=Current stock')).toBeVisible();
+    await page.fill('input[placeholder="e.g. 36"]', '30');
+    await page.click('button:has-text("Save Medication")');
+    await expect(page.getByRole('dialog')).toBeHidden({ timeout: 5000 });
+
+    // === The as-needed med shows "Log dose now" on the Rx tab ===
+    await page.locator('button', { hasText: 'Rx' }).click();
+    await expect(page.locator('text=Furosemide').first()).toBeVisible({ timeout: 5000 });
+
+    const logNow = page.getByRole('button', {
+      name: /log an as-needed dose of furosemide/i,
+    });
+    await expect(logNow).toBeVisible({ timeout: 5000 });
+
+    // Click → RetroactiveTimePicker → Log Dose
+    await logNow.click();
+    await expect(page.locator('text=/When did you take/')).toBeVisible();
+    await page.getByRole('button', { name: 'Log Dose' }).click();
+
+    // Success toast (the on-success/on-error handling added for this feature).
+    // Matches both the toast title and its aria-live status node — take the first.
+    await expect(
+      page.locator('text=/dose logged/i').first(),
+    ).toBeVisible({ timeout: 5000 });
+
+    expect(
+      consoleErrors,
+      `unexpected console errors:\n${consoleErrors.join('\n')}`,
+    ).toEqual([]);
+  });
+
   test('should show schedule empty state and navigate between tabs', async ({ page }) => {
     await page.goto('/medications');
     await expect(page.locator('text=Medications').first()).toBeVisible();
