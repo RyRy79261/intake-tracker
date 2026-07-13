@@ -306,6 +306,46 @@ export async function queryEatingHistory(userId: string, range: DateRange) {
   };
 }
 
+export async function querySubstanceHistory(
+  userId: string,
+  type: "caffeine" | "alcohol" | "all",
+  range: DateRange,
+) {
+  const typeFilter =
+    type === "all" ? undefined : eq(substanceRecords.type, type);
+  const rows = await db
+    .select({
+      id: substanceRecords.id,
+      type: substanceRecords.type,
+      amountMg: substanceRecords.amountMg,
+      amountStandardDrinks: substanceRecords.amountStandardDrinks,
+      abvPercent: substanceRecords.abvPercent,
+      volumeMl: substanceRecords.volumeMl,
+      description: substanceRecords.description,
+      // substance_records has no `note` column; originalInputText is the
+      // free-text the user typed and serves as the note-equivalent.
+      originalInputText: substanceRecords.originalInputText,
+      source: substanceRecords.source,
+      sourceRecordId: substanceRecords.sourceRecordId,
+      groupId: substanceRecords.groupId,
+      groupSource: substanceRecords.groupSource,
+      timestamp: substanceRecords.timestamp,
+    })
+    .from(substanceRecords)
+    .where(
+      and(
+        eq(substanceRecords.userId, userId),
+        gte(substanceRecords.timestamp, range.start),
+        lte(substanceRecords.timestamp, range.end),
+        isNull(substanceRecords.deletedAt),
+        ...(typeFilter ? [typeFilter] : []),
+      ),
+    )
+    .orderBy(asc(substanceRecords.timestamp))
+    .limit(MAX_ROWS + 1);
+  return capRows(rows);
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 // Medication queries
 // ─────────────────────────────────────────────────────────────────────────

@@ -14,6 +14,7 @@
 import type * as schema from "@intake/db/schema";
 
 type WeightInsert = typeof schema.weightRecords.$inferInsert;
+type SubstanceInsert = typeof schema.substanceRecords.$inferInsert;
 
 let counter = 0;
 function uid(prefix: string): string {
@@ -47,6 +48,29 @@ export function weightFixture(
     weight: 72.5,
     timestamp: ts,
     note: null,
+    ...syncColumns(ts),
+    ...overrides,
+  };
+}
+
+/**
+ * A substance_records insert row. Defaults to a standalone caffeine record;
+ * pass `type: "alcohol"` with `abvPercent`/`amountStandardDrinks`/`volumeMl`
+ * for a drink. `source` must be one of 'standalone' | 'water_intake' |
+ * 'eating' and `type` one of 'caffeine' | 'alcohol' (CHECK-constrained).
+ */
+export function substanceFixture(
+  userId: string,
+  overrides: Partial<SubstanceInsert> = {},
+): SubstanceInsert {
+  const ts = overrides.timestamp ?? Date.now();
+  return {
+    id: uid("substance"),
+    userId,
+    type: "caffeine",
+    description: "Espresso",
+    source: "standalone",
+    timestamp: ts,
     ...syncColumns(ts),
     ...overrides,
   };

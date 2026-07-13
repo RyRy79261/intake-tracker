@@ -32,7 +32,10 @@ import {
   setupTestDb,
   type TestDbContext,
 } from "@/__tests__/helpers/test-db";
-import { weightFixture } from "@/__tests__/helpers/mcp-query-fixtures";
+import {
+  weightFixture,
+  substanceFixture,
+} from "@/__tests__/helpers/mcp-query-fixtures";
 import * as schema from "@intake/db/schema";
 import type * as QueriesMod from "@/lib/mcp/queries";
 
@@ -79,6 +82,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await ctx.db.delete(schema.weightRecords);
+  await ctx.db.delete(schema.substanceRecords);
 });
 
 describe("MCP query fns — queryWeightHistory (real Postgres)", () => {
@@ -157,5 +161,105 @@ describe("MCP query fns — queryWeightHistory (real Postgres)", () => {
 
     expect(items).toHaveLength(5000);
     expect(truncated).toBe(false);
+  });
+});
+
+describe("MCP query fns — querySubstanceHistory (real Postgres)", () => {
+  it("filters by substance type, and 'all' returns both", async () => {
+    await ctx.db.insert(schema.substanceRecords).values([
+      substanceFixture(ctx.testUserId, { type: "caffeine", timestamp: 10 }),
+      substanceFixture(ctx.testUserId, {
+        type: "alcohol",
+        description: "Red wine",
+        timestamp: 20,
+      }),
+    ]);
+
+    const caffeine = await queries.querySubstanceHistory(
+      ctx.testUserId,
+      "caffeine",
+      FULL_RANGE,
+    );
+    expect(caffeine.items.map((r) => r.type)).toEqual(["caffeine"]);
+
+    const alcohol = await queries.querySubstanceHistory(
+      ctx.testUserId,
+      "alcohol",
+      FULL_RANGE,
+    );
+    expect(alcohol.items.map((r) => r.type)).toEqual(["alcohol"]);
+
+    const all = await queries.querySubstanceHistory(
+      ctx.testUserId,
+      "all",
+      FULL_RANGE,
+    );
+    expect(all.items.map((r) => r.type)).toEqual(["caffeine", "alcohol"]);
+  });
+
+  it("exposes the alcohol fields (ABV %, standard drinks, volume) that were previously unreachable", async () => {
+    await ctx.db.insert(schema.substanceRecords).values(
+      substanceFixture(ctx.testUserId, {
+        type: "alcohol",
+        description: "Espresso martini",
+        source: "eating",
+        groupId: "grp-1",
+        groupSource: "voice",
+        abvPercent: 20,
+        amountStandardDrinks: 1.5,
+        volumeMl: 120,
+      }),
+    );
+
+    const { items } = await queries.querySubstanceHistory(
+      ctx.testUserId,
+      "alcohol",
+      FULL_RANGE,
+    );
+
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      type: "alcohol",
+      abvPercent: 20,
+      amountStandardDrinks: 1.5,
+      volumeMl: 120,
+      groupId: "grp-1",
+      groupSource: "voice",
+      description: "Espresso martini",
+    });
+  });
+
+  it("is user-scoped and excludes tombstoned rows", async () => {
+    await ctx.db.insert(schema.substanceRecords).values([
+      substanceFixture(ctx.testUserId, { description: "mine" }),
+      substanceFixture(ctx.testUserId, {
+        description: "deleted",
+        deletedAt: Date.now(),
+      }),
+      substanceFixture(OTHER_USER_ID, { description: "theirs" }),
+    ]);
+
+    const { items } = await queries.querySubstanceHistory(
+      ctx.testUserId,
+      "all",
+      FULL_RANGE,
+    );
+
+    expect(items.map((r) => r.description)).toEqual(["mine"]);
+  });
+
+  it("filters to the requested time range, oldest first", async () => {
+    await ctx.db.insert(schema.substanceRecords).values([
+      substanceFixture(ctx.testUserId, { description: "a", timestamp: 1_000 }),
+      substanceFixture(ctx.testUserId, { description: "b", timestamp: 5_000 }),
+      substanceFixture(ctx.testUserId, { description: "c", timestamp: 9_000 }),
+    ]);
+
+    const { items } = await queries.querySubstanceHistory(ctx.testUserId, "all", {
+      start: 2_000,
+      end: 8_000,
+    });
+
+    expect(items.map((r) => r.description)).toEqual(["b"]);
   });
 });

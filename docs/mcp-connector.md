@@ -274,6 +274,7 @@ the existing patterns from `src/lib/analytics-service.ts` and
 | `query_weight_history` | weight points + 7-day avg over [start, end] | `weightRecords` |
 | `query_blood_pressure_history` | systolic/diastolic/HR points + 7-day avg | `bloodPressureRecords` |
 | `query_eating_history` | food log entries with parsed substances | `eatingRecords` + `substanceRecords` |
+| `query_substance_history` | caffeine/alcohol records (mg, standard drinks, ABV%) over [start, end], filterable by type | `substanceRecords` |
 | `list_medications` | active prescriptions + current phase + schedule | `prescriptions` + `medicationPhases` + `phaseSchedules` |
 | `list_recent_doses` | last N dose log entries with prescription names | `doseLogs` |
 | `get_inventory_status` | pill counts + days-of-supply per prescription | `inventoryItems` |
@@ -344,7 +345,7 @@ Single scope keeps the consent screen simple. Future write tools would add
    MCP routes are additive).
 3. Manual: add `https://intake-tracker.vercel.app/api/mcp` as a custom
    connector in claude.ai → Google sign-in flow completes → claude.ai
-   lists 8 tools → `get_today_summary` returns sensible JSON.
+   lists 9 tools → `get_today_summary` returns sensible JSON.
 4. Manual: revoke connector in claude.ai → next request returns 401.
 5. Audit log shows every tool invocation with redacted args.
 

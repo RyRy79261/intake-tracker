@@ -22,6 +22,7 @@ import {
   queryBloodPressureHistory,
   queryEatingHistory,
   queryIntakeHistory,
+  querySubstanceHistory,
   queryWeightHistory,
 } from "@/lib/mcp/queries";
 import { writeMcpAudit } from "@/lib/mcp/audit";
@@ -215,6 +216,35 @@ export function registerReadOnlyTools(server: McpServer): void {
           end: args.end_ms,
         });
       }),
+  );
+
+  server.registerTool(
+    "query_substance_history",
+    {
+      title: "Substance history (caffeine / alcohol)",
+      description:
+        "Caffeine and alcohol substance records in the given time range, oldest first. Each row carries the amount (caffeine mg or alcohol standard drinks), ABV %, volume, free-text description, and how it was logged (source='standalone', 'water_intake', or 'eating'; groupId links it to its parent drink/food entry). This is the authoritative source for alcohol and caffeine intake — including drinks decomposed from a water or food entry that do not appear as standalone rows. Capped at 5000 rows.",
+      inputSchema: {
+        type: z
+          .enum(["caffeine", "alcohol", "all"])
+          .describe("Substance type to filter on, or 'all'"),
+        ...dateRangeShape,
+      },
+    },
+    async (args, ctx) =>
+      runTool(
+        ctx,
+        "query_substance_history",
+        args,
+        { type: args.type, start_ms: args.start_ms, end_ms: args.end_ms },
+        (userId) => {
+          validateRange(args);
+          return querySubstanceHistory(userId, args.type, {
+            start: args.start_ms,
+            end: args.end_ms,
+          });
+        },
+      ),
   );
 
   server.registerTool(
