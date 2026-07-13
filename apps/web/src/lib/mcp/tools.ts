@@ -19,9 +19,12 @@ import {
   getTodaySummary,
   listMedications,
   listRecentDoses,
+  listTitrationPlans,
   queryBloodPressureHistory,
   queryEatingHistory,
   queryIntakeHistory,
+  querySubstanceHistory,
+  queryUrinationHistory,
   queryWeightHistory,
 } from "@/lib/mcp/queries";
 import { writeMcpAudit } from "@/lib/mcp/audit";
@@ -139,7 +142,7 @@ export function registerReadOnlyTools(server: McpServer): void {
     {
       title: "Intake history",
       description:
-        "Returns individual water/salt/sugar/potassium intake records in the given time range. Use type='all' to combine.",
+        "Returns individual water/salt/sugar/potassium intake records in the given time range. Use type='all' to combine. Each row includes groupId/groupSource, and a `substance` object when the row is the water half of a decomposed drink (source='substance:<id>') — carrying the linked substance's type, description, ABV %, standard drinks, and caffeine mg (null otherwise). Use query_substance_history for the full caffeine/alcohol list.",
       inputSchema: {
         type: z
           .enum(["water", "salt", "sugar", "potassium", "all"])
@@ -204,7 +207,7 @@ export function registerReadOnlyTools(server: McpServer): void {
     {
       title: "Eating history",
       description:
-        "Food log entries in the given time range, with linked caffeine/alcohol substances. Capped at 5000 rows.",
+        "Food log entries in the given time range, oldest first. Each row includes groupId; use query_substance_history for the caffeine/alcohol substances (standalone drinks are not linked here). Capped at 5000 rows.",
       inputSchema: dateRangeShape,
     },
     async (args, ctx) =>
@@ -218,11 +221,58 @@ export function registerReadOnlyTools(server: McpServer): void {
   );
 
   server.registerTool(
+    "query_substance_history",
+    {
+      title: "Substance history (caffeine / alcohol)",
+      description:
+        "Caffeine and alcohol substance records in the given time range, oldest first. Each row carries the amount (caffeine mg or alcohol standard drinks), ABV %, volume, free-text description, and how it was logged (source='standalone', 'water_intake', or 'eating'; groupId links it to its parent drink/food entry). This is the authoritative source for alcohol and caffeine intake — including drinks decomposed from a water or food entry that do not appear as standalone rows. Capped at 5000 rows.",
+      inputSchema: {
+        type: z
+          .enum(["caffeine", "alcohol", "all"])
+          .describe("Substance type to filter on, or 'all'"),
+        ...dateRangeShape,
+      },
+    },
+    async (args, ctx) =>
+      runTool(
+        ctx,
+        "query_substance_history",
+        args,
+        { type: args.type, start_ms: args.start_ms, end_ms: args.end_ms },
+        (userId) => {
+          validateRange(args);
+          return querySubstanceHistory(userId, args.type, {
+            start: args.start_ms,
+            end: args.end_ms,
+          });
+        },
+      ),
+  );
+
+  server.registerTool(
+    "query_urination_history",
+    {
+      title: "Urination history",
+      description:
+        "Urination events in the given time range, oldest first, each with a free-text volume estimate (e.g. small/normal/large) — useful for diuretic-response review. Capped at 5000 rows.",
+      inputSchema: dateRangeShape,
+    },
+    async (args, ctx) =>
+      runTool(ctx, "query_urination_history", args, args, (userId) => {
+        validateRange(args);
+        return queryUrinationHistory(userId, {
+          start: args.start_ms,
+          end: args.end_ms,
+        });
+      }),
+  );
+
+  server.registerTool(
     "list_medications",
     {
       title: "List active medications",
       description:
-        "All active prescriptions with their currently-active phase and enabled schedules.",
+        "All active prescriptions with their currently-active phase and enabled schedules. For schedule times, scheduleTimeUTC (minutes from UTC midnight) + anchorTimezone are authoritative; the legacy `time` string is deprecated.",
       inputSchema: {},
     },
     async (_args, ctx) =>
@@ -232,11 +282,25 @@ export function registerReadOnlyTools(server: McpServer): void {
   );
 
   server.registerTool(
+    "list_titration_plans",
+    {
+      title: "Titration plans",
+      description:
+        "The user's medication titration plans (e.g. an 8-step GDMT up-titration) with title, condition, recommended start date, status, notes, and warnings — the clinical narrative behind phased dose changes.",
+      inputSchema: {},
+    },
+    async (_args, ctx) =>
+      runTool(ctx, "list_titration_plans", {}, null, (userId) =>
+        listTitrationPlans(userId),
+      ),
+  );
+
+  server.registerTool(
     "list_recent_doses",
     {
       title: "Recent doses",
       description:
-        "The most recent dose log entries (taken / skipped / rescheduled / pending) joined with prescription names.",
+        "The most recent dose log entries (taken / skipped / rescheduled / pending) joined with prescription names. genericName resolves even for archived (soft-deleted) prescriptions; the `archived` field is true for those, false for active, and null if the prescription was hard-deleted.",
       inputSchema: {
         limit: z
           .number()
@@ -258,7 +322,7 @@ export function registerReadOnlyTools(server: McpServer): void {
     {
       title: "Inventory status",
       description:
-        "Per-prescription pill stock and refill thresholds for active inventory items.",
+        "Per-prescription pill stock and refill thresholds for active inventory items. `stock` is authoritative: the signed sum of the item's inventory transactions (falling back to the legacy currentStock, then 0, when an item has no transactions). It can be negative if over-consumed. Includes strength/unit/compounds so you can do tablets-per-dose math.",
       inputSchema: {},
     },
     async (_args, ctx) =>
