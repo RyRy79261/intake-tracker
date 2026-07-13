@@ -21,6 +21,8 @@ type PrescriptionInsert = typeof schema.prescriptions.$inferInsert;
 type MedicationPhaseInsert = typeof schema.medicationPhases.$inferInsert;
 type PhaseScheduleInsert = typeof schema.phaseSchedules.$inferInsert;
 type DoseLogInsert = typeof schema.doseLogs.$inferInsert;
+type InventoryItemInsert = typeof schema.inventoryItems.$inferInsert;
+type InventoryTxInsert = typeof schema.inventoryTransactions.$inferInsert;
 
 let counter = 0;
 function uid(prefix: string): string {
@@ -213,6 +215,56 @@ export function doseLogFixture(
     scheduledTime: "08:00",
     status: "taken",
     actionTimestamp: ts,
+    ...syncColumns(ts),
+    ...overrides,
+  };
+}
+
+/**
+ * An inventory_items insert row. FK: prescriptionId → prescriptions.id.
+ * `currentStock` defaults to null so tests exercise the transaction-sum path;
+ * pass it explicitly to test the legacy fallback.
+ */
+export function inventoryItemFixture(
+  userId: string,
+  prescriptionId: string,
+  overrides: Partial<InventoryItemInsert> = {},
+): InventoryItemInsert {
+  const ts = Date.now();
+  return {
+    id: uid("inv"),
+    userId,
+    prescriptionId,
+    brandName: "Lasix",
+    strength: 40,
+    unit: "mg",
+    pillShape: "round",
+    pillColor: "white",
+    isActive: true,
+    currentStock: null,
+    ...syncColumns(ts),
+    ...overrides,
+  };
+}
+
+/**
+ * An inventory_transactions insert row. FK: inventoryItemId → inventory_items.
+ * `amount` is signed (refill/initial positive, consumed negative, adjustments
+ * either way); `type` is CHECK-constrained to refill|consumed|adjusted|initial.
+ */
+export function inventoryTxFixture(
+  userId: string,
+  inventoryItemId: string,
+  overrides: Partial<InventoryTxInsert> = {},
+): InventoryTxInsert {
+  const ts = Date.now();
+  return {
+    id: uid("invtx"),
+    userId,
+    inventoryItemId,
+    timestamp: ts,
+    amount: 30,
+    type: "refill",
     ...syncColumns(ts),
     ...overrides,
   };

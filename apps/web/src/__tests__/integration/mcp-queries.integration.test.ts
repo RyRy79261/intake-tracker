@@ -41,6 +41,8 @@ import {
   medicationPhaseFixture,
   phaseScheduleFixture,
   doseLogFixture,
+  inventoryItemFixture,
+  inventoryTxFixture,
 } from "@/__tests__/helpers/mcp-query-fixtures";
 import * as schema from "@intake/db/schema";
 import type * as QueriesMod from "@/lib/mcp/queries";
@@ -119,6 +121,18 @@ async function seedMedChain(
     scheduleId: sched.id,
     presc,
   };
+}
+
+/** Seed a prescription + one inventory item; returns the item id. */
+async function seedInventoryItem(
+  userId: string,
+  itemOverrides: Parameters<typeof inventoryItemFixture>[2] = {},
+) {
+  const presc = prescriptionFixture(userId);
+  await ctx.db.insert(schema.prescriptions).values(presc);
+  const item = inventoryItemFixture(userId, presc.id, itemOverrides);
+  await ctx.db.insert(schema.inventoryItems).values(item);
+  return item.id;
 }
 
 describe("MCP query fns — queryWeightHistory (real Postgres)", () => {
@@ -495,5 +509,102 @@ describe("MCP query fns — listMedications schedule times (real Postgres)", () 
     expect(sched?.time).toBe("08:00");
     expect(sched?.scheduleTimeUTC).toBe(360);
     expect(sched?.anchorTimezone).toBe("UTC");
+  });
+});
+
+describe("MCP query fns — getInventoryStatus authoritative stock (real Postgres)", () => {
+  it("computes stock as the signed sum of transactions (incl. a positive 'consumed' reversal)", async () => {
+    const itemId = await seedInventoryItem(ctx.testUserId);
+    await ctx.db.insert(schema.inventoryTransactions).values([
+      inventoryTxFixture(ctx.testUserId, itemId, { type: "initial", amount: 30 }),
+      inventoryTxFixture(ctx.testUserId, itemId, {
+        type: "consumed",
+        amount: -10,
+      }),
+      // An "untake" writes a POSITIVE consumed reversal — must count as +5.
+      inventoryTxFixture(ctx.testUserId, itemId, {
+        type: "consumed",
+        amount: 5,
+      }),
+      inventoryTxFixture(ctx.testUserId, itemId, { type: "refill", amount: 20 }),
+    ]);
+
+    const { inventory } = await queries.getInventoryStatus(ctx.testUserId);
+
+    expect(inventory).toHaveLength(1);
+    expect(inventory[0]?.stock).toBe(45);
+  });
+
+  it("excludes tombstoned and other-user transactions from the sum", async () => {
+    const itemId = await seedInventoryItem(ctx.testUserId);
+    await ctx.db.insert(schema.inventoryTransactions).values([
+      inventoryTxFixture(ctx.testUserId, itemId, { amount: 30 }),
+      inventoryTxFixture(ctx.testUserId, itemId, {
+        amount: 100,
+        deletedAt: Date.now(),
+      }),
+      inventoryTxFixture(OTHER_USER_ID, itemId, { amount: 999 }),
+    ]);
+
+    const { inventory } = await queries.getInventoryStatus(ctx.testUserId);
+
+    expect(inventory[0]?.stock).toBe(30);
+  });
+
+  it("reports 0 for transactions that net to zero (real balance, not the fallback)", async () => {
+    // currentStock is 999, but SUM=0 (not NULL) must win — COALESCE only falls
+    // through on NULL (zero rows), not on a real zero balance.
+    const itemId = await seedInventoryItem(ctx.testUserId, { currentStock: 999 });
+    await ctx.db.insert(schema.inventoryTransactions).values([
+      inventoryTxFixture(ctx.testUserId, itemId, { amount: 10 }),
+      inventoryTxFixture(ctx.testUserId, itemId, {
+        type: "consumed",
+        amount: -10,
+      }),
+    ]);
+
+    const { inventory } = await queries.getInventoryStatus(ctx.testUserId);
+
+    expect(inventory[0]?.stock).toBe(0);
+  });
+
+  it("falls back to 0 for a legacy item with no transactions and null currentStock", async () => {
+    await seedInventoryItem(ctx.testUserId);
+
+    const { inventory } = await queries.getInventoryStatus(ctx.testUserId);
+
+    expect(inventory[0]?.stock).toBe(0);
+  });
+
+  it("falls back to the legacy currentStock for a zero-transaction item", async () => {
+    await seedInventoryItem(ctx.testUserId, { currentStock: 42 });
+
+    const { inventory } = await queries.getInventoryStatus(ctx.testUserId);
+
+    expect(inventory[0]?.stock).toBe(42);
+  });
+
+  it("allows negative stock (over-consumed) and returns compounds", async () => {
+    const itemId = await seedInventoryItem(ctx.testUserId, {
+      compounds: [
+        { name: "sacubitril", strength: 49 },
+        { name: "valsartan", strength: 51 },
+      ],
+    });
+    await ctx.db.insert(schema.inventoryTransactions).values([
+      inventoryTxFixture(ctx.testUserId, itemId, { amount: 10 }),
+      inventoryTxFixture(ctx.testUserId, itemId, {
+        type: "consumed",
+        amount: -30,
+      }),
+    ]);
+
+    const { inventory } = await queries.getInventoryStatus(ctx.testUserId);
+
+    expect(inventory[0]?.stock).toBe(-20);
+    expect(inventory[0]?.compounds).toEqual([
+      { name: "sacubitril", strength: 49 },
+      { name: "valsartan", strength: 51 },
+    ]);
   });
 });

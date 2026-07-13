@@ -288,7 +288,7 @@ export function registerReadOnlyTools(server: McpServer): void {
     {
       title: "Inventory status",
       description:
-        "Per-prescription pill stock and refill thresholds for active inventory items.",
+        "Per-prescription pill stock and refill thresholds for active inventory items. `stock` is authoritative: the signed sum of the item's inventory transactions (falling back to the legacy currentStock, then 0, when an item has no transactions). It can be negative if over-consumed. Includes strength/unit/compounds so you can do tablets-per-dose math.",
       inputSchema: {},
     },
     async (_args, ctx) =>

@@ -23,6 +23,7 @@ import {
   medicationPhases,
   phaseSchedules,
   inventoryItems,
+  inventoryTransactions,
   doseLogs,
   pushSettings,
 } from "@intake/db/schema";
@@ -511,9 +512,26 @@ export async function getInventoryStatus(userId: string) {
       id: inventoryItems.id,
       prescriptionId: inventoryItems.prescriptionId,
       brandName: inventoryItems.brandName,
-      currentStock: inventoryItems.currentStock,
+      // Authoritative stock = signed SUM of this item's non-deleted inventory
+      // transactions (amounts are already signed: refill/initial positive,
+      // consumed negative, adjustments either way — mirrors getCurrentStock in
+      // inventory-service). Cast to int so pg returns a number, not a bigint
+      // string. SUM over ZERO rows is NULL, so a legacy item with no
+      // transactions falls through to the deprecated currentStock, then 0. An
+      // item whose transactions net to zero yields SUM=0 and correctly reports
+      // 0 (a real balance). Negative stock is legal (over-consumed) — no clamp.
+      stock: sql<number>`COALESCE(
+        (SELECT SUM(${inventoryTransactions.amount})::int
+           FROM ${inventoryTransactions}
+          WHERE ${inventoryTransactions.inventoryItemId} = ${inventoryItems.id}
+            AND ${inventoryTransactions.userId} = ${userId}
+            AND ${inventoryTransactions.deletedAt} IS NULL),
+        ${inventoryItems.currentStock},
+        0
+      )`,
       strength: inventoryItems.strength,
       unit: inventoryItems.unit,
+      compounds: inventoryItems.compounds,
       refillAlertPills: inventoryItems.refillAlertPills,
       refillAlertDays: inventoryItems.refillAlertDays,
       isActive: inventoryItems.isActive,
