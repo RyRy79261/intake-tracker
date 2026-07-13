@@ -43,6 +43,8 @@ import {
   doseLogFixture,
   inventoryItemFixture,
   inventoryTxFixture,
+  urinationFixture,
+  titrationPlanFixture,
 } from "@/__tests__/helpers/mcp-query-fixtures";
 import * as schema from "@intake/db/schema";
 import type * as QueriesMod from "@/lib/mcp/queries";
@@ -606,5 +608,63 @@ describe("MCP query fns — getInventoryStatus authoritative stock (real Postgre
       { name: "sacubitril", strength: 49 },
       { name: "valsartan", strength: 51 },
     ]);
+  });
+});
+
+describe("MCP query fns — queryUrinationHistory (real Postgres)", () => {
+  it("returns urination events with amountEstimate; user-, tombstone- and range-scoped", async () => {
+    await ctx.db.insert(schema.urinationRecords).values([
+      urinationFixture(ctx.testUserId, {
+        amountEstimate: "large",
+        timestamp: 5_000,
+      }),
+      urinationFixture(ctx.testUserId, {
+        amountEstimate: "deleted",
+        timestamp: 5_500,
+        deletedAt: Date.now(),
+      }),
+      urinationFixture(ctx.testUserId, {
+        amountEstimate: "out-of-range",
+        timestamp: 50_000,
+      }),
+      urinationFixture(OTHER_USER_ID, {
+        amountEstimate: "theirs",
+        timestamp: 5_000,
+      }),
+    ]);
+
+    const { items, truncated } = await queries.queryUrinationHistory(
+      ctx.testUserId,
+      { start: 1_000, end: 10_000 },
+    );
+
+    expect(truncated).toBe(false);
+    expect(items.map((r) => r.amountEstimate)).toEqual(["large"]);
+  });
+});
+
+describe("MCP query fns — listTitrationPlans (real Postgres)", () => {
+  it("lists the user's titration plans (user-scoped, tombstone-excluded)", async () => {
+    await ctx.db.insert(schema.titrationPlans).values([
+      titrationPlanFixture(ctx.testUserId, {
+        title: "GDMT",
+        warnings: ["watch K+"],
+      }),
+      titrationPlanFixture(ctx.testUserId, {
+        title: "old",
+        deletedAt: Date.now(),
+      }),
+      titrationPlanFixture(OTHER_USER_ID, { title: "theirs" }),
+    ]);
+
+    const { titration_plans } = await queries.listTitrationPlans(
+      ctx.testUserId,
+    );
+
+    expect(titration_plans).toHaveLength(1);
+    expect(titration_plans[0]?.title).toBe("GDMT");
+    expect(titration_plans[0]?.conditionLabel).toBe("Heart failure");
+    expect(titration_plans[0]?.status).toBe("active");
+    expect(titration_plans[0]?.warnings).toEqual(["watch K+"]);
   });
 });

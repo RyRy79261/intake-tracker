@@ -19,10 +19,12 @@ import {
   getTodaySummary,
   listMedications,
   listRecentDoses,
+  listTitrationPlans,
   queryBloodPressureHistory,
   queryEatingHistory,
   queryIntakeHistory,
   querySubstanceHistory,
+  queryUrinationHistory,
   queryWeightHistory,
 } from "@/lib/mcp/queries";
 import { writeMcpAudit } from "@/lib/mcp/audit";
@@ -248,6 +250,24 @@ export function registerReadOnlyTools(server: McpServer): void {
   );
 
   server.registerTool(
+    "query_urination_history",
+    {
+      title: "Urination history",
+      description:
+        "Urination events in the given time range, oldest first, each with a free-text volume estimate (e.g. small/normal/large) — useful for diuretic-response review. Capped at 5000 rows.",
+      inputSchema: dateRangeShape,
+    },
+    async (args, ctx) =>
+      runTool(ctx, "query_urination_history", args, args, (userId) => {
+        validateRange(args);
+        return queryUrinationHistory(userId, {
+          start: args.start_ms,
+          end: args.end_ms,
+        });
+      }),
+  );
+
+  server.registerTool(
     "list_medications",
     {
       title: "List active medications",
@@ -258,6 +278,20 @@ export function registerReadOnlyTools(server: McpServer): void {
     async (_args, ctx) =>
       runTool(ctx, "list_medications", {}, null, (userId) =>
         listMedications(userId),
+      ),
+  );
+
+  server.registerTool(
+    "list_titration_plans",
+    {
+      title: "Titration plans",
+      description:
+        "The user's medication titration plans (e.g. an 8-step GDMT up-titration) with title, condition, recommended start date, status, notes, and warnings — the clinical narrative behind phased dose changes.",
+      inputSchema: {},
+    },
+    async (_args, ctx) =>
+      runTool(ctx, "list_titration_plans", {}, null, (userId) =>
+        listTitrationPlans(userId),
       ),
   );
 

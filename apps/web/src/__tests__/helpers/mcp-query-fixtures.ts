@@ -23,6 +23,8 @@ type PhaseScheduleInsert = typeof schema.phaseSchedules.$inferInsert;
 type DoseLogInsert = typeof schema.doseLogs.$inferInsert;
 type InventoryItemInsert = typeof schema.inventoryItems.$inferInsert;
 type InventoryTxInsert = typeof schema.inventoryTransactions.$inferInsert;
+type UrinationInsert = typeof schema.urinationRecords.$inferInsert;
+type TitrationPlanInsert = typeof schema.titrationPlans.$inferInsert;
 
 let counter = 0;
 function uid(prefix: string): string {
@@ -266,6 +268,43 @@ export function inventoryTxFixture(
     amount: 30,
     type: "refill",
     ...syncColumns(ts),
+    ...overrides,
+  };
+}
+
+/** A urination_records insert row. `amountEstimate` is a free-text category. */
+export function urinationFixture(
+  userId: string,
+  overrides: Partial<UrinationInsert> = {},
+): UrinationInsert {
+  const ts = overrides.timestamp ?? Date.now();
+  return {
+    id: uid("urin"),
+    userId,
+    timestamp: ts,
+    amountEstimate: "normal",
+    note: null,
+    ...syncColumns(ts),
+    ...overrides,
+  };
+}
+
+/**
+ * A titration_plans insert row. `status` is CHECK-constrained to
+ * draft|active|completed|cancelled. No `timezone` column (baseSync).
+ */
+export function titrationPlanFixture(
+  userId: string,
+  overrides: Partial<TitrationPlanInsert> = {},
+): TitrationPlanInsert {
+  const ts = Date.now();
+  return {
+    id: uid("titr"),
+    userId,
+    title: "GDMT up-titration",
+    conditionLabel: "Heart failure",
+    status: "active",
+    ...baseSync(ts),
     ...overrides,
   };
 }

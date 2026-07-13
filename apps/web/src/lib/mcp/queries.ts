@@ -19,7 +19,9 @@ import {
   bloodPressureRecords,
   eatingRecords,
   substanceRecords,
+  urinationRecords,
   prescriptions,
+  titrationPlans,
   medicationPhases,
   phaseSchedules,
   inventoryItems,
@@ -554,6 +556,50 @@ export async function getInventoryStatus(userId: string) {
       ),
     );
   return { inventory: rows };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Elimination + titration queries
+// ─────────────────────────────────────────────────────────────────────────
+
+export async function queryUrinationHistory(userId: string, range: DateRange) {
+  const rows = await db
+    .select({
+      id: urinationRecords.id,
+      timestamp: urinationRecords.timestamp,
+      // Free-text volume category (e.g. 'small' | 'normal' | 'large'), nullable.
+      amountEstimate: urinationRecords.amountEstimate,
+      note: urinationRecords.note,
+    })
+    .from(urinationRecords)
+    .where(
+      and(
+        eq(urinationRecords.userId, userId),
+        gte(urinationRecords.timestamp, range.start),
+        lte(urinationRecords.timestamp, range.end),
+        isNull(urinationRecords.deletedAt),
+      ),
+    )
+    .orderBy(asc(urinationRecords.timestamp))
+    .limit(MAX_ROWS + 1);
+  return capRows(rows);
+}
+
+export async function listTitrationPlans(userId: string) {
+  const plans = await db
+    .select({
+      id: titrationPlans.id,
+      title: titrationPlans.title,
+      conditionLabel: titrationPlans.conditionLabel,
+      recommendedStartDate: titrationPlans.recommendedStartDate,
+      status: titrationPlans.status,
+      notes: titrationPlans.notes,
+      warnings: titrationPlans.warnings,
+    })
+    .from(titrationPlans)
+    .where(and(eq(titrationPlans.userId, userId), isNull(titrationPlans.deletedAt)))
+    .orderBy(desc(titrationPlans.updatedAt));
+  return { titration_plans: plans };
 }
 
 // ─────────────────────────────────────────────────────────────────────────
