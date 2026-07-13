@@ -18,8 +18,9 @@
  * https://mswjs.io/docs/integrations/node
  */
 import { describe, it, expect, vi, beforeAll, afterAll, afterEach, beforeEach } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { dateTimeLocalToTimestamp } from "@/lib/date-utils";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 // Test-only direct DB access: needed to assert the integration write
@@ -126,6 +127,37 @@ describe("FoodSection — AI parse → submit → Dexie write (MSW integration)"
 
     // And a recent-list UI signal that the write reached the live query.
     expect(await screen.findByText("bowl of chicken soup")).toBeInTheDocument();
+  });
+
+  it("backdates the entry to a custom event time when the time input is used", async () => {
+    const user = userEvent.setup();
+    await renderWithFixtures(<FoodSection />);
+
+    // Enter a sodium amount so the entry can be recorded (submit is enabled).
+    await user.type(await screen.findByLabelText(/Sodium/i), "300");
+
+    // Open the collapsible time control (toggle button) and set a past time.
+    await user.click(
+      screen.getByRole("button", { name: /set different time/i }),
+    );
+    const timeInput = screen.getByLabelText(
+      /when did you have this/i,
+    ) as HTMLInputElement;
+    // datetime-local typing is unreliable in jsdom; set the value directly.
+    fireEvent.change(timeInput, { target: { value: "2026-07-10T09:00" } });
+
+    await user.click(
+      screen.getByRole("button", { name: "Record with details" }),
+    );
+
+    const expectedTs = dateTimeLocalToTimestamp("2026-07-10T09:00");
+    await waitFor(async () => {
+      const salt = (await db.intakeRecords.toArray()).find(
+        (r) => r.type === "salt" && r.amount === 300,
+      );
+      expect(salt, "expected a salt=300 intake record").toBeDefined();
+      expect(salt?.timestamp).toBe(expectedTs);
+    });
   });
 
   it("falls back gracefully when the AI endpoint returns 502", async () => {
