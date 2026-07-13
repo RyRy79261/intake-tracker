@@ -68,6 +68,15 @@ export interface EditDoseTimeInput {
   newTime: string; // "HH:MM" — actual time the dose was taken
 }
 
+export interface LogPrnDoseInput {
+  prescriptionId: string;
+  date: string; // "YYYY-MM-DD" — date the dose was taken
+  time: string; // "HH:MM" — time the dose was taken
+  doseMg?: number; // optional explicit dose recorded on the log
+  dosageMg?: number; // dose in mg for inventory pill math; omit to skip stock decrement
+  note?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Fractional pill math helpers (exported for reuse)
 // ---------------------------------------------------------------------------
@@ -218,8 +227,10 @@ export async function getDoseLogsWithDetailsForDate(date: string): Promise<DoseL
   const result: DoseLogWithDetails[] = [];
   for (const log of logs) {
     const prescription = prescriptionMap.get(log.prescriptionId);
-    const phase = phaseMap.get(log.phaseId);
-    const schedule = scheduleMap.get(log.scheduleId);
+    // phaseId/scheduleId are absent for PRN doses — those fall through the
+    // `prescription && phase && schedule` guard below and are excluded here.
+    const phase = log.phaseId ? phaseMap.get(log.phaseId) : undefined;
+    const schedule = log.scheduleId ? scheduleMap.get(log.scheduleId) : undefined;
     const inventory = inventoryMap.get(log.prescriptionId);
 
     if (prescription && phase && schedule) {
@@ -336,6 +347,115 @@ export async function takeDose(input: TakeDoseInput): Promise<ServiceResult<Dose
     return ok(log);
   } catch (e) {
     return err("Failed to take dose", e);
+  }
+}
+
+/**
+ * Log an as-needed (PRN) dose for a prescription with no active phase schedule
+ * (e.g. furosemide taken on symptoms). Creates a kind='prn' dose log with no
+ * phase/schedule, plus — when the prescription has tracked inventory and a
+ * dosage is given — a consumed inventory transaction so stock decrements.
+ */
+export async function logPrnDose(
+  input: LogPrnDoseInput,
+): Promise<ServiceResult<DoseLog>> {
+  try {
+    const { prescriptionId, date, time, doseMg, dosageMg, note } = input;
+
+    const [hStr, mStr] = time.split(":");
+    const h = Number(hStr);
+    const m = Number(mStr);
+    const takenAt = new Date(`${date}T00:00:00`);
+    takenAt.setHours(h, m, 0, 0);
+    const parsed = takenAt.getTime();
+    // A malformed date/time makes setHours(NaN,…) produce an Invalid Date whose
+    // getTime() is NaN — never persist that. Fall back to now so
+    // actionTimestamp is always a finite number.
+    const actionTimestamp = Number.isFinite(parsed) ? parsed : Date.now();
+
+    const log = await db.transaction(
+      "rw",
+      [db.doseLogs, db.inventoryItems, db.inventoryTransactions, db.auditLogs, db._syncQueue],
+      async () => {
+        const sf = syncFields();
+        const doseLogId = crypto.randomUUID();
+
+        let inventoryItemId: string | undefined;
+        let pillsConsumed = 0;
+        if (dosageMg !== undefined && dosageMg > 0) {
+          const inventory = await getActiveInventoryForPrescription(prescriptionId);
+          if (inventory) {
+            inventoryItemId = inventory.id;
+            pillsConsumed = calculatePillsConsumed(dosageMg, inventory.strength);
+            const newStock = (inventory.currentStock ?? 0) - pillsConsumed;
+            await db.inventoryItems.update(inventory.id, {
+              currentStock: Math.round(newStock * 10000) / 10000,
+              updatedAt: Date.now(),
+            });
+            await enqueueInsideTx("inventoryItems", inventory.id, "upsert");
+
+            const invTxId = crypto.randomUUID();
+            await db.inventoryTransactions.add({
+              id: invTxId,
+              inventoryItemId: inventory.id,
+              timestamp: Date.now(),
+              amount: -pillsConsumed,
+              type: "consumed" as const,
+              doseLogId,
+              createdAt: sf.createdAt,
+              updatedAt: sf.updatedAt,
+              deletedAt: null,
+              deviceId: sf.deviceId,
+              timezone: sf.timezone,
+            });
+            await enqueueInsideTx("inventoryTransactions", invTxId, "upsert");
+          }
+        }
+
+        // kind='prn' with NO phase/schedule satisfies the DB
+        // dose_logs_kind_fields_check (which only requires phase+schedule for
+        // scheduled doses). The client must construct this valid shape because
+        // the CHECK is not reflected into the drizzle-zod sync insert schema.
+        const doseLog: DoseLog = {
+          id: doseLogId,
+          prescriptionId,
+          kind: "prn",
+          scheduledDate: date,
+          scheduledTime: time,
+          status: "taken",
+          actionTimestamp,
+          timezone: sf.timezone,
+          createdAt: sf.createdAt,
+          updatedAt: sf.updatedAt,
+          deletedAt: null,
+          deviceId: sf.deviceId,
+          ...(inventoryItemId !== undefined && { inventoryItemId }),
+          ...(doseMg !== undefined && { doseMg }),
+          ...(note !== undefined && note.trim() !== "" && { note: note.trim() }),
+        };
+        await db.doseLogs.add(doseLog);
+        await enqueueInsideTx("doseLogs", doseLogId, "upsert");
+
+        const auditEntry = buildAuditEntry("dose_taken", {
+          prescriptionId,
+          date,
+          time,
+          kind: "prn",
+          doseMg,
+          pillsConsumed,
+          inventoryItemId,
+        });
+        await db.auditLogs.add(auditEntry);
+        await enqueueInsideTx("auditLogs", auditEntry.id, "upsert");
+
+        return doseLog;
+      },
+    );
+    schedulePush();
+
+    return ok(log);
+  } catch (e) {
+    return err("Failed to log PRN dose", e);
   }
 }
 

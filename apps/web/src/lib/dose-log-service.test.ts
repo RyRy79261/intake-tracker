@@ -12,6 +12,7 @@ import {
   rescheduleDose,
   takeAllDoses,
   skipAllDoses,
+  logPrnDose,
 } from "@/lib/dose-log-service";
 import {
   makePrescription,
@@ -135,6 +136,107 @@ async function seedFullPrescription(overrides?: {
 
   return { rx, phase, schedule, inv, txn };
 }
+
+// ---------------------------------------------------------------------------
+// logPrnDose (as-needed doses — no phase/schedule)
+// ---------------------------------------------------------------------------
+
+describe("logPrnDose", () => {
+  it("creates a kind='prn' dose log with no phase/schedule", async () => {
+    const { rx } = await seedFullPrescription();
+
+    const result = await logPrnDose({
+      prescriptionId: rx.id,
+      date: DATE,
+      time: TIME,
+      doseMg: 50,
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.kind).toBe("prn");
+      expect(result.data.status).toBe("taken");
+      expect(result.data.phaseId).toBeUndefined();
+      expect(result.data.scheduleId).toBeUndefined();
+      expect(result.data.doseMg).toBe(50);
+      expect(result.data.scheduledDate).toBe(DATE);
+      expect(result.data.scheduledTime).toBe(TIME);
+    }
+  });
+
+  it("decrements inventory via one consumed transaction when a dosage is given", async () => {
+    const { rx, inv } = await seedFullPrescription({ strength: 50, initialStock: 30 });
+
+    await logPrnDose({
+      prescriptionId: rx.id,
+      date: DATE,
+      time: TIME,
+      dosageMg: 50, // 50 / 50 = 1 pill
+    });
+
+    const consumed = (
+      await db.inventoryTransactions
+        .where("inventoryItemId")
+        .equals(inv.id)
+        .toArray()
+    ).filter((t) => t.type === "consumed");
+    expect(consumed).toHaveLength(1);
+    expect(consumed[0]?.amount).toBe(-1);
+
+    const item = await db.inventoryItems.get(inv.id);
+    expect(item?.currentStock).toBe(29);
+  });
+
+  it("skips the inventory decrement when no dosage is given", async () => {
+    const { rx, inv } = await seedFullPrescription({ initialStock: 30 });
+
+    await logPrnDose({ prescriptionId: rx.id, date: DATE, time: TIME });
+
+    const consumed = (
+      await db.inventoryTransactions
+        .where("inventoryItemId")
+        .equals(inv.id)
+        .toArray()
+    ).filter((t) => t.type === "consumed");
+    expect(consumed).toHaveLength(0);
+
+    const item = await db.inventoryItems.get(inv.id);
+    expect(item?.currentStock).toBe(30);
+  });
+
+  it("sets actionTimestamp from the given date + time", async () => {
+    const { rx } = await seedFullPrescription();
+
+    const result = await logPrnDose({
+      prescriptionId: rx.id,
+      date: DATE,
+      time: "14:30",
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const expected = new Date(DATE + "T00:00:00");
+      expected.setHours(14, 30, 0, 0);
+      expect(result.data.actionTimestamp).toBe(expected.getTime());
+    }
+  });
+
+  it("falls back to a finite actionTimestamp for a malformed time", async () => {
+    const { rx } = await seedFullPrescription();
+
+    const result = await logPrnDose({
+      prescriptionId: rx.id,
+      date: DATE,
+      time: "not-a-time",
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      // Never persist NaN — a bad time falls back to now.
+      expect(Number.isFinite(result.data.actionTimestamp)).toBe(true);
+    }
+  });
+});
 
 // ---------------------------------------------------------------------------
 // getDoseLogsForDate

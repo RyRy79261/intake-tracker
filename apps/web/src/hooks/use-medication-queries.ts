@@ -40,6 +40,7 @@ import {
   getDoseLogsForDate,
   getDoseLogsWithDetailsForDate,
   takeDose,
+  logPrnDose,
   untakeDose,
   skipDose,
   rescheduleDose,
@@ -49,6 +50,7 @@ import {
   editAllDoseTimes,
   type DoseLogWithDetails,
   type TakeDoseInput,
+  type LogPrnDoseInput,
   type UntakeDoseInput,
   type SkipDoseInput,
   type RescheduleDoseInput,
@@ -96,6 +98,26 @@ export function usePhasesForPrescription(prescriptionId: string | undefined) {
     () => prescriptionId ? getPhasesForPrescription(prescriptionId) : [],
     [prescriptionId],
     []
+  );
+}
+
+/**
+ * Loading-aware companion to `usePhasesForPrescription`: `false` until the
+ * phases query first resolves, then `true`. `usePhasesForPrescription` returns
+ * its `[]` default while loading — indistinguishable from "genuinely no
+ * phases" — so callers that must not treat a still-loading scheduled
+ * prescription as as-needed (e.g. the PRN button) gate on this. No default, so
+ * `useLiveQuery` yields `undefined` until the first result.
+ */
+export function usePhasesLoaded(prescriptionId: string | undefined): boolean {
+  return (
+    useLiveQuery(
+      () =>
+        prescriptionId
+          ? getPhasesForPrescription(prescriptionId).then(() => true)
+          : Promise.resolve(true),
+      [prescriptionId],
+    ) === true
   );
 }
 
@@ -213,6 +235,12 @@ export function useActivatePhase() {
 export function useTakeDose() {
   return useMutation({
     mutationFn: async (input: TakeDoseInput) => unwrap(await takeDose(input)),
+  });
+}
+
+export function useLogPrnDose() {
+  return useMutation({
+    mutationFn: async (input: LogPrnDoseInput) => unwrap(await logPrnDose(input)),
   });
 }
 
