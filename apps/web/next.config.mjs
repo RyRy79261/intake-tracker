@@ -44,6 +44,14 @@ const securityHeaders = [
 const nextConfig = {
   output: isCapacitorBuild ? "export" : undefined,
   reactStrictMode: true,
+  // Trace the bundled Outfit TTFs into the OG/Twitter image route functions —
+  // each metadata image route is its own serverless function on Vercel, and
+  // without this satori silently drops the brand font. (`src/app` because the
+  // app lives under src/.) No-op for the Capacitor static export.
+  outputFileTracingIncludes: {
+    "/opengraph-image": ["./src/app/_fonts/**"],
+    "/twitter-image": ["./src/app/_fonts/**"],
+  },
   // Internal @intake/* packages are consumed as raw TS source (JIT).
   transpilePackages: [
     "@intake/ai-prompts",
