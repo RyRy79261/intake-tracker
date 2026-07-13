@@ -68,6 +68,15 @@ export interface EditDoseTimeInput {
   newTime: string; // "HH:MM" — actual time the dose was taken
 }
 
+export interface LogPrnDoseInput {
+  prescriptionId: string;
+  date: string; // "YYYY-MM-DD" — date the dose was taken
+  time: string; // "HH:MM" — time the dose was taken
+  doseMg?: number; // optional explicit dose recorded on the log
+  dosageMg?: number; // dose in mg for inventory pill math; omit to skip stock decrement
+  note?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Fractional pill math helpers (exported for reuse)
 // ---------------------------------------------------------------------------
@@ -338,6 +347,109 @@ export async function takeDose(input: TakeDoseInput): Promise<ServiceResult<Dose
     return ok(log);
   } catch (e) {
     return err("Failed to take dose", e);
+  }
+}
+
+/**
+ * Log an as-needed (PRN) dose for a prescription with no active phase schedule
+ * (e.g. furosemide taken on symptoms). Creates a kind='prn' dose log with no
+ * phase/schedule, plus — when the prescription has tracked inventory and a
+ * dosage is given — a consumed inventory transaction so stock decrements.
+ */
+export async function logPrnDose(
+  input: LogPrnDoseInput,
+): Promise<ServiceResult<DoseLog>> {
+  try {
+    const { prescriptionId, date, time, doseMg, dosageMg, note } = input;
+
+    const [h, m] = time.split(":").map(Number);
+    const takenAt = new Date(date + "T00:00:00");
+    takenAt.setHours(h ?? 0, m ?? 0, 0, 0);
+    const actionTimestamp = takenAt.getTime();
+
+    const log = await db.transaction(
+      "rw",
+      [db.doseLogs, db.inventoryItems, db.inventoryTransactions, db.auditLogs, db._syncQueue],
+      async () => {
+        const sf = syncFields();
+        const doseLogId = crypto.randomUUID();
+
+        let inventoryItemId: string | undefined;
+        let pillsConsumed = 0;
+        if (dosageMg !== undefined && dosageMg > 0) {
+          const inventory = await getActiveInventoryForPrescription(prescriptionId);
+          if (inventory) {
+            inventoryItemId = inventory.id;
+            pillsConsumed = calculatePillsConsumed(dosageMg, inventory.strength);
+            const newStock = (inventory.currentStock ?? 0) - pillsConsumed;
+            await db.inventoryItems.update(inventory.id, {
+              currentStock: Math.round(newStock * 10000) / 10000,
+              updatedAt: Date.now(),
+            });
+            await enqueueInsideTx("inventoryItems", inventory.id, "upsert");
+
+            const invTxId = crypto.randomUUID();
+            await db.inventoryTransactions.add({
+              id: invTxId,
+              inventoryItemId: inventory.id,
+              timestamp: Date.now(),
+              amount: -pillsConsumed,
+              type: "consumed" as const,
+              doseLogId,
+              createdAt: sf.createdAt,
+              updatedAt: sf.updatedAt,
+              deletedAt: null,
+              deviceId: sf.deviceId,
+              timezone: sf.timezone,
+            });
+            await enqueueInsideTx("inventoryTransactions", invTxId, "upsert");
+          }
+        }
+
+        // kind='prn' with NO phase/schedule satisfies the DB
+        // dose_logs_kind_fields_check (which only requires phase+schedule for
+        // scheduled doses). The client must construct this valid shape because
+        // the CHECK is not reflected into the drizzle-zod sync insert schema.
+        const doseLog: DoseLog = {
+          id: doseLogId,
+          prescriptionId,
+          kind: "prn",
+          scheduledDate: date,
+          scheduledTime: time,
+          status: "taken",
+          actionTimestamp,
+          timezone: sf.timezone,
+          createdAt: sf.createdAt,
+          updatedAt: sf.updatedAt,
+          deletedAt: null,
+          deviceId: sf.deviceId,
+          ...(inventoryItemId !== undefined && { inventoryItemId }),
+          ...(doseMg !== undefined && { doseMg }),
+          ...(note !== undefined && note.trim() !== "" && { note: note.trim() }),
+        };
+        await db.doseLogs.add(doseLog);
+        await enqueueInsideTx("doseLogs", doseLogId, "upsert");
+
+        const auditEntry = buildAuditEntry("dose_taken", {
+          prescriptionId,
+          date,
+          time,
+          kind: "prn",
+          doseMg,
+          pillsConsumed,
+          inventoryItemId,
+        });
+        await db.auditLogs.add(auditEntry);
+        await enqueueInsideTx("auditLogs", auditEntry.id, "upsert");
+
+        return doseLog;
+      },
+    );
+    schedulePush();
+
+    return ok(log);
+  } catch (e) {
+    return err("Failed to log PRN dose", e);
   }
 }
 

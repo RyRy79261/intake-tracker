@@ -6,6 +6,7 @@ import { Card } from "@intake/ui/card";
 import { Badge } from "@intake/ui/badge";
 import { CompoundCardExpanded } from "@/components/medications/compound-card-expanded";
 import { InventoryItemViewDrawer } from "@/components/medications/inventory-item-view-drawer";
+import { RetroactiveTimePicker } from "@/components/medications/retroactive-time-picker";
 import { ChevronDown } from "lucide-react";
 import { PillIconWithBadge } from "@/components/medications/pill-icon";
 import {
@@ -13,12 +14,14 @@ import {
   getEffectivePhase,
   getActiveTitrationPhase,
   getPendingTitrationPhase,
+  getCurrentTimeHHMM,
 } from "@/lib/medication-ui-utils";
 import { isCombo, splitDose, formatCompoundShort } from "@intake/core/compound";
 import {
   usePhasesForPrescription,
   useInventoryForPrescription,
   useDailyDoseSchedule,
+  useLogPrnDose,
 } from "@/hooks/use-medication-queries";
 import type { Prescription } from "@/lib/db";
 import { toLocalDateKey } from "@/lib/date-utils";
@@ -37,6 +40,8 @@ function getTodayDateStr(): string {
 export function PrescriptionCard({ prescription, expanded: controlledExpanded, onToggleExpanded, className }: PrescriptionCardProps) {
   const [internalExpanded, setInternalExpanded] = useState(false);
   const [medDrawerOpen, setMedDrawerOpen] = useState(false);
+  const [prnPickerOpen, setPrnPickerOpen] = useState(false);
+  const logPrn = useLogPrnDose();
   const expanded = controlledExpanded ?? internalExpanded;
   const toggleExpanded = onToggleExpanded ?? (() => setInternalExpanded((v) => !v));
 
@@ -72,6 +77,20 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
   const nextDoseTime = firstPending?.localTime ?? null;
 
   const isAsNeeded = !effectivePhase;
+
+  const handleLogPrnDose = (time: string) => {
+    logPrn.mutate({
+      prescriptionId: prescription.id,
+      date: todayDateStr,
+      time,
+      // Default an as-needed dose to one pill of the tracked inventory's
+      // strength; with no inventory, just log the event (no stock decrement).
+      ...(activeInventory && {
+        doseMg: activeInventory.strength,
+        dosageMg: activeInventory.strength,
+      }),
+    });
+  };
 
   let nextDoseLabel: string;
   if (isAsNeeded) {
@@ -134,6 +153,21 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
             {nextDoseLabel}
           </span>
         </div>
+
+        {isAsNeeded && (
+          <button
+            type="button"
+            aria-label={`Log an as-needed dose of ${prescription.genericName}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              setPrnPickerOpen(true);
+            }}
+            disabled={logPrn.isPending}
+            className="mt-1.5 w-full text-[11px] font-medium py-1 rounded-md bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white transition-colors"
+          >
+            Log dose now
+          </button>
+        )}
 
         <div className="flex items-center gap-1 flex-wrap mt-1">
           {activeTitration && (
@@ -219,6 +253,14 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
         prescription={prescription}
         open={medDrawerOpen}
         onOpenChange={setMedDrawerOpen}
+      />
+
+      <RetroactiveTimePicker
+        open={prnPickerOpen}
+        onOpenChange={setPrnPickerOpen}
+        defaultTime={getCurrentTimeHHMM()}
+        compoundName={prescription.genericName}
+        onConfirm={handleLogPrnDose}
       />
     </motion.div>
   );

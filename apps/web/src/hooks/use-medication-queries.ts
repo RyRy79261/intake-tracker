@@ -40,6 +40,7 @@ import {
   getDoseLogsForDate,
   getDoseLogsWithDetailsForDate,
   takeDose,
+  logPrnDose,
   untakeDose,
   skipDose,
   rescheduleDose,
@@ -49,6 +50,7 @@ import {
   editAllDoseTimes,
   type DoseLogWithDetails,
   type TakeDoseInput,
+  type LogPrnDoseInput,
   type UntakeDoseInput,
   type SkipDoseInput,
   type RescheduleDoseInput,
@@ -213,6 +215,12 @@ export function useActivatePhase() {
 export function useTakeDose() {
   return useMutation({
     mutationFn: async (input: TakeDoseInput) => unwrap(await takeDose(input)),
+  });
+}
+
+export function useLogPrnDose() {
+  return useMutation({
+    mutationFn: async (input: LogPrnDoseInput) => unwrap(await logPrnDose(input)),
   });
 }
 
