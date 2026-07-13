@@ -13,9 +13,9 @@ import { test, expect } from "@playwright/test";
  *
  *   - DATABASE_URL → an ephemeral Neon branch (isolated test data)
  *   - NEON_AUTH_URL + NEON_AUTH_COOKIE_SECRET
- *   - ALLOWED_EMAILS unset (whitelist disabled) OR the test email whitelisted
- *   - Neon Auth email-verification OFF for the test project — OR wire the
- *     agent-inbox verification step at the marked hook below
+ *   - Neon Auth email-verification OFF for the test project (simplest) — OR, if
+ *     ON, wire the marked mail.tm verification step at the hook below
+ *     (ALLOWED_EMAILS is no longer used, so no whitelist step is needed)
  *
  *   RUN_SIGNUP_E2E=1 pnpm --filter @intake/web exec playwright test signup
  *
@@ -57,11 +57,13 @@ test.describe("Signup (live Neon Auth)", () => {
 
     await page.getByRole("button", { name: /create account/i }).click();
 
-    // ── agent-inbox verification hook ──────────────────────────────────────
-    // If the Neon Auth project requires email verification, the app shows a
-    // "check your email" screen instead of redirecting. Poll the agent-inbox
-    // temp mailbox for the verification email, extract the confirm link, and
-    // `await page.goto(link)`. With verification OFF, signup redirects to "/".
+    // ── email-verification hook (only if the project requires it) ──────────
+    // If verification is ON, the app shows "check your email" instead of
+    // redirecting. In a headless CI run, receive it via the mail.tm REST API in
+    // a helper (POST /accounts → poll GET /messages → extract the confirm link)
+    // and `await page.goto(link)` — the address must then come from mail.tm, not
+    // the placeholder above. (Interactively, the agent-inbox skill wraps the
+    // same API.) With verification OFF, signup redirects straight to "/".
     // ───────────────────────────────────────────────────────────────────────
 
     // Landed in the app as the newly-created user (past the auth gate).

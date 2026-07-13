@@ -50,13 +50,21 @@ when authored — verify selectors on the first live run).
    down its own ephemeral branch (same `neondatabase/create-branch-action`
    pattern CI uses) once the quota has headroom.
 2. **`NEON_AUTH_URL` + `NEON_AUTH_COOKIE_SECRET`** for the test env.
-3. **Whitelist:** either leave `ALLOWED_EMAILS` **unset** (the check is disabled
-   when empty — see `auth-middleware.ts`) or add the dedicated test email to it.
-4. **Email verification:** confirm whether the Neon Auth test project requires
-   it. If **off**, signup redirects straight to `/` and the spec works as-is. If
-   **on**, wire the marked **agent-inbox** hook in `signup.spec.ts` (create a
-   throwaway mail.tm inbox, poll for the verification email, `page.goto` the
-   link). The `agent-inbox` skill exists for exactly this.
+   (No whitelist step — `ALLOWED_EMAILS` is no longer used, so any address works.)
+3. **Email verification** — the deciding factor for whether an inbox is needed:
+   - **Verification OFF** (Neon Auth project setting): signup redirects straight
+     to `/`. No email, no inbox — the spec works as-is with any generated
+     address. Simplest; recommended for the test project.
+   - **Verification ON**: the app shows a "check your email" screen, so the run
+     must receive the message and click the link. Two ways to wire that:
+     - **Self-contained (CI-friendly):** a Playwright test helper hits the
+       **mail.tm REST API directly** (`POST /accounts` → `GET /messages` poll →
+       extract link), all inside the node test process. This is what a headless
+       CI run needs — see the hook in `signup.spec.ts`.
+     - **Agent-in-the-loop (interactive):** the `agent-inbox` skill's MCP tools
+       (`create_inbox` → `verify_email`) run in *my* context, not inside a
+       headless test — so it fits a one-time "sign up as a real user" walkthrough
+       I drive, not an unattended CI spec. It wraps the same mail.tm API.
 
 ### Run it
 
