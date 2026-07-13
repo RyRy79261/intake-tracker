@@ -22,7 +22,7 @@
   },
   "devDependencies": {
     "@intake/typescript-config": "workspace:*",
-    "@next/env": "16.2.9",
+    "@next/env": "16.2.10",
     "@types/node": "^25.9.3",
     "drizzle-kit": "^0.31.10",
     "typescript": "^6.0.3"
