@@ -37,6 +37,7 @@ import {
 } from "@/hooks/use-intake-queries";
 import { useEditRecord } from "@/hooks/use-edit-record";
 import { useToast } from "@intake/ui/use-toast";
+import { CollapsibleTimeInputControlled } from "@/components/collapsible-time-input";
 import { type EatingRecord } from "@/lib/db";
 import {
   getCurrentDateTimeLocal,
@@ -77,6 +78,10 @@ export function FoodSection() {
   const [waterMl, setWaterMl] = useState("");
   const [isParsing, setIsParsing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Event-time control: defaults to "now", but lets the user backdate the
+  // whole entry at creation instead of editing each item afterward.
+  const [showTimeInput, setShowTimeInput] = useState(false);
+  const [customTime, setCustomTime] = useState(getCurrentDateTimeLocal());
   // Track whether AI populated form fields (determines composable vs plain submit)
   const [aiPopulated, setAiPopulated] = useState(false);
 
@@ -225,6 +230,8 @@ export function FoodSection() {
     setPotassiumMg("");
     setWaterMl("");
     setAiPopulated(false);
+    setShowTimeInput(false);
+    setCustomTime(getCurrentDateTimeLocal());
   }, []);
 
   const handleParse = useCallback(async () => {
@@ -285,8 +292,10 @@ export function FoodSection() {
 
     setIsSubmitting(true);
     try {
-      // Capture timestamp at moment of submission
-      const timestamp = dateTimeLocalToTimestamp(getCurrentDateTimeLocal());
+      // Default to "now"; use the custom event time when the user opened it.
+      const timestamp = showTimeInput
+        ? dateTimeLocalToTimestamp(customTime)
+        : Date.now();
       const grams = detailGrams ? parseInt(detailGrams, 10) : undefined;
       const note = foodText.trim() || undefined;
 
@@ -373,6 +382,8 @@ export function FoodSection() {
     potassiumEnabled,
     waterMl,
     aiPopulated,
+    showTimeInput,
+    customTime,
     addComposableEntry,
     addEatingMutation,
     toast,
@@ -531,6 +542,14 @@ export function FoodSection() {
             onChange={(e) => setWaterMl(e.target.value)}
           />
         </div>
+
+        <CollapsibleTimeInputControlled
+          value={customTime}
+          onChange={setCustomTime}
+          expanded={showTimeInput}
+          onToggle={() => setShowTimeInput((v) => !v)}
+          label="When did you have this?"
+        />
 
         {/* Record button — always visible */}
         <Button
