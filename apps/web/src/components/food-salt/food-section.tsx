@@ -119,7 +119,8 @@ export function FoodSection() {
   const syncEatingGroupMutation = useSyncEatingGroup();
   const { deletingId, handleDelete } = useDeleteWithToast(
     deleteMutation,
-    "Eating record removed"
+    "Eating record removed",
+    { undoToast: true }
   );
 
   // Extra edit fields
