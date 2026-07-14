@@ -12,8 +12,8 @@ The app is **offline-first** — the Next middleware only guards `/auth`/`/auth/
 settings pages render and function via client-side Dexie **without auth**. The
 existing Playwright e2e drives exactly this:
 
-- `e2e/global-setup.ts` writes an empty session when `NEON_AUTH_TEST_EMAIL` /
-  `_PASSWORD` are unset, and specs run unauthenticated.
+- the `auth.setup.ts` setup project writes an empty session when
+  `NEON_AUTH_TEST_EMAIL` / `_PASSWORD` are unset, and specs run unauthenticated.
 - `e2e/medications.spec.ts` creates meds through the wizard and logs doses.
 
 **New:** `medications.spec.ts` › _"should create an as-needed (PRN) medication
@@ -54,17 +54,45 @@ when authored — verify selectors on the first live run).
 3. **Email verification** — the deciding factor for whether an inbox is needed:
    - **Verification OFF** (Neon Auth project setting): signup redirects straight
      to `/`. No email, no inbox — the spec works as-is with any generated
-     address. Simplest; recommended for the test project.
-   - **Verification ON**: the app shows a "check your email" screen, so the run
-     must receive the message and click the link. Two ways to wire that:
-     - **Self-contained (CI-friendly):** a Playwright test helper hits the
-       **mail.tm REST API directly** (`POST /accounts` → `GET /messages` poll →
-       extract link), all inside the node test process. This is what a headless
-       CI run needs — see the hook in `signup.spec.ts`.
-     - **Agent-in-the-loop (interactive):** the `agent-inbox` skill's MCP tools
-       (`create_inbox` → `verify_email`) run in *my* context, not inside a
-       headless test — so it fits a one-time "sign up as a real user" walkthrough
-       I drive, not an unattended CI spec. It wraps the same mail.tm API.
+     address. Simplest; recommended, and it matches how the app UX behaves today
+     (see the caveat below).
+   - **Verification ON**: signup creates the account but establishes no session
+     until the emailed link is clicked, so the run must receive that mail. This
+     is wired via a **real Nylas inbox** (see next section) — set the `NYLAS_*`
+     vars and the spec receives the link over the Nylas REST API and visits it.
+
+> **App-UX caveat.** `sign-up-form.tsx` always `router.replace("/")`s on success
+> — there is **no "check your email" screen**. With verification OFF that's fine.
+> With verification ON, a real user would be silently bounced back to `/auth`
+> with no guidance. So the e2e can drive verification-ON (it visits the link
+> directly), but shipping verification ON to real users would first need a proper
+> post-signup "verify your email" screen. Keep verification **OFF** unless/until
+> that UX exists.
+
+### Verification-ON inbox (Nylas Agent Account)
+
+The signup spec reads verification emails from a real, deliverable managed
+mailbox — a **Nylas Agent Account** (`signup@intake-tracker.nylas.email`) — over
+the Nylas v3 REST API. The helper is `e2e/helpers/mailbox.ts`; it needs only the
+API key (no CLI binary, no keyring passphrase), so it runs the same locally and
+in CI. Each run uses a unique **plus-address** (`signup+r<stamp>@…`, all
+delivered to the one inbox — validated against the live API) so re-runs never
+collide.
+
+Set these (as CI secrets, or in `.env.local` locally):
+
+```bash
+NYLAS_API_KEY="nyl_…"                                 # Nylas application API key
+NYLAS_GRANT_ID="c72fa548-…"                           # the agent-account grant (the inbox)
+NYLAS_INBOX_ADDRESS="signup@intake-tracker.nylas.email"
+NYLAS_API_BASE="https://api.eu.nylas.com"             # our Nylas app is in the EU region
+```
+
+Retrieve the API key from the configured CLI with `nylas auth token`, or from
+dashboard-v3.nylas.com. Full setup + the WSL/passphrase/region gotchas are in the
+project memory (`project_nylas_e2e_inbox`). Still to confirm on the first live
+run: that an **external** sender (Neon Auth) actually delivers to the
+`.nylas.email` address — only internal delivery has been proven so far.
 
 ### Run it
 
@@ -78,6 +106,6 @@ DATABASE_URL="postgres://…neon-branch…" NEON_AUTH_URL="…" NEON_AUTH_COOKIE
 
 - **Google social sign-in can't be automated** (consent/captcha) — the harness
   deliberately uses the email/password path, which exercises the same Neon Auth
-  backend + whitelist + session.
+  backend + session. (`ALLOWED_EMAILS` is retired — no whitelist step.)
 - Google's flow can only be smoke-checked manually; email/password is the
   automatable proxy for "a real user signs up and gets in".

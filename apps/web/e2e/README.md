@@ -67,8 +67,10 @@ pnpm exec playwright test e2e/dashboard.spec.ts   # single file
 
 ### Real signup flow (`signup.spec.ts`)
 Skipped unless `RUN_SIGNUP_E2E=1` **and** a Neon backend is present. Covers
-account creation → land-in-app. See `docs/e2e-live-user-testing.md` for the full
-setup and the email-verification / mail.tm note.
+account creation → land-in-app. With email-verification **ON**, it receives the
+verification link from a real Nylas Agent Account inbox
+(`e2e/helpers/mailbox.ts`, `NYLAS_*` env). See `docs/e2e-live-user-testing.md`
+for the full setup, the Nylas vars, and the app-UX caveat.
 
 ## CI (GitHub Actions)
 
@@ -91,6 +93,7 @@ app logs into and every authed spec 401s.
 | `NEON_AUTH_URL` | static auth endpoint the app logs into |
 | `NEON_AUTH_COOKIE_SECRET` | cookie signing secret (≥32 chars) |
 | `NEON_AUTH_TEST_EMAIL` / `NEON_AUTH_TEST_PASSWORD` | the persistent test account |
+| `NYLAS_API_KEY` / `NYLAS_GRANT_ID` / `NYLAS_INBOX_ADDRESS` | signup-spec inbox (verification-ON only); `NYLAS_API_BASE` defaults to the EU endpoint |
 
 ## Notes
 - `ALLOWED_EMAILS` is **no longer used** (the whitelist is retired).

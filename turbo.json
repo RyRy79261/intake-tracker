@@ -28,7 +28,12 @@
     "MOBILE_BUILD",
     "NEON_AUTH_TEST_EMAIL",
     "NEON_AUTH_TEST_PASSWORD",
-    "ENABLE_E2E_TEST_ROUTES"
+    "ENABLE_E2E_TEST_ROUTES",
+    "RUN_SIGNUP_E2E",
+    "NYLAS_API_KEY",
+    "NYLAS_GRANT_ID",
+    "NYLAS_INBOX_ADDRESS",
+    "NYLAS_API_BASE"
   ],
   "tasks": {
     "build": {
