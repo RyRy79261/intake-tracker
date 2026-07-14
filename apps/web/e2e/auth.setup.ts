@@ -2,7 +2,7 @@ import { test as setup, request as apiRequest } from "@playwright/test";
 import * as fs from "fs";
 import * as path from "path";
 import { neon } from "@neondatabase/serverless";
-import { WELCOME_SEEN_KEY } from "../src/lib/constants";
+import { WELCOME_SEEN_KEY } from "@/lib/constants";
 
 /**
  * E2E auth setup — a Playwright **setup project** (replaces the old
