@@ -1,102 +1,100 @@
-# E2E Tests (Playwright + Neon Auth)
+# E2E Tests (Playwright)
 
-Phase 41 rewired the E2E suite around a real Neon Auth test user.
-Playwright's `globalSetup` signs in once via the `/auth` page, captures
-the authenticated cookie session, and persists it to
-`playwright/.auth/user.json`. Every spec inherits the session via
-`use: { storageState: "playwright/.auth/user.json" }` and starts already
-signed in — no per-test login flow.
+Two run modes, depending on whether a spec needs a real login:
 
-## Local development
+- **Offline (no DB, no auth, no Neon)** — the app is offline-first; the Next
+  middleware only guards `/auth`, so the dashboard / medications / food pages
+  render and work via client-side Dexie **without a session**. Specs that only
+  drive the tracking UI run this way — e.g. `medications.spec.ts` (incl. the
+  as-needed "Log dose now" flow). This is the fast path for most feature specs.
+- **Authenticated** — the pre-existing specs that assume a signed-in session,
+  plus `signup.spec.ts`, need a Neon Auth backend.
 
-### One-time setup
+Auth is a Playwright **setup project** (`auth.setup.ts`, run before `chromium`):
+it signs in **once** — API fast path (`POST /api/auth/sign-in/email` →
+`storageState`), falling back to a browser login — and writes
+`playwright/.auth/user.json`; the `chromium` project reuses that cookie state.
+With no creds it writes an empty session, so the offline specs still run.
+Managed Neon Auth validates every session server-side, so this real login is the
+only sound approach — you can't forge a session.
 
-1. Provision a Neon Postgres branch (or use your dev branch — you do
-   not need a separate one for local runs).
-2. Add to `.env.local`:
+## Dependencies
 
+1. **Node 22 + pnpm** (repo toolchain) → `pnpm install`.
+2. **The Chromium browser binary** — Playwright's npm package does NOT bundle it:
    ```bash
-   DATABASE_URL=postgres://...               # your Neon branch
-   NEON_AUTH_URL=<Neon console → Branch → Auth endpoint URL>
-   NEON_AUTH_COOKIE_SECRET=$(openssl rand -base64 32)
-   NEON_AUTH_TEST_EMAIL=e2e@example.com
-   NEON_AUTH_TEST_PASSWORD=correct-horse-battery-staple
-   ALLOWED_EMAILS=e2e@example.com,you@example.com
+   pnpm --filter @intake/web exec playwright install chromium
+   # add --with-deps on a fresh Linux box / CI to also install the system libs
    ```
+3. **Authenticated / signup mode only:** a Neon Auth backend (see below).
 
-3. Seed the test user (idempotent — safe to re-run):
+The dev server is started automatically by Playwright (`pnpm run dev`, or a
+running one on `:3000` is reused) — you don't start it yourself.
 
-   ```bash
-   pnpm dev                          # in one terminal
-   pnpm tsx scripts/seed-e2e-user.ts # in another terminal
-   ```
+## Running
 
-   The seed script POSTs to `/api/auth/sign-up/email`. A `409` (user
-   already exists) is treated as success.
+From `apps/web` (or prefix with `pnpm --filter @intake/web exec`).
 
-### Running tests
-
+### Offline — no setup needed
 ```bash
-pnpm test:e2e                       # full suite
-pnpm exec playwright test --list    # list tests without running
-npx playwright test e2e/dashboard.spec.ts  # single file
+# Empty creds → the setup project writes an empty session; specs run offline.
+NEON_AUTH_TEST_EMAIL= NEON_AUTH_TEST_PASSWORD= DATABASE_URL= \
+  pnpm exec playwright test medications.spec.ts     # or: -g "as-needed"
 ```
 
-If `NEON_AUTH_TEST_EMAIL` / `NEON_AUTH_TEST_PASSWORD` are unset,
-`globalSetup` writes an empty `playwright/.auth/user.json` and logs a
-warning. Specs will then run unauthenticated and most will fail when
-they hit `/api/ai/*` endpoints — this is expected for "is the runner
-working at all" smoke checks but does not exercise real flows.
+### Authenticated — full suite
+Put the Neon backend env in `.env.local` (playwright.config loads it via
+`loadEnvConfig`):
+```bash
+DATABASE_URL=postgres://...          # your Neon branch (or dev branch)
+NEON_AUTH_URL=<Neon console → Branch → Auth endpoint URL>
+NEON_AUTH_COOKIE_SECRET=$(openssl rand -base64 32)
+NEON_AUTH_TEST_EMAIL=e2e@example.com
+NEON_AUTH_TEST_PASSWORD=correct-horse-battery-staple
+```
+Create the persistent test account **once** (idempotent; a `409` = already
+exists = success):
+```bash
+pnpm dev                          # one terminal
+pnpm exec tsx scripts/seed-e2e-user.ts   # another — POSTs the real signup
+```
+Then:
+```bash
+pnpm test:e2e                     # full suite (root: turbo run test:e2e)
+pnpm exec playwright test --list  # list without running
+pnpm exec playwright test e2e/dashboard.spec.ts   # single file
+```
+
+### Real signup flow (`signup.spec.ts`)
+Skipped unless `RUN_SIGNUP_E2E=1` **and** a Neon backend is present. Covers
+account creation → land-in-app. See `docs/e2e-live-user-testing.md` for the full
+setup and the email-verification / mail.tm note.
 
 ## CI (GitHub Actions)
 
-The `.github/workflows/ci.yml` `e2e` job creates an isolated Neon
-branch per run, seeds the test user on it, runs the full Playwright
-suite against the production build, and deletes the branch on cleanup.
+The `ci.yml` `e2e` job: `playwright install chromium --with-deps` → create an
+ephemeral Neon **data** branch (`create-branch-action@v6`) → reset schema +
+`pnpm db:migrate` → `pnpm test:e2e` against the production build → delete the
+branch (`if: always()`). The auth *account* is static — the app authenticates
+against the fixed `NEON_AUTH_URL` (decoupled from the per-run data branch), and
+`auth.setup.ts` seeds `neon_auth.users_sync` on the fresh branch for FK safety.
 
-```
-create-branch -> seed-user -> playwright (build + test) -> delete-branch
-```
-
-`delete-branch` runs with `if: always()` so the branch is cleaned up
-even on test failure. Trace artifacts are uploaded on failure for
-post-mortem investigation.
+**Invariant:** keep `NEON_AUTH_URL` static (don't switch `create-branch-action`
+to `get_auth_url: true`), or the static account won't exist at the endpoint the
+app logs into and every authed spec 401s.
 
 ### Required repository secrets
+| Secret | Purpose |
+| --- | --- |
+| `NEON_API_KEY` | `create-branch-action` |
+| `NEON_PROJECT_ID` | Neon project hosting the branches |
+| `NEON_AUTH_URL` | static auth endpoint the app logs into |
+| `NEON_AUTH_COOKIE_SECRET` | cookie signing secret (≥32 chars) |
+| `NEON_AUTH_TEST_EMAIL` / `NEON_AUTH_TEST_PASSWORD` | the persistent test account |
 
-Add these via Settings -> Secrets and variables -> Actions:
-
-| Secret                       | Purpose                                              |
-| ---------------------------- | ---------------------------------------------------- |
-| `NEON_API_KEY`               | Used by `neondatabase/create-branch-action@v5`       |
-| `NEON_PROJECT_ID`            | The Neon project that hosts the test branches       |
-| `NEON_AUTH_TEST_EMAIL`       | Seeded as the E2E user email + doubles as ALLOWED_EMAILS |
-| `NEON_AUTH_TEST_PASSWORD`    | Seeded as the E2E user password                     |
-| `NEON_AUTH_COOKIE_SECRET`    | Cookie signing secret (≥32 chars; `openssl rand -base64 32`) |
-
-If any of these secrets are missing, the e2e job fails fast with a
-clear error from the action that needs them. The job is gated on
-`needs.changes.outputs.src == 'true'`, so docs-only PRs skip it
-entirely.
-
-## Why per-run Neon branches
-
-- **Data isolation:** every CI run gets a fresh database, so a flaky
-  test cannot pollute the next run's state.
-- **Cheap and fast:** Neon branches are copy-on-write and provision in
-  ~1 second.
-- **Deterministic seeding:** the seed script always starts from an
-  empty users table, guaranteeing the same starting state.
-
-## Troubleshooting
-
-- **`Specs running unauthenticated`:** missing
-  `NEON_AUTH_TEST_EMAIL` / `NEON_AUTH_TEST_PASSWORD`. Check `.env.local`
-  for local runs or repo secrets for CI.
-- **`Seed failed: 401`:** the auth handler is up but
-  `NEON_AUTH_COOKIE_SECRET` differs between the seeding step and the
-  webServer that the specs hit. They must match — pass the secret
-  from a single source.
-- **`waitForURL timed out`:** the `/auth` page redirected somewhere
-  unexpected after sign-in. Check the trace artifact uploaded on
-  failure to see what URL the test browser landed on.
+## Notes
+- `ALLOWED_EMAILS` is **no longer used** (the whitelist is retired).
+- `playwright/.auth/user.json` is a **live session cookie** — git-ignored; never
+  commit it (nor `test-results/` / `playwright-report/`).
+- Deeper background on the live-user drive-through + signup harness:
+  `docs/e2e-live-user-testing.md`.
