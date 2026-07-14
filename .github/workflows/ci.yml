@@ -270,6 +270,12 @@ jobs:
           # if verification is ON but the mailbox secrets are absent, so this is
           # safe to leave enabled while the secrets are being provisioned.
           RUN_SIGNUP_E2E: "1"
+          # Run the MCP custom-connector OAuth + Streamable-HTTP handshake spec
+          # (mcp-connector.spec.ts) and the a11y consent-screen scan, which are
+          # otherwise skipped. The 4 no-auth checks (metadata ×2, DCR, 401) run
+          # anywhere; the consent + full-handshake tests additionally require the
+          # NEON_AUTH_TEST_EMAIL session above and self-skip without it.
+          RUN_MCP_E2E: "1"
           NYLAS_API_KEY: ${{ secrets.NYLAS_API_KEY }}
           NYLAS_GRANT_ID: ${{ secrets.NYLAS_GRANT_ID }}
           NYLAS_INBOX_ADDRESS: ${{ secrets.NYLAS_INBOX_ADDRESS }}
