@@ -47,7 +47,7 @@ export function DefecationCard() {
   const addMutation = useAddDefecation();
   const deleteMutation = useDeleteDefecation();
   const updateMutation = useUpdateDefecation();
-  const { deletingId, handleDelete } = useDeleteWithToast(deleteMutation, "Defecation record removed");
+  const { deletingId, handleDelete } = useDeleteWithToast(deleteMutation, "Defecation record removed", { undoToast: true });
 
   // Extra edit field (amountEstimate is record-specific)
   const [editAmountEstimate, setEditAmountEstimate] = useState("");

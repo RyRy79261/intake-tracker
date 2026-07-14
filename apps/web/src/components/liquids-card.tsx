@@ -69,7 +69,8 @@ export function LiquidsCard() {
   const sugarEnabled = useOptionalTrackerEnabled("sugar");
   const { deletingId, handleDelete } = useDeleteWithToast(
     deleteMutation,
-    "Water entry removed"
+    "Water entry removed",
+    { undoToast: true }
   );
 
   const [editAmount, setEditAmount] = useState("");

@@ -53,6 +53,16 @@ import { standardDrinksFromAbv, abvFromStandardDrinks } from "@intake/core/alcoh
 
 const PAGE_SIZE = 50;
 
+// Record types whose delete mutation surfaces its own undo toast
+// (useUndoDeleteMutation). For these we must NOT fire a second "Entry deleted"
+// toast on delete — TOAST_LIMIT is 1, so it would clobber the Undo action.
+const UNDO_TOAST_TYPES = new Set<string>([
+  "intake",
+  "eating",
+  "urination",
+  "defecation",
+]);
+
 // dateTimeLocalToTimestamp throws on invalid input (it never returns NaN), so
 // parse defensively and return null — each edit handler turns null into the
 // "Invalid date/time" toast at its existing check site.
@@ -186,7 +196,9 @@ export function RecordsTab({ range }: RecordsTabProps) {
       else if (unified.type === "urination") await deleteUrinationMutation.mutateAsync(id);
       else if (unified.type === "defecation") await deleteDefecationMutation.mutateAsync(id);
       else if (unified.type === "caffeine" || unified.type === "alcohol") await deleteSubstance(id);
-      toast({ title: "Entry deleted", description: "Record removed" });
+      if (!UNDO_TOAST_TYPES.has(unified.type)) {
+        toast({ title: "Entry deleted", description: "Record removed" });
+      }
     } catch {
       toast({ title: "Error", description: "Could not delete the entry", variant: "destructive" });
     } finally {

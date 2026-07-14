@@ -191,4 +191,41 @@ test.describe('Dashboard', () => {
     // Verify success toast (title is "Logged")
     await expect(page.getByText('Logged', { exact: true })).toBeVisible();
   });
+
+  test('logging water advances the Today total', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.locator('text=Intake Tracker')).toBeVisible();
+
+    // The "Today" summary (TextMetrics) starts at 0 in a fresh context.
+    const waterValue = page.getByTestId('today-water-value');
+    await expect(waterValue).toHaveText('0');
+
+    await page.locator('#section-water').locator('button', { hasText: 'Confirm Entry' }).click();
+    await expect(page.getByText('Water intake recorded', { exact: true })).toBeVisible();
+
+    // The at-a-glance total must reflect the log immediately.
+    await expect(waterValue).not.toHaveText('0');
+  });
+
+  test('delete then undo a water entry on the dashboard restores it', async ({ page }) => {
+    await page.goto('/');
+    await page.locator('#section-water').locator('button', { hasText: 'Confirm Entry' }).click();
+    await expect(page.getByText('Water intake recorded', { exact: true })).toBeVisible();
+
+    // The card's "Recent" section lists the entry with a delete button. Fresh
+    // context = exactly one record, so a page-scoped locator is unambiguous.
+    // NB: the row itself is role="button"; exact:true targets the icon button.
+    const recentDelete = page.getByRole('button', { name: 'Delete entry', exact: true }).first();
+    await expect(recentDelete).toBeVisible();
+    await recentDelete.click();
+
+    // A single "Record deleted" undo toast now survives (no clobbering plain
+    // toast), and the row is optimistically removed.
+    await expect(page.getByText('Record deleted', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Delete entry', exact: true })).toHaveCount(0);
+
+    // Undo (within the 5s window) restores the soft-deleted record.
+    await page.getByRole('button', { name: 'Undo' }).click();
+    await expect(page.getByRole('button', { name: 'Delete entry', exact: true }).first()).toBeVisible();
+  });
 });

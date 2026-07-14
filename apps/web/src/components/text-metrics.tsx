@@ -229,6 +229,7 @@ export function TextMetrics() {
             <div className="flex flex-col items-end leading-tight">
               <div className="flex items-baseline gap-1">
                 <span
+                  data-testid="today-water-value"
                   className={cn(
                     "text-sm font-semibold tabular-nums",
                     waterProgress.isOverExtended

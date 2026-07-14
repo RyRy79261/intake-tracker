@@ -92,4 +92,113 @@ test.describe('History / Analytics', () => {
       .or(page.locator('text=/No data for this period/i'));
     await expect(svgOrEmpty).toBeVisible({ timeout: 15000 });
   });
+
+  /**
+   * D-12 only proved blood pressure round-trips into Records. This extends the
+   * same create-via-UI → assert-in-Records loop to the other daily-driver
+   * metrics. We assert per **domain filter** (a record surfaces AND is filed
+   * under the right category) rather than matching brittle formatted strings —
+   * the "Edit entry" action button is unique to a rendered RecordRow.
+   */
+  test('every metric round-trips into the Records tab (D-12 extended)', async ({ page }) => {
+    // Step 1: log one of each metric on the dashboard.
+    await page.goto('/');
+
+    await page.locator('#section-water').locator('button', { hasText: 'Confirm Entry' }).click();
+    await expect(page.getByText('Water intake recorded', { exact: true })).toBeVisible();
+
+    const weightCard = page.locator('#section-weight');
+    await weightCard.scrollIntoViewIfNeeded();
+    await weightCard.locator('button:has-text("Record Weight")').click();
+    await expect(page.getByText('Weight recorded', { exact: true })).toBeVisible();
+
+    const bpCard = page.locator('#section-bp');
+    await bpCard.scrollIntoViewIfNeeded();
+    await bpCard.locator('#systolic').fill('118');
+    await bpCard.locator('#diastolic').fill('77');
+    await bpCard.locator('button:has-text("Record Reading")').click();
+    await expect(page.getByText('Blood pressure recorded', { exact: true })).toBeVisible();
+
+    const eatingCard = page.locator('#section-food-salt');
+    await eatingCard.scrollIntoViewIfNeeded();
+    await eatingCard.locator('#eating-sodium').fill('250');
+    await eatingCard.locator('button', { hasText: 'Record with details' }).click();
+    await expect(page.getByText('Eating event recorded', { exact: true })).toBeVisible();
+
+    const urinationCard = page.locator('#section-urination');
+    await urinationCard.scrollIntoViewIfNeeded();
+    await urinationCard.locator('button', { hasText: 'Medium' }).click();
+    await expect(page.getByText('Logged', { exact: true }).first()).toBeVisible();
+
+    const defecationCard = page.locator('#section-defecation');
+    await defecationCard.scrollIntoViewIfNeeded();
+    await defecationCard.locator('button', { hasText: 'Large' }).click();
+
+    // Step 2: on the Records tab, every domain filter must surface a row.
+    await page.goto('/analytics');
+    await dismissAnalyticsIntro(page);
+    await page.locator('[role="tab"]', { hasText: 'Records' }).click();
+
+    for (const filterLabel of ['Water', 'Weight', 'BP', 'Eating', 'Urination', 'Defecation']) {
+      await page.getByRole('button', { name: filterLabel, exact: true }).click();
+      await expect(
+        page.getByRole('button', { name: 'Edit entry', exact: true }).first(),
+        `${filterLabel} record should appear in the Records tab`,
+      ).toBeVisible();
+    }
+  });
+
+  test('edit a record from the Records tab updates its value (D-13)', async ({ page }) => {
+    // Log a distinctive weight on the dashboard.
+    await page.goto('/');
+    const weightCard = page.locator('#section-weight');
+    await weightCard.scrollIntoViewIfNeeded();
+    const recordBtn = weightCard.locator('button:has-text("Record Weight")');
+    await expect(recordBtn).toBeVisible();
+    const weightInput = weightCard.getByTestId('weight-direct-input');
+    await weightInput.focus();
+    await weightInput.fill('71.35');
+    await recordBtn.focus();
+    await expect(weightCard.getByText('71.35')).toBeVisible();
+    await recordBtn.click();
+    await expect(page.getByText('Weight recorded', { exact: true })).toBeVisible();
+
+    // Open it from the Records tab and change the value.
+    await page.goto('/analytics');
+    await dismissAnalyticsIntro(page);
+    await page.locator('[role="tab"]', { hasText: 'Records' }).click();
+    await page.getByRole('button', { name: 'Weight', exact: true }).click();
+    await expect(page.getByText('71.35 kg')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Edit entry', exact: true }).first().click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await page.locator('#edit-weight').fill('80');
+    await page.getByRole('button', { name: 'Save Changes' }).click();
+
+    await expect(page.getByText('Entry updated', { exact: true })).toBeVisible();
+    await expect(page.getByText('80 kg')).toBeVisible();
+    await expect(page.getByText('71.35 kg')).toHaveCount(0);
+  });
+
+  test('delete a record from the Records tab removes it (D-14)', async ({ page }) => {
+    await page.goto('/');
+    await page.locator('#section-water').locator('button', { hasText: 'Confirm Entry' }).click();
+    await expect(page.getByText('Water intake recorded', { exact: true })).toBeVisible();
+
+    await page.goto('/analytics');
+    await dismissAnalyticsIntro(page);
+    await page.locator('[role="tab"]', { hasText: 'Records' }).click();
+    await page.getByRole('button', { name: 'Water', exact: true }).click();
+
+    const deleteBtn = page.getByRole('button', { name: 'Delete entry', exact: true }).first();
+    await expect(deleteBtn).toBeVisible();
+    await deleteBtn.click();
+
+    // Records-tab delete is immediate (no confirm). Intake now shows a single
+    // "Record deleted" undo toast (the redundant plain toast was removed so the
+    // Undo action survives), and the row is gone.
+    await expect(page.getByText('Record deleted', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Edit entry', exact: true })).toHaveCount(0);
+    await expect(page.getByText('No records in this time range')).toBeVisible();
+  });
 });
