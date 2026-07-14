@@ -263,8 +263,17 @@ jobs:
           NEON_AUTH_COOKIE_SECRET: ${{ secrets.NEON_AUTH_COOKIE_SECRET }}
           NEON_AUTH_TEST_EMAIL: ${{ secrets.NEON_AUTH_TEST_EMAIL }}
           NEON_AUTH_TEST_PASSWORD: ${{ secrets.NEON_AUTH_TEST_PASSWORD }}
-          ALLOWED_EMAILS: ${{ secrets.NEON_AUTH_TEST_EMAIL }}
           ENABLE_E2E_TEST_ROUTES: "true"
+          # Exercise the real signup flow (account creation → verify via the
+          # Nylas inbox → land in app). Requires the NYLAS_* secrets below and
+          # email-verification ON in the Neon Auth project. The spec self-skips
+          # if verification is ON but the mailbox secrets are absent, so this is
+          # safe to leave enabled while the secrets are being provisioned.
+          RUN_SIGNUP_E2E: "1"
+          NYLAS_API_KEY: ${{ secrets.NYLAS_API_KEY }}
+          NYLAS_GRANT_ID: ${{ secrets.NYLAS_GRANT_ID }}
+          NYLAS_INBOX_ADDRESS: ${{ secrets.NYLAS_INBOX_ADDRESS }}
+          NYLAS_API_BASE: "https://api.eu.nylas.com"
         run: pnpm test:e2e
       - name: Delete Neon test branch
         if: always()
