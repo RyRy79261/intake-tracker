@@ -191,6 +191,9 @@ jobs:
   cap-export:
     needs: [changes, security]
     if: needs.changes.outputs.src == 'true'
+    # Least privilege: this job only reads the repo to build the static export.
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     steps:
       - name: Harden runner (egress audit)
@@ -198,6 +201,8 @@ jobs:
         with:
           egress-policy: audit
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v6
         with:
