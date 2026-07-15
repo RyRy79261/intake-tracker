@@ -59,13 +59,19 @@ const Drawer = ({
 }
 Drawer.displayName = "Drawer"
 
-const DrawerTrigger = DrawerPrimitive.Trigger
+// Explicit annotations keep the emitted types portable: vaul bundles its own
+// @radix-ui/react-dialog copy, so TS otherwise infers references to it via a
+// pnpm-hashed path and errors TS2883 ("cannot be named … not portable").
+const DrawerTrigger: typeof DrawerPrimitive.Trigger = DrawerPrimitive.Trigger
 
 const DrawerPortal = DrawerPrimitive.Portal
 
-const DrawerClose = DrawerPrimitive.Close
+const DrawerClose: typeof DrawerPrimitive.Close = DrawerPrimitive.Close
 
-const DrawerOverlay = React.forwardRef<
+const DrawerOverlay: React.ForwardRefExoticComponent<
+  React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Overlay> &
+    React.RefAttributes<React.ElementRef<typeof DrawerPrimitive.Overlay>>
+> = React.forwardRef<
   React.ElementRef<typeof DrawerPrimitive.Overlay>,
   React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Overlay>
 >(({ className, ...props }, ref) => (
@@ -162,7 +168,10 @@ const DrawerFooter = ({
 )
 DrawerFooter.displayName = "DrawerFooter"
 
-const DrawerTitle = React.forwardRef<
+const DrawerTitle: React.ForwardRefExoticComponent<
+  React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Title> &
+    React.RefAttributes<React.ElementRef<typeof DrawerPrimitive.Title>>
+> = React.forwardRef<
   React.ElementRef<typeof DrawerPrimitive.Title>,
   React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Title>
 >(({ className, ...props }, ref) => (
@@ -177,7 +186,10 @@ const DrawerTitle = React.forwardRef<
 ))
 DrawerTitle.displayName = DrawerPrimitive.Title.displayName
 
-const DrawerDescription = React.forwardRef<
+const DrawerDescription: React.ForwardRefExoticComponent<
+  React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Description> &
+    React.RefAttributes<React.ElementRef<typeof DrawerPrimitive.Description>>
+> = React.forwardRef<
   React.ElementRef<typeof DrawerPrimitive.Description>,
   React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Description>
 >(({ className, ...props }, ref) => (
