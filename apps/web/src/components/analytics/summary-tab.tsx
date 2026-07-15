@@ -433,7 +433,7 @@ export function SummaryTab({ range }: { range: TimeRange }) {
               <YAxis tick={{ fontSize: 10 }} domain={["dataMin - 1", "dataMax + 1"]} />
               <Tooltip
                 contentStyle={TOOLTIP_STYLE}
-                formatter={(v: number) => [`${v.toFixed(1)} kg`, "Weight"]}
+                formatter={(v) => [`${Number(v).toFixed(1)} kg`, "Weight"]}
               />
               <Line dataKey="weight" stroke="hsl(160 84% 39%)" strokeWidth={2} dot={{ r: 3 }} />
             </LineChart>
@@ -450,7 +450,7 @@ export function SummaryTab({ range }: { range: TimeRange }) {
               <YAxis tick={{ fontSize: 10 }} />
               <Tooltip
                 contentStyle={TOOLTIP_STYLE}
-                formatter={(v: number) => [`${v} ml`, "Balance"]}
+                formatter={(v) => [`${Number(v)} ml`, "Balance"]}
               />
               <ReferenceLine y={0} stroke="hsl(var(--border))" />
               <ReferenceLine
