@@ -5,6 +5,22 @@ packages:
 onlyBuiltDependencies:
   - '@reown/appkit'
 
+# pnpm 11 fails the install (ERR_PNPM_IGNORED_BUILDS) unless every dependency
+# with a postinstall build script is explicitly allowed or denied here. These
+# are set false (their build scripts do NOT run) — matching the pnpm 10 posture
+# where only @reown/appkit was allowed to build. Flip one to true only after
+# reviewing what its build script does.
+allowBuilds:
+  '@swc/core': false
+  core-js: false
+  cpu-features: false
+  esbuild: false
+  msw: false
+  protobufjs: false
+  sharp: false
+  ssh2: false
+  unrs-resolver: false
+
 # Supply chain security (Phase 23)
 minimumReleaseAge: 1440
 trustPolicy: no-downgrade
@@ -20,6 +36,7 @@ auditLevel: high
 
 # pnpm 10.30 does not read auditConfig from workspace config; use --ignore CLI flag in CI.
 # Each entry below has a documented rationale — do not remove without verifying the advisory.
+# (Key stays `ignoreCves` for the supply-chain-config governance test; the values are GHSAs.)
 auditConfig:
   ignoreCves:
     # Next.js RSC deserialization DoS — only affects >=15.0.0 RSC usage.
