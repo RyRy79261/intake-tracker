@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.34.1](https://github.com/RyRy79261/intake-tracker/compare/v1.34.0...v1.34.1) (2026-07-15)
+
+
+### Bug Fixes
+
+* **web:** restore Android APK publishing (force-static OG routes + CI export check) ([#283](https://github.com/RyRy79261/intake-tracker/issues/283)) ([4787e18](https://github.com/RyRy79261/intake-tracker/commit/4787e1829551d4b5ac04e23373504bfb3b331a36))
+
+## [1.34.0](https://github.com/RyRy79261/intake-tracker/compare/v1.33.2...v1.34.0) (2026-07-14)
+
+
+### Features
+
+* as-needed (PRN) dose logging end-to-end — migration, write path + card button (B1+C4) ([#276](https://github.com/RyRy79261/intake-tracker/issues/276)) ([9e67869](https://github.com/RyRy79261/intake-tracker/commit/9e678694174a985445889331ba9aa3d0d690ba34))
+* **intake:** event-time input on food/composable entry (PR-C1) ([#278](https://github.com/RyRy79261/intake-tracker/issues/278)) ([a2ebea1](https://github.com/RyRy79261/intake-tracker/commit/a2ebea181b49dcab3c414a1a995c0becf71f72a5))
+* **mcp:** additive read surface — substance history + intake linkage + query-fn test harness (A0–A2) ([#273](https://github.com/RyRy79261/intake-tracker/issues/273)) ([085a0e9](https://github.com/RyRy79261/intake-tracker/commit/085a0e9c7cb5688e1b107bccfd4cee2aa5442d00))
+* **web:** add Open Graph + Twitter share cards (dynamic next/og) ([#277](https://github.com/RyRy79261/intake-tracker/issues/277)) ([62304ef](https://github.com/RyRy79261/intake-tracker/commit/62304ef99026989a3edf2de997916589bcd97663))
+
 ## [1.33.2](https://github.com/RyRy79261/intake-tracker/compare/v1.33.1...v1.33.2) (2026-07-01)
 
 
