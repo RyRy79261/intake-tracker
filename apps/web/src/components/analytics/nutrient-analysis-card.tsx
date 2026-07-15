@@ -32,6 +32,11 @@ import { useToast } from "@intake/ui/use-toast";
 import { useEatingRecordsByDateRange } from "@/hooks/use-eating-queries";
 import { useUserProfile } from "@/hooks/use-profile-queries";
 import { buildMedicationSummary } from "@/lib/analytics-snapshot";
+import {
+  MAX_FOOD_DESCRIPTION_CHARS,
+  MAX_FOOD_GRAMS,
+  MAX_FOOD_ENTRIES,
+} from "@intake/ai-prompts/nutrient-analysis";
 
 const WINDOW_DAYS = 30;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -217,13 +222,20 @@ export function NutrientAnalysisCard() {
   const foods = useMemo(() => {
     return (records ?? [])
       .map((r) => {
-        const description = r.originalInputText?.trim() || r.note?.trim();
+        // Clamp to the server's per-entry caps: descriptions come from raw
+        // user input (voice-dictated meals run long) and one oversize entry
+        // would 400 the whole scan.
+        const description = (r.originalInputText?.trim() || r.note?.trim())
+          ?.slice(0, MAX_FOOD_DESCRIPTION_CHARS);
         if (!description) return null;
         return r.grams !== undefined && r.grams > 0
-          ? { description, grams: r.grams }
+          ? { description, grams: Math.min(r.grams, MAX_FOOD_GRAMS) }
           : { description };
       })
-      .filter((f): f is { description: string; grams?: number } => f !== null);
+      .filter((f): f is { description: string; grams?: number } => f !== null)
+      // Records arrive timestamp-ascending; keep the most recent entries
+      // when a heavy logger exceeds the server's array cap.
+      .slice(-MAX_FOOD_ENTRIES);
   }, [records]);
 
   const canAnalyze = foods.length > 0 && !pending;

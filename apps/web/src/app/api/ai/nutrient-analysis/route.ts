@@ -8,27 +8,40 @@ import { parseJsonBody, zodErrorResponse } from "@/app/api/_shared/validation";
 import { createRateLimiter, getClientIp } from "@/app/api/_shared/rate-limit";
 import { recordUsage, tokensFromAnthropic } from "@/app/api/ai/_shared/usage-tracker";
 import { aiErrorResponse } from "@/app/api/ai/_shared/ai-error-response";
-import { SYSTEM_PROMPT, NUTRIENT_ANALYSIS_TOOL } from "@intake/ai-prompts/nutrient-analysis";
+import {
+  SYSTEM_PROMPT,
+  NUTRIENT_ANALYSIS_TOOL,
+  MAX_FOOD_DESCRIPTION_CHARS,
+  MAX_FOOD_GRAMS,
+  MAX_FOOD_ENTRIES,
+} from "@intake/ai-prompts/nutrient-analysis";
+import {
+  MAX_MEDICATION_NAME_CHARS,
+  MAX_MEDICATION_DOSE_CHARS,
+  MAX_MEDICATION_FREQUENCY_CHARS,
+} from "@intake/ai-prompts/analytics-insights";
 
 const FoodItemSchema = z.object({
-  description: z.string().min(1).max(300),
-  grams: z.number().min(0).max(10000).optional(),
+  description: z.string().min(1).max(MAX_FOOD_DESCRIPTION_CHARS),
+  grams: z.number().min(0).max(MAX_FOOD_GRAMS).optional(),
 });
 
 // Shape mirrors MedicationSchema in analytics-insights.ts — duplicated here
-// rather than imported so the two routes stay independent.
+// rather than imported so the two routes stay independent. The field caps
+// are shared so the producer (buildMedicationSummary) clamps to the same
+// bounds both validators enforce.
 const MedicationSchema = z.object({
-  name: z.string().min(1).max(120),
+  name: z.string().min(1).max(MAX_MEDICATION_NAME_CHARS),
   phaseType: z.enum(["maintenance", "titration"]),
-  dose: z.string().min(1).max(80),
-  frequency: z.string().min(1).max(120),
+  dose: z.string().min(1).max(MAX_MEDICATION_DOSE_CHARS),
+  frequency: z.string().min(1).max(MAX_MEDICATION_FREQUENCY_CHARS),
   daysOnPhase: z.number().int().nonnegative(),
 });
 
 const NutrientAnalysisRequestSchema = z.object({
   windowDays: z.number().int().min(1).max(90),
   focus: z.string().max(200).optional(),
-  foods: z.array(FoodItemSchema).min(1).max(500),
+  foods: z.array(FoodItemSchema).min(1).max(MAX_FOOD_ENTRIES),
   // Both only reach the route when the user has opted in on the profile page.
   conditions: z.array(z.string().min(1).max(120)).max(20).optional(),
   medications: z.array(MedicationSchema).max(40).optional(),
