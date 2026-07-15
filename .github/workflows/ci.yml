@@ -182,6 +182,46 @@ jobs:
       - name: Bundle security scan
         run: pnpm --filter @intake/web exec vitest run src/__tests__/bundle-security.test.ts
 
+  # Validate the Capacitor static export (Next.js `output: "export"`). This build
+  # mode is ONLY exercised at release time by android-release.yml, so a route that
+  # can't be statically exported — e.g. a dynamic next/og image route without
+  # `dynamic = "force-static"` — passes the normal `build` job yet breaks the
+  # APK/AAB build, shipping a release with no Android artifacts. Running the real
+  # release export here catches that class of failure on the PR instead.
+  cap-export:
+    needs: [changes, security]
+    if: needs.changes.outputs.src == 'true'
+    # Least privilege: this job only reads the repo to build the static export.
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner (egress audit)
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - name: Cache Next.js build
+        uses: actions/cache@v6
+        with:
+          path: ${{ github.workspace }}/apps/web/.next/cache
+          key: ${{ runner.os }}-nextjs-cap-${{ hashFiles('pnpm-lock.yaml', 'apps/web/next.config.*') }}
+          restore-keys: |
+            ${{ runner.os }}-nextjs-cap-
+      # Mirrors android-release.yml's export step (cap-build.js sets
+      # CAPACITOR_BUILD + defaults NEXT_PUBLIC_API_BASE_URL). No Android SDK
+      # needed — this validates only the Next static export, not the gradle build.
+      - name: Validate Capacitor static export
+        run: pnpm --filter @intake/web cap:export
+
   data-integrity:
     needs: [security]
     runs-on: ubuntu-latest
@@ -417,7 +457,7 @@ jobs:
 
   ci-pass:
     if: always()
-    needs: [changes, secrets-check, security, lint, typecheck, test-tz-sa, test-tz-de, build, data-integrity, integration, e2e, schema-migration, supply-chain, coverage, benchmark]
+    needs: [changes, secrets-check, security, lint, typecheck, test-tz-sa, test-tz-de, build, cap-export, data-integrity, integration, e2e, schema-migration, supply-chain, coverage, benchmark]
     runs-on: ubuntu-latest
     steps:
       - name: Check all jobs passed
@@ -452,6 +492,7 @@ jobs:
           echo "schema-migration: ${{ needs.schema-migration.result }}"
           echo "coverage: ${{ needs.coverage.result }}"
           echo "benchmark: ${{ needs.benchmark.result }}"
+          echo "cap-export: ${{ needs.cap-export.result }}"
 
           for result in \
             "${{ needs.test-tz-sa.result }}" \
@@ -460,7 +501,8 @@ jobs:
             "${{ needs.e2e.result }}" \
             "${{ needs.schema-migration.result }}" \
             "${{ needs.coverage.result }}" \
-            "${{ needs.benchmark.result }}"; do
+            "${{ needs.benchmark.result }}" \
+            "${{ needs.cap-export.result }}"; do
             if [[ "$result" != "success" && "$result" != "skipped" ]]; then
               echo "::error::Gated job failed (not success or skipped): $result"
               exit 1
