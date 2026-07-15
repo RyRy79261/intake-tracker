@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.34.1](https://github.com/RyRy79261/intake-tracker/compare/v1.34.0...v1.34.1) (2026-07-15)
+
+
+### Bug Fixes
+
+* **web:** restore Android APK publishing (force-static OG routes + CI export check) ([#283](https://github.com/RyRy79261/intake-tracker/issues/283)) ([4787e18](https://github.com/RyRy79261/intake-tracker/commit/4787e1829551d4b5ac04e23373504bfb3b331a36))
+
 ## [1.34.0](https://github.com/RyRy79261/intake-tracker/compare/v1.33.2...v1.34.0) (2026-07-14)
 
 
