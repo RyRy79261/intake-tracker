@@ -550,6 +550,47 @@ realDb.version(20).stores({
 export const DB_SCHEMA_VERSION = 21;
 
 /**
+ * True when `e` (or anything in its `cause` chain) is Dexie's
+ * DatabaseClosedError — the "connection was severed, reopen and retry"
+ * signal. Service errors surface the original Dexie exception as `cause`
+ * via `unwrap`, hence the chain walk.
+ */
+export function isDatabaseClosedError(e: unknown): boolean {
+  let cur: unknown = e;
+  while (cur instanceof Error) {
+    if (cur.name === "DatabaseClosedError") return true;
+    cur = cur.cause;
+  }
+  return false;
+}
+
+/**
+ * If `e` is a DatabaseClosedError, reopen the active database and return
+ * true so the caller can retry the failed operation. Returns false for any
+ * other error, or if reopening itself fails.
+ *
+ * The browser can sever the IndexedDB connection out from under us — storage
+ * eviction under disk pressure, backing-store trouble, process termination
+ * (observed on Android Chrome, issue #287). After that Dexie rejects every
+ * operation with DatabaseClosedError until `open()` is called again; autoOpen
+ * does NOT cover this case because the first open already completed. Recovery
+ * lives here at the point of failure (rather than a global `db.on("close")`
+ * reopen) so it can never race an intentional `close()`/`delete()` from
+ * reset/restore flows — and one successful recovery restores the connection
+ * for the whole app, live queries included.
+ */
+export async function recoverClosedDatabase(e: unknown): Promise<boolean> {
+  if (!isDatabaseClosedError(e)) return false;
+  try {
+    await db.open();
+    return true;
+  } catch (reopenError) {
+    console.error("[db] reopen for retry failed:", reopenError);
+    return false;
+  }
+}
+
+/**
  * Store definitions for a preview database — the current (v19) schema in a
  * single version. A preview database is created empty and discarded, so it
  * needs no migration history.

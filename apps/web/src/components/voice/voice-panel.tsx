@@ -16,6 +16,7 @@ import { useAddComposableEntry, type ComposableEntryInput } from "@/hooks/use-co
 import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import type { VoiceParsedItem, VoiceParseResponse } from "@/lib/voice-types";
 import { standardDrinksFromAbv } from "@intake/core/alcohol";
+import { recoverClosedDatabase } from "@/lib/db";
 import { apiFetch } from "@/lib/api-fetch";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -150,6 +151,136 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
     setStage("idle");
   }, []);
 
+  const saveItem = useCallback(
+    async (item: VoiceParsedItem) => {
+      switch (item.kind) {
+        case "blood_pressure":
+          await addBloodPressure.mutateAsync({
+            systolic: item.systolic,
+            diastolic: item.diastolic,
+            position: item.position ?? "sitting",
+            arm: item.arm ?? "left",
+            ...(item.heartRate !== undefined && { heartRate: item.heartRate }),
+            note: item.note ?? "voice",
+          });
+          break;
+        case "weight":
+          await addWeight.mutateAsync({
+            weight: item.weightKg,
+            note: item.note ?? "voice",
+          });
+          break;
+        case "water":
+          await addIntake.mutateAsync({
+            type: "water",
+            amount: item.ml,
+            source: "voice",
+            ...(item.note !== undefined && { note: item.note }),
+          });
+          break;
+        case "salt":
+          await addIntake.mutateAsync({
+            type: "salt",
+            amount: item.sodiumMg,
+            source: "voice",
+            ...(item.note !== undefined && { note: item.note }),
+          });
+          break;
+        case "food": {
+          const intakes: ComposableEntryInput["intakes"] = [];
+          if (item.waterMl && item.waterMl > 0) {
+            intakes.push({
+              type: "water",
+              amount: item.waterMl,
+              source: "manual:food_water_content",
+              note: item.description,
+            });
+          }
+          if (item.sodiumMg && item.sodiumMg > 0) {
+            intakes.push({
+              type: "salt",
+              amount: item.sodiumMg,
+              source: "manual:sodium",
+              note: item.description,
+            });
+          }
+          if (sugarEnabled && item.sugarG && item.sugarG > 0) {
+            intakes.push({
+              type: "sugar",
+              amount: item.sugarG,
+              source: "manual:sugar",
+              note: item.description,
+            });
+          }
+          if (potassiumEnabled && item.potassiumMg && item.potassiumMg > 0) {
+            intakes.push({
+              type: "potassium",
+              amount: item.potassiumMg,
+              source: "manual:potassium",
+              note: item.description,
+            });
+          }
+          await addComposableEntry({
+            eating: {
+              note: item.description,
+              ...(item.grams !== undefined && { grams: item.grams }),
+            },
+            ...(intakes.length > 0 && { intakes }),
+            groupSource: "ai_food_parse",
+          });
+          break;
+        }
+        case "caffeine":
+          await addSubstance({
+            type: "caffeine",
+            amountMg: item.caffeineMg,
+            ...(item.volumeMl !== undefined && { volumeMl: item.volumeMl }),
+            description: item.description,
+          });
+          break;
+        case "alcohol": {
+          const stdDrinks =
+            Math.round(standardDrinksFromAbv(item.abvPercent, item.volumeMl) * 10) / 10;
+          await addSubstance({
+            type: "alcohol",
+            amountStandardDrinks: stdDrinks,
+            abvPercent: item.abvPercent,
+            volumeMl: item.volumeMl,
+            description: item.description,
+          });
+          break;
+        }
+        case "urination":
+          await addUrination.mutateAsync({
+            ...(item.amountEstimate !== undefined && {
+              amountEstimate: item.amountEstimate,
+            }),
+            note: item.note ?? "voice",
+          });
+          break;
+        case "defecation":
+          await addDefecation.mutateAsync({
+            ...(item.amountEstimate !== undefined && {
+              amountEstimate: item.amountEstimate,
+            }),
+            note: item.note ?? "voice",
+          });
+          break;
+      }
+    },
+    [
+      addIntake,
+      addComposableEntry,
+      addWeight,
+      addBloodPressure,
+      addUrination,
+      addDefecation,
+      addSubstance,
+      sugarEnabled,
+      potassiumEnabled,
+    ]
+  );
+
   const commit = useCallback(async () => {
     const approved = rows.filter((r) => r.approved === true).map((r) => r.item);
     if (approved.length === 0) return;
@@ -160,123 +291,28 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
 
     for (const item of approved) {
       try {
-        switch (item.kind) {
-          case "blood_pressure":
-            await addBloodPressure.mutateAsync({
-              systolic: item.systolic,
-              diastolic: item.diastolic,
-              position: item.position ?? "sitting",
-              arm: item.arm ?? "left",
-              ...(item.heartRate !== undefined && { heartRate: item.heartRate }),
-              note: item.note ?? "voice",
-            });
-            break;
-          case "weight":
-            await addWeight.mutateAsync({
-              weight: item.weightKg,
-              note: item.note ?? "voice",
-            });
-            break;
-          case "water":
-            await addIntake.mutateAsync({
-              type: "water",
-              amount: item.ml,
-              source: "voice",
-              ...(item.note !== undefined && { note: item.note }),
-            });
-            break;
-          case "salt":
-            await addIntake.mutateAsync({
-              type: "salt",
-              amount: item.sodiumMg,
-              source: "voice",
-              ...(item.note !== undefined && { note: item.note }),
-            });
-            break;
-          case "food": {
-            const intakes: ComposableEntryInput["intakes"] = [];
-            if (item.waterMl && item.waterMl > 0) {
-              intakes.push({
-                type: "water",
-                amount: item.waterMl,
-                source: "manual:food_water_content",
-                note: item.description,
-              });
-            }
-            if (item.sodiumMg && item.sodiumMg > 0) {
-              intakes.push({
-                type: "salt",
-                amount: item.sodiumMg,
-                source: "manual:sodium",
-                note: item.description,
-              });
-            }
-            if (sugarEnabled && item.sugarG && item.sugarG > 0) {
-              intakes.push({
-                type: "sugar",
-                amount: item.sugarG,
-                source: "manual:sugar",
-                note: item.description,
-              });
-            }
-            if (potassiumEnabled && item.potassiumMg && item.potassiumMg > 0) {
-              intakes.push({
-                type: "potassium",
-                amount: item.potassiumMg,
-                source: "manual:potassium",
-                note: item.description,
-              });
-            }
-            await addComposableEntry({
-              eating: {
-                note: item.description,
-                ...(item.grams !== undefined && { grams: item.grams }),
-              },
-              ...(intakes.length > 0 && { intakes }),
-              groupSource: "ai_food_parse",
-            });
-            break;
-          }
-          case "caffeine":
-            await addSubstance({
-              type: "caffeine",
-              amountMg: item.caffeineMg,
-              ...(item.volumeMl !== undefined && { volumeMl: item.volumeMl }),
-              description: item.description,
-            });
-            break;
-          case "alcohol": {
-            const stdDrinks =
-              Math.round(standardDrinksFromAbv(item.abvPercent, item.volumeMl) * 10) / 10;
-            await addSubstance({
-              type: "alcohol",
-              amountStandardDrinks: stdDrinks,
-              abvPercent: item.abvPercent,
-              volumeMl: item.volumeMl,
-              description: item.description,
-            });
-            break;
-          }
-          case "urination":
-            await addUrination.mutateAsync({
-              ...(item.amountEstimate !== undefined && {
-                amountEstimate: item.amountEstimate,
-              }),
-              note: item.note ?? "voice",
-            });
-            break;
-          case "defecation":
-            await addDefecation.mutateAsync({
-              ...(item.amountEstimate !== undefined && {
-                amountEstimate: item.amountEstimate,
-              }),
-              note: item.note ?? "voice",
-            });
-            break;
-        }
+        await saveItem(item);
         successCount++;
       } catch (e) {
-        failures.push(`${item.kind}: ${e instanceof Error ? e.message : "unknown"}`);
+        let saveError: unknown = e;
+        if (await recoverClosedDatabase(e)) {
+          // The browser severed the IndexedDB connection out from under us
+          // (storage eviction / backing-store loss — issue #287). The DB has
+          // been reopened; retry this item once before declaring it failed.
+          try {
+            await saveItem(item);
+            successCount++;
+            continue;
+          } catch (retryError) {
+            saveError = retryError;
+          }
+        }
+        // console.error is patched by the error-log service, so this both
+        // reaches devtools and persists the underlying cause for bug reports.
+        console.error(`[voice] save failed for ${item.kind}:`, saveError);
+        failures.push(
+          `${item.kind}: ${saveError instanceof Error ? saveError.message : "unknown"}`
+        );
       }
     }
 
@@ -298,22 +334,7 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
     } else {
       setStage("ready");
     }
-  }, [
-    rows,
-    toast,
-    reset,
-    queryClient,
-    addIntake,
-    addComposableEntry,
-    addWeight,
-    addBloodPressure,
-    addUrination,
-    addDefecation,
-    addSubstance,
-    onCommitted,
-    sugarEnabled,
-    potassiumEnabled,
-  ]);
+  }, [rows, toast, reset, queryClient, saveItem, onCommitted]);
 
   const hasItems = rows.length > 0;
 
