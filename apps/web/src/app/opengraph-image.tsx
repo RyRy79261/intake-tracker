@@ -6,6 +6,11 @@ export const alt =
   "Intake Tracker — a private, offline-first tracker for hydration, nutrition, vitals, and medications.";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
+// The card is a fixed brand image with no per-request data, so pre-render it at
+// build time. Required for the Capacitor `output: "export"` build (cap-build.js),
+// which otherwise fails collecting page data for this dynamic route; also makes
+// the web card a cacheable static asset instead of an on-demand render.
+export const dynamic = "force-static";
 
 export default async function OpengraphImage() {
   const fonts = await loadOgFonts();
