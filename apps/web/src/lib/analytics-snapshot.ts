@@ -21,7 +21,12 @@ import { db } from "@/lib/db";
 import { getActivePrescriptions } from "@/lib/prescription-service";
 import { getActivePhaseForPrescription } from "@/lib/phase-service";
 import type { TimeRange, TrendDirection } from "@intake/types/analytics";
-import type { AnalyticsInsightsRequest } from "@intake/ai-prompts/analytics-insights";
+import {
+  MAX_MEDICATION_NAME_CHARS,
+  MAX_MEDICATION_DOSE_CHARS,
+  MAX_MEDICATION_FREQUENCY_CHARS,
+  type AnalyticsInsightsRequest,
+} from "@intake/ai-prompts/analytics-insights";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -42,6 +47,12 @@ export async function buildMedicationSummary(): Promise<MedicationSnapshot> {
   const meds: MedicationSnapshot = [];
 
   for (const rx of prescriptions) {
+    // genericName is unbounded at entry; the insights/nutrient request
+    // schemas require 1-120 chars, so skip nameless prescriptions and clamp
+    // the rest rather than letting one record 400 the whole request.
+    const name = rx.genericName.trim().slice(0, MAX_MEDICATION_NAME_CHARS);
+    if (!name) continue;
+
     const phase = await getActivePhaseForPrescription(rx.id);
     if (!phase) continue;
 
@@ -75,10 +86,10 @@ export async function buildMedicationSummary(): Promise<MedicationSnapshot> {
     }
 
     meds.push({
-      name: rx.genericName,
+      name,
       phaseType: phase.type,
-      dose,
-      frequency,
+      dose: dose.slice(0, MAX_MEDICATION_DOSE_CHARS),
+      frequency: frequency.slice(0, MAX_MEDICATION_FREQUENCY_CHARS),
       daysOnPhase: Math.max(0, Math.floor((now - phase.startDate) / MS_PER_DAY)),
     });
     if (meds.length >= 40) break;

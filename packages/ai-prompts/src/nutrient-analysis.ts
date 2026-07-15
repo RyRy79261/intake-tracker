@@ -6,6 +6,17 @@
  * client, key vault, and zod request/response validation stay in apps/web.
  */
 
+/**
+ * Per-entry caps shared by the request validator (apps/web nutrient-analysis
+ * route) and the client that builds the payload (nutrient-analysis-card).
+ * The client clamps to these before sending; the server rejects past them.
+ * Keeping one definition prevents the drift where an unclamped
+ * originalInputText over the server cap 400s the whole scan.
+ */
+export const MAX_FOOD_DESCRIPTION_CHARS = 500;
+export const MAX_FOOD_GRAMS = 10000;
+export const MAX_FOOD_ENTRIES = 500;
+
 export const SYSTEM_PROMPT = `You are a nutrition pattern analyst. The user will send a list of food and drink descriptions they consumed over a recent time window. Your job is to identify nutrient biases — nutrients they may be over- or under-consuming based on the foods listed.
 
 You MUST call the report_nutrient_analysis tool to return your findings. Do not return free text only.

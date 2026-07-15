@@ -89,14 +89,24 @@ const CorrelationMetricSchema = z.object({
 });
 
 /**
+ * Per-field caps for the medication summary, shared with the producer
+ * (buildMedicationSummary in apps/web) and the nutrient-analysis route's
+ * duplicated schema so client-built strings can never exceed what the
+ * request validators accept.
+ */
+export const MAX_MEDICATION_NAME_CHARS = 120;
+export const MAX_MEDICATION_DOSE_CHARS = 80;
+export const MAX_MEDICATION_FREQUENCY_CHARS = 120;
+
+/**
  * A single active medication — the user's current prescription with its dose,
  * frequency, and how long the active maintenance/titration phase has run.
  */
 const MedicationSchema = z.object({
-  name: z.string().min(1).max(120),
+  name: z.string().min(1).max(MAX_MEDICATION_NAME_CHARS),
   phaseType: z.enum(["maintenance", "titration"]),
-  dose: z.string().min(1).max(80),
-  frequency: z.string().min(1).max(120),
+  dose: z.string().min(1).max(MAX_MEDICATION_DOSE_CHARS),
+  frequency: z.string().min(1).max(MAX_MEDICATION_FREQUENCY_CHARS),
   daysOnPhase: z.number().int().nonnegative(),
 });
 
