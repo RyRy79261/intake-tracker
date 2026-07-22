@@ -46,7 +46,7 @@ jobs:
           # nothing and widens the blast radius if a step is compromised.
           persist-credentials: false
       - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: 'pnpm'
