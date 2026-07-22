@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.34.2](https://github.com/RyRy79261/intake-tracker/compare/v1.34.1...v1.34.2) (2026-07-22)
+
+
+### Bug Fixes
+
+* **analytics:** clamp nutrient-scan payload to shared request caps ([#288](https://github.com/RyRy79261/intake-tracker/issues/288)) ([9672e26](https://github.com/RyRy79261/intake-tracker/commit/9672e265389b132ca144aa4510811d891d19dfac))
+* **voice:** surface real save errors + recover from severed IndexedDB connection ([#287](https://github.com/RyRy79261/intake-tracker/issues/287)) ([#289](https://github.com/RyRy79261/intake-tracker/issues/289)) ([97335f3](https://github.com/RyRy79261/intake-tracker/commit/97335f39a8cbba6a7845278c646700d6da380080))
+
 ## [1.34.1](https://github.com/RyRy79261/intake-tracker/compare/v1.34.0...v1.34.1) (2026-07-15)
 
 
