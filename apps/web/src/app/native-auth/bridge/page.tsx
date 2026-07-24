@@ -5,10 +5,18 @@ import { useEffect, useState } from "react";
 /**
  * Native Google sign-in — STEP 2 (runs in the Custom Tab after the OAuth
  * return). By the time this renders, Neon Auth's middleware has already
- * exchanged the verifier and set the session cookie (the matcher covers
- * /auth/*). This page mints a one-time code from that session (server reads the
- * HttpOnly cookie) and hands ONLY the code back to the app via a verified HTTPS
- * App Link — never the session token in a URL.
+ * exchanged the verifier and set the session cookie. This page mints a
+ * one-time code from that session (server reads the HttpOnly cookie) and hands
+ * ONLY the code back to the app via a verified HTTPS App Link — never the
+ * session token in a URL.
+ *
+ * MUST live outside /auth/*: `auth.middleware({ loginUrl: "/auth" })`
+ * early-allows every loginUrl-prefixed path BEFORE its verifier-exchange step
+ * (processAuthMiddleware in @neondatabase/auth), so when this page lived at
+ * /auth/native-bridge the `?neon_auth_session_verifier=` return was never
+ * exchanged, no session cookie materialised, and /api/native-auth/mint 401'd
+ * in production. middleware.ts routes /native-auth/* through the Neon Auth
+ * middleware so the exchange runs here.
  *
  * Client component (not a server component) so it survives the Capacitor
  * `output: export` build; the cookie-reading lives in /api/native-auth/mint,

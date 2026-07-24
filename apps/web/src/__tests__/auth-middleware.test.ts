@@ -172,10 +172,18 @@ describe("root middleware.ts", () => {
     // routed through Neon Auth's middleware so the OAuth verifier-exchange
     // step runs on the OAuth return trip (without it the session cookie
     // never materialises and the MCP custom-connector flow stalls after
-    // Google sign-in).
-    expect(matcher.length).toBe(3);
+    // Google sign-in). /native-auth/* is the native Google sign-in callback,
+    // kept OUTSIDE /auth/* because the loginUrl("/auth") early-allow in
+    // @neondatabase/auth skips the verifier exchange for loginUrl-prefixed
+    // paths.
+    expect(matcher.length).toBe(4);
     expect(matcher).toEqual(
-      expect.arrayContaining(["/api/:path*", "/auth", "/auth/:path*"]),
+      expect.arrayContaining([
+        "/api/:path*",
+        "/auth",
+        "/auth/:path*",
+        "/native-auth/:path*",
+      ]),
     );
   });
 
@@ -200,6 +208,25 @@ describe("root middleware.ts", () => {
     neonAuthMiddlewareFn.mockClear();
     const { default: middleware } = await import("@/middleware");
     const req = new NextRequest("https://example.test/api/mcp/oauth/register");
+    await middleware(req);
+    expect(neonAuthMiddlewareFn).not.toHaveBeenCalled();
+  });
+
+  it("delegates the native bridge OAuth return (verifier present) to the Neon Auth middleware", async () => {
+    neonAuthMiddlewareFn.mockClear();
+    const { default: middleware } = await import("@/middleware");
+    const req = new NextRequest(
+      "https://example.test/native-auth/bridge?neon_auth_session_verifier=tok",
+    );
+    await middleware(req);
+    expect(neonAuthMiddlewareFn).toHaveBeenCalledTimes(1);
+    expect(neonAuthMiddlewareFn).toHaveBeenCalledWith(req);
+  });
+
+  it("does NOT delegate verifier-less /native-auth/* loads (post-exchange redirect stays on the static page)", async () => {
+    neonAuthMiddlewareFn.mockClear();
+    const { default: middleware } = await import("@/middleware");
+    const req = new NextRequest("https://example.test/native-auth/bridge");
     await middleware(req);
     expect(neonAuthMiddlewareFn).not.toHaveBeenCalled();
   });
