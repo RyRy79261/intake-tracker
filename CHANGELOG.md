@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.34.3](https://github.com/RyRy79261/intake-tracker/compare/v1.34.2...v1.34.3) (2026-07-24)
+
+
+### Bug Fixes
+
+* **mobile:** move native OAuth callback off /auth so the verifier exchange runs ([#297](https://github.com/RyRy79261/intake-tracker/issues/297)) ([1af0164](https://github.com/RyRy79261/intake-tracker/commit/1af0164500dade23cd78cda02a7ea31e443303cb))
+
 ## [1.34.2](https://github.com/RyRy79261/intake-tracker/compare/v1.34.1...v1.34.2) (2026-07-22)
 
 
