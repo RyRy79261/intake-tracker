@@ -48,7 +48,7 @@ const APP_DESCRIPTION =
 export const metadata: Metadata = {
   // Absolute base so the file-convention opengraph-image / twitter-image URLs
   // resolve for crawlers (WhatsApp/Slack/X). Same origin as APP_ORIGIN in
-  // auth/native-bridge — hardcoded, so no new env var / turbo globalEnv entry.
+  // native-auth/bridge — hardcoded, so no new env var / turbo globalEnv entry.
   metadataBase: new URL("https://intake-tracker.ryanjnoble.dev"),
   title: { default: "Intake Tracker", template: "%s · Intake Tracker" },
   applicationName: "Intake Tracker",

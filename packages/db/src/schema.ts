@@ -1087,7 +1087,7 @@ export const mcpAuditLog = pgTable(
 // Native (Capacitor) Google sign-in bridge — server-only (no Dexie mirror).
 //
 // After the Neon Auth OAuth exchange completes INSIDE the system-browser Custom
-// Tab (where the PKCE challenge cookie lives), the /auth/native-bridge page mints
+// Tab (where the PKCE challenge cookie lives), the /native-auth/bridge page mints
 // a one-time `code` bound to the resulting Neon session token and hands ONLY the
 // code back to the app via a verified HTTPS App Link (never the token in a URL).
 // The app exchanges it (POST /api/auth/native-claim) for the session token and

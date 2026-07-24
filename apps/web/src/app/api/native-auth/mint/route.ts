@@ -1,7 +1,7 @@
 /**
  * POST /api/native-auth/mint — mint a one-time native sign-in code.
  *
- * Called by the /auth/native-bridge page from inside the system-browser Custom
+ * Called by the /native-auth/bridge page from inside the system-browser Custom
  * Tab, AFTER Neon Auth's middleware has exchanged the OAuth verifier and set the
  * session cookie. Reads that session cookie server-side (it is HttpOnly, so only
  * the server can), confirms it, and mints a one-time code bound to it. The page
