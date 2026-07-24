@@ -198,6 +198,13 @@ export function TextMetrics() {
       ? Math.min(100, (potassiumTotal / potassiumLimit) * 100)
       : 0;
 
+  // Water reads as the actual total against the full allowance
+  // (limit + safe extra). Once the total exceeds that allowance, a second
+  // line shows the overage against the safe-extra size.
+  const waterAllowance =
+    waterLimit > 0 ? waterLimit + waterProgress.extendedTotal : waterLimit;
+  const waterOverage = waterTotal - waterAllowance;
+
   return (
     <section aria-label="Daily intake summary">
       <div className="rounded-lg bg-muted/50 border p-4">
@@ -237,23 +244,22 @@ export function TextMetrics() {
                       : CARD_THEMES.water.latestValueColor
                   )}
                 >
-                  {formatValue(Math.min(waterTotal, waterLimit))}
+                  {formatValue(waterTotal)}
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  / {formatValue(waterLimit)} ml
+                  / {formatValue(waterAllowance)} ml
                 </span>
               </div>
-              {waterProgress.isOverTarget && waterProgress.extendedTotal > 0 && (
-                <span
-                  className={cn(
-                    "text-xs tabular-nums",
-                    waterProgress.isOverExtended
-                      ? "text-red-600 dark:text-red-400"
-                      : "text-muted-foreground"
+              {waterProgress.isOverExtended && waterOverage > 0 && (
+                <span className="text-xs tabular-nums text-red-600 dark:text-red-400">
+                  {waterProgress.extendedTotal > 0 ? (
+                    <>
+                      {formatValue(waterOverage)} /{" "}
+                      {formatValue(waterProgress.extendedTotal)} ml
+                    </>
+                  ) : (
+                    <>{formatValue(waterOverage)} ml over</>
                   )}
-                >
-                  {formatValue(waterProgress.extendedCurrent)} /{" "}
-                  {formatValue(waterProgress.extendedTotal)} ml extra
                 </span>
               )}
             </div>
