@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor, cleanup } from "@testing-library/react";
-import NativeSignInBridge from "@/app/auth/native-bridge/page";
+import NativeSignInBridge from "@/app/native-auth/bridge/page";
 
 const APP_ORIGIN = "https://intake-tracker.ryanjnoble.dev";
 

@@ -99,15 +99,22 @@ describe("CORS middleware for /api/* routes", () => {
     expect(res.headers.get("Access-Control-Allow-Origin")).toBeNull();
   });
 
-  it("matcher config includes /api/:path* and the /auth paths used by the verifier exchange", async () => {
+  it("matcher config includes /api/:path* and the auth paths used by the verifier exchange", async () => {
     const { config } = await import("@/middleware");
     expect(config.matcher).toEqual(
-      expect.arrayContaining(["/api/:path*", "/auth", "/auth/:path*"]),
+      expect.arrayContaining([
+        "/api/:path*",
+        "/auth",
+        "/auth/:path*",
+        "/native-auth/:path*",
+      ]),
     );
     // /auth and /auth/* are added so Neon Auth's auth.middleware() can
     // run the OAuth verifier-exchange step on the OAuth return trip.
     // Without them the session cookie is never materialised and the MCP
-    // custom-connector flow fails after Google sign-in.
-    expect(config.matcher.length).toBe(3);
+    // custom-connector flow fails after Google sign-in. /native-auth/* is
+    // the native Google sign-in callback — outside /auth/* so the exchange
+    // isn't skipped by the loginUrl("/auth") early-allow.
+    expect(config.matcher.length).toBe(4);
   });
 });

@@ -3,7 +3,7 @@
  *
  * The OAuth round-trip runs in the system-browser Custom Tab on our own origin
  * (so Google permits it and the PKCE challenge cookie is local). Once Neon Auth
- * has minted a session there, the /auth/native-bridge page calls
+ * has minted a session there, the /native-auth/bridge page calls
  * {@link mintNativeAuthCode} and hands ONLY the resulting code back to the app
  * via a verified HTTPS App Link — never the session token in a URL. The app then
  * POSTs the code to /api/native-auth/claim, which calls

@@ -43,8 +43,22 @@ function corsHeaders(origin: string): Record<string, string> {
  * because most of this app's pages handle auth client-side and our
  * public MCP endpoints (DCR, well-known, token, the MCP endpoint
  * itself) must remain unauthenticated.
+ *
+ * CAUTION — loginUrl prefix skip: processAuthMiddleware returns "allow"
+ * for any path prefixed by loginUrl BEFORE it reaches the verifier
+ * exchange, so with loginUrl "/auth" an OAuth return landing anywhere
+ * under /auth/* is served as-is and the exchange silently never runs.
+ * Any page that must receive the `?neon_auth_session_verifier=` return
+ * has to live outside /auth/* (see /native-auth/bridge below).
  */
 const neonAuthMiddleware = auth.middleware({ loginUrl: "/auth" });
+
+/**
+ * Query param Neon Auth's hosted callback appends on the OAuth return trip
+ * (NEON_AUTH_SESSION_VERIFIER_PARAM_NAME in @neondatabase/auth). Its presence
+ * is what makes the middleware's verifier exchange necessary.
+ */
+const NEON_AUTH_VERIFIER_PARAM = "neon_auth_session_verifier";
 
 export default async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
@@ -54,6 +68,24 @@ export default async function middleware(request: NextRequest) {
   // page itself (where social-login returns the user with the verifier
   // appended) and any /auth/* subroute.
   if (pathname === "/auth" || pathname.startsWith("/auth/")) {
+    return neonAuthMiddleware(request);
+  }
+
+  // Native Google sign-in return (Custom Tab). The callback lives at
+  // /native-auth/bridge — deliberately OUTSIDE /auth/* — because
+  // processAuthMiddleware early-allows every loginUrl("/auth")-prefixed path
+  // BEFORE its verifier-exchange step, which silently skipped the exchange
+  // when the callback was /auth/native-bridge (mint then 401'd: no session
+  // cookie ever set in the Custom Tab). Delegate only when the verifier is
+  // actually present: the exchange 307s back here with cookies set and the
+  // param stripped, and that second, verifier-less load (plus any direct
+  // visit) stays on the static page instead of bouncing through Neon Auth's
+  // session protection — the bridge renders its own error UI when
+  // /api/native-auth/mint finds no session.
+  if (
+    pathname.startsWith("/native-auth/") &&
+    request.nextUrl.searchParams.has(NEON_AUTH_VERIFIER_PARAM)
+  ) {
     return neonAuthMiddleware(request);
   }
 
@@ -80,7 +112,9 @@ export default async function middleware(request: NextRequest) {
 
 export const config = {
   // /auth + /auth/* added so Neon Auth's verifier-exchange middleware
-  // runs on the OAuth return trip. /api/* preserved for the existing
+  // runs on the OAuth return trip. /native-auth/* is the native (Capacitor)
+  // Google sign-in callback, kept outside /auth/* so the exchange isn't
+  // skipped by the loginUrl early-allow. /api/* preserved for the existing
   // capacitor CORS layer.
-  matcher: ["/api/:path*", "/auth", "/auth/:path*"],
+  matcher: ["/api/:path*", "/auth", "/auth/:path*", "/native-auth/:path*"],
 };
