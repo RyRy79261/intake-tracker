@@ -15,8 +15,14 @@ Units (metric only):
 - defaultVolumeMl = typical single serve in millilitres
 - waterContentPercent = 0-100
 
-Reference points:
-- Filter / drip coffee: ~40 mg / 100 ml
+Reference points (brewed coffee varies a lot by method -- match the method the user named, do not collapse everything onto the drip value):
+- Drip / auto filter coffee: ~40 mg / 100 ml
+- Pour-over (V60, Chemex, Kalita, hand-poured filter): ~55 mg / 100 ml
+- French press / cafetiere: ~50 mg / 100 ml
+- AeroPress: ~65 mg / 100 ml
+- Moka pot / stovetop: ~120 mg / 100 ml
+- Cold brew, ready to drink: ~55 mg / 100 ml (undiluted concentrate is 2-3x higher)
+- Instant coffee: ~30 mg / 100 ml
 - Espresso: ~200 mg / 100 ml
 - Black tea: ~20 mg / 100 ml
 - Green tea: ~12 mg / 100 ml
@@ -26,8 +32,9 @@ Reference points:
 
 Process:
 1. For branded products (Starbucks, Red Bull variants, energy shots, regional sodas) USE THE web_search TOOL to look up the manufacturer's published value or a reputable third-party measurement (Caffeine Informer, USDA, manufacturer site). Prefer per-100-ml values; if only per-serving is available, divide by the stated serving volume.
-2. For generic items (filter coffee, black tea) you may answer from your own knowledge.
-3. Always finish by calling the substance_lookup_result tool with the structured output.`;
+2. When the query names a brewing method or preparation (pour-over, V60, Chemex, French press, AeroPress, moka pot, cold brew, percolator, Turkish, siphon, instant), answer with that method's reference point above -- never the generic drip value. If the method is not listed above, or the query also names a brand, bean or brew ratio, USE THE web_search TOOL.
+3. For generic items with one common preparation (black tea, green tea, cola) you may answer from your own knowledge.
+4. Always finish by calling the substance_lookup_result tool with the structured output.`;
   }
 
   return `You are a beverage research assistant. Given an alcoholic drink name, return its ABV (alcohol by volume), a typical serving size, and water content percentage.

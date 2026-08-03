@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { SubstanceLookupResponseSchema, SUBSTANCE_LOOKUP_TOOL } from "@/app/api/ai/substance-lookup/schema";
+import { buildSystemPrompt } from "@intake/ai-prompts/substance-lookup";
 
 const validResponse = {
   substancePer100ml: 38,
@@ -69,5 +70,44 @@ describe("SUBSTANCE_LOOKUP_TOOL", () => {
 
   it("includes waterContentPercent in properties", () => {
     expect(SUBSTANCE_LOOKUP_TOOL.input_schema.properties).toHaveProperty("waterContentPercent");
+  });
+});
+
+// Issue #262: every brewed coffee collapsed onto the single
+// "Filter / drip coffee: ~40 mg / 100 ml" reference point, and the prompt
+// licensed answering coffee queries from generic knowledge, so brew method
+// never moved the answer.
+describe("buildSystemPrompt('caffeine') brew methods", () => {
+  const prompt = buildSystemPrompt("caffeine");
+  const lines = prompt.split("\n");
+  const BREW_METHODS = ["pour-over", "french press", "aeropress", "moka pot", "cold brew"];
+
+  const referenceLine = (method: string) =>
+    lines.find((l) => l.startsWith("- ") && l.toLowerCase().includes(method));
+
+  it.each(BREW_METHODS)("gives %s its own mg / 100 ml reference point", (method) => {
+    const line = referenceLine(method);
+    expect(line, `no reference point for ${method}`).toBeDefined();
+    expect(line).toMatch(/mg \/ 100 ml/);
+  });
+
+  it("does not give every brew method the same drip-coffee value", () => {
+    const values = BREW_METHODS.map((m) => referenceLine(m)?.match(/(\d+)\s*(?:-\s*\d+\s*)?mg/)?.[1]);
+    expect(new Set(values).size).toBeGreaterThan(1);
+  });
+
+  it("does not license answering brewed-coffee queries from generic knowledge", () => {
+    const ownKnowledge = lines.filter((l) => l.includes("your own knowledge"));
+    expect(ownKnowledge.length).toBeGreaterThan(0);
+    for (const line of ownKnowledge) {
+      expect(line.toLowerCase()).not.toContain("coffee");
+    }
+  });
+
+  it("tells the model to search when a brewing method is not covered by a reference point", () => {
+    const brewRule = lines.find(
+      (l) => /brew(ing)? method/i.test(l) && l.includes("web_search")
+    );
+    expect(brewRule, "no brewing-method rule pointing at web_search").toBeDefined();
   });
 });
