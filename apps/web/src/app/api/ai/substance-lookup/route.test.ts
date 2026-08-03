@@ -73,58 +73,57 @@ describe("SUBSTANCE_LOOKUP_TOOL", () => {
   });
 });
 
-// Issue #262: every brewed coffee collapsed onto the single
-// "Filter / drip coffee: ~40 mg / 100 ml" reference point, and the prompt
-// licensed answering coffee queries from generic knowledge, so brew method
-// never moved the answer.
-describe("buildSystemPrompt('caffeine') brew methods", () => {
+// Issue #262: pour-over came back at drip coffee's value. The cause is not a
+// missing reference point -- it is that the model was allowed to answer
+// caffeine queries from recall at all. Recalled figures collapse onto one
+// remembered number per category, so brewing method stops moving the answer.
+//
+// Supplying a per-method table does not fix that: the table is the same
+// recalled numbers, written down and unsourced. So these tests assert the
+// opposite of a table -- that the caffeine prompt carries NO hardcoded
+// mg / 100 ml values to anchor on, and mandates a search every time.
+describe("buildSystemPrompt('caffeine') sources every value", () => {
   const prompt = buildSystemPrompt("caffeine");
   const lines = prompt.split("\n");
-  // Pinned per method: an aggregate "the values differ" check still passes if
-  // pour-over regresses to drip's 40, because the other methods keep it
-  // varied. The regression this issue is about is a specific number.
-  const BREW_METHOD_MG_PER_100ML: Record<string, string> = {
-    "drip / auto filter": "40",
-    "pour-over": "55",
-    "french press": "50",
-    aeropress: "65",
-    "moka pot": "120",
-    "cold brew": "55",
-    instant: "30",
-  };
-  const referenceLine = (method: string) =>
-    lines.find((l) => l.startsWith("- ") && l.toLowerCase().includes(method));
+  // The prompt is hard-wrapped, so phrase assertions run against a
+  // whitespace-collapsed copy rather than breaking on a line boundary.
+  const flat = prompt.replace(/\s+/g, " ");
 
-  it.each(Object.entries(BREW_METHOD_MG_PER_100ML))(
-    "gives %s a ~%s mg / 100 ml reference point",
-    (method, mg) => {
-      const line = referenceLine(method);
-      expect(line, `no reference point for ${method}`).toBeDefined();
-      expect(line).toContain(`~${mg} mg / 100 ml`);
-    },
-  );
-
-  it("does not collapse pour-over onto the drip-coffee value", () => {
-    const pourOver = referenceLine("pour-over");
-    const drip = referenceLine("drip / auto filter");
-    expect(pourOver).toBeDefined();
-    expect(drip).toBeDefined();
-    expect(pourOver).not.toBe(drip);
-    expect(pourOver).not.toContain("~40 mg / 100 ml");
+  it("mandates web_search on every query, not only branded products", () => {
+    expect(flat).toMatch(/ALWAYS use the web_search tool/i);
+    expect(flat).toMatch(/every query without exception/i);
   });
 
-  it("does not license answering brewed-coffee queries from generic knowledge", () => {
-    const ownKnowledge = lines.filter((l) => l.includes("your own knowledge"));
-    expect(ownKnowledge.length).toBeGreaterThan(0);
-    for (const line of ownKnowledge) {
-      expect(line.toLowerCase()).not.toContain("coffee");
+  it("never licenses answering caffeine content from recall", () => {
+    expect(flat).toMatch(/[Nn]ever answer caffeine content from your own knowledge/);
+    // The alcohol prompt keeps its own-knowledge licence (ABV is a label
+    // value, not a searched measurement). The caffeine one must not.
+    expect(flat).not.toMatch(/you may answer from your own knowledge/);
+  });
+
+  it("carries no hardcoded mg / 100 ml figure to anchor on", () => {
+    const anchored = lines.filter((l) => /\d+\s*(?:-\s*\d+\s*)?mg \/ 100 ml/.test(l));
+    expect(
+      anchored,
+      `caffeine prompt must not hardcode values; found: ${anchored.join(" | ")}`,
+    ).toHaveLength(0);
+  });
+
+  it("still tells the model brewing method changes the answer", () => {
+    expect(flat).toMatch(/pour-over/i);
+    expect(flat).toMatch(/brewed coffee varies several-fold by method/i);
+  });
+
+  it("requires the source to be cited and unverified figures to be marked", () => {
+    expect(flat).toMatch(/Cite what you actually used/i);
+    expect(flat).toMatch(/clearly marked as unverified/i);
+  });
+
+  it("mentions its own knowledge only to forbid relying on it", () => {
+    const mentions = flat.match(/.{0,45}your own knowledge/g) ?? [];
+    expect(mentions.length).toBeGreaterThan(0);
+    for (const mention of mentions) {
+      expect(mention.toLowerCase(), `unguarded mention: "${mention}"`).toContain("never");
     }
-  });
-
-  it("tells the model to search when a brewing method is not covered by a reference point", () => {
-    const brewRule = lines.find(
-      (l) => /brew(ing)? method/i.test(l) && l.includes("web_search")
-    );
-    expect(brewRule, "no brewing-method rule pointing at web_search").toBeDefined();
   });
 });
