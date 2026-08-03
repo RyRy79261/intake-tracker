@@ -80,20 +80,37 @@ describe("SUBSTANCE_LOOKUP_TOOL", () => {
 describe("buildSystemPrompt('caffeine') brew methods", () => {
   const prompt = buildSystemPrompt("caffeine");
   const lines = prompt.split("\n");
-  const BREW_METHODS = ["pour-over", "french press", "aeropress", "moka pot", "cold brew"];
-
+  // Pinned per method: an aggregate "the values differ" check still passes if
+  // pour-over regresses to drip's 40, because the other methods keep it
+  // varied. The regression this issue is about is a specific number.
+  const BREW_METHOD_MG_PER_100ML: Record<string, string> = {
+    "drip / auto filter": "40",
+    "pour-over": "55",
+    "french press": "50",
+    aeropress: "65",
+    "moka pot": "120",
+    "cold brew": "55",
+    instant: "30",
+  };
   const referenceLine = (method: string) =>
     lines.find((l) => l.startsWith("- ") && l.toLowerCase().includes(method));
 
-  it.each(BREW_METHODS)("gives %s its own mg / 100 ml reference point", (method) => {
-    const line = referenceLine(method);
-    expect(line, `no reference point for ${method}`).toBeDefined();
-    expect(line).toMatch(/mg \/ 100 ml/);
-  });
+  it.each(Object.entries(BREW_METHOD_MG_PER_100ML))(
+    "gives %s a ~%s mg / 100 ml reference point",
+    (method, mg) => {
+      const line = referenceLine(method);
+      expect(line, `no reference point for ${method}`).toBeDefined();
+      expect(line).toContain(`~${mg} mg / 100 ml`);
+    },
+  );
 
-  it("does not give every brew method the same drip-coffee value", () => {
-    const values = BREW_METHODS.map((m) => referenceLine(m)?.match(/(\d+)\s*(?:-\s*\d+\s*)?mg/)?.[1]);
-    expect(new Set(values).size).toBeGreaterThan(1);
+  it("does not collapse pour-over onto the drip-coffee value", () => {
+    const pourOver = referenceLine("pour-over");
+    const drip = referenceLine("drip / auto filter");
+    expect(pourOver).toBeDefined();
+    expect(drip).toBeDefined();
+    expect(pourOver).not.toBe(drip);
+    expect(pourOver).not.toContain("~40 mg / 100 ml");
   });
 
   it("does not license answering brewed-coffee queries from generic knowledge", () => {
