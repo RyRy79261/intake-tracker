@@ -198,13 +198,6 @@ export function TextMetrics() {
       ? Math.min(100, (potassiumTotal / potassiumLimit) * 100)
       : 0;
 
-  // Water reads as the actual total against the full allowance
-  // (limit + safe extra). Once the total exceeds that allowance, a second
-  // line shows the overage against the safe-extra size.
-  const waterAllowance =
-    waterLimit > 0 ? waterLimit + waterProgress.extendedTotal : waterLimit;
-  const waterOverage = waterTotal - waterAllowance;
-
   return (
     <section aria-label="Daily intake summary">
       <div className="rounded-lg bg-muted/50 border p-4">
@@ -247,18 +240,25 @@ export function TextMetrics() {
                   {formatValue(waterTotal)}
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  / {formatValue(waterAllowance)} ml
+                  / {formatValue(waterLimit)} ml
                 </span>
               </div>
-              {waterProgress.isOverExtended && waterOverage > 0 && (
-                <span className="text-xs tabular-nums text-red-600 dark:text-red-400">
+              {waterProgress.isOverTarget && (
+                <span
+                  className={cn(
+                    "text-xs tabular-nums",
+                    waterProgress.isOverExtended
+                      ? "text-red-600 dark:text-red-400"
+                      : "text-muted-foreground"
+                  )}
+                >
                   {waterProgress.extendedTotal > 0 ? (
                     <>
-                      {formatValue(waterOverage)} /{" "}
+                      {formatValue(waterProgress.extendedCurrent)} /{" "}
                       {formatValue(waterProgress.extendedTotal)} ml
                     </>
                   ) : (
-                    <>{formatValue(waterOverage)} ml over</>
+                    <>{formatValue(waterProgress.extendedCurrent)} ml over</>
                   )}
                 </span>
               )}
@@ -295,13 +295,13 @@ export function TextMetrics() {
                       : CARD_THEMES.salt.latestValueColor
                   )}
                 >
-                  {formatValue(Math.min(saltTotal, saltLimit))}
+                  {formatValue(saltTotal)}
                 </span>
                 <span className="text-xs text-muted-foreground">
                   / {formatValue(saltLimit)} mg
                 </span>
               </div>
-              {saltProgress.isOverTarget && saltProgress.extendedTotal > 0 && (
+              {saltProgress.isOverTarget && (
                 <span
                   className={cn(
                     "text-xs tabular-nums",
@@ -310,8 +310,14 @@ export function TextMetrics() {
                       : "text-muted-foreground"
                   )}
                 >
-                  {formatValue(saltProgress.extendedCurrent)} /{" "}
-                  {formatValue(saltProgress.extendedTotal)} mg extra
+                  {saltProgress.extendedTotal > 0 ? (
+                    <>
+                      {formatValue(saltProgress.extendedCurrent)} /{" "}
+                      {formatValue(saltProgress.extendedTotal)} mg
+                    </>
+                  ) : (
+                    <>{formatValue(saltProgress.extendedCurrent)} mg over</>
+                  )}
                 </span>
               )}
             </div>
@@ -348,13 +354,13 @@ export function TextMetrics() {
                       : CARD_THEMES.sugar.latestValueColor
                   )}
                 >
-                  {formatValue(Math.min(sugarTotal, sugarLimit))}
+                  {formatValue(sugarTotal)}
                 </span>
                 <span className="text-xs text-muted-foreground">
                   / {formatValue(sugarLimit)} g
                 </span>
               </div>
-              {sugarProgress.isOverTarget && sugarProgress.extendedTotal > 0 && (
+              {sugarProgress.isOverTarget && (
                 <span
                   className={cn(
                     "text-xs tabular-nums",
@@ -363,8 +369,14 @@ export function TextMetrics() {
                       : "text-muted-foreground"
                   )}
                 >
-                  {formatValue(sugarProgress.extendedCurrent)} /{" "}
-                  {formatValue(sugarProgress.extendedTotal)} g extra
+                  {sugarProgress.extendedTotal > 0 ? (
+                    <>
+                      {formatValue(sugarProgress.extendedCurrent)} /{" "}
+                      {formatValue(sugarProgress.extendedTotal)} g
+                    </>
+                  ) : (
+                    <>{formatValue(sugarProgress.extendedCurrent)} g over</>
+                  )}
                 </span>
               )}
             </div>
