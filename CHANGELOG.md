@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.35.0](https://github.com/RyRy79261/intake-tracker/compare/v1.34.2...v1.35.0) (2026-08-03)
+
+
+### Features
+
+* **web:** show actual water total against full allowance in Today summary ([#305](https://github.com/RyRy79261/intake-tracker/issues/305)) ([b1a097b](https://github.com/RyRy79261/intake-tracker/commit/b1a097b64dcf6b2ee6a639cfbd7ff3429d1d8dfe))
+
+
+### Bug Fixes
+
+* **ci:** exclude .next/dev from turbo build outputs ([#316](https://github.com/RyRy79261/intake-tracker/issues/316)) ([87ec260](https://github.com/RyRy79261/intake-tracker/commit/87ec260f9952f145595d7146ebfac055cba9afec))
+* **ci:** unpin broken pnpm 11.13.0 release ([#317](https://github.com/RyRy79261/intake-tracker/issues/317)) ([a99d915](https://github.com/RyRy79261/intake-tracker/commit/a99d915e86d786f6f2bc86e950ca302ee55cf6ec))
+* **mobile:** move native OAuth callback off /auth so the verifier exchange runs ([#297](https://github.com/RyRy79261/intake-tracker/issues/297)) ([1af0164](https://github.com/RyRy79261/intake-tracker/commit/1af0164500dade23cd78cda02a7ea31e443303cb))
+* **web:** show Today totals against the configured target with buffer usage ([#309](https://github.com/RyRy79261/intake-tracker/issues/309)) ([ab4ac3e](https://github.com/RyRy79261/intake-tracker/commit/ab4ac3e591408b6844841844c83a489a03a84704))
+
 ## [1.34.2](https://github.com/RyRy79261/intake-tracker/compare/v1.34.1...v1.34.2) (2026-07-22)
 
 
