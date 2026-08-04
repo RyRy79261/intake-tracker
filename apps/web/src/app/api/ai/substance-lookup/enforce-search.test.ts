@@ -132,9 +132,53 @@ describe("caffeine lookups must be sourced by a completed web search", () => {
     expect(messagesCreate).toHaveBeenCalledTimes(2);
     const retry = messagesCreate.mock.calls[1]?.[0];
     expect(retry).toBeDefined();
-    expect(JSON.stringify(retry.messages)).toMatch(/answered without searching/i);
+    expect(JSON.stringify(retry.messages)).toMatch(/must call the web_search tool/i);
     // Forcing the structured tool would prevent the search we are asking for.
     expect(retry.tool_choice).toBeUndefined();
+  });
+
+  it("sends the retry as a fresh turn, never replaying the unpaired tool_use", async () => {
+    messagesCreate.mockResolvedValue({ content: [resultBlock()], usage });
+
+    await post({ query: "pour over coffee", type: "caffeine" });
+
+    const retry = messagesCreate.mock.calls[1]?.[0];
+    // The Messages API requires every assistant tool_use to be followed by a
+    // matching tool_result. Replaying the rejected answer would be malformed,
+    // and the mock here would not catch that - the real API would 400.
+    expect(retry.messages).toHaveLength(1);
+    expect(retry.messages[0].role).toBe("user");
+    expect(
+      retry.messages.some(
+        (m: { role: string }) => m.role === "assistant",
+      ),
+      "retry must not replay the assistant turn",
+    ).toBe(false);
+  });
+
+  it("never reuses the unsourced first value when the retry searches but returns no result", async () => {
+    // The dangerous shape: the retry satisfies the search gate but produces no
+    // structured block. Falling back to the first answer would pair "searched"
+    // with the 999 the gate exists to reject, so the handler must go to the
+    // forcing step for a value derived from the search instead.
+    messagesCreate
+      .mockResolvedValueOnce({
+        content: [resultBlock({ substancePer100ml: 999 })],
+        usage,
+      })
+      .mockResolvedValueOnce({ content: [searchResultBlock()], usage })
+      .mockResolvedValueOnce({
+        content: [resultBlock({ substancePer100ml: 55 })],
+        usage,
+      });
+
+    const res = await post({ query: "pour over coffee", type: "caffeine" });
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.substancePer100ml).toBe(55);
+    expect(json.substancePer100ml).not.toBe(999);
+    expect(messagesCreate).toHaveBeenCalledTimes(3);
   });
 
   it("accepts a caffeine value when a search completed", async () => {

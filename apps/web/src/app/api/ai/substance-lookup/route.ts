@@ -135,13 +135,16 @@ export const POST = withAuth(async ({ request, auth }) => {
         // Deliberately no tool_choice here: forcing the structured tool would
         // stop it searching, which is the one thing we need it to do.
         tools: [WEB_SEARCH_TOOL, SUBSTANCE_LOOKUP_TOOL],
+        // A fresh turn, NOT a continuation. The rejected answer is a bare
+        // tool_use block, and the Messages API requires every assistant
+        // tool_use to be followed by a matching tool_result — replaying it
+        // without one is a malformed request. There is also nothing worth
+        // carrying over: the answer is being discarded precisely because it
+        // was unsourced.
         messages: [
-          { role: "user", content: userPrompt },
-          { role: "assistant", content: response.content },
           {
             role: "user",
-            content:
-              "You answered without searching. Use the web_search tool now to find a published caffeine figure for this beverage, then call substance_lookup_result with the value you found and cite the source in reasoning.",
+            content: `${userPrompt} You must call the web_search tool before answering — a figure from memory is not acceptable here. Cite the source you used in reasoning.`,
           },
         ],
       });
@@ -158,7 +161,10 @@ export const POST = withAuth(async ({ request, auth }) => {
       });
       searched = hasCompletedWebSearch(retry.content);
       priorContent = retry.content;
-      toolBlock = findToolUse(retry.content, SUBSTANCE_LOOKUP_TOOL.name) ?? toolBlock;
+      // Take the result ONLY from the retry. Falling back to the first answer
+      // would pair the retry's "searched" flag with the unsourced value it was
+      // meant to replace — exactly the number this gate exists to reject.
+      toolBlock = findToolUse(retry.content, SUBSTANCE_LOOKUP_TOOL.name);
     }
 
     if (searchRequired && !searched) {
