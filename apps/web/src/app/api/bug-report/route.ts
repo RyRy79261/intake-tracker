@@ -9,6 +9,13 @@ import { parseJsonBody, zodErrorResponse } from "@/app/api/_shared/validation";
 import { createRateLimiter, getClientIp } from "@/app/api/_shared/rate-limit";
 import { recordUsage, tokensFromAnthropic } from "@/app/api/ai/_shared/usage-tracker";
 import { BUG_ISSUE_LABELS, FEATURE_ISSUE_LABELS } from "@/lib/github-labels";
+import {
+  acceptanceNotice,
+  classifyReport,
+  needsHumanReview,
+  UNTRUSTED_BANNER,
+  type ReportAcceptance,
+} from "@/lib/report-acceptance";
 
 /**
  * Files an in-app bug/feature report as a GitHub issue.
@@ -232,9 +239,18 @@ function assembleBody(
   type: ReportType,
   dictated: boolean,
   diagnostics: Diagnostics,
+  acceptance: ReportAcceptance,
 ): { title: string; body: string } {
   let title: string;
   const parts: string[] = [];
+
+  // Flagged reports say so at the very top, above anything the reporter wrote.
+  parts.push(acceptanceNotice(acceptance));
+
+  // Everything from here to the diagnostics is reporter-authored. The issue is
+  // filed under the server's token, so without this marker it reads as if the
+  // maintainer wrote it.
+  parts.push(UNTRUSTED_BANNER);
 
   if (structured) {
     title = sanitizeReportText(structured.title, 140);
@@ -253,9 +269,10 @@ function assembleBody(
     if (structured.actual) {
       parts.push("## Actual\n" + sanitizeReportText(structured.actual, 1000));
     }
-    if (structured.severity) {
-      parts.push(`_Severity hint: ${structured.severity}_`);
-    }
+    // structured.severity is deliberately NOT rendered. It is inferred from the
+    // reporter's own prose, so writing it into the body would let a report
+    // assign its own priority -- and priority is what unlocks the autonomous
+    // fix routine. Triage derives severity from reproducible symptoms instead.
   } else {
     const firstLine = rawDescription.split("\n")[0]?.trim() ?? "";
     title =
@@ -315,6 +332,15 @@ export const POST = withAuth(async ({ request, auth }) => {
       );
     }
 
+    // Classify the reporter's own words, before the AI pass gets to reshape
+    // them. Flagging here is deterministic and cannot be argued out of.
+    const acceptance = classifyReport(safeDescription);
+    if (needsHumanReview(acceptance)) {
+      console.warn(
+        `[AUDIT] bug-report held for human review (user: ${auth.userId}): ${acceptance.reasons.join(" | ")}`,
+      );
+    }
+
     const structured = useAi
       ? await structureWithAi(auth.userId!, auth.email, type, safeDescription)
       : null;
@@ -325,6 +351,7 @@ export const POST = withAuth(async ({ request, auth }) => {
       type,
       Boolean(transcript),
       diagnostics,
+      acceptance,
     );
 
     const repoSlug = process.env.GITHUB_REPO || DEFAULT_REPO;
@@ -345,7 +372,12 @@ export const POST = withAuth(async ({ request, auth }) => {
         repo,
         title,
         body,
-        labels: [...(type === "bug" ? BUG_ISSUE_LABELS : FEATURE_ISSUE_LABELS)],
+        labels: [
+          ...(type === "bug" ? BUG_ISSUE_LABELS : FEATURE_ISSUE_LABELS),
+          // A flagged report carries needs-human from the moment it is filed,
+          // so no routine can pick it up before triage has looked at it.
+          ...(needsHumanReview(acceptance) ? ["needs-human"] : []),
+        ],
       });
       return NextResponse.json({ url: data.html_url, number: data.number });
     } catch (e) {
