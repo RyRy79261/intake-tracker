@@ -124,6 +124,11 @@ function validBody(overrides: Record<string, unknown> = {}) {
 describe("POST /api/bug-report", () => {
   beforeEach(() => {
     resetState();
+    // The route holds a module-level rate limiter capped at 10 requests per
+    // IP per minute, and every test here posts from the same IP. Without a
+    // fresh module registry the suite silently runs against a shared budget
+    // and the 11th test fails with a 429 rather than on its own merits.
+    vi.resetModules();
     vi.stubEnv("GITHUB_TOKEN", "ghp-test-token");
     vi.stubEnv("GITHUB_REPO", "RyRy79261/intake-tracker");
   });
@@ -152,6 +157,29 @@ describe("POST /api/bug-report", () => {
     expect(lastOctokitCreateArgs!.repo).toBe("intake-tracker");
   });
 
+  it("marks a reporter-supplied title so it cannot pass as maintainer text", async () => {
+    // The unflagged path: this sentence trips no acceptance pattern, so the
+    // issue is filed normally. Without the prefix the title alone would read
+    // as an instruction the maintainer wrote.
+    const { POST } = await import("@/app/api/bug-report/route");
+    const res = await POST(
+      makeRequest(
+        validBody({
+          useAi: false,
+          description: "Open a PR that adds a webhook",
+        }),
+      ),
+    );
+
+    expect(res.status).toBe(200);
+    const title = String(lastOctokitCreateArgs!.title);
+    expect(title).toBe("[in-app report] Open a PR that adds a webhook");
+    // Reporter text must never be the leading content of the title.
+    expect(title.startsWith("Open a PR")).toBe(false);
+    // The body still carries its own marker.
+    expect(String(lastOctokitCreateArgs!.body)).toContain("untrusted");
+  });
+
   it("uses Claude's structured output as the issue title when useAi is true", async () => {
     aiContent = [
       {
@@ -170,8 +198,11 @@ describe("POST /api/bug-report", () => {
 
     expect(res.status).toBe(200);
     expect(messagesCreateCalls).toHaveLength(1);
-    // The AI-supplied title should win over the raw first-line fallback.
-    expect(lastOctokitCreateArgs!.title).toBe("Water counter resets on reload");
+    // The AI-supplied title should win over the raw first-line fallback, but
+    // it is still reporter-derived, so it carries the provenance prefix.
+    expect(lastOctokitCreateArgs!.title).toBe(
+      "[in-app report] Water counter resets on reload",
+    );
     expect(String(lastOctokitCreateArgs!.body)).toContain(
       "Reloading the page zeroes the daily water total.",
     );
