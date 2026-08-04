@@ -102,7 +102,11 @@ describe("buildSystemPrompt('caffeine') sources every value", () => {
   });
 
   it("carries no hardcoded mg / 100 ml figure to anchor on", () => {
-    const anchored = lines.filter((l) => /\d+\s*(?:-\s*\d+\s*)?mg \/ 100 ml/.test(l));
+    // Matches equivalent wordings too - "38 mg per 100 ml" is just as much an
+    // anchor as "38 mg / 100 ml".
+    const anchored = lines.filter((line) =>
+      /\b\d+(?:\s*-\s*\d+)?\s*(?:mg|milligrams?)\s*(?:\/|per)\s*100\s*ml\b/i.test(line),
+    );
     expect(
       anchored,
       `caffeine prompt must not hardcode values; found: ${anchored.join(" | ")}`,
