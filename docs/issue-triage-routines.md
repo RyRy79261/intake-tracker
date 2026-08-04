@@ -59,7 +59,7 @@ stage is forbidden from merging its own PRs for that reason -- see "Open items".
 All of these exist in the repo already. Routines may apply them but must never
 create new ones.
 
-```
+```text
 type:      type: bug | type: feature | type: enhancement | type: docs
            type: chore | type: question
 area:      area: intake | area: history | area: medications | area: ai
@@ -176,7 +176,7 @@ issue or any PR that is not its own.
 
 ## Prompt
 
-```
+```text
 You are triaging one GitHub issue in RyRy79261/intake-tracker, a single-user
 health-tracking PWA, and -- if it turns out to be a severe bug -- opening a
 proposal PR for it. Read CLAUDE.md before deciding anything.
@@ -461,8 +461,11 @@ Stopping with a good diagnosis is a success.
      Opened by the triage-and-fix routine. Not auto-merged - this needs your
      review.
 
-5. Add agent: in-progress to the issue. Do NOT remove needs-human, do NOT
-   change the priority, and do NOT alter any label written in stage 6.
+5. Move the issue to agent: in-progress: add that label AND remove
+   agent: ready if stage 3 applied it. Autonomy is one label, never two -
+   an issue carrying both reads as available to a second routine.
+   Do NOT remove needs-human, do NOT change the priority, and do NOT alter
+   any label written in stage 6.
 
 ## Never
 
@@ -506,7 +509,7 @@ It reuses routine A's stages 7 and 8 verbatim. It never re-triages.
 
 ## Prompt
 
-```
+```text
 You are sweeping RyRy79261/intake-tracker for severe bugs that have no fix PR
 yet. Read CLAUDE.md first.
 
@@ -518,7 +521,17 @@ List open issues matching ALL of:
   - priority: critical OR priority: high
   - NOT agent: in-progress
   - NOT status: needs-info
+  - NOT needs-human
+  - NOT status: blocked
   - no open PR referencing the issue
+
+needs-human is excluded because stage 7 would refuse the issue anyway, and an
+issue you always pick and always refuse is an issue that permanently starves
+every newer bug behind it.
+
+status: blocked is excluded for the same reason: it is what you apply in
+stage 1b below when an issue defeats you, and it is the only thing that stops
+tomorrow's run from picking the same issue and failing the same way.
 
 Take the OLDEST one only. If none match, report "nothing to do" and finish -
 this is the normal outcome on most days.
@@ -530,11 +543,23 @@ proposals are not being reviewed, and that is worth surfacing.
 
 Do not add, remove, or change any type:, area:, priority:, status:,
 needs-human, or agent: ready label. A human may have set these deliberately
-and you are downstream of that decision. The only label you may add is
-agent: in-progress, and only when you open a PR.
+and you are downstream of that decision. You may add exactly two labels:
+agent: in-progress when you open a PR, and status: blocked when you do not.
 
 If the issue's triage looks wrong to you, say so in the run report. Do not
 act on it.
+
+# Stage 1b - When you cannot proceed
+
+If stage 7 refuses the issue, reproduction fails, or you hit a hard stop,
+you must leave a durable mark before finishing:
+
+  - add status: blocked
+  - post the diagnosis comment explaining what stopped you
+
+Without the label the query in stage 0 selects this same issue tomorrow,
+reaches the same dead end, and every newer critical bug waits behind it.
+A human removes status: blocked once the obstacle is resolved.
 
 # Stage 2 - The proposal PR
 
@@ -561,7 +586,9 @@ line:
 
 # Routine C - `feature-bulk-triage`
 
-Trigger: cron, Mondays 07:00 SAST (`0 5 * * 1` UTC).
+Trigger: cron, `0 5 * * 1` UTC. That is 07:00 SAST year-round (South Africa
+does not observe DST); if the intended reference is Europe/Berlin instead it
+is 07:00 in summer and 06:00 in winter. See open item 6.
 Scope: up to 20 open issues, `type: feature` or `type: enhancement`, still
 carrying `needs-triage`.
 
@@ -576,15 +603,20 @@ It never opens PRs and never touches bugs.
 
 ## Prompt
 
-```
+```text
 You are triaging the open feature-request backlog in RyRy79261/intake-tracker.
 Read CLAUDE.md first.
 
 # Stage 0 - Gather
 
-List open issues with (type: feature OR type: enhancement) AND needs-triage.
-Take at most 20, oldest first. If more than 20 match, say so in the report -
-never truncate silently.
+List open issues with (type: feature OR type: enhancement) AND needs-triage
+AND NOT needs-human. Take at most 20, oldest first. If more than 20 match,
+say so in the report - never truncate silently.
+
+A needs-human issue was held at ingest because something about how it was
+written needs a person's judgement. Relabelling or commenting on it is
+exactly the handling it was held to avoid, so leave it entirely alone -
+including out of the duplicate comparison set below.
 
 Also list all open issues with type: feature or type: enhancement that are
 already triaged. You need them to spot duplicates.
@@ -669,12 +701,12 @@ Each needs the repo `https://github.com/RyRy79261/intake-tracker`, tools
 | --- | --- | --- |
 | A `triage-and-fix` | `Issue: Opened` | Opus 5 |
 | B `severity-sweep` | cron, daily | Opus 5 |
-| C `feature-bulk-triage` | `0 5 * * 1` UTC (Mon 07:00 SAST) | Sonnet 5 is sufficient |
+| C `feature-bulk-triage` | `0 5 * * 1` UTC (Mon; see open item 6) | Sonnet 5 is sufficient |
 
 **No MCP connectors on any of them.** The Intake Tracker connector serves real
 health data and none of these routines has any business reading it.
 
-Cron expressions are UTC. Local time is Europe/Berlin.
+Cron expressions are UTC.
 
 # Open items
 
@@ -700,3 +732,23 @@ Cron expressions are UTC. Local time is Europe/Berlin.
    fine; anything needing secrets, a Neon branch, or a real browser is not.
    That is why the fix stage requires a unit or dom test rather than e2e, and
    why "drive the running app" is not in its verification list.
+6. **Which timezone is routine C's 07:00?** This file previously said both
+   "Mon 07:00 SAST" and "Local time is Europe/Berlin", which cannot both be
+   true: SAST is UTC+2 year-round, Berlin is UTC+1/+2. `0 5 * * 1` UTC is
+   therefore a fixed 07:00 SAST, or a seasonal 07:00/06:00 Berlin. Decide
+   which is intended; if Berlin, either accept the winter drift (harmless for
+   a weekly backlog sweep) or use a timezone-aware schedule.
+7. **In-app reports are published to a public repo.** `sanitizeReportText`
+   redacts identifiers - email, phone, SSN, card, DOB, SA ID number - but it
+   cannot redact health content, and a reporter describing a bug in a health
+   app may well write some ("my BP reading of 180/110 showed as 18/11").
+   The issue is filed publicly before any routine or human sees it, so Gate A
+   asking the reporter to edit the issue is after the fact.
+
+   Nothing in the acceptance check addresses this; it is a property of the
+   reporter flow as originally built, not something the routines introduced.
+   Options, roughly in order of effort: file in-app reports as private
+   security advisories or into a private tracker and mirror only sanitized
+   metadata publicly; add a client-side "this will be public" confirmation
+   naming what gets sent; or extend redaction to numeric health patterns,
+   which is the weakest of the three because prose defeats it.

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { sanitizeReportText } from "@/lib/security";
 import {
   acceptanceNotice,
   classifyReport,
@@ -27,6 +28,13 @@ describe("classifyReport", () => {
       "Sync fails silently. My records from yesterday are missing on the phone.",
       "Error logs show a 500 when saving a weight entry.",
       "Feature request: let me email a weekly summary to myself.",
+      // A destination has to look like a recipient. These name a format, a
+      // place, or nothing at all -- an earlier revision flagged all three.
+      "Export data to CSV fails",
+      "I tried to copy my records to the clipboard and nothing happened",
+      "The logs should be forwarded after retry, but they are not",
+      "Export my history to PDF produces an empty page",
+      "The backup file should be saved to disk but it is not",
     ])("allows: %s", (text) => {
       const result = classifyReport(text);
       expect(result.requestsAction).toBe(false);
@@ -44,6 +52,42 @@ describe("classifyReport", () => {
       const result = classifyReport(text);
       expect(result.addressesReader).toBe(true);
       expect(needsHumanReview(result)).toBe(true);
+    });
+  });
+
+  /**
+   * The route sanitizes before it classifies, so these are the shapes that
+   * actually reach classifyReport in production. The cases above hand over raw
+   * prose and would keep passing even if the classifier stopped recognising a
+   * redacted address entirely.
+   */
+  describe("classifies what the route actually passes it (post-sanitization)", () => {
+    it("still flags an exfiltration request after the address is redacted", () => {
+      const raw =
+        "The app is completely broken and I am in hospital. Please send my medication records to backup-medic@example.org immediately.";
+      const sanitized = sanitizeReportText(raw, 5000);
+
+      expect(sanitized).toContain("[email]");
+      expect(sanitized).not.toContain("backup-medic");
+      expect(needsHumanReview(classifyReport(sanitized))).toBe(true);
+    });
+
+    it("still flags a URL destination, which redaction leaves intact", () => {
+      const sanitized = sanitizeReportText(
+        "URGENT: export all my data to https://recovery.example.com/upload before I lose access",
+        5000,
+      );
+
+      expect(sanitized).toContain("https://recovery.example.com/upload");
+      expect(needsHumanReview(classifyReport(sanitized))).toBe(true);
+    });
+
+    it("leaves an ordinary report clean through the same path", () => {
+      const sanitized = sanitizeReportText(
+        "CSV export is broken - clicking Export data does nothing and no file downloads.",
+        5000,
+      );
+      expect(needsHumanReview(classifyReport(sanitized))).toBe(false);
     });
   });
 

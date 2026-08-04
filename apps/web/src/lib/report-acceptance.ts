@@ -44,21 +44,55 @@ export interface ReportAcceptance {
  */
 const TRANSMISSION = String.raw`(?:send|email|e-mail|mail|forward|transmit|upload|post|share|deliver|transfer|export|dump|copy|disclose|give|provide)`;
 const DATA_NOUN = String.raw`(?:record|records|data|log|logs|history|report|reports|information|info|details|file|files|database|backup|credential|credentials|password|passwords|token|tokens|key|keys|secret|secrets)`;
-const RECIPIENT = String.raw`(?:to|at|via|into|towards?)\s+\S`;
+
+/**
+ * What counts as a destination.
+ *
+ * This has to be a positive list. An earlier version accepted any non-space
+ * token after "to", which flagged "Export data to CSV fails" and "copy my
+ * records to the clipboard" -- a format and a place, not recipients.
+ *
+ * The first alternative matters most and is the least obvious: `sanitizeReportText`
+ * runs BEFORE this classifier, so a real address never reaches it. By the time
+ * text is classified, "...to backup-medic@example.org" has already become
+ * "...to [email]". Matching on an email-shaped token would therefore pass the
+ * unit tests (which hand over raw prose) and miss every genuine report. The
+ * redaction placeholders ARE the destination in production.
+ *
+ * Deliberately excludes "me"/"us"/"myself": a reporter asking for their own
+ * data back is a feature request, not exfiltration.
+ */
+const REDACTED = String.raw`\[(?:email|phone|ssn|card|date|id-number)\]`;
+// Kept even though sanitization normally strips it first: classifyReport is
+// exported, and an unsanitized caller should not silently lose the clearest
+// destination there is.
+const EMAILISH = String.raw`[\w.%+-]+@[\w.-]+\.\w{2,}`;
+const URLISH = String.raw`(?:https?:\/\/|ftp:\/\/|www\.)\S`;
+const HOSTISH = String.raw`[\w-]+\.(?:com|org|net|io|dev|co|app|xyz|info|email|cloud|ru|cn)\b`;
+const HANDLE = String.raw`@[\w.-]+`;
+const PHONEISH = String.raw`\+?\d[\d\s().-]{5,}`;
+const RECIPIENT_NOUN = String.raw`(?:\w+\s+){0,3}(?:e-?mails?|address(?:es)?|inbox|mailbox|account|server|endpoint|webhook|bucket|drive|contact|number|recipient)\b`;
+const DESTINATION = String.raw`(?:${REDACTED}|${EMAILISH}|${URLISH}|${HOSTISH}|${HANDLE}|${PHONEISH}|${RECIPIENT_NOUN})`;
+const RECIPIENT = String.raw`\b(?:to|at|via|into|towards?)\s+${DESTINATION}`;
 
 const ACTION_REQUEST_PATTERNS: readonly RegExp[] = [
   // "send my records to ...", "email the logs at ...", "export data to ..."
   new RegExp(
-    String.raw`\b${TRANSMISSION}\b[^.!?\n]{0,60}\b${DATA_NOUN}\b[^.!?\n]{0,60}\b${RECIPIENT}`,
+    String.raw`\b${TRANSMISSION}\b[^.!?\n]{0,60}\b${DATA_NOUN}\b[^.!?\n]{0,60}${RECIPIENT}`,
     "i",
   ),
-  // "... my records should be sent to ..."
+  // "... my records should be sent to ...". The destination is required here
+  // too; without it "the logs should be forwarded after retry" reads as a
+  // transfer request when it is just a description of retry behaviour.
   new RegExp(
-    String.raw`\b${DATA_NOUN}\b[^.!?\n]{0,40}\b(?:should|must|need(?:s)? to|has to)\s+be\s+${TRANSMISSION}\w*\b`,
+    String.raw`\b${DATA_NOUN}\b[^.!?\n]{0,40}\b(?:should|must|need(?:s)? to|has to)\s+be\s+${TRANSMISSION}\w*\b[^.!?\n]{0,40}${RECIPIENT}`,
     "i",
   ),
   // Explicit contact-me-here, which a defect report never needs.
-  /\b(?:contact|reach|notify|respond to|reply to|get back to)\s+(?:me|us)\s+(?:at|on|via)\s+\S/i,
+  new RegExp(
+    String.raw`\b(?:contact|reach|notify|respond to|reply to|get back to)\s+(?:me|us)\s+(?:at|on|via)\s+${DESTINATION}`,
+    "i",
+  ),
 ];
 
 /**

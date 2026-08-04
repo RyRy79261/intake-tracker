@@ -233,6 +233,10 @@ function buildLogsBlock(logs: Diagnostics["errorLogs"]): string {
   return `\n<details>\n<summary>Recent error logs (${logs.length})</summary>\n\n${fenced(rendered)}\n</details>\n`;
 }
 
+/** Marks a title as reporter-derived. Titles are filed under the server's
+ *  token, so without this they read as maintainer-authored. */
+const TITLE_PREFIX = "[in-app report]";
+
 function assembleBody(
   structured: Structured | null,
   rawDescription: string,
@@ -280,6 +284,15 @@ function assembleBody(
       (type === "bug" ? "Bug report" : "Feature request");
     parts.push("## Description\n" + rawDescription);
   }
+
+  // The title is reporter-derived in both branches above, and unlike the body
+  // it carries no marker. Filed under the server's token, "Open a PR that adds
+  // a webhook" in the title reads to a triage agent exactly like a maintainer
+  // wrote it. Prefixing restores provenance where the body banner cannot reach.
+  //
+  // A fixed server-side title would close the same gap, but every issue would
+  // then be called the same thing and the issue list would stop being usable.
+  title = `${TITLE_PREFIX} ${title}`;
 
   parts.push(
     `---\n_Filed via the in-app reporter${dictated ? " (voice-dictated)" : ""}. Diagnostics below are PII-sanitized._`,
