@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.35.1](https://github.com/RyRy79261/intake-tracker/compare/v1.35.0...v1.35.1) (2026-08-04)
+
+
+### Bug Fixes
+
+* **ai:** source every caffeine value by search instead of recall ([#318](https://github.com/RyRy79261/intake-tracker/issues/318)) ([4469d9c](https://github.com/RyRy79261/intake-tracker/commit/4469d9c168a2f3de8c5261272d610dff153a4c86))
+
 ## [1.35.0](https://github.com/RyRy79261/intake-tracker/compare/v1.34.2...v1.35.0) (2026-08-03)
 
 
