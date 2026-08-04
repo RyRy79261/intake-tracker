@@ -15,19 +15,28 @@ Units (metric only):
 - defaultVolumeMl = typical single serve in millilitres
 - waterContentPercent = 0-100
 
-Reference points:
-- Filter / drip coffee: ~40 mg / 100 ml
-- Espresso: ~200 mg / 100 ml
-- Black tea: ~20 mg / 100 ml
-- Green tea: ~12 mg / 100 ml
-- Cola: ~10 mg / 100 ml
-- Energy drinks (Red Bull, Monster): ~32 mg / 100 ml
-- Matcha: highly variable, ~60-100 mg / 100 ml prepared
-
 Process:
-1. For branded products (Starbucks, Red Bull variants, energy shots, regional sodas) USE THE web_search TOOL to look up the manufacturer's published value or a reputable third-party measurement (Caffeine Informer, USDA, manufacturer site). Prefer per-100-ml values; if only per-serving is available, divide by the stated serving volume.
-2. For generic items (filter coffee, black tea) you may answer from your own knowledge.
-3. Always finish by calling the substance_lookup_result tool with the structured output.`;
+1. ALWAYS use the web_search tool, for every query without exception. Never
+   answer caffeine content from your own knowledge. Recalled caffeine figures
+   are unreliable in practice -- they collapse onto a single remembered value
+   for whole categories, so brewing method and brand stop moving the answer.
+   This applies to generic items (filter coffee, black tea, cola) exactly as
+   much as to branded ones.
+2. Search for the specific thing asked for. If the query names a brewing
+   method or preparation (pour-over, V60, Chemex, French press, AeroPress,
+   moka pot, cold brew, percolator, Turkish, siphon, instant), search for that
+   method -- brewed coffee varies several-fold by method, so a generic
+   "coffee" figure is the wrong answer.
+3. Prefer per-100-ml figures from USDA FoodData Central, the manufacturer, or
+   Caffeine Informer. If only a per-serving figure is published, divide by the
+   stated serving volume and say so in reasoning.
+4. Cite what you actually used in reasoning: the source and the figure it
+   gave. "Estimated" or an uncited number means you skipped step 1.
+5. If search returns nothing usable, say so in reasoning and return your best
+   available figure clearly marked as unverified. Never present a recalled
+   number as if it were sourced.
+6. Always finish by calling the substance_lookup_result tool with the
+   structured output.`;
   }
 
   return `You are a beverage research assistant. Given an alcoholic drink name, return its ABV (alcohol by volume), a typical serving size, and water content percentage.
@@ -58,7 +67,7 @@ export const SUBSTANCE_LOOKUP_TOOL = {
       substancePer100ml: {
         type: "number",
         description:
-          "FOR CAFFEINE QUERIES: caffeine in milligrams per 100 ml of beverage (e.g. ~40 for filter coffee, ~200 for espresso). FOR ALCOHOL QUERIES: ABV as a percentage by volume -- the same number that appears on the bottle label (e.g. 5 for typical lager, 12 for wine, 40 for vodka). NEVER grams of ethanol. NEVER mg of ethanol.",
+          "FOR CAFFEINE QUERIES: caffeine in milligrams per 100 ml of beverage, taken from the source you searched -- not from memory, and not anchored to any example. FOR ALCOHOL QUERIES: ABV as a percentage by volume -- the same number that appears on the bottle label (e.g. 5 for typical lager, 12 for wine, 40 for vodka). NEVER grams of ethanol. NEVER mg of ethanol.",
       },
       defaultVolumeMl: {
         type: "number",
