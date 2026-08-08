@@ -101,8 +101,16 @@ export function getLiquidTypeLabel(
     return "Beverage";
   }
 
-  // Substance prefix: "substance:{id}" -> note (description) or "Drink"
+  // Substance prefix: "substance:{id}" -> note (description) or "Drink".
+  // Written by the old implicit auto-water path; still present on older rows.
   if (source.startsWith("substance:")) {
+    return options?.note || "Drink";
+  }
+
+  // A drink logged through `logDrink`. Its water row carries the drink name as
+  // its note, which is the label the user expects to see — without this a
+  // dictated latte rendered as a bare "250 ml".
+  if (source === "drink" || source === "voice") {
     return options?.note || "Drink";
   }
 

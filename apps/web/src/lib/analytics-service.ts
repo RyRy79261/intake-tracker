@@ -7,8 +7,9 @@ import {
 import { getUrinationRecordsByDateRange } from "@/lib/urination-service";
 import { getEatingRecordsByDateRange } from "@/lib/eating-service";
 import { getDefecationRecordsByDateRange } from "@/lib/defecation-service";
+import { getSubstanceRecordsByDateRange as querySubstanceRecordsByDateRange } from "@/lib/substance-service";
 import { getDoseScheduleForDateRange } from "@/lib/dose-schedule-service";
-import { db, type SubstanceRecord } from "@/lib/db";
+import type { SubstanceRecord } from "@/lib/db";
 import { trend as computeTrend, correlateTimeSeries } from "@/lib/analytics-stats";
 import { getDeviceTimezone } from "@/lib/timezone";
 import type {
@@ -35,8 +36,14 @@ import {
 // ---------------------------------------------------------------------------
 
 /**
- * Query substance records by date range. This is an exception to the
- * "no db imports" rule -- no substance-service exists yet.
+ * Query substance records by date range.
+ *
+ * Delegates to substance-service rather than re-querying Dexie. The local copy
+ * this replaced had drifted in two ways: it never filtered `deletedAt`, so
+ * deleted drinks leaked into the BP correlations, the AI insight snapshot, the
+ * CSV export and the PDF report; and it used Dexie's default exclusive upper
+ * bound while substance-service passes `(true, true)`, so a record landing
+ * exactly on `range.end` was counted by one reader and dropped by the other.
  */
 async function getSubstanceRecordsByDateRange(
   type: "caffeine" | "alcohol",
@@ -44,10 +51,7 @@ async function getSubstanceRecordsByDateRange(
   end: number,
 ): Promise<SubstanceRecord[]> {
   try {
-    return await db.substanceRecords
-      .where("[type+timestamp]")
-      .between([type, start], [type, end])
-      .toArray();
+    return await querySubstanceRecordsByDateRange(start, end, type);
   } catch {
     // Table may not exist in older schema versions
     return [];

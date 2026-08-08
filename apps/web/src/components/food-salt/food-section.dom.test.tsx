@@ -42,7 +42,7 @@ describe("FoodSection", () => {
     ).toBeInTheDocument();
   });
 
-  it("disables the record button until a sodium amount is entered", async () => {
+  it("disables the record button until some value is entered", async () => {
     const user = userEvent.setup();
     await renderWithFixtures(<FoodSection />);
 
@@ -51,10 +51,25 @@ describe("FoodSection", () => {
     });
     expect(recordButton).toBeDisabled();
     expect(
-      screen.getByText(/Enter a sodium amount to enable saving/i),
+      screen.getByText(/Enter a sodium, water, sugar or potassium amount/i),
     ).toBeInTheDocument();
 
     await user.type(screen.getByLabelText(/Sodium/i), "300");
+    expect(recordButton).toBeEnabled();
+  });
+
+  it("enables the record button for a water-only entry (no sodium)", async () => {
+    // A drink the AI parses as water + sugar with no sodium used to be
+    // unsavable, and its parsed values were discarded.
+    const user = userEvent.setup();
+    await renderWithFixtures(<FoodSection />);
+
+    const recordButton = await screen.findByRole("button", {
+      name: "Record with details",
+    });
+    expect(recordButton).toBeDisabled();
+
+    await user.type(screen.getByLabelText(/Water/i), "240");
     expect(recordButton).toBeEnabled();
   });
 

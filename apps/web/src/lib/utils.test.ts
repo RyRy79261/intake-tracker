@@ -82,6 +82,17 @@ describe("getLiquidTypeLabel", () => {
     expect(getLiquidTypeLabel("food:ai_parse", { note: "Stew" })).toBe("Stew");
   });
 
+  it("uses the note for logDrink sources, defaults to Drink", () => {
+    // `logDrink` puts the drink name on the water row's note; without a case
+    // here a dictated latte rendered as a bare amount with no label.
+    expect(getLiquidTypeLabel("drink")).toBe("Drink");
+    expect(getLiquidTypeLabel("drink", { note: "Latte" })).toBe("Latte");
+    expect(getLiquidTypeLabel("voice", { note: "Pint of lager" })).toBe(
+      "Pint of lager",
+    );
+    expect(getLiquidTypeLabel("voice")).toBe("Drink");
+  });
+
   it("returns null for preset:manual", () => {
     expect(getLiquidTypeLabel("preset:manual")).toBeNull();
   });

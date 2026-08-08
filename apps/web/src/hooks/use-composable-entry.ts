@@ -1,7 +1,7 @@
 "use client";
 
 import { useLiveQuery } from "dexie-react-hooks";
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import {
   addComposableEntry,
   deleteEntryGroup,
@@ -11,6 +11,7 @@ import {
   undoDeleteSingleRecord,
   syncEatingGroup,
   syncLiquidEntrySubstances,
+  classifyLiquidDelete,
   parseSodiumKindFromSource,
   type ComposableEntryInput,
   type ComposableEntryResult,
@@ -109,6 +110,31 @@ export function useDeleteEntryGroup() {
     },
     [],
   );
+}
+
+/**
+ * Mutation hook for deleting a liquid intake record with the right blast
+ * radius: a drink's fluid row takes its substances with it, while a meal's
+ * water-content row is removed on its own and the meal survives.
+ *
+ * Shaped as a `{ mutateAsync }` object so it drops straight into
+ * `useDeleteWithToast` in place of the plain single-record delete.
+ */
+export function useDeleteLiquidEntry(
+  deleteIntakeRecord: (id: string) => Promise<unknown>,
+) {
+  const deleteGroup = useDeleteEntryGroup();
+  const mutateAsync = useCallback(
+    async (id: string) => {
+      const scope = await classifyLiquidDelete(id);
+      if (scope.scope === "group") return deleteGroup(scope.groupId);
+      return deleteIntakeRecord(id);
+    },
+    [deleteGroup, deleteIntakeRecord],
+  );
+  // Memoised so consumers that take this as a dependency (useDeleteWithToast)
+  // don't get a new callback identity on every render.
+  return useMemo(() => ({ mutateAsync }), [mutateAsync]);
 }
 
 /**

@@ -11,7 +11,7 @@
  * Every query that scans a time range has a hard row cap (5000) returned
  * as a `truncated` flag so the model knows to narrow the window.
  */
-import { and, asc, desc, eq, gte, isNull, lte, sql, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNull, lte, or, sql, inArray } from "drizzle-orm";
 import { db } from "@intake/db/client";
 import {
   intakeRecords,
@@ -194,14 +194,19 @@ export async function queryIntakeHistory(
 
   const capped = capRows(rows);
 
-  // Rows whose source is `substance:<id>` are the water half of a decomposed
-  // drink (e.g. an espresso martini → a water intake row + a caffeine + an
-  // alcohol substance, one groupId). Hydrate those rows with their linked
-  // substance so callers can tell which water is a drink — and read its
-  // caffeine mg / alcohol ABV — without a second query or regex. The water
-  // amounts themselves are untouched, so totals stay honest.
+  // A water row can be the fluid half of a decomposed drink (e.g. an espresso
+  // martini → one water intake row + a caffeine + an alcohol substance, all
+  // sharing a groupId). Hydrate those rows with their linked substance so
+  // callers can tell which water is a drink — and read its caffeine mg /
+  // alcohol ABV — without a second query or regex. The water amounts
+  // themselves are untouched, so totals stay honest.
+  //
+  // `groupId` is the current linkage, written by `logDrink`. The
+  // `source: "substance:<id>"` form is what the old implicit auto-water path
+  // produced; rows predating the v22 backfill can still carry it with no group,
+  // so both are resolved.
   const SUBSTANCE_PREFIX = "substance:";
-  const substanceIdOf = (source: string | null): string | null =>
+  const legacySubstanceIdOf = (source: string | null): string | null =>
     source?.startsWith(SUBSTANCE_PREFIX)
       ? source.slice(SUBSTANCE_PREFIX.length)
       : null;
@@ -209,25 +214,42 @@ export async function queryIntakeHistory(
   const substanceIds = Array.from(
     new Set(
       capped.items
-        .map((r) => substanceIdOf(r.source))
+        .map((r) => legacySubstanceIdOf(r.source))
+        .filter((id): id is string => !!id),
+    ),
+  );
+  const groupIds = Array.from(
+    new Set(
+      capped.items
+        .filter((r) => r.type === "water" && r.groupId)
+        .map((r) => r.groupId)
         .filter((id): id is string => !!id),
     ),
   );
 
-  const substanceById = new Map<
-    string,
-    {
-      substanceType: string;
-      description: string;
-      abvPercent: number | null;
-      amountStandardDrinks: number | null;
-      amountMg: number | null;
-    }
-  >();
-  if (substanceIds.length > 0) {
+  type LinkedSubstance = {
+    substanceType: string;
+    description: string;
+    abvPercent: number | null;
+    amountStandardDrinks: number | null;
+    amountMg: number | null;
+  };
+  const substanceById = new Map<string, LinkedSubstance>();
+  const substanceByGroupId = new Map<string, LinkedSubstance>();
+
+  if (substanceIds.length > 0 || groupIds.length > 0) {
+    const matchers = [
+      ...(substanceIds.length > 0
+        ? [inArray(substanceRecords.id, substanceIds)]
+        : []),
+      ...(groupIds.length > 0
+        ? [inArray(substanceRecords.groupId, groupIds)]
+        : []),
+    ];
     const linked = await db
       .select({
         id: substanceRecords.id,
+        groupId: substanceRecords.groupId,
         substanceType: substanceRecords.type,
         description: substanceRecords.description,
         abvPercent: substanceRecords.abvPercent,
@@ -238,23 +260,36 @@ export async function queryIntakeHistory(
       .where(
         and(
           eq(substanceRecords.userId, userId),
-          inArray(substanceRecords.id, substanceIds),
+          matchers.length === 1 ? matchers[0] : or(...matchers),
           isNull(substanceRecords.deletedAt),
         ),
-      );
-    for (const { id, ...rest } of linked) {
+      )
+      // A group can hold both a caffeine and an alcohol record (an espresso
+      // martini). This field is single-valued, so one has to win — order
+      // explicitly by id, otherwise which one wins depends on the database's
+      // row order and the answer can change between identical calls.
+      .orderBy(asc(substanceRecords.id));
+    for (const { id, groupId, ...rest } of linked) {
       substanceById.set(id, rest);
+      // First wins, deterministically, per the ordering above. Callers that
+      // need every substance on a drink use query_substance_history.
+      if (groupId && !substanceByGroupId.has(groupId)) {
+        substanceByGroupId.set(groupId, rest);
+      }
     }
   }
 
   return {
     ...capped,
     items: capped.items.map((r) => {
-      const sid = substanceIdOf(r.source);
-      return {
-        ...r,
-        substance: sid ? substanceById.get(sid) ?? null : null,
-      };
+      const legacyId = legacySubstanceIdOf(r.source);
+      const substance =
+        (legacyId ? substanceById.get(legacyId) : undefined) ??
+        (r.type === "water" && r.groupId
+          ? substanceByGroupId.get(r.groupId)
+          : undefined) ??
+        null;
+      return { ...r, substance };
     }),
   };
 }

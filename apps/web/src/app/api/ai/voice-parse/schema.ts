@@ -40,17 +40,26 @@ export const ItemSchema = z.discriminatedUnion("kind", [
     sugarG: z.number().min(0).max(1000).optional(),
     potassiumMg: z.number().min(0).max(20000).optional(),
   }),
+  // Drinks carry their own dissolved solutes so the model never needs to pair
+  // one with a `food` item to record a latte's sugar — that pairing booked the
+  // same fluid twice (issue #322).
   z.object({
     kind: z.literal("caffeine"),
     description: z.string().min(1).max(200),
     caffeineMg: z.number().min(0).max(2000),
     volumeMl: z.number().min(0).max(5000).optional(),
+    sugarG: z.number().min(0).max(1000).optional(),
+    sodiumMg: z.number().min(0).max(20000).optional(),
+    potassiumMg: z.number().min(0).max(20000).optional(),
   }),
   z.object({
     kind: z.literal("alcohol"),
     description: z.string().min(1).max(200),
     abvPercent: z.number().min(0).max(95),
     volumeMl: z.number().min(1).max(5000),
+    sugarG: z.number().min(0).max(1000).optional(),
+    sodiumMg: z.number().min(0).max(20000).optional(),
+    potassiumMg: z.number().min(0).max(20000).optional(),
   }),
   z.object({
     kind: z.literal("urination"),

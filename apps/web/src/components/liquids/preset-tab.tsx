@@ -12,7 +12,7 @@ import { CARD_THEMES } from "@/lib/card-themes";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useSettings } from "@/hooks/use-settings";
 import { useIntake } from "@/hooks/use-intake-queries";
-import { useAddComposableEntry, type ComposableEntryInput } from "@/hooks/use-composable-entry";
+import { useLogDrink, type LogDrinkInput } from "@/hooks/use-drink-log";
 import { useToast } from "@intake/ui/use-toast";
 import { useAuthGate } from "@/components/auth-guard";
 import {
@@ -54,7 +54,7 @@ export function PresetTab({ tab }: PresetTabProps) {
   const allPresets = useSettingsStore((s) => s.liquidPresets);
   const addPreset = useSettingsStore((s) => s.addLiquidPreset);
   const deletePreset = useSettingsStore((s) => s.deleteLiquidPreset);
-  const addEntry = useAddComposableEntry();
+  const logDrinkEntry = useLogDrink();
   const { toast } = useToast();
   const showAi = useAuthGate();
 
@@ -110,8 +110,20 @@ export function PresetTab({ tab }: PresetTabProps) {
     return parts.length > 0 ? parts.join(", ") : null;
   }, [volumeMl, caffeinePer100ml, alcoholPer100ml, saltPer100ml]);
 
-  // Whether we have any loggable substance
-  const hasSubstance = caffeinePer100ml > 0 || alcoholPer100ml > 0;
+  // Whether we have anything worth recording besides the volume itself.
+  // Salt and sugar count: gating on caffeine/alcohol alone made decaf, herbal
+  // tea, alcohol-free beer and salt- or sugar-only presets impossible to log —
+  // the button sat permanently disabled with no explanation.
+  const hasSubstance = useMemo(() => {
+    const parsedSugar = parseFloat(sugarG);
+    const hasSugar = Number.isFinite(parsedSugar) && parsedSugar > 0;
+    return (
+      caffeinePer100ml > 0 ||
+      alcoholPer100ml > 0 ||
+      saltPer100ml > 0 ||
+      hasSugar
+    );
+  }, [caffeinePer100ml, alcoholPer100ml, saltPer100ml, sugarG]);
 
   // Presets to display (collapse if more than 8)
   const visiblePresets = useMemo(() => {
@@ -223,94 +235,52 @@ export function PresetTab({ tab }: PresetTabProps) {
     }
   };
 
-  const buildComposableEntry = (presetIdOverride?: string): ComposableEntryInput => {
+  /**
+   * Build the `logDrink` payload for the current form state.
+   *
+   * This used to hand-assemble a composable entry: an explicit water intake
+   * plus substances whose `volumeMl` was omitted to suppress the service's
+   * implicit auto-water side effect (`...(waterAmount <= 0 && { volumeMl })`).
+   * That guard was tautologically dead — `waterAmount` *is* `volumeMl` and
+   * logging requires a positive volume — so the substance records were written
+   * with no volume at all, leaving nothing to sync a later volume edit against.
+   * `logDrink` owns the fluid instead: it derives the one water record from
+   * `volumeMl` and stores the volume on the substances as plain data.
+   */
+  const buildDrink = (presetIdOverride?: string): LogDrinkInput => {
     const description =
       beverageName ||
       searchText.trim() ||
       (tab === "coffee" ? "Coffee" : tab === "alcohol" ? "Drink" : "Beverage");
+    const presetTag = `preset:${presetIdOverride ?? selectedPresetId ?? "manual"}`;
 
-    const entry: ComposableEntryInput = {
-      groupSource: `preset:${presetIdOverride ?? selectedPresetId ?? "manual"}`,
-    };
-
-    // Water intake: full drink volume counts as water
-    // (caffeine/alcohol content does not reduce the water volume)
-    const waterAmount = volumeMl;
-    const intakes: ComposableEntryInput["intakes"] = [];
-    if (waterAmount > 0) {
-      intakes.push({
-        type: "water",
-        amount: waterAmount,
-        source: `preset:${presetIdOverride ?? selectedPresetId ?? "manual"}`,
-      });
-    }
-    // Salt intake
-    if (saltPer100ml > 0) {
-      intakes.push({
-        type: "salt",
-        amount: Math.round((volumeMl / 100) * saltPer100ml),
-      });
-    }
-    // Sugar intake — direct per-entry gram amount
     const parsedSugar = parseFloat(sugarG);
     const sugar =
       Number.isFinite(parsedSugar) && parsedSugar > 0
         ? Math.round(parsedSugar)
         : 0;
-    if (sugar > 0) {
-      intakes.push({ type: "sugar", amount: sugar, source: "manual:sugar" });
-    }
-    if (intakes.length > 0) {
-      entry.intakes = intakes;
-    }
 
-    // Build substance records
-    const substances: Array<{
-      type: "caffeine" | "alcohol";
-      amountMg?: number;
-      amountStandardDrinks?: number;
-      abvPercent?: number;
-      volumeMl?: number;
-      description: string;
-    }> = [];
-
-    if (caffeinePer100ml > 0) {
-      substances.push({
-        type: "caffeine",
-        amountMg: Math.round((volumeMl / 100) * caffeinePer100ml),
-        // Only include volumeMl when no explicit water intake exists,
-        // otherwise the service auto-creates a duplicate water record
-        ...(waterAmount <= 0 && { volumeMl }),
-        description,
-      });
-    }
-    if (alcoholPer100ml > 0) {
-      const stdDrinks = standardDrinksFromAbv(alcoholPer100ml, volumeMl);
-      substances.push({
-        type: "alcohol",
-        amountStandardDrinks: parseFloat(stdDrinks.toFixed(1)),
-        abvPercent: alcoholPer100ml,
-        ...(waterAmount <= 0 && { volumeMl }),
-        description,
-      });
-    }
-
-    // If only 1 substance: use singular field for backward compat
-    if (substances.length === 1 && substances[0]) {
-      entry.substance = substances[0];
-    } else if (substances.length > 1) {
-      entry.substances = substances;
-    }
-
-    return entry;
+    return {
+      volumeMl,
+      description,
+      waterSource: presetTag,
+      groupSource: presetTag,
+      ...(caffeinePer100ml > 0 && {
+        caffeineMg: Math.round((volumeMl / 100) * caffeinePer100ml),
+      }),
+      ...(alcoholPer100ml > 0 && { abvPercent: alcoholPer100ml }),
+      ...(saltPer100ml > 0 && {
+        saltMg: Math.round((volumeMl / 100) * saltPer100ml),
+      }),
+      ...(sugar > 0 && { sugarG: sugar }),
+    };
   };
 
   const handleLog = async () => {
     if (isSubmitting || volumeMl <= 0 || !hasSubstance) return;
     setIsSubmitting(true);
     try {
-      const entry = buildComposableEntry();
-      await addEntry(entry);
+      await logDrinkEntry(buildDrink());
       toast({
         title: "Logged",
         description: `${beverageName || searchText.trim() || "Entry"} recorded`,
@@ -344,8 +314,7 @@ export function PresetTab({ tab }: PresetTabProps) {
         isDefault: false,
         source: aiLookupUsed ? "ai" : "manual",
       });
-      const entry = buildComposableEntry(newPresetId);
-      await addEntry(entry);
+      await logDrinkEntry(buildDrink(newPresetId));
       toast({
         title: "Saved & Logged",
         description: `${beverageName.trim()} saved as preset and logged`,
@@ -592,6 +561,12 @@ export function PresetTab({ tab }: PresetTabProps) {
         >
           {isSubmitting ? "Logging..." : "Log Entry"}
         </Button>
+        {volumeMl > 0 && !hasSubstance && (
+          <p className="text-xs text-muted-foreground text-center">
+            Add a caffeine, ABV, salt or sugar amount — or log a plain drink from
+            the Water or Beverage tab.
+          </p>
+        )}
         {showAi && beverageName.trim() && (
           <>
             <Button
