@@ -22,6 +22,8 @@ import type { VoiceParsedItem, FoodItem, WaterItem } from "@/lib/voice-types";
  * worse than the duplicate it would have prevented. Pairings that are merely
  * suspicious are reported in `warnings` with both rows left intact, for the
  * user to resolve by rejecting one in the review list.
+ *
+ * @see reconcileLiquidItems
  */
 
 /** Volume tolerance for treating a food item as the same drink (fraction). */
@@ -35,6 +37,7 @@ const STOPWORDS = new Set([
   "medium", "large", "regular", "had", "drank", "i", "was", "it",
 ]);
 
+/** Identifying words of a description, lowercased with stopwords removed. */
 function tokenize(text: string): Set<string> {
   return new Set(
     text
@@ -56,6 +59,7 @@ function describesSameThing(a: string, b: string): boolean {
   return false;
 }
 
+/** True when two volumes are within {@link VOLUME_TOLERANCE} of each other. */
 function volumesComparable(a: number, b: number): boolean {
   if (a <= 0 || b <= 0) return false;
   return Math.abs(a - b) <= Math.max(a, b) * VOLUME_TOLERANCE;
@@ -63,14 +67,17 @@ function volumesComparable(a: number, b: number): boolean {
 
 type DrinkItem = Extract<VoiceParsedItem, { kind: "caffeine" | "alcohol" }>;
 
+/** A caffeine or alcohol item — the kinds that describe a complete drink. */
 function isDrink(item: VoiceParsedItem): item is DrinkItem {
   return item.kind === "caffeine" || item.kind === "alcohol";
 }
 
+/** A drink's fluid volume in ml, or 0 when the parser omitted it. */
 function drinkVolume(item: DrinkItem): number {
   return item.volumeMl ?? 0;
 }
 
+/** Outcome of {@link reconcileLiquidItems}. */
 export interface ReconcileResult {
   items: VoiceParsedItem[];
   /** One human-readable note per merge, surfaced in the review panel. */
@@ -82,6 +89,22 @@ export interface ReconcileResult {
   warnings: string[];
 }
 
+/**
+ * Collapse one dictated drink that the parser split across two items, so its
+ * fluid is booked once rather than twice (issue #322).
+ *
+ * Merges only unambiguous pairings — same name AND a comparable volume. A
+ * suspicious-but-uncertain pairing (a bare water item matching a drink's volume
+ * exactly) is reported in `warnings` with both items left intact, because
+ * silently dropping fluid the user really drank is worse than the duplicate it
+ * would prevent.
+ *
+ * Pure: the input array is not mutated.
+ *
+ * @param items Parsed voice items, in the order the model emitted them.
+ * @returns The reconciled items, notes describing each merge performed, and
+ *   warnings for pairings a human needs to resolve.
+ */
 export function reconcileLiquidItems(
   items: VoiceParsedItem[],
 ): ReconcileResult {

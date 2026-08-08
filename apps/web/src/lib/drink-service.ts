@@ -7,30 +7,7 @@ import { enqueueInsideTx } from "@/lib/sync-queue";
 import { schedulePush } from "@/lib/sync-engine";
 import { standardDrinksFromAbv } from "@intake/core/alcohol";
 
-/**
- * The single owner of liquid volume.
- *
- * Before this existed, "a drink" could be written by three different callers
- * (`addSubstanceRecord`, `addComposableEntry`, or a hand-built `intakes`
- * array), and `SubstanceRecord.volumeMl` doubled as an implicit *command* —
- * "also create a water record for me". Every caller had to decide on its own
- * whether to trip that side effect, and the invariant it protected (exactly
- * one water IntakeRecord per logged drink) lived in a comment rather than in
- * code. Two callers booking the same volume produced duplicate hydration
- * (issue #322); none booking it produced silent under-counting.
- *
- * `logDrink` removes the choice. It takes the drink's fluid volume once and
- * *derives* the water IntakeRecord from it. `volumeMl` on the SubstanceRecords
- * it writes is pure denormalised data — never a trigger. Every drink-logging
- * surface must go through here.
- *
- * Invariants guaranteed by this function:
- *  1. Exactly one water IntakeRecord per call, with `amount === volumeMl`.
- *  2. Every record it writes shares one non-null `groupId`, so the group is
- *     editable and deletable as a unit by the reconcilers.
- *  3. `amountStandardDrinks` is derived here from `abvPercent` + `volumeMl`,
- *     at one fixed precision, so it cannot drift between write paths.
- */
+/** Everything needed to record one drink. See {@link logDrink}. */
 export interface LogDrinkInput {
   /**
    * Fluid volume of the drink in ml — the single source of truth for
@@ -58,6 +35,7 @@ export interface LogDrinkInput {
   timestamp?: number;
 }
 
+/** Identifiers of everything {@link logDrink} wrote. */
 export interface LogDrinkResult {
   groupId: string;
   /** The one derived water record. Always present. */
@@ -74,6 +52,34 @@ const SUGAR_SOURCE = "manual:sugar";
 const POTASSIUM_SOURCE = "manual:potassium";
 const SODIUM_SOURCE = "manual:sodium";
 
+/**
+ * Record one drink — the single owner of liquid volume.
+ *
+ * Before this existed, "a drink" could be written by three different callers
+ * (`addSubstanceRecord`, `addComposableEntry`, or a hand-built `intakes`
+ * array), and `SubstanceRecord.volumeMl` doubled as an implicit *command* —
+ * "also create a water record for me". Every caller had to decide on its own
+ * whether to trip that side effect, and the invariant it protected (exactly
+ * one water IntakeRecord per logged drink) lived in a comment rather than in
+ * code. Two callers booking the same volume produced duplicate hydration
+ * (issue #322); none booking it produced silent under-counting.
+ *
+ * `logDrink` removes the choice. It takes the drink's fluid volume once and
+ * *derives* the water IntakeRecord from it. `volumeMl` on the SubstanceRecords
+ * it writes is pure denormalised data — never a trigger. Every drink-logging
+ * surface must go through here.
+ *
+ * Invariants guaranteed by this function:
+ *  1. Exactly one water IntakeRecord per call, with `amount === volumeMl`.
+ *  2. Every record it writes shares one non-null `groupId`, so the group is
+ *     editable and deletable as a unit by the reconcilers.
+ *  3. `amountStandardDrinks` is derived here from `abvPercent` + `volumeMl`,
+ *     at one fixed precision, so it cannot drift between write paths.
+ *
+ * @param input The drink's volume, name, substances and dissolved solutes.
+ * @returns The new group id, the derived water row's id, and every id written.
+ *   Fails without writing anything when `volumeMl` is not a positive number.
+ */
 export async function logDrink(
   input: LogDrinkInput,
 ): Promise<ServiceResult<LogDrinkResult>> {
@@ -124,25 +130,27 @@ export async function logDrink(
           amount: number;
           source: string;
         }> = [];
-        if (input.saltMg !== undefined && input.saltMg > 0) {
+        // Round BEFORE the positive check, not after. These columns are
+        // Postgres integers, so 0.4 g of sugar passed a `> 0` guard on the raw
+        // value and then rounded to zero — writing a solute row recording none
+        // of the solute.
+        const soluteCandidates: Array<{
+          type: "salt" | "sugar" | "potassium";
+          raw: number | undefined;
+          source: string;
+        }> = [
+          { type: "salt", raw: input.saltMg, source: SODIUM_SOURCE },
+          { type: "sugar", raw: input.sugarG, source: SUGAR_SOURCE },
+          { type: "potassium", raw: input.potassiumMg, source: POTASSIUM_SOURCE },
+        ];
+        for (const candidate of soluteCandidates) {
+          const amount =
+            candidate.raw !== undefined ? Math.round(candidate.raw) : 0;
+          if (amount <= 0) continue;
           solutes.push({
-            type: "salt",
-            amount: Math.round(input.saltMg),
-            source: SODIUM_SOURCE,
-          });
-        }
-        if (input.sugarG !== undefined && input.sugarG > 0) {
-          solutes.push({
-            type: "sugar",
-            amount: Math.round(input.sugarG),
-            source: SUGAR_SOURCE,
-          });
-        }
-        if (input.potassiumMg !== undefined && input.potassiumMg > 0) {
-          solutes.push({
-            type: "potassium",
-            amount: Math.round(input.potassiumMg),
-            source: POTASSIUM_SOURCE,
+            type: candidate.type,
+            amount,
+            source: candidate.source,
           });
         }
         for (const solute of solutes) {

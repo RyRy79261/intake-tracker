@@ -197,6 +197,39 @@ describe("drink-service: logDrink", () => {
       expect(result.data.intakeIds).toHaveLength(4);
     });
 
+    it("skips solute values that round to zero", async () => {
+      // These columns are Postgres integers. Checking `> 0` on the raw value
+      // and rounding afterwards wrote a solute row recording none of it.
+      const result = await logDrink({
+        volumeMl: 250,
+        description: "Black coffee",
+        caffeineMg: 95,
+        sugarG: 0.4,
+        saltMg: 0.2,
+        potassiumMg: 0.49,
+      });
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+
+      expect(result.data.intakeIds).toHaveLength(1);
+      const rows = await db.intakeRecords.toArray();
+      expect(rows.every((r) => r.amount > 0)).toBe(true);
+    });
+
+    it("keeps a solute that rounds up to a whole unit", async () => {
+      const result = await logDrink({
+        volumeMl: 250,
+        description: "Lightly sweetened tea",
+        sugarG: 0.6,
+      });
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+
+      const sugar = await db.intakeRecords.where("type").equals("sugar").toArray();
+      expect(sugar).toHaveLength(1);
+      expect(sugar[0]!.amount).toBe(1);
+    });
+
     it("skips zero and negative solute values", async () => {
       const result = await logDrink({
         volumeMl: 250,
