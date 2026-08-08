@@ -92,16 +92,6 @@ export function FoodSection() {
       ? Math.round(sodiumMgNum * SODIUM_MULTIPLIERS[sodiumSource])
       : 0;
 
-  // Saving needs *some* value, not sodium specifically. Gating on sodium alone
-  // meant a drink the AI parsed as water + sugar (sodium 0, which the parse
-  // prompt explicitly permits) could not be saved at all, and its parsed
-  // numbers were lost on unmount or re-parse.
-  const hasRecordableValue =
-    calculatedSodiumMg > 0 ||
-    (waterMl ? parseFloat(waterMl) > 0 : false) ||
-    (sugarEnabled && sugarG ? parseFloat(sugarG) > 0 : false) ||
-    (potassiumEnabled && potassiumMg ? parseFloat(potassiumMg) > 0 : false);
-
   // ─── Derived sugar calculation ────────────────────────────────────
   const sugarGNum = sugarG ? parseFloat(sugarG) : 0;
   const calculatedSugarG = sugarGNum > 0 ? Math.round(sugarGNum) : 0;
@@ -110,6 +100,24 @@ export function FoodSection() {
   const potassiumMgNum = potassiumMg ? parseFloat(potassiumMg) : 0;
   const calculatedPotassiumMg =
     potassiumMgNum > 0 ? Math.round(potassiumMgNum) : 0;
+
+  // ─── Derived water calculation ────────────────────────────────────
+  const waterMlNumRaw = waterMl ? parseFloat(waterMl) : 0;
+  const calculatedWaterMl = waterMlNumRaw > 0 ? Math.round(waterMlNumRaw) : 0;
+
+  // Saving needs *some* value, not sodium specifically. Gating on sodium alone
+  // meant a drink the AI parsed as water + sugar (sodium 0, which the parse
+  // prompt explicitly permits) could not be saved at all, and its parsed
+  // numbers were lost on unmount or re-parse.
+  //
+  // Gate on the *rounded* values, the ones submission actually persists —
+  // 0.4 g of sugar would otherwise enable the button and then round to zero,
+  // saving a bare eating record with none of the nutrient the user typed.
+  const hasRecordableValue =
+    calculatedSodiumMg > 0 ||
+    calculatedWaterMl > 0 ||
+    (sugarEnabled && calculatedSugarG > 0) ||
+    (potassiumEnabled && calculatedPotassiumMg > 0);
 
   // ─── Recent eating records ────────────────────────────────────────
   const recentRecords = useEatingRecords(5);
@@ -332,12 +340,12 @@ export function FoodSection() {
           source: "manual:potassium",
         });
       }
-      const waterMlNum = waterMl ? parseFloat(waterMl) : 0;
-      if (waterMlNum > 0) {
+      // Same derived value the save gate reads, so the two cannot diverge.
+      if (calculatedWaterMl > 0) {
         const trimmedFood = foodText.trim();
         intakes.push({
           type: "water",
-          amount: Math.round(waterMlNum),
+          amount: calculatedWaterMl,
           source: "manual:food_water_content",
           ...(trimmedFood && { note: trimmedFood }),
         });
@@ -390,7 +398,7 @@ export function FoodSection() {
     calculatedPotassiumMg,
     sugarEnabled,
     potassiumEnabled,
-    waterMl,
+    calculatedWaterMl,
     aiPopulated,
     showTimeInput,
     customTime,
@@ -466,7 +474,7 @@ export function FoodSection() {
         {/* Sodium section */}
         <div className="space-y-1">
           <Label htmlFor="eating-sodium" className="text-sm">
-            Sodium <span className="text-red-600 dark:text-red-400">*</span>
+            Sodium
           </Label>
           <div className="flex gap-2">
             <Input
@@ -476,8 +484,6 @@ export function FoodSection() {
               placeholder="mg"
               value={sodiumMg}
               onChange={(e) => setSodiumMg(e.target.value)}
-              required
-              aria-required="true"
               className="flex-1"
             />
             <Select

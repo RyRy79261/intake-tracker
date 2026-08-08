@@ -9,6 +9,7 @@ import {
 } from "@/lib/substance-service";
 import { makeSubstanceRecord, makeIntakeRecord } from "@/__tests__/fixtures/db-fixtures";
 import { logDrink } from "@/lib/drink-service";
+import { addComposableEntry } from "@/lib/composable-entry-service";
 
 describe("substance-service: addSubstanceRecord", () => {
   it("records volumeMl as data and creates NO water intake (issue #322)", async () => {
@@ -141,6 +142,33 @@ describe("substance-service: deleteSubstanceRecord", () => {
     expect(live).toHaveLength(0);
     const water = await db.intakeRecords.get(drink.data.waterIntakeId);
     expect(water!.deletedAt).toBeTypeOf("number");
+  });
+
+  it("does not cascade across a meal's group, and leaves the meal intact", async () => {
+    // `groupId` also ties a composable meal together. Taking the whole group
+    // when the user deletes a substance would soft-delete the meal's water and
+    // sodium rows while leaving the meal itself alive.
+    const meal = await addComposableEntry({
+      eating: { note: "Irish coffee cake", grams: 200 },
+      intakes: [
+        { type: "water", amount: 120, source: "manual:food_water_content" },
+        { type: "salt", amount: 300, source: "manual:sodium" },
+      ],
+      substance: { type: "caffeine", amountMg: 40, description: "coffee in cake" },
+    });
+    expect(meal.success).toBe(true);
+    if (!meal.success) return;
+
+    expect((await deleteSubstanceRecord(meal.data.substanceId!)).success).toBe(true);
+
+    // The substance is gone...
+    expect((await db.substanceRecords.get(meal.data.substanceId!))!.deletedAt)
+      .toBeTypeOf("number");
+    // ...and nothing else is.
+    expect((await db.eatingRecords.get(meal.data.eatingId!))!.deletedAt).toBeNull();
+    for (const intakeId of meal.data.intakeIds) {
+      expect((await db.intakeRecords.get(intakeId))!.deletedAt).toBeNull();
+    }
   });
 
   it("cascades to the group's water row (post-v22 data)", async () => {

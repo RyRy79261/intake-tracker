@@ -76,7 +76,14 @@ async function totalWaterMl(): Promise<number> {
   return (await waterRows()).reduce((sum, r) => sum + r.amount, 0);
 }
 
-/** Record → review → approve all → save. */
+/**
+ * Record → review → approve all → save, returning once the commit has finished.
+ *
+ * The completion signal is the review list unmounting: `commit` calls `reset()`
+ * only when every item saved, so this waits for a condition the commit actually
+ * establishes. (The "Saved N of M" toast would be the obvious choice, but no
+ * Toaster is mounted in the test wrapper, so it never reaches the DOM.)
+ */
 async function dictateAndSave(items: VoiceParsedItem[]) {
   parsedItems = items;
   const user = userEvent.setup();
@@ -86,8 +93,8 @@ async function dictateAndSave(items: VoiceParsedItem[]) {
   await screen.findByText(/Items \(/);
   await user.click(screen.getByRole("button", { name: /Approve all/i }));
   await user.click(screen.getByRole("button", { name: /^Save/ }));
-  await waitFor(async () => {
-    expect(await db.substanceRecords.count()).toBeGreaterThanOrEqual(0);
+  await waitFor(() => {
+    expect(screen.queryByText(/Items \(/)).not.toBeInTheDocument();
   });
   return user;
 }

@@ -579,6 +579,31 @@ realDb.version(22).stores({
   const now = Date.now();
   const intakeTable = trans.table("intakeRecords");
   const substanceTable = trans.table("substanceRecords");
+  const queueTable = trans.table("_syncQueue");
+
+  // The repair has to reach the server, not just this device. Push selects from
+  // `_syncQueue`, so an un-enqueued change is invisible to it — while a later
+  // pull happily overwrites the row with the server's still-ungrouped version
+  // (`bulkPut`, no field-level merge). It also means a fresh install, which
+  // creates the database at v22 directly and never runs this hook, would pull
+  // legacy ungrouped pairs and keep them forever.
+  //
+  // Push reads the live row at push time, so an op already queued for a record
+  // will carry the new groupId on its own; only enqueue when there is none.
+  const enqueueRepair = async (tableName: string, recordId: string) => {
+    const existing = await queueTable
+      .where("[tableName+recordId]")
+      .equals([tableName, recordId])
+      .first();
+    if (existing) return;
+    await queueTable.add({
+      tableName,
+      recordId,
+      op: "upsert",
+      enqueuedAt: now,
+      attempts: 0,
+    });
+  };
 
   // `source` is indexed, so scope the scan to the rows that can possibly match
   // rather than materialising every intake row a multi-year user has.
@@ -607,11 +632,16 @@ realDb.version(22).stores({
         (substance.groupId as string | undefined) ??
         substanceId;
 
+      // `updatedAt` is bumped deliberately: the row is enqueued below, and the
+      // server resolves by last-write-wins, so the pushed repair only takes
+      // effect if it looks newer than the version already stored.
       if (water.groupId !== groupId) {
         await intakeTable.update(water.id, { groupId, updatedAt: now });
+        await enqueueRepair("intakeRecords", water.id as string);
       }
       if (substance.groupId !== groupId) {
         await substanceTable.update(substanceId, { groupId, updatedAt: now });
+        await enqueueRepair("substanceRecords", substanceId);
       }
     } catch {
       // Skip this pair; the rest of the backfill still applies.

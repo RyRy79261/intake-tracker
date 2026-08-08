@@ -308,6 +308,73 @@ describe("v22 migration: groupId backfill for legacy drink pairs", () => {
     expect(foodWater!.amount).toBe(240);
   });
 
+  it("enqueues the repaired rows so the fix reaches the server", async () => {
+    // Push selects from `_syncQueue`. An un-enqueued repair is invisible to it,
+    // and a later pull overwrites the row with the server's ungrouped version.
+    await seedAtV21(
+      [
+        {
+          id: "sub-q",
+          type: "caffeine",
+          amountMg: 95,
+          volumeMl: 250,
+          description: "Coffee",
+          source: "standalone",
+          timestamp: 1700000000000,
+          ...SYNC_FIELDS,
+        },
+      ],
+      [
+        {
+          id: "water-q",
+          type: "water",
+          amount: 250,
+          timestamp: 1700000000000,
+          source: "substance:sub-q",
+          ...SYNC_FIELDS,
+        },
+      ],
+    );
+
+    const queued = await db._syncQueue.toArray();
+    const byId = new Map(queued.map((r) => [r.recordId, r]));
+    expect(byId.get("water-q")?.tableName).toBe("intakeRecords");
+    expect(byId.get("water-q")?.op).toBe("upsert");
+    expect(byId.get("sub-q")?.tableName).toBe("substanceRecords");
+    expect(byId.get("sub-q")?.op).toBe("upsert");
+  });
+
+  it("does not enqueue rows it did not change", async () => {
+    await seedAtV21(
+      [
+        {
+          id: "sub-nq",
+          type: "caffeine",
+          amountMg: 95,
+          volumeMl: 250,
+          description: "Coffee",
+          source: "standalone",
+          timestamp: 1700000000000,
+          groupId: "group-nq",
+          ...SYNC_FIELDS,
+        },
+      ],
+      [
+        {
+          id: "water-nq",
+          type: "water",
+          amount: 250,
+          timestamp: 1700000000000,
+          source: "substance:sub-nq",
+          groupId: "group-nq",
+          ...SYNC_FIELDS,
+        },
+      ],
+    );
+
+    expect(await db._syncQueue.count()).toBe(0);
+  });
+
   it("does not create or delete any rows", async () => {
     await seedAtV21(
       [

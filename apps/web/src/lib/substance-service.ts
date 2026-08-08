@@ -124,56 +124,75 @@ export async function deleteSubstanceRecord(
   try {
     const now = Date.now();
 
-    await db.transaction("rw", [db.substanceRecords, db.intakeRecords, db._syncQueue], async () => {
-      const substance = await db.substanceRecords.get(id);
-      await db.substanceRecords.update(id, { deletedAt: now, updatedAt: now });
-      await enqueueInsideTx("substanceRecords", id, "upsert");
+    await db.transaction(
+      "rw",
+      [db.substanceRecords, db.intakeRecords, db.eatingRecords, db._syncQueue],
+      async () => {
+        const substance = await db.substanceRecords.get(id);
+        await db.substanceRecords.update(id, { deletedAt: now, updatedAt: now });
+        await enqueueInsideTx("substanceRecords", id, "upsert");
 
-      // Two linkage styles have to be honoured. `groupId` is the current one,
-      // written by `logDrink`. `source: "substance:<id>"` is what the old
-      // implicit auto-water path produced; rows predating the v22 backfill can
-      // still carry it with no group.
-      const linkedIntakes = await db.intakeRecords
-        .where("source")
-        .equals(`substance:${id}`)
-        .toArray();
-
-      if (substance?.groupId) {
-        const grouped = await db.intakeRecords
-          .where("groupId")
-          .equals(substance.groupId)
+        // Rows written by the old implicit auto-water path are linked only by
+        // this source string, one-to-one with the substance, so they always
+        // follow it regardless of grouping.
+        const linkedIntakes = await db.intakeRecords
+          .where("source")
+          .equals(`substance:${id}`)
           .toArray();
-        for (const intake of grouped) {
-          if (!linkedIntakes.some((r) => r.id === intake.id)) {
-            linkedIntakes.push(intake);
+
+        // The group cascade applies only to a *drink* group. `groupId` is also
+        // how composable entries tie a meal together — an eating record plus
+        // its water-content and sodium rows, and possibly a substance. Taking
+        // the whole group there would soft-delete the meal's components while
+        // leaving the meal itself alive, which is incoherent. Presence of a
+        // live eating record is what distinguishes the two, matching
+        // `classifyLiquidDelete`.
+        const groupId = substance?.groupId;
+        if (groupId) {
+          const groupEatings = await db.eatingRecords
+            .where("groupId")
+            .equals(groupId)
+            .toArray();
+          const isDrinkGroup = !groupEatings.some((r) => r.deletedAt === null);
+
+          if (isDrinkGroup) {
+            const grouped = await db.intakeRecords
+              .where("groupId")
+              .equals(groupId)
+              .toArray();
+            for (const intake of grouped) {
+              if (!linkedIntakes.some((r) => r.id === intake.id)) {
+                linkedIntakes.push(intake);
+              }
+            }
+
+            // Sibling substances go too. One group can hold both a caffeine and
+            // an alcohol record (an Irish coffee, an espresso martini). Removing
+            // only the one the user tapped left the other counting toward its
+            // daily total with no fluid attached — and unreachable from the
+            // Liquids card, since the water row it was reached through is gone.
+            const siblings = await db.substanceRecords
+              .where("groupId")
+              .equals(groupId)
+              .toArray();
+            for (const sibling of siblings) {
+              if (sibling.id === id || sibling.deletedAt !== null) continue;
+              await db.substanceRecords.update(sibling.id, {
+                deletedAt: now,
+                updatedAt: now,
+              });
+              await enqueueInsideTx("substanceRecords", sibling.id, "upsert");
+            }
           }
         }
 
-        // Sibling substances go too. One group can hold both a caffeine and an
-        // alcohol record (an Irish coffee, an espresso martini). Removing only
-        // the one the user tapped left the other counting toward its daily
-        // total with no fluid attached — and unreachable from the Liquids card,
-        // since the water row it was reached through is now gone.
-        const siblings = await db.substanceRecords
-          .where("groupId")
-          .equals(substance.groupId)
-          .toArray();
-        for (const sibling of siblings) {
-          if (sibling.id === id || sibling.deletedAt !== null) continue;
-          await db.substanceRecords.update(sibling.id, {
-            deletedAt: now,
-            updatedAt: now,
-          });
-          await enqueueInsideTx("substanceRecords", sibling.id, "upsert");
+        for (const intake of linkedIntakes) {
+          if (intake.deletedAt !== null) continue;
+          await db.intakeRecords.update(intake.id, { deletedAt: now, updatedAt: now });
+          await enqueueInsideTx("intakeRecords", intake.id, "upsert");
         }
-      }
-
-      for (const intake of linkedIntakes) {
-        if (intake.deletedAt !== null) continue;
-        await db.intakeRecords.update(intake.id, { deletedAt: now, updatedAt: now });
-        await enqueueInsideTx("intakeRecords", intake.id, "upsert");
-      }
-    });
+      },
+    );
 
     schedulePush();
     return ok(undefined);

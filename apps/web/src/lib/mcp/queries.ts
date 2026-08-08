@@ -263,12 +263,16 @@ export async function queryIntakeHistory(
           matchers.length === 1 ? matchers[0] : or(...matchers),
           isNull(substanceRecords.deletedAt),
         ),
-      );
+      )
+      // A group can hold both a caffeine and an alcohol record (an espresso
+      // martini). This field is single-valued, so one has to win — order
+      // explicitly by id, otherwise which one wins depends on the database's
+      // row order and the answer can change between identical calls.
+      .orderBy(asc(substanceRecords.id));
     for (const { id, groupId, ...rest } of linked) {
       substanceById.set(id, rest);
-      // A group can hold both a caffeine and an alcohol record (an espresso
-      // martini); first one wins, matching the single-substance shape of this
-      // field. Callers needing both use query_substance_history.
+      // First wins, deterministically, per the ordering above. Callers that
+      // need every substance on a drink use query_substance_history.
       if (groupId && !substanceByGroupId.has(groupId)) {
         substanceByGroupId.set(groupId, rest);
       }
