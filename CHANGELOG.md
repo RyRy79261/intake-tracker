@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.36.0](https://github.com/RyRy79261/intake-tracker/compare/v1.35.1...v1.36.0) (2026-08-08)
+
+
+### Features
+
+* **web:** flag in-app reports that ask for data to move ([#320](https://github.com/RyRy79261/intake-tracker/issues/320)) ([074f1e2](https://github.com/RyRy79261/intake-tracker/commit/074f1e2515f310c72e04b527dab2186771612418))
+
+
+### Bug Fixes
+
+* **intake:** give liquid volume a single owner to stop duplicate water entries ([#323](https://github.com/RyRy79261/intake-tracker/issues/323)) ([3070320](https://github.com/RyRy79261/intake-tracker/commit/3070320ea6859e67191ce6041a655b694ad03b07))
+
 ## [1.35.1](https://github.com/RyRy79261/intake-tracker/compare/v1.35.0...v1.35.1) (2026-08-04)
 
 
