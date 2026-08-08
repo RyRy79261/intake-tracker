@@ -22,7 +22,11 @@ import { useSettings } from "@/hooks/use-settings";
 import { useToast } from "@intake/ui/use-toast";
 import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
 import { useEditRecord } from "@/hooks/use-edit-record";
-import { useSyncLiquidEntrySubstances, fetchEntryGroup } from "@/hooks/use-composable-entry";
+import {
+  useSyncLiquidEntrySubstances,
+  useDeleteLiquidEntry,
+  fetchEntryGroup,
+} from "@/hooks/use-composable-entry";
 import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import { cn, formatAmount, getLiquidTypeLabel } from "@/lib/utils";
 import { formatTimeOnly } from "@/lib/date-utils";
@@ -67,8 +71,11 @@ export function LiquidsCard() {
   const updateMutation = useUpdateIntake();
   const syncLiquidSubstancesMutation = useSyncLiquidEntrySubstances();
   const sugarEnabled = useOptionalTrackerEnabled("sugar");
+  // Deleting a drink's fluid row must take its caffeine/alcohol record with it;
+  // deleting a meal's water-content row must not take the meal.
+  const deleteLiquid = useDeleteLiquidEntry(deleteMutation.mutateAsync);
   const { deletingId, handleDelete } = useDeleteWithToast(
-    deleteMutation,
+    deleteLiquid,
     "Water entry removed",
     { undoToast: true }
   );
@@ -80,6 +87,12 @@ export function LiquidsCard() {
   const [editSugarG, setEditSugarG] = useState("");
   // Token to discard stale fetchEntryGroup results when opening another record
   const openTokenRef = useRef(0);
+  // Which substance fields the form actually populated for this record. An
+  // empty field only means "delete this substance" when there was a value in
+  // it to begin with — the group prefill below is async, so a blank field can
+  // simply mean it has not resolved (or failed), and treating that as a clear
+  // silently soft-deleted a live caffeine/alcohol record on save.
+  const prefilledRef = useRef({ caffeine: false, alcohol: false, sugar: false });
 
   const {
     editingRecord,
@@ -93,6 +106,7 @@ export function LiquidsCard() {
   } = useEditRecord<IntakeRecord>({
     onOpen: (record) => {
       const token = ++openTokenRef.current;
+      prefilledRef.current = { caffeine: false, alcohol: false, sugar: false };
       setEditAmount(record.amount.toString());
       setEditBeverageName("");
       setEditCaffeineMg("");
@@ -114,15 +128,18 @@ export function LiquidsCard() {
           if (preset.caffeinePer100ml !== undefined && preset.caffeinePer100ml > 0) {
             const mg = Math.round((record.amount / 100) * preset.caffeinePer100ml);
             setEditCaffeineMg(mg.toString());
+            prefilledRef.current.caffeine = true;
           }
           if (preset.alcoholPer100ml !== undefined && preset.alcoholPer100ml > 0) {
             setEditAlcoholAbv(preset.alcoholPer100ml.toString());
+            prefilledRef.current.alcohol = true;
           }
         }
       }
 
       if (record.groupId) {
-        void fetchEntryGroup(record.groupId).then((group) => {
+        void fetchEntryGroup(record.groupId)
+          .then((group) => {
           if (token !== openTokenRef.current) return;
           if (!group) return;
           const caffeine = group.substances.find(
@@ -138,6 +155,7 @@ export function LiquidsCard() {
           else if (alcohol?.description) setEditBeverageName(alcohol.description);
           if (caffeine?.amountMg !== undefined) {
             setEditCaffeineMg(caffeine.amountMg.toString());
+            prefilledRef.current.caffeine = true;
           }
           if (alcohol) {
             // Prefer the stored ABV %; fall back to deriving it from the
@@ -155,10 +173,19 @@ export function LiquidsCard() {
             }
             if (abv !== undefined) {
               setEditAlcoholAbv(parseFloat(abv.toFixed(1)).toString());
+              prefilledRef.current.alcohol = true;
             }
           }
-          if (sugar) setEditSugarG(sugar.amount.toString());
-        });
+          if (sugar) {
+            setEditSugarG(sugar.amount.toString());
+            prefilledRef.current.sugar = true;
+          }
+          })
+          .catch(() => {
+            // Leave the fields unprefilled. `parse` reads a blank unprefilled
+            // field as "untouched", so a failed group read can no longer be
+            // mistaken for the user clearing the substance.
+          });
       }
     },
     buildUpdates: (timestamp, note) => {
@@ -186,15 +213,18 @@ export function LiquidsCard() {
     mutateAsync: async ({ id, updates }) => {
       await updateMutation.mutateAsync({ id, updates });
       const u = updates as { amount: number; timestamp: number };
-      const parse = (raw: string): number | null => {
+      const parse = (raw: string, wasPrefilled: boolean): number | null => {
         const trimmed = raw.trim();
-        if (trimmed === "") return 0; // user cleared → soft-delete any existing
+        // Empty means "the user cleared it" → 0 → soft-delete, but only when
+        // the field held a value to clear. Otherwise it is untouched (null).
+        if (trimmed === "") return wasPrefilled ? 0 : null;
         const n = parseFloat(trimmed);
         return Number.isFinite(n) && n >= 0 ? n : null;
       };
-      const caffeineMg = parse(editCaffeineMg);
-      const alcoholAbv = parse(editAlcoholAbv);
-      const sugarG = sugarEnabled ? parse(editSugarG) : null;
+      const prefilled = prefilledRef.current;
+      const caffeineMg = parse(editCaffeineMg, prefilled.caffeine);
+      const alcoholAbv = parse(editAlcoholAbv, prefilled.alcohol);
+      const sugarG = sugarEnabled ? parse(editSugarG, prefilled.sugar) : null;
       await syncLiquidSubstancesMutation(id, {
         timestamp: u.timestamp,
         volumeMl: u.amount,

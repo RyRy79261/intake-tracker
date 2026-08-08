@@ -16,7 +16,9 @@ import {
   undoDeleteEntryGroup,
   deleteSingleGroupRecord,
   undoDeleteSingleRecord,
+  syncEatingGroup,
 } from "@/lib/composable-entry-service";
+import { logDrink } from "@/lib/drink-service";
 import {
   addSchedule,
   updateSchedule,
@@ -62,7 +64,7 @@ describe("Tier 2 sync-wired services", () => {
       expect(schedulePush).toHaveBeenCalled();
     });
 
-    it("addSubstanceRecord (with volume) enqueues for both substance and intake", async () => {
+    it("addSubstanceRecord (with volume) enqueues the substance only", async () => {
       const result = await addSubstanceRecord({
         type: "caffeine",
         amountMg: 100,
@@ -71,10 +73,11 @@ describe("Tier 2 sync-wired services", () => {
       });
       expect(result.success).toBe(true);
 
+      // No water row is written from `volumeMl` any more, so there is nothing
+      // else to enqueue. Drinks go through `logDrink` (see drink-service tests).
       const queueRows = await db._syncQueue.toArray();
-      expect(queueRows).toHaveLength(2);
-      const tableNames = queueRows.map((r) => r.tableName).sort();
-      expect(tableNames).toEqual(["intakeRecords", "substanceRecords"]);
+      expect(queueRows).toHaveLength(1);
+      expect(queueRows.map((r) => r.tableName)).toEqual(["substanceRecords"]);
     });
 
     it("deleteSubstanceRecord enqueues upsert for soft-deleted records", async () => {
@@ -118,6 +121,28 @@ describe("Tier 2 sync-wired services", () => {
 
   // ── Composable Entry ──
 
+
+  describe("drink-service", () => {
+    it("logDrink enqueues the water row and every substance", async () => {
+      const result = await logDrink({
+        volumeMl: 500,
+        description: "Beer",
+        abvPercent: 5,
+        sugarG: 8,
+      });
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+
+      const queueRows = await db._syncQueue.toArray();
+      expect(queueRows).toHaveLength(
+        result.data.intakeIds.length + result.data.substanceIds.length,
+      );
+      const tables = new Set(queueRows.map((r) => r.tableName));
+      expect(tables).toEqual(new Set(["intakeRecords", "substanceRecords"]));
+      expect(schedulePush).toHaveBeenCalled();
+    });
+  });
+
   describe("composable-entry-service", () => {
     it("addComposableEntry enqueues for all created records", async () => {
       const result = await addComposableEntry({
@@ -139,7 +164,7 @@ describe("Tier 2 sync-wired services", () => {
       expect(schedulePush).toHaveBeenCalled();
     });
 
-    it("addComposableEntry with substance.volumeMl creates linked water intake", async () => {
+    it("addComposableEntry with substance.volumeMl enqueues the substance only", async () => {
       const result = await addComposableEntry({
         substance: {
           type: "caffeine",
@@ -151,10 +176,8 @@ describe("Tier 2 sync-wired services", () => {
       expect(result.success).toBe(true);
 
       const queueRows = await db._syncQueue.toArray();
-      // substance + linked water intake = 2
-      expect(queueRows).toHaveLength(2);
-      const intakeRows = queueRows.filter((r) => r.tableName === "intakeRecords");
-      expect(intakeRows).toHaveLength(1);
+      expect(queueRows).toHaveLength(1);
+      expect(queueRows.filter((r) => r.tableName === "intakeRecords")).toHaveLength(0);
     });
 
     it("addComposableEntry with plural substances enqueues each", async () => {
@@ -170,6 +193,74 @@ describe("Tier 2 sync-wired services", () => {
       const queueRows = await db._syncQueue.toArray();
       expect(queueRows).toHaveLength(2);
       expect(queueRows.every((r) => r.tableName === "substanceRecords")).toBe(true);
+    });
+
+
+    it("syncEatingGroup enqueues every record it touches", async () => {
+      // This was the one mutator missing from this suite, and it showed: the
+      // function wrote outside the sync engine entirely, so a food-card edit
+      // stayed local and a later full pull silently reverted it — and
+      // resurrected the duplicate rows it had tombstoned.
+      const created = await addComposableEntry({
+        eating: { note: "Soup", grams: 400 },
+        intakes: [
+          { type: "water", amount: 300, source: "manual:food_water_content" },
+          { type: "salt", amount: 900, source: "manual:sodium" },
+        ],
+      });
+      expect(created.success).toBe(true);
+      if (!created.success) return;
+      await db._syncQueue.clear();
+      vi.mocked(schedulePush).mockClear();
+
+      const result = await syncEatingGroup(created.data.eatingId!, {
+        timestamp: Date.now(),
+        note: "Soup",
+        grams: 420,
+        sodiumMg: 750,
+        sodiumKind: "sodium",
+        waterMl: 320,
+        sugarG: 6,
+      });
+      expect(result.success).toBe(true);
+
+      const queueRows = await db._syncQueue.toArray();
+      const tables = queueRows.map((r) => r.tableName).sort();
+      expect(tables).toContain("eatingRecords");
+      expect(tables).toContain("intakeRecords");
+      // eating + water + salt + the newly created sugar row
+      expect(queueRows.length).toBeGreaterThanOrEqual(4);
+      expect(schedulePush).toHaveBeenCalled();
+    });
+
+    it("syncEatingGroup enqueues rows it soft-deletes", async () => {
+      const created = await addComposableEntry({
+        eating: { note: "Toast" },
+        intakes: [
+          { type: "water", amount: 100, source: "manual:food_water_content" },
+          { type: "salt", amount: 400, source: "manual:sodium" },
+        ],
+      });
+      expect(created.success).toBe(true);
+      if (!created.success) return;
+      await db._syncQueue.clear();
+
+      // waterMl 0 soft-deletes the linked water row; that tombstone has to
+      // reach the server or the next pull brings the row back.
+      const result = await syncEatingGroup(created.data.eatingId!, {
+        timestamp: Date.now(),
+        note: "Toast",
+        grams: undefined,
+        sodiumMg: 400,
+        sodiumKind: "sodium",
+        waterMl: 0,
+      });
+      expect(result.success).toBe(true);
+
+      const queued = await db._syncQueue.toArray();
+      const waterId = created.data.intakeIds[0]!;
+      expect(queued.some((r) => r.recordId === waterId)).toBe(true);
+      expect((await db.intakeRecords.get(waterId))!.deletedAt).toBeTypeOf("number");
     });
 
     it("deleteEntryGroup enqueues upsert for each soft-deleted record", async () => {

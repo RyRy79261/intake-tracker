@@ -126,7 +126,7 @@ describe("useAddSubstance", () => {
     expect(stored?.description).toBe("Espresso");
   });
 
-  it("also creates a linked intake record when volumeMl is supplied", async () => {
+  it("creates no water intake even when volumeMl is supplied (issue #322)", async () => {
     const add = renderHook(() => useAddSubstance(), { wrapper });
 
     const created = await add.result.current({
@@ -137,12 +137,12 @@ describe("useAddSubstance", () => {
       timestamp: 8000,
     });
 
-    const linked = await db.intakeRecords
-      .where("source")
-      .equals(`substance:${created.id}`)
-      .toArray();
-    expect(linked).toHaveLength(1);
-    expect(linked[0]?.amount).toBe(250);
+    expect(created.volumeMl).toBe(250);
+    // Counted unscoped by source on purpose — a source-scoped count cannot see
+    // a duplicate water row written by a different caller. Drinks go through
+    // `logDrink`, which owns the fluid.
+    const allWater = await db.intakeRecords.where("type").equals("water").toArray();
+    expect(allWater).toHaveLength(0);
   });
 });
 

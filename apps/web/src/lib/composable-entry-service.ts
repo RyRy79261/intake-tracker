@@ -107,6 +107,12 @@ export async function addComposableEntry(
       }
 
       // ── Substance record (singular — backward compat) ──
+      // `volumeMl` is recorded as data only. This branch used to also write a
+      // water IntakeRecord from it, which double-counted the fluid whenever
+      // the caller had already queued its own water intake (issue #322) and
+      // left the plural `substances` branch below behaving differently for
+      // identical input. Drinks now go through `logDrink`, the single owner of
+      // liquid volume; this path records substances and nothing more.
       if (input.substance) {
         const id = crypto.randomUUID();
         substanceId = id;
@@ -129,24 +135,6 @@ export async function addComposableEntry(
         };
         await db.substanceRecords.add(record);
         await enqueueInsideTx("substanceRecords", id, "upsert");
-
-        if (input.substance.volumeMl) {
-          const waterId = crypto.randomUUID();
-          intakeIds.push(waterId);
-          const waterRecord: IntakeRecord = {
-            id: waterId,
-            type: "water",
-            amount: input.substance.volumeMl,
-            timestamp: ts,
-            source: `substance:${id}`,
-            note: input.substance.description,
-            groupId,
-            ...(input.groupSource !== undefined && { groupSource: input.groupSource }),
-            ...fields,
-          };
-          await db.intakeRecords.add(waterRecord);
-          await enqueueInsideTx("intakeRecords", waterId, "upsert");
-        }
       }
 
       // ── Substance records (plural — multi-substance presets, per D-11) ──
@@ -218,6 +206,41 @@ export async function deleteEntryGroup(
   } catch (e) {
     return err("Failed to delete entry group", e);
   }
+}
+
+// ─── classifyLiquidDelete ─────────────────────────────────────────────
+
+/**
+ * Decide whether deleting a liquid IntakeRecord should take its whole group
+ * with it.
+ *
+ * A drink is stored as its fluid (a water IntakeRecord) plus its substances.
+ * Deleting just the water row left the caffeine/alcohol record alive and still
+ * counting toward daily totals — and the reverse, deleting the substance,
+ * already cascaded, so the two directions disagreed.
+ *
+ * A meal is different: its water-content row is one component of an eating
+ * record, and removing that component must not delete the meal. So the group
+ * is only taken as a whole when it has no eating record — i.e. it is a drink.
+ */
+export async function classifyLiquidDelete(
+  intakeId: string,
+): Promise<{ scope: "group"; groupId: string } | { scope: "record" }> {
+  const intake = await db.intakeRecords.get(intakeId);
+  if (!intake?.groupId) return { scope: "record" };
+
+  const [eatings, substances] = await Promise.all([
+    db.eatingRecords.where("groupId").equals(intake.groupId).toArray(),
+    db.substanceRecords.where("groupId").equals(intake.groupId).toArray(),
+  ]);
+
+  const hasLiveEating = eatings.some((r) => r.deletedAt === null);
+  const hasLiveSubstance = substances.some((r) => r.deletedAt === null);
+
+  if (!hasLiveEating && hasLiveSubstance) {
+    return { scope: "group", groupId: intake.groupId };
+  }
+  return { scope: "record" };
 }
 
 // ─── undoDeleteEntryGroup ─────────────────────────────────────────────
@@ -359,7 +382,21 @@ export async function syncEatingGroup(
     const fields = syncFields();
     const now = fields.updatedAt;
 
-    await db.transaction("rw", [...COMPOSABLE_TABLES], async () => {
+    await db.transaction("rw", [...COMPOSABLE_TABLES, db._syncQueue], async () => {
+      // Every intake row this function writes has to reach the sync engine.
+      // Without that, a food-card edit stayed local: a later full pull would
+      // silently revert the amounts and resurrect the duplicate rows the
+      // reconciliation below tombstones.
+      const touchedIntakeIds = new Set<string>();
+      const addIntake = async (record: IntakeRecord) => {
+        await db.intakeRecords.add(record);
+        touchedIntakeIds.add(record.id);
+      };
+      const patchIntake = async (id: string, updates: Record<string, unknown>) => {
+        await db.intakeRecords.update(id, updates);
+        touchedIntakeIds.add(id);
+      };
+
       const eating = await db.eatingRecords.get(eatingId);
       if (!eating) throw new Error("Eating record not found");
 
@@ -385,6 +422,7 @@ export async function syncEatingGroup(
       };
       if (!eating.groupId && groupId) eatingUpdates.groupId = groupId;
       await db.eatingRecords.update(eatingId, eatingUpdates);
+      await enqueueInsideTx("eatingRecords", eatingId, "upsert");
 
       if (!groupId) return; // Nothing else to sync
 
@@ -420,7 +458,7 @@ export async function syncEatingGroup(
       // ── Sodium intake ──
       if (patch.sodiumMg > 0) {
         if (existingSalt) {
-          await db.intakeRecords.update(existingSalt.id, {
+          await patchIntake(existingSalt.id, {
             amount: patch.sodiumMg,
             source: sodiumSource,
             timestamp: patch.timestamp,
@@ -437,16 +475,16 @@ export async function syncEatingGroup(
             groupSource,
             ...fields,
           };
-          await db.intakeRecords.add(record);
+          await addIntake(record);
         }
       } else if (existingSalt) {
-        await db.intakeRecords.update(existingSalt.id, {
+        await patchIntake(existingSalt.id, {
           deletedAt: now,
           updatedAt: now,
         });
       }
       for (const dup of extraSalts) {
-        await db.intakeRecords.update(dup.id, {
+        await patchIntake(dup.id, {
           deletedAt: now,
           updatedAt: now,
         });
@@ -463,7 +501,7 @@ export async function syncEatingGroup(
             updatedAt: now,
             ...(waterNote !== undefined && { note: waterNote }),
           };
-          await db.intakeRecords.update(existingWater.id, waterUpdates);
+          await patchIntake(existingWater.id, waterUpdates);
         } else {
           const record: IntakeRecord = {
             id: crypto.randomUUID(),
@@ -476,16 +514,16 @@ export async function syncEatingGroup(
             ...(waterNote !== undefined && { note: waterNote }),
             ...fields,
           };
-          await db.intakeRecords.add(record);
+          await addIntake(record);
         }
       } else if (existingWater) {
-        await db.intakeRecords.update(existingWater.id, {
+        await patchIntake(existingWater.id, {
           deletedAt: now,
           updatedAt: now,
         });
       }
       for (const dup of extraWaters) {
-        await db.intakeRecords.update(dup.id, {
+        await patchIntake(dup.id, {
           deletedAt: now,
           updatedAt: now,
         });
@@ -497,7 +535,7 @@ export async function syncEatingGroup(
       if (patch.sugarG !== undefined) {
         if (patch.sugarG > 0) {
           if (existingSugar) {
-            await db.intakeRecords.update(existingSugar.id, {
+            await patchIntake(existingSugar.id, {
               amount: patch.sugarG,
               timestamp: patch.timestamp,
               updatedAt: now,
@@ -513,16 +551,16 @@ export async function syncEatingGroup(
               groupSource,
               ...fields,
             };
-            await db.intakeRecords.add(record);
+            await addIntake(record);
           }
         } else if (existingSugar) {
-          await db.intakeRecords.update(existingSugar.id, {
+          await patchIntake(existingSugar.id, {
             deletedAt: now,
             updatedAt: now,
           });
         }
         for (const dup of extraSugars) {
-          await db.intakeRecords.update(dup.id, {
+          await patchIntake(dup.id, {
             deletedAt: now,
             updatedAt: now,
           });
@@ -534,7 +572,7 @@ export async function syncEatingGroup(
       if (patch.potassiumMg !== undefined) {
         if (patch.potassiumMg > 0) {
           if (existingPotassium) {
-            await db.intakeRecords.update(existingPotassium.id, {
+            await patchIntake(existingPotassium.id, {
               amount: patch.potassiumMg,
               timestamp: patch.timestamp,
               updatedAt: now,
@@ -550,23 +588,28 @@ export async function syncEatingGroup(
               groupSource,
               ...fields,
             };
-            await db.intakeRecords.add(record);
+            await addIntake(record);
           }
         } else if (existingPotassium) {
-          await db.intakeRecords.update(existingPotassium.id, {
+          await patchIntake(existingPotassium.id, {
             deletedAt: now,
             updatedAt: now,
           });
         }
         for (const dup of extraPotassiums) {
-          await db.intakeRecords.update(dup.id, {
+          await patchIntake(dup.id, {
             deletedAt: now,
             updatedAt: now,
           });
         }
       }
+
+      for (const id of touchedIntakeIds) {
+        await enqueueInsideTx("intakeRecords", id, "upsert");
+      }
     });
 
+    schedulePush();
     return ok(undefined);
   } catch (e) {
     return err("Failed to sync eating group", e);

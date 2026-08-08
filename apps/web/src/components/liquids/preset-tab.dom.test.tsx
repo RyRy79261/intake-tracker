@@ -82,6 +82,39 @@ describe("PresetTab", () => {
     expect(substances[0]!.type).toBe("caffeine");
     // 250/100 * 38 = 95mg
     expect(substances[0]!.amountMg).toBe(95);
+    // The volume is stored on the substance. It used to be omitted to suppress
+    // the service's implicit auto-water side effect, which left a later volume
+    // edit nothing to sync against.
+    expect(substances[0]!.volumeMl).toBe(250);
+
+    // Both halves share a group, so the entry can be edited and deleted as one.
+    const water = await db.intakeRecords.where("type").equals("water").toArray();
+    expect(water[0]!.groupId).toBeTruthy();
+    expect(substances[0]!.groupId).toBe(water[0]!.groupId);
+  });
+
+  it("logging a decaf preset records the volume with no substance", async () => {
+    // Gating the button on caffeine/alcohol alone made decaf, herbal tea and
+    // alcohol-free beer impossible to log at all.
+    const user = userEvent.setup();
+    await renderWithFixtures(<PresetTab tab="coffee" />);
+
+    await user.click(screen.getByRole("button", { name: COFFEE }));
+    await user.clear(screen.getByLabelText(/caffeine/i));
+    await user.type(screen.getByLabelText(/sugar/i), "5");
+
+    const logButton = screen.getByRole("button", { name: "Log Entry" });
+    expect(logButton).toBeEnabled();
+    await user.click(logButton);
+
+    await waitFor(async () => {
+      const water = await db.intakeRecords.where("type").equals("water").toArray();
+      expect(water).toHaveLength(1);
+      expect(water[0]!.amount).toBe(250);
+    });
+    const sugar = await db.intakeRecords.where("type").equals("sugar").toArray();
+    expect(sugar).toHaveLength(1);
+    expect(sugar[0]!.amount).toBe(5);
   });
 
   it("alcohol tab uses the % ABV field and records a standard-drinks substance", async () => {

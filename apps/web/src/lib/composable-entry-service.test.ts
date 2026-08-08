@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { db } from "@/lib/db";
 import { makeIntakeRecord, seedComposableGroup } from "@/__tests__/fixtures/db-fixtures";
+import { logDrink } from "@/lib/drink-service";
 import {
   addComposableEntry,
   deleteEntryGroup,
@@ -10,6 +11,7 @@ import {
   undoDeleteSingleRecord,
   recalculateFromCurrentValues,
   syncLiquidEntrySubstances,
+  classifyLiquidDelete,
   type ComposableEntryInput,
 } from "@/lib/composable-entry-service";
 
@@ -65,7 +67,7 @@ describe("composable-entry-service", () => {
       expect(intake?.groupId).toBe(result.data.groupId);
     });
 
-    it("Test 3: creates only substance + linked water intake when eating is undefined", async () => {
+    it("Test 3: substance.volumeMl creates NO water intake (issue #322)", async () => {
       const input: ComposableEntryInput = {
         substance: {
           type: "caffeine",
@@ -80,17 +82,34 @@ describe("composable-entry-service", () => {
 
       expect(result.data.eatingId).toBeUndefined();
       expect(result.data.substanceId).toBeTruthy();
-      // substance with volumeMl creates a linked water intake
-      expect(result.data.intakeIds.length).toBeGreaterThanOrEqual(1);
 
-      // Verify all share groupId
+      // `volumeMl` is data, not a request to book hydration. This branch used
+      // to write a water row from it, so a caller that also queued its own
+      // water intake double-counted the drink. It also made the singular and
+      // plural substance branches behave differently for identical input.
+      expect(result.data.intakeIds).toHaveLength(0);
+      const allWater = await db.intakeRecords.where("type").equals("water").toArray();
+      expect(allWater).toHaveLength(0);
+
+      // The volume is still stored on the substance.
       const substance = await db.substanceRecords.get(result.data.substanceId!);
+      expect(substance?.volumeMl).toBe(250);
       expect(substance?.groupId).toBe(result.data.groupId);
+    });
 
-      for (const id of result.data.intakeIds) {
-        const intake = await db.intakeRecords.get(id);
-        expect(intake?.groupId).toBe(result.data.groupId);
-      }
+    it("Test 3b: singular and plural substance branches agree on water", async () => {
+      // The asymmetry between these two was the shape of the original bug.
+      const singular = await addComposableEntry({
+        substance: { type: "caffeine", amountMg: 95, volumeMl: 250, description: "Coffee" },
+      });
+      const plural = await addComposableEntry({
+        substances: [
+          { type: "caffeine", amountMg: 95, volumeMl: 250, description: "Coffee" },
+        ],
+      });
+      expect(singular.success && plural.success).toBe(true);
+      if (!singular.success || !plural.success) return;
+      expect(singular.data.intakeIds).toEqual(plural.data.intakeIds);
     });
 
     it("Test 4: all records share the same timestamp", async () => {
@@ -618,7 +637,7 @@ describe("composable-entry-service", () => {
       }
     });
 
-    it("substances path does NOT auto-create water intake (unlike singular substance)", async () => {
+    it("substances path does NOT auto-create water intake", async () => {
       const input: ComposableEntryInput = {
         substances: [
           { type: "caffeine", amountMg: 95, volumeMl: 250, description: "Coffee" },
@@ -813,4 +832,142 @@ describe("composable-entry-service", () => {
       expect(group!.intakes).toHaveLength(1);
     });
   });
+
+  // ─── Edit path: must update, never duplicate ────────────────────────
+
+  describe("syncLiquidEntrySubstances does not duplicate a grouped substance", () => {
+    it("updates the existing alcohol record instead of creating a second one", async () => {
+      // The deterministic half of issue #322: one tap, one typed number,
+      // doubled standard drinks. It happened because the drink's two halves
+      // carried no shared groupId, so this reconciler — which keys only on
+      // groupId — found nothing and took its create branch.
+      const drink = await logDrink({
+        volumeMl: 568,
+        description: "Pint of lager",
+        abvPercent: 5,
+      });
+      expect(drink.success).toBe(true);
+      if (!drink.success) return;
+
+      const result = await syncLiquidEntrySubstances(drink.data.waterIntakeId, {
+        timestamp: Date.now(),
+        volumeMl: 568,
+        description: "Pint of lager",
+        caffeineMg: null,
+        alcoholAbv: 5.5,
+        sugarG: null,
+      });
+      expect(result.success).toBe(true);
+
+      const alcohols = (await db.substanceRecords.toArray()).filter(
+        (r) => r.type === "alcohol" && r.deletedAt === null,
+      );
+      expect(alcohols).toHaveLength(1);
+      expect(alcohols[0]!.abvPercent).toBe(5.5);
+    });
+
+    it("updates the existing caffeine record instead of creating a second one", async () => {
+      const drink = await logDrink({
+        volumeMl: 250,
+        description: "Latte",
+        caffeineMg: 80,
+      });
+      expect(drink.success).toBe(true);
+      if (!drink.success) return;
+
+      await syncLiquidEntrySubstances(drink.data.waterIntakeId, {
+        timestamp: Date.now(),
+        volumeMl: 250,
+        caffeineMg: 95,
+        alcoholAbv: null,
+        sugarG: null,
+      });
+
+      const caffeines = (await db.substanceRecords.toArray()).filter(
+        (r) => r.type === "caffeine" && r.deletedAt === null,
+      );
+      expect(caffeines).toHaveLength(1);
+      expect(caffeines[0]!.amountMg).toBe(95);
+    });
+
+    it("keeps the drink at one water row through an edit", async () => {
+      const drink = await logDrink({
+        volumeMl: 500,
+        description: "Beer",
+        abvPercent: 5,
+      });
+      expect(drink.success).toBe(true);
+      if (!drink.success) return;
+
+      await syncLiquidEntrySubstances(drink.data.waterIntakeId, {
+        timestamp: Date.now(),
+        volumeMl: 500,
+        caffeineMg: null,
+        alcoholAbv: 6,
+        sugarG: 3,
+      });
+
+      const water = (await db.intakeRecords.where("type").equals("water").toArray())
+        .filter((r) => r.deletedAt === null);
+      expect(water).toHaveLength(1);
+      expect(water[0]!.amount).toBe(500);
+    });
+  });
+
+  // ─── Delete scope ───────────────────────────────────────────────────
+
+  describe("classifyLiquidDelete", () => {
+    it("takes the whole group for a drink", async () => {
+      // Deleting a drink's fluid row used to leave its caffeine/alcohol record
+      // alive and still counting, while deleting the substance cascaded — the
+      // two directions disagreed.
+      const drink = await logDrink({
+        volumeMl: 250,
+        description: "Coffee",
+        caffeineMg: 95,
+      });
+      expect(drink.success).toBe(true);
+      if (!drink.success) return;
+
+      const scope = await classifyLiquidDelete(drink.data.waterIntakeId);
+      expect(scope.scope).toBe("group");
+      if (scope.scope !== "group") return;
+      expect(scope.groupId).toBe(drink.data.groupId);
+    });
+
+    it("deletes only the row for a meal's water-content component", async () => {
+      // A meal must survive having its water-content row removed.
+      const meal = await addComposableEntry({
+        eating: { note: "Soup", grams: 400 },
+        intakes: [
+          { type: "water", amount: 300, source: "manual:food_water_content" },
+          { type: "salt", amount: 900, source: "manual:sodium" },
+        ],
+      });
+      expect(meal.success).toBe(true);
+      if (!meal.success) return;
+
+      const waterId = meal.data.intakeIds[0]!;
+      expect((await classifyLiquidDelete(waterId)).scope).toBe("record");
+    });
+
+    it("deletes only the row for an ungrouped plain water entry", async () => {
+      const record = makeIntakeRecord({ type: "water", amount: 250, source: "manual" });
+      await db.intakeRecords.add(record);
+      expect((await classifyLiquidDelete(record.id)).scope).toBe("record");
+    });
+
+    it("deletes only the row when the group holds no live substance", async () => {
+      const entry = await addComposableEntry({
+        intakes: [
+          { type: "water", amount: 330, source: "beverage:Juice" },
+          { type: "sugar", amount: 30, source: "manual:sugar" },
+        ],
+      });
+      expect(entry.success).toBe(true);
+      if (!entry.success) return;
+      expect((await classifyLiquidDelete(entry.data.intakeIds[0]!)).scope).toBe("record");
+    });
+  });
+
 });

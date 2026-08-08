@@ -12,15 +12,26 @@ import { useAddWeight, useAddBloodPressure } from "@/hooks/use-health-queries";
 import { useAddUrination } from "@/hooks/use-urination-queries";
 import { useAddDefecation } from "@/hooks/use-defecation-queries";
 import { useAddSubstance } from "@/hooks/use-substance-queries";
+import { useLogDrink } from "@/hooks/use-drink-log";
 import { useAddComposableEntry, type ComposableEntryInput } from "@/hooks/use-composable-entry";
 import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import type { VoiceParsedItem, VoiceParseResponse } from "@/lib/voice-types";
-import { standardDrinksFromAbv } from "@intake/core/alcohol";
+import { reconcileLiquidItems } from "@/lib/voice-reconcile";
 import { recoverClosedDatabase } from "@/lib/db";
 import { apiFetch } from "@/lib/api-fetch";
 import { useQueryClient } from "@tanstack/react-query";
 
-type RowState = { item: VoiceParsedItem; approved: boolean | null };
+type RowState = {
+  item: VoiceParsedItem;
+  approved: boolean | null;
+  /**
+   * True once this row has been written to the database. A partial commit
+   * leaves the review list open so the user can retry the failures, and
+   * without this flag that retry re-saved every item that had already
+   * succeeded — duplicating them.
+   */
+  saved: boolean;
+};
 
 interface VoicePanelProps {
   /** Called once a save commit succeeds so the host can close the modal. */
@@ -37,6 +48,7 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
   const addUrination = useAddUrination();
   const addDefecation = useAddDefecation();
   const addSubstance = useAddSubstance();
+  const logDrinkEntry = useLogDrink();
   const addComposableEntry = useAddComposableEntry();
   const sugarEnabled = useOptionalTrackerEnabled("sugar");
   const potassiumEnabled = useOptionalTrackerEnabled("potassium");
@@ -53,10 +65,13 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
     () => rows.filter((r) => r.approved === null).length,
     [rows]
   );
+  // Approved but not yet written. After a partial commit the already-saved
+  // rows drop out, so the Save button counts (and offers) only the retry.
   const approvedCount = useMemo(
-    () => rows.filter((r) => r.approved === true).length,
+    () => rows.filter((r) => r.approved === true && !r.saved).length,
     [rows]
   );
+  const savedCount = useMemo(() => rows.filter((r) => r.saved).length, [rows]);
 
   const handleRecorded = useCallback(
     async (blob: Blob, mimeType: string) => {
@@ -107,11 +122,18 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
           throw new Error(j.error || `Parse failed (${parseRes.status})`);
         }
         const data = (await parseRes.json()) as VoiceParseResponse;
-        setRows(data.items.map((item) => ({ item, approved: null })));
-        setReasoning(data.reasoning ?? null);
+        // Collapse a drink the parser split into two items before the review
+        // list is built, so the user approves one row per drink instead of
+        // having a correction applied invisibly at save time (issue #322).
+        const { items, merges, warnings } = reconcileLiquidItems(data.items);
+        setRows(items.map((item) => ({ item, approved: null, saved: false })));
+        setReasoning(
+          [data.reasoning, ...merges, ...warnings].filter(Boolean).join(" ") ||
+            null,
+        );
         setStage("ready");
 
-        if (data.items.length === 0) {
+        if (items.length === 0) {
           toast({
             title: "No items detected",
             description: "The transcript didn't contain extractable health metrics.",
@@ -231,25 +253,88 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
           break;
         }
         case "caffeine":
-          await addSubstance({
-            type: "caffeine",
-            amountMg: item.caffeineMg,
-            ...(item.volumeMl !== undefined && { volumeMl: item.volumeMl }),
-            description: item.description,
-          });
+          // A caffeinated drink goes through logDrink, which owns the fluid:
+          // it writes exactly one water record from volumeMl and groups it
+          // with the caffeine record. With no volume we record the dose only —
+          // no hydration is invented, and the review row exposes the volume
+          // field so the user can supply it.
+          if (item.volumeMl !== undefined && item.volumeMl > 0) {
+            await logDrinkEntry({
+              volumeMl: item.volumeMl,
+              description: item.description,
+              caffeineMg: item.caffeineMg,
+              ...(item.sugarG !== undefined && sugarEnabled && { sugarG: item.sugarG }),
+              ...(item.sodiumMg !== undefined && { saltMg: item.sodiumMg }),
+              ...(item.potassiumMg !== undefined &&
+                potassiumEnabled && { potassiumMg: item.potassiumMg }),
+              waterSource: "voice",
+              groupSource: "voice_drink",
+            });
+          } else {
+            // No volume: record the dose and any solutes, but no water — the
+            // group still ties them together. Routing this through addSubstance
+            // alone silently dropped the item's sugar/sodium/potassium.
+            const soluteIntakes: ComposableEntryInput["intakes"] = [];
+            if (sugarEnabled && item.sugarG !== undefined && item.sugarG > 0) {
+              soluteIntakes.push({
+                type: "sugar",
+                amount: Math.round(item.sugarG),
+                source: "manual:sugar",
+                note: item.description,
+              });
+            }
+            if (item.sodiumMg !== undefined && item.sodiumMg > 0) {
+              soluteIntakes.push({
+                type: "salt",
+                amount: Math.round(item.sodiumMg),
+                source: "manual:sodium",
+                note: item.description,
+              });
+            }
+            if (
+              potassiumEnabled &&
+              item.potassiumMg !== undefined &&
+              item.potassiumMg > 0
+            ) {
+              soluteIntakes.push({
+                type: "potassium",
+                amount: Math.round(item.potassiumMg),
+                source: "manual:potassium",
+                note: item.description,
+              });
+            }
+            if (soluteIntakes.length > 0) {
+              await addComposableEntry({
+                substance: {
+                  type: "caffeine",
+                  amountMg: item.caffeineMg,
+                  description: item.description,
+                },
+                intakes: soluteIntakes,
+                groupSource: "voice_drink",
+              });
+            } else {
+              await addSubstance({
+                type: "caffeine",
+                amountMg: item.caffeineMg,
+                description: item.description,
+              });
+            }
+          }
           break;
-        case "alcohol": {
-          const stdDrinks =
-            Math.round(standardDrinksFromAbv(item.abvPercent, item.volumeMl) * 10) / 10;
-          await addSubstance({
-            type: "alcohol",
-            amountStandardDrinks: stdDrinks,
-            abvPercent: item.abvPercent,
+        case "alcohol":
+          await logDrinkEntry({
             volumeMl: item.volumeMl,
             description: item.description,
+            abvPercent: item.abvPercent,
+            ...(item.sugarG !== undefined && sugarEnabled && { sugarG: item.sugarG }),
+            ...(item.sodiumMg !== undefined && { saltMg: item.sodiumMg }),
+            ...(item.potassiumMg !== undefined &&
+              potassiumEnabled && { potassiumMg: item.potassiumMg }),
+            waterSource: "voice",
+            groupSource: "voice_drink",
           });
           break;
-        }
         case "urination":
           await addUrination.mutateAsync({
             ...(item.amountEstimate !== undefined && {
@@ -276,23 +361,31 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
       addUrination,
       addDefecation,
       addSubstance,
+      logDrinkEntry,
       sugarEnabled,
       potassiumEnabled,
     ]
   );
 
   const commit = useCallback(async () => {
-    const approved = rows.filter((r) => r.approved === true).map((r) => r.item);
-    if (approved.length === 0) return;
+    // Rows already written by an earlier partial commit are skipped, so
+    // re-tapping Save after a failure retries only what actually failed.
+    const pending = rows
+      .map((row, index) => ({ row, index }))
+      .filter(({ row }) => row.approved === true && !row.saved);
+    if (pending.length === 0) return;
 
     setStage("saving");
     let successCount = 0;
     const failures: string[] = [];
+    const savedIndices: number[] = [];
 
-    for (const item of approved) {
+    for (const { row, index } of pending) {
+      const { item } = row;
       try {
         await saveItem(item);
         successCount++;
+        savedIndices.push(index);
       } catch (e) {
         let saveError: unknown = e;
         if (await recoverClosedDatabase(e)) {
@@ -302,6 +395,7 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
           try {
             await saveItem(item);
             successCount++;
+            savedIndices.push(index);
             continue;
           } catch (retryError) {
             saveError = retryError;
@@ -316,10 +410,17 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
       }
     }
 
+    if (savedIndices.length > 0) {
+      const savedSet = new Set(savedIndices);
+      setRows((prev) =>
+        prev.map((r, i) => (savedSet.has(i) ? { ...r, saved: true } : r)),
+      );
+    }
+
     void queryClient.invalidateQueries();
 
     toast({
-      title: `Saved ${successCount} of ${approved.length}`,
+      title: `Saved ${successCount} of ${pending.length}`,
       ...(failures.length > 0 && {
         description: `Failures: ${failures.slice(0, 3).join("; ")}`,
         variant: "destructive" as const,
@@ -395,7 +496,8 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
             <Card>
               <CardHeader>
                 <CardTitle className="text-sm">
-                  Items ({approvedCount} approved · {pendingCount} pending)
+                  Items ({approvedCount} approved · {pendingCount} pending
+                  {savedCount > 0 ? ` · ${savedCount} saved` : ""})
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -405,7 +507,11 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
                     index={i}
                     item={row.item}
                     approved={row.approved}
-                    disabled={stage === "saving"}
+                    // A row already written by an earlier partial commit is
+                    // locked: leaving it interactive made it a dead end, since
+                    // toggling or editing it could no longer change what was
+                    // saved.
+                    disabled={stage === "saving" || row.saved}
                     onChange={(next) => updateRow(i, { item: next })}
                     onApprove={() =>
                       updateRow(i, {

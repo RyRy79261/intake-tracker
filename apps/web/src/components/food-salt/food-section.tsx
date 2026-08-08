@@ -91,7 +91,16 @@ export function FoodSection() {
     sodiumMgNum > 0
       ? Math.round(sodiumMgNum * SODIUM_MULTIPLIERS[sodiumSource])
       : 0;
-  const hasSodium = calculatedSodiumMg > 0;
+
+  // Saving needs *some* value, not sodium specifically. Gating on sodium alone
+  // meant a drink the AI parsed as water + sugar (sodium 0, which the parse
+  // prompt explicitly permits) could not be saved at all, and its parsed
+  // numbers were lost on unmount or re-parse.
+  const hasRecordableValue =
+    calculatedSodiumMg > 0 ||
+    (waterMl ? parseFloat(waterMl) > 0 : false) ||
+    (sugarEnabled && sugarG ? parseFloat(sugarG) > 0 : false) ||
+    (potassiumEnabled && potassiumMg ? parseFloat(potassiumMg) > 0 : false);
 
   // ─── Derived sugar calculation ────────────────────────────────────
   const sugarGNum = sugarG ? parseFloat(sugarG) : 0;
@@ -282,10 +291,10 @@ export function FoodSection() {
 
   const handleDetailSubmit = useCallback(async () => {
     if (isSubmitting) return;
-    if (!hasSodium) {
+    if (!hasRecordableValue) {
       toast({
-        title: "Sodium required",
-        description: "Enter a sodium amount before saving.",
+        title: "Nothing to record",
+        description: "Enter a sodium, water, sugar or potassium amount before saving.",
         variant: "destructive",
       });
       return;
@@ -372,7 +381,7 @@ export function FoodSection() {
     }
   }, [
     isSubmitting,
-    hasSodium,
+    hasRecordableValue,
     foodText,
     detailGrams,
     calculatedSodiumMg,
@@ -555,7 +564,7 @@ export function FoodSection() {
         {/* Record button — always visible */}
         <Button
           onClick={handleDetailSubmit}
-          disabled={addEatingMutation.isPending || isSubmitting || !hasSodium}
+          disabled={addEatingMutation.isPending || isSubmitting || !hasRecordableValue}
           className={cn("w-full mt-2", theme.buttonBg)}
         >
           {addEatingMutation.isPending || isSubmitting ? (
@@ -564,9 +573,9 @@ export function FoodSection() {
             "Record with details"
           )}
         </Button>
-        {!hasSodium && (
+        {!hasRecordableValue && (
           <p className="text-xs text-muted-foreground -mt-1">
-            Enter a sodium amount to enable saving.
+            Enter a sodium, water, sugar or potassium amount to enable saving.
           </p>
         )}
       </div>

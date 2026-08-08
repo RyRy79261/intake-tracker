@@ -483,35 +483,6 @@ realDb.version(19).stores({
   insightReports:          "id, generatedAt, updatedAt",
 });
 
-// Version 21: Add `sources` field to InsightReport for deep-mode reports
-// that cite URLs via web_search. No new Dexie index — `sources` is a
-// display field, not queryable. Stores byte-identical to v20; the version
-// bump exists so the sync layer recognises the new field.
-realDb.version(21).stores({
-  // --- REPEAT all v20 stores verbatim ---
-  intakeRecords:           "id, [type+timestamp], timestamp, source, groupId, updatedAt",
-  weightRecords:           "id, timestamp, updatedAt",
-  bloodPressureRecords:    "id, timestamp, position, arm, updatedAt",
-  eatingRecords:           "id, timestamp, groupId, updatedAt",
-  urinationRecords:        "id, timestamp, updatedAt",
-  defecationRecords:       "id, timestamp, updatedAt",
-  prescriptions:           "id, isActive, updatedAt, createdAt",
-  medicationPhases:        "id, prescriptionId, status, type, titrationPlanId, updatedAt",
-  phaseSchedules:          "id, phaseId, time, enabled, updatedAt",
-  inventoryItems:          "id, prescriptionId, isActive, updatedAt",
-  inventoryTransactions:   "id, [inventoryItemId+timestamp], inventoryItemId, timestamp, type, updatedAt",
-  doseLogs:                "id, [prescriptionId+scheduledDate], prescriptionId, phaseId, scheduleId, scheduledDate, scheduledTime, status, updatedAt",
-  dailyNotes:              "id, date, prescriptionId, doseLogId, updatedAt",
-  auditLogs:               "id, [action+timestamp], timestamp, action",
-  substanceRecords:        "id, [type+timestamp], type, timestamp, source, sourceRecordId, groupId, updatedAt",
-  titrationPlans:          "id, conditionLabel, status, updatedAt",
-  _syncQueue:              "++id, [tableName+recordId], tableName, enqueuedAt",
-  _syncMeta:               "tableName",
-  _errorLogs:              "id, timestamp, source",
-  userProfile:             "id, updatedAt",
-  insightReports:          "id, generatedAt, updatedAt",
-});
-
 // Version 20: Add `mode` field to InsightReport ("fast" | "deep"). No new
 // Dexie index — `mode` is a filter/display field, not a query key — so the
 // stores definition is byte-identical to v19. The Dexie version bump still
@@ -542,12 +513,118 @@ realDb.version(20).stores({
   insightReports:          "id, generatedAt, updatedAt",
 });
 
+// Version 21: Add `sources` field to InsightReport for deep-mode reports
+// that cite URLs via web_search. No new Dexie index — `sources` is a
+// display field, not queryable. Stores byte-identical to v20; the version
+// bump exists so the sync layer recognises the new field.
+realDb.version(21).stores({
+  // --- REPEAT all v20 stores verbatim ---
+  intakeRecords:           "id, [type+timestamp], timestamp, source, groupId, updatedAt",
+  weightRecords:           "id, timestamp, updatedAt",
+  bloodPressureRecords:    "id, timestamp, position, arm, updatedAt",
+  eatingRecords:           "id, timestamp, groupId, updatedAt",
+  urinationRecords:        "id, timestamp, updatedAt",
+  defecationRecords:       "id, timestamp, updatedAt",
+  prescriptions:           "id, isActive, updatedAt, createdAt",
+  medicationPhases:        "id, prescriptionId, status, type, titrationPlanId, updatedAt",
+  phaseSchedules:          "id, phaseId, time, enabled, updatedAt",
+  inventoryItems:          "id, prescriptionId, isActive, updatedAt",
+  inventoryTransactions:   "id, [inventoryItemId+timestamp], inventoryItemId, timestamp, type, updatedAt",
+  doseLogs:                "id, [prescriptionId+scheduledDate], prescriptionId, phaseId, scheduleId, scheduledDate, scheduledTime, status, updatedAt",
+  dailyNotes:              "id, date, prescriptionId, doseLogId, updatedAt",
+  auditLogs:               "id, [action+timestamp], timestamp, action",
+  substanceRecords:        "id, [type+timestamp], type, timestamp, source, sourceRecordId, groupId, updatedAt",
+  titrationPlans:          "id, conditionLabel, status, updatedAt",
+  _syncQueue:              "++id, [tableName+recordId], tableName, enqueuedAt",
+  _syncMeta:               "tableName",
+  _errorLogs:              "id, timestamp, source",
+  userProfile:             "id, updatedAt",
+  insightReports:          "id, generatedAt, updatedAt",
+});
+
+// Version 22: Backfill `groupId` onto drink pairs written by the old implicit
+// auto-water path (issue #322). Those pairs — a SubstanceRecord plus a water
+// IntakeRecord whose `source` is `substance:<substanceId>` — were linked only
+// by that source string and carried no group. `syncLiquidEntrySubstances` keys
+// exclusively on `groupId`, so editing one of these entries could not find the
+// existing substance and created a *second* one instead. Stamping a shared
+// group on both halves closes that off for data already on disk.
+//
+// Stores are byte-identical to v21; `groupId` is already indexed on both
+// tables. The version bump exists to carry the `upgrade` hook.
+realDb.version(22).stores({
+  // --- REPEAT all v21 stores verbatim ---
+  intakeRecords:           "id, [type+timestamp], timestamp, source, groupId, updatedAt",
+  weightRecords:           "id, timestamp, updatedAt",
+  bloodPressureRecords:    "id, timestamp, position, arm, updatedAt",
+  eatingRecords:           "id, timestamp, groupId, updatedAt",
+  urinationRecords:        "id, timestamp, updatedAt",
+  defecationRecords:       "id, timestamp, updatedAt",
+  prescriptions:           "id, isActive, updatedAt, createdAt",
+  medicationPhases:        "id, prescriptionId, status, type, titrationPlanId, updatedAt",
+  phaseSchedules:          "id, phaseId, time, enabled, updatedAt",
+  inventoryItems:          "id, prescriptionId, isActive, updatedAt",
+  inventoryTransactions:   "id, [inventoryItemId+timestamp], inventoryItemId, timestamp, type, updatedAt",
+  doseLogs:                "id, [prescriptionId+scheduledDate], prescriptionId, phaseId, scheduleId, scheduledDate, scheduledTime, status, updatedAt",
+  dailyNotes:              "id, date, prescriptionId, doseLogId, updatedAt",
+  auditLogs:               "id, [action+timestamp], timestamp, action",
+  substanceRecords:        "id, [type+timestamp], type, timestamp, source, sourceRecordId, groupId, updatedAt",
+  titrationPlans:          "id, conditionLabel, status, updatedAt",
+  _syncQueue:              "++id, [tableName+recordId], tableName, enqueuedAt",
+  _syncMeta:               "tableName",
+  _errorLogs:              "id, timestamp, source",
+  userProfile:             "id, updatedAt",
+  insightReports:          "id, generatedAt, updatedAt",
+}).upgrade(async (trans) => {
+  const now = Date.now();
+  const intakeTable = trans.table("intakeRecords");
+  const substanceTable = trans.table("substanceRecords");
+
+  // `source` is indexed, so scope the scan to the rows that can possibly match
+  // rather than materialising every intake row a multi-year user has.
+  const linkedWaters = await intakeTable
+    .where("source")
+    .startsWith("substance:")
+    .toArray();
+
+  for (const water of linkedWaters) {
+    // One malformed row must not abort the version change — Dexie then refuses
+    // to open the database at all, leaving the app unusable until the user
+    // clears storage.
+    try {
+      const substanceId = (water.source as string).slice("substance:".length);
+      const substance = await substanceTable.get(substanceId);
+      if (!substance) continue;
+
+      // Derived from the substance id, NOT random. Each device runs this
+      // upgrade independently and the result is never pushed, so a random id
+      // would have every device inventing a different group for the same pair —
+      // and the first sync would then split the halves apart again, recreating
+      // exactly the duplicate this migration exists to prevent. A deterministic
+      // id makes every device converge on its own.
+      const groupId =
+        (water.groupId as string | undefined) ??
+        (substance.groupId as string | undefined) ??
+        substanceId;
+
+      if (water.groupId !== groupId) {
+        await intakeTable.update(water.id, { groupId, updatedAt: now });
+      }
+      if (substance.groupId !== groupId) {
+        await substanceTable.update(substanceId, { groupId, updatedAt: now });
+      }
+    } catch {
+      // Skip this pair; the rest of the backfill still applies.
+    }
+  }
+});
+
 /**
  * Current Dexie schema version. Bump this constant in lockstep with each new
  * `realDb.version(N)` block above so diagnostic surfaces (Debug → Environment)
  * always reflect the real schema.
  */
-export const DB_SCHEMA_VERSION = 21;
+export const DB_SCHEMA_VERSION = 22;
 
 /**
  * True when `e` (or anything in its `cause` chain) is Dexie's

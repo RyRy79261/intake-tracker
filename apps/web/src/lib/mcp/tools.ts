@@ -142,7 +142,7 @@ export function registerReadOnlyTools(server: McpServer): void {
     {
       title: "Intake history",
       description:
-        "Returns individual water/salt/sugar/potassium intake records in the given time range. Use type='all' to combine. Each row includes groupId/groupSource, and a `substance` object when the row is the water half of a decomposed drink (source='substance:<id>') — carrying the linked substance's type, description, ABV %, standard drinks, and caffeine mg (null otherwise). Use query_substance_history for the full caffeine/alcohol list.",
+        "Returns individual water/salt/sugar/potassium intake records in the given time range. Use type='all' to combine. Each row includes groupId/groupSource, and a `substance` object when the row is the fluid half of a decomposed drink (linked by groupId, or by source='substance:<id>' for records predating that link) — carrying the linked substance's type, description, ABV %, standard drinks, and caffeine mg (null otherwise). Use query_substance_history for the full caffeine/alcohol list.",
       inputSchema: {
         type: z
           .enum(["water", "salt", "sugar", "potassium", "all"])
