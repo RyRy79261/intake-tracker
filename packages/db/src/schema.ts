@@ -451,7 +451,7 @@ export const inventoryItems = pgTable(
       .references(() => prescriptions.id),
     brandName: text("brand_name").notNull(),
     /** @deprecated Kept for Dexie interface parity; inventoryTransactions is authoritative. */
-    currentStock: integer("current_stock"),
+    currentStock: real("current_stock"),
     strength: real("strength").notNull(),
     // Per-pill combination-drug breakdown (mirrors Dexie CompoundStrength[]).
     compounds: jsonb("compounds").$type<{ name: string; strength: number }[]>(),
@@ -558,7 +558,7 @@ export const inventoryTransactions = pgTable(
       .notNull()
       .references(() => inventoryItems.id),
     timestamp: bigint("timestamp", { mode: "number" }).notNull(),
-    amount: integer("amount").notNull(),
+    amount: real("amount").notNull(),
     note: text("note"),
     type: text("type").notNull(),
     doseLogId: text("dose_log_id").references(() => doseLogs.id),
