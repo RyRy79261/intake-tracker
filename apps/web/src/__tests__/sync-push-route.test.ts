@@ -378,6 +378,76 @@ describe("sync-push-route", () => {
     expect(insertCalls[0]!.values.id).toBe("good");
   });
 
+  it("accepts fractional (split-pill) inventoryItems.currentStock and inventoryTransactions.amount", async () => {
+    // Issue #327: the app supports quarter/half/three-quarter tablet
+    // splitting (medication-ui-utils.ts formatPillCount), so currentStock
+    // and amount are real-valued on the Dexie/TS side. A row carrying a
+    // split-pill value must sync, not get silently and permanently dropped.
+    const { POST } = await import("@/app/api/sync/push/route");
+    const now = 1_000_000_000;
+
+    const inventoryItemRow = {
+      id: "inv-1",
+      prescriptionId: "rx-1",
+      brandName: "Furosemide",
+      currentStock: 0.5,
+      strength: 25,
+      unit: "mg",
+      pillShape: "round",
+      pillColor: "#94a3b8",
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+      deletedAt: null,
+      deviceId: "dev-A",
+      timezone: "UTC",
+    };
+
+    const inventoryTransactionRow = {
+      id: "tx-1",
+      inventoryItemId: "inv-1",
+      timestamp: now,
+      amount: 0.5,
+      type: "consumed",
+      createdAt: now,
+      updatedAt: now,
+      deletedAt: null,
+      deviceId: "dev-A",
+      timezone: "UTC",
+    };
+
+    const req = makePushRequest({
+      ops: [
+        {
+          queueId: 1,
+          tableName: "inventoryItems",
+          op: "upsert",
+          row: inventoryItemRow,
+        },
+        {
+          queueId: 2,
+          tableName: "inventoryTransactions",
+          op: "upsert",
+          row: inventoryTransactionRow,
+        },
+      ],
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      accepted: { queueId: number; serverUpdatedAt: number }[];
+      rejected: { queueId: number; tableName: string; error: string; code?: string }[];
+    };
+    expect(body.rejected ?? []).toHaveLength(0);
+    expect(body.accepted).toHaveLength(2);
+    expect(insertCalls).toHaveLength(2);
+    const invItemWrite = insertCalls.find((c) => c.values.id === "inv-1");
+    const invTxWrite = insertCalls.find((c) => c.values.id === "tx-1");
+    expect(invItemWrite!.values.currentStock).toBe(0.5);
+    expect(invTxWrite!.values.amount).toBe(0.5);
+  });
+
   it("rejects oversized batch", async () => {
     const validOp = {
       queueId: 1,
