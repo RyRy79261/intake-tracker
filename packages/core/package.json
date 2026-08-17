@@ -20,12 +20,12 @@
   },
   "dependencies": {
     "@intake/types": "workspace:*",
-    "simple-statistics": "^7.9.3"
+    "simple-statistics": "^7.10.0"
   },
   "devDependencies": {
     "@intake/typescript-config": "workspace:*",
-    "eslint": "^10.8.0",
+    "eslint": "^10.8.1",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.65.0"
+    "typescript-eslint": "^8.67.0"
   }
 }
