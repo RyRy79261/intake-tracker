@@ -5,11 +5,19 @@
  *   2. Check Neon Auth session.
  *      - If none, redirect to /auth?callbackURL=<this-url>. The /auth
  *        page is the client-side sign-in UI (email/password + Google
- *        button) — it forwards the callbackURL into signIn.social /
- *        signIn.email so the user lands back here after sign-in.
+ *        button); because this URL is an API route it keeps the OAuth
+ *        return trip on itself (so the session verifier can be
+ *        exchanged) and forwards here afterwards — see
+ *        signInReturnTarget() in src/lib/auth-callback.ts.
  *        We can't redirect straight to /api/auth/sign-in/social: that
  *        endpoint is the Neon Auth POST-only JSON API, not a navigable
  *        browser URL.
+ *      - The bounce happens AT MOST ONCE per attempt: the callback URL
+ *        carries `mcp_signin=retry`, and coming back still signed out
+ *        renders a dead-end "finish signing in" page instead of
+ *        bouncing again. Without that guard a sign-in that fails to
+ *        leave a session cookie ping-pongs the user between /auth and
+ *        this route forever.
  *   3. Verify the signed-in email is on the ALLOWED_EMAILS whitelist.
  *   4. Mirror the user into neon_auth.users_sync (FK target for auth_codes).
  *   5. Render a minimal consent page on first GET; on POST (Approve), mint
@@ -46,6 +54,13 @@ const querySchema = z.object({
   state: z.string().min(1).max(512),
   scope: z.string().optional(),
 });
+
+/**
+ * Marker added to the sign-in callback URL so a second signed-out arrival
+ * is recognisable. See the "at most once" note in the file docstring.
+ */
+const SIGNIN_RETRY_PARAM = "mcp_signin";
+const SIGNIN_RETRY_VALUE = "retry";
 
 function renderError(message: string, status = 400) {
   const html = `<!doctype html>
@@ -173,6 +188,54 @@ async function validateRequest(req: NextRequest) {
   };
 }
 
+/**
+ * `/auth?callbackURL=<this request, tagged as a retry>`. The tag is what
+ * lets the second signed-out arrival here be told apart from the first.
+ */
+function buildSignInUrl(req: NextRequest, origin: string): URL {
+  const callbackParams = new URLSearchParams(req.nextUrl.searchParams);
+  callbackParams.set(SIGNIN_RETRY_PARAM, SIGNIN_RETRY_VALUE);
+  const signInUrl = new URL("/auth", origin);
+  signInUrl.searchParams.set(
+    "callbackURL",
+    `/api/mcp/oauth/authorize?${callbackParams.toString()}`,
+  );
+  return signInUrl;
+}
+
+/**
+ * Terminal page for "came back from sign-in without a session". Nothing
+ * here navigates on its own — the link is the only way onward, so the
+ * flow cannot loop.
+ */
+function renderSignInRequired(signInUrl: URL): NextResponse {
+  const href = escapeHtml(signInUrl.toString());
+  const html = `<!doctype html>
+<html><head><meta charset="utf-8"><title>Sign in to continue</title>
+<style>
+  body { font-family: ui-sans-serif, system-ui; background: #0f172a; color: #e2e8f0; padding: 2rem; max-width: 32rem; margin: 0 auto; }
+  .card { background: #1e293b; border-radius: 0.75rem; padding: 1.5rem; }
+  h1 { font-size: 1.25rem; margin: 0 0 0.5rem; }
+  p { color: #cbd5e1; }
+  a.button { display: inline-block; margin-top: 1rem; background: #22c55e; color: #052e16; font-weight: 600; padding: 0.5rem 1rem; border-radius: 0.5rem; text-decoration: none; }
+</style></head>
+<body>
+  <div class="card">
+    <h1>Sign in to continue</h1>
+    <p>You were sent to sign in, but came back without an active session, so
+    the connection can&#39;t be authorized yet.</p>
+    <p>This usually means the sign-in didn&#39;t finish, or the browser is
+    blocking cookies for this site (common in an in-app browser — try opening
+    this page in your normal browser instead).</p>
+    <a class="button" href="${href}">Sign in and try again</a>
+  </div>
+</body></html>`;
+  return new NextResponse(html, {
+    status: 401,
+    headers: { "content-type": "text/html; charset=utf-8" },
+  });
+}
+
 async function ensureUserInSync(userId: string, email: string | null) {
   await db
     .insert(usersSync)
@@ -190,16 +253,26 @@ export async function GET(req: NextRequest) {
 
   const user = await getSignedInUser();
   if (!user) {
+    const origin = getPublicOrigin(req);
+    const signInUrl = buildSignInUrl(req, origin);
+
+    // Already been sent to sign in once and still no session — stop.
+    // Redirecting again would just restart the same round trip, which is
+    // exactly the loop this guard exists to break. Hand the user a page
+    // that says what happened and a link they have to click, so any
+    // further attempt is deliberate rather than automatic.
+    const retried =
+      req.nextUrl.searchParams.get(SIGNIN_RETRY_PARAM) === SIGNIN_RETRY_VALUE;
+    if (retried) {
+      return renderSignInRequired(signInUrl);
+    }
+
     // Bounce through the /auth page (client UI) rather than the
     // /api/auth/sign-in/social JSON endpoint, which only accepts POST.
-    // The /auth page reads `callbackURL` from its query string and
-    // passes it into signIn.social({...}), so the user lands back here
-    // after Google completes. callbackURL is a same-origin relative
-    // path (sign-in-form.tsx rejects anything else).
-    const origin = getPublicOrigin(req);
-    const callbackPath = `/api/mcp/oauth/authorize?${req.nextUrl.searchParams.toString()}`;
-    const signInUrl = new URL("/auth", origin);
-    signInUrl.searchParams.set("callbackURL", callbackPath);
+    // The /auth page reads `callbackURL` from its query string and hands
+    // it to signIn.social/.email, keeping the OAuth return trip on a page
+    // (see signInReturnTarget) before forwarding here. callbackURL is a
+    // same-origin relative path (sign-in-form.tsx rejects anything else).
     return NextResponse.redirect(signInUrl.toString(), { status: 302 });
   }
 

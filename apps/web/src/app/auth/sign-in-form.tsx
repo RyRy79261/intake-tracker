@@ -9,19 +9,7 @@ import { Label } from "@intake/ui/label";
 import { Capacitor } from "@capacitor/core";
 import { signIn, useSession } from "@/lib/auth-client";
 import { isCapacitorMode } from "@/lib/api-fetch";
-
-/**
- * Only accept a same-origin relative path as the post-sign-in target.
- * Rejects absolute URLs (cross-origin redirect attack), protocol-relative
- * URLs (`//evil.example`), and anything that doesn't start with a single
- * `/`. Returns the canonical fallback `/` for anything invalid.
- */
-function safeCallbackUrl(raw: string | null | undefined): string {
-  if (!raw) return "/";
-  if (!raw.startsWith("/")) return "/";
-  if (raw.startsWith("//")) return "/";
-  return raw;
-}
+import { safeCallbackUrl, signInReturnTarget } from "@/lib/auth-callback";
 
 export function SignInForm() {
   const router = useRouter();
@@ -34,9 +22,12 @@ export function SignInForm() {
   const [loading, setLoading] = useState(false);
 
   // Auto-forward when the user lands here with an active session AND a
-  // pending callbackURL. This catches the case where Better Auth's social
-  // sign-in returns the user to the originating page (/auth?callbackURL=…)
-  // instead of unwrapping the callbackURL value itself — without this the
+  // pending callbackURL. This is the second half of the API-route flow:
+  // returnTarget() deliberately sends the OAuth return trip back to this
+  // page (so the session verifier gets exchanged), and this effect then
+  // carries the user on to the real destination. It also covers a social
+  // sign-in that returns to the originating page (/auth?callbackURL=…)
+  // instead of unwrapping the callbackURL value itself — without it the
   // user would just see the sign-in form again despite being authenticated.
   useEffect(() => {
     if (sessionPending) return;
@@ -46,6 +37,17 @@ export function SignInForm() {
     // authorize endpoint), which router.push won't reach.
     window.location.replace(callbackURL);
   }, [sessionPending, session, callbackURL]);
+
+  /**
+   * Where Neon Auth should drop the browser once sign-in completes. For a
+   * page destination that is `callbackURL` itself; for an API route (the
+   * MCP authorize endpoint) it is this page, which then forwards via the
+   * effect above once the session exists.
+   */
+  function returnTarget(): string {
+    if (typeof window === "undefined") return callbackURL;
+    return signInReturnTarget(callbackURL, window.location);
+  }
 
   async function handleEmailSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -65,7 +67,7 @@ export function SignInForm() {
       const result = await signIn.email({
         email: email.trim(),
         password,
-        callbackURL,
+        callbackURL: returnTarget(),
       });
       if (result && "error" in result && result.error) {
         setError(result.error.message ?? "Sign in failed");
@@ -93,7 +95,10 @@ export function SignInForm() {
         setLoading(false);
         return;
       }
-      await signIn.social({ provider: "google", callbackURL });
+      // NOT `callbackURL` — an API-route destination has to be reached
+      // via this page so the session verifier can be exchanged. See
+      // signInReturnTarget().
+      await signIn.social({ provider: "google", callbackURL: returnTarget() });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Google sign in failed");
       setLoading(false);

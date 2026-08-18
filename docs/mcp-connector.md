@@ -70,11 +70,14 @@ screen showing the requested scopes → done.
      │                                                                │
      │                            ┌─── No Neon Auth session? ─────┐   │
      │                            ▼                               │   │
-     │                  /api/auth/sign-in/social?                 │   │
-     │                  provider=google&                          │   │
-     │                  callbackURL=/api/mcp/oauth/authorize?...  │   │
+     │                  /auth?callbackURL=                        │   │
+     │                    /api/mcp/oauth/authorize?...            │   │
+     │                    &mcp_signin=retry                       │   │
      │                            │                               │   │
-     │                            └─→ Google → Neon Auth ─────────┘   │
+     │                            ├─→ Google → Neon Auth ─┐       │   │
+     │                            │      returns to /auth ┘       │   │
+     │                            │      (verifier exchange)      │   │
+     │                            └─→ /auth forwards back ────────┘   │
      │                                                                │
      │                  Session OK → check ALLOWED_EMAILS             │
      │                            → mint auth_code (10 min TTL)       │
@@ -326,6 +329,20 @@ Single scope keeps the consent screen simple. Future write tools would add
 - **User signs in to Google with a non-whitelisted email.** Authorize
   endpoint shows `access_denied`. Don't leak whether the email is in
   Neon Auth at all — same error either way.
+- **Signed-out user starts the connector flow.** The authorize endpoint
+  bounces to `/auth`, never to an API route, and never more than once.
+  Two rules make that hold, both of which existed as bugs first:
+  1. The sign-in return trip must land on a **page**. Neon Auth appends
+     `?neon_auth_session_verifier=` to `callbackURL`, and only a page load
+     (client SDK) or `auth.middleware()` can trade that for a session
+     cookie — neither runs on `/api/mcp/oauth/authorize`. So SignInForm
+     hands Neon Auth its own URL when the destination is an API route and
+     forwards afterwards (`signInReturnTarget`, `src/lib/auth-callback.ts`).
+  2. The bounce carries `mcp_signin=retry`. Arriving here signed out with
+     that marker set renders a terminal "sign in to continue" page instead
+     of redirecting again, so a sign-in that leaves no cookie (blocked
+     cookies in an in-app browser, say) dead-ends visibly rather than
+     ping-ponging the user through the login form forever.
 - **claude.ai retries DCR.** Each retry creates a new `client_id` row.
   Acceptable (small table, can be GC'd by a daily cron after 30 days of
   inactivity).
