@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.36.1](https://github.com/RyRy79261/intake-tracker/compare/v1.36.0...v1.36.1) (2026-08-10)
+
+
+### Bug Fixes
+
+* **sync:** allow fractional inventory stock and transaction amounts ([#328](https://github.com/RyRy79261/intake-tracker/issues/328)) ([8d7f51b](https://github.com/RyRy79261/intake-tracker/commit/8d7f51b4c2662fb4310a474be418738f69c55420)), closes [#327](https://github.com/RyRy79261/intake-tracker/issues/327)
+
 ## [1.36.0](https://github.com/RyRy79261/intake-tracker/compare/v1.35.1...v1.36.0) (2026-08-08)
 
 
