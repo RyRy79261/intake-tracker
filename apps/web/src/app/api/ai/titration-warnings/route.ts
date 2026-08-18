@@ -89,7 +89,10 @@ export const POST = withAuth(async ({ request, auth }) => {
     const response = await client.messages.create({
       model: CLAUDE_MODELS.premium,
       max_tokens: 1536,
-      temperature: 0,
+      // No `temperature`/`top_p`/`top_k`: Claude Opus 4.7 and later reject a
+      // non-default sampling parameter with a 400, so passing one fails the
+      // whole request rather than tightening it. Determinism now comes from
+      // the forced tool_choice and the schema, not from a temperature of 0.
       system: SYSTEM_PROMPT,
       tools: [TITRATION_WARNINGS_TOOL],
       tool_choice: { type: "tool", name: "titration_warnings_result" },

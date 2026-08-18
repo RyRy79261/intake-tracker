@@ -60,6 +60,11 @@ let batchResults: Array<{
 const completeCalls: unknown[] = [];
 const failCalls: unknown[] = [];
 const expireCalls: unknown[] = [];
+// Continuation submissions made while resuming a paused turn.
+const batchesCreateCalls: Array<Record<string, unknown>> = [];
+const batchesCancelCalls: string[] = [];
+const attachCalls: Array<{ jobId: string; batchId: string }> = [];
+let attachReturn = true;
 
 function resetState() {
   mockJob = null;
@@ -72,6 +77,10 @@ function resetState() {
   completeCalls.length = 0;
   failCalls.length = 0;
   expireCalls.length = 0;
+  batchesCreateCalls.length = 0;
+  batchesCancelCalls.length = 0;
+  attachCalls.length = 0;
+  attachReturn = true;
 }
 
 vi.mock("@/lib/auth-middleware", () => ({
@@ -104,6 +113,14 @@ vi.mock("@/app/api/ai/_shared/claude-client", () => ({
             id: "msgbatch_test_123",
             processing_status: batchProcessingStatus,
           }),
+          create: async (params: Record<string, unknown>) => {
+            batchesCreateCalls.push(params);
+            return { id: `msgbatch_continuation_${batchesCreateCalls.length}` };
+          },
+          cancel: async (id: string) => {
+            batchesCancelCalls.push(id);
+            return { id };
+          },
           results: async () => ({
             async *[Symbol.asyncIterator]() {
               for (const entry of batchResults) yield entry;
@@ -130,6 +147,10 @@ vi.mock("@/lib/server/insight-job-service", () => ({
       return null;
     }
     return row;
+  },
+  attachBatchToJob: async (jobId: string, batchId: string) => {
+    attachCalls.push({ jobId, batchId });
+    return attachReturn;
   },
   completeInsightJob: async (jobId: string, report: unknown) => {
     completeCalls.push({ jobId, report });
@@ -169,6 +190,45 @@ function succeededResult(input: unknown, stopReason: string = "tool_use") {
   };
 }
 
+/**
+ * What Anthropic returns when the server-side tool loop hits its per-turn
+ * iteration limit: real work done, no answer yet, no tool call.
+ */
+function pausedResult(customId: string) {
+  return {
+    custom_id: customId,
+    result: {
+      type: "succeeded" as const,
+      message: {
+        content: [
+          { type: "text", text: "Checking published targets for this metric." },
+          {
+            type: "server_tool_use",
+            name: "web_search",
+            input: { query: "sodium target heart failure" },
+          },
+        ],
+        stop_reason: "pause_turn",
+        usage: { input_tokens: 900, output_tokens: 120 },
+      },
+    },
+  };
+}
+
+function pendingJob(id: string): MockJobRow {
+  return {
+    id,
+    userId: "user-test",
+    batchId: "msgbatch_test_123",
+    status: "pending",
+    requestPayload: PAYLOAD,
+    resultReportId: null,
+    error: null,
+    createdAt: Date.now() - 5 * 60_000,
+    completedAt: null,
+  };
+}
+
 // ── Tests ────────────────────────────────────────────────────────────────
 
 describe("GET /api/analytics/insights/jobs/:id", () => {
@@ -178,6 +238,95 @@ describe("GET /api/analytics/insights/jobs/:id", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it("resumes a paused turn instead of failing the job", async () => {
+    // pause_turn means the loop ran out of iterations, not that the model
+    // produced garbage. Failing here threw away paid research and reported
+    // deep analysis as broken.
+    mockJob = pendingJob("job-paused");
+    batchProcessingStatus = "ended";
+    batchResults = [pausedResult("insight-job-paused")];
+
+    const { GET } = await import("@/app/api/analytics/insights/jobs/[id]/route");
+    const res = await GET(makeRequest("job-paused"));
+
+    const body = (await res.json()) as { status: string };
+    expect(body.status).toBe("pending");
+    expect(failCalls).toHaveLength(0);
+    expect(completeCalls).toHaveLength(0);
+
+    // A continuation batch was submitted and the job now points at it.
+    expect(batchesCreateCalls).toHaveLength(1);
+    expect(attachCalls).toEqual([
+      { jobId: "job-paused", batchId: "msgbatch_continuation_1" },
+    ]);
+  });
+
+  it("carries the paused content and the same tools into the continuation", async () => {
+    mockJob = pendingJob("job-paused-2");
+    batchProcessingStatus = "ended";
+    batchResults = [pausedResult("insight-job-paused-2")];
+
+    const { GET } = await import("@/app/api/analytics/insights/jobs/[id]/route");
+    await GET(makeRequest("job-paused-2"));
+
+    const submitted = batchesCreateCalls[0] as {
+      requests: Array<{
+        custom_id: string;
+        params: {
+          tools: Array<{ name: string }>;
+          messages: Array<{ role: string; content: unknown }>;
+        };
+      }>;
+    };
+    const request = submitted.requests[0]!;
+    // Depth is encoded in the custom_id so the next poll can tell this is
+    // already a resumption.
+    expect(request.custom_id).toBe("insight-job-paused-2-c1");
+
+    // The paused assistant turn goes back verbatim...
+    const messages = request.params.messages;
+    expect(messages[0]!.role).toBe("user");
+    expect(messages[1]!.role).toBe("assistant");
+    expect(messages[1]!.content).toEqual(
+      pausedResult("x").result.message.content,
+    );
+    // ...and the tools it was still mid-way through must be re-declared, or
+    // the API rejects the resume outright.
+    const toolNames = request.params.tools.map((t) => t.name);
+    expect(toolNames).toContain("web_search");
+    expect(toolNames).toContain("analytics_insight");
+  });
+
+  it("gives up honestly once a resumed turn pauses again", async () => {
+    mockJob = pendingJob("job-paused-3");
+    batchProcessingStatus = "ended";
+    // Already a continuation (depth 1) and still paused.
+    batchResults = [pausedResult("insight-job-paused-3-c1")];
+
+    const { GET } = await import("@/app/api/analytics/insights/jobs/[id]/route");
+    const res = await GET(makeRequest("job-paused-3"));
+
+    const body = (await res.json()) as { status: string; error: string };
+    expect(body.status).toBe("failed");
+    expect(body.error).toMatch(/pausing/i);
+    // No unbounded chain of paid batches.
+    expect(batchesCreateCalls).toHaveLength(0);
+    expect(failCalls).toHaveLength(1);
+  });
+
+  it("cancels the continuation when another poller already finalised the job", async () => {
+    mockJob = pendingJob("job-paused-4");
+    batchProcessingStatus = "ended";
+    batchResults = [pausedResult("insight-job-paused-4")];
+    attachReturn = false;
+
+    const { GET } = await import("@/app/api/analytics/insights/jobs/[id]/route");
+    await GET(makeRequest("job-paused-4"));
+
+    // Nothing would ever poll that batch — don't leave it running.
+    expect(batchesCancelCalls).toEqual(["msgbatch_continuation_1"]);
   });
 
   it("returns 404 when the job is not found", async () => {

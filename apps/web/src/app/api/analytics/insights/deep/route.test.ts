@@ -208,6 +208,13 @@ describe("POST /api/analytics/insights/deep", () => {
     // research across the snapshot's multiple metric domains.
     const webSearch = requestParams.tools.find((t) => t.name === "web_search");
     expect(webSearch?.max_uses).toBeGreaterThanOrEqual(10);
+    // max_tokens covers the WHOLE turn — every search query block and the
+    // closing analytics_insight call. At 4096 the searches ate the budget
+    // the answer needed and the turn stopped mid-tool-call, failing the job
+    // as "cut off" on every research-heavy run. The floor here is the
+    // response schema's own worst case (4000-char summary + 16 × 2000-char
+    // observations + 30 source URLs) plus room for the search traffic.
+    expect(requestParams.max_tokens).toBeGreaterThanOrEqual(16384);
   });
 
   it("persists the validated request payload alongside the job for later audit/re-run", async () => {
