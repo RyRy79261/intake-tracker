@@ -7,6 +7,7 @@
  * user has to click through, not redirect again — that ping-pong was the
  * MCP connector login loop.
  */
+import { createHash } from "node:crypto";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { NextRequest } from "next/server";
 
@@ -59,12 +60,25 @@ function authorizeParams(extra: Record<string, string> = {}) {
   });
 }
 
-function makeRequest(params: URLSearchParams, { retried = false } = {}) {
+/** Mirrors the route's attempt fingerprint (client_id + state, hashed). */
+function fingerprintOf(params: URLSearchParams): string {
+  return createHash("sha256")
+    .update(`${params.get("client_id") ?? ""}\u0000${params.get("state") ?? ""}`)
+    .digest("base64url")
+    .slice(0, 22);
+}
+
+function makeRequest(
+  params: URLSearchParams,
+  { retried = false, markerFor = params }: { retried?: boolean; markerFor?: URLSearchParams } = {},
+) {
   const headers: Record<string, string> = {
     host: "app.test",
     "x-forwarded-proto": "https",
   };
-  if (retried) headers.cookie = "mcp_signin_retry=1";
+  if (retried) {
+    headers.cookie = `mcp_signin_retry=${fingerprintOf(markerFor)}`;
+  }
   return new NextRequest(
     `https://app.test/api/mcp/oauth/authorize?${params.toString()}`,
     { headers },
@@ -109,7 +123,9 @@ describe("authorize GET — signed out", () => {
     );
 
     const cookie = retryCookie(res)!;
-    expect(cookie).toContain("mcp_signin_retry=1");
+    expect(cookie).toContain(
+      `mcp_signin_retry=${fingerprintOf(authorizeParams())}`,
+    );
     expect(cookie).toContain("HttpOnly");
     expect(cookie).toContain("Path=/api/mcp/oauth/authorize");
     expect(cookie).toMatch(/Max-Age=\d+/);
@@ -120,6 +136,18 @@ describe("authorize GET — signed out", () => {
     // through sign-in by asserting one already happened.
     const res = await GET(
       makeRequest(authorizeParams({ mcp_signin: "retry" })),
+    );
+
+    expect(res.status).toBe(302);
+    expect(new URL(res.headers.get("location")!).pathname).toBe("/auth");
+  });
+
+  it("ignores a marker left by a different authorization attempt", async () => {
+    // Abandoning one connect attempt must not dead-end the next one: a
+    // second tab, or another client, still gets its own trip to sign-in.
+    const other = authorizeParams({ state: "some-other-attempt" });
+    const res = await GET(
+      makeRequest(authorizeParams(), { retried: true, markerFor: other }),
     );
 
     expect(res.status).toBe(302);

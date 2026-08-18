@@ -271,10 +271,21 @@ export const GET = withAuth(async ({ request, auth }) => {
       });
     }
 
-    // Point the job at the new batch. If the row is no longer pending
-    // (another poller finalised it) the continuation is redundant — cancel
-    // it rather than leave a batch nothing will ever read.
-    const attached = await attachBatchToJob(job.id, continuation.id);
+    // Point the job at the new batch, but only if the row still carries the
+    // batch we just read. Two polls can reach this branch on the same paused
+    // batch; the compare-and-swap lets exactly one win, and the loser cancels
+    // its own continuation instead of leaving a paid batch nothing polls.
+    let attached = false;
+    try {
+      attached = await attachBatchToJob(job.id, continuation.id, job.batchId);
+    } catch (attachErr) {
+      console.error(
+        "[analytics/insights/jobs] continuation attach threw:",
+        attachErr instanceof Error
+          ? `${attachErr.name}: ${attachErr.message}`
+          : attachErr,
+      );
+    }
     if (!attached) {
       await client.messages.batches
         .cancel(continuation.id)

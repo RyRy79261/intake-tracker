@@ -6,10 +6,10 @@ import {
   buildInsightsPrompt,
   type AnalyticsInsightsRequest,
 } from "@intake/ai-prompts/analytics-insights";
-import {
-  CLAUDE_MODELS,
-  WEB_SEARCH_TOOL,
-} from "@/app/api/ai/_shared/claude-client";
+// Straight from the SDK-free registry, NOT the claude-client re-export:
+// the Capacitor static export stashes out `src/app/api`, and a module
+// under `src/lib` that reaches into it dangles when the routes disappear.
+import { CLAUDE_MODELS, WEB_SEARCH_TOOL } from "@intake/ai-prompts/models";
 
 /**
  * The single definition of a deep-research insight batch request.

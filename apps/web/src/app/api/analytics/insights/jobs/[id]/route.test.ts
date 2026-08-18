@@ -63,7 +63,11 @@ const expireCalls: unknown[] = [];
 // Continuation submissions made while resuming a paused turn.
 const batchesCreateCalls: Array<Record<string, unknown>> = [];
 const batchesCancelCalls: string[] = [];
-const attachCalls: Array<{ jobId: string; batchId: string }> = [];
+const attachCalls: Array<{
+  jobId: string;
+  batchId: string;
+  expectedBatchId: string | undefined;
+}> = [];
 let attachReturn = true;
 
 function resetState() {
@@ -148,8 +152,12 @@ vi.mock("@/lib/server/insight-job-service", () => ({
     }
     return row;
   },
-  attachBatchToJob: async (jobId: string, batchId: string) => {
-    attachCalls.push({ jobId, batchId });
+  attachBatchToJob: async (
+    jobId: string,
+    batchId: string,
+    expectedBatchId?: string,
+  ) => {
+    attachCalls.push({ jobId, batchId, expectedBatchId });
     return attachReturn;
   },
   completeInsightJob: async (jobId: string, report: unknown) => {
@@ -258,8 +266,14 @@ describe("GET /api/analytics/insights/jobs/:id", () => {
 
     // A continuation batch was submitted and the job now points at it.
     expect(batchesCreateCalls).toHaveLength(1);
+    // Attached as a compare-and-swap against the batch this poll read, so a
+    // concurrent poll on the same paused batch can't silently overwrite it.
     expect(attachCalls).toEqual([
-      { jobId: "job-paused", batchId: "msgbatch_continuation_1" },
+      {
+        jobId: "job-paused",
+        batchId: "msgbatch_continuation_1",
+        expectedBatchId: "msgbatch_test_123",
+      },
     ]);
   });
 
@@ -316,10 +330,11 @@ describe("GET /api/analytics/insights/jobs/:id", () => {
     expect(failCalls).toHaveLength(1);
   });
 
-  it("cancels the continuation when another poller already finalised the job", async () => {
+  it("cancels its own continuation when a concurrent poll wins the swap", async () => {
     mockJob = pendingJob("job-paused-4");
     batchProcessingStatus = "ended";
     batchResults = [pausedResult("insight-job-paused-4")];
+    // The compare-and-swap fails: another poll already moved the job on.
     attachReturn = false;
 
     const { GET } = await import("@/app/api/analytics/insights/jobs/[id]/route");

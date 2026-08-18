@@ -31,6 +31,7 @@
  * implemented in this iteration — the user always sees the consent screen
  * once per code, which is more transparent.
  */
+import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/neon-auth";
@@ -60,10 +61,16 @@ const querySchema = z.object({
 
 /**
  * Server-issued marker proving this browser has already been sent through
- * sign-in for this authorization attempt. HttpOnly (no script can forge
+ * sign-in *for this authorization attempt*. HttpOnly (no script can forge
  * it), scoped to this route alone, and short-lived — it only has to
  * survive one trip to /auth and back. See the "at most once" note in the
  * file docstring.
+ *
+ * The value is a fingerprint of the attempt, not a flag: a marker left by
+ * an abandoned attempt must not make a *different* attempt's first request
+ * dead-end. Someone who gives up on one connect and starts another — a
+ * second tab, a different client — should still get their own automatic
+ * trip through sign-in.
  */
 const SIGNIN_RETRY_COOKIE = "mcp_signin_retry";
 const SIGNIN_RETRY_TTL_SECONDS = 600;
@@ -205,11 +212,31 @@ function buildSignInUrl(req: NextRequest, origin: string): URL {
   return signInUrl;
 }
 
+/**
+ * Identifies one authorization attempt. `client_id` + `state` is what
+ * distinguishes concurrent attempts from each other; hashed so the cookie
+ * carries no readable request detail. Not a security boundary — the cookie
+ * is HttpOnly and same-site, and the worst a forged one could do is show
+ * its own sender the "sign in to continue" page.
+ */
+function attemptFingerprint(params: URLSearchParams): string {
+  const clientId = params.get("client_id") ?? "";
+  const state = params.get("state") ?? "";
+  return createHash("sha256")
+    .update(`${clientId}\u0000${state}`)
+    .digest("base64url")
+    .slice(0, 22);
+}
+
 /** Record that this browser has now been sent through sign-in once. */
-function setRetryMarker(res: NextResponse, origin: string): NextResponse {
+function setRetryMarker(
+  res: NextResponse,
+  origin: string,
+  fingerprint: string,
+): NextResponse {
   res.cookies.set({
     name: SIGNIN_RETRY_COOKIE,
-    value: "1",
+    value: fingerprint,
     httpOnly: true,
     sameSite: "lax",
     secure: origin.startsWith("https://"),
@@ -236,8 +263,9 @@ function clearRetryMarker(res: NextResponse): NextResponse {
   return res;
 }
 
-function hasRetryMarker(req: NextRequest): boolean {
-  return req.cookies.get(SIGNIN_RETRY_COOKIE)?.value === "1";
+/** True only for a second signed-out arrival of *this same* attempt. */
+function hasRetryMarker(req: NextRequest, fingerprint: string): boolean {
+  return req.cookies.get(SIGNIN_RETRY_COOKIE)?.value === fingerprint;
 }
 
 /**
@@ -298,7 +326,8 @@ export async function GET(req: NextRequest) {
     // exactly the loop this guard exists to break. Hand the user a page
     // that says what happened and a link they have to click, so any
     // further attempt is deliberate rather than automatic.
-    if (hasRetryMarker(req)) {
+    const fingerprint = attemptFingerprint(req.nextUrl.searchParams);
+    if (hasRetryMarker(req, fingerprint)) {
       return clearRetryMarker(renderSignInRequired(signInUrl));
     }
 
@@ -311,6 +340,7 @@ export async function GET(req: NextRequest) {
     return setRetryMarker(
       NextResponse.redirect(signInUrl.toString(), { status: 302 }),
       origin,
+      fingerprint,
     );
   }
 

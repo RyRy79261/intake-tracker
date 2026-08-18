@@ -12,6 +12,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { CLAUDE_MODELS } from "@intake/ai-prompts/models";
 import { NoAiKeyError } from "@/lib/ai-key-resolver";
 import type * as InsightJobServiceMod from "@/lib/server/insight-job-service";
 
@@ -195,7 +196,10 @@ describe("POST /api/analytics/insights/deep", () => {
     };
     expect(params.requests).toHaveLength(1);
     const requestParams = params.requests[0]!.params;
-    expect(requestParams.model).toBe("claude-opus-test");
+    // Asserted against the real registry, not the claude-client stub: the
+    // request builder reads @intake/ai-prompts/models directly so the
+    // Capacitor export (which stashes out src/app/api) still type-checks.
+    expect(requestParams.model).toBe(CLAUDE_MODELS.premium);
     // Web search must be present (the whole point of deep mode) AND the
     // structured insight tool must remain available for the final answer.
     const toolNames = requestParams.tools.map((t) => t.name);

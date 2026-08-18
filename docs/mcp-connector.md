@@ -230,10 +230,13 @@ if (!session?.user) {
   // made that trip already. See the login-loop entry under Failure modes.
   const callbackURL = `/api/mcp/oauth/authorize?${request.nextUrl.searchParams}`;
   const signInUrl = `${origin}/auth?callbackURL=${encodeURIComponent(callbackURL)}`;
-  if (request.cookies.get("mcp_signin_retry")?.value === "1") {
-    return renderSignInRequired(signInUrl); // terminal page, no auto-redirect
+  const attempt = attemptFingerprint(request.nextUrl.searchParams);
+  if (request.cookies.get("mcp_signin_retry")?.value === attempt) {
+    // Terminal page, no auto-redirect. The marker is spent on the way out
+    // so the next attempt gets its own trip through sign-in.
+    return clearRetryMarker(renderSignInRequired(signInUrl));
   }
-  return setRetryMarker(NextResponse.redirect(signInUrl));
+  return setRetryMarker(NextResponse.redirect(signInUrl), attempt);
 }
 
 if (!getAllowedEmails().includes(session.user.email.toLowerCase())) {
@@ -345,7 +348,9 @@ Single scope keeps the consent screen simple. Future write tools would add
      hands Neon Auth its own URL when the destination is an API route and
      forwards afterwards (`signInReturnTarget`, `src/lib/auth-callback.ts`).
   2. The bounce sets a short-lived HttpOnly `mcp_signin_retry` cookie
-     scoped to this route. Arriving here signed out with that marker set
+     scoped to this route, holding a fingerprint of the attempt
+     (`client_id` + `state`, hashed) rather than a bare flag — a marker
+     left by an abandoned attempt must not dead-end a different one. Arriving here signed out with that marker set
      renders a terminal "sign in to continue" page instead of redirecting
      again, so a sign-in that leaves no cookie (blocked cookies in an
      in-app browser, say) dead-ends visibly rather than ping-ponging the
