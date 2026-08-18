@@ -34,6 +34,18 @@ describe("safeCallbackUrl", () => {
     expect(safeCallbackUrl("//evil.example")).toBe("/");
     expect(safeCallbackUrl("javascript:alert(1)")).toBe("/");
   });
+
+  it("rejects backslash forms browsers normalise to a scheme-relative URL", () => {
+    // A prefix check passes these — the browser then navigates off-origin.
+    expect(safeCallbackUrl("/\\evil.example")).toBe("/");
+    expect(safeCallbackUrl("\\\\evil.example")).toBe("/");
+    expect(safeCallbackUrl("/\\/evil.example")).toBe("/");
+    expect(safeCallbackUrl("https:/\\evil.example")).toBe("/");
+  });
+
+  it("keeps a relative path that merely contains a backslash in its query", () => {
+    expect(safeCallbackUrl("/history?q=a%5Cb")).toBe("/history?q=a%5Cb");
+  });
 });
 
 describe("isApiRoute", () => {

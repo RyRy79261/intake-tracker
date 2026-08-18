@@ -72,7 +72,7 @@ screen showing the requested scopes → done.
      │                            ▼                               │   │
      │                  /auth?callbackURL=                        │   │
      │                    /api/mcp/oauth/authorize?...            │   │
-     │                    &mcp_signin=retry                       │   │
+     │                  + Set-Cookie: mcp_signin_retry (HttpOnly) │   │
      │                            │                               │   │
      │                            ├─→ Google → Neon Auth ─┐       │   │
      │                            │      returns to /auth ┘       │   │
@@ -225,10 +225,15 @@ response_type=code, PKCE present, scope ⊆ supported set). Then:
 ```ts
 const session = await auth.getSession({ request });
 if (!session?.user) {
+  // At most one automatic trip through sign-in: the marker cookie is
+  // server-issued (HttpOnly) so a crafted request can't claim to have
+  // made that trip already. See the login-loop entry under Failure modes.
   const callbackURL = `/api/mcp/oauth/authorize?${request.nextUrl.searchParams}`;
-  return NextResponse.redirect(
-    `${origin}/api/auth/sign-in/social?provider=google&callbackURL=${encodeURIComponent(callbackURL)}`,
-  );
+  const signInUrl = `${origin}/auth?callbackURL=${encodeURIComponent(callbackURL)}`;
+  if (request.cookies.get("mcp_signin_retry")?.value === "1") {
+    return renderSignInRequired(signInUrl); // terminal page, no auto-redirect
+  }
+  return setRetryMarker(NextResponse.redirect(signInUrl));
 }
 
 if (!getAllowedEmails().includes(session.user.email.toLowerCase())) {
@@ -249,8 +254,9 @@ return NextResponse.redirect(
 
 A minimal consent screen (one HTML render) is shown before the redirect so
 the user sees "claude.ai is requesting read access to your intake-tracker
-data" with an Approve / Deny button. Skip-with-cookie if the user already
-approved this `client_id` in the last 30 days.
+data" with an Approve / Deny button. Consent is rendered on every attempt —
+skip-with-cookie auto-approval was considered and deliberately not built,
+since showing the screen once per code is the more transparent behaviour.
 
 #### `oauth/token/route.ts`
 
@@ -338,11 +344,16 @@ Single scope keeps the consent screen simple. Future write tools would add
      cookie — neither runs on `/api/mcp/oauth/authorize`. So SignInForm
      hands Neon Auth its own URL when the destination is an API route and
      forwards afterwards (`signInReturnTarget`, `src/lib/auth-callback.ts`).
-  2. The bounce carries `mcp_signin=retry`. Arriving here signed out with
-     that marker set renders a terminal "sign in to continue" page instead
-     of redirecting again, so a sign-in that leaves no cookie (blocked
-     cookies in an in-app browser, say) dead-ends visibly rather than
-     ping-ponging the user through the login form forever.
+  2. The bounce sets a short-lived HttpOnly `mcp_signin_retry` cookie
+     scoped to this route. Arriving here signed out with that marker set
+     renders a terminal "sign in to continue" page instead of redirecting
+     again, so a sign-in that leaves no cookie (blocked cookies in an
+     in-app browser, say) dead-ends visibly rather than ping-ponging the
+     user through the login form forever. The marker is server-issued, not
+     a query param: everything in the query string is caller-supplied, and
+     a caller must not be able to assert its way past its own sign-in trip.
+     It is cleared both on the terminal page and on a successful consent
+     render, so the next attempt starts clean.
 - **claude.ai retries DCR.** Each retry creates a new `client_id` row.
   Acceptable (small table, can be GC'd by a daily cron after 30 days of
   inactivity).

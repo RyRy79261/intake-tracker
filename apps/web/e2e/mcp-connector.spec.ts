@@ -300,9 +300,15 @@ test.describe("MCP connector — signed out", () => {
     await expect(page).toHaveURL(/\/auth\?/);
     const callbackURL = new URL(page.url()).searchParams.get("callbackURL");
     expect(callbackURL).toContain("/api/mcp/oauth/authorize");
-    expect(callbackURL).toContain("mcp_signin=retry");
     expect(callbackURL).toContain(`client_id=${client.client_id}`);
     await expect(page.getByRole("button", { name: /sign in/i })).toBeVisible();
+
+    // The bounce marks the browser with a server-issued HttpOnly cookie —
+    // not a query param the caller could have supplied itself.
+    const marker = (await page.context().cookies()).find(
+      (c) => c.name === "mcp_signin_retry",
+    );
+    expect(marker?.httpOnly).toBe(true);
 
     // Second arrival still signed out (what the loop looked like): the
     // request must terminate here, not bounce back to /auth again.

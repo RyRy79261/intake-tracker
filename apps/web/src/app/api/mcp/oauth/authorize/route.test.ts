@@ -59,11 +59,23 @@ function authorizeParams(extra: Record<string, string> = {}) {
   });
 }
 
-function makeRequest(params: URLSearchParams) {
+function makeRequest(params: URLSearchParams, { retried = false } = {}) {
+  const headers: Record<string, string> = {
+    host: "app.test",
+    "x-forwarded-proto": "https",
+  };
+  if (retried) headers.cookie = "mcp_signin_retry=1";
   return new NextRequest(
     `https://app.test/api/mcp/oauth/authorize?${params.toString()}`,
-    { headers: { host: "app.test", "x-forwarded-proto": "https" } },
+    { headers },
   );
+}
+
+/** The Set-Cookie value for the retry marker, if the response sets one. */
+function retryCookie(res: Response): string | undefined {
+  return res.headers
+    .getSetCookie()
+    .find((c) => c.startsWith("mcp_signin_retry="));
 }
 
 describe("authorize GET — signed out", () => {
@@ -84,14 +96,38 @@ describe("authorize GET — signed out", () => {
     expect(returned.get("state")).toBe("state-xyz");
     expect(returned.get("redirect_uri")).toBe(REDIRECT_URI);
     expect(returned.get("code_challenge")).toBe("a".repeat(43));
-    // ...alongside the marker that makes a second arrival recognisable.
-    expect(returned.get("mcp_signin")).toBe("retry");
   });
 
-  it("does NOT redirect again when the sign-in round trip already happened", async () => {
+  it("marks the browser with an HttpOnly cookie rather than a query param", async () => {
+    const res = await GET(makeRequest(authorizeParams()));
+
+    // The marker must not be forgeable by the caller: it never appears in
+    // the callback URL, and script can't read or set it.
+    const location = new URL(res.headers.get("location")!);
+    expect(location.searchParams.get("callbackURL")).not.toContain(
+      "mcp_signin",
+    );
+
+    const cookie = retryCookie(res)!;
+    expect(cookie).toContain("mcp_signin_retry=1");
+    expect(cookie).toContain("HttpOnly");
+    expect(cookie).toContain("Path=/api/mcp/oauth/authorize");
+    expect(cookie).toMatch(/Max-Age=\d+/);
+  });
+
+  it("still bounces when the caller fakes the retry marker in the query string", async () => {
+    // A crafted first request must not be able to skip its own trip
+    // through sign-in by asserting one already happened.
     const res = await GET(
       makeRequest(authorizeParams({ mcp_signin: "retry" })),
     );
+
+    expect(res.status).toBe(302);
+    expect(new URL(res.headers.get("location")!).pathname).toBe("/auth");
+  });
+
+  it("does NOT redirect again when the sign-in round trip already happened", async () => {
+    const res = await GET(makeRequest(authorizeParams(), { retried: true }));
 
     expect(res.status).toBe(401);
     expect(res.headers.get("location")).toBeNull();
@@ -100,6 +136,8 @@ describe("authorize GET — signed out", () => {
     // The way onward is a link the user clicks, not an automatic bounce.
     expect(body).not.toContain("http-equiv=\"refresh\"");
     expect(body).toContain("/auth?callbackURL=");
+    // Marker spent — the next attempt gets its own automatic bounce.
+    expect(retryCookie(res)).toContain("Max-Age=0");
   });
 });
 
@@ -117,16 +155,15 @@ describe("authorize GET — signed in", () => {
     expect(body).toContain("user@example.test");
   });
 
-  it("still renders consent when the retry marker is present", async () => {
+  it("renders consent and retires the marker after a successful sign-in", async () => {
     getSessionMock.mockResolvedValue({
       data: { user: { id: "user-1", email: "user@example.test" } },
     });
 
-    const res = await GET(
-      makeRequest(authorizeParams({ mcp_signin: "retry" })),
-    );
+    const res = await GET(makeRequest(authorizeParams(), { retried: true }));
 
     expect(res.status).toBe(200);
     expect(await res.text()).toContain("Connect to intake-tracker");
+    expect(retryCookie(res)).toContain("Max-Age=0");
   });
 });

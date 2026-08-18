@@ -15,16 +15,32 @@
 export const NEON_AUTH_VERIFIER_PARAM = "neon_auth_session_verifier";
 
 /**
+ * Origin the candidate is resolved against. Never navigated to — it exists
+ * only so a value that escapes to *any* other origin is detectable as one.
+ */
+const RESOLUTION_ORIGIN = "https://callback.invalid";
+
+/**
  * Only accept a same-origin relative path as the post-sign-in target.
- * Rejects absolute URLs (cross-origin redirect attack), protocol-relative
- * URLs (`//evil.example`), and anything that doesn't start with a single
- * `/`. Returns the canonical fallback `/` for anything invalid.
+ * Anything that resolves to another origin — an absolute URL, a
+ * protocol-relative `//evil.example`, or a backslash form like
+ * `/\evil.example` (browsers normalise the backslash to a slash, so
+ * prefix checks alone let it through) — collapses to the canonical
+ * fallback `/`.
+ *
+ * Resolution, not string matching, is what makes that exhaustive: the
+ * value is parsed the way the browser will parse it, and kept only when
+ * the parse lands back on our own origin.
  */
 export function safeCallbackUrl(raw: string | null | undefined): string {
   if (!raw) return "/";
-  if (!raw.startsWith("/")) return "/";
-  if (raw.startsWith("//")) return "/";
-  return raw;
+  try {
+    const url = new URL(raw, RESOLUTION_ORIGIN);
+    if (url.origin !== RESOLUTION_ORIGIN) return "/";
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return "/";
+  }
 }
 
 /** True when the target is an API route rather than a rendered page. */
