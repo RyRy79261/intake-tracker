@@ -344,6 +344,28 @@ describe("GET /api/analytics/insights/jobs/:id", () => {
     expect(batchesCancelCalls).toEqual(["msgbatch_continuation_1"]);
   });
 
+  it("keeps a continuation the job already references when the swap's ack was lost", async () => {
+    mockJob = pendingJob("job-paused-5");
+    batchProcessingStatus = "ended";
+    batchResults = [pausedResult("insight-job-paused-5")];
+    // The update committed but its response never came back, so the route
+    // sees a failed swap over a row that already points at our batch.
+    attachReturn = false;
+    mockJobAfterCas = {
+      ...pendingJob("job-paused-5"),
+      batchId: "msgbatch_continuation_1",
+    };
+
+    const { GET } = await import("@/app/api/analytics/insights/jobs/[id]/route");
+    const res = await GET(makeRequest("job-paused-5"));
+
+    // Cancelling here would kill the batch the job is now polling, and the
+    // next poll would fail the job on a canceled batch.
+    expect(batchesCancelCalls).toEqual([]);
+    expect(((await res.json()) as { status: string }).status).toBe("pending");
+    expect(failCalls).toHaveLength(0);
+  });
+
   it("returns 404 when the job is not found", async () => {
     const { GET } = await import("@/app/api/analytics/insights/jobs/[id]/route");
     const res = await GET(makeRequest("missing"));

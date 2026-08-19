@@ -287,9 +287,33 @@ export const GET = withAuth(async ({ request, auth }) => {
       );
     }
     if (!attached) {
-      await client.messages.batches
-        .cancel(continuation.id)
-        .catch(() => undefined);
+      // The swap said no — but "no" has two causes, and only one of them
+      // means this batch is orphaned. A concurrent poll may genuinely have
+      // moved the job on (cancel ours), or OUR OWN update may have
+      // committed with its acknowledgement lost in transit (cancelling
+      // would then kill the batch the job now points at, and the next poll
+      // would fail the job on a canceled batch). Re-read before cancelling
+      // and only cancel a batch the job demonstrably does not reference.
+      let referenced: boolean;
+      try {
+        const current = await getInsightJob(job.id, auth.userId!);
+        referenced = current?.batchId === continuation.id;
+      } catch (readErr) {
+        // Can't tell. Leave the batch alone: an unpolled batch costs money
+        // once, whereas cancelling a referenced one fails the job outright.
+        referenced = true;
+        console.error(
+          "[analytics/insights/jobs] post-attach re-read failed:",
+          readErr instanceof Error
+            ? `${readErr.name}: ${readErr.message}`
+            : readErr,
+        );
+      }
+      if (!referenced) {
+        await client.messages.batches
+          .cancel(continuation.id)
+          .catch(() => undefined);
+      }
     }
     return NextResponse.json({
       status: "pending" as const,
