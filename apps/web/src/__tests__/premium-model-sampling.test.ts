@@ -1,11 +1,11 @@
 /**
  * Sampling-parameter guard for `CLAUDE_MODELS.premium` requests.
  *
- * Claude Opus 4.7 and later removed `temperature` / `top_p` / `top_k`:
- * setting any of them to a non-default value returns a **400**, so the
- * request fails outright instead of being nudged toward determinism. Note
- * `temperature: 0` is a non-default value — "deterministic" is exactly the
- * setting that breaks.
+ * Claude Opus 4.7 and later — which includes the Opus 5 the premium tier
+ * now pins — removed `temperature` / `top_p` / `top_k`: setting any of them
+ * to a non-default value returns a **400**, so the request fails outright
+ * instead of being nudged toward determinism. Note `temperature: 0` is a
+ * non-default value — "deterministic" is exactly the setting that breaks.
  *
  * This shipped as a silent, total outage of every Opus-backed feature.
  * `/api/analytics/insights/deep` sent `temperature: 0.3`, so the batch
@@ -30,7 +30,7 @@ import ts from "typescript";
 
 const SRC = path.resolve(process.cwd(), "src");
 
-/** Parameters Opus 4.7+ rejects outright. */
+/** Parameters the premium model rejects outright. */
 const REJECTED_PARAMS = ["temperature", "top_p", "top_k"];
 
 function sourceFiles(dir: string): string[] {

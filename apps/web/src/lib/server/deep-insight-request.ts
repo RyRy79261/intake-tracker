@@ -119,10 +119,10 @@ export function buildDeepBatchParams(
   return {
     model: CLAUDE_MODELS.premium,
     max_tokens: DEEP_MAX_TOKENS,
-    // No `temperature`: Claude Opus 4.7 and later reject a non-default
-    // sampling parameter with a 400. This request carried temperature 0.3,
-    // so the batch entry errored before the model ever ran — which is what
-    // made deep analysis fail every single time.
+    // No `temperature`: the premium model rejects a non-default sampling
+    // parameter with a 400. This request carried temperature 0.3, so the
+    // batch entry errored before the model ever ran — which is what made
+    // deep analysis fail every single time.
     system: DEEP_SYSTEM_PROMPT,
     tools: [
       { ...WEB_SEARCH_TOOL, max_uses: DEEP_WEB_SEARCH_MAX_USES },
