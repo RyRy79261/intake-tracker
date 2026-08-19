@@ -230,13 +230,17 @@ if (!session?.user) {
   // made that trip already. See the login-loop entry under Failure modes.
   const callbackURL = `/api/mcp/oauth/authorize?${request.nextUrl.searchParams}`;
   const signInUrl = `${origin}/auth?callbackURL=${encodeURIComponent(callbackURL)}`;
-  const attempt = attemptFingerprint(request.nextUrl.searchParams);
+  const attempt = attemptFingerprint(params.client_id, params.state);
   if (request.cookies.get("mcp_signin_retry")?.value === attempt) {
     // Terminal page, no auto-redirect. The marker is spent on the way out
     // so the next attempt gets its own trip through sign-in.
     return clearRetryMarker(renderSignInRequired(signInUrl));
   }
-  return setRetryMarker(NextResponse.redirect(signInUrl), attempt);
+  return setRetryMarker(
+    NextResponse.redirect(signInUrl, { status: 302 }),
+    origin,
+    attempt,
+  );
 }
 
 if (!getAllowedEmails().includes(session.user.email.toLowerCase())) {

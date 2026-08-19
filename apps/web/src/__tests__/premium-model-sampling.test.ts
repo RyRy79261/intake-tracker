@@ -76,7 +76,15 @@ function propertyName(prop: ts.ObjectLiteralElementLike): string | null {
   return null;
 }
 
-/** Every object literal in the file whose `model` is the premium model. */
+/**
+ * Every object literal in the file that is an API *request* on the premium
+ * model.
+ *
+ * `model: CLAUDE_MODELS.premium` alone is not enough: `recordUsage({...})`
+ * carries the same property for attribution, and flagging those would put
+ * the scan on usage bookkeeping rather than on the request it's meant to
+ * guard. A request is what also carries `max_tokens` or `messages`.
+ */
 function premiumRequestLiterals(
   source: ts.SourceFile,
 ): ts.ObjectLiteralExpression[] {
@@ -84,7 +92,11 @@ function premiumRequestLiterals(
   const visit = (node: ts.Node): void => {
     if (
       ts.isObjectLiteralExpression(node) &&
-      node.properties.some(namesPremiumModel)
+      node.properties.some(namesPremiumModel) &&
+      node.properties.some((prop) => {
+        const name = propertyName(prop);
+        return name === "max_tokens" || name === "messages";
+      })
     ) {
       found.push(node);
     }
@@ -121,6 +133,16 @@ describe("premium-model requests omit removed sampling parameters", () => {
     for (const { file, source } of parsed) {
       for (const literal of premiumRequestLiterals(source)) {
         for (const prop of literal.properties) {
+          // A spread carries no property name, so a name-based check skips
+          // it — and `...{ temperature: 0 }` would sail straight past the
+          // one thing this guard exists to catch. Fail closed: a spread in
+          // a premium request has to be inlined to stay checkable.
+          if (ts.isSpreadAssignment(prop)) {
+            violations.push(
+              `${path.relative(SRC, file)} spreads into a premium-model request, which this scan cannot verify — inline the parameters`,
+            );
+            continue;
+          }
           const name = propertyName(prop);
           if (name && REJECTED_PARAMS.includes(name)) {
             violations.push(

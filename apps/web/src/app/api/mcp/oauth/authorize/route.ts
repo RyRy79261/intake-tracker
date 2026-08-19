@@ -215,13 +215,16 @@ function buildSignInUrl(req: NextRequest, origin: string): URL {
 /**
  * Identifies one authorization attempt. `client_id` + `state` is what
  * distinguishes concurrent attempts from each other; hashed so the cookie
- * carries no readable request detail. Not a security boundary — the cookie
+ * carries no readable request detail.
+ *
+ * Takes the values `validateRequest` parsed, never a second read of the URL:
+ * on a duplicated query key `Object.fromEntries` keeps the LAST value while
+ * `searchParams.get()` returns the FIRST, so reading the URL again could
+ * fingerprint a different attempt than the one being authorized. Not a security boundary — the cookie
  * is HttpOnly and same-site, and the worst a forged one could do is show
  * its own sender the "sign in to continue" page.
  */
-function attemptFingerprint(params: URLSearchParams): string {
-  const clientId = params.get("client_id") ?? "";
-  const state = params.get("state") ?? "";
+function attemptFingerprint(clientId: string, state: string): string {
   return createHash("sha256")
     .update(`${clientId}\u0000${state}`)
     .digest("base64url")
@@ -326,7 +329,7 @@ export async function GET(req: NextRequest) {
     // exactly the loop this guard exists to break. Hand the user a page
     // that says what happened and a link they have to click, so any
     // further attempt is deliberate rather than automatic.
-    const fingerprint = attemptFingerprint(req.nextUrl.searchParams);
+    const fingerprint = attemptFingerprint(params.client_id, params.state);
     if (hasRetryMarker(req, fingerprint)) {
       return clearRetryMarker(renderSignInRequired(signInUrl));
     }

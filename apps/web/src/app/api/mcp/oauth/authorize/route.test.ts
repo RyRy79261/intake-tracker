@@ -154,6 +154,24 @@ describe("authorize GET — signed out", () => {
     expect(new URL(res.headers.get("location")!).pathname).toBe("/auth");
   });
 
+  it("fingerprints the attempt validateRequest parsed, not the first duplicate", async () => {
+    // Zod reads the params via Object.fromEntries (last value wins); a second
+    // read through searchParams.get() would take the FIRST. With a duplicated
+    // key those disagree, and the marker would describe a different attempt
+    // than the one being authorized.
+    const params = authorizeParams({ state: "winning-state" });
+    params.append("state", "shadow-state");
+
+    const res = await GET(makeRequest(params));
+
+    const cookie = retryCookie(res)!;
+    const lastWins = new URLSearchParams({
+      client_id: CLIENT.clientId,
+      state: "shadow-state",
+    });
+    expect(cookie).toContain(`mcp_signin_retry=${fingerprintOf(lastWins)}`);
+  });
+
   it("does NOT redirect again when the sign-in round trip already happened", async () => {
     const res = await GET(makeRequest(authorizeParams(), { retried: true }));
 
