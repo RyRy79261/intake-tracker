@@ -154,10 +154,15 @@ describe("PrescriptionCard", () => {
     });
 
     await screen.findByText("Furosemide");
-    expect(screen.getByText("As needed")).toBeInTheDocument();
+    // The name renders straight from the prop, but the "As needed" label and
+    // the PRN button wait on the async phases hook — the same settling the
+    // scheduled test above waits out. Assert on both with find*, not get*.
+    expect(await screen.findByText("As needed")).toBeInTheDocument();
 
     await user.click(
-      screen.getByRole("button", { name: /log an as-needed dose of furosemide/i }),
+      await screen.findByRole("button", {
+        name: /log an as-needed dose of furosemide/i,
+      }),
     );
 
     // The retroactive time picker opens; confirm logs the dose.
