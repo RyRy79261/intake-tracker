@@ -15,7 +15,7 @@
  * (GET /api/analytics/insights/jobs/:id) is the only place that mutates
  * a row's status after creation.
  */
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@intake/db/client";
 import {
   insightJobs,
@@ -114,15 +114,32 @@ export async function createInsightJob(
  * Attach the Anthropic batch_id to a previously-reserved pending job.
  * Returns true on success, false if the job is no longer pending (e.g.
  * already failed by a cleanup path).
+ *
+ * `expectedBatchId` makes this a compare-and-swap, and the polling endpoint
+ * depends on it. Two concurrent polls can read the same paused batch and
+ * each submit a continuation; without the guard both writes succeed, the
+ * later one overwrites the earlier batch_id, and the first continuation is
+ * paid for but never polled. With it, only the poll whose read is still
+ * current wins — the loser sees false and cancels its orphan. Pass
+ * `undefined` for the initial attach, where the reserved row still has
+ * batch_id NULL.
  */
 export async function attachBatchToJob(
   jobId: string,
   batchId: string,
+  expectedBatchId?: string,
 ): Promise<boolean> {
+  const predicates = [
+    eq(insightJobs.id, jobId),
+    eq(insightJobs.status, "pending"),
+    expectedBatchId === undefined
+      ? isNull(insightJobs.batchId)
+      : eq(insightJobs.batchId, expectedBatchId),
+  ];
   const updated = await db
     .update(insightJobs)
     .set({ batchId })
-    .where(and(eq(insightJobs.id, jobId), eq(insightJobs.status, "pending")))
+    .where(and(...predicates))
     .returning({ id: insightJobs.id });
   return updated.length > 0;
 }
