@@ -28,6 +28,23 @@ updates:
     groups:
       # Group routine bumps so reviewers see one PR per ecosystem area
       # rather than ten. Major upgrades stay individual for blast radius.
+      #
+      # `react` and `react-dom` MUST move as one unit: react-dom's development
+      # build throws "Incompatible React versions" at module load unless the two
+      # versions match exactly, which wipes out every vitest suite (the global
+      # setupFiles imports @testing-library/react). Left ungrouped, Dependabot
+      # opens one PR per package and NEITHER can ever go green — see PRs #314
+      # and #315. Dependabot assigns a dependency to the FIRST matching group in
+      # file order, so this block must stay above `types:`.
+      react:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react"
+          - "@types/react-dom"
+        update-types:
+          - "minor"
+          - "patch"
       radix-ui:
         patterns:
           - "@radix-ui/*"
@@ -52,6 +69,10 @@ updates:
       types:
         patterns:
           - "@types/*"
+        exclude-patterns:
+          # Belt-and-braces: the React typings belong to the `react` group above.
+          - "@types/react"
+          - "@types/react-dom"
       minor-and-patch:
         update-types:
           - "minor"
