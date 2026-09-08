@@ -363,5 +363,55 @@ describe("local-notifications", () => {
       const scheduled = mockSchedule.mock.calls[0]![0].notifications;
       expect(scheduled[0].schedule.allowWhileIdle).toBe(true);
     });
+
+    // @capacitor/local-notifications 8.3.0 added `isExactNotification`,
+    // defaulting to TRUE. On API 31+ that makes schedule() open the system
+    // "Alarms & reminders" Activity whenever SCHEDULE_EXACT_ALARM is ungranted
+    // — and apps/native targets SDK 36, where it is not granted by default.
+    // initLocalNotifications() runs on every cold start (providers.tsx), so
+    // taking the default would bounce the user out to system settings on every
+    // launch. Every scheduled notification must opt out explicitly.
+    it("opts every notification out of exact alarms, so a cold start never opens system settings", async () => {
+      seedDb(
+        [
+          {
+            id: "s1",
+            phaseId: "p1",
+            scheduleTimeUTC: 480,
+            daysOfWeek: [1, 3, 5],
+            enabled: true,
+            deletedAt: null,
+            dosage: 10,
+          },
+        ],
+        [
+          {
+            id: "p1",
+            prescriptionId: "rx1",
+            status: "active",
+            deletedAt: null,
+          },
+        ],
+        [
+          {
+            id: "rx1",
+            genericName: "Test",
+            isActive: true,
+            deletedAt: null,
+          },
+        ]
+      );
+
+      const { syncMedicationNotifications } = await import(
+        "@/lib/local-notifications"
+      );
+      await syncMedicationNotifications();
+
+      const scheduled = mockSchedule.mock.calls[0]![0].notifications;
+      expect(scheduled).toHaveLength(3);
+      for (const n of scheduled) {
+        expect(n.isExactNotification).toBe(false);
+      }
+    });
   });
 });
