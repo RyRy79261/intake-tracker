@@ -265,3 +265,55 @@ test.describe("MCP connector handshake", () => {
     expect(wwwAuth ?? "").toMatch(/Bearer/);
   });
 });
+
+/**
+ * The signed-out entry point — the path a first-time connector user
+ * actually takes, and the one that used to loop.
+ *
+ * Runs in a fresh context (no `storageState`) so the app sees a browser
+ * with no Neon Auth session, exactly like clicking "Connect" in claude.ai
+ * before ever signing in to the web app.
+ */
+test.describe("MCP connector — signed out", () => {
+  test.skip(!RUN, "Set RUN_MCP_E2E=1 to run the MCP connector E2E spec");
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  test("bounces to sign-in once, then dead-ends instead of looping", async ({
+    page,
+    request,
+    baseURL,
+  }) => {
+    const client = await registerClient(request, baseURL ?? "");
+    const params = new URLSearchParams({
+      response_type: "code",
+      client_id: client.client_id,
+      redirect_uri: client.redirect_uris[0]!,
+      code_challenge: await pkceChallenge(PKCE_VERIFIER),
+      code_challenge_method: "S256",
+      state: `s-signed-out`,
+      scope: "intake-tracker:read",
+    });
+
+    // First arrival: land on the sign-in page with the whole request
+    // preserved as callbackURL.
+    await page.goto(`/api/mcp/oauth/authorize?${params.toString()}`);
+    await expect(page).toHaveURL(/\/auth\?/);
+    const callbackURL = new URL(page.url()).searchParams.get("callbackURL");
+    expect(callbackURL).toContain("/api/mcp/oauth/authorize");
+    expect(callbackURL).toContain(`client_id=${client.client_id}`);
+    await expect(page.getByRole("button", { name: /sign in/i })).toBeVisible();
+
+    // The bounce marks the browser with a server-issued HttpOnly cookie —
+    // not a query param the caller could have supplied itself.
+    const marker = (await page.context().cookies()).find(
+      (c) => c.name === "mcp_signin_retry",
+    );
+    expect(marker?.httpOnly).toBe(true);
+
+    // Second arrival still signed out (what the loop looked like): the
+    // request must terminate here, not bounce back to /auth again.
+    await page.goto(`/api/mcp/oauth/authorize?${callbackURL!.split("?")[1]}`);
+    await expect(page).toHaveURL(/\/api\/mcp\/oauth\/authorize/);
+    await expect(page.getByText(/Sign in to continue/i)).toBeVisible();
+  });
+});

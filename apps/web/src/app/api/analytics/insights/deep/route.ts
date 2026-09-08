@@ -1,18 +1,13 @@
 import { NextResponse } from "next/server";
 import { withAuth } from "@/lib/auth-middleware";
-import {
-  AnalyticsInsightsRequestSchema,
-  INSIGHT_TOOL,
-  DEEP_SYSTEM_PROMPT,
-  buildInsightsPrompt,
-} from "@intake/ai-prompts/analytics-insights";
+import { AnalyticsInsightsRequestSchema } from "@intake/ai-prompts/analytics-insights";
 import { parseJsonBody, zodErrorResponse } from "@/app/api/_shared/validation";
 import { createRateLimiter, getClientIp } from "@/app/api/_shared/rate-limit";
+import { getClaudeClientForUser } from "@/app/api/ai/_shared/claude-client";
 import {
-  getClaudeClientForUser,
-  CLAUDE_MODELS,
-  WEB_SEARCH_TOOL,
-} from "@/app/api/ai/_shared/claude-client";
+  buildDeepBatchParams,
+  deepCustomId,
+} from "@/lib/server/deep-insight-request";
 import { aiErrorResponse } from "@/app/api/ai/_shared/ai-error-response";
 import {
   createInsightJob,
@@ -43,14 +38,9 @@ export const runtime = "nodejs";
 // index) handles abuse on the long-running side.
 const rateLimiter = createRateLimiter(10);
 
-// More headroom than the fast Sonnet path. Deep research summaries are
-// allowed to be longer and incorporate citations from the searches.
-const DEEP_MAX_TOKENS = 4096;
-
-// Cap web-search invocations so a runaway plan can't fan out. ~12 is enough
-// to cover the 5-7 metric domains the snapshot can contain plus a couple of
-// follow-ups, but not so high it explodes cost.
-const DEEP_WEB_SEARCH_MAX_USES = 12;
+// Model, token budget, tools and message shape live in
+// @/lib/server/deep-insight-request — the polling endpoint resumes a paused
+// turn with the same values, and a resume that disagrees is rejected.
 
 export const POST = withAuth(async ({ request, auth }) => {
   try {
@@ -109,7 +99,9 @@ export const POST = withAuth(async ({ request, auth }) => {
     // The batch carries exactly one request. We use a stable custom_id so
     // the results stream is easy to match later (only one entry anyway, but
     // belts-and-braces if Anthropic ever bundles concurrent submissions).
-    const customId = `insight-${job.id}`;
+    // It also encodes how many times this turn has been resumed — depth 0
+    // here, bumped by the polling endpoint when it continues a paused turn.
+    const customId = deepCustomId(job.id);
 
     let batch;
     try {
@@ -117,26 +109,7 @@ export const POST = withAuth(async ({ request, auth }) => {
         requests: [
           {
             custom_id: customId,
-            params: {
-              model: CLAUDE_MODELS.premium,
-              max_tokens: DEEP_MAX_TOKENS,
-              temperature: 0.3,
-              system: DEEP_SYSTEM_PROMPT,
-              tools: [
-                { ...WEB_SEARCH_TOOL, max_uses: DEEP_WEB_SEARCH_MAX_USES },
-                INSIGHT_TOOL,
-              ],
-              // Auto so the model can run web_search before deciding it has
-              // enough to call analytics_insight. Forcing analytics_insight
-              // would block web_search calls before the final tool.
-              tool_choice: { type: "auto" },
-              messages: [
-                {
-                  role: "user",
-                  content: buildInsightsPrompt(parsed.data),
-                },
-              ],
-            },
+            params: buildDeepBatchParams(parsed.data),
           },
         ],
       });

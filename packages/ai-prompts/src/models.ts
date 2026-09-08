@@ -11,7 +11,14 @@
 export const CLAUDE_MODELS = {
   fast: "claude-haiku-4-5-20251001" as const,
   quality: "claude-sonnet-4-6" as const,
-  premium: "claude-opus-4-8" as const,
+  // Claude Opus 5. Two behaviours differ from the Opus 4.8 this replaced, and
+  // both are load-bearing for the routes below:
+  //   - Thinking is ON by default. Omitting `thinking` runs adaptive thinking
+  //     (on 4.8, omitting it meant no thinking at all), and those tokens count
+  //     against `max_tokens` — which is why the premium routes budget for it.
+  //   - Sampling parameters stay removed: `temperature`/`top_p`/`top_k` return
+  //     a 400, exactly as on 4.8/4.7.
+  premium: "claude-opus-5" as const,
 } as const;
 
 export const WEB_SEARCH_TOOL = {
