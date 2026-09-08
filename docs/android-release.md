@@ -25,6 +25,13 @@ On every published GitHub release the `Android Release` workflow:
    — it stamps `apps/native/android/app/version.properties` from the root
    `package.json` and runs `cap sync` to copy the export (`webDir: ../web/out`)
    into `apps/native/android` and refresh native plugins.
+
+   `cap sync` is what writes `apps/native/android/capacitor.settings.gradle`,
+   which is generated and **not committed** (see `apps/native/android/.gitignore`).
+   It hardcodes pnpm virtual-store paths that embed both the resolved version
+   and the peer hash, so bumping `@capacitor/core` rewrites the `projectDir` of
+   every plugin — including ones that were not bumped. Any Gradle command run
+   before `sync.mjs` fails with an explicit message telling you to generate it.
 2. Derives `versionCode`/`versionName` from the **root** `package.json`
    (`major*10000 + minor*100 + patch`).
 3. Decodes the upload keystore from the `ANDROID_KEYSTORE_BASE64` secret.
