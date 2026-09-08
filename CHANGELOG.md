@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.36.2](https://github.com/RyRy79261/intake-tracker/compare/v1.36.1...v1.36.2) (2026-09-08)
+
+
+### Bug Fixes
+
+* unblock deep analysis (Opus 4.7 sampling 400) and the MCP sign-in loop ([#333](https://github.com/RyRy79261/intake-tracker/issues/333)) ([30a7a8e](https://github.com/RyRy79261/intake-tracker/commit/30a7a8e7be9db69b1b4dc8fb66fda8045b10fae1))
+
 ## [1.36.1](https://github.com/RyRy79261/intake-tracker/compare/v1.36.0...v1.36.1) (2026-08-10)
 
 
