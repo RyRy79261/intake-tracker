@@ -12,12 +12,19 @@ import {
   CLAUDE_MODELS,
 } from "@/app/api/ai/_shared/claude-client";
 import {
+  buildDeepBatchParams,
+  continuationDepth,
+  deepCustomId,
+  DEEP_CONTINUATION_LIMIT,
+} from "@/lib/server/deep-insight-request";
+import {
   recordUsage,
   tokensFromAnthropic,
 } from "@/app/api/ai/_shared/usage-tracker";
 import { aiErrorResponse } from "@/app/api/ai/_shared/ai-error-response";
 import {
   getInsightJob,
+  attachBatchToJob,
   completeInsightJob,
   failInsightJob,
   expireInsightJob,
@@ -45,6 +52,15 @@ import {
  * — all from this single GET. That keeps the server stateless between polls
  * (no background worker, no cron) while still making the result durable as
  * soon as it's available.
+ *
+ * One batch does not always finish the turn. Server tools run in an
+ * agentic loop, and when that loop hits its per-turn iteration limit the
+ * message comes back with `stop_reason: "pause_turn"` — no answer yet, and
+ * no `analytics_insight` call. That is a turn to resume, not a failure:
+ * this route submits a continuation batch carrying the paused content and
+ * keeps the job pending. Treating it as a malformed response (as this route
+ * once did) threw away paid research and reported a working feature as
+ * broken.
  */
 
 export const runtime = "nodejs";
@@ -190,7 +206,8 @@ export const GET = withAuth(async ({ request, auth }) => {
 
   const message = r.message;
   // Record usage AFTER the model actually produced output, against the
-  // user's resolved key — same pattern as the fast route.
+  // user's resolved key — same pattern as the fast route. A paused turn
+  // burned tokens too, so this runs before the pause branch below.
   try {
     recordUsage({
       userId: auth.userId!,
@@ -208,6 +225,100 @@ export const GET = withAuth(async ({ request, auth }) => {
       "[analytics/insights/jobs] usage recording failed:",
       usageError,
     );
+  }
+
+  // Paused mid-loop: resume the turn rather than judging its output. The
+  // paused content goes back as-is, with the same tools declared — a resume
+  // that drops a tool the turn is still waiting on is rejected outright.
+  if (message.stop_reason === "pause_turn") {
+    const depth = continuationDepth(individual.custom_id);
+    if (depth >= DEEP_CONTINUATION_LIMIT) {
+      const err =
+        "Deep analysis kept pausing without reaching an answer. Try a narrower date range.";
+      console.error(
+        `[analytics/insights/jobs] pause limit reached job=${job.id} depth=${depth}`,
+      );
+      await failInsightJob(job.id, err);
+      return NextResponse.json({
+        status: "failed",
+        error: err,
+        startedAt: job.createdAt,
+      });
+    }
+
+    const submittedPayload = job.requestPayload as AnalyticsInsightsRequest;
+    let continuation;
+    try {
+      continuation = await client.messages.batches.create({
+        requests: [
+          {
+            custom_id: deepCustomId(job.id, depth + 1),
+            params: buildDeepBatchParams(submittedPayload, [message.content]),
+          },
+        ],
+      });
+    } catch (e) {
+      console.error(
+        "[analytics/insights/jobs] continuation batch submit failed:",
+        e instanceof Error ? `${e.name}: ${e.message}` : e,
+      );
+      const err = "Could not resume the paused deep analysis. Try again.";
+      await failInsightJob(job.id, err);
+      return NextResponse.json({
+        status: "failed",
+        error: err,
+        startedAt: job.createdAt,
+      });
+    }
+
+    // Point the job at the new batch, but only if the row still carries the
+    // batch we just read. Two polls can reach this branch on the same paused
+    // batch; the compare-and-swap lets exactly one win, and the loser cancels
+    // its own continuation instead of leaving a paid batch nothing polls.
+    let attached = false;
+    try {
+      attached = await attachBatchToJob(job.id, continuation.id, job.batchId);
+    } catch (attachErr) {
+      console.error(
+        "[analytics/insights/jobs] continuation attach threw:",
+        attachErr instanceof Error
+          ? `${attachErr.name}: ${attachErr.message}`
+          : attachErr,
+      );
+    }
+    if (!attached) {
+      // The swap said no — but "no" has two causes, and only one of them
+      // means this batch is orphaned. A concurrent poll may genuinely have
+      // moved the job on (cancel ours), or OUR OWN update may have
+      // committed with its acknowledgement lost in transit (cancelling
+      // would then kill the batch the job now points at, and the next poll
+      // would fail the job on a canceled batch). Re-read before cancelling
+      // and only cancel a batch the job demonstrably does not reference.
+      let referenced: boolean;
+      try {
+        const current = await getInsightJob(job.id, auth.userId!);
+        referenced = current?.batchId === continuation.id;
+      } catch (readErr) {
+        // Can't tell. Leave the batch alone: an unpolled batch costs money
+        // once, whereas cancelling a referenced one fails the job outright.
+        referenced = true;
+        console.error(
+          "[analytics/insights/jobs] post-attach re-read failed:",
+          readErr instanceof Error
+            ? `${readErr.name}: ${readErr.message}`
+            : readErr,
+        );
+      }
+      if (!referenced) {
+        await client.messages.batches
+          .cancel(continuation.id)
+          .catch(() => undefined);
+      }
+    }
+    return NextResponse.json({
+      status: "pending" as const,
+      startedAt: job.createdAt,
+    });
   }
 
   const toolBlock = message.content.find(

@@ -70,11 +70,14 @@ screen showing the requested scopes → done.
      │                                                                │
      │                            ┌─── No Neon Auth session? ─────┐   │
      │                            ▼                               │   │
-     │                  /api/auth/sign-in/social?                 │   │
-     │                  provider=google&                          │   │
-     │                  callbackURL=/api/mcp/oauth/authorize?...  │   │
+     │                  /auth?callbackURL=                        │   │
+     │                    /api/mcp/oauth/authorize?...            │   │
+     │                  + Set-Cookie: mcp_signin_retry (HttpOnly) │   │
      │                            │                               │   │
-     │                            └─→ Google → Neon Auth ─────────┘   │
+     │                            ├─→ Google → Neon Auth ─┐       │   │
+     │                            │      returns to /auth ┘       │   │
+     │                            │      (verifier exchange)      │   │
+     │                            └─→ /auth forwards back ────────┘   │
      │                                                                │
      │                  Session OK → check ALLOWED_EMAILS             │
      │                            → mint auth_code (10 min TTL)       │
@@ -222,9 +225,21 @@ response_type=code, PKCE present, scope ⊆ supported set). Then:
 ```ts
 const session = await auth.getSession({ request });
 if (!session?.user) {
+  // At most one automatic trip through sign-in: the marker cookie is
+  // server-issued (HttpOnly) so a crafted request can't claim to have
+  // made that trip already. See the login-loop entry under Failure modes.
   const callbackURL = `/api/mcp/oauth/authorize?${request.nextUrl.searchParams}`;
-  return NextResponse.redirect(
-    `${origin}/api/auth/sign-in/social?provider=google&callbackURL=${encodeURIComponent(callbackURL)}`,
+  const signInUrl = `${origin}/auth?callbackURL=${encodeURIComponent(callbackURL)}`;
+  const attempt = attemptFingerprint(params.client_id, params.state);
+  if (request.cookies.get("mcp_signin_retry")?.value === attempt) {
+    // Terminal page, no auto-redirect. The marker is spent on the way out
+    // so the next attempt gets its own trip through sign-in.
+    return clearRetryMarker(renderSignInRequired(signInUrl));
+  }
+  return setRetryMarker(
+    NextResponse.redirect(signInUrl, { status: 302 }),
+    origin,
+    attempt,
   );
 }
 
@@ -246,8 +261,9 @@ return NextResponse.redirect(
 
 A minimal consent screen (one HTML render) is shown before the redirect so
 the user sees "claude.ai is requesting read access to your intake-tracker
-data" with an Approve / Deny button. Skip-with-cookie if the user already
-approved this `client_id` in the last 30 days.
+data" with an Approve / Deny button. Consent is rendered on every attempt —
+skip-with-cookie auto-approval was considered and deliberately not built,
+since showing the screen once per code is the more transparent behaviour.
 
 #### `oauth/token/route.ts`
 
@@ -326,6 +342,27 @@ Single scope keeps the consent screen simple. Future write tools would add
 - **User signs in to Google with a non-whitelisted email.** Authorize
   endpoint shows `access_denied`. Don't leak whether the email is in
   Neon Auth at all — same error either way.
+- **Signed-out user starts the connector flow.** The authorize endpoint
+  bounces to `/auth`, never to an API route, and never more than once.
+  Two rules make that hold, both of which existed as bugs first:
+  1. The sign-in return trip must land on a **page**. Neon Auth appends
+     `?neon_auth_session_verifier=` to `callbackURL`, and only a page load
+     (client SDK) or `auth.middleware()` can trade that for a session
+     cookie — neither runs on `/api/mcp/oauth/authorize`. So SignInForm
+     hands Neon Auth its own URL when the destination is an API route and
+     forwards afterwards (`signInReturnTarget`, `src/lib/auth-callback.ts`).
+  2. The bounce sets a short-lived HttpOnly `mcp_signin_retry` cookie
+     scoped to this route, holding a fingerprint of the attempt
+     (`client_id` + `state`, hashed) rather than a bare flag — a marker
+     left by an abandoned attempt must not dead-end a different one. Arriving here signed out with that marker set
+     renders a terminal "sign in to continue" page instead of redirecting
+     again, so a sign-in that leaves no cookie (blocked cookies in an
+     in-app browser, say) dead-ends visibly rather than ping-ponging the
+     user through the login form forever. The marker is server-issued, not
+     a query param: everything in the query string is caller-supplied, and
+     a caller must not be able to assert its way past its own sign-in trip.
+     It is cleared both on the terminal page and on a successful consent
+     render, so the next attempt starts clean.
 - **claude.ai retries DCR.** Each retry creates a new `client_id` row.
   Acceptable (small table, can be GC'd by a daily cron after 30 days of
   inactivity).

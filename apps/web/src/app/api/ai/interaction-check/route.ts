@@ -101,8 +101,14 @@ export const POST = withAuth(async ({ request, auth }) => {
     const startedAt = Date.now();
     const response = await client.messages.create({
       model: CLAUDE_MODELS.premium,
-      max_tokens: 2048,
-      temperature: 0,
+      max_tokens: 8192,
+      // Room for adaptive thinking AND the tool call: the premium model
+      // thinks by default and those tokens share this ceiling, so a budget
+      // sized for the answer alone can truncate the call mid-JSON.
+      // No `temperature`/`top_p`/`top_k`: the premium model rejects a
+      // non-default sampling parameter with a 400, so passing one fails the
+      // whole request rather than tightening it. Determinism comes from the
+      // forced tool_choice and the schema, not from a temperature of 0.
       system: SYSTEM_PROMPT,
       tools: [INTERACTION_CHECK_TOOL],
       tool_choice: { type: "tool", name: "interaction_check_result" },

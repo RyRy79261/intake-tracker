@@ -5,11 +5,22 @@
  *   2. Check Neon Auth session.
  *      - If none, redirect to /auth?callbackURL=<this-url>. The /auth
  *        page is the client-side sign-in UI (email/password + Google
- *        button) — it forwards the callbackURL into signIn.social /
- *        signIn.email so the user lands back here after sign-in.
+ *        button); because this URL is an API route it keeps the OAuth
+ *        return trip on itself (so the session verifier can be
+ *        exchanged) and forwards here afterwards — see
+ *        signInReturnTarget() in src/lib/auth-callback.ts.
  *        We can't redirect straight to /api/auth/sign-in/social: that
  *        endpoint is the Neon Auth POST-only JSON API, not a navigable
  *        browser URL.
+ *      - The bounce happens AT MOST ONCE per attempt: it sets a
+ *        short-lived HttpOnly marker cookie, and coming back still
+ *        signed out renders a dead-end "finish signing in" page instead
+ *        of bouncing again. Without that guard a sign-in that fails to
+ *        leave a session cookie ping-pongs the user between /auth and
+ *        this route forever. The marker is server-issued rather than a
+ *        query param precisely because everything in the query string
+ *        is client-supplied: a caller must not be able to skip its own
+ *        trip through sign-in by asserting it already happened.
  *   3. Verify the signed-in email is on the ALLOWED_EMAILS whitelist.
  *   4. Mirror the user into neon_auth.users_sync (FK target for auth_codes).
  *   5. Render a minimal consent page on first GET; on POST (Approve), mint
@@ -20,6 +31,7 @@
  * implemented in this iteration — the user always sees the consent screen
  * once per code, which is more transparent.
  */
+import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/neon-auth";
@@ -46,6 +58,23 @@ const querySchema = z.object({
   state: z.string().min(1).max(512),
   scope: z.string().optional(),
 });
+
+/**
+ * Server-issued marker proving this browser has already been sent through
+ * sign-in *for this authorization attempt*. HttpOnly (no script can forge
+ * it), scoped to this route alone, and short-lived — it only has to
+ * survive one trip to /auth and back. See the "at most once" note in the
+ * file docstring.
+ *
+ * The value is a fingerprint of the attempt, not a flag: a marker left by
+ * an abandoned attempt must not make a *different* attempt's first request
+ * dead-end. Someone who gives up on one connect and starts another — a
+ * second tab, a different client — should still get their own automatic
+ * trip through sign-in.
+ */
+const SIGNIN_RETRY_COOKIE = "mcp_signin_retry";
+const SIGNIN_RETRY_TTL_SECONDS = 600;
+const AUTHORIZE_PATH = "/api/mcp/oauth/authorize";
 
 function renderError(message: string, status = 400) {
   const html = `<!doctype html>
@@ -173,6 +202,108 @@ async function validateRequest(req: NextRequest) {
   };
 }
 
+/** `/auth?callbackURL=<this exact request>`. */
+function buildSignInUrl(req: NextRequest, origin: string): URL {
+  const signInUrl = new URL("/auth", origin);
+  signInUrl.searchParams.set(
+    "callbackURL",
+    `${AUTHORIZE_PATH}?${req.nextUrl.searchParams.toString()}`,
+  );
+  return signInUrl;
+}
+
+/**
+ * Identifies one authorization attempt. `client_id` + `state` is what
+ * distinguishes concurrent attempts from each other; hashed so the cookie
+ * carries no readable request detail.
+ *
+ * Takes the values `validateRequest` parsed, never a second read of the URL:
+ * on a duplicated query key `Object.fromEntries` keeps the LAST value while
+ * `searchParams.get()` returns the FIRST, so reading the URL again could
+ * fingerprint a different attempt than the one being authorized. Not a security boundary — the cookie
+ * is HttpOnly and same-site, and the worst a forged one could do is show
+ * its own sender the "sign in to continue" page.
+ */
+function attemptFingerprint(clientId: string, state: string): string {
+  return createHash("sha256")
+    .update(`${clientId}\u0000${state}`)
+    .digest("base64url")
+    .slice(0, 22);
+}
+
+/** Record that this browser has now been sent through sign-in once. */
+function setRetryMarker(
+  res: NextResponse,
+  origin: string,
+  fingerprint: string,
+): NextResponse {
+  res.cookies.set({
+    name: SIGNIN_RETRY_COOKIE,
+    value: fingerprint,
+    httpOnly: true,
+    sameSite: "lax",
+    secure: origin.startsWith("https://"),
+    path: AUTHORIZE_PATH,
+    maxAge: SIGNIN_RETRY_TTL_SECONDS,
+  });
+  return res;
+}
+
+/**
+ * Spend the marker. Cleared both when the flow succeeds and when it
+ * dead-ends, so the next attempt starts from a clean slate and gets its
+ * own automatic trip through sign-in.
+ */
+function clearRetryMarker(res: NextResponse): NextResponse {
+  res.cookies.set({
+    name: SIGNIN_RETRY_COOKIE,
+    value: "",
+    httpOnly: true,
+    sameSite: "lax",
+    path: AUTHORIZE_PATH,
+    maxAge: 0,
+  });
+  return res;
+}
+
+/** True only for a second signed-out arrival of *this same* attempt. */
+function hasRetryMarker(req: NextRequest, fingerprint: string): boolean {
+  return req.cookies.get(SIGNIN_RETRY_COOKIE)?.value === fingerprint;
+}
+
+/**
+ * Terminal page for "came back from sign-in without a session". Nothing
+ * here navigates on its own — the link is the only way onward, so the
+ * flow cannot loop.
+ */
+function renderSignInRequired(signInUrl: URL): NextResponse {
+  const href = escapeHtml(signInUrl.toString());
+  const html = `<!doctype html>
+<html><head><meta charset="utf-8"><title>Sign in to continue</title>
+<style>
+  body { font-family: ui-sans-serif, system-ui; background: #0f172a; color: #e2e8f0; padding: 2rem; max-width: 32rem; margin: 0 auto; }
+  .card { background: #1e293b; border-radius: 0.75rem; padding: 1.5rem; }
+  h1 { font-size: 1.25rem; margin: 0 0 0.5rem; }
+  p { color: #cbd5e1; }
+  a.button { display: inline-block; margin-top: 1rem; background: #22c55e; color: #052e16; font-weight: 600; padding: 0.5rem 1rem; border-radius: 0.5rem; text-decoration: none; }
+</style></head>
+<body>
+  <div class="card">
+    <h1>Sign in to continue</h1>
+    <p>You were sent to sign in, but came back without an active session, so
+    the connection can&#39;t be authorized yet.</p>
+    <p>This usually means the sign-in didn&#39;t finish, or the browser is
+    blocking cookies for this site (common in an in-app browser — try opening
+    this page in your normal browser instead).</p>
+    <a class="button" href="${href}">Sign in and try again</a>
+  </div>
+</body></html>`;
+  return new NextResponse(html, {
+    status: 401,
+    headers: { "content-type": "text/html; charset=utf-8" },
+  });
+}
+
 async function ensureUserInSync(userId: string, email: string | null) {
   await db
     .insert(usersSync)
@@ -190,17 +321,30 @@ export async function GET(req: NextRequest) {
 
   const user = await getSignedInUser();
   if (!user) {
+    const origin = getPublicOrigin(req);
+    const signInUrl = buildSignInUrl(req, origin);
+
+    // Already been sent to sign in once and still no session — stop.
+    // Redirecting again would just restart the same round trip, which is
+    // exactly the loop this guard exists to break. Hand the user a page
+    // that says what happened and a link they have to click, so any
+    // further attempt is deliberate rather than automatic.
+    const fingerprint = attemptFingerprint(params.client_id, params.state);
+    if (hasRetryMarker(req, fingerprint)) {
+      return clearRetryMarker(renderSignInRequired(signInUrl));
+    }
+
     // Bounce through the /auth page (client UI) rather than the
     // /api/auth/sign-in/social JSON endpoint, which only accepts POST.
-    // The /auth page reads `callbackURL` from its query string and
-    // passes it into signIn.social({...}), so the user lands back here
-    // after Google completes. callbackURL is a same-origin relative
-    // path (sign-in-form.tsx rejects anything else).
-    const origin = getPublicOrigin(req);
-    const callbackPath = `/api/mcp/oauth/authorize?${req.nextUrl.searchParams.toString()}`;
-    const signInUrl = new URL("/auth", origin);
-    signInUrl.searchParams.set("callbackURL", callbackPath);
-    return NextResponse.redirect(signInUrl.toString(), { status: 302 });
+    // The /auth page reads `callbackURL` from its query string and hands
+    // it to signIn.social/.email, keeping the OAuth return trip on a page
+    // (see signInReturnTarget) before forwarding here. callbackURL is a
+    // same-origin relative path (sign-in-form.tsx rejects anything else).
+    return setRetryMarker(
+      NextResponse.redirect(signInUrl.toString(), { status: 302 }),
+      origin,
+      fingerprint,
+    );
   }
 
   if (!isEmailAllowed(user.email)) {
@@ -254,10 +398,14 @@ export async function GET(req: NextRequest) {
   </div>
 </body></html>`;
 
-  return new NextResponse(html, {
-    status: 200,
-    headers: { "content-type": "text/html; charset=utf-8" },
-  });
+  // Reaching consent means sign-in worked; retire the marker so a later
+  // attempt is not mistaken for a retry of this one.
+  return clearRetryMarker(
+    new NextResponse(html, {
+      status: 200,
+      headers: { "content-type": "text/html; charset=utf-8" },
+    }),
+  );
 }
 
 export async function POST(req: NextRequest) {

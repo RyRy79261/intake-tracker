@@ -12,6 +12,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { CLAUDE_MODELS } from "@intake/ai-prompts/models";
 import { NoAiKeyError } from "@/lib/ai-key-resolver";
 import type * as InsightJobServiceMod from "@/lib/server/insight-job-service";
 
@@ -195,7 +196,10 @@ describe("POST /api/analytics/insights/deep", () => {
     };
     expect(params.requests).toHaveLength(1);
     const requestParams = params.requests[0]!.params;
-    expect(requestParams.model).toBe("claude-opus-test");
+    // Asserted against the real registry, not the claude-client stub: the
+    // request builder reads @intake/ai-prompts/models directly so the
+    // Capacitor export (which stashes out src/app/api) still type-checks.
+    expect(requestParams.model).toBe(CLAUDE_MODELS.premium);
     // Web search must be present (the whole point of deep mode) AND the
     // structured insight tool must remain available for the final answer.
     const toolNames = requestParams.tools.map((t) => t.name);
@@ -208,6 +212,13 @@ describe("POST /api/analytics/insights/deep", () => {
     // research across the snapshot's multiple metric domains.
     const webSearch = requestParams.tools.find((t) => t.name === "web_search");
     expect(webSearch?.max_uses).toBeGreaterThanOrEqual(10);
+    // max_tokens covers the WHOLE turn — every search query block and the
+    // closing analytics_insight call. At 4096 the searches ate the budget
+    // the answer needed and the turn stopped mid-tool-call, failing the job
+    // as "cut off" on every research-heavy run. The floor here is the
+    // response schema's own worst case (4000-char summary + 16 × 2000-char
+    // observations + 30 source URLs) plus room for the search traffic.
+    expect(requestParams.max_tokens).toBeGreaterThanOrEqual(16384);
   });
 
   it("persists the validated request payload alongside the job for later audit/re-run", async () => {

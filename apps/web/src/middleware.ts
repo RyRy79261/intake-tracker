@@ -1,6 +1,7 @@
 import type { NextRequest} from "next/server";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/neon-auth";
+import { NEON_AUTH_VERIFIER_PARAM } from "@/lib/auth-callback";
 
 const ALLOWED_ORIGINS = new Set([
   "https://localhost",
@@ -32,11 +33,14 @@ function corsHeaders(origin: string): Record<string, string> {
  *
  * That exchange (`exchangeOAuthToken` in @neondatabase/auth/next/server)
  * runs inside `auth.middleware()` — it is NOT in `auth.handler()` and
- * cannot be triggered from a route handler. Without this middleware
- * installed, the user lands back on /auth with the verifier in the URL
- * but no session cookie ever materialises and every subsequent request
- * gets a 401. This was the root cause of the MCP connector flow failing
- * to return the user to claude.ai after Google sign-in.
+ * cannot be triggered from a route handler. The only other place it
+ * happens is the client SDK, which re-issues get-session with the
+ * verifier attached on a *page* load (that is what completes a plain
+ * /auth sign-in, since the middleware early-allows /auth — see CAUTION
+ * below). A return trip that lands on neither — an API route with no
+ * middleware delegation — never gets a session cookie, and every
+ * subsequent request 401s. That was the root cause of the MCP connector
+ * flow failing to return the user to claude.ai after Google sign-in.
  *
  * The middleware also redirects unauthenticated requests on protected
  * routes to `loginUrl`. We scope it narrowly via the matcher below
@@ -52,13 +56,6 @@ function corsHeaders(origin: string): Record<string, string> {
  * has to live outside /auth/* (see /native-auth/bridge below).
  */
 const neonAuthMiddleware = auth.middleware({ loginUrl: "/auth" });
-
-/**
- * Query param Neon Auth's hosted callback appends on the OAuth return trip
- * (NEON_AUTH_SESSION_VERIFIER_PARAM_NAME in @neondatabase/auth). Its presence
- * is what makes the middleware's verifier exchange necessary.
- */
-const NEON_AUTH_VERIFIER_PARAM = "neon_auth_session_verifier";
 
 export default async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
