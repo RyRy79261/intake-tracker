@@ -84,10 +84,15 @@ describe("TextMetrics", () => {
       },
     });
 
-    // The total is no longer capped at the limit. The value can also
-    // appear in the weekly grid, so match on at-least-one.
+    // The total is no longer capped at the limit. Gate on the Today row's
+    // own element: the weekly grid renders the same number from a separate
+    // live query, so matching on text alone can open the gate while the
+    // daily total is still its default 0.
     await waitFor(
-      () => expect(screen.getAllByText("1,700").length).toBeGreaterThan(0),
+      () =>
+        expect(screen.getByTestId("today-sodium-value")).toHaveTextContent(
+          "1,700",
+        ),
       { timeout: 5000 },
     );
     expect(screen.getByText("/ 1,500 mg")).toBeInTheDocument();

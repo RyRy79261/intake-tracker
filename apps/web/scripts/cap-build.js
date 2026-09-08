@@ -8,6 +8,11 @@ const path = require('path');
 // **/*.ts) — so a stash kept inside apps/web would still be type-checked, and
 // the moved routes' `@/app/api/...` imports would dangle. Parking them at the
 // repo root (outside apps/web's tsconfig) sidesteps both.
+//
+// Since Next 16.3 the build type-checks the whole tsconfig project via the
+// `tsc` CLI, tests included, so next.config.mjs also swaps in tsconfig.cap.json
+// for CAPACITOR_BUILD to drop src/__tests__ — otherwise the tests'
+// `await import("@/middleware")` calls dangle on the stashed modules.
 const API_DIR = path.join(__dirname, '..', 'src', 'app', 'api');
 const API_STASH = path.join(__dirname, '..', '..', '..', '.cap-api-stash');
 const MIDDLEWARE = path.join(__dirname, '..', 'src', 'middleware.ts');

@@ -43,6 +43,16 @@ const securityHeaders = [
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: isCapacitorBuild ? "export" : undefined,
+  // Next 16.3 turned on the `tsc`-CLI type-checker by default, and it checks
+  // the COMPLETE tsconfig project — test files included. scripts/cap-build.js
+  // moves src/app/api + middleware.ts out of the tree for the static export,
+  // so the tests that `await import("@/middleware")` / `@/app/api/*` dangle and
+  // the export fails with ~52 TS2307s. Point the Capacitor build at a tsconfig
+  // that drops the tests; `pnpm typecheck` still uses tsconfig.json, so the
+  // test files keep their type coverage on the normal path.
+  ...(isCapacitorBuild
+    ? { typescript: { tsconfigPath: "tsconfig.cap.json" } }
+    : {}),
   reactStrictMode: true,
   // Trace the bundled Outfit TTFs into the OG/Twitter image route functions —
   // each metadata image route is its own serverless function on Vercel, and
