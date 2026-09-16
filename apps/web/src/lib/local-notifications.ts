@@ -51,6 +51,7 @@ export async function syncMedicationNotifications(): Promise<void> {
     id: number;
     title: string;
     body: string;
+    isExactNotification: boolean;
     schedule: {
       on: { hour: number; minute: number; weekday: number };
       allowWhileIdle: boolean;
@@ -86,6 +87,15 @@ export async function syncMedicationNotifications(): Promise<void> {
         id: notifId++,
         title: `Time for ${prescription.genericName}`,
         body: `Take ${dosageText} of ${prescription.genericName}`,
+        // @capacitor/local-notifications 8.3.0 added `isExactNotification`,
+        // defaulting to TRUE. On API 31+ that makes schedule() open the system
+        // "Alarms & reminders" screen whenever SCHEDULE_EXACT_ALARM is not
+        // granted — and we target SDK 36, where it is not granted by default.
+        // Since initLocalNotifications() runs on every cold start
+        // (providers.tsx), the default would throw the user out to system
+        // settings every launch. false keeps the 8.2.x path: an inexact
+        // setAndAllowWhileIdle alarm, scheduled silently.
+        isExactNotification: false,
         schedule: {
           on: { hour, minute, weekday: capWeekday },
           allowWhileIdle: true,
