@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.36.3](https://github.com/RyRy79261/intake-tracker/compare/v1.36.2...v1.36.3) (2026-09-16)
+
+
+### Bug Fixes
+
+* **native:** stop Android bouncing to system settings on every cold start ([#345](https://github.com/RyRy79261/intake-tracker/issues/345)) ([f6ccb32](https://github.com/RyRy79261/intake-tracker/commit/f6ccb32021d524c5df9b05e0db86e86c4189ac99))
+
 ## [1.36.2](https://github.com/RyRy79261/intake-tracker/compare/v1.36.1...v1.36.2) (2026-09-08)
 
 
