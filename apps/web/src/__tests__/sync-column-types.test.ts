@@ -28,6 +28,11 @@ const INTEGER_COLUMN_TYPES = ["PgInteger", "PgSmallInt", "PgBigInt53"];
 /** Postgres column types that accept fractions but not NaN/Infinity. */
 const FLOAT_COLUMN_TYPES = ["PgReal", "PgDoublePrecision", "PgNumeric"];
 
+/**
+ * The table's column names of the given Postgres types, read from the Drizzle
+ * schema — the ground truth the hand-maintained maps are checked against.
+ * `userId` is excluded: the client never sends it, so no map covers it.
+ */
 function columnsOfType(tableName: TableName, types: string[]): string[] {
   const table = schemaByTableName[tableName];
   const columns = getTableColumns(table as never) as Record<
