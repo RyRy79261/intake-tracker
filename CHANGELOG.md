@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.36.4](https://github.com/RyRy79261/intake-tracker/compare/v1.36.3...v1.36.4) (2026-09-17)
+
+
+### Bug Fixes
+
+* **sync:** three stalls that kept a deleted record from syncing ([#355](https://github.com/RyRy79261/intake-tracker/issues/355)) ([c2ded42](https://github.com/RyRy79261/intake-tracker/commit/c2ded426e44495ddfd623ee40fa3fdd4aa7b4cac))
+
 ## [1.36.3](https://github.com/RyRy79261/intake-tracker/compare/v1.36.2...v1.36.3) (2026-09-16)
 
 
