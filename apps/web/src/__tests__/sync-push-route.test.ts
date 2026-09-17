@@ -35,9 +35,15 @@ const insertCalls: {
   set: Record<string, unknown>;
 }[] = [];
 
+const updateCalls: { set: Record<string, unknown> }[] = [];
+/** Which row the mocked UPDATE's WHERE clause is standing in for. */
+let updateTargetId = "";
+
 function resetDbState() {
   existingRows = {};
   insertCalls.length = 0;
+  updateCalls.length = 0;
+  updateTargetId = "";
 }
 
 // Mock the authenticated context — withAuth becomes a pass-through HOF
@@ -66,6 +72,18 @@ vi.mock("@intake/db/client", () => {
         where: (_cond: unknown) => {
           const rows = Object.values(existingRows);
           return Promise.resolve(rows);
+        },
+      }),
+    }),
+    update: (_table: unknown) => ({
+      set: (v: Record<string, unknown>) => ({
+        where: async (_cond: unknown) => {
+          // The route scopes every UPDATE by (id, userId); the mock can't read
+          // the predicate, so tests drive it via `updateTargetId`.
+          updateCalls.push({ set: v });
+          const target = existingRows[updateTargetId];
+          if (target) Object.assign(target, v);
+          return undefined;
         },
       }),
     }),
@@ -622,5 +640,204 @@ describe("sync-push-route", () => {
     for (const entry of body.accepted) {
       expect(typeof entry.serverUpdatedAt).toBe("number");
     }
+  });
+  // ─── Tombstone-only delete ops (issue #354) ────────────────────────────
+  // A delete whose local Dexie row is already gone can only carry
+  // {id, updatedAt, deletedAt}. That stub cannot satisfy the full-row schema,
+  // so it used to be quarantined as "invalid" and dropped by the client — the
+  // deletion never landed and the next pull resurrected the row.
+
+  it("tombstone: a stub delete tombstones the live server row via UPDATE, not insert", async () => {
+    existingRows["ghost-1"] = {
+      id: "ghost-1",
+      userId: "user-test",
+      updatedAt: 1000,
+      deletedAt: null,
+    };
+    updateTargetId = "ghost-1";
+
+    const { POST } = await import("@/app/api/sync/push/route");
+    const req = makePushRequest({
+      ops: [
+        {
+          queueId: 7,
+          tableName: "phaseSchedules",
+          op: "delete",
+          row: { id: "ghost-1", updatedAt: 2000, deletedAt: 2000 },
+        },
+      ],
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      accepted: { queueId: number; serverUpdatedAt: number }[];
+      rejected: unknown[];
+    };
+
+    expect(body.rejected ?? []).toHaveLength(0);
+    expect(body.accepted).toEqual([{ queueId: 7, serverUpdatedAt: 2000 }]);
+    // An insert would need every NOT NULL column the stub does not have.
+    expect(insertCalls.filter((c) => c.values.id === "ghost-1")).toHaveLength(0);
+    expect(updateCalls).toHaveLength(1);
+    expect(updateCalls[0]!.set).toMatchObject({
+      deletedAt: 2000,
+      updatedAt: 2000,
+    });
+  });
+
+  it("tombstone: a row that is not on the server acks as a no-op", async () => {
+    const { POST } = await import("@/app/api/sync/push/route");
+    const req = makePushRequest({
+      ops: [
+        {
+          queueId: 8,
+          tableName: "phaseSchedules",
+          op: "delete",
+          row: { id: "never-synced", updatedAt: 2000, deletedAt: 2000 },
+        },
+      ],
+    });
+
+    const res = await POST(req);
+    const body = (await res.json()) as {
+      accepted: { queueId: number }[];
+      rejected: unknown[];
+    };
+
+    // Nothing to delete is a satisfied delete — not an error to retry forever.
+    expect(body.rejected ?? []).toHaveLength(0);
+    expect(body.accepted.map((a) => a.queueId)).toEqual([8]);
+    expect(updateCalls).toHaveLength(0);
+  });
+
+  it("tombstone: a stale stub loses to a newer server row (LWW)", async () => {
+    existingRows["row-1"] = {
+      id: "row-1",
+      userId: "user-test",
+      updatedAt: 9000,
+      deletedAt: null,
+    };
+    updateTargetId = "row-1";
+
+    const { POST } = await import("@/app/api/sync/push/route");
+    const req = makePushRequest({
+      ops: [
+        {
+          queueId: 9,
+          tableName: "phaseSchedules",
+          op: "delete",
+          row: { id: "row-1", updatedAt: 1000, deletedAt: 1000 },
+        },
+      ],
+    });
+
+    const res = await POST(req);
+    const body = (await res.json()) as {
+      accepted: { queueId: number; serverUpdatedAt: number }[];
+    };
+
+    expect(updateCalls).toHaveLength(0);
+    expect(body.accepted).toEqual([{ queueId: 9, serverUpdatedAt: 9000 }]);
+  });
+
+  it("tombstone: a tie with the server row still deletes (deletion wins ties)", async () => {
+    existingRows["row-1"] = {
+      id: "row-1",
+      userId: "user-test",
+      updatedAt: 5000,
+      deletedAt: null,
+    };
+    updateTargetId = "row-1";
+
+    const { POST } = await import("@/app/api/sync/push/route");
+    const req = makePushRequest({
+      ops: [
+        {
+          queueId: 11,
+          tableName: "phaseSchedules",
+          op: "delete",
+          row: { id: "row-1", updatedAt: 5000, deletedAt: 5000 },
+        },
+      ],
+    });
+
+    const res = await POST(req);
+    const body = (await res.json()) as {
+      accepted: { queueId: number; serverUpdatedAt: number }[];
+    };
+
+    expect(updateCalls).toHaveLength(1);
+    expect(body.accepted).toEqual([{ queueId: 11, serverUpdatedAt: 5000 }]);
+  });
+
+  it("tombstone: an already-deleted server row acks idempotently without a second write", async () => {
+    existingRows["row-1"] = {
+      id: "row-1",
+      userId: "user-test",
+      updatedAt: 4000,
+      deletedAt: 4000,
+    };
+    updateTargetId = "row-1";
+
+    const { POST } = await import("@/app/api/sync/push/route");
+    const req = makePushRequest({
+      ops: [
+        {
+          queueId: 12,
+          tableName: "phaseSchedules",
+          op: "delete",
+          row: { id: "row-1", updatedAt: 6000, deletedAt: 6000 },
+        },
+      ],
+    });
+
+    const res = await POST(req);
+    const body = (await res.json()) as {
+      accepted: { queueId: number; serverUpdatedAt: number }[];
+    };
+
+    expect(updateCalls).toHaveLength(0);
+    expect(body.accepted).toEqual([{ queueId: 12, serverUpdatedAt: 4000 }]);
+  });
+
+  it("tombstone: the fallback does not widen what else gets through", async () => {
+    const { POST } = await import("@/app/api/sync/push/route");
+    const req = makePushRequest({
+      ops: [
+        // An upsert stub is still invalid — only a delete may be row-less.
+        {
+          queueId: 13,
+          tableName: "phaseSchedules",
+          op: "upsert",
+          row: { id: "row-x", updatedAt: 2000, deletedAt: 2000 },
+        },
+        // An unknown table is still rejected, delete or not.
+        {
+          queueId: 14,
+          tableName: "notATable",
+          op: "delete",
+          row: { id: "row-y", updatedAt: 2000, deletedAt: 2000 },
+        },
+        // A delete with no deletedAt is not a tombstone.
+        {
+          queueId: 15,
+          tableName: "phaseSchedules",
+          op: "delete",
+          row: { id: "row-z", updatedAt: 2000 },
+        },
+      ],
+    });
+
+    const res = await POST(req);
+    const body = (await res.json()) as {
+      accepted: unknown[];
+      rejected: { queueId: number; code?: string }[];
+    };
+
+    expect(body.accepted ?? []).toHaveLength(0);
+    expect(body.rejected.map((r) => r.queueId).sort()).toEqual([13, 14, 15]);
+    for (const r of body.rejected) expect(r.code).toBe("invalid");
+    expect(updateCalls).toHaveLength(0);
   });
 });

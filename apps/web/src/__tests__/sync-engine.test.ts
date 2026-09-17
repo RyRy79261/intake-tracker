@@ -78,6 +78,19 @@ function makeIntake(overrides: Partial<IntakeRecord> = {}): IntakeRecord {
   };
 }
 
+/**
+ * Let real async work settle while only setTimeout/clearTimeout are faked.
+ *
+ * `advanceTimersByTimeAsync` flushes microtasks, but a pull cycle that a timer
+ * kicks off then awaits Dexie I/O, which needs real event-loop turns before it
+ * reaches fetch. setImmediate is left unfaked precisely so this can drive it.
+ */
+async function flushRealAsync(turns = 20): Promise<void> {
+  for (let i = 0; i < turns; i++) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+}
+
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -779,6 +792,106 @@ describe("sync-engine", () => {
     expect(useSyncStatusStore.getState().lastError).toBe("rate limited");
   });
 
+  it("pull: a network error reschedules itself, so one 'Failed to fetch' can't strand the client (issue #354)", async () => {
+    // Nothing else re-kicks a pull: schedulePull() is otherwise only reached
+    // from a *successful* push, the online transition, and engine startup, and
+    // the visibility handler only kicks a push — which returns before the
+    // network when the queue is empty. Without a self-reschedule the client
+    // read stale data until the tab was reloaded.
+    installDom();
+    __startEngineForTests();
+
+    let failNext = true;
+    const fetchMock = vi.fn(async () => {
+      if (failNext) throw new Error("Failed to fetch");
+      return jsonResponse({ result: {}, serverTime: Date.now() });
+    }) as unknown as Mock;
+    vi.stubGlobal("fetch", fetchMock);
+
+    // Fake only the timer functions the engine's backoff uses — faking the
+    // whole clock (setImmediate included) stalls Dexie's own scheduling, so
+    // the awaited pull cycle would never settle.
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    await runPullCycle();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(useSyncStatusStore.getState().lastError).toBe("Failed to fetch");
+
+    // The retry is scheduled, not immediate — nothing fires before backoff.
+    await vi.advanceTimersByTimeAsync(500);
+    await flushRealAsync();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // nextBackoff(0) is 2s ±20%; past the ceiling of that window it has run.
+    failNext = false;
+    await vi.advanceTimersByTimeAsync(3000);
+    await flushRealAsync();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    // Recovered — the error clears and no further retry is left pending.
+    expect(useSyncStatusStore.getState().lastError).toBeNull();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("pull: a non-OK status reschedules too, and backs off between attempts", async () => {
+    installDom();
+    __startEngineForTests();
+
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ error: "rate limited" }), {
+          status: 429,
+          headers: { "Content-Type": "application/json" },
+        }),
+    ) as unknown as Mock;
+    vi.stubGlobal("fetch", fetchMock);
+
+    // Fake only the timer functions the engine's backoff uses — faking the
+    // whole clock (setImmediate included) stalls Dexie's own scheduling, so
+    // the awaited pull cycle would never settle.
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    await runPullCycle();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // Attempt 2 lands inside nextBackoff(0)'s window (2s ±20%).
+    await vi.advanceTimersByTimeAsync(3000);
+    await flushRealAsync();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    // Attempt 3 is on the doubled delay (4s ±20%), so it is not due yet at
+    // +2.5s — the retries back off instead of hammering a struggling server.
+    await vi.advanceTimersByTimeAsync(2500);
+    await flushRealAsync();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(2500);
+    await flushRealAsync();
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+
+    expect(useSyncStatusStore.getState().lastError).toBe("rate limited");
+  });
+
+  it("pull: a 401 does NOT reschedule (auth is re-established elsewhere)", async () => {
+    installDom();
+    __startEngineForTests();
+
+    const fetchMock = vi.fn(
+      async () => new Response("", { status: 401 }),
+    ) as unknown as Mock;
+    vi.stubGlobal("fetch", fetchMock);
+
+    // Fake only the timer functions the engine's backoff uses — faking the
+    // whole clock (setImmediate included) stalls Dexie's own scheduling, so
+    // the awaited pull cycle would never settle.
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    await runPullCycle();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // Spinning on 401s would burn the device's battery for nothing.
+    expect(vi.getTimerCount()).toBe(0);
+    await vi.advanceTimersByTimeAsync(120_000);
+    await flushRealAsync();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   // ─── Targeted mutant-killing tests (round 2) ──────────────────────────
   // After the failure-path round in this file, ~127 mutants survived on
   // sync-engine.ts. The block below targets the seven concrete branches
@@ -892,6 +1005,92 @@ describe("sync-engine", () => {
     expect(body.ops[0]!.op).toBe("delete");
     expect(body.ops[0]!.row.id).toBe("ghost-1");
     expect(body.ops[0]!.row.deletedAt).not.toBeNull();
+  });
+
+  it("push: a fractional value in an integer column is rounded before the op leaves (issue #354)", async () => {
+    // Regression: `eating_records.grams` is a Postgres integer, so a
+    // fractional value made the push validator reject the op as permanently
+    // invalid. The engine then dropped it — which meant deleting the record
+    // silently never synced, because the tombstone carried the same bad
+    // field. The row must leave here already coerced to the column's shape.
+    installDom();
+    __startEngineForTests();
+
+    const now = Date.now();
+    await db.eatingRecords.add({
+      id: "mate-1",
+      timestamp: now,
+      grams: 330.5,
+      note: "Mio Mate",
+      createdAt: now,
+      updatedAt: now,
+      deletedAt: now,
+      deviceId: "test-device",
+      timezone: "UTC",
+    });
+    await enqueue("eatingRecords", "mate-1", "upsert");
+
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ accepted: [] }),
+    ) as unknown as Mock;
+    vi.stubGlobal("fetch", fetchMock);
+
+    await runPushCycle();
+
+    const body = JSON.parse(
+      (fetchMock.mock.calls[0]![1] as RequestInit).body as string,
+    ) as { ops: { row: { grams: number; deletedAt: number | null } }[] };
+    expect(body.ops[0]!.row.grams).toBe(331);
+    // The tombstone still rides along — normalization must not strip it.
+    expect(body.ops[0]!.row.deletedAt).toBe(now);
+
+    // The local row keeps the value the user actually saw; only the wire
+    // representation is coerced.
+    expect((await db.eatingRecords.get("mate-1"))!.grams).toBe(330.5);
+  });
+
+  it("push: a delete op's tombstone is normalized too, so the deletion can sync (issue #354)", async () => {
+    // The reported failure was on DELETE, and deletes take a separate branch
+    // in collectAndOrderQueuedOps than the upsert case above. A tombstone
+    // carrying the record's original fractional grams was rejected as
+    // permanently invalid and dropped, so the delete never reached the server.
+    installDom();
+    __startEngineForTests();
+
+    const now = Date.now();
+    const deletedAt = now + 5;
+    await db.eatingRecords.add({
+      id: "mate-del-1",
+      timestamp: now,
+      grams: 330.5,
+      note: "Mio Mate",
+      createdAt: now,
+      updatedAt: deletedAt,
+      deletedAt,
+      deviceId: "test-device",
+      timezone: "UTC",
+    });
+    await enqueue("eatingRecords", "mate-del-1", "delete");
+
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ accepted: [] }),
+    ) as unknown as Mock;
+    vi.stubGlobal("fetch", fetchMock);
+
+    await runPushCycle();
+
+    const body = JSON.parse(
+      (fetchMock.mock.calls[0]![1] as RequestInit).body as string,
+    ) as {
+      ops: { op: string; row: { id: string; grams: number; deletedAt: number } }[];
+    };
+    expect(body.ops).toHaveLength(1);
+    expect(body.ops[0]!.op).toBe("delete");
+    expect(body.ops[0]!.row.id).toBe("mate-del-1");
+    expect(body.ops[0]!.row.grams).toBe(331);
+    // The tombstone must survive normalization — otherwise the row is pushed
+    // back as live and the deletion is lost.
+    expect(body.ops[0]!.row.deletedAt).toBe(deletedAt);
   });
 
   it("push: body.ops length matches queue length exactly (no junk array element)", async () => {

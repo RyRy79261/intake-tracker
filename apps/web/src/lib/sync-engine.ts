@@ -12,7 +12,10 @@
  *   updatedAt only when `local.updatedAt <= server` (D-12 rule 4 + Pitfall 3),
  *   schedules a pull. On failure, increments attempts and reschedules via
  *   nextBackoff().
- * - `schedulePull()`: microtask-scheduled pull kick.
+ * - `schedulePull(delayMs?)`: pull kick — immediate (microtask) by default,
+ *   or delayed for a retry. A failed pull reschedules itself through
+ *   nextBackoff(), indefinitely: nothing else would, and giving up leaves the
+ *   client reading stale data until the tab reloads (issue #354).
  * - `runPullCycle()`: per-table cursor pagination, atomic bulkPut+cursor
  *   transaction, advances cursor to `min(maxRowUpdatedAt, serverTime - 30s)`
  *   (Pattern 7 skew margin), re-calls while any table reports hasMore.
@@ -35,6 +38,7 @@
 import { db, type SyncQueueRow } from "@/lib/db";
 import { ack, getQueueDepth } from "@/lib/sync-queue";
 import { TABLE_PUSH_ORDER, type TableName } from "@/lib/sync-topology";
+import { normalizeRowForPush } from "@/lib/sync-column-types";
 import { apiFetch } from "@/lib/api-fetch";
 import { isOnline, initNetworkListener } from "@/lib/network-status";
 import { useSyncStatusStore } from "@/stores/sync-status-store";
@@ -79,7 +83,10 @@ export const MAX_PUSH_ATTEMPTS = 8;
 
 let pushTimer: ReturnType<typeof setTimeout> | null = null;
 let pushInFlight = false;
+let pullTimer: ReturnType<typeof setTimeout> | null = null;
 let pullInFlight = false;
+/** Consecutive failed pull cycles — drives the pull's own backoff. */
+let pullAttempts = 0;
 let engineStarted = false;
 let engineSuspended = false;
 let listenersAttached = false;
@@ -174,6 +181,8 @@ async function collectAndOrderQueuedOps(): Promise<{
     if (qRow.op === "delete") {
       // Delete op: carry the tombstone row (soft-delete) if it still exists,
       // otherwise synthesize a minimal stub so the server still sees the id.
+      // The push route accepts that stub via its tombstone schema and applies
+      // it as an UPDATE — a full row is only needed for an upsert.
       const row = liveRow ?? {
         id: qRow.recordId,
         deletedAt: qRow.enqueuedAt,
@@ -183,7 +192,7 @@ async function collectAndOrderQueuedOps(): Promise<{
         queueId: qRow.id!,
         tableName,
         op: "delete",
-        row,
+        row: normalizeRowForPush(tableName, row),
       });
     } else {
       // Upsert op: read current Dexie row at flush time (D-04 latest-wins).
@@ -193,7 +202,7 @@ async function collectAndOrderQueuedOps(): Promise<{
         queueId: qRow.id!,
         tableName,
         op: "upsert",
-        row: liveRow,
+        row: normalizeRowForPush(tableName, liveRow),
       });
     }
   }
@@ -408,11 +417,24 @@ async function incrementAttemptsAndReschedule(
 // ─────────────────────────────────────────────────────────────────────────
 
 /**
- * Schedule a pull on the microtask queue (avoids synchronous recursion when
- * called from inside runPushCycle).
+ * Schedule a pull. With no delay it runs on the microtask queue (avoids
+ * synchronous recursion when called from inside runPushCycle); with a delay
+ * it goes through a timer that later calls collapse into, so a burst of
+ * retries cannot stack up.
  */
-export function schedulePull(): void {
+export function schedulePull(delayMs = 0): void {
   if (engineSuspended) return;
+  if (pullTimer) {
+    clearTimeout(pullTimer);
+    pullTimer = null;
+  }
+  if (delayMs > 0) {
+    pullTimer = setTimeout(() => {
+      pullTimer = null;
+      void runPullCycle();
+    }, delayMs);
+    return;
+  }
   if (typeof queueMicrotask === "function") {
     queueMicrotask(() => {
       void runPullCycle();
@@ -421,6 +443,26 @@ export function schedulePull(): void {
     // Fallback — setTimeout 0 behaves identically for scheduling purposes.
     setTimeout(() => void runPullCycle(), 0);
   }
+}
+
+/**
+ * Retry a failed pull, with the same exponential backoff the push side uses.
+ *
+ * Nothing else will do it. `schedulePull()` is otherwise only reached from a
+ * *successful* push, the `online` transition, and engine startup — and the
+ * visibility handler only kicks a push, which returns before the network when
+ * the queue is empty. So a single transient "Failed to fetch" used to leave
+ * the client reading stale data until the tab was reloaded or an unrelated
+ * local write happened to flush a push that chained a new pull (issue #354).
+ *
+ * Unlike a push op there is no give-up point: a push can drop a poisoned op,
+ * but abandoning the pull just restores the stale-forever bug. So this retries
+ * indefinitely, at `nextBackoff`'s 60s ceiling.
+ */
+function scheduleFailedPullRetry(lastError: string): void {
+  pullAttempts++;
+  useSyncStatusStore.setState({ lastError });
+  schedulePull(nextBackoff(pullAttempts - 1));
 }
 
 /**
@@ -465,14 +507,17 @@ export async function runPullCycle(): Promise<void> {
           body: JSON.stringify({ cursors }),
         });
       } catch (err) {
-        useSyncStatusStore.setState({
-          lastError: err instanceof Error ? err.message : String(err),
-        });
+        scheduleFailedPullRetry(
+          err instanceof Error ? err.message : String(err),
+        );
         return;
       }
 
       if (!res.ok) {
         if (res.status === 401) {
+          // Auth is handled elsewhere (the session is re-established, which
+          // fires its own pull). Retrying here would just spin on 401s.
+          pullAttempts = 0;
           useSyncStatusStore.setState({ lastError: null });
           return;
         }
@@ -483,7 +528,7 @@ export async function runPullCycle(): Promise<void> {
         } catch {
           // keep status-code detail
         }
-        useSyncStatusStore.setState({ lastError: detail });
+        scheduleFailedPullRetry(detail);
         return;
       }
 
@@ -559,6 +604,7 @@ export async function runPullCycle(): Promise<void> {
       lastError: null,
       initialSyncComplete: true,
     });
+    pullAttempts = 0;
 
     // Invalidate React Query caches so every hook re-fetches the freshly
     // pulled rows (D-10 downstream effect) — but only when this cycle actually
@@ -705,6 +751,9 @@ export function __resetEngineForTests(): void {
   if (pushTimer) clearTimeout(pushTimer);
   pushTimer = null;
   pushInFlight = false;
+  if (pullTimer) clearTimeout(pullTimer);
+  pullTimer = null;
+  pullAttempts = 0;
   pullInFlight = false;
   engineStarted = false;
   engineSuspended = false;

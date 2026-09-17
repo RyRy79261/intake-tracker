@@ -5,6 +5,7 @@ import type { ServiceResult } from "@intake/types/service";
 import { syncFields } from "@/lib/utils";
 import { enqueueInsideTx } from "@/lib/sync-queue";
 import { schedulePush } from "@/lib/sync-engine";
+import { roundGrams } from "@/lib/eating-service";
 import { standardDrinksFromAbv } from "@intake/core/alcohol";
 
 const COMPOSABLE_TABLES = [db.intakeRecords, db.eatingRecords, db.substanceRecords] as const;
@@ -71,11 +72,12 @@ export async function addComposableEntry(
       if (input.eating) {
         const id = crypto.randomUUID();
         eatingId = id;
+        const wholeGrams = roundGrams(input.eating.grams);
         const record: EatingRecord = {
           id,
           timestamp: ts,
           groupId,
-          ...(input.eating.grams !== undefined && { grams: input.eating.grams }),
+          ...(wholeGrams !== undefined && { grams: wholeGrams }),
           ...(input.eating.note !== undefined && { note: input.eating.note }),
           ...(input.originalInputText !== undefined && { originalInputText: input.originalInputText }),
           ...(input.groupSource !== undefined && { groupSource: input.groupSource }),
@@ -417,7 +419,7 @@ export async function syncEatingGroup(
       const eatingUpdates: Record<string, unknown> = {
         timestamp: patch.timestamp,
         note: patch.note,
-        grams: patch.grams,
+        grams: roundGrams(patch.grams),
         updatedAt: now,
       };
       if (!eating.groupId && groupId) eatingUpdates.groupId = groupId;
