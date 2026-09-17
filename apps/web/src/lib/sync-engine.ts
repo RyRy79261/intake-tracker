@@ -35,6 +35,7 @@
 import { db, type SyncQueueRow } from "@/lib/db";
 import { ack, getQueueDepth } from "@/lib/sync-queue";
 import { TABLE_PUSH_ORDER, type TableName } from "@/lib/sync-topology";
+import { normalizeRowForPush } from "@/lib/sync-column-types";
 import { apiFetch } from "@/lib/api-fetch";
 import { isOnline, initNetworkListener } from "@/lib/network-status";
 import { useSyncStatusStore } from "@/stores/sync-status-store";
@@ -183,7 +184,7 @@ async function collectAndOrderQueuedOps(): Promise<{
         queueId: qRow.id!,
         tableName,
         op: "delete",
-        row,
+        row: normalizeRowForPush(tableName, row),
       });
     } else {
       // Upsert op: read current Dexie row at flush time (D-04 latest-wins).
@@ -193,7 +194,7 @@ async function collectAndOrderQueuedOps(): Promise<{
         queueId: qRow.id!,
         tableName,
         op: "upsert",
-        row: liveRow,
+        row: normalizeRowForPush(tableName, liveRow),
       });
     }
   }

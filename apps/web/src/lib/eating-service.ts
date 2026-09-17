@@ -12,6 +12,19 @@ import {
   updateRecord,
 } from "@/lib/record-crud";
 
+/**
+ * `eating_records.grams` is a Postgres `integer`. AI parses and the voice
+ * panel's `parseFloat` inputs can both produce a fraction, and a fractional
+ * value fails push validation — the record, and later its tombstone, are
+ * dropped from the sync queue and never reach the server (issue #354). Round
+ * at the write sites so stored data matches what the column can hold; the
+ * push loop normalizes as a backstop for rows written before this.
+ */
+export function roundGrams(grams: number | undefined): number | undefined {
+  if (grams === undefined || !Number.isFinite(grams)) return undefined;
+  return Math.round(grams);
+}
+
 export async function addEatingRecord(
   timestamp?: number,
   note?: string,
@@ -19,10 +32,11 @@ export async function addEatingRecord(
 ): Promise<ServiceResult<EatingRecord>> {
   try {
     const trimmedNote = note?.trim();
+    const wholeGrams = roundGrams(grams);
     const record: EatingRecord = {
       id: generateId(),
       timestamp: timestamp ?? Date.now(),
-      ...(grams !== undefined && grams > 0 && { grams }),
+      ...(wholeGrams !== undefined && wholeGrams > 0 && { grams: wholeGrams }),
       ...(trimmedNote !== undefined && trimmedNote !== "" && { note: trimmedNote }),
       ...syncFields(),
     };
@@ -61,5 +75,13 @@ export function updateEatingRecord(
   id: string,
   updates: { timestamp?: number; note?: string; grams?: number }
 ): Promise<ServiceResult<void>> {
-  return updateRecord<EatingRecord>(db.eatingRecords, "eatingRecords", id, updates, "Failed to update eating record");
+  const normalized = { ...updates };
+  if (updates.grams !== undefined) {
+    const wholeGrams = roundGrams(updates.grams);
+    // exactOptionalPropertyTypes forbids assigning undefined to an optional
+    // field, so an unusable value (NaN/Infinity) drops the key entirely.
+    if (wholeGrams === undefined) delete normalized.grams;
+    else normalized.grams = wholeGrams;
+  }
+  return updateRecord<EatingRecord>(db.eatingRecords, "eatingRecords", id, normalized, "Failed to update eating record");
 }

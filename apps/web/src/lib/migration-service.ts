@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { TABLE_PUSH_ORDER, type TableName } from "@/lib/sync-topology";
+import { normalizeRowForPush } from "@/lib/sync-column-types";
 import type { PushOp } from "@intake/db/sync-payload";
 import { apiFetch } from "@/lib/api-fetch";
 import { useMigrationStore } from "@/stores/migration-store";
@@ -118,11 +119,15 @@ async function uploadTable(
 
   for (let batchIdx = startBatch; batchIdx < batches.length; batchIdx++) {
     const batch = batches[batchIdx]!;
+    // Same coercion the push loop applies (issue #354): a value Postgres
+    // cannot store — a fraction in an `integer` column, a NaN — fails push
+    // validation, and the route quarantines that op instead of 400-ing the
+    // batch, so the record is silently left behind by the migration.
     const ops: PushOp[] = batch.map((record) => ({
       queueId: queueIdRef.value++,
       tableName,
       op: "upsert" as const,
-      row: record,
+      row: normalizeRowForPush(tableName, record),
     }));
 
     await postWithRetry("/api/sync/push", { ops });

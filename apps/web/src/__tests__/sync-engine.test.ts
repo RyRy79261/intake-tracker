@@ -894,6 +894,48 @@ describe("sync-engine", () => {
     expect(body.ops[0]!.row.deletedAt).not.toBeNull();
   });
 
+  it("push: a fractional value in an integer column is rounded before the op leaves (issue #354)", async () => {
+    // Regression: `eating_records.grams` is a Postgres integer, so a
+    // fractional value made the push validator reject the op as permanently
+    // invalid. The engine then dropped it — which meant deleting the record
+    // silently never synced, because the tombstone carried the same bad
+    // field. The row must leave here already coerced to the column's shape.
+    installDom();
+    __startEngineForTests();
+
+    const now = Date.now();
+    await db.eatingRecords.add({
+      id: "mate-1",
+      timestamp: now,
+      grams: 330.5,
+      note: "Mio Mate",
+      createdAt: now,
+      updatedAt: now,
+      deletedAt: now,
+      deviceId: "test-device",
+      timezone: "UTC",
+    });
+    await enqueue("eatingRecords", "mate-1", "upsert");
+
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ accepted: [] }),
+    ) as unknown as Mock;
+    vi.stubGlobal("fetch", fetchMock);
+
+    await runPushCycle();
+
+    const body = JSON.parse(
+      (fetchMock.mock.calls[0]![1] as RequestInit).body as string,
+    ) as { ops: { row: { grams: number; deletedAt: number | null } }[] };
+    expect(body.ops[0]!.row.grams).toBe(331);
+    // The tombstone still rides along — normalization must not strip it.
+    expect(body.ops[0]!.row.deletedAt).toBe(now);
+
+    // The local row keeps the value the user actually saw; only the wire
+    // representation is coerced.
+    expect((await db.eatingRecords.get("mate-1"))!.grams).toBe(330.5);
+  });
+
   it("push: body.ops length matches queue length exactly (no junk array element)", async () => {
     // Mutant: `}> = [];` → `}> = ["Stryker was here"];` — would prepend
     // a junk string to the ops array. Tests that only check the
