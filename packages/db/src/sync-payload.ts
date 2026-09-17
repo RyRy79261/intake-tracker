@@ -220,11 +220,13 @@ export const pushEnvelopeSchema = z.object({
   ops: z.array(z.unknown()).max(500),
 });
 
+
 // ─────────────────────────────────────────────────────────────────────────
 // Type exports
 // ─────────────────────────────────────────────────────────────────────────
 
 export type PushOp = z.infer<typeof opSchema>;
+export type TombstoneOp = z.infer<typeof tombstoneOpSchema>;
 export type PushBody = z.infer<typeof pushBodySchema>;
 export type TableName = PushOp["tableName"];
 
@@ -312,6 +314,39 @@ export const tableNameSchema = z.enum([
   "userProfile",
   "insightReports",
 ]);
+
+// ─────────────────────────────────────────────────────────────────────────
+// Tombstone-only delete op
+//
+// A delete whose local Dexie row is already gone (a hard delete, e.g.
+// `phase-service` bulk-deleting phaseSchedules) cannot carry a full row — the
+// engine has nothing left to read, so it synthesises `{id, updatedAt,
+// deletedAt}`. That stub can never satisfy `opSchema_`, which requires every
+// NOT NULL column, so such a delete was quarantined as "invalid" and dropped:
+// the deletion never reached the server and the next pull resurrected the row
+// (issue #354).
+//
+// The stub is nonetheless enough to *delete* with. The route falls back to
+// this schema and applies the tombstone as an UPDATE against the existing
+// server row, never an insert — so no NOT NULL column is ever needed, and a
+// row that does not exist server-side is simply a no-op. `tableName` is
+// validated against the same enum as everything else and the UPDATE is still
+// scoped by `auth.userId`, so this widens the shape a delete may take without
+// widening what a client can reach.
+// ─────────────────────────────────────────────────────────────────────────
+
+export const tombstoneRowSchema = z.object({
+  id: z.string().min(1).max(200),
+  updatedAt: z.number().int().nonnegative(),
+  deletedAt: z.number().int().nonnegative(),
+});
+
+export const tombstoneOpSchema = z.object({
+  queueId: z.number().int(),
+  op: z.literal("delete"),
+  tableName: tableNameSchema,
+  row: tombstoneRowSchema,
+});
 
 /**
  * Per-table pull cursor — a keyset `(updatedAt, id)` pair.

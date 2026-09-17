@@ -53,8 +53,10 @@ import { usersSync } from "@intake/db/schema";
 import {
   pushEnvelopeSchema,
   opSchema_,
+  tombstoneOpSchema,
   schemaByTableName,
   type PushOp,
+  type TombstoneOp,
   type TableName,
 } from "@intake/db/sync-payload";
 
@@ -89,6 +91,39 @@ function extractDbError(err: unknown): string {
   return msg;
 }
 
+type ExistingRow = { updatedAt: number; deletedAt: number | null };
+
+/**
+ * Chunked SELECT of the server rows a batch touches, keyed by id.
+ *
+ * Chunked to stay under Neon's HTTP parameter limit, and always scoped by
+ * `userId` so a batch can only ever see the caller's own rows.
+ */
+async function loadExistingRows(
+  table: PgTable,
+  ids: string[],
+  userId: string,
+): Promise<Map<string, ExistingRow>> {
+  const existingById = new Map<string, ExistingRow>();
+  for (let i = 0; i < ids.length; i += SELECT_CHUNK_SIZE) {
+    const chunk = ids.slice(i, i + SELECT_CHUNK_SIZE);
+    const rows = await drizzleDb
+      .select()
+      .from(table)
+      .where(
+        and(
+          inArray((table as unknown as { id: PgColumn }).id, chunk),
+          eq((table as unknown as { userId: PgColumn }).userId, userId),
+        ),
+      );
+    for (const r of rows) {
+      const row = r as { id: string; updatedAt: number; deletedAt: number | null };
+      existingById.set(row.id, row);
+    }
+  }
+  return existingById;
+}
+
 export const POST = withAuth(async ({ request, auth }) => {
   try {
     const body = await request.json();
@@ -110,6 +145,7 @@ export const POST = withAuth(async ({ request, auth }) => {
     // bad op into `rejected` (code "invalid", so the client can drop it) and
     // let every valid op apply.
     const validOps: PushOp[] = [];
+    const tombstoneOps: TombstoneOp[] = [];
     const rejected: Array<{
       queueId: number;
       tableName: string;
@@ -120,6 +156,17 @@ export const POST = withAuth(async ({ request, auth }) => {
       const parsedOp = opSchema_.safeParse(rawOp);
       if (parsedOp.success) {
         validOps.push(parsedOp.data);
+        continue;
+      }
+
+      // A delete whose local row is already gone can only carry a
+      // {id, updatedAt, deletedAt} stub, which no full-row schema can accept.
+      // Applied as an UPDATE below, that stub is all a deletion needs — and
+      // rejecting it meant the delete never propagated and the next pull
+      // resurrected the row (issue #354).
+      const parsedTombstone = tombstoneOpSchema.safeParse(rawOp);
+      if (parsedTombstone.success) {
+        tombstoneOps.push(parsedTombstone.data);
       } else {
         const raw = (rawOp ?? {}) as Record<string, unknown>;
         const queueId = typeof raw.queueId === "number" ? raw.queueId : -1;
@@ -165,29 +212,13 @@ export const POST = withAuth(async ({ request, auth }) => {
       const table = schemaByTableName[tableName];
       const ids = tableOps.map((op) => op.row.id as string);
 
-      // Chunked SELECT to avoid exceeding Neon HTTP parameter limits
-      let existingById: Map<
-        string,
-        { updatedAt: number; deletedAt: number | null }
-      >;
+      let existingById: Map<string, ExistingRow>;
       try {
-        existingById = new Map();
-        for (let i = 0; i < ids.length; i += SELECT_CHUNK_SIZE) {
-          const chunk = ids.slice(i, i + SELECT_CHUNK_SIZE);
-          const rows = await drizzleDb
-            .select()
-            .from(table)
-            .where(
-              and(
-                inArray((table as { id: PgColumn }).id, chunk),
-                eq((table as { userId: PgColumn }).userId, auth.userId!),
-              ),
-            );
-          for (const r of rows) {
-            const row = r as { id: string; updatedAt: number; deletedAt: number | null };
-            existingById.set(row.id, row);
-          }
-        }
+        existingById = await loadExistingRows(
+          table as PgTable,
+          ids,
+          auth.userId!,
+        );
       } catch (selectErr) {
         console.error(
           `[sync/push] Batch SELECT failed: table=${tableName} — ${extractDbError(selectErr)}`,
@@ -276,6 +307,96 @@ export const POST = withAuth(async ({ request, auth }) => {
           queueId: op.queueId,
           serverUpdatedAt: serverRow.updatedAt,
         });
+      }
+    }
+
+    // ── Tombstone-only deletes ──
+    // Same LWW precedence as above, but applied as an UPDATE: the stub has no
+    // NOT NULL columns to insert with, and a row that is not on the server has
+    // nothing to delete, so it acks as a no-op rather than failing forever.
+    const tombstonesByTable = new Map<TableName, TombstoneOp[]>();
+    for (const op of tombstoneOps) {
+      const bucket = tombstonesByTable.get(op.tableName) ?? [];
+      bucket.push(op);
+      tombstonesByTable.set(op.tableName, bucket);
+    }
+
+    for (const [tableName, tableOps] of tombstonesByTable) {
+      const table = schemaByTableName[tableName] as PgTable;
+      const ids = tableOps.map((op) => op.row.id);
+
+      let existingById: Map<string, ExistingRow>;
+      try {
+        existingById = await loadExistingRows(table, ids, auth.userId!);
+      } catch (selectErr) {
+        console.error(
+          `[sync/push] Tombstone SELECT failed: table=${tableName} — ${extractDbError(selectErr)}`,
+        );
+        for (const op of tableOps) {
+          rejected.push({
+            queueId: op.queueId,
+            tableName,
+            error: "Server rejected the write",
+          });
+        }
+        continue;
+      }
+
+      for (const op of tableOps) {
+        const clampedUpdatedAt = Math.min(
+          op.row.updatedAt,
+          serverNow + MAX_FUTURE_MS,
+        );
+        const serverRow = existingById.get(op.row.id);
+
+        // Nothing on the server (never synced, or already hard-deleted), or
+        // already tombstoned — either way the delete is satisfied.
+        if (!serverRow || serverRow.deletedAt != null) {
+          accepted.push({
+            queueId: op.queueId,
+            serverUpdatedAt: serverRow?.updatedAt ?? clampedUpdatedAt,
+          });
+          continue;
+        }
+
+        // Rule 2/2b: the tombstone wins when it is at least as new as the
+        // server's row — deletion is a deliberate act and beats a concurrent
+        // edit on ties. A stale tombstone (strictly older) still loses.
+        if (clampedUpdatedAt < serverRow.updatedAt) {
+          accepted.push({
+            queueId: op.queueId,
+            serverUpdatedAt: serverRow.updatedAt,
+          });
+          continue;
+        }
+
+        try {
+          await drizzleDb
+            .update(table)
+            .set({ deletedAt: op.row.deletedAt, updatedAt: clampedUpdatedAt })
+            .where(
+              and(
+                eq((table as unknown as { id: PgColumn }).id, op.row.id),
+                eq(
+                  (table as unknown as { userId: PgColumn }).userId,
+                  auth.userId!,
+                ),
+              ),
+            );
+          accepted.push({
+            queueId: op.queueId,
+            serverUpdatedAt: clampedUpdatedAt,
+          });
+        } catch (err: unknown) {
+          console.error(
+            `[sync/push] Tombstone failed: table=${tableName} id=${op.row.id} — ${extractDbError(err)}`,
+          );
+          rejected.push({
+            queueId: op.queueId,
+            tableName,
+            error: "Server rejected the write",
+          });
+        }
       }
     }
 
