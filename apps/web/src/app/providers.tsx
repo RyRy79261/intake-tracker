@@ -64,6 +64,18 @@ export function Providers({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    let dispose: (() => void) | undefined;
+    let cancelled = false;
+    import("@/lib/medication-notification-resync").then((m) => {
+      if (!cancelled) dispose = m.installMedicationNotificationResync();
+    });
+    return () => {
+      cancelled = true;
+      dispose?.();
+    };
+  }, []);
+
+  useEffect(() => {
     import("@/lib/native-auth-return").then((m) => m.initNativeAuthReturn());
   }, []);
 

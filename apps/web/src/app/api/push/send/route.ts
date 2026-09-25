@@ -1,21 +1,21 @@
 import type { NextRequest} from "next/server";
 import { NextResponse } from "next/server";
-import {
-  getAllSubscribedUserIds,
-  getUserTimezone,
-  getDueNotificationsForUser,
-  getFollowUpNotifications,
-  logSentNotification,
-  deletePushSubscription,
-  getSettings,
-} from "@/lib/push-db";
+import { getAllSubscribedUserIds } from "@/lib/push-db";
+import { dispatchUserReminders } from "@/lib/push-dispatch";
 
 async function getSendPush() {
   const { sendPush } = await import("@/lib/push-sender");
   return sendPush;
 }
 
-export async function POST(request: NextRequest): Promise<NextResponse> {
+/**
+ * Background dispatcher for every subscribed user, meant for a scheduler
+ * (Vercel Cron invokes with GET, other schedulers may POST). Authenticated by
+ * `Authorization: Bearer <CRON_SECRET>`, which Vercel Cron sends itself.
+ * Due slots are matched within a window and claimed before sending, so a
+ * late or overlapping tick neither drops nor repeats a reminder.
+ */
+async function handle(request: NextRequest): Promise<NextResponse> {
   const authHeader = request.headers.get("Authorization");
   const token = authHeader?.startsWith("Bearer ")
     ? authHeader.slice(7)
@@ -35,87 +35,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     let totalFollowUps = 0;
 
     for (const userId of userIds) {
-      const tz = await getUserTimezone(userId);
-      const localTime = now.toLocaleTimeString("en-GB", {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
-        timeZone: tz,
-      });
-      const localDay = new Date(
-        now.toLocaleString("en-US", { timeZone: tz })
-      ).getDay();
-      const localToday = now.toLocaleDateString("en-CA", { timeZone: tz });
-
-      const dueRows = await getDueNotificationsForUser(
-        userId,
-        localTime,
-        localDay,
-        localToday
-      );
-
-      for (const row of dueRows) {
-        const result = await sendPush(
-          {
-            endpoint: row.endpoint as string,
-            keys: {
-              p256dh: row.p256dh as string,
-              auth: row.auth_key as string,
-            },
-          },
-          JSON.stringify({
-            title: `Time for your ${row.time_slot} medications`,
-            body: row.medications_json as string,
-            tag: `dose-${row.time_slot}`,
-            url: "/medications?tab=schedule",
-          })
-        );
-
-        if (result.success) {
-          await logSentNotification(userId, row.time_slot as string, localToday, 0);
-          totalSent++;
-        } else if (result.statusCode === 410) {
-          await deletePushSubscription(userId);
-        }
-      }
-
-      const settings = await getSettings(userId);
-      if (!settings.enabled) continue;
-
-      for (let i = 1; i <= settings.followUpCount; i++) {
-        const followUpRows = await getFollowUpNotifications(
-          localToday,
-          i,
-          settings.followUpIntervalMinutes
-        );
-
-        for (const row of followUpRows) {
-          if ((row.user_id as string) !== userId) continue;
-
-          const result = await sendPush(
-            {
-              endpoint: row.endpoint as string,
-              keys: {
-                p256dh: row.p256dh as string,
-                auth: row.auth_key as string,
-              },
-            },
-            JSON.stringify({
-              title: `Reminder: your ${row.time_slot} medications`,
-              body: row.medications_json as string,
-              tag: `dose-${row.time_slot}`,
-              url: "/medications?tab=schedule",
-            })
-          );
-
-          if (result.success) {
-            await logSentNotification(userId, row.time_slot as string, localToday, i);
-            totalFollowUps++;
-          } else if (result.statusCode === 410) {
-            await deletePushSubscription(userId);
-          }
-        }
-      }
+      const { sent, followUps } = await dispatchUserReminders(userId, now, sendPush);
+      totalSent += sent;
+      totalFollowUps += followUps;
     }
 
     return NextResponse.json({ sent: totalSent, followUps: totalFollowUps });
@@ -127,3 +49,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 }
+
+export const GET = handle;
+export const POST = handle;

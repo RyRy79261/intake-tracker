@@ -299,6 +299,9 @@ export async function subscribeToPush(): Promise<PushSubscription | null> {
           p256dh: subJson.keys?.p256dh,
           auth: subJson.keys?.auth,
         },
+        // Without it the server would fall back to UTC and compare UTC wall
+        // time against local-time slots.
+        timezone: currentTimezone(),
       }),
     });
 
@@ -337,4 +340,63 @@ export async function unsubscribeFromPush(): Promise<boolean> {
     console.error("[push] Failed to unsubscribe:", error);
     return false;
   }
+}
+
+// ----- Push Schedule Sync -----
+
+function currentTimezone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone;
+}
+
+let lastPushScheduleHash = "";
+
+async function hasPushSubscription(): Promise<boolean> {
+  if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return false;
+  if (typeof window === "undefined" || !("PushManager" in window)) return false;
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    return (await registration.pushManager.getSubscription()) !== null;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Send the full weekly reminder schedule, and this device's timezone, to the
+ * push server. Built from the whole regimen per weekday (not today's slots)
+ * and sent even when empty, so stopping the last medication clears the
+ * server's reminders. Skipped when nothing changed since the last send;
+ * `force` resends regardless (after a (re)subscribe the server row is new).
+ */
+export async function syncPushSchedule(opts: { force?: boolean } = {}): Promise<void> {
+  const { useSettingsStore } = await import("@/stores/settings-store");
+  if (!useSettingsStore.getState().doseRemindersEnabled) return;
+  if (!(await hasPushSubscription())) return;
+
+  const { loadReminderDoses, buildWeeklyPushEntries } = await import(
+    "@/lib/medication-reminder-builder"
+  );
+  const timezone = currentTimezone();
+  const schedules = buildWeeklyPushEntries(await loadReminderDoses(), timezone);
+
+  // The timezone is part of the hash: an in-session "Adjust schedules" keeps
+  // the local slots identical but must still update the server's zone.
+  const hash = JSON.stringify({ schedules, timezone });
+  if (!opts.force && hash === lastPushScheduleHash) return;
+
+  try {
+    const res = await apiFetch("/api/push/sync-schedule", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ schedules, timezone }),
+    });
+    if (res.ok) lastPushScheduleHash = hash;
+  } catch (error) {
+    console.warn("[push-schedule-sync] Failed to sync schedule:", error);
+  }
+}
+
+/** Test-only: forget the last-sent hash. */
+export function resetPushScheduleSyncState(): void {
+  lastPushScheduleHash = "";
 }

@@ -9,18 +9,20 @@ function getSQL() {
 
 export async function savePushSubscription(
   userId: string,
-  sub: { endpoint: string; keys: { p256dh: string; auth: string }; timezone?: string }
+  sub: { endpoint: string; keys: { p256dh: string; auth: string }; timezone?: string | undefined }
 ): Promise<void> {
   const sql = getSQL();
-  const tz = sub.timezone ?? "UTC";
+  // A re-subscribe without a timezone keeps the stored one rather than
+  // resetting it to UTC (which would shift every reminder by the offset).
+  const tz = sub.timezone ?? null;
   await sql`
     INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth_key, timezone, updated_at)
-    VALUES (${userId}, ${sub.endpoint}, ${sub.keys.p256dh}, ${sub.keys.auth}, ${tz}, NOW())
+    VALUES (${userId}, ${sub.endpoint}, ${sub.keys.p256dh}, ${sub.keys.auth}, COALESCE(${tz}, 'UTC'), NOW())
     ON CONFLICT (user_id) DO UPDATE SET
       endpoint = EXCLUDED.endpoint,
       p256dh = EXCLUDED.p256dh,
       auth_key = EXCLUDED.auth_key,
-      timezone = EXCLUDED.timezone,
+      timezone = COALESCE(${tz}, push_subscriptions.timezone),
       updated_at = NOW()
   `;
 }
@@ -76,9 +78,13 @@ export async function getDueNotifications(
 export async function getFollowUpNotifications(
   today: string,
   followUpIndex: number,
-  intervalMinutes: number
+  intervalMinutes: number,
+  dayOfWeek?: number,
+  userId?: string
 ) {
   const sql = getSQL();
+  // push_schedules holds one row per (slot, weekday): without the weekday
+  // filter a daily slot joins seven rows and the follow-up goes out 7 times.
   return sql`
     SELECT
       s.user_id,
@@ -94,6 +100,8 @@ export async function getFollowUpNotifications(
     WHERE l.sent_date = ${today}
       AND l.follow_up_index = ${followUpIndex - 1}
       AND l.sent_at <= NOW() - (${intervalMinutes} || ' minutes')::INTERVAL
+      AND (${dayOfWeek ?? null}::int IS NULL OR d.day_of_week = ${dayOfWeek ?? null}::int)
+      AND (${userId ?? null}::text IS NULL OR l.user_id = ${userId ?? null}::text)
       AND ps.enabled = true
       AND NOT EXISTS (
         SELECT 1 FROM push_sent_log l2
@@ -107,7 +115,29 @@ export async function getFollowUpNotifications(
 
 // ----- Sent Log -----
 
+/**
+ * Record a send. Returns true when this call created the row: callers claim
+ * a slot BEFORE sending, so two concurrent dispatchers (the cron and a
+ * client's /api/push/check ping) can never both send it.
+ */
 export async function logSentNotification(
+  userId: string,
+  timeSlot: string,
+  sentDate: string,
+  followUpIndex: number
+): Promise<boolean> {
+  const sql = getSQL();
+  const rows = await sql`
+    INSERT INTO push_sent_log (user_id, time_slot, sent_date, follow_up_index)
+    VALUES (${userId}, ${timeSlot}, ${sentDate}, ${followUpIndex})
+    ON CONFLICT (user_id, time_slot, sent_date, follow_up_index) DO NOTHING
+    RETURNING id
+  `;
+  return rows.length > 0;
+}
+
+/** Undo a claim whose send failed, so the next dispatch can retry it. */
+export async function releaseSentNotification(
   userId: string,
   timeSlot: string,
   sentDate: string,
@@ -115,10 +145,37 @@ export async function logSentNotification(
 ): Promise<void> {
   const sql = getSQL();
   await sql`
-    INSERT INTO push_sent_log (user_id, time_slot, sent_date, follow_up_index)
-    VALUES (${userId}, ${timeSlot}, ${sentDate}, ${followUpIndex})
-    ON CONFLICT (user_id, time_slot, sent_date, follow_up_index) DO NOTHING
+    DELETE FROM push_sent_log
+    WHERE user_id = ${userId}
+      AND time_slot = ${timeSlot}
+      AND sent_date = ${sentDate}
+      AND follow_up_index = ${followUpIndex}
   `;
+}
+
+// ----- Dose status -----
+
+/**
+ * The subset of `scheduleIds` whose dose on `scheduledDate` is already dealt
+ * with (taken, skipped or rescheduled) in the synced dose_logs.
+ */
+export async function getHandledScheduleIds(
+  userId: string,
+  scheduledDate: string,
+  scheduleIds: string[]
+): Promise<Set<string>> {
+  if (scheduleIds.length === 0) return new Set();
+  const sql = getSQL();
+  const rows = await sql`
+    SELECT DISTINCT schedule_id
+    FROM dose_logs
+    WHERE user_id = ${userId}
+      AND scheduled_date = ${scheduledDate}
+      AND schedule_id = ANY(${scheduleIds})
+      AND status IN ('taken', 'skipped', 'rescheduled')
+      AND deleted_at IS NULL
+  `;
+  return new Set(rows.map((r) => r.schedule_id as string));
 }
 
 // ----- Dose Schedules -----
@@ -224,13 +281,29 @@ export async function getUserTimezone(userId: string): Promise<string> {
 
 // ----- Per-user due notifications -----
 
+/**
+ * How late a dispatcher may be and still send a slot. The sent-log claim
+ * stops a slot going out twice, so the window only makes a delayed or
+ * skipped tick harmless instead of silently dropping the reminder.
+ */
+export const DUE_WINDOW_MINUTES = 30;
+
+/** "HH:MM" `minutes` before `time`, clamped to the same day. */
+export function windowStart(time: string, minutes: number): string {
+  const [h, m] = time.split(":").map(Number);
+  const total = Math.max(0, (h ?? 0) * 60 + (m ?? 0) - minutes);
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
 export async function getDueNotificationsForUser(
   userId: string,
   userLocalTime: string,
   dayOfWeek: number,
-  today: string
+  today: string,
+  windowMinutes: number = DUE_WINDOW_MINUTES
 ) {
   const sql = getSQL();
+  const from = windowStart(userLocalTime, windowMinutes);
   return sql`
     SELECT
       s.user_id,
@@ -243,7 +316,8 @@ export async function getDueNotificationsForUser(
     JOIN push_schedules d ON d.user_id = s.user_id
     JOIN push_settings ps ON ps.user_id = s.user_id
     WHERE s.user_id = ${userId}
-      AND d.time_slot = ${userLocalTime}
+      AND d.time_slot <= ${userLocalTime}
+      AND d.time_slot >= ${from}
       AND d.day_of_week = ${dayOfWeek}
       AND ps.enabled = true
       AND NOT EXISTS (

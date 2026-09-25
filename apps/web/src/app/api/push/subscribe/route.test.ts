@@ -61,6 +61,21 @@ describe("POST /api/push/subscribe", () => {
     );
   });
 
+  it("passes the device timezone through to storage", async () => {
+    const body = { ...VALID_SUB, timezone: "Europe/Berlin" };
+    const res = await callSubscribe(JSON.stringify(body));
+    expect(res.status).toBe(200);
+    expect(mockSavePushSubscription).toHaveBeenCalledWith("user-test", body);
+  });
+
+  it("rejects an unknown timezone", async () => {
+    const res = await callSubscribe(
+      JSON.stringify({ ...VALID_SUB, timezone: "Mars/Olympus" }),
+    );
+    expect(res.status).toBe(400);
+    expect(mockSavePushSubscription).not.toHaveBeenCalled();
+  });
+
   it("rejects with 400 when the endpoint is not a valid URL", async () => {
     const res = await callSubscribe(
       JSON.stringify({ ...VALID_SUB, endpoint: "not-a-url" }),

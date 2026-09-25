@@ -20,6 +20,8 @@ const mockGetFollowUpNotifications = vi.fn();
 const mockLogSentNotification = vi.fn();
 const mockDeletePushSubscription = vi.fn();
 const mockGetSettings = vi.fn();
+const mockReleaseSentNotification = vi.fn();
+const mockGetHandledScheduleIds = vi.fn();
 
 vi.mock("@/lib/push-db", () => ({
   getAllSubscribedUserIds: (...args: unknown[]) =>
@@ -33,6 +35,10 @@ vi.mock("@/lib/push-db", () => ({
   deletePushSubscription: (...args: unknown[]) =>
     mockDeletePushSubscription(...args),
   getSettings: (...args: unknown[]) => mockGetSettings(...args),
+  releaseSentNotification: (...args: unknown[]) =>
+    mockReleaseSentNotification(...args),
+  getHandledScheduleIds: (...args: unknown[]) =>
+    mockGetHandledScheduleIds(...args),
 }));
 
 const DEFAULT_SETTINGS = {
@@ -75,7 +81,9 @@ describe("POST /api/push/send", () => {
     mockGetSettings.mockResolvedValue(DEFAULT_SETTINGS);
     mockGetDueNotificationsForUser.mockResolvedValue([]);
     mockGetFollowUpNotifications.mockResolvedValue([]);
-    mockLogSentNotification.mockResolvedValue(undefined);
+    mockLogSentNotification.mockResolvedValue(true);
+    mockReleaseSentNotification.mockResolvedValue(undefined);
+    mockGetHandledScheduleIds.mockResolvedValue(new Set());
     mockDeletePushSubscription.mockResolvedValue(undefined);
     mockSendPush.mockResolvedValue({ success: true });
   });
@@ -149,6 +157,18 @@ describe("POST /api/push/send", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ sent: 0, followUps: 1 });
     expect(mockSendPush).toHaveBeenCalledTimes(1);
+  });
+
+  it("accepts GET, which is how Vercel Cron invokes it", async () => {
+    mockGetDueNotificationsForUser.mockResolvedValue([makeDueRow()]);
+    const { GET } = await import("@/app/api/push/send/route");
+    const res = await GET(
+      new NextRequest("http://localhost/api/push/send", {
+        headers: { Authorization: "Bearer the-cron-secret" },
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ sent: 1, followUps: 0 });
   });
 
   it("skips follow-ups when settings.enabled is false", async () => {

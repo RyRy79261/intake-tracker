@@ -12,6 +12,8 @@ const mockGetFollowUpNotifications = vi.fn();
 const mockLogSentNotification = vi.fn();
 const mockDeletePushSubscription = vi.fn();
 const mockGetSettings = vi.fn();
+const mockReleaseSentNotification = vi.fn();
+const mockGetHandledScheduleIds = vi.fn();
 
 vi.mock("@/lib/push-db", () => ({
   getUserTimezone: (...args: unknown[]) => mockGetUserTimezone(...args),
@@ -24,6 +26,10 @@ vi.mock("@/lib/push-db", () => ({
   deletePushSubscription: (...args: unknown[]) =>
     mockDeletePushSubscription(...args),
   getSettings: (...args: unknown[]) => mockGetSettings(...args),
+  releaseSentNotification: (...args: unknown[]) =>
+    mockReleaseSentNotification(...args),
+  getHandledScheduleIds: (...args: unknown[]) =>
+    mockGetHandledScheduleIds(...args),
 }));
 
 vi.mock("@/lib/auth-middleware", () => ({
@@ -68,7 +74,9 @@ describe("/api/push/check endpoint", () => {
     mockGetSettings.mockResolvedValue(DEFAULT_SETTINGS);
     mockGetDueNotificationsForUser.mockResolvedValue([]);
     mockGetFollowUpNotifications.mockResolvedValue([]);
-    mockLogSentNotification.mockResolvedValue(undefined);
+    mockLogSentNotification.mockResolvedValue(true);
+    mockReleaseSentNotification.mockResolvedValue(undefined);
+    mockGetHandledScheduleIds.mockResolvedValue(new Set());
     mockDeletePushSubscription.mockResolvedValue(undefined);
     mockSendPush.mockResolvedValue({ success: true });
   });
@@ -180,5 +188,68 @@ describe("/api/push/check endpoint", () => {
 
     expect(body).toEqual({ sent: 1, followUps: 0 });
     expect(mockGetFollowUpNotifications).not.toHaveBeenCalled();
+  });
+  it("does not send a slot another dispatcher already claimed", async () => {
+    mockGetDueNotificationsForUser.mockResolvedValue([makeDueRow()]);
+    mockLogSentNotification.mockResolvedValue(false);
+
+    const body = await (await callCheck()).json();
+
+    expect(body).toEqual({ nothingDue: true });
+    expect(mockSendPush).not.toHaveBeenCalled();
+  });
+
+  it("suppresses a reminder when every dose in the slot is already taken or skipped", async () => {
+    mockGetDueNotificationsForUser.mockResolvedValue([
+      makeDueRow({
+        medications_json: JSON.stringify({ body: "Aspirin 100mg", scheduleIds: ["s1", "s2"] }),
+      }),
+    ]);
+    mockGetHandledScheduleIds.mockResolvedValue(new Set(["s1", "s2"]));
+
+    const body = await (await callCheck()).json();
+
+    expect(mockGetHandledScheduleIds).toHaveBeenCalledWith("test-user", expect.any(String), ["s1", "s2"]);
+    expect(mockSendPush).not.toHaveBeenCalled();
+    expect(body).toEqual({ nothingDue: true });
+  });
+
+  it("still reminds when only some doses in the slot are handled, using the body text and one tag per slot", async () => {
+    mockGetDueNotificationsForUser.mockResolvedValue([
+      makeDueRow({
+        medications_json: JSON.stringify({ body: "Aspirin 100mg, B 5mg", scheduleIds: ["s1", "s2"] }),
+      }),
+    ]);
+    mockGetHandledScheduleIds.mockResolvedValue(new Set(["s1"]));
+
+    await callCheck();
+
+    const payload = JSON.parse(mockSendPush.mock.calls[0]![1] as string);
+    expect(payload.body).toBe("Aspirin 100mg, B 5mg");
+    expect(payload.tag).toBe("dose-09:00");
+  });
+
+  it("releases the claim when a send fails for a non-410 reason", async () => {
+    mockGetDueNotificationsForUser.mockResolvedValue([makeDueRow()]);
+    mockSendPush.mockResolvedValue({ success: false, statusCode: 500 });
+
+    await callCheck();
+
+    expect(mockReleaseSentNotification).toHaveBeenCalledWith("test-user", "09:00", expect.any(String), 0);
+    expect(mockDeletePushSubscription).not.toHaveBeenCalled();
+  });
+
+  it("scopes follow-up lookups to the user and the local weekday", async () => {
+    mockGetUserTimezone.mockResolvedValue("Europe/Berlin");
+
+    await callCheck();
+
+    expect(mockGetFollowUpNotifications).toHaveBeenCalledWith(
+      expect.any(String),
+      1,
+      DEFAULT_SETTINGS.followUpIntervalMinutes,
+      expect.any(Number),
+      "test-user",
+    );
   });
 });
