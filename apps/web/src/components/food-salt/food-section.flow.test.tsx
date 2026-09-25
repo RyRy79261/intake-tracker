@@ -80,6 +80,14 @@ const server = setupServer(
 );
 
 beforeAll(() => server.listen({ onUnhandledRequest: "bypass" }));
+
+/** Override the parse response for the rest of the current test. */
+function parseResponse(body: Record<string, unknown>) {
+  server.use(
+    http.post("http://localhost:3000/api/ai/parse", () => HttpResponse.json(body)),
+    http.post("/api/ai/parse", () => HttpResponse.json(body)),
+  );
+}
 afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
@@ -89,6 +97,7 @@ describe("FoodSection — AI parse → submit → Dexie write (MSW integration)"
     // depends on a known empty starting state for the bulkAdd assertion.
     await db.eatingRecords.clear();
     await db.intakeRecords.clear();
+    await db.substanceRecords.clear();
   });
 
   it("AI-populates the form and writes the resulting records to IndexedDB on submit", async () => {
@@ -158,6 +167,71 @@ describe("FoodSection — AI parse → submit → Dexie write (MSW integration)"
       expect(salt, "expected a salt=300 intake record").toBeDefined();
       expect(salt?.timestamp).toBe(expectedTs);
     });
+  });
+
+  it("a re-parse replaces every field, clearing values the new item doesn't have", async () => {
+    const user = userEvent.setup();
+    await renderWithFixtures(<FoodSection />);
+
+    const aiInput = await screen.findByLabelText(
+      /Describe food for AI nutritional parsing/i,
+    );
+    await user.type(aiInput, "bowl of chicken soup");
+    await user.keyboard("{Enter}");
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Water content \(ml\)/i)).toHaveValue(200);
+    });
+
+    // Second item: sodium only; water and sugar come back 0 / null.
+    parseResponse({
+      water: 0,
+      salt: 400,
+      measurement_type: "sodium",
+      sugar: null,
+      reasoning: "Bag of plain crisps.",
+    });
+    await user.clear(aiInput);
+    await user.type(aiInput, "bag of crisps");
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Sodium/i)).toHaveValue(400);
+    });
+    expect((screen.getByLabelText(/Water content \(ml\)/i) as HTMLInputElement).value).toBe("");
+    expect((screen.getByLabelText(/Sugar/i) as HTMLInputElement).value).toBe("");
+  });
+
+  it("logs a parsed drink through logDrink, keeping its caffeine", async () => {
+    parseResponse({
+      water: 330,
+      salt: 10,
+      measurement_type: "sodium",
+      sugar: 35,
+      is_drink: true,
+      caffeine_mg: 34,
+      abv_percent: 0,
+      reasoning: "A 330 ml can of cola.",
+    });
+    const user = userEvent.setup();
+    await renderWithFixtures(<FoodSection />);
+
+    const aiInput = await screen.findByLabelText(
+      /Describe food for AI nutritional parsing/i,
+    );
+    await user.type(aiInput, "can of coke");
+    await user.keyboard("{Enter}");
+    expect(await screen.findByTestId("food-save-as-drink")).toHaveTextContent(/34 mg caffeine/);
+
+    await user.click(screen.getByRole("button", { name: "Record with details" }));
+
+    await waitFor(async () => {
+      const caffeine = await db.substanceRecords.toArray();
+      expect(caffeine.map((r) => [r.type, r.amountMg])).toEqual([["caffeine", 34]]);
+    });
+    // A drink, not a meal: no eating record, one full-volume water row.
+    expect(await db.eatingRecords.count()).toBe(0);
+    const water = (await db.intakeRecords.toArray()).filter((r) => r.type === "water");
+    expect(water.map((r) => r.amount)).toEqual([330]);
   });
 
   it("falls back gracefully when the AI endpoint returns 502", async () => {
