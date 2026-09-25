@@ -8,21 +8,26 @@
  * - `schedulePush(delayMs?)`: debounced push (3s default). Collapses rapid
  *   writes into one flush.
  * - `runPushCycle()`: collects queue rows in TABLE_PUSH_ORDER, POSTs to
- *   /api/sync/push (≤200 ops/cycle), acks on success, applies server
- *   updatedAt only when `local.updatedAt <= server` (D-12 rule 4 + Pitfall 3),
- *   schedules a pull. On failure, increments attempts and reschedules via
- *   nextBackoff().
+ *   /api/sync/push (≤50 ops/cycle), acks accepted ops whose queue row did not
+ *   change while the request was in flight, lowers a clamped server updatedAt
+ *   onto a still-unchanged local row (D-12 rule 4 + Pitfall 3), schedules a
+ *   pull. A per-op rejection bumps that op's `attempts`; a whole-batch
+ *   network/HTTP failure only backs the loop off (audit sync-engine#13).
  * - `schedulePull(delayMs?)`: pull kick — immediate (microtask) by default,
  *   or delayed for a retry. A failed pull reschedules itself through
  *   nextBackoff(), indefinitely: nothing else would, and giving up leaves the
  *   client reading stale data until the tab reloads (issue #354).
- * - `runPullCycle()`: per-table cursor pagination, atomic bulkPut+cursor
- *   transaction, advances cursor to `min(maxRowUpdatedAt, serverTime - 30s)`
- *   (Pattern 7 skew margin), re-calls while any table reports hasMore.
- *   Invalidates React Query caches on completion.
- * - `startEngine()`: idempotent one-time startup — sets isOnline, kicks a
- *   startup pull, attaches the dev-only `window.__syncEngine` hook
+ * - `runPullCycle()`: per-table cursor pagination, atomic apply+cursor
+ *   transaction (a pulled row only replaces a local one it beats under the
+ *   server's LWW rules — audit sync-engine#1), advances cursor to
+ *   `min(maxRowUpdatedAt, serverTime - 30s)` (Pattern 7 skew margin),
+ *   re-calls while any table reports hasMore. Resolves `true` only for a
+ *   complete pull. Invalidates React Query caches on completion.
+ * - `startEngine()`: idempotent one-time startup — sets isOnline and the
+ *   persisted queue depth, flushes the queue, then pulls (audit
+ *   sync-engine#14), attaches the dev-only `window.__syncEngine` hook
  *   (T-43-06-01 mitigation: NODE_ENV !== 'production' guard).
+ * - `waitForSyncIdle()`: resolves once no push or pull is in flight.
  * - `attachLifecycleListeners()` / `detachLifecycleListeners()`: plain-DOM
  *   helpers the lifecycle hook composes; exported so test code can drive
  *   them without rendering React.
@@ -36,12 +41,19 @@
  */
 
 import { db, type SyncQueueRow } from "@/lib/db";
-import { ack, getQueueDepth } from "@/lib/sync-queue";
+import { ackIfUnchanged, getQueueDepth } from "@/lib/sync-queue";
 import { TABLE_PUSH_ORDER, type TableName } from "@/lib/sync-topology";
 import { normalizeRowForPush } from "@/lib/sync-column-types";
+import {
+  fillClearedFieldsForPush,
+  normalizePulledRow,
+} from "@/lib/sync-nullable-fields";
 import { apiFetch } from "@/lib/api-fetch";
 import { isOnline, initNetworkListener } from "@/lib/network-status";
-import { useSyncStatusStore } from "@/stores/sync-status-store";
+import {
+  useSyncStatusStore,
+  type DroppedSyncOp,
+} from "@/stores/sync-status-store";
 import { queryClient } from "@/lib/query-client";
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -72,7 +84,9 @@ export const SKEW_MARGIN_MS = 30_000;
  * on the op (its local Dexie row is untouched) so the queue can reach empty.
  *
  * Only applies to per-op server rejections — whole-batch network/HTTP failures
- * retry forever (an outage must never silently discard the user's writes).
+ * retry forever (an outage must never silently discard the user's writes) and
+ * do not count against this budget (audit sync-engine#13): they back off on
+ * the engine's own `pushFailures` counter instead.
  */
 export const MAX_PUSH_ATTEMPTS = 8;
 
@@ -82,9 +96,13 @@ export const MAX_PUSH_ATTEMPTS = 8;
 // ─────────────────────────────────────────────────────────────────────────
 
 let pushTimer: ReturnType<typeof setTimeout> | null = null;
-let pushInFlight = false;
+/** The running push cycle, if any — `waitForSyncIdle` awaits it. */
+let pushInFlight: Promise<void> | null = null;
+/** Consecutive whole-batch push failures — drives the push loop's backoff. */
+let pushFailures = 0;
 let pullTimer: ReturnType<typeof setTimeout> | null = null;
-let pullInFlight = false;
+/** The running pull cycle, if any — later callers join it. */
+let pullInFlight: Promise<boolean> | null = null;
 /** Consecutive failed pull cycles — drives the pull's own backoff. */
 let pullAttempts = 0;
 let engineStarted = false;
@@ -131,22 +149,46 @@ export function schedulePush(delayMs: number = DEBOUNCE_MS): void {
   }, delayMs);
 }
 
-/** Internal — collect up to PUSH_BATCH_CAP queue rows ordered by topology. */
+type PushOpPayload = {
+  queueId: number;
+  tableName: TableName;
+  op: "upsert" | "delete";
+  row: Record<string, unknown>;
+};
+
+/** Record a push-side error. A successful pull leaves it standing. */
+function setPushError(lastError: string): void {
+  useSyncStatusStore.setState({ lastError, lastErrorSource: "push" });
+}
+
+/** Record a pull-side error. */
+function setPullError(lastError: string): void {
+  useSyncStatusStore.setState({ lastError, lastErrorSource: "pull" });
+}
+
+/**
+ * Internal — collect up to PUSH_BATCH_CAP queue rows ordered by topology.
+ *
+ * `sentUpdatedAt` maps each op's queueId to the local `updatedAt` it carried,
+ * so the ack can tell whether the local row moved on while it was in flight.
+ */
 async function collectAndOrderQueuedOps(): Promise<{
   queueRows: SyncQueueRow[];
-  ops: Array<{
-    queueId: number;
-    tableName: TableName;
-    op: "upsert" | "delete";
-    row: Record<string, unknown>;
-  }>;
+  ops: PushOpPayload[];
+  sentUpdatedAt: Map<number, number | undefined>;
+  orphansDropped: number;
 }> {
   const pending = await db._syncQueue
     .orderBy("enqueuedAt")
     .limit(PUSH_BATCH_CAP)
     .toArray();
   if (pending.length === 0) {
-    return { queueRows: [], ops: [] };
+    return {
+      queueRows: [],
+      ops: [],
+      sentUpdatedAt: new Map(),
+      orphansDropped: 0,
+    };
   }
 
   // Group by table in TABLE_PUSH_ORDER (parent-before-child). Preserve FIFO
@@ -166,12 +208,10 @@ async function collectAndOrderQueuedOps(): Promise<{
     if (bucket) ordered.push(...bucket);
   }
 
-  const ops: Array<{
-    queueId: number;
-    tableName: TableName;
-    op: "upsert" | "delete";
-    row: Record<string, unknown>;
-  }> = [];
+  const ops: PushOpPayload[] = [];
+  const sentUpdatedAt = new Map<number, number | undefined>();
+  const queueRows: SyncQueueRow[] = [];
+  const orphans: SyncQueueRow[] = [];
   for (const qRow of ordered) {
     const tableName = qRow.tableName as TableName;
     const liveRow = (await db
@@ -182,234 +222,300 @@ async function collectAndOrderQueuedOps(): Promise<{
       // Delete op: carry the tombstone row (soft-delete) if it still exists,
       // otherwise synthesize a minimal stub so the server still sees the id.
       // The push route accepts that stub via its tombstone schema and applies
-      // it as an UPDATE — a full row is only needed for an upsert.
-      const row = liveRow ?? {
-        id: qRow.recordId,
-        deletedAt: qRow.enqueuedAt,
-        updatedAt: qRow.enqueuedAt,
-      };
-      ops.push({
-        queueId: qRow.id!,
-        tableName,
-        op: "delete",
-        row: normalizeRowForPush(tableName, row),
-      });
+      // it as an UPDATE — a full row is only needed for an upsert. The stub is
+      // never null-filled: as an UPDATE, those nulls would clear columns.
+      const row = liveRow
+        ? fillClearedFieldsForPush(
+            tableName,
+            normalizeRowForPush(tableName, liveRow),
+          )
+        : normalizeRowForPush(tableName, {
+            id: qRow.recordId,
+            deletedAt: qRow.enqueuedAt,
+            updatedAt: qRow.enqueuedAt,
+          });
+      queueRows.push(qRow);
+      ops.push({ queueId: qRow.id!, tableName, op: "delete", row });
+      sentUpdatedAt.set(qRow.id!, liveRow?.updatedAt as number | undefined);
     } else {
       // Upsert op: read current Dexie row at flush time (D-04 latest-wins).
-      // If the local row has disappeared, skip (nothing to push).
-      if (!liveRow) continue;
+      // A record that has disappeared (hard-deleted by a cascade, or cleared
+      // by a backup restore) has nothing to push. Its queue row is dropped
+      // now: left in place it was never acked, kept queueDepth above 0 for
+      // good, and 50 of them at the head of the queue wedged every later
+      // push (audit sync-engine#4).
+      if (!liveRow) {
+        orphans.push(qRow);
+        continue;
+      }
+      queueRows.push(qRow);
+      // Every nullable column the row leaves unset goes out as an explicit
+      // null, so clearing a field locally clears it on the server too (audit
+      // health-records-inputs#4).
       ops.push({
         queueId: qRow.id!,
         tableName,
         op: "upsert",
-        row: normalizeRowForPush(tableName, liveRow),
+        row: fillClearedFieldsForPush(
+          tableName,
+          normalizeRowForPush(tableName, liveRow),
+        ),
       });
+      sentUpdatedAt.set(qRow.id!, liveRow.updatedAt as number | undefined);
     }
   }
 
-  return { queueRows: ordered, ops };
+  // Only drop an orphan whose queue row is untouched: a record re-created in
+  // the meantime has re-enqueued onto the same row.
+  const orphansDropped =
+    orphans.length > 0 ? (await ackIfUnchanged(orphans)).length : 0;
+
+  return { queueRows, ops, sentUpdatedAt, orphansDropped };
 }
 
 /**
- * Internal — per Pitfall 3, server ack is only applied when the local row's
- * updatedAt has NOT moved past the server's. Race window: the user edits
- * the same record locally while the push is in flight; that newer local
- * edit is already re-enqueued (coalesce), so overwriting with the ack's
- * older serverUpdatedAt would clobber it.
+ * Internal — reconcile the local row with the server's ack.
+ *
+ * The server acks with the `updatedAt` it now holds. Two cases need care:
+ *   - The user edited the record while the push was in flight. The local row
+ *     is no longer the one that was sent, so it is left alone; its queue row
+ *     moved too, so the next cycle pushes it (audit sync-engine#0).
+ *   - The server kept a *newer* version (LWW rule 3). Stamping that
+ *     updatedAt onto the stale local content would make it look current, and
+ *     the pull would then skip the real update. The pull applies the
+ *     server's row instead.
+ * Only a server value *below* the one sent (the clock-skew clamp, or a server
+ * tombstone that won by rule 1) is copied onto the unchanged row (Pitfall 3).
  */
 async function applyServerAck(
   accepted: Array<{ queueId: number; serverUpdatedAt: number }>,
   queueRowsById: Map<number, SyncQueueRow>,
+  sentUpdatedAt: Map<number, number | undefined>,
 ): Promise<void> {
   for (const entry of accepted) {
     const origin = queueRowsById.get(entry.queueId);
     if (!origin) continue;
+    const sent = sentUpdatedAt.get(entry.queueId);
+    if (sent == null || entry.serverUpdatedAt >= sent) continue;
     const tableName = origin.tableName as TableName;
-    const local = (await db
-      .table(tableName)
-      .get(origin.recordId)) as { updatedAt?: number } | undefined;
-    if (!local) continue;
-    if ((local.updatedAt ?? 0) <= entry.serverUpdatedAt) {
+    await db.transaction("rw", db.table(tableName), async () => {
+      const local = (await db
+        .table(tableName)
+        .get(origin.recordId)) as { updatedAt?: number } | undefined;
+      if (!local || local.updatedAt !== sent) return;
       await db
         .table(tableName)
         .update(origin.recordId, { updatedAt: entry.serverUpdatedAt });
+    });
+  }
+}
+
+/**
+ * Push cycle. Idempotent — a call while a cycle is already in flight joins
+ * it; a call while the device is offline is a no-op.
+ */
+export function runPushCycle(): Promise<void> {
+  if (pushInFlight) return pushInFlight;
+  if (engineSuspended) return Promise.resolve();
+  if (!isOnline()) return Promise.resolve();
+
+  const cycle = pushCycle().finally(() => {
+    if (pushInFlight === cycle) pushInFlight = null;
+    useSyncStatusStore.setState({ isSyncing: false });
+  });
+  pushInFlight = cycle;
+  return cycle;
+}
+
+async function pushCycle(): Promise<void> {
+  useSyncStatusStore.setState({ isSyncing: true });
+
+  let collected = await collectAndOrderQueuedOps();
+  let orphansDropped = collected.orphansDropped;
+  // A batch made only of orphans still made progress: collect the next one.
+  while (collected.ops.length === 0 && collected.orphansDropped > 0) {
+    collected = await collectAndOrderQueuedOps();
+    orphansDropped += collected.orphansDropped;
+  }
+  const { queueRows, ops, sentUpdatedAt } = collected;
+  if (ops.length === 0) {
+    useSyncStatusStore.setState({ queueDepth: await getQueueDepth() });
+    return;
+  }
+
+  let res: Response;
+  try {
+    res = await apiFetch("/api/sync/push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+      body: JSON.stringify({ ops }),
+    });
+  } catch (err) {
+    // Network error — back the loop off and retry.
+    await rescheduleAfterBatchFailure(
+      err instanceof Error ? err.message : String(err),
+    );
+    return;
+  }
+
+  if (!res.ok) {
+    if (res.status === 401) {
+      useSyncStatusStore.setState({ lastError: null, lastErrorSource: null });
+      return;
+    }
+    let detail = `HTTP ${res.status}`;
+    try {
+      const body = (await res.json()) as {
+        error?: string;
+        detail?: string;
+      };
+      if (body?.detail) detail = body.detail;
+      else if (body?.error) detail = body.error;
+    } catch {
+      // non-JSON body, keep the status-code detail
+    }
+    await rescheduleAfterBatchFailure(detail);
+    return;
+  }
+  pushFailures = 0;
+
+  const body = (await res.json()) as {
+    accepted?: Array<{ queueId: number; serverUpdatedAt: number }>;
+    rejected?: Array<{
+      queueId: number;
+      tableName: string;
+      error: string;
+      code?: string;
+    }>;
+  };
+  const accepted = body.accepted ?? [];
+  const rejected = body.rejected ?? [];
+  const queueRowsById = new Map<number, SyncQueueRow>();
+  for (const q of queueRows) {
+    if (q.id != null) queueRowsById.set(q.id, q);
+  }
+
+  await applyServerAck(accepted, queueRowsById, sentUpdatedAt);
+  // Ack by snapshot, not by id: an edit made while this request was in
+  // flight coalesced onto the same queue row, and deleting it would lose
+  // that edit (audit sync-engine#0). Such a row stays for the next cycle.
+  await ackIfUnchanged(
+    accepted
+      .map((a) => queueRowsById.get(a.queueId))
+      .filter((q): q is SyncQueueRow => q != null),
+  );
+
+  let droppedCount = 0;
+  if (rejected.length > 0) {
+    const firstErr = rejected[0]!;
+    const detail = `${firstErr.tableName}: ${firstErr.error}`;
+    console.error(
+      `[sync] ${rejected.length} op(s) rejected:`,
+      rejected.map((r) => `${r.tableName}: ${r.error}`),
+    );
+    // An op is DROPPED (acked out of the queue; its local Dexie row stays) when
+    // it can never succeed and would otherwise wedge the queue forever:
+    //   1. `code: "invalid"` — failed server-side schema validation. The
+    //      schema won't change, so it can never apply.
+    //   2. A non-"invalid" rejection (a real DB write failure) that has now
+    //      failed MAX_PUSH_ATTEMPTS times. These look transient but, when
+    //      permanent (a CHECK violation or schema drift), an un-dropped op
+    //      keeps queueDepth > 0 so the engine shows "Syncing…" forever and no
+    //      save ever settles. Once the retry budget is spent we give up.
+    // Everything else gets an attempts bump so exponential backoff applies.
+    //
+    // A dropped op is recorded in the persisted `droppedOps` list so the
+    // user can see which records never reached the server (audit
+    // sync-engine#13). A queue row an in-flight edit moved is not dropped:
+    // it now stands for a newer version that deserves its own attempt.
+    const drops: Array<{ q: SyncQueueRow; error: string }> = [];
+    let bumpedCount = 0;
+    let maxBumpedAttempts = 0;
+    for (const r of rejected) {
+      const q = queueRowsById.get(r.queueId);
+      if (q?.id == null) continue;
+      const nextAttempts = (q.attempts ?? 0) + 1;
+      if (r.code === "invalid" || nextAttempts >= MAX_PUSH_ATTEMPTS) {
+        if (r.code !== "invalid") {
+          console.error(
+            `[sync] giving up on op after ${nextAttempts} attempts: ${r.tableName} queueId=${r.queueId} — ${r.error}`,
+          );
+        }
+        drops.push({ q, error: r.error });
+      } else {
+        await db._syncQueue.update(q.id, { attempts: nextAttempts });
+        bumpedCount++;
+        if (nextAttempts > maxBumpedAttempts) maxBumpedAttempts = nextAttempts;
+      }
+    }
+    if (drops.length > 0) {
+      const droppedIds = new Set(await ackIfUnchanged(drops.map((d) => d.q)));
+      const now = Date.now();
+      const recorded: DroppedSyncOp[] = drops
+        .filter((d) => droppedIds.has(d.q.id!))
+        .map((d) => ({
+          tableName: d.q.tableName,
+          recordId: d.q.recordId,
+          error: d.error,
+          droppedAt: now,
+        }));
+      if (recorded.length > 0) {
+        useSyncStatusStore.getState().recordDroppedOps(recorded);
+      }
+      droppedCount = droppedIds.size;
+    }
+    setPushError(`${rejected.length} record(s) failed: ${detail}`);
+    useSyncStatusStore.setState({
+      lastPushedAt: Date.now(),
+      queueDepth: await getQueueDepth(),
+    });
+
+    // Ops we bumped (not dropped) are still pending. Schedule a backoff retry
+    // so they keep trying autonomously until they apply or exhaust the retry
+    // budget. Without this a rejected op sits untouched until the next manual
+    // write happens to flush it, leaving the indicator stuck on "Syncing…".
+    if (bumpedCount > 0) {
+      schedulePush(nextBackoff(maxBumpedAttempts));
+    }
+  } else {
+    useSyncStatusStore.setState({
+      lastPushedAt: Date.now(),
+      lastError: null,
+      lastErrorSource: null,
+      queueDepth: await getQueueDepth(),
+    });
+  }
+
+  // Chain a pull so the client sees server-authoritative state for any
+  // records other devices may have written (D-10).
+  schedulePull();
+
+  // Re-drain: if new records arrived while the push was in flight, flush
+  // them immediately. Re-drain whenever this cycle made forward progress —
+  // either it acked items, or it dropped un-syncable ops (a batch of only
+  // un-syncable ops that wedged the queue must keep draining). Without
+  // progress we must NOT re-drain, or the same un-acked ops loop forever.
+  if (accepted.length > 0 || droppedCount > 0 || orphansDropped > 0) {
+    const remaining = await getQueueDepth();
+    if (remaining > 0) {
+      schedulePush(0);
     }
   }
 }
 
 /**
- * Push cycle. Idempotent — repeat calls while a cycle is already in flight
- * or the device is offline are no-ops.
+ * A whole batch failed (network error or non-OK status): nothing reached the
+ * server, so no op's `attempts` is touched — that budget is for per-op
+ * rejections only. Sharing it let a short server outage spend an op's budget,
+ * after which one transient rejection dropped it (audit sync-engine#13). The
+ * loop backs off on its own consecutive-failure count and retries forever.
  */
-export async function runPushCycle(): Promise<void> {
-  if (pushInFlight) return;
-  if (engineSuspended) return;
-  if (!isOnline()) return;
-
-  pushInFlight = true;
-  useSyncStatusStore.setState({ isSyncing: true });
-
-  try {
-    const { queueRows, ops } = await collectAndOrderQueuedOps();
-    if (ops.length === 0) {
-      useSyncStatusStore.setState({ queueDepth: await getQueueDepth() });
-      return;
-    }
-
-    let res: Response;
-    try {
-      res = await apiFetch("/api/sync/push", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        cache: "no-store",
-        body: JSON.stringify({ ops }),
-      });
-    } catch (err) {
-      // Network error — treat as failure, backoff on max attempt in batch.
-      await incrementAttemptsAndReschedule(
-        queueRows,
-        err instanceof Error ? err.message : String(err),
-      );
-      return;
-    }
-
-    if (!res.ok) {
-      if (res.status === 401) {
-        useSyncStatusStore.setState({ lastError: null });
-        return;
-      }
-      let detail = `HTTP ${res.status}`;
-      try {
-        const body = (await res.json()) as {
-          error?: string;
-          detail?: string;
-        };
-        if (body?.detail) detail = body.detail;
-        else if (body?.error) detail = body.error;
-      } catch {
-        // non-JSON body, keep the status-code detail
-      }
-      await incrementAttemptsAndReschedule(queueRows, detail);
-      return;
-    }
-
-    const body = (await res.json()) as {
-      accepted?: Array<{ queueId: number; serverUpdatedAt: number }>;
-      rejected?: Array<{
-        queueId: number;
-        tableName: string;
-        error: string;
-        code?: string;
-      }>;
-    };
-    const accepted = body.accepted ?? [];
-    const rejected = body.rejected ?? [];
-    const queueRowsById = new Map<number, SyncQueueRow>();
-    for (const q of queueRows) {
-      if (q.id != null) queueRowsById.set(q.id, q);
-    }
-
-    await applyServerAck(accepted, queueRowsById);
-    await ack(accepted.map((a) => a.queueId));
-
-    let droppedCount = 0;
-    if (rejected.length > 0) {
-      const firstErr = rejected[0]!;
-      const detail = `${firstErr.tableName}: ${firstErr.error}`;
-      console.error(
-        `[sync] ${rejected.length} op(s) rejected:`,
-        rejected.map((r) => `${r.tableName}: ${r.error}`),
-      );
-      // An op is DROPPED (acked out of the queue; its local Dexie row stays) when
-      // it can never succeed and would otherwise wedge the queue forever:
-      //   1. `code: "invalid"` — failed server-side schema validation. The
-      //      schema won't change, so it can never apply.
-      //   2. A non-"invalid" rejection (a real DB write failure) that has now
-      //      failed MAX_PUSH_ATTEMPTS times. These look transient but, when
-      //      permanent (a CHECK violation or schema drift), an un-dropped op
-      //      keeps queueDepth > 0 so the engine shows "Syncing…" forever and no
-      //      save ever settles. Once the retry budget is spent we give up.
-      // Everything else gets an attempts bump so exponential backoff applies.
-      const dropIds: number[] = [];
-      let bumpedCount = 0;
-      let maxBumpedAttempts = 0;
-      for (const r of rejected) {
-        const q = queueRowsById.get(r.queueId);
-        if (q?.id == null) continue;
-        const nextAttempts = (q.attempts ?? 0) + 1;
-        if (r.code === "invalid" || nextAttempts >= MAX_PUSH_ATTEMPTS) {
-          if (r.code !== "invalid") {
-            console.error(
-              `[sync] giving up on op after ${nextAttempts} attempts: ${r.tableName} queueId=${r.queueId} — ${r.error}`,
-            );
-          }
-          dropIds.push(q.id);
-        } else {
-          await db._syncQueue.update(q.id, { attempts: nextAttempts });
-          bumpedCount++;
-          if (nextAttempts > maxBumpedAttempts) maxBumpedAttempts = nextAttempts;
-        }
-      }
-      if (dropIds.length > 0) await ack(dropIds);
-      droppedCount = dropIds.length;
-      useSyncStatusStore.setState({
-        lastError: `${rejected.length} record(s) failed: ${detail}`,
-        lastPushedAt: Date.now(),
-        queueDepth: await getQueueDepth(),
-      });
-
-      // Ops we bumped (not dropped) are still pending. Schedule a backoff retry
-      // so they keep trying autonomously until they apply or exhaust the retry
-      // budget. Without this a rejected op sits untouched until the next manual
-      // write happens to flush it, leaving the indicator stuck on "Syncing…".
-      if (bumpedCount > 0) {
-        schedulePush(nextBackoff(maxBumpedAttempts));
-      }
-    } else {
-      useSyncStatusStore.setState({
-        lastPushedAt: Date.now(),
-        lastError: null,
-        queueDepth: await getQueueDepth(),
-      });
-    }
-
-    // Chain a pull so the client sees server-authoritative state for any
-    // records other devices may have written (D-10).
-    schedulePull();
-
-    // Re-drain: if new records arrived while the push was in flight, flush
-    // them immediately. Re-drain whenever this cycle made forward progress —
-    // either it acked items, or it dropped un-syncable ops (a batch of only
-    // un-syncable ops that wedged the queue must keep draining). Without
-    // progress we must NOT re-drain, or the same un-acked ops loop forever.
-    if (accepted.length > 0 || droppedCount > 0) {
-      const remaining = await getQueueDepth();
-      if (remaining > 0) {
-        schedulePush(0);
-      }
-    }
-  } finally {
-    pushInFlight = false;
-    useSyncStatusStore.setState({ isSyncing: false });
-  }
-}
-
-async function incrementAttemptsAndReschedule(
-  queueRows: SyncQueueRow[],
-  lastError: string,
-): Promise<void> {
-  let maxAttempts = 0;
-  for (const q of queueRows) {
-    if (q.id == null) continue;
-    const newAttempts = (q.attempts ?? 0) + 1;
-    if (newAttempts > maxAttempts) maxAttempts = newAttempts;
-    await db._syncQueue.update(q.id, { attempts: newAttempts });
-  }
-  useSyncStatusStore.setState({
-    lastError,
-    queueDepth: await getQueueDepth(),
-  });
-  schedulePush(nextBackoff(maxAttempts));
+async function rescheduleAfterBatchFailure(lastError: string): Promise<void> {
+  pushFailures++;
+  setPushError(lastError);
+  useSyncStatusStore.setState({ queueDepth: await getQueueDepth() });
+  schedulePush(nextBackoff(pushFailures));
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -461,8 +567,85 @@ export function schedulePull(delayMs = 0): void {
  */
 function scheduleFailedPullRetry(lastError: string): void {
   pullAttempts++;
-  useSyncStatusStore.setState({ lastError });
+  setPullError(lastError);
   schedulePull(nextBackoff(pullAttempts - 1));
+}
+
+type PulledRow = Record<string, unknown> & {
+  id: string;
+  updatedAt?: number;
+  deletedAt?: number | null;
+};
+
+/**
+ * Should a pulled server row replace the local copy? Mirrors the push route's
+ * LWW rules, so the device converges on what the server will keep instead of
+ * blindly overwriting (audit sync-engine#1):
+ *   - A server tombstone beats a live local row (rule 1: a delete is never
+ *     resurrected by an edit).
+ *   - A server live row beats a local tombstone only when strictly newer
+ *     (rule 2b: the tombstone wins ties).
+ *   - Otherwise the strictly newer `updatedAt` wins. A tie goes to the server
+ *     (rule 3) unless a local edit is still queued.
+ *
+ * A pending queue entry alone does not block a strictly newer server row: the
+ * server rejects the older local edit anyway, and skipping the row while the
+ * cursor moves past it would leave this device stale for good.
+ */
+function pulledRowWins(
+  pulled: PulledRow,
+  local: PulledRow | undefined,
+  hasPendingOp: boolean,
+): boolean {
+  if (!local) return true;
+  const pulledDeleted = pulled.deletedAt != null;
+  const localDeleted = local.deletedAt != null;
+  if (pulledDeleted && !localDeleted) return true;
+  const pulledAt = pulled.updatedAt ?? 0;
+  const localAt = local.updatedAt ?? 0;
+  if (pulledAt !== localAt) return pulledAt > localAt;
+  if (localDeleted && !pulledDeleted) return false;
+  return !hasPendingOp;
+}
+
+/**
+ * Apply one table's pulled page and advance its cursor, atomically. Returns
+ * the number of rows written.
+ */
+async function applyPulledRows(
+  tn: TableName,
+  rawRows: Record<string, unknown>[],
+  cursor: { updatedAt: number; id: string },
+): Promise<number> {
+  // Pulled rows arrive as raw Postgres rows: every unset optional column is
+  // null, plus the server's userId. Shape them like a locally written row
+  // (audit core-duplication#3).
+  const rows = rawRows.map((r) => normalizePulledRow(r) as PulledRow);
+  return db.transaction(
+    "rw",
+    [db.table(tn), db._syncMeta, db._syncQueue],
+    async () => {
+      const ids = rows.map((r) => r.id);
+      const locals = (await db.table(tn).bulkGet(ids)) as Array<
+        PulledRow | undefined
+      >;
+      const pending = await db._syncQueue
+        .where("[tableName+recordId]")
+        .anyOf(ids.map((id) => [tn, id]))
+        .toArray();
+      const pendingIds = new Set(pending.map((q) => q.recordId));
+      const winners = rows.filter((row, i) =>
+        pulledRowWins(row, locals[i], pendingIds.has(row.id)),
+      );
+      if (winners.length > 0) await db.table(tn).bulkPut(winners);
+      await db._syncMeta.put({
+        tableName: tn,
+        lastPulledUpdatedAt: cursor.updatedAt,
+        lastPulledId: cursor.id,
+      });
+      return winners.length;
+    },
+  );
 }
 
 /**
@@ -471,13 +654,26 @@ function scheduleFailedPullRetry(lastError: string): void {
  * to /api/sync/pull, applies each table's rows in an atomic transaction,
  * advances the cursor with the SKEW_MARGIN_MS clamp, and re-calls until
  * every table reports `hasMore: false`.
+ *
+ * Resolves `true` only when every table drained, i.e. IndexedDB now holds a
+ * complete copy of the cloud dataset; `false` on any skip or failure (audit
+ * sync-engine#9). A call while a pull is in flight joins it and reports its
+ * result, so a caller that needs a complete pull never proceeds on a no-op.
  */
-export async function runPullCycle(): Promise<void> {
-  if (pullInFlight) return;
-  if (engineSuspended) return;
-  if (!isOnline()) return;
+export function runPullCycle(): Promise<boolean> {
+  if (pullInFlight) return pullInFlight;
+  if (engineSuspended) return Promise.resolve(false);
+  if (!isOnline()) return Promise.resolve(false);
 
-  pullInFlight = true;
+  const cycle = pullCycle().finally(() => {
+    if (pullInFlight === cycle) pullInFlight = null;
+    useSyncStatusStore.setState({ isSyncing: false });
+  });
+  pullInFlight = cycle;
+  return cycle;
+}
+
+async function pullCycle(): Promise<boolean> {
   useSyncStatusStore.setState({ isSyncing: true });
 
   // Tracks whether this cycle actually wrote any rows to Dexie. Used to avoid a
@@ -487,146 +683,143 @@ export async function runPullCycle(): Promise<void> {
   // making expensive views (analytics/insights) thrash.
   let appliedAnyRows = false;
 
-  try {
-    while (true) {
-      const cursors: Record<string, { updatedAt: number; id: string }> = {};
-      for (const tn of TABLE_PUSH_ORDER) {
-        const meta = await db._syncMeta.get(tn);
-        cursors[tn] = {
-          updatedAt: meta?.lastPulledUpdatedAt ?? 0,
-          id: meta?.lastPulledId ?? "",
-        };
-      }
-
-      let res: Response;
-      try {
-        res = await apiFetch("/api/sync/pull", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          cache: "no-store",
-          // Opt into the server-stamp keyset; without it the route pages by
-          // `updatedAt` for older clients (audit sync-engine#3).
-          body: JSON.stringify({ cursors, cursorKind: "server" }),
-        });
-      } catch (err) {
-        scheduleFailedPullRetry(
-          err instanceof Error ? err.message : String(err),
-        );
-        return;
-      }
-
-      if (!res.ok) {
-        if (res.status === 401) {
-          // Auth is handled elsewhere (the session is re-established, which
-          // fires its own pull). Retrying here would just spin on 401s.
-          pullAttempts = 0;
-          useSyncStatusStore.setState({ lastError: null });
-          return;
-        }
-        let detail = `HTTP ${res.status}`;
-        try {
-          const body = (await res.json()) as { error?: string };
-          if (body?.error) detail = body.error;
-        } catch {
-          // keep status-code detail
-        }
-        scheduleFailedPullRetry(detail);
-        return;
-      }
-
-      const body = (await res.json()) as {
-        result: Record<
-          string,
-          {
-            rows: Record<string, unknown>[];
-            hasMore: boolean;
-            cursor?: { updatedAt: number; id: string };
-          }
-        >;
-        serverTime: number;
+  while (true) {
+    const cursors: Record<string, { updatedAt: number; id: string }> = {};
+    for (const tn of TABLE_PUSH_ORDER) {
+      const meta = await db._syncMeta.get(tn);
+      cursors[tn] = {
+        updatedAt: meta?.lastPulledUpdatedAt ?? 0,
+        id: meta?.lastPulledId ?? "",
       };
+    }
 
-      let anyHasMore = false;
+    let res: Response;
+    try {
+      res = await apiFetch("/api/sync/pull", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        // Opt into the server-stamp keyset; without it the route pages by
+        // `updatedAt` for older clients (audit sync-engine#3).
+        body: JSON.stringify({ cursors, cursorKind: "server" }),
+      });
+    } catch (err) {
+      scheduleFailedPullRetry(
+        err instanceof Error ? err.message : String(err),
+      );
+      return false;
+    }
 
-      for (const tn of TABLE_PUSH_ORDER) {
-        const slice = body.result?.[tn];
-        if (!slice) continue;
-        const rows = slice.rows ?? [];
-        if (slice.hasMore) anyHasMore = true;
+    if (!res.ok) {
+      if (res.status === 401) {
+        // Auth is handled elsewhere (the session is re-established, which
+        // fires its own pull). Retrying here would just spin on 401s.
+        pullAttempts = 0;
+        useSyncStatusStore.setState({ lastError: null, lastErrorSource: null });
+        return false;
+      }
+      let detail = `HTTP ${res.status}`;
+      try {
+        const body = (await res.json()) as { error?: string };
+        if (body?.error) detail = body.error;
+      } catch {
+        // keep status-code detail
+      }
+      scheduleFailedPullRetry(detail);
+      return false;
+    }
 
-        if (rows.length === 0) continue;
-
-        // The server returns the keyset position of the last row as an
-        // opaque `cursor` — its `updatedAt` is the server-assigned write
-        // stamp, NOT the row's own `updatedAt`, so a record pushed late by
-        // another device still lands past this cursor (audit sync-engine#3).
-        // Fall back to the last row only for a server that predates it.
-        const lastRow = rows[rows.length - 1] as {
-          updatedAt?: number;
-          id?: string;
-        };
-        const lastUpdatedAt = slice.cursor?.updatedAt ?? lastRow.updatedAt ?? 0;
-        const lastId = slice.cursor?.id ?? lastRow.id ?? "";
-
-        let nextUpdatedAt: number;
-        let nextId: string;
-        if (slice.hasMore) {
-          // More rows queued — advance to the exact `(updatedAt, id)` seen.
-          // No skew clamp here: clamping while `hasMore` is true would
-          // re-fetch this same page forever. Forward progress by the keyset
-          // tuple is what lets a duplicate-`updatedAt` run paginate at all.
-          nextUpdatedAt = lastUpdatedAt;
-          nextId = lastId;
-        } else if (lastUpdatedAt > body.serverTime - SKEW_MARGIN_MS) {
-          // Table drained, but the newest rows sit inside the clock-skew
-          // window. Clamp the persisted cursor back (id reset to "") so the
-          // next pull cycle re-scans that window for rows written concurrently
-          // with this query (Pattern 7). The current loop still terminates —
-          // `hasMore` is false.
-          nextUpdatedAt = body.serverTime - SKEW_MARGIN_MS;
-          nextId = "";
-        } else {
-          nextUpdatedAt = lastUpdatedAt;
-          nextId = lastId;
+    const body = (await res.json()) as {
+      result: Record<
+        string,
+        {
+          rows: Record<string, unknown>[];
+          hasMore: boolean;
+          cursor?: { updatedAt: number; id: string };
         }
+      >;
+      serverTime: number;
+    };
 
-        await db.transaction("rw", [db.table(tn), db._syncMeta], async () => {
-          await db.table(tn).bulkPut(rows);
-          await db._syncMeta.put({
-            tableName: tn,
-            lastPulledUpdatedAt: nextUpdatedAt,
-            lastPulledId: nextId,
-          });
-        });
-        appliedAnyRows = true;
+    let anyHasMore = false;
+
+    for (const tn of TABLE_PUSH_ORDER) {
+      const slice = body.result?.[tn];
+      if (!slice) continue;
+      const rows = slice.rows ?? [];
+      if (slice.hasMore) anyHasMore = true;
+
+      if (rows.length === 0) continue;
+
+      // The server returns the keyset position of the last row as an
+      // opaque `cursor` — its `updatedAt` is the server-assigned write
+      // stamp, NOT the row's own `updatedAt`, so a record pushed late by
+      // another device still lands past this cursor (audit sync-engine#3).
+      // Fall back to the last row only for a server that predates it.
+      const lastRow = rows[rows.length - 1] as {
+        updatedAt?: number;
+        id?: string;
+      };
+      const lastUpdatedAt = slice.cursor?.updatedAt ?? lastRow.updatedAt ?? 0;
+      const lastId = slice.cursor?.id ?? lastRow.id ?? "";
+
+      let nextUpdatedAt: number;
+      let nextId: string;
+      if (slice.hasMore) {
+        // More rows queued — advance to the exact `(updatedAt, id)` seen.
+        // No skew clamp here: clamping while `hasMore` is true would
+        // re-fetch this same page forever. Forward progress by the keyset
+        // tuple is what lets a duplicate-`updatedAt` run paginate at all.
+        nextUpdatedAt = lastUpdatedAt;
+        nextId = lastId;
+      } else if (lastUpdatedAt > body.serverTime - SKEW_MARGIN_MS) {
+        // Table drained, but the newest rows sit inside the clock-skew
+        // window. Clamp the persisted cursor back (id reset to "") so the
+        // next pull cycle re-scans that window for rows written concurrently
+        // with this query (Pattern 7). The current loop still terminates —
+        // `hasMore` is false.
+        nextUpdatedAt = body.serverTime - SKEW_MARGIN_MS;
+        nextId = "";
+      } else {
+        nextUpdatedAt = lastUpdatedAt;
+        nextId = lastId;
       }
 
-      if (!anyHasMore) break;
+      const written = await applyPulledRows(tn, rows, {
+        updatedAt: nextUpdatedAt,
+        id: nextId,
+      });
+      if (written > 0) appliedAnyRows = true;
     }
 
-    // Reaching here means the while-loop drained every table (no `hasMore`),
-    // so IndexedDB now holds a complete copy of the cloud dataset. Early
-    // returns on network/HTTP errors skip this block, so the flag only
-    // flips once a full pull has genuinely succeeded.
-    useSyncStatusStore.setState({
-      lastPulledAt: Date.now(),
-      lastError: null,
-      initialSyncComplete: true,
-    });
-    pullAttempts = 0;
-
-    // Invalidate React Query caches so every hook re-fetches the freshly
-    // pulled rows (D-10 downstream effect) — but only when this cycle actually
-    // applied rows. A no-op pull (no new server data) has nothing to surface,
-    // so skipping the invalidation avoids a needless refetch storm during
-    // write-heavy bursts (Dexie's own useLiveQuery hooks still react to writes).
-    if (appliedAnyRows) {
-      queryClient.invalidateQueries();
-    }
-  } finally {
-    pullInFlight = false;
-    useSyncStatusStore.setState({ isSyncing: false });
+    if (!anyHasMore) break;
   }
+
+  // Reaching here means the while-loop drained every table (no `hasMore`),
+  // so IndexedDB now holds a complete copy of the cloud dataset. Early
+  // returns on network/HTTP errors skip this block, so the flag only
+  // flips once a full pull has genuinely succeeded.
+  //
+  // Only a pull-side error is cleared: every push chains a pull, and wiping
+  // the push's error here hid it from the user within a tick (audit
+  // sync-engine#13).
+  const clearsError = useSyncStatusStore.getState().lastErrorSource !== "push";
+  useSyncStatusStore.setState({
+    lastPulledAt: Date.now(),
+    initialSyncComplete: true,
+    ...(clearsError ? { lastError: null, lastErrorSource: null } : {}),
+  });
+  pullAttempts = 0;
+
+  // Invalidate React Query caches so every hook re-fetches the freshly
+  // pulled rows (D-10 downstream effect) — but only when this cycle actually
+  // applied rows. A no-op pull (no new server data) has nothing to surface,
+  // so skipping the invalidation avoids a needless refetch storm during
+  // write-heavy bursts (Dexie's own useLiveQuery hooks still react to writes).
+  if (appliedAnyRows) {
+    queryClient.invalidateQueries();
+  }
+  return true;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -648,10 +841,7 @@ export function attachLifecycleListeners(): void {
 
   networkCleanup = initNetworkListener((online) => {
     useSyncStatusStore.setState({ isOnline: online });
-    if (online) {
-      schedulePush(0);
-      schedulePull();
-    }
+    if (online) void flushThenPull();
   });
 
   onVisibleHandler = () => {
@@ -689,8 +879,14 @@ export function detachLifecycleListeners(): void {
 export function stopEngine(): void {
   if (pushTimer) clearTimeout(pushTimer);
   pushTimer = null;
+  if (pullTimer) clearTimeout(pullTimer);
+  pullTimer = null;
   engineStarted = false;
-  useSyncStatusStore.setState({ lastError: null, isSyncing: false });
+  useSyncStatusStore.setState({
+    lastError: null,
+    lastErrorSource: null,
+    isSyncing: false,
+  });
 }
 
 /**
@@ -711,11 +907,48 @@ export function resumeEngine(): void {
 }
 
 /**
+ * Push whatever is queued, then pull — used on startup and on reconnect.
+ *
+ * Ops can be left in the queue by an earlier session (the app closed inside
+ * the debounce, or writes made offline). Pushing them first means the pull
+ * that follows sees the server with those edits applied; and `queueDepth`,
+ * which is not persisted, is refreshed so the indicator does not read
+ * "synced" while ops are pending (audit sync-engine#14).
+ */
+async function flushThenPull(): Promise<void> {
+  if (!engineStarted || engineSuspended) return;
+  if (pushTimer) clearTimeout(pushTimer);
+  pushTimer = null;
+  useSyncStatusStore.setState({ queueDepth: await getQueueDepth() });
+  await runPushCycle();
+  schedulePull();
+}
+
+/**
+ * Resolve once no push or pull cycle is in flight. Cycles started while
+ * waiting (a push chains a pull) are waited for too. Pending timers are not.
+ */
+export async function waitForSyncIdle(): Promise<void> {
+  for (;;) {
+    const running = [pushInFlight, pullInFlight].filter(
+      (p): p is Promise<void> | Promise<boolean> => p != null,
+    );
+    if (running.length === 0) {
+      // A chained pull is scheduled on the microtask queue; let it start.
+      await Promise.resolve();
+      if (!pushInFlight && !pullInFlight) return;
+      continue;
+    }
+    await Promise.allSettled(running);
+  }
+}
+
+/**
  * Idempotent engine start. Called once by the lifecycle hook after listeners
- * are attached. Sets initial online state, kicks a startup pull (D-10), and
- * attaches the dev-only window.__syncEngine hook under a NODE_ENV guard
- * (T-43-06-01 mitigation — the string MUST NOT appear in the production
- * bundle; Plan 07 asserts this at build time).
+ * are attached. Sets initial online state, flushes the queue and then pulls
+ * (D-10, audit sync-engine#14), and attaches the dev-only window.__syncEngine
+ * hook under a NODE_ENV guard (T-43-06-01 mitigation — the string MUST NOT
+ * appear in the production bundle; Plan 07 asserts this at build time).
  */
 export function startEngine(): void {
   if (engineStarted) return;
@@ -725,8 +958,8 @@ export function startEngine(): void {
 
   useSyncStatusStore.setState({ isOnline: isOnline() });
 
-  // Startup pull (D-10).
-  schedulePull();
+  // Startup push, then pull (D-10).
+  void flushThenPull();
 
   if (process.env.NODE_ENV !== "production") {
     if (typeof window !== "undefined") {
@@ -734,7 +967,7 @@ export function startEngine(): void {
         window as Window & {
           __syncEngine?: {
             pushNow: () => Promise<void>;
-            pullNow: () => Promise<void>;
+            pullNow: () => Promise<boolean>;
             getQueueDepth: typeof getQueueDepth;
           };
         }
@@ -759,11 +992,12 @@ export function startEngine(): void {
 export function __resetEngineForTests(): void {
   if (pushTimer) clearTimeout(pushTimer);
   pushTimer = null;
-  pushInFlight = false;
+  pushInFlight = null;
+  pushFailures = 0;
   if (pullTimer) clearTimeout(pullTimer);
   pullTimer = null;
   pullAttempts = 0;
-  pullInFlight = false;
+  pullInFlight = null;
   engineStarted = false;
   engineSuspended = false;
   detachLifecycleListeners();
