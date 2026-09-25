@@ -7,6 +7,7 @@ import {
   type LogDrinkResult,
 } from "@/lib/drink-service";
 import { unwrap } from "@intake/core/service";
+import { withDbRecovery } from "@/lib/db-recovery";
 
 export type { LogDrinkInput, LogDrinkResult };
 
@@ -19,7 +20,7 @@ export type { LogDrinkInput, LogDrinkResult };
 export function useLogDrink() {
   return useCallback(
     async (input: LogDrinkInput): Promise<LogDrinkResult> => {
-      return unwrap(await logDrink(input));
+      return withDbRecovery(async () => unwrap(await logDrink(input)));
     },
     [],
   );

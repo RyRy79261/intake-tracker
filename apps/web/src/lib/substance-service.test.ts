@@ -83,6 +83,19 @@ describe("substance-service: getSubstanceRecordsByDateRange", () => {
     const all = await getSubstanceRecordsByDateRange(base, base + 5000);
     expect(all).toHaveLength(3);
   });
+
+  it("uses the same half-open [start, end) range as every other range query", async () => {
+    const base = 1700000000000;
+    await db.substanceRecords.bulkAdd([
+      makeSubstanceRecord({ id: "at-start", type: "caffeine", timestamp: base }),
+      makeSubstanceRecord({ id: "at-end", type: "caffeine", timestamp: base + 5000 }),
+    ]);
+
+    const typed = await getSubstanceRecordsByDateRange(base, base + 5000, "caffeine");
+    expect(typed.map((r) => r.id)).toEqual(["at-start"]);
+    const all = await getSubstanceRecordsByDateRange(base, base + 5000);
+    expect(all.map((r) => r.id)).toEqual(["at-start"]);
+  });
 });
 
 describe("substance-service: deleteSubstanceRecord", () => {

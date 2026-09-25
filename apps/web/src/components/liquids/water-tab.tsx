@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { Button } from "@intake/ui/button";
 import { Progress } from "@intake/ui/progress";
 import { Minus, Plus, Check } from "lucide-react";
@@ -11,6 +11,8 @@ import { useSettings } from "@/hooks/use-settings";
 import { useToast } from "@intake/ui/use-toast";
 import { useIntake } from "@/hooks/use-intake-queries";
 import { computeTwoStageProgress } from "@intake/core/progress";
+import { reportSaveError } from "@/lib/db-recovery";
+import { formatDateTime } from "@/lib/date-utils";
 
 const theme = CARD_THEMES.water;
 const unit = "ml";
@@ -24,8 +26,15 @@ export function WaterTab() {
   const waterIntake = useIntake("water");
 
   const [pendingAmount, setPendingAmount] = useState(waterIncrement);
+  // Optional custom time / note picked in the "tap to edit" dialog. They ride
+  // along with the next Confirm and are cleared after it.
+  const [pendingTimestamp, setPendingTimestamp] = useState<number | undefined>();
+  const [pendingNote, setPendingNote] = useState<string | undefined>();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showManualInput, setShowManualInput] = useState(false);
+  // Synchronous in-flight guard: `isSubmitting` is read from the render
+  // closure, so two clicks dispatched before React re-renders both pass it.
+  const inFlightRef = useRef(false);
 
   const { toast } = useToast();
 
@@ -49,52 +58,49 @@ export function WaterTab() {
   }, [waterIncrement]);
 
   const handleConfirm = useCallback(async () => {
-    if (pendingAmount <= 0 || isSubmitting) return;
+    if (pendingAmount <= 0 || inFlightRef.current) return;
 
+    inFlightRef.current = true;
     setIsSubmitting(true);
     try {
-      await waterIntake.addRecord(pendingAmount, "manual");
+      await waterIntake.addRecord(
+        pendingAmount,
+        "manual",
+        pendingTimestamp,
+        pendingNote
+      );
       toast({
         title: `Added ${formatAmount(pendingAmount, unit)}`,
-        description: "Water intake recorded",
+        description: pendingTimestamp
+          ? "Water intake recorded for earlier time"
+          : "Water intake recorded",
         variant: "success",
       });
       setPendingAmount(waterIncrement);
-    } catch {
+      setPendingTimestamp(undefined);
+      setPendingNote(undefined);
+    } catch (e) {
+      reportSaveError("water", e);
       toast({
         title: "Error",
         description: "Failed to record intake",
         variant: "destructive",
       });
     } finally {
+      inFlightRef.current = false;
       setIsSubmitting(false);
     }
-  }, [pendingAmount, isSubmitting, waterIntake, toast, waterIncrement]);
+  }, [pendingAmount, pendingTimestamp, pendingNote, waterIntake, toast, waterIncrement]);
 
+  // "Tap to edit" only edits the pending entry; Confirm is the single commit.
   const handleManualSubmit = useCallback(
-    async (amount: number, timestamp?: number, note?: string) => {
-      setIsSubmitting(true);
-      try {
-        await waterIntake.addRecord(amount, "manual", timestamp, note);
-        toast({
-          title: `Added ${formatAmount(amount, unit)}`,
-          description: timestamp
-            ? "Water intake recorded for earlier time"
-            : "Water intake recorded",
-          variant: "success",
-        });
-        setShowManualInput(false);
-      } catch {
-        toast({
-          title: "Error",
-          description: "Failed to record intake",
-          variant: "destructive",
-        });
-      } finally {
-        setIsSubmitting(false);
-      }
+    (amount: number, timestamp?: number, note?: string) => {
+      setPendingAmount(amount);
+      setPendingTimestamp(timestamp);
+      setPendingNote(note);
+      setShowManualInput(false);
     },
-    [waterIntake, toast]
+    []
   );
 
   return (
@@ -167,7 +173,12 @@ export function WaterTab() {
           >
             +{formatAmount(pendingAmount, unit)}
           </span>
-          <span className="text-xs text-muted-foreground">tap to edit</span>
+          <span className="text-xs text-muted-foreground">
+            {pendingTimestamp !== undefined &&
+              `${formatDateTime(pendingTimestamp)} · `}
+            {pendingNote !== undefined && "with note · "}
+            tap to edit
+          </span>
         </button>
 
         {/* Increment Button */}
@@ -186,7 +197,7 @@ export function WaterTab() {
       {/* Confirm Button */}
       <Button
         onClick={handleConfirm}
-        disabled={isSubmitting || waterIntake.isLoading || pendingAmount <= 0}
+        disabled={isSubmitting || pendingAmount <= 0}
         className={cn("w-full mt-4 h-12 text-base font-semibold", theme.buttonBg)}
       >
         <Check className="w-5 h-5 mr-2" />
@@ -198,8 +209,11 @@ export function WaterTab() {
         onOpenChange={setShowManualInput}
         type="water"
         currentValue={pendingAmount}
+        initialTimestamp={pendingTimestamp}
+        initialNote={pendingNote}
         onSubmit={handleManualSubmit}
-        isSubmitting={isSubmitting}
+        description="Set the amount (and optionally the time or a note), then confirm the entry."
+        submitLabel="Set Amount"
       />
 
     </>

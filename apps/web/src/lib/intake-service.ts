@@ -84,11 +84,23 @@ export async function updateIntakeRecord(
   }
 }
 
+/**
+ * Exclusive upper bound for "today" / "last 24h" reads: everything up to and
+ * including now. Future-dated records (a mistyped date) must not count toward
+ * the current day. Computed per query so a record written a moment ago is
+ * included as soon as the live query re-runs.
+ */
+function nowExclusiveEnd(): number {
+  return Date.now() + 1;
+}
+
 export async function getRecordsInLast24Hours(
   type?: "water" | "salt" | "sugar" | "potassium"
 ): Promise<IntakeRecord[]> {
   const cutoffTime = Date.now() - TWENTY_FOUR_HOURS_MS;
-  const query = db.intakeRecords.where("timestamp").aboveOrEqual(cutoffTime);
+  const query = db.intakeRecords
+    .where("timestamp")
+    .between(cutoffTime, nowExclusiveEnd());
   const records = await query.toArray();
   if (type) {
     return records.filter((r) => r.type === type && r.deletedAt === null);
@@ -105,7 +117,7 @@ export async function getDailyTotal(type: "water" | "salt" | "sugar" | "potassiu
   const cutoffTime = getDayStartTimestamp(dayStartHour);
   const records = await db.intakeRecords
     .where("timestamp")
-    .aboveOrEqual(cutoffTime)
+    .between(cutoffTime, nowExclusiveEnd())
     .filter((r) => r.type === type && r.deletedAt === null)
     .toArray();
   return records.reduce((sum, r) => sum + r.amount, 0);

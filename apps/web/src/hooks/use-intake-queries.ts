@@ -18,6 +18,7 @@ import {
   getPotassiumTotalsByGroupIds,
 } from "@/lib/intake-service";
 import { unwrap } from "@intake/core/service";
+import { withDbRecovery } from "@/lib/db-recovery";
 import { useUndoDeleteMutation } from "@/hooks/use-undo-delete-mutation";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useNowTick } from "@intake/ui/use-now-tick";
@@ -64,7 +65,8 @@ export function useRecentIntakeRecords(type: "water" | "salt" | "sugar" | "potas
 }
 
 /**
- * Hook to add an intake record.
+ * Hook to add an intake record. A write that hits a severed IndexedDB
+ * connection reopens it and retries once (see `withDbRecovery`).
  */
 export function useAddIntake() {
   return useMutation({
@@ -80,7 +82,10 @@ export function useAddIntake() {
       source?: string;
       timestamp?: number;
       note?: string;
-    }) => unwrap(await addIntakeRecord(type, amount, source, timestamp, note)),
+    }) =>
+      withDbRecovery(async () =>
+        unwrap(await addIntakeRecord(type, amount, source, timestamp, note))
+      ),
   });
 }
 
@@ -95,7 +100,7 @@ export function useUpdateIntake() {
     }: {
       id: string;
       updates: { amount?: number; timestamp?: number; note?: string; source?: string };
-    }) => unwrap(await updateIntakeRecord(id, updates)),
+    }) => withDbRecovery(async () => unwrap(await updateIntakeRecord(id, updates))),
   });
 }
 
@@ -138,7 +143,6 @@ export function useIntake(type: "water" | "salt" | "sugar" | "potassium") {
     rollingTotal: rollingTotal ?? 0,
     // Legacy: keep 'total' pointing to daily for backward compat, but prefer explicit names
     total: dailyTotal ?? 0,
-    isLoading: dailyTotal === undefined || rollingTotal === undefined,
     addRecord,
     removeRecord,
   };

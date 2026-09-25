@@ -1,13 +1,15 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { describe, it, expect, afterEach } from "vitest";
+import { screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { onlineManager } from "@tanstack/react-query";
 
 import { WaterTab } from "@/components/liquids/water-tab";
 import { renderWithFixtures } from "@/__tests__/react-test-utils";
 import { makeIntakeRecord } from "@/__tests__/fixtures/db-fixtures";
 /* eslint-disable-next-line no-restricted-imports -- test asserts a Dexie write */
 import { db } from "@/lib/db";
+import { makeQueryClient } from "@/lib/query-client";
 
 /** Resolves the Minus / Plus icon buttons (icon-only, no accessible name). */
 function stepperButtons(container: HTMLElement) {
@@ -137,5 +139,125 @@ describe("WaterTab", () => {
     );
     expect(marker).not.toBeNull();
     expect(marker!.style.left).toBe("calc(75% - 1px)");
+  });
+
+  describe("save reliability", () => {
+    afterEach(() => {
+      onlineManager.setOnline(true);
+    });
+
+    it("still writes the record while the browser reports offline", async () => {
+      // Regression: React Query's default mutation networkMode ('online')
+      // paused every local Dexie write after an `offline` event, leaving the
+      // button on 'Recording...' and nothing in IndexedDB.
+      const user = userEvent.setup();
+      await renderWithFixtures(<WaterTab />, { queryClient: makeQueryClient() });
+
+      window.dispatchEvent(new Event("offline"));
+      expect(onlineManager.isOnline()).toBe(false);
+
+      await user.click(screen.getByRole("button", { name: /Confirm Entry/i }));
+
+      await waitFor(async () => {
+        const records = await db.intakeRecords.toArray();
+        expect(records).toHaveLength(1);
+        expect(records[0]!.amount).toBe(250);
+      });
+    });
+
+    it("two clicks dispatched in the same task write only one record", async () => {
+      await renderWithFixtures(<WaterTab />);
+      const button = screen.getByRole("button", { name: /Confirm Entry/i });
+
+      // Both clicks land before React re-renders with the button disabled.
+      button.click();
+      button.click();
+
+      await waitFor(async () => {
+        expect(await db.intakeRecords.count()).toBeGreaterThan(0);
+        expect(
+          screen.getByRole("button", { name: /Confirm Entry/i })
+        ).toBeEnabled();
+      });
+      expect(await db.intakeRecords.count()).toBe(1);
+    });
+  });
+
+  describe("tap to edit", () => {
+    it("sets the pending amount without writing; Confirm saves it", async () => {
+      const user = userEvent.setup();
+      await renderWithFixtures(<WaterTab />);
+
+      await user.click(screen.getByRole("button", { name: /tap to edit/i }));
+      const input = screen.getByLabelText("Amount (ml)");
+      await user.clear(input);
+      await user.type(input, "330");
+      await user.click(screen.getByRole("button", { name: "Set Amount" }));
+
+      expect(await screen.findByText("+330ml")).toBeInTheDocument();
+      expect(await db.intakeRecords.count()).toBe(0);
+
+      await user.click(screen.getByRole("button", { name: /Confirm Entry/i }));
+      await waitFor(async () => {
+        const records = await db.intakeRecords.toArray();
+        expect(records.map((r) => r.amount)).toEqual([330]);
+      });
+    });
+
+    it("cancelling the dialog leaves the pending amount unchanged", async () => {
+      const user = userEvent.setup();
+      await renderWithFixtures(<WaterTab />);
+
+      await user.click(screen.getByRole("button", { name: /tap to edit/i }));
+      const input = screen.getByLabelText("Amount (ml)");
+      await user.clear(input);
+      await user.type(input, "330");
+      await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+      expect(screen.getByText("+250ml")).toBeInTheDocument();
+      expect(await db.intakeRecords.count()).toBe(0);
+    });
+
+    it("carries a custom time and note from the dialog into the confirmed entry only", async () => {
+      const user = userEvent.setup();
+      await renderWithFixtures(<WaterTab />);
+
+      await user.click(screen.getByRole("button", { name: /tap to edit/i }));
+      await user.click(
+        screen.getByRole("button", { name: /Set different time/i })
+      );
+      fireEvent.change(screen.getByLabelText(/When did this happen/i), {
+        target: { value: "2024-01-02T08:30" },
+      });
+      await user.click(screen.getByRole("button", { name: /Add a note/i }));
+      await user.type(screen.getByLabelText(/Note \(optional\)/i), "breakfast");
+      await user.click(screen.getByRole("button", { name: "Set Amount" }));
+
+      await user.click(screen.getByRole("button", { name: /Confirm Entry/i }));
+      await waitFor(async () => {
+        const records = await db.intakeRecords.toArray();
+        expect(records).toHaveLength(1);
+        expect(records[0]!.timestamp).toBe(
+          new Date("2024-01-02T08:30").getTime()
+        );
+        expect(records[0]!.note).toBe("breakfast");
+      });
+
+      // The custom time and note do not stick to the next entry.
+      await waitFor(() =>
+        expect(
+          screen.getByRole("button", { name: /Confirm Entry/i })
+        ).toBeEnabled()
+      );
+      await user.click(screen.getByRole("button", { name: /Confirm Entry/i }));
+      await waitFor(async () => {
+        expect(await db.intakeRecords.count()).toBe(2);
+      });
+      const next = (await db.intakeRecords.toArray()).find(
+        (r) => r.note !== "breakfast"
+      );
+      expect(next).toBeDefined();
+      expect(Math.abs(next!.timestamp - Date.now())).toBeLessThan(60_000);
+    });
   });
 });
