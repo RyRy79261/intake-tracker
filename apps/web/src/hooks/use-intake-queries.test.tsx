@@ -254,7 +254,12 @@ describe("use-intake-queries mutation hooks", () => {
     });
 
     expect(result.current.dailyTotal).toBe(0);
+    await waitFor(() => expect(result.current.rollingTotal).toBe(0));
 
+    // The record is stamped after the live queries first ran, so its
+    // timestamp is past any "now" end bound those queries captured; they
+    // must still observe it (a closed range would not be re-notified).
+    await new Promise((r) => setTimeout(r, 20));
     await result.current.addRecord(250);
 
     await waitFor(() => expect(result.current.dailyTotal).toBe(250));

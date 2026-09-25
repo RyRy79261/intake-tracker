@@ -6,7 +6,10 @@ import {
   getDayStartTimestamp,
   useIntakeRecordsByDateRange,
 } from "@/hooks/use-intake-queries";
-import { useSubstanceRecordsByDateRange } from "@/hooks/use-substance-queries";
+import {
+  useSubstanceRecordsByDateRange,
+  useSubstanceRecordsSince,
+} from "@/hooks/use-substance-queries";
 import { useNowTick } from "@intake/ui/use-now-tick";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
@@ -97,20 +100,11 @@ export function TextMetrics() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [dayStartHour, tick]
   );
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const now = useMemo(() => Date.now(), [tick]);
 
-  // Today's substance totals
-  const caffeineRecords = useSubstanceRecordsByDateRange(
-    dayStart,
-    now,
-    "caffeine"
-  );
-  const alcoholRecords = useSubstanceRecordsByDateRange(
-    dayStart,
-    now,
-    "alcohol"
-  );
+  // Today's substance totals (end bound is "now" at query time, so a new
+  // entry shows immediately rather than after the next minute tick)
+  const caffeineRecords = useSubstanceRecordsSince(dayStart, "caffeine");
+  const alcoholRecords = useSubstanceRecordsSince(dayStart, "alcohol");
 
   const caffeineTotal = useMemo(
     () => caffeineRecords.reduce((sum, r) => sum + (r.amountMg ?? 0), 0),
