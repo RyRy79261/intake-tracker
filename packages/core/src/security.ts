@@ -69,11 +69,13 @@ function redactPii(input: string): string {
 }
 
 // Data minimization helper for AI API
-// Strips any potentially sensitive info before sending to AI
-export function sanitizeForAI(input: string): string {
+// Strips any potentially sensitive info before sending to AI. `maxLength`
+// defaults to 500 (short free-text fields); callers that legitimately carry
+// more text — a dictated voice transcript — pass their own cap.
+export function sanitizeForAI(input: string, maxLength = 500): string {
   return redactPii(input)
     .trim()
-    .slice(0, 500); // Limit input length
+    .slice(0, maxLength); // Limit input length
 }
 
 // Sanitize multi-line text (descriptions, error logs, environment dumps) for
