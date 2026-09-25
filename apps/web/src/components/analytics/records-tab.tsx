@@ -41,6 +41,11 @@ import { useUpdateEating, useDeleteEating } from "@/hooks/use-eating-queries";
 import { useUpdateUrination, useDeleteUrination } from "@/hooks/use-urination-queries";
 import { useUpdateDefecation, useDeleteDefecation } from "@/hooks/use-defecation-queries";
 import { useUpdateSubstance } from "@/hooks/use-substance-queries";
+import {
+  useDeleteLiquidEntry,
+  useDeleteSubstanceWithUndo,
+  describeSubstanceDeleteCascade,
+} from "@/hooks/use-composable-entry";
 import { useToast } from "@intake/ui/use-toast";
 import { useKeyboardAwareScroll } from "@/hooks/use-keyboard-scroll";
 import { cn } from "@/lib/utils";
@@ -61,6 +66,8 @@ const UNDO_TOAST_TYPES = new Set<string>([
   "eating",
   "urination",
   "defecation",
+  "caffeine",
+  "alcohol",
 ]);
 
 // dateTimeLocalToTimestamp throws on invalid input (it never returns NaN), so
@@ -135,11 +142,15 @@ export function RecordsTab({ range }: RecordsTabProps) {
   }, [range.start, range.end]);
 
   // Fetch all domain records via hook
-  const { data: allRecords, deleteWeight, deleteBP, deleteSubstance } = useRecordsTabData(range);
+  const { data: allRecords, deleteWeight, deleteBP } = useRecordsTabData(range);
 
   // Mutations
   const updateMutation = useUpdateIntake();
-  const deleteMutation = useDeleteIntake();
+  const deleteIntakeMutation = useDeleteIntake();
+  // Same blast radius as the Liquids card: a drink's water row takes the
+  // whole drink (substances, sugar, salt) with it; a meal's water row doesn't.
+  const deleteMutation = useDeleteLiquidEntry(deleteIntakeMutation.mutateAsync);
+  const deleteSubstance = useDeleteSubstanceWithUndo();
   const updateWeightMutation = useUpdateWeight();
   const updateBPMutation = useUpdateBloodPressure();
   const updateEatingMutation = useUpdateEating();
@@ -195,7 +206,12 @@ export function RecordsTab({ range }: RecordsTabProps) {
       else if (unified.type === "eating") await deleteEatingMutation.mutateAsync(id);
       else if (unified.type === "urination") await deleteUrinationMutation.mutateAsync(id);
       else if (unified.type === "defecation") await deleteDefecationMutation.mutateAsync(id);
-      else if (unified.type === "caffeine" || unified.type === "alcohol") await deleteSubstance(id);
+      else if (unified.type === "caffeine" || unified.type === "alcohol") {
+        // A drink's substance takes the whole drink with it; say so first.
+        const cascade = await describeSubstanceDeleteCascade(id);
+        if (cascade && !window.confirm(`Delete this whole drink? This also removes ${cascade}.`)) return;
+        await deleteSubstance(id);
+      }
       if (!UNDO_TOAST_TYPES.has(unified.type)) {
         toast({ title: "Entry deleted", description: "Record removed" });
       }
@@ -309,8 +325,9 @@ export function RecordsTab({ range }: RecordsTabProps) {
     const newTimestamp = parseDateTimeLocalOrNull(editTimestamp);
     if (newTimestamp === null) { toast({ title: "Invalid date/time", variant: "destructive" }); return; }
     try {
+      // Pass the note explicitly so clearing the field clears it.
       const eatingNote = editNote.trim() || undefined;
-      await updateEatingMutation.mutateAsync({ id: editingEating.id, updates: { timestamp: newTimestamp, ...(eatingNote !== undefined && { note: eatingNote }) } });
+      await updateEatingMutation.mutateAsync({ id: editingEating.id, updates: { timestamp: newTimestamp, note: eatingNote } });
       setEditingEating(null);
       toast({ title: "Entry updated" });
     } catch { toast({ title: "Error", description: "Could not update", variant: "destructive" }); }
