@@ -5,7 +5,11 @@ import {
   deobfuscateApiKey,
   sanitizeNumericInput
 } from "@/lib/security";
-import { DEFAULT_LIQUID_PRESETS, type LiquidPreset } from "@/lib/constants";
+import {
+  DEFAULT_LIQUID_PRESETS,
+  type LiquidPreset,
+  type LiquidPresetPatch,
+} from "@/lib/constants";
 import { DEFAULT_QUICK_NAV_ITEMS, type QuickNavItem } from "@/lib/quick-nav-defaults";
 
 export type { LiquidPreset } from "@/lib/constants";
@@ -153,7 +157,7 @@ interface SettingsActions {
   setWeightGraphShowDefecation: (value: boolean) => void;
   setWeightGraphShowDrinking: (value: boolean) => void;
   addLiquidPreset: (preset: Omit<LiquidPreset, "id">) => string;
-  updateLiquidPreset: (id: string, updates: Partial<Omit<LiquidPreset, "id">>) => void;
+  updateLiquidPreset: (id: string, updates: LiquidPresetPatch) => void;
   deleteLiquidPreset: (id: string) => void;
   // Analytics intro
   setAnalyticsIntroSeen: (seen: boolean) => void;
@@ -446,9 +450,18 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
       },
       updateLiquidPreset: (id, updates) =>
         set((state) => ({
-          liquidPresets: state.liquidPresets.map((p) =>
-            p.id === id ? { ...p, ...updates } : p
-          ),
+          liquidPresets: state.liquidPresets.map((p) => {
+            if (p.id !== id) return p;
+            // A key present with `undefined` clears the field (the user
+            // emptied that input). A plain spread would keep it as an own
+            // `undefined` key rather than removing it.
+            const next: Record<string, unknown> = { ...p };
+            for (const [key, value] of Object.entries(updates)) {
+              if (value === undefined) delete next[key];
+              else next[key] = value;
+            }
+            return next as unknown as LiquidPreset;
+          }),
         })),
       deleteLiquidPreset: (id) =>
         set((state) => ({

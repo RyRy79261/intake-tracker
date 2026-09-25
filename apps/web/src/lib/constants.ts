@@ -117,10 +117,21 @@ export interface LiquidPreset {
   caffeinePer100ml?: number;                 // mg per 100ml
   alcoholPer100ml?: number;                  // ABV percentage (e.g. 5 for beer, 12 for wine)
   saltPer100ml?: number;                     // mg sodium per 100ml
+  sugarPer100ml?: number;                    // g sugar per 100ml
+  potassiumPer100ml?: number;                // mg potassium per 100ml
   isDefault: boolean;
   source: "manual" | "ai";
   aiConfidence?: number;
 }
+
+/**
+ * Patch accepted by `updateLiquidPreset`. Unlike `Partial<LiquidPreset>`, a key
+ * may be present with the value `undefined` — that means "clear this field"
+ * (e.g. the user emptied the sugar input), not "leave it alone".
+ */
+export type LiquidPresetPatch = {
+  [K in keyof Omit<LiquidPreset, "id">]?: Omit<LiquidPreset, "id">[K] | undefined;
+};
 
 export const DEFAULT_LIQUID_PRESETS: LiquidPreset[] = [
   // Caffeine presets

@@ -48,6 +48,33 @@ describe("liquidPresets CRUD", () => {
     expect(updated!.tab).toBe("coffee");
   });
 
+  it("updateLiquidPreset clears a field passed explicitly as undefined", () => {
+    const { addLiquidPreset, updateLiquidPreset } = useSettingsStore.getState();
+    addLiquidPreset({
+      name: "Cola",
+      tab: "beverage",
+      waterContentPercent: 90,
+      defaultVolumeMl: 330,
+      sugarPer100ml: 10.6,
+      potassiumPer100ml: 2,
+      isDefault: false,
+      source: "ai",
+    });
+    const added = useSettingsStore.getState().liquidPresets.at(-1)!;
+
+    updateLiquidPreset(added.id, { sugarPer100ml: undefined, name: "Cola Zero" });
+
+    const updated = useSettingsStore
+      .getState()
+      .liquidPresets.find((p) => p.id === added.id)!;
+    // A spread would leave `sugarPer100ml: undefined` behind as an own key —
+    // the clear must actually remove it.
+    expect("sugarPer100ml" in updated).toBe(false);
+    expect(updated.name).toBe("Cola Zero");
+    // Keys absent from the patch are untouched.
+    expect(updated.potassiumPer100ml).toBe(2);
+  });
+
   it("deleteLiquidPreset removes the preset by id", () => {
     const { deleteLiquidPreset } = useSettingsStore.getState();
     deleteLiquidPreset("default-espresso");
