@@ -1,24 +1,35 @@
-import { describe, it, expect } from "vitest";
+// @vitest-environment jsdom
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { db } from "@/lib/db";
 import {
   makePrescription,
   makeMedicationPhase,
   makePhaseSchedule,
 } from "@/__tests__/fixtures/db-fixtures";
+import type * as TimezoneModule from "@/lib/timezone";
+
+// The device zone is whatever the test says it is. Everything else in the
+// timezone module stays real.
+const device = vi.hoisted(() => ({ tz: "Europe/Berlin", clearCalls: 0 }));
+vi.mock("@/lib/timezone", async (importOriginal) => {
+  const actual = await importOriginal<typeof TimezoneModule>();
+  return {
+    ...actual,
+    getDeviceTimezone: () => device.tz,
+    clearTimezoneCache: () => {
+      device.clearCalls++;
+    },
+  };
+});
+
+import {
+  useTimezoneDetection,
+  TIMEZONE_DISMISSALS_KEY,
+} from "@/hooks/use-timezone-detection";
 
 /**
- * Tests for timezone detection logic.
- *
- * Since the hook uses React state (useState/useEffect) and the test
- * environment is Node (no DOM), we test the core detection logic directly
- * by replicating the same db queries and comparisons the hook performs.
- *
- * The hook's detection algorithm is:
- *   1. clearTimezoneCache()
- *   2. getDeviceTimezone() -> current IANA
- *   3. Read enabled PhaseSchedule records
- *   4. Compare anchorTimezone values against device timezone
- *   5. If mismatch -> open dialog
+ * Tests for the real useTimezoneDetection hook against a seeded IndexedDB.
  */
 
 // ---------------------------------------------------------------------------
@@ -27,16 +38,20 @@ import {
 
 async function seedSchedule(overrides?: {
   anchorTimezone?: string;
-  scheduleTimeUTC?: number;
   enabled?: boolean;
+  deletedAt?: number | null;
+  phaseStatus?: "active" | "pending" | "completed" | "cancelled";
+  name?: string;
+  time?: string;
 }) {
-  const rx = makePrescription();
-  const phase = makeMedicationPhase(rx.id);
+  const rx = makePrescription({ genericName: overrides?.name ?? "Metoprolol" });
+  const phase = makeMedicationPhase(rx.id, { status: overrides?.phaseStatus ?? "active" });
   const schedule = makePhaseSchedule(phase.id, {
-    scheduleTimeUTC: overrides?.scheduleTimeUTC ?? 390,
+    scheduleTimeUTC: 390,
     anchorTimezone: overrides?.anchorTimezone ?? "Africa/Johannesburg",
     enabled: overrides?.enabled ?? true,
-    time: "08:30",
+    deletedAt: overrides?.deletedAt ?? null,
+    time: overrides?.time ?? "08:30",
   });
 
   await db.prescriptions.add(rx);
@@ -46,149 +61,145 @@ async function seedSchedule(overrides?: {
   return { rx, phase, schedule };
 }
 
-/**
- * Core detection logic extracted to match hook behavior.
- * Returns { shouldOpen, oldTimezone, newTimezone }.
- */
-async function detectTimezoneChange(deviceTimezone: string) {
-  const allSchedules = await db.phaseSchedules.toArray();
-  const activeSchedules = allSchedules.filter((s) => s.enabled === true);
-
-  if (activeSchedules.length === 0) {
-    return { shouldOpen: false, oldTimezone: "", newTimezone: "" };
-  }
-
-  const anchorTimezones = Array.from(
-    new Set(activeSchedules.map((s) => s.anchorTimezone)),
-  );
-  const hasMismatch = anchorTimezones.some((tz) => tz !== deviceTimezone);
-
-  if (hasMismatch) {
-    const mismatchedTz = anchorTimezones.find(
-      (tz) => tz !== deviceTimezone,
-    );
-    return {
-      shouldOpen: true,
-      oldTimezone: mismatchedTz ?? "",
-      newTimezone: deviceTimezone,
-    };
-  }
-
-  return { shouldOpen: false, oldTimezone: "", newTimezone: "" };
+/** Mount the hook and let the on-mount check finish. */
+async function mountHook() {
+  const hook = renderHook(() => useTimezoneDetection());
+  // The check is async (Dexie reads); give it a chance to settle.
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 20));
+  });
+  return hook;
 }
+
+function setVisibility(state: "visible" | "hidden") {
+  Object.defineProperty(document, "visibilityState", {
+    configurable: true,
+    get: () => state,
+  });
+  document.dispatchEvent(new Event("visibilitychange"));
+}
+
+beforeEach(() => {
+  device.tz = "Europe/Berlin";
+  device.clearCalls = 0;
+  localStorage.clear();
+});
 
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
-describe("timezone detection logic", () => {
-  it("Test A: detects when device IANA timezone differs from stored anchorTimezone", async () => {
-    await seedSchedule({
-      anchorTimezone: "Africa/Johannesburg",
-      enabled: true,
-    });
+describe("useTimezoneDetection", () => {
+  it("opens when a live schedule's anchor differs from the device zone", async () => {
+    await seedSchedule({ anchorTimezone: "Africa/Johannesburg" });
 
-    const result = await detectTimezoneChange("Europe/Berlin");
+    const { result } = await mountHook();
 
-    expect(result.shouldOpen).toBe(true);
-    expect(result.oldTimezone).toBe("Africa/Johannesburg");
-    expect(result.newTimezone).toBe("Europe/Berlin");
+    await waitFor(() => expect(result.current.dialogOpen).toBe(true));
+    expect(result.current.oldTimezone).toBe("Africa/Johannesburg");
+    expect(result.current.newTimezone).toBe("Europe/Berlin");
   });
 
-  it("Test B: no dialog when device timezone matches stored anchorTimezone", async () => {
-    await seedSchedule({
-      anchorTimezone: "Africa/Johannesburg",
-      enabled: true,
-    });
+  it("stays closed when every anchor matches the device zone", async () => {
+    await seedSchedule({ anchorTimezone: "Europe/Berlin" });
 
-    const result = await detectTimezoneChange("Africa/Johannesburg");
+    const { result } = await mountHook();
 
-    expect(result.shouldOpen).toBe(false);
+    expect(result.current.dialogOpen).toBe(false);
   });
 
-  it("Test C: no dialog when no active schedules exist", async () => {
-    // Seed disabled schedules only
-    await seedSchedule({
-      anchorTimezone: "Africa/Johannesburg",
-      enabled: false,
-    });
+  it("stays closed for disabled, tombstoned and completed-phase schedules", async () => {
+    await seedSchedule({ enabled: false });
+    await seedSchedule({ deletedAt: 1000 });
+    await seedSchedule({ phaseStatus: "completed" });
 
-    const result = await detectTimezoneChange("Europe/Berlin");
+    const { result } = await mountHook();
 
-    expect(result.shouldOpen).toBe(false);
+    expect(result.current.dialogOpen).toBe(false);
   });
 
-  it("Test C2: no dialog when schedule table is empty", async () => {
-    // No schedules at all
-    const result = await detectTimezoneChange("Europe/Berlin");
+  it("lists every distinct mismatched anchor with its doses", async () => {
+    await seedSchedule({ anchorTimezone: "Africa/Johannesburg", name: "Alpha" });
+    await seedSchedule({ anchorTimezone: "America/New_York", name: "Beta" });
+    await seedSchedule({ anchorTimezone: "Europe/Berlin", name: "Gamma" });
 
-    expect(result.shouldOpen).toBe(false);
+    const { result } = await mountHook();
+
+    await waitFor(() => expect(result.current.dialogOpen).toBe(true));
+    const anchors = result.current.anchors.map((g) => g.anchorTimezone).sort();
+    expect(anchors).toEqual(["Africa/Johannesburg", "America/New_York"]);
+    const beta = result.current.anchors.find((g) => g.anchorTimezone === "America/New_York")!;
+    expect(beta.doses).toEqual([
+      expect.objectContaining({ name: "Beta", after: "08:30" }),
+    ]);
   });
 
-  it("Test D: session dismissal flag prevents re-detection", async () => {
-    // Import the module-level flag control
-    const { _resetDismissedFlag } = await import(
-      "@/hooks/use-timezone-detection"
+  it("remembers 'Not now' across a remount for the same device/anchor pair", async () => {
+    await seedSchedule({ anchorTimezone: "Africa/Johannesburg" });
+
+    const first = await mountHook();
+    await waitFor(() => expect(first.result.current.dialogOpen).toBe(true));
+    act(() => first.result.current.handleDismiss());
+    expect(first.result.current.dialogOpen).toBe(false);
+    first.unmount();
+
+    expect(JSON.parse(localStorage.getItem(TIMEZONE_DISMISSALS_KEY)!)).toEqual([
+      "Europe/Berlin|Africa/Johannesburg",
+    ]);
+
+    // A cold start in the same zone does not prompt again.
+    const second = await mountHook();
+    expect(second.result.current.dialogOpen).toBe(false);
+    second.unmount();
+
+    // Moving on to another zone does.
+    device.tz = "Asia/Tokyo";
+    const third = await mountHook();
+    await waitFor(() => expect(third.result.current.dialogOpen).toBe(true));
+  });
+
+  it("still prompts for an anchor that was not part of the dismissal", async () => {
+    await seedSchedule({ anchorTimezone: "Africa/Johannesburg" });
+    localStorage.setItem(
+      TIMEZONE_DISMISSALS_KEY,
+      JSON.stringify(["Europe/Berlin|Africa/Johannesburg"]),
     );
+    await seedSchedule({ anchorTimezone: "America/New_York" });
 
-    // Access the module's internal dismissed flag via dynamic import
-    // The _dismissedThisSession flag is module-level, so we test its behavior
-    // by checking the exported _resetDismissedFlag helper
-    _resetDismissedFlag(); // Ensure clean state
+    const { result } = await mountHook();
 
-    await seedSchedule({
-      anchorTimezone: "Africa/Johannesburg",
-      enabled: true,
-    });
-
-    // First detection should find a mismatch
-    const result1 = await detectTimezoneChange("Europe/Berlin");
-    expect(result1.shouldOpen).toBe(true);
-
-    // The _dismissedThisSession flag exists and can be reset
-    // This validates the contract: the flag is exported for testing
-    expect(typeof _resetDismissedFlag).toBe("function");
+    await waitFor(() => expect(result.current.dialogOpen).toBe(true));
+    expect(result.current.anchors.map((g) => g.anchorTimezone)).toEqual(["America/New_York"]);
   });
 
-  it("Test E: detects mismatch with multiple schedules in different timezones", async () => {
-    // Some schedules already updated, some not
-    await seedSchedule({
-      anchorTimezone: "Africa/Johannesburg",
-      enabled: true,
-    });
-    await seedSchedule({
-      anchorTimezone: "Europe/Berlin",
-      enabled: true,
-    });
+  it("clears the timezone cache on every resume, even after a dismissal", async () => {
+    await seedSchedule({ anchorTimezone: "Africa/Johannesburg" });
 
-    // Device is in Berlin -- should detect Johannesburg schedules as mismatched
-    const result = await detectTimezoneChange("Europe/Berlin");
+    const { result } = await mountHook();
+    await waitFor(() => expect(result.current.dialogOpen).toBe(true));
+    act(() => result.current.handleDismiss());
 
-    expect(result.shouldOpen).toBe(true);
-    expect(result.oldTimezone).toBe("Africa/Johannesburg");
-    expect(result.newTimezone).toBe("Europe/Berlin");
+    const before = device.clearCalls;
+    await act(async () => {
+      setVisibility("visible");
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    expect(device.clearCalls).toBe(before + 1);
+    expect(result.current.dialogOpen).toBe(false);
   });
 
-  it("Test F: recalculateScheduleTimezones updates schedules correctly", async () => {
-    const { recalculateScheduleTimezones } = await import(
-      "@/lib/timezone-recalculation-service"
-    );
+  it("confirming re-anchors the schedules and keeps their time", async () => {
+    const { schedule } = await seedSchedule({ anchorTimezone: "Africa/Johannesburg" });
 
-    // Seed a schedule anchored in SA
-    const { schedule } = await seedSchedule({
-      anchorTimezone: "Africa/Johannesburg",
-      scheduleTimeUTC: 390, // 08:30 SA (UTC+2) = 06:30 UTC
-      enabled: true,
+    const { result } = await mountHook();
+    await waitFor(() => expect(result.current.dialogOpen).toBe(true));
+    await act(async () => {
+      await result.current.handleConfirm();
     });
 
-    // Recalculate to New York (UTC-5/-4, never overlaps with SA's UTC+2)
-    const count = await recalculateScheduleTimezones("America/New_York");
-    expect(count).toBe(1);
-
-    // Verify the schedule was updated
+    expect(result.current.dialogOpen).toBe(false);
     const updated = await db.phaseSchedules.get(schedule.id);
-    expect(updated?.anchorTimezone).toBe("America/New_York");
-    // scheduleTimeUTC should have changed to preserve wall-clock 08:30 in New York
-    expect(updated?.scheduleTimeUTC).not.toBe(390);
+    expect(updated!.anchorTimezone).toBe("Europe/Berlin");
+    expect(updated!.time).toBe("08:30");
   });
 });
