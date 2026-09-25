@@ -1,12 +1,12 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { Check, Mic, X } from "lucide-react";
+import { AlertTriangle, Check, Mic, X } from "lucide-react";
 import { Button } from "@intake/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@intake/ui/card";
 import { useToast } from "@intake/ui/use-toast";
 import { VoiceRecorder } from "@/components/voice/voice-recorder";
-import { ParsedItemRow } from "@/components/voice/parsed-item-row";
+import { ParsedItemRow, type ParsedItemNote } from "@/components/voice/parsed-item-row";
 import { useAddIntake } from "@/hooks/use-intake-queries";
 import { useAddWeight, useAddBloodPressure } from "@/hooks/use-health-queries";
 import { useAddUrination } from "@/hooks/use-urination-queries";
@@ -17,6 +17,10 @@ import { useAddComposableEntry, type ComposableEntryInput } from "@/hooks/use-co
 import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import type { VoiceParsedItem, VoiceParseResponse } from "@/lib/voice-types";
 import { reconcileLiquidItems } from "@/lib/voice-reconcile";
+import { applyPresetCaffeine } from "@/lib/voice-presets";
+import { validateVoiceItem } from "@/lib/voice-validation";
+import { normalizeSpokenTiming, resolveSpokenTime } from "@/lib/voice-time";
+import { useSettingsStore } from "@/stores/settings-store";
 import { recoverClosedDatabase } from "@/lib/db";
 import { apiFetch } from "@/lib/api-fetch";
 import { useQueryClient } from "@tanstack/react-query";
@@ -31,7 +35,35 @@ type RowState = {
    * succeeded — duplicating them.
    */
   saved: boolean;
+  /** Merge / preset / duplicate notes anchored to this row. */
+  notes: ParsedItemNote[];
+  /**
+   * A possible duplicate of another row. "Approve all" leaves it pending so
+   * the user resolves the pair one row at a time.
+   */
+  flagged: boolean;
 };
+
+/** Plain-language notices about what the parse left out. */
+function parseNotices(data: VoiceParseResponse): string[] {
+  const notices: string[] = [];
+  if (data.transcriptTruncated) {
+    notices.push(
+      "The recording was too long — the end of the transcript was not parsed. Record anything missing separately.",
+    );
+  }
+  if (data.dropped) {
+    notices.push(
+      `${data.dropped} ${data.dropped === 1 ? "item was" : "items were"} incomplete and left out — check the transcript and log anything missing.`,
+    );
+  }
+  if (data.overCap) {
+    notices.push(
+      `${data.overCap} more ${data.overCap === 1 ? "item was" : "items were"} over the per-recording limit and left out.`,
+    );
+  }
+  return notices;
+}
 
 interface VoicePanelProps {
   /** Called once a save commit succeeds so the host can close the modal. */
@@ -52,6 +84,8 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
   const addComposableEntry = useAddComposableEntry();
   const sugarEnabled = useOptionalTrackerEnabled("sugar");
   const potassiumEnabled = useOptionalTrackerEnabled("potassium");
+  const dayStartHour = useSettingsStore((s) => s.dayStartHour);
+  const liquidPresets = useSettingsStore((s) => s.liquidPresets);
 
   const [transcript, setTranscript] = useState<string>("");
   const [rows, setRows] = useState<RowState[]>([]);
@@ -60,6 +94,7 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
   );
   const [error, setError] = useState<string | null>(null);
   const [reasoning, setReasoning] = useState<string | null>(null);
+  const [notices, setNotices] = useState<string[]>([]);
 
   const pendingCount = useMemo(
     () => rows.filter((r) => r.approved === null).length,
@@ -75,10 +110,15 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
 
   const handleRecorded = useCallback(
     async (blob: Blob, mimeType: string) => {
+      // Rows from an earlier recording that are not yet saved are kept — the
+      // new items are appended below them. Replacing the list threw away
+      // approved rows (and, after a partial save, rows that had failed)
+      // without a word.
       setError(null);
-      setRows([]);
+      setRows((prev) => prev.filter((r) => !r.saved));
       setTranscript("");
       setReasoning(null);
+      setNotices([]);
       setStage("transcribing");
 
       try {
@@ -125,12 +165,37 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
         // Collapse a drink the parser split into two items before the review
         // list is built, so the user approves one row per drink instead of
         // having a correction applied invisibly at save time (issue #322).
-        const { items, merges, warnings } = reconcileLiquidItems(data.items);
-        setRows(items.map((item) => ({ item, approved: null, saved: false })));
-        setReasoning(
-          [data.reasoning, ...merges, ...warnings].filter(Boolean).join(" ") ||
-            null,
+        const receivedAt = Date.now();
+        const reconciled = reconcileLiquidItems(
+          data.items.map((item) => normalizeSpokenTiming(item, receivedAt)),
         );
+        // Voice caffeine follows the user's preset for a named drink, so the
+        // same moka books the same caffeine whichever way it was logged.
+        const priced = applyPresetCaffeine(reconciled.items, liquidPresets);
+        const newRows: RowState[] = priced.items.map((item) => ({
+          item,
+          approved: null,
+          saved: false,
+          notes: [],
+          flagged: false,
+        }));
+        for (const note of [...reconciled.merges, ...priced.notes]) {
+          for (const index of note.itemIndices) {
+            newRows[index]?.notes.push({ tone: "info", message: note.message });
+          }
+        }
+        for (const warning of reconciled.warnings) {
+          for (const index of warning.itemIndices) {
+            const row = newRows[index];
+            if (!row) continue;
+            row.notes.push({ tone: "warning", message: warning.message });
+            row.flagged = true;
+          }
+        }
+        const items = priced.items;
+        setRows((prev) => [...prev, ...newRows]);
+        setReasoning(data.reasoning ?? null);
+        setNotices(parseNotices(data));
         setStage("ready");
 
         if (items.length === 0) {
@@ -150,15 +215,23 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
         });
       }
     },
-    [toast]
+    [toast, liquidPresets]
   );
 
   const updateRow = useCallback((index: number, next: Partial<RowState>) => {
     setRows((prev) => prev.map((r, i) => (i === index ? { ...r, ...next } : r)));
   }, []);
 
+  // Skips rows that are flagged as a possible duplicate or fail validation:
+  // those need the user's attention one at a time.
   const approveAll = useCallback(() => {
-    setRows((prev) => prev.map((r) => (r.approved === null ? { ...r, approved: true } : r)));
+    setRows((prev) =>
+      prev.map((r) =>
+        r.approved === null && !r.flagged && validateVoiceItem(r.item) === null
+          ? { ...r, approved: true }
+          : r,
+      ),
+    );
   }, []);
 
   const rejectAll = useCallback(() => {
@@ -169,12 +242,13 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
     setRows([]);
     setTranscript("");
     setReasoning(null);
+    setNotices([]);
     setError(null);
     setStage("idle");
   }, []);
 
   const saveItem = useCallback(
-    async (item: VoiceParsedItem) => {
+    async (item: VoiceParsedItem, timestamp: number) => {
       switch (item.kind) {
         case "blood_pressure":
           await addBloodPressure.mutateAsync({
@@ -184,12 +258,14 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
             arm: item.arm ?? "left",
             ...(item.heartRate !== undefined && { heartRate: item.heartRate }),
             note: item.note ?? "voice",
+            timestamp,
           });
           break;
         case "weight":
           await addWeight.mutateAsync({
             weight: item.weightKg,
             note: item.note ?? "voice",
+            timestamp,
           });
           break;
         case "water":
@@ -197,6 +273,7 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
             type: "water",
             amount: item.ml,
             source: "voice",
+            timestamp,
             ...(item.note !== undefined && { note: item.note }),
           });
           break;
@@ -205,6 +282,7 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
             type: "salt",
             amount: item.sodiumMg,
             source: "voice",
+            timestamp,
             ...(item.note !== undefined && { note: item.note }),
           });
           break;
@@ -249,7 +327,7 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
             },
             ...(intakes.length > 0 && { intakes }),
             groupSource: "ai_food_parse",
-          });
+          }, timestamp);
           break;
         }
         case "caffeine":
@@ -269,6 +347,7 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
                 potassiumEnabled && { potassiumMg: item.potassiumMg }),
               waterSource: "voice",
               groupSource: "voice_drink",
+              timestamp,
             });
           } else {
             // No volume: record the dose and any solutes, but no water — the
@@ -312,12 +391,13 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
                 },
                 intakes: soluteIntakes,
                 groupSource: "voice_drink",
-              });
+              }, timestamp);
             } else {
               await addSubstance({
                 type: "caffeine",
                 amountMg: item.caffeineMg,
                 description: item.description,
+                timestamp,
               });
             }
           }
@@ -333,6 +413,7 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
               potassiumEnabled && { potassiumMg: item.potassiumMg }),
             waterSource: "voice",
             groupSource: "voice_drink",
+            timestamp,
           });
           break;
         case "urination":
@@ -341,6 +422,7 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
               amountEstimate: item.amountEstimate,
             }),
             note: item.note ?? "voice",
+            timestamp,
           });
           break;
         case "defecation":
@@ -349,6 +431,7 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
               amountEstimate: item.amountEstimate,
             }),
             note: item.note ?? "voice",
+            timestamp,
           });
           break;
       }
@@ -376,6 +459,11 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
     if (pending.length === 0) return;
 
     setStage("saving");
+    // One "now" for the whole batch, so items dictated together are logged
+    // together; an item with a spoken time is placed at that time instead.
+    const batchNow = Date.now();
+    const timestampFor = (item: VoiceParsedItem) =>
+      item.time !== undefined ? resolveSpokenTime(item.time, batchNow, dayStartHour) : batchNow;
     let successCount = 0;
     const failures: string[] = [];
     const savedIndices: number[] = [];
@@ -383,7 +471,7 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
     for (const { row, index } of pending) {
       const { item } = row;
       try {
-        await saveItem(item);
+        await saveItem(item, timestampFor(item));
         successCount++;
         savedIndices.push(index);
       } catch (e) {
@@ -393,7 +481,7 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
           // (storage eviction / backing-store loss — issue #287). The DB has
           // been reopened; retry this item once before declaring it failed.
           try {
-            await saveItem(item);
+            await saveItem(item, timestampFor(item));
             successCount++;
             savedIndices.push(index);
             continue;
@@ -435,7 +523,7 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
     } else {
       setStage("ready");
     }
-  }, [rows, toast, reset, queryClient, saveItem, onCommitted]);
+  }, [rows, toast, reset, queryClient, saveItem, onCommitted, dayStartHour]);
 
   const hasItems = rows.length > 0;
 
@@ -492,6 +580,20 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
             </Card>
           )}
 
+          {notices.length > 0 && (
+            <div
+              role="status"
+              className="space-y-1 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-300"
+            >
+              {notices.map((notice) => (
+                <p key={notice} className="flex items-start gap-1.5">
+                  <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />
+                  <span>{notice}</span>
+                </p>
+              ))}
+            </div>
+          )}
+
           {hasItems && (
             <Card>
               <CardHeader>
@@ -507,6 +609,7 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
                     index={i}
                     item={row.item}
                     approved={row.approved}
+                    notes={row.notes}
                     // A row already written by an earlier partial commit is
                     // locked: leaving it interactive made it a dead end, since
                     // toggling or editing it could no longer change what was

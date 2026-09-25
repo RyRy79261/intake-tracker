@@ -20,7 +20,7 @@ const timing = {
     .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
     .optional()
     .catch(undefined),
-  minutesAgo: z.number().int().min(0).max(1440).optional().catch(undefined),
+  minutesAgo: z.number().int().min(0).max(1439).optional().catch(undefined),
 };
 
 export const ItemSchema = z.discriminatedUnion("kind", [

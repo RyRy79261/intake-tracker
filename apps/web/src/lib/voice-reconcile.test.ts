@@ -95,7 +95,9 @@ describe("reconcileLiquidItems", () => {
       expect(items).toHaveLength(2);
       expect(merges).toHaveLength(0);
       expect(warnings).toHaveLength(1);
-      expect(warnings[0]).toMatch(/reject one/i);
+      expect(warnings[0]!.message).toMatch(/reject one/i);
+      // The warning is anchored to both rows it concerns.
+      expect(warnings[0]!.itemIndices).toEqual([0, 1]);
     });
 
     it("does not merge two same-volume items with unrelated names", () => {
@@ -235,5 +237,137 @@ describe("reconcileLiquidItems", () => {
 
   it("handles an empty list", () => {
     expect(reconcileLiquidItems([])).toEqual({ items: [], merges: [], warnings: [] });
+  });
+
+  describe("identity check is stronger than one shared word", () => {
+    it("does not merge 'coffee with milk' and 'a glass of milk'", () => {
+      const { items, merges } = reconcileLiquidItems([
+        { kind: "caffeine", description: "coffee with milk", caffeineMg: 95, volumeMl: 250 },
+        { kind: "food", description: "glass of milk", waterMl: 250, sugarG: 12, potassiumMg: 380 },
+      ]);
+      expect(items).toHaveLength(2);
+      expect(merges).toHaveLength(0);
+      expect(totalFluidMl(items)).toBe(500);
+      const drink = items[0] as Extract<VoiceParsedItem, { kind: "caffeine" }>;
+      expect(drink.sugarG).toBeUndefined();
+    });
+
+    it("does not merge a vodka and orange with a separate glass of orange juice", () => {
+      const { items, merges } = reconcileLiquidItems([
+        { kind: "alcohol", description: "vodka and orange juice", abvPercent: 10, volumeMl: 250 },
+        { kind: "food", description: "glass of orange juice", waterMl: 240, sugarG: 22 },
+      ]);
+      expect(items).toHaveLength(2);
+      expect(merges).toHaveLength(0);
+    });
+
+    it("does not merge a coffee with a coffee milkshake", () => {
+      const { items, merges } = reconcileLiquidItems([
+        { kind: "caffeine", description: "coffee", caffeineMg: 95, volumeMl: 250 },
+        { kind: "food", description: "coffee milkshake", waterMl: 300, sugarG: 40 },
+      ]);
+      expect(items).toHaveLength(2);
+      expect(merges).toHaveLength(0);
+      const drink = items[0] as Extract<VoiceParsedItem, { kind: "caffeine" }>;
+      expect(drink.sugarG).toBeUndefined();
+    });
+
+    it("does not merge whisky and water with coconut water", () => {
+      const { items, merges } = reconcileLiquidItems([
+        { kind: "alcohol", description: "whisky and water", abvPercent: 20, volumeMl: 200 },
+        { kind: "food", description: "coconut water", waterMl: 250, potassiumMg: 600 },
+      ]);
+      expect(items).toHaveLength(2);
+      expect(merges).toHaveLength(0);
+    });
+
+    it("still merges a companion named with a subset of the drink's words", () => {
+      const { items, merges } = reconcileLiquidItems([
+        { kind: "caffeine", description: "iced oat latte", caffeineMg: 80, volumeMl: 350 },
+        { kind: "food", description: "latte", waterMl: 350, sugarG: 10 },
+      ]);
+      expect(items).toHaveLength(1);
+      expect(merges).toHaveLength(1);
+      expect(merges[0]!.itemIndices).toEqual([0]);
+    });
+
+    it("treats a plural as the same word", () => {
+      const { items } = reconcileLiquidItems([
+        { kind: "caffeine", description: "two lattes", caffeineMg: 160, volumeMl: 500 },
+        { kind: "food", description: "latte", waterMl: 500, sugarG: 24 },
+      ]);
+      expect(items).toHaveLength(1);
+      expect(totalFluidMl(items)).toBe(500);
+    });
+  });
+
+  describe("suspicious pairings it will not merge are flagged, not passed silently", () => {
+    it("flags a companion that names only the milk of a milky drink", () => {
+      const { items, warnings } = reconcileLiquidItems([
+        { kind: "caffeine", description: "flat white", caffeineMg: 130, volumeMl: 200 },
+        { kind: "food", description: "milk", waterMl: 180, sugarG: 9 },
+      ]);
+      expect(items).toHaveLength(2);
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]!.itemIndices).toEqual([0, 1]);
+    });
+
+    it("flags a same-name companion carrying only part of the volume", () => {
+      const { items, warnings } = reconcileLiquidItems([
+        { kind: "caffeine", description: "latte", caffeineMg: 80, volumeMl: 350 },
+        { kind: "food", description: "latte milk", waterMl: 250, sugarG: 12 },
+      ]);
+      expect(items).toHaveLength(2);
+      expect(warnings).toHaveLength(1);
+    });
+
+    it("does not flag a same-word solid food with little water", () => {
+      const { warnings } = reconcileLiquidItems([
+        { kind: "caffeine", description: "coffee", caffeineMg: 95, volumeMl: 250 },
+        { kind: "food", description: "coffee cake", waterMl: 30, grams: 90 },
+      ]);
+      expect(warnings).toHaveLength(0);
+    });
+
+    it("flags a water item whose volume is close to, not exactly, the drink's", () => {
+      const { items, warnings } = reconcileLiquidItems([
+        { kind: "alcohol", description: "beer", abvPercent: 5, volumeMl: 500 },
+        { kind: "water", ml: 473 },
+      ]);
+      expect(items).toHaveLength(2);
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]!.itemIndices).toEqual([0, 1]);
+    });
+  });
+
+  describe("merging solutes", () => {
+    it("treats the drink's explicit 0 as missing and keeps the companion's value", () => {
+      const { items } = reconcileLiquidItems([
+        {
+          kind: "caffeine",
+          description: "latte",
+          caffeineMg: 80,
+          volumeMl: 250,
+          sugarG: 0,
+          potassiumMg: 0,
+        },
+        { kind: "food", description: "latte", waterMl: 250, sugarG: 12, potassiumMg: 380 },
+      ]);
+      const drink = items[0] as Extract<VoiceParsedItem, { kind: "caffeine" }>;
+      expect(drink.sugarG).toBe(12);
+      expect(drink.potassiumMg).toBe(380);
+    });
+  });
+
+  it("anchors notes to indices in the returned (post-merge) list", () => {
+    const { items, merges, warnings } = reconcileLiquidItems([
+      { kind: "caffeine", description: "latte", caffeineMg: 80, volumeMl: 250 },
+      { kind: "food", description: "latte", waterMl: 250, sugarG: 12 },
+      { kind: "alcohol", description: "beer", abvPercent: 5, volumeMl: 500 },
+      { kind: "water", ml: 500 },
+    ]);
+    expect(items.map((i) => i.kind)).toEqual(["caffeine", "alcohol", "water"]);
+    expect(merges[0]!.itemIndices).toEqual([0]);
+    expect(warnings[0]!.itemIndices).toEqual([1, 2]);
   });
 });
