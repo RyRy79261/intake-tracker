@@ -41,60 +41,44 @@ import * as schema from "./schema";
 // enforces at the type level that the client cannot forge it.
 // ─────────────────────────────────────────────────────────────────────────
 
-const intakeRecordsRowSchema = createInsertSchema(schema.intakeRecords).omit({
-  userId: true,
-});
-const weightRecordsRowSchema = createInsertSchema(schema.weightRecords).omit({
-  userId: true,
-});
+/**
+ * Columns the client may never supply. `userId` comes from the session (see
+ * T-sync-05 above); `serverUpdatedAt` is the server-assigned pull cursor,
+ * stamped by the push route on every write. Omitting them means a
+ * client-sent value is stripped by the parser rather than trusted.
+ */
+const SERVER_ONLY_COLUMNS = { userId: true, serverUpdatedAt: true } as const;
+
+const intakeRecordsRowSchema = createInsertSchema(schema.intakeRecords).omit(SERVER_ONLY_COLUMNS);
+const weightRecordsRowSchema = createInsertSchema(schema.weightRecords).omit(SERVER_ONLY_COLUMNS);
 const bloodPressureRecordsRowSchema = createInsertSchema(
   schema.bloodPressureRecords,
-).omit({ userId: true });
-const eatingRecordsRowSchema = createInsertSchema(schema.eatingRecords).omit({
-  userId: true,
-});
+).omit(SERVER_ONLY_COLUMNS);
+const eatingRecordsRowSchema = createInsertSchema(schema.eatingRecords).omit(SERVER_ONLY_COLUMNS);
 const urinationRecordsRowSchema = createInsertSchema(
   schema.urinationRecords,
-).omit({ userId: true });
+).omit(SERVER_ONLY_COLUMNS);
 const defecationRecordsRowSchema = createInsertSchema(
   schema.defecationRecords,
-).omit({ userId: true });
-const prescriptionsRowSchema = createInsertSchema(schema.prescriptions).omit({
-  userId: true,
-});
+).omit(SERVER_ONLY_COLUMNS);
+const prescriptionsRowSchema = createInsertSchema(schema.prescriptions).omit(SERVER_ONLY_COLUMNS);
 const medicationPhasesRowSchema = createInsertSchema(
   schema.medicationPhases,
-).omit({ userId: true });
-const phaseSchedulesRowSchema = createInsertSchema(schema.phaseSchedules).omit({
-  userId: true,
-});
-const inventoryItemsRowSchema = createInsertSchema(schema.inventoryItems).omit({
-  userId: true,
-});
+).omit(SERVER_ONLY_COLUMNS);
+const phaseSchedulesRowSchema = createInsertSchema(schema.phaseSchedules).omit(SERVER_ONLY_COLUMNS);
+const inventoryItemsRowSchema = createInsertSchema(schema.inventoryItems).omit(SERVER_ONLY_COLUMNS);
 const inventoryTransactionsRowSchema = createInsertSchema(
   schema.inventoryTransactions,
-).omit({ userId: true });
-const doseLogsRowSchema = createInsertSchema(schema.doseLogs).omit({
-  userId: true,
-});
-const dailyNotesRowSchema = createInsertSchema(schema.dailyNotes).omit({
-  userId: true,
-});
-const auditLogsRowSchema = createInsertSchema(schema.auditLogs).omit({
-  userId: true,
-});
+).omit(SERVER_ONLY_COLUMNS);
+const doseLogsRowSchema = createInsertSchema(schema.doseLogs).omit(SERVER_ONLY_COLUMNS);
+const dailyNotesRowSchema = createInsertSchema(schema.dailyNotes).omit(SERVER_ONLY_COLUMNS);
+const auditLogsRowSchema = createInsertSchema(schema.auditLogs).omit(SERVER_ONLY_COLUMNS);
 const substanceRecordsRowSchema = createInsertSchema(
   schema.substanceRecords,
-).omit({ userId: true });
-const titrationPlansRowSchema = createInsertSchema(schema.titrationPlans).omit({
-  userId: true,
-});
-const userProfileRowSchema = createInsertSchema(schema.userProfile).omit({
-  userId: true,
-});
-const insightReportsRowSchema = createInsertSchema(schema.insightReports).omit({
-  userId: true,
-});
+).omit(SERVER_ONLY_COLUMNS);
+const titrationPlansRowSchema = createInsertSchema(schema.titrationPlans).omit(SERVER_ONLY_COLUMNS);
+const userProfileRowSchema = createInsertSchema(schema.userProfile).omit(SERVER_ONLY_COLUMNS);
+const insightReportsRowSchema = createInsertSchema(schema.insightReports).omit(SERVER_ONLY_COLUMNS);
 
 // ─────────────────────────────────────────────────────────────────────────
 // Discriminated union keyed by tableName
@@ -351,7 +335,13 @@ export const tombstoneOpSchema = z.object({
 /**
  * Per-table pull cursor — a keyset `(updatedAt, id)` pair.
  *
- * Pagination orders by `(updatedAt, id)`, so the cursor needs both halves:
+ * The cursor is OPAQUE to the client: it echoes back the `cursor` the last
+ * pull returned. Despite the wire name, `updatedAt` holds the row's
+ * server-assigned `server_updated_at` stamp, not the client's `updatedAt`
+ * (audit sync-engine#3). Migration 0021 backfilled `server_updated_at =
+ * updated_at`, so cursors saved before the switch stay valid.
+ *
+ * Pagination orders by `(serverUpdatedAt, id)`, so the cursor needs both halves:
  * `updatedAt` alone is not unique (the v11 migration stamped every existing
  * record with a single timestamp), and a 500-row page boundary landing
  * inside such a run would otherwise strand every row after it.
@@ -426,19 +416,26 @@ export type PullBody = z.infer<typeof pullBodySchema>;
  * safety in the engine loop (Plan 06).
  *
  * Contract:
- *   - `result[tableName].rows`: rows with `updatedAt > cursor`, ordered ASC.
- *     Tombstones (rows with non-null `deletedAt`) ARE included — the client
- *     applies them as soft-delete writes.
+ *   - `result[tableName].rows`: rows past the cursor in `(serverUpdatedAt,
+ *     id)` order. Tombstones (rows with non-null `deletedAt`) ARE included —
+ *     the client applies them as soft-delete writes. `serverUpdatedAt` is
+ *     stripped from every row; it is server-only.
  *   - `result[tableName].hasMore`: true iff the server had to cap the page.
  *     Clients keep calling pull until every entry reports `hasMore: false`.
- *   - `serverTime`: `Date.now()` captured BEFORE any SELECT runs. Clients
- *     clamp their next cursor to `min(maxRowUpdatedAt, serverTime - 30s)` so
- *     rows that were written during the query window aren't skipped.
+ *   - `result[tableName].cursor`: the keyset position of the last returned
+ *     row, present when `rows` is non-empty. The client stores it verbatim
+ *     and sends it back as that table's cursor.
+ *   - `serverTime`: `Date.now()` captured BEFORE any SELECT runs, on the same
+ *     clock as `serverUpdatedAt`. Clients clamp their next cursor to
+ *     `min(cursor, serverTime - 30s)` so rows written by a push still in
+ *     flight during the query window aren't skipped.
  */
+export type PullCursor = { updatedAt: number; id: string };
+
 export type PullResponse = {
   result: Record<
     TableName,
-    { rows: Record<string, unknown>[]; hasMore: boolean }
+    { rows: Record<string, unknown>[]; hasMore: boolean; cursor?: PullCursor }
   >;
   serverTime: number;
 };

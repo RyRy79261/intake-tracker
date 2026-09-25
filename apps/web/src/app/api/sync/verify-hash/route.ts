@@ -53,7 +53,12 @@ export const POST = withAuth(async ({ auth }) => {
           .limit(SELECT_CHUNK_SIZE);
 
         for (const row of rows) {
-          const { userId: _, ...rest } = row as Record<string, unknown> & { userId: unknown };
+          // Both columns are server-only — the device's copy never has them.
+          const {
+            userId: _,
+            serverUpdatedAt: _stamp,
+            ...rest
+          } = row as Record<string, unknown>;
           if (count > 0) hash.update(",");
           hash.update(deterministicJsonRow(rest));
           count++;

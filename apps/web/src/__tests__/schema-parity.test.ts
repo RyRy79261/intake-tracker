@@ -6,13 +6,25 @@
  * fall out of sync — which is the moment a future phase adds a field to one side
  * without the other.
  *
- * The comparator is STRUCTURAL (field name presence) — not type-based. Union
- * types in Dexie and text+CHECK in Drizzle are considered equivalent because
- * both encode the same set of values. If this decision ever reverses, switch
- * to drizzle-zod + expect-type for compile-time type comparison.
+ * The core comparator is STRUCTURAL (field name presence). Union types in
+ * Dexie and text+CHECK in Drizzle are considered equivalent because both
+ * encode the same set of values.
  *
- * The only permitted Drizzle-only column is `userId` (single-user Dexie
- * has no user ownership field — see 42-CONTEXT.md D-12).
+ * On top of presence it also checks the drift classes that actually break
+ * sync (audit server-schema-parity#9):
+ *   - optionality: a TS-optional/nullable field on a NOT NULL column with no
+ *     default is rejected by the push; a nullable column behind a required,
+ *     non-null TS field hands `null` to code that does not expect it on pull;
+ *   - numeric shape: every scalar `number` field is classified as integer or
+ *     real in `sync-column-types` (itself parity-checked against Drizzle by
+ *     sync-column-types.test.ts), so a fraction can never reach an integer
+ *     column unnoticed;
+ *   - table lists: the Dexie stores in db.ts, TABLE_PUSH_ORDER and the
+ *     extractor's TABLE_TO_INTERFACE map name the same synced tables.
+ *
+ * The permitted Drizzle-only columns are `userId` (single-user Dexie has no
+ * user ownership field — see 42-CONTEXT.md D-12) and `serverUpdatedAt` (the
+ * server-assigned pull cursor, audit sync-engine#3).
  *
  * Run: pnpm exec vitest run src/__tests__/schema-parity.test.ts
  */
@@ -21,7 +33,17 @@ import { describe, it, expect } from "vitest";
 import { getTableColumns } from "drizzle-orm";
 import type { Table } from "drizzle-orm";
 import * as drizzleSchema from "@intake/db/schema";
-import { extractDexieSchema, type DexieTableSchema } from "@/__tests__/dexie-schema-extractor";
+import {
+  extractDexieSchema,
+  TABLE_TO_INTERFACE,
+  type DexieTableSchema,
+} from "@/__tests__/dexie-schema-extractor";
+import { parseDbSchema } from "@/__tests__/integrity/parse-schema";
+import { TABLE_PUSH_ORDER, type TableName } from "@/lib/sync-topology";
+import {
+  INTEGER_SYNC_FIELDS,
+  FLOAT_SYNC_FIELDS,
+} from "@/lib/sync-column-types";
 
 // Computed once at module load — zero IO redundancy across parameterized tests.
 const DEXIE_TABLES: DexieTableSchema[] = extractDexieSchema();
@@ -29,7 +51,7 @@ const DEXIE_TABLES: DexieTableSchema[] = extractDexieSchema();
 // Fields that exist on the Drizzle side but must NEVER match a Dexie field —
 // the exemption list for the "no extra Drizzle columns" check.
 // T-42-12: This set must remain a compile-time constant with no env-var escape hatch.
-const DRIZZLE_ONLY_EXEMPTIONS = new Set<string>(["userId"]);
+const DRIZZLE_ONLY_EXEMPTIONS = new Set<string>(["userId", "serverUpdatedAt"]);
 
 function getDrizzleTable(tableName: string): Table | undefined {
   // drizzleSchema is a module shape with specific exports; cast through unknown
@@ -163,7 +185,7 @@ describe("Dexie ↔ Drizzle schema parity", () => {
       expect(
         extras,
         `${tableName}: Drizzle has column(s) not in Dexie interface and not in the exemption list ` +
-          `(only 'userId' is exempt). Extra: [${extras.join(", ")}]. ` +
+          `(only ${[...DRIZZLE_ONLY_EXEMPTIONS].join(", ")} are exempt). Extra: [${extras.join(", ")}]. ` +
           `Fix: add the field to the Dexie interface in @intake/types/records ` +
           `OR remove the column from @intake/db/schema`,
       ).toEqual([]);
@@ -186,4 +208,121 @@ describe("Dexie ↔ Drizzle schema parity", () => {
       ).toContain("userId");
     },
   );
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// Optionality — TS `?:` / `| null` vs Drizzle notNull / hasDefault.
+// ─────────────────────────────────────────────────────────────────────────
+
+type ColumnMeta = { notNull: boolean; hasDefault: boolean };
+
+function getColumnMeta(table: Table): Record<string, ColumnMeta> {
+  return getTableColumns(table) as unknown as Record<string, ColumnMeta>;
+}
+
+describe("Dexie ↔ Drizzle optionality parity", () => {
+  it.each(DEXIE_TABLES)(
+    "$tableName: a field the client may omit or null is not a NOT NULL column without a default",
+    ({ tableName, optionalFields, nullableFields }) => {
+      const cols = getColumnMeta(getDrizzleTable(tableName)!);
+      const mayBeAbsent = new Set([...optionalFields, ...nullableFields]);
+      // The push route turns undefined (and "") into NULL, so such a field
+      // makes the INSERT fail and the op is eventually dropped.
+      const violations = [...mayBeAbsent].filter(
+        (f) => cols[f] && cols[f]!.notNull && !cols[f]!.hasDefault,
+      );
+      expect(
+        violations,
+        `${tableName}: field(s) optional/nullable in @intake/types/records but NOT NULL ` +
+          `(no default) in @intake/db/schema: [${violations.join(", ")}]. ` +
+          `Fix: make the column nullable (or give it a default), or make the field required.`,
+      ).toEqual([]);
+    },
+  );
+
+  it.each(DEXIE_TABLES)(
+    "$tableName: a nullable column is not declared as a required, non-null field",
+    ({ tableName, fields, optionalFields, nullableFields }) => {
+      const cols = getColumnMeta(getDrizzleTable(tableName)!);
+      const mayBeAbsent = new Set([...optionalFields, ...nullableFields]);
+      // A pull hands back NULL for such a column; code typed against a
+      // required field would not expect it.
+      const violations = fields.filter(
+        (f) => cols[f] && !cols[f]!.notNull && !mayBeAbsent.has(f),
+      );
+      expect(
+        violations,
+        `${tableName}: field(s) required in @intake/types/records but nullable ` +
+          `in @intake/db/schema: [${violations.join(", ")}]. ` +
+          `Fix: mark the field optional/nullable, or make the column NOT NULL.`,
+      ).toEqual([]);
+    },
+  );
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// Numeric shape — every scalar number field is classified int-vs-real.
+// ─────────────────────────────────────────────────────────────────────────
+
+describe("Dexie number fields ↔ sync-column-types", () => {
+  it.each(DEXIE_TABLES)(
+    "$tableName: every number field is classified as integer or real, and nothing else is",
+    ({ tableName, numberFields }) => {
+      const t = tableName as TableName;
+      const classified = [...INTEGER_SYNC_FIELDS[t], ...FLOAT_SYNC_FIELDS[t]];
+      expect(
+        [...numberFields].sort(),
+        `${tableName}: the scalar number fields of the interface must be listed in ` +
+          `exactly one of INTEGER_SYNC_FIELDS / FLOAT_SYNC_FIELDS (src/lib/sync-column-types.ts). ` +
+          `Decide deliberately: an integer column rejects fractions.`,
+      ).toEqual([...classified].sort());
+    },
+  );
+
+  it.each(DEXIE_TABLES)(
+    "$tableName: no field is classified as both integer and real",
+    ({ tableName }) => {
+      const t = tableName as TableName;
+      const ints = new Set(INTEGER_SYNC_FIELDS[t]);
+      expect(FLOAT_SYNC_FIELDS[t].filter((f) => ints.has(f))).toEqual([]);
+    },
+  );
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// Table lists — db.ts stores vs TABLE_PUSH_ORDER vs TABLE_TO_INTERFACE.
+// ─────────────────────────────────────────────────────────────────────────
+
+describe("synced table lists agree", () => {
+  const versions = parseDbSchema();
+  const latest = versions[versions.length - 1]!;
+  // `_`-prefixed stores (_syncQueue, _syncMeta, _errorLogs) are device-local.
+  const syncedStores = latest.tables.filter((t) => !t.startsWith("_")).sort();
+
+  it("db.ts latest-version stores == TABLE_PUSH_ORDER", () => {
+    expect(syncedStores).toEqual([...TABLE_PUSH_ORDER].sort());
+  });
+
+  it("db.ts latest-version stores == TABLE_TO_INTERFACE keys", () => {
+    expect(syncedStores).toEqual(Object.keys(TABLE_TO_INTERFACE).sort());
+  });
+
+  it("every synced store has a Drizzle table", () => {
+    const missing = syncedStores.filter((t) => !getDrizzleTable(t));
+    expect(missing).toEqual([]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// Backup schema — enum and optionality parity with the record types.
+//
+// Deferred: the backup zod schemas currently disagree with the record types
+// (e.g. the intake `type` union lacks "potassium"; doseLogSchema requires a
+// phaseId that PRN doses do not have). The backup-and-data-deletion package
+// fixes those (audit server#4) and then enables these checks.
+// ─────────────────────────────────────────────────────────────────────────
+
+describe("backup schema ↔ record types parity", () => {
+  it.todo("backup enum literals match the TS unions and Drizzle CHECK lists");
+  it.todo("backup required keys match the required fields of each record type");
 });

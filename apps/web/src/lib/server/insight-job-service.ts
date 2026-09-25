@@ -241,7 +241,7 @@ export async function completeInsightJob(
     // keep history clean.
     await db
       .update(insightReports)
-      .set({ deletedAt: now, updatedAt: now })
+      .set({ deletedAt: now, updatedAt: now, serverUpdatedAt: Date.now() })
       .where(eq(insightReports.id, reportId));
     return null;
   }

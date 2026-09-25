@@ -337,7 +337,7 @@ function ScheduleTab({ prescription }: { prescription: Prescription }) {
 function DetailsTab({ prescription, onOpenChange }: { prescription: Prescription, onOpenChange: (open: boolean) => void }) {
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(prescription.genericName);
-  const [indication, setIndication] = useState(prescription.indication);
+  const [indication, setIndication] = useState(prescription.indication ?? "");
   const [notes, setNotes] = useState(prescription.notes || "");
   const [isActive, setIsActive] = useState(prescription.isActive);
 
@@ -346,7 +346,7 @@ function DetailsTab({ prescription, onOpenChange }: { prescription: Prescription
 
   useEffect(() => {
     setName(prescription.genericName);
-    setIndication(prescription.indication);
+    setIndication(prescription.indication ?? "");
     setNotes(prescription.notes || "");
     setIsActive(prescription.isActive);
     setIsEditing(false);

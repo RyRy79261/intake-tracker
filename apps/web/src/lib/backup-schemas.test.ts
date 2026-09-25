@@ -235,6 +235,46 @@ describe("backup-schemas: tightening over the legacy isValid* checks", () => {
   });
 });
 
+describe("backup-schemas: 2026-09 schema additions", () => {
+  // Prescription.indication became optional (audit sync-engine#10); a row
+  // pulled from the server carries `null` for it.
+  it("accepts a prescription with a missing or null indication", () => {
+    const { indication: _omit, ...withoutIndication } = makePrescription();
+    expect(BACKUP_VALIDATORS.prescriptions(withoutIndication)).toBe(true);
+    expect(BACKUP_VALIDATORS.prescriptions({ ...makePrescription(), indication: null })).toBe(true);
+  });
+
+  it("accepts the optional dose-log snapshot fields, absent or null", () => {
+    const base = makeDoseLog("rx", "ph", "sch");
+    expect(BACKUP_VALIDATORS.doseLogs(base)).toBe(true);
+    expect(
+      BACKUP_VALIDATORS.doseLogs({
+        ...base,
+        doseAmount: 2.5,
+        doseUnit: "mg",
+        pillsConsumed: 0.5,
+        pillStrength: 5,
+      }),
+    ).toBe(true);
+    expect(
+      BACKUP_VALIDATORS.doseLogs({
+        ...base,
+        doseAmount: null,
+        doseUnit: null,
+        pillsConsumed: null,
+        pillStrength: null,
+      }),
+    ).toBe(true);
+  });
+
+  it("rejects non-finite or mistyped dose-log snapshot values", () => {
+    const base = makeDoseLog("rx", "ph", "sch");
+    expect(BACKUP_VALIDATORS.doseLogs({ ...base, doseAmount: Number.NaN })).toBe(false);
+    expect(BACKUP_VALIDATORS.doseLogs({ ...base, pillsConsumed: "1" })).toBe(false);
+    expect(BACKUP_VALIDATORS.doseLogs({ ...base, doseUnit: 5 })).toBe(false);
+  });
+});
+
 describe("backup-schemas: invariants", () => {
   it("BACKUP_SCHEMAS covers exactly the 18 expected tables", () => {
     expect(tableNames.sort()).toEqual(

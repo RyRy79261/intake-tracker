@@ -18,8 +18,9 @@
  *   - Sync scaffolding on every app table: created_at / updated_at / deleted_at / device_id
  *
  * Parity enforcement: src/__tests__/schema-parity.test.ts (Plan 42-03) verifies that
- * every Dexie table field has a matching column here, with `userId` as the only
- * permitted Drizzle-only addition.
+ * every Dexie table field has a matching column here, with `userId` and
+ * `serverUpdatedAt` (the server-assigned pull cursor) as the only permitted
+ * Drizzle-only additions.
  *
  * NEVER edit this file without regenerating migrations: pnpm exec drizzle-kit generate
  */
@@ -41,6 +42,22 @@ import {
   primaryKey,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
+
+/**
+ * Server-assigned change stamp (Unix ms) on every synced table — the pull
+ * cursor. It is set by the push route on every insert/update/tombstone and is
+ * never read from, or returned to, the client.
+ *
+ * Why not `updated_at`: that is the client's wall clock, kept for
+ * last-write-wins. A record written offline and pushed hours later keeps its
+ * old `updated_at`, which already sits below every other device's cursor, so
+ * those devices never pulled it (audit sync-engine#3). The default covers
+ * direct inserts (and the ADD COLUMN on existing rows before the backfill).
+ */
+const serverUpdatedAt = () =>
+  bigint("server_updated_at", { mode: "number" })
+    .notNull()
+    .default(sql`(floor(extract(epoch from now()) * 1000))::bigint`);
 
 // ─────────────────────────────────────────────────────────────────────────
 // neon_auth.users_sync — local mirror of authenticated users.
@@ -81,6 +98,7 @@ export const intakeRecords = pgTable(
     deletedAt: bigint("deleted_at", { mode: "number" }),
     deviceId: text("device_id").notNull(),
     timezone: text("timezone").notNull(),
+    serverUpdatedAt: serverUpdatedAt(),
   },
   (t) => ({
     typeCheck: check(
@@ -88,6 +106,11 @@ export const intakeRecords = pgTable(
       sql`${t.type} IN ('water','salt','sugar','potassium')`,
     ),
     userUpdatedIdx: index("idx_intake_user_updated").on(t.userId, t.updatedAt),
+    userServerUpdatedIdx: index("idx_intake_user_server_updated").on(
+      t.userId,
+      t.serverUpdatedAt,
+      t.id,
+    ),
     typeTimestampIdx: index("idx_intake_type_ts").on(t.type, t.timestamp),
     groupIdx: index("idx_intake_group").on(t.groupId),
   }),
@@ -111,9 +134,15 @@ export const weightRecords = pgTable(
     deletedAt: bigint("deleted_at", { mode: "number" }),
     deviceId: text("device_id").notNull(),
     timezone: text("timezone").notNull(),
+    serverUpdatedAt: serverUpdatedAt(),
   },
   (t) => ({
     userUpdatedIdx: index("idx_weight_user_updated").on(t.userId, t.updatedAt),
+    userServerUpdatedIdx: index("idx_weight_user_server_updated").on(
+      t.userId,
+      t.serverUpdatedAt,
+      t.id,
+    ),
   }),
 );
 
@@ -137,6 +166,7 @@ export const bloodPressureRecords = pgTable(
     deletedAt: bigint("deleted_at", { mode: "number" }),
     deviceId: text("device_id").notNull(),
     timezone: text("timezone").notNull(),
+    serverUpdatedAt: serverUpdatedAt(),
   },
   (t) => ({
     positionCheck: check(
@@ -148,6 +178,11 @@ export const bloodPressureRecords = pgTable(
       sql`${t.arm} IN ('left','right')`,
     ),
     userUpdatedIdx: index("idx_bp_user_updated").on(t.userId, t.updatedAt),
+    userServerUpdatedIdx: index("idx_bp_user_server_updated").on(
+      t.userId,
+      t.serverUpdatedAt,
+      t.id,
+    ),
     timestampIdx: index("idx_bp_ts").on(t.timestamp),
   }),
 );
@@ -170,9 +205,15 @@ export const eatingRecords = pgTable(
     deletedAt: bigint("deleted_at", { mode: "number" }),
     deviceId: text("device_id").notNull(),
     timezone: text("timezone").notNull(),
+    serverUpdatedAt: serverUpdatedAt(),
   },
   (t) => ({
     userUpdatedIdx: index("idx_eating_user_updated").on(t.userId, t.updatedAt),
+    userServerUpdatedIdx: index("idx_eating_user_server_updated").on(
+      t.userId,
+      t.serverUpdatedAt,
+      t.id,
+    ),
     groupIdx: index("idx_eating_group").on(t.groupId),
   }),
 );
@@ -192,11 +233,17 @@ export const urinationRecords = pgTable(
     deletedAt: bigint("deleted_at", { mode: "number" }),
     deviceId: text("device_id").notNull(),
     timezone: text("timezone").notNull(),
+    serverUpdatedAt: serverUpdatedAt(),
   },
   (t) => ({
     userUpdatedIdx: index("idx_urination_user_updated").on(
       t.userId,
       t.updatedAt,
+    ),
+    userServerUpdatedIdx: index("idx_urination_user_server_updated").on(
+      t.userId,
+      t.serverUpdatedAt,
+      t.id,
     ),
   }),
 );
@@ -216,11 +263,17 @@ export const defecationRecords = pgTable(
     deletedAt: bigint("deleted_at", { mode: "number" }),
     deviceId: text("device_id").notNull(),
     timezone: text("timezone").notNull(),
+    serverUpdatedAt: serverUpdatedAt(),
   },
   (t) => ({
     userUpdatedIdx: index("idx_defecation_user_updated").on(
       t.userId,
       t.updatedAt,
+    ),
+    userServerUpdatedIdx: index("idx_defecation_user_server_updated").on(
+      t.userId,
+      t.serverUpdatedAt,
+      t.id,
     ),
   }),
 );
@@ -255,6 +308,7 @@ export const substanceRecords = pgTable(
     deletedAt: bigint("deleted_at", { mode: "number" }),
     deviceId: text("device_id").notNull(),
     timezone: text("timezone").notNull(),
+    serverUpdatedAt: serverUpdatedAt(),
   },
   (t) => ({
     typeCheck: check(
@@ -272,6 +326,11 @@ export const substanceRecords = pgTable(
     userUpdatedIdx: index("idx_substance_user_updated").on(
       t.userId,
       t.updatedAt,
+    ),
+    userServerUpdatedIdx: index("idx_substance_user_server_updated").on(
+      t.userId,
+      t.serverUpdatedAt,
+      t.id,
     ),
     typeTimestampIdx: index("idx_substance_type_ts").on(t.type, t.timestamp),
     groupIdx: index("idx_substance_group").on(t.groupId),
@@ -299,7 +358,9 @@ export const prescriptions = pgTable(
       .notNull()
       .references(() => usersSync.id, { onDelete: "cascade" }),
     genericName: text("generic_name").notNull(),
-    indication: text("indication").notNull(),
+    // Nullable: the add-medication wizard leaves it blank unless the AI search
+    // suggests one, and the push route stores "" as NULL (audit sync-engine#10).
+    indication: text("indication"),
     notes: text("notes"),
     contraindications: text("contraindications").array(),
     warnings: text("warnings").array(),
@@ -311,11 +372,17 @@ export const prescriptions = pgTable(
     updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
     deletedAt: bigint("deleted_at", { mode: "number" }),
     deviceId: text("device_id").notNull(),
+    serverUpdatedAt: serverUpdatedAt(),
   },
   (t) => ({
     userUpdatedIdx: index("idx_prescriptions_user_updated").on(
       t.userId,
       t.updatedAt,
+    ),
+    userServerUpdatedIdx: index("idx_prescriptions_user_server_updated").on(
+      t.userId,
+      t.serverUpdatedAt,
+      t.id,
     ),
     isActiveIdx: index("idx_prescriptions_active").on(t.isActive),
   }),
@@ -339,6 +406,7 @@ export const titrationPlans = pgTable(
     updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
     deletedAt: bigint("deleted_at", { mode: "number" }),
     deviceId: text("device_id").notNull(),
+    serverUpdatedAt: serverUpdatedAt(),
   },
   (t) => ({
     statusCheck: check(
@@ -348,6 +416,11 @@ export const titrationPlans = pgTable(
     userUpdatedIdx: index("idx_titration_user_updated").on(
       t.userId,
       t.updatedAt,
+    ),
+    userServerUpdatedIdx: index("idx_titration_user_server_updated").on(
+      t.userId,
+      t.serverUpdatedAt,
+      t.id,
     ),
     conditionIdx: index("idx_titration_condition").on(t.conditionLabel),
     statusIdx: index("idx_titration_status").on(t.status),
@@ -380,6 +453,7 @@ export const medicationPhases = pgTable(
     updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
     deletedAt: bigint("deleted_at", { mode: "number" }),
     deviceId: text("device_id").notNull(),
+    serverUpdatedAt: serverUpdatedAt(),
   },
   (t) => ({
     typeCheck: check(
@@ -398,6 +472,11 @@ export const medicationPhases = pgTable(
       t.userId,
       t.updatedAt,
     ),
+    userServerUpdatedIdx: index("idx_phases_user_server_updated").on(
+      t.userId,
+      t.serverUpdatedAt,
+      t.id,
+    ),
     prescriptionIdx: index("idx_phases_prescription").on(t.prescriptionId),
     statusTypeIdx: index("idx_phases_status_type").on(t.status, t.type),
   }),
@@ -413,7 +492,7 @@ export const phaseSchedules = pgTable(
     phaseId: text("phase_id")
       .notNull()
       .references(() => medicationPhases.id),
-    /** @deprecated Kept for Dexie interface parity; scheduleTimeUTC is authoritative. */
+    /** Canonical wall-clock "HH:MM" in anchorTimezone; scheduleTimeUTC is derived. */
     time: text("time").notNull(),
     scheduleTimeUTC: integer("schedule_time_utc").notNull(),
     // PhaseSchedule uses anchorTimezone instead of a plain `timezone` column.
@@ -428,11 +507,17 @@ export const phaseSchedules = pgTable(
     updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
     deletedAt: bigint("deleted_at", { mode: "number" }),
     deviceId: text("device_id").notNull(),
+    serverUpdatedAt: serverUpdatedAt(),
   },
   (t) => ({
     userUpdatedIdx: index("idx_phase_schedules_user_updated").on(
       t.userId,
       t.updatedAt,
+    ),
+    userServerUpdatedIdx: index("idx_phase_schedules_user_server_updated").on(
+      t.userId,
+      t.serverUpdatedAt,
+      t.id,
     ),
     phaseIdx: index("idx_phase_schedules_phase").on(t.phaseId),
     enabledIdx: index("idx_phase_schedules_enabled").on(t.enabled),
@@ -468,6 +553,7 @@ export const inventoryItems = pgTable(
     deletedAt: bigint("deleted_at", { mode: "number" }),
     deviceId: text("device_id").notNull(),
     timezone: text("timezone").notNull(),
+    serverUpdatedAt: serverUpdatedAt(),
   },
   (t) => ({
     pillShapeCheck: check(
@@ -477,6 +563,11 @@ export const inventoryItems = pgTable(
     userUpdatedIdx: index("idx_inventory_user_updated").on(
       t.userId,
       t.updatedAt,
+    ),
+    userServerUpdatedIdx: index("idx_inventory_user_server_updated").on(
+      t.userId,
+      t.serverUpdatedAt,
+      t.id,
     ),
     prescriptionIdx: index("idx_inventory_prescription").on(t.prescriptionId),
     isActiveIdx: index("idx_inventory_active").on(t.isActive),
@@ -510,6 +601,13 @@ export const doseLogs = pgTable(
     // Optional explicit dose (mg) for a PRN dose when it isn't derivable from
     // the linked inventory item + quantity.
     doseMg: real("dose_mg"),
+    // Snapshot of what was actually taken, frozen at log time so later edits
+    // to the schedule or inventory cannot rewrite history. `doseAmount` is in
+    // `doseUnit`; `pillsConsumed` × `pillStrength` is the pill math used.
+    doseAmount: real("dose_amount"),
+    doseUnit: text("dose_unit"),
+    pillsConsumed: real("pills_consumed"),
+    pillStrength: real("pill_strength"),
     actionTimestamp: bigint("action_timestamp", { mode: "number" }),
     rescheduledTo: text("rescheduled_to"),
     skipReason: text("skip_reason"),
@@ -520,6 +618,7 @@ export const doseLogs = pgTable(
     updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
     deletedAt: bigint("deleted_at", { mode: "number" }),
     deviceId: text("device_id").notNull(),
+    serverUpdatedAt: serverUpdatedAt(),
   },
   (t) => ({
     statusCheck: check(
@@ -538,6 +637,11 @@ export const doseLogs = pgTable(
     userUpdatedIdx: index("idx_dose_logs_user_updated").on(
       t.userId,
       t.updatedAt,
+    ),
+    userServerUpdatedIdx: index("idx_dose_logs_user_server_updated").on(
+      t.userId,
+      t.serverUpdatedAt,
+      t.id,
     ),
     prescriptionDateIdx: index("idx_dose_logs_prescription_date").on(
       t.prescriptionId,
@@ -567,6 +671,7 @@ export const inventoryTransactions = pgTable(
     deletedAt: bigint("deleted_at", { mode: "number" }),
     deviceId: text("device_id").notNull(),
     timezone: text("timezone").notNull(),
+    serverUpdatedAt: serverUpdatedAt(),
   },
   (t) => ({
     typeCheck: check(
@@ -576,6 +681,11 @@ export const inventoryTransactions = pgTable(
     userUpdatedIdx: index("idx_inventory_tx_user_updated").on(
       t.userId,
       t.updatedAt,
+    ),
+    userServerUpdatedIdx: index("idx_inventory_tx_user_server_updated").on(
+      t.userId,
+      t.serverUpdatedAt,
+      t.id,
     ),
     itemTimestampIdx: index("idx_inventory_tx_item_ts").on(
       t.inventoryItemId,
@@ -601,11 +711,17 @@ export const dailyNotes = pgTable(
     deletedAt: bigint("deleted_at", { mode: "number" }),
     deviceId: text("device_id").notNull(),
     timezone: text("timezone").notNull(),
+    serverUpdatedAt: serverUpdatedAt(),
   },
   (t) => ({
     userUpdatedIdx: index("idx_daily_notes_user_updated").on(
       t.userId,
       t.updatedAt,
+    ),
+    userServerUpdatedIdx: index("idx_daily_notes_user_server_updated").on(
+      t.userId,
+      t.serverUpdatedAt,
+      t.id,
     ),
     dateIdx: index("idx_daily_notes_date").on(t.date),
     prescriptionIdx: index("idx_daily_notes_prescription").on(t.prescriptionId),
@@ -627,6 +743,7 @@ export const auditLogs = pgTable(
     deletedAt: bigint("deleted_at", { mode: "number" }),
     deviceId: text("device_id").notNull(),
     timezone: text("timezone").notNull(),
+    serverUpdatedAt: serverUpdatedAt(),
   },
   (t) => ({
     // All 29 AuditAction values copied verbatim from the AuditAction type in @intake/types/records.
@@ -644,6 +761,11 @@ export const auditLogs = pgTable(
       )`,
     ),
     userUpdatedIdx: index("idx_audit_user_updated").on(t.userId, t.updatedAt),
+    userServerUpdatedIdx: index("idx_audit_user_server_updated").on(
+      t.userId,
+      t.serverUpdatedAt,
+      t.id,
+    ),
     actionTimestampIdx: index("idx_audit_action_ts").on(
       t.action,
       t.timestamp,
@@ -675,11 +797,17 @@ export const userProfile = pgTable(
     updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
     deletedAt: bigint("deleted_at", { mode: "number" }),
     deviceId: text("device_id").notNull(),
+    serverUpdatedAt: serverUpdatedAt(),
   },
   (t) => ({
     userUpdatedIdx: index("idx_user_profile_user_updated").on(
       t.userId,
       t.updatedAt,
+    ),
+    userServerUpdatedIdx: index("idx_user_profile_user_server_updated").on(
+      t.userId,
+      t.serverUpdatedAt,
+      t.id,
     ),
   }),
 );
@@ -715,6 +843,7 @@ export const insightReports = pgTable(
     updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
     deletedAt: bigint("deleted_at", { mode: "number" }),
     deviceId: text("device_id").notNull(),
+    serverUpdatedAt: serverUpdatedAt(),
   },
   (t) => ({
     modeCheck: check(
@@ -724,6 +853,11 @@ export const insightReports = pgTable(
     userUpdatedIdx: index("idx_insight_reports_user_updated").on(
       t.userId,
       t.updatedAt,
+    ),
+    userServerUpdatedIdx: index("idx_insight_reports_user_server_updated").on(
+      t.userId,
+      t.serverUpdatedAt,
+      t.id,
     ),
     generatedAtIdx: index("idx_insight_reports_generated").on(t.generatedAt),
   }),

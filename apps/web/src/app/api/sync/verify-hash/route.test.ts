@@ -181,6 +181,23 @@ describe("sync-verify-hash-route", () => {
     expect(body.hashes.intakeRecords).not.toBe(withUserId);
   });
 
+  it("excludes the server-only serverUpdatedAt pull stamp from the digest", async () => {
+    const { schemaByTableName } = await import("@intake/db/sync-payload");
+    // The client never holds this column, so hashing it would make every
+    // table mismatch the device's copy.
+    rowsByTableRef.set(schemaByTableName.intakeRecords, [
+      { id: "a", userId: "user-test", amount: 250, updatedAt: 1000, serverUpdatedAt: 9999 },
+    ]);
+
+    const { POST } = await import("@/app/api/sync/verify-hash/route");
+    const body = (await (await POST(makeRequest())).json()) as {
+      hashes: Record<string, string>;
+    };
+    expect(body.hashes.intakeRecords).toBe(
+      expectedHashFor([{ id: "a", amount: 250, updatedAt: 1000 }]),
+    );
+  });
+
   it("produces an identical hash regardless of key order within a row", async () => {
     const { schemaByTableName } = await import("@intake/db/sync-payload");
 

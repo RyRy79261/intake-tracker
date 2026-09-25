@@ -28,6 +28,12 @@ const INTEGER_COLUMN_TYPES = ["PgInteger", "PgSmallInt", "PgBigInt53"];
 /** Postgres column types that accept fractions but not NaN/Infinity. */
 const FLOAT_COLUMN_TYPES = ["PgReal", "PgDoublePrecision", "PgNumeric"];
 
+/**
+ * Server-only columns: the client never sends them (the push schema omits
+ * both), so they cannot carry a bad value and are not mirrored here.
+ */
+const SERVER_ONLY_COLUMNS = new Set(["userId", "serverUpdatedAt"]);
+
 function columnsOfType(tableName: TableName, types: string[]): string[] {
   const table = schemaByTableName[tableName];
   const columns = getTableColumns(table as never) as Record<
@@ -35,7 +41,10 @@ function columnsOfType(tableName: TableName, types: string[]): string[] {
     { columnType: string }
   >;
   return Object.entries(columns)
-    .filter(([name, col]) => name !== "userId" && types.includes(col.columnType))
+    .filter(
+      ([name, col]) =>
+        !SERVER_ONLY_COLUMNS.has(name) && types.includes(col.columnType),
+    )
     .map(([name]) => name)
     .sort();
 }

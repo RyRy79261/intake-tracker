@@ -172,7 +172,8 @@ export interface CompoundStrength {
 export interface Prescription {
   id: string;
   genericName: string;
-  indication: string;
+  /** Optional: blank unless entered or suggested by the AI search. Pulled rows may carry `null`. */
+  indication?: string;
   notes?: string;
   contraindications?: string[];
   warnings?: string[];
@@ -229,9 +230,17 @@ export interface TitrationPlan {
 export interface PhaseSchedule {
   id: string;
   phaseId: string;
-  /** @deprecated Use scheduleTimeUTC. Kept for v10 DB record compatibility. */
+  /**
+   * Canonical dose time: wall-clock "HH:MM" in `anchorTimezone`. This is what
+   * the user chose and what stays fixed across DST changes.
+   */
   time: string;
-  scheduleTimeUTC: number; // minutes from midnight UTC (integer)
+  /**
+   * Derived from `time` + `anchorTimezone` (minutes from midnight UTC,
+   * integer). A cache, not authoritative — it goes stale across DST, so
+   * recompute from `time` rather than trusting it.
+   */
+  scheduleTimeUTC: number;
   anchorTimezone: string; // IANA timezone when schedule was created
   dosage: number;
   daysOfWeek: number[];
@@ -315,6 +324,15 @@ export interface DoseLog {
   kind?: DoseKind;
   /** Optional explicit dose (mg) for a PRN dose when not derivable from inventory. */
   doseMg?: number;
+  /**
+   * Snapshot of what was taken, frozen at log time so later schedule or
+   * inventory edits cannot rewrite history. `doseAmount` is in `doseUnit`;
+   * `pillsConsumed` pills of `pillStrength` each. Absent on older logs.
+   */
+  doseAmount?: number;
+  doseUnit?: string;
+  pillsConsumed?: number;
+  pillStrength?: number;
   actionTimestamp?: number;
   rescheduledTo?: string;
   skipReason?: string;
@@ -363,6 +381,11 @@ export interface SyncQueueRow {
 /** Per-table pull cursor (Dexie v16+, Phase 43 D-07). Singleton per tableName. */
 export interface SyncMetaRow {
   tableName: string;
+  /**
+   * Opaque cursor value returned by the pull route. Since the 2026-09 audit
+   * it is the server-assigned write stamp (`server_updated_at`), not a row's
+   * `updatedAt`; the name is kept for stored-cursor compatibility.
+   */
   lastPulledUpdatedAt: number;
   /**
    * Tiebreaker for the keyset cursor — the `id` of the last row consumed at

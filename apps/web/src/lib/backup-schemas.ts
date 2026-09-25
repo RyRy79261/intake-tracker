@@ -85,7 +85,8 @@ export const substanceRecordSchema = baseRecord
 export const prescriptionSchema = baseRecord
   .extend({
     genericName: z.string(),
-    indication: z.string(),
+    // Optional since 2026-09 (audit sync-engine#10); pulled rows carry null.
+    indication: z.string().nullable().optional(),
     isActive: z.boolean(),
   })
   .passthrough();
@@ -124,6 +125,11 @@ export const doseLogSchema = baseRecord
     prescriptionId: z.string(),
     phaseId: z.string(),
     scheduledDate: z.string(),
+    // Dose snapshot (2026-09). Optional, and null when pulled from the server.
+    doseAmount: finiteNumber.nullable().optional(),
+    doseUnit: z.string().nullable().optional(),
+    pillsConsumed: finiteNumber.nullable().optional(),
+    pillStrength: finiteNumber.nullable().optional(),
   })
   .passthrough();
 
