@@ -477,5 +477,35 @@ describe("PresetTab", () => {
       });
       expect(await intakesOfType("sugar")).toHaveLength(0);
     });
+
+    // The preset is configuration, not an entry: the Settings editor keeps a
+    // preset's sugar while the tracker is off, so a looked-up preset should
+    // too, ready for when the tracker is turned back on.
+    it("keeps the looked-up sugar on a saved preset while the tracker is off", async () => {
+      const user = userEvent.setup();
+      await renderWithFixtures(<PresetTab tab="coffee" />, {
+        settings: {
+          optionalTrackers: { sugar: false, potassium: false },
+          liquidPresets: [...DEFAULT_LIQUID_PRESETS],
+        },
+      });
+      lookupReturns(COLA);
+      await lookUp(user, "Coca-Cola");
+      await waitFor(() =>
+        expect(screen.getByLabelText("coffee name")).toHaveValue("Coca-Cola"),
+      );
+
+      await user.click(
+        screen.getByRole("button", { name: "Save as preset & log" }),
+      );
+
+      await waitFor(() => {
+        const saved = useSettingsStore
+          .getState()
+          .liquidPresets.find((p) => p.name === "Coca-Cola");
+        expect(saved).toMatchObject({ sugarPer100ml: 10.6 });
+      });
+      expect(await intakesOfType("sugar")).toHaveLength(0);
+    });
   });
 });

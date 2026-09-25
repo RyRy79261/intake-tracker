@@ -384,10 +384,14 @@ export function PresetTab({ tab }: PresetTabProps) {
     }
   };
 
-  /** Sugar per 100 ml to store on a new preset, from what the form shows. */
+  /**
+   * Sugar per 100 ml to store on a new preset, from what the form shows. While
+   * the tracker is off the field is hidden, so keep the preset/lookup figure:
+   * a preset is configuration (the Settings editor keeps it too), and the
+   * sugar only stops being logged, not known.
+   */
   const presetSugarPer100ml = (): number => {
-    if (!sugarEnabled) return 0;
-    if (form.sugarGInput === null) return sugarPer100ml;
+    if (!sugarEnabled || form.sugarGInput === null) return sugarPer100ml;
     if (volumeMl <= 0) return 0;
     return Math.round((sugarGrams(form) / volumeMl) * 100 * 100) / 100;
   };
