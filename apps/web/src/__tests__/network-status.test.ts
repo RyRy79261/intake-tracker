@@ -193,5 +193,40 @@ describe("network-status", () => {
       cleanup();
       expect(mockRemove).toHaveBeenCalled();
     });
+
+    it("cleanup before the listener handle resolves still removes it (audit native-android#11)", async () => {
+      const { initNetworkListener } = await loadModule();
+      const cb = vi.fn();
+      const cleanup = initNetworkListener(cb);
+
+      // Detach before the dynamic import / addListener have resolved.
+      cleanup();
+
+      // Either the listener is never added, or it is removed once it lands.
+      await new Promise((r) => setTimeout(r, 20));
+      expect(mockAddListener.mock.calls.length).toBe(mockRemove.mock.calls.length);
+      expect(cb).not.toHaveBeenCalled();
+    });
+
+    it("a listener handle that resolves after cleanup is removed", async () => {
+      let resolveHandle!: (h: { remove: () => void }) => void;
+      mockAddListener.mockReturnValue(
+        new Promise((r) => {
+          resolveHandle = r;
+        }),
+      );
+      const { initNetworkListener } = await loadModule();
+      const cleanup = initNetworkListener(vi.fn());
+
+      await vi.waitFor(() => {
+        expect(mockAddListener).toHaveBeenCalled();
+      });
+      cleanup();
+      resolveHandle({ remove: mockRemove as unknown as () => void });
+
+      await vi.waitFor(() => {
+        expect(mockRemove).toHaveBeenCalledTimes(1);
+      });
+    });
   });
 });
