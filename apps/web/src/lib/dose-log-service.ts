@@ -1,5 +1,6 @@
 import { db, type DoseLog, type DoseStatus, type Prescription, type MedicationPhase, type PhaseSchedule, type InventoryItem } from "@/lib/db";
 import { ok, err } from "@intake/core/service";
+import { isValidPillStrength } from "@intake/core/compound";
 import type { ServiceResult } from "@intake/types/service";
 import { syncFields } from "@/lib/utils";
 import { getDeviceTimezone } from "@/lib/timezone";
@@ -83,10 +84,12 @@ export interface LogPrnDoseInput {
 
 /**
  * Calculate how many pills are consumed for a given dose.
- * Uses 4-decimal rounding to avoid floating-point noise.
+ * Uses 4-decimal rounding to avoid floating-point noise. Returns undefined for
+ * an invalid strength (≤ 0, missing or non-finite) — callers must skip the
+ * stock write rather than record 0, NaN or ∞ pills.
  */
-export function calculatePillsConsumed(doseMg: number, pillStrengthMg: number): number {
-  if (pillStrengthMg === 0) return 0;
+export function calculatePillsConsumed(doseMg: number, pillStrengthMg: number): number | undefined {
+  if (!isValidPillStrength(pillStrengthMg)) return undefined;
   const raw = doseMg / pillStrengthMg;
   return Math.round(raw * 10000) / 10000;
 }
@@ -277,6 +280,7 @@ export async function takeDose(input: TakeDoseInput): Promise<ServiceResult<Dose
 
         let inventoryItemId: string | undefined = prev?.inventoryItemId;
         let pillsConsumed = 0;
+        let invalidStrength = false;
 
         if (!wasTaken) {
           // Find active inventory for this prescription. `isActive` is a
@@ -284,10 +288,12 @@ export async function takeDose(input: TakeDoseInput): Promise<ServiceResult<Dose
           // `.where({ isActive: 1 })` equality match never hits — the shared
           // helper filters in memory the same way every other call site does.
           const inventory = await getActiveInventoryForPrescription(prescriptionId);
+          const pills = inventory && calculatePillsConsumed(dosageMg, inventory.strength);
+          if (inventory && pills === undefined) invalidStrength = true;
 
-          if (inventory) {
+          if (inventory && pills !== undefined) {
             inventoryItemId = inventory.id;
-            pillsConsumed = calculatePillsConsumed(dosageMg, inventory.strength);
+            pillsConsumed = pills;
             const newStock = (inventory.currentStock ?? 0) - pillsConsumed;
 
             // Update stock (negative allowed per user decision)
@@ -335,6 +341,7 @@ export async function takeDose(input: TakeDoseInput): Promise<ServiceResult<Dose
         if (pillsConsumed > 0 && !isCleanFraction(pillsConsumed)) {
           auditDetails.warning = "odd_fraction";
         }
+        if (invalidStrength) auditDetails.warning = "invalid_strength";
         const auditEntry = buildAuditEntry("dose_taken", auditDetails);
         await db.auditLogs.add(auditEntry);
         await enqueueInsideTx("auditLogs", auditEntry.id, "upsert");
@@ -384,9 +391,10 @@ export async function logPrnDose(
         let pillsConsumed = 0;
         if (dosageMg !== undefined && dosageMg > 0) {
           const inventory = await getActiveInventoryForPrescription(prescriptionId);
-          if (inventory) {
+          const pills = inventory && calculatePillsConsumed(dosageMg, inventory.strength);
+          if (inventory && pills !== undefined) {
             inventoryItemId = inventory.id;
-            pillsConsumed = calculatePillsConsumed(dosageMg, inventory.strength);
+            pillsConsumed = pills;
             const newStock = (inventory.currentStock ?? 0) - pillsConsumed;
             await db.inventoryItems.update(inventory.id, {
               currentStock: Math.round(newStock * 10000) / 10000,
@@ -476,8 +484,9 @@ export async function untakeDose(input: UntakeDoseInput): Promise<ServiceResult<
 
         if (wasTaken && prev?.inventoryItemId) {
           const inventory = await db.inventoryItems.get(prev.inventoryItemId);
-          if (inventory) {
-            pillsConsumed = calculatePillsConsumed(dosageMg, inventory.strength);
+          const pills = inventory && calculatePillsConsumed(dosageMg, inventory.strength);
+          if (inventory && pills !== undefined) {
+            pillsConsumed = pills;
             const newStock = (inventory.currentStock ?? 0) + pillsConsumed;
 
             await db.inventoryItems.update(inventory.id, {
@@ -545,8 +554,9 @@ export async function skipDose(input: SkipDoseInput): Promise<ServiceResult<Dose
         // Reverse stock if previously taken
         if (prev?.status === "taken" && prev?.inventoryItemId) {
           const inventory = await db.inventoryItems.get(prev.inventoryItemId);
-          if (inventory) {
-            pillsConsumed = calculatePillsConsumed(dosageMg, inventory.strength);
+          const pills = inventory && calculatePillsConsumed(dosageMg, inventory.strength);
+          if (inventory && pills !== undefined) {
+            pillsConsumed = pills;
             const newStock = (inventory.currentStock ?? 0) + pillsConsumed;
 
             await db.inventoryItems.update(inventory.id, {
@@ -616,8 +626,9 @@ export async function rescheduleDose(input: RescheduleDoseInput): Promise<Servic
         // Reverse stock if previously taken
         if (prev?.status === "taken" && prev?.inventoryItemId) {
           const inventory = await db.inventoryItems.get(prev.inventoryItemId);
-          if (inventory) {
-            pillsConsumed = calculatePillsConsumed(dosageMg, inventory.strength);
+          const pills = inventory && calculatePillsConsumed(dosageMg, inventory.strength);
+          if (inventory && pills !== undefined) {
+            pillsConsumed = pills;
             const newStock = (inventory.currentStock ?? 0) + pillsConsumed;
 
             await db.inventoryItems.update(inventory.id, {

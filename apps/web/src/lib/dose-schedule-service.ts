@@ -8,6 +8,7 @@ import {
 } from "@/lib/db";
 import { formatLocalTime, getDeviceTimezone } from "@/lib/timezone";
 import { calculatePillsConsumed, isCleanFraction } from "@/lib/dose-log-service";
+import { isValidPillStrength } from "@intake/core/compound";
 import { toLocalDateKey } from "@/lib/date-utils";
 
 // ---------------------------------------------------------------------------
@@ -39,7 +40,7 @@ export interface DoseSlot {
 
   // Computed stock info
   pillsPerDose?: number; // dosageMg / inventory.strength (if inventory exists)
-  inventoryWarning?: string; // "negative_stock" | "no_inventory" | "odd_fraction"
+  inventoryWarning?: string; // "negative_stock" | "no_inventory" | "odd_fraction" | "invalid_strength"
 }
 
 // ---------------------------------------------------------------------------
@@ -196,8 +197,12 @@ export async function getDailyDoseSchedule(
 
     if (!inventory) {
       inventoryWarning = "no_inventory";
+    } else if (!isValidPillStrength(inventory.strength)) {
+      // A zero/missing strength can't be counted in pills — flag it instead
+      // of showing "0 tablets" or NaN.
+      inventoryWarning = "invalid_strength";
     } else {
-      pillsPerDose = calculatePillsConsumed(dosageMg, inventory.strength);
+      pillsPerDose = calculatePillsConsumed(dosageMg, inventory.strength) ?? 0;
       pillsPerDose =
         Math.round(pillsPerDose * 10000) / 10000;
 
