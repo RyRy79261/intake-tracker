@@ -93,7 +93,7 @@ export async function addMedicationToPrescription(input: AddMedicationToPrescrip
       await enqueueInsideTx("inventoryItems", inventory.id, "upsert");
 
       if (input.currentStock > 0) {
-        const transaction = buildTransaction(inventory.id, input.currentStock, "refill", now, "Initial stock");
+        const transaction = buildTransaction(inventory.id, input.currentStock, "initial", now, "Initial stock");
         await db.inventoryTransactions.add(transaction);
         await enqueueInsideTx("inventoryTransactions", transaction.id, "upsert");
       }

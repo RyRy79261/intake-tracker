@@ -447,7 +447,7 @@ describe("inventory management", () => {
       .equals(inv.id)
       .toArray();
     expect(txs.length).toBe(1);
-    expect(txs[0]!.type).toBe("refill");
+    expect(txs[0]!.type).toBe("initial");
     expect(txs[0]!.amount).toBe(60);
   });
 

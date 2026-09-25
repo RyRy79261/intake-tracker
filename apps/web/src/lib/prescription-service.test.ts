@@ -51,7 +51,7 @@ function makeInput(overrides?: Partial<CreatePrescriptionInput>): CreatePrescrip
 // ---------------------------------------------------------------------------
 
 describe("addPrescription", () => {
-  it("creates prescription, phase, schedules, inventory and a refill transaction when stock > 0", async () => {
+  it("creates prescription, phase, schedules, inventory and an initial stock transaction when stock > 0", async () => {
     const result = await addPrescription(makeInput({ currentStock: 30 }));
     expect(result.success).toBe(true);
     if (!result.success) return;
@@ -68,7 +68,7 @@ describe("addPrescription", () => {
       .equals(inventory.id)
       .toArray();
     expect(txns).toHaveLength(1);
-    expect(txns[0]!.type).toBe("refill");
+    expect(txns[0]!.type).toBe("initial");
     expect(txns[0]!.amount).toBe(30);
   });
 
