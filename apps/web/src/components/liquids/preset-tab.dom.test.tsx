@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
@@ -9,9 +9,16 @@ vi.mock("@/components/auth-guard", () => ({
   useAuthGate: () => true,
 }));
 
+// The AI lookup goes through apiFetch; each test queues the JSON it returns.
+const apiFetchMock = vi.fn();
+vi.mock("@/lib/api-fetch", () => ({
+  apiFetch: (...args: unknown[]) => apiFetchMock(...args),
+}));
+
 import { PresetTab } from "@/components/liquids/preset-tab";
 import { renderWithFixtures } from "@/__tests__/react-test-utils";
-import { useSettingsStore } from "@/stores/settings-store";
+import { useSettingsStore, type LiquidPreset } from "@/stores/settings-store";
+import { DEFAULT_LIQUID_PRESETS } from "@/lib/constants";
 /* eslint-disable-next-line no-restricted-imports -- test asserts a Dexie write */
 import { db } from "@/lib/db";
 
@@ -136,9 +143,11 @@ describe("PresetTab", () => {
   });
 
   it("shows an empty-state message when the tab has no presets", async () => {
-    await renderWithFixtures(<PresetTab tab="beverage" />);
+    await renderWithFixtures(<PresetTab tab="alcohol" />, {
+      settings: { liquidPresets: [] },
+    });
 
-    expect(screen.getByText(/No beverage presets yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/No alcohol presets yet/i)).toBeInTheDocument();
   });
 
   it("manually entered values log a substance without creating a preset", async () => {
@@ -186,5 +195,287 @@ describe("PresetTab", () => {
     await user.click(espresso);
     expect(screen.getByLabelText("Volume (ml)")).toHaveValue(null);
     expect(within(espresso).getByText("Espresso")).toBeInTheDocument();
+  });
+
+  describe("sugar and sodium", () => {
+    const SALTED: LiquidPreset = {
+      id: "custom-salted",
+      name: "Salted Latte",
+      tab: "coffee",
+      defaultVolumeMl: 200,
+      waterContentPercent: 98,
+      caffeinePer100ml: 30,
+      saltPer100ml: 100,
+      isDefault: false,
+      source: "manual",
+    };
+    const SWEET: LiquidPreset = {
+      id: "custom-sweet",
+      name: "Mocha",
+      tab: "coffee",
+      defaultVolumeMl: 100,
+      waterContentPercent: 95,
+      caffeinePer100ml: 40,
+      sugarPer100ml: 10,
+      isDefault: false,
+      source: "ai",
+    };
+
+    const COLA = {
+      substancePer100ml: 10,
+      defaultVolumeMl: 330,
+      beverageName: "Coca-Cola",
+      reasoning: "label",
+      waterContentPercent: 90,
+      sugarPer100ml: 10.6,
+      sodiumPer100ml: 4,
+    };
+
+    function lookupReturns(body: Record<string, unknown>) {
+      apiFetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => body,
+      });
+    }
+
+    async function renderCoffee(extra: LiquidPreset[] = []) {
+      await renderWithFixtures(<PresetTab tab="coffee" />, {
+        settings: {
+          liquidPresets: [
+            ...DEFAULT_LIQUID_PRESETS,
+            ...extra,
+          ],
+        },
+      });
+    }
+
+    async function lookUp(
+      user: ReturnType<typeof userEvent.setup>,
+      query: string,
+    ) {
+      await user.type(
+        screen.getByLabelText("Search beverages for AI lookup"),
+        query,
+      );
+      await user.click(
+        screen.getByRole("button", { name: "Look up substance content" }),
+      );
+    }
+
+    async function intakesOfType(type: string) {
+      return db.intakeRecords.where("type").equals(type).toArray();
+    }
+
+    beforeEach(() => {
+      apiFetchMock.mockReset();
+    });
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("fills sugar from an AI lookup and records it with the sodium", async () => {
+      const user = userEvent.setup();
+      await renderCoffee();
+      lookupReturns(COLA);
+
+      await lookUp(user, "Coca-Cola");
+
+      // 330 ml at 10.6 g / 100 ml
+      await waitFor(() =>
+        expect(screen.getByLabelText(/sugar/i)).toHaveValue(35),
+      );
+      expect(screen.getByText(/35 g sugar/)).toBeInTheDocument();
+      expect(screen.getByText(/13 mg sodium/)).toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: "Log Entry" }));
+      await waitFor(async () => {
+        const sugar = await intakesOfType("sugar");
+        expect(sugar.map((r) => r.amount)).toEqual([35]);
+      });
+      const salt = await intakesOfType("salt");
+      expect(salt.map((r) => r.amount)).toEqual([13]);
+    });
+
+    it("a lookup replaces stale sugar and salt from the previous drink", async () => {
+      const user = userEvent.setup();
+      await renderCoffee([SALTED]);
+
+      await user.click(screen.getByRole("button", { name: "Salted Latte200ml" }));
+      await user.type(screen.getByLabelText(/sugar/i), "35");
+
+      lookupReturns({
+        ...COLA,
+        beverageName: "Black coffee",
+        substancePer100ml: 40,
+        defaultVolumeMl: 250,
+        sugarPer100ml: 0,
+        sodiumPer100ml: 0,
+      });
+      await lookUp(user, "black coffee");
+
+      await waitFor(() =>
+        expect(screen.getByLabelText("coffee name")).toHaveValue("Black coffee"),
+      );
+      expect(screen.getByLabelText(/sugar/i)).toHaveValue(null);
+
+      await user.click(screen.getByRole("button", { name: "Log Entry" }));
+      await waitFor(async () => {
+        expect(await intakesOfType("water")).toHaveLength(1);
+      });
+      expect(await intakesOfType("sugar")).toHaveLength(0);
+      expect(await intakesOfType("salt")).toHaveLength(0);
+    });
+
+    it("tapping or deselecting a preset clears typed sugar", async () => {
+      const user = userEvent.setup();
+      await renderCoffee();
+
+      await user.type(screen.getByLabelText(/sugar/i), "35");
+      const espresso = screen.getByRole("button", { name: ESPRESSO });
+      await user.click(espresso);
+      expect(screen.getByLabelText(/sugar/i)).toHaveValue(null);
+
+      await user.type(screen.getByLabelText(/sugar/i), "12");
+      await user.click(espresso);
+      expect(screen.getByLabelText(/sugar/i)).toHaveValue(null);
+    });
+
+    it("scales a preset's sugar with the volume", async () => {
+      const user = userEvent.setup();
+      await renderCoffee([SWEET]);
+
+      await user.click(screen.getByRole("button", { name: "Mocha100ml" }));
+      expect(screen.getByLabelText(/sugar/i)).toHaveValue(10);
+
+      await user.clear(screen.getByLabelText("Volume (ml)"));
+      await user.type(screen.getByLabelText("Volume (ml)"), "250");
+      expect(screen.getByLabelText(/sugar/i)).toHaveValue(25);
+
+      await user.click(screen.getByRole("button", { name: "Log Entry" }));
+      await waitFor(async () => {
+        const sugar = await intakesOfType("sugar");
+        expect(sugar.map((r) => r.amount)).toEqual([25]);
+      });
+    });
+
+    it("shows salt in the summary alongside caffeine", async () => {
+      const user = userEvent.setup();
+      await renderCoffee([SALTED]);
+
+      await user.click(screen.getByRole("button", { name: "Salted Latte200ml" }));
+      expect(screen.getByText(/60 mg caffeine/)).toBeInTheDocument();
+      expect(screen.getByText(/200 mg sodium/)).toBeInTheDocument();
+    });
+
+    it("Save as preset & log stores sugar per 100 ml on the new preset", async () => {
+      const user = userEvent.setup();
+      await renderCoffee();
+      lookupReturns(COLA);
+      await lookUp(user, "Coca-Cola");
+      await waitFor(() =>
+        expect(screen.getByLabelText(/sugar/i)).toHaveValue(35),
+      );
+
+      await user.click(
+        screen.getByRole("button", { name: "Save as preset & log" }),
+      );
+
+      await waitFor(() => {
+        const saved = useSettingsStore
+          .getState()
+          .liquidPresets.find((p) => p.name === "Coca-Cola");
+        expect(saved).toMatchObject({
+          sugarPer100ml: 10.6,
+          saltPer100ml: 4,
+          caffeinePer100ml: 10,
+          source: "ai",
+        });
+      });
+      expect((await intakesOfType("sugar")).map((r) => r.amount)).toEqual([35]);
+    });
+
+    it("does not save the preset when logging the drink fails", async () => {
+      const user = userEvent.setup();
+      await renderCoffee();
+      lookupReturns(COLA);
+      await lookUp(user, "Coca-Cola");
+      await waitFor(() =>
+        expect(screen.getByLabelText("coffee name")).toHaveValue("Coca-Cola"),
+      );
+      const consoleError = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
+      vi.spyOn(db.intakeRecords, "add").mockRejectedValueOnce(
+        new Error("disk full"),
+      );
+
+      await user.click(
+        screen.getByRole("button", { name: "Save as preset & log" }),
+      );
+
+      await waitFor(() => expect(consoleError).toHaveBeenCalled());
+      await waitFor(() =>
+        expect(
+          screen.getByRole("button", { name: "Save as preset & log" }),
+        ).toBeEnabled(),
+      );
+      expect(await intakesOfType("water")).toHaveLength(0);
+      expect(
+        useSettingsStore
+          .getState()
+          .liquidPresets.some((p) => p.name === "Coca-Cola"),
+      ).toBe(false);
+    });
+
+    it("tapping a preset after a lookup does not offer to save it again", async () => {
+      const user = userEvent.setup();
+      await renderCoffee();
+      lookupReturns(COLA);
+      await lookUp(user, "Coca-Cola");
+      await waitFor(() =>
+        expect(
+          screen.getByRole("button", { name: "Save as preset & log" }),
+        ).toBeEnabled(),
+      );
+
+      await user.click(screen.getByRole("button", { name: ESPRESSO }));
+
+      expect(
+        screen.getByRole("button", { name: "Save as preset & log" }),
+      ).toBeDisabled();
+    });
+
+    it("sugar that rounds to 0 g does not count as a substance", async () => {
+      const user = userEvent.setup();
+      await renderCoffee();
+
+      await user.type(screen.getByLabelText("Volume (ml)"), "250");
+      await user.type(screen.getByLabelText(/sugar/i), "0.4");
+
+      expect(screen.getByRole("button", { name: "Log Entry" })).toBeDisabled();
+    });
+
+    it("hides and drops sugar while the sugar tracker is off", async () => {
+      const user = userEvent.setup();
+      await renderWithFixtures(<PresetTab tab="coffee" />, {
+        settings: {
+          optionalTrackers: { sugar: false, potassium: false },
+          liquidPresets: [
+            ...DEFAULT_LIQUID_PRESETS,
+            SWEET,
+          ],
+        },
+      });
+
+      expect(screen.queryByLabelText(/sugar/i)).not.toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "Mocha100ml" }));
+      expect(screen.queryByText(/g sugar/)).not.toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "Log Entry" }));
+
+      await waitFor(async () => {
+        expect(await intakesOfType("water")).toHaveLength(1);
+      });
+      expect(await intakesOfType("sugar")).toHaveLength(0);
+    });
   });
 });

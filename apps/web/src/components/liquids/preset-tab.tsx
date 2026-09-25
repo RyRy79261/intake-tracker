@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef, useCallback } from "react";
+import { useState, useMemo, useRef, useCallback, useReducer } from "react";
 import { Button } from "@intake/ui/button";
 import { Input } from "@intake/ui/input";
 import { Label } from "@intake/ui/label";
@@ -13,6 +13,7 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { useSettings } from "@/hooks/use-settings";
 import { useIntake } from "@/hooks/use-intake-queries";
 import { useLogDrink, type LogDrinkInput } from "@/hooks/use-drink-log";
+import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import { useToast } from "@intake/ui/use-toast";
 import { useAuthGate } from "@/components/auth-guard";
 import {
@@ -26,26 +27,137 @@ import {
   AlertDialogTitle,
 } from "@intake/ui/alert-dialog";
 import type { LiquidPreset } from "@/lib/constants";
+import type { SubstanceLookupResponse } from "@/app/api/ai/substance-lookup/schema";
 import { standardDrinksFromAbv } from "@intake/core/alcohol";
 import { computeTwoStageProgress } from "@intake/core/progress";
 
+type PresetTabKind = "coffee" | "alcohol";
+
 interface PresetTabProps {
-  tab: "coffee" | "alcohol" | "beverage";
+  tab: PresetTabKind;
+}
+
+/**
+ * Everything that describes the drink being entered. It lives in one reducer
+ * so a preset tap, a deselect or an AI lookup replaces the whole drink at
+ * once. As separate useState calls, each path set the fields it knew about
+ * and left the rest — sugar typed for a cola, or salt from a salted preset,
+ * was then logged against the next espresso.
+ */
+interface DrinkForm {
+  selectedPresetId: string | null;
+  volumeMl: number;
+  caffeinePer100ml: number;
+  /** % ABV. */
+  alcoholPer100ml: number;
+  /** mg sodium per 100 ml. */
+  saltPer100ml: number;
+  /** g sugar per 100 ml, from a preset or lookup; scaled by the volume. */
+  sugarPer100ml: number;
+  /**
+   * Grams the user typed into the sugar field. It replaces the per-100ml
+   * figure until the next preset, lookup or reset. `null` = not typed.
+   */
+  sugarGInput: string | null;
+  waterContentPercent: number;
+  beverageName: string;
+  /** Whether the current values came from an AI lookup (enables save-as-preset). */
+  aiLookupUsed: boolean;
+}
+
+const EMPTY_FORM: DrinkForm = {
+  selectedPresetId: null,
+  volumeMl: 0,
+  caffeinePer100ml: 0,
+  alcoholPer100ml: 0,
+  saltPer100ml: 0,
+  sugarPer100ml: 0,
+  sugarGInput: null,
+  waterContentPercent: 100,
+  beverageName: "",
+  aiLookupUsed: false,
+};
+
+type DrinkFormAction =
+  | { type: "selectPreset"; preset: LiquidPreset }
+  | { type: "reset" }
+  | { type: "lookup"; tab: PresetTabKind; result: SubstanceLookupResponse }
+  | { type: "setVolume"; volumeMl: number }
+  | { type: "setPrimary"; tab: PresetTabKind; value: number }
+  | { type: "setSugar"; value: string }
+  | { type: "setName"; value: string };
+
+function drinkFormReducer(state: DrinkForm, action: DrinkFormAction): DrinkForm {
+  switch (action.type) {
+    case "selectPreset": {
+      const { preset } = action;
+      return {
+        ...EMPTY_FORM,
+        selectedPresetId: preset.id,
+        volumeMl: preset.defaultVolumeMl,
+        caffeinePer100ml: preset.caffeinePer100ml ?? 0,
+        alcoholPer100ml: preset.alcoholPer100ml ?? 0,
+        saltPer100ml: preset.saltPer100ml ?? 0,
+        sugarPer100ml: preset.sugarPer100ml ?? 0,
+        waterContentPercent: preset.waterContentPercent,
+        beverageName: preset.name,
+      };
+    }
+    case "reset":
+      return EMPTY_FORM;
+    case "lookup": {
+      const { result, tab } = action;
+      const substance = result.substancePer100ml ?? 0;
+      return {
+        ...EMPTY_FORM,
+        volumeMl: result.defaultVolumeMl,
+        caffeinePer100ml: tab === "coffee" ? substance : 0,
+        alcoholPer100ml: tab === "alcohol" ? substance : 0,
+        saltPer100ml: result.sodiumPer100ml ?? 0,
+        sugarPer100ml: result.sugarPer100ml ?? 0,
+        waterContentPercent: result.waterContentPercent ?? 100,
+        beverageName: result.beverageName,
+        aiLookupUsed: true,
+      };
+    }
+    case "setVolume":
+      return { ...state, volumeMl: action.volumeMl, selectedPresetId: null };
+    case "setPrimary":
+      return action.tab === "coffee"
+        ? { ...state, caffeinePer100ml: action.value, selectedPresetId: null }
+        : { ...state, alcoholPer100ml: action.value, selectedPresetId: null };
+    case "setSugar":
+      return { ...state, sugarGInput: action.value };
+    case "setName":
+      return { ...state, beverageName: action.value };
+  }
+}
+
+/** Sugar in grams for the current drink, before rounding. */
+function sugarGrams(form: DrinkForm): number {
+  if (form.sugarGInput !== null) {
+    const typed = parseFloat(form.sugarGInput);
+    return Number.isFinite(typed) && typed > 0 ? typed : 0;
+  }
+  return (form.volumeMl / 100) * form.sugarPer100ml;
 }
 
 export function PresetTab({ tab }: PresetTabProps) {
-  const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
+  const [form, dispatch] = useReducer(drinkFormReducer, EMPTY_FORM);
+  const {
+    selectedPresetId,
+    volumeMl,
+    caffeinePer100ml,
+    alcoholPer100ml,
+    saltPer100ml,
+    sugarPer100ml,
+    waterContentPercent,
+    beverageName,
+    aiLookupUsed,
+  } = form;
   const [searchText, setSearchText] = useState("");
-  const [volumeMl, setVolumeMl] = useState<number>(0);
-  const [caffeinePer100ml, setCaffeinePer100ml] = useState<number>(0);
-  const [alcoholPer100ml, setAlcoholPer100ml] = useState<number>(0);
-  const [saltPer100ml, setSaltPer100ml] = useState<number>(0);
-  const [waterContentPercent, setWaterContentPercent] = useState<number>(100);
-  const [beverageName, setBeverageName] = useState("");
-  const [sugarG, setSugarG] = useState("");
   const [isLookingUp, setIsLookingUp] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [aiLookupUsed, setAiLookupUsed] = useState(false);
   const [showAllPresets, setShowAllPresets] = useState(false);
   const [deletePresetId, setDeletePresetId] = useState<string | null>(null);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -57,6 +169,9 @@ export function PresetTab({ tab }: PresetTabProps) {
   const logDrinkEntry = useLogDrink();
   const { toast } = useToast();
   const showAi = useAuthGate();
+  // A disabled tracker is hidden from input forms and its entries are not
+  // persisted (see optional-trackers.ts).
+  const sugarEnabled = useOptionalTrackerEnabled("sugar");
 
   // Water progress data
   const settings = useSettings();
@@ -77,17 +192,23 @@ export function PresetTab({ tab }: PresetTabProps) {
   );
 
   // Determine theme based on tab
-  const theme =
-    tab === "coffee"
-      ? CARD_THEMES.caffeine
-      : tab === "alcohol"
-        ? CARD_THEMES.alcohol
-        : CARD_THEMES.water;
+  const theme = tab === "coffee" ? CARD_THEMES.caffeine : CARD_THEMES.alcohol;
 
-  // AI lookup type mapping
-  const aiLookupType = tab === "coffee" ? "caffeine" : tab === "alcohol" ? "alcohol" : "caffeine";
+  // Sugar as it will be logged: integer grams (the column is an integer), and
+  // nothing while the tracker is off.
+  const sugarG = sugarEnabled ? Math.round(sugarGrams(form)) : 0;
 
-  // Calculated substance amounts for display
+  // What the sugar input shows: the typed text, or the per-100ml figure
+  // scaled to the current volume.
+  const sugarFieldValue = useMemo(() => {
+    if (form.sugarGInput !== null) return form.sugarGInput;
+    const derived = (volumeMl / 100) * sugarPer100ml;
+    return derived > 0 ? String(Math.round(derived * 10) / 10) : "";
+  }, [form.sugarGInput, volumeMl, sugarPer100ml]);
+
+  // Calculated substance amounts for display. Every non-zero solute is listed:
+  // this tab has no salt input, so the summary is the only place a preset's
+  // sodium is visible before it is logged.
   const calculatedDisplay = useMemo(() => {
     if (volumeMl <= 0) return null;
     const parts: string[] = [];
@@ -102,28 +223,22 @@ export function PresetTab({ tab }: PresetTabProps) {
         `${alcoholPer100ml}% ABV (${parseFloat(stdDrinks.toFixed(1))} std drinks)`
       );
     }
-    if (parts.length === 0 && saltPer100ml > 0) {
-      parts.push(
-        `${Math.round((volumeMl / 100) * saltPer100ml)} mg salt`
-      );
-    }
+    const sodiumMg = Math.round((volumeMl / 100) * saltPer100ml);
+    if (sodiumMg > 0) parts.push(`${sodiumMg} mg sodium`);
+    if (sugarG > 0) parts.push(`${sugarG} g sugar`);
     return parts.length > 0 ? parts.join(", ") : null;
-  }, [volumeMl, caffeinePer100ml, alcoholPer100ml, saltPer100ml]);
+  }, [volumeMl, caffeinePer100ml, alcoholPer100ml, saltPer100ml, sugarG]);
 
   // Whether we have anything worth recording besides the volume itself.
   // Salt and sugar count: gating on caffeine/alcohol alone made decaf, herbal
   // tea, alcohol-free beer and salt- or sugar-only presets impossible to log —
-  // the button sat permanently disabled with no explanation.
-  const hasSubstance = useMemo(() => {
-    const parsedSugar = parseFloat(sugarG);
-    const hasSugar = Number.isFinite(parsedSugar) && parsedSugar > 0;
-    return (
-      caffeinePer100ml > 0 ||
-      alcoholPer100ml > 0 ||
-      saltPer100ml > 0 ||
-      hasSugar
-    );
-  }, [caffeinePer100ml, alcoholPer100ml, saltPer100ml, sugarG]);
+  // the button sat permanently disabled with no explanation. Sugar is checked
+  // after rounding, as logged: 0.4 g rounds to nothing and records no sugar.
+  const hasSubstance =
+    caffeinePer100ml > 0 ||
+    alcoholPer100ml > 0 ||
+    saltPer100ml > 0 ||
+    sugarG > 0;
 
   // Presets to display (collapse if more than 8)
   const visiblePresets = useMemo(() => {
@@ -131,33 +246,17 @@ export function PresetTab({ tab }: PresetTabProps) {
     return presets.slice(0, 6);
   }, [presets, showAllPresets]);
 
-  const selectPreset = useCallback((preset: LiquidPreset) => {
-    setVolumeMl(preset.defaultVolumeMl);
-    setCaffeinePer100ml(preset.caffeinePer100ml ?? 0);
-    setAlcoholPer100ml(preset.alcoholPer100ml ?? 0);
-    setSaltPer100ml(preset.saltPer100ml ?? 0);
-    setWaterContentPercent(preset.waterContentPercent);
-    setBeverageName(preset.name);
-    setSearchText("");
-  }, []);
-
   const handlePresetTap = useCallback((presetId: string) => {
     if (selectedPresetId === presetId) {
       // Deselect
-      setSelectedPresetId(null);
-      setVolumeMl(0);
-      setCaffeinePer100ml(0);
-      setAlcoholPer100ml(0);
-      setSaltPer100ml(0);
-      setWaterContentPercent(100);
-      setBeverageName("");
+      dispatch({ type: "reset" });
       return;
     }
     const preset = presets.find((p) => p.id === presetId);
     if (!preset) return;
-    setSelectedPresetId(presetId);
-    selectPreset(preset);
-  }, [selectedPresetId, presets, selectPreset]);
+    dispatch({ type: "selectPreset", preset });
+    setSearchText("");
+  }, [selectedPresetId, presets]);
 
   const handlePointerDown = useCallback((presetId: string) => {
     longPressTriggeredRef.current = false;
@@ -182,6 +281,11 @@ export function PresetTab({ tab }: PresetTabProps) {
     handlePresetTap(presetId);
   }, [handlePresetTap]);
 
+  const resetFields = useCallback(() => {
+    dispatch({ type: "reset" });
+    setSearchText("");
+  }, []);
+
   const handleDeleteConfirm = useCallback(() => {
     if (!deletePresetId) return;
     const presetName = presets.find((p) => p.id === deletePresetId)?.name ?? "Preset";
@@ -195,36 +299,24 @@ export function PresetTab({ tab }: PresetTabProps) {
       description: `${presetName} removed`,
     });
     setDeletePresetId(null);
-  }, [deletePresetId, deletePreset, presets, selectedPresetId, toast]);
+  }, [deletePresetId, deletePreset, presets, selectedPresetId, toast, resetFields]);
 
   const handleAiLookup = async () => {
     if (!searchText.trim() || isLookingUp) return;
     setIsLookingUp(true);
-    setSelectedPresetId(null);
     try {
       const res = await apiFetch("/api/ai/substance-lookup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: searchText.trim(), type: aiLookupType }),
+        body: JSON.stringify({ query: searchText.trim(), type: tab === "coffee" ? "caffeine" : "alcohol" }),
       });
       if (!res.ok) throw new Error("Lookup failed");
-      const data = await res.json();
-      // Map AI response substancePer100ml to correct per-100ml field based on tab
-      if (tab === "coffee") {
-        setCaffeinePer100ml(data.substancePer100ml ?? 0);
-        setAlcoholPer100ml(0);
-      } else if (tab === "alcohol") {
-        setAlcoholPer100ml(data.substancePer100ml ?? 0);
-        setCaffeinePer100ml(0);
-      } else {
-        // beverage tab: could be either, default to caffeine
-        setCaffeinePer100ml(data.substancePer100ml ?? 0);
-      }
-      setVolumeMl(data.defaultVolumeMl);
-      setBeverageName(data.beverageName);
-      setWaterContentPercent(data.waterContentPercent ?? 100);
-      setAiLookupUsed(true);
-    } catch {
+      const result = (await res.json()) as SubstanceLookupResponse;
+      // Replaces the whole drink, sugar and sodium included — a value left
+      // over from the previous drink must not ride along with this one.
+      dispatch({ type: "lookup", tab, result });
+    } catch (cause) {
+      console.error("[preset-tab] substance lookup failed", cause);
       toast({
         title: "Lookup failed",
         description: "Try a different name or enter values manually.",
@@ -247,18 +339,10 @@ export function PresetTab({ tab }: PresetTabProps) {
    * `logDrink` owns the fluid instead: it derives the one water record from
    * `volumeMl` and stores the volume on the substances as plain data.
    */
-  const buildDrink = (presetIdOverride?: string): LogDrinkInput => {
+  const buildDrink = (): LogDrinkInput => {
     const description =
-      beverageName ||
-      searchText.trim() ||
-      (tab === "coffee" ? "Coffee" : tab === "alcohol" ? "Drink" : "Beverage");
-    const presetTag = `preset:${presetIdOverride ?? selectedPresetId ?? "manual"}`;
-
-    const parsedSugar = parseFloat(sugarG);
-    const sugar =
-      Number.isFinite(parsedSugar) && parsedSugar > 0
-        ? Math.round(parsedSugar)
-        : 0;
+      beverageName || searchText.trim() || (tab === "coffee" ? "Coffee" : "Drink");
+    const presetTag = `preset:${selectedPresetId ?? "manual"}`;
 
     return {
       volumeMl,
@@ -272,7 +356,7 @@ export function PresetTab({ tab }: PresetTabProps) {
       ...(saltPer100ml > 0 && {
         saltMg: Math.round((volumeMl / 100) * saltPer100ml),
       }),
-      ...(sugar > 0 && { sugarG: sugar }),
+      ...(sugarG > 0 && { sugarG }),
     };
   };
 
@@ -288,7 +372,8 @@ export function PresetTab({ tab }: PresetTabProps) {
       });
       // Reset fields
       resetFields();
-    } catch {
+    } catch (cause) {
+      console.error("[preset-tab] failed to log drink", cause);
       toast({
         title: "Error",
         description: "Failed to record intake",
@@ -299,56 +384,71 @@ export function PresetTab({ tab }: PresetTabProps) {
     }
   };
 
+  /** Sugar per 100 ml to store on a new preset, from what the form shows. */
+  const presetSugarPer100ml = (): number => {
+    if (!sugarEnabled) return 0;
+    if (form.sugarGInput === null) return sugarPer100ml;
+    if (volumeMl <= 0) return 0;
+    return Math.round((sugarGrams(form) / volumeMl) * 100 * 100) / 100;
+  };
+
   const handleSaveAndLog = async () => {
     if (!beverageName.trim()) return;
     setIsSubmitting(true);
+    const name = beverageName.trim();
     try {
-      const newPresetId = addPreset({
-        name: beverageName.trim(),
-        tab,
-        defaultVolumeMl: volumeMl,
-        waterContentPercent,
-        ...(caffeinePer100ml > 0 && { caffeinePer100ml }),
-        ...(alcoholPer100ml > 0 && { alcoholPer100ml }),
-        ...(saltPer100ml > 0 && { saltPer100ml }),
-        isDefault: false,
-        source: aiLookupUsed ? "ai" : "manual",
-      });
-      await logDrinkEntry(buildDrink(newPresetId));
+      // Log first. The preset used to be saved before logging, so a failed log
+      // still left a new preset behind while the toast blamed the preset.
+      try {
+        await logDrinkEntry(buildDrink());
+      } catch (cause) {
+        console.error("[preset-tab] failed to log drink", cause);
+        toast({
+          title: "Error",
+          description: "Failed to record intake",
+          variant: "destructive",
+        });
+        return;
+      }
+      const sugarPer100 = presetSugarPer100ml();
+      try {
+        addPreset({
+          name,
+          tab,
+          defaultVolumeMl: volumeMl,
+          waterContentPercent,
+          ...(caffeinePer100ml > 0 && { caffeinePer100ml }),
+          ...(alcoholPer100ml > 0 && { alcoholPer100ml }),
+          ...(saltPer100ml > 0 && { saltPer100ml }),
+          ...(sugarPer100 > 0 && { sugarPer100ml: sugarPer100 }),
+          isDefault: false,
+          source: aiLookupUsed ? "ai" : "manual",
+        });
+      } catch (cause) {
+        console.error("[preset-tab] failed to save preset", cause);
+        toast({
+          title: "Logged",
+          description: `${name} recorded, but the preset could not be saved`,
+          variant: "destructive",
+        });
+        resetFields();
+        return;
+      }
       toast({
         title: "Saved & Logged",
-        description: `${beverageName.trim()} saved as preset and logged`,
+        description: `${name} saved as preset and logged`,
         variant: "success",
       });
       // Reset
       resetFields();
-    } catch {
-      toast({
-        title: "Error",
-        description: "Failed to save preset",
-        variant: "destructive",
-      });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const resetFields = () => {
-    setVolumeMl(0);
-    setCaffeinePer100ml(0);
-    setAlcoholPer100ml(0);
-    setSaltPer100ml(0);
-    setWaterContentPercent(100);
-    setBeverageName("");
-    setSearchText("");
-    setSelectedPresetId(null);
-    setAiLookupUsed(false);
-    setSugarG("");
-  };
-
   // Primary substance label for the per-100ml input
   const primarySubstanceLabel =
-    tab === "coffee" ? "per 100ml (mg caffeine)" : tab === "alcohol" ? "% ABV" : "per 100ml (mg)";
+    tab === "coffee" ? "per 100ml (mg caffeine)" : "% ABV";
 
   return (
     <>
@@ -419,13 +519,7 @@ export function PresetTab({ tab }: PresetTabProps) {
           <Input
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
-            placeholder={
-              tab === "coffee"
-                ? "Search beverage..."
-                : tab === "alcohol"
-                  ? "Search drink..."
-                  : "Search beverage..."
-            }
+            placeholder={tab === "coffee" ? "Search beverage..." : "Search drink..."}
             aria-label="Search beverages for AI lookup"
             disabled={isLookingUp}
             className="h-10 pr-10"
@@ -457,14 +551,8 @@ export function PresetTab({ tab }: PresetTabProps) {
       {/* Name Input — always visible so signed-out users can label entries */}
       <Input
         value={beverageName}
-        onChange={(e) => setBeverageName(e.target.value)}
-        placeholder={
-          tab === "coffee"
-            ? "e.g. Espresso, Latte"
-            : tab === "alcohol"
-              ? "e.g. Beer, Whisky"
-              : "e.g. Juice, Smoothie"
-        }
+        onChange={(e) => dispatch({ type: "setName", value: e.target.value })}
+        placeholder={tab === "coffee" ? "e.g. Espresso, Latte" : "e.g. Beer, Whisky"}
         aria-label={`${tab} name`}
         className="h-10 mb-3"
       />
@@ -479,10 +567,9 @@ export function PresetTab({ tab }: PresetTabProps) {
             id={`${tab}-volume`}
             type="number"
             value={volumeMl || ""}
-            onChange={(e) => {
-              setVolumeMl(Number(e.target.value) || 0);
-              setSelectedPresetId(null);
-            }}
+            onChange={(e) =>
+              dispatch({ type: "setVolume", volumeMl: Number(e.target.value) || 0 })
+            }
             className="h-10"
             min={0}
           />
@@ -497,20 +584,14 @@ export function PresetTab({ tab }: PresetTabProps) {
           <Input
             id={`${tab}-per100ml`}
             type="number"
-            value={
-              tab === "coffee"
-                ? caffeinePer100ml || ""
-                : tab === "alcohol"
-                  ? alcoholPer100ml || ""
-                  : caffeinePer100ml || ""
+            value={(tab === "coffee" ? caffeinePer100ml : alcoholPer100ml) || ""}
+            onChange={(e) =>
+              dispatch({
+                type: "setPrimary",
+                tab,
+                value: Number(e.target.value) || 0,
+              })
             }
-            onChange={(e) => {
-              const val = Number(e.target.value) || 0;
-              if (tab === "coffee") setCaffeinePer100ml(val);
-              else if (tab === "alcohol") setAlcoholPer100ml(val);
-              else setCaffeinePer100ml(val);
-              setSelectedPresetId(null);
-            }}
             className="h-10"
             min={0}
             step={tab === "alcohol" ? "0.5" : "1"}
@@ -518,25 +599,27 @@ export function PresetTab({ tab }: PresetTabProps) {
         </div>
       </div>
 
-      {/* Optional sugar content */}
-      <div className="mb-3 space-y-1">
-        <Label
-          htmlFor={`${tab}-sugar`}
-          className="text-xs text-muted-foreground"
-        >
-          Sugar (g) — optional
-        </Label>
-        <Input
-          id={`${tab}-sugar`}
-          type="number"
-          min={0}
-          inputMode="decimal"
-          placeholder="g"
-          value={sugarG}
-          onChange={(e) => setSugarG(e.target.value)}
-          className="h-10"
-        />
-      </div>
+      {/* Optional sugar content — only while the sugar tracker is on */}
+      {sugarEnabled && (
+        <div className="mb-3 space-y-1">
+          <Label
+            htmlFor={`${tab}-sugar`}
+            className="text-xs text-muted-foreground"
+          >
+            Sugar (g) — optional
+          </Label>
+          <Input
+            id={`${tab}-sugar`}
+            type="number"
+            min={0}
+            inputMode="decimal"
+            placeholder="g"
+            value={sugarFieldValue}
+            onChange={(e) => dispatch({ type: "setSugar", value: e.target.value })}
+            className="h-10"
+          />
+        </div>
+      )}
 
       {/* 4. Calculated Amount Display */}
       <div className="mb-4">
@@ -563,8 +646,10 @@ export function PresetTab({ tab }: PresetTabProps) {
         </Button>
         {volumeMl > 0 && !hasSubstance && (
           <p className="text-xs text-muted-foreground text-center">
-            Add a caffeine, ABV, salt or sugar amount — or log a plain drink from
-            the Water or Beverage tab.
+            {sugarEnabled
+              ? "Add a caffeine, ABV, salt or sugar amount"
+              : "Add a caffeine, ABV or salt amount"}{" "}
+            — or log a plain drink from the Water or Beverage tab.
           </p>
         )}
         {showAi && beverageName.trim() && (
