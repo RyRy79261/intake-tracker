@@ -138,6 +138,27 @@ describe("getLiquidTypeLabel", () => {
     );
   });
 
+  // The note is the drink's name as it was when logged. Presets live only in
+  // this device's localStorage, so the preset lookup is a fallback: it went
+  // missing on another device and renamed every past row with the preset.
+  it("labels a preset:manual row from its note", () => {
+    expect(getLiquidTypeLabel("preset:manual", { note: "Flat white" })).toBe(
+      "Flat white",
+    );
+  });
+
+  it("prefers the stored note over the current preset name", () => {
+    const presets: LiquidPreset[] = [
+      { id: "abc", name: "Renamed Mate" } as LiquidPreset,
+    ];
+    expect(
+      getLiquidTypeLabel("preset:abc", { presets, note: "Club-Mate" }),
+    ).toBe("Club-Mate");
+    expect(
+      getLiquidTypeLabel("preset:gone", { presets: [], note: "Club-Mate" }),
+    ).toBe("Club-Mate");
+  });
+
   it("uses note for substance sources, defaults to Drink", () => {
     expect(getLiquidTypeLabel("substance:xyz")).toBe("Drink");
     expect(getLiquidTypeLabel("substance:xyz", { note: "Cola" })).toBe("Cola");

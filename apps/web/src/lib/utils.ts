@@ -68,7 +68,7 @@ export function syncFields() {
  *
  * @param source - The record's source field (e.g., "manual", "coffee:latte", "preset:abc123", "substance:xyz")
  * @param options.presets - Available liquid presets for name lookup (from settings store)
- * @param options.note - The record's note field, used as fallback label for substance-sourced entries
+ * @param options.note - The record's note field: the label for preset, drink and substance entries
  */
 export function getLiquidTypeLabel(
   source?: string,
@@ -102,7 +102,11 @@ export function getLiquidTypeLabel(
     return options?.note || "Food";
   }
 
-  // Preset prefix: "preset:manual" -> null, "preset:{id}" -> preset name or "Beverage"
+  // Preset prefix: the note first — it is the drink's name as logged, and it
+  // survives on a device where the preset doesn't exist (presets live only in
+  // this device's localStorage) and after the preset is renamed or deleted.
+  // Then "preset:{id}" -> preset name or "Beverage"; "preset:manual" -> null.
+  if (source.startsWith("preset:") && options?.note) return options.note;
   if (source === "preset:manual") return null;
   if (source.startsWith("preset:")) {
     const presetId = source.slice(7);

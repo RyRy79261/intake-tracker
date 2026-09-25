@@ -358,7 +358,7 @@ export function LiquidsCard() {
                   <span className="font-medium shrink-0">
                     {formatAmount(record.amount, "ml")}
                   </span>
-                  {record.groupId && groupSugarMap.get(record.groupId) ? (
+                  {sugarEnabled && record.groupId && groupSugarMap.get(record.groupId) ? (
                     <span className="text-xs font-medium text-pink-600 dark:text-pink-400 shrink-0">
                       {groupSugarMap.get(record.groupId)}g sugar
                     </span>
