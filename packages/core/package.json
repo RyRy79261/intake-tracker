@@ -14,7 +14,8 @@
     "./shake": "./src/shake-detector.ts",
     "./analytics-stats": "./src/analytics-stats.ts",
     "./lifecycle": "./src/lifecycle.ts",
-    "./effective-phase": "./src/effective-phase.ts"
+    "./effective-phase": "./src/effective-phase.ts",
+    "./logical-day": "./src/logical-day.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
