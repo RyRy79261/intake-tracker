@@ -11,11 +11,12 @@ import {
   makeInventoryItem,
 } from "@/__tests__/fixtures/db-fixtures";
 import type { DoseSlot } from "@/hooks/use-medication-queries";
+import type * as MedicationQueries from "@/hooks/use-medication-queries";
 
 const takeMutateAsync = vi.hoisted(() => vi.fn(async () => undefined));
 
 vi.mock("@/hooks/use-medication-queries", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/hooks/use-medication-queries")>();
+  const actual = await importOriginal<typeof MedicationQueries>();
   return {
     ...actual,
     useTakeDose: () => ({ mutateAsync: takeMutateAsync }),

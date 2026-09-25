@@ -1,4 +1,5 @@
 import { db, type DoseLog, type DoseStatus, type Prescription, type MedicationPhase, type PhaseSchedule, type InventoryItem } from "@/lib/db";
+import type { UpdateSpec } from "dexie";
 import { ok, err } from "@intake/core/service";
 import type { ServiceResult } from "@intake/types/service";
 import { syncFields } from "@/lib/utils";
@@ -205,11 +206,12 @@ async function newScheduledDoseLogId(scheduleId: string, date: string): Promise<
   return (await db.doseLogs.get(id)) ? crypto.randomUUID() : id;
 }
 
-type DoseLogPatch = Partial<Pick<
-  DoseLog,
+type PatchableField =
   | "rescheduledTo" | "skipReason" | "note" | "inventoryItemId" | "actionTimestamp"
-  | "doseAmount" | "doseUnit" | "pillsConsumed" | "pillStrength"
->>;
+  | "doseAmount" | "doseUnit" | "pillsConsumed" | "pillStrength";
+
+/** Fields to write on a slot's log; an explicit `undefined` clears the field. */
+type DoseLogPatch = { [K in PatchableField]?: DoseLog[K] | undefined };
 
 interface SlotRef {
   prescriptionId: string;
@@ -233,20 +235,25 @@ async function writeSlotLog(
   const now = Date.now();
 
   if (prev) {
-    const updates: Partial<DoseLog> = {
+    const updates = {
       status,
       actionTimestamp: now,
       timezone: getDeviceTimezone(),
       updatedAt: now,
       ...patch,
     };
-    await db.doseLogs.update(prev.id, updates);
-    return { ...prev, ...updates };
+    // Dexie deletes a key whose update value is `undefined`.
+    await db.doseLogs.update(prev.id, updates as UpdateSpec<DoseLog>);
+    const next: Record<string, unknown> = { ...prev, ...updates };
+    for (const [key, value] of Object.entries(patch)) {
+      if (value === undefined) delete next[key];
+    }
+    return next as unknown as DoseLog;
   }
 
   const defined = Object.fromEntries(
     Object.entries(patch).filter(([, v]) => v !== undefined),
-  ) as DoseLogPatch;
+  ) as Partial<Pick<DoseLog, PatchableField>>;
   const log: DoseLog = {
     id,
     prescriptionId: slot.prescriptionId,
@@ -870,7 +877,7 @@ export async function skipAllDoses(
  */
 export async function editDoseTime(input: EditDoseTimeInput): Promise<ServiceResult<DoseLog>> {
   try {
-    const { prescriptionId, phaseId, scheduleId, date, time, newTime } = input;
+    const { prescriptionId, scheduleId, date, time, newTime } = input;
 
     const newTimestamp = resolveTakenAt(date, time, newTime);
     if (newTimestamp === undefined) {
