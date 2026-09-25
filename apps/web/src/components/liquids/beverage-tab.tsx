@@ -33,10 +33,21 @@ const ALCOHOL_NAME_PATTERN =
 const CAFFEINE_NAME_PATTERN =
   /\b(coffee|espresso|latte|cappuccino|americano|mocha|macchiato|flat white|tea|matcha|chai|caffeine|energy drink|cola|red bull|monster)\b/i;
 
+// Names that contain a keyword above but are not alcoholic / caffeinated
+// ("ginger ale", "root beer", "decaf latte"): these belong on this tab.
+const NON_ALCOHOLIC_PATTERN =
+  /\b(ginger (ale|beer)|root beer|non-?alcoholic|alcohol-?free|zero|0(\.0)?\s?%)/i;
+const CAFFEINE_FREE_PATTERN =
+  /\b(decaf(feinated)?|caffeine-?free|herbal|rooibos|chamomile|peppermint)\b/i;
+
 /** Which substance tab a beverage name suggests, if any. */
 function suggestedSubstanceTab(name: string): "Alcohol" | "Coffee" | null {
-  if (ALCOHOL_NAME_PATTERN.test(name)) return "Alcohol";
-  if (CAFFEINE_NAME_PATTERN.test(name)) return "Coffee";
+  if (ALCOHOL_NAME_PATTERN.test(name) && !NON_ALCOHOLIC_PATTERN.test(name)) {
+    return "Alcohol";
+  }
+  if (CAFFEINE_NAME_PATTERN.test(name) && !CAFFEINE_FREE_PATTERN.test(name)) {
+    return "Coffee";
+  }
   return null;
 }
 

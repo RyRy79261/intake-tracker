@@ -148,4 +148,15 @@ describe("BeverageTab", () => {
     await user.type(name, "Iced latte");
     expect(screen.getByRole("status")).toHaveTextContent(/Coffee tab/i);
   });
+
+  it.each(["Ginger ale", "Root beer", "Alcohol-free beer", "Decaf latte", "Herbal tea"])(
+    "does not warn for the non-alcoholic / caffeine-free drink %s",
+    async (drink) => {
+      const user = userEvent.setup();
+      await renderWithFixtures(<BeverageTab />);
+
+      await user.type(screen.getByPlaceholderText("e.g. Juice, Smoothie"), drink);
+      expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    },
+  );
 });

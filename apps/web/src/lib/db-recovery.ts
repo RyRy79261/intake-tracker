@@ -6,13 +6,15 @@
  * wraps a write so every write hook gets the same "reopen once and retry"
  * behaviour the voice panel already had, instead of failing until reload.
  *
- * Save failures are also buffered in memory. The persistent error log
- * (`_errorLogs`) lives in the same IndexedDB, so while the connection is
- * severed a `console.error` cannot be persisted. Buffered entries are
- * re-logged once a recovery succeeds, so the cause still reaches bug reports.
+ * Save failures caused by a closed database are also buffered in memory. The
+ * persistent error log (`_errorLogs`) lives in the same IndexedDB, so while
+ * the connection is severed a `console.error` cannot be persisted. Buffered
+ * entries are re-logged once a recovery succeeds, so the cause still reaches
+ * bug reports. Other failures persist normally and are not buffered, so a
+ * later recovery does not log them a second time.
  */
 
-import { recoverClosedDatabase } from "@/lib/db";
+import { isDatabaseClosedError, recoverClosedDatabase } from "@/lib/db";
 
 export interface BufferedSaveError {
   timestamp: number;
@@ -33,11 +35,14 @@ function describe(e: unknown): string {
 
 /**
  * Record a failed save: log it (devtools + the error-log pipeline, when the
- * database is reachable) and keep an in-memory copy in case it is not.
+ * database is reachable) and, if the database was closed, keep an in-memory
+ * copy because the error log could not persist it.
  */
 export function reportSaveError(context: string, e: unknown): void {
-  buffer.push({ timestamp: Date.now(), context, message: describe(e) });
-  if (buffer.length > MAX_BUFFERED) buffer.shift();
+  if (isDatabaseClosedError(e)) {
+    buffer.push({ timestamp: Date.now(), context, message: describe(e) });
+    if (buffer.length > MAX_BUFFERED) buffer.shift();
+  }
   console.error(`[save] ${context} failed:`, e);
 }
 

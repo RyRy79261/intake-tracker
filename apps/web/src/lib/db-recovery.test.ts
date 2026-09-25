@@ -41,7 +41,9 @@ describe("withDbRecovery", () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
-    reportSaveError("water", new Error("DatabaseClosedError"));
+    const closed = new Error("Database has been closed");
+    closed.name = "DatabaseClosedError";
+    reportSaveError("water", new Error("Failed to add intake record", { cause: closed }));
     expect(getBufferedSaveErrors()).toHaveLength(1);
 
     db.close();
@@ -53,5 +55,17 @@ describe("withDbRecovery", () => {
     );
     error.mockRestore();
     warn.mockRestore();
+  });
+
+  it("does not buffer failures unrelated to a closed database", () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    reportSaveError("water", new Error("ConstraintError"));
+
+    // Already persisted by the error-log pipeline; buffering it would only
+    // log it a second time after the next recovery.
+    expect(getBufferedSaveErrors()).toHaveLength(0);
+    expect(error).toHaveBeenCalledTimes(1);
+    error.mockRestore();
   });
 });
