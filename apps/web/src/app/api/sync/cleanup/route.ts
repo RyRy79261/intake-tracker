@@ -1,43 +1,14 @@
 import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
-import { type PgColumn } from "drizzle-orm/pg-core";
 import { withAuth } from "@/lib/auth-middleware";
-import { db } from "@intake/db/client";
-import { schemaByTableName, type TableName } from "@intake/db/sync-payload";
+import { deleteMigratedData } from "@/lib/user-data-deletion";
 
 export const maxDuration = 60;
 
-const DELETION_ORDER: TableName[] = [
-  "doseLogs",
-  "inventoryTransactions",
-  "inventoryItems",
-  "phaseSchedules",
-  "medicationPhases",
-  "titrationPlans",
-  "prescriptions",
-  "substanceRecords",
-  "auditLogs",
-  "dailyNotes",
-  "defecationRecords",
-  "urinationRecords",
-  "eatingRecords",
-  "bloodPressureRecords",
-  "weightRecords",
-  "intakeRecords",
-];
-
 export const POST = withAuth(async ({ auth }) => {
   try {
-    const deleted: Record<string, number> = {};
-
-    for (const tableName of DELETION_ORDER) {
-      const table = schemaByTableName[tableName];
-      const result = await db
-        .delete(table)
-        .where(eq((table as { userId: PgColumn }).userId, auth.userId!));
-
-      deleted[tableName] = result.rowCount ?? 0;
-    }
+    // FK-safe order, one transaction — shared with wipe/account-delete so the
+    // three paths cannot drift apart again (audit sync-engine#6).
+    const deleted = await deleteMigratedData(auth.userId!);
 
     console.log(
       "[sync/cleanup] Deleted user rows: %s",

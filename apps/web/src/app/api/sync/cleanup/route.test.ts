@@ -49,6 +49,9 @@ vi.mock("@/lib/auth-middleware", () => ({
 
 vi.mock("@intake/db/client", () => {
   const db = {
+    // Neon HTTP's `batch` runs the deletes as one transaction; the stub just
+    // awaits the already-issued `where()` promises in order.
+    batch: async (queries: Promise<unknown>[]) => Promise.all(queries),
     delete: (table: unknown) => ({
       where: async (_cond: unknown) => {
         if (deleteShouldThrow) throw deleteShouldThrow;
@@ -71,10 +74,11 @@ function makeRequest(): NextRequest {
 }
 
 // The exact order the route must delete in (child tables before parents so
-// foreign keys never break). Mirrors DELETION_ORDER in the route.
+// foreign keys never break). Mirrors MIGRATION_CLEANUP_ORDER in user-data-deletion.ts.
 const EXPECTED_DELETION_ORDER = [
-  "doseLogs",
   "inventoryTransactions",
+  "dailyNotes",
+  "doseLogs",
   "inventoryItems",
   "phaseSchedules",
   "medicationPhases",
@@ -82,7 +86,6 @@ const EXPECTED_DELETION_ORDER = [
   "prescriptions",
   "substanceRecords",
   "auditLogs",
-  "dailyNotes",
   "defecationRecords",
   "urinationRecords",
   "eatingRecords",

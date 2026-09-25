@@ -498,7 +498,7 @@ describe("sync-push integration (real Postgres)", () => {
       expect(rows[0]!.amount).toBe(100);
     });
 
-    it("deleted server row prevents resurrection", async () => {
+    it("deleted server row prevents resurrection by a stale edit", async () => {
       const rowId = crypto.randomUUID();
 
       await ctx.db.insert(schema.intakeRecords).values({
@@ -522,7 +522,8 @@ describe("sync-push integration (real Postgres)", () => {
             op: "upsert",
             row: validIntakeRow({
               id: rowId,
-              updatedAt: BASE_TS + 9999,
+              // Older than the tombstone: an edit made before the delete.
+              updatedAt: BASE_TS + 500,
               deletedAt: null,
             }),
           },
@@ -541,6 +542,56 @@ describe("sync-push integration (real Postgres)", () => {
         .from(schema.intakeRecords)
         .where(eq(schema.intakeRecords.id, rowId));
       expect(rows[0]!.deletedAt).toBe(BASE_TS + 999);
+    });
+
+    it("undo after a synced delete restores the row (newer live write beats the tombstone)", async () => {
+      // audit sync-engine#8: the undo toast re-saves the row with
+      // deletedAt null and a fresh updatedAt. If the delete already
+      // reached the server, that restore must win, not be silently acked.
+      const rowId = crypto.randomUUID();
+
+      await ctx.db.insert(schema.intakeRecords).values({
+        id: rowId,
+        userId: ctx.testUserId,
+        type: "water",
+        amount: 100,
+        timestamp: BASE_TS,
+        createdAt: BASE_TS,
+        updatedAt: BASE_TS + 1000,
+        deletedAt: BASE_TS + 1000,
+        deviceId: "dev-server",
+        timezone: "UTC",
+      });
+
+      const req = makePushRequest({
+        ops: [
+          {
+            queueId: 1,
+            tableName: "intakeRecords",
+            op: "upsert",
+            row: validIntakeRow({
+              id: rowId,
+              amount: 100,
+              updatedAt: BASE_TS + 4000,
+              deletedAt: null,
+            }),
+          },
+        ],
+      });
+
+      const res = await POST(req);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as PushResponse;
+      expect(body.accepted).toEqual([
+        { queueId: 1, serverUpdatedAt: BASE_TS + 4000 },
+      ]);
+
+      const rows = await ctx.db
+        .select()
+        .from(schema.intakeRecords)
+        .where(eq(schema.intakeRecords.id, rowId));
+      expect(rows[0]!.deletedAt).toBeNull();
+      expect(rows[0]!.updatedAt).toBe(BASE_TS + 4000);
     });
   });
 
@@ -800,10 +851,11 @@ describe("sync-push integration (real Postgres)", () => {
       expect(theirRow!.amount).toBe(100); // untouched
     });
 
-    it("onConflictDoUpdate on shared PK overwrites cross-user (UUID collision guard)", async () => {
-      // Documents known behavior: PK conflict resolution ignores userId.
-      // In practice, client-generated UUIDs never collide. This test
-      // verifies the behavior is understood, not that it's desirable.
+    it("a shared PK owned by another user is rejected, not taken over", async () => {
+      // audit server-schema-parity#0: the LWW SELECT is scoped to the
+      // caller, so another user's row with the same id looks "new". The
+      // ON CONFLICT update must still refuse to touch it — otherwise the
+      // row (and its user_id) is silently moved into the caller's account.
       const otherUserId = "other-user";
       await ctx.pool.query(
         `INSERT INTO neon_auth.users_sync (id) VALUES ($1) ON CONFLICT DO NOTHING`,
@@ -824,9 +876,6 @@ describe("sync-push integration (real Postgres)", () => {
         timezone: "UTC",
       });
 
-      // Push with the SAME id from a different user — LWW SELECT won't
-      // find it (scoped to userId), so the route treats it as a new row
-      // and issues INSERT ... ON CONFLICT DO UPDATE, which overwrites.
       const req = makePushRequest({
         ops: [
           {
@@ -844,12 +893,18 @@ describe("sync-push integration (real Postgres)", () => {
 
       const res = await POST(req);
       expect(res.status).toBe(200);
+      const body = (await res.json()) as PushResponse & {
+        rejected: Array<{ code?: string }>;
+      };
+      expect(body.accepted).toHaveLength(0);
+      expect(body.rejected).toHaveLength(1);
+      expect(body.rejected[0]!.code).toBe("conflict");
 
-      // Only 1 row — the upsert overwrote on PK conflict
+      // The other user's row is untouched.
       const allRows = await ctx.db.select().from(schema.intakeRecords);
       expect(allRows).toHaveLength(1);
-      expect(allRows[0]!.userId).toBe("test-user-integration");
-      expect(allRows[0]!.amount).toBe(999);
+      expect(allRows[0]!.userId).toBe(otherUserId);
+      expect(allRows[0]!.amount).toBe(100);
     });
   });
 
