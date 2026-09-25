@@ -483,6 +483,9 @@ describe("inventory management", () => {
 
     const inv = makeInventoryItem(rx.id, { currentStock: 30 });
     await db.inventoryItems.add(inv);
+    // Stock derives from the ledger, so the 30 needs its transaction.
+    const initial = makeInventoryTransaction(inv.id, { type: "initial", amount: 30 });
+    await db.inventoryTransactions.add(initial);
 
     const result = await adjustStock(inv.id, -2, "Took 2 pills");
     expect(result.success).toBe(true);
@@ -499,8 +502,8 @@ describe("inventory management", () => {
       .where("inventoryItemId")
       .equals(inv.id)
       .toArray();
-    expect(txs.length).toBe(1);
-    expect(txs[0]!.amount).toBe(-2);
+    expect(txs.length).toBe(2);
+    expect(txs.find((t) => t.id !== initial.id)!.amount).toBe(-2);
   });
 
   it("getInventoryTransactions returns transactions in descending timestamp order", async () => {

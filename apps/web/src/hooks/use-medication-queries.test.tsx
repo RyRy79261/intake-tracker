@@ -32,6 +32,7 @@ import {
   makeMedicationPhase,
   makePhaseSchedule,
   makeInventoryItem,
+  makeInventoryTransaction,
   makeTitrationPlan,
 } from "@/__tests__/fixtures/db-fixtures";
 import { db } from "@/lib/db";
@@ -255,7 +256,9 @@ describe("mutation hooks", () => {
   it("useAdjustStock applies a stock delta and logs a transaction", async () => {
     const rx = makePrescription();
     const inventory = makeInventoryItem(rx.id, { currentStock: 30 });
-    await seedDatabase({ prescriptions: [rx], inventoryItems: [inventory] });
+    // Stock derives from the ledger, so the 30 needs its transaction.
+    const initial = makeInventoryTransaction(inventory.id, { type: "initial", amount: 30 });
+    await seedDatabase({ prescriptions: [rx], inventoryItems: [inventory], inventoryTransactions: [initial] });
 
     const { result } = renderHook(() => useAdjustStock(), { wrapper });
 
@@ -274,7 +277,7 @@ describe("mutation hooks", () => {
       .where("inventoryItemId")
       .equals(inventory.id)
       .toArray();
-    expect(txs).toHaveLength(1);
-    expect(txs[0]!.amount).toBe(12);
+    expect(txs).toHaveLength(2);
+    expect(txs.find((t) => t.id !== initial.id)!.amount).toBe(12);
   });
 });
