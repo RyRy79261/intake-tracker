@@ -1,6 +1,17 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
+
+let mockSyncAccountId: string | null = null;
+vi.mock("@/lib/sync-account", () => ({
+  getSyncAccountId: () => mockSyncAccountId,
+}));
+
+import { db } from "@/lib/db";
+import { useSettingsStore } from "@/stores/settings-store";
+import { useSyncStatusStore } from "@/stores/sync-status-store";
 import {
   normalizeConditions,
+  saveUserProfile,
+  emptyProfile,
   MAX_CONDITIONS,
   MAX_CONDITION_LENGTH,
 } from "@/lib/profile-service";
@@ -72,5 +83,65 @@ describe("profile-service normalizeConditions", () => {
     expect(result).toHaveLength(MAX_CONDITIONS);
     // The values beyond the cap are dropped entirely.
     expect(result).not.toContain(`c${MAX_CONDITIONS}`);
+  });
+});
+
+describe("profile-service saveUserProfile (audit sync-engine#18)", () => {
+  beforeEach(() => {
+    mockSyncAccountId = null;
+    useSettingsStore.setState({ storageMode: "local" });
+    useSyncStatusStore.setState({ initialSyncComplete: false });
+  });
+
+  it("gives a new profile the signed-in user's deterministic id", async () => {
+    mockSyncAccountId = "user-a";
+    useSettingsStore.setState({ storageMode: "cloud-sync" });
+    useSyncStatusStore.setState({ initialSyncComplete: true });
+
+    const result = await saveUserProfile({ conditions: ["Hypertension"] });
+
+    expect(result.success).toBe(true);
+    const rows = await db.userProfile.toArray();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.id).toBe("user-a");
+  });
+
+  it("refuses to save in cloud-sync mode before the initial sync completes", async () => {
+    mockSyncAccountId = "user-a";
+    useSettingsStore.setState({ storageMode: "cloud-sync" });
+    useSyncStatusStore.setState({ initialSyncComplete: false });
+
+    const result = await saveUserProfile({ shareConditionsWithAI: true });
+
+    expect(result.success).toBe(false);
+    expect(await db.userProfile.count()).toBe(0);
+  });
+
+  it("updates an existing profile row in place, keeping its id", async () => {
+    mockSyncAccountId = "user-a";
+    useSettingsStore.setState({ storageMode: "cloud-sync" });
+    useSyncStatusStore.setState({ initialSyncComplete: true });
+    await db.userProfile.put({
+      ...emptyProfile(),
+      id: "legacy-random-id",
+      conditions: ["Asthma"],
+    });
+
+    const result = await saveUserProfile({ shareConditionsWithAI: true });
+
+    expect(result.success).toBe(true);
+    const rows = await db.userProfile.toArray();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.id).toBe("legacy-random-id");
+    expect(rows[0]!.conditions).toEqual(["Asthma"]);
+  });
+
+  it("still saves in local-only mode with no signed-in account", async () => {
+    const result = await saveUserProfile({ conditions: ["Gout"] });
+
+    expect(result.success).toBe(true);
+    const rows = await db.userProfile.toArray();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.id).not.toBe("");
   });
 });
