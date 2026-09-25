@@ -13,7 +13,11 @@
  */
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { validateBearerToken } from "@/lib/auth-middleware";
+import {
+  AuthUpstreamError,
+  ensureUserSynced,
+  validateBearerToken,
+} from "@/lib/auth-middleware";
 import { mintNativeAuthCode } from "@/lib/native-auth-bridge";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +28,19 @@ const SESSION_COOKIE = "__Secure-neon-auth.session_token";
 
 export async function POST() {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
-  const session = token ? await validateBearerToken(token) : null;
+  let session: Awaited<ReturnType<typeof validateBearerToken>> = null;
+  if (token) {
+    try {
+      session = await validateBearerToken(token);
+    } catch (e) {
+      if (!(e instanceof AuthUpstreamError)) throw e;
+      console.error("[native-auth/mint] session validation unavailable:", e.message);
+      return NextResponse.json(
+        { error: "auth_unavailable" },
+        { status: 503, headers: NO_STORE },
+      );
+    }
+  }
   if (!token || !session) {
     return NextResponse.json(
       { error: "no_session" },
@@ -32,10 +48,21 @@ export async function POST() {
     );
   }
 
-  const code = await mintNativeAuthCode({
-    sessionToken: token,
-    userId: session.userId,
-  });
-
-  return NextResponse.json({ code }, { status: 200, headers: NO_STORE });
+  try {
+    // native_auth_codes.user_id references users_sync, and a first-ever
+    // sign-in via the Android bridge reaches here before any withAuth route
+    // has mirrored the user (audit mcp-server-auth#14).
+    await ensureUserSynced(session.userId, session.email.toLowerCase());
+    const code = await mintNativeAuthCode({
+      sessionToken: token,
+      userId: session.userId,
+    });
+    return NextResponse.json({ code }, { status: 200, headers: NO_STORE });
+  } catch (e) {
+    console.error("[native-auth/mint] failed to mint code:", e);
+    return NextResponse.json(
+      { error: "mint_failed" },
+      { status: 500, headers: NO_STORE },
+    );
+  }
 }
