@@ -51,9 +51,10 @@ export function MigrationWizard({
 
   const handleCancelConfirm = useCallback(async () => {
     setCancelOpen(false);
+    // Keep the dialog open: it shows either the "cancelled" confirmation or,
+    // when the server cleanup failed, the error (audit sync-engine#7).
     await cancelMigration();
-    onOpenChange(false);
-  }, [onOpenChange]);
+  }, []);
 
   const handleComplete = useCallback(async () => {
     await completeMigration();

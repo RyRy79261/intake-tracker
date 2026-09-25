@@ -29,10 +29,15 @@ export function CompletionSummaryStep({
   const { tableProgress } = useMigrationStore();
   const duration = Date.now() - migrationStartTime;
 
-  const totalUploaded = Object.values(tableProgress).reduce(
-    (sum, p) => sum + p.uploaded,
+  // `uploaded` counts rows sent; the server may have rejected some of them
+  // (audit sync-engine#12). Those are queued and retried once sync starts.
+  const totalRejected = Object.values(tableProgress).reduce(
+    (sum, p) => sum + (p.rejected ?? 0),
     0,
   );
+  const totalUploaded =
+    Object.values(tableProgress).reduce((sum, p) => sum + p.uploaded, 0) -
+    totalRejected;
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -43,6 +48,14 @@ export function CompletionSummaryStep({
           {totalUploaded.toLocaleString()} records uploaded in{" "}
           {formatDuration(duration)}
         </p>
+        {totalRejected > 0 && (
+          <p className="text-sm text-amber-600 dark:text-amber-400">
+            {totalRejected.toLocaleString()}{" "}
+            {totalRejected === 1 ? "record was" : "records were"} not accepted
+            by the server. They stay on this device and will be retried when
+            sync starts.
+          </p>
+        )}
       </div>
 
       <div className="space-y-2 max-h-48 overflow-y-auto">
@@ -56,7 +69,9 @@ export function CompletionSummaryStep({
             >
               <span>{tableLabel(name)}</span>
               <span className="text-muted-foreground tabular-nums">
-                {progress.uploaded.toLocaleString()} records
+                {(progress.uploaded - (progress.rejected ?? 0)).toLocaleString()}{" "}
+                records
+                {progress.rejected ? `, ${progress.rejected} not accepted` : ""}
               </span>
             </div>
           );
