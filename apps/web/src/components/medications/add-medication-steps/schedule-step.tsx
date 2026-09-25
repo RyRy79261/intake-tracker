@@ -29,7 +29,7 @@ export function ScheduleStep({
   };
 
   const addScheduleEntry = () => {
-    setSchedules([...schedules, { time: "20:30", daysOfWeek: [...ALL_DAYS], dosage: 1 }]);
+    setSchedules([...schedules, { time: "20:30", daysOfWeek: [...ALL_DAYS] }]);
   };
 
   const removeSchedule = (index: number) => {
