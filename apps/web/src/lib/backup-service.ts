@@ -3,9 +3,19 @@
  * data tables (including userProfile).
  *
  * Conflict detection is scoped: in merge mode the medication/system tables and
- * userProfile record conflicts (mergeTableWithConflicts), while health tables
- * skip rows whose id already exists. Replace mode bypasses conflict detection
- * and overwrites every table.
+ * userProfile record conflicts, while health tables skip rows whose id is
+ * already live locally. A backup row whose local copy is tombstoned restores
+ * it in every table. Replace mode bypasses conflict detection, overwrites
+ * every table and tombstones local rows the backup lacks.
+ *
+ * Every import runs in one Dexie transaction and goes through the sync queue
+ * like any other write (audit analytics-history-export#4):
+ * - a new live row is enqueued as-is, keeping its own `updatedAt`, so a newer
+ *   copy already on the server still wins last-write-wins;
+ * - a row that replaces a local one (restore over a tombstone, a resolved
+ *   conflict, replace mode) gets a fresh `updatedAt` so it wins;
+ * - a backup tombstone for an unknown id is kept locally but never pushed, so
+ *   an old backup can't delete a record that lives on the server.
  */
 
 import {
@@ -30,10 +40,16 @@ import {
   type InsightReport,
 } from "@/lib/db";
 import { ok, err } from "@intake/core/service";
+import { isLive } from "@intake/core/lifecycle";
 import type { ServiceResult } from "@intake/types/service";
 import { logAudit } from "@/lib/audit";
 import { encrypt, decrypt, type EncryptedData } from "@/lib/crypto";
 import { BACKUP_VALIDATORS } from "@/lib/backup-schemas";
+import { TABLE_PUSH_ORDER, type TableName } from "@/lib/sync-topology";
+import { enqueueInsideTx } from "@/lib/sync-queue";
+import { schedulePush } from "@/lib/sync-engine";
+import { getDeviceId } from "@/lib/utils";
+import { getDeviceTimezone } from "@/lib/timezone";
 
 export interface BackupData {
   version: number;
@@ -87,10 +103,62 @@ export interface ImportResult {
   auditLogsImported: number;
   userProfileImported: number;
   insightReportsImported: number;
+  /** Sum of every `*Imported` count above. */
+  totalImported: number;
   skipped: number;
   conflicts: ConflictRecord[];
   errors: string[];
 }
+
+type ImportCountKey = Exclude<
+  { [K in keyof ImportResult]: ImportResult[K] extends number ? K : never }[keyof ImportResult],
+  "skipped" | "totalImported"
+>;
+
+/** ImportResult counter for each backed-up table. */
+const IMPORT_COUNT_KEY: Record<TableName, ImportCountKey> = {
+  intakeRecords: "intakeImported",
+  weightRecords: "weightImported",
+  bloodPressureRecords: "bpImported",
+  eatingRecords: "eatingImported",
+  urinationRecords: "urinationImported",
+  defecationRecords: "defecationImported",
+  substanceRecords: "substanceImported",
+  prescriptions: "prescriptionsImported",
+  medicationPhases: "phasesImported",
+  phaseSchedules: "schedulesImported",
+  inventoryItems: "inventoryItemsImported",
+  inventoryTransactions: "inventoryTransactionsImported",
+  doseLogs: "doseLogsImported",
+  titrationPlans: "titrationPlansImported",
+  dailyNotes: "dailyNotesImported",
+  auditLogs: "auditLogsImported",
+  userProfile: "userProfileImported",
+  insightReports: "insightReportsImported",
+};
+
+/** Health tables: a live local row always wins, no conflict is raised. */
+const SKIP_EXISTING_TABLES: ReadonlySet<TableName> = new Set<TableName>([
+  "intakeRecords",
+  "weightRecords",
+  "bloodPressureRecords",
+  "eatingRecords",
+  "urinationRecords",
+  "defecationRecords",
+  "substanceRecords",
+]);
+
+/** Tables whose record type has no `timezone` column (see baseSyncFields). */
+const NO_TIMEZONE_TABLES: ReadonlySet<TableName> = new Set<TableName>([
+  "prescriptions",
+  "medicationPhases",
+  "phaseSchedules",
+  "titrationPlans",
+  "userProfile",
+  "insightReports",
+]);
+
+type Row = Record<string, unknown> & { id: string; deletedAt?: number | null; updatedAt?: number };
 
 const CURRENT_BACKUP_VERSION = 5;
 
@@ -121,6 +189,7 @@ function emptyImportResult(): ImportResult {
     auditLogsImported: 0,
     userProfileImported: 0,
     insightReportsImported: 0,
+    totalImported: 0,
     skipped: 0,
     conflicts: [],
     errors: [],
@@ -128,11 +197,12 @@ function emptyImportResult(): ImportResult {
 }
 
 /**
- * Compare two records ignoring sync metadata fields.
+ * Compare two records ignoring sync metadata fields (but not whether each is
+ * live or deleted).
  */
 const IGNORE_FIELDS = new Set(["createdAt", "updatedAt", "deletedAt", "deviceId", "timezone"]);
 
-function isContentEqual(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
+function isContentEqual(a: Row, b: Row): boolean {
   // Collect all keys from both objects, excluding sync metadata
   const allKeys: string[] = [];
   const seen = new Set<string>();
@@ -146,6 +216,9 @@ function isContentEqual(a: Record<string, unknown>, b: Record<string, unknown>):
   };
   addKeys(Object.keys(a));
   addKeys(Object.keys(b));
+  // A live row and a tombstone of it are never "the same" -- restoring a
+  // backup is how a deletion gets undone (audit analytics-history-export#3).
+  if (isLive(a) !== isLive(b)) return false;
   // Compare values -- treat missing keys and undefined as equivalent
   for (let i = 0; i < allKeys.length; i++) {
     const k = allKeys[i]!;
@@ -380,46 +453,115 @@ function validateBackupData(data: unknown): data is BackupData {
 }
 
 /**
- * Conflict-aware merge for a single medication/system table.
- * Returns the number of new records imported.
+ * Fill sync metadata a backup row lacks. Backups exported before the sync
+ * fields existed (the v1 `records` format, or any file older than Dexie v10)
+ * omit them, and every read path filters on `deletedAt === null`, so an
+ * un-normalised row would import but never show up (audit
+ * gap-records-history-listing#2).
  */
-async function mergeTableWithConflicts<T extends { id: string }>(
-  tableName: string,
-  records: T[],
-  validator: (r: unknown) => boolean,
+function normaliseRow(tableName: TableName, record: Row, now: number): Row {
+  const row: Row = { ...record };
+  row.deletedAt ??= null;
+  if (typeof row.createdAt !== "number") {
+    row.createdAt = typeof row.timestamp === "number" ? row.timestamp : now;
+  }
+  row.updatedAt ??= row.createdAt as number;
+  row.deviceId ??= getDeviceId();
+  if (!NO_TIMEZONE_TABLES.has(tableName)) row.timezone ??= getDeviceTimezone();
+  return row;
+}
+
+/**
+ * Write one backup row and queue it for sync. Must run inside a transaction
+ * that covers the table and `_syncQueue`. Returns true if a sync op was queued.
+ */
+async function writeRow(
+  tableName: TableName,
+  row: Row,
+  existing: Row | undefined,
+  now: number,
+): Promise<boolean> {
+  // A row that replaces a local copy must beat it (and the server's copy of
+  // it) under last-write-wins.
+  const written: Row = existing
+    ? { ...row, updatedAt: Math.max(now, (existing.updatedAt ?? 0) + 1) }
+    : row;
+  await db.table<Row, string>(tableName).put(written);
+  if (!existing && !isLive(written)) return false;
+  await enqueueInsideTx(tableName, written.id, isLive(written) ? "upsert" : "delete");
+  return true;
+}
+
+function backupRows(data: BackupData, tableName: TableName): Row[] {
+  return (data[tableName] ?? []) as unknown as Row[];
+}
+
+/**
+ * Import every table inside one transaction. Returns the number of sync ops
+ * queued. Throws (rolling back the whole import) if any write fails.
+ */
+async function importTables(
+  data: BackupData,
+  mode: "merge" | "replace",
   result: ImportResult,
 ): Promise<number> {
-  const table = db.table(tableName);
-  const existingIds = new Set(await table.toCollection().primaryKeys());
-  const toImport: T[] = [];
+  let queuedOps = 0;
+  const tables = TABLE_PUSH_ORDER.map((t) => db.table(t));
+  await db.transaction("rw", [...tables, db._syncQueue], async () => {
+    const now = Date.now();
+    for (const tableName of TABLE_PUSH_ORDER) {
+      const table = db.table<Row, string>(tableName);
+      const local = new Map((await table.toArray()).map((r) => [r.id, r]));
+      const validator = BACKUP_VALIDATORS[tableName];
+      const backupIds = new Set<string>();
+      let imported = 0;
 
-  for (const record of records) {
-    if (!validator(record)) {
-      result.skipped++;
-      continue;
-    }
-    if (!existingIds.has(record.id)) {
-      toImport.push(record);
-    } else {
-      // Fetch full record and compare content
-      const existing = await table.get(record.id) as Record<string, unknown> | undefined;
-      if (existing && isContentEqual(existing, record as unknown as Record<string, unknown>)) {
-        result.skipped++;
-      } else {
-        result.conflicts.push({
-          table: tableName,
-          id: record.id,
-          current: existing as Record<string, unknown>,
-          backup: record as unknown as Record<string, unknown>,
-        });
+      for (const record of backupRows(data, tableName)) {
+        if (!validator(record)) {
+          result.skipped++;
+          continue;
+        }
+        const row = normaliseRow(tableName, record, now);
+        backupIds.add(row.id);
+        const existing = local.get(row.id);
+
+        if (mode === "merge" && existing) {
+          if (!isLive(existing)) {
+            // Local copy was deleted: a live backup row restores it.
+            if (!isLive(row)) {
+              result.skipped++;
+              continue;
+            }
+          } else if (SKIP_EXISTING_TABLES.has(tableName) || isContentEqual(existing, row)) {
+            result.skipped++;
+            continue;
+          } else {
+            result.conflicts.push({ table: tableName, id: row.id, current: existing, backup: row });
+            continue;
+          }
+        }
+
+        if (await writeRow(tableName, row, existing, now)) queuedOps++;
+        // A repeated id later in the same file is then treated as existing.
+        local.set(row.id, row);
+        imported++;
       }
-    }
-  }
 
-  if (toImport.length > 0) {
-    await table.bulkPut(toImport);
-  }
-  return toImport.length;
+      if (mode === "replace") {
+        // Local rows the backup lacks are tombstoned rather than cleared, so
+        // the deletion reaches the server copy too.
+        for (const existing of local.values()) {
+          if (backupIds.has(existing.id) || !isLive(existing)) continue;
+          await table.update(existing.id, { deletedAt: now, updatedAt: now });
+          await enqueueInsideTx(tableName, existing.id, "delete");
+          queuedOps++;
+        }
+      }
+
+      result[IMPORT_COUNT_KEY[tableName]] = imported;
+    }
+  });
+  return queuedOps;
 }
 
 /**
@@ -471,259 +613,65 @@ export async function importBackup(
       return ok(result);
     }
 
-    // Clear existing data if replacing (merge never clears; we only add/update)
-    if (mode === "replace") {
-      await Promise.all([
-        db.intakeRecords.clear(),
-        db.weightRecords.clear(),
-        db.bloodPressureRecords.clear(),
-        db.eatingRecords.clear(),
-        db.urinationRecords.clear(),
-        db.defecationRecords.clear(),
-        db.substanceRecords.clear(),
-        db.prescriptions.clear(),
-        db.medicationPhases.clear(),
-        db.phaseSchedules.clear(),
-        db.inventoryItems.clear(),
-        db.inventoryTransactions.clear(),
-        db.doseLogs.clear(),
-        db.titrationPlans.clear(),
-        db.dailyNotes.clear(),
-        db.auditLogs.clear(),
-        db.userProfile.clear(),
-        db.insightReports.clear(),
-      ]);
-    }
+    const queuedOps = await importTables(data, mode, result);
+    if (queuedOps > 0) schedulePush();
 
-    // --- Health tables: simple skip-based merge (backward-compatible) ---
-
-    if (mode === "merge") {
-      // Get existing IDs for health tables
-      const [intakeIds, weightIds, bpIds, eatingIds, urinationIds, defecationIds, substanceIds] = await Promise.all([
-        db.intakeRecords.toCollection().primaryKeys(),
-        db.weightRecords.toCollection().primaryKeys(),
-        db.bloodPressureRecords.toCollection().primaryKeys(),
-        db.eatingRecords.toCollection().primaryKeys(),
-        db.urinationRecords.toCollection().primaryKeys(),
-        db.defecationRecords.toCollection().primaryKeys(),
-        db.substanceRecords.toCollection().primaryKeys(),
-      ]);
-
-      const healthIdSets = {
-        intake: new Set(intakeIds),
-        weight: new Set(weightIds),
-        bp: new Set(bpIds),
-        eating: new Set(eatingIds),
-        urination: new Set(urinationIds),
-        defecation: new Set(defecationIds),
-        substance: new Set(substanceIds),
-      };
-
-      result.intakeImported = await importHealthTable(data.intakeRecords || [], BACKUP_VALIDATORS.intakeRecords, healthIdSets.intake, db.intakeRecords, result);
-      result.weightImported = await importHealthTable(data.weightRecords || [], BACKUP_VALIDATORS.weightRecords, healthIdSets.weight, db.weightRecords, result);
-      result.bpImported = await importHealthTable(data.bloodPressureRecords || [], BACKUP_VALIDATORS.bloodPressureRecords, healthIdSets.bp, db.bloodPressureRecords, result);
-      result.eatingImported = await importHealthTable(data.eatingRecords || [], BACKUP_VALIDATORS.eatingRecords, healthIdSets.eating, db.eatingRecords, result);
-      result.urinationImported = await importHealthTable(data.urinationRecords || [], BACKUP_VALIDATORS.urinationRecords, healthIdSets.urination, db.urinationRecords, result);
-      result.defecationImported = await importHealthTable(data.defecationRecords || [], BACKUP_VALIDATORS.defecationRecords, healthIdSets.defecation, db.defecationRecords, result);
-      result.substanceImported = await importHealthTable(data.substanceRecords || [], BACKUP_VALIDATORS.substanceRecords, healthIdSets.substance, db.substanceRecords, result);
-
-      // --- Medication/system tables: conflict-aware merge ---
-      result.prescriptionsImported = await mergeTableWithConflicts("prescriptions", data.prescriptions || [], BACKUP_VALIDATORS.prescriptions, result);
-      result.phasesImported = await mergeTableWithConflicts("medicationPhases", data.medicationPhases || [], BACKUP_VALIDATORS.medicationPhases, result);
-      result.schedulesImported = await mergeTableWithConflicts("phaseSchedules", data.phaseSchedules || [], BACKUP_VALIDATORS.phaseSchedules, result);
-      result.inventoryItemsImported = await mergeTableWithConflicts("inventoryItems", data.inventoryItems || [], BACKUP_VALIDATORS.inventoryItems, result);
-      result.inventoryTransactionsImported = await mergeTableWithConflicts("inventoryTransactions", data.inventoryTransactions || [], BACKUP_VALIDATORS.inventoryTransactions, result);
-      result.doseLogsImported = await mergeTableWithConflicts("doseLogs", data.doseLogs || [], BACKUP_VALIDATORS.doseLogs, result);
-      result.titrationPlansImported = await mergeTableWithConflicts("titrationPlans", data.titrationPlans || [], BACKUP_VALIDATORS.titrationPlans, result);
-      result.dailyNotesImported = await mergeTableWithConflicts("dailyNotes", data.dailyNotes || [], BACKUP_VALIDATORS.dailyNotes, result);
-      result.auditLogsImported = await mergeTableWithConflicts("auditLogs", data.auditLogs || [], BACKUP_VALIDATORS.auditLogs, result);
-      result.userProfileImported = await mergeTableWithConflicts("userProfile", data.userProfile || [], BACKUP_VALIDATORS.userProfile, result);
-      result.insightReportsImported = await mergeTableWithConflicts("insightReports", data.insightReports || [], BACKUP_VALIDATORS.insightReports, result);
-    } else {
-      // Replace mode: import everything without ID checks
-      result.intakeImported = await importHealthTable(data.intakeRecords || [], BACKUP_VALIDATORS.intakeRecords, new Set(), db.intakeRecords, result);
-      result.weightImported = await importHealthTable(data.weightRecords || [], BACKUP_VALIDATORS.weightRecords, new Set(), db.weightRecords, result);
-      result.bpImported = await importHealthTable(data.bloodPressureRecords || [], BACKUP_VALIDATORS.bloodPressureRecords, new Set(), db.bloodPressureRecords, result);
-      result.eatingImported = await importHealthTable(data.eatingRecords || [], BACKUP_VALIDATORS.eatingRecords, new Set(), db.eatingRecords, result);
-      result.urinationImported = await importHealthTable(data.urinationRecords || [], BACKUP_VALIDATORS.urinationRecords, new Set(), db.urinationRecords, result);
-      result.defecationImported = await importHealthTable(data.defecationRecords || [], BACKUP_VALIDATORS.defecationRecords, new Set(), db.defecationRecords, result);
-      result.substanceImported = await importHealthTable(data.substanceRecords || [], BACKUP_VALIDATORS.substanceRecords, new Set(), db.substanceRecords, result);
-
-      // Medication tables in replace mode: no conflict detection, just import
-      result.prescriptionsImported = await importHealthTable(data.prescriptions || [], BACKUP_VALIDATORS.prescriptions, new Set(), db.prescriptions, result);
-      result.phasesImported = await importHealthTable(data.medicationPhases || [], BACKUP_VALIDATORS.medicationPhases, new Set(), db.medicationPhases, result);
-      result.schedulesImported = await importHealthTable(data.phaseSchedules || [], BACKUP_VALIDATORS.phaseSchedules, new Set(), db.phaseSchedules, result);
-      result.inventoryItemsImported = await importHealthTable(data.inventoryItems || [], BACKUP_VALIDATORS.inventoryItems, new Set(), db.inventoryItems, result);
-      result.inventoryTransactionsImported = await importHealthTable(data.inventoryTransactions || [], BACKUP_VALIDATORS.inventoryTransactions, new Set(), db.inventoryTransactions, result);
-      result.doseLogsImported = await importHealthTable(data.doseLogs || [], BACKUP_VALIDATORS.doseLogs, new Set(), db.doseLogs, result);
-      result.titrationPlansImported = await importHealthTable(data.titrationPlans || [], BACKUP_VALIDATORS.titrationPlans, new Set(), db.titrationPlans, result);
-      result.dailyNotesImported = await importHealthTable(data.dailyNotes || [], BACKUP_VALIDATORS.dailyNotes, new Set(), db.dailyNotes, result);
-      result.auditLogsImported = await importHealthTable(data.auditLogs || [], BACKUP_VALIDATORS.auditLogs, new Set(), db.auditLogs, result);
-      result.userProfileImported = await importHealthTable(data.userProfile || [], BACKUP_VALIDATORS.userProfile, new Set(), db.userProfile, result);
-      result.insightReportsImported = await importHealthTable(data.insightReports || [], BACKUP_VALIDATORS.insightReports, new Set(), db.insightReports, result);
-    }
-
+    result.totalImported = TABLE_PUSH_ORDER.reduce(
+      (sum, t) => sum + result[IMPORT_COUNT_KEY[t]],
+      0,
+    );
     result.success = true;
-
-    const totalImported =
-      result.intakeImported + result.weightImported + result.bpImported +
-      result.eatingImported + result.urinationImported + result.defecationImported +
-      result.substanceImported + result.prescriptionsImported + result.phasesImported +
-      result.schedulesImported + result.inventoryItemsImported + result.inventoryTransactionsImported +
-      result.doseLogsImported + result.titrationPlansImported + result.dailyNotesImported +
-      result.auditLogsImported + result.userProfileImported + result.insightReportsImported;
-    logAudit("data_import", `Imported ${totalImported} records (${result.skipped} skipped, ${result.conflicts.length} conflicts)`);
+    logAudit("data_import", `Imported ${result.totalImported} records (${result.skipped} skipped, ${result.conflicts.length} conflicts)`);
 
   } catch (error) {
-    result.errors.push(error instanceof Error ? error.message : "Unknown error during import");
+    // The transaction rolled back, so nothing was imported.
+    const failed = emptyImportResult();
+    failed.errors.push(error instanceof Error ? error.message : "Unknown error during import");
+    return ok(failed);
   }
 
   return ok(result);
 }
 
-/**
- * Simple health table import: validate, skip existing IDs, bulkPut new records.
- */
-async function importHealthTable<T extends { id: string }>(
-  records: T[],
-  validator: (r: unknown) => boolean,
-  existingIds: Set<string>,
-  table: { bulkPut: (items: T[]) => Promise<unknown> },
-  result: ImportResult,
-): Promise<number> {
-  const toImport: T[] = [];
-  for (const record of records) {
-    if (!validator(record)) {
-      result.skipped++;
-      continue;
-    }
-    if (existingIds.has(record.id)) {
-      result.skipped++;
-      continue;
-    }
-    toImport.push(record);
-  }
-  if (toImport.length > 0) {
-    await table.bulkPut(toImport);
-  }
-  return toImport.length;
+function isTableName(name: string): name is TableName {
+  return (TABLE_PUSH_ORDER as readonly string[]).includes(name);
 }
 
 /**
  * Resolve conflicts after a merge import.
- * For each resolution, if useBackup is true, overwrite the local record with the backup version.
+ * For each resolution, if useBackup is true, overwrite the local record with
+ * the backup version (fresh `updatedAt`, queued for sync).
  */
 export async function resolveConflicts(
   resolutions: Array<{ table: string; id: string; useBackup: boolean; backupRecord: Record<string, unknown> }>
 ): Promise<ServiceResult<{ resolved: number }>> {
   try {
-    let resolved = 0;
-    for (const res of resolutions) {
-      if (res.useBackup) {
-        const table = db.table(res.table);
-        await table.put(res.backupRecord);
-        resolved++;
-      }
+    const chosen = resolutions.filter((r) => r.useBackup);
+    for (const res of chosen) {
+      if (!isTableName(res.table)) throw new Error(`Unknown table "${res.table}"`);
     }
+    const tableNames = [...new Set(chosen.map((r) => r.table as TableName))];
+    let queuedOps = 0;
+    if (chosen.length > 0) {
+      await db.transaction(
+        "rw",
+        [...tableNames.map((t) => db.table(t)), db._syncQueue],
+        async () => {
+          const now = Date.now();
+          for (const res of chosen) {
+            const tableName = res.table as TableName;
+            const row = normaliseRow(tableName, { ...res.backupRecord, id: res.id }, now);
+            const existing = await db.table<Row, string>(tableName).get(res.id);
+            if (await writeRow(tableName, row, existing, now)) queuedOps++;
+          }
+        },
+      );
+    }
+    if (queuedOps > 0) schedulePush();
+    const resolved = chosen.length;
     logAudit("data_import", `Resolved ${resolved} conflicts (${resolutions.length - resolved} kept current)`);
     return ok({ resolved });
   } catch (e) {
     return err("Failed to resolve conflicts", e);
   }
-}
-
-/**
- * Get backup statistics.
- * Read function -- returns T directly, lets errors propagate.
- */
-export async function getBackupStats(): Promise<{
-  intakeCount: number;
-  weightCount: number;
-  bpCount: number;
-  eatingCount: number;
-  urinationCount: number;
-  defecationCount: number;
-  substanceCount: number;
-  prescriptionCount: number;
-  phaseCount: number;
-  scheduleCount: number;
-  inventoryItemCount: number;
-  inventoryTransactionCount: number;
-  doseLogCount: number;
-  titrationPlanCount: number;
-  dailyNoteCount: number;
-  auditLogCount: number;
-  userProfileCount: number;
-  insightReportCount: number;
-  totalCount: number;
-  oldestRecord: Date | null;
-  newestRecord: Date | null;
-}> {
-  const [
-    intakeRecords, weightRecords, bpRecords, eatingRecords, urinationRecords, defecationRecords, substanceRecords,
-    prescriptions, phases, schedules, inventoryItems, inventoryTransactions, doseLogs,
-    titrationPlans, dailyNotes, auditLogs, userProfile, insightReports,
-  ] = await Promise.all([
-    db.intakeRecords.toArray(),
-    db.weightRecords.toArray(),
-    db.bloodPressureRecords.toArray(),
-    db.eatingRecords.toArray(),
-    db.urinationRecords.toArray(),
-    db.defecationRecords.toArray(),
-    db.substanceRecords.toArray(),
-    db.prescriptions.toArray(),
-    db.medicationPhases.toArray(),
-    db.phaseSchedules.toArray(),
-    db.inventoryItems.toArray(),
-    db.inventoryTransactions.toArray(),
-    db.doseLogs.toArray(),
-    db.titrationPlans.toArray(),
-    db.dailyNotes.toArray(),
-    db.auditLogs.toArray(),
-    db.userProfile.toArray(),
-    db.insightReports.toArray(),
-  ]);
-
-  const allTimestamps = [
-    ...intakeRecords.map((r) => r.timestamp),
-    ...weightRecords.map((r) => r.timestamp),
-    ...bpRecords.map((r) => r.timestamp),
-    ...eatingRecords.map((r) => r.timestamp),
-    ...urinationRecords.map((r) => r.timestamp),
-    ...defecationRecords.map((r) => r.timestamp),
-    ...substanceRecords.map((r) => r.timestamp),
-    ...inventoryTransactions.map((r) => r.timestamp),
-    ...auditLogs.map((r) => r.timestamp),
-    ...insightReports.map((r) => r.generatedAt),
-  ];
-
-  return {
-    intakeCount: intakeRecords.length,
-    weightCount: weightRecords.length,
-    bpCount: bpRecords.length,
-    eatingCount: eatingRecords.length,
-    urinationCount: urinationRecords.length,
-    defecationCount: defecationRecords.length,
-    substanceCount: substanceRecords.length,
-    prescriptionCount: prescriptions.length,
-    phaseCount: phases.length,
-    scheduleCount: schedules.length,
-    inventoryItemCount: inventoryItems.length,
-    inventoryTransactionCount: inventoryTransactions.length,
-    doseLogCount: doseLogs.length,
-    titrationPlanCount: titrationPlans.length,
-    dailyNoteCount: dailyNotes.length,
-    auditLogCount: auditLogs.length,
-    userProfileCount: userProfile.length,
-    insightReportCount: insightReports.length,
-    totalCount:
-      intakeRecords.length + weightRecords.length + bpRecords.length +
-      eatingRecords.length + urinationRecords.length + defecationRecords.length +
-      substanceRecords.length + prescriptions.length + phases.length +
-      schedules.length + inventoryItems.length + inventoryTransactions.length +
-      doseLogs.length + titrationPlans.length + dailyNotes.length + auditLogs.length +
-      userProfile.length + insightReports.length,
-    oldestRecord: allTimestamps.length > 0 ? new Date(Math.min(...allTimestamps)) : null,
-    newestRecord: allTimestamps.length > 0 ? new Date(Math.max(...allTimestamps)) : null,
-  };
 }

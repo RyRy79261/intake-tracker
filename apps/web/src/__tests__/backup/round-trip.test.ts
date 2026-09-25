@@ -392,16 +392,18 @@ describe("backup-service", () => {
     if (!result.success) throw new Error("Expected success");
     expect(result.data.intakeImported).toBe(1);
 
-    // All original records should be gone
-    expect(await db.prescriptions.count()).toBe(0);
-    expect(await db.medicationPhases.count()).toBe(0);
-    expect(await db.phaseSchedules.count()).toBe(0);
-    expect(await db.inventoryItems.count()).toBe(0);
-    expect(await db.inventoryTransactions.count()).toBe(0);
-    expect(await db.doseLogs.count()).toBe(0);
-    expect(await db.titrationPlans.count()).toBe(0);
-    expect(await db.dailyNotes.count()).toBe(0);
-    expect(await db.weightRecords.count()).toBe(0);
-    expect(await db.substanceRecords.count()).toBe(0);
+    // All original records should be gone (tombstoned, so the deletion syncs)
+    const live = (t: { filter(fn: (r: { deletedAt: number | null }) => boolean): { count(): Promise<number> } }) =>
+      t.filter((r) => r.deletedAt === null).count();
+    expect(await live(db.prescriptions)).toBe(0);
+    expect(await live(db.medicationPhases)).toBe(0);
+    expect(await live(db.phaseSchedules)).toBe(0);
+    expect(await live(db.inventoryItems)).toBe(0);
+    expect(await live(db.inventoryTransactions)).toBe(0);
+    expect(await live(db.doseLogs)).toBe(0);
+    expect(await live(db.titrationPlans)).toBe(0);
+    expect(await live(db.dailyNotes)).toBe(0);
+    expect(await live(db.weightRecords)).toBe(0);
+    expect(await live(db.substanceRecords)).toBe(0);
   });
 });

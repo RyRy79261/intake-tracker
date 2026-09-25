@@ -31,11 +31,17 @@ function getDiffFields(
     "deviceId",
     "timezone",
   ]);
-  return Object.keys(backup).filter(
+  const fields = Object.keys(backup).filter(
     (k) =>
       !IGNORE.has(k) &&
       JSON.stringify(current[k]) !== JSON.stringify(backup[k])
   );
+  // A conflict can be purely "deleted in one copy, live in the other".
+  const deleted = (r: Record<string, unknown>) => r.deletedAt != null;
+  if (deleted(current) !== deleted(backup)) {
+    fields.unshift(deleted(backup) ? "deleted in backup" : "deleted here");
+  }
+  return fields;
 }
 
 export function ConflictReviewDrawer({

@@ -15,9 +15,9 @@
  *   - The encrypted-vs-plain crossover in both importers.
  *   - Legacy v1 backup shape (records[] instead of intakeRecords[]).
  *   - Merge-mode conflict detection vs same-content skip.
- *   - Replace mode actually clearing existing rows.
+ *   - Replace mode tombstoning existing rows in one transaction.
  *   - resolveConflicts overwrite / keep semantics.
- *   - getBackupStats on empty + populated databases.
+ *   - Restores over tombstones, sync enqueueing, legacy row normalisation.
  *   - generateBackupFilename format.
  *   - importEncryptedBackup with the wrong PIN never corrupts the DB.
  */
@@ -30,16 +30,15 @@ import {
   importBackup,
   importEncryptedBackup,
   resolveConflicts,
-  getBackupStats,
   generateBackupFilename,
 } from "@/lib/backup-service";
 import {
   makeIntakeRecord,
   makeWeightRecord,
-  makeBloodPressureRecord,
   makePrescription,
-  makeInventoryItem,
-  makeDailyNote,
+  makeDoseLog,
+  makeUserProfile,
+  makeInsightReport,
 } from "@/__tests__/fixtures/db-fixtures";
 
 // Tests run in the node vitest environment (per vitest.config.ts), so File,
@@ -271,7 +270,7 @@ describe("backup-service: importBackup merge mode", () => {
 });
 
 describe("backup-service: importBackup replace mode", () => {
-  it("clears existing rows before importing", async () => {
+  it("tombstones and enqueues local rows the backup does not contain", async () => {
     // Seed pre-existing data that the replace must remove.
     await db.intakeRecords.bulkAdd([
       makeIntakeRecord({ id: "pre-1" }),
@@ -289,14 +288,49 @@ describe("backup-service: importBackup replace mode", () => {
     expect(res.success).toBe(true);
     if (!res.success) return;
 
-    // Pre-existing rows gone, only the imported one remains.
-    expect(await db.intakeRecords.get("pre-1")).toBeUndefined();
-    expect(await db.intakeRecords.get("pre-2")).toBeUndefined();
+    // Pre-existing rows are tombstoned (so the deletion syncs), only the
+    // imported one stays live.
+    const live = (await db.intakeRecords.toArray()).filter((r) => r.deletedAt === null);
+    expect(live.map((r) => r.id)).toEqual(["new-1"]);
+    expect((await db.intakeRecords.get("pre-1"))?.deletedAt).toBeTypeOf("number");
     expect((await db.intakeRecords.get("new-1"))?.amount).toBe(500);
+    const pre1 = await db._syncQueue
+      .where("[tableName+recordId]")
+      .equals(["intakeRecords", "pre-1"])
+      .first();
+    expect(pre1?.op).toBe("delete");
 
-    // Empty arrays in the backup mean the table ends empty.
-    expect(await db.weightRecords.get("old-weight")).toBeUndefined();
-    expect(await db.weightRecords.count()).toBe(0);
+    // Empty arrays in the backup mean the table ends with no live rows.
+    expect((await db.weightRecords.get("old-weight"))?.deletedAt).toBeTypeOf("number");
+  });
+
+  it("rolls back everything when the import fails midway", async () => {
+    await db.intakeRecords.add(makeIntakeRecord({ id: "survivor" }));
+    // Every Dexie table shares one Table prototype; fail only weight writes.
+    type Put = (this: { name: string }, ...args: unknown[]) => Promise<unknown>;
+    const tableProto = Object.getPrototypeOf(db.weightRecords) as { put: Put };
+    const realPut = tableProto.put;
+    const put = vi.spyOn(tableProto, "put").mockImplementation(function (this: { name: string }, ...args) {
+      if (this.name === "weightRecords") return Promise.reject(new Error("disk full"));
+      return realPut.apply(this, args);
+    });
+    try {
+      const body = makeBackupJson({
+        intakeRecords: [makeIntakeRecord({ id: "incoming" })],
+        weightRecords: [makeWeightRecord({ id: "w-in" })],
+      });
+      const res = await importBackup(makeFile(body), "replace");
+      expect(res.success).toBe(true);
+      if (!res.success) return;
+      expect(res.data.success).toBe(false);
+      expect(res.data.errors.length).toBeGreaterThan(0);
+    } finally {
+      put.mockRestore();
+    }
+
+    expect((await db.intakeRecords.get("survivor"))?.deletedAt).toBeNull();
+    expect(await db.intakeRecords.get("incoming")).toBeUndefined();
+    expect(await db._syncQueue.count()).toBe(0);
   });
 
   it("imports medication records in replace mode without conflict detection", async () => {
@@ -361,39 +395,6 @@ describe("backup-service: resolveConflicts", () => {
     if (!res.success) return;
     expect(res.data.resolved).toBe(0);
     expect((await db.prescriptions.get("rx-keep"))?.genericName).toBe("Keep");
-  });
-});
-
-describe("backup-service: getBackupStats", () => {
-  it("returns zero counts and null oldest/newest on an empty database", async () => {
-    const stats = await getBackupStats();
-    expect(stats.totalCount).toBe(0);
-    expect(stats.intakeCount).toBe(0);
-    expect(stats.oldestRecord).toBeNull();
-    expect(stats.newestRecord).toBeNull();
-  });
-
-  it("returns table counts and a date range that spans the oldest and newest timestamps", async () => {
-    await db.intakeRecords.bulkAdd([
-      makeIntakeRecord({ id: "i-1", timestamp: 1000 }),
-      makeIntakeRecord({ id: "i-2", timestamp: 5000 }),
-    ]);
-    await db.weightRecords.add(makeWeightRecord({ id: "w-1", timestamp: 3000 }));
-    await db.bloodPressureRecords.add(
-      makeBloodPressureRecord({ id: "bp-1", timestamp: 4000 })
-    );
-    await db.dailyNotes.add(makeDailyNote({ id: "n-1" }));
-    await db.inventoryItems.add(makeInventoryItem("rx-stats", { id: "inv-1" }));
-
-    const stats = await getBackupStats();
-    expect(stats.intakeCount).toBe(2);
-    expect(stats.weightCount).toBe(1);
-    expect(stats.bpCount).toBe(1);
-    expect(stats.dailyNoteCount).toBe(1);
-    expect(stats.inventoryItemCount).toBe(1);
-    expect(stats.totalCount).toBe(6);
-    expect(stats.oldestRecord?.getTime()).toBe(1000);
-    expect(stats.newestRecord?.getTime()).toBe(5000);
   });
 });
 
@@ -520,5 +521,216 @@ describe("backup-service: encrypted round-trip and wrong-PIN handling", () => {
       expect(res.data.intakeImported).toBe(1);
       expect((await db.intakeRecords.get("enc-1"))?.amount).toBe(42);
     });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// Restore correctness (audit analytics-history-export#3/#4/#20,
+// server-schema-parity#4, gap-records-history-listing#2).
+// ─────────────────────────────────────────────────────────────────────────
+
+async function queued(tableName: string, recordId: string) {
+  return db._syncQueue
+    .where("[tableName+recordId]")
+    .equals([tableName, recordId])
+    .first();
+}
+
+describe("backup-service: restoring over deleted records", () => {
+  it("restores a health record whose local copy is tombstoned", async () => {
+    await db.intakeRecords.add(
+      makeIntakeRecord({ id: "gone", amount: 250, deletedAt: 5000, updatedAt: 5000 }),
+    );
+    const body = makeBackupJson({
+      intakeRecords: [makeIntakeRecord({ id: "gone", amount: 250, updatedAt: 1000 })],
+    });
+
+    const res = await importBackup(makeFile(body), "merge");
+    expect(res.success).toBe(true);
+    if (!res.success) return;
+    expect(res.data.intakeImported).toBe(1);
+    expect(res.data.skipped).toBe(0);
+
+    const stored = await db.intakeRecords.get("gone");
+    expect(stored?.deletedAt).toBeNull();
+    // Newer than the local tombstone, so last-write-wins keeps the restore.
+    expect(stored!.updatedAt).toBeGreaterThan(5000);
+    expect((await queued("intakeRecords", "gone"))?.op).toBe("upsert");
+  });
+
+  it("restores a medication record whose local copy is tombstoned, without a conflict", async () => {
+    await db.prescriptions.add(
+      makePrescription({ id: "rx-del", genericName: "Furosemide", deletedAt: 5000, updatedAt: 5000 }),
+    );
+    const body = makeBackupJson({
+      prescriptions: [makePrescription({ id: "rx-del", genericName: "Furosemide" })],
+    });
+
+    const res = await importBackup(makeFile(body), "merge");
+    expect(res.success).toBe(true);
+    if (!res.success) return;
+    expect(res.data.prescriptionsImported).toBe(1);
+    expect(res.data.conflicts).toHaveLength(0);
+    expect((await db.prescriptions.get("rx-del"))?.deletedAt).toBeNull();
+    expect((await queued("prescriptions", "rx-del"))?.op).toBe("upsert");
+  });
+
+  it("reports a conflict when the backup holds a tombstone of a live local record", async () => {
+    const rx = makePrescription({ id: "rx-live", genericName: "Same" });
+    await db.prescriptions.add(rx);
+    const body = makeBackupJson({ prescriptions: [{ ...rx, deletedAt: 9000 }] });
+
+    const res = await importBackup(makeFile(body), "merge");
+    expect(res.success).toBe(true);
+    if (!res.success) return;
+    expect(res.data.conflicts).toHaveLength(1);
+    expect((await db.prescriptions.get("rx-live"))?.deletedAt).toBeNull();
+  });
+
+  it("skips a tombstone when the local copy is tombstoned too", async () => {
+    await db.intakeRecords.add(makeIntakeRecord({ id: "both", deletedAt: 5000 }));
+    const body = makeBackupJson({
+      intakeRecords: [makeIntakeRecord({ id: "both", deletedAt: 4000 })],
+    });
+
+    const res = await importBackup(makeFile(body), "merge");
+    expect(res.success).toBe(true);
+    if (!res.success) return;
+    expect(res.data.intakeImported).toBe(0);
+    expect(res.data.skipped).toBe(1);
+    expect(await queued("intakeRecords", "both")).toBeUndefined();
+  });
+});
+
+describe("backup-service: imported rows reach sync", () => {
+  it("enqueues an upsert for every newly imported live row", async () => {
+    const body = makeBackupJson({
+      intakeRecords: [makeIntakeRecord({ id: "new-sync" })],
+      prescriptions: [makePrescription({ id: "rx-sync" })],
+    });
+
+    const res = await importBackup(makeFile(body), "merge");
+    expect(res.success).toBe(true);
+    expect((await queued("intakeRecords", "new-sync"))?.op).toBe("upsert");
+    expect((await queued("prescriptions", "rx-sync"))?.op).toBe("upsert");
+  });
+
+  it("keeps a new row's own updatedAt so a newer server copy still wins", async () => {
+    const body = makeBackupJson({
+      intakeRecords: [makeIntakeRecord({ id: "keep-ts", updatedAt: 1234 })],
+    });
+
+    await importBackup(makeFile(body), "merge");
+    expect((await db.intakeRecords.get("keep-ts"))?.updatedAt).toBe(1234);
+  });
+
+  it("stores a backup tombstone for an unknown id without pushing it", async () => {
+    const body = makeBackupJson({
+      intakeRecords: [makeIntakeRecord({ id: "old-tomb", deletedAt: 4000 })],
+    });
+
+    await importBackup(makeFile(body), "merge");
+    expect((await db.intakeRecords.get("old-tomb"))?.deletedAt).toBe(4000);
+    expect(await queued("intakeRecords", "old-tomb")).toBeUndefined();
+  });
+
+  it("resolveConflicts writes the backup version with a fresh updatedAt and enqueues it", async () => {
+    await db.prescriptions.add(
+      makePrescription({ id: "rx-res", genericName: "Old", updatedAt: 9000 }),
+    );
+    const backupRecord = makePrescription({
+      id: "rx-res",
+      genericName: "FromBackup",
+      updatedAt: 1000,
+    }) as unknown as Record<string, unknown>;
+
+    const res = await resolveConflicts([
+      { table: "prescriptions", id: "rx-res", useBackup: true, backupRecord },
+    ]);
+    expect(res.success).toBe(true);
+    const stored = await db.prescriptions.get("rx-res");
+    expect(stored?.genericName).toBe("FromBackup");
+    expect(stored!.updatedAt).toBeGreaterThan(9000);
+    expect((await queued("prescriptions", "rx-res"))?.op).toBe("upsert");
+  });
+
+  it("resolveConflicts enqueues a delete when the chosen backup version is a tombstone", async () => {
+    await db.prescriptions.add(makePrescription({ id: "rx-tomb" }));
+    const backupRecord = makePrescription({
+      id: "rx-tomb",
+      deletedAt: 5000,
+    }) as unknown as Record<string, unknown>;
+
+    await resolveConflicts([
+      { table: "prescriptions", id: "rx-tomb", useBackup: true, backupRecord },
+    ]);
+    expect((await db.prescriptions.get("rx-tomb"))?.deletedAt).toBe(5000);
+    expect((await queued("prescriptions", "rx-tomb"))?.op).toBe("delete");
+  });
+});
+
+describe("backup-service: legacy rows without sync fields", () => {
+  it("normalises missing sync fields so imported rows are visible", async () => {
+    const body = JSON.stringify({
+      version: 1,
+      records: [{ id: "legacy-bare", type: "water", amount: 500, timestamp: 1_700_000_000_000 }],
+    });
+
+    const res = await importBackup(makeFile(body), "merge");
+    expect(res.success).toBe(true);
+    const stored = await db.intakeRecords.get("legacy-bare");
+    expect(stored?.deletedAt).toBeNull();
+    expect(stored?.createdAt).toBe(1_700_000_000_000);
+    expect(typeof stored?.updatedAt).toBe("number");
+    expect(typeof stored?.deviceId).toBe("string");
+    expect(typeof stored?.timezone).toBe("string");
+  });
+
+  it("does not add a timezone to tables that have no timezone column", async () => {
+    const rx = makePrescription({ id: "rx-no-tz" }) as unknown as Record<string, unknown>;
+    delete rx.deletedAt;
+    const body = makeBackupJson({ prescriptions: [rx] });
+
+    await importBackup(makeFile(body), "merge");
+    const stored = (await db.prescriptions.get("rx-no-tz")) as unknown as Record<string, unknown>;
+    expect(stored.deletedAt).toBeNull();
+    expect("timezone" in stored).toBe(false);
+  });
+});
+
+describe("backup-service: records the old validators dropped", () => {
+  it("imports potassium intakes and PRN doses without a phase or schedule", async () => {
+    const prn = makeDoseLog("rx-prn", "unused", "unused", { id: "prn-1" }) as unknown as Record<
+      string,
+      unknown
+    >;
+    delete prn.phaseId;
+    delete prn.scheduleId;
+    const body = makeBackupJson({
+      intakeRecords: [makeIntakeRecord({ id: "k-1", type: "potassium", amount: 400 })],
+      doseLogs: [prn, { ...prn, id: "prn-2", phaseId: null, scheduleId: null }],
+    });
+
+    const res = await importBackup(makeFile(body), "merge");
+    expect(res.success).toBe(true);
+    if (!res.success) return;
+    expect(res.data.intakeImported).toBe(1);
+    expect(res.data.doseLogsImported).toBe(2);
+    expect(res.data.skipped).toBe(0);
+  });
+});
+
+describe("backup-service: import totals", () => {
+  it("totalImported counts every table, including profile and insight reports", async () => {
+    const body = makeBackupJson({
+      intakeRecords: [makeIntakeRecord()],
+      userProfile: [makeUserProfile()],
+      insightReports: [makeInsightReport()],
+    });
+
+    const res = await importBackup(makeFile(body), "merge");
+    expect(res.success).toBe(true);
+    if (!res.success) return;
+    expect(res.data.totalImported).toBe(3);
   });
 });
