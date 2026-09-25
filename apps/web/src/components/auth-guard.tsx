@@ -9,6 +9,9 @@ import {
   apiFetch,
 } from "@/lib/api-fetch";
 
+/** Fallback retry delay when a transient validate failure has no 'online' event. */
+const RETRY_VALIDATE_MS = 30_000;
+
 interface CapUser {
   id: string;
   email: string;
@@ -19,6 +22,8 @@ export function useAuth() {
   const [capUser, setCapUser] = useState<CapUser | null>(null);
   const [capPending, setCapPending] = useState(false);
   const validated = useRef(false);
+  // Bumped to re-run validation after a transient failure.
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     if (!isCapacitorMode() || session?.user || validated.current) return;
@@ -27,18 +32,52 @@ export function useAuth() {
 
     validated.current = true;
     setCapPending(true);
+    let disposed = false;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    const retry = () => {
+      window.removeEventListener("online", retry);
+      clearTimeout(retryTimer);
+      if (!disposed) setAttempt((n) => n + 1);
+    };
+    // Only an explicit 401/403 means the token is dead. A 5xx (Neon Auth
+    // outage → 503) or a network error says nothing about the token: keep it
+    // and try again when the network returns, or after a pause
+    // (audit native-android#5).
+    const scheduleRetry = () => {
+      validated.current = false;
+      if (disposed) return;
+      window.addEventListener("online", retry);
+      retryTimer = setTimeout(retry, RETRY_VALIDATE_MS);
+    };
+
     apiFetch("/api/auth/validate")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
+      .then(async (res) => {
+        if (res.status === 401 || res.status === 403) {
+          clearAuthToken();
+          return;
+        }
+        if (!res.ok) {
+          scheduleRetry();
+          return;
+        }
+        const data = (await res.json()) as {
+          user?: { id: string; email: string };
+        } | null;
         if (data?.user) {
           setCapUser({ id: data.user.id, email: data.user.email });
         } else {
           clearAuthToken();
         }
       })
-      .catch(() => {})
+      .catch(() => scheduleRetry())
       .finally(() => setCapPending(false));
-  }, [session]);
+
+    return () => {
+      disposed = true;
+      window.removeEventListener("online", retry);
+      clearTimeout(retryTimer);
+    };
+  }, [session, attempt]);
 
   const loading = isPending || capPending;
   const user = session?.user ?? capUser;
