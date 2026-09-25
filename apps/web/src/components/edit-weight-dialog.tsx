@@ -12,6 +12,7 @@ import {
 import { Button } from "@intake/ui/button";
 import { Input } from "@intake/ui/input";
 import { Label } from "@intake/ui/label";
+import { WEIGHT_RANGE_KG } from "@intake/core/record-schemas";
 import { type WeightRecord } from "@/lib/db";
 
 interface EditWeightDialogProps {
@@ -52,8 +53,11 @@ export function EditWeightDialog({
             <Input
               id="edit-weight"
               type="number"
-              min="0.1"
-              step="0.1"
+              min={WEIGHT_RANGE_KG.min}
+              max={WEIGHT_RANGE_KG.max}
+              // "any": a 0.1 step made the browser block saving 72.35 (a
+              // normal value at the default 0.05 +/- increment).
+              step="any"
               value={weight}
               onChange={(e) => onWeightChange(e.target.value)}
               onFocus={onFocus}

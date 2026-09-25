@@ -2,13 +2,8 @@
 
 import { type FocusEvent } from "react";
 import { type UrinationRecord } from "@/lib/db";
+import { URINATION_AMOUNT_OPTIONS } from "@/lib/constants";
 import { EditEstimateEntryDialog } from "@/components/edit-estimate-entry-dialog";
-
-const AMOUNT_OPTIONS = [
-  { value: "small", label: "Small" },
-  { value: "medium", label: "Medium" },
-  { value: "large", label: "Large" },
-] as const;
 
 interface EditUrinationDialogProps {
   record: UrinationRecord | null;
@@ -28,7 +23,8 @@ export function EditUrinationDialog({ record, ...rest }: EditUrinationDialogProp
     <EditEstimateEntryDialog
       open={record !== null}
       title="Edit Urination Entry"
-      amountOptions={AMOUNT_OPTIONS}
+      amountOptions={URINATION_AMOUNT_OPTIONS}
+      allowNoEstimate
       notePlaceholder="e.g. colour, urgency"
       accentClassName="bg-violet-600 hover:bg-violet-700"
       idPrefix="edit-urination"

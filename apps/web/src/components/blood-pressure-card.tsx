@@ -18,13 +18,13 @@ function pulsePressureColor(pp: number) {
     : "text-muted-foreground";
 }
 
-const BloodPressureFormSchema = z.object({
-  systolic: z.number({ error: "Systolic is required" })
-    .int("Must be a whole number").min(50, "Too low").max(300, "Too high"),
-  diastolic: z.number({ error: "Diastolic is required" })
-    .int("Must be a whole number").min(20, "Too low").max(200, "Too high"),
-  heartRate: z.number().int("Must be a whole number").min(20, "Too low").max(250, "Too high").optional(),
-});
+import {
+  BP_RANGES,
+  bloodPressureRecordSchema,
+  isSwappedBloodPressure,
+  parseNumericInput,
+} from "@intake/core/record-schemas";
+import { validateBloodPressureEdit } from "@/components/edit-blood-pressure-dialog";
 import { CollapsibleTimeInputControlled } from "@/components/collapsible-time-input";
 import { RecentEntriesList, InlineEditFormShell } from "@/components/recent-entries-list";
 import { Checkbox } from "@intake/ui/checkbox";
@@ -57,16 +57,17 @@ export function BloodPressureCard() {
   const [position, setPosition] = useState<"sitting" | "standing">("sitting");
   const [arm, setArm] = useState<"left" | "right">("left");
   const [irregularHeartbeat, setIrregularHeartbeat] = useState(false);
+  const [note, setNote] = useState("");
   const [showDetails, setShowDetails] = useState(false);
   const [showTimeInput, setShowTimeInput] = useState(false);
   const [customTime, setCustomTime] = useState(getCurrentDateTimeLocal());
 
   const recentRecords = useBloodPressureRecords(5);
-  const isLoading = !recentRecords;
+  const isLoading = recentRecords === undefined;
   const addMutation = useAddBloodPressure();
   const deleteMutation = useDeleteBloodPressure();
   const updateMutation = useUpdateBloodPressure();
-  const { deletingId, handleDelete } = useDeleteWithToast(deleteMutation, "Blood pressure record removed");
+  const { deletingId, handleDelete } = useDeleteWithToast(deleteMutation, "Blood pressure record removed", { undoToast: true });
 
   // Extra edit fields (BP-specific)
   const [editSystolic, setEditSystolic] = useState("");
@@ -95,69 +96,89 @@ export function BloodPressureCard() {
       setEditIrregularHeartbeat(record.irregularHeartbeat || false);
     },
     buildUpdates: (timestamp, note) => {
-      const newSystolic = parseInt(editSystolic, 10);
-      const newDiastolic = parseInt(editDiastolic, 10);
-      if (isNaN(newSystolic) || isNaN(newDiastolic) || newSystolic <= 0 || newDiastolic <= 0) {
-        toast({ title: "Invalid values", variant: "destructive" });
-        return null;
-      }
-      let newHeartRate: number | undefined;
-      if (editHeartRate) {
-        newHeartRate = parseInt(editHeartRate, 10);
-        if (isNaN(newHeartRate) || newHeartRate <= 0) {
-          toast({ title: "Invalid values", variant: "destructive" });
-          return null;
-        }
-      }
+      const values = validateBloodPressureEdit(
+        { systolic: editSystolic, diastolic: editDiastolic, heartRate: editHeartRate },
+        () => {
+          setEditSystolic(editDiastolic);
+          setEditDiastolic(editSystolic);
+        },
+      );
+      if (!values) return null;
+      // Optional fields are always sent: `null` / `false` clear them.
       return {
-        systolic: newSystolic,
-        diastolic: newDiastolic,
-        ...(newHeartRate !== undefined && { heartRate: newHeartRate }),
-        ...(editIrregularHeartbeat && { irregularHeartbeat: true as const }),
+        systolic: values.systolic,
+        diastolic: values.diastolic,
+        heartRate: values.heartRate,
+        irregularHeartbeat: editIrregularHeartbeat,
         position: editPosition,
         arm: editArm,
-        ...(timestamp !== undefined && { timestamp }),
-        ...(note !== undefined && { note }),
+        timestamp,
+        note: note ?? null,
       };
     },
     mutateAsync: updateMutation.mutateAsync,
   });
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [swapSuggested, setSwapSuggested] = useState(false);
   const latestReading = recentRecords?.[0];
   const bpCategory = latestReading
     ? getBPCategory(latestReading.systolic, latestReading.diastolic)
     : null;
 
-  const handleSubmit = async () => {
-    const systolic = parseInt(systolicInput, 10);
-    const diastolic = parseInt(diastolicInput, 10);
-    const heartRate = heartRateInput ? parseInt(heartRateInput, 10) : undefined;
+  const handleSwap = () => {
+    setSystolicInput(diastolicInput);
+    setDiastolicInput(systolicInput);
+    setFieldErrors({});
+    setSwapSuggested(false);
+  };
 
-    const parsed = BloodPressureFormSchema.safeParse({
-      systolic: isNaN(systolic) ? undefined : systolic,
-      diastolic: isNaN(diastolic) ? undefined : diastolic,
-      ...(heartRate !== undefined && !isNaN(heartRate) && { heartRate }),
+  const handleSubmit = async () => {
+    // Number() (not parseInt) so "120.9" reaches .int() instead of being
+    // silently truncated to 120.
+    const systolic = parseNumericInput(systolicInput);
+    const diastolic = parseNumericInput(diastolicInput);
+    const heartRate = parseNumericInput(heartRateInput);
+    let timestamp: number | undefined;
+    try {
+      timestamp = showTimeInput ? dateTimeLocalToTimestamp(customTime) : undefined;
+    } catch {
+      setFieldErrors({ timestamp: "Invalid date/time" });
+      return;
+    }
+    const trimmedNote = note.trim();
+
+    const parsed = bloodPressureRecordSchema.safeParse({
+      systolic,
+      diastolic,
+      ...(heartRate !== undefined && { heartRate }),
+      ...(timestamp !== undefined && { timestamp }),
     });
     if (!parsed.success) {
       const errors: Record<string, string> = {};
       for (const issue of parsed.error.issues) {
         const field = issue.path[0];
-        if (field && typeof field === "string") errors[field] = issue.message;
+        if (field && typeof field === "string" && !errors[field]) errors[field] = issue.message;
       }
       setFieldErrors(errors);
+      setSwapSuggested(
+        systolic !== undefined && diastolic !== undefined && isSwappedBloodPressure(systolic, diastolic),
+      );
       logAudit("validation_error", JSON.stringify({ form: "blood_pressure", errors: z.flattenError(parsed.error) }).slice(0, 100));
       return;
     }
     setFieldErrors({});
+    setSwapSuggested(false);
 
     try {
-      const timestamp = showTimeInput ? dateTimeLocalToTimestamp(customTime) : undefined;
       await addMutation.mutateAsync({
-        systolic, diastolic, position, arm,
-        ...(heartRate !== undefined && { heartRate }),
+        systolic: parsed.data.systolic,
+        diastolic: parsed.data.diastolic,
+        position, arm,
+        ...(parsed.data.heartRate != null && { heartRate: parsed.data.heartRate }),
         ...(irregularHeartbeat && { irregularHeartbeat: true as const }),
         ...(timestamp !== undefined && { timestamp }),
+        ...(trimmedNote !== "" && { note: trimmedNote }),
       });
       toast({
         title: "Blood pressure recorded",
@@ -168,6 +189,7 @@ export function BloodPressureCard() {
       setDiastolicInput("");
       setHeartRateInput("");
       setIrregularHeartbeat(false);
+      setNote("");
       setShowDetails(false);
       setShowTimeInput(false);
       setCustomTime(getCurrentDateTimeLocal());
@@ -235,8 +257,8 @@ export function BloodPressureCard() {
               <Input
                 id="systolic"
                 type="number"
-                min="0"
-                max="300"
+                min={BP_RANGES.systolic.min}
+                max={BP_RANGES.systolic.max}
                 placeholder="120"
                 value={systolicInput}
                 onChange={(e) => setSystolicInput(e.target.value)}
@@ -251,8 +273,8 @@ export function BloodPressureCard() {
               <Input
                 id="diastolic"
                 type="number"
-                min="0"
-                max="200"
+                min={BP_RANGES.diastolic.min}
+                max={BP_RANGES.diastolic.max}
                 placeholder="80"
                 value={diastolicInput}
                 onChange={(e) => setDiastolicInput(e.target.value)}
@@ -263,6 +285,11 @@ export function BloodPressureCard() {
               )}
             </div>
           </div>
+          {swapSuggested && (
+            <Button type="button" variant="outline" size="sm" className="w-full" onClick={handleSwap}>
+              Swap values ({diastolicInput}/{systolicInput})
+            </Button>
+          )}
 
           {/* Heart Rate (optional) - promoted to primary input area */}
           <div className="space-y-1 mt-2">
@@ -271,8 +298,8 @@ export function BloodPressureCard() {
               <Input
                 id="heartrate"
                 type="number"
-                min="0"
-                max="250"
+                min={BP_RANGES.heartRate.min}
+                max={BP_RANGES.heartRate.max}
                 placeholder="72"
                 value={heartRateInput}
                 onChange={(e) => setHeartRateInput(e.target.value)}
@@ -398,6 +425,18 @@ export function BloodPressureCard() {
                 </div>
               </div>
 
+              {/* Note */}
+              <div className="space-y-2">
+                <Label htmlFor="bp-note" className="text-xs">Note (optional)</Label>
+                <Input
+                  id="bp-note"
+                  aria-label="Blood pressure note"
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  className="h-9 text-sm bg-background"
+                />
+              </div>
+
               {/* Time Override */}
               <CollapsibleTimeInputControlled
                 value={customTime}
@@ -407,6 +446,9 @@ export function BloodPressureCard() {
                 id="bp-time"
               />
             </div>
+          )}
+          {fieldErrors.timestamp && (
+            <p className="text-sm text-destructive">{fieldErrors.timestamp}</p>
           )}
 
           {/* Record button */}
@@ -463,10 +505,10 @@ export function BloodPressureCard() {
           renderEditForm={() => (
             <InlineEditFormShell timestamp={editTimestamp} onTimestampChange={setEditTimestamp} note={editNote} onNoteChange={setEditNote} onSave={() => handleEditSubmit()} onCancel={closeEdit} buttonClassName={theme.buttonBg}>
               <div className="grid grid-cols-2 gap-2">
-                <Input aria-label="Systolic pressure" type="number" placeholder="Systolic" value={editSystolic} onChange={(e) => setEditSystolic(e.target.value)} className="h-8 text-sm" />
-                <Input aria-label="Diastolic pressure" type="number" placeholder="Diastolic" value={editDiastolic} onChange={(e) => setEditDiastolic(e.target.value)} className="h-8 text-sm" />
+                <Input aria-label="Systolic pressure" type="number" min={BP_RANGES.systolic.min} max={BP_RANGES.systolic.max} placeholder="Systolic" value={editSystolic} onChange={(e) => setEditSystolic(e.target.value)} className="h-8 text-sm" />
+                <Input aria-label="Diastolic pressure" type="number" min={BP_RANGES.diastolic.min} max={BP_RANGES.diastolic.max} placeholder="Diastolic" value={editDiastolic} onChange={(e) => setEditDiastolic(e.target.value)} className="h-8 text-sm" />
               </div>
-              <Input aria-label="Heart rate" type="number" placeholder="Heart rate (optional)" value={editHeartRate} onChange={(e) => setEditHeartRate(e.target.value)} className="h-8 text-sm" />
+              <Input aria-label="Heart rate" type="number" min={BP_RANGES.heartRate.min} max={BP_RANGES.heartRate.max} placeholder="Heart rate (optional)" value={editHeartRate} onChange={(e) => setEditHeartRate(e.target.value)} className="h-8 text-sm" />
               <div className="grid grid-cols-2 gap-2">
                 <Select value={editPosition} onValueChange={(v) => setEditPosition(v as "sitting" | "standing")}>
                   <SelectTrigger aria-label="Position" className="h-8 text-sm"><SelectValue /></SelectTrigger>

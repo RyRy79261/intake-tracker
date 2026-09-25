@@ -26,6 +26,12 @@ export interface InlineEditProps
   min?: number;
   /** Maximum valid value (default 100000) */
   max?: number;
+  /**
+   * Clamp the typed value into [min, max] on blur (default true). Pass false
+   * when the parent validates the range itself, so an out-of-range reading
+   * surfaces as an error instead of being silently replaced by the bound.
+   */
+  clamp?: boolean;
 }
 
 const InlineEdit = React.forwardRef<HTMLInputElement, InlineEditProps>(
@@ -40,6 +46,7 @@ const InlineEdit = React.forwardRef<HTMLInputElement, InlineEditProps>(
       suffixClassName,
       min = 0,
       max = 100000,
+      clamp = true,
       className,
       type,
       inputMode,
@@ -79,20 +86,22 @@ const InlineEdit = React.forwardRef<HTMLInputElement, InlineEditProps>(
         return;
       }
 
-      const parsed = parseFloat(editValue);
-      if (isNaN(parsed)) {
+      // Number() (not parseFloat) so "72.4kg" or "7o" is rejected instead
+      // of being truncated to its numeric prefix.
+      const parsed = Number(editValue.trim());
+      if (!Number.isFinite(parsed)) {
         // Invalid input — revert silently
         return;
       }
 
       // Clamp to [min, max]
-      const clamped = Math.max(min, Math.min(max, parsed));
+      const clamped = clamp ? Math.max(min, Math.min(max, parsed)) : parsed;
 
       // Apply rounding if provided
       const rounded = roundOnBlur ? roundOnBlur(clamped) : clamped;
 
       onValueChange(rounded);
-    }, [editValue, min, max, roundOnBlur, onValueChange]);
+    }, [editValue, min, max, clamp, roundOnBlur, onValueChange]);
 
     const handleChange = React.useCallback(
       (e: React.ChangeEvent<HTMLInputElement>) => {

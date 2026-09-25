@@ -29,6 +29,14 @@ import {
 } from "@/lib/date-utils";
 import { DEFECATION_AMOUNT_OPTIONS } from "@/lib/constants";
 import { useSettings } from "@/hooks/use-settings";
+import { useQuickLogGuard } from "@/hooks/use-quick-log-guard";
+import { showUndoToast } from "@/components/medications/undo-toast";
+import { deleteDefecationRecord } from "@/lib/defecation-service";
+import {
+  NO_ESTIMATE_VALUE,
+  estimateRecordSchema,
+  normalizeAmountEstimate,
+} from "@intake/core/record-schemas";
 
 const AMOUNT_OPTIONS = DEFECATION_AMOUNT_OPTIONS;
 
@@ -42,6 +50,8 @@ export function DefecationCard() {
   const [note, setNote] = useState("");
   const [detailTime, setDetailTime] = useState(getCurrentDateTimeLocal());
   const [submittingAmount, setSubmittingAmount] = useState<string | null>(null);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const quickLogGuard = useQuickLogGuard();
   const recentRecords = useDefecationRecords(5);
   const isLoading = !recentRecords;
   const addMutation = useAddDefecation();
@@ -63,10 +73,11 @@ export function DefecationCard() {
     handleEditSubmit,
   } = useEditRecord<DefecationRecord>({
     onOpen: (record) => setEditAmountEstimate(record.amountEstimate || ""),
+    // `null` clears the estimate / note (and the clear syncs).
     buildUpdates: (timestamp, note) => ({
       timestamp,
-      amountEstimate: editAmountEstimate && editAmountEstimate !== "__none__" ? editAmountEstimate : undefined,
-      note,
+      amountEstimate: normalizeAmountEstimate(editAmountEstimate),
+      note: note ?? null,
     }),
     mutateAsync: updateMutation.mutateAsync,
   });
@@ -74,13 +85,21 @@ export function DefecationCard() {
   const latestRecord = recentRecords?.[0];
 
   const handleQuickLog = async (amountValue: string) => {
+    // Ref guard + identical-tap window: a double tap must not log twice.
+    if (!quickLogGuard.begin(amountValue)) return;
     setSubmittingAmount(amountValue);
+    let succeeded = false;
     try {
-      await addMutation.mutateAsync({ amountEstimate: amountValue });
-      toast({
+      const record = await addMutation.mutateAsync({ amountEstimate: amountValue });
+      succeeded = true;
+      // One tap commits immediately, so offer Undo for a mis-tap.
+      showUndoToast({
         title: "Logged",
         description: `Defecation (${amountValue}) recorded`,
-        variant: "success",
+        onUndo: () => {
+          quickLogGuard.reset();
+          void deleteDefecationRecord(record.id);
+        },
       });
     } catch {
       toast({
@@ -89,14 +108,37 @@ export function DefecationCard() {
         variant: "destructive",
       });
     } finally {
+      quickLogGuard.end(succeeded);
       setSubmittingAmount(null);
     }
   };
 
+  const toggleDetails = () => {
+    // The default time was captured at mount; refresh it on open so a PWA
+    // left open for hours doesn't stamp the record with a stale time.
+    if (!showDetails) {
+      setDetailTime(getCurrentDateTimeLocal());
+      setDetailError(null);
+    }
+    setShowDetails(!showDetails);
+  };
+
   const handleSubmitDetails = async () => {
+    let timestamp: number;
     try {
-      const timestamp = dateTimeLocalToTimestamp(detailTime);
-      const effectiveAmount = amount && amount !== "__none__" ? amount : undefined;
+      timestamp = dateTimeLocalToTimestamp(detailTime);
+    } catch {
+      setDetailError("Invalid date/time");
+      return;
+    }
+    const effectiveAmount = normalizeAmountEstimate(amount) ?? undefined;
+    const parsed = estimateRecordSchema.safeParse({ timestamp, amountEstimate: effectiveAmount });
+    if (!parsed.success) {
+      setDetailError(parsed.error.issues[0]?.message ?? "Invalid values");
+      return;
+    }
+    setDetailError(null);
+    try {
       await addMutation.mutateAsync({
         timestamp,
         ...(effectiveAmount !== undefined && { amountEstimate: effectiveAmount }),
@@ -157,7 +199,7 @@ export function DefecationCard() {
           variant="ghost"
           size="sm"
           className="w-full justify-between text-muted-foreground"
-          onClick={() => setShowDetails(!showDetails)}
+          onClick={toggleDetails}
         >
           <span>Add details</span>
           {showDetails ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
@@ -167,12 +209,12 @@ export function DefecationCard() {
           <div className="p-3 rounded-lg bg-muted/50 border space-y-3">
             <div className="space-y-2">
               <Label>Amount (optional)</Label>
-              <Select value={amount} onValueChange={setAmount}>
-                <SelectTrigger className="bg-background">
+              <Select value={amount || NO_ESTIMATE_VALUE} onValueChange={setAmount}>
+                <SelectTrigger aria-label="Amount estimate" className="bg-background">
                   <SelectValue placeholder="Select estimate" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__none__">No estimate</SelectItem>
+                  <SelectItem value={NO_ESTIMATE_VALUE}>No estimate</SelectItem>
                   {AMOUNT_OPTIONS.map((opt) => (
                     <SelectItem key={opt.value} value={opt.value}>
                       {opt.label}
@@ -200,6 +242,9 @@ export function DefecationCard() {
                 onChange={(e) => setDetailTime(e.target.value)}
                 max={getCurrentDateTimeLocal()}
               />
+              {detailError && (
+                <p className="text-sm text-destructive">{detailError}</p>
+              )}
             </div>
             <Button
               onClick={handleSubmitDetails}
@@ -239,12 +284,12 @@ export function DefecationCard() {
         )}
         renderEditForm={() => (
           <InlineEditFormShell timestamp={editTimestamp} onTimestampChange={setEditTimestamp} note={editNote} onNoteChange={setEditNote} onSave={() => handleEditSubmit()} onCancel={closeEdit} buttonClassName={theme.buttonBg}>
-            <Select value={editAmountEstimate} onValueChange={setEditAmountEstimate}>
-              <SelectTrigger className="h-8 text-sm">
+            <Select value={editAmountEstimate || NO_ESTIMATE_VALUE} onValueChange={setEditAmountEstimate}>
+              <SelectTrigger aria-label="Amount estimate" className="h-8 text-sm">
                 <SelectValue placeholder="Amount estimate" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__none__">No estimate</SelectItem>
+                <SelectItem value={NO_ESTIMATE_VALUE}>No estimate</SelectItem>
                 {AMOUNT_OPTIONS.map((opt) => (
                   <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                 ))}

@@ -6,6 +6,44 @@ import {
   timestampToDateTimeLocal,
   dateTimeLocalToTimestamp,
 } from "@/lib/date-utils";
+import {
+  FUTURE_TIMESTAMP_MESSAGE,
+  isFutureTimestamp,
+} from "@intake/core/record-schemas";
+
+export type EditedTimestampResult =
+  | { ok: true; timestamp: number }
+  | { ok: false; message: string };
+
+/**
+ * Resolve a datetime-local edit against the record's original timestamp.
+ *
+ * - Unchanged minute → the original timestamp, untouched. The input is
+ *   minute-precision, so re-parsing it would silently drop the original
+ *   seconds and reorder near-simultaneous records.
+ * - Unparseable → "Invalid date/time"; future (beyond the skew) → rejected.
+ *   An untouched legacy future timestamp is not re-checked, so its other
+ *   fields stay editable.
+ */
+export function resolveEditedTimestamp(
+  originalTimestamp: number,
+  editedLocal: string,
+): EditedTimestampResult {
+  if (editedLocal === timestampToDateTimeLocal(originalTimestamp)) {
+    return { ok: true, timestamp: originalTimestamp };
+  }
+  let timestamp: number;
+  try {
+    // dateTimeLocalToTimestamp throws (it never returns NaN) on bad input.
+    timestamp = dateTimeLocalToTimestamp(editedLocal);
+  } catch {
+    return { ok: false, message: "Invalid date/time" };
+  }
+  if (isFutureTimestamp(timestamp)) {
+    return { ok: false, message: FUTURE_TIMESTAMP_MESSAGE };
+  }
+  return { ok: true, timestamp };
+}
 
 /**
  * Generic hook for the "tap recent entry → edit dialog → save" pattern.
@@ -32,8 +70,12 @@ interface UseEditRecordOptions<
 
   /**
    * Build the `updates` payload from the current form state.
-   * `timestamp` is already parsed and validated; `note` is already trimmed
-   * (or `undefined` if blank). Return `null` to abort (show your own toast
+   * `timestamp` is already parsed and validated (the original, exact value
+   * when the minute was not changed); `note` is already trimmed (or
+   * `undefined` if blank). To clear an optional field send `null` (e.g.
+   * `note: note ?? null`): an explicit `undefined` makes Dexie delete the key
+   * locally, but the missing key never reaches the server, so the old value
+   * returns on the next pull. Return `null` to abort (show your own toast
    * before returning null).
    */
   buildUpdates: (timestamp: number, note: string | undefined) => object | null;
@@ -88,18 +130,14 @@ export function useEditRecord<
       e?.preventDefault();
       if (!editingRecord) return;
 
-      // dateTimeLocalToTimestamp throws (it never returns NaN) on an invalid
-      // value, so catch it to surface the toast instead of an unhandled error.
-      let newTimestamp: number;
-      try {
-        newTimestamp = dateTimeLocalToTimestamp(editTimestamp);
-      } catch {
-        toast({ title: "Invalid date/time", variant: "destructive" });
+      const resolved = resolveEditedTimestamp(editingRecord.timestamp, editTimestamp);
+      if (!resolved.ok) {
+        toast({ title: resolved.message, variant: "destructive" });
         return;
       }
 
       const note = editNote.trim() || undefined;
-      const updates = optionsRef.current.buildUpdates(newTimestamp, note);
+      const updates = optionsRef.current.buildUpdates(resolved.timestamp, note);
       if (updates === null) return; // consumer aborted (e.g. validation toast)
 
       try {

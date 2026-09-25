@@ -18,6 +18,10 @@ interface CollapsibleTimeInputProps {
 /**
  * Collapsible "Set different time" section used in weight, BP,
  * and manual-input-dialog.
+ *
+ * Opening the panel resets the value to now: the parent's default was
+ * captured when the screen mounted, and a PWA left open for hours would
+ * otherwise pre-fill (and save) a stale time.
  */
 export function CollapsibleTimeInput({
   value,
@@ -35,7 +39,10 @@ export function CollapsibleTimeInput({
         variant="ghost"
         size="sm"
         className="w-full justify-between text-muted-foreground hover:text-foreground"
-        onClick={() => setExpanded(!expanded)}
+        onClick={() => {
+          if (!expanded) onChange(getCurrentDateTimeLocal());
+          setExpanded(!expanded);
+        }}
       >
         <span className="flex items-center gap-2">
           <Clock className="w-4 h-4" />
@@ -70,6 +77,7 @@ export function CollapsibleTimeInput({
 /**
  * Variant that exposes the expanded state to the parent
  * (for cases where the parent needs to know if a custom time was chosen).
+ * Like the uncontrolled variant, opening it resets the value to now.
  */
 export function CollapsibleTimeInputControlled({
   value,
@@ -90,7 +98,10 @@ export function CollapsibleTimeInputControlled({
         variant="ghost"
         size="sm"
         className="w-full justify-between text-muted-foreground hover:text-foreground"
-        onClick={onToggle}
+        onClick={() => {
+          if (!expanded) onChange(getCurrentDateTimeLocal());
+          onToggle();
+        }}
       >
         <span className="flex items-center gap-2">
           <Clock className="w-4 h-4" />
