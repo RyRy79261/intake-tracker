@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { computeTwoStageProgress } from "@intake/core/progress";
+import {
+  computeTwoStageProgress,
+  getProgressStatus,
+} from "@intake/core/progress";
 
 describe("computeTwoStageProgress", () => {
   it("returns zeros when target is 0", () => {
@@ -13,6 +16,7 @@ describe("computeTwoStageProgress", () => {
       extendedCurrent: 0,
       extendedTotal: 500,
       maxAmount: 0,
+      status: "ok",
     });
   });
 
@@ -90,4 +94,28 @@ describe("computeTwoStageProgress", () => {
     expect(r.extendedPct).toBe(0);
     expect(r.extendedTotal).toBe(0);
   });
+
+  // One tri-state drives every surface's colour, so "inside the buffer"
+  // can't read as red on one card and neutral on the next.
+  it.each([
+    // [current, target, buffer, status]
+    [0, 1000, 500, "ok"],
+    [1000, 1000, 500, "ok"],
+    [1200, 1000, 500, "extended"],
+    [1500, 1000, 500, "extended"],
+    [1501, 1000, 500, "over"],
+    // With no buffer there is no allowance: anything past the target is over.
+    [1001, 1000, 0, "over"],
+    [1000, 1000, 0, "ok"],
+    // No target configured → never flagged.
+    [5000, 0, 500, "ok"],
+  ] as const)(
+    "status of %s against target %s + buffer %s is %s",
+    (current, target, buffer, status) => {
+      expect(computeTwoStageProgress(current, target, buffer).status).toBe(
+        status,
+      );
+      expect(getProgressStatus(current, target, buffer)).toBe(status);
+    },
+  );
 });

@@ -1,7 +1,7 @@
 "use client";
 
 import { Card, CardContent } from "@intake/ui/card";
-import { Progress } from "@intake/ui/progress";
+import { Progress, progressStatusTextClass } from "@intake/ui/progress";
 import { Utensils } from "lucide-react";
 import { cn, formatAmount } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
@@ -74,27 +74,27 @@ export function FoodSaltCard() {
               <p
                 className={cn(
                   "text-sm font-medium",
-                  saltProgress.isOverExtended
-                    ? "text-red-600 dark:text-red-400"
-                    : saltProgress.isOverTarget
-                      ? "text-orange-600 dark:text-orange-400"
-                      : "text-foreground"
+                  progressStatusTextClass(saltProgress.status, "text-foreground")
                 )}
               >
-                {formatAmount(Math.min(dailyTotal, limit), "mg")} /{" "}
+                {formatAmount(dailyTotal, "mg")} /{" "}
                 {formatAmount(limit, "mg")}
               </p>
-              {saltProgress.isOverTarget && saltProgress.extendedTotal > 0 && (
+              {saltProgress.isOverTarget && (
                 <p
                   className={cn(
                     "text-xs",
-                    saltProgress.isOverExtended
-                      ? "text-red-600 dark:text-red-400"
-                      : "text-orange-600 dark:text-orange-400"
+                    progressStatusTextClass(saltProgress.status, "text-foreground")
                   )}
                 >
-                  {formatAmount(saltProgress.extendedCurrent, "mg")} /{" "}
-                  {formatAmount(saltProgress.extendedTotal, "mg")} extra
+                  {saltProgress.extendedTotal > 0 ? (
+                    <>
+                      {formatAmount(saltProgress.extendedCurrent, "mg")} /{" "}
+                      {formatAmount(saltProgress.extendedTotal, "mg")} extra
+                    </>
+                  ) : (
+                    <>{formatAmount(saltProgress.extendedCurrent, "mg")} over</>
+                  )}
                 </p>
               )}
               <p className="text-xs text-muted-foreground/70">
@@ -128,27 +128,27 @@ export function FoodSaltCard() {
               <p
                 className={cn(
                   "text-sm font-medium",
-                  sugarProgress.isOverExtended
-                    ? "text-red-600 dark:text-red-400"
-                    : sugarProgress.isOverTarget
-                      ? "text-orange-600 dark:text-orange-400"
-                      : "text-foreground"
+                  progressStatusTextClass(sugarProgress.status, "text-foreground")
                 )}
               >
-                {formatAmount(Math.min(sugarDaily, sugarLimit), "g")} /{" "}
+                {formatAmount(sugarDaily, "g")} /{" "}
                 {formatAmount(sugarLimit, "g")}
               </p>
-              {sugarProgress.isOverTarget && sugarProgress.extendedTotal > 0 && (
+              {sugarProgress.isOverTarget && (
                 <p
                   className={cn(
                     "text-xs",
-                    sugarProgress.isOverExtended
-                      ? "text-red-600 dark:text-red-400"
-                      : "text-orange-600 dark:text-orange-400"
+                    progressStatusTextClass(sugarProgress.status, "text-foreground")
                   )}
                 >
-                  {formatAmount(sugarProgress.extendedCurrent, "g")} /{" "}
-                  {formatAmount(sugarProgress.extendedTotal, "g")} extra
+                  {sugarProgress.extendedTotal > 0 ? (
+                    <>
+                      {formatAmount(sugarProgress.extendedCurrent, "g")} /{" "}
+                      {formatAmount(sugarProgress.extendedTotal, "g")} extra
+                    </>
+                  ) : (
+                    <>{formatAmount(sugarProgress.extendedCurrent, "g")} over</>
+                  )}
                 </p>
               )}
               <p className="text-xs text-muted-foreground/70">

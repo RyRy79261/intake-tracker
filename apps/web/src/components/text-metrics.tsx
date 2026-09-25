@@ -11,61 +11,69 @@ import { useNowTick } from "@intake/ui/use-now-tick";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import { CARD_THEMES } from "@/lib/card-themes";
-import { Progress } from "@intake/ui/progress";
-import { computeTwoStageProgress } from "@intake/core/progress";
+import { Progress, progressStatusTextClass } from "@intake/ui/progress";
+import { computeTwoStageProgress, getProgressStatus } from "@intake/core/progress";
 import { Droplets, Sparkles, Coffee, Wine, Candy, Banana } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toLocalDateKey, WEEK_STARTS_ON } from "@/lib/date-utils";
 
-/**
- * Get the Monday 00:00 (adjusted for dayStartHour) of the current week.
- */
-function getWeekStartTimestamp(dayStartHour: number): number {
-  const now = new Date();
-  // Adjust for day boundary: if before dayStartHour, we're still in "yesterday"
-  const adjusted = new Date(now);
-  if (now.getHours() < dayStartHour) {
-    adjusted.setDate(adjusted.getDate() - 1);
-  }
+const DAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"] as const;
+const DAY_ABBREVIATIONS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 
-  // Get day of week (0=Sun, 1=Mon, ..., 6=Sat)
-  const dow = adjusted.getDay();
-  // Days since Monday: Mon=0, Tue=1, ..., Sun=6
-  const daysSinceMonday = dow === 0 ? 6 : dow - 1;
-
-  const monday = new Date(adjusted);
-  monday.setDate(adjusted.getDate() - daysSinceMonday);
-  monday.setHours(dayStartHour, 0, 0, 0);
-  return monday.getTime();
+/** The calendar date a timestamp's logical day (starting at dayStartHour) belongs to. */
+function logicalDate(timestamp: number, dayStartHour: number): Date {
+  const d = new Date(timestamp);
+  if (d.getHours() < dayStartHour) d.setDate(d.getDate() - 1);
+  return d;
 }
 
 /**
- * Get the "logical day index" (0=Mon through 6=Sun) for today,
- * accounting for dayStartHour boundary.
+ * The logical week containing `now`: its seven day keys, the [start, end)
+ * timestamps to query, and today's column. Days are calendar dates shifted by
+ * dayStartHour, and the end is the next logical day start rather than
+ * start + 7 × 24h, so 23h/25h DST days don't drop or borrow an hour.
  */
-function getTodayDayIndex(dayStartHour: number): number {
-  const now = new Date();
-  const adjusted = new Date(now);
-  if (now.getHours() < dayStartHour) {
-    adjusted.setDate(adjusted.getDate() - 1);
+export function getLogicalWeek(now: Date, dayStartHour: number) {
+  const today = logicalDate(now.getTime(), dayStartHour);
+  const todayIndex = (today.getDay() - WEEK_STARTS_ON + 7) % 7;
+
+  const first = new Date(today);
+  first.setDate(today.getDate() - todayIndex);
+  first.setHours(dayStartHour, 0, 0, 0);
+
+  const dayKeys: string[] = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(first);
+    d.setDate(first.getDate() + i);
+    dayKeys.push(toLocalDateKey(d));
   }
-  const dow = adjusted.getDay();
-  return dow === 0 ? 6 : dow - 1;
+
+  const next = new Date(first);
+  next.setDate(first.getDate() + 7);
+  next.setHours(dayStartHour, 0, 0, 0);
+
+  return { start: first.getTime(), end: next.getTime(), dayKeys, todayIndex };
 }
 
 function formatValue(value: number): string {
-  return value.toLocaleString();
+  // Summed totals can carry float noise (0.1 + 0.2); show at most one decimal.
+  return (Math.round(value * 10) / 10).toLocaleString();
 }
 
-const DAY_HEADERS = ["M", "T", "W", "T", "F", "S", "S"] as const;
-const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+const DAY_HEADERS = Array.from(
+  { length: 7 },
+  (_, i) => DAY_LETTERS[(WEEK_STARTS_ON + i) % 7]!
+);
+const WEEK_LABEL = `${DAY_ABBREVIATIONS[WEEK_STARTS_ON]}-${DAY_ABBREVIATIONS[(WEEK_STARTS_ON + 6) % 7]}`;
 
-function bucketByDay<T extends { timestamp: number }>(
-  records: T[], weekStart: number, accessor: (r: T) => number
+/** Sum records into the week's columns by the logical day each belongs to. */
+export function bucketByLogicalDay<T extends { timestamp: number }>(
+  records: T[], dayKeys: string[], dayStartHour: number, accessor: (r: T) => number
 ): number[] {
   const buckets = [0, 0, 0, 0, 0, 0, 0];
   for (const r of records) {
-    const i = Math.floor((r.timestamp - weekStart) / ONE_DAY_MS);
-    if (i >= 0 && i < 7) buckets[i] = (buckets[i] ?? 0) + accessor(r);
+    const i = dayKeys.indexOf(toLocalDateKey(logicalDate(r.timestamp, dayStartHour)));
+    if (i >= 0) buckets[i] = (buckets[i] ?? 0) + accessor(r);
   }
   return buckets;
 }
@@ -122,17 +130,12 @@ export function TextMetrics() {
   );
 
   // Weekly data
-  const weekStart = useMemo(
-    () => getWeekStartTimestamp(dayStartHour),
+  const week = useMemo(
+    () => getLogicalWeek(new Date(), dayStartHour),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [dayStartHour, tick]
   );
-  const weekEnd = weekStart + 7 * ONE_DAY_MS;
-  const todayIndex = useMemo(
-    () => getTodayDayIndex(dayStartHour),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [dayStartHour, tick]
-  );
+  const { start: weekStart, end: weekEnd, dayKeys, todayIndex } = week;
 
   const weeklyWaterRecords = useIntakeRecordsByDateRange(
     weekStart,
@@ -167,12 +170,12 @@ export function TextMetrics() {
   );
 
   // Bucket records into 7 days
-  const weeklyWater = useMemo(() => bucketByDay(weeklyWaterRecords, weekStart, (r) => r.amount), [weeklyWaterRecords, weekStart]);
-  const weeklySalt = useMemo(() => bucketByDay(weeklySaltRecords, weekStart, (r) => r.amount), [weeklySaltRecords, weekStart]);
-  const weeklySugar = useMemo(() => bucketByDay(weeklySugarRecords, weekStart, (r) => r.amount), [weeklySugarRecords, weekStart]);
-  const weeklyPotassium = useMemo(() => bucketByDay(weeklyPotassiumRecords, weekStart, (r) => r.amount), [weeklyPotassiumRecords, weekStart]);
-  const weeklyCaffeine = useMemo(() => bucketByDay(weeklyCaffeineRecords, weekStart, (r) => r.amountMg ?? 0), [weeklyCaffeineRecords, weekStart]);
-  const weeklyAlcohol = useMemo(() => bucketByDay(weeklyAlcoholRecords, weekStart, (r) => r.amountStandardDrinks ?? 0), [weeklyAlcoholRecords, weekStart]);
+  const weeklyWater = useMemo(() => bucketByLogicalDay(weeklyWaterRecords, dayKeys, dayStartHour, (r) => r.amount), [weeklyWaterRecords, dayKeys, dayStartHour]);
+  const weeklySalt = useMemo(() => bucketByLogicalDay(weeklySaltRecords, dayKeys, dayStartHour, (r) => r.amount), [weeklySaltRecords, dayKeys, dayStartHour]);
+  const weeklySugar = useMemo(() => bucketByLogicalDay(weeklySugarRecords, dayKeys, dayStartHour, (r) => r.amount), [weeklySugarRecords, dayKeys, dayStartHour]);
+  const weeklyPotassium = useMemo(() => bucketByLogicalDay(weeklyPotassiumRecords, dayKeys, dayStartHour, (r) => r.amount), [weeklyPotassiumRecords, dayKeys, dayStartHour]);
+  const weeklyCaffeine = useMemo(() => bucketByLogicalDay(weeklyCaffeineRecords, dayKeys, dayStartHour, (r) => r.amountMg ?? 0), [weeklyCaffeineRecords, dayKeys, dayStartHour]);
+  const weeklyAlcohol = useMemo(() => bucketByLogicalDay(weeklyAlcoholRecords, dayKeys, dayStartHour, (r) => r.amountStandardDrinks ?? 0), [weeklyAlcoholRecords, dayKeys, dayStartHour]);
 
   // Two-stage progress: primary fill up to the daily limit, then a
   // second-tone segment up to (limit + extendedBuffer), then red when
@@ -232,9 +235,10 @@ export function TextMetrics() {
                   data-testid="today-water-value"
                   className={cn(
                     "text-sm font-semibold tabular-nums",
-                    waterProgress.isOverExtended
-                      ? "text-red-600 dark:text-red-400"
-                      : CARD_THEMES.water.latestValueColor
+                    progressStatusTextClass(
+                      waterProgress.status,
+                      CARD_THEMES.water.latestValueColor
+                    )
                   )}
                 >
                   {formatValue(waterTotal)}
@@ -247,9 +251,7 @@ export function TextMetrics() {
                 <span
                   className={cn(
                     "text-xs tabular-nums",
-                    waterProgress.isOverExtended
-                      ? "text-red-600 dark:text-red-400"
-                      : "text-muted-foreground"
+                    progressStatusTextClass(waterProgress.status, "text-muted-foreground")
                   )}
                 >
                   {waterProgress.extendedTotal > 0 ? (
@@ -291,9 +293,10 @@ export function TextMetrics() {
                   data-testid="today-sodium-value"
                   className={cn(
                     "text-sm font-semibold tabular-nums",
-                    saltProgress.isOverExtended
-                      ? "text-red-600 dark:text-red-400"
-                      : CARD_THEMES.salt.latestValueColor
+                    progressStatusTextClass(
+                      saltProgress.status,
+                      CARD_THEMES.salt.latestValueColor
+                    )
                   )}
                 >
                   {formatValue(saltTotal)}
@@ -306,9 +309,7 @@ export function TextMetrics() {
                 <span
                   className={cn(
                     "text-xs tabular-nums",
-                    saltProgress.isOverExtended
-                      ? "text-red-600 dark:text-red-400"
-                      : "text-muted-foreground"
+                    progressStatusTextClass(saltProgress.status, "text-muted-foreground")
                   )}
                 >
                   {saltProgress.extendedTotal > 0 ? (
@@ -350,9 +351,10 @@ export function TextMetrics() {
                 <span
                   className={cn(
                     "text-sm font-semibold tabular-nums",
-                    sugarProgress.isOverExtended
-                      ? "text-red-600 dark:text-red-400"
-                      : CARD_THEMES.sugar.latestValueColor
+                    progressStatusTextClass(
+                      sugarProgress.status,
+                      CARD_THEMES.sugar.latestValueColor
+                    )
                   )}
                 >
                   {formatValue(sugarTotal)}
@@ -365,9 +367,7 @@ export function TextMetrics() {
                 <span
                   className={cn(
                     "text-xs tabular-nums",
-                    sugarProgress.isOverExtended
-                      ? "text-red-600 dark:text-red-400"
-                      : "text-muted-foreground"
+                    progressStatusTextClass(sugarProgress.status, "text-muted-foreground")
                   )}
                 >
                   {sugarProgress.extendedTotal > 0 ? (
@@ -428,7 +428,7 @@ export function TextMetrics() {
                   : CARD_THEMES.caffeine.latestValueColor
               )}
             >
-              {caffeineTotal} mg
+              {formatValue(caffeineTotal)} mg
             </span>
           </div>
 
@@ -455,7 +455,7 @@ export function TextMetrics() {
 
         {/* Weekly Summary */}
         <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground mt-4 mb-2">
-          This Week (Mon-Sun)
+          {`This Week (${WEEK_LABEL})`}
         </h2>
         <div className="grid grid-cols-[auto_repeat(7,1fr)] gap-x-1 gap-y-1">
           {/* Day headers row */}
@@ -485,10 +485,7 @@ export function TextMetrics() {
               {row.data.map((val, i) => {
                 const isFuture = i > todayIndex;
                 const isToday = i === todayIndex;
-                const isOverTarget = row.limit > 0 && val > row.limit;
-                const isOverExtended =
-                  row.limit > 0 && val > row.limit + row.buffer;
-                const isInExtendedZone = isOverTarget && !isOverExtended;
+                const status = getProgressStatus(val, row.limit, row.buffer);
                 const hasData = val > 0;
                 return (
                   <div
@@ -497,9 +494,7 @@ export function TextMetrics() {
                       "text-xs tabular-nums text-center",
                       isFuture && "text-muted-foreground/50",
                       isToday && "font-semibold",
-                      !isFuture && hasData && !isOverTarget && row.theme.latestValueColor,
-                      !isFuture && isInExtendedZone && "text-orange-600 dark:text-orange-400",
-                      !isFuture && isOverExtended && "text-red-600 dark:text-red-400",
+                      !isFuture && hasData && progressStatusTextClass(status, row.theme.latestValueColor),
                       !isFuture && !hasData && "text-muted-foreground/50"
                     )}
                   >

@@ -6,11 +6,22 @@ import { type LiquidPreset } from "@/lib/constants";
 // and the few that pull cn alongside an app helper below — resolve unchanged.
 export { cn } from "@intake/ui/lib/utils";
 
+/**
+ * Format an amount for display. Summed totals can carry float noise
+ * (0.1 + 0.2), so values are rounded to one decimal. Litres keep up to three
+ * decimals (every whole ml) so a total just over a whole-litre limit
+ * (1040 ml → "1.04L") never reads the same as the limit ("1.0L").
+ */
 export function formatAmount(amount: number, unit: string): string {
   if (unit === "ml" && amount >= 1000) {
-    return `${(amount / 1000).toFixed(1)}L`;
+    const litres = Math.round(amount) / 1000;
+    return `${litres.toLocaleString("en-US", {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 3,
+      useGrouping: false,
+    })}L`;
   }
-  return `${amount}${unit}`;
+  return `${Math.round(amount * 10) / 10}${unit}`;
 }
 
 /**

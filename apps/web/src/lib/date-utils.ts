@@ -69,6 +69,14 @@ export function toLocalDateKey(value: Date | number = new Date()): string {
 }
 
 /**
+ * First day of a displayed week (0 = Sunday, JS `getDay()` numbering). One
+ * convention for every weekly view: the dashboard's weekly grid and the
+ * medications week strip both start on Sunday, matching the Sunday-indexed
+ * `daysOfWeek` on phase schedules.
+ */
+export const WEEK_STARTS_ON = 0;
+
+/**
  * Format a timestamp as time only (e.g., "2:30 PM").
  * Used for compact displays where date isn't needed.
  */
