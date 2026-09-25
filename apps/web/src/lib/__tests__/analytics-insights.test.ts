@@ -2,6 +2,9 @@ import { describe, it, expect } from "vitest";
 import {
   AnalyticsInsightsRequestSchema,
   buildInsightsPrompt,
+  INSIGHT_TOOL,
+  InsightResponseSchema,
+  MAX_INSIGHT_SOURCES,
 } from "@intake/ai-prompts/analytics-insights";
 
 const validBp = {
@@ -236,5 +239,25 @@ describe("buildInsightsPrompt", () => {
     });
     const prompt = buildInsightsPrompt(req);
     expect(prompt).not.toContain("Previous AI assessment(s)");
+  });
+});
+
+describe("InsightResponseSchema sources", () => {
+  it("drops non-URL entries and caps the list instead of rejecting the report", () => {
+    const urls = Array.from({ length: 34 }, (_, i) => `https://example.test/${i}`);
+    const result = InsightResponseSchema.safeParse({
+      summary: "Summary.",
+      observations: ["One."],
+      sources: ["AHA 2025 guideline", ...urls],
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.sources).toEqual(urls.slice(0, MAX_INSIGHT_SOURCES));
+  });
+
+  it("advertises the same cap to the model in the tool schema", () => {
+    expect(INSIGHT_TOOL.input_schema.properties.sources.maxItems).toBe(
+      MAX_INSIGHT_SOURCES,
+    );
   });
 });

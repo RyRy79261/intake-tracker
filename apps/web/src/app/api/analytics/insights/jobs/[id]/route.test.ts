@@ -9,8 +9,14 @@
  *   - Mock @/app/api/ai/_shared/claude-client so batches.retrieve and
  *     batches.results are deterministic.
  */
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from "vitest";
 import { NextRequest } from "next/server";
+import Anthropic from "@anthropic-ai/sdk";
+import type { AnalyticsInsightsRequest } from "@intake/ai-prompts/analytics-insights";
+import {
+  buildJobPayload,
+  PinnedKeyUnavailableError,
+} from "@/lib/server/insight-job-payload";
 
 // ── Controllable stubs ───────────────────────────────────────────────────
 
@@ -32,7 +38,14 @@ const PAYLOAD = {
 };
 
 let mockJob: MockJobRow | null = null;
-let mockReport: { narrative: string; observations: string[]; generatedAt: number } | null = null;
+let mockReport: {
+  narrative: string;
+  observations: string[];
+  generatedAt: number;
+  rangeStart?: number;
+  rangeEnd?: number;
+  personalised?: boolean;
+} | null = null;
 // Override completeInsightJob's return value to simulate the CAS-loss path
 // (another concurrent poller already finalised the job).
 let completionReturn: { reportId: string } | null = { reportId: "report-test-1" };
@@ -69,8 +82,16 @@ const attachCalls: Array<{
   expectedBatchId: string | undefined;
 }> = [];
 let attachReturn = true;
+// What getClaudeClientForJob was handed (the row's request_payload), and an
+// optional error it throws instead of resolving a client.
+const jobKeyCalls: unknown[] = [];
+let jobKeyThrows: Error | null = null;
+let retrieveThrows: Error | null = null;
 
 function resetState() {
+  jobKeyCalls.length = 0;
+  jobKeyThrows = null;
+  retrieveThrows = null;
   mockJob = null;
   mockReport = null;
   completionReturn = { reportId: "report-test-1" };
@@ -113,10 +134,13 @@ vi.mock("@/app/api/ai/_shared/claude-client", () => ({
     client: {
       messages: {
         batches: {
-          retrieve: async () => ({
-            id: "msgbatch_test_123",
-            processing_status: batchProcessingStatus,
-          }),
+          retrieve: async () => {
+            if (retrieveThrows) throw retrieveThrows;
+            return {
+              id: "msgbatch_test_123",
+              processing_status: batchProcessingStatus,
+            };
+          },
           create: async (params: Record<string, unknown>) => {
             batchesCreateCalls.push(params);
             return { id: `msgbatch_continuation_${batchesCreateCalls.length}` };
@@ -135,6 +159,19 @@ vi.mock("@/app/api/ai/_shared/claude-client", () => ({
     },
     resolved: { keyOwnerId: "user-test", source: "env" },
   }),
+}));
+
+// Polling resolves the key the job was submitted with. The stub hands back
+// the same fake client, recording which payload it was asked to resolve.
+vi.mock("@/lib/server/insight-job-key", () => ({
+  getClaudeClientForJob: async (requestPayload: unknown) => {
+    jobKeyCalls.push(requestPayload);
+    if (jobKeyThrows) throw jobKeyThrows;
+    const { getClaudeClientForUser } = await import(
+      "@/app/api/ai/_shared/claude-client"
+    );
+    return getClaudeClientForUser("user-test", "test@example.test");
+  },
 }));
 
 vi.mock("@/app/api/ai/_shared/usage-tracker", () => ({
@@ -240,6 +277,11 @@ function pendingJob(id: string): MockJobRow {
 // ── Tests ────────────────────────────────────────────────────────────────
 
 describe("GET /api/analytics/insights/jobs/:id", () => {
+  // Pay the route's cold import once, outside any single test's timeout.
+  beforeAll(async () => {
+    await import("@/app/api/analytics/insights/jobs/[id]/route");
+  }, 30_000);
+
   beforeEach(() => {
     resetState();
   });
@@ -734,5 +776,184 @@ describe("GET /api/analytics/insights/jobs/:id", () => {
     expect(body.status).toBe("completed");
     expect(body.narrative).toBe("Cached deep summary.");
     expect(body.observations).toEqual(["One observation."]);
+  });
+
+  it("echoes the persisted report's identity so the client can cache it locally", async () => {
+    mockJob = {
+      ...pendingJob("job-cached-id"),
+      status: "completed",
+      resultReportId: "report-abc",
+    };
+    mockReport = {
+      narrative: "Cached deep summary.",
+      observations: ["One observation."],
+      generatedAt: 5_000,
+      rangeStart: PAYLOAD.range.start,
+      rangeEnd: PAYLOAD.range.end,
+      personalised: true,
+    };
+
+    const { GET } = await import("@/app/api/analytics/insights/jobs/[id]/route");
+    const body = (await (await GET(makeRequest("job-cached-id"))).json()) as Record<
+      string,
+      unknown
+    >;
+    expect(body).toMatchObject({
+      status: "completed",
+      reportId: "report-abc",
+      rangeStart: PAYLOAD.range.start,
+      rangeEnd: PAYLOAD.range.end,
+      personalised: true,
+    });
+  });
+
+  describe("key pinning and stuck jobs", () => {
+    it("polls with the key recorded on the job, not the caller's current key", async () => {
+      const envelope = buildJobPayload(PAYLOAD as AnalyticsInsightsRequest, {
+        keySource: "shared_from",
+        keyOwnerId: "grantor-1",
+      });
+      mockJob = { ...pendingJob("job-pinned"), requestPayload: envelope };
+
+      const { GET } = await import("@/app/api/analytics/insights/jobs/[id]/route");
+      await GET(makeRequest("job-pinned"));
+
+      expect(jobKeyCalls).toEqual([envelope]);
+    });
+
+    it("fails the job and releases the lock when the pinned key is gone", async () => {
+      mockJob = pendingJob("job-revoked");
+      jobKeyThrows = new PinnedKeyUnavailableError("shared_from");
+
+      const { GET } = await import("@/app/api/analytics/insights/jobs/[id]/route");
+      const res = await GET(makeRequest("job-revoked"));
+      const body = (await res.json()) as { status: string; error: string };
+
+      // A 402 here would be read as transient and polled for 24h while the
+      // one-pending-job index blocks every new deep run.
+      expect(res.status).toBe(200);
+      expect(body.status).toBe("failed");
+      expect(body.error).toMatch(/no longer available/i);
+      expect(failCalls).toHaveLength(1);
+    });
+
+    it("treats a batch Anthropic no longer knows as a terminal failure", async () => {
+      mockJob = pendingJob("job-404");
+      retrieveThrows = Anthropic.APIError.generate(
+        404,
+        { type: "error", error: { type: "not_found_error", message: "not found" } },
+        "not found",
+        new Headers(),
+      );
+
+      const { GET } = await import("@/app/api/analytics/insights/jobs/[id]/route");
+      const res = await GET(makeRequest("job-404"));
+      const body = (await res.json()) as { status: string };
+
+      expect(body.status).toBe("failed");
+      expect(failCalls).toHaveLength(1);
+    });
+
+    it("keeps a transient retrieve failure pending-retryable (502), without failing the job", async () => {
+      mockJob = pendingJob("job-blip");
+      retrieveThrows = new Error("socket hang up");
+
+      const { GET } = await import("@/app/api/analytics/insights/jobs/[id]/route");
+      const res = await GET(makeRequest("job-blip"));
+
+      expect(res.status).toBe(502);
+      expect(failCalls).toHaveLength(0);
+    });
+
+    it("fails a reservation whose batch was never attached once submission has clearly died", async () => {
+      // The submitting request was killed between batches.create and
+      // attachBatchToJob. Nothing will ever attach a batch now.
+      mockJob = {
+        ...pendingJob("job-orphan"),
+        batchId: null,
+        createdAt: Date.now() - 30 * 60_000,
+      };
+
+      const { GET } = await import("@/app/api/analytics/insights/jobs/[id]/route");
+      const body = (await (await GET(makeRequest("job-orphan"))).json()) as {
+        status: string;
+      };
+
+      expect(body.status).toBe("failed");
+      expect(failCalls).toHaveLength(1);
+      expect(jobKeyCalls).toHaveLength(0);
+    });
+
+    it("finalises an enveloped job using the request inside the envelope", async () => {
+      const request = {
+        ...PAYLOAD,
+        profile: { conditions: ["HFrEF"] },
+      } as AnalyticsInsightsRequest;
+      mockJob = {
+        ...pendingJob("job-envelope"),
+        requestPayload: buildJobPayload(request, {
+          keySource: "own_stored",
+          keyOwnerId: "user-test",
+        }),
+      };
+      batchProcessingStatus = "ended";
+      batchResults = [
+        {
+          custom_id: "insight-job-envelope",
+          result: succeededResult({ summary: "Summary.", observations: ["One."] }),
+        },
+      ];
+
+      const { GET } = await import("@/app/api/analytics/insights/jobs/[id]/route");
+      const body = (await (await GET(makeRequest("job-envelope"))).json()) as Record<
+        string,
+        unknown
+      >;
+
+      expect(body).toMatchObject({
+        status: "completed",
+        reportId: "report-test-1",
+        rangeStart: PAYLOAD.range.start,
+        rangeEnd: PAYLOAD.range.end,
+        personalised: true,
+      });
+      const { report } = completeCalls[0] as {
+        report: { rangeStart: number; personalised: boolean };
+      };
+      expect(report.rangeStart).toBe(PAYLOAD.range.start);
+      expect(report.personalised).toBe(true);
+    });
+  });
+
+  describe("source list coercion", () => {
+    it("keeps the report when the model lists a non-URL or more than 30 sources", async () => {
+      mockJob = pendingJob("job-sources");
+      batchProcessingStatus = "ended";
+      const urls = Array.from(
+        { length: 34 },
+        (_, i) => `https://example.test/ref-${i}`,
+      );
+      batchResults = [
+        {
+          custom_id: "insight-job-sources",
+          result: succeededResult({
+            summary: "Researched summary.",
+            observations: ["Grounded observation."],
+            sources: ["AHA 2025 guideline", ...urls],
+          }),
+        },
+      ];
+
+      const { GET } = await import("@/app/api/analytics/insights/jobs/[id]/route");
+      const body = (await (await GET(makeRequest("job-sources"))).json()) as {
+        status: string;
+        sources: string[];
+      };
+
+      expect(body.status).toBe("completed");
+      expect(body.sources).toHaveLength(30);
+      expect(body.sources).not.toContain("AHA 2025 guideline");
+      expect(failCalls).toHaveLength(0);
+    });
   });
 });

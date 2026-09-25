@@ -90,7 +90,7 @@ vi.mock("@/app/api/ai/_shared/claude-client", () => ({
           },
         },
       },
-      resolved: { keyOwnerId: "user-test", source: "env" },
+      resolved: { keyOwnerId: "user-test", source: "own_stored" },
     };
   },
 }));
@@ -231,10 +231,33 @@ describe("POST /api/analytics/insights/deep", () => {
       requestPayload: unknown;
     };
     expect(call.userId).toBe("user-test");
+    // The request rides in an envelope next to the key that submitted the
+    // batch, so polling can talk to the org that owns it.
     expect(call.requestPayload).toMatchObject({
-      range: { start: expect.any(Number), end: expect.any(Number) },
-      metrics: { intake: expect.any(Object) },
+      request: {
+        range: { start: expect.any(Number), end: expect.any(Number) },
+        metrics: { intake: expect.any(Object) },
+      },
+      key: { keySource: "own_stored", keyOwnerId: "user-test" },
     });
+  });
+
+  it("stores and submits a PII-redacted request", async () => {
+    const { POST } = await import("@/app/api/analytics/insights/deep/route");
+    await POST(
+      makeRequest(
+        validBody({
+          profile: { conditions: ["CKD stage 3 - Dr Smith 082-555-1234"] },
+        }),
+      ),
+    );
+
+    const stored = JSON.stringify(
+      (createJobCalls[0] as { requestPayload: unknown }).requestPayload,
+    );
+    expect(stored).toContain("[phone]");
+    expect(stored).not.toContain("082-555-1234");
+    expect(JSON.stringify(batchesCreateCalls[0])).not.toContain("082-555-1234");
   });
 
   it("reserves the DB lock BEFORE submitting to Anthropic and attaches batchId afterwards", async () => {
