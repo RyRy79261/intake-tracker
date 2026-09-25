@@ -13,6 +13,7 @@ import {
   updateSchedule,
   deleteSchedule,
 } from "@/lib/medication-schedule-service";
+import { localHHMMStringToUTCMinutes } from "@/lib/timezone";
 
 describe("getDailySchedule", () => {
   it("returns Map with prescriptionId-keyed entries for matching dayOfWeek", async () => {
@@ -198,6 +199,41 @@ describe("updateSchedule", () => {
     expect(updated!.dosage).toBe(100);
     expect(updated!.time).toBe("08:00"); // unchanged
     expect(updated!.enabled).toBe(true); // unchanged
+  });
+});
+
+describe("updateSchedule keeps the anchorTimezone (gap-timezone-travel-recalc#2)", () => {
+  // The test device zone is UTC; the schedule is anchored in Berlin.
+  async function seedBerlin() {
+    const rx = makePrescription();
+    const phase = makeMedicationPhase(rx.id);
+    const schedule = makePhaseSchedule(phase.id, {
+      time: "08:00",
+      anchorTimezone: "Europe/Berlin",
+      scheduleTimeUTC: 999,
+    });
+    await db.prescriptions.add(rx);
+    await db.medicationPhases.add(phase);
+    await db.phaseSchedules.add(schedule);
+    return schedule;
+  }
+
+  it("leaves anchor and UTC alone when the same time is resent", async () => {
+    const schedule = await seedBerlin();
+    await updateSchedule(schedule.id, { time: "08:00", dosage: 75 });
+
+    const updated = await db.phaseSchedules.get(schedule.id);
+    expect(updated!.anchorTimezone).toBe("Europe/Berlin");
+    expect(updated!.scheduleTimeUTC).toBe(999);
+  });
+
+  it("encodes a changed time in the existing anchor", async () => {
+    const schedule = await seedBerlin();
+    await updateSchedule(schedule.id, { time: "09:00" });
+
+    const updated = await db.phaseSchedules.get(schedule.id);
+    expect(updated!.anchorTimezone).toBe("Europe/Berlin");
+    expect(updated!.scheduleTimeUTC).toBe(localHHMMStringToUTCMinutes("09:00", "Europe/Berlin"));
   });
 });
 

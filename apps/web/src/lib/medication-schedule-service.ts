@@ -124,13 +124,19 @@ export async function updateSchedule(
   updates: Partial<Omit<PhaseSchedule, "id" | "createdAt" | "phaseId">>,
 ): Promise<ServiceResult<void>> {
   try {
-    const tz = getDeviceTimezone();
     const finalUpdates = { ...updates, updatedAt: Date.now() };
 
-    // If time is being updated, recompute scheduleTimeUTC
+    // If the time changed, recompute scheduleTimeUTC in the schedule's own
+    // anchor; re-anchoring to the device zone is the travel prompt's job.
     if (updates.time) {
-      finalUpdates.scheduleTimeUTC = localHHMMStringToUTCMinutes(updates.time, tz);
-      finalUpdates.anchorTimezone = tz;
+      const prev = await db.phaseSchedules.get(id);
+      if (prev && prev.time === updates.time) {
+        delete finalUpdates.time;
+      } else {
+        const anchor = updates.anchorTimezone || prev?.anchorTimezone || getDeviceTimezone();
+        finalUpdates.scheduleTimeUTC = localHHMMStringToUTCMinutes(updates.time, anchor);
+        finalUpdates.anchorTimezone = anchor;
+      }
     }
 
     await db.transaction("rw", [db.phaseSchedules, db.auditLogs, db._syncQueue], async () => {

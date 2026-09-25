@@ -279,11 +279,19 @@ export async function updatePhase(input: UpdatePhaseInput): Promise<ServiceResul
           }
         }
         for (const u of toUpdate) {
-          const tz = getDeviceTimezone();
+          // Keep the schedule's anchor: re-anchoring to the device zone is
+          // the travel prompt's job. Re-encode only when the time changed.
+          const prev = existingSchedules.find((s) => s.id === u.id);
+          const anchor = prev?.anchorTimezone || getDeviceTimezone();
+          const timeFields = prev && prev.time === u.time
+            ? {}
+            : {
+                time: u.time,
+                scheduleTimeUTC: localHHMMStringToUTCMinutes(u.time, anchor),
+                anchorTimezone: anchor,
+              };
           await db.phaseSchedules.update(u.id, {
-            time: u.time,
-            scheduleTimeUTC: localHHMMStringToUTCMinutes(u.time, tz),
-            anchorTimezone: tz,
+            ...timeFields,
             dosage: u.dosage,
             daysOfWeek: u.daysOfWeek,
             updatedAt: Date.now(),
