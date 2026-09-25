@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { RecentEntriesList, InlineEditFormShell } from "@/components/recent-entries-list";
 import { parseIntakeWithAI } from "@/lib/ai-client";
+import { SODIUM_FRACTION } from "@intake/core/sodium";
 import { useAuthGate } from "@/components/auth-guard";
 import {
   useAddComposableEntry,
@@ -54,7 +55,7 @@ type SodiumSource = "sodium" | "salt" | "msg";
 
 const SODIUM_MULTIPLIERS: Record<SodiumSource, number> = {
   sodium: 1.0, // direct sodium mg
-  salt: 0.39, // table salt is ~39% sodium
+  salt: SODIUM_FRACTION, // table salt is ~39.3% sodium (shared with the AI prompts)
   msg: 0.12, // MSG is ~12% sodium
 };
 

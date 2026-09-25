@@ -51,12 +51,15 @@ const FORBIDDEN = [
   "@intake/db",
   "next-themes",
 ];
-// Only these non-relative specifiers are allowed.
+// Only these non-relative specifiers are allowed. @intake/core is pure and
+// DOM-free too, so its granular subpaths are fine (the shared salt → sodium
+// factor lives there); the barrel is not, to keep the graph narrow.
 const ALLOWED_BARE = (s: string) =>
   s === "zod" ||
   s.startsWith("zod/") ||
   s === "@intake/types" ||
-  s.startsWith("@intake/types/");
+  s.startsWith("@intake/types/") ||
+  s.startsWith("@intake/core/");
 
 describe("@intake/ai-prompts purity", () => {
   const files = tsFiles(PKG_SRC);
@@ -81,7 +84,7 @@ describe("@intake/ai-prompts purity", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("only depends on @intake/types + zod (and relative imports)", () => {
+  it("only depends on @intake/types, @intake/core subpaths + zod (and relative imports)", () => {
     const offenders: string[] = [];
     for (const file of files) {
       const code = fs.readFileSync(file, "utf-8");

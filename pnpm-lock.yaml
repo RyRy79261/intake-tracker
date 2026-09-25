@@ -335,6 +335,9 @@ importers:
 
   packages/ai-prompts:
     dependencies:
+      '@intake/core':
+        specifier: workspace:*
+        version: link:../core
       '@intake/types':
         specifier: workspace:*
         version: link:../types

@@ -19,6 +19,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@intake/core": "workspace:*",
     "@intake/types": "workspace:*",
     "zod": "^4.5.4"
   },

@@ -14,7 +14,8 @@
     "./shake": "./src/shake-detector.ts",
     "./analytics-stats": "./src/analytics-stats.ts",
     "./lifecycle": "./src/lifecycle.ts",
-    "./effective-phase": "./src/effective-phase.ts"
+    "./effective-phase": "./src/effective-phase.ts",
+    "./sodium": "./src/sodium.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

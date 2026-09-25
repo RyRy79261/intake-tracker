@@ -78,11 +78,11 @@ describe("FoodSection", () => {
     await renderWithFixtures(<FoodSection />);
 
     await user.type(await screen.findByLabelText(/Sodium/i), "1000");
-    // 1000 mg of table salt -> ~390 mg sodium (multiplier 0.39).
+    // 1000 mg of table salt -> ~393 mg sodium (SODIUM_FRACTION 0.393).
     await user.click(screen.getByRole("combobox"));
     await user.click(screen.getByRole("option", { name: "Salt" }));
 
-    expect(await screen.findByText("= 390mg sodium")).toBeInTheDocument();
+    expect(await screen.findByText("= 393mg sodium")).toBeInTheDocument();
   });
 
   it("records a composable entry and surfaces it in the recent list", async () => {
