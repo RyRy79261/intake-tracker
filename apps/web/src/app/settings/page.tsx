@@ -1,11 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button } from "@intake/ui/button";
 import { Accordion } from "@intake/ui/accordion";
-import { RotateCcw, Activity, Palette, Pill, Database, Shield, Bug, Download, Sparkles, MessageSquare, BookOpen } from "lucide-react";
-import { useSettings } from "@/hooks/use-settings";
-import { useToast } from "@intake/ui/use-toast";
+import { Activity, Palette, Pill, Database, Shield, Bug, Download, Sparkles, MessageSquare, BookOpen } from "lucide-react";
 import { DebugPanel } from "@/components/debug-panel";
 import { AboutDialog } from "@/components/about-dialog";
 import { SettingsAccordionGroup } from "@/components/settings/settings-accordion-group";
@@ -34,13 +31,12 @@ import { AiKeysSection } from "@/components/settings/ai-keys-section";
 import { ReportBugSection } from "@/components/settings/report-bug-section";
 import { HelpSection } from "@/components/settings/help-section";
 import { ReportBugDialog } from "@/components/report-bug-dialog";
+import { ResetSettingsButton } from "@/components/settings/reset-settings-button";
 
 /** Set by the ErrorBoundary crash screen before it navigates here. */
 const CRASH_REPORT_KEY = "intake-tracker:crash-report";
 
 function SettingsContent() {
-  const settings = useSettings();
-  const { toast } = useToast();
   const sugarEnabled = useOptionalTrackerEnabled("sugar");
   const potassiumEnabled = useOptionalTrackerEnabled("potassium");
   const [crash, setCrash] = useState<{ open: boolean; description: string }>({
@@ -66,14 +62,6 @@ function SettingsContent() {
       // Malformed / unavailable sessionStorage — nothing to restore.
     }
   }, []);
-
-  const handleResetToDefaults = () => {
-    settings.resetToDefaults();
-    toast({
-      title: "Settings reset",
-      description: "All settings have been restored to defaults",
-    });
-  };
 
   return (
     <>
@@ -144,14 +132,7 @@ function SettingsContent() {
       />
 
       <div className="pt-4 border-t space-y-2">
-        <Button
-          variant="ghost"
-          className="w-full justify-start gap-2 text-muted-foreground"
-          onClick={handleResetToDefaults}
-        >
-          <RotateCcw className="w-4 h-4" />
-          Reset to Defaults
-        </Button>
+        <ResetSettingsButton />
         <AboutDialog />
       </div>
     </>

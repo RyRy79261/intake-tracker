@@ -1,10 +1,6 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import {
-  obfuscateApiKey,
-  deobfuscateApiKey,
-  sanitizeNumericInput
-} from "@/lib/security";
+import { sanitizeNumericInput } from "@/lib/security";
 import {
   DEFAULT_LIQUID_PRESETS,
   type LiquidPreset,
@@ -15,21 +11,9 @@ import { DEFAULT_QUICK_NAV_ITEMS, type QuickNavItem } from "@/lib/quick-nav-defa
 export type { LiquidPreset } from "@/lib/constants";
 export type { QuickNavItem } from "@/lib/quick-nav-defaults";
 
-export interface SubstanceConfig {
-  caffeine: {
-    enabled: boolean;
-    types: Array<{ name: string; defaultMg: number; defaultVolumeMl: number }>;
-  };
-  alcohol: {
-    enabled: boolean;
-    types: Array<{ name: string; defaultDrinks: number; defaultVolumeMl: number }>;
-  };
-}
-
 export interface Settings {
-  // Increment values for +/- buttons
+  // Increment value for the water +/- buttons
   waterIncrement: number; // ml
-  saltIncrement: number; // mg
 
   // Daily limits
   waterLimit: number; // ml (default 1000ml = 1L)
@@ -55,16 +39,6 @@ export interface Settings {
   saltExtendedBuffer: number; // mg
   sugarExtendedBuffer: number; // g
 
-  // Secret to authenticate with server-side AI (if using server API key)
-  // Set AI_AUTH_SECRET env var on server, enter same value here
-  aiAuthSecret: string;
-
-  // Theme preference
-  theme: "light" | "dark" | "system";
-
-  // Data retention (days, 0 = keep forever)
-  dataRetentionDays: number;
-
   // Day start hour for budget tracking (0-23, default 2 = 2am)
   // Records after this hour count toward "today's" budget
   dayStartHour: number;
@@ -87,11 +61,6 @@ export interface Settings {
   // Tracking defaults
   urinationDefaultAmount: "small" | "medium" | "large";
   defecationDefaultAmount: "small" | "medium" | "large";
-  // Weight graph defaults
-  weightGraphShowEating: boolean;
-  weightGraphShowUrination: boolean;
-  weightGraphShowDefecation: boolean;
-  weightGraphShowDrinking: boolean;
 
   // Liquid presets (beverage CRUD)
   liquidPresets: LiquidPreset[];
@@ -103,7 +72,7 @@ export interface Settings {
   primaryRegion: string;
   secondaryRegion: string;
 
-  // Time format
+  // Clock format for displayed times (read by formatTimeOnly/formatDateTime)
   timeFormat: "12h" | "24h";
 
   // Dose reminder settings
@@ -121,14 +90,10 @@ export interface Settings {
   shakeToReportEnabled: boolean;
   shakeThreshold: number; // acceleration-magnitude jolt delta (m/s²) — lower = more sensitive
   shakeRequiredJolts: number; // jolts within the detection window required to fire
-
-  // Substance tracking configuration
-  substanceConfig: SubstanceConfig;
 }
 
 interface SettingsActions {
   setWaterIncrement: (value: number) => void;
-  setSaltIncrement: (value: number) => void;
   setWaterLimit: (value: number) => void;
   setSaltLimit: (value: number) => void;
   setSugarLimit: (value: number) => void;
@@ -137,10 +102,6 @@ interface SettingsActions {
   setSugarExtendedBuffer: (value: number) => void;
   setPotassiumLimit: (value: number) => void;
   setOptionalTracker: (key: "sugar" | "potassium", enabled: boolean) => void;
-  setAiAuthSecret: (secret: string) => void;
-  getDeobfuscatedAuthSecret: () => string;
-  setTheme: (theme: "light" | "dark" | "system") => void;
-  setDataRetentionDays: (days: number) => void;
   setDayStartHour: (hour: number) => void;
   setShowQuickNav: (value: boolean) => void;
   setQuickNavOrder: (order: "ltr" | "rtl") => void;
@@ -152,10 +113,6 @@ interface SettingsActions {
   setSwipeNavVelocityThreshold: (value: number) => void;
   setUrinationDefaultAmount: (value: "small" | "medium" | "large") => void;
   setDefecationDefaultAmount: (value: "small" | "medium" | "large") => void;
-  setWeightGraphShowEating: (value: boolean) => void;
-  setWeightGraphShowUrination: (value: boolean) => void;
-  setWeightGraphShowDefecation: (value: boolean) => void;
-  setWeightGraphShowDrinking: (value: boolean) => void;
   addLiquidPreset: (preset: Omit<LiquidPreset, "id">) => string;
   updateLiquidPreset: (id: string, updates: LiquidPresetPatch) => void;
   deleteLiquidPreset: (id: string) => void;
@@ -178,14 +135,15 @@ interface SettingsActions {
   setShakeToReportEnabled: (value: boolean) => void;
   setShakeThreshold: (value: number) => void;
   setShakeRequiredJolts: (value: number) => void;
-  // Substance config
-  setSubstanceConfig: (config: SubstanceConfig) => void;
+  /**
+   * Restore preferences to their defaults. Leaves alone the fields that are
+   * data or have their own flows (see RESET_PRESERVED_KEYS).
+   */
   resetToDefaults: () => void;
 }
 
 const defaultSettings: Settings = {
   waterIncrement: 250,
-  saltIncrement: 250,
   waterLimit: 1000,
   saltLimit: 1500,
   sugarLimit: 30,
@@ -197,9 +155,6 @@ const defaultSettings: Settings = {
     sugar: true,
     potassium: false,
   },
-  aiAuthSecret: "",
-  theme: "system",
-  dataRetentionDays: 90, // Default: keep 90 days of data
   dayStartHour: 2, // Default: 2am - day starts at 2am for budget tracking
   showQuickNav: true,
   quickNavOrder: "rtl" as const,
@@ -211,10 +166,6 @@ const defaultSettings: Settings = {
   swipeNavVelocityThreshold: 500,
   urinationDefaultAmount: "small" as const,
   defecationDefaultAmount: "medium" as const,
-  weightGraphShowEating: true,
-  weightGraphShowUrination: true,
-  weightGraphShowDefecation: true,
-  weightGraphShowDrinking: true,
   liquidPresets: DEFAULT_LIQUID_PRESETS,
   weightIncrement: 0.05,
   storageMode: "local" as const,
@@ -228,26 +179,6 @@ const defaultSettings: Settings = {
   doseRemindersEnabled: false,
   reminderFollowUpCount: 2,
   reminderFollowUpInterval: 10,
-  substanceConfig: {
-    caffeine: {
-      enabled: true,
-      types: [
-        { name: "Coffee", defaultMg: 95, defaultVolumeMl: 250 },
-        { name: "Espresso", defaultMg: 63, defaultVolumeMl: 30 },
-        { name: "Tea", defaultMg: 47, defaultVolumeMl: 250 },
-        { name: "Other", defaultMg: 80, defaultVolumeMl: 250 },
-      ],
-    },
-    alcohol: {
-      enabled: true,
-      types: [
-        { name: "Beer", defaultDrinks: 1, defaultVolumeMl: 330 },
-        { name: "Wine", defaultDrinks: 1, defaultVolumeMl: 150 },
-        { name: "Spirits", defaultDrinks: 1, defaultVolumeMl: 45 },
-        { name: "Other", defaultDrinks: 1, defaultVolumeMl: 250 },
-      ],
-    },
-  },
 };
 
 /**
@@ -256,7 +187,30 @@ const defaultSettings: Settings = {
  * that would break an older stored state (new required field, dropped key,
  * renamed key, etc).
  */
-export const SETTINGS_PERSIST_VERSION = 16;
+export const SETTINGS_PERSIST_VERSION = 17;
+
+/**
+ * Fields "Reset to Defaults" must not touch:
+ * - liquidPresets: user data; past entries tagged `preset:<id>` lose their
+ *   name if a custom preset disappears.
+ * - storageMode / doseRemindersEnabled: flipping the flag alone skips the
+ *   sync switch and the push unsubscribe, leaving client and server out of
+ *   step. Change them through their own controls.
+ * - analyticsIntroSeen: a one-time onboarding flag, not a preference.
+ */
+const RESET_PRESERVED_KEYS = [
+  "liquidPresets",
+  "storageMode",
+  "doseRemindersEnabled",
+  "analyticsIntroSeen",
+] as const satisfies ReadonlyArray<keyof Settings>;
+
+/** Legacy region codes written by the old /settings region picker. */
+function normalizeRegion(value: unknown): unknown {
+  if (value === "UK") return "GB";
+  if (value === "None" || value === "none" || value === "Other") return "";
+  return value;
+}
 
 /**
  * Forward-migrate a persisted settings blob from any older version up to
@@ -314,11 +268,10 @@ export function migrateSettings(
     state.shakeToReportEnabled = true;
   }
   if (version < 11) {
-    state.shakeThreshold = 15;
-    state.shakeRequiredJolts = 3;
-  }
-  if (version < 12) {
-    state.shakeThreshold = 8;
+    // Seed the shake-to-report tuning. Originally 15 / 3 then 8 (v12); the
+    // defaults are now 10 / 5, and v17 moves installs still on 8 / 3 there.
+    state.shakeThreshold = 10;
+    state.shakeRequiredJolts = 5;
   }
   if (version < 13) {
     state.sugarLimit = 30;
@@ -339,18 +292,47 @@ export function migrateSettings(
     state.saltExtendedBuffer = 500;
     state.sugarExtendedBuffer = 10;
   }
+  if (version < 17) {
+    // The shake defaults moved from 8 / 3 to 10 / 5 without a migration, so
+    // no existing install picked them up. Move the untouched old pair only.
+    if (state.shakeThreshold === 8 && state.shakeRequiredJolts === 3) {
+      state.shakeThreshold = 10;
+      state.shakeRequiredJolts = 5;
+    }
+    // The old /settings region picker stored "UK", "None" and "Other"; the
+    // medication settings combobox (and the AI search) use ISO codes and ""
+    // for "not specified".
+    for (const key of ["primaryRegion", "secondaryRegion"]) {
+      if (key in state) state[key] = normalizeRegion(state[key]);
+    }
+    // Settings nothing reads: the sodium +/- increment (no stepper uses it),
+    // weight-graph overlay toggles (no such chart), substance presets, the
+    // never-set AI auth secret, data retention, and the theme (next-themes
+    // owns it).
+    for (const key of [
+      "saltIncrement",
+      "weightGraphShowEating",
+      "weightGraphShowUrination",
+      "weightGraphShowDefecation",
+      "weightGraphShowDrinking",
+      "substanceConfig",
+      "aiAuthSecret",
+      "dataRetentionDays",
+      "theme",
+    ]) {
+      delete state[key];
+    }
+  }
   return state as unknown as Settings & SettingsActions;
 }
 
 export const useSettingsStore = create<Settings & SettingsActions>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       ...defaultSettings,
 
       setWaterIncrement: (value) => 
         set({ waterIncrement: sanitizeNumericInput(value, 10, 1000) }),
-      setSaltIncrement: (value) => 
-        set({ saltIncrement: sanitizeNumericInput(value, 10, 1000) }),
       setWaterLimit: (value) => 
         set({ waterLimit: sanitizeNumericInput(value, 100, 10000) }),
       setSaltLimit: (value) =>
@@ -369,19 +351,8 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
         set((state) => ({
           optionalTrackers: { ...state.optionalTrackers, [key]: enabled },
         })),
-      
-      // Store auth secret with obfuscation
-      setAiAuthSecret: (secret) =>
-        set({ aiAuthSecret: obfuscateApiKey(secret) }),
-      
-      // Get the actual auth secret for use
-      getDeobfuscatedAuthSecret: () => deobfuscateApiKey(get().aiAuthSecret),
-      
-      setTheme: (theme) => set({ theme }),
-      
-      setDataRetentionDays: (days) => 
-        set({ dataRetentionDays: sanitizeNumericInput(days, 0, 365) }),
-      
+
+
       setDayStartHour: (hour) =>
         set({ dayStartHour: sanitizeNumericInput(hour, 0, 23) }),
 
@@ -401,10 +372,6 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
 
       setUrinationDefaultAmount: (value) => set({ urinationDefaultAmount: value }),
       setDefecationDefaultAmount: (value) => set({ defecationDefaultAmount: value }),
-      setWeightGraphShowEating: (value) => set({ weightGraphShowEating: value }),
-      setWeightGraphShowUrination: (value) => set({ weightGraphShowUrination: value }),
-      setWeightGraphShowDefecation: (value) => set({ weightGraphShowDefecation: value }),
-      setWeightGraphShowDrinking: (value) => set({ weightGraphShowDrinking: value }),
 
       // Analytics intro
       setAnalyticsIntroSeen: (seen) => set({ analyticsIntroSeen: seen }),
@@ -434,9 +401,6 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
         set({ shakeThreshold: sanitizeNumericInput(value, 4, 20) }),
       setShakeRequiredJolts: (value) =>
         set({ shakeRequiredJolts: sanitizeNumericInput(value, 2, 8) }),
-
-      // Substance config
-      setSubstanceConfig: (config) => set({ substanceConfig: config }),
 
       addLiquidPreset: (preset) => {
         const id = crypto.randomUUID();
@@ -468,7 +432,12 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
           liquidPresets: state.liquidPresets.filter((p) => p.id !== id),
         })),
 
-      resetToDefaults: () => set(defaultSettings),
+      resetToDefaults: () => {
+        // A partial set merges, so the preserved fields keep their values.
+        const next: Partial<Settings> = { ...defaultSettings };
+        for (const key of RESET_PRESERVED_KEYS) delete next[key];
+        set(next);
+      },
     }),
     {
       name: "intake-tracker-settings",
