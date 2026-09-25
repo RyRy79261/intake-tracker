@@ -10,9 +10,13 @@ interface DoseProgressSummaryProps {
 }
 
 export function DoseProgressSummary({ slots, lowStockWarnings }: DoseProgressSummaryProps) {
-  const { total, taken, pct, allDone } = computeProgress(slots);
+  // pct/allDone count skipped doses as handled (deliberately — a skipped dose
+  // needs no further action). The copy says "handled" and shows taken and
+  // skipped apart, and only a day with every dose taken is celebrated.
+  const { total, taken, skipped, pct, allDone } = computeProgress(slots);
+  const counts = `${taken} taken · ${skipped} skipped · ${total} total`;
 
-  if (allDone && total > 0) {
+  if (allDone && total > 0 && skipped === 0) {
     return (
       <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 p-4 flex items-center gap-3">
         <CheckCircle2 className="w-6 h-6 text-emerald-600 dark:text-emerald-400 shrink-0" />
@@ -28,13 +32,20 @@ export function DoseProgressSummary({ slots, lowStockWarnings }: DoseProgressSum
     );
   }
 
+  if (allDone && total > 0) {
+    return (
+      <div className="rounded-xl bg-muted/50 border p-4">
+        <p className="font-semibold text-sm">All doses handled</p>
+        <p className="text-xs text-muted-foreground">{counts}</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between text-sm">
-        <span className="text-muted-foreground">
-          {taken}/{total} taken
-        </span>
-        <span className="font-medium">{pct}%</span>
+        <span className="text-muted-foreground">{counts}</span>
+        <span className="font-medium">{pct}% handled</span>
       </div>
       <div className="h-2 rounded-full bg-muted overflow-hidden">
         <div

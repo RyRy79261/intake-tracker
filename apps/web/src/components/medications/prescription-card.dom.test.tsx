@@ -179,4 +179,58 @@ describe("PrescriptionCard", () => {
       expect(logs[0]?.phaseId).toBeUndefined();
     });
   });
+
+  it("lists logged as-needed doses and undoes one, restoring its stock", async () => {
+    const user = userEvent.setup();
+    const prescription = makePrescription({ genericName: "Furosemide" });
+    const inventory = makeInventoryItem(prescription.id, {
+      prescriptionId: prescription.id,
+      brandName: "Lasix",
+      strength: 40,
+      currentStock: 30,
+    });
+
+    await renderWithFixtures(<PrescriptionCard prescription={prescription} />, {
+      seed: { prescriptions: [prescription], inventoryItems: [inventory] },
+    });
+
+    await user.click(
+      await screen.findByRole("button", { name: /log an as-needed dose of furosemide/i }),
+    );
+    await user.click(await screen.findByRole("button", { name: "Log Dose" }));
+    await waitFor(async () => {
+      expect((await db.inventoryItems.get(inventory.id))?.currentStock).toBe(29);
+    });
+
+    // First tap arms the removal, the second confirms it.
+    await user.click(await screen.findByRole("button", { name: /^undo as-needed dose/i }));
+    expect((await db.inventoryItems.get(inventory.id))?.currentStock).toBe(29);
+    await user.click(screen.getByRole("button", { name: /confirm undo as-needed dose/i }));
+
+    await waitFor(async () => {
+      expect((await db.inventoryItems.get(inventory.id))?.currentStock).toBe(30);
+      const logs = await db.doseLogs.where("prescriptionId").equals(prescription.id).toArray();
+      expect(logs[0]?.deletedAt).not.toBeNull();
+    });
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("button", { name: /undo as-needed dose/i }),
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  it("does not accept a PRN time later than now", async () => {
+    const user = userEvent.setup();
+    const prescription = makePrescription({ genericName: "Furosemide" });
+    await renderWithFixtures(<PrescriptionCard prescription={prescription} />, {
+      seed: { prescriptions: [prescription] },
+    });
+
+    await user.click(
+      await screen.findByRole("button", { name: /log an as-needed dose of furosemide/i }),
+    );
+    await screen.findByRole("button", { name: "Log Dose" });
+    const input = document.querySelector('input[type="time"]') as HTMLInputElement;
+    expect(input.max).not.toBe("");
+  });
 });
