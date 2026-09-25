@@ -1,0 +1,45 @@
+name: Dispatch push reminders
+
+# Background trigger for server push dose reminders. Without it
+# /api/push/send has no caller and web/PWA reminders only go out while
+# /medications is open (its 60s /api/push/check ping).
+#
+# Not a Vercel Cron: on the Hobby plan Vercel rejects any cron that runs more
+# than once a day, which would fail the deployment. GitHub's scheduler runs at
+# most every 5 minutes and can lag; /api/push/send matches slots within a
+# window (DUE_WINDOW_MINUTES in lib/push-db.ts) and claims each slot before
+# sending, so a late or overlapping tick neither drops nor repeats a reminder.
+#
+# Needs two repository secrets:
+#   PUSH_DISPATCH_URL  production origin, e.g. https://intake-tracker.example
+#   CRON_SECRET        same value as the Vercel env var of that name
+# The job no-ops while either is missing.
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: push-reminders
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Call /api/push/send
+        env:
+          PUSH_DISPATCH_URL: ${{ secrets.PUSH_DISPATCH_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$PUSH_DISPATCH_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "PUSH_DISPATCH_URL or CRON_SECRET is not set; skipping."
+            exit 0
+          fi
+          curl --fail-with-body --silent --show-error --max-time 60 \
+            -X POST \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            "${PUSH_DISPATCH_URL%/}/api/push/send"
