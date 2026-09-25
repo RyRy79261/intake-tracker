@@ -14,7 +14,10 @@ import {
   alcoholVsBP,
   correlate,
 } from "@/lib/analytics-service";
-import { startOfDay, endOfDay, subDays } from "date-fns";
+import { useNowTick } from "@intake/ui/use-now-tick";
+import { logicalDayKey, logicalDayStart, shiftDayKey } from "@intake/core/logical-day";
+import { useSettingsStore } from "@/stores/settings-store";
+import { getDeviceTimezone } from "@/lib/timezone";
 import type {
   Domain,
   TimeScope,
@@ -231,36 +234,40 @@ export function useCorrelation(
 // Time scope utility
 // ---------------------------------------------------------------------------
 
+const SCOPE_DAYS: Record<Exclude<TimeScope, "all">, number> = {
+  // "24h" is labelled "Today": the current logical day, not a rolling window.
+  "24h": 1,
+  "7d": 7,
+  "30d": 30,
+  "90d": 90,
+};
+
 /**
- * Convert a TimeScope preset to a concrete TimeRange aligned to calendar-day
- * boundaries — the range ends at the end of today and starts at the start of
- * the first included day, so daily grouping never produces partial edge days.
- * Memoized to prevent unnecessary re-renders.
+ * Convert a TimeScope preset to a concrete TimeRange aligned to logical-day
+ * boundaries (the user's dayStartHour in the device zone, as on the
+ * dashboard). The range ends at the end of the current logical day and starts
+ * at the start of the first included day, so daily grouping never produces
+ * partial edge days.
+ *
+ * A minute tick re-derives today's key, so a page left open (or a PWA resumed)
+ * past the day boundary moves forward. The range object only changes when the
+ * key does, keeping every live query keyed on it stable in between.
  */
 export function useTimeScopeRange(scope: TimeScope): TimeRange {
+  const dayStartHour = useSettingsStore((s) => s.dayStartHour);
+  const tick = useNowTick();
+  const tz = getDeviceTimezone();
+  const todayKey = useMemo(
+    () => logicalDayKey(Date.now(), dayStartHour, tz),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- tick forces a re-read of the clock
+    [tick, dayStartHour, tz],
+  );
+
   return useMemo(() => {
-    const now = new Date();
-    const end = endOfDay(now).getTime();
-    let start: number;
-    switch (scope) {
-      case "24h":
-        start = startOfDay(now).getTime();
-        break;
-      case "7d":
-        start = startOfDay(subDays(now, 6)).getTime();
-        break;
-      case "30d":
-        start = startOfDay(subDays(now, 29)).getTime();
-        break;
-      case "90d":
-        start = startOfDay(subDays(now, 89)).getTime();
-        break;
-      case "all":
-        start = 0;
-        break;
-      default:
-        start = startOfDay(subDays(now, 6)).getTime();
-    }
+    const end = logicalDayStart(shiftDayKey(todayKey, 1), dayStartHour, tz) - 1;
+    if (scope === "all") return { start: 0, end };
+    const days = SCOPE_DAYS[scope] ?? SCOPE_DAYS["7d"];
+    const start = logicalDayStart(shiftDayKey(todayKey, -(days - 1)), dayStartHour, tz);
     return { start, end };
-  }, [scope]);
+  }, [scope, todayKey, dayStartHour, tz]);
 }
