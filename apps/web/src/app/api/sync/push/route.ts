@@ -40,6 +40,13 @@
  *   — client clocks ahead by more than 60s get clamped so a misset device
  *   cannot poison future writes.
  *
+ * Pull cursor (audit sync-engine#3):
+ *   Every write — insert, update, and the tombstone-stub UPDATE — also sets
+ *   `serverUpdatedAt` to the server's clock. Pull pages by that stamp, so a
+ *   record pushed late (with an old client `updatedAt`) still reaches every
+ *   other device. LWW keeps using the client `updatedAt`; a skipped (losing)
+ *   write does not restamp, since nothing changed.
+ *
  * Logging: module prefix `[sync/push]`. The request body is never logged
  * (contains PHI — timestamps, food descriptions, medication names).
  */
@@ -275,6 +282,10 @@ export const POST = withAuth(async ({ request, auth }) => {
             ...rowWithoutUserId,
             userId: auth.userId!,
             updatedAt: clampedUpdatedAt,
+            // Pull cursor — stamped at write time, not batch start, so a slow
+            // batch cannot stamp rows further in the past than the skew
+            // margin covers. Lands in `set` too, so updates restamp.
+            serverUpdatedAt: Date.now(),
           };
 
           const { id: _id, ...setValues } = writeValues;
@@ -373,7 +384,12 @@ export const POST = withAuth(async ({ request, auth }) => {
         try {
           await drizzleDb
             .update(table)
-            .set({ deletedAt: op.row.deletedAt, updatedAt: clampedUpdatedAt })
+            .set({
+              deletedAt: op.row.deletedAt,
+              updatedAt: clampedUpdatedAt,
+              // Restamp so peers pull the tombstone (see the upsert path).
+              serverUpdatedAt: Date.now(),
+            })
             .where(
               and(
                 eq((table as unknown as { id: PgColumn }).id, op.row.id),

@@ -535,7 +535,11 @@ export async function runPullCycle(): Promise<void> {
       const body = (await res.json()) as {
         result: Record<
           string,
-          { rows: Record<string, unknown>[]; hasMore: boolean }
+          {
+            rows: Record<string, unknown>[];
+            hasMore: boolean;
+            cursor?: { updatedAt: number; id: string };
+          }
         >;
         serverTime: number;
       };
@@ -550,14 +554,17 @@ export async function runPullCycle(): Promise<void> {
 
         if (rows.length === 0) continue;
 
-        // Rows arrive ordered by `(updatedAt, id)` ASC, so the last row is
-        // the max tuple — the keyset cursor for the next page.
+        // The server returns the keyset position of the last row as an
+        // opaque `cursor` — its `updatedAt` is the server-assigned write
+        // stamp, NOT the row's own `updatedAt`, so a record pushed late by
+        // another device still lands past this cursor (audit sync-engine#3).
+        // Fall back to the last row only for a server that predates it.
         const lastRow = rows[rows.length - 1] as {
           updatedAt?: number;
           id?: string;
         };
-        const lastUpdatedAt = lastRow.updatedAt ?? 0;
-        const lastId = lastRow.id ?? "";
+        const lastUpdatedAt = slice.cursor?.updatedAt ?? lastRow.updatedAt ?? 0;
+        const lastId = slice.cursor?.id ?? lastRow.id ?? "";
 
         let nextUpdatedAt: number;
         let nextId: string;

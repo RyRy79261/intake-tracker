@@ -297,6 +297,60 @@ describe("sync-pull-route", () => {
     expect(tombstoneRow?.deletedAt).toBe(2999);
   });
 
+  it("pages by the server-assigned stamp, returns it as the cursor, and strips it from rows", async () => {
+    const { POST } = await import("@/app/api/sync/pull/route");
+    const { schemaByTableName } = await import("@intake/db/sync-payload");
+
+    // Client `updatedAt` is old (written offline); the server stamp is new.
+    rowsByTableRef.set(schemaByTableName.intakeRecords, [
+      { id: "late-1", updatedAt: 1000, serverUpdatedAt: 9_000, deletedAt: null },
+      { id: "late-2", updatedAt: 1001, serverUpdatedAt: 9_500, deletedAt: null },
+    ]);
+
+    const res = await POST(
+      makePullRequest({ cursors: { intakeRecords: { updatedAt: 8_000, id: "" } } }),
+    );
+    const body = (await res.json()) as {
+      result: Record<
+        string,
+        { rows: StubRow[]; cursor?: { updatedAt: number; id: string } }
+      >;
+    };
+
+    const slice = body.result.intakeRecords!;
+    expect(slice.rows.map((r) => r.id)).toEqual(["late-1", "late-2"]);
+    for (const r of slice.rows) expect(r).not.toHaveProperty("serverUpdatedAt");
+    // LWW data is untouched.
+    expect(slice.rows[0]!.updatedAt).toBe(1000);
+    expect(slice.cursor).toEqual({ updatedAt: 9_500, id: "late-2" });
+    // An empty table carries no cursor — the client keeps its own.
+    expect(body.result.weightRecords!.cursor).toBeUndefined();
+
+    // The WHERE compares against server_updated_at, not updated_at.
+    const intakeWhere = whereCalls.find(
+      (c) => c.table === schemaByTableName.intakeRecords,
+    )!;
+    const names = new Set<string>();
+    const seen = new WeakSet<object>();
+    const walk = (node: unknown): void => {
+      if (!node || typeof node !== "object" || seen.has(node)) return;
+      seen.add(node);
+      if (Array.isArray(node)) {
+        node.forEach(walk);
+        return;
+      }
+      // Same traversal as the user_id test above: column `.name`s inside
+      // the SQL chunks, never the column's back-reference to its table.
+      for (const [k, v] of Object.entries(node)) {
+        if (k === "name" && typeof v === "string") names.add(v);
+        if (k === "value" || k === "queryChunks" || k === "chunks") walk(v);
+      }
+    };
+    walk(intakeWhere.condition);
+    expect(names).toContain("server_updated_at");
+    expect(names).not.toContain("updated_at");
+  });
+
   it("returns serverTime for client-side skew-margin cursor clamp", async () => {
     const { POST } = await import("@/app/api/sync/pull/route");
 

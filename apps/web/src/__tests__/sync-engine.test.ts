@@ -262,6 +262,38 @@ describe("sync-engine", () => {
     expect(stored?.updatedAt).toBe(1000);
   });
 
+  it("pull stores the server-returned cursor, not the row's own updatedAt (audit sync-engine#3)", async () => {
+    installDom({ onLine: true });
+
+    // A record another device wrote offline hours ago: old client updatedAt,
+    // recent server stamp. Parking the cursor on the row's updatedAt would
+    // rewind it; the opaque server cursor is what must be stored.
+    const row = { ...makeIntake({ id: "late-1" }), updatedAt: 1000 };
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        jsonResponse({
+          result: {
+            intakeRecords: {
+              rows: [row],
+              hasMore: false,
+              cursor: { updatedAt: 4_000_000, id: "late-1" },
+            },
+          },
+          serverTime: 5_000_000,
+        }),
+      ) as unknown as Mock,
+    );
+
+    await runPullCycle();
+
+    const meta = await db._syncMeta.get("intakeRecords");
+    expect(meta?.lastPulledUpdatedAt).toBe(4_000_000);
+    expect(meta?.lastPulledId).toBe("late-1");
+    expect((await db.intakeRecords.get("late-1"))?.updatedAt).toBe(1000);
+  });
+
   it("cursor skew margin clamps advance to serverTime - 30s", async () => {
     installDom({ onLine: true });
 
