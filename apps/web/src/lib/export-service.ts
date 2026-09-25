@@ -3,7 +3,7 @@
  * Provides PDF report generation and CSV export, both fully client-side.
  */
 
-import { format } from "date-fns";
+import { format, startOfDay } from "date-fns";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import {
@@ -11,9 +11,30 @@ import {
   adherenceRate,
   bpTrend,
   weightTrend,
-  getRecordsByDomain,
 } from "@/lib/analytics-service";
-import type { TimeRange, Domain, AnalyticsResult } from "@intake/types/analytics";
+import { db } from "@/lib/db";
+import type {
+  IntakeRecord,
+  WeightRecord,
+  BloodPressureRecord,
+  EatingRecord,
+  UrinationRecord,
+  DefecationRecord,
+  SubstanceRecord,
+  DoseLog,
+} from "@/lib/db";
+import { getRecordsByDateRange as getIntakeRecordsByDateRange } from "@/lib/intake-service";
+import {
+  getWeightRecordsByDateRange,
+  getBloodPressureRecordsByDateRange,
+} from "@/lib/health-service";
+import { getEatingRecordsByDateRange } from "@/lib/eating-service";
+import { getUrinationRecordsByDateRange } from "@/lib/urination-service";
+import { getDefecationRecordsByDateRange } from "@/lib/defecation-service";
+import { getSubstanceRecordsByDateRange } from "@/lib/substance-service";
+import { isLive } from "@intake/core/lifecycle";
+import type { TimeRange, AnalyticsResult } from "@intake/types/analytics";
+import { URINATION_ESTIMATE_ML } from "@intake/types/analytics";
 
 // ---------------------------------------------------------------------------
 // CSV helpers
@@ -36,6 +57,85 @@ function triggerDownload(blob: Blob, filename: string): void {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+// ---------------------------------------------------------------------------
+// Record loading and the 'All' range
+// ---------------------------------------------------------------------------
+
+interface ExportRecords {
+  intake: IntakeRecord[];
+  weight: WeightRecord[];
+  bp: BloodPressureRecord[];
+  eating: EatingRecord[];
+  urination: UrinationRecord[];
+  defecation: DefecationRecord[];
+  substances: SubstanceRecord[];
+}
+
+async function loadRecords(range: TimeRange): Promise<ExportRecords> {
+  const { start, end } = range;
+  const [intake, weight, bp, eating, urination, defecation, substances] = await Promise.all([
+    getIntakeRecordsByDateRange(start, end),
+    getWeightRecordsByDateRange(start, end),
+    getBloodPressureRecordsByDateRange(start, end),
+    getEatingRecordsByDateRange(start, end),
+    getUrinationRecordsByDateRange(start, end),
+    getDefecationRecordsByDateRange(start, end),
+    getSubstanceRecordsByDateRange(start, end),
+  ]);
+  return { intake, weight, bp, eating, urination, defecation, substances };
+}
+
+/**
+ * Dose logs whose calendar `scheduledDate` falls in the range. Medications are
+ * keyed on the calendar date (local midnight), not the logical day.
+ */
+async function loadDoseLogs(range: TimeRange): Promise<DoseLog[]> {
+  const startKey = format(range.start, "yyyy-MM-dd");
+  const endKey = format(range.end, "yyyy-MM-dd");
+  const logs = await db.doseLogs
+    .where("scheduledDate")
+    .between(startKey, endKey, true, true)
+    .filter(isLive)
+    .toArray();
+  return logs.sort(
+    (a, b) =>
+      a.scheduledDate.localeCompare(b.scheduledDate) ||
+      a.scheduledTime.localeCompare(b.scheduledTime),
+  );
+}
+
+/**
+ * The 'All' preset sends `start: 0`. Clamp it to the first day with any data
+ * (records, dose logs or a prescription), so a report doesn't walk the dose
+ * schedule day by day from 1970 and the filename carries a real date.
+ */
+async function resolveExportRange(range: TimeRange): Promise<TimeRange> {
+  if (range.start > 0) return range;
+
+  const candidates: number[] = [];
+  const firsts = await Promise.all([
+    db.intakeRecords.orderBy("timestamp").filter(isLive).first(),
+    db.weightRecords.orderBy("timestamp").filter(isLive).first(),
+    db.bloodPressureRecords.orderBy("timestamp").filter(isLive).first(),
+    db.eatingRecords.orderBy("timestamp").filter(isLive).first(),
+    db.urinationRecords.orderBy("timestamp").filter(isLive).first(),
+    db.defecationRecords.orderBy("timestamp").filter(isLive).first(),
+    db.substanceRecords.orderBy("timestamp").filter(isLive).first(),
+  ]);
+  for (const r of firsts) if (r) candidates.push(r.timestamp);
+
+  const firstRx = await db.prescriptions.orderBy("createdAt").filter(isLive).first();
+  if (firstRx) candidates.push(firstRx.createdAt);
+  const firstDose = await db.doseLogs.orderBy("scheduledDate").filter(isLive).first();
+  if (firstDose) {
+    const [y, m, d] = firstDose.scheduledDate.split("-").map(Number);
+    candidates.push(new Date(y!, m! - 1, d!).getTime());
+  }
+
+  const earliest = candidates.length > 0 ? Math.min(...candidates) : range.end;
+  return { start: Math.min(startOfDay(earliest).getTime(), range.end), end: range.end };
 }
 
 // ---------------------------------------------------------------------------
@@ -70,98 +170,281 @@ export function exportToCSV(
   triggerDownload(blob, filename);
 }
 
+type Cell = string | number | boolean | null | undefined;
+
+interface CsvSection {
+  title: string;
+  headers: string[];
+  rows: Cell[][];
+}
+
+function cell(v: Cell): string {
+  return v == null ? "" : String(v);
+}
+
+const byTime = <T extends { timestamp: number }>(records: T[]): T[] =>
+  [...records].sort((a, b) => a.timestamp - b.timestamp);
+
+/** ISO timestamp plus the device-local wall clock, the first two columns of every timed section. */
+function when(ts: number): [string, string] {
+  return [new Date(ts).toISOString(), format(ts, "yyyy-MM-dd HH:mm")];
+}
+
+const INTAKE_UNITS: Record<IntakeRecord["type"], string> = {
+  water: "ml",
+  salt: "mg",
+  sugar: "g",
+  potassium: "mg",
+};
+
+function buildSections(records: ExportRecords, doseLogs: DoseLog[], medNames: Map<string, string>): CsvSection[] {
+  return [
+    {
+      title: "Intake",
+      headers: ["timestamp", "local_time", "type", "amount", "unit", "source", "note"],
+      rows: byTime(records.intake).map((r) => [
+        ...when(r.timestamp),
+        r.type,
+        r.amount,
+        INTAKE_UNITS[r.type],
+        r.source,
+        r.note,
+      ]),
+    },
+    {
+      title: "Weight",
+      headers: ["timestamp", "local_time", "weight_kg", "note"],
+      rows: byTime(records.weight).map((r) => [...when(r.timestamp), r.weight, r.note]),
+    },
+    {
+      title: "Blood pressure",
+      headers: [
+        "timestamp",
+        "local_time",
+        "systolic",
+        "diastolic",
+        "heart_rate",
+        "irregular_heartbeat",
+        "position",
+        "arm",
+        "note",
+      ],
+      rows: byTime(records.bp).map((r) => [
+        ...when(r.timestamp),
+        r.systolic,
+        r.diastolic,
+        r.heartRate,
+        r.irregularHeartbeat,
+        r.position,
+        r.arm,
+        r.note,
+      ]),
+    },
+    {
+      title: "Eating",
+      headers: ["timestamp", "local_time", "grams", "note"],
+      rows: byTime(records.eating).map((r) => [...when(r.timestamp), r.grams, r.note]),
+    },
+    {
+      // Urination volume is never measured: the ml column is the app's fixed
+      // estimate for the logged size, and the header says so.
+      title: "Urination",
+      headers: ["timestamp", "local_time", "amount_estimate", "estimated_ml (not measured)", "note"],
+      rows: byTime(records.urination).map((r) => [
+        ...when(r.timestamp),
+        r.amountEstimate,
+        r.amountEstimate ? URINATION_ESTIMATE_ML[r.amountEstimate] : undefined,
+        r.note,
+      ]),
+    },
+    {
+      title: "Defecation",
+      headers: ["timestamp", "local_time", "amount_estimate", "note"],
+      rows: byTime(records.defecation).map((r) => [...when(r.timestamp), r.amountEstimate, r.note]),
+    },
+    {
+      title: "Caffeine and alcohol",
+      headers: [
+        "timestamp",
+        "local_time",
+        "type",
+        "caffeine_mg",
+        "standard_drinks",
+        "abv_percent",
+        "volume_ml",
+        "description",
+      ],
+      rows: byTime(records.substances).map((r) => [
+        ...when(r.timestamp),
+        r.type,
+        r.amountMg,
+        r.amountStandardDrinks,
+        r.abvPercent,
+        r.volumeMl,
+        r.description,
+      ]),
+    },
+    {
+      title: "Dose logs",
+      headers: [
+        "scheduled_date",
+        "scheduled_time",
+        "medication",
+        "status",
+        "kind",
+        "action_time",
+        "dose_amount",
+        "dose_unit",
+        "pills_consumed",
+        "pill_strength",
+        "skip_reason",
+        "rescheduled_to",
+        "note",
+      ],
+      rows: doseLogs.map((l) => [
+        l.scheduledDate,
+        l.scheduledTime,
+        medNames.get(l.prescriptionId) ?? l.prescriptionId,
+        l.status,
+        l.kind ?? "scheduled",
+        l.actionTimestamp != null ? new Date(l.actionTimestamp).toISOString() : undefined,
+        l.doseAmount ?? l.doseMg,
+        l.doseUnit ?? (l.doseMg != null ? "mg" : undefined),
+        l.pillsConsumed,
+        l.pillStrength,
+        l.skipReason,
+        l.rescheduledTo,
+        l.note,
+      ]),
+    },
+  ];
+}
+
 /**
- * Export all domain records within a time range as a single CSV.
+ * Export every record in the range as one CSV with a section per record type
+ * ("# Title", header row, rows; sections separated by a blank line). Each
+ * section carries that type's own columns, so blood pressure keeps diastolic,
+ * heart rate, position and arm, meals keep their grams and notes, and dose
+ * logs are included. Empty sections are left out; nothing is downloaded when
+ * the range has no data.
  */
 export async function exportAllRecordsCSV(range: TimeRange): Promise<void> {
-  const domains: Domain[] = [
-    "water",
-    "salt",
-    "sugar",
-    "potassium",
-    "weight",
-    "bp",
-    "eating",
-    "urination",
-    "defecation",
-    "caffeine",
-    "alcohol",
-  ];
+  const resolved = await resolveExportRange(range);
+  const [records, doseLogs, prescriptions] = await Promise.all([
+    loadRecords(resolved),
+    loadDoseLogs(resolved),
+    db.prescriptions.toArray(),
+  ]);
+  const medNames = new Map(prescriptions.map((p) => [p.id, p.genericName]));
 
-  const allRows: string[][] = [];
+  const sections = buildSections(records, doseLogs, medNames).filter((s) => s.rows.length > 0);
+  if (sections.length === 0) return;
 
-  for (const domain of domains) {
-    const points = await getRecordsByDomain(domain, range);
-    for (const p of points) {
-      allRows.push([
-        new Date(p.timestamp).toISOString(),
-        domain,
-        String(p.value),
-        domainUnit(domain),
-        p.label ?? "",
-      ]);
-    }
-  }
+  const csvContent = sections
+    .map((s) =>
+      [
+        `# ${s.title}`,
+        s.headers.map(escapeCSVField).join(","),
+        ...s.rows.map((r) => r.map((v) => escapeCSVField(cell(v))).join(",")),
+      ].join("\n"),
+    )
+    .join("\n\n");
 
-  if (allRows.length === 0) return;
-
-  // Sort by timestamp
-  allRows.sort((a, b) => (a[0] ?? "").localeCompare(b[0] ?? ""));
-
-  const headers = ["timestamp", "domain", "value", "unit", "note"];
-  const csvContent = [
-    headers.join(","),
-    ...allRows.map((r) => r.map(escapeCSVField).join(",")),
-  ].join("\n");
-
-  const startDate = format(new Date(range.start), "yyyy-MM-dd");
-  const endDate = format(new Date(range.end), "yyyy-MM-dd");
+  const startDate = format(new Date(resolved.start), "yyyy-MM-dd");
+  const endDate = format(new Date(resolved.end), "yyyy-MM-dd");
   const filename = `health-data-${startDate}-${endDate}.csv`;
 
   const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
   triggerDownload(blob, filename);
 }
 
-function domainUnit(domain: Domain): string {
-  switch (domain) {
-    case "water":
-      return "ml";
-    case "salt":
-      return "mg";
-    case "sugar":
-      return "g";
-    case "potassium":
-      return "mg";
-    case "weight":
-      return "kg";
-    case "bp":
-      return "mmHg";
-    case "urination":
-      return "ml";
-    case "eating":
-      return "event";
-    case "defecation":
-      return "event";
-    case "caffeine":
-      return "mg";
-    case "alcohol":
-      return "std_drinks";
-    case "medication":
-      return "dose";
-    default:
-      return "";
-  }
-}
-
 // ---------------------------------------------------------------------------
 // PDF report
 // ---------------------------------------------------------------------------
+
+const RECENT_PER_DOMAIN = 10;
+const RECENT_TOTAL = 50;
+
+interface RecentRow {
+  timestamp: number;
+  domain: string;
+  value: string;
+}
+
+function recentRows(records: ExportRecords): RecentRow[][] {
+  const intake = (type: IntakeRecord["type"], label: string) =>
+    records.intake
+      .filter((r) => r.type === type)
+      .map((r) => ({ timestamp: r.timestamp, domain: label, value: `${r.amount} ${INTAKE_UNITS[type]}` }));
+  const substances = (type: SubstanceRecord["type"]) =>
+    records.substances
+      .filter((r) => r.type === type)
+      .map((r) => ({
+        timestamp: r.timestamp,
+        domain: type === "caffeine" ? "Caffeine" : "Alcohol",
+        value:
+          type === "caffeine"
+            ? `${r.amountMg ?? 0} mg`
+            : `${(r.amountStandardDrinks ?? 0).toFixed(1)} drinks`,
+      }));
+
+  return [
+    intake("water", "Water"),
+    intake("salt", "Sodium"),
+    intake("sugar", "Sugar"),
+    intake("potassium", "Potassium"),
+    records.weight.map((r) => ({ timestamp: r.timestamp, domain: "Weight", value: `${r.weight} kg` })),
+    records.bp.map((r) => ({
+      timestamp: r.timestamp,
+      domain: "Blood pressure",
+      value:
+        `${r.systolic}/${r.diastolic} mmHg` + (r.heartRate != null ? `, ${r.heartRate} bpm` : ""),
+    })),
+    records.eating.map((r) => ({
+      timestamp: r.timestamp,
+      domain: "Eating",
+      value: [r.note, r.grams != null ? `${r.grams} g` : ""].filter(Boolean).join(" · ") || "meal",
+    })),
+    records.urination.map((r) => ({
+      timestamp: r.timestamp,
+      domain: "Urination",
+      value: r.amountEstimate ? `${r.amountEstimate} (estimate)` : "logged",
+    })),
+    records.defecation.map((r) => ({
+      timestamp: r.timestamp,
+      domain: "Defecation",
+      value: r.amountEstimate ?? "logged",
+    })),
+    substances("caffeine"),
+    substances("alcohol"),
+  ];
+}
+
+/**
+ * Rows for the PDF "Recent Records" table: the newest records of each domain,
+ * merged newest first on the numeric timestamp, then cut to the newest 50.
+ * Dates carry the year when the range spans more than one.
+ */
+async function buildRecentRecordsTable(range: TimeRange): Promise<string[][]> {
+  const records = await loadRecords(range);
+  const rows = recentRows(records)
+    .flatMap((domainRows) =>
+      [...domainRows].sort((a, b) => b.timestamp - a.timestamp).slice(0, RECENT_PER_DOMAIN),
+    )
+    .sort((a, b) => b.timestamp - a.timestamp)
+    .slice(0, RECENT_TOTAL);
+
+  const crossesYear = new Date(range.start).getFullYear() !== new Date(range.end).getFullYear();
+  const dateFormat = crossesYear ? "MMM d, yyyy, HH:mm" : "MMM d, HH:mm";
+  return rows.map((r) => [format(r.timestamp, dateFormat), r.domain, r.value]);
+}
 
 /**
  * Generate and download a structured PDF health report for the given range.
  * All computation is client-side -- works offline.
  */
-export async function exportToPDF(range: TimeRange): Promise<void> {
+export async function exportToPDF(inputRange: TimeRange): Promise<void> {
+  const range = await resolveExportRange(inputRange);
   const [fluid, adherence, bp, weight] = await Promise.all([
     fluidBalance(range),
     adherenceRate(range),
@@ -262,27 +545,7 @@ export async function exportToPDF(range: TimeRange): Promise<void> {
 
   // Section 6: Recent Records table
   addSection("Recent Records");
-
-  // Gather recent records from all domains for the table
-  const tableData: string[][] = [];
-  const domains: Domain[] = ["water", "salt", "sugar", "potassium", "weight", "bp", "caffeine", "alcohol"];
-
-  for (const domain of domains) {
-    const points = await getRecordsByDomain(domain, range);
-    // Take last 10 per domain
-    const recent = points.slice(-10);
-    for (const p of recent) {
-      tableData.push([
-        format(new Date(p.timestamp), "MMM d, HH:mm"),
-        domain,
-        `${p.value} ${domainUnit(domain)}`,
-      ]);
-    }
-  }
-
-  // Sort by date desc, limit to 50
-  tableData.sort((a, b) => (b[0] ?? "").localeCompare(a[0] ?? ""));
-  const limitedData = tableData.slice(0, 50);
+  const limitedData = await buildRecentRecordsTable(range);
 
   if (limitedData.length > 0) {
     autoTable(doc, {
@@ -309,4 +572,7 @@ export async function exportToPDF(range: TimeRange): Promise<void> {
 }
 
 // Re-export for testing
-export { escapeCSVField as _escapeCSVField };
+export {
+  escapeCSVField as _escapeCSVField,
+  buildRecentRecordsTable as _buildRecentRecordsTable,
+};
