@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { Button } from "@intake/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTodayKey } from "@/hooks/use-today-key";
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -40,7 +41,11 @@ function formatDateLabel(date: Date): string {
 }
 
 export function WeekDaySelector({ selectedDate, onSelectDate }: WeekDaySelectorProps) {
-  const today = useMemo(() => new Date(), []);
+  // Re-derived from a ticking day key so the "Today" label and ring move at
+  // midnight instead of staying on the day the screen was mounted.
+  const todayKey = useTodayKey();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- todayKey is the rollover trigger
+  const today = useMemo(() => new Date(), [todayKey]);
 
   const weekStart = useMemo(() => startOfWeek(selectedDate), [selectedDate]);
 
