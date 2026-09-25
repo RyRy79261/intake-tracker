@@ -44,7 +44,7 @@ vi.mock("@intake/db/client", async () => {
 });
 
 import { mockState } from "@/lib/__tests__/ai-key-resolver-mock-state";
-import { resolveAiKey, NoAiKeyError } from "@/lib/ai-key-resolver";
+import { resolveAiKey, NoAiKeyError, KeyUnreadableError } from "@/lib/ai-key-resolver";
 import { encryptKey } from "@/lib/key-vault";
 
 type MockRow = Record<string, unknown>;
@@ -193,6 +193,47 @@ describe("resolveAiKey priority chain", () => {
     expect(result.apiKey).toBe("sk-ant-g7-wins");
     expect(result.keyOwnerId).toBe("g7");
     expect(result.source).toBe("shared_from");
+  });
+
+  it("throws KeyUnreadableError (own_stored) when the caller's own key can't be decrypted", async () => {
+    setOwnRow("alice", "sk-ant-alice-key");
+    // Rotating the master secret makes every stored blob unreadable.
+    process.env.API_KEY_ENCRYPTION_SECRET = randomBytes(32).toString("base64");
+
+    const error = await resolveAiKey("alice", "alice@example.com", "anthropic").catch(
+      (e: unknown) => e,
+    );
+    expect(error).toBeInstanceOf(KeyUnreadableError);
+    expect((error as KeyUnreadableError).source).toBe("own_stored");
+    expect((error as KeyUnreadableError).provider).toBe("anthropic");
+  });
+
+  it("skips a share whose blob can't be decrypted and uses the next readable grant", async () => {
+    setNoOwnRow();
+    setShareRows(["bob", "carol"]);
+    // bob's blob is bound to another user id, so AES-GCM rejects it.
+    mockRowsByCall[2] = [
+      { encrypted: encryptKey("sk-ant-bob", { userId: "mallory", provider: "anthropic" }) },
+    ];
+    setGrantorKey(3, "carol", "anthropic", "sk-ant-carol-key");
+
+    const result = await resolveAiKey("alice", "alice@example.com", "anthropic");
+    expect(result.apiKey).toBe("sk-ant-carol-key");
+    expect(result.keyOwnerId).toBe("carol");
+  });
+
+  it("throws KeyUnreadableError (shared_from) when the only share can't be decrypted", async () => {
+    setNoOwnRow();
+    setShareRows(["bob"]);
+    mockRowsByCall[2] = [
+      { encrypted: encryptKey("sk-ant-bob", { userId: "mallory", provider: "anthropic" }) },
+    ];
+
+    const error = await resolveAiKey("alice", "alice@example.com", "anthropic").catch(
+      (e: unknown) => e,
+    );
+    expect(error).toBeInstanceOf(KeyUnreadableError);
+    expect((error as KeyUnreadableError).source).toBe("shared_from");
   });
 
   it("resolves Groq independently of Anthropic", async () => {

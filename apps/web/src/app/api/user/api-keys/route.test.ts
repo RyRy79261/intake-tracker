@@ -140,8 +140,38 @@ describe("/api/user/api-keys", () => {
   });
 
   it("GET: exposes only configured + last4, never the encrypted blob", async () => {
+    const { encryptKey } = await import("@/lib/key-vault");
+    const encrypted = encryptKey("sk-ant-SUPER-SECRET-KEY-AB12", {
+      userId: "user-test",
+      provider: "anthropic",
+    });
     selectRow = {
       userId: "user-test",
+      anthropicKeyEncrypted: encrypted,
+      anthropicLast4: "AB12",
+      groqKeyEncrypted: null,
+      groqLast4: null,
+    };
+    const { GET } = await import("@/app/api/user/api-keys/route");
+    const res = await GET(new NextRequest(BASE, { method: "GET" }));
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      anthropic: { configured: boolean; last4: string; readable: boolean } | null;
+      groq: unknown;
+    };
+    expect(body.anthropic).toEqual({ configured: true, last4: "AB12", readable: true });
+    expect(body.groq).toBeNull();
+    // Neither the ciphertext nor the decrypted key may appear in the response.
+    expect(JSON.stringify(body)).not.toContain(encrypted);
+    expect(JSON.stringify(body)).not.toContain("SUPER-SECRET");
+  });
+
+  it("GET: reports a stored key that no longer decrypts as unreadable", async () => {
+    selectRow = {
+      userId: "user-test",
+      // Not decryptable under the current secret — what every stored key
+      // looks like after API_KEY_ENCRYPTION_SECRET is rotated.
       anthropicKeyEncrypted: "v1:aaa:bbb:ccc-SUPER-SECRET-CIPHERTEXT",
       anthropicLast4: "AB12",
       groqKeyEncrypted: null,
@@ -152,12 +182,9 @@ describe("/api/user/api-keys", () => {
 
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
-      anthropic: { configured: boolean; last4: string } | null;
-      groq: unknown;
+      anthropic: { configured: boolean; last4: string; readable: boolean } | null;
     };
-    expect(body.anthropic).toEqual({ configured: true, last4: "AB12" });
-    expect(body.groq).toBeNull();
-    // The encrypted ciphertext must never appear in the response.
+    expect(body.anthropic).toEqual({ configured: true, last4: "AB12", readable: false });
     expect(JSON.stringify(body)).not.toContain("SUPER-SECRET-CIPHERTEXT");
   });
 

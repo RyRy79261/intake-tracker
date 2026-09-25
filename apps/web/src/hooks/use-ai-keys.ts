@@ -9,6 +9,8 @@ export type AiProvider = "anthropic" | "groq";
 export interface KeyStatusEntry {
   configured: boolean;
   last4: string;
+  /** False when the stored key no longer decrypts and must be re-entered. */
+  readable?: boolean;
 }
 
 export interface KeyStatus {

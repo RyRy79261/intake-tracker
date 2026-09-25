@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomBytes } from "node:crypto";
-import { encryptKey, decryptKey, lastFourOf } from "@/lib/key-vault";
+import { encryptKey, decryptKey, lastFourOf, KeyDecryptError } from "@/lib/key-vault";
 
 describe("key-vault", () => {
   let originalSecret: string | undefined;
@@ -71,6 +71,40 @@ describe("key-vault", () => {
       expect(() =>
         encryptKey("x", { userId: "u", provider: "anthropic" }),
       ).toThrow(/API_KEY_ENCRYPTION_SECRET/);
+    } finally {
+      process.env.API_KEY_ENCRYPTION_SECRET = saved;
+    }
+  });
+
+  it("throws the typed KeyDecryptError when a blob can't be read (e.g. after secret rotation)", () => {
+    const blob = encryptKey("secret", { userId: "alice", provider: "anthropic" });
+    const saved = process.env.API_KEY_ENCRYPTION_SECRET;
+    process.env.API_KEY_ENCRYPTION_SECRET = randomBytes(32).toString("base64");
+    try {
+      expect(() =>
+        decryptKey(blob, { userId: "alice", provider: "anthropic" }),
+      ).toThrow(KeyDecryptError);
+    } finally {
+      process.env.API_KEY_ENCRYPTION_SECRET = saved;
+    }
+    expect(() =>
+      decryptKey("v1:notenough", { userId: "u", provider: "anthropic" }),
+    ).toThrow(KeyDecryptError);
+  });
+
+  it("keeps a missing secret a plain configuration error, not KeyDecryptError", () => {
+    const blob = encryptKey("secret", { userId: "alice", provider: "anthropic" });
+    const saved = process.env.API_KEY_ENCRYPTION_SECRET;
+    delete process.env.API_KEY_ENCRYPTION_SECRET;
+    try {
+      let caught: unknown;
+      try {
+        decryptKey(blob, { userId: "alice", provider: "anthropic" });
+      } catch (e) {
+        caught = e;
+      }
+      expect(caught).toBeInstanceOf(Error);
+      expect(caught).not.toBeInstanceOf(KeyDecryptError);
     } finally {
       process.env.API_KEY_ENCRYPTION_SECRET = saved;
     }
