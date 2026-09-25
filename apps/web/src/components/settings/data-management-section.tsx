@@ -2,11 +2,10 @@
 
 import { useRef, useState } from "react";
 import { Button } from "@intake/ui/button";
-import { Download, Upload, Trash2, AlertTriangle } from "lucide-react";
+import { Download, Upload, AlertTriangle } from "lucide-react";
 import {
   useDownloadBackup,
   useUploadBackup,
-  useClearAllData,
   type ImportResult,
 } from "@/hooks/use-backup-queries";
 import { ConflictReviewDrawer } from "@/components/settings/conflict-review-drawer";
@@ -15,7 +14,6 @@ import { useSyncStatusStore } from "@/stores/sync-status-store";
 
 export function DataManagementSection() {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [showImportConfirm, setShowImportConfirm] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [lastImportResult, setLastImportResult] = useState<ImportResult | null>(
@@ -26,7 +24,6 @@ export function DataManagementSection() {
 
   const downloadMut = useDownloadBackup();
   const uploadMut = useUploadBackup();
-  const clearMut = useClearAllData();
 
   const storageMode = useSettingsStore((s) => s.storageMode);
   const initialSyncComplete = useSyncStatusStore((s) => s.initialSyncComplete);
@@ -83,32 +80,6 @@ export function DataManagementSection() {
     }
   };
 
-  const handleClearData = () => {
-    clearMut.mutate(undefined, {
-      onSuccess: () => setShowClearConfirm(false),
-    });
-  };
-
-  const importTotal = lastImportResult
-    ? lastImportResult.intakeImported +
-      lastImportResult.weightImported +
-      lastImportResult.bpImported +
-      lastImportResult.eatingImported +
-      lastImportResult.urinationImported +
-      lastImportResult.defecationImported +
-      lastImportResult.substanceImported +
-      lastImportResult.prescriptionsImported +
-      lastImportResult.phasesImported +
-      lastImportResult.schedulesImported +
-      lastImportResult.inventoryItemsImported +
-      lastImportResult.inventoryTransactionsImported +
-      lastImportResult.doseLogsImported +
-      lastImportResult.titrationPlansImported +
-      lastImportResult.dailyNotesImported +
-      lastImportResult.auditLogsImported +
-      lastImportResult.userProfileImported +
-      lastImportResult.insightReportsImported
-    : 0;
 
   return (
     <div className="space-y-4">
@@ -178,8 +149,8 @@ export function DataManagementSection() {
             <div className="flex items-start gap-2">
               <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
               <p className="text-sm text-amber-800 dark:text-amber-200">
-                This will merge backup data with your existing data. New records
-                will be added, duplicates skipped.
+                This will merge backup data with your existing data. New and
+                deleted records will be restored, duplicates skipped.
               </p>
             </div>
             <div className="flex gap-2">
@@ -206,7 +177,7 @@ export function DataManagementSection() {
         {lastImportResult && (
           <div className="rounded-lg border p-3 space-y-2">
             <p className="text-sm text-muted-foreground">
-              Last import: {importTotal} new, {lastImportResult.skipped}{" "}
+              Last import: {lastImportResult.totalImported} new, {lastImportResult.skipped}{" "}
               skipped, {lastImportResult.conflicts.length} conflicts
             </p>
             {lastImportResult.conflicts.length > 0 && (
@@ -220,34 +191,8 @@ export function DataManagementSection() {
             )}
           </div>
         )}
-
-        {!showClearConfirm ? (
-          <Button
-            variant="outline"
-            className="w-full justify-start gap-2 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30"
-            onClick={() => setShowClearConfirm(true)}
-          >
-            <Trash2 className="w-4 h-4" />
-            Clear All Data
-          </Button>
-        ) : (
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              className="flex-1"
-              onClick={() => setShowClearConfirm(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              className="flex-1"
-              onClick={handleClearData}
-            >
-              Confirm Delete
-            </Button>
-          </div>
-        )}
+        {/* Deleting data lives in one place: the "Delete data" controls in
+            Storage settings (audit analytics-history-export#2). */}
       </div>
 
       <ConflictReviewDrawer
