@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { db } from "@/lib/db";
+import { formatLocalTime, localHHMMStringToUTCMinutes } from "@/lib/timezone";
 import {
   getDailyDoseSchedule,
   getDoseScheduleForDateRange,
@@ -27,10 +28,13 @@ async function seedPrescription(overrides?: {
   phaseStatus?: string;
   daysOfWeek?: number[];
   scheduleTimeUTC?: number;
+  time?: string;
+  anchorTimezone?: string;
   dosage?: number;
   enabled?: boolean;
   createdAt?: number;
 }) {
+  const utcMinutes = overrides?.scheduleTimeUTC ?? 480;
   const rx = makePrescription({
     isActive: overrides?.isActive ?? true,
     createdAt: overrides?.createdAt ?? 1700000000000,
@@ -39,8 +43,10 @@ async function seedPrescription(overrides?: {
     status: (overrides?.phaseStatus ?? "active") as "active" | "completed" | "pending",
   });
   const schedule = makePhaseSchedule(phase.id, {
-    scheduleTimeUTC: overrides?.scheduleTimeUTC ?? 480, // 08:00 UTC
-    anchorTimezone: "UTC",
+    scheduleTimeUTC: utcMinutes, // 08:00 UTC by default
+    // `time` is canonical; with the default UTC anchor it mirrors the cache.
+    time: overrides?.time ?? formatLocalTime(utcMinutes, "UTC"),
+    anchorTimezone: overrides?.anchorTimezone ?? "UTC",
     daysOfWeek: overrides?.daysOfWeek ?? [0, 1, 2, 3, 4, 5, 6],
     dosage: overrides?.dosage ?? 50,
     enabled: overrides?.enabled ?? true,
@@ -172,6 +178,7 @@ describe("getDailyDoseSchedule", () => {
     });
     const eveningSchedule = makePhaseSchedule(phase.id, {
       scheduleTimeUTC: 1080, // 18:00 UTC
+      time: "18:00",
       anchorTimezone: "UTC",
       daysOfWeek: [2],
       dosage: 25,
@@ -405,10 +412,11 @@ describe("timezone behavior", () => {
 describe("DST transition handling", () => {
   it("produces correct local time for Africa/Johannesburg (no DST, always UTC+2)", async () => {
     // 08:30 local in SAST (UTC+2) = 06:30 UTC = 390 minutes
-    const { schedule } = await seedPrescription({
+    await seedPrescription({
       scheduleTimeUTC: 390,
+      time: "08:30",
+      anchorTimezone: "Africa/Johannesburg",
     });
-    await db.phaseSchedules.update(schedule.id, { anchorTimezone: "Africa/Johannesburg" });
 
     const result = await getDailyDoseSchedule(TUESDAY, "Africa/Johannesburg");
     expect(result).toHaveLength(1);
@@ -416,23 +424,17 @@ describe("DST transition handling", () => {
   });
 
   it("produces correct local time for Europe/Berlin (has DST)", async () => {
-    // 08:30 local in CET (UTC+1 winter) = 07:30 UTC = 450 minutes
-    // 08:30 local in CEST (UTC+2 summer) = 06:30 UTC = 390 minutes
-    // The key: scheduleTimeUTC is fixed at creation time.
-    // When queried, utcMinutesToLocalTime uses the CURRENT offset.
-    // So the local time displayed shifts by 1 hour between winter and summer.
-    // This is expected behavior — the dose fires at the same UTC instant.
-    const { schedule } = await seedPrescription({
-      scheduleTimeUTC: 450, // 07:30 UTC (= 08:30 CET in winter)
+    // `time` + anchor is canonical; the stale 450 cache (08:30 CET) is ignored,
+    // so the slot shows 08:30 whichever season the test runs in.
+    await seedPrescription({
+      scheduleTimeUTC: 450,
+      time: "08:30",
+      anchorTimezone: "Europe/Berlin",
     });
-    await db.phaseSchedules.update(schedule.id, { anchorTimezone: "Europe/Berlin" });
 
     const result = await getDailyDoseSchedule(TUESDAY, "Europe/Berlin");
     expect(result).toHaveLength(1);
-    // The local time depends on whether the test is running in winter or summer
-    // In both cases it should be a valid HH:MM string
-    expect(result[0]!.localTime).toMatch(/^\d{2}:\d{2}$/);
-    // And the slot should always be generated (not dropped)
+    expect(result[0]!.localTime).toBe("08:30");
     expect(result[0]!.dosageMg).toBe(50);
   });
 
@@ -453,5 +455,93 @@ describe("DST transition handling", () => {
     // Either way, the result should be a valid number different from or equal to SA depending on season
     expect(deUTC).toBeGreaterThanOrEqual(0);
     expect(deUTC).toBeLessThan(1440);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Berlin DST crossings (doses-titration-schedule#7, #24)
+// ---------------------------------------------------------------------------
+
+// Node re-reads process.env.TZ on assignment; assigning undefined would set
+// the literal string "undefined", so delete instead.
+function restoreTZ(original: string | undefined) {
+  if (original === undefined) delete process.env.TZ;
+  else process.env.TZ = original;
+}
+
+describe("Berlin DST crossings (TZ=Europe/Berlin)", () => {
+  const originalTZ = process.env.TZ;
+
+  afterEach(() => {
+    vi.useRealTimers();
+    restoreTZ(originalTZ);
+  });
+
+  function useBerlinClock(iso: string) {
+    process.env.TZ = "Europe/Berlin";
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date(iso) });
+  }
+
+  // 2026-10-25: CEST -> CET. 2027-03-28: CET -> CEST. Every day selected.
+  it.each([
+    ["2026-10-24", "2026-11-02T09:00:00Z"],
+    ["2026-10-25", "2026-11-02T09:00:00Z"],
+    ["2026-10-26", "2026-11-02T09:00:00Z"],
+    ["2027-03-27", "2027-04-05T09:00:00Z"],
+    ["2027-03-28", "2027-04-05T09:00:00Z"],
+    ["2027-03-29", "2027-04-05T09:00:00Z"],
+  ])("an 08:30 dose saved in summer stays 08:30 on %s", async (day, now) => {
+    // Saved on 2026-09-25 (CEST): the UTC cache holds 06:30.
+    useBerlinClock("2026-09-25T10:00:00Z");
+    const savedUTC = localHHMMStringToUTCMinutes("08:30", "Europe/Berlin");
+    expect(savedUTC).toBe(390);
+    await seedPrescription({
+      scheduleTimeUTC: savedUTC,
+      time: "08:30",
+      anchorTimezone: "Europe/Berlin",
+      createdAt: new Date("2026-09-25T10:00:00Z").getTime(),
+    });
+
+    // Read after the shift, when "today's offset" differs from the saved one.
+    vi.setSystemTime(new Date(now));
+    const slots = await getDailyDoseSchedule(day, "Europe/Berlin");
+    expect(slots).toHaveLength(1);
+    expect(slots[0]!.localTime).toBe("08:30");
+  });
+
+  it("an 08:30 dose saved in winter stays 08:30 after spring-forward", async () => {
+    useBerlinClock("2027-01-15T10:00:00Z");
+    await seedPrescription({
+      scheduleTimeUTC: localHHMMStringToUTCMinutes("08:30", "Europe/Berlin"), // 450
+      time: "08:30",
+      anchorTimezone: "Europe/Berlin",
+      createdAt: new Date("2027-01-15T10:00:00Z").getTime(),
+    });
+
+    vi.setSystemTime(new Date("2027-04-05T09:00:00Z"));
+    const slots = await getDailyDoseSchedule("2027-03-29", "Europe/Berlin");
+    expect(slots[0]!.localTime).toBe("08:30");
+  });
+});
+
+describe("prescription creation cutoff uses the local date", () => {
+  const originalTZ = process.env.TZ;
+
+  afterEach(() => {
+    restoreTZ(originalTZ);
+  });
+
+  it("shows the creation day's doses west of UTC for an evening creation", async () => {
+    process.env.TZ = "America/New_York";
+    // 2026-09-24 20:00 in New York is already 2026-09-25 in UTC.
+    await seedPrescription({
+      time: "21:00",
+      anchorTimezone: "America/New_York",
+      createdAt: new Date("2026-09-25T00:00:00Z").getTime(),
+    });
+
+    const slots = await getDailyDoseSchedule("2026-09-24", "America/New_York");
+    expect(slots).toHaveLength(1);
+    expect(slots[0]!.localTime).toBe("21:00");
   });
 });

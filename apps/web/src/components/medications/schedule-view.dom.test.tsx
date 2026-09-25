@@ -10,7 +10,8 @@ import {
   makePhaseSchedule,
   makeInventoryItem,
 } from "@/__tests__/fixtures/db-fixtures";
-import { formatLocalTime, getDeviceTimezone } from "@/lib/timezone";
+import { getDeviceTimezone, resolveScheduleLocalTime } from "@/lib/timezone";
+import { toLocalDateKey } from "@/lib/date-utils";
 
 /**
  * ScheduleView builds today's dose schedule from the seeded IndexedDB via
@@ -18,8 +19,8 @@ import { formatLocalTime, getDeviceTimezone } from "@/lib/timezone";
  * slot is produced for whatever "today" is when the test runs.
  *
  * A slot's display time (and the `time-slot-<time>` anchor id) is derived from
- * `scheduleTimeUTC` converted into the device timezone — not from the schedule
- * `time` field — so tests resolve the expected id via `formatLocalTime`.
+ * wall-clock `time` in its `anchorTimezone` resolved for today into the device
+ * timezone, so tests resolve the expected id via `resolveScheduleLocalTime`.
  */
 describe("ScheduleView", () => {
   it("renders the empty-schedule state when no medications are seeded", async () => {
@@ -40,14 +41,14 @@ describe("ScheduleView", () => {
 
   it("renders a time-slot group for a seeded dose at its scheduled time", async () => {
     const tz = getDeviceTimezone();
-    const utcMinutes = 855; // 14:15 UTC
-    const localTime = formatLocalTime(utcMinutes, tz);
+    const wallClock = { time: "14:15", anchorTimezone: "UTC", scheduleTimeUTC: 855 };
+    const localTime = resolveScheduleLocalTime(wallClock, toLocalDateKey(), tz);
 
     const prescription = makePrescription({ genericName: "Spironolactone" });
     const phase = makeMedicationPhase(prescription.id);
     const schedule = makePhaseSchedule(phase.id, {
       dosage: 25,
-      scheduleTimeUTC: utcMinutes,
+      ...wallClock,
     });
     const inventory = makeInventoryItem(prescription.id, {
       prescriptionId: prescription.id,
@@ -80,8 +81,8 @@ describe("ScheduleView", () => {
 
   it("groups two same-time doses into a single time slot", async () => {
     const tz = getDeviceTimezone();
-    const utcMinutes = 1200; // 20:00 UTC
-    const localTime = formatLocalTime(utcMinutes, tz);
+    const wallClock = { time: "20:00", anchorTimezone: "UTC", scheduleTimeUTC: 1200 };
+    const localTime = resolveScheduleLocalTime(wallClock, toLocalDateKey(), tz);
 
     const rxA = makePrescription({ genericName: "DrugAlpha" });
     const rxB = makePrescription({ genericName: "DrugBeta" });
@@ -89,11 +90,11 @@ describe("ScheduleView", () => {
     const phaseB = makeMedicationPhase(rxB.id);
     const schedA = makePhaseSchedule(phaseA.id, {
       dosage: 10,
-      scheduleTimeUTC: utcMinutes,
+      ...wallClock,
     });
     const schedB = makePhaseSchedule(phaseB.id, {
       dosage: 20,
-      scheduleTimeUTC: utcMinutes,
+      ...wallClock,
     });
 
     await renderWithFixtures(
