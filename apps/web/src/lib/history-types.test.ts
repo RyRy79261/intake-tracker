@@ -138,6 +138,20 @@ describe("groupRecordsByDate", () => {
     const key = [...groups.keys()][0]!;
     expect(groups.get(key)).toEqual([waterRec, saltRec, sugarRec]);
   });
+
+  it("groups by logical day when given a dayStartHour", () => {
+    const evening: UnifiedRecord = {
+      type: "intake",
+      record: makeIntakeRecord({ timestamp: Date.UTC(2023, 10, 14, 22, 0) }),
+    };
+    const lateNight: UnifiedRecord = {
+      type: "intake",
+      record: makeIntakeRecord({ timestamp: Date.UTC(2023, 10, 15, 1, 30) }),
+    };
+
+    const groups = groupRecordsByDate([lateNight, evening], { dayStartHour: 2, tz: "UTC" });
+    expect([...groups.entries()]).toEqual([["Tue, Nov 14, 2023", [lateNight, evening]]]);
+  });
 });
 
 describe("filterRecords", () => {

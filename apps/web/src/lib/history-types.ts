@@ -1,4 +1,5 @@
 import { type IntakeRecord, type WeightRecord, type BloodPressureRecord, type EatingRecord, type UrinationRecord, type DefecationRecord, type SubstanceRecord } from "@/lib/db";
+import { logicalDayKey } from "@intake/core/logical-day";
 
 /** Unified record type for display in history */
 export type UnifiedRecord =
@@ -23,18 +24,42 @@ export function getRecordId(unified: UnifiedRecord): string {
   return unified.record.id;
 }
 
-/** Group records by date for display */
-export function groupRecordsByDate(records: UnifiedRecord[]): Map<string, UnifiedRecord[]> {
+const DATE_LABEL_OPTIONS: Intl.DateTimeFormatOptions = {
+  weekday: "short",
+  year: "numeric",
+  month: "short",
+  day: "numeric",
+};
+
+/**
+ * Group records by date for display, keyed by a label like "Tue, Nov 14, 2023".
+ *
+ * With `logicalDay`, a record before `dayStartHour` in `tz` is grouped under
+ * the previous date, matching the dashboard's day. Without it, groups follow
+ * local calendar midnight.
+ */
+export function groupRecordsByDate(
+  records: UnifiedRecord[],
+  logicalDay?: { dayStartHour: number; tz: string },
+): Map<string, UnifiedRecord[]> {
   const groups = new Map<string, UnifiedRecord[]>();
+  const labels = new Map<string, string>();
 
   for (const unified of records) {
-    const date = new Date(getRecordTimestamp(unified));
-    const dateKey = date.toLocaleDateString("en-US", {
-      weekday: "short",
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
+    const ts = getRecordTimestamp(unified);
+    let dateKey: string;
+    if (logicalDay) {
+      const key = logicalDayKey(ts, logicalDay.dayStartHour, logicalDay.tz);
+      let label = labels.get(key);
+      if (label === undefined) {
+        const [y, m, d] = key.split("-").map(Number);
+        label = new Date(y!, m! - 1, d!, 12).toLocaleDateString("en-US", DATE_LABEL_OPTIONS);
+        labels.set(key, label);
+      }
+      dateKey = label;
+    } else {
+      dateKey = new Date(ts).toLocaleDateString("en-US", DATE_LABEL_OPTIONS);
+    }
 
     if (!groups.has(dateKey)) {
       groups.set(dateKey, []);

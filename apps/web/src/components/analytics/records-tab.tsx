@@ -44,6 +44,7 @@ import { useUpdateSubstance } from "@/hooks/use-substance-queries";
 import { useToast } from "@intake/ui/use-toast";
 import { useKeyboardAwareScroll } from "@/hooks/use-keyboard-scroll";
 import { cn } from "@/lib/utils";
+import { getDeviceTimezone } from "@/lib/timezone";
 import {
   timestampToDateTimeLocal,
   dateTimeLocalToTimestamp,
@@ -74,6 +75,10 @@ function parseDateTimeLocalOrNull(value: string): number | null {
   }
 }
 
+function entriesLabel(count: number): string {
+  return `${count} ${count === 1 ? "entry" : "entries"}`;
+}
+
 interface RecordsTabProps {
   range: TimeRange;
 }
@@ -87,7 +92,7 @@ const FILTER_TABS: {
 }[] = [
   { value: "all", label: "All" },
   { value: "water", label: "Water" },
-  { value: "salt", label: "Salt" },
+  { value: "salt", label: "Sodium" },
   { value: "sugar", label: "Sugar", optional: "sugar" },
   { value: "potassium", label: "K", optional: "potassium" },
   { value: "weight", label: "Weight" },
@@ -181,8 +186,15 @@ export function RecordsTab({ range }: RecordsTabProps) {
   const visibleRecords = filteredRecords.slice(0, visibleEnd);
   const hasMore = visibleEnd < filteredRecords.length;
 
-  const groupedRecords = groupRecordsByDate(visibleRecords);
+  // Day groups follow the dashboard's logical day. The header counts come
+  // from the whole filtered list so a day split across pages isn't undercounted.
+  const logicalDay = { dayStartHour: settings.dayStartHour, tz: getDeviceTimezone() };
+  const groupedRecords = groupRecordsByDate(visibleRecords, logicalDay);
   const dateGroups = Array.from(groupedRecords.entries());
+  const dayCounts = new Map<string, number>();
+  groupRecordsByDate(filteredRecords, logicalDay).forEach((recs, date) =>
+    dayCounts.set(date, recs.length),
+  );
 
   // Delete handler
   const handleDelete = useCallback(async (unified: UnifiedRecord) => {
@@ -431,7 +443,7 @@ export function RecordsTab({ range }: RecordsTabProps) {
                   <Calendar className="w-4 h-4" />
                   {date}
                   <span className="text-xs bg-muted px-2 py-0.5 rounded-full">
-                    {dayRecords.length} {dayRecords.length === 1 ? "entry" : "entries"}
+                    {entriesLabel(dayCounts.get(date) ?? dayRecords.length)}
                   </span>
                 </div>
                 <div className="border-t border-border/50">
