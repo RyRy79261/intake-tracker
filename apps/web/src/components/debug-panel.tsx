@@ -286,7 +286,12 @@ function StockManagement() {
   const [isLoadingComparisons, setIsLoadingComparisons] = useState(false);
 
   const activeItems = useLiveQuery(
-    () => db.inventoryItems.where("isActive").equals(1).toArray(),
+    // Booleans are not IndexedDB keys, so `isActive` is not indexed (dropped
+    // in Dexie v23) — load the table and filter in JS.
+    async () =>
+      (await db.inventoryItems.toArray()).filter(
+        (i) => i.isActive === true && i.deletedAt == null,
+      ),
     [],
     [],
   );
