@@ -12,7 +12,9 @@
     "./service": "./src/service-result.ts",
     "./security": "./src/security.ts",
     "./shake": "./src/shake-detector.ts",
-    "./analytics-stats": "./src/analytics-stats.ts"
+    "./analytics-stats": "./src/analytics-stats.ts",
+    "./lifecycle": "./src/lifecycle.ts",
+    "./effective-phase": "./src/effective-phase.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
