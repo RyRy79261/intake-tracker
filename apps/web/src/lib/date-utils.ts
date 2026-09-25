@@ -2,6 +2,8 @@
  * Date/time utility functions shared across components.
  */
 
+import { useSettingsStore } from "@/stores/settings-store";
+
 /**
  * Get current datetime in local format for HTML datetime-local inputs.
  * Returns a string like "2024-01-15T14:30"
@@ -76,28 +78,57 @@ export function toLocalDateKey(value: Date | number = new Date()): string {
  */
 export const WEEK_STARTS_ON = 0;
 
+export type TimeFormat = "12h" | "24h";
+
+/** The user's Time Format setting (Medications → Settings → Display). */
+function currentTimeFormat(): TimeFormat {
+  return useSettingsStore.getState().timeFormat === "12h" ? "12h" : "24h";
+}
+
+function clockOptions(timeFormat: TimeFormat): Intl.DateTimeFormatOptions {
+  // hourCycle h23 (not hour12: false) so midnight reads "00:05", not "24:05".
+  return timeFormat === "12h"
+    ? { hour: "numeric", minute: "2-digit", hour12: true }
+    : { hour: "2-digit", minute: "2-digit", hourCycle: "h23" };
+}
+
 /**
- * Format a timestamp as time only (e.g., "2:30 PM").
+ * Format a timestamp as time only ("14:30", or "2:30 PM" in 12-hour mode).
  * Used for compact displays where date isn't needed.
  */
-export function formatTimeOnly(timestamp: number): string {
-  return new Date(timestamp).toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
+export function formatTimeOnly(
+  timestamp: number,
+  timeFormat: TimeFormat = currentTimeFormat()
+): string {
+  return new Date(timestamp).toLocaleTimeString("en-US", clockOptions(timeFormat));
+}
+
+/**
+ * Format a timestamp with date and time ("Jan 15, 14:30" / "Jan 15, 2:30 PM").
+ * Used for displays showing recent records across days.
+ */
+export function formatDateTime(
+  timestamp: number,
+  timeFormat: TimeFormat = currentTimeFormat()
+): string {
+  return new Date(timestamp).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    ...clockOptions(timeFormat),
   });
 }
 
 /**
- * Format a timestamp with date and time (e.g., "Jan 15, 2:30 PM").
- * Used for displays showing recent records across days.
+ * Format a wall-clock "HH:mm" string (e.g. a schedule's time) in the user's
+ * Time Format, so dose times can match record times.
  */
-export function formatDateTime(timestamp: number): string {
-  return new Date(timestamp).toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
+export function formatClockTime(
+  hhmm: string,
+  timeFormat: TimeFormat = currentTimeFormat()
+): string {
+  const [h, m] = hhmm.split(":").map(Number);
+  if (h === undefined || m === undefined || Number.isNaN(h) || Number.isNaN(m)) {
+    return hhmm;
+  }
+  return formatTimeOnly(new Date(2000, 0, 1, h, m).getTime(), timeFormat);
 }
