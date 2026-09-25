@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { cn, formatAmount, generateId, getLiquidTypeLabel } from "@/lib/utils";
+import {
+  baseSyncFields,
+  cn,
+  formatAmount,
+  generateId,
+  getLiquidTypeLabel,
+  syncFields,
+} from "@/lib/utils";
 import type { LiquidPreset } from "@/lib/constants";
 
 describe("cn", () => {
@@ -48,6 +55,27 @@ describe("generateId", () => {
   it("produces unique values across calls", () => {
     const ids = new Set(Array.from({ length: 100 }, () => generateId()));
     expect(ids.size).toBe(100);
+  });
+});
+
+describe("syncFields / baseSyncFields", () => {
+  it("syncFields stamps timezone for tables that declare it", () => {
+    const f = syncFields();
+    expect(typeof f.timezone).toBe("string");
+    expect(f.deletedAt).toBeNull();
+    expect(f.createdAt).toBe(f.updatedAt);
+  });
+
+  // Prescription / MedicationPhase / PhaseSchedule / TitrationPlan /
+  // UserProfile / InsightReport have no `timezone` field, locally or on the
+  // server — spreading one in wrote an untyped, local-only value that was
+  // dropped on the first sync round-trip (dexie-schema#15).
+  it("baseSyncFields omits timezone", () => {
+    const f = baseSyncFields();
+    expect(f).not.toHaveProperty("timezone");
+    expect(Object.keys(f).sort()).toEqual(
+      ["createdAt", "deletedAt", "deviceId", "updatedAt"],
+    );
   });
 });
 

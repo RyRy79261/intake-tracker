@@ -1,7 +1,7 @@
 import { db, type PhaseSchedule, type Prescription, type MedicationPhase, type InventoryItem } from "@/lib/db";
 import { ok, err } from "@intake/core/service";
 import type { ServiceResult } from "@intake/types/service";
-import { syncFields } from "@/lib/utils";
+import { baseSyncFields } from "@/lib/utils";
 import { getDeviceTimezone, localHHMMStringToUTCMinutes } from "@/lib/timezone";
 import { buildAuditEntry } from "@/lib/audit-service";
 import { enqueueInsideTx } from "@/lib/sync-queue";
@@ -97,7 +97,7 @@ export async function addSchedule(
       enabled: true,
       scheduleTimeUTC: localHHMMStringToUTCMinutes(input.time, tz),
       anchorTimezone: tz,
-      ...syncFields(),
+      ...baseSyncFields(),
     };
     await db.transaction("rw", [db.phaseSchedules, db.auditLogs, db._syncQueue], async () => {
       await db.phaseSchedules.add(schedule);

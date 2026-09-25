@@ -45,9 +45,21 @@ export function getDeviceId(): string {
   return "server";
 }
 
-export function syncFields() {
+/**
+ * Sync scaffolding for a new record on a table WITHOUT a `timezone` field:
+ * Prescription, MedicationPhase, PhaseSchedule (it has `anchorTimezone`),
+ * TitrationPlan, UserProfile and InsightReport. Neither their interfaces nor
+ * their server tables carry `timezone`, so writing one only leaves an untyped
+ * local-only value that the first sync round-trip drops.
+ */
+export function baseSyncFields() {
   const now = Date.now();
-  return { createdAt: now, updatedAt: now, deletedAt: null as null, deviceId: getDeviceId(), timezone: getDeviceTimezone() };
+  return { createdAt: now, updatedAt: now, deletedAt: null as null, deviceId: getDeviceId() };
+}
+
+/** Sync scaffolding plus the device `timezone`, for tables that declare it. */
+export function syncFields() {
+  return { ...baseSyncFields(), timezone: getDeviceTimezone() };
 }
 
 /**

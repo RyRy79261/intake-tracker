@@ -153,6 +153,28 @@ describe("addSchedule", () => {
     const schedules = await getSchedulesForPhase(phase.id);
     expect(schedules).toHaveLength(1);
   });
+
+  it("does not write a local-only timezone field (PhaseSchedule has anchorTimezone)", async () => {
+    const rx = makePrescription({ id: "rx-add-tz" });
+    const phase = makeMedicationPhase(rx.id, { id: "phase-add-tz" });
+    await db.prescriptions.add(rx);
+    await db.medicationPhases.add(phase);
+
+    const result = await addSchedule({
+      phaseId: phase.id,
+      time: "09:00",
+      dosage: 25,
+      daysOfWeek: [1],
+      scheduleTimeUTC: 0,
+      anchorTimezone: "UTC",
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+
+    const stored = await db.phaseSchedules.get(result.data.id);
+    expect(stored).toBeDefined();
+    expect(stored).not.toHaveProperty("timezone");
+  });
 });
 
 describe("updateSchedule", () => {
