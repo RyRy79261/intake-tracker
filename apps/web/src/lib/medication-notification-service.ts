@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { showNotification, getNotificationPermission } from "@/lib/push-notification-service";
-import { getSchedulesForPhase } from "@/lib/medication-schedule-service";
+import { getRefillStatuses, reconcileRefillNotifications } from "@/lib/refill-status";
 import { isCombo, splitDose, formatCompoundShort } from "@intake/core/compound";
 
 const MED_NOTIFICATION_KEY = "intake-tracker-med-notifications";
@@ -51,11 +51,12 @@ async function showDoseReminder(
   });
 }
 
-async function showRefillAlert(brandName: string, dosageStrength: string, id: string, currentStock: number, daysLeft: number): Promise<boolean> {
+async function showRefillAlert(brandName: string, dosageStrength: string, id: string, currentStock: number, daysLeft: number | null): Promise<boolean> {
   if (getNotificationPermission() !== "granted") return false;
 
+  const supply = daysLeft === null ? "" : ` (~${daysLeft} days)`;
   return showNotification(`Refill needed: ${brandName}`, {
-    body: `${currentStock} pills left (~${daysLeft} days). Time to refill ${brandName} ${dosageStrength}.`,
+    body: `${currentStock} pills left${supply}. Time to refill ${brandName} ${dosageStrength}.`,
     tag: `refill-${id}`,
   });
 }
@@ -140,58 +141,28 @@ async function checkRefillAlerts(): Promise<void> {
     return;
   }
 
-  const allRxs = await db.prescriptions.toArray();
-  const activePrescriptions = allRxs.filter(p => p.isActive === true);
-  const newRefillNotifications: string[] = [];
+  // Same decision as the cards and the inventory drawer (computeRefillStatus
+  // over the effective phase). A prescription drops out of notifiedRefills once
+  // it no longer needs a refill, so running low again alerts again.
+  const statuses = await getRefillStatuses();
+  const { toNotify, notified } = reconcileRefillNotifications(state.notifiedRefills, statuses);
 
-  for (const prescription of activePrescriptions) {
-    const activePhase = await db.medicationPhases
-      .where("prescriptionId")
-      .equals(prescription.id)
-      .toArray()
-      .then(phases => phases.find(p => p.status === "active"));
-
-    if (!activePhase) continue;
-
-    let schedules;
-    try {
-      schedules = await getSchedulesForPhase(activePhase.id);
-    } catch {
-      continue;
-    }
-
-    const inventories = await db.inventoryItems.where("prescriptionId").equals(prescription.id).toArray();
-    const activeInventory = inventories.find(i => i.isActive && !i.isArchived);
-
-    if (!activeInventory) continue;
-
-    const stock = activeInventory.currentStock ?? 0;
-    const dailyDosage = schedules.reduce((acc, sched) => acc + (sched.dosage * (sched.daysOfWeek.length / 7)), 0);
-    const dailyPills = activeInventory.strength > 0 ? dailyDosage / activeInventory.strength : 0;
-
-    const daysLeft = dailyPills > 0 ? Math.floor(stock / dailyPills) : Infinity;
-
-    let shouldAlert = false;
-    if (activeInventory.refillAlertDays !== undefined && daysLeft <= activeInventory.refillAlertDays) shouldAlert = true;
-    if (activeInventory.refillAlertPills !== undefined && stock <= activeInventory.refillAlertPills) shouldAlert = true;
-
-    if (shouldAlert && !state.notifiedRefills.includes(prescription.id)) {
-      await showRefillAlert(
-        activeInventory.brandName || prescription.genericName,
-        isCombo(activeInventory)
-          ? formatCompoundShort(activeInventory.compounds, activeInventory.unit)
-          : `${activeInventory.strength}${activeInventory.unit}`,
-        prescription.id,
-        stock,
-        daysLeft
-      );
-      newRefillNotifications.push(prescription.id);
-    }
+  for (const { prescriptionId, prescription, inventory, status } of statuses) {
+    if (!toNotify.includes(prescriptionId)) continue;
+    await showRefillAlert(
+      inventory.brandName || prescription.genericName,
+      isCombo(inventory)
+        ? formatCompoundShort(inventory.compounds, inventory.unit)
+        : `${inventory.strength}${inventory.unit}`,
+      prescriptionId,
+      status.stock,
+      status.daysLeft,
+    );
   }
 
   saveState({
     lastRefillCheck: now,
-    notifiedRefills: [...state.notifiedRefills, ...newRefillNotifications],
+    notifiedRefills: notified,
   });
 }
 
