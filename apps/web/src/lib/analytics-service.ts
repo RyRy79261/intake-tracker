@@ -8,7 +8,7 @@ import { getUrinationRecordsByDateRange } from "@/lib/urination-service";
 import { getEatingRecordsByDateRange } from "@/lib/eating-service";
 import { getDefecationRecordsByDateRange } from "@/lib/defecation-service";
 import { getSubstanceRecordsByDateRange as querySubstanceRecordsByDateRange } from "@/lib/substance-service";
-import { getDoseScheduleForDateRange } from "@/lib/dose-schedule-service";
+import { getDoseScheduleForDateRange, type DoseSlot } from "@/lib/dose-schedule-service";
 import type { SubstanceRecord } from "@/lib/db";
 import { trend as computeTrend, correlateTimeSeries } from "@/lib/analytics-stats";
 import { getDeviceTimezone } from "@/lib/timezone";
@@ -273,6 +273,19 @@ export async function fluidBalance(
 }
 
 /**
+ * Whether a slot counts toward adherence: anything already logged or missed,
+ * but not a pending dose whose scheduled time has not arrived yet (ranges
+ * ending today would otherwise be penalised for tonight's dose).
+ */
+function isAdherenceDue(slot: DoseSlot, now: number): boolean {
+  if (slot.status !== "pending") return true;
+  const [h, m] = slot.localTime.split(":").map(Number);
+  const due = new Date(slot.scheduledDate + "T00:00:00");
+  due.setHours(h ?? 0, m ?? 0, 0, 0);
+  return due.getTime() <= now;
+}
+
+/**
  * Medication adherence rate.
  */
 export async function adherenceRate(
@@ -283,15 +296,16 @@ export async function adherenceRate(
   const endDate = format(new Date(range.end), "yyyy-MM-dd");
 
   const scheduleMap = await getDoseScheduleForDateRange(startDate, endDate);
+  const now = Date.now();
 
   let totalTaken = 0;
   let totalSlots = 0;
   const dailyEntries: AdherenceResult["daily"] = [];
 
   scheduleMap.forEach((slots, date) => {
-    const filteredSlots = prescriptionId
-      ? slots.filter((s) => s.prescriptionId === prescriptionId)
-      : slots;
+    const filteredSlots = (
+      prescriptionId ? slots.filter((s) => s.prescriptionId === prescriptionId) : slots
+    ).filter((s) => isAdherenceDue(s, now));
 
     const dayTotal = filteredSlots.length;
     const dayTaken = filteredSlots.filter((s) => s.status === "taken").length;
