@@ -6,10 +6,12 @@ import {
   addEatingRecord,
   getEatingRecords,
   getEatingRecordsByDateRange,
-  updateEatingRecord,
-  deleteEatingRecord,
-  undoDeleteEatingRecord,
 } from "@/lib/eating-service";
+import {
+  deleteEatingEntry,
+  undoDeleteEatingEntry,
+  updateEatingEntry,
+} from "@/lib/composable-entry-service";
 import { unwrap } from "@intake/core/service";
 import { useUndoDeleteMutation } from "@/hooks/use-undo-delete-mutation";
 
@@ -21,7 +23,8 @@ export type AddEatingParams = {
 
 export type UpdateEatingParams = {
   id: string;
-  updates: { timestamp?: number; note?: string; grams?: number };
+  /** `note`: key present with `undefined` clears it; key absent leaves it. */
+  updates: { timestamp?: number; note?: string | undefined; grams?: number };
 };
 
 export function useEatingRecords(limit: number = 10) {
@@ -46,17 +49,25 @@ export function useAddEating() {
   });
 }
 
+/**
+ * Hook to edit a meal's time / note / grams. A time change moves the meal's
+ * linked sodium, water, sugar and potassium rows with it.
+ */
 export function useUpdateEating() {
   return useMutation({
     mutationFn: async (params: UpdateEatingParams) =>
-      unwrap(await updateEatingRecord(params.id, params.updates)),
+      unwrap(await updateEatingEntry(params.id, params.updates)),
   });
 }
 
 /**
- * Hook to delete an eating record.
- * Shows an undo toast with ~5 second window per D-08.
+ * Hook to delete a meal — its eating record and every linked row in its group.
+ * Shows an undo toast with ~5 second window per D-08; Undo restores exactly
+ * the rows this delete removed.
  */
 export function useDeleteEating() {
-  return useUndoDeleteMutation(deleteEatingRecord, undoDeleteEatingRecord);
+  return useUndoDeleteMutation(
+    deleteEatingEntry,
+    (id, deleted) => undoDeleteEatingEntry(id, deleted.deletedAt),
+  );
 }

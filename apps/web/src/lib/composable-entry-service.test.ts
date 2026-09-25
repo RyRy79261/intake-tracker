@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { db } from "@/lib/db";
-import { makeIntakeRecord, seedComposableGroup } from "@/__tests__/fixtures/db-fixtures";
+import { makeEatingRecord, makeIntakeRecord, seedComposableGroup } from "@/__tests__/fixtures/db-fixtures";
 import { logDrink } from "@/lib/drink-service";
 import {
   addComposableEntry,
@@ -12,6 +12,10 @@ import {
   recalculateFromCurrentValues,
   syncLiquidEntrySubstances,
   classifyLiquidDelete,
+  deleteEatingEntry,
+  undoDeleteEatingEntry,
+  updateEatingEntry,
+  syncEatingGroup,
   type ComposableEntryInput,
 } from "@/lib/composable-entry-service";
 
@@ -338,8 +342,9 @@ describe("composable-entry-service", () => {
       });
 
       // Delete then undo
-      await deleteEntryGroup(groupId);
-      const result = await undoDeleteEntryGroup(groupId);
+      const del = await deleteEntryGroup(groupId);
+      if (!del.success) throw new Error("delete failed");
+      const result = await undoDeleteEntryGroup(groupId, del.data.deletedAt);
       expect(result.success).toBe(true);
       if (!result.success) return;
 
@@ -356,31 +361,58 @@ describe("composable-entry-service", () => {
         intakes: [{ type: "water", amount: 100 }, { type: "salt", amount: 200 }],
       });
 
-      await deleteEntryGroup(groupId);
-      const result = await undoDeleteEntryGroup(groupId);
+      const del = await deleteEntryGroup(groupId);
+      if (!del.success) throw new Error("delete failed");
+      const result = await undoDeleteEntryGroup(groupId, del.data.deletedAt);
       expect(result.success).toBe(true);
       if (!result.success) return;
       expect(result.data.restoredCount).toBe(3); // eating + 2 intakes
     });
 
-    it("Test 16: only restores records with non-null deletedAt", async () => {
+    it("Test 16: only restores the rows that delete tombstoned", async () => {
+      // A row removed earlier (an edit cleared it) must stay removed. Undo used
+      // to restore every tombstoned row in the group, resurrecting it.
       const { groupId, eatingId, intakeIds } = await seedComposableGroup({
         eating: { note: "Active" },
-        intakes: [{ type: "water", amount: 100 }],
+        intakes: [{ type: "water", amount: 100 }, { type: "salt", amount: 500 }],
       });
+      await db.intakeRecords.update(intakeIds[0]!, { deletedAt: 1700000000000 });
 
-      // Only soft-delete the eating record manually
-      await db.eatingRecords.update(eatingId!, { deletedAt: Date.now() });
-
-      const result = await undoDeleteEntryGroup(groupId);
+      const del = await deleteEntryGroup(groupId);
+      if (!del.success) throw new Error("delete failed");
+      const result = await undoDeleteEntryGroup(groupId, del.data.deletedAt);
       expect(result.success).toBe(true);
       if (!result.success) return;
-      // Only eating was deleted, so only 1 restored
-      expect(result.data.restoredCount).toBe(1);
+      expect(result.data.restoredCount).toBe(2); // eating + salt
 
-      // The intake that was never deleted should still be fine
-      const intake = await db.intakeRecords.get(intakeIds[0]!);
-      expect(intake?.deletedAt).toBeNull();
+      expect((await db.eatingRecords.get(eatingId!))?.deletedAt).toBeNull();
+      expect((await db.intakeRecords.get(intakeIds[1]!))?.deletedAt).toBeNull();
+      expect((await db.intakeRecords.get(intakeIds[0]!))?.deletedAt).toBe(1700000000000);
+    });
+
+    it("does not resurrect a substance an edit removed before the drink was deleted", async () => {
+      const drink = await logDrink({
+        volumeMl: 250,
+        description: "Irish coffee",
+        caffeineMg: 80,
+        abvPercent: 10,
+      });
+      if (!drink.success) throw new Error("logDrink failed");
+      // The user clears the caffeine in the edit form; alcohol stays.
+      await syncLiquidEntrySubstances(drink.data.waterIntakeId, {
+        timestamp: Date.now(),
+        volumeMl: 250,
+        caffeineMg: 0,
+        alcoholAbv: null,
+        sugarG: null,
+      });
+
+      const del = await deleteEntryGroup(drink.data.groupId);
+      if (!del.success) throw new Error("delete failed");
+      await undoDeleteEntryGroup(drink.data.groupId, del.data.deletedAt);
+
+      const live = (await db.substanceRecords.toArray()).filter((r) => r.deletedAt === null);
+      expect(live.map((r) => r.type)).toEqual(["alcohol"]);
     });
   });
 
@@ -957,7 +989,9 @@ describe("composable-entry-service", () => {
       expect((await classifyLiquidDelete(record.id)).scope).toBe("record");
     });
 
-    it("deletes only the row when the group holds no live substance", async () => {
+    it("takes the whole group for a beverage with sugar but no substance", async () => {
+      // Deleting the water row alone left the drink's sugar counting toward
+      // the daily total with no Liquids entry to reach it from.
       const entry = await addComposableEntry({
         intakes: [
           { type: "water", amount: 330, source: "beverage:Juice" },
@@ -966,8 +1000,261 @@ describe("composable-entry-service", () => {
       });
       expect(entry.success).toBe(true);
       if (!entry.success) return;
-      expect((await classifyLiquidDelete(entry.data.intakeIds[0]!)).scope).toBe("record");
+      expect((await classifyLiquidDelete(entry.data.intakeIds[0]!)).scope).toBe("group");
+    });
+
+    it("takes the whole group for a solute-only drink logged via logDrink", async () => {
+      const drink = await logDrink({ volumeMl: 250, description: "Broth", saltMg: 400, sugarG: 5 });
+      if (!drink.success) throw new Error("logDrink failed");
+      const scope = await classifyLiquidDelete(drink.data.waterIntakeId);
+      expect(scope.scope).toBe("group");
+
+      if (scope.scope !== "group") return;
+      await deleteEntryGroup(scope.groupId);
+      const live = (await db.intakeRecords.toArray()).filter((r) => r.deletedAt === null);
+      expect(live).toHaveLength(0);
+    });
+
+    it("deletes only the row for a non-water member of a drink group", async () => {
+      const drink = await logDrink({ volumeMl: 250, description: "Cola", sugarG: 27 });
+      if (!drink.success) throw new Error("logDrink failed");
+      const sugarId = drink.data.intakeIds.find((id) => id !== drink.data.waterIntakeId)!;
+      expect((await classifyLiquidDelete(sugarId)).scope).toBe("record");
     });
   });
 
+  // ─── Meal (eating) group operations ─────────────────────────────────
+
+  describe("deleteEatingEntry", () => {
+    it("tombstones the meal and every live row in its group", async () => {
+      const meal = await addComposableEntry({
+        eating: { note: "Pizza" },
+        intakes: [
+          { type: "salt", amount: 1200, source: "manual:sodium" },
+          { type: "water", amount: 150, source: "manual:food_water_content" },
+          { type: "sugar", amount: 8, source: "manual:sugar" },
+        ],
+      });
+      if (!meal.success) throw new Error("add failed");
+
+      const result = await deleteEatingEntry(meal.data.eatingId!);
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.data.deletedCount).toBe(4);
+
+      const liveIntakes = (await db.intakeRecords.toArray()).filter((r) => r.deletedAt === null);
+      expect(liveIntakes).toHaveLength(0);
+      expect((await db.eatingRecords.get(meal.data.eatingId!))!.deletedAt).toBe(result.data.deletedAt);
+    });
+
+    it("undo restores the meal group but not a row removed earlier", async () => {
+      const meal = await addComposableEntry({
+        eating: { note: "Salad" },
+        intakes: [
+          { type: "salt", amount: 300, source: "manual:sodium" },
+          { type: "water", amount: 100, source: "manual:food_water_content" },
+        ],
+      });
+      if (!meal.success) throw new Error("add failed");
+      const [saltId, waterId] = meal.data.intakeIds;
+      await db.intakeRecords.update(waterId!, { deletedAt: 1700000000000 });
+
+      const del = await deleteEatingEntry(meal.data.eatingId!);
+      if (!del.success) throw new Error("delete failed");
+      const undo = await undoDeleteEatingEntry(meal.data.eatingId!, del.data.deletedAt);
+      expect(undo.success).toBe(true);
+
+      expect((await db.eatingRecords.get(meal.data.eatingId!))!.deletedAt).toBeNull();
+      expect((await db.intakeRecords.get(saltId!))!.deletedAt).toBeNull();
+      expect((await db.intakeRecords.get(waterId!))!.deletedAt).toBe(1700000000000);
+    });
+
+    it("deletes and restores an ungrouped plain meal", async () => {
+      const record = makeEatingRecord({ note: "Toast" });
+      await db.eatingRecords.add(record);
+
+      const del = await deleteEatingEntry(record.id);
+      if (!del.success) throw new Error("delete failed");
+      expect((await db.eatingRecords.get(record.id))!.deletedAt).toBeTypeOf("number");
+      await undoDeleteEatingEntry(record.id, del.data.deletedAt);
+      expect((await db.eatingRecords.get(record.id))!.deletedAt).toBeNull();
+    });
+
+    it("returns an error for a missing eating record", async () => {
+      expect((await deleteEatingEntry("nope")).success).toBe(false);
+    });
+  });
+
+  describe("updateEatingEntry", () => {
+    it("moves every live group member to the new time and can clear the note", async () => {
+      const ts = Date.now() - 3 * 86_400_000;
+      const meal = await addComposableEntry(
+        {
+          eating: { note: "Dinner" },
+          intakes: [
+            { type: "salt", amount: 1400, source: "manual:sodium" },
+            { type: "water", amount: 200, source: "manual:food_water_content" },
+          ],
+        },
+        ts,
+      );
+      if (!meal.success) throw new Error("add failed");
+
+      const newTs = ts - 3_600_000;
+      const result = await updateEatingEntry(meal.data.eatingId!, { timestamp: newTs, note: undefined });
+      expect(result.success).toBe(true);
+
+      const eating = await db.eatingRecords.get(meal.data.eatingId!);
+      expect(eating!.timestamp).toBe(newTs);
+      expect(eating!.note).toBeUndefined();
+      for (const id of meal.data.intakeIds) {
+        expect((await db.intakeRecords.get(id))!.timestamp).toBe(newTs);
+      }
+    });
+
+    it("leaves the note alone when the key is absent", async () => {
+      const meal = await addComposableEntry({ eating: { note: "Keep me" } });
+      if (!meal.success) throw new Error("add failed");
+      await updateEatingEntry(meal.data.eatingId!, { timestamp: 1_700_000_000_000 });
+      expect((await db.eatingRecords.get(meal.data.eatingId!))!.note).toBe("Keep me");
+    });
+
+    it("returns an error for a missing eating record", async () => {
+      expect((await updateEatingEntry("nope", { timestamp: 1 })).success).toBe(false);
+    });
+  });
+
+  describe("syncEatingGroup reconciles legacy-sourced rows", () => {
+    it("updates a legacy food:ai_parse salt row instead of adding a second one", async () => {
+      const { eatingId } = await seedComposableGroup({
+        eating: { note: "Old meal" },
+        intakes: [
+          { type: "salt", amount: 800, source: "food:ai_parse" },
+          { type: "water", amount: 100, source: "food:ai_parse" },
+        ],
+      });
+
+      const result = await syncEatingGroup(eatingId!, {
+        timestamp: Date.now(),
+        note: "Old meal",
+        grams: undefined,
+        sodiumMg: 800,
+        sodiumKind: "sodium",
+        waterMl: 100,
+      });
+      expect(result.success).toBe(true);
+
+      const live = (await db.intakeRecords.toArray()).filter((r) => r.deletedAt === null);
+      expect(live.filter((r) => r.type === "salt").map((r) => r.amount)).toEqual([800]);
+      expect(live.filter((r) => r.type === "water").map((r) => r.amount)).toEqual([100]);
+    });
+
+    it("moves an untouched sugar row with the meal when the tracker is off", async () => {
+      const ts = Date.now() - 86_400_000;
+      const meal = await addComposableEntry(
+        {
+          eating: { note: "Cake" },
+          intakes: [
+            { type: "salt", amount: 200, source: "manual:sodium" },
+            { type: "sugar", amount: 30, source: "manual:sugar" },
+          ],
+        },
+        ts,
+      );
+      if (!meal.success) throw new Error("add failed");
+      const newTs = Date.now();
+      await syncEatingGroup(meal.data.eatingId!, {
+        timestamp: newTs,
+        note: "Cake",
+        grams: undefined,
+        sodiumMg: 200,
+        sodiumKind: "sodium",
+        waterMl: 0,
+      });
+      const sugar = (await db.intakeRecords.toArray()).find((r) => r.type === "sugar")!;
+      expect(sugar.deletedAt).toBeNull();
+      expect(sugar.amount).toBe(30);
+      expect(sugar.timestamp).toBe(newTs);
+    });
+  });
+
+  describe("syncLiquidEntrySubstances keeps the group together", () => {
+    it("moves salt, potassium and untouched sugar rows with the drink", async () => {
+      const ts = Date.now() - 3 * 86_400_000;
+      const drink = await logDrink({
+        volumeMl: 250,
+        description: "Sports drink",
+        caffeineMg: 80,
+        sugarG: 10,
+        saltMg: 100,
+        potassiumMg: 50,
+        timestamp: ts,
+      });
+      if (!drink.success) throw new Error("logDrink failed");
+      const newTs = Date.now();
+      await db.intakeRecords.update(drink.data.waterIntakeId, { timestamp: newTs });
+
+      const result = await syncLiquidEntrySubstances(drink.data.waterIntakeId, {
+        timestamp: newTs,
+        volumeMl: 250,
+        caffeineMg: 80,
+        alcoholAbv: null,
+        sugarG: null,
+      });
+      expect(result.success).toBe(true);
+
+      const intakes = (await db.intakeRecords.toArray()).filter((r) => r.deletedAt === null);
+      expect(intakes).toHaveLength(4);
+      for (const r of intakes) expect(r.timestamp).toBe(newTs);
+      const subs = (await db.substanceRecords.toArray()).filter((r) => r.deletedAt === null);
+      for (const r of subs) expect(r.timestamp).toBe(newTs);
+    });
+
+    it("re-times a meal as a whole and leaves its sugar alone when its water row is edited", async () => {
+      const ts = Date.now() - 86_400_000;
+      const meal = await addComposableEntry(
+        {
+          eating: { note: "Banana" },
+          intakes: [
+            { type: "water", amount: 90, source: "manual:food_water_content" },
+            { type: "sugar", amount: 14, source: "manual:sugar" },
+            { type: "potassium", amount: 420, source: "manual:potassium" },
+          ],
+        },
+        ts,
+      );
+      if (!meal.success) throw new Error("add failed");
+      const waterId = meal.data.intakeIds[0]!;
+      const newTs = Date.now();
+      await db.intakeRecords.update(waterId, { timestamp: newTs });
+
+      await syncLiquidEntrySubstances(waterId, {
+        timestamp: newTs,
+        volumeMl: 90,
+        caffeineMg: 50,
+        alcoholAbv: null,
+        sugarG: 0,
+      });
+
+      // No substance is attached to a meal, and its sugar is not cleared.
+      expect(await db.substanceRecords.count()).toBe(0);
+      const sugar = await db.intakeRecords.get(meal.data.intakeIds[1]!);
+      expect(sugar!.deletedAt).toBeNull();
+      expect(sugar!.amount).toBe(14);
+      // The meal moved as one unit.
+      expect((await db.eatingRecords.get(meal.data.eatingId!))!.timestamp).toBe(newTs);
+      for (const id of meal.data.intakeIds) {
+        expect((await db.intakeRecords.get(id))!.timestamp).toBe(newTs);
+      }
+    });
+  });
+
+  describe("single-record helpers check the row exists", () => {
+    it("returns an error and queues nothing for a missing id", async () => {
+      const before = await db._syncQueue.count();
+      expect((await deleteSingleGroupRecord("intakeRecords", "nope")).success).toBe(false);
+      expect((await undoDeleteSingleRecord("intakeRecords", "nope")).success).toBe(false);
+      expect(await db._syncQueue.count()).toBe(before);
+    });
+  });
 });
