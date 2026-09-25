@@ -7,6 +7,7 @@ import {
   mean,
 } from "simple-statistics";
 import type { DataPoint, TrendDirection, CorrelationResult } from "@intake/types/analytics";
+import { logicalDayKey } from "./logical-day";
 
 // ---------------------------------------------------------------------------
 // Moving Average
@@ -79,19 +80,35 @@ export function trend(points: DataPoint[]): TrendDirection {
 // Correlate Time Series
 // ---------------------------------------------------------------------------
 
+/** How a series collapses to one value per day before correlating. */
+export type DailyAggregate = "sum" | "mean";
+
+export interface CorrelateOptions {
+  /**
+   * Per-day aggregation for each series. Intake, substance and event-count
+   * domains are daily totals ("sum"); readings like weight and BP are
+   * averaged ("mean"). Defaults to "mean".
+   */
+  aggregateA?: DailyAggregate;
+  aggregateB?: DailyAggregate;
+  /** Hour the logical day starts at (see logical-day.ts). Defaults to 0. */
+  dayStartHour?: number;
+}
+
 /**
- * Align two data-point series by calendar day, apply an optional lag, then
- * compute the Pearson correlation coefficient.
+ * Align two data-point series by day, apply an optional lag, then compute the
+ * Pearson correlation coefficient.
  *
- * `timezone` (IANA, default "UTC") fixes the calendar-day boundary so the
- * result is deterministic regardless of the host's local zone. Pass the
- * viewer's zone (e.g. `getDeviceTimezone()`) for user-facing correlations.
+ * `timezone` (IANA, default "UTC") fixes the day boundary so the result is
+ * deterministic regardless of the host's local zone. Pass the viewer's zone
+ * (e.g. `getDeviceTimezone()`) for user-facing correlations.
  */
 export function correlateTimeSeries(
   seriesA: DataPoint[],
   seriesB: DataPoint[],
   lagDays: number = 0,
   timezone: string = "UTC",
+  options: CorrelateOptions = {},
 ): CorrelationResult {
   const empty: CorrelationResult = {
     coefficient: 0,
@@ -105,17 +122,12 @@ export function correlateTimeSeries(
 
   if (seriesA.length === 0 || seriesB.length === 0) return empty;
 
-  // Group by calendar day in the given IANA timezone (deterministic; no
-  // dependency on the host's local zone). en-CA formats as YYYY-MM-DD.
-  const dayFmt = new Intl.DateTimeFormat("en-CA", {
-    timeZone: timezone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-  const dayKey = (ts: number): string => dayFmt.format(ts);
+  // Group by logical day in the given IANA timezone (deterministic; no
+  // dependency on the host's local zone).
+  const dayStartHour = options.dayStartHour ?? 0;
+  const dayKey = (ts: number): string => logicalDayKey(ts, dayStartHour, timezone);
 
-  const avgByDay = (points: DataPoint[]): Map<string, number> => {
+  const byDay = (points: DataPoint[], agg: DailyAggregate): Map<string, number> => {
     const groups = new Map<string, number[]>();
     for (const p of points) {
       const key = dayKey(p.timestamp);
@@ -125,13 +137,13 @@ export function correlateTimeSeries(
     }
     const result = new Map<string, number>();
     groups.forEach((vals, key) => {
-      result.set(key, mean(vals));
+      result.set(key, agg === "sum" ? vals.reduce((s, v) => s + v, 0) : mean(vals));
     });
     return result;
   };
 
-  const mapA = avgByDay(seriesA);
-  const mapB = avgByDay(seriesB);
+  const mapA = byDay(seriesA, options.aggregateA ?? "mean");
+  const mapB = byDay(seriesB, options.aggregateB ?? "mean");
 
   // Apply lag: shift a YYYY-MM-DD key forward by `days` calendar days. Anchored
   // at UTC noon and shifted with UTC getters so the arithmetic is

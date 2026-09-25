@@ -11,7 +11,10 @@ import { getSubstanceRecordsByDateRange as querySubstanceRecordsByDateRange } fr
 import { getDoseScheduleForDateRange } from "@/lib/dose-schedule-service";
 import type { SubstanceRecord } from "@/lib/db";
 import { trend as computeTrend, correlateTimeSeries } from "@/lib/analytics-stats";
+import type { DailyAggregate } from "@intake/core/analytics-stats";
+import { logicalDayKey } from "@intake/core/logical-day";
 import { getDeviceTimezone } from "@/lib/timezone";
+import { useSettingsStore } from "@/stores/settings-store";
 import type {
   Domain,
   TimeRange,
@@ -58,9 +61,37 @@ async function getSubstanceRecordsByDateRange(
   }
 }
 
-function dayKey(ts: number): string {
-  return format(new Date(ts), "yyyy-MM-dd");
+/** Options for logical-day bucketing; unset fields follow the user's settings. */
+export interface DayBucketOptions {
+  dayStartHour?: number;
+  tz?: string;
 }
+
+function resolveDayBucket(opts: DayBucketOptions = {}): { dayStartHour: number; tz: string } {
+  return {
+    dayStartHour: opts.dayStartHour ?? useSettingsStore.getState().dayStartHour,
+    tz: opts.tz ?? getDeviceTimezone(),
+  };
+}
+
+/**
+ * How each domain collapses to one value per day. Intake, substance and event
+ * domains are daily totals; weight and BP readings are averaged.
+ */
+const DOMAIN_DAILY_AGGREGATE: Record<Domain, DailyAggregate> = {
+  water: "sum",
+  salt: "sum",
+  sugar: "sum",
+  potassium: "sum",
+  eating: "sum",
+  urination: "sum",
+  defecation: "sum",
+  caffeine: "sum",
+  alcohol: "sum",
+  medication: "sum",
+  weight: "mean",
+  bp: "mean",
+};
 
 // ---------------------------------------------------------------------------
 // Layer 1 -- Building Blocks
@@ -163,12 +194,17 @@ export async function getRecordsByDomain(
 }
 
 /**
- * Group DataPoint[] by calendar date (midnight boundaries).
+ * Group DataPoint[] by logical day ("YYYY-MM-DD"), which starts at the user's
+ * dayStartHour in the device zone so analytics agree with the dashboard.
  */
-export function groupByDay(points: DataPoint[]): Map<string, DataPoint[]> {
+export function groupByDay(
+  points: DataPoint[],
+  opts?: DayBucketOptions,
+): Map<string, DataPoint[]> {
+  const { dayStartHour, tz } = resolveDayBucket(opts);
   const map = new Map<string, DataPoint[]>();
   for (const p of points) {
-    const key = dayKey(p.timestamp);
+    const key = logicalDayKey(p.timestamp, dayStartHour, tz);
     const arr = map.get(key) ?? [];
     arr.push(p);
     map.set(key, arr);
@@ -189,9 +225,15 @@ export async function correlate(
     getRecordsByDomain(domainA, range),
     getRecordsByDomain(domainB, range),
   ]);
-  // Anchor day-bucketing to the viewer's zone so correlations are deterministic
-  // (no dependency on the server/runtime's local timezone).
-  return correlateTimeSeries(seriesA, seriesB, lagDays, getDeviceTimezone());
+  // Anchor day-bucketing to the viewer's zone and logical day so correlations
+  // are deterministic and match the dashboard. Totals per day for intake and
+  // event domains, means for readings.
+  const { dayStartHour, tz } = resolveDayBucket();
+  return correlateTimeSeries(seriesA, seriesB, lagDays, tz, {
+    aggregateA: DOMAIN_DAILY_AGGREGATE[domainA],
+    aggregateB: DOMAIN_DAILY_AGGREGATE[domainB],
+    dayStartHour,
+  });
 }
 
 // ---------------------------------------------------------------------------
