@@ -21,6 +21,12 @@ import {
   updateInventoryTransaction,
   deleteInventoryTransaction,
   initStockRecalculation,
+  deriveStock,
+  isActiveBrand,
+  setActiveBrand,
+  archiveInventoryItem,
+  setStockCount,
+  restoreInventoryTransaction,
 } from "@/lib/inventory-service";
 
 describe("getCurrentStock", () => {
@@ -50,7 +56,7 @@ describe("getCurrentStock", () => {
     expect(stock).toBe(0);
   });
 
-  it("includes soft-deleted transactions in sum (no deletedAt filter)", async () => {
+  it("excludes soft-deleted transactions from the sum", async () => {
     const rx = makePrescription({ id: "rx-del-1" });
     const item = makeInventoryItem(rx.id, { id: "item-del-1" });
     await db.prescriptions.add(rx);
@@ -66,9 +72,9 @@ describe("getCurrentStock", () => {
       }),
     ]);
 
-    // getCurrentStock sums ALL transactions (does not filter deletedAt)
+    // The soft-deleted -1 no longer counts: a deleted row must not come back.
     const stock = await getCurrentStock(item.id);
-    expect(stock).toBe(29);
+    expect(stock).toBe(30);
   });
 });
 
@@ -108,6 +114,7 @@ describe("recalculateAllStock", () => {
     ]);
 
     const result = await recalculateAllStock();
+    expect(result.checked).toBe(2);
     expect(result.updated).toBe(2);
     // item1 drifted: cached 99 vs derived 30
     // item2 drifted: cached 0 vs derived 10
@@ -125,9 +132,58 @@ describe("recalculateAllStock", () => {
     );
 
     const result = await recalculateAllStock();
-    expect(result.updated).toBe(1);
+    expect(result.checked).toBe(1);
+    expect(result.updated).toBe(0);
     expect(result.drifted).toBe(0);
     expect(result.items).toHaveLength(0);
+  });
+
+  it("leaves undrifted items, the sync queue and the audit log untouched", async () => {
+    const rx = makePrescription();
+    const item = makeInventoryItem(rx.id, { currentStock: 30, updatedAt: 1_000 });
+    await db.prescriptions.add(rx);
+    await db.inventoryItems.add(item);
+    await db.inventoryTransactions.add(
+      makeInventoryTransaction(item.id, { type: "initial", amount: 30 }),
+    );
+
+    await recalculateAllStock();
+
+    const stored = await db.inventoryItems.get(item.id);
+    expect(stored!.updatedAt).toBe(1_000);
+    expect(await db._syncQueue.count()).toBe(0);
+    const audits = await db.auditLogs.toArray();
+    expect(audits.some((a) => a.action === "stock_recalculated")).toBe(false);
+  });
+
+  it("does not add a deleted refill back into stock on the launch recount", async () => {
+    const rx = makePrescription();
+    const item = makeInventoryItem(rx.id, { currentStock: 30 });
+    await db.prescriptions.add(rx);
+    await db.inventoryItems.add(item);
+    await db.inventoryTransactions.add(
+      makeInventoryTransaction(item.id, { type: "initial", amount: 30 }),
+    );
+
+    const refill = await adjustStock(item.id, 100, undefined, "refill");
+    expect(refill.success).toBe(true);
+    const refillTx = (await db.inventoryTransactions.toArray()).find((t) => t.amount === 100)!;
+    await deleteInventoryTransaction(refillTx.id);
+    expect((await db.inventoryItems.get(item.id))!.currentStock).toBe(30);
+
+    await recalculateAllStock();
+    expect((await db.inventoryItems.get(item.id))!.currentStock).toBe(30);
+  });
+
+  it("skips soft-deleted inventory items", async () => {
+    const rx = makePrescription();
+    const item = makeInventoryItem(rx.id, { currentStock: 99, deletedAt: 5_000, updatedAt: 5_000 });
+    await db.prescriptions.add(rx);
+    await db.inventoryItems.add(item);
+
+    const result = await recalculateAllStock();
+    expect(result.checked).toBe(0);
+    expect((await db.inventoryItems.get(item.id))!.updatedAt).toBe(5_000);
   });
 
   it("writes a stock_recalculated audit log", async () => {
@@ -168,6 +224,7 @@ describe("adjustStock rounding", () => {
     const item = makeInventoryItem(rx.id, { currentStock: 0.1 });
     await db.prescriptions.add(rx);
     await db.inventoryItems.add(item);
+    await db.inventoryTransactions.add(makeInventoryTransaction(item.id, { amount: 0.1 }));
 
     const result = await adjustStock(item.id, 0.2);
     expect(result.success).toBe(true);
@@ -383,6 +440,7 @@ describe("adjustStock", () => {
     const item = makeInventoryItem(rx.id, { currentStock: 2 });
     await db.prescriptions.add(rx);
     await db.inventoryItems.add(item);
+    await db.inventoryTransactions.add(makeInventoryTransaction(item.id, { amount: 2 }));
 
     const result = await adjustStock(item.id, -5);
     expect(result.success).toBe(true);
@@ -496,5 +554,309 @@ describe("deleteInventoryTransaction", () => {
   it("returns an error when the transaction does not exist", async () => {
     const result = await deleteInventoryTransaction("missing-tx");
     expect(result.success).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Audit 2026-09: one stock derivation, live-only readers, brand switching
+// ---------------------------------------------------------------------------
+
+async function seedItem(overrides = {}, stock = 30) {
+  const rx = makePrescription();
+  const item = makeInventoryItem(rx.id, { currentStock: stock, ...overrides });
+  await db.prescriptions.add(rx);
+  await db.inventoryItems.add(item);
+  if (stock !== 0) {
+    await db.inventoryTransactions.add(
+      makeInventoryTransaction(item.id, { type: "initial", amount: stock }),
+    );
+  }
+  return { rx, item };
+}
+
+describe("deriveStock", () => {
+  it("treats a transaction with no deletedAt key (pulled row) as live", async () => {
+    const { item } = await seedItem();
+    const pulled = makeInventoryTransaction(item.id, { type: "refill", amount: 10 });
+    delete (pulled as { deletedAt?: unknown }).deletedAt;
+    await db.inventoryTransactions.add(pulled);
+
+    expect(await deriveStock(item.id)).toBe(40);
+  });
+});
+
+describe("adjustStock derives from the ledger", () => {
+  it("keeps currentStock equal to the transaction sum under concurrent refills", async () => {
+    const { item } = await seedItem({}, 10);
+
+    await Promise.all([adjustStock(item.id, 30), adjustStock(item.id, 30)]);
+
+    const stored = await db.inventoryItems.get(item.id);
+    expect(stored!.currentStock).toBe(70);
+    expect(await deriveStock(item.id)).toBe(70);
+  });
+
+  it("rejects a non-finite delta", async () => {
+    const { item } = await seedItem();
+    expect((await adjustStock(item.id, Number.NaN)).success).toBe(false);
+    expect(await db.inventoryTransactions.count()).toBe(1);
+  });
+
+  it("rejects a non-positive refill and a zero adjustment", async () => {
+    const { item } = await seedItem();
+    expect((await adjustStock(item.id, -3, undefined, "refill")).success).toBe(false);
+    expect((await adjustStock(item.id, 0, undefined, "adjusted")).success).toBe(false);
+    expect(await db.inventoryTransactions.count()).toBe(1);
+  });
+});
+
+describe("setStockCount", () => {
+  it("records the difference to the counted value as one 'adjusted' transaction", async () => {
+    const { item } = await seedItem({}, 35);
+
+    const result = await setStockCount(item.id, 28, "Counted the box");
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data).toBe(28);
+
+    const txs = await db.inventoryTransactions.where("inventoryItemId").equals(item.id).toArray();
+    const adjustment = txs.find((t) => t.type === "adjusted");
+    expect(adjustment!.amount).toBe(-7);
+    expect(adjustment!.note).toBe("Counted the box");
+    expect((await db.inventoryItems.get(item.id))!.currentStock).toBe(28);
+  });
+
+  it("counts against the ledger, not a drifted cache", async () => {
+    const { item } = await seedItem({ currentStock: 99 }, 20);
+
+    await setStockCount(item.id, 25);
+
+    const txs = await db.inventoryTransactions.where("inventoryItemId").equals(item.id).toArray();
+    expect(txs.find((t) => t.type === "adjusted")!.amount).toBe(5);
+    expect((await db.inventoryItems.get(item.id))!.currentStock).toBe(25);
+  });
+
+  it("writes nothing when the count already matches", async () => {
+    const { item } = await seedItem({}, 20);
+    const result = await setStockCount(item.id, 20);
+    expect(result.success).toBe(true);
+    expect(await db.inventoryTransactions.count()).toBe(1);
+  });
+
+  it("rejects a negative or non-finite count", async () => {
+    const { item } = await seedItem({}, 20);
+    expect((await setStockCount(item.id, -1)).success).toBe(false);
+    expect((await setStockCount(item.id, Number.NaN)).success).toBe(false);
+  });
+});
+
+describe("updateInventoryTransaction validation", () => {
+  async function seedRefill(amount = 30) {
+    const { item } = await seedItem({}, 10);
+    const refill = makeInventoryTransaction(item.id, { type: "refill", amount, note: "pharmacy" });
+    await db.inventoryTransactions.add(refill);
+    await db.inventoryItems.update(item.id, { currentStock: 10 + amount });
+    return { item, refill };
+  }
+
+  it("rejects a refill edited to zero, a negative or a non-finite amount", async () => {
+    const { item, refill } = await seedRefill();
+    for (const amount of [0, -30, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const result = await updateInventoryTransaction(refill.id, { amount });
+      expect(result.success).toBe(false);
+    }
+    expect((await db.inventoryTransactions.get(refill.id))!.amount).toBe(30);
+    expect((await db.inventoryItems.get(item.id))!.currentStock).toBe(40);
+  });
+
+  it("rejects an adjustment edited to zero but allows a negative one", async () => {
+    const { item } = await seedItem({}, 10);
+    const adj = makeInventoryTransaction(item.id, { type: "adjusted", amount: -2 });
+    await db.inventoryTransactions.add(adj);
+
+    expect((await updateInventoryTransaction(adj.id, { amount: 0 })).success).toBe(false);
+    expect((await updateInventoryTransaction(adj.id, { amount: -4 })).success).toBe(true);
+    expect((await db.inventoryItems.get(item.id))!.currentStock).toBe(6);
+  });
+
+  it("clears the note when given an empty note", async () => {
+    const { refill } = await seedRefill();
+    const result = await updateInventoryTransaction(refill.id, { note: "" });
+    expect(result.success).toBe(true);
+    const stored = await db.inventoryTransactions.get(refill.id);
+    expect(stored!.note).toBeUndefined();
+  });
+
+  it("does not rewrite the item on a note-only edit when stock is in sync", async () => {
+    const { item, refill } = await seedRefill();
+    await db.inventoryItems.update(item.id, { updatedAt: 1_000 });
+
+    await updateInventoryTransaction(refill.id, { note: "new note" });
+
+    expect((await db.inventoryItems.get(item.id))!.updatedAt).toBe(1_000);
+  });
+});
+
+describe("restoreInventoryTransaction", () => {
+  it("undoes a delete and restores the stock", async () => {
+    const { item } = await seedItem({}, 10);
+    await adjustStock(item.id, 30, undefined, "refill");
+    const refill = (await db.inventoryTransactions.toArray()).find((t) => t.amount === 30)!;
+
+    await deleteInventoryTransaction(refill.id);
+    expect((await db.inventoryItems.get(item.id))!.currentStock).toBe(10);
+
+    const result = await restoreInventoryTransaction(refill.id);
+    expect(result.success).toBe(true);
+    expect((await db.inventoryTransactions.get(refill.id))!.deletedAt).toBeNull();
+    expect((await db.inventoryItems.get(item.id))!.currentStock).toBe(40);
+
+    const queued = await db._syncQueue
+      .where("[tableName+recordId]")
+      .equals(["inventoryTransactions", refill.id])
+      .first();
+    expect(queued!.op).toBe("upsert");
+  });
+});
+
+describe("live-only inventory readers", () => {
+  it("hide soft-deleted items and transactions", async () => {
+    const rx = makePrescription();
+    await db.prescriptions.add(rx);
+    const live = makeInventoryItem(rx.id, { isActive: false });
+    const deleted = makeInventoryItem(rx.id, { isActive: true, deletedAt: 5_000 });
+    await db.inventoryItems.bulkAdd([live, deleted]);
+    await db.inventoryTransactions.bulkAdd([
+      makeInventoryTransaction(live.id, { amount: 5 }),
+      makeInventoryTransaction(live.id, { amount: 7, deletedAt: 5_000 }),
+    ]);
+
+    expect((await getInventoryForPrescription(rx.id)).map((i) => i.id)).toEqual([live.id]);
+    expect((await getAllInventoryItems()).map((i) => i.id)).toEqual([live.id]);
+    expect(await getAllActiveInventoryItems()).toHaveLength(0);
+    expect(await getActiveInventoryForPrescription(rx.id)).toBeUndefined();
+    expect((await getInventoryTransactions(live.id)).map((t) => t.amount)).toEqual([5]);
+  });
+
+  it("getActiveInventoryForPrescription skips an archived brand", async () => {
+    const rx = makePrescription();
+    await db.prescriptions.add(rx);
+    const archived = makeInventoryItem(rx.id, { isActive: true, isArchived: true });
+    const current = makeInventoryItem(rx.id, { isActive: true });
+    await db.inventoryItems.bulkAdd([archived, current]);
+
+    expect((await getActiveInventoryForPrescription(rx.id))!.id).toBe(current.id);
+  });
+
+  it("isActiveBrand requires live, active and not archived", () => {
+    const base = makeInventoryItem("rx");
+    expect(isActiveBrand(base)).toBe(true);
+    expect(isActiveBrand({ ...base, isActive: false })).toBe(false);
+    expect(isActiveBrand({ ...base, isArchived: true })).toBe(false);
+    expect(isActiveBrand({ ...base, deletedAt: 1 })).toBe(false);
+  });
+
+  it("deleteInventoryItem clears isActive", async () => {
+    const { item } = await seedItem();
+    await deleteInventoryItem(item.id);
+    expect((await db.inventoryItems.get(item.id))!.isActive).toBe(false);
+  });
+});
+
+describe("setActiveBrand", () => {
+  it("activates the target and deactivates every other brand in one step", async () => {
+    const rx = makePrescription();
+    await db.prescriptions.add(rx);
+    const a = makeInventoryItem(rx.id, { isActive: true });
+    const b = makeInventoryItem(rx.id, { isActive: true });
+    const c = makeInventoryItem(rx.id, { isActive: false });
+    await db.inventoryItems.bulkAdd([a, b, c]);
+
+    const result = await setActiveBrand(rx.id, c.id);
+    expect(result.success).toBe(true);
+
+    const items = await db.inventoryItems.where("prescriptionId").equals(rx.id).toArray();
+    expect(items.filter((i) => i.isActive).map((i) => i.id)).toEqual([c.id]);
+    for (const id of [a.id, b.id, c.id]) {
+      const queued = await db._syncQueue
+        .where("[tableName+recordId]")
+        .equals(["inventoryItems", id])
+        .first();
+      expect(queued).toBeDefined();
+    }
+  });
+
+  it("rejects an archived, deleted or foreign item without changing anything", async () => {
+    const rx = makePrescription();
+    const other = makePrescription();
+    await db.prescriptions.bulkAdd([rx, other]);
+    const active = makeInventoryItem(rx.id, { isActive: true });
+    const archived = makeInventoryItem(rx.id, { isActive: false, isArchived: true });
+    const deleted = makeInventoryItem(rx.id, { isActive: false, deletedAt: 1 });
+    const foreign = makeInventoryItem(other.id, { isActive: false });
+    await db.inventoryItems.bulkAdd([active, archived, deleted, foreign]);
+
+    for (const id of [archived.id, deleted.id, foreign.id, "missing"]) {
+      expect((await setActiveBrand(rx.id, id)).success).toBe(false);
+    }
+    expect((await db.inventoryItems.get(active.id))!.isActive).toBe(true);
+  });
+});
+
+describe("archiveInventoryItem", () => {
+  it("auto-promotes the only other brand when archiving the active one", async () => {
+    const rx = makePrescription();
+    await db.prescriptions.add(rx);
+    const a = makeInventoryItem(rx.id, { isActive: true });
+    const b = makeInventoryItem(rx.id, { isActive: false });
+    await db.inventoryItems.bulkAdd([a, b]);
+
+    const result = await archiveInventoryItem(a.id);
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.promotedId).toBe(b.id);
+
+    const storedA = await db.inventoryItems.get(a.id);
+    expect(storedA!.isArchived).toBe(true);
+    expect(storedA!.isActive).toBe(false);
+    expect((await db.inventoryItems.get(b.id))!.isActive).toBe(true);
+  });
+
+  it("requires a replacement when several brands could take over", async () => {
+    const rx = makePrescription();
+    await db.prescriptions.add(rx);
+    const a = makeInventoryItem(rx.id, { isActive: true });
+    const b = makeInventoryItem(rx.id, { isActive: false });
+    const c = makeInventoryItem(rx.id, { isActive: false });
+    await db.inventoryItems.bulkAdd([a, b, c]);
+
+    const refused = await archiveInventoryItem(a.id);
+    expect(refused.success).toBe(false);
+    expect((await db.inventoryItems.get(a.id))!.isArchived).toBe(false);
+
+    const result = await archiveInventoryItem(a.id, c.id);
+    expect(result.success).toBe(true);
+    expect((await db.inventoryItems.get(c.id))!.isActive).toBe(true);
+    expect((await db.inventoryItems.get(b.id))!.isActive).toBe(false);
+  });
+
+  it("archives the last brand and leaves no active brand", async () => {
+    const { item } = await seedItem();
+    const result = await archiveInventoryItem(item.id);
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.promotedId).toBeNull();
+    const stored = await db.inventoryItems.get(item.id);
+    expect(stored!.isArchived).toBe(true);
+    expect(stored!.isActive).toBe(false);
+  });
+
+  it("archives an inactive brand without touching the active one", async () => {
+    const rx = makePrescription();
+    await db.prescriptions.add(rx);
+    const a = makeInventoryItem(rx.id, { isActive: true });
+    const b = makeInventoryItem(rx.id, { isActive: false });
+    await db.inventoryItems.bulkAdd([a, b]);
+
+    await archiveInventoryItem(b.id);
+    expect((await db.inventoryItems.get(a.id))!.isActive).toBe(true);
+    expect((await db.inventoryItems.get(b.id))!.isArchived).toBe(true);
   });
 });

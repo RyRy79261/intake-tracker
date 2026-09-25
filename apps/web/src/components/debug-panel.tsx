@@ -5,7 +5,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db, type AuditAction } from "@/lib/db";
 import {
   recalculateAllStock,
-  getCurrentStock,
+  deriveStock,
 } from "@/lib/inventory-service";
 import { Button } from "@intake/ui/button";
 import { Card } from "@intake/ui/card";
@@ -260,6 +260,7 @@ function AuditLogViewer() {
 // ---------------------------------------------------------------------------
 
 interface StockResult {
+  checked: number;
   updated: number;
   drifted: number;
   items: Array<{
@@ -311,7 +312,7 @@ function StockManagement() {
     try {
       const comparisons: StockComparison[] = [];
       for (const item of activeItems) {
-        const derived = await getCurrentStock(item.id);
+        const derived = await deriveStock(item.id);
         comparisons.push({
           id: item.id,
           brandName: item.brandName,
@@ -359,8 +360,8 @@ function StockManagement() {
       {recalcResult && (
         <Card className="p-3 text-xs space-y-2">
           <div className="font-medium">
-            Recalculation Result: {recalcResult.updated} items updated,{" "}
-            {recalcResult.drifted} drifted
+            Recalculation Result: {recalcResult.checked} items checked,{" "}
+            {recalcResult.updated} drifted and rewritten
           </div>
           {recalcResult.items.length > 0 && (
             <div className="space-y-1">
