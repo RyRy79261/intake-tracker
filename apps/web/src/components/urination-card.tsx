@@ -29,9 +29,8 @@ import {
 } from "@/lib/date-utils";
 import { URINATION_AMOUNT_OPTIONS } from "@/lib/constants";
 import { useSettings } from "@/hooks/use-settings";
-import { useQuickLogGuard } from "@/hooks/use-quick-log-guard";
+import { useQuickLogGuard, removeQuickLoggedRecord } from "@/hooks/use-quick-log-guard";
 import { showUndoToast } from "@/components/medications/undo-toast";
-import { deleteUrinationRecord } from "@/lib/urination-service";
 import {
   NO_ESTIMATE_VALUE,
   estimateRecordSchema,
@@ -98,7 +97,7 @@ export function UrinationCard() {
         description: `Urination (${amountValue}) recorded`,
         onUndo: () => {
           quickLogGuard.reset();
-          void deleteUrinationRecord(record.id);
+          void removeQuickLoggedRecord("urination", record.id);
         },
       });
     } catch {
@@ -132,7 +131,7 @@ export function UrinationCard() {
       return;
     }
     const effectiveAmount = normalizeAmountEstimate(amount) ?? undefined;
-    const parsed = estimateRecordSchema.safeParse({ timestamp, amountEstimate: effectiveAmount });
+    const parsed = estimateRecordSchema(Date.now()).safeParse({ timestamp, amountEstimate: effectiveAmount });
     if (!parsed.success) {
       setDetailError(parsed.error.issues[0]?.message ?? "Invalid values");
       return;

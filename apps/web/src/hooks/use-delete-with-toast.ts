@@ -13,10 +13,10 @@ interface DeleteMutation {
  *
  * `options.undoToast`: pass true when the delete mutation already surfaces its
  * own undo toast (the useUndoDeleteMutation domains: intake, eating, urination,
- * defecation). In that case we must NOT fire a second "Entry deleted" toast —
- * TOAST_LIMIT is 1, so it would instantly replace the undo toast and the Undo
- * button would never be clickable. Domains without an undo toast (weight, blood
- * pressure) leave this off and get the plain confirmation toast.
+ * defecation, weight, blood pressure). In that case we must NOT fire a second
+ * "Entry deleted" toast — TOAST_LIMIT is 1, so it would instantly replace the
+ * undo toast and the Undo button would never be clickable. Domains without an
+ * undo toast leave this off and get the plain confirmation toast.
  */
 export function useDeleteWithToast(
   deleteMutation: DeleteMutation,

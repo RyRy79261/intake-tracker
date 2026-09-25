@@ -32,9 +32,9 @@ describe("timestamps", () => {
   it("every record schema rejects a timestamp hours ahead", () => {
     const future = Date.now() + 8 * 60 * 60 * 1000;
     for (const result of [
-      weightRecordSchema.safeParse({ weight: 70, timestamp: future }),
-      bloodPressureRecordSchema.safeParse({ systolic: 120, diastolic: 80, timestamp: future }),
-      estimateRecordSchema.safeParse({ timestamp: future }),
+      weightRecordSchema(Date.now()).safeParse({ weight: 70, timestamp: future }),
+      bloodPressureRecordSchema(Date.now()).safeParse({ systolic: 120, diastolic: 80, timestamp: future }),
+      estimateRecordSchema(Date.now()).safeParse({ timestamp: future }),
     ]) {
       expect(result.success).toBe(false);
       expect(result.error?.issues[0]?.message).toBe(FUTURE_TIMESTAMP_MESSAGE);

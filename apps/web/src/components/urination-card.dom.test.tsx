@@ -6,6 +6,7 @@ import userEvent from "@testing-library/user-event";
 import { UrinationCard } from "@/components/urination-card";
 import { renderWithFixtures } from "@/__tests__/react-test-utils";
 import { makeUrinationRecord } from "@/__tests__/fixtures/db-fixtures";
+/* eslint-disable-next-line no-restricted-imports -- test asserts the stored rows */
 import { db } from "@/lib/db";
 import { getCurrentDateTimeLocal, timestampToDateTimeLocal } from "@/lib/date-utils";
 

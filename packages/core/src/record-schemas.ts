@@ -7,6 +7,9 @@
  * The form parsers take raw input strings and use Number() (not parseInt /
  * parseFloat), so "120.9" reaches `.int()` and "12abc" is rejected instead of
  * being silently truncated to a numeric prefix.
+ *
+ * Core stays pure: the full record schemas are factories that take the
+ * caller's `now` for the "not in the future" check.
  */
 import { z } from "zod";
 
@@ -22,15 +25,17 @@ import { z } from "zod";
 export const FUTURE_TIMESTAMP_SKEW_MS = 5 * 60 * 1000;
 export const FUTURE_TIMESTAMP_MESSAGE = "Time can't be in the future";
 
-export function isFutureTimestamp(timestamp: number, now: number = Date.now()): boolean {
+export function isFutureTimestamp(timestamp: number, now: number): boolean {
   return timestamp > now + FUTURE_TIMESTAMP_SKEW_MS;
 }
 
-/** Epoch-ms timestamp that is not in the future (evaluated at parse time). */
-export const recordTimestampSchema = z
-  .number()
-  .int()
-  .refine((ts) => !isFutureTimestamp(ts), FUTURE_TIMESTAMP_MESSAGE);
+/** Epoch-ms timestamp that is not in the future relative to `now`. */
+export function recordTimestampSchema(now: number) {
+  return z
+    .number()
+    .int()
+    .refine((ts) => !isFutureTimestamp(ts, now), FUTURE_TIMESTAMP_MESSAGE);
+}
 
 /** Optional free-text note. `null` is an explicit clear on update. */
 const noteSchema = z.string().nullable().optional();
@@ -77,13 +82,16 @@ export function roundWeightKg(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-export const weightRecordSchema = z.object({
+const weightFields = {
   weight: numberField("Weight")
     .min(WEIGHT_RANGE_KG.min, `Weight must be at least ${WEIGHT_RANGE_KG.min} kg`)
     .max(WEIGHT_RANGE_KG.max, `Weight seems too high (max ${WEIGHT_RANGE_KG.max} kg)`),
-  timestamp: recordTimestampSchema.optional(),
   note: noteSchema,
-});
+};
+
+export function weightRecordSchema(now: number) {
+  return z.object({ ...weightFields, timestamp: recordTimestampSchema(now).optional() });
+}
 
 // ============================================================================
 // Blood pressure
@@ -97,21 +105,27 @@ export const BP_RANGES = {
 
 export const BP_ORDER_MESSAGE = "Systolic must be higher than diastolic";
 
-export const bloodPressureRecordSchema = z
-  .object({
-    systolic: intField("Systolic", BP_RANGES.systolic),
-    diastolic: intField("Diastolic", BP_RANGES.diastolic),
-    heartRate: intField("Heart rate", BP_RANGES.heartRate).nullable().optional(),
-    irregularHeartbeat: z.boolean().optional(),
-    position: z.enum(["sitting", "standing"]).optional(),
-    arm: z.enum(["left", "right"]).optional(),
-    timestamp: recordTimestampSchema.optional(),
-    note: noteSchema,
-  })
-  .refine((v) => v.systolic > v.diastolic, {
-    message: BP_ORDER_MESSAGE,
-    path: ["diastolic"],
-  });
+const bloodPressureFields = {
+  systolic: intField("Systolic", BP_RANGES.systolic),
+  diastolic: intField("Diastolic", BP_RANGES.diastolic),
+  heartRate: intField("Heart rate", BP_RANGES.heartRate).nullable().optional(),
+  irregularHeartbeat: z.boolean().optional(),
+  position: z.enum(["sitting", "standing"]).optional(),
+  arm: z.enum(["left", "right"]).optional(),
+  note: noteSchema,
+};
+
+const bpOrderCheck = (v: { systolic: number; diastolic: number }) => v.systolic > v.diastolic;
+const bpOrderIssue = { message: BP_ORDER_MESSAGE, path: ["diastolic"] };
+
+export function bloodPressureRecordSchema(now: number) {
+  return z
+    .object({ ...bloodPressureFields, timestamp: recordTimestampSchema(now).optional() })
+    .refine(bpOrderCheck, bpOrderIssue);
+}
+
+/** Value fields only (no timestamp) — for edit forms. */
+const bloodPressureValuesSchema = z.object(bloodPressureFields).refine(bpOrderCheck, bpOrderIssue);
 
 /**
  * True when the reading looks like systolic and diastolic were typed into
@@ -139,11 +153,13 @@ export const AMOUNT_ESTIMATE_VALUES = ["small", "medium", "large"] as const;
 /** Select sentinel for "No estimate" (Radix Select can't hold ""). */
 export const NO_ESTIMATE_VALUE = "__none__";
 
-export const estimateRecordSchema = z.object({
-  amountEstimate: z.enum(AMOUNT_ESTIMATE_VALUES).nullable().optional(),
-  timestamp: recordTimestampSchema.optional(),
-  note: noteSchema,
-});
+export function estimateRecordSchema(now: number) {
+  return z.object({
+    amountEstimate: z.enum(AMOUNT_ESTIMATE_VALUES).nullable().optional(),
+    timestamp: recordTimestampSchema(now).optional(),
+    note: noteSchema,
+  });
+}
 
 /** Map a Select value to the stored estimate: blank / "No estimate" → null. */
 export function normalizeAmountEstimate(value: string | null | undefined): string | null {
@@ -165,10 +181,10 @@ export type FormParseResult<T> =
       fieldErrors: Record<string, string>;
     };
 
-function toFailure(error: z.ZodError): Extract<FormParseResult<never>, { ok: false }> {
+function toFailure(error: z.ZodError, fieldForRoot?: string): Extract<FormParseResult<never>, { ok: false }> {
   const fieldErrors: Record<string, string> = {};
   for (const issue of error.issues) {
-    const field = issue.path[0];
+    const field = issue.path[0] ?? fieldForRoot;
     if (typeof field === "string" && !(field in fieldErrors)) fieldErrors[field] = issue.message;
   }
   return { ok: false, message: error.issues[0]?.message ?? "Invalid values", fieldErrors };
@@ -176,11 +192,9 @@ function toFailure(error: z.ZodError): Extract<FormParseResult<never>, { ok: fal
 
 /** Validate a typed weight (string or number); returns it rounded to 2 dp. */
 export function parseWeightForm(input: { weight: string | number | null | undefined }): FormParseResult<{ weight: number }> {
-  const parsed = weightRecordSchema.pick({ weight: true }).safeParse({
-    weight: parseNumericInput(input.weight),
-  });
-  if (!parsed.success) return toFailure(parsed.error);
-  return { ok: true, data: { weight: roundWeightKg(parsed.data.weight) } };
+  const parsed = weightFields.weight.safeParse(parseNumericInput(input.weight));
+  if (!parsed.success) return toFailure(parsed.error, "weight");
+  return { ok: true, data: { weight: roundWeightKg(parsed.data) } };
 }
 
 export interface BloodPressureFormResult {
@@ -202,7 +216,7 @@ export function parseBloodPressureForm(input: {
   const systolic = parseNumericInput(input.systolic);
   const diastolic = parseNumericInput(input.diastolic);
   const heartRate = parseNumericInput(input.heartRate);
-  const parsed = bloodPressureRecordSchema.safeParse({
+  const parsed = bloodPressureValuesSchema.safeParse({
     systolic,
     diastolic,
     ...(heartRate !== undefined && { heartRate }),

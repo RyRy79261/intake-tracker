@@ -113,7 +113,7 @@ export function WeightCard() {
       return;
     }
     const trimmedNote = note.trim();
-    const parsed = weightRecordSchema.safeParse({
+    const parsed = weightRecordSchema(Date.now()).safeParse({
       weight: pendingWeight,
       ...(timestamp !== undefined && { timestamp }),
     });

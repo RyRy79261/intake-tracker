@@ -39,7 +39,7 @@ export function resolveEditedTimestamp(
   } catch {
     return { ok: false, message: "Invalid date/time" };
   }
-  if (isFutureTimestamp(timestamp)) {
+  if (isFutureTimestamp(timestamp, Date.now())) {
     return { ok: false, message: FUTURE_TIMESTAMP_MESSAGE };
   }
   return { ok: true, timestamp };

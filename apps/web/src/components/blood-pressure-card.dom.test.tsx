@@ -6,6 +6,7 @@ import userEvent from "@testing-library/user-event";
 import { BloodPressureCard } from "@/components/blood-pressure-card";
 import { renderWithFixtures } from "@/__tests__/react-test-utils";
 import { bloodPressureSeries } from "@/__tests__/fixtures/scenarios";
+/* eslint-disable-next-line no-restricted-imports -- test asserts the stored rows */
 import { db } from "@/lib/db";
 
 async function liveReadings() {

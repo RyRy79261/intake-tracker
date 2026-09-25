@@ -1,6 +1,17 @@
 "use client";
 
 import { useCallback, useRef } from "react";
+import { deleteUrinationRecord } from "@/lib/urination-service";
+import { deleteDefecationRecord } from "@/lib/defecation-service";
+
+/**
+ * Soft-delete a record just created by a quick-log tap (its Undo action).
+ * Uses the service directly rather than the delete hooks, which would raise a
+ * second "Record deleted / Undo" toast.
+ */
+export function removeQuickLoggedRecord(kind: "urination" | "defecation", id: string) {
+  return kind === "urination" ? deleteUrinationRecord(id) : deleteDefecationRecord(id);
+}
 
 /** Identical one-tap logs closer together than this are treated as a double tap. */
 export const QUICK_LOG_REPEAT_WINDOW_MS = 2000;

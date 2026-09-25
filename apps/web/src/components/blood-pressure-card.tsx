@@ -148,7 +148,7 @@ export function BloodPressureCard() {
     }
     const trimmedNote = note.trim();
 
-    const parsed = bloodPressureRecordSchema.safeParse({
+    const parsed = bloodPressureRecordSchema(Date.now()).safeParse({
       systolic,
       diastolic,
       ...(heartRate !== undefined && { heartRate }),
