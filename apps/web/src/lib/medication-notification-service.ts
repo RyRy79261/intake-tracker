@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { showNotification, getNotificationPermission } from "@/lib/push-notification-service";
 import { getSchedulesForPhase } from "@/lib/medication-schedule-service";
 import { isCombo, splitDose, formatCompoundShort } from "@intake/core/compound";
+import { daysOfSupply, formatSupplyRemaining } from "@/lib/medication-ui-utils";
 
 const MED_NOTIFICATION_KEY = "intake-tracker-med-notifications";
 
@@ -55,7 +56,7 @@ async function showRefillAlert(brandName: string, dosageStrength: string, id: st
   if (getNotificationPermission() !== "granted") return false;
 
   return showNotification(`Refill needed: ${brandName}`, {
-    body: `${currentStock} pills left (~${daysLeft} days). Time to refill ${brandName} ${dosageStrength}.`,
+    body: `${formatSupplyRemaining(currentStock, daysLeft)}. Time to refill ${brandName} ${dosageStrength}.`,
     tag: `refill-${id}`,
   });
 }
@@ -169,7 +170,7 @@ async function checkRefillAlerts(): Promise<void> {
     const dailyDosage = schedules.reduce((acc, sched) => acc + (sched.dosage * (sched.daysOfWeek.length / 7)), 0);
     const dailyPills = activeInventory.strength > 0 ? dailyDosage / activeInventory.strength : 0;
 
-    const daysLeft = dailyPills > 0 ? Math.floor(stock / dailyPills) : Infinity;
+    const daysLeft = daysOfSupply(stock, dailyPills);
 
     let shouldAlert = false;
     if (activeInventory.refillAlertDays !== undefined && daysLeft <= activeInventory.refillAlertDays) shouldAlert = true;

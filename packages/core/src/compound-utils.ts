@@ -25,9 +25,19 @@ export function isCombo(record: { compounds?: CompoundStrength[] } | null | unde
 }
 
 /**
+ * True for a strength usable as a pill-math denominator: a finite number above
+ * zero. Zero, negative, NaN, ±Infinity, null and undefined are all invalid —
+ * dividing by them silently deducts 0, NaN or ∞ pills.
+ */
+export function isValidPillStrength(strength: unknown): strength is number {
+  return typeof strength === "number" && Number.isFinite(strength) && strength > 0;
+}
+
+/**
  * Split a summed mg dose into its per-compound amounts, preserving the
- * reference ratio. Used to label a dose when no stocked brand is available
- * to read an exact per-pill breakdown from.
+ * reference ratio. Marketed strengths don't share one exact ratio (24/26,
+ * 49/51, 97/103), so the result can name amounts no tablet contains — prefer
+ * `formatComboDose` for labels.
  */
 export function splitDose(
   dosageMg: number,
@@ -60,6 +70,28 @@ export function formatCompoundShort(
 ): string {
   if (!compounds || compounds.length === 0) return "";
   return `${compounds.map((c) => c.strength).join("/")}${unit}`;
+}
+
+/**
+ * Label a summed dose for display. With a stocked combination brand the
+ * per-compound amounts are that brand's per-pill compounds × the pill count —
+ * what the tablets actually contain (200 on Entresto 97/103 ⇒ `97/103mg`).
+ * Without one, the summed dose is shown as-is rather than an invented split.
+ */
+export function formatComboDose(
+  dosageMg: number,
+  unit = "mg",
+  brand?: { compounds?: CompoundStrength[]; strength?: number } | null,
+): string {
+  if (brand && isCombo(brand)) {
+    const perPill = isValidPillStrength(brand.strength)
+      ? brand.strength
+      : compoundSum(brand.compounds);
+    if (perPill > 0) {
+      return formatCompoundShort(scaleCompounds(brand.compounds, dosageMg / perPill), unit);
+    }
+  }
+  return `${dosageMg}${unit}`;
 }
 
 /** Verbose, named breakdown, e.g. `Sacubitril 49mg + Valsartan 51mg`. */

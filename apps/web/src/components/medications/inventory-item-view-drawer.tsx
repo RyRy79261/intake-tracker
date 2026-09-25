@@ -17,7 +17,7 @@ import {
   useUpdateInventoryTransaction,
   useDeleteInventoryTransaction,
 } from "@/hooks/use-medication-queries";
-import { getEffectivePhase } from "@/lib/medication-ui-utils";
+import { daysOfSupply, getEffectivePhase } from "@/lib/medication-ui-utils";
 import { isCombo, formatCompoundShort, formatCompoundFull } from "@intake/core/compound";
 import type { Prescription, InventoryItem } from "@/lib/db";
 import { Loader2, Archive, ArchiveRestore, Plus, Pencil, Trash2, Check, X, CheckCircle2 } from "lucide-react";
@@ -166,7 +166,7 @@ function InventoryTab({ item, prescription }: { item: InventoryItem; prescriptio
     const dailyDosage = schedules.reduce((acc, s) => acc + (s.dosage * (s.daysOfWeek.length / 7)), 0);
     const dailyPills = dailyDosage / item.strength;
     if (dailyPills > 0) {
-      daysLeft = Math.floor((item.currentStock ?? 0) / dailyPills);
+      daysLeft = daysOfSupply(item.currentStock ?? 0, dailyPills);
     }
   }
 
@@ -179,7 +179,11 @@ function InventoryTab({ item, prescription }: { item: InventoryItem; prescriptio
         </div>
         <div className="text-right">
           <p className="text-sm text-muted-foreground">Est. Supply</p>
-          <p className="text-xl font-semibold">{daysLeft === Infinity ? "∞" : daysLeft} <span className="text-sm font-normal text-muted-foreground">days</span></p>
+          {(item.currentStock ?? 0) <= 0 ? (
+            <p className="text-xl font-semibold text-red-500">Out of stock</p>
+          ) : (
+            <p className="text-xl font-semibold">{daysLeft === Infinity ? "∞" : daysLeft} <span className="text-sm font-normal text-muted-foreground">days</span></p>
+          )}
         </div>
       </div>
 

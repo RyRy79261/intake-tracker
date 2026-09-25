@@ -1,10 +1,15 @@
 "use client";
 
 import { Clock } from "lucide-react";
-import { usePhasesForPrescription, useSchedulesForPhase } from "@/hooks/use-medication-queries";
+import {
+  useInventoryForPrescription,
+  usePhasesForPrescription,
+  useSchedulesForPhase,
+} from "@/hooks/use-medication-queries";
 import type { Prescription } from "@/lib/db";
 import { DAY_LABELS_LONG } from "@/components/medications/titrations/types";
-import { isCombo, splitDose, formatCompoundShort } from "@intake/core/compound";
+import { averageDailyDosage } from "@/lib/medication-ui-utils";
+import { formatComboDose } from "@intake/core/compound";
 
 export function MaintenanceRow({ prescription }: { prescription: Prescription }) {
   const phases = usePhasesForPrescription(prescription.id);
@@ -12,22 +17,26 @@ export function MaintenanceRow({ prescription }: { prescription: Prescription })
     (p) => p.type === "maintenance" && p.status === "active",
   );
   const schedules = useSchedulesForPhase(maintenancePhase?.id);
+  const inventoryItems = useInventoryForPrescription(prescription.id);
 
   if (!maintenancePhase || schedules.length === 0) return null;
 
-  const totalDaily = schedules.reduce((acc, s) => acc + s.dosage, 0);
-  const combo = isCombo(prescription);
-  const fmtDose = (mg: number, unit: string) =>
-    combo
-      ? formatCompoundShort(splitDose(mg, prescription.compounds), unit)
-      : `${mg}${unit}`;
+  // Weekday-weighted, like the refill estimates: a Mon/Wed/Fri schedule adds
+  // 3/7 of its dose to the daily figure, not all of it.
+  const everyDay = schedules.every((s) => s.daysOfWeek.length === 7);
+  const dailyDose = averageDailyDosage(schedules);
+  // Combination drugs are labelled per compound from the active brand's
+  // tablets; with no combo brand stocked the summed dose is shown.
+  const activeBrand = inventoryItems.find((i) => i.isActive && !i.isArchived);
+  const fmtDose = (mg: number, unit: string) => formatComboDose(mg, unit, activeBrand);
 
   return (
     <div className="p-2.5 rounded-lg bg-muted/30 border border-border/40">
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium">{prescription.genericName}</span>
         <span className="text-[10px] text-muted-foreground">
-          {fmtDose(totalDaily, maintenancePhase.unit)}/day
+          {everyDay ? "" : "avg "}
+          {fmtDose(dailyDose, maintenancePhase.unit)}/day
         </span>
       </div>
       {prescription.indication && (
