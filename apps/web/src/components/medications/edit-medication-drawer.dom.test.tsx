@@ -20,6 +20,8 @@ import {
   makePrescription,
   makeMedicationPhase,
   makePhaseSchedule,
+  makeInventoryItem,
+  makeInventoryTransaction,
 } from "@/__tests__/fixtures/db-fixtures";
 
 function regimen() {
@@ -154,5 +156,184 @@ describe("PrescriptionViewDrawer", () => {
       const rx = await db.prescriptions.get(prescription.id);
       expect(rx?.genericName).toBe("Lisinopril XR");
     });
+  });
+
+  it("offers a controlled unit list instead of free text", async () => {
+    const { prescription, phase, schedule } = regimen();
+    await renderWithFixtures(
+      <PrescriptionViewDrawer prescription={prescription} open onOpenChange={() => {}} />,
+      { seed: { prescriptions: [prescription], medicationPhases: [phase], phaseSchedules: [schedule] } },
+    );
+
+    const unit = await screen.findByLabelText(/dosage unit/i);
+    expect(unit.tagName).toBe("SELECT");
+    const options = within(unit).getAllByRole("option").map((o) => o.textContent);
+    expect(options).toEqual(["mg", "mcg", "g", "ml"]);
+  });
+
+  it("blocks a unit that doesn't match the active brand and converts doses when the unit changes", async () => {
+    const user = userEvent.setup();
+    const prescription = makePrescription({ genericName: "Levothyroxine" });
+    const phase = makeMedicationPhase(prescription.id, { unit: "mg" });
+    const schedule = makePhaseSchedule(phase.id, { time: "07:00", dosage: 0.1 });
+    const brand = makeInventoryItem(prescription.id, { brandName: "Eltroxin", strength: 100, unit: "mcg" });
+    await renderWithFixtures(
+      <PrescriptionViewDrawer prescription={prescription} open onOpenChange={() => {}} />,
+      {
+        seed: {
+          prescriptions: [prescription],
+          medicationPhases: [phase],
+          phaseSchedules: [schedule],
+          inventoryItems: [brand],
+        },
+      },
+    );
+
+    const dose = await screen.findByDisplayValue("0.1");
+    await user.clear(dose);
+    await user.type(dose, "0.2");
+    // Eltroxin is counted in mcg, so a mg schedule can't be saved.
+    expect(await screen.findByText(/doses must be in mcg/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /save schedule/i })).toBeDisabled();
+
+    // Switching the unit converts the amount rather than just relabelling it.
+    await user.selectOptions(screen.getByLabelText(/dosage unit/i), "mcg");
+    expect(await screen.findByDisplayValue("200")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /save schedule/i }));
+
+    await vi.waitFor(async () => {
+      expect((await db.medicationPhases.get(phase.id))?.unit).toBe("mcg");
+      const rows = await db.phaseSchedules.where("phaseId").equals(phase.id).toArray();
+      expect(rows.map((r) => r.dosage)).toEqual([200]);
+    });
+  });
+
+  it("takes a combination dose as tablets of the active brand with a live preview", async () => {
+    const user = userEvent.setup();
+    const prescription = makePrescription({ genericName: "Sacubitril/valsartan" });
+    const phase = makeMedicationPhase(prescription.id, { unit: "mg" });
+    const schedule = makePhaseSchedule(phase.id, { time: "08:00", dosage: 200 });
+    const brand = makeInventoryItem(prescription.id, {
+      brandName: "Entresto",
+      strength: 100,
+      unit: "mg",
+      compounds: [
+        { name: "Sacubitril", strength: 49 },
+        { name: "Valsartan", strength: 51 },
+      ],
+    });
+    await renderWithFixtures(
+      <PrescriptionViewDrawer prescription={prescription} open onOpenChange={() => {}} />,
+      {
+        seed: {
+          prescriptions: [prescription],
+          medicationPhases: [phase],
+          phaseSchedules: [schedule],
+          inventoryItems: [brand],
+        },
+      },
+    );
+
+    const tablets = await screen.findByLabelText(/tablets per dose/i);
+    await vi.waitFor(() => expect(tablets).toHaveValue(2));
+    expect(screen.getByText(/98\/102mg/)).toBeInTheDocument();
+
+    await user.clear(tablets);
+    await user.type(tablets, "1.5");
+    expect(await screen.findByText(/73\.5\/76\.5mg/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /save schedule/i }));
+
+    await vi.waitFor(async () => {
+      const rows = await db.phaseSchedules.where("phaseId").equals(phase.id).toArray();
+      expect(rows.map((r) => r.dosage)).toEqual([150]);
+    });
+  });
+
+  it("Medicine tab edits a brand's strength and refill alerts, keeping the mg on hand when asked", async () => {
+    const user = userEvent.setup();
+    const { prescription, phase, schedule } = regimen();
+    // Saved by an old wizard as a 1mg pill; the box really says 5mg. The
+    // refill alerts were skipped at the time.
+    const { refillAlertDays: _days, refillAlertPills: _pills, ...brand } = makeInventoryItem(
+      prescription.id,
+      { brandName: "Zestril", strength: 1, unit: "mg", currentStock: 30 },
+    );
+    const initial = makeInventoryTransaction(brand.id, { amount: 30 });
+    await renderWithFixtures(
+      <PrescriptionViewDrawer prescription={prescription} open onOpenChange={() => {}} />,
+      {
+        seed: {
+          prescriptions: [prescription],
+          medicationPhases: [phase],
+          phaseSchedules: [schedule],
+          inventoryItems: [brand],
+          inventoryTransactions: [initial],
+        },
+      },
+    );
+
+    await user.click(screen.getByRole("tab", { name: /medicine/i }));
+    await user.click(await screen.findByRole("button", { name: /edit zestril/i }));
+
+    const strength = screen.getByLabelText(/^strength$/i);
+    await user.clear(strength);
+    await user.type(strength, "5");
+    await user.type(screen.getByLabelText(/alert when days left/i), "7");
+    await user.click(screen.getByRole("button", { name: /save medicine/i }));
+
+    // Stock is on hand, so the strength change asks what the count means.
+    expect(await screen.findByText(/you have 30 on hand/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /keep 30mg on hand/i }));
+
+    await vi.waitFor(async () => {
+      const item = await db.inventoryItems.get(brand.id);
+      expect(item?.strength).toBe(5);
+      expect(item?.refillAlertDays).toBe(7);
+      const txs = await db.inventoryTransactions.where("inventoryItemId").equals(brand.id).toArray();
+      const adjusted = txs.filter((t) => t.type === "adjusted");
+      expect(adjusted.map((t) => t.amount)).toEqual([-24]);
+      // The original entry is untouched — history isn't rewritten.
+      expect(txs.find((t) => t.id === initial.id)?.amount).toBe(30);
+    });
+  });
+
+  it("Medicine tab keeps the pill count when the strength is only corrected", async () => {
+    const user = userEvent.setup();
+    const { prescription, phase, schedule } = regimen();
+    const brand = makeInventoryItem(prescription.id, { brandName: "Zestril", strength: 1, unit: "mg", currentStock: 30 });
+    await renderWithFixtures(
+      <PrescriptionViewDrawer prescription={prescription} open onOpenChange={() => {}} />,
+      { seed: { prescriptions: [prescription], medicationPhases: [phase], phaseSchedules: [schedule], inventoryItems: [brand] } },
+    );
+
+    await user.click(screen.getByRole("tab", { name: /medicine/i }));
+    await user.click(await screen.findByRole("button", { name: /edit zestril/i }));
+    const strength = screen.getByLabelText(/^strength$/i);
+    await user.clear(strength);
+    await user.type(strength, "10");
+    await user.click(screen.getByRole("button", { name: /save medicine/i }));
+    await user.click(await screen.findByRole("button", { name: /keep 30 pills/i }));
+
+    await vi.waitFor(async () => {
+      expect((await db.inventoryItems.get(brand.id))?.strength).toBe(10);
+    });
+    expect(await db.inventoryTransactions.count()).toBe(0);
+  });
+
+  it("Medicine tab rejects a strength unit that doesn't match the prescription", async () => {
+    const user = userEvent.setup();
+    const { prescription, phase, schedule } = regimen();
+    const brand = makeInventoryItem(prescription.id, { brandName: "Zestril", strength: 10, unit: "mg" });
+    await renderWithFixtures(
+      <PrescriptionViewDrawer prescription={prescription} open onOpenChange={() => {}} />,
+      { seed: { prescriptions: [prescription], medicationPhases: [phase], phaseSchedules: [schedule], inventoryItems: [brand] } },
+    );
+
+    await user.click(screen.getByRole("tab", { name: /medicine/i }));
+    await user.click(await screen.findByRole("button", { name: /edit zestril/i }));
+    await user.selectOptions(screen.getByLabelText(/^unit$/i), "mcg");
+
+    expect(await screen.findByText(/dosed in mg/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /save medicine/i })).toBeDisabled();
   });
 });
