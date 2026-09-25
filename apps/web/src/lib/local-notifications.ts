@@ -1,6 +1,7 @@
 import { Capacitor } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
 import { db } from "@/lib/db";
+import { areRemindersSuspended } from "@/lib/reminder-suspension";
 import { isCombo, splitDose, formatCompoundShort } from "@intake/core/compound";
 
 export async function initLocalNotifications(): Promise<void> {
@@ -22,6 +23,8 @@ export async function syncMedicationNotifications(): Promise<void> {
   if (pending.notifications.length > 0) {
     await LocalNotifications.cancel({ notifications: pending.notifications });
   }
+  // Signed out: keep reminders off until the next sign-in (native-android#8).
+  if (areRemindersSuspended()) return;
 
   const schedules = await db.phaseSchedules
     .filter((s) => s.enabled && s.deletedAt === null)

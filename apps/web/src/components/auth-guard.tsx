@@ -8,6 +8,7 @@ import {
   clearAuthToken,
   apiFetch,
 } from "@/lib/api-fetch";
+import { resumeReminders } from "@/lib/reminder-suspension";
 
 /** Fallback retry delay when a transient validate failure has no 'online' event. */
 const RETRY_VALIDATE_MS = 30_000;
@@ -81,6 +82,17 @@ export function useAuth() {
 
   const loading = isPending || capPending;
   const user = session?.user ?? capUser;
+  const signedInId = loading ? null : (user?.id ?? null);
+
+  // Reminders are suspended at sign-out; bring them back on the next sign-in
+  // (audit native-android#8). resumeReminders() is a no-op after the first
+  // useAuth instance claims it.
+  useEffect(() => {
+    if (!signedInId || !resumeReminders()) return;
+    import("@/lib/local-notifications")
+      .then((m) => m.syncMedicationNotifications())
+      .catch(() => {});
+  }, [signedInId]);
 
   if (loading) {
     return { ready: false, authenticated: false, user: null } as const;

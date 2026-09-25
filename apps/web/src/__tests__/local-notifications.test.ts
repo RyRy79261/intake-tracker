@@ -18,6 +18,11 @@ vi.mock("@capacitor/local-notifications", () => ({
   },
 }));
 
+let remindersSuspended = false;
+vi.mock("@/lib/reminder-suspension", () => ({
+  areRemindersSuspended: () => remindersSuspended,
+}));
+
 const testSchedules: Record<string, unknown>[] = [];
 const testPhases: Record<string, unknown>[] = [];
 const testPrescriptions: Record<string, unknown>[] = [];
@@ -81,6 +86,7 @@ describe("local-notifications", () => {
     mockSchedule.mockResolvedValue(undefined);
     mockCancel.mockResolvedValue(undefined);
     seedDb([], [], []);
+    remindersSuspended = false;
   });
 
   describe("initLocalNotifications", () => {
@@ -151,6 +157,36 @@ describe("local-notifications", () => {
         notifications: [{ id: 1 }, { id: 2 }],
       });
       expect(mockSchedule).toHaveBeenCalledOnce();
+    });
+
+    it("cancels and schedules nothing while signed out (reminders suspended)", async () => {
+      // audit native-android#8: sign-out suspends reminders; the cold-start
+      // resync must not bring them back.
+      remindersSuspended = true;
+      mockGetPending.mockResolvedValue({ notifications: [{ id: 1 }] });
+      seedDb(
+        [
+          {
+            id: "s1",
+            phaseId: "p1",
+            scheduleTimeUTC: 540,
+            daysOfWeek: [1],
+            enabled: true,
+            deletedAt: null,
+            dosage: 100,
+          },
+        ],
+        [{ id: "p1", prescriptionId: "rx1", status: "active", deletedAt: null }],
+        [{ id: "rx1", genericName: "Aspirin", isActive: true, deletedAt: null }],
+      );
+
+      const { syncMedicationNotifications } = await import(
+        "@/lib/local-notifications"
+      );
+      await syncMedicationNotifications();
+
+      expect(mockCancel).toHaveBeenCalledWith({ notifications: [{ id: 1 }] });
+      expect(mockSchedule).not.toHaveBeenCalled();
     });
 
     it("schedules notifications for each day of week", async () => {

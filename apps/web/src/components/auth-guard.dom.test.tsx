@@ -24,7 +24,16 @@ vi.mock("@/lib/api-fetch", () => ({
   apiFetch: (path: string) => apiFetchMock(path),
 }));
 
+const syncMedicationNotifications = vi.fn(async () => undefined);
+vi.mock("@/lib/local-notifications", () => ({
+  syncMedicationNotifications: () => syncMedicationNotifications(),
+}));
+
 import { useAuth } from "@/components/auth-guard";
+import {
+  suspendReminders,
+  areRemindersSuspended,
+} from "@/lib/reminder-suspension";
 
 function validReply(): Response {
   return new Response(
@@ -36,6 +45,29 @@ function validReply(): Response {
 beforeEach(() => {
   apiFetchMock.mockReset();
   clearAuthTokenMock.mockReset();
+  syncMedicationNotifications.mockClear();
+  localStorage.clear();
+});
+
+describe("useAuth reminder resume (audit native-android#8)", () => {
+  it("re-enables and reschedules reminders suspended at sign-out once signed in", async () => {
+    suspendReminders();
+    apiFetchMock.mockResolvedValue(validReply());
+    const { result } = renderHook(() => useAuth());
+    await waitFor(() => expect(result.current.authenticated).toBe(true));
+    await waitFor(() =>
+      expect(syncMedicationNotifications).toHaveBeenCalledTimes(1),
+    );
+    expect(areRemindersSuspended()).toBe(false);
+  });
+
+  it("does not reschedule when reminders were never suspended", async () => {
+    apiFetchMock.mockResolvedValue(validReply());
+    const { result } = renderHook(() => useAuth());
+    await waitFor(() => expect(result.current.authenticated).toBe(true));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(syncMedicationNotifications).not.toHaveBeenCalled();
+  });
 });
 
 describe("useAuth native token validation", () => {
