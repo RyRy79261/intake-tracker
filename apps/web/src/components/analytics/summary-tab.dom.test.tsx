@@ -9,6 +9,7 @@ import {
   makeBloodPressureRecord,
   makeWeightRecord,
 } from "@/__tests__/fixtures/db-fixtures";
+import { useSettingsStore } from "@/stores/settings-store";
 import type { TimeRange } from "@intake/types/analytics";
 
 // Recharts' ResponsiveContainer observes element size; jsdom has no
@@ -78,5 +79,47 @@ describe("SummaryTab", () => {
     expect(await screen.findByText(/1\.0 L total/)).toBeInTheDocument();
     // Sodium total 800 mg appears in its KPI subtitle.
     expect(await screen.findByText(/800 mg total/)).toBeInTheDocument();
+  });
+
+  it("averages over logged days and leaves out the unfinished current day", async () => {
+    useSettingsStore.setState({ dayStartHour: 0 });
+    const noonDaysAgo = (n: number) => {
+      const d = new Date();
+      d.setDate(d.getDate() - n);
+      d.setHours(12, 0, 0, 0);
+      return d.getTime();
+    };
+    // A 30-day window with only three full logged days of 2 L, plus a
+    // half-started today. Dividing by the span would give ~208 ml/day.
+    const now = Date.now();
+    const range: TimeRange = { start: now - 29 * DAY_MS, end: now + DAY_MS };
+
+    await renderWithFixtures(<SummaryTab range={range} />, {
+      seed: {
+        intakeRecords: [
+          makeIntakeRecord({ type: "water", amount: 2000, timestamp: noonDaysAgo(3) }),
+          makeIntakeRecord({ type: "water", amount: 2000, timestamp: noonDaysAgo(2) }),
+          makeIntakeRecord({ type: "water", amount: 2000, timestamp: noonDaysAgo(1) }),
+          makeIntakeRecord({ type: "water", amount: 250, timestamp: Math.min(now, noonDaysAgo(0)) }),
+        ],
+      },
+    });
+
+    expect(await screen.findByText("2000 ml")).toBeInTheDocument();
+    expect(screen.queryByText(/Average daily water .* is below/)).not.toBeInTheDocument();
+  });
+
+  it("rounds fractional intake totals", async () => {
+    const now = Date.now();
+    await renderWithFixtures(<SummaryTab range={RANGE} />, {
+      seed: {
+        intakeRecords: [
+          makeIntakeRecord({ type: "salt", amount: 123.4, timestamp: now - DAY_MS }),
+          makeIntakeRecord({ type: "salt", amount: 56.7, timestamp: now - DAY_MS }),
+        ],
+      },
+    });
+
+    expect(await screen.findByText(/^180 mg total/)).toBeInTheDocument();
   });
 });
