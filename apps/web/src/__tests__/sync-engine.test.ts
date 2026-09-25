@@ -294,6 +294,20 @@ describe("sync-engine", () => {
     expect((await db.intakeRecords.get("late-1"))?.updatedAt).toBe(1000);
   });
 
+  it("pull opts into server-stamp cursors in the request body", async () => {
+    installDom({ onLine: true });
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ result: {}, serverTime: 5_000_000 }),
+    );
+    vi.stubGlobal("fetch", fetchMock as unknown as Mock);
+
+    await runPullCycle();
+
+    const init = (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1];
+    const sent = JSON.parse(init.body as string) as { cursorKind?: string };
+    expect(sent.cursorKind).toBe("server");
+  });
+
   it("cursor skew margin clamps advance to serverTime - 30s", async () => {
     installDom({ onLine: true });
 

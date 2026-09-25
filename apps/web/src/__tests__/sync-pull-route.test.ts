@@ -308,7 +308,10 @@ describe("sync-pull-route", () => {
     ]);
 
     const res = await POST(
-      makePullRequest({ cursors: { intakeRecords: { updatedAt: 8_000, id: "" } } }),
+      makePullRequest({
+        cursors: { intakeRecords: { updatedAt: 8_000, id: "" } },
+        cursorKind: "server",
+      }),
     );
     const body = (await res.json()) as {
       result: Record<
@@ -349,6 +352,55 @@ describe("sync-pull-route", () => {
     walk(intakeWhere.condition);
     expect(names).toContain("server_updated_at");
     expect(names).not.toContain("updated_at");
+  });
+
+  it("keeps paging by the row's updatedAt for a client that does not opt into server cursors", async () => {
+    // A service-worker-cached client from before the server cursor derives its
+    // next cursor from the LAST ROW's `updatedAt`. Paging it by the server
+    // stamp would hand it a page whose last row's `updatedAt` sits behind the
+    // page start (a late push), so with `hasMore` it would re-request the same
+    // page forever. It keeps the old keyset instead.
+    const { POST } = await import("@/app/api/sync/pull/route");
+    const { schemaByTableName } = await import("@intake/db/sync-payload");
+
+    rowsByTableRef.set(schemaByTableName.intakeRecords, [
+      { id: "a", updatedAt: 1000, serverUpdatedAt: 9_000, deletedAt: null },
+    ]);
+
+    const res = await POST(
+      makePullRequest({ cursors: { intakeRecords: { updatedAt: 500, id: "" } } }),
+    );
+    const body = (await res.json()) as {
+      result: Record<
+        string,
+        { rows: StubRow[]; cursor?: { updatedAt: number; id: string } }
+      >;
+    };
+    const slice = body.result.intakeRecords!;
+    expect(slice.rows[0]).not.toHaveProperty("serverUpdatedAt");
+    // The cursor, if any, is in the same space the legacy client reads.
+    expect(slice.cursor).toEqual({ updatedAt: 1000, id: "a" });
+
+    const intakeWhere = whereCalls.find(
+      (c) => c.table === schemaByTableName.intakeRecords,
+    )!;
+    const names = new Set<string>();
+    const seen = new WeakSet<object>();
+    const walk = (node: unknown): void => {
+      if (!node || typeof node !== "object" || seen.has(node)) return;
+      seen.add(node);
+      if (Array.isArray(node)) {
+        node.forEach(walk);
+        return;
+      }
+      for (const [k, v] of Object.entries(node)) {
+        if (k === "name" && typeof v === "string") names.add(v);
+        if (k === "value" || k === "queryChunks" || k === "chunks") walk(v);
+      }
+    };
+    walk(intakeWhere.condition);
+    expect(names).toContain("updated_at");
+    expect(names).not.toContain("server_updated_at");
   });
 
   it("returns serverTime for client-side skew-margin cursor clamp", async () => {

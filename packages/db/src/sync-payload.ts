@@ -406,6 +406,15 @@ export const pullBodySchema = z.object({
     }
     return raw;
   }, z.partialRecord(tableNameSchema, cursorSchema)),
+  // Which keyset the cursors are in. `"server"` = `(serverUpdatedAt, id)` —
+  // sent by every client that stores the returned `cursor` (audit
+  // sync-engine#3). Absent = a service-worker-cached older client that
+  // derives its cursor from the last row's own `updatedAt`; it keeps being
+  // paged by `(updatedAt, id)`, since server-stamp order would hand it pages
+  // whose last row sits behind the page start and it would re-request the
+  // same page forever. An older server strips the unknown key and answers in
+  // `updatedAt` space without a `cursor`, which the client falls back to.
+  cursorKind: z.literal("server").optional(),
 });
 
 export type PullBody = z.infer<typeof pullBodySchema>;

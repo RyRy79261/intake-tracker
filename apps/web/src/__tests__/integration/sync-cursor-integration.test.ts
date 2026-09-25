@@ -100,7 +100,9 @@ type PullSlice = {
 type PullBody = { result: Record<string, PullSlice>; serverTime: number };
 
 async function pull(cursors: Record<string, unknown>): Promise<PullBody> {
-  const res = await PULL(post("/api/sync/pull", { cursors }));
+  const res = await PULL(
+    post("/api/sync/pull", { cursors, cursorKind: "server" }),
+  );
   expect(res.status).toBe(200);
   return (await res.json()) as PullBody;
 }

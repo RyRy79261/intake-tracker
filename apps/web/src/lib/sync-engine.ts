@@ -504,7 +504,9 @@ export async function runPullCycle(): Promise<void> {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           cache: "no-store",
-          body: JSON.stringify({ cursors }),
+          // Opt into the server-stamp keyset; without it the route pages by
+          // `updatedAt` for older clients (audit sync-engine#3).
+          body: JSON.stringify({ cursors, cursorKind: "server" }),
         });
       } catch (err) {
         scheduleFailedPullRetry(

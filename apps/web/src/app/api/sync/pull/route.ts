@@ -8,7 +8,8 @@
  * other device's cursor — the client's own `updatedAt` only drives LWW
  * (audit sync-engine#3). Each table slice returns the `cursor` to resume from;
  * the client treats it as opaque. `serverUpdatedAt` never leaves the server as
- * row data.
+ * row data. A request without `cursorKind: "server"` comes from an older
+ * cached client and is still paged by `(updated_at, id)`.
  *
  * Security contract (43-04-PLAN.md threat model):
  *   - withAuth gates the route behind a valid Neon Auth session. The handler
@@ -77,6 +78,8 @@ export const POST = withAuth(async ({ request, auth }) => {
     // note at the top of the file.
     const serverTime = Date.now();
 
+    const byServerStamp = parsed.data.cursorKind === "server";
+
     const tableNames = (Object.keys(schemaByTableName) as TableName[]).filter(t => t !== 'auditLogs');
     const entries = await Promise.all(
       tableNames.map(async (tableName) => {
@@ -91,15 +94,21 @@ export const POST = withAuth(async ({ request, auth }) => {
         const table = schemaByTableName[tableName] as PgTable & {
           id: PgColumn;
           userId: PgColumn;
+          updatedAt: PgColumn;
           serverUpdatedAt: PgColumn;
         };
 
         // Keyset on the SERVER-assigned stamp, not the client's `updatedAt`:
         // a record pushed late keeps its old `updatedAt`, which would already
-        // sit below every other device's cursor (audit sync-engine#3).
-        // `stamp > cursor` OR `(stamp = cursor AND id > cursorId)` — the tuple
-        // comparison keeps pagination correct when many rows share one stamp
+        // sit below every other device's cursor (audit sync-engine#3). Only
+        // clients that opted in (`cursorKind: "server"`) get it — an older
+        // cached client builds its cursor from the last row's `updatedAt`, so
+        // it stays on the `updatedAt` keyset (see pullBodySchema).
+        // `key > cursor` OR `(key = cursor AND id > cursorId)` — the tuple
+        // comparison keeps pagination correct when many rows share one key
         // (a whole push batch, or the migration backfill). Ordering matches.
+        const keyField = byServerStamp ? "serverUpdatedAt" : "updatedAt";
+        const keyColumn = table[keyField];
         const rows = (await drizzleDb
           .select()
           .from(table)
@@ -107,15 +116,15 @@ export const POST = withAuth(async ({ request, auth }) => {
             and(
               eq(table.userId, auth.userId!),
               or(
-                gt(table.serverUpdatedAt, cursorUpdatedAt),
+                gt(keyColumn, cursorUpdatedAt),
                 and(
-                  eq(table.serverUpdatedAt, cursorUpdatedAt),
+                  eq(keyColumn, cursorUpdatedAt),
                   gt(table.id, cursorId),
                 ),
               ),
             ),
           )
-          .orderBy(asc(table.serverUpdatedAt), asc(table.id))
+          .orderBy(asc(keyColumn), asc(table.id))
           .limit(PULL_SOFT_CAP + 1)) as Record<string, unknown>[];
 
         const hasMore = rows.length > PULL_SOFT_CAP;
@@ -125,7 +134,7 @@ export const POST = withAuth(async ({ request, auth }) => {
         // server-only and never reaches the client as row data.
         const cursor = last
           ? {
-              updatedAt: last.serverUpdatedAt as number,
+              updatedAt: last[keyField] as number,
               id: last.id as string,
             }
           : undefined;
