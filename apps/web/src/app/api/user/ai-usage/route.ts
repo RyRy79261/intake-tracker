@@ -12,6 +12,7 @@ import { aiUsage } from "@intake/db/schema";
  *         anthropic: { totalCalls, inputTokens, outputTokens },
  *         groq: { totalCalls, audioSeconds },
  *         byRoute: [{ route, calls, inputTokens, outputTokens }],
+ *         byModel: [{ provider, model, calls, errors, inputTokens, ... }],
  *       },
  *       asGrantor: {
  *         byGrantee: [{ granteeEmail, provider, calls, inputTokens, outputTokens }],
@@ -70,6 +71,26 @@ export const GET = withAuth(async ({ request, auth }) => {
     )
     .groupBy(aiUsage.route, aiUsage.provider);
 
+  // --- Mine, by model ---
+  // Tiers price very differently (Opus vs Sonnet vs Haiku), so tokens are
+  // only meaningful per model. Failed upstream calls are included and
+  // counted in `errors`: they still count against the key's rate limits,
+  // and some (a mid-stream failure) are billed.
+  const mineByModel = await db
+    .select({
+      provider: aiUsage.provider,
+      model: aiUsage.model,
+      calls: drizzleSql<number>`count(*)::int`,
+      errors: drizzleSql<number>`(count(*) filter (where ${aiUsage.status} = 'error'))::int`,
+      inputTokens: drizzleSql<number>`coalesce(sum(${aiUsage.inputTokens}), 0)::int`,
+      outputTokens: drizzleSql<number>`coalesce(sum(${aiUsage.outputTokens}), 0)::int`,
+      cacheReadTokens: drizzleSql<number>`coalesce(sum(${aiUsage.cacheReadTokens}), 0)::int`,
+      cacheCreateTokens: drizzleSql<number>`coalesce(sum(${aiUsage.cacheCreateTokens}), 0)::int`,
+    })
+    .from(aiUsage)
+    .where(and(eq(aiUsage.userId, userId), gte(aiUsage.timestamp, cutoff)))
+    .groupBy(aiUsage.provider, aiUsage.model);
+
   // --- As grantor: who consumed my key ---
   // Join with neon_auth.users_sync via raw SQL to get the grantee email.
   const rawSql = neon(process.env.DATABASE_URL!);
@@ -106,6 +127,7 @@ export const GET = withAuth(async ({ request, auth }) => {
     mine: {
       byProvider: mineByProvider,
       byRoute: mineByRoute,
+      byModel: mineByModel,
     },
     asGrantor: {
       byGrantee: asGrantor.map((r) => ({
