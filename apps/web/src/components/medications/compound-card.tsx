@@ -19,10 +19,7 @@ export function MedicationCard({ item, prescription }: MedicationCardProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const currentStock = item.currentStock ?? 0;
-  const isFractional = currentStock % 1 !== 0;
-  const stockDisplay = isFractional
-    ? formatPillCount(currentStock)
-    : `${currentStock} pills`;
+  const stockDisplay = formatPillCount(currentStock, "pill");
 
   const isNegativeStock = currentStock < 0;
   const isLowStock =

@@ -225,8 +225,12 @@ function InventoryTab({
         </div>
         <div className="text-right">
           <p className="text-sm text-muted-foreground">Est. Supply</p>
-          <p className="text-xl font-semibold" data-testid="est-supply">{supplyText} <span className="text-sm font-normal text-muted-foreground">days</span></p>
-          {status?.isLow && (
+          {(item.currentStock ?? 0) <= 0 ? (
+            <p className="text-xl font-semibold text-red-500" data-testid="est-supply">Out of stock</p>
+          ) : (
+            <p className="text-xl font-semibold" data-testid="est-supply">{supplyText} <span className="text-sm font-normal text-muted-foreground">days</span></p>
+          )}
+          {status?.isLow && (item.currentStock ?? 0) > 0 && (
             <p className="text-xs text-amber-600 dark:text-amber-400">Refill soon</p>
           )}
         </div>

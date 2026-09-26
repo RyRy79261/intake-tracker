@@ -12,7 +12,7 @@ import {
 } from "@/hooks/use-medication-queries";
 import type { BulkDoseOutcome, DoseLog, DoseSlot, UntakeDoseInput } from "@/hooks/use-medication-queries";
 import { useTodayKey } from "@/hooks/use-today-key";
-import { hapticTake, hapticSkip, getCurrentTimeHHMM } from "@/lib/medication-ui-utils";
+import { hapticTake, hapticSkip, getCurrentTimeHHMM, formatTakeToastDescription } from "@/lib/medication-ui-utils";
 import { toast } from "@intake/ui/use-toast";
 import { showUndoToast } from "@/components/medications/undo-toast";
 import { DoseProgressSummary } from "@/components/medications/dose-progress-summary";
@@ -197,9 +197,7 @@ export function ScheduleView({ selectedDate, onDoseClick, onAddMed }: ScheduleVi
         return;
       }
 
-      const description = slot.inventory
-        ? `${slot.pillsPerDose ?? 1} pill(s) deducted`
-        : "Dose logged -- no stock tracked";
+      const description = formatTakeToastDescription(slot);
       offerUndo(`${slot.prescription.genericName} taken`, description, [{ slot, log }]);
     },
     [takeDoseMut, offerUndo],

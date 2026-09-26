@@ -51,8 +51,16 @@ describe("calculatePillsConsumed", () => {
     expect(calculatePillsConsumed(75, 50)).toBe(1.5);
   });
 
-  it("returns 0 when pill strength is 0", () => {
-    expect(calculatePillsConsumed(50, 0)).toBe(0);
+  it("returns undefined when pill strength is 0 or negative", () => {
+    expect(calculatePillsConsumed(50, 0)).toBeUndefined();
+    expect(calculatePillsConsumed(50, -10)).toBeUndefined();
+  });
+
+  it("returns undefined for a missing or non-finite pill strength", () => {
+    expect(calculatePillsConsumed(50, undefined as unknown as number)).toBeUndefined();
+    expect(calculatePillsConsumed(50, null as unknown as number)).toBeUndefined();
+    expect(calculatePillsConsumed(50, NaN)).toBeUndefined();
+    expect(calculatePillsConsumed(50, Infinity)).toBeUndefined();
   });
 
   it("handles very small fractions without floating-point noise", () => {
@@ -424,6 +432,34 @@ describe("takeDose", () => {
 
     const updatedInv = await db.inventoryItems.get(inv.id);
     expect(updatedInv!.currentStock).toBe(29.5);
+  });
+
+  it.each([
+    ["zero", 0],
+    ["missing", undefined],
+    ["null", null],
+  ])("skips the stock decrement for a %s pill strength", async (_label, strength) => {
+    const { rx, phase, schedule, inv } = await seedFullPrescription({ initialStock: 30 });
+    await db.inventoryItems.update(inv.id, { strength: strength as unknown as number });
+
+    const result = await takeDose({
+      prescriptionId: rx.id,
+      phaseId: phase.id,
+      scheduleId: schedule.id,
+      date: DATE,
+      time: TIME,
+      dosageMg: 100,
+    });
+
+    expect(result.success).toBe(true);
+    const consumed = (
+      await db.inventoryTransactions.where("inventoryItemId").equals(inv.id).toArray()
+    ).filter((t) => t.type === "consumed");
+    expect(consumed).toHaveLength(0);
+    expect((await db.inventoryItems.get(inv.id))!.currentStock).toBe(30);
+
+    const audit = (await db.auditLogs.toArray()).find((a) => a.action === "dose_taken");
+    expect(JSON.parse(audit!.details!).warning).toBe("invalid_strength");
   });
 
   it("uses takenAtTime override for actionTimestamp (retroactive logging)", async () => {

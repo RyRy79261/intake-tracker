@@ -1,4 +1,3 @@
-import { db } from "@/lib/db";
 import { showNotification, getNotificationPermission } from "@/lib/push-notification-service";
 import { isCombo, formatCompoundShort } from "@intake/core/compound";
 import {
@@ -9,6 +8,7 @@ import {
 import { getDeviceTimezone } from "@/lib/timezone";
 import { toLocalDateKey } from "@/lib/date-utils";
 import { getRefillStatuses, reconcileRefillNotifications } from "@/lib/refill-status";
+import { formatSupplyRemaining } from "@/lib/medication-ui-utils";
 
 const MED_NOTIFICATION_KEY = "intake-tracker-med-notifications";
 
@@ -63,9 +63,8 @@ async function showDoseReminder(
 async function showRefillAlert(brandName: string, dosageStrength: string, id: string, currentStock: number, daysLeft: number | null): Promise<boolean> {
   if (getNotificationPermission() !== "granted") return false;
 
-  const supply = daysLeft === null ? "" : ` (~${daysLeft} days)`;
   return showNotification(`Refill needed: ${brandName}`, {
-    body: `${currentStock} pills left${supply}. Time to refill ${brandName} ${dosageStrength}.`,
+    body: `${formatSupplyRemaining(currentStock, daysLeft ?? Infinity)}. Time to refill ${brandName} ${dosageStrength}.`,
     tag: `refill-${id}`,
   });
 }

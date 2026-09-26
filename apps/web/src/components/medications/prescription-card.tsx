@@ -16,7 +16,7 @@ import {
   getPendingTitrationPhase,
   getCurrentTimeHHMM,
 } from "@/lib/medication-ui-utils";
-import { isCombo, splitDose, formatCompoundShort } from "@intake/core/compound";
+import { isCombo, formatCompoundShort, formatComboDose } from "@intake/core/compound";
 import {
   usePhasesForPrescription,
   usePhasesLoaded,
@@ -90,13 +90,10 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
   const firstSlot = prescriptionSlots.length > 0 ? prescriptionSlots[0] : undefined;
   const dosageMg = firstSlot?.dosageMg;
   const unit = effectivePhase?.unit ?? "mg";
-  // Dose chip — per-compound split for a combination drug, plain mg otherwise.
+  // Dose chip — per-compound amounts from the active combo brand's tablets,
+  // plain summed mg otherwise.
   const dosageChip =
-    dosageMg === undefined
-      ? undefined
-      : firstSlot && isCombo(firstSlot.prescription)
-        ? formatCompoundShort(splitDose(dosageMg, firstSlot.prescription.compounds), unit)
-        : `${dosageMg}${unit}`;
+    dosageMg === undefined ? undefined : formatComboDose(dosageMg, unit, firstSlot?.inventory);
 
   const pendingSlots = prescriptionSlots.filter((s) => s.status === "pending");
   const allHandled = prescriptionSlots.length > 0 && pendingSlots.length === 0;
