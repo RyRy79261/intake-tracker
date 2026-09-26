@@ -376,13 +376,27 @@ describe("backup-service", () => {
       db.auditLogs.add(makeAuditLog()),
     ]);
 
-    // Create minimal backup with 1 intake record only
+    // Backup with 1 intake record and every other table present but empty
+    // (a table the file has no key for is left alone).
     const backupData: BackupData = {
       version: 5,
       exportedAt: new Date().toISOString(),
       intakeRecords: [makeIntakeRecord()],
       weightRecords: [],
       bloodPressureRecords: [],
+      eatingRecords: [],
+      urinationRecords: [],
+      defecationRecords: [],
+      substanceRecords: [],
+      prescriptions: [],
+      medicationPhases: [],
+      phaseSchedules: [],
+      inventoryItems: [],
+      inventoryTransactions: [],
+      doseLogs: [],
+      titrationPlans: [],
+      dailyNotes: [],
+      auditLogs: [],
     };
 
     const file = backupDataToFile(backupData);

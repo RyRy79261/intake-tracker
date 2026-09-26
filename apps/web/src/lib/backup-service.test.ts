@@ -304,6 +304,22 @@ describe("backup-service: importBackup replace mode", () => {
     expect((await db.weightRecords.get("old-weight"))?.deletedAt).toBeTypeOf("number");
   });
 
+  it("leaves tables the backup file has no key for untouched", async () => {
+    // An older backup that predates a table (no `userProfile` / `doseLogs`
+    // key at all) says nothing about it, so replace must not wipe it.
+    await db.userProfile.add(makeUserProfile({ id: "profile" }));
+    await db.doseLogs.add(makeDoseLog("rx", "ph", "sch", { id: "dose" }));
+
+    const res = await importBackup(makeFile(makeBackupJson()), "replace");
+    expect(res.success).toBe(true);
+    if (!res.success) return;
+    expect(res.data.success).toBe(true);
+
+    expect((await db.userProfile.get("profile"))?.deletedAt).toBeNull();
+    expect((await db.doseLogs.get("dose"))?.deletedAt).toBeNull();
+    expect(await db._syncQueue.count()).toBe(0);
+  });
+
   it("rolls back everything when the import fails midway", async () => {
     await db.intakeRecords.add(makeIntakeRecord({ id: "survivor" }));
     // Every Dexie table shares one Table prototype; fail only weight writes.

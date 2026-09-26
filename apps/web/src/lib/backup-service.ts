@@ -6,7 +6,8 @@
  * userProfile record conflicts, while health tables skip rows whose id is
  * already live locally. A backup row whose local copy is tombstoned restores
  * it in every table. Replace mode bypasses conflict detection, overwrites
- * every table and tombstones local rows the backup lacks.
+ * every table and tombstones local rows the backup lacks (only in tables the
+ * file includes).
  *
  * Every import runs in one Dexie transaction and goes through the sync queue
  * like any other write (audit analytics-history-export#4):
@@ -547,7 +548,9 @@ async function importTables(
         imported++;
       }
 
-      if (mode === "replace") {
+      // A file with no key for this table (a backup older than the table)
+      // says nothing about it, so replace leaves it alone.
+      if (mode === "replace" && data[tableName] !== undefined) {
         // Local rows the backup lacks are tombstoned rather than cleared, so
         // the deletion reaches the server copy too.
         for (const existing of local.values()) {
