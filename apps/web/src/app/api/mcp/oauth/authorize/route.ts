@@ -41,6 +41,7 @@ import { sql } from "drizzle-orm";
 import { getClient, issueAuthCode } from "@/lib/mcp/oauth";
 import { parseScopeString, serialiseScopes } from "@/lib/mcp/scopes";
 import { isEmailAllowed } from "@/lib/mcp/whitelist";
+import { consentDataCategories } from "@/lib/mcp/tool-catalog";
 import { getPublicOrigin } from "@/lib/mcp/origin";
 
 export const dynamic = "force-dynamic";
@@ -379,10 +380,9 @@ export async function GET(req: NextRequest) {
     <h1>Connect to intake-tracker</h1>
     <p><strong>${escapeHtml(client.clientName)}</strong> is requesting read-only access to your intake-tracker data:</p>
     <ul>
-      <li>Today's intake totals and latest BP/weight</li>
-      <li>Intake, weight, blood-pressure, and food history</li>
-      <li>Active medications and recent dose logs</li>
-      <li>Inventory status</li>
+      ${consentDataCategories()
+        .map((line) => `<li>${escapeHtml(line)}</li>`)
+        .join("\n      ")}
     </ul>
     <p class="meta">Signed in as ${escapeHtml(user.email ?? user.userId)}. Scope: ${escapeHtml(scope)}.</p>
     <form method="POST" class="actions">

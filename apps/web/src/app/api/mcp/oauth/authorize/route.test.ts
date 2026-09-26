@@ -201,6 +201,24 @@ describe("authorize GET — signed in", () => {
     expect(body).toContain("user@example.test");
   });
 
+  it("lists every category of data the registered tools expose", async () => {
+    getSessionMock.mockResolvedValue({
+      data: { user: { id: "user-1", email: "user@example.test" } },
+    });
+
+    const res = await GET(makeRequest(authorizeParams()));
+    const body = await res.text();
+
+    // The categories the old hand-written list left out.
+    expect(body).toContain("Caffeine and alcohol history");
+    expect(body).toContain("Urination history");
+    expect(body).toContain("Titration plans, including their clinical notes and warnings");
+    const { consentDataCategories } = await import("@/lib/mcp/tool-catalog");
+    for (const line of consentDataCategories()) {
+      expect(body).toContain(line.replaceAll("'", "&#39;"));
+    }
+  });
+
   it("renders consent and retires the marker after a successful sign-in", async () => {
     getSessionMock.mockResolvedValue({
       data: { user: { id: "user-1", email: "user@example.test" } },
