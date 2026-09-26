@@ -16,7 +16,8 @@
     "./lifecycle": "./src/lifecycle.ts",
     "./effective-phase": "./src/effective-phase.ts",
     "./strength": "./src/strength-parser.ts",
-    "./record-schemas": "./src/record-schemas.ts"
+    "./record-schemas": "./src/record-schemas.ts",
+    "./logical-day": "./src/logical-day.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

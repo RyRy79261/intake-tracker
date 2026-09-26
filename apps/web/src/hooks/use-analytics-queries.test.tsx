@@ -1,15 +1,17 @@
 // @vitest-environment jsdom
 import type { ReactNode } from "react";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { renderHook, waitFor } from "@testing-library/react";
+import { renderHook, waitFor, act } from "@testing-library/react";
 
 import {
   useFluidBalance,
   useWeightTrend,
   useBPTrend,
   useSaltVsWeight,
+  useTimeScopeRange,
 } from "@/hooks/use-analytics-queries";
+import { useSettingsStore } from "@/stores/settings-store";
 import { makeTestQueryClient } from "@/__tests__/react-test-utils";
 import { seedDatabase } from "@/__tests__/fixtures/scenarios";
 import {
@@ -153,5 +155,52 @@ describe("useSaltVsWeight", () => {
     // Salt and weight both rise together -> a positive coefficient.
     expect(result.current.value.coefficient).toBeGreaterThan(0);
     expect(result.current.unit).toBe("correlation");
+  });
+});
+
+describe("useTimeScopeRange", () => {
+  // Local wall-clock dates: jsdom's device zone is the host zone.
+  const local = (d: number, h: number, m = 0) => new Date(2026, 8, d, h, m).getTime();
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
+    useSettingsStore.setState({ dayStartHour: 2 });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("aligns presets to logical days that start at dayStartHour", () => {
+    vi.setSystemTime(local(20, 23, 30));
+    const { result } = renderHook(() => useTimeScopeRange("7d"));
+    expect(result.current).toEqual({ start: local(14, 2), end: local(21, 2) - 1 });
+  });
+
+  it("treats 'Today' as the current logical day, even after midnight", () => {
+    vi.setSystemTime(local(21, 1, 0));
+    const { result } = renderHook(() => useTimeScopeRange("24h"));
+    expect(result.current).toEqual({ start: local(20, 2), end: local(21, 2) - 1 });
+  });
+
+  it("moves the range forward when the day rolls over with the page open", () => {
+    vi.setSystemTime(local(20, 23, 30));
+    const { result } = renderHook(() => useTimeScopeRange("7d"));
+    const before = result.current;
+
+    vi.setSystemTime(local(21, 8, 0));
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+
+    expect(result.current.end).toBe(local(22, 2) - 1);
+    expect(result.current.start).toBe(local(15, 2));
+
+    // Within the same logical day the object stays referentially stable.
+    const after = result.current;
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(result.current).toBe(after);
+    expect(before).not.toBe(after);
   });
 });

@@ -36,7 +36,9 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { AiInsightsCard } from "@/components/analytics/ai-insights-card";
 import { NutrientAnalysisCard } from "@/components/analytics/nutrient-analysis-card";
 import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
-import type { TimeRange, TrendDirection } from "@intake/types/analytics";
+import { getDeviceTimezone } from "@/lib/timezone";
+import { averagePerLoggedDay } from "@intake/core/logical-day";
+import type { DataPoint, TimeRange, TrendDirection } from "@intake/types/analytics";
 
 const TOOLTIP_STYLE = {
   backgroundColor: "hsl(var(--card))",
@@ -46,7 +48,6 @@ const TOOLTIP_STYLE = {
 };
 
 const CHART_MARGIN = { top: 5, right: 5, left: -20, bottom: 0 };
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const FLUID_TARGET_ML = 500;
 
 // ---------------------------------------------------------------------------
@@ -124,51 +125,61 @@ export function SummaryTab({ range }: { range: TimeRange }) {
   const sugarEnabled = useOptionalTrackerEnabled("sugar");
   const potassiumEnabled = useOptionalTrackerEnabled("potassium");
 
+  const dayStartHour = useSettingsStore((s) => s.dayStartHour);
+
   // Aggregate the unified record list into intake totals and event counts.
+  // Daily averages divide each domain's total by the logical days on which
+  // that domain was logged, leaving out the unfinished current day, so
+  // unlogged days and a half-logged today don't drag the average down.
   const totals = useMemo(() => {
-    let waterMl = 0;
-    let saltMg = 0;
-    let sugarG = 0;
-    let potassiumMg = 0;
+    const series = {
+      water: [] as DataPoint[],
+      salt: [] as DataPoint[],
+      sugar: [] as DataPoint[],
+      potassium: [] as DataPoint[],
+      caffeine: [] as DataPoint[],
+      alcohol: [] as DataPoint[],
+    };
     let meals = 0;
     let urination = 0;
     let defecation = 0;
-    let caffeineMg = 0;
-    let alcoholDrinks = 0;
-    const activeDays = new Set<string>();
 
     for (const r of records) {
-      activeDays.add(new Date(r.record.timestamp).toDateString());
-      if (r.type === "intake" && r.record.type === "water") waterMl += r.record.amount;
-      else if (r.type === "intake" && r.record.type === "salt") saltMg += r.record.amount;
-      else if (r.type === "intake" && r.record.type === "sugar") sugarG += r.record.amount;
-      else if (r.type === "intake" && r.record.type === "potassium") potassiumMg += r.record.amount;
+      const timestamp = r.record.timestamp;
+      if (r.type === "intake") series[r.record.type].push({ timestamp, value: r.record.amount });
       else if (r.type === "eating") meals += 1;
       else if (r.type === "urination") urination += 1;
       else if (r.type === "defecation") defecation += 1;
-      else if (r.type === "caffeine") caffeineMg += r.record.amountMg ?? 0;
-      else if (r.type === "alcohol") alcoholDrinks += r.record.amountStandardDrinks ?? 0;
+      else if (r.type === "caffeine") series.caffeine.push({ timestamp, value: r.record.amountMg ?? 0 });
+      else if (r.type === "alcohol") {
+        series.alcohol.push({ timestamp, value: r.record.amountStandardDrinks ?? 0 });
+      }
     }
 
+    const opts = { now: Date.now(), dayStartHour, tz: getDeviceTimezone() };
+    const sum = (pts: DataPoint[]) => pts.reduce((s, p) => s + p.value, 0);
+    const avg = (pts: DataPoint[]) => averagePerLoggedDay(pts, opts).average;
+
     return {
-      waterMl,
-      saltMg,
-      sugarG,
-      potassiumMg,
+      waterMl: sum(series.water),
+      saltMg: sum(series.salt),
+      sugarG: sum(series.sugar),
+      potassiumMg: sum(series.potassium),
       meals,
       urination,
       defecation,
-      caffeineMg,
-      alcoholDrinks,
-      activeDays: activeDays.size,
+      caffeineMg: sum(series.caffeine),
+      alcoholDrinks: sum(series.alcohol),
+      avg: {
+        waterMl: avg(series.water),
+        saltMg: avg(series.salt),
+        sugarG: avg(series.sugar),
+        potassiumMg: avg(series.potassium),
+        caffeineMg: avg(series.caffeine),
+        alcoholDrinks: avg(series.alcohol),
+      },
     };
-  }, [records]);
-
-  // Per-day divisor: span of the range, or active days for the "all" preset.
-  const rangeDays =
-    range.start > 0
-      ? Math.max(1, Math.round((range.end - range.start) / MS_PER_DAY))
-      : Math.max(1, totals.activeDays);
+  }, [records, dayStartHour]);
 
   const bpReadings = bp.value.readings;
   const weightReadings = weight.value.readings;
@@ -207,14 +218,14 @@ export function SummaryTab({ range }: { range: TimeRange }) {
       }
     }
 
-    const avgWater = totals.waterMl / rangeDays;
+    const avgWater = totals.avg.waterMl;
     if (totals.waterMl > 0 && avgWater < waterGoal) {
       out.push(
         `Average daily water (${Math.round(avgWater)} ml) is below your ${waterGoal} ml goal.`,
       );
     }
 
-    const avgSalt = totals.saltMg / rangeDays;
+    const avgSalt = totals.avg.saltMg;
     if (totals.saltMg > 0 && avgSalt > saltLimit) {
       out.push(
         `Average daily sodium (${Math.round(avgSalt)} mg) is above your ${saltLimit} mg limit.`,
@@ -222,7 +233,7 @@ export function SummaryTab({ range }: { range: TimeRange }) {
     }
 
     if (sugarEnabled) {
-      const avgSugar = totals.sugarG / rangeDays;
+      const avgSugar = totals.avg.sugarG;
       if (totals.sugarG > 0 && avgSugar > sugarLimit) {
         out.push(
           `Average daily sugar (${Math.round(avgSugar)} g) is above your ${sugarLimit} g limit.`,
@@ -233,7 +244,7 @@ export function SummaryTab({ range }: { range: TimeRange }) {
     if (potassiumEnabled) {
       // Potassium is a soft target — no over-limit warning, just a "below
       // target" observation since the deficit case is what usually matters.
-      const avgPotassium = totals.potassiumMg / rangeDays;
+      const avgPotassium = totals.avg.potassiumMg;
       if (totals.potassiumMg > 0 && potassiumLimit > 0 && avgPotassium < potassiumLimit) {
         out.push(
           `Average daily potassium (${Math.round(avgPotassium)} mg) is below your ${potassiumLimit} mg target — note potassium estimates are rough.`,
@@ -242,7 +253,7 @@ export function SummaryTab({ range }: { range: TimeRange }) {
     }
 
     return out;
-  }, [bp, bpReadings, weightReadings, fluid, totals, rangeDays, waterGoal, saltLimit, sugarLimit, potassiumLimit, sugarEnabled, potassiumEnabled]);
+  }, [bp, bpReadings, weightReadings, fluid, totals, waterGoal, saltLimit, sugarLimit, potassiumLimit, sugarEnabled, potassiumEnabled]);
 
   if (!hasAnyData) {
     // The nutrient card uses a fixed 30-day window pinned at its mount,
@@ -340,29 +351,29 @@ export function SummaryTab({ range }: { range: TimeRange }) {
         <KpiCard
           icon={<Droplets className="w-3.5 h-3.5" />}
           label="Water Intake"
-          value={`${Math.round(totals.waterMl / rangeDays)} ml`}
+          value={`${Math.round(totals.avg.waterMl)} ml`}
           sub={`${(totals.waterMl / 1000).toFixed(1)} L total · avg/day`}
         />
         <KpiCard
           icon={<Activity className="w-3.5 h-3.5" />}
           label="Sodium Intake"
-          value={`${Math.round(totals.saltMg / rangeDays)} mg`}
-          sub={`${totals.saltMg} mg total · avg/day`}
+          value={`${Math.round(totals.avg.saltMg)} mg`}
+          sub={`${Math.round(totals.saltMg)} mg total · avg/day`}
         />
         {sugarEnabled && (
           <KpiCard
             icon={<Candy className="w-3.5 h-3.5" />}
             label="Sugar Intake"
-            value={`${Math.round(totals.sugarG / rangeDays)} g`}
-            sub={`${totals.sugarG} g total · avg/day`}
+            value={`${Math.round(totals.avg.sugarG)} g`}
+            sub={`${Math.round(totals.sugarG)} g total · avg/day`}
           />
         )}
         {potassiumEnabled && (
           <KpiCard
             icon={<Banana className="w-3.5 h-3.5" />}
             label="Potassium Intake"
-            value={`${Math.round(totals.potassiumMg / rangeDays)} mg`}
-            sub={`${totals.potassiumMg} mg total · avg/day`}
+            value={`${Math.round(totals.avg.potassiumMg)} mg`}
+            sub={`${Math.round(totals.potassiumMg)} mg total · avg/day`}
           />
         )}
         <KpiCard
@@ -376,7 +387,7 @@ export function SummaryTab({ range }: { range: TimeRange }) {
             icon={<Activity className="w-3.5 h-3.5" />}
             label="Caffeine"
             value={`${Math.round(totals.caffeineMg)} mg`}
-            sub={`${Math.round(totals.caffeineMg / rangeDays)} mg avg/day`}
+            sub={`${Math.round(totals.avg.caffeineMg)} mg avg/day`}
           />
         )}
         {totals.alcoholDrinks > 0 && (
@@ -384,7 +395,7 @@ export function SummaryTab({ range }: { range: TimeRange }) {
             icon={<Activity className="w-3.5 h-3.5" />}
             label="Alcohol"
             value={`${totals.alcoholDrinks.toFixed(1)} drinks`}
-            sub={`${(totals.alcoholDrinks / rangeDays).toFixed(1)} avg/day`}
+            sub={`${totals.avg.alcoholDrinks.toFixed(1)} avg/day`}
           />
         )}
       </div>

@@ -176,4 +176,25 @@ describe("RecordsTab", () => {
       expect(eating?.note).toBeUndefined();
     });
   });
+
+  it("counts a day's entries from the whole list, not just the loaded page", async () => {
+    // Local midday so all 55 rows fall on one day in any runner zone.
+    const noon = new Date();
+    noon.setHours(12, 0, 0, 0);
+    const intakeRecords = Array.from({ length: 55 }, (_, i) =>
+      makeIntakeRecord({ type: "water", amount: 100 + i, timestamp: noon.getTime() - i * 60_000 }),
+    );
+
+    await renderWithFixtures(<RecordsTab range={RANGE} />, { seed: { intakeRecords } });
+
+    expect(await screen.findByText("55 entries")).toBeInTheDocument();
+    // Only the first page of 50 rows is rendered.
+    expect(screen.getAllByRole("button", { name: "Edit entry" })).toHaveLength(50);
+  });
+
+  it("names the sodium filter 'Sodium', matching its rows", async () => {
+    await renderWithFixtures(<RecordsTab range={RANGE} />);
+    expect(await screen.findByRole("button", { name: "Sodium" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Salt" })).not.toBeInTheDocument();
+  });
 });

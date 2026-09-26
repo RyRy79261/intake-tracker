@@ -69,6 +69,7 @@ import {
 import { getUrinationRecordsByDateRange as mockGetUrination } from "@/lib/urination-service";
 import { getDoseScheduleForDateRange as mockGetDoseSchedule } from "@/lib/dose-schedule-service";
 import { db as mockDb } from "@/lib/db";
+import { useSettingsStore } from "@/stores/settings-store";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -487,5 +488,54 @@ describe("building blocks", () => {
     const points = await getRecordsByDomain("water", makeRange(1));
     expect(points).toHaveLength(1);
     expect(points[0]!.value).toBe(500);
+  });
+});
+
+describe("day buckets and per-domain aggregation", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useSettingsStore.setState({ dayStartHour: 2 });
+  });
+
+  it("groupByDay puts a record before dayStartHour on the previous day", () => {
+    const lateNight = Date.UTC(2024, 5, 2, 1, 30); // 01:30 UTC
+    const grouped = groupByDay([{ timestamp: lateNight, value: 500 }], {
+      dayStartHour: 2,
+      tz: "UTC",
+    });
+    expect([...grouped.keys()]).toEqual(["2024-06-01"]);
+  });
+
+  it("fluidBalance follows the dayStartHour setting", async () => {
+    vi.mocked(mockGetIntake).mockResolvedValue([
+      makeIntakeRecord({ type: "water", amount: 1000, timestamp: Date.UTC(2024, 5, 1, 20) }),
+      makeIntakeRecord({ type: "water", amount: 500, timestamp: Date.UTC(2024, 5, 2, 1, 30) }),
+    ]);
+    vi.mocked(mockGetUrination).mockResolvedValue([]);
+
+    const result = await fluidBalance(makeRange(3));
+    expect(result.value.daily.map((d) => [d.date, d.intakeMl])).toEqual([
+      ["2024-06-01", 1500],
+    ]);
+  });
+
+  it("correlates daily sodium totals, not the mean entry size", async () => {
+    // Five days of 200 mg entries, 5, 10, ... 25 per day; weight rises daily.
+    const salt: IntakeRecord[] = [];
+    const weight: WeightRecord[] = [];
+    for (let i = 0; i < 5; i++) {
+      for (let j = 0; j < (i + 1) * 5; j++) {
+        salt.push(
+          makeIntakeRecord({ type: "salt", amount: 200, timestamp: BASE_TS + i * DAY_MS + j * 60_000 }),
+        );
+      }
+      weight.push(makeWeightRecord(71 + i, BASE_TS + i * DAY_MS));
+    }
+    vi.mocked(mockGetIntake).mockResolvedValue(salt);
+    vi.mocked(mockGetWeight).mockResolvedValue(weight);
+
+    const result = await saltVsWeight(makeRange(6), 0);
+    expect(result.value.strength).toBe("strong");
+    expect(result.value.pairs[0]).toEqual({ a: 1000, b: 71 });
   });
 });

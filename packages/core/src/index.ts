@@ -29,3 +29,4 @@ export * from "./shake-detector";
 export * from "./analytics-stats";
 export * from "./lifecycle";
 export * from "./effective-phase";
+export * from "./logical-day";
