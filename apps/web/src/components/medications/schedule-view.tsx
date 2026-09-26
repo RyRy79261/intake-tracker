@@ -3,7 +3,7 @@
 import { useMemo, useState, useCallback } from "react";
 import { useDailyDoseSchedule, useTakeDose, useUntakeDose, useSkipDose, useTakeAllDoses, useEditDoseTime } from "@/hooks/use-medication-queries";
 import type { DoseSlot } from "@/hooks/use-medication-queries";
-import { hapticTake, hapticSkip, getCurrentTimeHHMM } from "@/lib/medication-ui-utils";
+import { hapticTake, hapticSkip, getCurrentTimeHHMM, formatTakeToastDescription } from "@/lib/medication-ui-utils";
 import { toast } from "@intake/ui/use-toast";
 import { showUndoToast } from "@/components/medications/undo-toast";
 import { DoseProgressSummary } from "@/components/medications/dose-progress-summary";
@@ -123,9 +123,7 @@ export function ScheduleView({ selectedDate, onDoseClick, onAddMed }: ScheduleVi
         dosageMg: slot.dosageMg,
       });
 
-      const description = slot.inventory
-        ? `${slot.pillsPerDose ?? 1} pill(s) deducted`
-        : "Dose logged -- no stock tracked";
+      const description = formatTakeToastDescription(slot);
 
       showUndoToast({
         title: `${slot.prescription.genericName} taken`,
@@ -159,9 +157,7 @@ export function ScheduleView({ selectedDate, onDoseClick, onAddMed }: ScheduleVi
         takenAtTime, // user-specified time stored in actionTimestamp
       });
 
-      const description = slot.inventory
-        ? `${slot.pillsPerDose ?? 1} pill(s) deducted`
-        : "Dose logged -- no stock tracked";
+      const description = formatTakeToastDescription(slot);
 
       showUndoToast({
         title: `${slot.prescription.genericName} taken`,

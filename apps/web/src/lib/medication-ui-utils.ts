@@ -124,6 +124,19 @@ export function formatDoseAmount(slot: DoseSlot): string {
 }
 
 /**
+ * Undo-toast description after a take: the pills deducted, in the same format
+ * as the dose label. A brand with an unusable tablet strength is not deducted
+ * (see calculatePillsConsumed), so the toast must not claim it was.
+ */
+export function formatTakeToastDescription(slot: DoseSlot): string {
+  if (!slot.inventory) return "Dose logged -- no stock tracked";
+  if (slot.inventoryWarning === "invalid_strength" || slot.pillsPerDose == null) {
+    return "Dose logged -- tablet strength missing, stock not changed";
+  }
+  return `${formatPillCount(slot.pillsPerDose)} deducted`;
+}
+
+/**
  * Whole days a stock lasts at `dailyPills` a day. Clamped at 0: negative stock
  * is over-consumed, not "-4 days". Infinity when nothing is consumed.
  */

@@ -10,6 +10,7 @@ import {
   daysOfSupply,
   formatSupplyRemaining,
   averageDailyDosage,
+  formatTakeToastDescription,
 } from "@/lib/medication-ui-utils";
 import type { MedicationPhase } from "@/lib/db";
 import type { DoseSlot, DoseSlotStatus } from "@/lib/dose-schedule-service";
@@ -276,6 +277,30 @@ describe("formatSupplyRemaining", () => {
 
   it("describes zero stock as out of stock", () => {
     expect(formatSupplyRemaining(0, 0)).toBe("Out of stock");
+  });
+});
+
+describe("formatTakeToastDescription", () => {
+  const slot = (overrides: Partial<DoseSlot>) =>
+    ({ dosageMg: 100, unit: "mg", ...overrides }) as DoseSlot;
+  const inv = { strength: 50, unit: "mg" } as unknown as NonNullable<DoseSlot["inventory"]>;
+
+  it("formats the deducted pill count with the shared formatter", () => {
+    expect(formatTakeToastDescription(slot({ inventory: inv, pillsPerDose: 1.3333 }))).toBe(
+      "1.33 tablets deducted",
+    );
+  });
+
+  it("does not claim a deduction when the tablet strength is unusable", () => {
+    const d = formatTakeToastDescription(
+      slot({ inventory: inv, inventoryWarning: "invalid_strength" }),
+    );
+    expect(d).not.toMatch(/deducted/);
+    expect(d).toMatch(/strength/);
+  });
+
+  it("says no stock is tracked without a brand", () => {
+    expect(formatTakeToastDescription(slot({}))).toBe("Dose logged -- no stock tracked");
   });
 });
 
