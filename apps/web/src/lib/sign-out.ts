@@ -37,5 +37,7 @@ export async function handleSignOut(): Promise<void> {
     // Timeout or network failure — redirect anyway.
   }
 
+  // Hard navigation on purpose: drops every in-memory cache of the old session.
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- intentional hard reload
   window.location.href = "/auth";
 }

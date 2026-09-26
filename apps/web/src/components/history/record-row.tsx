@@ -128,9 +128,12 @@ function RecordRowImpl({ unified, onDelete, onEdit, isDeleting, liquidPresets }:
           {formatTimeOnly(unified.record.timestamp)}
         </span>
       </div>
+      {/* Keep the action buttons' clicks and key presses away from the row's
+          own edit handler (which would also preventDefault their activation). */}
       <div
         className="flex items-center gap-1 shrink-0"
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
       >
         <Button
           variant="ghost"

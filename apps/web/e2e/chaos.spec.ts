@@ -193,23 +193,25 @@ test.describe("Chaos: clock jump backward", () => {
     await page.addInitScript(() => {
       const fakeNow = Date.UTC(2020, 5, 15, 12, 0, 0); // 2020-06-15
       const RealDate = Date;
-      // @ts-expect-error — override global Date for the page
-      window.Date = class extends RealDate {
-        constructor(...args: ConstructorParameters<typeof RealDate>) {
+      class FakeDate extends RealDate {
+        constructor(...args: unknown[]) {
           if (args.length === 0) {
             super(fakeNow);
           } else {
-            super(...args);
+            // Forward every argument untouched; the tuple cast only satisfies
+            // the overloaded Date constructor signature.
+            super(...(args as [string | number | Date]));
           }
         }
-        static now(): number {
+        static override now(): number {
           return fakeNow;
         }
-      };
+      }
+      // Override global Date for the page. A class has no call signature,
+      // hence the cast to the full DateConstructor type.
+      window.Date = FakeDate as unknown as DateConstructor;
       // Preserve static helpers
-      // @ts-expect-error — propagate parse/UTC
       window.Date.parse = RealDate.parse;
-      // @ts-expect-error — propagate parse/UTC
       window.Date.UTC = RealDate.UTC;
     });
 

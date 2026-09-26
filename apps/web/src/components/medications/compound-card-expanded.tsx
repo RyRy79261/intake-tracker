@@ -70,6 +70,7 @@ export function CompoundCardExpanded({ prescription }: CompoundCardExpandedProps
     <div
       className="pt-3 space-y-4"
       onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
     >
       <div className="border-t" />
 

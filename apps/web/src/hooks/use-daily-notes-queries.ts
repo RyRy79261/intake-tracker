@@ -2,17 +2,22 @@
 
 import { useLiveQuery } from "dexie-react-hooks";
 import { useMutation } from "@tanstack/react-query";
+import { isLive } from "@intake/core/lifecycle";
 import { db, type DailyNote } from "@/lib/db";
 import { syncFields } from "@/lib/utils";
+import { writeWithSync } from "@/lib/sync-queue";
+import { schedulePush } from "@/lib/sync-engine";
 
+/** Live (non-soft-deleted) notes for a day, optionally scoped to one prescription. */
 export function useDailyNotes(date: string, prescriptionId?: string) {
   return useLiveQuery(
     async () => {
-      const query = db.dailyNotes.where("date").equals(date);
-      if (prescriptionId) {
-        return (await query.toArray()).filter(n => n.prescriptionId === prescriptionId);
-      }
-      return query.toArray();
+      const notes = await db.dailyNotes.where("date").equals(date).toArray();
+      return notes.filter(
+        (n) =>
+          isLive(n) &&
+          (prescriptionId === undefined || n.prescriptionId === prescriptionId),
+      );
     },
     [date, prescriptionId],
     []
@@ -37,7 +42,13 @@ export function useAddDailyNote() {
         note: input.note,
         ...syncFields(),
       };
-      await db.dailyNotes.add(entry);
+      // Same write path as every other synced table: the row and its queue
+      // entry commit atomically, then a debounced push is scheduled.
+      await writeWithSync("dailyNotes", "upsert", async () => {
+        await db.dailyNotes.add(entry);
+        return entry;
+      });
+      schedulePush();
       return entry;
     },
   });

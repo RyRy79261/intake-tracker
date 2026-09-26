@@ -1,6 +1,5 @@
 import path from "node:path";
 import { defineConfig } from "vitest/config";
-import tsconfigPaths from "vite-tsconfig-paths";
 
 // `server-only` / `client-only` are build-time bundler markers (React-team
 // packages that Next.js resolves via the `react-server` export condition). They
@@ -13,16 +12,17 @@ const BUNDLER_MARKER_STUB = path.resolve(
 );
 
 export default defineConfig({
-  plugins: [tsconfigPaths()],
   resolve: {
+    // Native tsconfig `paths` resolution (the `@/*` alias).
+    tsconfigPaths: true,
     alias: {
       "server-only": BUNDLER_MARKER_STUB,
       "client-only": BUNDLER_MARKER_STUB,
     },
   },
-  // tsconfig has jsx:"preserve" (Next.js handles the transform); vitest uses
-  // esbuild directly, so opt into the automatic JSX runtime here for tests.
-  esbuild: { jsx: "automatic" },
+  // tsconfig has jsx:"preserve" (Next.js handles the transform); vite's oxc
+  // transformer compiles the tests, so pin the automatic JSX runtime here.
+  oxc: { jsx: { runtime: "automatic" } },
   test: {
     environment: "node",
     setupFiles: ["src/__tests__/setup.ts"],
@@ -106,6 +106,33 @@ export default defineConfig({
           statements: 88,
           functions: 95,
           branches: 95,
+        },
+        // Dose reminders, day bucketing and the destructive account flows
+        // (2026-09 audit baseline-health#7). Floors sit ~10 points under the
+        // coverage their dedicated tests reached.
+        "src/hooks/use-push-schedule-sync.ts": {
+          lines: 85,
+          statements: 84,
+          functions: 79,
+          branches: 75,
+        },
+        "src/hooks/use-timezone-detection.ts": {
+          lines: 90,
+          statements: 90,
+          functions: 90,
+          branches: 65,
+        },
+        "src/hooks/use-permissions.ts": {
+          lines: 84,
+          statements: 80,
+          functions: 85,
+          branches: 65,
+        },
+        "src/lib/account-service.ts": {
+          lines: 83,
+          statements: 83,
+          functions: 90,
+          branches: 77,
         },
       },
     },

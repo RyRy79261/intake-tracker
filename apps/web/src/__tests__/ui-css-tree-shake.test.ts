@@ -10,7 +10,8 @@
  * just renders unstyled. This test turns that silent failure into a hard gate.
  *
  * Requires a build first (`pnpm build`); skips otherwise (like
- * bundle-security.test.ts).
+ * bundle-security.test.ts). CI's build job sets REQUIRE_BUILD_ARTIFACTS=1 so a
+ * missing build fails there instead of silently skipping.
  */
 
 import { describe, it, expect } from "vitest";
@@ -32,8 +33,9 @@ const staticDir = path.resolve(process.cwd(), ".next/static");
 const cssFiles = allCssRecursive(staticDir);
 const css = cssFiles.map((f) => fs.readFileSync(f, "utf-8")).join("\n");
 const hasBuild = cssFiles.length > 0;
+const requireBuild = process.env.REQUIRE_BUILD_ARTIFACTS === "1";
 
-describe.skipIf(!hasBuild)("@intake/ui compiled-CSS tree-shake guard", () => {
+describe.skipIf(!hasBuild && !requireBuild)("@intake/ui compiled-CSS tree-shake guard", () => {
   it("emits utilities used ONLY by moved primitives (the @source canary)", () => {
     // animate-accordion-up/down is referenced exclusively by the moved
     // accordion.tsx — its presence proves the package @source is scanned.

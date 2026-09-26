@@ -1,8 +1,7 @@
 import path from "node:path";
 import { defineConfig } from "vitest/config";
-import tsconfigPaths from "vite-tsconfig-paths";
 
-// See vitest.config.ts: alias the `server-only` / `client-only` bundler markers
+// See vitest.config.mts: alias the `server-only` / `client-only` bundler markers
 // to an empty stub so integration tests (which hit the real Drizzle/Neon layer)
 // can import server modules under the node environment.
 const BUNDLER_MARKER_STUB = path.resolve(
@@ -11,8 +10,9 @@ const BUNDLER_MARKER_STUB = path.resolve(
 );
 
 export default defineConfig({
-  plugins: [tsconfigPaths()],
   resolve: {
+    // Native tsconfig `paths` resolution (the `@/*` alias).
+    tsconfigPaths: true,
     alias: {
       "server-only": BUNDLER_MARKER_STUB,
       "client-only": BUNDLER_MARKER_STUB,

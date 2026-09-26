@@ -71,7 +71,9 @@ setup("authenticate", async ({ page, baseURL }) => {
 
   // ── Fast path: API sign-in (no browser) ────────────────────────────────
   try {
-    const api = await apiRequest.newContext({ baseURL });
+    const api = await apiRequest.newContext({
+      baseURL: baseURL ?? "http://localhost:3000",
+    });
     const res = await api.post("/api/auth/sign-in/email", {
       data: { email, password },
     });

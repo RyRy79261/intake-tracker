@@ -126,8 +126,8 @@ describe("PrescriptionCard", () => {
     });
 
     await screen.findByText("Lisinopril");
-    // The phases hook loads async; a scheduled med briefly shows "As needed"
-    // before the effective phase resolves. Wait for the button to settle out.
+    // The phases hook loads async and the PRN affordances are gated on it, so
+    // wait for the load to settle before asserting the button stays absent.
     await waitFor(() => {
       expect(
         screen.queryByRole("button", { name: /log an as-needed dose/i }),

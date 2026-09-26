@@ -179,8 +179,13 @@ jobs:
             ${{ runner.os }}-nextjs-
       - name: Build production bundle
         run: pnpm build
-      - name: Bundle security scan
-        run: pnpm --filter @intake/web exec vitest run src/__tests__/bundle-security.test.ts
+      - name: Bundle security scan + @intake/ui CSS tree-shake guard
+        # Both suites skip without a build, so this is the only CI job where
+        # they run; REQUIRE_BUILD_ARTIFACTS makes the CSS guard fail rather
+        # than skip if the build output is missing.
+        env:
+          REQUIRE_BUILD_ARTIFACTS: "1"
+        run: pnpm --filter @intake/web exec vitest run src/__tests__/bundle-security.test.ts src/__tests__/ui-css-tree-shake.test.ts
 
   # Validate the Capacitor static export (Next.js `output: "export"`). This build
   # mode is ONLY exercised at release time by android-release.yml, so a route that

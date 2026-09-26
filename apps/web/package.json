@@ -8,14 +8,14 @@
     "vercel-build": "pnpm db:migrate && next build",
     "start": "next start",
     "cap:export": "node scripts/cap-build.js",
-    "lint": "eslint src",
-    "typecheck": "tsc --noEmit",
+    "lint": "eslint --max-warnings 0 src e2e playwright.config.ts",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p e2e/tsconfig.json && tsc --noEmit -p tsconfig.sw.json",
     "test": "vitest run",
     "test:tz:sa": "TZ=Africa/Johannesburg vitest run",
     "test:tz:de": "TZ=Europe/Berlin vitest run",
     "test:tz": "pnpm test:tz:sa && pnpm test:tz:de",
     "test:watch": "vitest",
-    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:integration": "vitest run --config vitest.integration.config.mts",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "test:mutation": "stryker run",
@@ -109,7 +109,6 @@
     "tw-animate-css": "^1.4.0",
     "typescript": "^6.0.3",
     "vite": "^8.2.2",
-    "vite-tsconfig-paths": "^6.1.1",
     "vitest": "^4.1.11"
   }
 }
