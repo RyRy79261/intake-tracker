@@ -335,6 +335,17 @@ function localTimestamp(date: string, h: number, m: number, addDays = 0): number
 const HALF_DAY_MS = 12 * 60 * 60 * 1000;
 
 /**
+ * Slack for a "taken at" time the picker allowed: the picked minute has no
+ * seconds, and the check runs a moment after the user tapped.
+ */
+const FUTURE_TAKEN_AT_GRACE_MS = 60 * 1000;
+
+/** True when a recorded "taken at" timestamp lies in the future. */
+function isFutureTakenAt(timestamp: number, now: number = Date.now()): boolean {
+  return timestamp > now + FUTURE_TAKEN_AT_GRACE_MS;
+}
+
+/**
  * Turn the "taken at" wall-clock time the user picked into a timestamp. The
  * picker only asks for a time, so a late dose taken after midnight (the 22:00
  * dose taken at 00:30) belongs to the day after the scheduled date: when the
@@ -453,6 +464,9 @@ export async function takeDose(input: TakeDoseInput): Promise<ServiceResult<Dose
       if (actionTimestampOverride === undefined) {
         return err(`Invalid time "${takenAtTime}"`);
       }
+      if (isFutureTakenAt(actionTimestampOverride)) {
+        return err("Cannot record a dose as taken at a future time");
+      }
     }
 
     const log = await db.transaction(
@@ -469,7 +483,8 @@ export async function takeDose(input: TakeDoseInput): Promise<ServiceResult<Dose
 
         let inventoryItemId: string | undefined = prev?.inventoryItemId;
         let pillsConsumed = 0;
-        const patch: DoseLogPatch = {};
+        // A taken dose has no skip reason; clear one left by an earlier skip.
+        const patch: DoseLogPatch = { skipReason: undefined };
         let invalidStrength = false;
 
         if (!wasTaken) {
@@ -693,7 +708,8 @@ export async function untakeDose(input: UntakeDoseInput): Promise<ServiceResult<
         const doseLog = await writeSlotLog(
           prev, logId, { prescriptionId, phaseId, scheduleId, date, time },
           prev?.rescheduledTo ? "rescheduled" : "pending",
-          { pillsConsumed: 0 },
+          // Clear a reason left by an earlier skip: the slot is no longer skipped.
+          { pillsConsumed: 0, skipReason: undefined },
         );
         await enqueueInsideTx("doseLogs", doseLog.id, "upsert");
 
@@ -722,6 +738,11 @@ export async function skipDose(input: SkipDoseInput): Promise<ServiceResult<Dose
   try {
     const { prescriptionId, phaseId, scheduleId, date, time, dosageMg, reason } = input;
 
+    // Skipping ahead of the day would mark a dose that is not yet due.
+    if (date > toLocalDateKey()) {
+      return err("Cannot skip a dose scheduled for a future date");
+    }
+
     const log = await db.transaction(
       "rw",
       [
@@ -744,8 +765,9 @@ export async function skipDose(input: SkipDoseInput): Promise<ServiceResult<Dose
           doseAmount: dosageMg,
           doseUnit: schedule?.unit ?? phase?.unit,
           pillsConsumed: 0,
+          // Always written: a skip without a reason clears an older one.
+          skipReason: reason,
         };
-        if (reason !== undefined) patch.skipReason = reason;
 
         const doseLog = await writeSlotLog(
           prev, logId, { prescriptionId, phaseId, scheduleId, date, time }, "skipped", patch,
@@ -891,6 +913,9 @@ export async function editDoseTime(input: EditDoseTimeInput): Promise<ServiceRes
     const newTimestamp = resolveTakenAt(date, time, newTime);
     if (newTimestamp === undefined) {
       return err(`Invalid time "${newTime}"`);
+    }
+    if (isFutureTakenAt(newTimestamp)) {
+      return err("Cannot record a dose as taken at a future time");
     }
 
     const log = await db.transaction(
