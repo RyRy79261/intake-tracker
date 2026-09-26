@@ -347,6 +347,8 @@ describe("buildInsightsPrompt", () => {
             daysOnPhase: 200,
             dosesTaken: 0,
             dosesDue: 30,
+            dosesSkipped: 2,
+            dosesMissed: 28,
           },
           {
             name: "Ramipril",
@@ -364,7 +366,10 @@ describe("buildInsightsPrompt", () => {
     expect(prompt).toContain("Furosemide: as needed (PRN");
     expect(prompt).toContain("5 as-needed dose(s) logged");
     expect(prompt).toContain("27 of 30 scheduled dose(s) logged as taken (90%)");
-    expect(prompt).toMatch(/Spironolactone.*treat adherence as unknown/);
+    // Owner decision (live-data-forensics#7): a past scheduled dose with
+    // nothing logged is missed, not "unknown".
+    expect(prompt).toMatch(/Spironolactone.*0 of 30 scheduled dose\(s\) logged as taken.*2 skipped.*28 missed \(nothing logged\)/);
+    expect(prompt).not.toMatch(/Spironolactone.*treat adherence as unknown/);
     expect(prompt).toMatch(/Ramipril.*adherence unknown/);
   });
 });

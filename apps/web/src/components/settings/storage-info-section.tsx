@@ -35,6 +35,7 @@ import { useAccountActions } from "@/hooks/use-account-actions";
 import { checkInterruptedMigration } from "@/lib/migration-service";
 import { MigrationWizard } from "@/components/migration/migration-wizard";
 import { DeleteDataControls } from "@/components/settings/delete-data-controls";
+import { DeleteMedicationDataControl } from "@/components/settings/delete-medication-data-control";
 
 function tableLabel(name: string): string {
   return name
@@ -264,6 +265,10 @@ export function StorageInfoSection() {
 
         <div className="pt-2 border-t">
           <DeleteDataControls />
+        </div>
+
+        <div className="pt-2 border-t">
+          <DeleteMedicationDataControl />
         </div>
       </div>
 

@@ -50,8 +50,11 @@ import {
   makeUrinationRecord,
   makeEatingRecord,
   makePrescription,
+  makeMedicationPhase,
+  makePhaseSchedule,
   makeDoseLog,
 } from "@/__tests__/fixtures/db-fixtures";
+import { toLocalDateKey } from "@/lib/date-utils";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const BASE_TS = 1700000000000;
@@ -440,5 +443,85 @@ describe("exportToPDF", () => {
     expect(pdfSaves[0]!.filename).toBe(
       `health-report-${format(noon, "yyyy-MM-dd")}-${format(noon + 7 * DAY_MS, "yyyy-MM-dd")}.pdf`,
     );
+  });
+});
+
+// Owner decision (live-data-forensics#7): a scheduled dose on a past day with
+// no taken/skipped log is MISSED, in the export as on the schedule screen.
+describe("export: missed doses", () => {
+  const daysAgoKey = (n: number) => toLocalDateKey(Date.now() - n * DAY_MS);
+  const doseSection = (csv: string): string[] => {
+    const block = csv.split("\n\n").find((b) => b.startsWith("# Dose logs\n"));
+    expect(block, "dose log section").toBeDefined();
+    return block!.split("\n").slice(1);
+  };
+
+  async function seedDailyRegimen() {
+    const since = Date.now() - 10 * DAY_MS;
+    const rx = makePrescription({ id: "rx-missed", genericName: "Bisoprolol", createdAt: since });
+    await db.prescriptions.add(rx);
+    await db.medicationPhases.add(
+      makeMedicationPhase(rx.id, { id: "ph-missed", startDate: since, createdAt: since }),
+    );
+    await db.phaseSchedules.add(
+      makePhaseSchedule("ph-missed", {
+        id: "sch-missed",
+        time: "08:00",
+        dosage: 5,
+        anchorTimezone: getDeviceTimezone(),
+        createdAt: since,
+      }),
+    );
+    return rx;
+  }
+
+  it("lists an unlogged past scheduled dose as missed, and a stale pending log as missed", async () => {
+    const rx = await seedDailyRegimen();
+    // Two days ago: taken. Yesterday: a leftover "pending" log (an untake).
+    // Three days ago: nothing logged at all.
+    await db.doseLogs.bulkAdd([
+      makeDoseLog(rx.id, "ph-missed", "sch-missed", {
+        id: "taken",
+        scheduledDate: daysAgoKey(2),
+        scheduledTime: "08:00",
+        status: "taken",
+      }),
+      makeDoseLog(rx.id, "ph-missed", "sch-missed", {
+        id: "stale",
+        scheduledDate: daysAgoKey(1),
+        scheduledTime: "08:00",
+        status: "pending",
+      }),
+    ]);
+
+    await exportAllRecordsCSV({ start: Date.now() - 3 * DAY_MS, end: Date.now() });
+    const doses = doseSection(await capturedCSV());
+    const rowFor = (date: string) => doses.filter((r) => r.startsWith(`${date},`));
+
+    expect(rowFor(daysAgoKey(3))).toHaveLength(1);
+    expect(rowFor(daysAgoKey(3))[0]).toContain(",08:00,Bisoprolol,missed,scheduled,");
+    expect(rowFor(daysAgoKey(2))[0]).toContain(",Bisoprolol,taken,");
+    expect(rowFor(daysAgoKey(1))).toHaveLength(1);
+    expect(rowFor(daysAgoKey(1))[0]).toContain(",Bisoprolol,missed,");
+    // Today's dose is not missed yet, and is not listed.
+    expect(rowFor(daysAgoKey(0))).toHaveLength(0);
+  });
+
+  it("the PDF reports taken, skipped and missed doses", async () => {
+    pdfSaves.length = 0;
+    const rx = await seedDailyRegimen();
+    await db.doseLogs.add(
+      makeDoseLog(rx.id, "ph-missed", "sch-missed", {
+        scheduledDate: daysAgoKey(1),
+        scheduledTime: "08:00",
+        status: "skipped",
+      }),
+    );
+
+    await exportToPDF({ start: Date.now() - 3 * DAY_MS, end: Date.now() });
+    const pdf = atob(pdfSaves[0]!.dataUri.split(",")[1]!);
+    expect(pdf).toContain("Taken: 0 / 3 doses");
+    // jsPDF escapes parentheses in its text operators.
+    expect(pdf).toMatch(/Skipped: 1, missed \\?\(not logged\\?\): 2/);
   });
 });

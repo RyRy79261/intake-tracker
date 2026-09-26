@@ -18,6 +18,9 @@
  *   consent; limits, presets, day start, home timezone). Tombstoned configuration
  *   is also switched off (inactive / cancelled), matching the Dexie v23
  *   tombstone repair.
+ * - `deleteAllMedicationData` (Settings > Data > "Delete all medication
+ *   data") wipes only the medication tables, whatever their age. It only
+ *   ever runs when the user presses the button and confirms.
  */
 import { addDays, isValid, parse } from "date-fns";
 import { db } from "@/lib/db";
@@ -51,6 +54,24 @@ export interface DeleteRange {
   /** Inclusive upper bound on the event time (Unix ms), or null for no upper bound. */
   to: number | null;
 }
+
+/**
+ * Every table that holds medication data, in push order (parents before
+ * children). Notes, audit logs and health records are not included.
+ */
+const MEDICATION_TABLES: readonly TableName[] = TABLE_PUSH_ORDER.filter((t) =>
+  (
+    [
+      "prescriptions",
+      "titrationPlans",
+      "medicationPhases",
+      "phaseSchedules",
+      "inventoryItems",
+      "doseLogs",
+      "inventoryTransactions",
+    ] as readonly TableName[]
+  ).includes(t),
+);
 
 /** Build a range for "records older than `days` days ago". */
 export function olderThanDays(days: number): DeleteRange {
@@ -158,5 +179,35 @@ export async function deleteRecordsInRange(
     return ok(total);
   } catch (e) {
     return err("Failed to delete records", e);
+  }
+}
+
+/**
+ * Soft-delete every live prescription, phase, schedule, inventory item and
+ * transaction, dose log and titration plan. Each row is tombstoned, switched
+ * off (inactive / disabled / cancelled) and enqueued as a sync delete, so the
+ * cloud copy and other devices follow. Returns the number of rows deleted.
+ *
+ * User-triggered only (behind a typed confirmation); nothing calls it
+ * automatically.
+ */
+export async function deleteAllMedicationData(): Promise<ServiceResult<number>> {
+  try {
+    // One outer transaction: either every medication table is wiped or none.
+    const total = await db.transaction(
+      "rw",
+      [...MEDICATION_TABLES.map((t) => db.table(t)), db._syncQueue],
+      async () => {
+        let count = 0;
+        for (const tableName of MEDICATION_TABLES) {
+          count += await tombstoneWhere(tableName, () => true);
+        }
+        return count;
+      },
+    );
+    if (total > 0) schedulePush();
+    return ok(total);
+  } catch (e) {
+    return err("Failed to delete medication data", e);
   }
 }

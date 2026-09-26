@@ -25,6 +25,7 @@ import {
 import { startNewPhase, updatePhase, deletePhase, activatePhase, type CreatePhaseInput, type UpdatePhaseInput } from "@/lib/medication-service";
 import {
   getTitrationPlans,
+  getDueTitrationPlans,
   getPhasesForTitrationPlan,
   getConditionLabels,
   createTitrationPlan,
@@ -446,6 +447,14 @@ export function useDeleteInventoryTransaction() {
 
 export function useTitrationPlans() {
   return useLiveQuery(() => getTitrationPlans(), [], []);
+}
+
+/**
+ * Draft titration plans whose start date has arrived (`todayKey` is the local
+ * YYYY-MM-DD). They wait for the user to confirm; nothing starts on its own.
+ */
+export function useDueTitrationPlans(todayKey: string) {
+  return useLiveQuery(() => getDueTitrationPlans(todayKey), [todayKey], []);
 }
 
 export function usePhasesForTitrationPlan(planId: string | undefined) {

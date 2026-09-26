@@ -1100,3 +1100,70 @@ describe("MCP query fns — getTodaySummary day boundary (real Postgres)", () =>
     ]);
   });
 });
+
+// Owner decision (live-data-forensics#7): the MCP tools report dose status
+// with the app's rule. An outstanding dose (no log, "pending" or
+// "rescheduled") is pending today and missed on a past day.
+describe("MCP query fns — dose status matches the app (real Postgres)", () => {
+  // 2026-09-25T10:00Z = 12:00 in Berlin.
+  const NOW = Date.UTC(2026, 8, 25, 10, 0);
+
+  it("reports today's rescheduled dose as outstanding, not skipped", async () => {
+    const refs = await seedMedChain(ctx.testUserId, { genericName: "Furosemide", createdAt: 0 });
+    await ctx.db.insert(schema.doseLogs).values(
+      doseLogFixture(ctx.testUserId, refs, {
+        scheduledDate: "2026-09-25",
+        status: "rescheduled",
+        rescheduledTo: "14:00",
+        actionTimestamp: null as never,
+      }),
+    );
+
+    const { doses } = await queries.getTodaySummary(ctx.testUserId, {
+      timezone: "Europe/Berlin",
+      now: NOW,
+    });
+
+    expect(doses.skipped).toBe(0);
+    expect(doses.outstanding).toBe(1);
+    expect(doses.slots.map((sl) => sl.status)).toEqual(["outstanding"]);
+  });
+
+  it("listRecentDoses reports a past outstanding log as missed and keeps the logged status", async () => {
+    const refs = await seedMedChain(ctx.testUserId);
+    await ctx.db.insert(schema.doseLogs).values([
+      doseLogFixture(ctx.testUserId, refs, {
+        scheduledDate: "2026-09-25",
+        status: "pending",
+        actionTimestamp: 4_000,
+      }),
+      doseLogFixture(ctx.testUserId, refs, {
+        scheduledDate: "2026-09-24",
+        status: "rescheduled",
+        actionTimestamp: 3_000,
+      }),
+      doseLogFixture(ctx.testUserId, refs, {
+        scheduledDate: "2026-09-23",
+        status: "pending",
+        actionTimestamp: 2_000,
+      }),
+      doseLogFixture(ctx.testUserId, refs, {
+        scheduledDate: "2026-09-22",
+        status: "taken",
+        actionTimestamp: 1_000,
+      }),
+    ]);
+
+    const { doses } = await queries.listRecentDoses(ctx.testUserId, 50, {
+      timezone: "Europe/Berlin",
+      now: NOW,
+    });
+
+    expect(doses.map((d) => [d.scheduledDate, d.status, d.loggedStatus])).toEqual([
+      ["2026-09-25", "pending", "pending"],
+      ["2026-09-24", "missed", "rescheduled"],
+      ["2026-09-23", "missed", "pending"],
+      ["2026-09-22", "taken", "taken"],
+    ]);
+  });
+});

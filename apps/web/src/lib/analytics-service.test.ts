@@ -261,6 +261,50 @@ describe("adherenceRate", () => {
     }
   });
 
+  it("counts missed (past, unlogged) and skipped doses, but never today's outstanding ones (live-data-forensics#7)", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2024-06-02T21:00:00"));
+    try {
+      const slot = (date: string, localTime: string, status: DoseSlot["status"]): DoseSlot =>
+        ({
+          prescriptionId: "rx1",
+          phaseId: "ph1",
+          scheduleId: `s-${localTime}`,
+          scheduledDate: date,
+          scheduleTimeUTC: 0,
+          localTime,
+          dosageMg: 10,
+          unit: "mg",
+          status,
+          prescription: {} as DoseSlot["prescription"],
+          phase: {} as DoseSlot["phase"],
+          schedule: {} as DoseSlot["schedule"],
+        }) as DoseSlot;
+
+      const map = new Map<string, DoseSlot[]>();
+      // Yesterday: one taken, one skipped, one never logged (missed).
+      map.set("2024-06-01", [
+        slot("2024-06-01", "08:00", "taken"),
+        slot("2024-06-01", "14:00", "skipped"),
+        slot("2024-06-01", "20:00", "missed"),
+      ]);
+      // 21:00 today: the 08:00 dose is overdue but not missed until the day
+      // is over, so it is left out, exactly as the schedule shows it.
+      map.set("2024-06-02", [slot("2024-06-02", "08:00", "pending"), slot("2024-06-02", "20:00", "taken")]);
+      vi.mocked(mockGetDoseSchedule).mockResolvedValue(map);
+
+      const result = await adherenceRate(makeRange(2));
+      expect(result.value.taken).toBe(2);
+      expect(result.value.skipped).toBe(1);
+      expect(result.value.missed).toBe(1);
+      expect(result.value.total).toBe(4);
+      expect(result.value.rate).toBeCloseTo(0.5);
+      expect(result.value.daily.find((d) => d.date === "2024-06-02")?.total).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("returns rate=0 for no dose schedule", async () => {
     vi.mocked(mockGetDoseSchedule).mockResolvedValue(new Map());
     const result = await adherenceRate(makeRange(7));

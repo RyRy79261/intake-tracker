@@ -13,6 +13,9 @@ import {
   weightTrend,
 } from "@/lib/analytics-service";
 import { db } from "@/lib/db";
+import { getDoseScheduleForDateRange, type DoseSlot } from "@/lib/dose-schedule-service";
+import { resolveDoseStatus } from "@/lib/dose-status";
+import { toLocalDateKey } from "@/lib/date-utils";
 import type {
   IntakeRecord,
   WeightRecord,
@@ -125,6 +128,25 @@ async function loadDoseLogs(range: TimeRange): Promise<DoseLog[]> {
 }
 
 /**
+ * Scheduled doses in the range that were never logged on a past day. They are
+ * missed (resolveDoseStatus) and have no dose-log row, so the export derives
+ * them from the schedule, as the Medications screen does. Today is never
+ * included: its doses are not missed yet.
+ */
+async function loadUnloggedMissedDoses(range: TimeRange): Promise<DoseSlot[]> {
+  const startKey = format(range.start, "yyyy-MM-dd");
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayKey = toLocalDateKey(yesterday);
+  const endKey = lastDayKey(range) < yesterdayKey ? lastDayKey(range) : yesterdayKey;
+  if (startKey > endKey) return [];
+  const byDate = await getDoseScheduleForDateRange(startKey, endKey);
+  return [...byDate.values()]
+    .flat()
+    .filter((slot) => slot.status === "missed" && !slot.existingLog);
+}
+
+/**
  * The 'All' preset sends `start: 0`. Clamp it to the first day with any data
  * (records, dose logs or a prescription), so a report doesn't walk the dose
  * schedule day by day from 1970 and the filename carries a real date.
@@ -215,7 +237,64 @@ const INTAKE_UNITS: Record<IntakeRecord["type"], string> = {
   potassium: "mg",
 };
 
-function buildSections(records: ExportRecords, doseLogs: DoseLog[], medNames: Map<string, string>): CsvSection[] {
+/**
+ * Dose-log rows plus one row per unlogged missed dose, by date and time. A
+ * scheduled log that is still outstanding ("pending"/"rescheduled") on a past
+ * day reports as missed, the same rule the schedule screen applies.
+ */
+function doseRows(
+  doseLogs: DoseLog[],
+  missed: DoseSlot[],
+  medNames: Map<string, string>,
+): Cell[][] {
+  const todayKey = toLocalDateKey();
+  const rows: { date: string; time: string; row: Cell[] }[] = doseLogs.map((l) => ({
+    date: l.scheduledDate,
+    time: l.scheduledTime,
+    row: [
+      l.scheduledDate,
+      l.scheduledTime,
+      medNames.get(l.prescriptionId) ?? l.prescriptionId,
+      l.kind === "prn" ? l.status : resolveDoseStatus(l.status, l.scheduledDate, todayKey),
+      l.kind ?? "scheduled",
+      l.actionTimestamp != null ? new Date(l.actionTimestamp).toISOString() : undefined,
+      l.doseAmount ?? l.doseMg,
+      l.doseUnit ?? (l.doseMg != null ? "mg" : undefined),
+      l.pillsConsumed,
+      l.pillStrength,
+      l.skipReason,
+      l.rescheduledTo,
+      l.note,
+    ],
+  }));
+  for (const slot of missed) {
+    rows.push({
+      date: slot.scheduledDate,
+      time: slot.localTime,
+      row: [
+        slot.scheduledDate,
+        slot.localTime,
+        medNames.get(slot.prescriptionId) ?? slot.prescriptionId,
+        "missed",
+        "scheduled",
+        undefined,
+        // The scheduled dose that was not logged.
+        slot.dosageMg,
+        slot.unit,
+      ],
+    });
+  }
+  return rows
+    .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time))
+    .map((r) => r.row);
+}
+
+function buildSections(
+  records: ExportRecords,
+  doseLogs: DoseLog[],
+  missedDoses: DoseSlot[],
+  medNames: Map<string, string>,
+): CsvSection[] {
   return [
     {
       title: "Intake",
@@ -336,21 +415,7 @@ function buildSections(records: ExportRecords, doseLogs: DoseLog[], medNames: Ma
         "rescheduled_to",
         "note",
       ],
-      rows: doseLogs.map((l) => [
-        l.scheduledDate,
-        l.scheduledTime,
-        medNames.get(l.prescriptionId) ?? l.prescriptionId,
-        l.status,
-        l.kind ?? "scheduled",
-        l.actionTimestamp != null ? new Date(l.actionTimestamp).toISOString() : undefined,
-        l.doseAmount ?? l.doseMg,
-        l.doseUnit ?? (l.doseMg != null ? "mg" : undefined),
-        l.pillsConsumed,
-        l.pillStrength,
-        l.skipReason,
-        l.rescheduledTo,
-        l.note,
-      ]),
+      rows: doseRows(doseLogs, missedDoses, medNames),
     },
   ];
 }
@@ -365,14 +430,17 @@ function buildSections(records: ExportRecords, doseLogs: DoseLog[], medNames: Ma
  */
 export async function exportAllRecordsCSV(range: TimeRange): Promise<void> {
   const resolved = await resolveExportRange(range);
-  const [records, doseLogs, prescriptions] = await Promise.all([
+  const [records, doseLogs, missedDoses, prescriptions] = await Promise.all([
     loadRecords(resolved),
     loadDoseLogs(resolved),
+    loadUnloggedMissedDoses(resolved),
     db.prescriptions.toArray(),
   ]);
   const medNames = new Map(prescriptions.map((p) => [p.id, p.genericName]));
 
-  const sections = buildSections(records, doseLogs, medNames).filter((s) => s.rows.length > 0);
+  const sections = buildSections(records, doseLogs, missedDoses, medNames).filter(
+    (s) => s.rows.length > 0,
+  );
   if (sections.length === 0) return;
 
   const csvContent = sections
@@ -573,6 +641,10 @@ export async function exportToPDF(inputRange: TimeRange): Promise<void> {
   if (adherence.value.total > 0) {
     addLine(`Overall rate: ${(adherence.value.rate * 100).toFixed(1)}%`);
     addLine(`Taken: ${adherence.value.taken} / ${adherence.value.total} doses`);
+    // A scheduled dose on a past day with nothing logged counts as missed.
+    addLine(
+      `Skipped: ${adherence.value.skipped}, missed (not logged): ${adherence.value.missed}`,
+    );
   } else {
     addLine("No medication schedule data in this period.");
   }
