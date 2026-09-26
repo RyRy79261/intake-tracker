@@ -710,6 +710,33 @@ describe("MCP query fns — sodium naming (real Postgres)", () => {
 
     expect(items.map((r) => [r.type, r.amount])).toEqual([["sodium", 400]]);
   });
+
+  it("returns what a sodium row was entered as, and null when the source is unknown", async () => {
+    await ctx.db.insert(schema.intakeRecords).values([
+      intakeFixture(ctx.testUserId, {
+        type: "salt",
+        amount: 786,
+        timestamp: 100,
+        sodiumSource: "salt",
+        sourceAmount: 2,
+        sourceUnit: "g",
+      }),
+      intakeFixture(ctx.testUserId, { type: "salt", amount: 400, timestamp: 200 }),
+    ]);
+
+    const { items } = await queries.queryIntakeHistory(
+      ctx.testUserId,
+      "sodium",
+      FULL_RANGE,
+    );
+
+    expect(
+      items.map((r) => [r.amount, r.sodiumSource, r.sourceAmount, r.sourceUnit]),
+    ).toEqual([
+      [786, "salt", 2, "g"],
+      [400, null, null, null],
+    ]);
+  });
 });
 
 describe("MCP query fns — listMedications effective phase (real Postgres)", () => {
