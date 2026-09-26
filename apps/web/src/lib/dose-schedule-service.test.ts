@@ -39,7 +39,9 @@ async function seedPrescription(overrides?: {
   const utcMinutes = overrides?.scheduleTimeUTC ?? 480;
   const rx = makePrescription({
     isActive: overrides?.isActive ?? true,
-    createdAt: overrides?.createdAt ?? 1700000000000,
+    // Local noon well before TUESDAY: BASE_TS (1700000000000) is 22:13 UTC,
+    // already the next local day east of UTC+1.
+    createdAt: overrides?.createdAt ?? REGIMEN_START,
   });
   const phase = makeMedicationPhase(rx.id, {
     status: (overrides?.phaseStatus ?? "active") as "active" | "completed" | "pending",
@@ -172,7 +174,7 @@ describe("getDailyDoseSchedule", () => {
   });
 
   it("returns two DoseSlots sorted by localTime for multiple schedules", async () => {
-    const rx = makePrescription();
+    const rx = makePrescription({ createdAt: REGIMEN_START });
     const phase = makeMedicationPhase(rx.id, { startDate: REGIMEN_START });
     const morningSchedule = makePhaseSchedule(phase.id, {
       scheduleTimeUTC: 480, // 08:00 UTC
@@ -233,7 +235,7 @@ describe("getDailyDoseSchedule", () => {
   });
 
   it("sets inventoryWarning to 'no_inventory' when no inventory exists", async () => {
-    const rx = makePrescription();
+    const rx = makePrescription({ createdAt: REGIMEN_START });
     const phase = makeMedicationPhase(rx.id, { startDate: REGIMEN_START });
     const schedule = makePhaseSchedule(phase.id, {
       scheduleTimeUTC: 480,
@@ -391,7 +393,7 @@ describe("timezone behavior", () => {
     const { recalculateScheduleTimezones } = await import("@/lib/timezone-recalculation-service");
 
     // Seed schedule anchored at SA: 08:30 SA (UTC+2) = 06:30 UTC = 390 min
-    const rx = makePrescription({ createdAt: 1700000000000 });
+    const rx = makePrescription({ createdAt: REGIMEN_START });
     const phase = makeMedicationPhase(rx.id, { startDate: REGIMEN_START });
     const schedule = makePhaseSchedule(phase.id, {
       scheduleTimeUTC: 390,
