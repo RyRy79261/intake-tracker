@@ -596,6 +596,29 @@ describe("buildMedicationSummary", () => {
 
     expect(med!.dosesDue).toBe(4);
     expect(med!.dosesTaken).toBe(3);
+    // The one due day with nothing logged is missed.
+    expect(med!.dosesSkipped).toBe(0);
+    expect(med!.dosesMissed).toBe(1);
+  });
+
+  it("splits the untaken due doses into skipped and missed (live-data-forensics#7)", async () => {
+    const { rx, phase, schedules } = await addScheduledRx(
+      "Bisoprolol",
+      [{ dosage: 5, daysOfWeek: [0, 1, 2, 3, 4, 5, 6] }],
+      { startDate: NOW - 5 * DAY_MS },
+    );
+    const log = (daysAgo: number, status: "taken" | "skipped" | "pending" | "rescheduled") =>
+      makeDoseLog(rx.id, phase.id, schedules[0]!.id, {
+        status,
+        scheduledDate: toLocalDateKey(NOW - daysAgo * DAY_MS),
+      });
+    // 4 due days: taken, skipped, a stale pending log (still owed, so
+    // missed), and nothing at all (missed).
+    await db.doseLogs.bulkAdd([log(1, "taken"), log(2, "skipped"), log(3, "pending")]);
+
+    const [med] = await buildMedicationSummary(RANGE, NOW);
+
+    expect(med).toMatchObject({ dosesDue: 4, dosesTaken: 1, dosesSkipped: 1, dosesMissed: 2 });
   });
 
   it("does not count doses scheduled before the phase started that day as due", async () => {

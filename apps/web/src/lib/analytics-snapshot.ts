@@ -20,6 +20,7 @@ import {
 import { db, type DoseLog, type PhaseSchedule } from "@/lib/db";
 import { getActivePrescriptions } from "@/lib/prescription-service";
 import { toLocalDateKey } from "@/lib/date-utils";
+import { resolveDoseStatus } from "@/lib/dose-status";
 import { isLive } from "@intake/core/lifecycle";
 import { selectEffectivePhase } from "@intake/core/effective-phase";
 import type { DataPoint, TimeRange, TrendDirection } from "@intake/types/analytics";
@@ -132,10 +133,12 @@ function slotTime(day: Date, time: string): number {
 }
 
 /**
- * Scheduled doses due vs logged as taken on the completed days of the current
- * phase inside the window. The phase's schedules only describe the current
- * regimen, so days before the phase started are not counted. A day's taken
- * count is capped at its due count so duplicate logs can't lift the rate.
+ * Scheduled doses due on the completed days of the current phase inside the
+ * window, split into taken, skipped and missed. A due dose with no taken or
+ * skipped log is missed (resolveDoseStatus: every day counted here is past).
+ * The phase's schedules only describe the current regimen, so days before
+ * the phase started are not counted. Each slot counts once, so duplicate
+ * logs can't lift the rate; a taken log beats a skipped one.
  */
 function scheduledAdherence(
   phaseId: string,
@@ -144,35 +147,45 @@ function scheduledAdherence(
   logs: DoseLog[],
   range: TimeRange,
   now: number,
-): { dosesTaken: number; dosesDue: number } {
-  const takenByDate = new Map<string, Set<string>>();
+): { dosesTaken: number; dosesDue: number; dosesSkipped: number; dosesMissed: number } {
+  // Per date, the best status logged for each schedule slot.
+  const statusByDate = new Map<string, Map<string, string>>();
   for (const log of logs) {
-    if (log.kind === "prn" || log.status !== "taken") continue;
+    if (log.kind === "prn" || (log.status !== "taken" && log.status !== "skipped")) continue;
     if (log.phaseId !== phaseId || !log.scheduleId) continue;
-    const set = takenByDate.get(log.scheduledDate) ?? new Set<string>();
-    set.add(log.scheduleId);
-    takenByDate.set(log.scheduledDate, set);
+    const bySlot = statusByDate.get(log.scheduledDate) ?? new Map<string, string>();
+    if (bySlot.get(log.scheduleId) !== "taken") bySlot.set(log.scheduleId, log.status);
+    statusByDate.set(log.scheduledDate, bySlot);
   }
 
-  // Only completed days: never today, whose doses may not be due yet.
+  // Only completed days: never today, whose doses are not missed yet.
+  const todayKey = toLocalDateKey(now);
   const lastDay = Math.min(range.end, startOfLocalDay(now) - 1);
   let dosesDue = 0;
   let dosesTaken = 0;
+  let dosesSkipped = 0;
+  let dosesMissed = 0;
   const day = new Date(startOfLocalDay(Math.max(range.start, phaseStart)));
   while (day.getTime() <= lastDay) {
     const dow = day.getDay();
+    const dateKey = toLocalDateKey(day);
     // On the day the phase started (phases activate at "now", mid-day), a
     // slot that was already past belonged to the previous phase.
     const due = schedules.filter(
       (s) =>
         s.daysOfWeek.includes(dow) && slotTime(day, s.time) >= phaseStart,
     );
-    const taken = takenByDate.get(toLocalDateKey(day));
-    dosesDue += due.length;
-    dosesTaken += taken ? due.filter((s) => taken.has(s.id)).length : 0;
+    const logged = statusByDate.get(dateKey);
+    for (const s of due) {
+      const status = resolveDoseStatus(logged?.get(s.id), dateKey, todayKey);
+      dosesDue += 1;
+      if (status === "taken") dosesTaken += 1;
+      else if (status === "skipped") dosesSkipped += 1;
+      else dosesMissed += 1;
+    }
     day.setDate(day.getDate() + 1);
   }
-  return { dosesTaken, dosesDue };
+  return { dosesTaken, dosesDue, dosesSkipped, dosesMissed };
 }
 
 /**

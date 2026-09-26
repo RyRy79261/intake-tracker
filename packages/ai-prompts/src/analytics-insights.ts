@@ -127,8 +127,10 @@ export const MAX_MEDICATION_FREQUENCY_CHARS = 160;
  *
  * Adherence fields are optional (older clients never sent them): `dosesDue`
  * counts scheduled doses on completed days of the current phase inside the
- * window, `dosesTaken` how many of those were logged as taken. `prnDoses`
- * counts as-needed doses logged in the window.
+ * window, `dosesTaken` how many of those were logged as taken, `dosesSkipped`
+ * how many were logged as skipped and `dosesMissed` how many had nothing
+ * logged (a past scheduled dose with no taken/skipped log is missed).
+ * `prnDoses` counts as-needed doses logged in the window.
  */
 const MedicationSchema = z.object({
   name: z.string().min(1).max(MAX_MEDICATION_NAME_CHARS),
@@ -138,6 +140,8 @@ const MedicationSchema = z.object({
   daysOnPhase: z.number().int().nonnegative(),
   dosesTaken: z.number().int().nonnegative().optional(),
   dosesDue: z.number().int().nonnegative().optional(),
+  dosesSkipped: z.number().int().nonnegative().optional(),
+  dosesMissed: z.number().int().nonnegative().optional(),
   prnDoses: z.number().int().nonnegative().optional(),
 });
 
@@ -282,7 +286,7 @@ Rules:
 - Treat low-confidence trends as inconclusive rather than asserting a direction.
 - The water figure is compared against the user's daily fluid LIMIT: a ceiling (for example a heart-failure fluid restriction), not a target. Intake under the limit is expected; never call it under-hydration or suggest drinking more to reach the limit.
 - An intake type that is not listed was not logged. Never treat it as zero intake. Averages cover only the days that type was logged.
-- Medication adherence is only as reliable as the user's dose logging. When it is unknown or sparse, say so and do not assume the medication was taken as scheduled.
+- A scheduled dose on a past day with nothing logged counts as missed: report it as missed and never assume it was taken. When adherence is unknown or based on few doses, say so.
 - A correlation with fewer than 3 paired days is insufficient data, not evidence of "no relationship".
 - Correlation is not causation — never imply one metric causes another.
 - Keep a neutral, non-alarming tone. This summary is informational only and never replaces a qualified professional. If a reading looks notable, state the number plainly and recommend the user discuss it with their healthcare provider.
@@ -350,21 +354,23 @@ function describeTrend(t: z.infer<typeof TrendSchema>): string {
 }
 
 /**
- * Adherence wording for one scheduled medication. Dose logging is optional in
- * the app, so zero logged doses reads as "unknown", not "none taken".
+ * Adherence wording for one scheduled medication. A past scheduled dose with
+ * nothing logged counts as missed. Older clients send no skipped/missed
+ * split; their untaken doses are reported as "not logged as taken".
  */
 function describeAdherence(m: z.infer<typeof MedicationSchema>): string {
-  const { dosesTaken: taken, dosesDue: due } = m;
+  const { dosesTaken: taken, dosesDue: due, dosesSkipped: skipped, dosesMissed: missed } = m;
   if (due === undefined || taken === undefined) return "adherence unknown (not reported)";
   if (due === 0) {
     return "adherence unknown (no completed scheduled days on this phase in the period)";
   }
-  if (taken === 0) {
-    return `0 of ${due} scheduled dose(s) logged as taken — the user may not log doses, so treat adherence as unknown`;
-  }
   const pct = Math.round((taken / due) * 100);
   const sparse = due < 7 ? ", sparse data" : "";
-  return `${taken} of ${due} scheduled dose(s) logged as taken (${pct}%${sparse})`;
+  const head = `${taken} of ${due} scheduled dose(s) logged as taken (${pct}%${sparse})`;
+  if (skipped === undefined || missed === undefined) {
+    return taken === due ? head : `${head}; ${due - taken} not logged as taken`;
+  }
+  return `${head}; ${skipped} skipped, ${missed} missed (nothing logged)`;
 }
 
 function domainLabel(d: Domain): string {
