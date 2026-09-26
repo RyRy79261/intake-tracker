@@ -107,6 +107,33 @@ export default defineConfig({
           functions: 95,
           branches: 95,
         },
+        // Dose reminders, day bucketing and the destructive account flows
+        // (2026-09 audit baseline-health#7). Floors sit ~10 points under the
+        // coverage their dedicated tests reached.
+        "src/hooks/use-push-schedule-sync.ts": {
+          lines: 85,
+          statements: 84,
+          functions: 79,
+          branches: 75,
+        },
+        "src/hooks/use-timezone-detection.ts": {
+          lines: 90,
+          statements: 90,
+          functions: 90,
+          branches: 65,
+        },
+        "src/hooks/use-permissions.ts": {
+          lines: 84,
+          statements: 80,
+          functions: 85,
+          branches: 65,
+        },
+        "src/lib/account-service.ts": {
+          lines: 83,
+          statements: 83,
+          functions: 90,
+          branches: 77,
+        },
       },
     },
   },
