@@ -262,10 +262,11 @@ export async function getDailyDoseSchedule(
 
     const inventory = inventoryByPrescription.get(prescription.id);
     // A logged dose shows what was recorded, not the schedule's current dose.
-    const shownDose =
+    const snapshot =
       existingLog?.status === "taken" || existingLog?.status === "skipped"
-        ? existingLog.doseAmount ?? dosageMg
-        : dosageMg;
+        ? existingLog
+        : undefined;
+    const shownDose = snapshot?.doseAmount ?? dosageMg;
 
     // Calculate pill info
     let pillsPerDose: number | undefined;
@@ -299,7 +300,7 @@ export async function getDailyDoseSchedule(
       // A rescheduled dose sits at its new time.
       localTime: existingLog?.rescheduledTo ?? localTime,
       dosageMg: shownDose,
-      unit: existingLog?.doseUnit ?? phase.unit,
+      unit: snapshot?.doseUnit ?? phase.unit,
       status,
       ...(existingLog !== undefined && { existingLog }),
       prescription,

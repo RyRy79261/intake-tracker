@@ -546,6 +546,20 @@ describe("slot and log matching", () => {
     expect(slots[0]!.localTime).toBe("14:00");
   });
 
+  it("shows the current dose and unit for an untaken log, not a stale snapshot", async () => {
+    // An untake leaves the previous take's snapshot on the now-pending log.
+    const { rx, phase, schedule } = await seedRegimen();
+    await db.doseLogs.add(
+      makeDoseLog(rx.id, phase.id, schedule.id, {
+        scheduledDate: TUESDAY, status: "pending", doseAmount: 25, doseUnit: "mcg",
+      }),
+    );
+
+    const slots = await getDailyDoseSchedule(TUESDAY, "UTC");
+    expect(slots[0]!.dosageMg).toBe(50);
+    expect(slots[0]!.unit).toBe(phase.unit);
+  });
+
   it("shows the dose recorded on a taken log, not the edited schedule (prescriptions-model#3)", async () => {
     const { rx, phase, schedule } = await seedRegimen();
     await db.doseLogs.add(
