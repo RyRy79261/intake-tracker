@@ -93,6 +93,11 @@ export const intakeRecords = pgTable(
     groupId: text("group_id"),
     originalInputText: text("original_input_text"),
     groupSource: text("group_source"),
+    // Sodium ("salt"-typed) rows: the substance the user entered and the
+    // amount/unit as typed. `amount` stays the converted sodium mg.
+    sodiumSource: text("sodium_source"),
+    sourceAmount: real("source_amount"),
+    sourceUnit: text("source_unit"),
     createdAt: bigint("created_at", { mode: "number" }).notNull(),
     updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
     deletedAt: bigint("deleted_at", { mode: "number" }),
@@ -104,6 +109,14 @@ export const intakeRecords = pgTable(
     typeCheck: check(
       "intake_records_type_check",
       sql`${t.type} IN ('water','salt','sugar','potassium')`,
+    ),
+    sodiumSourceCheck: check(
+      "intake_records_sodium_source_check",
+      sql`${t.sodiumSource} IS NULL OR ${t.sodiumSource} IN ('sodium','salt','msg')`,
+    ),
+    sourceUnitCheck: check(
+      "intake_records_source_unit_check",
+      sql`${t.sourceUnit} IS NULL OR ${t.sourceUnit} IN ('mg','g')`,
     ),
     userUpdatedIdx: index("idx_intake_user_updated").on(t.userId, t.updatedAt),
     userServerUpdatedIdx: index("idx_intake_user_server_updated").on(

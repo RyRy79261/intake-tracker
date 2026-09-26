@@ -283,6 +283,35 @@ describe("backup-schemas: 2026-09 schema additions", () => {
     expect(BACKUP_VALIDATORS.doseLogs({ ...base, pillsConsumed: "1" })).toBe(false);
     expect(BACKUP_VALIDATORS.doseLogs({ ...base, doseUnit: 5 })).toBe(false);
   });
+
+  // Sodium rows record the substance/amount the user entered (sodium-sources).
+  it("accepts a sodium row with or without its entered source", () => {
+    const base = makeIntakeRecord({ type: "salt", amount: 786 });
+    expect(BACKUP_VALIDATORS.intakeRecords(base)).toBe(true);
+    expect(
+      BACKUP_VALIDATORS.intakeRecords({
+        ...base,
+        sodiumSource: "salt",
+        sourceAmount: 2,
+        sourceUnit: "g",
+      }),
+    ).toBe(true);
+    expect(
+      BACKUP_VALIDATORS.intakeRecords({
+        ...base,
+        sodiumSource: null,
+        sourceAmount: null,
+        sourceUnit: null,
+      }),
+    ).toBe(true);
+  });
+
+  it("rejects an unknown sodium source or unit", () => {
+    const base = makeIntakeRecord({ type: "salt", amount: 786 });
+    expect(BACKUP_VALIDATORS.intakeRecords({ ...base, sodiumSource: "potash" })).toBe(false);
+    expect(BACKUP_VALIDATORS.intakeRecords({ ...base, sourceUnit: "oz" })).toBe(false);
+    expect(BACKUP_VALIDATORS.intakeRecords({ ...base, sourceAmount: Number.NaN })).toBe(false);
+  });
 });
 
 describe("backup-schemas: invariants", () => {

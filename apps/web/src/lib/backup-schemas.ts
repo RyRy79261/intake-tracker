@@ -58,6 +58,11 @@ export const intakeRecordSchema = baseRecord
     type: z.enum(["water", "salt", "sugar", "potassium"]),
     amount: finiteNumber,
     timestamp: timestampSchema,
+    // Sodium rows: the substance/amount the user entered (all optional —
+    // rows written before these fields existed carry none of them).
+    sodiumSource: z.enum(["sodium", "salt", "msg"]).nullable().optional(),
+    sourceAmount: finiteNumber.nullable().optional(),
+    sourceUnit: z.enum(["mg", "g"]).nullable().optional(),
   })
   .passthrough();
 

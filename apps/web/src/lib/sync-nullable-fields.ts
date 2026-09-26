@@ -82,6 +82,9 @@ export const NULLABLE_SYNC_FIELDS: Record<TableName, readonly string[]> = {
     "groupId",
     "originalInputText",
     "groupSource",
+    "sodiumSource",
+    "sourceAmount",
+    "sourceUnit",
     "deletedAt",
   ],
   substanceRecords: [

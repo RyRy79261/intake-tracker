@@ -84,6 +84,18 @@ describe("MCP tools — tool set", () => {
     const history = tools.find((t) => t.name === "query_intake_history")!;
     expect(history.description).toMatch(/sodium/i);
   });
+
+  it("uses the app's salt → sodium factor and names the entered-source fields", async () => {
+    const { tools } = await client.listTools();
+    const summary = tools.find((t) => t.name === "get_today_summary")!;
+    const history = tools.find((t) => t.name === "query_intake_history")!;
+    for (const t of [summary, history]) {
+      expect(t.description).toContain("1 g salt is about 393 mg sodium");
+      expect(t.description).not.toContain("400 mg");
+    }
+    expect(history.description).toMatch(/sodiumSource/);
+    expect(history.description).toMatch(/MSG/);
+  });
 });
 
 describe("MCP tools — input validation errors reach the model verbatim", () => {

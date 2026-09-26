@@ -21,10 +21,33 @@
  * This module is pure types (zero runtime, zero imports) — keep it that way.
  */
 
+/**
+ * The substance a sodium entry was measured as. Salt (NaCl) and MSG are not
+ * sodium: the record's `amount` is always the sodium they contain, in mg.
+ */
+export type SodiumSource = "sodium" | "salt" | "msg";
+
+/** Unit of an entered sodium-source amount. */
+export type SodiumSourceUnit = "mg" | "g";
+
 export interface IntakeRecord {
   id: string;
+  /**
+   * "salt" is the historical key for the SODIUM tracker — its `amount` is
+   * sodium mg, never grams of table salt. The key stays for data stability;
+   * every label reads "Sodium".
+   */
   type: "water" | "salt" | "sugar" | "potassium";
-  amount: number; // ml for water, mg for salt, g for sugar, mg for potassium
+  amount: number; // ml for water, mg SODIUM for "salt", g for sugar, mg for potassium
+  /**
+   * Sodium rows only: what the user entered — `sourceAmount` `sourceUnit` of
+   * `sodiumSource` (e.g. 2 g of salt), kept so the entry reads and edits as
+   * typed while `amount` holds the converted sodium mg. Absent on rows written
+   * before these fields existed and on AI/preset rows: sodium, source unknown.
+   */
+  sodiumSource?: "sodium" | "salt" | "msg";
+  sourceAmount?: number;
+  sourceUnit?: "mg" | "g";
   timestamp: number; // Unix timestamp in milliseconds
   source?: string; // "manual", "food:apple", "voice", etc.
   note?: string; // Optional note for the entry

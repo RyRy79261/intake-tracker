@@ -414,6 +414,11 @@ export async function queryIntakeHistory(
       note: intakeRecords.note,
       groupId: intakeRecords.groupId,
       groupSource: intakeRecords.groupSource,
+      // Sodium rows: what the user entered (e.g. 2 g of salt) — `amount` is
+      // already the sodium mg. Null on rows with no recorded source.
+      sodiumSource: intakeRecords.sodiumSource,
+      sourceAmount: intakeRecords.sourceAmount,
+      sourceUnit: intakeRecords.sourceUnit,
     })
     .from(intakeRecords)
     .where(

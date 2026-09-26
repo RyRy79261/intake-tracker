@@ -119,7 +119,7 @@ export const FLOAT_SYNC_FIELDS: Record<TableName, readonly string[]> = {
   doseLogs: ["doseMg", "doseAmount", "pillsConsumed", "pillStrength"],
   inventoryTransactions: ["amount"],
   dailyNotes: [],
-  intakeRecords: [],
+  intakeRecords: ["sourceAmount"],
   substanceRecords: ["amountStandardDrinks", "abvPercent"],
   weightRecords: ["weight"],
   bloodPressureRecords: [],
