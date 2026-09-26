@@ -539,10 +539,8 @@ describe("buildMedicationSummary", () => {
       createdAt: NOW - 90 * DAY_MS,
     });
     await db.prescriptions.add(rx);
-    const prn = (daysAgo: number, overrides: Record<string, unknown> = {}) =>
-      makeDoseLog(rx.id, "", "", {
-        phaseId: undefined,
-        scheduleId: undefined,
+    const prn = (daysAgo: number, overrides: Record<string, unknown> = {}) => {
+      const log = makeDoseLog(rx.id, "", "", {
         kind: "prn",
         status: "taken",
         scheduledDate: toLocalDateKey(NOW - daysAgo * DAY_MS),
@@ -550,6 +548,11 @@ describe("buildMedicationSummary", () => {
         doseUnit: "mg",
         ...overrides,
       });
+      // PRN doses carry no phase or schedule.
+      delete log.phaseId;
+      delete log.scheduleId;
+      return log;
+    };
     await db.doseLogs.bulkAdd([
       prn(2),
       prn(5),
