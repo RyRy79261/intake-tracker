@@ -10,6 +10,7 @@ import userEvent from "@testing-library/user-event";
 
 import { TitrationStartPrompt } from "@/components/medications/titrations/titration-start-prompt";
 import { renderWithFixtures } from "@/__tests__/react-test-utils";
+/* eslint-disable-next-line no-restricted-imports -- test seeds and asserts the stored rows */
 import { db } from "@/lib/db";
 import { makeMedicationPhase, makeTitrationPlan } from "@/__tests__/fixtures/db-fixtures";
 

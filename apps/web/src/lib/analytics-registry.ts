@@ -91,7 +91,7 @@ export const queryRegistry: QueryDescriptor[] = [
     id: "adherence_rate",
     name: "Medication Adherence",
     description:
-      "Medication adherence rate as a ratio of taken vs scheduled doses, with daily breakdown. Optionally filtered by prescription.",
+      "Medication adherence rate as a ratio of taken vs scheduled doses, with taken, skipped and missed counts and a daily breakdown. A scheduled dose on a past day with nothing logged is missed; today's outstanding doses are not counted yet. Optionally filtered by prescription.",
     category: "medication",
     parameters: AdherenceParamsSchema,
     execute: async (params) => {

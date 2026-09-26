@@ -803,7 +803,7 @@ describe("titration start confirmation", () => {
     expect(isTitrationPlanDue({ ...base, recommendedStartDate: at("2026-10-01") }, today)).toBe(true);
     expect(isTitrationPlanDue({ ...base, recommendedStartDate: at("2026-09-20") }, today)).toBe(true);
     expect(isTitrationPlanDue({ ...base, recommendedStartDate: at("2026-10-02") }, today)).toBe(false);
-    expect(isTitrationPlanDue({ ...base, recommendedStartDate: undefined }, today)).toBe(false);
+    expect(isTitrationPlanDue({ ...base }, today)).toBe(false);
     expect(isTitrationPlanDue({ ...base, status: "active", recommendedStartDate: at("2026-09-20") }, today)).toBe(false);
     expect(isTitrationPlanDue({ ...base, status: "cancelled", recommendedStartDate: at("2026-09-20") }, today)).toBe(false);
     expect(isTitrationPlanDue({ ...base, deletedAt: 5, recommendedStartDate: at("2026-09-20") }, today)).toBe(false);
