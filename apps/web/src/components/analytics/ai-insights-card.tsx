@@ -9,6 +9,7 @@ import {
   Loader2,
   Search,
   Sparkles,
+  Trash2,
   X,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@intake/ui/card";
@@ -33,10 +34,15 @@ import {
   useGenerateInsights,
   useInsightReports,
   useDeepInsightJob,
+  useSharedMedicationCount,
   NotEnoughDataError,
 } from "@/hooks/use-insights";
 import { useUserProfile } from "@/hooks/use-profile-queries";
 import { insightsRange, INSIGHTS_WINDOW_DAYS } from "@/lib/analytics-snapshot";
+import {
+  deleteInsightReport,
+  pickPreviousInsightReport,
+} from "@/lib/insight-report-service";
 import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import type { InsightReport } from "@/lib/db";
 
@@ -244,6 +250,35 @@ export function AiInsightsCard() {
   const [readingReport, setReadingReport] = useState<InsightReport | null>(
     null,
   );
+  // Delete is two-tap: the first arms it, the second deletes.
+  const [deleteArmed, setDeleteArmed] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const openReport = (report: InsightReport | null) => {
+    setDeleteArmed(false);
+    setReadingReport(report);
+  };
+
+  const deleteReadingReport = async () => {
+    if (!readingReport) return;
+    if (!deleteArmed) {
+      setDeleteArmed(true);
+      return;
+    }
+    setDeleting(true);
+    // Soft delete through writeWithSync, so the removal syncs like any edit.
+    const result = await deleteInsightReport(readingReport.id);
+    setDeleting(false);
+    if (!result.success) {
+      toast({
+        title: "Couldn't delete the report",
+        description: result.error,
+        variant: "destructive",
+      });
+      return;
+    }
+    openReport(null);
+    toast({ title: "Report deleted" });
+  };
   // Recompute "long-running" wording each minute while a deep job is pending
   // so the message swaps without a refresh once the threshold is crossed.
   const [, forceTick] = useState(0);
@@ -255,12 +290,25 @@ export function AiInsightsCard() {
 
   const latest = reports[0] ?? null;
   const history = reports.slice(1);
-  const hasPrevious = reports.length > 0;
 
   const shareConditions =
     profile.shareConditionsWithAI && profile.conditions.length > 0;
   const shareMedications = profile.shareMedicationsWithAI;
-  const personalised = shareConditions || shareMedications;
+  const sharedMedicationCount = useSharedMedicationCount(shareMedications);
+  // What would actually be sent: medication sharing with no active
+  // prescription sends nothing.
+  const personalised =
+    shareConditions || (sharedMedicationCount ?? 0) > 0;
+
+  // Mirrors the hook's choice (useGenerateInsights / useDeepInsightJob): a
+  // report for an earlier period, withheld when it is personalised and the
+  // new request would not be.
+  const previousReport = pickPreviousInsightReport(
+    reports,
+    insightsRange().start,
+  );
+  const hasPrevious =
+    previousReport !== null && (!previousReport.personalised || personalised);
 
   const pendingState =
     deep.state.status === "pending" ? deep.state : null;
@@ -317,9 +365,9 @@ export function AiInsightsCard() {
   };
 
   // Surface deep completion / failure with a toast and clear the hook's
-  // sticky state so subsequent runs start clean. The result itself lands in
-  // the Dexie cache via the sync pull triggered by the hook, so the card's
-  // live query renders it automatically — no special "fresh result" pane.
+  // sticky state so subsequent runs start clean. The hook has already written
+  // the result into the Dexie cache, so the card's live query renders it
+  // automatically — no special "fresh result" pane.
   useEffect(() => {
     if (deep.state.status === "completed") {
       toast({
@@ -349,11 +397,15 @@ export function AiInsightsCard() {
         <CardTitle className="text-sm font-medium flex items-center gap-1.5">
           <Sparkles className="w-3.5 h-3.5 text-violet-500" />
           AI Insights
+          {/* Always its own rolling window, whatever range the tab shows. */}
+          <span className="ml-auto text-[11px] font-normal text-muted-foreground">
+            Last {INSIGHTS_WINDOW_DAYS} days
+          </span>
         </CardTitle>
       </CardHeader>
       <CardContent className="px-3 pb-3 space-y-3">
         {latest ? (
-          <ReportPreview report={latest} onOpen={setReadingReport} />
+          <ReportPreview report={latest} onOpen={openReport} />
         ) : (
           <p className="text-sm text-muted-foreground">
             Generate an AI summary of your last {INSIGHTS_WINDOW_DAYS} days of
@@ -442,7 +494,7 @@ export function AiInsightsCard() {
                 <ReportPreview
                   key={report.id}
                   report={report}
-                  onOpen={setReadingReport}
+                  onOpen={openReport}
                 />
               ))}
             </CollapsibleContent>
@@ -525,15 +577,17 @@ export function AiInsightsCard() {
                   </span>
                 </li>
                 <li className="flex gap-1.5">
-                  {shareMedications ? (
+                  {shareMedications && sharedMedicationCount !== 0 ? (
                     <Check className="w-3.5 h-3.5 mt-0.5 shrink-0 text-emerald-500" />
                   ) : (
                     <X className="w-3.5 h-3.5 mt-0.5 shrink-0 text-slate-400" />
                   )}
                   <span>
-                    {shareMedications
-                      ? "Medications included — your active prescriptions, doses, and titration/maintenance phases"
-                      : "Medications not included — turn on sharing in your Profile to add prescription context"}
+                    {!shareMedications
+                      ? "Medications not included — turn on sharing in your Profile to add prescription context"
+                      : sharedMedicationCount === 0
+                        ? "Medication sharing is on, but you have no active prescriptions to include"
+                        : `Medications included — ${sharedMedicationCount ?? "your"} active prescription${sharedMedicationCount === 1 ? "" : "s"}, with doses and titration/maintenance phases`}
                   </span>
                 </li>
               </ul>
@@ -599,7 +653,7 @@ export function AiInsightsCard() {
       <Dialog
         open={readingReport !== null}
         onOpenChange={(open) => {
-          if (!open) setReadingReport(null);
+          if (!open) openReport(null);
         }}
       >
         <DialogContent className="max-w-lg max-h-[85vh] flex flex-col">
@@ -632,6 +686,18 @@ export function AiInsightsCard() {
               <ReportContent report={readingReport} />
             </div>
           )}
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button
+              variant={deleteArmed ? "destructive" : "outline"}
+              size="sm"
+              onClick={deleteReadingReport}
+              disabled={deleting}
+              className="gap-1.5"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              {deleteArmed ? "Tap again to delete" : "Delete report"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </Card>

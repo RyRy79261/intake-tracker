@@ -4,6 +4,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { apiFetch } from "@/lib/api-fetch";
 import {
   buildAnalyticsSnapshot,
+  buildMedicationSummary,
   snapshotIsEmpty,
   type IntakeGoals,
 } from "@/lib/analytics-snapshot";
@@ -57,6 +58,19 @@ interface GenerateInsightsInput {
 /** Live history of cached insight reports, newest first. */
 export function useInsightReports(): InsightReport[] {
   return useLiveQuery(getInsightReports, [], []);
+}
+
+/**
+ * How many active medications sharing would actually send — the same list
+ * the snapshot builds. 0 when sharing is off; undefined while loading.
+ * Sharing can be on with nothing to send (no active prescription), and the
+ * UI must not claim a personalised summary then.
+ */
+export function useSharedMedicationCount(enabled: boolean): number | undefined {
+  return useLiveQuery(
+    async () => (enabled ? (await buildMedicationSummary()).length : 0),
+    [enabled],
+  );
 }
 
 /**

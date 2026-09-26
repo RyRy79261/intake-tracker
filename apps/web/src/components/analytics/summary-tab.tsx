@@ -245,9 +245,9 @@ export function SummaryTab({ range }: { range: TimeRange }) {
   }, [bp, bpReadings, weightReadings, fluid, totals, rangeDays, waterGoal, saltLimit, sugarLimit, potassiumLimit, sugarEnabled, potassiumEnabled]);
 
   if (!hasAnyData) {
-    // The nutrient card uses a fixed 30-day window pinned at its mount,
-    // independent of the parent `range` selector — so it can still have
-    // food entries to analyse even when the selected range is empty.
+    // The AI and nutrient cards use fixed 30-day windows, independent of
+    // the parent `range` selector — so they can still have data to analyse
+    // (and saved reports to show) even when the selected range is empty.
     return (
       <div className="space-y-4">
         <div className="py-12 text-center text-muted-foreground">
@@ -257,6 +257,7 @@ export function SummaryTab({ range }: { range: TimeRange }) {
             Log entries or widen the time range to see your summary.
           </p>
         </div>
+        <AiInsightsCard />
         <NutrientAnalysisCard />
       </div>
     );
