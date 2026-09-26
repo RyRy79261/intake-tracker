@@ -2,6 +2,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { act, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type * as ToastModule from "@intake/ui/use-toast";
 
 // PresetTab (rendered inside the card) gates its AI lookup on useAuthGate;
 // open the gate so the card renders its full UI without a real session.
@@ -12,7 +13,7 @@ vi.mock("@/components/auth-guard", () => ({
 // No <Toaster> is mounted in these tests; capture toasts to assert on them.
 const toastMock = vi.hoisted(() => vi.fn());
 vi.mock("@intake/ui/use-toast", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@intake/ui/use-toast")>();
+  const actual = await importOriginal<typeof ToastModule>();
   return {
     ...actual,
     toast: toastMock,
