@@ -189,10 +189,26 @@ export type AnalyticsInsightsRequest = z.infer<
 // web_search to ground its clinical claims. Optional so fast-mode reports
 // (which never invoke web_search) can produce a valid tool input without
 // populating it.
+//
+// The model is told to pass every URL it used, and a research-heavy run can
+// cite more than 30 or slip in a bare title ("AHA 2025 guideline"). Neither
+// makes the summary wrong, so the list is coerced — non-URLs dropped, the
+// rest capped — rather than failing a paid deep job on its bibliography.
+export const MAX_INSIGHT_SOURCES = 30;
+
+function coerceSources(value: unknown): unknown {
+  if (!Array.isArray(value)) return value;
+  return value
+    .filter((s) => z.url().safeParse(s).success)
+    .slice(0, MAX_INSIGHT_SOURCES);
+}
+
 export const InsightResponseSchema = z.object({
   summary: z.string().min(1).max(4000),
   observations: z.array(z.string().min(1).max(2000)).max(16),
-  sources: z.array(z.url()).max(30).optional(),
+  sources: z
+    .preprocess(coerceSources, z.array(z.url()).max(MAX_INSIGHT_SOURCES))
+    .optional(),
 });
 
 export const INSIGHT_TOOL = {
@@ -216,6 +232,7 @@ export const INSIGHT_TOOL = {
       sources: {
         type: "array",
         items: { type: "string", format: "uri" },
+        maxItems: MAX_INSIGHT_SOURCES,
         description:
           "Deep mode only: the URLs you retrieved via web_search to ground clinical claims. Required when web_search was used; omit when no external references back the observations.",
       },

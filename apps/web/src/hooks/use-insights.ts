@@ -4,16 +4,23 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { apiFetch } from "@/lib/api-fetch";
 import {
   buildAnalyticsSnapshot,
+  buildMedicationSummary,
   snapshotIsEmpty,
   type IntakeGoals,
 } from "@/lib/analytics-snapshot";
 import {
+  cacheServerInsightReport,
+  deleteInsightReport,
   getInsightReports,
-  getLatestInsightReport,
+  getPreviousInsightReport,
+  isPersonalisedRequest,
+  pickPreviousInsightReport,
+  priorAssessmentFor,
   saveInsightReport,
 } from "@/lib/insight-report-service";
+import { unwrap } from "@intake/core/service";
 import { schedulePull } from "@/lib/sync-engine";
-import type { PriorAssessment } from "@intake/ai-prompts/analytics-insights";
+import type { AnalyticsInsightsRequest } from "@intake/ai-prompts/analytics-insights";
 import type { TimeRange } from "@intake/types/analytics";
 import type { InsightReport } from "@/lib/db";
 
@@ -57,6 +64,53 @@ export function useInsightReports(): InsightReport[] {
 }
 
 /**
+ * The report a new analysis would compare against (see
+ * pickPreviousInsightReport), for the window starting at `rangeStart`.
+ */
+export function usePreviousInsightReport(
+  reports: InsightReport[],
+  rangeStart: number,
+): InsightReport | null {
+  return pickPreviousInsightReport(reports, rangeStart);
+}
+
+/** Soft-delete a cached report; the removal syncs like any other edit. */
+export function useDeleteInsightReport() {
+  return useMutation({
+    mutationFn: async (id: string) => unwrap(await deleteInsightReport(id)),
+  });
+}
+
+/**
+ * How many active medications sharing would actually send — the same list
+ * the snapshot builds. 0 when sharing is off; undefined while loading.
+ * Sharing can be on with nothing to send (no active prescription), and the
+ * UI must not claim a personalised summary then.
+ */
+export function useSharedMedicationCount(enabled: boolean): number | undefined {
+  return useLiveQuery(
+    async () => (enabled ? (await buildMedicationSummary()).length : 0),
+    [enabled],
+  );
+}
+
+/**
+ * Attach the comparison report when the user opted in: the latest one for an
+ * earlier period, and only if its medical detail is still shareable (see
+ * priorAssessmentFor). Mutates `snapshot` in place.
+ */
+async function attachPreviousAssessment(
+  snapshot: AnalyticsInsightsRequest,
+  includePrevious: boolean | undefined,
+): Promise<void> {
+  if (!includePrevious) return;
+  const previous = await getPreviousInsightReport(snapshot.range.start);
+  if (!previous) return;
+  const prior = priorAssessmentFor(previous, isPersonalisedRequest(snapshot));
+  if (prior) snapshot.priorAssessments = [prior];
+}
+
+/**
  * Builds the analytics snapshot locally and asks the server to turn it into an
  * AI narrative. The caller triggers this explicitly (a button), so cost is
  * bounded by user intent rather than scheduled traffic. A successful result is
@@ -83,22 +137,7 @@ export function useGenerateInsights() {
         throw new NotEnoughDataError();
       }
 
-      if (includePrevious) {
-        const previous = await getLatestInsightReport();
-        if (previous) {
-          const priorAssessment: PriorAssessment = {
-            generatedAt: previous.generatedAt,
-            rangeStart: previous.rangeStart,
-            rangeEnd: previous.rangeEnd,
-            summary: previous.narrative,
-            observations: previous.observations,
-            ...(previous.sources && previous.sources.length > 0
-              ? { sources: previous.sources }
-              : {}),
-          };
-          snapshot.priorAssessments = [priorAssessment];
-        }
-      }
+      await attachPreviousAssessment(snapshot, includePrevious);
 
       const res = await apiFetch("/api/analytics/insights", {
         method: "POST",
@@ -155,9 +194,10 @@ export function useGenerateInsights() {
           rangeEnd: range.end,
           narrative: insight.narrative,
           observations: insight.observations,
-          personalised:
-            (conditions !== undefined && conditions.length > 0) ||
-            includeMedications === true,
+          // What was sent, not what the toggles say: medication sharing
+          // with no active prescription sends nothing. A personalised prior
+          // is only attached to a personalised request, so this covers it.
+          personalised: isPersonalisedRequest(snapshot),
           mode: "fast",
         });
       } catch (cacheError) {
@@ -175,8 +215,8 @@ export function useGenerateInsights() {
 // The job state lives on the server (Postgres `insight_jobs`); the client
 // just keeps the jobId in localStorage so polling survives a tab close /
 // reload. On completion the server has already persisted the report to
-// `insight_reports`; we trigger a sync pull so it shows up in the local
-// Dexie cache without waiting for the regular sync cycle.
+// `insight_reports`; the poll response carries it (with the server's id), and
+// we write it straight into the local Dexie cache.
 // ─────────────────────────────────────────────────────────────────────────
 
 const PENDING_DEEP_JOB_KEY = "insight-deep-job-pending";
@@ -227,8 +267,14 @@ export type DeepJobState =
 interface DeepPollResponse {
   status: "pending" | "completed" | "failed" | "expired";
   startedAt: number;
+  /** Completed only: the server's insight_reports id and its window. */
+  reportId?: string;
+  rangeStart?: number;
+  rangeEnd?: number;
+  personalised?: boolean;
   narrative?: string;
   observations?: string[];
+  sources?: string[];
   generatedAt?: number;
   error?: string;
 }
@@ -331,11 +377,38 @@ export function useDeepInsightJob() {
         }
 
         if (body.status === "completed" && body.narrative && body.observations) {
+          // Save the report locally from the poll response, under the
+          // server's id so a later sync pull resolves to the same row.
+          // Relying on a pull instead ran a full, storage-mode-blind pull of
+          // every table, and a failed pull lost the report with the job id.
+          if (
+            typeof body.reportId === "string" &&
+            typeof body.rangeStart === "number" &&
+            typeof body.rangeEnd === "number"
+          ) {
+            const cached = await cacheServerInsightReport({
+              id: body.reportId,
+              generatedAt: body.generatedAt ?? Date.now(),
+              rangeStart: body.rangeStart,
+              rangeEnd: body.rangeEnd,
+              narrative: body.narrative,
+              observations: body.observations,
+              ...(Array.isArray(body.sources) && { sources: body.sources }),
+              personalised: body.personalised === true,
+            });
+            if (!cached.success) {
+              // Keep the job id so the next poll retries the local save.
+              timerRef.current = setTimeout(
+                () => poll(jobId, startedAt),
+                DEEP_POLL_INTERVAL_MS,
+              );
+              return;
+            }
+          } else {
+            // A server that predates reportId in the poll response.
+            schedulePull();
+          }
           writeStoredJob(null);
-          // Pull from the server right now so the Dexie cache picks up the
-          // server-inserted report and the history list updates without
-          // waiting for the next regular sync cycle.
-          schedulePull();
           setState({
             status: "completed",
             jobId,
@@ -402,19 +475,7 @@ export function useDeepInsightJob() {
         if (snapshotIsEmpty(snapshot)) {
           throw new NotEnoughDataError();
         }
-        if (input.includePrevious) {
-          const previous = await getLatestInsightReport();
-          if (previous) {
-            const priorAssessment: PriorAssessment = {
-              generatedAt: previous.generatedAt,
-              rangeStart: previous.rangeStart,
-              rangeEnd: previous.rangeEnd,
-              summary: previous.narrative,
-              observations: previous.observations,
-            };
-            snapshot.priorAssessments = [priorAssessment];
-          }
-        }
+        await attachPreviousAssessment(snapshot, input.includePrevious);
 
         const res = await apiFetch("/api/analytics/insights/deep", {
           method: "POST",

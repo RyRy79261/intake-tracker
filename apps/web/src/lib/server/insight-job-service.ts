@@ -23,13 +23,17 @@ import {
   usersSync,
 } from "@intake/db/schema";
 import { generateId } from "@/lib/utils";
+import { FINALISED_JOB_PAYLOAD } from "@/lib/server/insight-job-payload";
 
 const SERVER_DEVICE_ID = "server-deep-batch";
 
 export interface CreateInsightJobInput {
   userId: string;
-  // The raw validated request body so we can re-run / audit later without
-  // depending on Anthropic retaining the message contents past 24h.
+  // The request envelope (see insight-job-payload.ts): the validated request,
+  // needed to resume a paused turn and to stamp the finished report, plus the
+  // key that submitted the batch. It carries the user's conditions and
+  // medications, so every terminal transition below replaces it with
+  // FINALISED_JOB_PAYLOAD.
   requestPayload: unknown;
 }
 
@@ -232,6 +236,8 @@ export async function completeInsightJob(
       status: "completed",
       completedAt: now,
       resultReportId: reportId,
+      // Conditions and medications have no use once the report exists.
+      requestPayload: FINALISED_JOB_PAYLOAD,
     })
     .where(and(eq(insightJobs.id, jobId), eq(insightJobs.status, "pending")))
     .returning({ id: insightJobs.id });
@@ -264,6 +270,7 @@ export async function failInsightJob(
       status: "failed",
       completedAt: Date.now(),
       error,
+      requestPayload: FINALISED_JOB_PAYLOAD,
     })
     .where(and(eq(insightJobs.id, jobId), eq(insightJobs.status, "pending")))
     .returning({ id: insightJobs.id });
@@ -278,6 +285,7 @@ export async function expireInsightJob(jobId: string): Promise<boolean> {
       status: "expired",
       completedAt: Date.now(),
       error: "Batch exceeded the 24-hour SLA without completing.",
+      requestPayload: FINALISED_JOB_PAYLOAD,
     })
     .where(and(eq(insightJobs.id, jobId), eq(insightJobs.status, "pending")))
     .returning({ id: insightJobs.id });
@@ -286,8 +294,9 @@ export async function expireInsightJob(jobId: string): Promise<boolean> {
 
 /**
  * Fetch the persisted report referenced by a completed job. Used by the
- * polling endpoint to echo the result back to the client without making it
- * wait for the next sync pull.
+ * polling endpoint to echo the result back to the client, which caches it in
+ * Dexie under the same id rather than waiting for a sync pull. A report the
+ * user has since deleted is not returned, so polling can't resurrect it.
  */
 export async function getReportForJob(
   resultReportId: string,
@@ -297,6 +306,9 @@ export async function getReportForJob(
   observations: string[];
   sources: string[] | null;
   generatedAt: number;
+  rangeStart: number;
+  rangeEnd: number;
+  personalised: boolean;
 } | null> {
   const rows = await db
     .select({
@@ -304,12 +316,16 @@ export async function getReportForJob(
       observations: insightReports.observations,
       sources: insightReports.sources,
       generatedAt: insightReports.generatedAt,
+      rangeStart: insightReports.rangeStart,
+      rangeEnd: insightReports.rangeEnd,
+      personalised: insightReports.personalised,
     })
     .from(insightReports)
     .where(
       and(
         eq(insightReports.id, resultReportId),
         eq(insightReports.userId, userId),
+        isNull(insightReports.deletedAt),
       ),
     )
     .limit(1);

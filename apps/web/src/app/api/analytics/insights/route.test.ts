@@ -265,6 +265,37 @@ describe("POST /api/analytics/insights", () => {
     expect(params.max_tokens).toBeGreaterThanOrEqual(2048);
   });
 
+  it("redacts incidental PII from conditions and prior summaries before prompting", async () => {
+    aiContent = [insightToolBlock({ summary: "ok", observations: ["ok"] })];
+
+    const { POST } = await import("@/app/api/analytics/insights/route");
+    const req = makeRequest(
+      validBody({
+        profile: { conditions: ["CKD stage 3 - Dr Smith 082-555-1234"] },
+        priorAssessments: [
+          {
+            generatedAt: 1,
+            rangeStart: 0,
+            rangeEnd: 1,
+            summary: "Sent to me@example.test last time.",
+            observations: ["ok"],
+          },
+        ],
+      }),
+    );
+    // Own IP bucket: the route's per-IP limiter is shared across this file.
+    req.headers.set("x-forwarded-for", "203.0.113.16");
+    await POST(req);
+
+    const params = messagesCreateCalls[0] as {
+      messages: Array<{ content: string }>;
+    };
+    const prompt = params.messages[0]!.content;
+    expect(prompt).toContain("CKD stage 3 - Dr Smith [phone]");
+    expect(prompt).not.toContain("082-555-1234");
+    expect(prompt).not.toContain("me@example.test");
+  });
+
   it("returns a generic 502 when the model call throws an unmapped error", async () => {
     aiThrows = new Error("anthropic 529 overloaded SECRET_TRACE_ID=xyz");
 

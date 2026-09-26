@@ -20,6 +20,7 @@ import {
   tokensFromAnthropic,
 } from "@/app/api/ai/_shared/usage-tracker";
 import { aiErrorResponse } from "@/app/api/ai/_shared/ai-error-response";
+import { sanitizeInsightsRequest } from "@/lib/server/sanitize-insights-request";
 
 /**
  * Analytics insights endpoint.
@@ -30,10 +31,12 @@ import { aiErrorResponse } from "@/app/api/ai/_shared/ai-error-response";
  * key. The client throttles how often it calls this, so AI cost scales with
  * active usage rather than total user count.
  *
- * The request body is intentionally aggregate-only (numbers/enums, no free
- * text), so no personal health detail reaches the external AI call — except
- * `priorAssessments`, the app's own earlier AI summaries, which the user can
- * opt in to including so the model can compare periods.
+ * The metrics are aggregate-only (numbers/enums). Three parts are free text,
+ * each opt-in: user-reported conditions and the active medication list
+ * (profile sharing toggles), and `priorAssessments`, the app's own earlier AI
+ * summaries (which can quote those conditions back). Those are sent on
+ * purpose, so sanitizeInsightsRequest only redacts incidental PII in them
+ * (emails, phone and ID numbers) before the prompt is built.
  */
 
 export const runtime = "nodejs";
@@ -90,7 +93,12 @@ export const POST = withAuth(async ({ request, auth }) => {
       system: INSIGHTS_SYSTEM_PROMPT,
       tools: [INSIGHT_TOOL],
       tool_choice: { type: "tool", name: INSIGHT_TOOL.name },
-      messages: [{ role: "user", content: buildInsightsPrompt(parsed.data) }],
+      messages: [
+        {
+          role: "user",
+          content: buildInsightsPrompt(sanitizeInsightsRequest(parsed.data)),
+        },
+      ],
     });
     // Usage telemetry must never turn a successful AI call into a 502.
     try {

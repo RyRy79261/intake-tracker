@@ -31,7 +31,9 @@ import {
 import { useToast } from "@intake/ui/use-toast";
 import { useEatingRecordsByDateRange } from "@/hooks/use-eating-queries";
 import { useUserProfile } from "@/hooks/use-profile-queries";
+import { useSharedMedicationCount } from "@/hooks/use-insights";
 import { buildMedicationSummary } from "@/lib/analytics-snapshot";
+import { apiFetch } from "@/lib/api-fetch";
 import {
   MAX_FOOD_DESCRIPTION_CHARS,
   MAX_FOOD_GRAMS,
@@ -208,7 +210,11 @@ export function NutrientAnalysisCard() {
   const shareConditions =
     profile.shareConditionsWithAI && profile.conditions.length > 0;
   const shareMedications = profile.shareMedicationsWithAI;
-  const personalised = shareConditions || shareMedications;
+  // Sharing can be on with no active prescription to send; label what is
+  // actually sent, not the toggle.
+  const sharedMedicationCount = useSharedMedicationCount(shareMedications);
+  const sendsMedications = (sharedMedicationCount ?? 0) > 0;
+  const personalised = shareConditions || sendsMedications;
 
   // Pin the window at mount so the live query doesn't refetch every render.
   // Eating-record updates within the window still flow through Dexie's live
@@ -253,7 +259,9 @@ export function NutrientAnalysisCard() {
       const medications = shareMedications
         ? await buildMedicationSummary()
         : null;
-      const res = await fetch("/api/ai/nutrient-analysis", {
+      // apiFetch, not fetch: the Android static export has no local api/
+      // routes and needs the base URL + Bearer token apiFetch adds.
+      const res = await apiFetch("/api/ai/nutrient-analysis", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -325,7 +333,7 @@ export function NutrientAnalysisCard() {
         {personalised && (
           <p className="text-[11px] text-muted-foreground">
             Personalised with your medical profile
-            {shareConditions && shareMedications
+            {shareConditions && sendsMedications
               ? " (conditions + medications)"
               : shareConditions
                 ? " (conditions)"
@@ -497,15 +505,17 @@ export function NutrientAnalysisCard() {
                   </span>
                 </li>
                 <li className="flex gap-1.5">
-                  {shareMedications ? (
+                  {shareMedications && sharedMedicationCount !== 0 ? (
                     <Check className="w-3.5 h-3.5 mt-0.5 shrink-0 text-emerald-500" />
                   ) : (
                     <X className="w-3.5 h-3.5 mt-0.5 shrink-0 text-slate-400" />
                   )}
                   <span>
-                    {shareMedications
-                      ? "Medications included — your active prescriptions, doses, and titration/maintenance phases"
-                      : "Medications not included — turn on sharing in your Profile to add prescription context"}
+                    {!shareMedications
+                      ? "Medications not included — turn on sharing in your Profile to add prescription context"
+                      : sharedMedicationCount === 0
+                        ? "Medication sharing is on, but you have no active prescriptions to include"
+                        : "Medications included — your active prescriptions, doses, and titration/maintenance phases"}
                   </span>
                 </li>
               </ul>
