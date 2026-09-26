@@ -169,7 +169,35 @@ describe("useTimezoneDetection", () => {
     const { result } = await mountHook();
 
     await waitFor(() => expect(result.current.dialogOpen).toBe(true));
-    expect(result.current.anchors.map((g) => g.anchorTimezone)).toEqual(["America/New_York"]);
+    // Confirming re-anchors every mismatched schedule, so the dialog lists
+    // the already-dismissed anchor too rather than moving it unannounced.
+    expect(result.current.anchors.map((g) => g.anchorTimezone).sort()).toEqual([
+      "Africa/Johannesburg",
+      "America/New_York",
+    ]);
+  });
+
+  it("forgets a trip's dismissal once the device leaves that zone", async () => {
+    await seedSchedule({ anchorTimezone: "Europe/Berlin" });
+
+    // On a trip to New York the user keeps home times.
+    device.tz = "America/New_York";
+    const trip = await mountHook();
+    await waitFor(() => expect(trip.result.current.dialogOpen).toBe(true));
+    act(() => trip.result.current.handleDismiss());
+    trip.unmount();
+
+    // Back home: nothing to prompt, and the trip's choice is dropped.
+    device.tz = "Europe/Berlin";
+    const home = await mountHook();
+    expect(home.result.current.dialogOpen).toBe(false);
+    home.unmount();
+    expect(JSON.parse(localStorage.getItem(TIMEZONE_DISMISSALS_KEY) ?? "[]")).toEqual([]);
+
+    // A later trip to New York asks again.
+    device.tz = "America/New_York";
+    const nextTrip = await mountHook();
+    await waitFor(() => expect(nextTrip.result.current.dialogOpen).toBe(true));
   });
 
   it("clears the timezone cache on every resume, even after a dismissal", async () => {

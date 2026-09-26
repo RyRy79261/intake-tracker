@@ -47,14 +47,17 @@ function writeDismissals(keys: string[]): void {
   }
 }
 
-/** Anchors the user already dismissed while on `deviceTz`. */
+/**
+ * Anchors the user already dismissed while on `deviceTz`. Dismissals made in
+ * any other device zone are dropped: once the device leaves a zone the trip
+ * is over, so a later visit to the same zone prompts again.
+ */
 function dismissedAnchorsFor(deviceTz: string): Set<string> {
   const prefix = `${deviceTz}|`;
-  return new Set(
-    readDismissals()
-      .filter((k) => k.startsWith(prefix))
-      .map((k) => k.slice(prefix.length)),
-  );
+  const all = readDismissals();
+  const kept = all.filter((k) => k.startsWith(prefix));
+  if (kept.length !== all.length) writeDismissals(kept);
+  return new Set(kept.map((k) => k.slice(prefix.length)));
 }
 
 // ---------------------------------------------------------------------------
@@ -105,8 +108,11 @@ export function useTimezoneDetection(): TimezoneChangeState {
     const deviceTz = getDeviceTimezone();
 
     try {
-      const groups = await findMismatchedAnchors(deviceTz, dismissedAnchorsFor(deviceTz));
-      if (groups.length === 0) return;
+      // Prompt only if some mismatched anchor is not yet dismissed, but then
+      // list them all: confirming re-anchors every mismatched schedule.
+      const dismissed = dismissedAnchorsFor(deviceTz);
+      const groups = await findMismatchedAnchors(deviceTz);
+      if (!groups.some((g) => !dismissed.has(g.anchorTimezone))) return;
       setAnchors(groups);
       setNewTimezone(deviceTz);
       setDialogOpen(true);
