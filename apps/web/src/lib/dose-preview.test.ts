@@ -37,7 +37,7 @@ describe("previewDoseInPills", () => {
 
   it("describes a single-compound dose", () => {
     expect(previewDoseInPills(2.5, "mg", bisoprolol)!.label).toBe("½ tablet of Concor 5mg");
-    expect(previewDoseInPills(7.5, "mg", bisoprolol)!.label).toBe("1½ tablets of Concor 5mg");
+    expect(previewDoseInPills(7.5, "mg", bisoprolol)!.label).toBe("1 ½ tablets of Concor 5mg");
   });
 
   it("returns null without a brand, for a non-positive dose, or on a unit mismatch", () => {

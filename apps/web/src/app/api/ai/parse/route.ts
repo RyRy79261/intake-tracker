@@ -26,6 +26,9 @@ const AIParseResponseSchema = z.object({
   sodiumMg: z.number().min(0).max(20000).nullable(),
   sugarG: z.number().min(0).max(1000).nullable(),
   potassiumMg: z.number().min(0).max(20000).nullable(),
+  isDrink: z.boolean().optional(),
+  caffeineMg: z.number().min(0).max(2000).nullable().optional(),
+  abvPercent: z.number().min(0).max(100).nullable().optional(),
   reasoning: z.string().max(1000).optional(),
 });
 
@@ -156,6 +159,9 @@ export const POST = withAuth(async ({ request, auth }) => {
       sodiumMg: toolInput.sodium_mg,
       sugarG: toolInput.sugar_g,
       potassiumMg: toolInput.potassium_mg,
+      isDrink: toolInput.is_drink,
+      caffeineMg: toolInput.caffeine_mg,
+      abvPercent: toolInput.abv_percent,
       reasoning: toolInput.reasoning,
     });
     if (!validated.success) {
@@ -173,6 +179,11 @@ export const POST = withAuth(async ({ request, auth }) => {
       measurement_type: "sodium" as const,
       sugar: validated.data.sugarG,
       potassium: validated.data.potassiumMg,
+      // A drink routes to logDrink on the client so its caffeine/alcohol is
+      // recorded the same way the voice and Liquids paths record it.
+      is_drink: validated.data.isDrink ?? false,
+      caffeine_mg: validated.data.caffeineMg ?? null,
+      abv_percent: validated.data.abvPercent ?? null,
       ...(validated.data.reasoning !== undefined && { reasoning: validated.data.reasoning }),
     });
   } catch (error) {

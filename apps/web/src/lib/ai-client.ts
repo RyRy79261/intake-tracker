@@ -7,6 +7,9 @@ export interface ParsedIntake {
   measurementType: "sodium" | "salt";
   sugarG: number | null; // total sugars in grams
   potassiumMg: number | null; // potassium in mg (elemental K+)
+  isDrink: boolean; // consumed as a liquid — logged as a drink, not a meal
+  caffeineMg: number | null; // caffeine in mg for the portion
+  abvPercent: number | null; // alcohol by volume, %
   reasoning?: string;
 }
 
@@ -55,6 +58,9 @@ export async function parseIntakeWithAI(input: string): Promise<ParsedIntake | n
       measurementType: result.measurement_type,
       sugarG: result.sugar,
       potassiumMg: result.potassium ?? null,
+      isDrink: result.is_drink === true,
+      caffeineMg: result.caffeine_mg ?? null,
+      abvPercent: result.abv_percent ?? null,
       reasoning: result.reasoning,
     };
   } catch (error) {

@@ -84,12 +84,36 @@ export const PARSE_RESULT_TOOL = {
         description:
           "Potassium content in milligrams (elemental K+). Estimate from typical food composition tables when not labelled. Null if it cannot be estimated.",
       },
+      is_drink: {
+        type: "boolean",
+        description:
+          "True when the item is a drink (consumed as a liquid: water, coffee, tea, juice, soft drinks, milk, beer, wine, spirits, smoothies). False for solid or semi-solid food.",
+      },
+      caffeine_mg: {
+        type: ["number", "null"],
+        description:
+          "Caffeine content in milligrams for the described portion (coffee, tea, cola, energy drinks, chocolate). 0 when it has none; null if it cannot be estimated.",
+      },
+      abv_percent: {
+        type: ["number", "null"],
+        description:
+          "Alcohol by volume in percent for an alcoholic drink (beer ~5, wine ~13, spirits ~40). 0 for a non-alcoholic item; null if it cannot be estimated.",
+      },
       reasoning: {
         type: "string",
         description: "Brief explanation of the estimate, including any sources consulted.",
       },
     },
-    required: ["water_ml", "sodium_mg", "sugar_g", "potassium_mg", "reasoning"],
+    required: [
+      "water_ml",
+      "sodium_mg",
+      "sugar_g",
+      "potassium_mg",
+      "is_drink",
+      "caffeine_mg",
+      "abv_percent",
+      "reasoning",
+    ],
     additionalProperties: false,
   },
 };

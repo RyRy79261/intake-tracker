@@ -56,7 +56,21 @@ export async function getRecordsBetween<T extends SoftDeleteRow>(
   return records.filter((r) => r.deletedAt === null);
 }
 
-/** Soft-delete a record (sets deletedAt) and enqueue a sync delete. */
+/**
+ * Thrown inside a write transaction when the target row is missing, so the
+ * transaction aborts before `writeWithSync` enqueues an op for an id that
+ * doesn't exist (Dexie's update resolves 0 there rather than throwing).
+ */
+class RecordNotFoundError extends Error {
+  constructor() {
+    super("Record not found");
+  }
+}
+
+/**
+ * Soft-delete a record (sets deletedAt) and enqueue a sync delete.
+ * Returns `err("Record not found")` for a missing id, without queueing.
+ */
 export async function softDeleteRecord<T extends SoftDeleteRow>(
   table: RecordTable<T>,
   tableName: TableName,
@@ -66,17 +80,22 @@ export async function softDeleteRecord<T extends SoftDeleteRow>(
   try {
     const now = Date.now();
     await writeWithSync(tableName, "delete", async () => {
-      await asTable(table).update(id, { deletedAt: now, updatedAt: now } as unknown as UpdateSpec<T>);
+      const changed = await asTable(table).update(id, { deletedAt: now, updatedAt: now } as unknown as UpdateSpec<T>);
+      if (changed === 0) throw new RecordNotFoundError();
       return { id };
     });
     schedulePush();
     return ok(undefined);
   } catch (e) {
+    if (e instanceof RecordNotFoundError) return err(e.message);
     return err(errorMessage, e);
   }
 }
 
-/** Reverse a soft-delete (clears deletedAt) and enqueue a sync upsert. */
+/**
+ * Reverse a soft-delete (clears deletedAt) and enqueue a sync upsert.
+ * Returns `err("Record not found")` for a missing id, without queueing.
+ */
 export async function undoSoftDeleteRecord<T extends SoftDeleteRow>(
   table: RecordTable<T>,
   tableName: TableName,
@@ -86,12 +105,14 @@ export async function undoSoftDeleteRecord<T extends SoftDeleteRow>(
   try {
     const now = Date.now();
     await writeWithSync(tableName, "upsert", async () => {
-      await asTable(table).update(id, { deletedAt: null, updatedAt: now } as unknown as UpdateSpec<T>);
+      const changed = await asTable(table).update(id, { deletedAt: null, updatedAt: now } as unknown as UpdateSpec<T>);
+      if (changed === 0) throw new RecordNotFoundError();
       return { id };
     });
     schedulePush();
     return ok(undefined);
   } catch (e) {
+    if (e instanceof RecordNotFoundError) return err(e.message);
     return err(errorMessage, e);
   }
 }

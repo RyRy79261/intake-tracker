@@ -119,6 +119,45 @@ describe("POST /api/ai/parse", () => {
     expect(messagesCreate).toHaveBeenCalledTimes(1);
   });
 
+  it("passes a drink's is_drink, caffeine and ABV through to the client", async () => {
+    messagesCreate.mockResolvedValueOnce(
+      toolResponse({
+        water_ml: 330,
+        sodium_mg: 10,
+        sugar_g: 35,
+        potassium_mg: 0,
+        is_drink: true,
+        caffeine_mg: 34,
+        abv_percent: 0,
+        reasoning: "A 330 ml can of cola.",
+      }),
+    );
+
+    const { POST } = await import("@/app/api/ai/parse/route");
+    const res = await POST(makeRequest({ input: "can of coke" }));
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { is_drink: boolean; caffeine_mg: number | null; abv_percent: number | null };
+    expect(body.is_drink).toBe(true);
+    expect(body.caffeine_mg).toBe(34);
+    expect(body.abv_percent).toBe(0);
+  });
+
+  it("defaults the drink fields when an older tool result omits them", async () => {
+    messagesCreate.mockResolvedValueOnce(
+      toolResponse({ water_ml: 0, sodium_mg: 400, sugar_g: 0, potassium_mg: 0, reasoning: "Crisps." }),
+    );
+
+    const { POST } = await import("@/app/api/ai/parse/route");
+    const res = await POST(makeRequest({ input: "bag of crisps" }));
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { is_drink: boolean; caffeine_mg: number | null; abv_percent: number | null };
+    expect(body.is_drink).toBe(false);
+    expect(body.caffeine_mg).toBeNull();
+    expect(body.abv_percent).toBeNull();
+  });
+
   it("passes through null AI values without error", async () => {
     messagesCreate.mockResolvedValueOnce(
       toolResponse({ water_ml: null, sodium_mg: null, sugar_g: null, potassium_mg: null, reasoning: "Unknown." }),

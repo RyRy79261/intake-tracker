@@ -290,10 +290,11 @@ describe("Tier 2 sync-wired services", () => {
         intakes: [{ type: "salt", amount: 1 }],
       });
       if (!addResult.success) return;
-      await deleteEntryGroup(addResult.data.groupId);
+      const del = await deleteEntryGroup(addResult.data.groupId);
+      if (!del.success) return;
       await db._syncQueue.clear();
 
-      const undoResult = await undoDeleteEntryGroup(addResult.data.groupId);
+      const undoResult = await undoDeleteEntryGroup(addResult.data.groupId, del.data.deletedAt);
       expect(undoResult.success).toBe(true);
       if (!undoResult.success) return;
       expect(undoResult.data.restoredCount).toBe(2);

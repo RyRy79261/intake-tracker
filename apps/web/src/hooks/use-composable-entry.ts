@@ -13,15 +13,22 @@ import {
   syncLiquidEntrySubstances,
   classifyLiquidDelete,
   parseSodiumKindFromSource,
+  pickEatingGroupNutrients,
   type ComposableEntryInput,
   type ComposableEntryResult,
   type EntryGroup,
   type RecordTable,
   type SodiumKind,
 } from "@/lib/composable-entry-service";
+import {
+  deleteSubstanceRecord,
+  undoDeleteSubstanceRecord,
+  previewSubstanceDelete,
+} from "@/lib/substance-service";
 import { unwrap } from "@intake/core/service";
 import { withDbRecovery } from "@/lib/db-recovery";
 import { showUndoToast } from "@/components/medications/undo-toast";
+import { runUndo } from "@/hooks/use-undo-delete-mutation";
 
 export type { ComposableEntryInput, ComposableEntryResult, EntryGroup, RecordTable, SodiumKind };
 
@@ -31,6 +38,7 @@ export type { ComposableEntryInput, ComposableEntryResult, EntryGroup, RecordTab
  */
 export const fetchEntryGroup = getEntryGroup;
 export const sodiumKindFromSource = parseSodiumKindFromSource;
+export const eatingGroupNutrients = pickEatingGroupNutrients;
 
 /**
  * Reactive hook for reading all records in a composable entry group.
@@ -105,9 +113,8 @@ export function useDeleteEntryGroup() {
       const result = unwrap(await deleteEntryGroup(groupId));
       showUndoToast({
         title: `Deleted ${result.deletedCount} linked record${result.deletedCount !== 1 ? "s" : ""}`,
-        onUndo: async () => {
-          await undoDeleteEntryGroup(groupId);
-        },
+        // Restore only what this delete removed (its tombstone stamp).
+        onUndo: () => runUndo(() => undoDeleteEntryGroup(groupId, result.deletedAt)),
       });
       return result;
     },
@@ -151,12 +158,51 @@ export function useDeleteSingleGroupRecord() {
       const result = unwrap(await deleteSingleGroupRecord(table, id));
       showUndoToast({
         title: "Record deleted",
-        onUndo: async () => {
-          await undoDeleteSingleRecord(table, id);
-        },
+        onUndo: () => runUndo(() => undoDeleteSingleRecord(table, id)),
       });
       return result;
     },
     [],
   );
+}
+
+const CASCADE_UNITS: Record<string, string> = {
+  water: "ml water",
+  salt: "mg sodium",
+  sugar: "g sugar",
+  potassium: "mg potassium",
+};
+
+/**
+ * Describe what else a caffeine/alcohol delete will remove — a drink's
+ * substance takes the whole drink with it — or `null` when it removes only
+ * itself. Used to confirm the delete before it happens.
+ */
+export async function describeSubstanceDeleteCascade(id: string): Promise<string | null> {
+  const { intakes, substances } = await previewSubstanceDelete(id);
+  const parts = [
+    ...intakes.map((r) => `${r.amount} ${CASCADE_UNITS[r.type] ?? r.type}`),
+    ...substances.map((s) =>
+      s.type === "caffeine" && s.amountMg !== undefined
+        ? `${s.amountMg} mg caffeine`
+        : `the ${s.type} record`,
+    ),
+  ];
+  return parts.length > 0 ? parts.join(", ") : null;
+}
+
+/**
+ * Mutation hook for deleting a caffeine/alcohol record. For a drink this also
+ * removes the drink's water, solutes and sibling substances, so it shows an
+ * undo toast that restores exactly the rows this delete removed.
+ */
+export function useDeleteSubstanceWithUndo() {
+  return useCallback(async (id: string) => {
+    const result = unwrap(await deleteSubstanceRecord(id));
+    showUndoToast({
+      title: "Record deleted",
+      onUndo: () => runUndo(() => undoDeleteSubstanceRecord(id, result.deletedAt)),
+    });
+    return result;
+  }, []);
 }
