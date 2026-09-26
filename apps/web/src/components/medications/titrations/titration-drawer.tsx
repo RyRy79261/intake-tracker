@@ -388,7 +388,7 @@ interface CurrentRegimen {
  * schedules) to the drawer, so the AI-warnings request can label doses in
  * the prescription's own unit and show what the titration changes from.
  */
-function CurrentRegimenLoader({
+export function CurrentRegimenLoader({
   prescriptionId,
   onLoad,
 }: {
@@ -398,17 +398,22 @@ function CurrentRegimenLoader({
   const phases = usePhasesForPrescription(prescriptionId);
   const maintenance = getMaintenancePhase(phases);
   const schedules = useSchedulesForPhase(maintenance?.id);
+  const regimen: CurrentRegimen | undefined = maintenance
+    ? { unit: maintenance.unit, schedules: schedules.filter((s) => s.enabled) }
+    : undefined;
+  // Keyed on content, not array identity: until Dexie resolves, useLiveQuery
+  // returns a fresh default [] every render, and reporting on identity would
+  // loop (report -> parent state -> re-render -> new [] -> report ...).
+  const regimenKey = JSON.stringify(
+    regimen && [regimen.unit, regimen.schedules.map((s) => [s.id, s.time, s.dosage, s.daysOfWeek])],
+  );
 
   useEffect(() => {
-    onLoad(
-      maintenance
-        ? { unit: maintenance.unit, schedules: schedules.filter((s) => s.enabled) }
-        : undefined,
-    );
+    onLoad(regimen);
     // onLoad is an inline callback from the parent — including it in deps
     // would re-run on every parent render. We only need to react to data.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [maintenance?.id, maintenance?.unit, schedules]);
+  }, [regimenKey]);
 
   return null;
 }
