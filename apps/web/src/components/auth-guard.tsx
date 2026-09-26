@@ -34,6 +34,7 @@ export function useAuth() {
     validated.current = true;
     setCapPending(true);
     let disposed = false;
+    let settled = false;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
     const retry = () => {
       window.removeEventListener("online", retry);
@@ -71,10 +72,16 @@ export function useAuth() {
         }
       })
       .catch(() => scheduleRetry())
-      .finally(() => setCapPending(false));
+      .finally(() => {
+        settled = true;
+        setCapPending(false);
+      });
 
     return () => {
       disposed = true;
+      // A disposed run can no longer schedule its own retry, so let the next
+      // run validate again instead of waiting on this in-flight request.
+      if (!settled) validated.current = false;
       window.removeEventListener("online", retry);
       clearTimeout(retryTimer);
     };

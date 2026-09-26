@@ -126,4 +126,24 @@ describe("useAuth native token validation", () => {
     await waitFor(() => expect(result.current.authenticated).toBe(true));
     expect(clearAuthTokenMock).not.toHaveBeenCalled();
   });
+
+  it("still retries when the effect re-runs while the first validate is in flight", async () => {
+    // StrictMode (and any dep change) disposes the first effect run before
+    // its request settles. That run's failure must not strand the hook with
+    // no retry scheduled.
+    apiFetchMock
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValue(validReply());
+    const { result } = renderHook(() => useAuth(), { reactStrictMode: true });
+    await waitFor(() => expect(apiFetchMock).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(result.current.ready).toBe(true));
+
+    act(() => {
+      window.dispatchEvent(new Event("online"));
+    });
+
+    await waitFor(() => expect(result.current.authenticated).toBe(true));
+    expect(clearAuthTokenMock).not.toHaveBeenCalled();
+  });
 });
