@@ -195,6 +195,45 @@ describe("InventoryItemViewDrawer", () => {
     });
   });
 
+  it("warns when a combination brand differs from the prescription's compounds", async () => {
+    const prescription = makePrescription({
+      genericName: "Sacubitril/Valsartan",
+      compounds: [{ name: "Sacubitril", strength: 49 }, { name: "Valsartan", strength: 51 }],
+    });
+    const item = makeInventoryItem(prescription.id, {
+      brandName: "Exforge",
+      strength: 85,
+      unit: "mg",
+      compounds: [{ name: "Amlodipine", strength: 5 }, { name: "Valsartan", strength: 80 }],
+    });
+    await renderWithFixtures(
+      <InventoryItemViewDrawer item={item} prescription={prescription} open onOpenChange={() => {}} />,
+      { seed: { prescriptions: [prescription], inventoryItems: [item] } },
+    );
+
+    expect(await screen.findByText(/differ from this prescription/i)).toBeInTheDocument();
+  });
+
+  it("does not warn for another strength of the same combination", async () => {
+    const prescription = makePrescription({
+      genericName: "Sacubitril/Valsartan",
+      compounds: [{ name: "Sacubitril", strength: 24 }, { name: "Valsartan", strength: 26 }],
+    });
+    const item = makeInventoryItem(prescription.id, {
+      brandName: "Entresto",
+      strength: 200,
+      unit: "mg",
+      compounds: [{ name: "Sacubitril", strength: 97 }, { name: "Valsartan", strength: 103 }],
+    });
+    await renderWithFixtures(
+      <InventoryItemViewDrawer item={item} prescription={prescription} open onOpenChange={() => {}} />,
+      { seed: { prescriptions: [prescription], inventoryItems: [item] } },
+    );
+
+    expect(await screen.findByText("Entresto")).toBeInTheDocument();
+    expect(screen.queryByText(/differ from this prescription/i)).not.toBeInTheDocument();
+  });
+
   it("Stock tab renders existing transaction history", async () => {
     const user = userEvent.setup();
     const { prescription, phase, schedule, item } = fixture();

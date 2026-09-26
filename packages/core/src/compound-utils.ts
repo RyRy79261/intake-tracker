@@ -117,6 +117,34 @@ export function formatCompoundFull(
     .join(" + ");
 }
 
+/** Share of the total strength one compound may drift between marketed strengths. */
+const RATIO_TOLERANCE = 0.03;
+
+/**
+ * True when a stocked brand is not the same combination as the prescription
+ * it is filed under: different ingredients, or the same ingredients in a
+ * clearly different ratio. Marketed strengths of one product (24/26, 49/51,
+ * 97/103) differ slightly and still match. `false` when either side is not a
+ * combination, since there is nothing to compare.
+ */
+export function compoundsMismatch(
+  reference: CompoundStrength[] | undefined,
+  brand: CompoundStrength[] | undefined,
+): boolean {
+  if (!isCombo({ compounds: reference }) || !isCombo({ compounds: brand })) return false;
+  const refTotal = compoundSum(reference);
+  const brandTotal = compoundSum(brand);
+  if (!(refTotal > 0) || !(brandTotal > 0)) return false;
+
+  const key = (name: string) => name.trim().toLowerCase();
+  const brandShare = new Map(brand!.map((c) => [key(c.name), c.strength / brandTotal]));
+  if (brandShare.size !== reference!.length) return true;
+  return reference!.some((c) => {
+    const share = brandShare.get(key(c.name));
+    return share === undefined || Math.abs(share - c.strength / refTotal) > RATIO_TOLERANCE;
+  });
+}
+
 /** Ingredient names only, e.g. `Sacubitril / Valsartan`. */
 export function formatCompoundNames(
   compounds: CompoundStrength[] | undefined,

@@ -28,7 +28,7 @@ import { showUndoToast } from "@/components/medications/undo-toast";
 import { useToast } from "@intake/ui/use-toast";
 import { selectEffectivePhase } from "@intake/core/effective-phase";
 import { isLive } from "@intake/core/lifecycle";
-import { isCombo, formatCompoundShort, formatCompoundFull } from "@intake/core/compound";
+import { isCombo, formatCompoundShort, formatCompoundFull, compoundsMismatch } from "@intake/core/compound";
 import type { Prescription, InventoryItem, InventoryTransaction } from "@/lib/db";
 import { toLocalDateKey } from "@/lib/date-utils";
 import { Loader2, Archive, ArchiveRestore, Plus, Pencil, Trash2, Check, X, CheckCircle2, AlertTriangle } from "lucide-react";
@@ -131,6 +131,18 @@ function DetailsTab({ item, prescription }: { item: InventoryItem; prescription:
             <p className="text-muted-foreground text-xs mb-1">Markings</p>
             <p className="font-medium">{item.visualIdentification}</p>
           </div>
+        )}
+
+        {prescription && compoundsMismatch(prescription.compounds, item.compounds) && (
+          <p className="flex gap-2 text-xs text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 p-2.5 rounded-lg border border-amber-200 dark:border-amber-800">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <span>
+              This brand&apos;s ingredients ({formatCompoundFull(item.compounds, item.unit)}) differ
+              from this prescription ({formatCompoundFull(prescription.compounds, item.unit)}).
+              Doses are labelled and counted from this brand&apos;s tablets; check it is the
+              right medicine.
+            </span>
+          </p>
         )}
       </div>
 
