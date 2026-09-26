@@ -7,7 +7,11 @@ import { parseJsonBody, zodErrorResponse } from "@/app/api/_shared/validation";
 import { createRateLimiter, getClientIp } from "@/app/api/_shared/rate-limit";
 import { recordUsage, tokensFromAnthropic } from "@/app/api/ai/_shared/usage-tracker";
 import { aiErrorResponse } from "@/app/api/ai/_shared/ai-error-response";
-import { SYSTEM_PROMPT, INTERACTION_CHECK_TOOL } from "@intake/ai-prompts/interaction-check";
+import {
+  SYSTEM_PROMPT,
+  INTERACTION_CHECK_TOOL,
+  withUnassessedMedications,
+} from "@intake/ai-prompts/interaction-check";
 
 // --- Zod Schemas (co-located per project convention) ---
 
@@ -143,7 +147,15 @@ export const POST = withAuth(async ({ request, auth }) => {
       );
     }
 
-    return NextResponse.json(validated.data);
+    // An omitted medication would read as "no interaction"; flag it instead.
+    return NextResponse.json({
+      ...validated.data,
+      interactions: withUnassessedMedications(
+        validated.data.interactions,
+        activePrescriptions.map((rx) => rx.genericName),
+        querySubstance,
+      ),
+    });
   } catch (error) {
     const mapped = aiErrorResponse(error);
     if (mapped) return mapped;
