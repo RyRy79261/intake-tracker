@@ -5,7 +5,8 @@
   "description": "Capacitor native shell (Android) for Intake Tracker. Wraps the @intake/web static export; owns capacitor.config.ts, the android/ project, and native plugin discovery.",
   "scripts": {
     "sync": "node scripts/sync.mjs",
-    "cap": "cap"
+    "cap": "cap",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.1",
@@ -16,6 +17,8 @@
     "@capacitor/network": "^8.0.1"
   },
   "devDependencies": {
-    "@capacitor/cli": "^8.5.1"
+    "@capacitor/cli": "^8.5.1",
+    "@intake/typescript-config": "workspace:*",
+    "typescript": "^6.0.3"
   }
 }

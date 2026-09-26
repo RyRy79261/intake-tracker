@@ -82,6 +82,12 @@ importers:
       '@capacitor/cli':
         specifier: ^8.5.1
         version: 8.5.1
+      '@intake/typescript-config':
+        specifier: workspace:*
+        version: link:../../packages/typescript-config
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
 
   apps/web:
     dependencies:
@@ -342,9 +348,15 @@ importers:
         specifier: ^4.5.4
         version: 4.5.4
     devDependencies:
+      '@intake/eslint-config':
+        specifier: workspace:*
+        version: link:../eslint-config
       '@intake/typescript-config':
         specifier: workspace:*
         version: link:../typescript-config
+      eslint:
+        specifier: ^10.10.0
+        version: 10.10.0(jiti@2.7.0)
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -389,6 +401,9 @@ importers:
         specifier: ^4.5.4
         version: 4.5.4
     devDependencies:
+      '@intake/eslint-config':
+        specifier: workspace:*
+        version: link:../eslint-config
       '@intake/typescript-config':
         specifier: workspace:*
         version: link:../typescript-config
@@ -401,6 +416,9 @@ importers:
       drizzle-kit:
         specifier: ^0.31.10
         version: 0.31.10
+      eslint:
+        specifier: ^10.10.0
+        version: 10.10.0(jiti@2.7.0)
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -425,9 +443,15 @@ importers:
 
   packages/types:
     devDependencies:
+      '@intake/eslint-config':
+        specifier: workspace:*
+        version: link:../eslint-config
       '@intake/typescript-config':
         specifier: workspace:*
         version: link:../typescript-config
+      eslint:
+        specifier: ^10.10.0
+        version: 10.10.0(jiti@2.7.0)
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -509,6 +533,9 @@ importers:
         specifier: ^1.1.2
         version: 1.1.2(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
     devDependencies:
+      '@intake/eslint-config':
+        specifier: workspace:*
+        version: link:../eslint-config
       '@intake/typescript-config':
         specifier: workspace:*
         version: link:../typescript-config
@@ -518,6 +545,9 @@ importers:
       '@types/react-dom':
         specifier: ^19.3.0
         version: 19.3.0(@types/react@19.3.0)
+      eslint:
+        specifier: ^10.10.0
+        version: 10.10.0(jiti@2.7.0)
       typescript:
         specifier: ^6.0.3
         version: 6.0.3

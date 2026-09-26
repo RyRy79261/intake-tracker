@@ -1,0 +1,12 @@
+{
+  "extends": "@intake/typescript-config/base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "WebWorker"],
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "incremental": false,
+    "types": []
+  },
+  "include": ["src/app/sw.ts"]
+}

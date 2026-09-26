@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 
 const DB_NAME = "IntakeTrackerDB";
 
@@ -12,7 +12,7 @@ const DB_NAME = "IntakeTrackerDB";
  * real Dexie records where those fields were never set.
  */
 async function seedRecordsAndQueue(
-  page: import("@playwright/test").Page,
+  page: Page,
   count: number,
   prefix: string,
   options?: { sparse?: boolean },
@@ -75,7 +75,7 @@ async function seedRecordsAndQueue(
 }
 
 async function getQueueDepth(
-  page: import("@playwright/test").Page,
+  page: Page,
 ): Promise<number> {
   return page.evaluate(async (dbName) => {
     return new Promise<number>((resolve) => {
@@ -94,7 +94,7 @@ async function getQueueDepth(
 }
 
 async function getServerIntakeCount(
-  page: import("@playwright/test").Page,
+  page: Page,
 ): Promise<number> {
   return page.evaluate(async () => {
     const res = await fetch("/api/e2e-test/count-intake", { method: "POST" });
@@ -104,7 +104,7 @@ async function getServerIntakeCount(
 }
 
 async function triggerSyncViaOnlineEvent(
-  page: import("@playwright/test").Page,
+  page: Page,
 ): Promise<void> {
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
 }
@@ -121,7 +121,9 @@ test.describe("sync-engine", () => {
           if (parsed.state) parsed.state.storageMode = "cloud-sync";
           parsed.version = 8;
           localStorage.setItem(key, JSON.stringify(parsed));
-        } catch {}
+        } catch {
+          // Unparseable persisted settings: leave them untouched.
+        }
       } else {
         localStorage.setItem(
           key,

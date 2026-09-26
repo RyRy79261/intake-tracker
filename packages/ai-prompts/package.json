@@ -17,14 +17,17 @@
     "./voice-parse": "./src/voice-parse.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src"
   },
   "dependencies": {
     "@intake/types": "workspace:*",
     "zod": "^4.5.4"
   },
   "devDependencies": {
+    "@intake/eslint-config": "workspace:*",
     "@intake/typescript-config": "workspace:*",
+    "eslint": "^10.10.0",
     "typescript": "^6.0.3"
   }
 }
