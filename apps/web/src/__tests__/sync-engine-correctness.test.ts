@@ -413,6 +413,63 @@ describe("sync-engine correctness (audit 2026-09)", () => {
     expect(useSyncStatusStore.getState().queueDepth).toBe(0);
   });
 
+  // ─── sync-engine#13 (FK ordering) ─────────────────────────────────────
+
+  it("a queued FK parent outside the oldest batch is pushed with its children", async () => {
+    installDom();
+    __startEngineForTests();
+
+    // 50 children queued first, their parent re-enqueued last (coalescing
+    // moved its enqueuedAt behind them), so the oldest-50 window alone
+    // would never carry it and every child would fail its FK check.
+    const now = Date.now();
+    await db.intakeRecords.add(makeIntake({ id: "parent" }));
+    for (let i = 0; i < 50; i++) {
+      await db.substanceRecords.add({
+        id: `child-${i}`,
+        type: "caffeine",
+        amountMg: 95,
+        description: "Coffee",
+        source: "water_intake",
+        sourceRecordId: "parent",
+        timestamp: now,
+        createdAt: now,
+        updatedAt: now,
+        deletedAt: null,
+        deviceId: "d",
+        timezone: "UTC",
+      } as SubstanceRecord);
+      await db._syncQueue.add({
+        tableName: "substanceRecords",
+        recordId: `child-${i}`,
+        op: "upsert",
+        enqueuedAt: 1000 + i,
+        attempts: 0,
+      });
+    }
+    await db._syncQueue.add({
+      tableName: "intakeRecords",
+      recordId: "parent",
+      op: "upsert",
+      enqueuedAt: 5000,
+      attempts: 0,
+    });
+
+    const fetchMock = vi.fn(async (url: string) =>
+      String(url).includes("/api/sync/push")
+        ? jsonResponse({ accepted: [] })
+        : emptyPull(),
+    ) as unknown as Mock;
+    vi.stubGlobal("fetch", fetchMock);
+
+    await runPushCycle();
+
+    const [body] = pushBodies(fetchMock);
+    const ids = body!.ops.map((o) => o.row.id);
+    expect(ids[0]).toBe("parent");
+    expect(ids).toHaveLength(51);
+  });
+
   // ─── sync-engine#9 ────────────────────────────────────────────────────
 
   it("runPullCycle reports success only for a complete pull", async () => {

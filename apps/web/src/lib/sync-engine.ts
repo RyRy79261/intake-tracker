@@ -8,10 +8,10 @@
  * - `schedulePush(delayMs?)`: debounced push (3s default). Collapses rapid
  *   writes into one flush.
  * - `runPushCycle()`: collects queue rows in TABLE_PUSH_ORDER, POSTs to
- *   /api/sync/push (≤50 ops/cycle), acks accepted ops whose queue row did not
- *   change while the request was in flight, lowers a clamped server updatedAt
- *   onto a still-unchanged local row (D-12 rule 4 + Pitfall 3), schedules a
- *   pull. A per-op rejection bumps that op's `attempts`; a whole-batch
+ *   /api/sync/push (≤50 ops/cycle, plus their queued FK parents), acks
+ *   accepted ops whose queue row did not change while the request was in
+ *   flight, lowers a clamped server updatedAt onto a still-unchanged local
+ *   row (D-12 rule 4 + Pitfall 3), schedules a pull. A per-op rejection bumps that op's `attempts`; a whole-batch
  *   network/HTTP failure only backs the loop off (audit sync-engine#13).
  * - `schedulePull(delayMs?)`: pull kick — immediate (microtask) by default,
  *   or delayed for a retry. A failed pull reschedules itself through
@@ -167,7 +167,90 @@ function setPullError(lastError: string): void {
 }
 
 /**
- * Internal — collect up to PUSH_BATCH_CAP queue rows ordered by topology.
+ * FK columns per child table and the table each one points at — the FK graph
+ * documented in `sync-topology.ts`, as column names.
+ */
+const FK_PARENTS: Partial<
+  Record<TableName, ReadonlyArray<readonly [string, TableName]>>
+> = {
+  medicationPhases: [
+    ["prescriptionId", "prescriptions"],
+    ["titrationPlanId", "titrationPlans"],
+  ],
+  phaseSchedules: [["phaseId", "medicationPhases"]],
+  inventoryItems: [["prescriptionId", "prescriptions"]],
+  doseLogs: [
+    ["prescriptionId", "prescriptions"],
+    ["phaseId", "medicationPhases"],
+    ["scheduleId", "phaseSchedules"],
+    ["inventoryItemId", "inventoryItems"],
+  ],
+  inventoryTransactions: [
+    ["inventoryItemId", "inventoryItems"],
+    ["doseLogId", "doseLogs"],
+  ],
+  dailyNotes: [
+    ["prescriptionId", "prescriptions"],
+    ["doseLogId", "doseLogs"],
+  ],
+  substanceRecords: [["sourceRecordId", "intakeRecords"]],
+};
+
+/**
+ * Add the still-queued FK parents of every row in the batch (transitively,
+ * at most PUSH_BATCH_CAP extra rows).
+ *
+ * Coalescing moves a record's `enqueuedAt` to its latest edit, so a parent
+ * edited after its children — an inventory item re-enqueued by every dose —
+ * can sit behind them, outside the oldest-first window. Its children then
+ * failed the server's FK check cycle after cycle until their retry budget ran
+ * out and they were dropped (audit sync-engine#13). Pulled in here, the
+ * parent lands in the same request, ahead of them by TABLE_PUSH_ORDER.
+ *
+ * Returns the live rows read along the way, keyed `table:id`, for reuse.
+ */
+async function withQueuedParents(pending: SyncQueueRow[]): Promise<{
+  rows: SyncQueueRow[];
+  liveRows: Map<string, Record<string, unknown> | undefined>;
+}> {
+  const rows = [...pending];
+  const liveRows = new Map<string, Record<string, unknown> | undefined>();
+  const inBatch = new Set(pending.map((q) => `${q.tableName}:${q.recordId}`));
+  const work = [...pending];
+  let added = 0;
+  while (work.length > 0 && added < PUSH_BATCH_CAP) {
+    const q = work.pop()!;
+    const tableName = q.tableName as TableName;
+    const key = `${tableName}:${q.recordId}`;
+    const fks = FK_PARENTS[tableName];
+    if (!fks) continue;
+    const live = (await db.table(tableName).get(q.recordId)) as
+      | Record<string, unknown>
+      | undefined;
+    liveRows.set(key, live);
+    if (!live) continue;
+    for (const [column, parentTable] of fks) {
+      const parentId = live[column];
+      if (typeof parentId !== "string" || parentId === "") continue;
+      const parentKey = `${parentTable}:${parentId}`;
+      if (inBatch.has(parentKey)) continue;
+      inBatch.add(parentKey);
+      const parentQ = await db._syncQueue
+        .where("[tableName+recordId]")
+        .equals([parentTable, parentId])
+        .first();
+      if (!parentQ || added >= PUSH_BATCH_CAP) continue;
+      rows.push(parentQ);
+      work.push(parentQ);
+      added++;
+    }
+  }
+  return { rows, liveRows };
+}
+
+/**
+ * Internal — collect up to PUSH_BATCH_CAP queue rows (plus their queued FK
+ * parents) ordered by topology.
  *
  * `sentUpdatedAt` maps each op's queueId to the local `updatedAt` it carried,
  * so the ack can tell whether the local row moved on while it was in flight.
@@ -178,10 +261,11 @@ async function collectAndOrderQueuedOps(): Promise<{
   sentUpdatedAt: Map<number, number | undefined>;
   orphansDropped: number;
 }> {
-  const pending = await db._syncQueue
+  const oldest = await db._syncQueue
     .orderBy("enqueuedAt")
     .limit(PUSH_BATCH_CAP)
     .toArray();
+  const { rows: pending, liveRows } = await withQueuedParents(oldest);
   if (pending.length === 0) {
     return {
       queueRows: [],
@@ -214,9 +298,12 @@ async function collectAndOrderQueuedOps(): Promise<{
   const orphans: SyncQueueRow[] = [];
   for (const qRow of ordered) {
     const tableName = qRow.tableName as TableName;
-    const liveRow = (await db
-      .table(tableName)
-      .get(qRow.recordId)) as Record<string, unknown> | undefined;
+    const cacheKey = `${tableName}:${qRow.recordId}`;
+    const liveRow = liveRows.has(cacheKey)
+      ? liveRows.get(cacheKey)
+      : ((await db.table(tableName).get(qRow.recordId)) as
+          | Record<string, unknown>
+          | undefined);
 
     if (qRow.op === "delete") {
       // Delete op: carry the tombstone row (soft-delete) if it still exists,
