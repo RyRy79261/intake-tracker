@@ -19,10 +19,11 @@
  *   3. `buildWeeklyPushEntries()` groups one week of occurrences into the
  *      per-weekday, device-local `HH:MM` slots the push server matches on.
  */
-import { db, type DoseLog, type MedicationPhase, type PhaseSchedule, type Prescription } from "@/lib/db";
+import { db, type DoseLog, type InventoryItem, type MedicationPhase, type PhaseSchedule } from "@/lib/db";
 import { isLive } from "@intake/core/lifecycle";
 import { selectEffectivePhases } from "@intake/core/effective-phase";
-import { isCombo, splitDose, formatCompoundShort } from "@intake/core/compound";
+import { formatComboDose } from "@intake/core/compound";
+import { isActiveBrand } from "@/lib/inventory-service";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -175,11 +176,16 @@ function isValidTimeZone(tz: string | undefined): tz is string {
 // Regimen
 // ---------------------------------------------------------------------------
 
-function formatDosage(prescription: Prescription, phase: MedicationPhase, schedule: PhaseSchedule): string {
-  const unit = phase.unit ?? "mg";
-  return isCombo(prescription)
-    ? formatCompoundShort(splitDose(schedule.dosage, prescription.compounds), unit)
-    : `${schedule.dosage}${unit}`;
+/**
+ * Same labeller as the Today view: a combination dose shows the active brand's
+ * per-pill compounds x the pill count, never a split of the Rx reference.
+ */
+function formatDosage(
+  phase: MedicationPhase,
+  schedule: PhaseSchedule,
+  brand: InventoryItem | undefined,
+): string {
+  return formatComboDose(schedule.dosage, phase.unit ?? "mg", brand);
 }
 
 /**
@@ -200,10 +206,10 @@ export async function loadReminderDoses(): Promise<ReminderDose[]> {
   const prescriptionMap = new Map(
     prescriptions.filter((p) => p.isActive === true && isLive(p)).map((p) => [p.id, p]),
   );
-  const brandByPrescription = new Map<string, string>();
+  const brandByPrescription = new Map<string, InventoryItem>();
   for (const inv of inventory) {
-    if (inv.isActive && !inv.isArchived && isLive(inv) && inv.brandName) {
-      brandByPrescription.set(inv.prescriptionId, inv.brandName);
+    if (isActiveBrand(inv) && !brandByPrescription.has(inv.prescriptionId)) {
+      brandByPrescription.set(inv.prescriptionId, inv);
     }
   }
 
@@ -216,6 +222,7 @@ export async function loadReminderDoses(): Promise<ReminderDose[]> {
   for (const { prescriptionId, phase, schedules: phaseSchedules } of effective) {
     const prescription = prescriptionMap.get(prescriptionId);
     if (!prescription) continue;
+    const brand = brandByPrescription.get(prescriptionId);
     for (const schedule of phaseSchedules) {
       if (!/^\d{1,2}:\d{2}$/.test(schedule.time ?? "")) continue;
       doses.push({
@@ -223,8 +230,8 @@ export async function loadReminderDoses(): Promise<ReminderDose[]> {
         phaseId: phase.id,
         scheduleId: schedule.id,
         genericName: prescription.genericName,
-        displayName: brandByPrescription.get(prescriptionId) ?? prescription.genericName,
-        dosageText: formatDosage(prescription, phase, schedule),
+        displayName: brand?.brandName || prescription.genericName,
+        dosageText: formatDosage(phase, schedule, brand),
         time: schedule.time.padStart(5, "0"),
         anchorTimezone: schedule.anchorTimezone,
         daysOfWeek: schedule.daysOfWeek ?? [],
