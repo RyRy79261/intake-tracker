@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { Button } from "@intake/ui/button";
 import { RecordRow } from "@/components/history/record-row";
 import { useSettings } from "@/hooks/use-settings";
@@ -181,20 +181,26 @@ export function RecordsTab({ range }: RecordsTabProps) {
   const [editSubstanceVolume, setEditSubstanceVolume] = useState("");
 
   // Filter + paginate
-  const filteredRecords = filterRecords(allRecords, filter);
+  const filteredRecords = useMemo(() => filterRecords(allRecords, filter), [allRecords, filter]);
   const visibleEnd = page * PAGE_SIZE;
   const visibleRecords = filteredRecords.slice(0, visibleEnd);
   const hasMore = visibleEnd < filteredRecords.length;
 
   // Day groups follow the dashboard's logical day. The header counts come
   // from the whole filtered list so a day split across pages isn't undercounted.
-  const logicalDay = { dayStartHour: settings.dayStartHour, tz: getDeviceTimezone() };
-  const groupedRecords = groupRecordsByDate(visibleRecords, logicalDay);
+  // Memoised: the full list can be thousands of rows under "All", and the edit
+  // dialogs re-render this component on every keystroke.
+  const dayStartHour = settings.dayStartHour;
+  const tz = getDeviceTimezone();
+  const groupedRecords = groupRecordsByDate(visibleRecords, { dayStartHour, tz });
   const dateGroups = Array.from(groupedRecords.entries());
-  const dayCounts = new Map<string, number>();
-  groupRecordsByDate(filteredRecords, logicalDay).forEach((recs, date) =>
-    dayCounts.set(date, recs.length),
-  );
+  const dayCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    groupRecordsByDate(filteredRecords, { dayStartHour, tz }).forEach((recs, date) =>
+      counts.set(date, recs.length),
+    );
+    return counts;
+  }, [filteredRecords, dayStartHour, tz]);
 
   // Delete handler
   const handleDelete = useCallback(async (unified: UnifiedRecord) => {

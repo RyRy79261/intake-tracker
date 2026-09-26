@@ -33,6 +33,9 @@ import { getUrinationRecordsByDateRange } from "@/lib/urination-service";
 import { getDefecationRecordsByDateRange } from "@/lib/defecation-service";
 import { getSubstanceRecordsByDateRange } from "@/lib/substance-service";
 import { isLive } from "@intake/core/lifecycle";
+import { logicalDayKey } from "@intake/core/logical-day";
+import { getDeviceTimezone } from "@/lib/timezone";
+import { useSettingsStore } from "@/stores/settings-store";
 import type { TimeRange, AnalyticsResult } from "@intake/types/analytics";
 import { URINATION_ESTIMATE_ML } from "@intake/types/analytics";
 
@@ -88,12 +91,27 @@ async function loadRecords(range: TimeRange): Promise<ExportRecords> {
 }
 
 /**
+ * The last day ("YYYY-MM-DD") a range covers. Ranges end at the close of a
+ * logical day, which is dayStartHour the next calendar morning, so formatting
+ * `range.end` directly would name tomorrow.
+ */
+function lastDayKey(range: TimeRange): string {
+  return logicalDayKey(range.end, useSettingsStore.getState().dayStartHour, getDeviceTimezone());
+}
+
+/** `lastDayKey` as a local-midnight Date, for date-fns formatting. */
+function lastDay(range: TimeRange): Date {
+  const [y, m, d] = lastDayKey(range).split("-").map(Number);
+  return new Date(y!, m! - 1, d!);
+}
+
+/**
  * Dose logs whose calendar `scheduledDate` falls in the range. Medications are
  * keyed on the calendar date (local midnight), not the logical day.
  */
 async function loadDoseLogs(range: TimeRange): Promise<DoseLog[]> {
   const startKey = format(range.start, "yyyy-MM-dd");
-  const endKey = format(range.end, "yyyy-MM-dd");
+  const endKey = lastDayKey(range);
   const logs = await db.doseLogs
     .where("scheduledDate")
     .between(startKey, endKey, true, true)
@@ -134,7 +152,7 @@ async function resolveExportRange(range: TimeRange): Promise<TimeRange> {
     candidates.push(new Date(y!, m! - 1, d!).getTime());
   }
 
-  const earliest = candidates.length > 0 ? Math.min(...candidates) : range.end;
+  const earliest = candidates.length > 0 ? Math.min(...candidates) : lastDay(range).getTime();
   return { start: Math.min(startOfDay(earliest).getTime(), range.end), end: range.end };
 }
 
@@ -351,7 +369,7 @@ export async function exportAllRecordsCSV(range: TimeRange): Promise<void> {
     .join("\n\n");
 
   const startDate = format(new Date(resolved.start), "yyyy-MM-dd");
-  const endDate = format(new Date(resolved.end), "yyyy-MM-dd");
+  const endDate = lastDayKey(resolved);
   const filename = `health-data-${startDate}-${endDate}.csv`;
 
   const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
@@ -434,7 +452,7 @@ async function buildRecentRecordsTable(range: TimeRange): Promise<string[][]> {
     .sort((a, b) => b.timestamp - a.timestamp)
     .slice(0, RECENT_TOTAL);
 
-  const crossesYear = new Date(range.start).getFullYear() !== new Date(range.end).getFullYear();
+  const crossesYear = new Date(range.start).getFullYear() !== lastDay(range).getFullYear();
   const dateFormat = crossesYear ? "MMM d, yyyy, HH:mm" : "MMM d, HH:mm";
   return rows.map((r) => [format(r.timestamp, dateFormat), r.domain, r.value]);
 }
@@ -455,7 +473,7 @@ export async function exportToPDF(inputRange: TimeRange): Promise<void> {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
   const startDate = format(new Date(range.start), "MMM d, yyyy");
-  const endDate = format(new Date(range.end), "MMM d, yyyy");
+  const endDate = format(lastDay(range), "MMM d, yyyy");
   let y = 20;
 
   // Title
@@ -567,7 +585,7 @@ export async function exportToPDF(inputRange: TimeRange): Promise<void> {
     doc.text(`Page ${i} of ${pageCount}`, pageWidth / 2, 290, { align: "center" });
   }
 
-  const filename = `health-report-${format(new Date(range.start), "yyyy-MM-dd")}-${format(new Date(range.end), "yyyy-MM-dd")}.pdf`;
+  const filename = `health-report-${format(new Date(range.start), "yyyy-MM-dd")}-${lastDayKey(range)}.pdf`;
   doc.save(filename);
 }
 

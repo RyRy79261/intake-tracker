@@ -38,6 +38,9 @@ import {
   _buildRecentRecordsTable,
 } from "@/lib/export-service";
 import { format } from "date-fns";
+import { logicalDaysRange } from "@intake/core/logical-day";
+import { getDeviceTimezone } from "@/lib/timezone";
+import { useSettingsStore } from "@/stores/settings-store";
 import { db } from "@/lib/db";
 import {
   makeIntakeRecord,
@@ -297,6 +300,28 @@ describe("exportAllRecordsCSV (real Dexie data)", () => {
     expect(anchor.download).toMatch(
       new RegExp(`^health-data-${format(BASE_TS, "yyyy-MM-dd")}-`),
     );
+  });
+});
+
+describe("exportAllRecordsCSV logical-day range end", () => {
+  it("names and bounds the range by its last logical day, not the next calendar date", async () => {
+    // A "Today" range with dayStartHour 2 runs to 01:59:59.999 the next
+    // calendar morning. The filename and the dose-log dates stop at today.
+    const tz = getDeviceTimezone();
+    const range = logicalDaysRange(new Date(2023, 10, 20, 12).getTime(), 1, 2, tz);
+    useSettingsStore.setState({ dayStartHour: 2 });
+    await db.weightRecords.add(makeWeightRecord({ weight: 70, timestamp: new Date(2023, 10, 20, 9).getTime() }));
+    const rx = makePrescription({ genericName: "Furosemide" });
+    await db.prescriptions.add(rx);
+    await db.doseLogs.add(
+      makeDoseLog(rx.id, "phase-1", "sched-1", { scheduledDate: "2023-11-21", scheduledTime: "08:00" }),
+    );
+    const anchor = document.createElement("a") as unknown as { download: string };
+
+    await exportAllRecordsCSV(range);
+
+    expect(anchor.download).toBe("health-data-2023-11-20-2023-11-20.csv");
+    expect(await capturedCSV()).not.toContain("# Dose logs");
   });
 });
 
