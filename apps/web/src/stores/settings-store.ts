@@ -268,10 +268,13 @@ export function migrateSettings(
     state.shakeToReportEnabled = true;
   }
   if (version < 11) {
-    // Seed the shake-to-report tuning. Originally 15 / 3 then 8 (v12); the
-    // defaults are now 10 / 5, and v17 moves installs still on 8 / 3 there.
-    state.shakeThreshold = 10;
-    state.shakeRequiredJolts = 5;
+    state.shakeThreshold = 15;
+    state.shakeRequiredJolts = 3;
+  }
+  if (version < 12 && state.shakeThreshold === 15) {
+    // Installs stored at v11 hold 15 / 3; lower them to 8 as v12 did, so v17
+    // below can move the whole 8 / 3 pair to the current 10 / 5 defaults.
+    state.shakeThreshold = 8;
   }
   if (version < 13) {
     state.sugarLimit = 30;

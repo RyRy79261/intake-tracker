@@ -55,6 +55,14 @@ describe("settings migrations", () => {
     expect(state.shakeRequiredJolts).toBe(5);
   });
 
+  it("moves a v11 install on the old 15 / 3 shake defaults to the current 10 / 5", () => {
+    // v11 seeded 15 / 3 and v12 lowered the threshold to 8; an install stored
+    // at v11 still holds 15 / 3 and must land on the current defaults too.
+    const state = hydrate({ shakeThreshold: 15, shakeRequiredJolts: 3 }, 11);
+    expect(state.shakeThreshold).toBe(10);
+    expect(state.shakeRequiredJolts).toBe(5);
+  });
+
   it("keeps a shake sensitivity the user chose", () => {
     const state = hydrate({ shakeThreshold: 12, shakeRequiredJolts: 4 }, 16);
     expect(state.shakeThreshold).toBe(12);
