@@ -46,6 +46,73 @@ describe("LiquidPresetsSection", () => {
     expect(await screen.findByText("Cold Brew")).toBeInTheDocument();
   });
 
+  it("labels ABV as a percentage in the preset summary", async () => {
+    const user = userEvent.setup();
+    await renderWithFixtures(<LiquidPresetsSection />);
+    await expandSection(user);
+
+    // Default Beer preset: alcoholPer100ml 5 means 5% ABV, not 5 std drinks.
+    expect(await screen.findByText("5% ABV")).toBeInTheDocument();
+    expect(screen.queryByText(/std alc/)).not.toBeInTheDocument();
+  });
+
+  it("clears a nutrient when the edit form empties it", async () => {
+    const user = userEvent.setup();
+    await renderWithFixtures(<LiquidPresetsSection />);
+    await expandSection(user);
+
+    await user.click(await screen.findByRole("button", { name: "Edit Coffee" }));
+    await user.clear(screen.getByLabelText("Caffeine/100ml"));
+    await user.click(screen.getByRole("button", { name: /save changes/i }));
+
+    const coffee = useSettingsStore
+      .getState()
+      .liquidPresets.find((p: LiquidPreset) => p.id === "default-coffee");
+    expect(coffee).toBeDefined();
+    expect(coffee).not.toHaveProperty("caffeinePer100ml");
+  });
+
+  it("saves and summarises sugar per 100 ml", async () => {
+    const user = userEvent.setup();
+    await renderWithFixtures(<LiquidPresetsSection />);
+    await expandSection(user);
+
+    await user.click(await screen.findByRole("button", { name: /add preset/i }));
+    await user.type(await screen.findByPlaceholderText(/beverage name/i), "Cola");
+    await user.type(screen.getByLabelText("Sugar g/100ml"), "10.6");
+    await user.click(screen.getByRole("button", { name: /add preset/i }));
+
+    const cola = useSettingsStore
+      .getState()
+      .liquidPresets.find((p: LiquidPreset) => p.name === "Cola");
+    expect(cola?.sugarPer100ml).toBe(10.6);
+    expect(await screen.findByText(/10\.6g sugar\/100ml/)).toBeInTheDocument();
+  });
+
+  it("hides the sugar input while the sugar tracker is off", async () => {
+    const user = userEvent.setup();
+    await renderWithFixtures(<LiquidPresetsSection />, {
+      settings: { optionalTrackers: { sugar: false, potassium: false } },
+    });
+    await expandSection(user);
+
+    await user.click(await screen.findByRole("button", { name: /add preset/i }));
+    expect(screen.queryByLabelText("Sugar g/100ml")).not.toBeInTheDocument();
+  });
+
+  it("does not offer the unused Beverage category", async () => {
+    const user = userEvent.setup();
+    await renderWithFixtures(<LiquidPresetsSection />);
+    await expandSection(user);
+
+    await user.click(await screen.findByRole("button", { name: /add preset/i }));
+    await user.click(screen.getByRole("combobox"));
+    expect(
+      screen.queryByRole("option", { name: "Beverage" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Coffee" })).toBeInTheDocument();
+  });
+
   it("deletes a non-default preset after the inline confirmation", async () => {
     const user = userEvent.setup();
     const custom: LiquidPreset = {

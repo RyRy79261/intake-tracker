@@ -8,12 +8,14 @@
 
 export function buildSystemPrompt(type: "caffeine" | "alcohol"): string {
   if (type === "caffeine") {
-    return `You are a beverage research assistant. Given a beverage name, return its caffeine content per 100 ml, a typical serving size, and water content percentage.
+    return `You are a beverage research assistant. Given a beverage name, return its caffeine content per 100 ml, a typical serving size, water content percentage, and its sugar and sodium per 100 ml.
 
 Units (metric only):
 - substancePer100ml = milligrams of caffeine per 100 ml of beverage
 - defaultVolumeMl = typical single serve in millilitres
 - waterContentPercent = 0-100
+- sugarPer100ml = grams of total sugars per 100 ml (the label's "of which sugars" line; 0 for an unsweetened drink)
+- sodiumPer100ml = milligrams of sodium per 100 ml (0 if negligible)
 
 Process:
 1. ALWAYS use the web_search tool, for every query without exception. Never
@@ -39,7 +41,7 @@ Process:
    structured output.`;
   }
 
-  return `You are a beverage research assistant. Given an alcoholic drink name, return its ABV (alcohol by volume), a typical serving size, and water content percentage.
+  return `You are a beverage research assistant. Given an alcoholic drink name, return its ABV (alcohol by volume), a typical serving size, water content percentage, and its sugar and sodium per 100 ml.
 
 CRITICAL UNIT RULE:
 - substancePer100ml MUST be ABV as a percentage by volume -- the same number printed on the bottle label.
@@ -50,6 +52,8 @@ CRITICAL UNIT RULE:
 Other fields:
 - defaultVolumeMl = typical single serving in millilitres (e.g. pint = 568, half pint = 284, wine glass = 175, single spirit = 25 (UK) / 30 (most of EU))
 - waterContentPercent = 0-100 (beer ~93, wine ~87, spirits ~60)
+- sugarPer100ml = grams of total sugars per 100 ml (the label's "of which sugars" line; cider, alcopops, liqueurs and sweet wine carry real sugar, dry spirits ~0)
+- sodiumPer100ml = milligrams of sodium per 100 ml (0 if negligible)
 
 Process:
 1. For branded products, regional drinks, craft beers, named cocktails, or anything you are not 100% sure of, USE THE web_search TOOL to look up the producer's stated ABV or a reputable retailer listing.
@@ -60,7 +64,7 @@ Process:
 export const SUBSTANCE_LOOKUP_TOOL = {
   name: "substance_lookup_result" as const,
   description:
-    "Return beverage data. For caffeine queries: caffeine in mg per 100 ml. For alcohol queries: ABV as a percentage (vol/vol).",
+    "Return beverage data. For caffeine queries: caffeine in mg per 100 ml. For alcohol queries: ABV as a percentage (vol/vol). Always include sugar (g) and sodium (mg) per 100 ml.",
   input_schema: {
     type: "object" as const,
     properties: {
@@ -87,6 +91,15 @@ export const SUBSTANCE_LOOKUP_TOOL = {
         description:
           "Estimated water content as a percentage (0-100). Reference: black coffee ~99, beer ~93, wine ~87, spirits ~60.",
       },
+      sugarPer100ml: {
+        type: "number",
+        description:
+          "Total sugars in grams per 100 ml (the nutrition label's 'of which sugars' figure). 0 for black coffee, plain tea, dry spirits and other unsweetened drinks.",
+      },
+      sodiumPer100ml: {
+        type: "number",
+        description: "Sodium in milligrams per 100 ml. 0 if negligible.",
+      },
     },
     required: [
       "substancePer100ml",
@@ -94,6 +107,8 @@ export const SUBSTANCE_LOOKUP_TOOL = {
       "beverageName",
       "reasoning",
       "waterContentPercent",
+      "sugarPer100ml",
+      "sodiumPer100ml",
     ],
     additionalProperties: false,
   },
