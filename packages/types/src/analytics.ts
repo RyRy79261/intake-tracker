@@ -71,9 +71,16 @@ export interface FluidBalanceResult {
 // Adherence
 // ---------------------------------------------------------------------------
 
+/**
+ * Scheduled-dose adherence. `total` counts every resolved slot: taken,
+ * skipped and missed. A scheduled dose on a past day with no taken/skipped log
+ * is missed; today's outstanding doses are not counted until the day is over.
+ */
 export interface AdherenceResult {
   rate: number;
   taken: number;
+  skipped: number;
+  missed: number;
   total: number;
   daily: Array<{
     date: string;

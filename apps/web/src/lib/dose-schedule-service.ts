@@ -10,6 +10,7 @@ import { getDeviceTimezone, resolveScheduleLocalTime } from "@/lib/timezone";
 import { calculatePillsConsumed, isCleanFraction, selectSlotLog } from "@/lib/dose-log-service";
 import { isValidPillStrength } from "@intake/core/compound";
 import { toLocalDateKey } from "@/lib/date-utils";
+import { resolveDoseStatus, type ResolvedDoseStatus } from "@/lib/dose-status";
 import { isLive } from "@intake/core/lifecycle";
 import { selectEffectivePhase, selectEffectivePhases } from "@intake/core/effective-phase";
 
@@ -17,7 +18,7 @@ import { selectEffectivePhase, selectEffectivePhases } from "@intake/core/effect
 // Types
 // ---------------------------------------------------------------------------
 
-export type DoseSlotStatus = "taken" | "skipped" | "pending" | "missed";
+export type DoseSlotStatus = ResolvedDoseStatus;
 
 export interface DoseSlot {
   // Schedule info
@@ -57,22 +58,15 @@ function getTodayDateStr(): string {
 }
 
 /**
- * Determine dose slot status based on existing log and date.
+ * Determine dose slot status based on existing log and date. The shared rule
+ * (resolveDoseStatus): an outstanding dose on a past day is missed.
  */
 function deriveStatus(
   log: DoseLog | undefined,
   dateStr: string,
   todayStr: string,
 ): DoseSlotStatus {
-  if (log?.status === "taken") return "taken";
-  if (log?.status === "skipped") return "skipped";
-
-  // No log, a "pending" log (an untaken dose) or a "rescheduled" one (still
-  // owed, at its new time): the dose is outstanding, so the date decides.
-  if (dateStr === todayStr) return "pending";
-  if (dateStr < todayStr) return "missed";
-  // Future date
-  return "pending";
+  return resolveDoseStatus(log?.status, dateStr, todayStr);
 }
 
 /**
