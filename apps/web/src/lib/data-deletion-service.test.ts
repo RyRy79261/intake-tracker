@@ -12,11 +12,13 @@ import { format } from "date-fns";
 import { db } from "@/lib/db";
 import {
   deleteRecordsInRange,
+  deleteAllMedicationData,
   olderThanDays,
   ALL_TIME,
 } from "@/lib/data-deletion-service";
 import {
   makeIntakeRecord,
+  makeUserSettings,
   makeWeightRecord,
   makeBloodPressureRecord,
   makeEatingRecord,
@@ -165,6 +167,15 @@ describe("data-deletion-service: olderThanDays", () => {
 });
 
 describe("data-deletion-service: ALL_TIME", () => {
+  it("keeps the synced user settings (limits, presets, day start)", async () => {
+    await db.userSettings.add(makeUserSettings({ id: "settings" }));
+
+    const res = await deleteRecordsInRange(ALL_TIME);
+    expect(res.success).toBe(true);
+
+    expect((await db.userSettings.get("settings"))?.deletedAt).toBeNull();
+  });
+
   it("wipes records and configuration but keeps the user profile", async () => {
     await seedConfiguration(daysAgo(10));
     await db.intakeRecords.add(makeIntakeRecord({ id: "i", timestamp: daysAgo(1) }));
@@ -176,5 +187,72 @@ describe("data-deletion-service: ALL_TIME", () => {
     expect((await db.prescriptions.get("rx"))?.deletedAt).not.toBeNull();
     expect((await db.phaseSchedules.get("sch"))?.deletedAt).not.toBeNull();
     expect((await db.userProfile.get("profile"))?.deletedAt).toBeNull();
+  });
+});
+
+describe("data-deletion-service: deleteAllMedicationData", () => {
+  it("tombstones every medication table, switches configuration off and enqueues each row", async () => {
+    await seedConfiguration(daysAgo(10));
+    await db.medicationPhases.update("ph", { status: "active" });
+    await db.titrationPlans.update("tp", { status: "draft" });
+    await db.doseLogs.add(makeDoseLog("rx", "ph", "sch", { id: "dose", scheduledDate: dateDaysAgo(1) }));
+    await db.intakeRecords.add(makeIntakeRecord({ id: "i", timestamp: daysAgo(1) }));
+
+    const res = await deleteAllMedicationData();
+    expect(res.success).toBe(true);
+    if (!res.success) return;
+    // rx, phase, schedule, inventory item, transaction, dose log, titration plan
+    expect(res.data).toBe(7);
+
+    const rx = await db.prescriptions.get("rx");
+    expect(rx?.deletedAt).not.toBeNull();
+    expect(rx?.isActive).toBe(false);
+    const phase = await db.medicationPhases.get("ph");
+    expect(phase?.deletedAt).not.toBeNull();
+    expect(phase?.status).toBe("cancelled");
+    const schedule = await db.phaseSchedules.get("sch");
+    expect(schedule?.deletedAt).not.toBeNull();
+    expect(schedule?.enabled).toBe(false);
+    const inv = await db.inventoryItems.get("inv");
+    expect(inv?.deletedAt).not.toBeNull();
+    expect(inv?.isActive).toBe(false);
+    expect((await db.inventoryTransactions.get("tx"))?.deletedAt).not.toBeNull();
+    expect((await db.doseLogs.get("dose"))?.deletedAt).not.toBeNull();
+    const plan = await db.titrationPlans.get("tp");
+    expect(plan?.deletedAt).not.toBeNull();
+    expect(plan?.status).toBe("cancelled");
+
+    // Health records, notes, audit logs and the profile are not medication data.
+    expect((await db.intakeRecords.get("i"))?.deletedAt).toBeNull();
+    expect((await db.dailyNotes.get("note"))?.deletedAt).toBeNull();
+    expect((await db.auditLogs.get("audit"))?.deletedAt).toBeNull();
+    expect((await db.userProfile.get("profile"))?.deletedAt).toBeNull();
+
+    // Every tombstone is queued as a delete so the cloud and other devices follow.
+    const queued = await db._syncQueue.toArray();
+    expect(queued).toHaveLength(7);
+    expect(queued.every((q) => q.op === "delete")).toBe(true);
+    expect(new Set(queued.map((q) => q.tableName))).toEqual(
+      new Set([
+        "prescriptions",
+        "medicationPhases",
+        "phaseSchedules",
+        "inventoryItems",
+        "inventoryTransactions",
+        "doseLogs",
+        "titrationPlans",
+      ]),
+    );
+  });
+
+  it("leaves already-deleted medication rows untouched", async () => {
+    await db.prescriptions.add(makePrescription({ id: "gone", deletedAt: 123, updatedAt: 123 }));
+
+    const res = await deleteAllMedicationData();
+    expect(res.success).toBe(true);
+    if (!res.success) return;
+    expect(res.data).toBe(0);
+    expect((await db.prescriptions.get("gone"))?.updatedAt).toBe(123);
+    expect(await db._syncQueue.count()).toBe(0);
   });
 });

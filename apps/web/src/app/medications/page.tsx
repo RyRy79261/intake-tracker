@@ -11,6 +11,7 @@ import { DoseDetailDialog } from "@/components/medications/dose-detail-dialog";
 import { CompoundList } from "@/components/medications/compound-list";
 import { PrescriptionsView } from "@/components/medications/prescriptions-view";
 import { TitrationsView } from "@/components/medications/titrations-view";
+import { TitrationStartPrompt } from "@/components/medications/titrations/titration-start-prompt";
 import type { DoseSlot } from "@/hooks/use-medication-queries";
 import { useMedicationNotifications } from "@/hooks/use-medication-notifications";
 import { useMedicationUIStore } from "@/stores/medication-ui-store";
@@ -48,6 +49,8 @@ function MedicationsContent() {
       {activeTab === "schedule" && (
         <>
           <WeekDaySelector selectedDate={selectedDate} onSelectDate={setSelectedDate} />
+          {/* A planned titration step waits for the user to confirm it. */}
+          <TitrationStartPrompt className="px-1 mb-4" />
           <ScheduleView
             selectedDate={selectedDate}
             onDoseClick={handleDoseClick}

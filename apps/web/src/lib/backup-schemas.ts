@@ -58,9 +58,19 @@ export const intakeRecordSchema = baseRecord
     type: z.enum(["water", "salt", "sugar", "potassium"]),
     amount: finiteNumber,
     timestamp: timestampSchema,
+    // Sodium rows: the substance/amount the user entered (all optional —
+    // rows written before these fields existed carry none of them).
+    sodiumSource: z.enum(["sodium", "salt", "msg"]).nullable().optional(),
+    sourceAmount: finiteNumber.nullable().optional(),
+    sourceUnit: z.enum(["mg", "g"]).nullable().optional(),
   })
   .passthrough();
 
+// Weight and blood pressure are checked for shape only, deliberately NOT
+// against the value ranges in @intake/core/record-schemas that every write
+// path uses. A restore must bring back every record the app ever stored,
+// including legacy readings saved before those ranges existed; range-checking
+// here would silently drop them from the restored data.
 export const weightRecordSchema = baseRecord
   .extend({
     weight: finiteNumber,
@@ -97,12 +107,23 @@ export const substanceRecordSchema = baseRecord
   })
   .passthrough();
 
+/**
+ * Per-compound breakdown of a combination tablet. The strengths feed dose
+ * labels and pill math, so each must be a real number (a hand-edited backup
+ * could carry `"49"` or `1e999`, which parses to Infinity).
+ */
+const compoundsSchema = z
+  .array(z.object({ name: z.string(), strength: finiteNumber }).passthrough())
+  .nullable()
+  .optional();
+
 export const prescriptionSchema = baseRecordNoTz
   .extend({
     genericName: z.string(),
     // Optional since 2026-09 (audit sync-engine#10); pulled rows carry null.
     indication: z.string().nullable().optional(),
     isActive: z.boolean(),
+    compounds: compoundsSchema,
   })
   .passthrough();
 
@@ -125,6 +146,10 @@ export const inventoryItemSchema = baseRecord
   .extend({
     prescriptionId: z.string(),
     brandName: z.string(),
+    // The pill-math denominator (gap-combo-drugs-pill-math#8). Optional so an
+    // old backup without it still imports; dose math skips a missing strength.
+    strength: finiteNumber.optional(),
+    compounds: compoundsSchema,
   })
   .passthrough();
 
@@ -186,6 +211,15 @@ export const insightReportSchema = baseRecordNoTz
   })
   .passthrough();
 
+export const userSettingsSchema = baseRecordNoTz
+  .extend({
+    waterLimit: finiteNumber,
+    saltLimit: finiteNumber,
+    dayStartHour: finiteNumber,
+    liquidPresets: z.array(z.object({ id: z.string(), name: z.string() }).passthrough()),
+  })
+  .passthrough();
+
 export type BackupTableName =
   | "intakeRecords"
   | "weightRecords"
@@ -204,7 +238,8 @@ export type BackupTableName =
   | "dailyNotes"
   | "auditLogs"
   | "userProfile"
-  | "insightReports";
+  | "insightReports"
+  | "userSettings";
 
 export const BACKUP_SCHEMAS: Record<BackupTableName, z.ZodTypeAny> = {
   intakeRecords: intakeRecordSchema,
@@ -225,6 +260,7 @@ export const BACKUP_SCHEMAS: Record<BackupTableName, z.ZodTypeAny> = {
   auditLogs: auditLogSchema,
   userProfile: userProfileSchema,
   insightReports: insightReportSchema,
+  userSettings: userSettingsSchema,
 };
 
 /** Boolean type guard backed by a Zod schema. */
@@ -252,4 +288,5 @@ export const BACKUP_VALIDATORS: Record<BackupTableName, (record: unknown) => boo
   auditLogs: makeZodValidator(auditLogSchema),
   userProfile: makeZodValidator(userProfileSchema),
   insightReports: makeZodValidator(insightReportSchema),
+  userSettings: makeZodValidator(userSettingsSchema),
 };

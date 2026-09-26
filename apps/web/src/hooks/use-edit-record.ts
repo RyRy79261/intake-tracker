@@ -10,6 +10,7 @@ import {
   FUTURE_TIMESTAMP_MESSAGE,
   isFutureTimestamp,
 } from "@intake/core/record-schemas";
+import { reportSaveError } from "@/lib/db-recovery";
 
 export type EditedTimestampResult =
   | { ok: true; timestamp: number }
@@ -147,7 +148,8 @@ export function useEditRecord<
         });
         setEditingRecord(null);
         toast({ title: "Entry updated" });
-      } catch {
+      } catch (e) {
+        reportSaveError("edit", e);
         toast({
           title: "Error",
           description: "Could not update the entry",

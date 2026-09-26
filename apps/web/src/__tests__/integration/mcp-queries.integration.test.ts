@@ -710,6 +710,33 @@ describe("MCP query fns — sodium naming (real Postgres)", () => {
 
     expect(items.map((r) => [r.type, r.amount])).toEqual([["sodium", 400]]);
   });
+
+  it("returns what a sodium row was entered as, and null when the source is unknown", async () => {
+    await ctx.db.insert(schema.intakeRecords).values([
+      intakeFixture(ctx.testUserId, {
+        type: "salt",
+        amount: 786,
+        timestamp: 100,
+        sodiumSource: "salt",
+        sourceAmount: 2,
+        sourceUnit: "g",
+      }),
+      intakeFixture(ctx.testUserId, { type: "salt", amount: 400, timestamp: 200 }),
+    ]);
+
+    const { items } = await queries.queryIntakeHistory(
+      ctx.testUserId,
+      "sodium",
+      FULL_RANGE,
+    );
+
+    expect(
+      items.map((r) => [r.amount, r.sodiumSource, r.sourceAmount, r.sourceUnit]),
+    ).toEqual([
+      [786, "salt", 2, "g"],
+      [400, null, null, null],
+    ]);
+  });
 });
 
 describe("MCP query fns — listMedications effective phase (real Postgres)", () => {
@@ -943,6 +970,70 @@ describe("MCP query fns — getTodaySummary day boundary (real Postgres)", () =>
     expect(summary.day_started_at).toBe(Date.UTC(2026, 8, 24, 22, 0));
   });
 
+  function syncedSettingsRow(overrides: Partial<typeof schema.userSettings.$inferInsert> = {}) {
+    return {
+      id: `settings-${Math.random().toString(36).slice(2)}`,
+      userId: ctx.testUserId,
+      waterLimit: 1000,
+      saltLimit: 1500,
+      sugarLimit: 30,
+      potassiumLimit: 3500,
+      waterExtendedBuffer: 500,
+      saltExtendedBuffer: 500,
+      sugarExtendedBuffer: 10,
+      optionalTrackers: { sugar: true, potassium: false },
+      dayStartHour: 2,
+      liquidPresets: [],
+      primaryRegion: "",
+      secondaryRegion: "",
+      reminderFollowUpCount: 2,
+      reminderFollowUpInterval: 10,
+      homeTimezone: null,
+      homeTimezoneConfirmedAt: null,
+      createdAt: 1,
+      updatedAt: 1,
+      deletedAt: null,
+      deviceId: "d",
+      ...overrides,
+    };
+  }
+
+  it("prefers the synced settings' day-start hour over the push settings copy", async () => {
+    await ctx.db.delete(schema.userSettings);
+    await ctx.db.insert(schema.pushSettings).values({
+      userId: ctx.testUserId,
+      dayStartHour: 2,
+    });
+    await ctx.db.insert(schema.userSettings).values([
+      syncedSettingsRow({ dayStartHour: 5, updatedAt: 10 }),
+      // Newest live row wins; a newer tombstone is ignored.
+      syncedSettingsRow({ dayStartHour: 0, updatedAt: 20 }),
+      syncedSettingsRow({ dayStartHour: 7, updatedAt: 30, deletedAt: 30 }),
+    ]);
+
+    const summary = await queries.getTodaySummary(ctx.testUserId, {
+      timezone: "Europe/Berlin",
+      now: NOW,
+    });
+
+    expect(summary.day_started_at).toBe(Date.UTC(2026, 8, 24, 22, 0));
+    await ctx.db.delete(schema.userSettings);
+  });
+
+  it("falls back to the synced home timezone when no other zone is known", async () => {
+    await ctx.db.delete(schema.userSettings);
+    await seedIntakeAroundBerlinDayStart();
+    await ctx.db.insert(schema.userSettings).values(
+      syncedSettingsRow({ homeTimezone: "Europe/Berlin", updatedAt: 10 }),
+    );
+
+    const summary = await queries.getTodaySummary(ctx.testUserId, { now: NOW });
+
+    expect(summary.timezone).toBe("Europe/Berlin");
+    expect(summary.intake.water_ml).toBe(250);
+    await ctx.db.delete(schema.userSettings);
+  });
+
   it("reports today's slots by scheduledDate as taken, skipped or outstanding", async () => {
     const refs = await seedMedChain(ctx.testUserId, {
       genericName: "Furosemide",
@@ -1006,6 +1097,73 @@ describe("MCP query fns — getTodaySummary day boundary (real Postgres)", () =>
     ]);
     expect(doses.unscheduled).toEqual([
       { kind: "prn", status: "taken", count: 1 },
+    ]);
+  });
+});
+
+// Owner decision (live-data-forensics#7): the MCP tools report dose status
+// with the app's rule. An outstanding dose (no log, "pending" or
+// "rescheduled") is pending today and missed on a past day.
+describe("MCP query fns — dose status matches the app (real Postgres)", () => {
+  // 2026-09-25T10:00Z = 12:00 in Berlin.
+  const NOW = Date.UTC(2026, 8, 25, 10, 0);
+
+  it("reports today's rescheduled dose as outstanding, not skipped", async () => {
+    const refs = await seedMedChain(ctx.testUserId, { genericName: "Furosemide", createdAt: 0 });
+    await ctx.db.insert(schema.doseLogs).values(
+      doseLogFixture(ctx.testUserId, refs, {
+        scheduledDate: "2026-09-25",
+        status: "rescheduled",
+        rescheduledTo: "14:00",
+        actionTimestamp: null as never,
+      }),
+    );
+
+    const { doses } = await queries.getTodaySummary(ctx.testUserId, {
+      timezone: "Europe/Berlin",
+      now: NOW,
+    });
+
+    expect(doses.skipped).toBe(0);
+    expect(doses.outstanding).toBe(1);
+    expect(doses.slots.map((sl) => sl.status)).toEqual(["outstanding"]);
+  });
+
+  it("listRecentDoses reports a past outstanding log as missed and keeps the logged status", async () => {
+    const refs = await seedMedChain(ctx.testUserId);
+    await ctx.db.insert(schema.doseLogs).values([
+      doseLogFixture(ctx.testUserId, refs, {
+        scheduledDate: "2026-09-25",
+        status: "pending",
+        actionTimestamp: 4_000,
+      }),
+      doseLogFixture(ctx.testUserId, refs, {
+        scheduledDate: "2026-09-24",
+        status: "rescheduled",
+        actionTimestamp: 3_000,
+      }),
+      doseLogFixture(ctx.testUserId, refs, {
+        scheduledDate: "2026-09-23",
+        status: "pending",
+        actionTimestamp: 2_000,
+      }),
+      doseLogFixture(ctx.testUserId, refs, {
+        scheduledDate: "2026-09-22",
+        status: "taken",
+        actionTimestamp: 1_000,
+      }),
+    ]);
+
+    const { doses } = await queries.listRecentDoses(ctx.testUserId, 50, {
+      timezone: "Europe/Berlin",
+      now: NOW,
+    });
+
+    expect(doses.map((d) => [d.scheduledDate, d.status, d.loggedStatus])).toEqual([
+      ["2026-09-25", "pending", "pending"],
+      ["2026-09-24", "missed", "rescheduled"],
+      ["2026-09-23", "missed", "pending"],
+      ["2026-09-22", "taken", "taken"],
     ]);
   });
 });

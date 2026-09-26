@@ -40,6 +40,7 @@ import {
   makeAuditLog,
   makeUserProfile,
   makeInsightReport,
+  makeUserSettings,
 } from "@/__tests__/fixtures/db-fixtures";
 
 /** Fixtures stripped of any undefined-valued keys, mirroring JSON round-trip. */
@@ -151,6 +152,15 @@ const fixturesByTable: Record<BackupTableName, () => Array<Record<string, unknow
     }),
     JSON.parse(JSON.stringify(makeInsightReport())),
   ],
+  userSettings: () => [
+    makeUserSettings(),
+    makeUserSettings({
+      liquidPresets: [{ id: "p1", name: "Oat latte", tab: "coffee", defaultVolumeMl: 250 }],
+      homeTimezone: "Europe/Berlin",
+      homeTimezoneConfirmedAt: Date.now(),
+    }),
+    JSON.parse(JSON.stringify(makeUserSettings())),
+  ],
 };
 
 const tableNames = Object.keys(BACKUP_SCHEMAS) as BackupTableName[];
@@ -233,6 +243,32 @@ describe("backup-schemas: tightening over the legacy isValid* checks", () => {
     expect(BACKUP_VALIDATORS.intakeRecords({ ...makeIntakeRecord(), deletedAt: "yes" })).toBe(false);
     expect(BACKUP_VALIDATORS.intakeRecords({ ...makeIntakeRecord(), deletedAt: Number.NaN })).toBe(false);
   });
+
+  // gap-combo-drugs-pill-math#8: pill strength is the dose-math denominator, so
+  // a hand-edited backup must not bring in a non-numeric or infinite one
+  // (JSON.parse("1e999") is Infinity).
+  it("rejects an inventory item with a non-finite or mistyped strength", () => {
+    const base = makeInventoryItem("rx");
+    expect(BACKUP_VALIDATORS.inventoryItems({ ...base, strength: 25 })).toBe(true);
+    expect(BACKUP_VALIDATORS.inventoryItems({ ...base, strength: Infinity })).toBe(false);
+    expect(BACKUP_VALIDATORS.inventoryItems({ ...base, strength: "50" })).toBe(false);
+    expect(BACKUP_VALIDATORS.inventoryItems({ ...base, strength: null })).toBe(false);
+  });
+
+  it("validates per-compound strengths on inventory items and prescriptions", () => {
+    const good = [{ name: "Sacubitril", strength: 49 }, { name: "Valsartan", strength: 51 }];
+    const bad = [{ name: "Sacubitril", strength: "49" }];
+    const inf = [{ name: "Sacubitril", strength: JSON.parse("1e999") }];
+    const item = makeInventoryItem("rx");
+    const rx = makePrescription();
+
+    expect(BACKUP_VALIDATORS.inventoryItems({ ...item, compounds: good })).toBe(true);
+    expect(BACKUP_VALIDATORS.inventoryItems({ ...item, compounds: null })).toBe(true);
+    expect(BACKUP_VALIDATORS.inventoryItems({ ...item, compounds: bad })).toBe(false);
+    expect(BACKUP_VALIDATORS.inventoryItems({ ...item, compounds: inf })).toBe(false);
+    expect(BACKUP_VALIDATORS.prescriptions({ ...rx, compounds: good })).toBe(true);
+    expect(BACKUP_VALIDATORS.prescriptions({ ...rx, compounds: bad })).toBe(false);
+  });
 });
 
 describe("backup-schemas: 2026-09 schema additions", () => {
@@ -273,10 +309,39 @@ describe("backup-schemas: 2026-09 schema additions", () => {
     expect(BACKUP_VALIDATORS.doseLogs({ ...base, pillsConsumed: "1" })).toBe(false);
     expect(BACKUP_VALIDATORS.doseLogs({ ...base, doseUnit: 5 })).toBe(false);
   });
+
+  // Sodium rows record the substance/amount the user entered (sodium-sources).
+  it("accepts a sodium row with or without its entered source", () => {
+    const base = makeIntakeRecord({ type: "salt", amount: 786 });
+    expect(BACKUP_VALIDATORS.intakeRecords(base)).toBe(true);
+    expect(
+      BACKUP_VALIDATORS.intakeRecords({
+        ...base,
+        sodiumSource: "salt",
+        sourceAmount: 2,
+        sourceUnit: "g",
+      }),
+    ).toBe(true);
+    expect(
+      BACKUP_VALIDATORS.intakeRecords({
+        ...base,
+        sodiumSource: null,
+        sourceAmount: null,
+        sourceUnit: null,
+      }),
+    ).toBe(true);
+  });
+
+  it("rejects an unknown sodium source or unit", () => {
+    const base = makeIntakeRecord({ type: "salt", amount: 786 });
+    expect(BACKUP_VALIDATORS.intakeRecords({ ...base, sodiumSource: "potash" })).toBe(false);
+    expect(BACKUP_VALIDATORS.intakeRecords({ ...base, sourceUnit: "oz" })).toBe(false);
+    expect(BACKUP_VALIDATORS.intakeRecords({ ...base, sourceAmount: Number.NaN })).toBe(false);
+  });
 });
 
 describe("backup-schemas: invariants", () => {
-  it("BACKUP_SCHEMAS covers exactly the 18 expected tables", () => {
+  it("BACKUP_SCHEMAS covers exactly the 19 expected tables", () => {
     expect(tableNames.sort()).toEqual(
       [
         "auditLogs",
@@ -297,6 +362,7 @@ describe("backup-schemas: invariants", () => {
         "weightRecords",
         "userProfile",
         "insightReports",
+        "userSettings",
       ].sort()
     );
   });

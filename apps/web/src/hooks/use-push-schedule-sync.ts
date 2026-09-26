@@ -29,6 +29,7 @@ export function usePushScheduleSync(): void {
   const doseRemindersEnabled = useSettingsStore((s) => s.doseRemindersEnabled);
   const followUpCount = useSettingsStore((s) => s.reminderFollowUpCount);
   const followUpInterval = useSettingsStore((s) => s.reminderFollowUpInterval);
+  const dayStartHour = useSettingsStore((s) => s.dayStartHour);
   const { authenticated } = useAuth();
 
   const lastSettingsHashRef = useRef<string>("");
@@ -54,11 +55,12 @@ export function usePushScheduleSync(): void {
     return () => clearInterval(id);
   }, [doseRemindersEnabled]);
 
-  // Sync follow-up settings to server when they change
+  // Sync follow-up settings and the day-start hour (the server's day
+  // boundary, e.g. the MCP today summary) when they change.
   useEffect(() => {
     if (!doseRemindersEnabled) return;
 
-    const hash = JSON.stringify({ followUpCount, followUpInterval });
+    const hash = JSON.stringify({ followUpCount, followUpInterval, dayStartHour });
     if (hash === lastSettingsHashRef.current) return;
     lastSettingsHashRef.current = hash;
 
@@ -68,11 +70,12 @@ export function usePushScheduleSync(): void {
       body: JSON.stringify({
         followUpCount,
         followUpIntervalMinutes: followUpInterval,
+        dayStartHour,
       }),
     }).catch((err) =>
       console.warn("[push/settings] sync failed:", err)
     );
-  }, [doseRemindersEnabled, followUpCount, followUpInterval]);
+  }, [doseRemindersEnabled, followUpCount, followUpInterval, dayStartHour]);
 }
 
 /**

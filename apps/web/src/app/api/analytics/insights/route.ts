@@ -10,7 +10,7 @@ import {
   buildInsightsPrompt,
 } from "@intake/ai-prompts/analytics-insights";
 import { parseJsonBody, zodErrorResponse } from "@/app/api/_shared/validation";
-import { createRateLimiter, getClientIp } from "@/app/api/_shared/rate-limit";
+import { createRateLimiter, rateLimitKey } from "@/app/api/_shared/rate-limit";
 import {
   getClaudeClientForUser,
   CLAUDE_MODELS,
@@ -50,8 +50,7 @@ type ToolUseBlock = Extract<
 
 export const POST = withAuth(async ({ request, auth }) => {
   try {
-    const ip = getClientIp(request);
-    if (!rateLimiter.check(ip)) {
+    if (!rateLimiter.check(rateLimitKey(request, auth.userId))) {
       return NextResponse.json(
         { error: "Rate limit exceeded. Please try again later." },
         { status: 429 },

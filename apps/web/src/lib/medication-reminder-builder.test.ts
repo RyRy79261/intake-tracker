@@ -141,3 +141,42 @@ describe("loadReminderDoses", () => {
     ]);
   });
 });
+
+describe("loadReminderDoses combination labels (gap-combo-drugs-pill-math#3)", () => {
+  it("labels a combo dose from the active brand's per-pill compounds", async () => {
+    // The Rx ratio (24/26) differs from the stocked brand (97/103): the label
+    // must show what the tablets contain, not a split of the Rx reference.
+    const rx = makePrescription({
+      genericName: "Sacubitril/Valsartan",
+      compounds: [{ name: "Sacubitril", strength: 24 }, { name: "Valsartan", strength: 26 }],
+    });
+    const phase = makeMedicationPhase(rx.id);
+    await db.prescriptions.add(rx);
+    await db.medicationPhases.add(phase);
+    await db.phaseSchedules.add(makePhaseSchedule(phase.id, { dosage: 200 }));
+    await db.inventoryItems.add(makeInventoryItem(rx.id, {
+      brandName: "Entresto",
+      strength: 200,
+      compounds: [{ name: "Sacubitril", strength: 97 }, { name: "Valsartan", strength: 103 }],
+    }));
+
+    const [reminder] = await loadReminderDoses();
+
+    expect(reminder?.dosageText).toBe("97/103mg");
+  });
+
+  it("shows the summed dose for a combo with no stocked brand", async () => {
+    const rx = makePrescription({
+      genericName: "Sacubitril/Valsartan",
+      compounds: [{ name: "Sacubitril", strength: 24 }, { name: "Valsartan", strength: 26 }],
+    });
+    const phase = makeMedicationPhase(rx.id);
+    await db.prescriptions.add(rx);
+    await db.medicationPhases.add(phase);
+    await db.phaseSchedules.add(makePhaseSchedule(phase.id, { dosage: 100 }));
+
+    const [reminder] = await loadReminderDoses();
+
+    expect(reminder?.dosageText).toBe("100mg");
+  });
+});

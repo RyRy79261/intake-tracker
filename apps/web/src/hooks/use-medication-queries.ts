@@ -22,9 +22,10 @@ import {
   deleteSchedule,
   getSchedulesForPhase,
 } from "@/lib/medication-schedule-service";
-import { startNewPhase, updatePhase, deletePhase, activatePhase, type CreatePhaseInput, type UpdatePhaseInput } from "@/lib/medication-service";
+import { startNewPhase, updatePhase, activatePhase, type CreatePhaseInput, type UpdatePhaseInput } from "@/lib/medication-service";
 import {
   getTitrationPlans,
+  getDueTitrationPlans,
   getPhasesForTitrationPlan,
   getConditionLabels,
   createTitrationPlan,
@@ -38,14 +39,12 @@ import {
 } from "@/lib/titration-service";
 import {
   getDoseLogsForDate,
-  getDoseLogsWithDetailsForDate,
   takeDose,
   logPrnDose,
   untakeDose,
   skipDose,
   rescheduleDose,
   editDoseTime,
-  type DoseLogWithDetails,
   type TakeDoseInput,
   type LogPrnDoseInput,
   type UntakeDoseInput,
@@ -75,7 +74,7 @@ import { unwrap } from "@intake/core/service";
 import { useTodayKey } from "@/hooks/use-today-key";
 
 // Re-export types so components import from hooks, not services
-export type { DoseLogWithDetails, DoseSlot, CreatePhaseInput, CreateTitrationPlanInput, DoseLog, UntakeDoseInput };
+export type { DoseSlot, CreatePhaseInput, CreateTitrationPlanInput, DoseLog, UntakeDoseInput };
 
 // ============================================================================
 // Read Hooks — useLiveQuery (no invalidation needed)
@@ -103,10 +102,6 @@ export function usePrnDoseLogs(prescriptionId: string, sinceDate: string) {
 
 export function useDoseLogsForDate(date: string) {
   return useLiveQuery(() => getDoseLogsForDate(date), [date], []);
-}
-
-export function useDoseLogsWithDetailsForDate(date: string) {
-  return useLiveQuery(() => getDoseLogsWithDetailsForDate(date), [date], []);
 }
 
 export function usePhasesForPrescription(prescriptionId: string | undefined) {
@@ -233,12 +228,6 @@ export function useStartNewPhase() {
 export function useUpdatePhase() {
   return useMutation({
     mutationFn: async (input: UpdatePhaseInput) => unwrap(await updatePhase(input)),
-  });
-}
-
-export function useDeletePhase() {
-  return useMutation({
-    mutationFn: async (id: string) => unwrap(await deletePhase(id)),
   });
 }
 
@@ -416,8 +405,15 @@ export function useUpdateInventoryItem() {
 
 export function useAdjustStock() {
   return useMutation({
-    mutationFn: async ({ inventoryItemId, amount, note, type }: { inventoryItemId: string; amount: number; note?: string; type?: "refill" | "consumed" | "adjusted" }) =>
-      unwrap(await adjustStock(inventoryItemId, amount, note, type)),
+    mutationFn: async ({ inventoryItemId, amount, note, type, occurredAt }: {
+      inventoryItemId: string;
+      amount: number;
+      note?: string;
+      type?: "refill" | "consumed" | "adjusted";
+      /** Backdate the movement (e.g. a refill collected earlier). */
+      occurredAt?: number;
+    }) =>
+      unwrap(await adjustStock(inventoryItemId, amount, note, type, occurredAt)),
   });
 }
 
@@ -446,6 +442,14 @@ export function useDeleteInventoryTransaction() {
 
 export function useTitrationPlans() {
   return useLiveQuery(() => getTitrationPlans(), [], []);
+}
+
+/**
+ * Draft titration plans whose start date has arrived (`todayKey` is the local
+ * YYYY-MM-DD). They wait for the user to confirm; nothing starts on its own.
+ */
+export function useDueTitrationPlans(todayKey: string) {
+  return useLiveQuery(() => getDueTitrationPlans(todayKey), [todayKey], []);
 }
 
 export function usePhasesForTitrationPlan(planId: string | undefined) {

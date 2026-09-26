@@ -233,6 +233,29 @@ describe("useEditRecord", () => {
     expect(result.current.editingRecord).not.toBeNull();
   });
 
+  // liquids-save#0: a failed edit save was swallowed by a bare catch, so the
+  // cause never reached the console or the error-log pipeline.
+  it("reports the cause of a failed save", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const cause = new Error("network down");
+    const { result } = renderHook(() =>
+      useEditRecord<TestRecord>({
+        buildUpdates: () => ({}),
+        mutateAsync: async () => {
+          throw cause;
+        },
+      }),
+    );
+
+    act(() => result.current.openEdit(RECORD));
+    await act(async () => {
+      await result.current.handleEditSubmit();
+    });
+
+    expect(consoleError).toHaveBeenCalledWith("[save] edit failed:", cause);
+    consoleError.mockRestore();
+  });
+
   it("does nothing when submitted with no record open", async () => {
     const mutateAsync = vi.fn(async () => {});
     const { result } = renderHook(() =>

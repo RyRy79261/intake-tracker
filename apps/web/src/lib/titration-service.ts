@@ -12,6 +12,7 @@ import { buildAuditEntry } from "@/lib/audit-service";
 import { enqueueInsideTx } from "@/lib/sync-queue";
 import { schedulePush } from "@/lib/sync-engine";
 import { isLive } from "@intake/core/lifecycle";
+import { toLocalDateKey } from "@/lib/date-utils";
 import { updateSyncedInsideTx, softDeleteInsideTx } from "@/lib/synced-update";
 
 // ---------------------------------------------------------------------------
@@ -61,6 +62,47 @@ export async function getTitrationPlanById(id: string): Promise<TitrationPlan | 
 export async function getActiveTitrationPlans(): Promise<TitrationPlan[]> {
   const all = await db.titrationPlans.toArray();
   return all.filter((p) => p.status === "active" && isLive(p));
+}
+
+/**
+ * Whether a planned titration step is due to start: a live draft whose
+ * recommended start date falls on or before `todayKey` (local YYYY-MM-DD).
+ *
+ * A due step is NOT started automatically. The app asks the user to confirm
+ * it (activateTitrationPlan); until then the previous regimen stays in effect.
+ */
+export function isTitrationPlanDue(
+  plan: Pick<TitrationPlan, "status" | "recommendedStartDate" | "deletedAt">,
+  todayKey: string,
+): boolean {
+  return (
+    isLive(plan) &&
+    plan.status === "draft" &&
+    plan.recommendedStartDate != null &&
+    toLocalDateKey(plan.recommendedStartDate) <= todayKey
+  );
+}
+
+/**
+ * Draft plans whose start date has arrived, oldest planned start first. A plan
+ * is only offered while it still has a live pending phase on a live
+ * prescription: once its medication is deleted there is nothing to start.
+ */
+export async function getDueTitrationPlans(todayKey: string): Promise<TitrationPlan[]> {
+  const all = await db.titrationPlans.toArray();
+  const due = all.filter((p) => isTitrationPlanDue(p, todayKey));
+  if (due.length === 0) return [];
+  const liveRx = new Set(
+    (await db.prescriptions.toArray()).filter(isLive).map((rx) => rx.id),
+  );
+  const startable = new Set(
+    (await db.medicationPhases.where("titrationPlanId").anyOf(due.map((p) => p.id)).toArray())
+      .filter((ph) => isLive(ph) && ph.status === "pending" && liveRx.has(ph.prescriptionId))
+      .map((ph) => ph.titrationPlanId),
+  );
+  return due
+    .filter((p) => startable.has(p.id))
+    .sort((a, b) => (a.recommendedStartDate ?? 0) - (b.recommendedStartDate ?? 0));
 }
 
 export async function getPhasesForTitrationPlan(planId: string): Promise<MedicationPhase[]> {

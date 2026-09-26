@@ -294,10 +294,11 @@ export async function undoDeleteSubstanceRecord(
 /**
  * Update a SubstanceRecord, keeping its group's fluid row consistent.
  *
- * `volumeMl` is the drink's fluid, and the group's water IntakeRecord is
- * derived from it. Editing the volume on the substance alone let the two halves
- * of one drink disagree — the substance said 500 ml while hydration still
- * counted 330 — with nothing to reconcile them. Same for `timestamp`: moving
+ * `volumeMl` is the drink's volume, and the group's water IntakeRecord is
+ * derived from it (volume x water content, see logDrink). Editing the volume
+ * on the substance alone let the two halves of one drink disagree — the
+ * substance said 500 ml while hydration still counted 330 — with nothing to
+ * reconcile them. Same for `timestamp`: moving
  * the substance without its water stranded the halves on different days.
  */
 export async function updateSubstanceRecord(
@@ -317,14 +318,19 @@ export async function updateSubstanceRecord(
         const groupId = updates.groupId ?? existing?.groupId;
         if (!groupId) return;
 
-        const waterPatch: Record<string, number> = {};
-        if (updates.volumeMl !== undefined) {
-          waterPatch.amount = Math.round(updates.volumeMl);
-        }
-        if (updates.timestamp !== undefined) {
-          waterPatch.timestamp = updates.timestamp;
-        }
-        if (Object.keys(waterPatch).length === 0) return;
+        // The water row is the drink's water share, not always its whole
+        // volume (a spirit logged at 60% water has a 27 ml row for 45 ml).
+        // So scale it by the change in volume: re-sending the same volume
+        // leaves it alone. With no stored volume to compare against, the
+        // drink is taken to be all water, as before water content existed.
+        const oldVolume = existing?.volumeMl;
+        const newVolume = updates.volumeMl;
+        const volumeChanged = newVolume !== undefined && newVolume !== oldVolume;
+        const scale =
+          volumeChanged && oldVolume !== undefined && oldVolume > 0
+            ? newVolume / oldVolume
+            : null;
+        if (!volumeChanged && updates.timestamp === undefined) return;
 
         const groupIntakes = await db.intakeRecords
           .where("groupId")
@@ -332,6 +338,16 @@ export async function updateSubstanceRecord(
           .toArray();
         for (const intake of groupIntakes) {
           if (intake.type !== "water" || intake.deletedAt !== null) continue;
+          const waterPatch: Record<string, number> = {};
+          if (volumeChanged) {
+            waterPatch.amount = Math.max(
+              1,
+              Math.round(scale !== null ? intake.amount * scale : newVolume),
+            );
+          }
+          if (updates.timestamp !== undefined) {
+            waterPatch.timestamp = updates.timestamp;
+          }
           await db.intakeRecords.update(intake.id, {
             ...waterPatch,
             updatedAt: now,

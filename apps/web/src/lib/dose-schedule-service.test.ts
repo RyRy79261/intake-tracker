@@ -234,6 +234,25 @@ describe("getDailyDoseSchedule", () => {
     expect(slots[0]!.inventory!.brandName).toBe("Lopressor");
   });
 
+  it("never picks a deleted brand as the slot's inventory", async () => {
+    const { rx } = await seedPrescription({ daysOfWeek: [2], dosage: 50 });
+    // A brand deleted on another device can still carry isActive: true. The
+    // "zzz" id sorts after the live item, so a last-wins scan would pick it.
+    await db.inventoryItems.add(
+      makeInventoryItem(rx.id, {
+        id: "zzz-deleted-brand",
+        brandName: "Deleted Brand",
+        strength: 25,
+        isActive: true,
+        deletedAt: REGIMEN_START,
+      }),
+    );
+
+    const slots = await getDailyDoseSchedule(TUESDAY, "UTC");
+    expect(slots[0]!.inventory!.brandName).toBe("Lopressor");
+    expect(slots[0]!.pillsPerDose).toBe(1);
+  });
+
   it("sets inventoryWarning to 'no_inventory' when no inventory exists", async () => {
     const rx = makePrescription({ createdAt: REGIMEN_START });
     const phase = makeMedicationPhase(rx.id, { startDate: REGIMEN_START });

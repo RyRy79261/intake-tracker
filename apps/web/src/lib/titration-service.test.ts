@@ -13,9 +13,13 @@ import {
   cancelTitrationPlan,
   updateTitrationPlan,
   deleteTitrationPlan,
+  getDueTitrationPlans,
+  isTitrationPlanDue,
   type CreateTitrationPlanInput,
 } from "@/lib/titration-service";
 import { getDailyDoseSchedule } from "@/lib/dose-schedule-service";
+import { toLocalDateKey } from "@/lib/date-utils";
+import { getDeviceTimezone } from "@/lib/timezone";
 import {
   makePrescription,
   makeMedicationPhase,
@@ -428,11 +432,10 @@ describe("deleteTitrationPlan", () => {
 // Lifecycle regressions — soft-deleted rows must never drive dosing
 // ===================================================================
 
-// 2023-11-14 (BASE_TS in fixtures) — every fixture prescription exists by then.
-// Today (UTC, matching the "UTC" zone passed below): the schedule resolves
-// each date from the phases live on it, so a fixed past date would predate
-// the titration phases these tests create.
-const TODAY = new Date().toISOString().slice(0, 10);
+// Today in the device zone: the titration services stamp start dates and
+// "today" from the device clock, so querying a UTC date breaks between
+// midnight and the UTC rollover east of UTC.
+const TODAY = toLocalDateKey();
 
 async function seedMaintenance(opts?: {
   unit?: string;
@@ -478,7 +481,7 @@ function singleEntryPlan(
 }
 
 async function slotsFor(rxId: string) {
-  const slots = await getDailyDoseSchedule(TODAY, "UTC");
+  const slots = await getDailyDoseSchedule(TODAY, getDeviceTimezone());
   return slots.filter((s) => s.prescriptionId === rxId);
 }
 
@@ -718,5 +721,105 @@ describe("titration units follow the prescription", () => {
 
     await updateTitrationPlan({ planId: plan.data.id, entries });
     expect((await db.medicationPhases.get(phase!.id))!.unit).toBe("mcg");
+  });
+});
+
+// ===================================================================
+// Start confirmation (owner decision doses-titration-schedule#21):
+// a planned step never auto-activates; the app asks once it is due.
+// ===================================================================
+
+describe("titration start confirmation", () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const deviceZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+  async function seedMaintenance(rxId: string) {
+    const since = Date.now() - 30 * DAY;
+    const phase = makeMedicationPhase(rxId, { id: "maint", createdAt: since, startDate: since });
+    await db.medicationPhases.add(phase);
+    await db.phaseSchedules.add(
+      makePhaseSchedule(phase.id, { id: "maint-sch", dosage: 25, createdAt: since, anchorTimezone: deviceZone }),
+    );
+  }
+
+  function stepInput(rxId: string, recommendedStartDate: number): CreateTitrationPlanInput {
+    return validPlanInput(rxId, {
+      recommendedStartDate,
+      entries: [
+        {
+          prescriptionId: rxId,
+          unit: "mg",
+          schedules: [{ time: "08:00", daysOfWeek: [0, 1, 2, 3, 4, 5, 6], dosage: 50 }],
+        },
+      ],
+    });
+  }
+
+  it("a draft plan whose start date has arrived is due, but stays a draft", async () => {
+    const rxId = await seedPrescription({ createdAt: Date.now() - 30 * DAY });
+    await seedMaintenance(rxId);
+    const created = await createTitrationPlan(stepInput(rxId, Date.now() - 2 * DAY));
+    expect(created.success).toBe(true);
+    if (!created.success) return;
+
+    const due = await getDueTitrationPlans(toLocalDateKey());
+    expect(due.map((p) => p.id)).toEqual([created.data.id]);
+
+    // Nothing was activated: the plan is still a draft, its phase still
+    // pending, and today's schedule still shows the previous regimen.
+    expect((await db.titrationPlans.get(created.data.id))?.status).toBe("draft");
+    const phases = await getPhasesForTitrationPlan(created.data.id);
+    expect(phases.every((p) => p.status === "pending")).toBe(true);
+    const today = await getDailyDoseSchedule(toLocalDateKey());
+    expect(today.map((s) => s.dosageMg)).toEqual([25]);
+  });
+
+  it("a draft plan planned for later is not due yet", async () => {
+    const rxId = await seedPrescription();
+    await createTitrationPlan(stepInput(rxId, Date.now() + 3 * DAY));
+    expect(await getDueTitrationPlans(toLocalDateKey())).toEqual([]);
+  });
+
+  it("confirming (activate) switches today's schedule to the new step", async () => {
+    const rxId = await seedPrescription({ createdAt: Date.now() - 30 * DAY });
+    await seedMaintenance(rxId);
+    const created = await createTitrationPlan(stepInput(rxId, Date.now() - DAY));
+    if (!created.success) throw new Error("create failed");
+
+    await activateTitrationPlan(created.data.id);
+
+    expect(await getDueTitrationPlans(toLocalDateKey())).toEqual([]);
+    const plan = await db.titrationPlans.get(created.data.id);
+    // The planned start date is kept on the plan.
+    expect(plan?.recommendedStartDate).toBe(created.data.recommendedStartDate);
+    const today = await getDailyDoseSchedule(toLocalDateKey());
+    expect(today.map((s) => s.dosageMg)).toEqual([50]);
+  });
+
+  it("a draft plan whose medication was deleted is not offered (nothing left to start)", async () => {
+    const rxId = await seedPrescription({ createdAt: Date.now() - 30 * DAY });
+    await seedMaintenance(rxId);
+    const created = await createTitrationPlan(stepInput(rxId, Date.now() - DAY));
+    if (!created.success) throw new Error("create failed");
+
+    const { deletePrescription } = await import("@/lib/prescription-service");
+    expect((await deletePrescription(rxId)).success).toBe(true);
+
+    expect(await getDueTitrationPlans(toLocalDateKey())).toEqual([]);
+    // The plan itself is left untouched.
+    expect((await db.titrationPlans.get(created.data.id))?.status).toBe("draft");
+  });
+
+  it("isTitrationPlanDue: only live drafts with a start date on or before today", () => {
+    const today = "2026-10-01";
+    const at = (key: string) => new Date(`${key}T09:00:00`).getTime();
+    const base = { deletedAt: null, status: "draft" as const };
+    expect(isTitrationPlanDue({ ...base, recommendedStartDate: at("2026-10-01") }, today)).toBe(true);
+    expect(isTitrationPlanDue({ ...base, recommendedStartDate: at("2026-09-20") }, today)).toBe(true);
+    expect(isTitrationPlanDue({ ...base, recommendedStartDate: at("2026-10-02") }, today)).toBe(false);
+    expect(isTitrationPlanDue({ ...base }, today)).toBe(false);
+    expect(isTitrationPlanDue({ ...base, status: "active", recommendedStartDate: at("2026-09-20") }, today)).toBe(false);
+    expect(isTitrationPlanDue({ ...base, status: "cancelled", recommendedStartDate: at("2026-09-20") }, today)).toBe(false);
+    expect(isTitrationPlanDue({ ...base, deletedAt: 5, recommendedStartDate: at("2026-09-20") }, today)).toBe(false);
   });
 });

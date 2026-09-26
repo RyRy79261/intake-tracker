@@ -223,13 +223,13 @@ export function AiInsightsCard() {
   // in the snapshot the route receives.
   const trackedData = [
     "Water intake",
-    "Salt / sodium intake",
+    "Sodium intake",
     ...(sugarEnabled ? ["Sugar intake"] : []),
     ...(potassiumEnabled ? ["Potassium intake"] : []),
     "Blood pressure readings",
     "Weight readings",
     "Fluid balance (in vs. out)",
-    `Correlations: salt vs. weight${sugarEnabled ? ", sugar vs. weight" : ""}` +
+    `Correlations: sodium vs. weight${sugarEnabled ? ", sugar vs. weight" : ""}` +
       `${potassiumEnabled ? ", potassium vs. weight" : ""}, caffeine & alcohol vs. blood pressure`,
     `Your water goal, sodium limit${sugarEnabled ? ", sugar limit" : ""}` +
       `${potassiumEnabled ? " & potassium target" : ""}`,

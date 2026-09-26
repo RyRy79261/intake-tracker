@@ -16,13 +16,21 @@ import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { RecentEntriesList, InlineEditFormShell } from "@/components/recent-entries-list";
 import { parseIntakeWithAI } from "@/lib/ai-client";
-import { SODIUM_FRACTION } from "@intake/core/sodium";
+import {
+  SODIUM_SOURCE_LABELS,
+  SODIUM_SOURCES,
+  SODIUM_SOURCE_UNITS,
+  isSodiumSource,
+  isSodiumSourceUnit,
+  toSodiumMg,
+  type SodiumSource,
+  type SodiumSourceUnit,
+} from "@intake/core/sodium";
 import { useAuthGate } from "@/components/auth-guard";
 import {
   useAddComposableEntry,
   useSyncEatingGroup,
   fetchEntryGroup,
-  sodiumKindFromSource,
   eatingGroupNutrients,
   type ComposableEntryInput,
 } from "@/hooks/use-composable-entry";
@@ -48,18 +56,78 @@ import {
   formatDateTime,
 } from "@/lib/date-utils";
 import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
+import { waterContentPercentFromAbv } from "@intake/core/alcohol";
 
 const theme = CARD_THEMES.eating;
 
-// ─── Sodium conversion multipliers ─────────────────────────────────
+// ─── Sodium entry ──────────────────────────────────────────────────
+// Salt is not sodium. The field takes an amount of salt, MSG or sodium in mg
+// or g; the record stores the sodium mg (fractions in @intake/core/sodium)
+// plus what was typed, so the entry reads and edits as entered.
 
-type SodiumSource = "sodium" | "salt" | "msg";
+/** Sodium mg (rounded, as stored) for a typed amount, or 0 when blank/invalid. */
+function sodiumMgFromInput(
+  value: string,
+  unit: SodiumSourceUnit,
+  source: SodiumSource,
+): number {
+  const n = value ? parseFloat(value) : 0;
+  return n > 0 ? Math.round(toSodiumMg(n, unit, source)) : 0;
+}
 
-const SODIUM_MULTIPLIERS: Record<SodiumSource, number> = {
-  sodium: 1.0, // direct sodium mg
-  salt: SODIUM_FRACTION, // table salt is ~39.3% sodium (shared with the AI prompts)
-  msg: 0.12, // MSG is ~12% sodium
-};
+function SodiumSourceSelect({
+  value,
+  onChange,
+  ariaLabel,
+  className,
+}: {
+  value: SodiumSource;
+  onChange: (v: SodiumSource) => void;
+  ariaLabel: string;
+  className: string;
+}) {
+  return (
+    <Select value={value} onValueChange={(v) => onChange(v as SodiumSource)}>
+      <SelectTrigger className={className} aria-label={ariaLabel}>
+        <SelectValue placeholder="Source" />
+      </SelectTrigger>
+      <SelectContent>
+        {SODIUM_SOURCES.map((s) => (
+          <SelectItem key={s} value={s}>
+            {SODIUM_SOURCE_LABELS[s]}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+function SodiumUnitSelect({
+  value,
+  onChange,
+  ariaLabel,
+  className,
+}: {
+  value: SodiumSourceUnit;
+  onChange: (v: SodiumSourceUnit) => void;
+  ariaLabel: string;
+  className: string;
+}) {
+  return (
+    <Select value={value} onValueChange={(v) => onChange(v as SodiumSourceUnit)}>
+      <SelectTrigger className={className} aria-label={ariaLabel}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {SODIUM_SOURCE_UNITS.map((u) => (
+          <SelectItem key={u} value={u}>
+            {u}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
 
 export function FoodSection() {
   const { toast } = useToast();
@@ -76,6 +144,7 @@ export function FoodSection() {
   const [detailGrams, setDetailGrams] = useState("");
   const [sodiumMg, setSodiumMg] = useState("");
   const [sodiumSource, setSodiumSource] = useState<SodiumSource>("sodium");
+  const [sodiumUnit, setSodiumUnit] = useState<SodiumSourceUnit>("mg");
   const [sugarG, setSugarG] = useState("");
   const [potassiumMg, setPotassiumMg] = useState("");
   const [waterMl, setWaterMl] = useState("");
@@ -98,10 +167,7 @@ export function FoodSection() {
 
   // ─── Derived sodium calculation ───────────────────────────────────
   const sodiumMgNum = sodiumMg ? parseFloat(sodiumMg) : 0;
-  const calculatedSodiumMg =
-    sodiumMgNum > 0
-      ? Math.round(sodiumMgNum * SODIUM_MULTIPLIERS[sodiumSource])
-      : 0;
+  const calculatedSodiumMg = sodiumMgFromInput(sodiumMg, sodiumUnit, sodiumSource);
 
   // ─── Derived sugar calculation ────────────────────────────────────
   const sugarGNum = sugarG ? parseFloat(sugarG) : 0;
@@ -138,6 +204,11 @@ export function FoodSection() {
   const canSave = hasRecordableValue || hasMealDetail;
   // Only a drink with a volume can go through logDrink.
   const saveAsDrink = parsedDrink !== null && calculatedWaterMl > 0;
+  // For a drink the field holds the drink's full volume (the parse prompt
+  // reports it that way); an alcoholic drink's ethanol is not water, so
+  // logDrink books only the non-alcohol share.
+  const drinkWaterPercent = waterContentPercentFromAbv(parsedDrink?.abvPercent);
+  const drinkWaterMl = Math.max(1, Math.round((calculatedWaterMl * drinkWaterPercent) / 100));
 
   // ─── Recent eating records ────────────────────────────────────────
   const recentRecords = useEatingRecords(5);
@@ -164,6 +235,14 @@ export function FoodSection() {
   const [editGrams, setEditGrams] = useState("");
   const [editSodiumMg, setEditSodiumMg] = useState("");
   const [editSodiumSource, setEditSodiumSource] = useState<SodiumSource>("sodium");
+  const [editSodiumUnit, setEditSodiumUnit] = useState<SodiumSourceUnit>("mg");
+  // The sodium inputs as prefilled. Saving them unchanged leaves the stored
+  // row alone — a legacy row keeps its value and unknown source.
+  const editSodiumPrefillRef = useRef<{
+    value: string;
+    source: SodiumSource;
+    unit: SodiumSourceUnit;
+  }>({ value: "", source: "sodium", unit: "mg" });
   const [editSugarG, setEditSugarG] = useState("");
   const [editPotassiumMg, setEditPotassiumMg] = useState("");
   const [editWaterMl, setEditWaterMl] = useState("");
@@ -189,6 +268,8 @@ export function FoodSection() {
       setEditGrams(record.grams?.toString() || "");
       setEditSodiumMg("");
       setEditSodiumSource("sodium");
+      setEditSodiumUnit("mg");
+      editSodiumPrefillRef.current = { value: "", source: "sodium", unit: "mg" };
       setEditSugarG("");
       setEditPotassiumMg("");
       setEditWaterMl("");
@@ -206,12 +287,26 @@ export function FoodSection() {
           const potassium = nutrients.potassiums[0];
           const water = nutrients.waters[0];
           if (salt) {
-            const kind = sodiumKindFromSource(salt.source);
-            // back-convert stored sodium-mg to the user's input units
-            const multiplier = SODIUM_MULTIPLIERS[kind];
-            const inputValue = Math.round(salt.amount / multiplier);
-            setEditSodiumMg(inputValue.toString());
-            setEditSodiumSource(kind);
+            // Show the entry as typed when the row recorded it; otherwise
+            // (older rows) it is sodium mg with an unknown source — shown as
+            // stored, never back-converted through a guessed fraction.
+            const prefill =
+              // Type guards, not `!== undefined`: a restored backup may carry
+              // explicit nulls for these fields.
+              isSodiumSource(salt.sodiumSource) &&
+              typeof salt.sourceAmount === "number" &&
+              Number.isFinite(salt.sourceAmount) &&
+              isSodiumSourceUnit(salt.sourceUnit)
+                ? {
+                    value: String(salt.sourceAmount),
+                    source: salt.sodiumSource,
+                    unit: salt.sourceUnit,
+                  }
+                : { value: String(salt.amount), source: "sodium" as const, unit: "mg" as const };
+            editSodiumPrefillRef.current = prefill;
+            setEditSodiumMg(prefill.value);
+            setEditSodiumSource(prefill.source);
+            setEditSodiumUnit(prefill.unit);
           }
           if (sugar) {
             setEditSugarG(sugar.amount.toString());
@@ -242,10 +337,12 @@ export function FoodSection() {
       }
       const g = editGrams ? parseInt(editGrams, 10) : undefined;
       const sodiumInput = editSodiumMg ? parseFloat(editSodiumMg) : 0;
-      const calculatedSodiumMg =
-        sodiumInput > 0
-          ? Math.round(sodiumInput * SODIUM_MULTIPLIERS[editSodiumSource])
-          : 0;
+      const calculatedSodiumMg = sodiumMgFromInput(editSodiumMg, editSodiumUnit, editSodiumSource);
+      const prefill = editSodiumPrefillRef.current;
+      const sodiumEdited =
+        editSodiumMg !== prefill.value ||
+        editSodiumSource !== prefill.source ||
+        editSodiumUnit !== prefill.unit;
       const waterInput = editWaterMl ? parseFloat(editWaterMl) : 0;
       const sugarInput = editSugarG ? parseFloat(editSugarG) : 0;
       const potassiumInput = editPotassiumMg ? parseFloat(editPotassiumMg) : 0;
@@ -257,6 +354,9 @@ export function FoodSection() {
         grams: g && g > 0 ? g : undefined,
         sodiumMg: calculatedSodiumMg,
         sodiumKind: editSodiumSource,
+        ...(sodiumEdited && calculatedSodiumMg > 0 && {
+          sodiumEntry: { amount: sodiumInput, unit: editSodiumUnit },
+        }),
         waterMl: waterInput > 0 ? Math.round(waterInput) : 0,
         ...(sugarEnabled && {
           sugarG: sugarInput > 0 ? Math.round(sugarInput) : 0,
@@ -281,6 +381,7 @@ export function FoodSection() {
     setDetailGrams("");
     setSodiumMg("");
     setSodiumSource("sodium");
+    setSodiumUnit("mg");
     setSugarG("");
     setPotassiumMg("");
     setWaterMl("");
@@ -308,6 +409,7 @@ export function FoodSection() {
         v !== null && v !== undefined && v > 0 ? v.toString() : "";
       setSodiumMg(asField(result.valueMg));
       setSodiumSource("sodium");
+      setSodiumUnit("mg");
       setWaterMl(asField(result.water));
       if (sugarEnabled) setSugarG(asField(result.sugarG));
       if (potassiumEnabled) setPotassiumMg(asField(result.potassiumMg));
@@ -360,6 +462,7 @@ export function FoodSection() {
       if (saveAsDrink && parsedDrink) {
         await logDrink({
           volumeMl: calculatedWaterMl,
+          waterContentPercent: drinkWaterPercent,
           description: foodText.trim() || "Drink",
           ...(parsedDrink.caffeineMg !== null && parsedDrink.caffeineMg > 0 && {
             caffeineMg: parsedDrink.caffeineMg,
@@ -367,7 +470,10 @@ export function FoodSection() {
           ...(parsedDrink.abvPercent !== null && parsedDrink.abvPercent > 0 && {
             abvPercent: parsedDrink.abvPercent,
           }),
-          ...(calculatedSodiumMg > 0 && { saltMg: calculatedSodiumMg }),
+          ...(calculatedSodiumMg > 0 && {
+            saltMg: calculatedSodiumMg,
+            sodiumEntry: { source: sodiumSource, amount: sodiumMgNum, unit: sodiumUnit },
+          }),
           ...(sugarEnabled && calculatedSugarG > 0 && { sugarG: calculatedSugarG }),
           ...(potassiumEnabled && calculatedPotassiumMg > 0 && {
             potassiumMg: calculatedPotassiumMg,
@@ -388,6 +494,9 @@ export function FoodSection() {
           type: "salt",
           amount: calculatedSodiumMg,
           source: `manual:${sodiumSource}`,
+          sodiumSource,
+          sourceAmount: sodiumMgNum,
+          sourceUnit: sodiumUnit,
         });
       }
       if (sugarEnabled && calculatedSugarG > 0) {
@@ -460,12 +569,15 @@ export function FoodSection() {
     foodText,
     detailGrams,
     calculatedSodiumMg,
+    sodiumMgNum,
     sodiumSource,
+    sodiumUnit,
     calculatedSugarG,
     calculatedPotassiumMg,
     sugarEnabled,
     potassiumEnabled,
     calculatedWaterMl,
+    drinkWaterPercent,
     aiPopulated,
     showTimeInput,
     customTime,
@@ -548,26 +660,26 @@ export function FoodSection() {
               id="eating-sodium"
               type="number"
               min="0"
-              placeholder="mg"
+              step="any"
+              placeholder={sodiumUnit}
               value={sodiumMg}
               onChange={(e) => setSodiumMg(e.target.value)}
-              className="flex-1"
+              className="flex-1 min-w-0"
             />
-            <Select
+            <SodiumSourceSelect
               value={sodiumSource}
-              onValueChange={(v) => setSodiumSource(v as SodiumSource)}
-            >
-              <SelectTrigger className="w-[120px]" aria-label="Measurement source">
-                <SelectValue placeholder="Source" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="sodium">Sodium</SelectItem>
-                <SelectItem value="salt">Salt</SelectItem>
-                <SelectItem value="msg">MSG</SelectItem>
-              </SelectContent>
-            </Select>
+              onChange={setSodiumSource}
+              ariaLabel="Measured as"
+              className="w-[100px]"
+            />
+            <SodiumUnitSelect
+              value={sodiumUnit}
+              onChange={setSodiumUnit}
+              ariaLabel="Unit"
+              className="w-[68px]"
+            />
           </div>
-          {calculatedSodiumMg > 0 && sodiumSource !== "sodium" && (
+          {calculatedSodiumMg > 0 && (sodiumSource !== "sodium" || sodiumUnit !== "mg") && (
             <p className="text-xs text-muted-foreground">
               = {calculatedSodiumMg}mg sodium
             </p>
@@ -658,7 +770,7 @@ export function FoodSection() {
               ? ` with ${Math.round(parsedDrink.caffeineMg)} mg caffeine`
               : ""}
             {parsedDrink.abvPercent !== null && parsedDrink.abvPercent > 0
-              ? ` (${parsedDrink.abvPercent}% ABV)`
+              ? ` (${parsedDrink.abvPercent}% ABV, ${drinkWaterMl} ml counted as water)`
               : ""}
             .
           </p>
@@ -696,7 +808,7 @@ export function FoodSection() {
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0">
                   {sodium ? (
                     <span className="text-xs font-medium text-orange-600 dark:text-orange-400">
-                      {sodium}mg
+                      {sodium}mg Na
                     </span>
                   ) : null}
                   {sugar ? (
@@ -744,24 +856,24 @@ export function FoodSection() {
                   id="edit-eating-sodium"
                   type="number"
                   min="0"
-                  placeholder="mg"
+                  step="any"
+                  placeholder={editSodiumUnit}
                   value={editSodiumMg}
                   onChange={(e) => setEditSodiumMg(e.target.value)}
-                  className="h-8 text-sm flex-1"
+                  className="h-8 text-sm flex-1 min-w-0"
                 />
-                <Select
+                <SodiumSourceSelect
                   value={editSodiumSource}
-                  onValueChange={(v) => setEditSodiumSource(v as SodiumSource)}
-                >
-                  <SelectTrigger className="h-8 text-sm w-[100px]" aria-label="Measurement source">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="sodium">Sodium</SelectItem>
-                    <SelectItem value="salt">Salt</SelectItem>
-                    <SelectItem value="msg">MSG</SelectItem>
-                  </SelectContent>
-                </Select>
+                  onChange={setEditSodiumSource}
+                  ariaLabel="Edit measured as"
+                  className="h-8 text-sm w-[90px]"
+                />
+                <SodiumUnitSelect
+                  value={editSodiumUnit}
+                  onChange={setEditSodiumUnit}
+                  ariaLabel="Edit unit"
+                  className="h-8 text-sm w-[64px]"
+                />
               </div>
             </div>
             {sugarEnabled && (

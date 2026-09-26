@@ -31,8 +31,10 @@ describe("CorrelationsTab", () => {
     await renderWithFixtures(<CorrelationsTab range={RANGE} />);
 
     expect(
-      await screen.findByText("Weight vs Salt Intake"),
+      await screen.findByText("Weight vs Sodium Intake"),
     ).toBeInTheDocument();
+    // The tracked quantity is sodium mg; "salt" (NaCl) would misstate it.
+    expect(screen.queryByText(/Salt/)).not.toBeInTheDocument();
     expect(screen.getByText("Weight vs Sugar Intake")).toBeInTheDocument();
     expect(screen.getByText("Caffeine vs Blood Pressure")).toBeInTheDocument();
     expect(screen.getByText("Alcohol vs Blood Pressure")).toBeInTheDocument();

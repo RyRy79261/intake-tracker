@@ -1,5 +1,10 @@
 import { db } from "@/lib/db";
-import type { IntakeRecord, SubstanceRecord } from "@/lib/db";
+import type {
+  IntakeRecord,
+  SubstanceRecord,
+  SodiumSource,
+  SodiumSourceUnit,
+} from "@/lib/db";
 import { ok, err } from "@intake/core/service";
 import type { ServiceResult } from "@intake/types/service";
 import { syncFields } from "@/lib/utils";
@@ -10,8 +15,9 @@ import { standardDrinksFromAbv } from "@intake/core/alcohol";
 /** Everything needed to record one drink. See {@link logDrink}. */
 export interface LogDrinkInput {
   /**
-   * Fluid volume of the drink in ml — the single source of truth for
-   * hydration. Callers never pass their own water intake alongside this.
+   * Volume of the drink in ml. The water row is derived from it (scaled by
+   * `waterContentPercent`); callers never pass their own water intake
+   * alongside this.
    */
   volumeMl: number;
   /** User-facing name of the drink ("Latte", "Pint of lager"). */
@@ -22,10 +28,24 @@ export interface LogDrinkInput {
   abvPercent?: number;
   /** Sodium dissolved in the drink, in mg. */
   saltMg?: number;
+  /**
+   * What `saltMg` was typed as (e.g. 2 g of salt), stored on the sodium row
+   * beside the converted mg. Omit when only sodium mg is known (presets,
+   * voice): the row then reads as sodium with an unknown source.
+   */
+  sodiumEntry?: { source: SodiumSource; amount: number; unit: SodiumSourceUnit };
   /** Total sugars in the drink, in grams. */
   sugarG?: number;
   /** Potassium in the drink, in mg. */
   potassiumMg?: number;
+  /**
+   * Share of the drink's volume that counts as water, in percent (0 < p ≤
+   * 100). Omit for 100%. Spirits are ~60%: their ethanol is not fluid, so a
+   * 45 ml measure hydrates ~27 ml. Only the water row is reduced — the
+   * substances keep the full drink volume, which is what the alcohol dose is
+   * derived from.
+   */
+  waterContentPercent?: number;
   /** `source` tag written onto the derived water IntakeRecord. */
   waterSource?: string;
   /** Provenance of the whole group (e.g. `preset:<id>`, `voice_drink`). */
@@ -70,7 +90,8 @@ const SODIUM_SOURCE = "manual:sodium";
  * surface must go through here.
  *
  * Invariants guaranteed by this function:
- *  1. Exactly one water IntakeRecord per call, with `amount === volumeMl`.
+ *  1. Exactly one water IntakeRecord per call, with `amount` = `volumeMl` ×
+ *     `waterContentPercent` (100% when omitted), and never below 1 ml.
  *  2. Every record it writes shares one non-null `groupId`, so the group is
  *     editable and deletable as a unit by the reconcilers.
  *  3. `amountStandardDrinks` is derived here from `abvPercent` + `volumeMl`,
@@ -86,6 +107,10 @@ export async function logDrink(
   if (!Number.isFinite(input.volumeMl) || input.volumeMl <= 0) {
     return err("A drink needs a positive volume in ml");
   }
+  const waterPercent = input.waterContentPercent ?? 100;
+  if (!Number.isFinite(waterPercent) || waterPercent <= 0 || waterPercent > 100) {
+    return err("A drink's water content must be above 0% and at most 100%");
+  }
 
   try {
     const groupId = crypto.randomUUID();
@@ -95,6 +120,7 @@ export async function logDrink(
     // rejected by the push validator and silently dropped by the sync engine,
     // so round at the only place that mints these rows.
     const volumeMl = Math.round(input.volumeMl);
+    const waterMl = Math.max(1, Math.round((input.volumeMl * waterPercent) / 100));
     const intakeIds: string[] = [];
     const substanceIds: string[] = [];
     const waterIntakeId = crypto.randomUUID();
@@ -107,7 +133,7 @@ export async function logDrink(
         const water: IntakeRecord = {
           id: waterIntakeId,
           type: "water",
-          amount: volumeMl,
+          amount: waterMl,
           timestamp: ts,
           source: input.waterSource ?? "drink",
           note: input.description,
@@ -124,7 +150,7 @@ export async function logDrink(
 
         // ── Dissolved solutes ──
         // These never displace fluid volume: the water record above is the
-        // full drink volume regardless of what is dissolved in it.
+        // drink volume × water content regardless of what is dissolved in it.
         const solutes: Array<{
           type: "salt" | "sugar" | "potassium";
           amount: number;
@@ -153,14 +179,21 @@ export async function logDrink(
             source: candidate.source,
           });
         }
+        const entry = input.sodiumEntry;
         for (const solute of solutes) {
           const id = crypto.randomUUID();
+          const sodiumEntry = solute.type === "salt" ? entry : undefined;
           const record: IntakeRecord = {
             id,
             type: solute.type,
             amount: solute.amount,
             timestamp: ts,
-            source: solute.source,
+            source: sodiumEntry ? `manual:${sodiumEntry.source}` : solute.source,
+            ...(sodiumEntry && {
+              sodiumSource: sodiumEntry.source,
+              sourceAmount: sodiumEntry.amount,
+              sourceUnit: sodiumEntry.unit,
+            }),
             groupId,
             ...(input.groupSource !== undefined && { groupSource: input.groupSource }),
             ...fields,

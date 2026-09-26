@@ -91,7 +91,7 @@ export const queryRegistry: QueryDescriptor[] = [
     id: "adherence_rate",
     name: "Medication Adherence",
     description:
-      "Medication adherence rate as a ratio of taken vs scheduled doses, with daily breakdown. Optionally filtered by prescription.",
+      "Medication adherence rate as a ratio of taken vs scheduled doses, with taken, skipped and missed counts and a daily breakdown. A scheduled dose on a past day with nothing logged is missed; today's outstanding doses are not counted yet. Optionally filtered by prescription.",
     category: "medication",
     parameters: AdherenceParamsSchema,
     execute: async (params) => {
@@ -188,7 +188,7 @@ export const queryRegistry: QueryDescriptor[] = [
     id: "custom_correlation",
     name: "Custom Domain Correlation",
     description:
-      "Pearson correlation between any two health domains with optional lag. Each domain is reduced to one value per day: intake, substance and event domains are summed into a daily total, weight and BP readings are averaged. Supports all tracked domains: water, salt, sugar, potassium, weight, bp, eating, urination, defecation, caffeine, alcohol, medication.",
+      "Pearson correlation between any two health domains with optional lag. Each domain is reduced to one value per day: intake, substance and event domains are summed into a daily total, weight and BP readings are averaged. Supports all tracked domains: water, salt (sodium mg), sugar, potassium, weight, bp, eating, urination, defecation, caffeine, alcohol, medication.",
     category: "custom",
     parameters: CorrelationParamsSchema,
     execute: async (params) => {

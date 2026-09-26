@@ -13,6 +13,7 @@ import { useAddUrination } from "@/hooks/use-urination-queries";
 import { useAddDefecation } from "@/hooks/use-defecation-queries";
 import { useAddSubstance } from "@/hooks/use-substance-queries";
 import { useLogDrink } from "@/hooks/use-drink-log";
+import { waterContentPercentFromAbv } from "@intake/core/alcohol";
 import { useAddComposableEntry, type ComposableEntryInput } from "@/hooks/use-composable-entry";
 import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import type { VoiceParsedItem, VoiceParseResponse } from "@/lib/voice-types";
@@ -407,6 +408,9 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
             volumeMl: item.volumeMl,
             description: item.description,
             abvPercent: item.abvPercent,
+            // No measured water content from voice: book the non-alcohol
+            // share as water (a 40% spirit hydrates 60% of its volume).
+            waterContentPercent: waterContentPercentFromAbv(item.abvPercent),
             ...(item.sugarG !== undefined && sugarEnabled && { sugarG: item.sugarG }),
             ...(item.sodiumMg !== undefined && { saltMg: item.sodiumMg }),
             ...(item.potassiumMg !== undefined &&

@@ -42,6 +42,12 @@ type CheckParams =
 
 // --- useInteractionCheck ---
 
+/**
+ * Client-side ceiling for one interaction check: the route's maxDuration
+ * (60 s). Its own deadline (50 s) returns a JSON 504 before this fires.
+ */
+const INTERACTION_CHECK_TIMEOUT_MS = 60_000;
+
 export function useInteractionCheck() {
   const [data, setData] = useState<InteractionResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -91,9 +97,11 @@ export function useInteractionCheck() {
     const controller = new AbortController();
     abortRef.current = controller;
 
-    // The 15s abort timer must not start while the sign-in modal is open;
-    // arm it only once aiFetch resolves with an actual Response.
-    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    // Armed before the request, so it covers the whole round trip: a timer
+    // started only once headers arrived never fired for a request the server
+    // did not answer. The route answers a slow model with a JSON 504 at its
+    // own 50 s deadline, so this only catches a request that got no answer.
+    const timeoutId = setTimeout(() => controller.abort(), INTERACTION_CHECK_TIMEOUT_MS);
 
     setIsLoading(true);
     setError(null);
@@ -113,8 +121,6 @@ export function useInteractionCheck() {
         setIsLoading(false);
         return null;
       }
-
-      timeoutId = setTimeout(() => controller.abort(), 15000);
 
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
@@ -144,7 +150,7 @@ export function useInteractionCheck() {
       setIsLoading(false);
       return null;
     } finally {
-      if (timeoutId !== null) clearTimeout(timeoutId);
+      clearTimeout(timeoutId);
     }
   }, []);
 

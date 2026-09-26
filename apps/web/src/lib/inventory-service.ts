@@ -323,22 +323,41 @@ export async function archiveInventoryItem(
  * all inside one rw transaction (no read-modify-write race). Returns the new
  * derived stock.
  */
+/** Slack for an "occurred at" time taken from a date picker a moment ago. */
+const FUTURE_OCCURRED_AT_GRACE_MS = 60 * 1000;
+
+/**
+ * Add a stock movement. `occurredAt` backdates it (a refill collected
+ * earlier); it defaults to now and may not lie in the future. Only the
+ * transaction's `timestamp` is backdated: stock is the sum of amounts, so the
+ * date never changes it, and the sync metadata still records the write time.
+ */
 export async function adjustStock(
   inventoryItemId: string,
   delta: number,
   note?: string,
   type?: "refill" | "consumed" | "adjusted",
+  occurredAt?: number,
 ): Promise<ServiceResult<number>> {
   try {
     const txType = type ?? (delta > 0 ? "refill" : "consumed");
     assertValidAmount(txType, delta);
     const now = Date.now();
+    if (occurredAt !== undefined) {
+      if (!Number.isFinite(occurredAt)) throw new InventoryRuleError("Invalid date");
+      if (occurredAt > now + FUTURE_OCCURRED_AT_GRACE_MS) {
+        throw new InventoryRuleError("A stock change cannot be dated in the future");
+      }
+    }
     let newStock = 0;
 
     await db.transaction("rw", [db.inventoryItems, db.inventoryTransactions, db.auditLogs, db._syncQueue], async () => {
       const item = await getItemOrThrow(inventoryItemId);
 
-      const transaction = buildTransaction(inventoryItemId, delta, txType, now, note);
+      const transaction = {
+        ...buildTransaction(inventoryItemId, delta, txType, now, note),
+        timestamp: occurredAt ?? now,
+      };
       await db.inventoryTransactions.add(transaction);
       await enqueueInsideTx("inventoryTransactions", transaction.id, "upsert");
 

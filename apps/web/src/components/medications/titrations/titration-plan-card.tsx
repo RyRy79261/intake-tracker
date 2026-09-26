@@ -31,14 +31,16 @@ import {
   useCancelTitrationPlan,
   useCompleteTitrationPlan,
   useDeleteTitrationPlan,
+  useInventoryForPrescription,
   usePhasesForTitrationPlan,
   usePrescriptions,
   useSchedulesForPhase,
 } from "@/hooks/use-medication-queries";
+import { findActiveBrand } from "@/lib/dose-preview";
 import type { MedicationPhase, TitrationPlan } from "@/lib/db";
 import { cn } from "@/lib/utils";
 import { DAY_LABELS_LONG } from "@/components/medications/titrations/types";
-import { isCombo, splitDose, formatCompoundShort } from "@intake/core/compound";
+import { formatComboDose } from "@intake/core/compound";
 
 export function TitrationPlanCard({
   plan, onEdit,
@@ -286,7 +288,12 @@ function PhaseEntryRow({ phase }: { phase: MedicationPhase }) {
   const prescriptions = usePrescriptions();
   const schedules = useSchedulesForPhase(phase.id);
 
+  const inventoryItems = useInventoryForPrescription(phase.prescriptionId);
+
   const rx = prescriptions.find((p) => p.id === phase.prescriptionId);
+  // Combination doses are labelled from the active brand's tablets; with no
+  // combo brand stocked the summed dose is shown.
+  const activeBrand = findActiveBrand(inventoryItems);
 
   return (
     <div className="p-2.5 rounded-lg bg-muted/30 border border-border/40">
@@ -312,9 +319,7 @@ function PhaseEntryRow({ phase }: { phase: MedicationPhase }) {
               <Clock className="w-3 h-3" />
               <span>{s.time}</span>
               <span className="font-medium text-foreground">
-                {isCombo(rx)
-                  ? formatCompoundShort(splitDose(s.dosage, rx?.compounds), phase.unit)
-                  : `${s.dosage}${phase.unit}`}
+                {formatComboDose(s.dosage, phase.unit, activeBrand)}
               </span>
               {s.daysOfWeek.length < 7 && (
                 <span className="text-[10px]">

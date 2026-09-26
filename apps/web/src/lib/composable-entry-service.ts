@@ -1,5 +1,11 @@
 import { db } from "@/lib/db";
-import type { IntakeRecord, EatingRecord, SubstanceRecord } from "@/lib/db";
+import type {
+  IntakeRecord,
+  EatingRecord,
+  SubstanceRecord,
+  SodiumSource,
+  SodiumSourceUnit,
+} from "@/lib/db";
 import { ok, err } from "@intake/core/service";
 import type { ServiceResult } from "@intake/types/service";
 import { syncFields } from "@/lib/utils";
@@ -15,7 +21,16 @@ const COMPOSABLE_TABLES = [db.intakeRecords, db.eatingRecords, db.substanceRecor
 
 export interface ComposableEntryInput {
   eating?: { note?: string; grams?: number };
-  intakes?: Array<{ type: "water" | "salt" | "sugar" | "potassium"; amount: number; source?: string; note?: string }>;
+  intakes?: Array<{
+    type: "water" | "salt" | "sugar" | "potassium";
+    amount: number;
+    source?: string;
+    note?: string;
+    /** Sodium rows only: the substance and amount the user typed. */
+    sodiumSource?: SodiumSource;
+    sourceAmount?: number;
+    sourceUnit?: SodiumSourceUnit;
+  }>;
   substance?: {
     type: "caffeine" | "alcohol";
     amountMg?: number;
@@ -101,6 +116,15 @@ export async function addComposableEntry(
             source: intake.source ?? "composable",
             groupId,
             ...(intake.note !== undefined && { note: intake.note }),
+            ...(intake.type === "salt" && intake.sodiumSource !== undefined && {
+              sodiumSource: intake.sodiumSource,
+            }),
+            ...(intake.type === "salt" && intake.sourceAmount !== undefined && {
+              sourceAmount: intake.sourceAmount,
+            }),
+            ...(intake.type === "salt" && intake.sourceUnit !== undefined && {
+              sourceUnit: intake.sourceUnit,
+            }),
             ...(input.groupSource !== undefined && { groupSource: input.groupSource }),
             ...fields,
           };
@@ -454,53 +478,9 @@ export async function getEntryGroup(
   };
 }
 
-// ─── deleteSingleGroupRecord ──────────────────────────────────────────
-
-export async function deleteSingleGroupRecord(
-  table: RecordTable,
-  id: string,
-): Promise<ServiceResult<{ table: RecordTable; id: string }>> {
-  try {
-    const now = Date.now();
-    const dexieTable = db[table];
-    await db.transaction("rw", [dexieTable, db._syncQueue], async () => {
-      // Dexie's update resolves 0 for a missing id; don't queue a sync op for
-      // a row that doesn't exist.
-      const changed = await dexieTable.update(id, { deletedAt: now, updatedAt: now });
-      if (changed === 0) throw new Error("Record not found");
-      await enqueueInsideTx(table, id, "upsert");
-    });
-    schedulePush();
-    return ok({ table, id });
-  } catch (e) {
-    return err("Failed to delete single group record", e);
-  }
-}
-
-// ─── undoDeleteSingleRecord ───────────────────────────────────────────
-
-export async function undoDeleteSingleRecord(
-  table: RecordTable,
-  id: string,
-): Promise<ServiceResult<{ table: RecordTable; id: string }>> {
-  try {
-    const now = Date.now();
-    const dexieTable = db[table];
-    await db.transaction("rw", [dexieTable, db._syncQueue], async () => {
-      const changed = await dexieTable.update(id, { deletedAt: null, updatedAt: now });
-      if (changed === 0) throw new Error("Record not found");
-      await enqueueInsideTx(table, id, "upsert");
-    });
-    schedulePush();
-    return ok({ table, id });
-  } catch (e) {
-    return err("Failed to undo delete single record", e);
-  }
-}
-
 // ─── syncEatingGroup ──────────────────────────────────────────────────
 
-export type SodiumKind = "sodium" | "salt" | "msg";
+export type SodiumKind = SodiumSource;
 
 const FOOD_WATER_SOURCE = "manual:food_water_content";
 const SUGAR_SOURCE = "manual:sugar";
@@ -551,6 +531,13 @@ export async function syncEatingGroup(
     grams: number | undefined;
     sodiumMg: number;
     sodiumKind: SodiumKind;
+    /**
+     * The amount/unit of `sodiumKind` the user typed (e.g. 2 g of salt), stored
+     * beside the converted `sodiumMg`. Omit when the sodium field was not
+     * edited: an unchanged row then keeps its value, source tag and any
+     * recorded source; a changed mg without an entry drops the stale source.
+     */
+    sodiumEntry?: { amount: number; unit: SodiumSourceUnit };
     waterMl: number;
     /** `undefined` ⇒ leave any existing linked sugar record untouched
      *  (used when the optional tracker is disabled). `0` ⇒ soft-delete. */
@@ -631,14 +618,34 @@ export async function syncEatingGroup(
       const groupSource = eating.groupSource ?? "manual_food_entry";
 
       // ── Sodium intake ──
+      const entry = patch.sodiumEntry;
+      const entryFields = entry
+        ? {
+            sodiumSource: patch.sodiumKind,
+            sourceAmount: entry.amount,
+            sourceUnit: entry.unit,
+          }
+        : undefined;
       if (patch.sodiumMg > 0) {
         if (existingSalt) {
-          await patchIntake(existingSalt.id, {
+          const sodiumUpdates: Record<string, unknown> = {
             amount: patch.sodiumMg,
-            source: sodiumSource,
             timestamp: patch.timestamp,
             updatedAt: now,
-          });
+          };
+          if (entryFields) {
+            sodiumUpdates.source = sodiumSource;
+            Object.assign(sodiumUpdates, entryFields);
+          } else if (existingSalt.amount !== patch.sodiumMg) {
+            // A new mg with no typed entry: whatever was recorded no longer
+            // describes this value. Clearing (never rewriting) keeps the row
+            // honest; the push sends null for the removed keys.
+            sodiumUpdates.source = sodiumSource;
+            sodiumUpdates.sodiumSource = undefined;
+            sodiumUpdates.sourceAmount = undefined;
+            sodiumUpdates.sourceUnit = undefined;
+          }
+          await patchIntake(existingSalt.id, sodiumUpdates);
         } else {
           const record: IntakeRecord = {
             id: crypto.randomUUID(),
@@ -646,6 +653,7 @@ export async function syncEatingGroup(
             amount: patch.sodiumMg,
             timestamp: patch.timestamp,
             source: sodiumSource,
+            ...entryFields,
             groupId,
             groupSource,
             ...fields,
@@ -818,15 +826,22 @@ export function parseSodiumKindFromSource(source: string | undefined): SodiumKin
  *     - `0` or negative ⇒ soft-delete any existing linked record of that
  *       kind.
  *     - `>0` ⇒ upsert.
- * - `volumeMl` keeps the substance records' volume in sync with the edited
- *   IntakeRecord amount; for alcohol it also drives the derived
- *   `amountStandardDrinks` value.
+ * - `waterMl` is the edited water row's amount and `previousWaterMl` what it
+ *   was before the edit. The drink's volume lives on its substance records
+ *   and is NOT the water amount: a spirit logged at 60% water has a 27 ml
+ *   water row but a 45 ml alcohol record. So the drink volume is only scaled
+ *   by `waterMl / previousWaterMl` — a time-only edit leaves it (and the
+ *   derived `amountStandardDrinks`) exactly as it was. With no
+ *   `previousWaterMl`, or no stored substance volume, the drink is taken to
+ *   be all water (drink volume = `waterMl`), as every drink logged before
+ *   water content existed was.
  */
 export async function syncLiquidEntrySubstances(
   intakeId: string,
   patch: {
     timestamp: number;
-    volumeMl: number;
+    waterMl: number;
+    previousWaterMl?: number;
     description?: string;
     caffeineMg: number | null;
     alcoholAbv: number | null;
@@ -885,6 +900,25 @@ export async function syncLiquidEntrySubstances(
         const groupSource = intake.groupSource;
         const description = patch.description?.trim() || undefined;
 
+        // Drink volume, kept apart from the water amount (see the doc above).
+        const scale =
+          patch.previousWaterMl !== undefined && patch.previousWaterMl > 0
+            ? patch.waterMl / patch.previousWaterMl
+            : null;
+        const scaledVolume = (stored: number | undefined): number =>
+          scale !== null && stored !== undefined
+            ? scale === 1
+              ? stored
+              : Math.round(stored * scale)
+            : patch.waterMl;
+        // A substance added by this edit takes the drink volume of a live
+        // sibling that has one, so a spirit's new caffeine is not booked
+        // against its (smaller) water amount.
+        const siblingVolume = groupSubstances.find(
+          (s) => s.deletedAt === null && s.volumeMl !== undefined,
+        )?.volumeMl;
+        const newSubstanceVolume = scaledVolume(siblingVolume);
+
         // ── Caffeine ──
         if (patch.caffeineMg !== null) {
           const existingCaffeines = groupSubstances.filter(
@@ -901,7 +935,7 @@ export async function syncLiquidEntrySubstances(
               };
               if (description !== undefined) updates.description = description;
               if (existingCaffeine.volumeMl !== undefined) {
-                updates.volumeMl = patch.volumeMl;
+                updates.volumeMl = scaledVolume(existingCaffeine.volumeMl);
               }
               await db.substanceRecords.update(existingCaffeine.id, updates);
               await enqueueInsideTx("substanceRecords", existingCaffeine.id, "upsert");
@@ -910,7 +944,7 @@ export async function syncLiquidEntrySubstances(
                 id: crypto.randomUUID(),
                 type: "caffeine",
                 amountMg,
-                volumeMl: patch.volumeMl,
+                volumeMl: newSubstanceVolume,
                 description: description ?? "Drink",
                 source: "standalone",
                 timestamp: patch.timestamp,
@@ -945,8 +979,11 @@ export async function syncLiquidEntrySubstances(
           const [existingAlcohol, ...extraAlcohols] = existingAlcohols;
           if (patch.alcoholAbv > 0) {
             const abvPercent = patch.alcoholAbv;
+            const drinkVolume = existingAlcohol
+              ? scaledVolume(existingAlcohol.volumeMl)
+              : newSubstanceVolume;
             const amountStandardDrinks = parseFloat(
-              standardDrinksFromAbv(abvPercent, patch.volumeMl).toFixed(2),
+              standardDrinksFromAbv(abvPercent, drinkVolume).toFixed(2),
             );
             if (existingAlcohol) {
               const updates: Partial<SubstanceRecord> = {
@@ -957,7 +994,7 @@ export async function syncLiquidEntrySubstances(
               };
               if (description !== undefined) updates.description = description;
               if (existingAlcohol.volumeMl !== undefined) {
-                updates.volumeMl = patch.volumeMl;
+                updates.volumeMl = drinkVolume;
               }
               await db.substanceRecords.update(existingAlcohol.id, updates);
               await enqueueInsideTx("substanceRecords", existingAlcohol.id, "upsert");
@@ -967,7 +1004,7 @@ export async function syncLiquidEntrySubstances(
                 type: "alcohol",
                 abvPercent,
                 amountStandardDrinks,
-                volumeMl: patch.volumeMl,
+                volumeMl: drinkVolume,
                 description: description ?? "Drink",
                 source: "standalone",
                 timestamp: patch.timestamp,
@@ -1053,14 +1090,4 @@ export async function syncLiquidEntrySubstances(
   } catch (e) {
     return err("Failed to sync liquid entry substances", e);
   }
-}
-
-// ─── recalculateFromCurrentValues (stub) ──────────────────────────────
-
-export async function recalculateFromCurrentValues(
-  _groupId: string,
-): Promise<ServiceResult<void>> {
-  return err(
-    "Not implemented — deferred to Phase 13/14. Requires preset data and recalculation logic not yet available.",
-  );
 }

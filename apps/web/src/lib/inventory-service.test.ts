@@ -426,6 +426,50 @@ describe("deleteInventoryItem", () => {
   });
 });
 
+describe("adjustStock backdating (gap-inventory-refill-ui-flows#10)", () => {
+  async function seedItem() {
+    const rx = makePrescription();
+    const item = makeInventoryItem(rx.id, { currentStock: 10 });
+    await db.prescriptions.add(rx);
+    await db.inventoryItems.add(item);
+    await db.inventoryTransactions.add(makeInventoryTransaction(item.id, { amount: 10 }));
+    return item;
+  }
+
+  it("stamps a refill with the date it was collected", async () => {
+    const item = await seedItem();
+    const collected = Date.now() - 3 * 24 * 60 * 60 * 1000;
+
+    const result = await adjustStock(item.id, 28, undefined, "refill", collected);
+
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data).toBe(38);
+    const refill = (await db.inventoryTransactions.where("inventoryItemId").equals(item.id).toArray())
+      .find((t) => t.type === "refill" && t.amount === 28);
+    expect(refill!.timestamp).toBe(collected);
+    // Sync metadata still records when the row was written.
+    expect(refill!.createdAt).toBeGreaterThan(collected);
+  });
+
+  it("rejects a refill dated in the future", async () => {
+    const item = await seedItem();
+
+    const result = await adjustStock(
+      item.id, 28, undefined, "refill", Date.now() + 2 * 24 * 60 * 60 * 1000,
+    );
+
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error).toMatch(/future/i);
+    expect(await db.inventoryTransactions.where("inventoryItemId").equals(item.id).count()).toBe(1);
+  });
+
+  it("rejects a non-finite date", async () => {
+    const item = await seedItem();
+    const result = await adjustStock(item.id, 28, undefined, "refill", NaN);
+    expect(result.success).toBe(false);
+  });
+});
+
 describe("adjustStock", () => {
   it("returns an error when the inventory item does not exist", async () => {
     const result = await adjustStock("missing-id", 5);

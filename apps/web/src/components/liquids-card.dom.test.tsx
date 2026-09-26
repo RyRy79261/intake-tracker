@@ -2,12 +2,24 @@
 import { describe, it, expect, vi } from "vitest";
 import { act, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type * as ToastModule from "@intake/ui/use-toast";
 
 // PresetTab (rendered inside the card) gates its AI lookup on useAuthGate;
 // open the gate so the card renders its full UI without a real session.
 vi.mock("@/components/auth-guard", () => ({
   useAuthGate: () => true,
 }));
+
+// No <Toaster> is mounted in these tests; capture toasts to assert on them.
+const toastMock = vi.hoisted(() => vi.fn());
+vi.mock("@intake/ui/use-toast", async (importOriginal) => {
+  const actual = await importOriginal<typeof ToastModule>();
+  return {
+    ...actual,
+    toast: toastMock,
+    useToast: () => ({ ...actual.useToast(), toast: toastMock }),
+  };
+});
 
 import { LiquidsCard } from "@/components/liquids-card";
 import { renderWithFixtures } from "@/__tests__/react-test-utils";
@@ -121,6 +133,126 @@ describe("LiquidsCard", () => {
     });
     const live = (await db.substanceRecords.toArray()).filter((r) => r.deletedAt === null);
     expect(live).toHaveLength(0);
+  });
+
+  // ai-routes-models#9: a spirit's water row is smaller than the drink. The
+  // edit form used to send the water amount as the drink volume, so a
+  // time-only edit cut the alcohol record to the water amount.
+  it("keeps a spirit's drink volume and standard drinks through a time-only edit", async () => {
+    const user = userEvent.setup();
+    const drink = await logDrink({
+      volumeMl: 45,
+      description: "Vodka",
+      abvPercent: 40,
+      waterContentPercent: 60,
+      waterSource: "preset:default-spirit",
+    });
+    if (!drink.success) throw new Error("logDrink failed");
+    const before = (await db.substanceRecords.get(drink.data.substanceIds[0]!))!;
+
+    await renderWithFixtures(<LiquidsCard />);
+    await user.click(await recentEntry("27ml"));
+    const abv = (await screen.findByLabelText(/Alcohol \(% ABV\)/)) as HTMLInputElement;
+    await waitFor(() => expect(abv.value).toBe("40"));
+
+    const earlier = timestampToDateTimeLocal(Date.now() - 3_600_000);
+    fireEvent.change(screen.getByLabelText(/Date and time/), { target: { value: earlier } });
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    const expected = dateTimeLocalToTimestamp(earlier);
+    await waitFor(async () => {
+      expect((await db.substanceRecords.get(before.id))?.timestamp).toBe(expected);
+    });
+    const after = (await db.substanceRecords.get(before.id))!;
+    expect(after.volumeMl).toBe(45);
+    expect(after.amountStandardDrinks).toBe(before.amountStandardDrinks);
+    expect((await db.intakeRecords.get(drink.data.waterIntakeId))?.amount).toBe(27);
+  });
+
+  // liquids-save#12: parseInt read "1e3" as 1 ml.
+  it("parses the edited amount as a number, so 1e3 is 1000 ml", async () => {
+    const user = userEvent.setup();
+    const record = makeIntakeRecord({ type: "water", amount: 250, source: "manual" });
+    await renderWithFixtures(<LiquidsCard />, { seed: { intakeRecords: [record] } });
+    await user.click(await recentEntry("250ml"));
+
+    fireEvent.change(await screen.findByLabelText("Amount (ml)"), { target: { value: "1e3" } });
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(async () => {
+      expect((await db.intakeRecords.get(record.id))?.amount).toBe(1000);
+    });
+  });
+
+  it("rejects a fractional edited amount instead of truncating it", async () => {
+    const user = userEvent.setup();
+    const record = makeIntakeRecord({ type: "water", amount: 250, source: "manual" });
+    await renderWithFixtures(<LiquidsCard />, { seed: { intakeRecords: [record] } });
+    await user.click(await recentEntry("250ml"));
+
+    fireEvent.change(await screen.findByLabelText("Amount (ml)"), { target: { value: "250.7" } });
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({ description: expect.stringMatching(/whole number/i) }),
+      ),
+    );
+    expect((await db.intakeRecords.get(record.id))?.amount).toBe(250);
+  });
+
+  // liquids-save#9: the Recent label is the water row's note, so renaming a
+  // drink must rename the note too, or the edit looks like it didn't save.
+  it("renaming a drink relabels its row", async () => {
+    const user = userEvent.setup();
+    const drink = await logDrink({
+      volumeMl: 250,
+      description: "Coffee",
+      caffeineMg: 95,
+      waterSource: "preset:manual",
+    });
+    if (!drink.success) throw new Error("logDrink failed");
+
+    await renderWithFixtures(<LiquidsCard />);
+    await user.click(await recentEntry("250ml"));
+    const name = (await screen.findByLabelText(/Beverage name/)) as HTMLInputElement;
+    await waitFor(() => expect(name.value).toBe("Coffee"));
+
+    await user.clear(name);
+    await user.type(name, "Flat white");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(async () => {
+      expect((await db.intakeRecords.get(drink.data.waterIntakeId))?.note).toBe("Flat white");
+    });
+    const caffeine = await db.substanceRecords.get(drink.data.substanceIds[0]!);
+    expect(caffeine?.description).toBe("Flat white");
+  });
+
+  it("keeps a note the user typed when renaming a drink", async () => {
+    const user = userEvent.setup();
+    const drink = await logDrink({
+      volumeMl: 250,
+      description: "Coffee",
+      caffeineMg: 95,
+      waterSource: "preset:manual",
+    });
+    if (!drink.success) throw new Error("logDrink failed");
+
+    await renderWithFixtures(<LiquidsCard />);
+    await user.click(await recentEntry("250ml"));
+    const name = (await screen.findByLabelText(/Beverage name/)) as HTMLInputElement;
+    await waitFor(() => expect(name.value).toBe("Coffee"));
+
+    await user.clear(name);
+    await user.type(name, "Flat white");
+    await user.clear(screen.getByLabelText(/^Note/));
+    await user.type(screen.getByLabelText(/^Note/), "oat milk");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(async () => {
+      expect((await db.intakeRecords.get(drink.data.waterIntakeId))?.note).toBe("oat milk");
+    });
   });
 
   it("edits a meal's water row as part of the meal: no drink fields, time moves the meal", async () => {

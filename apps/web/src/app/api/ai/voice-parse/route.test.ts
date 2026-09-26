@@ -215,8 +215,46 @@ describe("voice-parse route handler", () => {
     const res = await POST(makeRequest({ transcript: "had some water" }));
 
     expect(res.status).toBe(504);
-    const body = (await res.json()) as { error: string };
-    expect(body.error).toBe("AI request timed out");
+    const body = (await res.json()) as { error: string; code?: string };
+    expect(body.code).toBe("AI_TIMEOUT");
+  });
+
+  // ai-routes-models#19: the route branches on stop_reason via the shared
+  // claude-call helpers instead of treating every non-tool reply as bad format.
+  it("maps a refusal to 422 AI_REFUSED without retrying", async () => {
+    messagesCreate.mockResolvedValueOnce({
+      content: [],
+      stop_reason: "refusal",
+      stop_details: { category: "cyber" },
+      usage: { input_tokens: 10, output_tokens: 1 },
+    });
+
+    const { POST } = await import("@/app/api/ai/voice-parse/route");
+    const res = await POST(makeRequest({ transcript: "had some water" }));
+
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as { code?: string };
+    expect(body.code).toBe("AI_REFUSED");
+    expect(messagesCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries a max_tokens cut-off with a larger budget", async () => {
+    messagesCreate
+      .mockResolvedValueOnce({
+        content: [],
+        stop_reason: "max_tokens",
+        usage: { input_tokens: 10, output_tokens: 4096 },
+      })
+      .mockResolvedValueOnce(toolUseResponse({ items: [{ kind: "water", ml: 250 }] }));
+
+    const { POST } = await import("@/app/api/ai/voice-parse/route");
+    const res = await POST(makeRequest({ transcript: "had some water" }));
+
+    expect(res.status).toBe(200);
+    expect(messagesCreate).toHaveBeenCalledTimes(2);
+    const first = messagesCreate.mock.calls[0]![0] as { max_tokens: number };
+    const second = messagesCreate.mock.calls[1]![0] as { max_tokens: number };
+    expect(second.max_tokens).toBeGreaterThan(first.max_tokens);
   });
 
   it("does not let the SDK retry a timed-out call more than once", async () => {
@@ -228,5 +266,29 @@ describe("voice-parse route handler", () => {
     const options = messagesCreate.mock.calls[0]![1] as { maxRetries?: number };
     expect(options.maxRetries).toBeDefined();
     expect(options.maxRetries).toBeLessThanOrEqual(1);
+  });
+});
+
+// ai-routes-models#21: the limiter is keyed on the signed-in user, so rotating
+// x-forwarded-for does not reset the cap on someone's (possibly shared) key.
+describe("voice-parse rate limit", () => {
+  it("counts every request from one user whatever IP it claims", async () => {
+    vi.resetModules();
+    messagesCreate.mockReset();
+    messagesCreate.mockResolvedValue(toolUseResponse({ items: [{ kind: "water", ml: 250 }] }));
+    const { POST } = await import("@/app/api/ai/voice-parse/route");
+
+    const statuses: number[] = [];
+    for (let i = 0; i < 21; i++) {
+      const req = new NextRequest("https://example.test/api/ai/voice-parse", {
+        method: "POST",
+        body: JSON.stringify({ transcript: "water" }),
+        headers: { "content-type": "application/json", "x-forwarded-for": `10.0.0.${i}` },
+      });
+      statuses.push((await POST(req)).status);
+    }
+
+    expect(statuses.slice(0, 20).every((s) => s === 200)).toBe(true);
+    expect(statuses[20]).toBe(429);
   });
 });

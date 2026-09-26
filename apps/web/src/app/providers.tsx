@@ -77,6 +77,20 @@ export function Providers({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  // Mirror the synced settings (limits, presets, day start, home timezone)
+  // between the settings store and the synced userSettings table.
+  useEffect(() => {
+    let dispose: (() => void) | undefined;
+    let cancelled = false;
+    import("@/lib/settings-sync").then((m) => {
+      if (!cancelled) dispose = m.installSettingsSync();
+    });
+    return () => {
+      cancelled = true;
+      dispose?.();
+    };
+  }, []);
+
   useEffect(() => {
     import("@/lib/native-auth-return").then((m) => m.initNativeAuthReturn());
   }, []);

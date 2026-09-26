@@ -1,9 +1,9 @@
 /**
- * Comprehensive backup service for all health data — export/import of all 17
- * data tables (including userProfile).
+ * Comprehensive backup service for all health data — export/import of every
+ * synced data table (including userProfile and userSettings).
  *
  * Conflict detection is scoped: in merge mode the medication/system tables and
- * userProfile record conflicts, while health tables skip rows whose id is
+ * userProfile/userSettings record conflicts, while health tables skip rows whose id is
  * already live locally. A backup row whose local copy is tombstoned restores
  * it in every table. Replace mode bypasses conflict detection, overwrites
  * every table and tombstones local rows the backup lacks (only in tables the
@@ -39,6 +39,7 @@ import {
   type AuditLog,
   type UserProfile,
   type InsightReport,
+  type UserSettings,
 } from "@/lib/db";
 import { ok, err } from "@intake/core/service";
 import { isLive } from "@intake/core/lifecycle";
@@ -51,6 +52,14 @@ import { enqueueInsideTx } from "@/lib/sync-queue";
 import { schedulePush } from "@/lib/sync-engine";
 import { getDeviceId } from "@/lib/utils";
 import { getDeviceTimezone } from "@/lib/timezone";
+import {
+  getActiveUserSettings,
+  pickSyncedSettings,
+  settingsFromRow,
+  userSettingsFromLegacyBlob,
+  SEED_UPDATED_AT,
+} from "@/lib/settings-sync";
+import { useSettingsStore } from "@/stores/settings-store";
 
 export interface BackupData {
   version: number;
@@ -74,6 +83,10 @@ export interface BackupData {
   auditLogs?: AuditLog[];
   userProfile?: UserProfile[];
   insightReports?: InsightReport[];
+  userSettings?: UserSettings[];
+  // The raw settings-store blob (`{ state }`), device preferences included.
+  // Backups older than the userSettings table carry the synced settings only
+  // here; import turns them into a userSettings row.
   settings?: Record<string, unknown>;
 }
 
@@ -104,6 +117,7 @@ export interface ImportResult {
   auditLogsImported: number;
   userProfileImported: number;
   insightReportsImported: number;
+  userSettingsImported: number;
   /** Sum of every `*Imported` count above. */
   totalImported: number;
   skipped: number;
@@ -136,6 +150,7 @@ const IMPORT_COUNT_KEY: Record<TableName, ImportCountKey> = {
   auditLogs: "auditLogsImported",
   userProfile: "userProfileImported",
   insightReports: "insightReportsImported",
+  userSettings: "userSettingsImported",
 };
 
 /** Health tables: a live local row always wins, no conflict is raised. */
@@ -157,6 +172,7 @@ const NO_TIMEZONE_TABLES: ReadonlySet<TableName> = new Set<TableName>([
   "titrationPlans",
   "userProfile",
   "insightReports",
+  "userSettings",
 ]);
 
 type Row = Record<string, unknown> & { id: string; deletedAt?: number | null; updatedAt?: number };
@@ -190,6 +206,7 @@ function emptyImportResult(): ImportResult {
     auditLogsImported: 0,
     userProfileImported: 0,
     insightReportsImported: 0,
+    userSettingsImported: 0,
     totalImported: 0,
     skipped: 0,
     conflicts: [],
@@ -242,6 +259,7 @@ export async function exportBackup(): Promise<Blob> {
     prescriptions, medicationPhases, phaseSchedules,
     inventoryItems, inventoryTransactions, doseLogs,
     titrationPlans, dailyNotes, auditLogs, userProfile, insightReports,
+    userSettings,
   ] = await Promise.all([
     db.intakeRecords.toArray(),
     db.weightRecords.toArray(),
@@ -261,6 +279,7 @@ export async function exportBackup(): Promise<Blob> {
     db.auditLogs.toArray(),
     db.userProfile.toArray(),
     db.insightReports.toArray(),
+    db.userSettings.toArray(),
   ]);
 
   // Get settings from localStorage
@@ -300,6 +319,7 @@ export async function exportBackup(): Promise<Blob> {
     auditLogs,
     userProfile,
     insightReports,
+    userSettings,
     settings,
   };
 
@@ -311,7 +331,7 @@ export async function exportBackup(): Promise<Blob> {
     `${phaseSchedules.length} schedules, ${inventoryItems.length} inventory items, ${inventoryTransactions.length} inv txns, ` +
     `${doseLogs.length} dose logs, ${titrationPlans.length} titration plans, ${dailyNotes.length} daily notes, ` +
     `${auditLogs.length} audit logs, ${userProfile.length} profile, ` +
-    `${insightReports.length} insight reports`
+    `${insightReports.length} insight reports, ${userSettings.length} settings`
   );
 
   const json = JSON.stringify(backupData, null, 2);
@@ -449,6 +469,7 @@ function validateBackupData(data: unknown): data is BackupData {
   if (backup.auditLogs !== undefined && !Array.isArray(backup.auditLogs)) return false;
   if (backup.userProfile !== undefined && !Array.isArray(backup.userProfile)) return false;
   if (backup.insightReports !== undefined && !Array.isArray(backup.insightReports)) return false;
+  if (backup.userSettings !== undefined && !Array.isArray(backup.userSettings)) return false;
 
   return true;
 }
@@ -491,6 +512,29 @@ async function writeRow(
   if (!existing && !isLive(written)) return false;
   await enqueueInsideTx(tableName, written.id, isLive(written) ? "upsert" : "delete");
   return true;
+}
+
+/**
+ * A backup older than the userSettings table holds the synced settings only
+ * in its `settings` blob. Give it the equivalent userSettings row, so they are
+ * restored (or raise a conflict) like any other record.
+ */
+async function withLegacySettingsRow(data: BackupData): Promise<BackupData> {
+  if (data.userSettings !== undefined || !data.settings) return data;
+  const current = await getActiveUserSettings();
+  const exportedAt = Date.parse(data.exportedAt);
+  const row = userSettingsFromLegacyBlob(
+    data.settings,
+    {
+      row: current,
+      settings: {
+        ...pickSyncedSettings(useSettingsStore.getState()),
+        ...(current ? settingsFromRow(current) : {}),
+      },
+    },
+    Number.isFinite(exportedAt) ? exportedAt : SEED_UPDATED_AT,
+  );
+  return row ? { ...data, userSettings: [row] } : data;
 }
 
 function backupRows(data: BackupData, tableName: TableName): Row[] {
@@ -616,7 +660,7 @@ export async function importBackup(
       return ok(result);
     }
 
-    const queuedOps = await importTables(data, mode, result);
+    const queuedOps = await importTables(await withLegacySettingsRow(data), mode, result);
     if (queuedOps > 0) schedulePush();
 
     result.totalImported = TABLE_PUSH_ORDER.reduce(

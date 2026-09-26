@@ -8,6 +8,7 @@ import type { TitrationPlan } from "@/lib/db";
 import { MaintenanceRow } from "@/components/medications/titrations/maintenance-row";
 import { TitrationPlanCard } from "@/components/medications/titrations/titration-plan-card";
 import { TitrationDrawer } from "@/components/medications/titrations/titration-drawer";
+import { TitrationStartPrompt } from "@/components/medications/titrations/titration-start-prompt";
 
 export function TitrationsView() {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -44,6 +45,8 @@ export function TitrationsView() {
           New
         </Button>
       </div>
+
+      <TitrationStartPrompt />
 
       {plans.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">

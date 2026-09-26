@@ -73,8 +73,25 @@ export async function updateIntakeRecord(
   try {
     const existing = await db.intakeRecords.get(id);
     if (!existing) return err("Record not found");
+    // A sodium row's entered source ("2 g salt") describes its old mg. When
+    // the mg is edited directly the source no longer holds — clear it rather
+    // than show a stale "from 2 g salt" beside a new value.
+    const staleSource =
+      updates.amount !== undefined &&
+      updates.amount !== existing.amount &&
+      (existing.sodiumSource !== undefined ||
+        existing.sourceAmount !== undefined ||
+        existing.sourceUnit !== undefined);
+    // Dexie's update deletes a key set to undefined, but
+    // exactOptionalPropertyTypes rejects that on the typed update spec.
+    const patch: Record<string, unknown> = { ...updates, updatedAt: Date.now() };
+    if (staleSource) {
+      patch.sodiumSource = undefined;
+      patch.sourceAmount = undefined;
+      patch.sourceUnit = undefined;
+    }
     await writeWithSync("intakeRecords", "upsert", async () => {
-      await db.intakeRecords.update(id, { ...updates, updatedAt: Date.now() });
+      await db.intakeRecords.update(id, patch);
       return { id };
     });
     schedulePush();
@@ -154,38 +171,6 @@ export async function getRecordsPaginated(
   const total = activeRecords.length;
   const records = activeRecords.slice(offset, offset + limit);
   return { records, hasMore: offset + records.length < total, total };
-}
-
-export async function getRecordsByCursor(
-  beforeTimestamp?: number,
-  limit: number = 20
-): Promise<{ records: IntakeRecord[]; nextCursor: number | null }> {
-  let query = db.intakeRecords.orderBy("timestamp").reverse();
-
-  if (beforeTimestamp !== undefined) {
-    query = db.intakeRecords
-      .where("timestamp")
-      .below(beforeTimestamp)
-      .reverse();
-  }
-
-  // Fetch extra to compensate for filtered-out soft-deleted records,
-  // then apply soft-delete filter and limit manually.
-  const raw = await query.toArray();
-  const active = raw.filter((r) => r.deletedAt === null);
-  const records = active.slice(0, limit + 1);
-
-  const hasMore = records.length > limit;
-  if (hasMore) {
-    records.pop();
-  }
-
-  const lastRecord = records[records.length - 1];
-  const nextCursor = hasMore && lastRecord
-    ? lastRecord.timestamp
-    : null;
-
-  return { records, nextCursor };
 }
 
 export async function getRecordsByDateRange(

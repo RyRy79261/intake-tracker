@@ -1,0 +1,229 @@
+{
+ "base": "origin/main at the time of branching; integration branch fix/audit-2026-09-followup",
+ "context": "Follow-up to PR #359 (2026-09 audit). Original findings: docs/audit-2026-09/findings.json. Per-package results incl. remaining concerns: docs/audit-2026-09/fix-results.json. Android/native work is OUT of scope (owner decision).",
+ "packages": [
+  {
+   "key": "leftovers-liquids-health",
+   "base_branch": "fix/audit-2026-09-followup",
+   "title": "Finish partial fixes: liquids/drinks, health record inputs, dead code, settings",
+   "items": [
+    {
+     "from_package": "water-save",
+     "id": "liquids-save#0 (partial: preset-tab catches)",
+     "reason": "preset-tab.tsx belongs to the drink-sugar-lookup package. reportSaveError is exported from apps/web/src/lib/db-recovery.ts so that package can replace its bare catch{} blocks. The Liquids inline edit form in liquids-card.tsx is also outside this package's files and was not changed."
+    },
+    {
+     "from_package": "water-save",
+     "id": "liquids-save#12 (partial: liquids-card edit form)",
+     "reason": "Only ManualInputDialog was fixed: it now parses with Number, so '1e3' gives 1000, and a non-integer shows a field error. The parseInt call in the liquids-card.tsx inline edit form is in a file outside this package and was not changed."
+    },
+    {
+     "from_package": "water-save",
+     "id": "liquids-save#7 (partial: useEditRecord future-date rejection)",
+     "reason": "The plan assigns future-date rejection in useEditRecord and the edit dialogs to the health-inputs-validation package. Here, the today and 24h totals now leave out future-dated records, and ManualInputDialog rejects a future custom time."
+    },
+    {
+     "from_package": "drink-sugar-lookup",
+     "id": "ai-routes-models#9",
+     "reason": "I left this out on purpose. Making logDrink write volume x waterContentPercent as the water row would corrupt data through the Liquids edit path. liquids-card.tsx sends `volumeMl: u.amount` (the water amount) to syncLiquidEntrySubstances in composable-entry-service.ts, and that function recomputes amountStandardDrinks from it. Once water is reduced, even a time-only edit of a 45 ml spirit (stored as 27 ml water) would rewrite the alcohol record to 27 ml and cut its standard drinks by 40%. Neither file is owned by this package (liquids-card belongs to food-entry-groups). The edit path has to keep the drink volume separate from the water amount first. After that, logDrink can take an optional waterContentPercent that presets pass, with voice defaulting to 100 - ABV. The other route, dropping the spirits exception from the parse/voice prompts, is also outside the owned files."
+    },
+    {
+     "from_package": "drink-sugar-lookup",
+     "id": "substance-sugar#15 (beverage-tab part)",
+     "reason": "PresetTab and the Liquids recent-list badge are gated. The BeverageTab sugar field and its payload are not gated yet: beverage-tab.tsx is owned by the water-save package."
+    },
+    {
+     "from_package": "drink-sugar-lookup",
+     "id": "liquids-save#9 (edit-form part)",
+     "reason": "Labels now come from the stored note, so preset:manual and renamed or deleted presets show the drink name. The edit form's 'Beverage name' field still updates only SubstanceRecord.description, not the water row's note. That buildUpdates change is in liquids-card.tsx, which food-entry-groups owns. Changing the Note field does now relabel the row."
+    },
+    {
+     "from_package": "health-inputs-validation",
+     "id": "health-records-inputs#10",
+     "reason": "Partly fixed. The weight and BP create forms now have an optional note field. The other half, moving voice provenance out of `note` and into `source`, needs a schema change: `WeightRecord` and `BloodPressureRecord` have no `source` field in packages/types/src/records.ts, and only `IntakeRecord` does. It also needs an edit to voice-panel.tsx, which the voice-logging package owns. Voice-logged BP notes that say 'voice' can now be cleared, because BP note clears send null."
+    },
+    {
+     "from_package": "health-inputs-validation",
+     "id": "core-duplication#7 (voice / backup / use-record-adapters paths)",
+     "reason": "The shared schemas in @intake/core/record-schemas now back create, card edit, the Records-tab dialogs and use-edit-record. The voice-parse schema, backup import and the unmounted HistoryDrawer use-record-adapters.ts still have their own ranges. The package notes say voice and backup adopt the schemas later, and those files are not owned by this package."
+    },
+    {
+     "from_package": "health-inputs-validation",
+     "id": "live-data-forensics#11 (intake/eating/substance Records-tab edits)",
+     "reason": "The weight, BP, urination and defecation add and edit paths reject future timestamps. The Records-tab edit handlers for intake, eating and substance still use `parseDateTimeLocalOrNull` with no future check. They belong to other domains' packages, and changing them would conflict with those packages' records-tab edits. `resolveEditedTimestamp` (exported from apps/web/src/hooks/use-edit-record.ts) can be reused there. `max` was deliberately not added to the form-based edit dialogs, because native constraint validation would then block editing any other field of a legacy future-dated row."
+    },
+    {
+     "from_package": "dead-code-and-ci-gates",
+     "id": "food-salt-voice#16 (remainder)",
+     "reason": "Not deleted yet, all in files owned by food-entry-groups, which is reworking group ops in the same files: the recalculateFromCurrentValues stub and its test (composable-entry-service.ts:862 and .test.ts:817), useEntryGroup and useDeleteSingleGroupRecord (use-composable-entry.ts), and deleteSingleGroupRecord. The salt increment setting is being removed by dashboard-display-settings. Left for a post-merge sweep."
+    },
+    {
+     "from_package": "dead-code-and-ci-gates",
+     "id": "state-settings-cache#16 (remainder)",
+     "reason": "useWaterSettings, useSaltSettings, useSugarSettings and usePotassiumSettings (use-settings.ts, owned by dashboard-display-settings) and useIntakeRecords and useAllIntake (use-intake-queries.ts, owned by water-save) are still there. They are in files being edited in parallel, so they are left for a post-merge grep-and-delete."
+    },
+    {
+     "from_package": "dead-code-and-ci-gates",
+     "id": "core-duplication#12 (remainder)",
+     "reason": "Left for a post-merge sweep because every one is in another package's file. dataRetentionDays is being removed by dashboard-display-settings. runExpiryCheck, notifyExpiringRecords and shouldCheckExpiry are in push-notification-service.ts (reminders-android-push). exportEncryptedBackup and importEncryptedBackup are in backup-service.ts (backup-and-data-deletion). recalculateStockForItem is in inventory-service.ts (inventory-stock), which may use it. FOOD_PRESETS and DEFAULT_SODIUM_PRESETS are in constants.ts (drink-sugar-lookup). getActiveTitrationPhaseForPrescription is in titration-service.ts. getRecordsByCursor in intake-service.ts (water-save) has had no production caller since use-history-queries was deleted. /history was kept as a redirect for old bookmarks; a comment now documents why."
+    }
+   ],
+   "notes": "Each item was left partial only because its file belonged to another package during the parallel run; that restriction no longer applies. Also review the review_remaining_concerns of the listed packages in fix-results.json and fix any that are real, small, and in these areas. For ai-routes-models#9 (drink water content): first make the Liquids edit path keep the drink volume separate from the water amount, then let logDrink take waterContentPercent. Do not backfill or rewrite existing records."
+  },
+  {
+   "key": "leftovers-meds-ai-mcp",
+   "base_branch": "fix/audit-2026-09-followup",
+   "title": "Finish partial fixes: dose actions, pill math, inventory, DST, AI routes, MCP, med dead code",
+   "items": [
+    {
+     "from_package": "dose-actions-ui",
+     "id": "gap-bulk-dose-actions#2 (service part)",
+     "reason": "Only the UI side is fixed here: the detail drawer hides Take/Skip on future days. Per the package notes, rejecting scheduledDate > today in takeDose/skipDose belongs to dose-log-keys-history (dose-log-service.ts)."
+    },
+    {
+     "from_package": "dose-actions-ui",
+     "id": "gap-bulk-dose-actions#3 (service part)",
+     "reason": "The picker now blocks empty, invalid and future times, and today's pickers cannot go past now. The service-level check that rejects a combined timestamp later than Date.now() in takeDose/editDoseTime is in dose-log-service.ts, which this package does not own."
+    },
+    {
+     "from_package": "dose-actions-ui",
+     "id": "gap-bulk-dose-actions#9 (stale skipReason in upsert)",
+     "reason": "Every bulk and row skip now always sends a reason, so an old reason gets overwritten. But upsertDoseLog still merges fields, so an untake or a reasonless skip (the detail drawer's SKIP) can still bring back an old skipReason. That fix belongs in dose-log-service.ts, which this package does not own."
+    },
+    {
+     "from_package": "dose-actions-ui",
+     "id": "gap-bulk-dose-actions#7 (TOAST_LIMIT)",
+     "reason": "packages/ui use-toast TOAST_LIMIT=1 is unchanged (not owned). Instead, undo-toast.tsx carries any earlier undo that is still inside its 5-second window into the newer toast (shown as 'Undo N'), so the earlier Undo is no longer dropped."
+    },
+    {
+     "from_package": "dose-actions-ui",
+     "id": "gap-bulk-dose-actions#8 (atomicity)",
+     "reason": "Bulk actions are still one transaction per slot, not all-or-nothing. Hook-level runPerSlot now returns the slots that succeeded and the ones that failed. The UI names the failed doses in a toast and keeps Undo for the ones that were written, which is the second option the finding suggested."
+    },
+    {
+     "from_package": "pill-math-labels",
+     "id": "gap-combo-drugs-pill-math#3",
+     "reason": "Partly fixed. The dose row, bulk dialog, dose-detail header, prescription chip, expanded card and maintenance row now all use one labeller: formatDoseAmount / formatComboDose, which applies scaleCompounds to the active brand's compounds. Web/native notifications and push payloads (medication-notification-service reminder functions, local-notifications.ts, use-push-schedule-sync.ts) and titration-plan-card.tsx still call splitDose. Those files belong to reminders-android-push and med-lifecycle-titration; they should switch to formatComboDose(dosageMg, unit, activeBrand) from @intake/core/compound. The warning for a brand/Rx compound-ratio mismatch was not added."
+    },
+    {
+     "from_package": "pill-math-labels",
+     "id": "gap-combo-drugs-pill-math#6",
+     "reason": "Partly fixed. The dose label now shows the odd_fraction condition as '\u00b7 uneven split', computed from pillsPerDose, so the negative_stock overwrite no longer hides it in the UI. Thirds still count as clean (a documented, intentional choice). Flagging impossible splits at save time in the wizard, edit and titration forms was not done: those forms are outside owned files."
+    },
+    {
+     "from_package": "pill-math-labels",
+     "id": "gap-combo-drugs-pill-math#8",
+     "reason": "Partly fixed. The calculatePillsConsumed guard (!finite || <= 0 returns undefined; stock writes skipped) stops NaN/Infinity reaching currentStock and the ledger. Validating strength / compounds[].strength in backup-schemas.ts was not done: outside owned files, and the verifier says this is only reachable through a hand-edited backup."
+    },
+    {
+     "from_package": "inventory-stock",
+     "id": "core-duplication#4 (MCP ::int part)",
+     "reason": "The MCP SUM()::int cast lives in apps/web/src/lib/mcp/queries.ts. The package notes assign it to the mcp-server package (mcp#3). The client part of this finding is fixed: there is now one deriveStock that counts only live transactions."
+    },
+    {
+     "from_package": "inventory-stock",
+     "id": "gap-inventory-refill-ui-flows#10 (backdating)",
+     "reason": "Fixed: the refill field now starts empty and Add stays disabled until an amount is entered. Not done: backdating a refill (a date field). No transaction timestamp editing was added."
+    },
+    {
+     "from_package": "dst-schedule-time",
+     "id": "doses-titration-schedule#24 (reminder side-issues)",
+     "reason": "The createdAt cutoff now uses toLocalDateKey, and the daily list derives from the same `time` contract that the in-app reminder reads, so the two now agree. Two related issues from the verifier notes are outside this package and are left for reminders-android-push: the de-duplication key in medication-notification-service.ts uses a UTC date (now.toISOString()), and local-notifications.ts:72 still schedules native notifications from scheduleTimeUTC."
+    },
+    {
+     "from_package": "dst-schedule-time",
+     "id": "dexie-schema#11 (index/doc parts)",
+     "reason": "The schema package made `time` canonical, and this branch moves the display onto `time`. The `time` index and the missing scheduleTimeUTC index are schema-owned, so I did not touch them. mcp/queries.ts and mcp/tools.ts still describe `time` as deprecated and scheduleTimeUTC as authoritative. They belong to the MCP package and should be updated to the new contract."
+    },
+    {
+     "from_package": "ai-models",
+     "id": "ai-routes-models#19 (voice-parse, substance-lookup)",
+     "reason": "Those routes belong to other packages. Only their temperature lines were removed here. They still call messages.create directly and never check stop_reason. They can be moved to _shared/claude-call.ts requestToolCall/createMessage the same way as nutrient-analysis."
+    },
+    {
+     "from_package": "ai-models",
+     "id": "ai-routes-models#21 (voice-parse, substance-lookup, voice-transcribe, insights, deep)",
+     "reason": "The limiter on those non-owned routes is still keyed on IP via getClientIp. The fix is to swap in rateLimitKey(request, auth.userId), but some of their tests rely on rotating IPs, so it is left to the owning packages. No durable store was added (it would need infrastructure)."
+    },
+    {
+     "from_package": "ai-models",
+     "id": "ai-routes-models#7 (client hook timer)",
+     "reason": "The late-armed 15s timer is in apps/web/src/hooks/use-interaction-check.ts, which this package does not own. The server side is fixed instead: interaction-check now has maxDuration=60 and a 50s shared deadline that returns a JSON 504 AI_TIMEOUT. voice-parse, substance-lookup and insights still use the SDK default timeout."
+    },
+    {
+     "from_package": "mcp-server",
+     "id": "dates-timezones#6 (partial: dayStartHour sync)",
+     "reason": "The MCP summary now takes the day-start hour from push_settings.day_start_hour and applies it in the user's zone. But POST /api/push/settings still always writes dayStartHour: 2 and the client never sends its own setting. That route (apps/web/src/app/api/push/**) belongs to the reminders-android-push package, so I left it alone. Until it is fixed, a user whose day starts at 5am still gets a 2am boundary, now in their own zone."
+    },
+    {
+     "from_package": "mcp-server",
+     "id": "mcp-server-auth#13 (partial: cron)",
+     "reason": "No cron was scheduled for purgeExpired. The only in-repo scheduler would be apps/web/vercel.json, which reminders-android-push owns and which does not exist yet. Instead, purgeExpired now runs from the token endpoint as a background task, at most once an hour per instance. It needs no new infrastructure."
+    },
+    {
+     "from_package": "dead-code-and-ci-gates",
+     "id": "prescriptions-model#18",
+     "reason": "The dead code sits only in files other packages own and are changing right now. getDailySchedule is in medication-schedule-service.ts and activatePhase in phase-service.ts (both med-lifecycle-titration). useActivatePhase, useDeletePhase and useDoseLogsWithDetailsForDate are in use-medication-queries.ts (dose-actions-ui). getInactivePrescriptions is in prescription-service.ts, and med-lifecycle-titration may use it for its new Archived section. Deleting these before those branches merge could break the build without any merge conflict to warn about. Per the package notes (grep importers after the others merge), this is left for a post-merge sweep. Initial stock written as 'refill' and the PhaseSchedule.unit cleanup are schema/service changes outside this package."
+    },
+    {
+     "from_package": "deferred",
+     "id": "server-schema-parity#3",
+     "reason": "Possibly fixed by #355 (normalizeRowForPush). Re-check; fix only if still broken."
+    }
+   ],
+   "notes": "Same reason as above. For the MCP purgeExpired cron: add it to apps/web/vercel.json crons if the route pattern exists; keep it idempotent. AI routes voice-parse and substance-lookup: move them onto the shared _shared/claude-call helpers (stop_reason check) and user-keyed rateLimitKey. Also review review_remaining_concerns for these packages in fix-results.json."
+  },
+  {
+   "key": "med-decisions",
+   "base_branch": "fix/audit-2026-09-followup",
+   "title": "Owner decisions: missed doses, titration start confirmation, delete-all-medication-data control",
+   "items": [
+    {
+     "id": "live-data-forensics#7",
+     "decision": "A scheduled dose on a past day with no log counts as MISSED unless the user later updates it (take/skip/edit). Make every surface agree: schedule view, analytics adherence, export, MCP tools, insights snapshot."
+    },
+    {
+     "id": "doses-titration-schedule#21",
+     "decision": "A titration step does NOT auto-activate. On (or after) its start date the app prompts the user to confirm starting it; confirming activates it (existing activate flow). Until confirmed, the previous regimen stays in effect. Show a clear prompt (e.g. on the medications page / schedule) when a step is due. Keep the start date field."
+    },
+    {
+     "id": "owner-request-delete-meds",
+     "decision": "Add a Settings > Data control \"Delete all medication data\" that removes prescriptions, phases, schedules, inventory items/transactions, dose logs and titration plans locally AND on the server (via the existing sync/tombstone or deletion mechanism, so other devices and the cloud follow), with a typed or explicit confirmation dialog. Reuse the existing delete-data-controls / data-deletion-service patterns. Do NOT run it automatically; the owner will press it."
+    }
+   ],
+   "notes": "No automatic deletion or rewriting of existing data anywhere. Tests for each decision."
+  },
+  {
+   "key": "synced-settings",
+   "base_branch": "fix/audit-2026-09-followup",
+   "title": "Synced user settings table (limits, presets, dayStartHour, trackers, regions, home timezone)",
+   "items": [
+    {
+     "id": "state-settings-cache#2",
+     "decision": "Owner approved: move user DATA-like settings (daily limits/targets, liquid presets, dayStartHour, optional trackers, regions, reminder follow-up settings, home timezone) from localStorage-only Zustand into a synced single-row-per-user settings record in Dexie + Postgres, mirrored by the sync engine. Purely device-local UI preferences (theme, animation timing, swipe/quick-nav) can stay local \u2014 decide and document the split."
+    },
+    {
+     "id": "gap-timezone-travel-recalc#1",
+     "decision": "Add a synced home timezone setting and use it where the finding needs it."
+    },
+    {
+     "id": "ai-routes-models#13",
+     "decision": "Optional, only if cheap while you are in the schema: add ai_usage web_search_requests / is_batch columns."
+    }
+   ],
+   "notes": "Schema change: new Dexie version (copy stores from the numerically highest version), Postgres schema + pnpm db:generate (never hand-edit the journal), parity test, sync payload, backup/restore. Migration must seed the synced record from the current localStorage values on first run so nobody loses their settings; last-write-wins per field or whole record \u2014 document. Keep the Zustand store as the in-memory API so components change minimally. MCP server should read limits/dayStartHour from the new table if it currently reads them elsewhere (push_settings.day_start_hour)."
+  },
+  {
+   "key": "sodium-sources",
+   "base_branch": "audit2/synced-settings",
+   "title": "Salt vs MSG vs sodium: track sodium with the source it came from",
+   "items": [
+    {
+     "id": "dexie-schema#12",
+     "decision": "Owner clarification: salt is NOT sodium. Salt (NaCl) is ~39.3% sodium, MSG (monosodium glutamate monohydrate) is ~12.3% sodium, sodium is 100%. The tracked quantity is SODIUM (mg). Inputs must let the user enter an amount of salt, MSG or sodium; store the sodium mg plus the source substance and the entered amount/unit so the original entry is preserved and editable. Put the fractions in one place (@intake/core/sodium already has SODIUM_FRACTION 0.393 \u2014 add MSG). Fix every label that says salt where it means sodium and vice versa (dashboard, history, analytics, export, MCP, AI prompts \u2014 the AI parse returns sodium mg). Existing records: they already store sodium mg under type \"salt\"; do not rewrite their values \u2014 interpret them as sodium with unknown source, and only change labels."
+    }
+   ],
+   "notes": "Runs AFTER synced-settings and branches from its branch (audit2/synced-settings) because both change the schema; your Dexie version must come after theirs. Keep the internal record type key stable if renaming would need a data migration; prefer adding fields (e.g. sodiumSource, sourceAmount, sourceUnit)."
+  }
+ ]
+}

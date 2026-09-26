@@ -1,0 +1,182 @@
+[
+ {
+  "package": "leftovers-liquids-health",
+  "done": [
+   "liquids-save#0 (preset-tab catches + edit form): preset-tab.tsx log failures now go through reportSaveError(tab, e); useEditRecord's bare catch now calls reportSaveError('edit', e), which covers the Liquids inline edit form and every other useEditRecord user",
+   "liquids-save#12 (liquids-card edit form): the amount is parsed with Number, so '1e3' saves 1000 ml. A fractional value is refused with a 'whole number of ml' toast. The Records-tab intake edit got the same Number/whole-number parsing",
+   "liquids-save#7 (useEditRecord future-date rejection): this was already in place in use-edit-record.ts (resolveEditedTimestamp) on the base branch. The Liquids edit form uses it. No change was needed beyond the Records-tab work under live-data-forensics#11",
+   "ai-routes-models#9: step 1, syncLiquidEntrySubstances now takes waterMl + previousWaterMl instead of volumeMl. It only scales the stored drink volume by the change in water, so a time-only edit keeps a spirit's 45 ml and its standard drinks. liquids-card passes previousWaterMl=editingRecord.amount. Step 2, logDrink takes an optional waterContentPercent in (0,100]: it rejects out-of-range values and never books less than 1 ml. Only the water row is scaled; substances keep the full volume. Presets and AI lookups pass their stored %. A hand-typed alcohol drink, voice alcohol and food-parsed alcoholic drinks use waterContentPercentFromAbv (100 - ABV, new in @intake/core/alcohol). The spirits exception was removed from the parse.ts and voice-parse.ts prompts, which now report full drink volume. Existing records are not backfilled or rewritten",
+   "substance-sugar#15 (beverage-tab part): the BeverageTab sugar field is hidden while the sugar tracker is off, and its sugar is not written even if it was typed before the tracker was turned off",
+   "liquids-save#9 (edit-form part): renaming a drink (not a beverage:/meal row) in the Liquids edit form now also sets the water row's note, which is the Recent label. A note the user changed in the same edit wins. Legacy preset rows with no note also prefill the name from the note",
+   "core-duplication#7 (voice paths): voice review-row validation (voice-validation.ts) now uses parseBloodPressureForm / parseWeightForm from @intake/core/record-schemas (ranges, whole numbers, systolic > diastolic). The voice-parse server schema takes its ranges from BP_RANGES / WEIGHT_RANGE_KG. Backup import deliberately stays shape-only, with a comment in backup-schemas.ts explaining that a restore must not drop legacy out-of-range readings. use-record-adapters.ts and history-drawer were already deleted",
+   "live-data-forensics#11: the Records-tab intake, eating and substance edit handlers now use resolveEditedTimestamp (future times refused; an unchanged minute keeps the exact original timestamp). The unused parseDateTimeLocalOrNull helper was removed",
+   "food-salt-voice#16 remainder: deleted recalculateFromCurrentValues and its test, useEntryGroup, useDeleteSingleGroupRecord, deleteSingleGroupRecord and undoDeleteSingleRecord, plus their tests (including in sync-service-tier2). ComposablePreview and saltIncrement were already gone",
+   "state-settings-cache#16 remainder: deleted useIntakeRecords and useAllIntake (and the test case). The per-domain use-settings hooks were already gone",
+   "core-duplication#12 (partial): deleted getRecordsByCursor, FOOD_PRESETS, and runExpiryCheck / notifyExpiringRecords / shouldCheckExpiry / checkExpiringRecords / ExpiringRecordsInfo. dataRetentionDays was already removed by the settings migration"
+  ],
+  "not_done": [
+   {
+    "id": "health-records-inputs#10 (voice provenance half)",
+    "reason": "Moving voice provenance from note to source needs a schema change: WeightRecord, BloodPressureRecord, UrinationRecord and DefecationRecord have no source field, and only the synced-settings and sodium-sources packages may change schemas. voice-panel.tsx still writes note: item.note ?? 'voice'. It was left alone because removing it would drop provenance with nowhere else to keep it. The create-form note half was already done."
+   },
+   {
+    "id": "core-duplication#12 (exportEncryptedBackup / importEncryptedBackup)",
+    "reason": "They have no callers, but SECURITY.md ('Encrypted Backups') documents them as a supported capability, and crypto.ts is also kept for future use. I deleted them and then reverted the deletion. This needs an owner decision: delete the functions, SECURITY.md section and crypto.ts together, or wire them into the UI."
+   },
+   {
+    "id": "core-duplication#12 (recalculateStockForItem, getActiveTitrationPhaseForPrescription, DEFAULT_SODIUM_PRESETS)",
+    "reason": "Left in place to avoid clashing with packages running in parallel: leftovers-meds-ai-mcp (inventory backdating and med dead code) and med-decisions touch inventory-service and titration-service, and sodium-sources covers salt/MSG/sodium and may adopt DEFAULT_SODIUM_PRESETS. Delete them in a post-merge sweep if still unused."
+   },
+   {
+    "id": "review concern: drink-sugar-lookup small sodium rows from AI lookups",
+    "reason": "An AI lookup that reports a few mg of sodium for coffee writes a small sodium row. The value is accurate, and ignoring small amounts is a product decision rather than a bug, so I made no change."
+   }
+  ],
+  "review_verdict": "approved-with-fixes",
+  "review_remaining_concerns": [
+   "not_done reasons hold. Voice provenance needs a schema change (a source field on weight, BP, urination and defecation records), and only the synced-settings and sodium-sources packages may change schemas. exportEncryptedBackup and importEncryptedBackup need an owner decision because SECURITY.md documents them. recalculateStockForItem, getActiveTitrationPhaseForPrescription and DEFAULT_SODIUM_PRESETS clash with parallel packages; delete them in a post-merge sweep. Ignoring the small AI sodium rows is a product decision.",
+   "UX: the Liquids edit 'Amount (ml)' field and the Recent list now show the water share of a spirit (27 ml for a 45 ml drink). If a user types the drink volume there, the alcohol volume scales by 45/27. Consider relabelling the field as water, or editing the drink volume there instead.",
+   "Voice caffeine drinks that match a coffee preset (voice-presets applyPresetCaffeine) still book 100% water, while the preset tab books the preset's 98-99%. This is about a 1% inconsistency, not fixed.",
+   "Existing records keep their old hydration: spirits logged before the change at 100% (presets and voice), or at about 60% via food parse (where the substance volume is also about 30 ml). As the plan says, there is no backfill.",
+   "permissions-section.tsx still shows an 'expiry reminders' notification toggle. It had no working backend even before runExpiryCheck was deleted, and it could be removed in a later sweep.",
+   "Integration and e2e tests were not run."
+  ]
+ },
+ {
+  "package": "leftovers-meds-ai-mcp",
+  "done": [
+   "gap-bulk-dose-actions#2 (service part): skipDose now rejects a future scheduledDate. takeDose already rejected one. (dose-log-service.ts)",
+   "gap-bulk-dose-actions#3 (service part): takeDose (takenAtTime) and editDoseTime reject a taken-at timestamp later than now, with a 60s grace.",
+   "gap-bulk-dose-actions#9: take, untake and skip always write skipReason (cleared, or set to the new reason), so an old reason can no longer come back.",
+   "gap-combo-drugs-pill-math#3: the reminder text in loadReminderDoses (used by web, push and native) and titration-plan-card now use formatComboDose with the active brand. Added compoundsMismatch in @intake/core/compound, and the brand's Details tab warns when the brand's ingredients or ratio differ from the prescription's.",
+   "gap-combo-drugs-pill-math#6: the add-medication wizard dosage step now warns about an uneven tablet split. The edit and titration editors already warned via DosePreviewLine. isCleanFraction moved to @intake/core/compound (dose-log-service re-exports it) so components respect no-restricted-imports.",
+   "gap-combo-drugs-pill-math#8: backup-schemas now validates inventory strength (finite, optional) and compounds[].strength (finite) on inventory items and prescriptions.",
+   "gap-inventory-refill-ui-flows#10 (backdating): the Log Refill form has a 'Collected on' date (defaults to today, no future dates). adjustStock/useAdjustStock take an optional occurredAt that sets only the transaction timestamp; a future or invalid date is rejected.",
+   "ai-routes-models#19: voice-parse and substance-lookup now go through the shared createMessage/requestToolCall. Refusal returns 422 AI_REFUSED, max_tokens is retried, pause_turn is resumed, and each route has maxDuration 60 with a 50s shared deadline. The caffeine search gate and fresh-turn retry are unchanged.",
+   "ai-routes-models#21: voice-parse, substance-lookup, voice-transcribe, analytics/insights and insights/deep now rate-limit on rateLimitKey(request, userId). The insights test now uses a separate user per test instead of rotating IPs.",
+   "ai-routes-models#7: use-interaction-check arms its abort timer before the request, and the timeout is now 60s (the route's maxDuration) instead of 15s.",
+   "dates-timezones#6: POST /api/push/settings accepts dayStartHour (0-23) and keeps the stored value when an older client leaves it out. usePushScheduleSync sends the settings-store dayStartHour and re-syncs when it changes.",
+   "mcp-server-auth#13: new /api/mcp/purge route (CRON_SECRET bearer, GET/POST, idempotent) plus apps/web/vercel.json with a daily cron (17 3 * * *, within the Hobby plan limit). The test checks the schedule and that the cron path has a route file.",
+   "prescriptions-model#18 (partial): removed getDailySchedule, getDoseLogsWithDetailsForDate, useDoseLogsWithDetailsForDate, the DoseLogWithDetails type, and useDeletePhase, with their tests.",
+   "Review concern (inventory-stock): getDailyDoseSchedule no longer picks a tombstoned brand. It now uses isActiveBrand and takes the first match, the same choice takeDose makes.",
+   "Verified already fixed, no change needed: core-duplication#4 (the MCP stock SUM has no ::int cast; it uses double precision rounded to 4dp); dexie-schema#11 doc part (the mcp tools/queries text already calls `time` canonical); the doses-titration-schedule#24 notification de-dup key (it uses the dose's own dateKey); the titration-service anchorTimezone promotion (it copies s.anchorTimezone); server-schema-parity#3 (fixed by #355: normalizeRowForPush rounds integer columns at the push choke point, with a parity test)."
+  ],
+  "not_done": [
+   {
+    "id": "gap-bulk-dose-actions#7 (TOAST_LIMIT)",
+    "reason": "Left as is: undo-toast already carries earlier undos over. Raising TOAST_LIMIT in packages/ui would change toast behaviour app-wide and needs a UX decision."
+   },
+   {
+    "id": "gap-bulk-dose-actions#8 (atomicity)",
+    "reason": "Kept per-slot transactions with the success/failure reporting that is already there, which is the finding's second option. A single all-or-nothing transaction would change the bulk semantics other code relies on."
+   },
+   {
+    "id": "doses-titration-schedule#24 / local-notifications.ts:72",
+    "reason": "Native (Capacitor) scheduling from scheduleTimeUTC is Android/native, which is out of scope."
+   },
+   {
+    "id": "dexie-schema#11 (index part)",
+    "reason": "Adding a `time` or scheduleTimeUTC index is a schema change. Only the synced-settings and sodium-sources packages may change schemas."
+   },
+   {
+    "id": "prescriptions-model#18 (remainder)",
+    "reason": "Kept activatePhase/useActivatePhase and getInactivePrescriptions: the parallel med-decisions package (titration start confirmation, delete-all medication data) may start using them. Deleting them now could break the merged build without a merge conflict to warn about. Initial stock as 'refill' and the PhaseSchedule.unit cleanup are schema/service changes outside this package."
+   },
+   {
+    "id": "dates-timezones#6 (full)",
+    "reason": "dayStartHour syncs only while dose reminders are on (the settings sync effect is gated on that). Users without reminders have no push_settings row, so MCP falls back to 2am. The synced-settings package is moving dayStartHour to a synced table that MCP should read."
+   },
+   {
+    "id": "review concern: compound-card / compound-card-expanded / schedule-view low-stock",
+    "reason": "These still use their own pills-only check instead of computeRefillStatus. Not changed, to keep this branch focused."
+   }
+  ],
+  "review_verdict": "approved-with-fixes",
+  "review_remaining_concerns": [
+   "apps/web/vercel.json only works if the Vercel project's Root Directory is apps/web. That is what docs/TURBOREPO_MIGRATION_PROPOSAL.md says, but I have not checked it in the Vercel project. /api/mcp/purge returns 401 until CRON_SECRET is set in Vercel's env. Both failures are harmless, because the token endpoint still purges opportunistically.",
+   "dates-timezones#6: dayStartHour reaches push_settings only while dose reminders are on. POST /api/push/settings always writes enabled: true, so the settings sync can't simply be un-gated. This is left to the synced-settings package, and the reason is valid.",
+   "compound-card, compound-card-expanded and schedule-view still use their own pills-only low-stock check instead of computeRefillStatus. Switching needs phase and schedule data in each component, and the parallel packages edit these files, so I left it. It is a reasonable post-merge item.",
+   "The other not_done reasons all hold: the TOAST_LIMIT change is app-wide, keeping per-slot transactions is the finding's own second option, native scheduling is out of scope, the Dexie index is a schema change owned by another package, and the rest of the dead-code cleanup should wait until med-decisions has merged.",
+   "Merge hotspots are as the fixer listed: dose-log-service.ts, use-medication-queries.ts (removed hooks and the useAdjustStock signature), push/settings/route.ts, and use-push-schedule-sync.ts.",
+   "The dosage-step warning says 'Not a whole or half tablet', but the check also treats thirds and quarters as clean. The wording is slightly imprecise but not wrong."
+  ]
+ },
+ {
+  "package": "med-decisions",
+  "done": [
+   "live-data-forensics#7: new shared rule apps/web/src/lib/dose-status.ts (resolveDoseStatus). A scheduled dose on a past day with no taken/skipped log, or with a leftover pending/rescheduled log, counts as missed. The same doses today or later count as pending. The schedule view (dose-schedule-service deriveStatus), analytics adherence, export, MCP tools and insights snapshot all use this rule now.",
+   "live-data-forensics#7 analytics: adherenceRate now also returns skipped and missed counts (AdherenceResult in packages/types gains skipped/missed). It no longer counts today's outstanding doses, because they are not missed until the day ends. The registry description was updated to match.",
+   "live-data-forensics#7 export: the CSV adds a row with status missed for each past scheduled dose that was never logged. It also reports a stale pending/rescheduled log on a past day as missed. The PDF now has a 'Skipped: N, missed (not logged): N' line.",
+   "live-data-forensics#7 insights: analytics-snapshot sends dosesSkipped and dosesMissed. The insights prompt now reports missed doses as missed instead of saying 'treat adherence as unknown'; the system rule was updated. Older clients that don't send the split fall back to 'N not logged as taken'.",
+   "live-data-forensics#7 MCP: get_today_summary now counts a rescheduled dose as outstanding (it said skipped, which disagreed with the app). list_recent_doses reports status by the app's rule, so a past outstanding dose shows as missed in the user's time zone. It gains an optional timezone argument and a loggedStatus field, and its description explains that missed doses with no log at all have no row.",
+   "doses-titration-schedule#21: added isTitrationPlanDue, getDueTitrationPlans and the useDueTitrationPlans hook. The new TitrationStartPrompt (components/medications/titrations/titration-start-prompt.tsx) shows on the Schedule and Titrations tabs. Confirming uses the existing activateTitrationPlan flow. 'Not now' hides the prompt for the current session. Nothing starts automatically, and the previous regimen stays in effect until the user confirms. The start-date field is kept and the titration drawer now explains this behaviour.",
+   "owner-request-delete-meds: deleteAllMedicationData() in data-deletion-service.ts soft-deletes prescriptions, titration plans, phases, schedules, inventory items, inventory transactions and dose logs in one transaction, in push order. It also switches each record off (inactive/disabled/cancelled) and queues a sync delete for each, so the cloud and other devices follow. It is wired to the useDeleteAllMedicationData hook and the DeleteMedicationDataControl in Settings > Data & Storage (Storage section). The dialog requires typing DELETE. Nothing calls it automatically."
+  ],
+  "not_done": [],
+  "review_verdict": "approved-with-fixes",
+  "review_remaining_concerns": [
+   "adherenceRate no longer counts today's doses that are past their time but not logged. The owner should know this was a deliberate trade-off, made so it matches the schedule view.",
+   "The insights snapshot only looks at the current effective phase and at currently live schedules. Days under an earlier phase, or on a schedule that has since been deleted, are left out, so it can count fewer doses than it should (it no longer counts too many). This was already the case before this branch.",
+   "Missed doses are only derived for prescriptions that are active now (getDailyDoseSchedule filters isActive). A paused or archived medication's past unlogged doses don't appear in the export or in adherence. This was already the case before this branch.",
+   "Delete all medication data leaves dailyNotes and audit logs that reference prescriptions or doses, because the decision did not list those tables.",
+   "The export test builds days with Date.now() - n*DAY, which could be flaky on a day when clocks change for daylight saving (minor)."
+  ]
+ },
+ {
+  "package": "synced-settings",
+  "done": [
+   "state-settings-cache#2",
+   "gap-timezone-travel-recalc#1",
+   "ai-routes-models#13 (optional part only: ai_usage.web_search_requests + ai_usage.is_batch columns, recorded via tokensFromAnthropic and isBatch on the deep-insights batch route)"
+  ],
+  "not_done": [
+   {
+    "id": "ai-routes-models#13 (remainder)",
+    "reason": "Out of scope for this package, which was asked only for the optional columns. Still open: recording failed Anthropic calls, grouping totals by model, a price table, recording deep-batch usage inside the completion compare-and-set, the bug-report follow-up call, and empty Groq transcripts. /api/user/ai-usage does not show the new columns yet."
+   },
+   {
+    "id": "gap-timezone-travel-recalc#1 (new-schedule anchor)",
+    "reason": "New or edited schedules are still anchored to the editing device's zone, not homeTimezone. That code is in medication-schedule-service.ts, phase-service.ts and titration-service.ts, which other packages own. With a home zone set, a device at home no longer prompts for such a schedule, but the schedule keeps the away anchor until a device away from home adjusts it."
+   }
+  ],
+  "review_verdict": "approved-with-fixes",
+  "review_remaining_concerns": [
+   "Both not_done items have valid reasons. The rest of ai-routes-models#13 was outside this package, which only asked for the optional columns. The new-schedule anchor lives in schedule, phase and titration service files owned by parallel packages.",
+   "Offline behaviour: a device in cloud-sync mode with no local settings row writes nothing to userSettings until it completes a pull while online. Its edits are kept as dirty keys with their own stamps and are written after that pull.",
+   "Settings sync resolves conflicts for the whole row by updatedAt, as the package documents. If two devices edit different settings while both are offline, only the later device's row survives. That was the intended decision.",
+   "use-timezone-detection still records homeTimezone before the first pull on an upgraded device. After the per-key fix only that one setting can win over the cloud row. It is also practically always the same zone on every device, because it is recorded only when every synced schedule is anchored to the device's zone.",
+   "Merge warning from the fixer still applies: sodium-sources will also produce migration 0022 and Dexie v24, so whichever merges second must regenerate its migration and bump its Dexie version.",
+   "Not checked in a browser. I only ran the automated tests."
+  ]
+ },
+ {
+  "package": "sodium-sources",
+  "done": [
+   "dexie-schema#12: IntakeRecord gains optional sodiumSource ('sodium'|'salt'|'msg'), sourceAmount and sourceUnit ('mg'|'g') (packages/types/src/records.ts). The Postgres columns sodium_source text, source_amount real and source_unit text, each with a CHECK, come from generated migration packages/db/migrations/0023_intake_sodium_source.sql. The journal was written by drizzle-kit, not by hand. The sync nullable and float field lists and the backup zod schema are updated, and schema-parity is green. amount still holds sodium mg and the type key stays 'salt'.",
+   "@intake/core/sodium (packages/core/src/sodium.ts) now holds every fraction: SODIUM_FRACTION 0.393 (salt), the new MSG_SODIUM_FRACTION 0.123, and SODIUM_FRACTIONS for all three sources. It also exports toSodiumMg(amount, unit, source), describeSodiumEntry (for example 'from 2 g salt'), and the source/unit lists and labels.",
+   "Food card (apps/web/src/components/food-salt/food-section.tsx): the sodium field has a 'Measured as' picker (Sodium/Salt/MSG) and a new mg/g unit picker, and converts through core. MSG was 0.12 and is now 0.123. Saving stores the sodium mg plus what was typed. Edit reopens the entry as typed. Rows that have no recorded source open as sodium mg exactly as stored; the old back-conversion through a guessed fraction is removed. Saving an edit that leaves sodium untouched leaves those rows exactly as they were.",
+   "syncEatingGroup takes an optional sodiumEntry and writes the source fields from it. When sodium mg changes without a typed entry, syncEatingGroup and updateIntakeRecord (Records tab) clear the stale source fields. They never rewrite the value.",
+   "Labels: history rows show '786 mg \u00b7 from 2 g salt'. The CSV export reports the type as 'sodium' and adds entered_as, entered_amount and entered_unit columns. Correlations now say 'Weight vs Sodium Intake' and 'Sodium Intake'. The AI insights consent list now says 'Sodium intake' and 'sodium vs. weight'. Liquid preset summaries say 'mg sodium/100ml'. The footer says 'Food & Sodium'. The help manual now explains salt/MSG entry and says 'water and sodium limits'. The custom_correlation tool description now says 'salt (sodium mg)'.",
+   "MCP: the tool descriptions use 393 mg sodium per g salt (was 400) and 123 per g MSG. queryIntakeHistory returns sodiumSource, sourceAmount and sourceUnit, which are null when the source is unknown.",
+   "AI prompts: the parse prompt and tool schema and the voice-parse prompt now give the MSG factor (msg_g \u00d7 123) next to the salt one. Both still return sodium mg."
+  ],
+  "not_done": [
+   {
+    "id": "dexie-version-block",
+    "reason": "No Dexie version was added. The new fields are optional and unindexed, so the store list does not change and Dexie needs no new version. Adding one would only move DB_SCHEMA_VERSION off synced-settings' 24."
+   },
+   {
+    "id": "voice/preset/drink-path source capture",
+    "reason": "Kept focused. Voice items, liquid presets and a Food-card entry the AI parsed as a drink (saved through logDrink) still write sodium mg only, with no source fields, so they read as 'sodium, source unknown'. The voice prompt now converts MSG as well as salt."
+   }
+  ],
+  "review_verdict": "approved-with-fixes",
+  "review_remaining_concerns": [
+   "Voice items and liquid presets still write sodium mg with no source fields, which reads as source unknown. Skipping them is reasonable: voice capture would need a change to the prompt's item schema, and a preset's sodium is already mg sodium.",
+   "An AI-parsed Food-card meal saved without edits is recorded as sodiumSource 'sodium', sourceAmount = mg. That is harmless (describeSodiumEntry shows nothing for sodium), but the MCP description says AI rows have null source fields, which is slightly inaccurate.",
+   "The CSV export's intake type column now reads 'sodium' instead of 'salt'. The owner asked for this label change, but it breaks anyone parsing old CSVs by type. JSON backups are unaffected.",
+   "No Dexie version was added. That is correct: the new fields are optional and unindexed, so the phone's existing Dexie opens unchanged. The Postgres migration 0023 only adds columns (3 nullable columns and 2 CHECKs), and drizzle-kit wrote the journal entry with a 'when' above 0022's.",
+   "4 tests in titration-service.test.ts fail. They also fail on the base branch audit2/synced-settings and have nothing to do with sodium (the dose assertions expect 100/150, get 50). They need their own follow-up."
+  ]
+ }
+]

@@ -156,7 +156,7 @@ export function registerReadOnlyTools(server: McpServer): void {
     {
       title: "Today's summary",
       description:
-        "Today so far, in the user's time zone. `intake` holds totals since the user's day-start hour: water_ml, sodium_mg (sodium, not table salt: 1 g salt is about 400 mg sodium), sugar_g and potassium_mg. Also the latest blood-pressure and weight readings. `doses` covers today's local calendar date (`scheduled_date`): each scheduled slot of the effective regimen with its status (taken / skipped / outstanding), the counts per status, and any other dose logs for the date (as-needed doses, or logs against a slot no longer in the regimen) under `unscheduled`.",
+        "Today so far, in the user's time zone. `intake` holds totals since the user's day-start hour: water_ml, sodium_mg (sodium, not table salt: 1 g salt is about 393 mg sodium, 1 g MSG about 123 mg), sugar_g and potassium_mg. Also the latest blood-pressure and weight readings. `doses` covers today's local calendar date (`scheduled_date`): each scheduled slot of the effective regimen with its status (taken / skipped / outstanding), the counts per status, and any other dose logs for the date (as-needed doses, or logs against a slot no longer in the regimen) under `unscheduled`.",
       inputSchema: { timezone: timezoneArg },
     },
     async (args, ctx) =>
@@ -174,7 +174,7 @@ export function registerReadOnlyTools(server: McpServer): void {
     {
       title: "Intake history",
       description:
-        "Returns individual water/sodium/sugar/potassium intake records in the given time range. Use type='all' to combine. Sodium rows are sodium in mg (not table salt: 1 g salt is about 400 mg sodium); 'salt' is accepted as a legacy name for 'sodium'. Each row includes groupId/groupSource, and a `substance` object when the row is the fluid half of a decomposed drink (linked by groupId, or by source='substance:<id>' for records predating that link) — carrying the linked substance's type, description, ABV %, standard drinks, and caffeine mg (null otherwise). Use query_substance_history for the full caffeine/alcohol list. Returned oldest first. Capped at 5000 rows: when `truncated` is true the NEWEST 5000 rows in the range are kept, so page further back by calling again with end_ms set just before the first row's timestamp.",
+        "Returns individual water/sodium/sugar/potassium intake records in the given time range. Use type='all' to combine. Sodium rows are sodium in mg (not table salt: 1 g salt is about 393 mg sodium, 1 g MSG about 123 mg); 'salt' is accepted as a legacy name for 'sodium'. A sodium row entered as salt, MSG or sodium carries what the user typed in sodiumSource ('salt' | 'msg' | 'sodium'), sourceAmount and sourceUnit ('mg' | 'g') — amount is always the converted sodium mg; those fields are null when the source is unknown (older, AI-parsed or preset rows). Each row includes groupId/groupSource, and a `substance` object when the row is the fluid half of a decomposed drink (linked by groupId, or by source='substance:<id>' for records predating that link) — carrying the linked substance's type, description, ABV %, standard drinks, and caffeine mg (null otherwise). Use query_substance_history for the full caffeine/alcohol list. Returned oldest first. Capped at 5000 rows: when `truncated` is true the NEWEST 5000 rows in the range are kept, so page further back by calling again with end_ms set just before the first row's timestamp.",
       inputSchema: withRange({
         type: z
           .enum(["water", "sodium", "salt", "sugar", "potassium", "all"])
@@ -313,7 +313,7 @@ export function registerReadOnlyTools(server: McpServer): void {
     {
       title: "Recent doses",
       description:
-        "The most recent dose log entries (taken / skipped / rescheduled / pending) joined with prescription names, newest first. `kind` is 'scheduled' (logged against `phaseId`/`scheduleId`) or 'prn' (an as-needed dose with no schedule). For the amount, prefer the snapshot frozen when the dose was logged (`doseAmount` in `doseUnit`, from `pillsConsumed` x `pillStrength`); else `doseMg` for a PRN dose; else `scheduleDosage` in `scheduleUnit` from the linked schedule as it is now. `inventoryItemId` names the stock the dose drew from. genericName resolves even for archived (soft-deleted) prescriptions; the `archived` field is true for those, false for active, and null if the prescription was hard-deleted.",
+        "The most recent dose log entries joined with prescription names, newest first. `status` uses the app's rule: taken / skipped, or for a dose still owed (logged as pending or rescheduled) 'pending' on today's date and 'missed' on an earlier date, in the user's time zone; `loggedStatus` is the status as stored (taken / skipped / rescheduled / pending). Only logged doses are listed: a scheduled dose on a past day with no log at all is also missed but has no row here. `kind` is 'scheduled' (logged against `phaseId`/`scheduleId`) or 'prn' (an as-needed dose with no schedule). For the amount, prefer the snapshot frozen when the dose was logged (`doseAmount` in `doseUnit`, from `pillsConsumed` x `pillStrength`); else `doseMg` for a PRN dose; else `scheduleDosage` in `scheduleUnit` from the linked schedule as it is now. `inventoryItemId` names the stock the dose drew from. genericName resolves even for archived (soft-deleted) prescriptions; the `archived` field is true for those, false for active, and null if the prescription was hard-deleted.",
       inputSchema: {
         limit: z
           .number()
@@ -322,11 +322,12 @@ export function registerReadOnlyTools(server: McpServer): void {
           .max(500)
           .default(50)
           .describe("Number of rows to return (1-500, default 50)"),
+        timezone: timezoneArg,
       },
     },
     async (args, ctx) =>
       runTool(ctx, "list_recent_doses", args, args, (userId) =>
-        listRecentDoses(userId, args.limit),
+        listRecentDoses(userId, args.limit, { timezone: args.timezone }),
       ),
   );
 

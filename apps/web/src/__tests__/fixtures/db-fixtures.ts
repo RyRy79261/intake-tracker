@@ -3,7 +3,7 @@ import { db, type IntakeRecord, type WeightRecord, type BloodPressureRecord,
   type Prescription, type MedicationPhase, type PhaseSchedule,
   type InventoryItem, type InventoryTransaction, type DoseLog,
   type DailyNote, type AuditLog, type SubstanceRecord, type TitrationPlan,
-  type UserProfile, type InsightReport } from "@/lib/db";
+  type UserProfile, type InsightReport, type UserSettings } from "@/lib/db";
 
 const BASE_TS = 1700000000000; // 2023-11-14 — fixed base for determinism
 
@@ -285,6 +285,33 @@ export function makeUserProfile(overrides?: Partial<UserProfile>): UserProfile {
     deviceId: "test-device",
     ...overrides,
   } as UserProfile;
+}
+
+export function makeUserSettings(overrides?: Partial<UserSettings>): UserSettings {
+  return {
+    id: crypto.randomUUID(),
+    waterLimit: 1000,
+    saltLimit: 1500,
+    sugarLimit: 30,
+    potassiumLimit: 3500,
+    waterExtendedBuffer: 500,
+    saltExtendedBuffer: 500,
+    sugarExtendedBuffer: 10,
+    optionalTrackers: { sugar: true, potassium: false },
+    dayStartHour: 2,
+    liquidPresets: [],
+    primaryRegion: "",
+    secondaryRegion: "",
+    reminderFollowUpCount: 2,
+    reminderFollowUpInterval: 10,
+    homeTimezone: null,
+    homeTimezoneConfirmedAt: null,
+    createdAt: BASE_TS,
+    updatedAt: BASE_TS,
+    deletedAt: null,
+    deviceId: "test-device",
+    ...overrides,
+  };
 }
 
 export function makeInsightReport(overrides?: Partial<InsightReport>): InsightReport {

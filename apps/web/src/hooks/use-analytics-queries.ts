@@ -53,6 +53,8 @@ const DEFAULT_ADHERENCE: AnalyticsResult<AdherenceResult> = {
   value: {
     rate: 0,
     taken: 0,
+    skipped: 0,
+    missed: 0,
     total: 0,
     daily: [],
   },

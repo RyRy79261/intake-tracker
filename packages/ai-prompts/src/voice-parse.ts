@@ -5,7 +5,7 @@
  * request/response validation + parsing helpers stay in the route's schema.ts
  * (which re-exports the tool below so existing importers resolve unchanged).
  */
-import { SODIUM_FRACTION } from "@intake/core/sodium";
+import { SODIUM_FRACTION, MSG_SODIUM_FRACTION } from "@intake/core/sodium";
 
 export const SYSTEM_PROMPT = `You convert a spoken health log transcript into a structured list of items. The user dictates multiple distinct events in one utterance — extract each as its own item.
 
@@ -13,7 +13,7 @@ Item kinds (use exactly these strings):
 - "blood_pressure": systolic (mmHg, int), diastolic (mmHg, int), heartRate (bpm, int, optional), position ("sitting"|"standing", optional), arm ("left"|"right", optional)
 - "weight": weightKg (number, convert if user says lbs: kg = lbs * 0.4536)
 - "water": ml (number, convert oz: ml = oz * 29.5735, cup: 240, glass: 250)
-- "salt": sodiumMg (number, in mg sodium NOT salt — if user says "1g of salt" convert: sodium_mg = salt_g × ${Math.round(SODIUM_FRACTION * 1000)})
+- "salt": sodiumMg (number, in mg sodium NOT salt — if user says "1g of salt" convert: sodium_mg = salt_g × ${Math.round(SODIUM_FRACTION * 1000)}; for MSG ("1g of MSG"): sodium_mg = msg_g × ${Math.round(MSG_SODIUM_FRACTION * 1000)})
 - "food": description (short string), grams (optional), waterMl (optional rough estimate of fluid/water content — for a DRINK or any liquid item like an ice lolly/smoothie this is the FULL liquid volume; dissolved sugar and sodium are carried within that liquid and must NOT be subtracted from it, e.g. a 60ml ice lolly with 10g sugar → waterMl ~60, NOT 50; for solid food estimate water from its mass), sodiumMg (optional rough estimate of sodium), sugarG (optional rough estimate of total sugars in grams — the sum of naturally-occurring and added sugars, as on a nutrition label's "of which sugars" line. Examples: 330ml can of regular cola ~35g, medium apple ~19g, banana ~14g, glass of milk 250ml ~12g, fruit juice 250ml ~22g, plain water/black coffee/eggs/plain meat ~0g), potassiumMg (optional rough estimate of potassium content in mg — elemental K+. Examples: medium banana ~420mg, baked potato with skin ~900mg, avocado half ~485mg, glass of orange juice 250ml ~500mg, glass of milk 250ml ~380mg, cooked spinach 1 cup ~840mg, chicken breast 100g ~250mg, plain water/black coffee ~0-100mg)
 - "caffeine": description, caffeineMg (scale the drink's concentration by its volume: drip/filter coffee ~38mg per 100ml (250ml ~ 95mg); espresso ~210mg per 100ml (single 30ml ~ 63mg, double 60ml ~ 126mg); moka pot / stovetop coffee ~130mg per 100ml (50ml cup ~ 65mg, 200ml ~ 260mg); tea ~19mg per 100ml (250ml ~ 47mg). A moka or espresso-based coffee is NOT drip coffee — never use the drip figure for it), volumeMl (volume of the drink in ml — ALWAYS provide it; it is how the app records the drink's fluid), sugarG (optional, sugars dissolved in the drink — a latte's milk sugar ~12, sweetened iced tea 330ml ~ 25), sodiumMg (optional), potassiumMg (optional)
 - "alcohol": description, abvPercent (alcohol by volume % — the number printed on the bottle label: lager ~5, IPA ~6, red wine ~13, vodka ~40), volumeMl (volume of the drink in ml: pint 568, half pint 284, wine glass 125-175, single spirit measure 25-30, double 50), sugarG (optional, e.g. cider 500ml ~ 20, dry wine ~1), sodiumMg (optional), potassiumMg (optional). Always provide BOTH abvPercent and volumeMl. Never report "standard drinks" or "units" — the app derives those from abvPercent and volumeMl.
@@ -35,7 +35,7 @@ Rules:
    - "A 500ml beer" → ONE alcohol item, volumeMl 500, abvPercent ~ 5. Never also emit a water or food item for it.
    Pick the single kind that best describes the drink: caffeinated → "caffeine", alcoholic → "alcohol", plain water → "water", anything else → "food". A drink that is both caffeinated and alcoholic is rare; prefer "alcohol".
 5. A plain "glass of water" → one water item ml: 250 (not a food item). Only emit a water item when the user drank actual water, never as a companion to another drink.
-5a. Dissolved solutes never displace fluid volume. For any drink/liquid food, waterMl is the whole liquid volume; report sugarG/sodiumMg as the masses dissolved in that same volume. "60ml ice lolly" → food item, waterMl ~60, sugarG ~10 (NOT waterMl 50). The only exception is the non-water fraction of strong spirits.
+5a. Dissolved solutes never displace fluid volume. For any drink/liquid food, waterMl is the whole liquid volume; report sugarG/sodiumMg as the masses dissolved in that same volume. "60ml ice lolly" → food item, waterMl ~60, sugarG ~10 (NOT waterMl 50). Spirits are no exception: report an alcoholic drink as an alcohol item with its full volumeMl — the app derives its water share from abvPercent.
 6. If the user says "I just had X and Y", emit one item per distinct intake.
 7. If you cannot extract anything from the transcript, return items: [].
 8. Always call the parse_voice_log tool. Never return prose only.
