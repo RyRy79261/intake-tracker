@@ -19,6 +19,11 @@ export function OPTIONS() {
 export function GET(req: NextRequest) {
   const origin = getPublicOrigin(req);
   const urls = buildOAuthUrls(origin);
+  const clientAuthMethods = [
+    "none",
+    "client_secret_basic",
+    "client_secret_post",
+  ];
 
   return withCors(
     NextResponse.json({
@@ -26,14 +31,13 @@ export function GET(req: NextRequest) {
       authorization_endpoint: urls.authorizationEndpoint,
       token_endpoint: urls.tokenEndpoint,
       registration_endpoint: urls.registrationEndpoint,
+      // RFC 7009 — lets a client revoke its grant on disconnect.
+      revocation_endpoint: urls.revocationEndpoint,
       scopes_supported: [...SUPPORTED_SCOPES],
       response_types_supported: ["code"],
       grant_types_supported: ["authorization_code", "refresh_token"],
-      token_endpoint_auth_methods_supported: [
-        "none",
-        "client_secret_basic",
-        "client_secret_post",
-      ],
+      token_endpoint_auth_methods_supported: clientAuthMethods,
+      revocation_endpoint_auth_methods_supported: clientAuthMethods,
       code_challenge_methods_supported: ["S256"],
       // Point at the in-repo design doc on GitHub — the markdown isn't
       // served from the app, so this must be an externally reachable URL

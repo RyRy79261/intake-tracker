@@ -319,3 +319,84 @@ describe("MCP OAuth integration (real Postgres)", () => {
     });
   });
 });
+
+describe("MCP token revocation (real Postgres)", () => {
+  async function connectClient(name = "claude.ai") {
+    const client = await oauth.registerClient({
+      clientName: name,
+      redirectUris: ["https://claude.ai/cb"],
+      tokenEndpointAuthMethod: "none",
+    });
+    const issued = await oauth.issueAccessToken({
+      clientId: client.clientId,
+      userId: ctx.testUserId,
+      scope: "intake-tracker:read",
+    });
+    return { client, issued };
+  }
+
+  it("revoking the access token also kills its refresh token", async () => {
+    const { client, issued } = await connectClient();
+
+    const revoked = await oauth.revokeToken(issued.accessToken, client.clientId);
+
+    expect(revoked).toBe(1);
+    expect(await oauth.lookupAccessToken(issued.accessToken)).toBeNull();
+    const refreshed = await oauth.rotateRefreshToken(
+      issued.refreshToken,
+      client.clientId,
+    );
+    expect(refreshed.ok).toBe(false);
+  });
+
+  it("revokes by refresh token", async () => {
+    const { client, issued } = await connectClient();
+
+    expect(await oauth.revokeToken(issued.refreshToken, client.clientId)).toBe(1);
+    expect(await oauth.lookupAccessToken(issued.accessToken)).toBeNull();
+  });
+
+  it("does not let another client revoke the token", async () => {
+    const { issued } = await connectClient();
+    const { client: other } = await connectClient("other");
+
+    expect(await oauth.revokeToken(issued.accessToken, other.clientId)).toBe(0);
+    expect(await oauth.lookupAccessToken(issued.accessToken)).not.toBeNull();
+  });
+
+  it("revokes every connection of a user, or just one client's", async () => {
+    const a = await connectClient("claude.ai");
+    const b = await connectClient("claude desktop");
+
+    expect(
+      await oauth.revokeUserTokens(ctx.testUserId, a.client.clientId),
+    ).toBe(1);
+    expect(await oauth.lookupAccessToken(a.issued.accessToken)).toBeNull();
+    expect(await oauth.lookupAccessToken(b.issued.accessToken)).not.toBeNull();
+
+    expect(await oauth.revokeUserTokens(ctx.testUserId)).toBe(1);
+    expect(await oauth.lookupAccessToken(b.issued.accessToken)).toBeNull();
+  });
+
+  it("lists live connections per client and drops revoked ones", async () => {
+    const a = await connectClient("claude.ai");
+    await connectClient("claude desktop");
+    await oauth.revokeUserTokens(ctx.testUserId, a.client.clientId);
+
+    const connections = await oauth.listUserConnections(ctx.testUserId);
+
+    expect(connections.map((c) => c.clientName)).toEqual(["claude desktop"]);
+    expect(connections[0]).toMatchObject({ tokenCount: 1 });
+  });
+
+  it("purgeExpired removes revoked tokens and dead codes but keeps live tokens", async () => {
+    const live = await connectClient("live");
+    const gone = await connectClient("gone");
+    await oauth.revokeUserTokens(ctx.testUserId, gone.client.clientId);
+
+    await oauth.purgeExpired();
+
+    const rows = await ctx.db.select().from(schema.mcpAccessTokens);
+    expect(rows.map((r) => r.clientId)).toEqual([live.client.clientId]);
+  });
+});

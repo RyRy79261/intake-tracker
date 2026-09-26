@@ -23,6 +23,7 @@ import { QuickNavSection } from "@/components/settings/quick-nav-section";
 import { DataManagementSection } from "@/components/settings/data-management-section";
 import { PermissionsSection } from "@/components/settings/permissions-section";
 import { MedicalAiSection } from "@/components/settings/medical-ai-section";
+import { McpConnectionsSection } from "@/components/settings/mcp-connections-section";
 import { AppUpdatesSection } from "@/components/settings/app-updates-section";
 import { LiquidPresetsSection } from "@/components/settings/liquid-presets-section";
 import { UrinationDefecationDefaults } from "@/components/settings/urination-defecation-defaults";
@@ -117,6 +118,7 @@ function SettingsContent() {
         <SettingsAccordionGroup value="privacy-security" icon={Shield} label="Privacy & Security" iconColorClass="text-emerald-600 dark:text-emerald-400">
           <PermissionsSection />
           <MedicalAiSection />
+          <McpConnectionsSection />
         </SettingsAccordionGroup>
 
         <SettingsAccordionGroup value="system" icon={Download} label="System" iconColorClass="text-sky-600 dark:text-sky-400">
