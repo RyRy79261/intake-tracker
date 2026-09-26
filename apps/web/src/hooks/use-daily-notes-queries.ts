@@ -2,6 +2,7 @@
 
 import { useLiveQuery } from "dexie-react-hooks";
 import { useMutation } from "@tanstack/react-query";
+import { isLive } from "@intake/core/lifecycle";
 import { db, type DailyNote } from "@/lib/db";
 import { syncFields } from "@/lib/utils";
 import { writeWithSync } from "@/lib/sync-queue";
@@ -14,7 +15,7 @@ export function useDailyNotes(date: string, prescriptionId?: string) {
       const notes = await db.dailyNotes.where("date").equals(date).toArray();
       return notes.filter(
         (n) =>
-          n.deletedAt === null &&
+          isLive(n) &&
           (prescriptionId === undefined || n.prescriptionId === prescriptionId),
       );
     },
