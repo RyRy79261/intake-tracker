@@ -17,24 +17,73 @@ import { cn } from "@/lib/utils";
 import { logAudit } from "@/lib/audit";
 import { Clock, ChevronDown, ChevronUp, StickyNote } from "lucide-react";
 
-const IntakeFormSchema = z.object({
-  amount: z.number({ error: "Amount is required" })
-    .positive("Amount must be positive"),
-  note: z.string().max(200, "Note too long").optional(),
-});
 import { Textarea } from "@intake/ui/textarea";
 import {
   getCurrentDateTimeLocal,
-  dateTimeLocalToTimestamp,
+  parseDateTimeLocal,
+  timestampToDateTimeLocal,
 } from "@/lib/date-utils";
+
+/**
+ * A datetime-local value only has minute precision, so "now" typed into the
+ * picker can land up to a minute ahead of a slightly lagging clock.
+ */
+const FUTURE_GRACE_MS = 60_000;
+
+/**
+ * Why a custom time is unusable, or null when it is fine. Shared by the zod
+ * schema (submit) and the live check that disables the submit button.
+ */
+function customTimeError(value: string): string | null {
+  const timestamp = parseDateTimeLocal(value);
+  if (timestamp === null) return "Enter a valid date and time";
+  if (timestamp > Date.now() + FUTURE_GRACE_MS) return "Time can't be in the future";
+  return null;
+}
+
+const IntakeFormSchema = z.object({
+  amount: z.number({ error: "Amount is required" })
+    .int("Amount must be a whole number")
+    .positive("Amount must be positive"),
+  note: z.string().max(200, "Note too long").optional(),
+  customTime: z
+    .string()
+    .optional()
+    .superRefine((value, ctx) => {
+      if (value === undefined) return;
+      const message = customTimeError(value);
+      if (message) ctx.addIssue({ code: "custom", message });
+    }),
+});
+
+/**
+ * `Number` rather than `parseInt`: parseInt silently truncates what a
+ * type=number input accepts ("1e3" became 1 ml). Non-integers are left for
+ * the schema to reject with a field error.
+ */
+function parseAmount(value: string): number | undefined {
+  if (value.trim() === "") return undefined;
+  const amount = Number(value);
+  return Number.isFinite(amount) ? amount : undefined;
+}
 
 interface ManualInputDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   type: "water" | "salt";
   currentValue: number;
-  onSubmit: (amount: number, timestamp?: number, note?: string) => Promise<void>;
+  onSubmit: (amount: number, timestamp?: number, note?: string) => Promise<void> | void;
   isSubmitting?: boolean;
+  /** Overrides the default "Enter Water/Sodium Amount" title. */
+  title?: string;
+  /** Overrides the default description line. */
+  description?: string;
+  /** Overrides the default "Add Entry" submit label. */
+  submitLabel?: string;
+  /** Pre-fills (and reveals) the custom time when the dialog opens. */
+  initialTimestamp?: number | undefined;
+  /** Pre-fills (and reveals) the note when the dialog opens. */
+  initialNote?: string | undefined;
 }
 
 export function ManualInputDialog({
@@ -44,6 +93,11 @@ export function ManualInputDialog({
   currentValue,
   onSubmit,
   isSubmitting = false,
+  title,
+  description,
+  submitLabel = "Add Entry",
+  initialTimestamp,
+  initialNote,
 }: ManualInputDialogProps) {
   const [value, setValue] = useState(currentValue.toString());
   const [showTimeInput, setShowTimeInput] = useState(false);
@@ -59,21 +113,29 @@ export function ManualInputDialog({
   useEffect(() => {
     if (open) {
       setValue(currentValue.toString());
-      setShowTimeInput(false);
-      setCustomTime(getCurrentDateTimeLocal());
-      setShowNoteInput(false);
-      setNote("");
+      setShowTimeInput(initialTimestamp !== undefined);
+      setCustomTime(
+        initialTimestamp !== undefined
+          ? timestampToDateTimeLocal(initialTimestamp)
+          : getCurrentDateTimeLocal()
+      );
+      setShowNoteInput(initialNote !== undefined);
+      setNote(initialNote ?? "");
+      setFieldErrors({});
     }
-  }, [open, currentValue]);
+  }, [open, currentValue, initialTimestamp, initialNote]);
+
+  const amountValue = parseAmount(value);
+  const liveTimeError = showTimeInput ? customTimeError(customTime) : null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const amount = parseInt(value, 10);
     const trimmedNote = note.trim() || undefined;
 
     const parsed = IntakeFormSchema.safeParse({
-      amount: isNaN(amount) ? undefined : amount,
+      amount: amountValue,
       ...(trimmedNote !== undefined && { note: trimmedNote }),
+      ...(showTimeInput && { customTime }),
     });
     if (!parsed.success) {
       const errors: Record<string, string> = {};
@@ -87,8 +149,12 @@ export function ManualInputDialog({
     }
     setFieldErrors({});
 
-    // Pass custom timestamp if time input is shown, otherwise use current time
-    const timestamp = showTimeInput ? dateTimeLocalToTimestamp(customTime) : undefined;
+    // Pass custom timestamp if time input is shown, otherwise use current time.
+    // The schema has already rejected an empty/invalid/future customTime.
+    const timestamp =
+      parsed.data.customTime !== undefined
+        ? (parseDateTimeLocal(parsed.data.customTime) ?? undefined)
+        : undefined;
     await onSubmit(parsed.data.amount, timestamp, trimmedNote);
   };
 
@@ -101,10 +167,11 @@ export function ManualInputDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
-            Enter {isWater ? "Water" : "Sodium"} Amount
+            {title ?? `Enter ${isWater ? "Water" : "Sodium"} Amount`}
           </DialogTitle>
           <DialogDescription>
-            Enter the exact amount in {unit} to add to your intake.
+            {description ??
+              `Enter the exact amount in ${unit} to add to your intake.`}
           </DialogDescription>
         </DialogHeader>
 
@@ -185,7 +252,13 @@ export function ManualInputDialog({
                   onChange={(e) => setCustomTime(e.target.value)}
                   max={getCurrentDateTimeLocal()}
                   className="text-sm"
+                  aria-invalid={liveTimeError !== null}
                 />
+                {(liveTimeError ?? fieldErrors.customTime) && (
+                  <p className="text-sm text-destructive">
+                    {liveTimeError ?? fieldErrors.customTime}
+                  </p>
+                )}
                 <p className="text-xs text-muted-foreground">
                   Use this to log intake that happened earlier
                 </p>
@@ -244,14 +317,19 @@ export function ManualInputDialog({
             </Button>
             <Button
               type="submit"
-              disabled={isSubmitting || !value || parseInt(value, 10) <= 0}
+              disabled={
+                isSubmitting ||
+                amountValue === undefined ||
+                amountValue <= 0 ||
+                liveTimeError !== null
+              }
               className={cn(
                 isWater
                   ? "bg-sky-600 hover:bg-sky-700"
                   : "bg-amber-600 hover:bg-amber-700"
               )}
             >
-              {isSubmitting ? "Adding..." : "Add Entry"}
+              {isSubmitting ? "Adding..." : submitLabel}
             </Button>
           </DialogFooter>
         </form>

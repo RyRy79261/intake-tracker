@@ -20,6 +20,7 @@ import {
   type SodiumKind,
 } from "@/lib/composable-entry-service";
 import { unwrap } from "@intake/core/service";
+import { withDbRecovery } from "@/lib/db-recovery";
 import { showUndoToast } from "@/components/medications/undo-toast";
 
 export type { ComposableEntryInput, ComposableEntryResult, EntryGroup, RecordTable, SodiumKind };
@@ -53,7 +54,9 @@ export function useEntryGroup(groupId: string | undefined) {
 export function useAddComposableEntry() {
   return useCallback(
     async (input: ComposableEntryInput, timestamp?: number): Promise<ComposableEntryResult> => {
-      return unwrap(await addComposableEntry(input, timestamp));
+      return withDbRecovery(async () =>
+        unwrap(await addComposableEntry(input, timestamp)),
+      );
     },
     [],
   );

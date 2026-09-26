@@ -62,6 +62,28 @@ describe("useAddComposableEntry", () => {
   });
 });
 
+describe("useAddComposableEntry recovery", () => {
+  it("reopens a severed database and still saves (issue #287)", async () => {
+    const { result } = renderHook(() => useAddComposableEntry());
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    db.close();
+    let created!: Awaited<ReturnType<typeof result.current>>;
+    await act(async () => {
+      created = await result.current({
+        intakes: [
+          { type: "water", amount: 330, source: "beverage" },
+          { type: "sugar", amount: 20, source: "manual:sugar" },
+        ],
+      });
+    });
+
+    const group = await fetchEntryGroup(created.groupId);
+    expect(group?.intakes).toHaveLength(2);
+    warn.mockRestore();
+  });
+});
+
 describe("useEntryGroup", () => {
   it("returns null for an undefined groupId", async () => {
     const { result } = renderHook(() => useEntryGroup(undefined));

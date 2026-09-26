@@ -106,12 +106,12 @@ export async function getSubstanceRecordsByDateRange(
   if (type) {
     records = await db.substanceRecords
       .where("[type+timestamp]")
-      .between([type, startTime], [type, endTime], true, true)
+      .between([type, startTime], [type, endTime])
       .toArray();
   } else {
     records = await db.substanceRecords
       .where("timestamp")
-      .between(startTime, endTime, true, true)
+      .between(startTime, endTime)
       .toArray();
   }
 

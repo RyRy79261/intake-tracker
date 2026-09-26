@@ -31,11 +31,22 @@ export function timestampToDateTimeLocal(timestamp: number): string {
  * @throws Error if the value cannot be parsed as a valid date
  */
 export function dateTimeLocalToTimestamp(value: string): number {
-  const timestamp = new Date(value).getTime();
-  if (isNaN(timestamp)) {
+  const timestamp = parseDateTimeLocal(value);
+  if (timestamp === null) {
     throw new Error(`Invalid date value: "${value}"`);
   }
   return timestamp;
+}
+
+/**
+ * Non-throwing variant of `dateTimeLocalToTimestamp` for form validation.
+ * Mobile pickers can clear a datetime-local input to "", so callers that
+ * validate as the user types need a guard rather than an exception.
+ * @returns Unix timestamp in milliseconds, or null if the value is not a date
+ */
+export function parseDateTimeLocal(value: string): number | null {
+  const timestamp = new Date(value).getTime();
+  return isNaN(timestamp) ? null : timestamp;
 }
 
 /**

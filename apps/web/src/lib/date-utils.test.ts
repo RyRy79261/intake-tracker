@@ -3,6 +3,7 @@ import {
   getCurrentDateTimeLocal,
   timestampToDateTimeLocal,
   dateTimeLocalToTimestamp,
+  parseDateTimeLocal,
   formatTimeOnly,
   formatDateTime,
 } from "@/lib/date-utils";
@@ -26,6 +27,21 @@ describe("date-utils", () => {
         expect(() => dateTimeLocalToTimestamp(bad)).toThrow(
           `Invalid date value: "${bad}"`,
         );
+      },
+    );
+  });
+
+  describe("parseDateTimeLocal", () => {
+    it("returns the timestamp for a valid value", () => {
+      expect(parseDateTimeLocal("2024-01-15T14:30")).toBe(
+        new Date(2024, 0, 15, 14, 30).getTime(),
+      );
+    });
+
+    it.each(["", "not-a-date", "2024-13-99T99:99"])(
+      "returns null instead of throwing for %j",
+      (bad) => {
+        expect(parseDateTimeLocal(bad)).toBeNull();
       },
     );
   });

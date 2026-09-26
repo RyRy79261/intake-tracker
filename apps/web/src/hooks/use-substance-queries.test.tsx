@@ -11,6 +11,7 @@ import { makeSubstanceRecord } from "@/__tests__/fixtures/db-fixtures";
 import {
   useSubstanceRecords,
   useSubstanceRecordsByDateRange,
+  useSubstanceRecordsSince,
   useAddSubstance,
   useUpdateSubstance,
   useDeleteSubstance,
@@ -105,6 +106,29 @@ describe("useSubstanceRecordsByDateRange", () => {
 
     await waitFor(() => expect(result.current).toHaveLength(1));
     expect(result.current[0]?.type).toBe("alcohol");
+  });
+});
+
+describe("useSubstanceRecordsSince", () => {
+  it("includes a record logged after mount, but not future-dated ones", async () => {
+    const start = Date.now() - 60_000;
+    const { result } = renderHook(
+      () => useSubstanceRecordsSince(start, "caffeine"),
+      { wrapper },
+    );
+    await waitFor(() => expect(result.current).toEqual([]));
+
+    // Logged a moment after the hook mounted: must show without waiting for
+    // the next minute tick (the old memoised `now` end bound excluded it).
+    await new Promise((r) => setTimeout(r, 5));
+    await db.substanceRecords.bulkAdd([
+      makeSubstanceRecord({ id: "fresh", type: "caffeine", timestamp: Date.now() }),
+      makeSubstanceRecord({ id: "future", type: "caffeine", timestamp: Date.now() + 86_400_000 }),
+    ]);
+
+    await waitFor(() =>
+      expect(result.current.map((r) => r.id)).toEqual(["fresh"]),
+    );
   });
 });
 
