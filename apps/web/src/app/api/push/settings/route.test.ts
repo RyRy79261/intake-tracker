@@ -9,8 +9,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { NextRequest } from "next/server";
 
 const mockSaveSettings = vi.fn();
+const mockGetSettings = vi.fn();
 vi.mock("@/lib/push-db", () => ({
   saveSettings: (...args: unknown[]) => mockSaveSettings(...args),
+  getSettings: (...args: unknown[]) => mockGetSettings(...args),
 }));
 
 vi.mock("@/lib/auth-middleware", () => ({
@@ -40,6 +42,51 @@ describe("POST /api/push/settings", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     mockSaveSettings.mockResolvedValue(undefined);
+    mockGetSettings.mockResolvedValue({
+      enabled: true,
+      followUpCount: 2,
+      followUpIntervalMinutes: 10,
+      dayStartHour: 2,
+    });
+  });
+
+  // dates-timezones#6: the day-start hour comes from the client, and an older
+  // client that does not send it keeps whatever is already stored.
+  it("saves the day-start hour the client sends", async () => {
+    const res = await callSettings({
+      followUpCount: 3,
+      followUpIntervalMinutes: 15,
+      dayStartHour: 5,
+    });
+    expect(res.status).toBe(200);
+    expect(mockSaveSettings).toHaveBeenCalledWith(
+      "user-test",
+      expect.objectContaining({ dayStartHour: 5 }),
+    );
+  });
+
+  it("keeps the stored day-start hour when the client does not send one", async () => {
+    mockGetSettings.mockResolvedValue({
+      enabled: true,
+      followUpCount: 2,
+      followUpIntervalMinutes: 10,
+      dayStartHour: 6,
+    });
+    await callSettings({ followUpCount: 3, followUpIntervalMinutes: 15 });
+    expect(mockSaveSettings).toHaveBeenCalledWith(
+      "user-test",
+      expect.objectContaining({ dayStartHour: 6 }),
+    );
+  });
+
+  it("rejects an out-of-range day-start hour", async () => {
+    const res = await callSettings({
+      followUpCount: 3,
+      followUpIntervalMinutes: 15,
+      dayStartHour: 24,
+    });
+    expect(res.status).toBe(400);
+    expect(mockSaveSettings).not.toHaveBeenCalled();
   });
 
   afterEach(() => {

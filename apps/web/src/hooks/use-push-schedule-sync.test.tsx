@@ -200,7 +200,32 @@ describe("usePushScheduleSync", () => {
     const settingsBody = JSON.parse(
       String((callsTo("/api/push/settings")[1]?.[1] as RequestInit).body),
     );
-    expect(settingsBody).toEqual({ followUpCount: 4, followUpIntervalMinutes: 15 });
+    expect(settingsBody).toEqual({
+      followUpCount: 4,
+      followUpIntervalMinutes: 15,
+      dayStartHour: useSettingsStore.getState().dayStartHour,
+    });
+  });
+
+  // dates-timezones#6: the server's day boundary (MCP today summary) used to
+  // be hardcoded to 2am; the client now sends its own setting.
+  it("sends the user's day-start hour and re-sends it when it changes", async () => {
+    await seedMedication("Metoprolol", 50);
+    act(() => {
+      useSettingsStore.setState({ dayStartHour: 5 });
+    });
+    renderHook(() => usePushScheduleSync());
+    await waitFor(() => expect(callsTo("/api/push/settings")).toHaveLength(1));
+    const first = JSON.parse(String((callsTo("/api/push/settings")[0]?.[1] as RequestInit).body));
+    expect(first.dayStartHour).toBe(5);
+
+    act(() => {
+      useSettingsStore.setState({ dayStartHour: 4 });
+    });
+
+    await waitFor(() => expect(callsTo("/api/push/settings")).toHaveLength(2));
+    const second = JSON.parse(String((callsTo("/api/push/settings")[1]?.[1] as RequestInit).body));
+    expect(second.dayStartHour).toBe(4);
   });
 
   it("pings the reminder check endpoint on mount and every minute", async () => {
