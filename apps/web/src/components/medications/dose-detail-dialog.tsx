@@ -68,7 +68,10 @@ export function DoseDetailDialog({
       phaseId: slot.phaseId,
       scheduleId: slot.scheduleId,
       date: slot.scheduledDate,
-      time,
+      // The slot is keyed by its scheduled time; the picked time is when the
+      // dose was actually taken.
+      time: slot.localTime,
+      takenAtTime: time,
       dosageMg: slot.dosageMg,
     });
     onOpenChange(false);

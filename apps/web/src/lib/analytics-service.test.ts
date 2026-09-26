@@ -224,6 +224,42 @@ describe("adherenceRate", () => {
     expect(result.value.daily).toHaveLength(2);
   });
 
+  it("leaves doses that are not yet due out of the denominator (analytics-history-export#10)", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2024-06-02T09:00:00"));
+    try {
+      const slot = (date: string, localTime: string, status: DoseSlot["status"]): DoseSlot =>
+        ({
+          prescriptionId: "rx1",
+          phaseId: "ph1",
+          scheduleId: `s-${localTime}`,
+          scheduledDate: date,
+          scheduleTimeUTC: 0,
+          localTime,
+          dosageMg: 10,
+          unit: "mg",
+          status,
+          prescription: {} as DoseSlot["prescription"],
+          phase: {} as DoseSlot["phase"],
+          schedule: {} as DoseSlot["schedule"],
+        }) as DoseSlot;
+
+      const map = new Map<string, DoseSlot[]>();
+      map.set("2024-06-01", [slot("2024-06-01", "08:00", "taken"), slot("2024-06-01", "20:00", "taken")]);
+      // 09:00 today: the 08:00 dose is taken, the 20:00 dose is not due yet.
+      map.set("2024-06-02", [slot("2024-06-02", "08:00", "taken"), slot("2024-06-02", "20:00", "pending")]);
+      vi.mocked(mockGetDoseSchedule).mockResolvedValue(map);
+
+      const result = await adherenceRate(makeRange(2));
+      expect(result.value.taken).toBe(3);
+      expect(result.value.total).toBe(3);
+      expect(result.value.rate).toBe(1);
+      expect(result.value.daily.find((d) => d.date === "2024-06-02")?.total).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("returns rate=0 for no dose schedule", async () => {
     vi.mocked(mockGetDoseSchedule).mockResolvedValue(new Map());
     const result = await adherenceRate(makeRange(7));

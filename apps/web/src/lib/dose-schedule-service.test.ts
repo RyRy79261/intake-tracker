@@ -21,6 +21,8 @@ import {
 const TUESDAY = "2023-11-14";
 const WEDNESDAY = "2023-11-15";
 const THURSDAY = "2023-11-16";
+// Local noon, so the regimen's start date is 2023-11-01 in every test timezone.
+const REGIMEN_START = new Date("2023-11-01T12:00:00").getTime();
 
 async function seedPrescription(overrides?: {
   isActive?: boolean;
@@ -37,6 +39,7 @@ async function seedPrescription(overrides?: {
   });
   const phase = makeMedicationPhase(rx.id, {
     status: (overrides?.phaseStatus ?? "active") as "active" | "completed" | "pending",
+    startDate: overrides?.createdAt ?? REGIMEN_START,
   });
   const schedule = makePhaseSchedule(phase.id, {
     scheduleTimeUTC: overrides?.scheduleTimeUTC ?? 480, // 08:00 UTC
@@ -44,6 +47,7 @@ async function seedPrescription(overrides?: {
     daysOfWeek: overrides?.daysOfWeek ?? [0, 1, 2, 3, 4, 5, 6],
     dosage: overrides?.dosage ?? 50,
     enabled: overrides?.enabled ?? true,
+    createdAt: overrides?.createdAt ?? REGIMEN_START,
   });
   const inv = makeInventoryItem(rx.id, {
     strength: 50,
@@ -163,18 +167,20 @@ describe("getDailyDoseSchedule", () => {
 
   it("returns two DoseSlots sorted by localTime for multiple schedules", async () => {
     const rx = makePrescription();
-    const phase = makeMedicationPhase(rx.id);
+    const phase = makeMedicationPhase(rx.id, { startDate: REGIMEN_START });
     const morningSchedule = makePhaseSchedule(phase.id, {
       scheduleTimeUTC: 480, // 08:00 UTC
       anchorTimezone: "UTC",
       daysOfWeek: [2],
       dosage: 50,
+      createdAt: REGIMEN_START,
     });
     const eveningSchedule = makePhaseSchedule(phase.id, {
       scheduleTimeUTC: 1080, // 18:00 UTC
       anchorTimezone: "UTC",
       daysOfWeek: [2],
       dosage: 25,
+      createdAt: REGIMEN_START,
     });
     const inv = makeInventoryItem(rx.id, { strength: 50, currentStock: 30 });
 
@@ -221,11 +227,12 @@ describe("getDailyDoseSchedule", () => {
 
   it("sets inventoryWarning to 'no_inventory' when no inventory exists", async () => {
     const rx = makePrescription();
-    const phase = makeMedicationPhase(rx.id);
+    const phase = makeMedicationPhase(rx.id, { startDate: REGIMEN_START });
     const schedule = makePhaseSchedule(phase.id, {
       scheduleTimeUTC: 480,
       anchorTimezone: "UTC",
       daysOfWeek: [2],
+      createdAt: REGIMEN_START,
     });
 
     await db.prescriptions.add(rx);
@@ -238,7 +245,7 @@ describe("getDailyDoseSchedule", () => {
     expect(slots[0]!.inventoryWarning).toBe("no_inventory");
   });
 
-  it("maps rescheduled dose log to skipped slot status", async () => {
+  it("builds a rescheduled slot at its new time, still owed (doses-titration-schedule#6)", async () => {
     const { rx, phase, schedule } = await seedPrescription({
       daysOfWeek: [2],
     });
@@ -252,7 +259,11 @@ describe("getDailyDoseSchedule", () => {
 
     const slots = await getDailyDoseSchedule(TUESDAY, "UTC");
     expect(slots).toHaveLength(1);
-    expect(slots[0]!.status).toBe("skipped"); // rescheduled shows as handled
+    // Rescheduled is not handled: the dose is still owed, now at 14:00, and
+    // on a past date it was missed.
+    expect(slots[0]!.status).toBe("missed");
+    expect(slots[0]!.localTime).toBe("14:00");
+    expect(slots[0]!.existingLog?.id).toBe(log.id);
   });
 
   it("does not return slots for dates before prescription was created", async () => {
@@ -374,12 +385,13 @@ describe("timezone behavior", () => {
 
     // Seed schedule anchored at SA: 08:30 SA (UTC+2) = 06:30 UTC = 390 min
     const rx = makePrescription({ createdAt: 1700000000000 });
-    const phase = makeMedicationPhase(rx.id);
+    const phase = makeMedicationPhase(rx.id, { startDate: REGIMEN_START });
     const schedule = makePhaseSchedule(phase.id, {
       scheduleTimeUTC: 390,
       anchorTimezone: "Africa/Johannesburg",
       daysOfWeek: [2], // Tuesday
       time: "08:30",
+      createdAt: REGIMEN_START,
     });
     const inv = makeInventoryItem(rx.id, { strength: 50, currentStock: 30 });
 
@@ -453,5 +465,192 @@ describe("DST transition handling", () => {
     // Either way, the result should be a valid number different from or equal to SA depending on season
     expect(deUTC).toBeGreaterThanOrEqual(0);
     expect(deUTC).toBeLessThan(1440);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Slot/log matching and effective-dated history
+// ---------------------------------------------------------------------------
+
+/** A local-time timestamp, clear of any midnight in every test timezone. */
+function localNoon(date: string): number {
+  return new Date(date + "T12:00:00").getTime();
+}
+
+const MONDAY = "2023-11-13";
+const PREV_WEEK = "2023-11-07";
+
+async function seedRegimen(opts?: { phase?: Parameters<typeof makeMedicationPhase>[1] }) {
+  const rx = makePrescription({ createdAt: localNoon("2023-11-01") });
+  const phase = makeMedicationPhase(rx.id, {
+    startDate: localNoon("2023-11-01"),
+    createdAt: localNoon("2023-11-01"),
+    ...opts?.phase,
+  });
+  const schedule = makePhaseSchedule(phase.id, {
+    createdAt: localNoon("2023-11-01"),
+    dosage: 50,
+  });
+  await db.prescriptions.add(rx);
+  await db.medicationPhases.add(phase);
+  await db.phaseSchedules.add(schedule);
+  return { rx, phase, schedule };
+}
+
+describe("slot and log matching", () => {
+  it("picks the taken log whichever order duplicate logs were stored in", async () => {
+    const { rx, phase, schedule } = await seedRegimen();
+    await db.doseLogs.bulkAdd([
+      makeDoseLog(rx.id, phase.id, schedule.id, { id: "b", scheduledDate: TUESDAY, status: "taken" }),
+      makeDoseLog(rx.id, phase.id, schedule.id, { id: "c", scheduledDate: TUESDAY, status: "pending", scheduledTime: "11:00" }),
+      makeDoseLog(rx.id, phase.id, schedule.id, { id: "a", scheduledDate: TUESDAY, status: "pending", updatedAt: 1_800_000_000_000 }),
+    ]);
+
+    const slots = await getDailyDoseSchedule(TUESDAY, "UTC");
+    expect(slots).toHaveLength(1);
+    expect(slots[0]!.status).toBe("taken");
+    expect(slots[0]!.existingLog?.id).toBe("b");
+  });
+
+  it("ignores soft-deleted logs", async () => {
+    const { rx, phase, schedule } = await seedRegimen();
+    await db.doseLogs.add(
+      makeDoseLog(rx.id, phase.id, schedule.id, { scheduledDate: TUESDAY, status: "taken", deletedAt: 1 }),
+    );
+
+    const slots = await getDailyDoseSchedule(TUESDAY, "UTC");
+    expect(slots[0]!.status).toBe("missed");
+    expect(slots[0]!.existingLog).toBeUndefined();
+  });
+
+  it("reads a pending log on a past date as missed (gap-bulk-dose-actions#5)", async () => {
+    const { rx, phase, schedule } = await seedRegimen();
+    await db.doseLogs.add(
+      makeDoseLog(rx.id, phase.id, schedule.id, { scheduledDate: TUESDAY, status: "pending" }),
+    );
+
+    const slots = await getDailyDoseSchedule(TUESDAY, "UTC");
+    expect(slots[0]!.status).toBe("missed");
+  });
+
+  it("keeps a rescheduled dose at its new time once taken", async () => {
+    const { rx, phase, schedule } = await seedRegimen();
+    await db.doseLogs.add(
+      makeDoseLog(rx.id, phase.id, schedule.id, {
+        scheduledDate: TUESDAY, status: "taken", rescheduledTo: "14:00",
+      }),
+    );
+
+    const slots = await getDailyDoseSchedule(TUESDAY, "UTC");
+    expect(slots[0]!.status).toBe("taken");
+    expect(slots[0]!.localTime).toBe("14:00");
+  });
+
+  it("shows the current dose and unit for an untaken log, not a stale snapshot", async () => {
+    // An untake leaves the previous take's snapshot on the now-pending log.
+    const { rx, phase, schedule } = await seedRegimen();
+    await db.doseLogs.add(
+      makeDoseLog(rx.id, phase.id, schedule.id, {
+        scheduledDate: TUESDAY, status: "pending", doseAmount: 25, doseUnit: "mcg",
+      }),
+    );
+
+    const slots = await getDailyDoseSchedule(TUESDAY, "UTC");
+    expect(slots[0]!.dosageMg).toBe(50);
+    expect(slots[0]!.unit).toBe(phase.unit);
+  });
+
+  it("shows the dose recorded on a taken log, not the edited schedule (prescriptions-model#3)", async () => {
+    const { rx, phase, schedule } = await seedRegimen();
+    await db.doseLogs.add(
+      makeDoseLog(rx.id, phase.id, schedule.id, {
+        scheduledDate: TUESDAY, status: "taken", doseAmount: 25, doseUnit: "mg",
+      }),
+    );
+    await db.phaseSchedules.update(schedule.id, { dosage: 100 });
+
+    const slots = await getDailyDoseSchedule(TUESDAY, "UTC");
+    expect(slots[0]!.dosageMg).toBe(25);
+    // An unlogged day shows the current regimen.
+    const monday = await getDailyDoseSchedule(MONDAY, "UTC");
+    expect(monday[0]!.dosageMg).toBe(100);
+  });
+});
+
+describe("effective-dated history (doses-titration-schedule#13)", () => {
+  it("resolves a past date from the phase live on that date, not today's titration", async () => {
+    const { rx, phase: maintenance, schedule: maintSchedule } = await seedRegimen();
+    const titration = makeMedicationPhase(rx.id, {
+      type: "titration",
+      titrationPlanId: "plan-1",
+      startDate: localNoon(MONDAY),
+      createdAt: localNoon(MONDAY),
+    });
+    const titSchedule = makePhaseSchedule(titration.id, { dosage: 100, createdAt: localNoon(MONDAY) });
+    await db.medicationPhases.add(titration);
+    await db.phaseSchedules.add(titSchedule);
+    await db.doseLogs.add(
+      makeDoseLog(rx.id, maintenance.id, maintSchedule.id, { scheduledDate: PREV_WEEK, status: "taken" }),
+    );
+
+    const before = await getDailyDoseSchedule(PREV_WEEK, "UTC");
+    expect(before.map((s) => [s.scheduleId, s.status])).toEqual([[maintSchedule.id, "taken"]]);
+
+    const during = await getDailyDoseSchedule(TUESDAY, "UTC");
+    expect(during.map((s) => s.scheduleId)).toEqual([titSchedule.id]);
+  });
+
+  it("keeps a completed phase's days inside its start and end dates", async () => {
+    const { schedule } = await seedRegimen({
+      phase: { status: "completed", endDate: localNoon(MONDAY) },
+    });
+
+    const inside = await getDailyDoseSchedule(PREV_WEEK, "UTC");
+    expect(inside.map((s) => s.scheduleId)).toEqual([schedule.id]);
+    expect(await getDailyDoseSchedule(TUESDAY, "UTC")).toHaveLength(0);
+  });
+
+  it("does not mark a schedule missed on days before it was added", async () => {
+    const { phase } = await seedRegimen();
+    const added = makePhaseSchedule(phase.id, { time: "20:00", scheduleTimeUTC: 1200, createdAt: localNoon(MONDAY) });
+    await db.phaseSchedules.add(added);
+
+    const before = await getDailyDoseSchedule(PREV_WEEK, "UTC");
+    expect(before.map((s) => s.scheduleId)).not.toContain(added.id);
+    const after = await getDailyDoseSchedule(TUESDAY, "UTC");
+    expect(after.map((s) => s.scheduleId)).toContain(added.id);
+  });
+
+  it("shows a removed schedule on days before it was removed", async () => {
+    const { schedule } = await seedRegimen();
+    await db.phaseSchedules.update(schedule.id, { deletedAt: localNoon(MONDAY), enabled: false });
+
+    expect((await getDailyDoseSchedule(PREV_WEEK, "UTC")).map((s) => s.scheduleId)).toEqual([schedule.id]);
+    expect(await getDailyDoseSchedule(TUESDAY, "UTC")).toHaveLength(0);
+  });
+
+  it("drops soft-deleted prescriptions and phases", async () => {
+    const { rx } = await seedRegimen();
+    await db.prescriptions.update(rx.id, { deletedAt: 1 });
+    expect(await getDailyDoseSchedule(TUESDAY, "UTC")).toHaveLength(0);
+
+    await db.prescriptions.update(rx.id, { deletedAt: null });
+    const phase = await db.medicationPhases.where("prescriptionId").equals(rx.id).first();
+    await db.medicationPhases.update(phase!.id, { deletedAt: 1 });
+    expect(await getDailyDoseSchedule(TUESDAY, "UTC")).toHaveLength(0);
+  });
+
+  it("still shows a past logged dose whose phase no longer covers that date", async () => {
+    // A phase completed without an endDate cannot be dated, but its taken
+    // dose must not vanish from history.
+    const { rx, phase, schedule } = await seedRegimen({ phase: { status: "completed" } });
+    await db.doseLogs.add(
+      makeDoseLog(rx.id, phase.id, schedule.id, { scheduledDate: TUESDAY, status: "taken" }),
+    );
+
+    const slots = await getDailyDoseSchedule(TUESDAY, "UTC");
+    expect(slots.map((s) => [s.scheduleId, s.status])).toEqual([[schedule.id, "taken"]]);
+    // No log on another day: nothing to show.
+    expect(await getDailyDoseSchedule(MONDAY, "UTC")).toHaveLength(0);
   });
 });

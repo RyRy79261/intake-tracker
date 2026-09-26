@@ -7,8 +7,10 @@ import {
   type InventoryItem,
 } from "@/lib/db";
 import { formatLocalTime, getDeviceTimezone } from "@/lib/timezone";
-import { calculatePillsConsumed, isCleanFraction } from "@/lib/dose-log-service";
+import { calculatePillsConsumed, isCleanFraction, selectSlotLog } from "@/lib/dose-log-service";
 import { toLocalDateKey } from "@/lib/date-utils";
+import { isLive } from "@intake/core/lifecycle";
+import { selectEffectivePhase, selectEffectivePhases } from "@intake/core/effective-phase";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -61,20 +63,78 @@ function deriveStatus(
   dateStr: string,
   todayStr: string,
 ): DoseSlotStatus {
-  if (log) {
-    // Map dose log status to slot status
-    if (log.status === "taken") return "taken";
-    if (log.status === "skipped") return "skipped";
-    // "rescheduled" and "pending" logs map to their respective statuses
-    if (log.status === "rescheduled") return "skipped"; // rescheduled slots show as handled
-    if (log.status === "pending") return "pending";
-  }
+  if (log?.status === "taken") return "taken";
+  if (log?.status === "skipped") return "skipped";
 
-  // No log exists
+  // No log, a "pending" log (an untaken dose) or a "rescheduled" one (still
+  // owed, at its new time): the dose is outstanding, so the date decides.
   if (dateStr === todayStr) return "pending";
   if (dateStr < todayStr) return "missed";
   // Future date
   return "pending";
+}
+
+/**
+ * Whether a phase was running on a past date: started on or before it, and,
+ * once completed, ended on or after it. An active phase has no end yet (a
+ * maintenance phase re-activated after a titration keeps its old endDate).
+ * A completed phase with no endDate cannot be dated and counts as not live.
+ */
+function phaseLiveOn(phase: MedicationPhase, dateStr: string): boolean {
+  if (!isLive(phase) || toLocalDateKey(phase.startDate) > dateStr) return false;
+  if (phase.status === "active") return true;
+  if (phase.status === "completed") {
+    return phase.endDate != null && toLocalDateKey(phase.endDate) >= dateStr;
+  }
+  return false;
+}
+
+/**
+ * Whether a schedule applied on a date: added on or before it, and either
+ * still live and enabled or removed after it. A removed schedule's `enabled`
+ * says nothing about the days it ran (the v23 tombstone repair cleared it).
+ */
+function scheduleLiveOn(schedule: PhaseSchedule, dateStr: string): boolean {
+  if (toLocalDateKey(schedule.createdAt) > dateStr) return false;
+  if (isLive(schedule)) return schedule.enabled === true;
+  return dateStr < toLocalDateKey(schedule.deletedAt!);
+}
+
+/**
+ * The phase and schedules that drove each prescription on a PAST date. The
+ * same precedence as today (a plan-linked titration beats maintenance), but
+ * only among phases that were running on that date; ties go to the phase
+ * that started last.
+ */
+function selectPhasesLiveOn(
+  dateStr: string,
+  phases: MedicationPhase[],
+  schedules: PhaseSchedule[],
+): { phase: MedicationPhase; schedules: PhaseSchedule[] }[] {
+  const byPrescription = new Map<string, MedicationPhase[]>();
+  for (const phase of phases) {
+    if (!phaseLiveOn(phase, dateStr)) continue;
+    const bucket = byPrescription.get(phase.prescriptionId) ?? [];
+    bucket.push(phase);
+    byPrescription.set(phase.prescriptionId, bucket);
+  }
+
+  const result: { phase: MedicationPhase; schedules: PhaseSchedule[] }[] = [];
+  for (const candidates of byPrescription.values()) {
+    // selectEffectivePhase only weighs active phases; every candidate here was
+    // running on the date, so present them all as active and map back by id.
+    candidates.sort((a, b) => b.startDate - a.startDate);
+    const chosen = selectEffectivePhase(
+      candidates.map((p) => ({ ...p, status: "active" as const })),
+    );
+    const phase = candidates.find((p) => p.id === chosen?.id);
+    if (!phase) continue;
+    result.push({
+      phase,
+      schedules: schedules.filter((s) => s.phaseId === phase.id && scheduleLiveOn(s, dateStr)),
+    });
+  }
+  return result;
 }
 
 // ---------------------------------------------------------------------------
@@ -102,57 +162,70 @@ export async function getDailyDoseSchedule(
   const parsedDate = new Date(dateStr + "T12:00:00");
   const dayOfWeek = parsedDate.getDay(); // 0=Sunday
 
-  // 2. Get all active prescriptions (filter on boolean, not indexed integer)
+  // 2. Get all live, active prescriptions (filter on boolean, not indexed integer)
   const allPrescriptions = await db.prescriptions.toArray();
-  const activePrescriptions = allPrescriptions.filter(p => p.isActive === true);
+  const activePrescriptions = allPrescriptions.filter(
+    (p) => p.isActive === true && isLive(p),
+  );
   const prescriptionMap = new Map(activePrescriptions.map((p) => [p.id, p]));
-  const prescriptionIds = activePrescriptions.map((p) => p.id);
 
-  // 3. Get active phases for those prescriptions.
-  // Prefer titration phases over maintenance: if a prescription has an active
-  // titration phase (linked to a titrationPlanId), use that instead of its
-  // maintenance phase.
-  const allActivePhases = await db.medicationPhases
-    .where("status")
-    .equals("active")
-    .toArray();
-  const allRelevantPhases = allActivePhases.filter((p) =>
-    prescriptionIds.includes(p.prescriptionId),
+  // 3. Pick each prescription's phase and schedules. Today and later use the
+  // current regimen (a plan-linked titration overrides maintenance). A past
+  // date is resolved from the phases and schedules that were live ON that
+  // date, so a later titration or schedule edit does not rewrite history.
+  const isPast = dateStr < todayStr;
+  const allPhases = (await db.medicationPhases.toArray()).filter(
+    (p) => prescriptionMap.has(p.prescriptionId) && isLive(p),
   );
-
-  // For each prescription, pick the titration phase if one exists, else maintenance
-  const phaseByPrescription = new Map<string, typeof allRelevantPhases[number]>();
-  for (const phase of allRelevantPhases) {
-    const existing = phaseByPrescription.get(phase.prescriptionId);
-    if (!existing) {
-      phaseByPrescription.set(phase.prescriptionId, phase);
-    } else if (phase.type === "titration" && phase.titrationPlanId) {
-      // Titration overrides maintenance
-      phaseByPrescription.set(phase.prescriptionId, phase);
-    }
-  }
-  const activePhases = Array.from(phaseByPrescription.values());
-  const phaseMap = new Map(activePhases.map((p) => [p.id, p]));
-  const phaseIds = activePhases.map((p) => p.id);
-
-  // 4. Get enabled schedules for active phases on this day-of-week
   const allSchedules = await db.phaseSchedules.toArray();
-  const enabledSchedules = allSchedules.filter(s => s.enabled === true);
-  const applicableSchedules = enabledSchedules.filter(
-    (s) => phaseIds.includes(s.phaseId) && s.daysOfWeek.includes(dayOfWeek),
-  );
+  const effective = isPast
+    ? selectPhasesLiveOn(dateStr, allPhases, allSchedules)
+    : selectEffectivePhases(allPhases, allSchedules).map(({ phase, schedules }) => ({
+        phase,
+        // A schedule added today has no slot on the days before it.
+        schedules: schedules.filter((s) => toLocalDateKey(s.createdAt) <= dateStr),
+      }));
+  const phaseMap = new Map(effective.map(({ phase }) => [phase.id, phase]));
 
-  // 5. Get all existing dose logs for this date
+  // 4. The schedules that apply on this day-of-week
+  const applicableSchedules = effective
+    .flatMap(({ schedules }) => schedules)
+    .filter((s) => s.daysOfWeek.includes(dayOfWeek));
+
+  // 5. Get all live scheduled dose logs for this date, grouped per slot. A
+  // slot is (scheduleId, date); when several logs exist for one (older builds,
+  // two offline devices) selectSlotLog picks one deterministically.
   const doseLogs = await db.doseLogs
     .where("scheduledDate")
     .equals(dateStr)
     .toArray();
-
-  // Build a lookup map: "prescriptionId|phaseId|scheduleId" -> DoseLog
-  const logMap = new Map<string, DoseLog>();
+  const logsBySchedule = new Map<string, DoseLog[]>();
   for (const log of doseLogs) {
-    const key = `${log.prescriptionId}|${log.phaseId}|${log.scheduleId}`;
-    logMap.set(key, log);
+    if (!log.scheduleId || log.kind === "prn" || !isLive(log)) continue;
+    const bucket = logsBySchedule.get(log.scheduleId) ?? [];
+    bucket.push(log);
+    logsBySchedule.set(log.scheduleId, bucket);
+  }
+  const logMap = new Map<string, DoseLog>();
+  for (const [scheduleId, logs] of logsBySchedule) {
+    const log = selectSlotLog(logs);
+    if (log) logMap.set(scheduleId, log);
+  }
+
+  // A past dose that was taken or skipped stays in history even when its
+  // phase can no longer be dated (e.g. completed without an endDate).
+  if (isPast) {
+    const shown = new Set(applicableSchedules.map((s) => s.id));
+    const scheduleById = new Map(allSchedules.map((s) => [s.id, s]));
+    const phaseById = new Map(allPhases.map((p) => [p.id, p]));
+    for (const [scheduleId, log] of logMap) {
+      if (shown.has(scheduleId) || (log.status !== "taken" && log.status !== "skipped")) continue;
+      const schedule = scheduleById.get(scheduleId);
+      const phase = schedule && phaseById.get(schedule.phaseId);
+      if (!schedule || !phase) continue;
+      phaseMap.set(phase.id, phase);
+      applicableSchedules.push(schedule);
+    }
   }
 
   // 6. Get all active inventory items (filter on boolean, not indexed integer)
@@ -181,14 +254,19 @@ export async function getDailyDoseSchedule(
       : undefined;
     if (createdDate && dateStr < createdDate) continue;
 
-    const logKey = `${prescription.id}|${phase.id}|${schedule.id}`;
-    const existingLog = logMap.get(logKey);
+    const existingLog = logMap.get(schedule.id);
 
     const status = deriveStatus(existingLog, dateStr, todayStr);
     const localTime = formatLocalTime(schedule.scheduleTimeUTC, tz);
     const dosageMg = schedule.dosage;
 
     const inventory = inventoryByPrescription.get(prescription.id);
+    // A logged dose shows what was recorded, not the schedule's current dose.
+    const snapshot =
+      existingLog?.status === "taken" || existingLog?.status === "skipped"
+        ? existingLog
+        : undefined;
+    const shownDose = snapshot?.doseAmount ?? dosageMg;
 
     // Calculate pill info
     let pillsPerDose: number | undefined;
@@ -197,7 +275,7 @@ export async function getDailyDoseSchedule(
     if (!inventory) {
       inventoryWarning = "no_inventory";
     } else {
-      pillsPerDose = calculatePillsConsumed(dosageMg, inventory.strength);
+      pillsPerDose = calculatePillsConsumed(shownDose, inventory.strength);
       pillsPerDose =
         Math.round(pillsPerDose * 10000) / 10000;
 
@@ -219,9 +297,10 @@ export async function getDailyDoseSchedule(
       scheduleId: schedule.id,
       scheduledDate: dateStr,
       scheduleTimeUTC: schedule.scheduleTimeUTC,
-      localTime,
-      dosageMg,
-      unit: phase.unit,
+      // A rescheduled dose sits at its new time.
+      localTime: existingLog?.rescheduledTo ?? localTime,
+      dosageMg: shownDose,
+      unit: snapshot?.doseUnit ?? phase.unit,
       status,
       ...(existingLog !== undefined && { existingLog }),
       prescription,
