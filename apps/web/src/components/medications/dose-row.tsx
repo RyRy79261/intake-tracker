@@ -158,12 +158,15 @@ export function DoseRow({ slot, isToday, isFuture, onTake, onRetroactiveTake, on
         </div>
       </div>
 
+      {/* A late dose today defaults to now; a past-date back-fill defaults
+          to the scheduled time, matching Mark All and the detail drawer. */}
       <RetroactiveTimePicker
         open={timePickerOpen}
         onOpenChange={setTimePickerOpen}
-        defaultTime={getCurrentTimeHHMM()}
+        defaultTime={isToday ? getCurrentTimeHHMM() : slot.localTime}
         compoundName={prescription.genericName}
         onConfirm={handleRetroactiveConfirm}
+        notAfterNow={isToday}
       />
 
       <RetroactiveTimePicker
@@ -172,6 +175,7 @@ export function DoseRow({ slot, isToday, isFuture, onTake, onRetroactiveTake, on
         defaultTime={takenAtDisplay}
         compoundName={prescription.genericName}
         onConfirm={(time) => onEditTime(slot, time)}
+        notAfterNow={isToday}
       />
     </>
   );

@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { useRollingSelectedDate } from "@/hooks/use-today-key";
+import { toLocalDateKey } from "@/lib/date-utils";
 import { WeekDaySelector } from "@/components/medications/week-day-selector";
 import { MedTabBar } from "@/components/medications/med-footer";
 import { ScheduleView } from "@/components/medications/schedule-view";
@@ -17,14 +19,18 @@ function MedicationsContent() {
   const activeTab = useMedicationUIStore((s) => s.activeTab);
   const setActiveTab = useMedicationUIStore((s) => s.setActiveTab);
   const setWizardOpen = useMedicationUIStore((s) => s.setWizardOpen);
-  const [selectedDate, setSelectedDate] = useState(() => new Date());
+  // Ticks over at midnight, so a screen left open overnight moves its
+  // "today" (and a today selection) to the new day.
+  const { selectedDate, setSelectedDate, todayKey } = useRollingSelectedDate();
 
   const [doseDetailOpen, setDoseDetailOpen] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<DoseSlot | null>(null);
 
   useMedicationNotifications();
 
-  const isToday = selectedDate.toDateString() === new Date().toDateString();
+  const selectedKey = toLocalDateKey(selectedDate);
+  const isToday = selectedKey === todayKey;
+  const isFuture = selectedKey > todayKey;
 
   const handleDoseClick = useCallback((slot: DoseSlot) => {
     setSelectedSlot(slot);
@@ -68,6 +74,7 @@ function MedicationsContent() {
         onOpenChange={setDoseDetailOpen}
         slot={selectedSlot}
         isToday={isToday}
+        isFuture={isFuture}
       />
     </>
   );
