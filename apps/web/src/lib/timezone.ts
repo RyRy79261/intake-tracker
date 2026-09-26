@@ -189,13 +189,20 @@ export function zonedWallClockToInstant(
   const [y, mo, d] = dateKey.split("-").map(Number);
   if (!hm || !y || !mo || !d) return null;
   const wallAsUTC = Date.UTC(y, mo - 1, d, hm.hours, hm.minutes);
-  const firstOffset = getTimezoneOffsetAt(wallAsUTC, timezone);
-  let instant = wallAsUTC - firstOffset * 60_000;
-  const secondOffset = getTimezoneOffsetAt(instant, timezone);
-  if (secondOffset !== firstOffset) {
-    instant = wallAsUTC - secondOffset * 60_000;
-  }
-  return instant;
+  // The offsets in force a day either side cover both sides of any DST
+  // change that could affect this wall clock (east or west of UTC).
+  const offsets = new Set([
+    getTimezoneOffsetAt(wallAsUTC - 86_400_000, timezone),
+    getTimezoneOffsetAt(wallAsUTC + 86_400_000, timezone),
+  ]);
+  const candidates = [...offsets].map((o) => wallAsUTC - o * 60_000);
+  const exact = candidates.filter(
+    (instant) => (wallAsUTC - instant) / 60_000 === getTimezoneOffsetAt(instant, timezone),
+  );
+  // Overlap: two exact matches, take the later (standard-time) one. Gap: no
+  // exact match; the later candidate is the wall clock pushed forward by
+  // the gap.
+  return Math.max(...(exact.length > 0 ? exact : candidates));
 }
 
 /** Format an instant as "HH:MM" on the wall clock of `timezone`. */

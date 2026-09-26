@@ -45,6 +45,24 @@ describe("zonedWallClockToInstant", () => {
     expect(instant).toBe(Date.UTC(2027, 2, 28, 1, 30)); // 03:30 CEST
   });
 
+  it("resolves the fall-back overlap to the later, standard-time occurrence", () => {
+    // 02:30 happens twice in Berlin on 2026-10-25; the CET one is 01:30 UTC.
+    expect(zonedWallClockToInstant("2026-10-25", "02:30", BERLIN)).toBe(
+      Date.UTC(2026, 9, 25, 1, 30),
+    );
+    // 01:30 happens twice in New York on 2026-11-01; the EST one is 06:30 UTC.
+    expect(zonedWallClockToInstant("2026-11-01", "01:30", "America/New_York")).toBe(
+      Date.UTC(2026, 10, 1, 6, 30),
+    );
+  });
+
+  it("moves a gap time forward west of UTC too", () => {
+    // 02:30 does not exist in New York on 2027-03-14; 03:30 EDT is 07:30 UTC.
+    expect(zonedWallClockToInstant("2027-03-14", "02:30", "America/New_York")).toBe(
+      Date.UTC(2027, 2, 14, 7, 30),
+    );
+  });
+
   it("returns null for a malformed time or date", () => {
     expect(zonedWallClockToInstant("2026-10-26", "8h30", BERLIN)).toBeNull();
     expect(zonedWallClockToInstant("not-a-date", "08:30", BERLIN)).toBeNull();
