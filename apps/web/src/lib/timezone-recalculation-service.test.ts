@@ -175,9 +175,12 @@ describe("recalculateScheduleTimezones", () => {
     const { getDailyDoseSchedule } = await import("@/lib/dose-schedule-service");
     const { makeInventoryItem } = await import("@/__tests__/fixtures/db-fixtures");
 
-    const rx = makePrescription({ createdAt: 1700000000000 });
-    const phase = makeMedicationPhase(rx.id);
+    // Local noon well before the Tuesday queried below, in every test zone.
+    const created = new Date("2023-11-01T12:00:00").getTime();
+    const rx = makePrescription({ createdAt: created });
+    const phase = makeMedicationPhase(rx.id, { startDate: created, createdAt: created });
     const schedule = makePhaseSchedule(phase.id, {
+      createdAt: created,
       scheduleTimeUTC: 390, // 08:30 SA = 06:30 UTC
       anchorTimezone: "Africa/Johannesburg",
       daysOfWeek: [2], // Tuesday

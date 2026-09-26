@@ -406,14 +406,17 @@ describe("exportToPDF", () => {
 
   it("clamps an 'All' report to the first data point instead of walking from 1970", async () => {
     pdfSaves.length = 0;
-    await db.weightRecords.add(makeWeightRecord({ weight: 71, timestamp: BASE_TS }));
+    // Local noon: BASE_TS is 22:13 UTC, past midnight east of UTC+1, which
+    // would move the report's first/last logical day in those zones.
+    const noon = new Date("2023-11-14T12:00:00").getTime();
+    await db.weightRecords.add(makeWeightRecord({ weight: 71, timestamp: noon }));
 
     // The unclamped range walks ~20 000 days of dose schedule and times out.
-    await exportToPDF({ start: 0, end: BASE_TS + 7 * DAY_MS });
+    await exportToPDF({ start: 0, end: noon + 7 * DAY_MS });
 
     expect(pdfSaves).toHaveLength(1);
     expect(pdfSaves[0]!.filename).toBe(
-      `health-report-${format(BASE_TS, "yyyy-MM-dd")}-${format(BASE_TS + 7 * DAY_MS, "yyyy-MM-dd")}.pdf`,
+      `health-report-${format(noon, "yyyy-MM-dd")}-${format(noon + 7 * DAY_MS, "yyyy-MM-dd")}.pdf`,
     );
   });
 });
