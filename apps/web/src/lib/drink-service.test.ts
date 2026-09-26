@@ -197,6 +197,40 @@ describe("drink-service: logDrink", () => {
       expect(result.data.intakeIds).toHaveLength(4);
     });
 
+    it("records the salt/MSG a drink's sodium was entered as", async () => {
+      const result = await logDrink({
+        volumeMl: 250,
+        description: "Broth",
+        saltMg: 786,
+        sodiumEntry: { source: "salt", amount: 2, unit: "g" },
+      });
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      const rows = await Promise.all(
+        result.data.intakeIds.map((id) => db.intakeRecords.get(id)),
+      );
+      const sodium = rows.find((r) => r!.type === "salt")!;
+      expect(sodium.amount).toBe(786);
+      expect(sodium.source).toBe("manual:salt");
+      expect(sodium).toMatchObject({ sodiumSource: "salt", sourceAmount: 2, sourceUnit: "g" });
+      // The entered source never leaks onto the other rows of the group.
+      const water = rows.find((r) => r!.type === "water")!;
+      expect(water.sodiumSource).toBeUndefined();
+    });
+
+    it("leaves the source unknown when no sodium entry is given", async () => {
+      const result = await logDrink({ volumeMl: 250, description: "Broth", saltMg: 300 });
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      const rows = await Promise.all(
+        result.data.intakeIds.map((id) => db.intakeRecords.get(id)),
+      );
+      const sodium = rows.find((r) => r!.type === "salt")!;
+      expect(sodium.source).toBe("manual:sodium");
+      expect("sodiumSource" in sodium).toBe(false);
+      expect("sourceAmount" in sodium).toBe(false);
+    });
+
     it("skips solute values that round to zero", async () => {
       // These columns are Postgres integers. Checking `> 0` on the raw value
       // and rounding afterwards wrote a solute row recording none of it.

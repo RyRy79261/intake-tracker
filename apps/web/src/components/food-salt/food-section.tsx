@@ -458,7 +458,10 @@ export function FoodSection() {
           ...(parsedDrink.abvPercent !== null && parsedDrink.abvPercent > 0 && {
             abvPercent: parsedDrink.abvPercent,
           }),
-          ...(calculatedSodiumMg > 0 && { saltMg: calculatedSodiumMg }),
+          ...(calculatedSodiumMg > 0 && {
+            saltMg: calculatedSodiumMg,
+            sodiumEntry: { source: sodiumSource, amount: sodiumMgNum, unit: sodiumUnit },
+          }),
           ...(sugarEnabled && calculatedSugarG > 0 && { sugarG: calculatedSugarG }),
           ...(potassiumEnabled && calculatedPotassiumMg > 0 && {
             potassiumMg: calculatedPotassiumMg,
