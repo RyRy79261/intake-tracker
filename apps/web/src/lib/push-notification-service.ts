@@ -354,7 +354,10 @@ async function hasPushSubscription(): Promise<boolean> {
   if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return false;
   if (typeof window === "undefined" || !("PushManager" in window)) return false;
   try {
-    const registration = await navigator.serviceWorker.ready;
+    // Not `ready`: it never settles when no worker is registered (dev, or
+    // a browser that dropped it), and the reminder resync calls this often.
+    const registration = await navigator.serviceWorker.getRegistration();
+    if (!registration) return false;
     return (await registration.pushManager.getSubscription()) !== null;
   } catch {
     return false;

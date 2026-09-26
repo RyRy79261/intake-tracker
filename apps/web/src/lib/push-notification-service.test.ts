@@ -45,14 +45,16 @@ describe("push-notification-service", () => {
     vi.setSystemTime(TUESDAY);
     fetchMock.mockClear();
     vi.stubGlobal("fetch", fetchMock);
+    const registration = {
+      pushManager: {
+        getSubscription: async () => fakeSubscription,
+        subscribe: async () => fakeSubscription,
+      },
+    };
     vi.stubGlobal("navigator", {
       serviceWorker: {
-        ready: Promise.resolve({
-          pushManager: {
-            getSubscription: async () => fakeSubscription,
-            subscribe: async () => fakeSubscription,
-          },
-        }),
+        ready: Promise.resolve(registration),
+        getRegistration: async () => registration,
       },
     });
     vi.stubGlobal("window", { PushManager: function PushManager() {} });
@@ -112,6 +114,21 @@ describe("push-notification-service", () => {
       const sent = bodiesFor("/api/push/sync-schedule");
       expect(sent).toHaveLength(2);
       expect(sent[1]!.timezone).toBe("America/New_York");
+    });
+
+    it("returns without waiting when no service worker is registered", async () => {
+      // `ready` never settles without a registration; the app-wide resync
+      // must not pile up promises waiting on it.
+      vi.stubGlobal("navigator", {
+        serviceWorker: {
+          ready: new Promise(() => {}),
+          getRegistration: async () => undefined,
+        },
+      });
+
+      await syncPushSchedule();
+
+      expect(fetchMock).not.toHaveBeenCalled();
     });
 
     it("does nothing while push reminders are off", async () => {

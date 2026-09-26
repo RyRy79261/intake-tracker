@@ -164,7 +164,8 @@ describe("local-notifications", () => {
       await sync();
 
       const days = scheduled().map((n) => n.schedule.at.toISOString().slice(0, 10));
-      expect(days).toEqual(["2026-09-28", "2026-09-30", "2026-10-05", "2026-10-07"]);
+      expect(days.slice(0, 4)).toEqual(["2026-09-28", "2026-09-30", "2026-10-05", "2026-10-07"]);
+      for (const day of days) expect([1, 3]).toContain(new Date(day).getUTCDay());
     });
 
     it("announces only the titration dose when titration overrides maintenance", async () => {
@@ -218,7 +219,8 @@ describe("local-notifications", () => {
       await sync();
 
       const days = scheduled().map((n) => n.schedule.at.toISOString().slice(0, 10));
-      expect(days).toEqual(["2026-10-05"]);
+      expect(days[0]).toBe("2026-10-05");
+      expect(days).not.toContain("2026-09-28");
     });
 
     it("adds follow-ups per the follow-up settings", async () => {
@@ -235,6 +237,36 @@ describe("local-notifications", () => {
         "2026-09-28T06:15:00.000Z",
         "2026-09-28T06:30:00.000Z",
       ]);
+    });
+
+    it("limits follow-ups to the follow-up horizon but keeps every main reminder", async () => {
+      useSettingsStore.setState({ reminderFollowUpCount: 2, reminderFollowUpInterval: 10 });
+      await seedRegimen({ daysOfWeek: [0, 1, 2, 3, 4, 5, 6] });
+
+      await sync();
+
+      const { NATIVE_REMINDER_HORIZON_DAYS, NATIVE_FOLLOW_UP_HORIZON_DAYS } = await import(
+        "@/lib/local-notifications"
+      );
+      const list = scheduled();
+      const main = list.filter((n) => n.title.startsWith("Time for"));
+      const followUps = list.filter((n) => n.title.startsWith("Reminder:"));
+      expect(main).toHaveLength(NATIVE_REMINDER_HORIZON_DAYS);
+      expect(followUps).toHaveLength(NATIVE_FOLLOW_UP_HORIZON_DAYS * 2);
+    });
+
+    it("keeps main reminders over follow-ups when the alarm cap is reached", async () => {
+      useSettingsStore.setState({ reminderFollowUpCount: 3, reminderFollowUpInterval: 5 });
+      // 15 daily doses: 450 main reminders over 30 days, 315 follow-ups.
+      for (let h = 6; h < 21; h++) {
+        await seedRegimen({ daysOfWeek: [0, 1, 2, 3, 4, 5, 6], time: `${String(h).padStart(2, "0")}:00` });
+      }
+
+      await sync();
+
+      const list = scheduled();
+      expect(list).toHaveLength(400);
+      expect(list.every((n) => n.title.startsWith("Time for"))).toBe(true);
     });
 
     it("uses stable ids and cancels only reminders that are no longer wanted", async () => {

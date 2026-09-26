@@ -10,9 +10,17 @@ import { useSettingsStore } from "@/stores/settings-store";
 
 /**
  * How far ahead one-shot reminders are scheduled. Every resync (app start,
- * resume, any regimen or dose-log change) rolls the window forward.
+ * resume, any regimen or dose-log change) rolls the window forward, but a
+ * user who relies on the reminders alone may not open the app for weeks, so
+ * the main reminders reach well past a typical gap between launches.
  */
-export const NATIVE_REMINDER_HORIZON_DAYS = 14;
+export const NATIVE_REMINDER_HORIZON_DAYS = 30;
+
+/**
+ * Follow-ups multiply the alarm count, so they cover a shorter window than
+ * the main reminders. Past it, each dose still gets its main reminder.
+ */
+export const NATIVE_FOLLOW_UP_HORIZON_DAYS = 7;
 
 /** Android caps an app at 500 pending alarms; stay well below it. */
 const MAX_PENDING_NOTIFICATIONS = 400;
@@ -90,15 +98,17 @@ async function buildNotifications(now: number): Promise<NativeNotification[]> {
   const { reminderFollowUpCount, reminderFollowUpInterval } = useSettingsStore.getState();
   const followUps = Math.max(0, reminderFollowUpCount);
   const intervalMs = Math.max(1, reminderFollowUpInterval) * 60_000;
+  const followUpEnd = now + NATIVE_FOLLOW_UP_HORIZON_DAYS * 24 * 60 * 60 * 1000;
 
-  const notifications: NativeNotification[] = [];
+  const main: NativeNotification[] = [];
+  const extra: NativeNotification[] = [];
   for (const o of occurrences) {
     if (handled.has(`${o.dose.scheduleId}|${o.dateKey}`)) continue;
     const { genericName, dosageText } = o.dose;
-    for (let i = 0; i <= followUps; i++) {
+    for (let i = 0; i <= (o.at < followUpEnd ? followUps : 0); i++) {
       const at = o.at + i * intervalMs;
       if (at < now) continue;
-      notifications.push({
+      (i === 0 ? main : extra).push({
         id: reminderNotificationId(o.dose.scheduleId, o.dateKey, i),
         title: i === 0 ? `Time for ${genericName}` : `Reminder: ${genericName}`,
         body: `Take ${dosageText} of ${genericName}`,
@@ -119,8 +129,13 @@ async function buildNotifications(now: number): Promise<NativeNotification[]> {
     }
   }
 
-  notifications.sort((a, b) => a.schedule.at.getTime() - b.schedule.at.getTime());
-  return notifications.slice(0, MAX_PENDING_NOTIFICATIONS);
+  // Over the cap, the main reminders win over follow-ups, and earlier
+  // reminders over later ones.
+  const byTime = (a: NativeNotification, b: NativeNotification) =>
+    a.schedule.at.getTime() - b.schedule.at.getTime();
+  return [...main.sort(byTime), ...extra.sort(byTime)]
+    .slice(0, MAX_PENDING_NOTIFICATIONS)
+    .sort(byTime);
 }
 
 async function runSync(): Promise<void> {
