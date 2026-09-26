@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { BP_RANGES, WEIGHT_RANGE_KG } from "@intake/core/record-schemas";
 
 /**
  * Schema + tool definition for /api/ai/voice-parse, kept separate from the
@@ -27,9 +28,15 @@ export const ItemSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("blood_pressure"),
     ...timing,
-    systolic: z.number().int().min(40).max(260),
-    diastolic: z.number().int().min(20).max(200),
-    heartRate: z.number().int().min(20).max(250).optional(),
+    // Ranges shared with the add/edit forms (@intake/core/record-schemas).
+    systolic: z.number().int().min(BP_RANGES.systolic.min).max(BP_RANGES.systolic.max),
+    diastolic: z.number().int().min(BP_RANGES.diastolic.min).max(BP_RANGES.diastolic.max),
+    heartRate: z
+      .number()
+      .int()
+      .min(BP_RANGES.heartRate.min)
+      .max(BP_RANGES.heartRate.max)
+      .optional(),
     position: z.enum(["sitting", "standing"]).optional(),
     arm: z.enum(["left", "right"]).optional(),
     note: z.string().max(200).optional(),
@@ -37,7 +44,7 @@ export const ItemSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("weight"),
     ...timing,
-    weightKg: z.number().min(1).max(500),
+    weightKg: z.number().min(WEIGHT_RANGE_KG.min).max(WEIGHT_RANGE_KG.max),
     note: z.string().max(200).optional(),
   }),
   z.object({

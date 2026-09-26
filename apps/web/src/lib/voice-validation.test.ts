@@ -42,6 +42,22 @@ describe("validateVoiceItem", () => {
     ).not.toBeNull();
   });
 
+  // core-duplication#7: voice saves through the same record contract as the
+  // add forms (@intake/core/record-schemas), not its own looser ranges.
+  it("applies the shared blood-pressure and weight contract", () => {
+    // Below the add form's systolic minimum (50).
+    expect(validateVoiceItem({ kind: "blood_pressure", systolic: 45, diastolic: 30 })).not.toBeNull();
+    // Systolic must be above diastolic.
+    expect(validateVoiceItem({ kind: "blood_pressure", systolic: 80, diastolic: 120 })).toMatch(/higher than diastolic/i);
+    // Whole numbers only.
+    expect(validateVoiceItem({ kind: "blood_pressure", systolic: 120.5, diastolic: 80 })).not.toBeNull();
+    // Heart rate below the add form's minimum (20).
+    expect(validateVoiceItem({ kind: "blood_pressure", systolic: 120, diastolic: 80, heartRate: 10 })).not.toBeNull();
+    // Above the shared weight maximum (500 kg).
+    expect(validateVoiceItem({ kind: "weight", weightKg: 600 })).not.toBeNull();
+    expect(validateVoiceItem({ kind: "weight", weightKg: 500 })).toBeNull();
+  });
+
   it("rejects an empty description", () => {
     expect(validateVoiceItem({ kind: "food", description: "  " })).not.toBeNull();
   });

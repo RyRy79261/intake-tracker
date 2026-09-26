@@ -61,6 +61,11 @@ export const intakeRecordSchema = baseRecord
   })
   .passthrough();
 
+// Weight and blood pressure are checked for shape only, deliberately NOT
+// against the value ranges in @intake/core/record-schemas that every write
+// path uses. A restore must bring back every record the app ever stored,
+// including legacy readings saved before those ranges existed; range-checking
+// here would silently drop them from the restored data.
 export const weightRecordSchema = baseRecord
   .extend({
     weight: finiteNumber,
