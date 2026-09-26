@@ -62,6 +62,21 @@ describe("WeightCard", () => {
     expect(weights).toEqual([72.4, 75]);
   });
 
+  it("accepts a comma decimal separator from a locale keypad", async () => {
+    const user = userEvent.setup();
+    await renderWithFixtures(<WeightCard />);
+    await screen.findByText("--");
+
+    const input = screen.getByTestId("weight-direct-input");
+    await user.click(input);
+    await user.type(input, "72,4");
+    await user.tab();
+    await user.click(screen.getByRole("button", { name: /record weight/i }));
+
+    await waitFor(async () => expect(await liveWeights()).toHaveLength(1));
+    expect((await liveWeights())[0]!.weight).toBe(72.4);
+  });
+
   it("rejects an out-of-range typed weight instead of clamping it", async () => {
     const user = userEvent.setup();
     await renderWithFixtures(<WeightCard />, {

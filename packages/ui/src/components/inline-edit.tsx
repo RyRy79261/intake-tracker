@@ -87,8 +87,9 @@ const InlineEdit = React.forwardRef<HTMLInputElement, InlineEditProps>(
       }
 
       // Number() (not parseFloat) so "72.4kg" or "7o" is rejected instead
-      // of being truncated to its numeric prefix.
-      const parsed = Number(editValue.trim());
+      // of being truncated to its numeric prefix. A single comma is read as
+      // the decimal separator (locale keypads with inputMode="decimal").
+      const parsed = Number(editValue.trim().replace(",", "."));
       if (!Number.isFinite(parsed)) {
         // Invalid input — revert silently
         return;
