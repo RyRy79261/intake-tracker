@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, X } from "lucide-react";
+import { AlertTriangle, Check, Info, X } from "lucide-react";
 import { Button } from "@intake/ui/button";
 import { Input } from "@intake/ui/input";
 import { Label } from "@intake/ui/label";
@@ -19,6 +19,15 @@ import {
   type VoiceParsedItem,
 } from "@/lib/voice-types";
 import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
+import { validateVoiceItem } from "@/lib/voice-validation";
+import { isEarlierLogicalDay, resolveSpokenTime } from "@/lib/voice-time";
+import { useSettingsStore } from "@/stores/settings-store";
+
+/** A note shown on one review row — a merge, a preset, or a warning. */
+export interface ParsedItemNote {
+  tone: "info" | "warning";
+  message: string;
+}
 
 interface ParsedItemRowProps {
   item: VoiceParsedItem;
@@ -28,6 +37,8 @@ interface ParsedItemRowProps {
   onReject: () => void;
   approved: boolean | null; // null = pending
   disabled?: boolean;
+  /** Notes anchored to this row (merges, presets, possible duplicates). */
+  notes?: ParsedItemNote[];
 }
 
 type ColorClass = { bar: string; ring: string; chip: string };
@@ -111,6 +122,68 @@ function setOptionalEnum<T extends object, K extends string, V extends string>(
     next[key] = raw as V;
   }
   return next as T & Partial<Record<K, V>>;
+}
+
+type DrinkItem = Extract<VoiceParsedItem, { kind: "caffeine" | "alcohol" }>;
+
+/**
+ * Sugar / sodium / potassium of a caffeine or alcohol drink. These are saved
+ * with the drink (and may have been merged in from a companion item), so the
+ * row must show them for the user to approve what is written. Sugar and
+ * potassium follow their optional-tracker toggles, as on the food editor.
+ */
+function DrinkSoluteFields({
+  item,
+  onChange,
+  disabled,
+  sugarEnabled,
+  potassiumEnabled,
+}: {
+  item: DrinkItem;
+  onChange: (next: VoiceParsedItem) => void;
+  disabled: boolean | undefined;
+  sugarEnabled: boolean;
+  potassiumEnabled: boolean;
+}) {
+  return (
+    <>
+      {sugarEnabled && (
+        <Field label="Sugar (g)">
+          <Input
+            type="number"
+            inputMode="decimal"
+            step="0.1"
+            disabled={disabled}
+            value={item.sugarG ?? ""}
+            placeholder="—"
+            onChange={(e) => onChange(setOptionalNumber(item, "sugarG", e.target.value))}
+          />
+        </Field>
+      )}
+      <Field label="Sodium (mg)">
+        <Input
+          type="number"
+          inputMode="numeric"
+          disabled={disabled}
+          value={item.sodiumMg ?? ""}
+          placeholder="—"
+          onChange={(e) => onChange(setOptionalNumber(item, "sodiumMg", e.target.value))}
+        />
+      </Field>
+      {potassiumEnabled && (
+        <Field label="Potassium (mg)">
+          <Input
+            type="number"
+            inputMode="numeric"
+            disabled={disabled}
+            value={item.potassiumMg ?? ""}
+            placeholder="—"
+            onChange={(e) => onChange(setOptionalNumber(item, "potassiumMg", e.target.value))}
+          />
+        </Field>
+      )}
+    </>
+  );
 }
 
 function ItemEditor({
@@ -327,6 +400,13 @@ function ItemEditor({
                 }
               />
             </Field>
+            <DrinkSoluteFields
+              item={item}
+              onChange={onChange}
+              disabled={disabled}
+              sugarEnabled={sugarEnabled}
+              potassiumEnabled={potassiumEnabled}
+            />
           </div>
         </div>
       );
@@ -366,6 +446,13 @@ function ItemEditor({
                 }
               />
             </Field>
+            <DrinkSoluteFields
+              item={item}
+              onChange={onChange}
+              disabled={disabled}
+              sugarEnabled={sugarEnabled}
+              potassiumEnabled={potassiumEnabled}
+            />
           </div>
           <p className="text-xs text-muted-foreground">
             ≈ {stdDrinks.toFixed(1)} standard drink{stdDrinks.toFixed(1) === "1.0" ? "" : "s"}
@@ -375,6 +462,30 @@ function ItemEditor({
     }
 
     case "urination":
+      // An amount is required, as on the manual card — analytics imputed a
+      // missing one as "medium" (300 ml) of output that was never estimated.
+      return (
+        <Field label="Amount">
+          <Select
+            disabled={disabled ?? false}
+            // "" shows the placeholder until the user picks an amount.
+            value={item.amountEstimate ?? ""}
+            onValueChange={(v) =>
+              onChange({ ...item, amountEstimate: v as "small" | "medium" | "large" })
+            }
+          >
+            <SelectTrigger className="h-9">
+              <SelectValue placeholder="Pick an amount" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="small">Small</SelectItem>
+              <SelectItem value="medium">Medium</SelectItem>
+              <SelectItem value="large">Large</SelectItem>
+            </SelectContent>
+          </Select>
+        </Field>
+      );
+
     case "defecation":
       return (
         <Field label="Amount">
@@ -410,6 +521,44 @@ function ItemEditor({
 // "unset" option and translate it back to "" at the boundary.
 const AMOUNT_NONE = "__none__";
 
+/**
+ * The item's spoken time ("HH:mm"). Blank means "when saved". A time later
+ * than now resolves to the previous day, which the hint makes visible.
+ */
+function TimeField({
+  item,
+  onChange,
+  disabled,
+}: {
+  item: VoiceParsedItem;
+  onChange: (next: VoiceParsedItem) => void;
+  disabled?: boolean;
+}) {
+  const dayStartHour = useSettingsStore((s) => s.dayStartHour);
+  const now = Date.now();
+  const yesterday =
+    item.time !== undefined &&
+    isEarlierLogicalDay(resolveSpokenTime(item.time, now, dayStartHour), now, dayStartHour);
+  return (
+    <div className="flex items-end gap-2">
+      <Field label="Time">
+        <Input
+          type="time"
+          className="h-9 w-32"
+          disabled={disabled}
+          value={item.time ?? ""}
+          onChange={(e) =>
+            onChange(setOptionalEnum<VoiceParsedItem, "time", string>(item, "time", e.target.value))
+          }
+        />
+      </Field>
+      <span className="pb-2 text-xs text-muted-foreground">
+        {item.time === undefined ? "when saved" : yesterday ? "yesterday" : "today"}
+      </span>
+    </div>
+  );
+}
+
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1">
@@ -427,11 +576,15 @@ export function ParsedItemRow({
   onReject,
   approved,
   disabled,
+  notes,
 }: ParsedItemRowProps) {
   const token = VOICE_ITEM_COLOR[item.kind];
   const c: ColorClass =
     COLOR_CLASS[token] ?? { bar: "bg-muted", ring: "ring-muted/30", chip: "bg-muted" };
   const label = VOICE_ITEM_LABEL[item.kind];
+  // Only a pending row is validated: an approved row is locked, and approval
+  // is what the check gates.
+  const invalid = approved === null ? validateVoiceItem(item) : null;
 
   return (
     <div
@@ -467,6 +620,34 @@ export function ParsedItemRow({
             onChange={onChange}
             disabled={disabled || approved !== null}
           />
+          <TimeField
+            item={item}
+            onChange={onChange}
+            disabled={disabled || approved !== null}
+          />
+          {invalid && (
+            <p role="alert" className="text-xs text-destructive">
+              {invalid}
+            </p>
+          )}
+          {notes?.map((note, i) => (
+            <p
+              key={i}
+              className={cn(
+                "flex items-start gap-1.5 text-[11px] leading-snug",
+                note.tone === "warning"
+                  ? "text-amber-700 dark:text-amber-400"
+                  : "text-muted-foreground"
+              )}
+            >
+              {note.tone === "warning" ? (
+                <AlertTriangle className="mt-px h-3 w-3 shrink-0" />
+              ) : (
+                <Info className="mt-px h-3 w-3 shrink-0" />
+              )}
+              <span>{note.message}</span>
+            </p>
+          ))}
         </div>
         <div className="flex shrink-0 flex-col gap-1">
           <Button
@@ -474,7 +655,7 @@ export function ParsedItemRow({
             size="icon"
             variant={approved === true ? "default" : "outline"}
             className="h-8 w-8"
-            disabled={disabled}
+            disabled={disabled || invalid !== null}
             onClick={onApprove}
             aria-label={`Approve ${label}`}
           >

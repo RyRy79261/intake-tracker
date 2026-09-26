@@ -18,7 +18,20 @@ export type VoiceItemKind =
   | "urination"
   | "defecation";
 
-export interface BloodPressureItem {
+/**
+ * When an item happened, if the user said. Absent → the save time.
+ *
+ * `time` is a 24-hour "HH:mm" clock time ("at 1pm" → "13:00"), resolved to the
+ * most recent such time within the day-start rules (see `resolveSpokenTime`).
+ * `minutesAgo` is a relative offset the parser may return instead; the panel
+ * converts it to a `time` on receipt, so the review row edits one field.
+ */
+interface SpokenTiming {
+  time?: string;
+  minutesAgo?: number;
+}
+
+export interface BloodPressureItem extends SpokenTiming {
   kind: "blood_pressure";
   systolic: number;
   diastolic: number;
@@ -28,25 +41,25 @@ export interface BloodPressureItem {
   note?: string;
 }
 
-export interface WeightItem {
+export interface WeightItem extends SpokenTiming {
   kind: "weight";
   weightKg: number;
   note?: string;
 }
 
-export interface WaterItem {
+export interface WaterItem extends SpokenTiming {
   kind: "water";
   ml: number;
   note?: string;
 }
 
-export interface SaltItem {
+export interface SaltItem extends SpokenTiming {
   kind: "salt";
   sodiumMg: number;
   note?: string;
 }
 
-export interface FoodItem {
+export interface FoodItem extends SpokenTiming {
   kind: "food";
   description: string;
   grams?: number;
@@ -65,7 +78,7 @@ export interface FoodItem {
  * the same fluid twice (issue #322), because `food.waterMl` and a drink's
  * `volumeMl` are both hydration.
  */
-interface DrinkSolutes {
+interface DrinkSolutes extends SpokenTiming {
   /** Total sugars dissolved in the drink, in grams. */
   sugarG?: number;
   /** Sodium dissolved in the drink, in mg. */
@@ -96,13 +109,13 @@ export interface AlcoholItem extends DrinkSolutes {
   volumeMl: number;
 }
 
-export interface UrinationItem {
+export interface UrinationItem extends SpokenTiming {
   kind: "urination";
   amountEstimate?: "small" | "medium" | "large";
   note?: string;
 }
 
-export interface DefecationItem {
+export interface DefecationItem extends SpokenTiming {
   kind: "defecation";
   amountEstimate?: "small" | "medium" | "large";
   note?: string;
@@ -122,6 +135,12 @@ export type VoiceParsedItem =
 export interface VoiceParseResponse {
   items: VoiceParsedItem[];
   reasoning?: string;
+  /** Items the model returned that failed validation and were discarded. */
+  dropped?: number;
+  /** Valid items cut by the server's per-request item cap. */
+  overCap?: number;
+  /** The transcript was longer than the parser accepts; its tail was not parsed. */
+  transcriptTruncated?: boolean;
 }
 
 export const VOICE_ITEM_COLOR: Record<VoiceItemKind, string> = {

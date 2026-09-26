@@ -61,6 +61,42 @@ describe("extractVoiceItems", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.items).toHaveLength(MAX_ITEMS);
+    // The cut is reported so the review panel can say items were left out.
+    expect(result.overCap).toBe(5);
+  });
+
+  it("reports no over-cap items when the list fits", () => {
+    const result = extractVoiceItems({ items: [water] });
+    expect(result.ok && result.overCap).toBe(0);
+  });
+
+  it("keeps a spoken clock time and a relative offset on an item", () => {
+    const result = extractVoiceItems({
+      items: [
+        { ...food, time: "13:00" },
+        { ...water, minutesAgo: 30 },
+      ],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.items[0]).toMatchObject({ time: "13:00" });
+    expect(result.items[1]).toMatchObject({ minutesAgo: 30 });
+  });
+
+  it("strips a malformed time instead of dropping the whole item", () => {
+    // A bad time must not cost the user the reading itself.
+    const result = extractVoiceItems({
+      items: [
+        { ...bp, time: "1pm" },
+        { ...water, minutesAgo: -5 },
+      ],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.items).toHaveLength(2);
+    expect(result.dropped).toBe(0);
+    expect(result.items[0]).not.toHaveProperty("time");
+    expect(result.items[1]).not.toHaveProperty("minutesAgo");
   });
 
   it("omits reasoning when it is absent or blank", () => {
@@ -75,5 +111,11 @@ describe("PARSE_TOOL", () => {
   it("declares the parse_voice_log tool with an items array", () => {
     expect(PARSE_TOOL.name).toBe("parse_voice_log");
     expect(PARSE_TOOL.input_schema.required).toContain("items");
+  });
+
+  it("offers the per-item time fields to the model", () => {
+    const props = PARSE_TOOL.input_schema.properties.items.items.properties;
+    expect(props).toHaveProperty("time");
+    expect(props).toHaveProperty("minutesAgo");
   });
 });
