@@ -7,6 +7,7 @@ import { Label } from "@intake/ui/label";
 import { Progress } from "@intake/ui/progress";
 import { Sparkles, Loader2 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
+import { readAiErrorMessage } from "@/lib/ai-error-message";
 import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -201,13 +202,18 @@ export function PresetTab({ tab }: PresetTabProps) {
     if (!searchText.trim() || isLookingUp) return;
     setIsLookingUp(true);
     setSelectedPresetId(null);
+    let failureMessage = "Try a different name or enter values manually.";
     try {
       const res = await apiFetch("/api/ai/substance-lookup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: searchText.trim(), type: aiLookupType }),
       });
-      if (!res.ok) throw new Error("Lookup failed");
+      if (!res.ok) {
+        // The route's message is actionable (add a key, retry, enter manually).
+        failureMessage = await readAiErrorMessage(res, failureMessage);
+        throw new Error(failureMessage);
+      }
       const data = await res.json();
       // Map AI response substancePer100ml to correct per-100ml field based on tab
       if (tab === "coffee") {
@@ -227,7 +233,7 @@ export function PresetTab({ tab }: PresetTabProps) {
     } catch {
       toast({
         title: "Lookup failed",
-        description: "Try a different name or enter values manually.",
+        description: failureMessage,
         variant: "destructive",
       });
     } finally {

@@ -20,6 +20,8 @@ import {
 } from "@/hooks/use-medication-queries";
 import type { Prescription, TitrationPlan } from "@/lib/db";
 import { useAiFetch } from "@/hooks/use-ai-fetch";
+import { useToast } from "@intake/ui/use-toast";
+import { readAiErrorMessage } from "@/lib/ai-error-message";
 import { useAuthGate } from "@/components/auth-guard";
 import { RxEntryCard, EditPhaseScheduleLoader } from "@/components/medications/titrations/rx-entry-card";
 import { DAY_LABELS_LONG } from "@/components/medications/titrations/types";
@@ -39,6 +41,7 @@ export function TitrationDrawer({
   const createMutation = useCreateTitrationPlan();
   const updateMutation = useUpdateTitrationPlan();
   const aiFetch = useAiFetch();
+  const { toast } = useToast();
   const showAi = useAuthGate();
   const isEditing = editingPlan !== null;
 
@@ -120,9 +123,20 @@ export function TitrationDrawer({
           const newWarnings = data.warnings.join("\n");
           setWarnings(existing ? `${existing}\n${newWarnings}` : newWarnings);
         }
+      } else if (res) {
+        // e.g. NO_AI_KEY: the route's message says where to add a key.
+        toast({
+          title: "Couldn't generate warnings",
+          description: await readAiErrorMessage(res, "You can still type warnings manually."),
+          variant: "destructive",
+        });
       }
     } catch {
-      // Silently fail — user can still type manually
+      toast({
+        title: "Couldn't generate warnings",
+        description: "You can still type warnings manually.",
+        variant: "destructive",
+      });
     } finally {
       setAiLoading(false);
     }
