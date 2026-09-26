@@ -10,12 +10,15 @@ import {
 } from "@/lib/analytics-snapshot";
 import {
   cacheServerInsightReport,
+  deleteInsightReport,
   getInsightReports,
   getPreviousInsightReport,
   isPersonalisedRequest,
+  pickPreviousInsightReport,
   priorAssessmentFor,
   saveInsightReport,
 } from "@/lib/insight-report-service";
+import { unwrap } from "@intake/core/service";
 import { schedulePull } from "@/lib/sync-engine";
 import type { AnalyticsInsightsRequest } from "@intake/ai-prompts/analytics-insights";
 import type { TimeRange } from "@intake/types/analytics";
@@ -58,6 +61,24 @@ interface GenerateInsightsInput {
 /** Live history of cached insight reports, newest first. */
 export function useInsightReports(): InsightReport[] {
   return useLiveQuery(getInsightReports, [], []);
+}
+
+/**
+ * The report a new analysis would compare against (see
+ * pickPreviousInsightReport), for the window starting at `rangeStart`.
+ */
+export function usePreviousInsightReport(
+  reports: InsightReport[],
+  rangeStart: number,
+): InsightReport | null {
+  return pickPreviousInsightReport(reports, rangeStart);
+}
+
+/** Soft-delete a cached report; the removal syncs like any other edit. */
+export function useDeleteInsightReport() {
+  return useMutation({
+    mutationFn: async (id: string) => unwrap(await deleteInsightReport(id)),
+  });
 }
 
 /**

@@ -9,7 +9,6 @@ import {
   makeInsightReport,
   makeUserProfile,
 } from "@/__tests__/fixtures/db-fixtures";
-import { db } from "@/lib/db";
 
 /**
  * AiInsightsCard generates a summary via POST /api/analytics/insights and
@@ -201,18 +200,23 @@ describe("AiInsightsCard", () => {
 
     await user.click(await screen.findByText("A report the user wants gone."));
     await user.click(await screen.findByRole("button", { name: "Delete report" }));
-    // First tap only arms the action.
-    expect((await db.insightReports.get(report.id))!.deletedAt).toBeNull();
+    // First tap only arms the action: the dialog and report are still there.
+    expect(
+      screen.getByRole("button", { name: "Tap again to delete" }),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("A report the user wants gone.").length).toBeGreaterThan(0);
     await user.click(screen.getByRole("button", { name: "Tap again to delete" }));
 
-    await waitFor(async () =>
-      expect((await db.insightReports.get(report.id))!.deletedAt).not.toBeNull(),
-    );
+    // Gone from the card (the live query excludes soft-deleted rows) and the
+    // dialog closed.
     await waitFor(() =>
       expect(
         screen.queryByText("A report the user wants gone."),
       ).not.toBeInTheDocument(),
     );
+    expect(
+      await screen.findByText(/Generate an AI summary of your last 30 days/i),
+    ).toBeInTheDocument();
   });
 
   it("offers the comparison only when a report for an earlier period exists", async () => {

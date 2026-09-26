@@ -27,7 +27,7 @@ import {
   PinnedKeyUnavailableError,
   readJobKey,
   type InsightJobKeyRef,
-} from "./insight-job-payload";
+} from "@/lib/server/insight-job-payload";
 
 function isWhitelisted(email: string | undefined): boolean {
   if (!email) return false;

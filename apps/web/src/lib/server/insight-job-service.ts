@@ -23,7 +23,7 @@ import {
   usersSync,
 } from "@intake/db/schema";
 import { generateId } from "@/lib/utils";
-import { FINALISED_JOB_PAYLOAD } from "./insight-job-payload";
+import { FINALISED_JOB_PAYLOAD } from "@/lib/server/insight-job-payload";
 
 const SERVER_DEVICE_ID = "server-deep-batch";
 

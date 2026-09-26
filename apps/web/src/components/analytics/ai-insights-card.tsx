@@ -35,14 +35,12 @@ import {
   useInsightReports,
   useDeepInsightJob,
   useSharedMedicationCount,
+  usePreviousInsightReport,
+  useDeleteInsightReport,
   NotEnoughDataError,
 } from "@/hooks/use-insights";
 import { useUserProfile } from "@/hooks/use-profile-queries";
 import { insightsRange, INSIGHTS_WINDOW_DAYS } from "@/lib/analytics-snapshot";
-import {
-  deleteInsightReport,
-  pickPreviousInsightReport,
-} from "@/lib/insight-report-service";
 import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import type { InsightReport } from "@/lib/db";
 
@@ -252,32 +250,32 @@ export function AiInsightsCard() {
   );
   // Delete is two-tap: the first arms it, the second deletes.
   const [deleteArmed, setDeleteArmed] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+  const deleteReport = useDeleteInsightReport();
   const openReport = (report: InsightReport | null) => {
     setDeleteArmed(false);
     setReadingReport(report);
   };
 
-  const deleteReadingReport = async () => {
+  const deleteReadingReport = () => {
     if (!readingReport) return;
     if (!deleteArmed) {
       setDeleteArmed(true);
       return;
     }
-    setDeleting(true);
     // Soft delete through writeWithSync, so the removal syncs like any edit.
-    const result = await deleteInsightReport(readingReport.id);
-    setDeleting(false);
-    if (!result.success) {
-      toast({
-        title: "Couldn't delete the report",
-        description: result.error,
-        variant: "destructive",
-      });
-      return;
-    }
-    openReport(null);
-    toast({ title: "Report deleted" });
+    deleteReport.mutate(readingReport.id, {
+      onSuccess: () => {
+        openReport(null);
+        toast({ title: "Report deleted" });
+      },
+      onError: (error) => {
+        toast({
+          title: "Couldn't delete the report",
+          description: error.message,
+          variant: "destructive",
+        });
+      },
+    });
   };
   // Recompute "long-running" wording each minute while a deep job is pending
   // so the message swaps without a refresh once the threshold is crossed.
@@ -303,7 +301,7 @@ export function AiInsightsCard() {
   // Mirrors the hook's choice (useGenerateInsights / useDeepInsightJob): a
   // report for an earlier period, withheld when it is personalised and the
   // new request would not be.
-  const previousReport = pickPreviousInsightReport(
+  const previousReport = usePreviousInsightReport(
     reports,
     insightsRange().start,
   );
@@ -691,7 +689,7 @@ export function AiInsightsCard() {
               variant={deleteArmed ? "destructive" : "outline"}
               size="sm"
               onClick={deleteReadingReport}
-              disabled={deleting}
+              disabled={deleteReport.isPending}
               className="gap-1.5"
             >
               <Trash2 className="w-3.5 h-3.5" />
