@@ -131,7 +131,10 @@ test.describe('Dashboard', () => {
     const weightInput = weightCard.getByTestId('weight-direct-input');
     await weightInput.focus();
     await weightInput.fill('72.4');
-    await recordBtn.focus();
+    // Blur commits the typed value. Focusing the Record button would not:
+    // it stays disabled until a weight exists, and a disabled button can't
+    // take focus, so the input would never blur.
+    await weightInput.blur();
     await recordBtn.click();
 
     // Verify success toast
@@ -157,8 +160,9 @@ test.describe('Dashboard', () => {
     // Clear and type a new value
     await weightInput.fill('71.35');
 
-    // Blur to trigger rounding (focus the record button)
-    await recordBtn.focus();
+    // Blur to commit the value (the Record button is disabled until a weight
+    // exists, so focusing it would not blur the input for a first-time user)
+    await weightInput.blur();
 
     // Wait for display to update with the value
     // 71.35 is already aligned to 0.05 increments, so it stays 71.35
