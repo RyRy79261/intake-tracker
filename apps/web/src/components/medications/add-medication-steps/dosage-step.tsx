@@ -6,6 +6,7 @@ import { Switch } from "@intake/ui/switch";
 import { cn } from "@/lib/utils";
 import { resolveWizardDose, type AddMedicationFormState } from "@/hooks/use-add-medication-form";
 import { formatCompoundFull } from "@intake/core/compound";
+import { isCleanFraction } from "@/lib/dose-log-service";
 import { type FieldChange, DOSE_MULTIPLIERS } from "@/components/medications/add-medication-steps/types";
 
 export function DosageStep({
@@ -28,6 +29,9 @@ export function DosageStep({
   const pillsNeeded = dose?.pills ?? dosageAmount;
   const prescribedAmount = dose?.total ?? pillsNeeded * strengthNum;
   const validDose = Number.isFinite(pillsNeeded) && pillsNeeded > 0;
+  // Flag a split that can't be cut from whole, half, third or quarter
+  // tablets before it is saved, like the edit and titration dose editors.
+  const unevenSplit = validDose && !isCleanFraction(pillsNeeded);
 
   return (
     <div className="space-y-4">
@@ -115,6 +119,11 @@ export function DosageStep({
           {isCombination && " total"}
           {validDose && pillsNeeded < 1 && " (partial pill)"}
         </p>
+        {unevenSplit && (
+          <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+            Not a whole or half tablet: check how this dose is split before saving.
+          </p>
+        )}
       </div>
 
       <div className="flex items-center justify-between rounded-lg border p-3">
