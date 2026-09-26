@@ -313,7 +313,7 @@ export function registerReadOnlyTools(server: McpServer): void {
     {
       title: "Recent doses",
       description:
-        "The most recent dose log entries (taken / skipped / rescheduled / pending) joined with prescription names, newest first. `kind` is 'scheduled' (logged against `phaseId`/`scheduleId`) or 'prn' (an as-needed dose with no schedule). For the amount, prefer the snapshot frozen when the dose was logged (`doseAmount` in `doseUnit`, from `pillsConsumed` x `pillStrength`); else `doseMg` for a PRN dose; else `scheduleDosage` in `scheduleUnit` from the linked schedule as it is now. `inventoryItemId` names the stock the dose drew from. genericName resolves even for archived (soft-deleted) prescriptions; the `archived` field is true for those, false for active, and null if the prescription was hard-deleted.",
+        "The most recent dose log entries joined with prescription names, newest first. `status` uses the app's rule: taken / skipped, or for a dose still owed (logged as pending or rescheduled) 'pending' on today's date and 'missed' on an earlier date, in the user's time zone; `loggedStatus` is the status as stored (taken / skipped / rescheduled / pending). Only logged doses are listed: a scheduled dose on a past day with no log at all is also missed but has no row here. `kind` is 'scheduled' (logged against `phaseId`/`scheduleId`) or 'prn' (an as-needed dose with no schedule). For the amount, prefer the snapshot frozen when the dose was logged (`doseAmount` in `doseUnit`, from `pillsConsumed` x `pillStrength`); else `doseMg` for a PRN dose; else `scheduleDosage` in `scheduleUnit` from the linked schedule as it is now. `inventoryItemId` names the stock the dose drew from. genericName resolves even for archived (soft-deleted) prescriptions; the `archived` field is true for those, false for active, and null if the prescription was hard-deleted.",
       inputSchema: {
         limit: z
           .number()
@@ -322,11 +322,12 @@ export function registerReadOnlyTools(server: McpServer): void {
           .max(500)
           .default(50)
           .describe("Number of rows to return (1-500, default 50)"),
+        timezone: timezoneArg,
       },
     },
     async (args, ctx) =>
       runTool(ctx, "list_recent_doses", args, args, (userId) =>
-        listRecentDoses(userId, args.limit),
+        listRecentDoses(userId, args.limit, { timezone: args.timezone }),
       ),
   );
 

@@ -34,6 +34,7 @@ import {
   pushSubscriptions,
 } from "@intake/db/schema";
 import { resolveTimeZone, zonedDayWindow } from "@/lib/mcp/day-window";
+import { resolveDoseStatus } from "@/lib/dose-status";
 
 const MAX_ROWS = 5000;
 const DEFAULT_DAY_START_HOUR = 2;
@@ -251,12 +252,14 @@ async function loadEffectiveRegimen(userId: string) {
 
 type SlotStatus = "taken" | "skipped" | "outstanding";
 
-/** Mirrors the app's deriveStatus for a slot on the current day. */
-function slotStatus(logStatus: string | undefined): SlotStatus {
-  if (logStatus === "taken") return "taken";
-  // A rescheduled slot shows as handled in the app.
-  if (logStatus === "skipped" || logStatus === "rescheduled") return "skipped";
-  return "outstanding";
+/**
+ * The app's rule (resolveDoseStatus) for a slot on the current day: only a
+ * taken or skipped log settles it. No log, a "pending" log or a
+ * "rescheduled" one (still owed, at its new time) is outstanding.
+ */
+function slotStatus(logStatus: string | undefined, date: string): SlotStatus {
+  const status = resolveDoseStatus(logStatus, date, date);
+  return status === "taken" || status === "skipped" ? status : "outstanding";
 }
 
 /**
@@ -326,7 +329,7 @@ async function getDoseDay(
         anchorTimezone: sched.anchorTimezone,
         dosage: sched.dosage,
         unit: sched.unit ?? phase.unit,
-        status: slotStatus(log?.status),
+        status: slotStatus(log?.status, date),
       });
     }
   }
@@ -648,7 +651,24 @@ export async function listMedications(userId: string) {
   };
 }
 
-export async function listRecentDoses(userId: string, limit: number) {
+/**
+ * The most recent dose logs. `status` follows the app's rule
+ * (resolveDoseStatus): a scheduled dose still outstanding ("pending" or
+ * "rescheduled") on a day before today, in the user's zone, is "missed".
+ * `loggedStatus` is the status as stored.
+ */
+export async function listRecentDoses(
+  userId: string,
+  limit: number,
+  opts: { timezone?: string | undefined; now?: number } = {},
+) {
+  const storedTz = opts.timezone ? null : await getStoredTimeZone(userId);
+  const todayKey = new Intl.DateTimeFormat("en-CA", {
+    timeZone: resolveTimeZone(opts.timezone, storedTz),
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(opts.now ?? Date.now());
   const cap = Math.min(Math.max(limit, 1), 500);
   const rows = await db
     .select({
@@ -706,7 +726,14 @@ export async function listRecentDoses(userId: string, limit: number) {
     // actioned ones instead of Postgres' default NULLS FIRST for DESC.
     .orderBy(sql`${doseLogs.actionTimestamp} DESC NULLS LAST`, desc(doseLogs.id))
     .limit(cap);
-  return { doses: rows };
+  return {
+    doses: rows.map(({ status, ...row }) => ({
+      ...row,
+      status:
+        row.kind === "prn" ? status : resolveDoseStatus(status, row.scheduledDate, todayKey),
+      loggedStatus: status,
+    })),
+  };
 }
 
 export async function getInventoryStatus(userId: string) {
