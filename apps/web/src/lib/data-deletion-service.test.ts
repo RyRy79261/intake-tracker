@@ -135,6 +135,22 @@ describe("data-deletion-service: olderThanDays", () => {
     expect((await db.doseLogs.get("new-dose"))?.deletedAt).toBeNull();
   });
 
+  it("never splits a day's doses at either bound", async () => {
+    const day = dateDaysAgo(10);
+    await db.doseLogs.add(makeDoseLog("rx", "ph", "sch", { id: "dose", scheduledDate: day }));
+    const noon = new Date(`${day}T12:00:00`).getTime();
+
+    // Each bound falls mid-day, so the whole day is not in range.
+    expect((await deleteRecordsInRange({ from: noon, to: null })).success).toBe(true);
+    expect((await deleteRecordsInRange({ from: null, to: noon })).success).toBe(true);
+    expect((await db.doseLogs.get("dose"))?.deletedAt).toBeNull();
+
+    // A range covering the whole day deletes it.
+    const midnight = new Date(`${day}T00:00:00`).getTime();
+    await deleteRecordsInRange({ from: midnight, to: midnight + DAY - 1 });
+    expect((await db.doseLogs.get("dose"))?.deletedAt).not.toBeNull();
+  });
+
   it("leaves already-deleted rows untouched", async () => {
     await db.intakeRecords.add(
       makeIntakeRecord({ id: "gone", timestamp: daysAgo(200), deletedAt: 123, updatedAt: 123 }),

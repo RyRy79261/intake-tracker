@@ -18,7 +18,7 @@
  *   is also switched off (inactive / cancelled), matching the Dexie v23
  *   tombstone repair.
  */
-import { format } from "date-fns";
+import { addDays, isValid, parse } from "date-fns";
 import { db } from "@/lib/db";
 import { TABLE_PUSH_ORDER, type TableName } from "@/lib/sync-topology";
 import { enqueueInsideTx } from "@/lib/sync-queue";
@@ -70,10 +70,11 @@ function inRange(eventTime: number, { from, to }: DeleteRange): boolean {
  * A dose's `scheduledDate` is a local calendar day. It is in range only when
  * the whole day is, so a bound never splits one day's doses.
  */
-function dayInRange(scheduledDate: string, { from, to }: DeleteRange): boolean {
-  if (from !== null && scheduledDate < format(new Date(from), "yyyy-MM-dd")) return false;
-  if (to !== null && scheduledDate >= format(new Date(to), "yyyy-MM-dd")) return false;
-  return true;
+function dayInRange(scheduledDate: string, range: DeleteRange): boolean {
+  const dayStart = parse(scheduledDate, "yyyy-MM-dd", new Date());
+  if (!isValid(dayStart)) return false;
+  const dayEnd = addDays(dayStart, 1).getTime() - 1;
+  return inRange(dayStart.getTime(), range) && inRange(dayEnd, range);
 }
 
 /** Extra changes that switch a configuration row off as it is tombstoned. */
