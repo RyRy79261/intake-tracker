@@ -142,6 +142,53 @@ describe("useRevertDoseActions", () => {
     expect((await db.inventoryItems.get(e!.inventoryItemId))?.currentStock).toBe(10);
   });
 
+  it("still reverts after the sync push ack re-stamps the log's updatedAt", async () => {
+    // The push is debounced ~3s and its ack rewrites the local updatedAt to
+    // the server's clock, well inside the 5s undo window. That is not a user
+    // change, so it must not make the Undo stale.
+    const [e] = await seedRegimens(1);
+    const { result } = renderHook(
+      () => ({ take: useTakeDose(), revert: useRevertDoseActions() }),
+      { wrapper },
+    );
+    const input = { ...e!, date: DATE, time: TIME };
+    let log: Awaited<ReturnType<typeof result.current.take.mutateAsync>> | undefined;
+    await act(async () => {
+      log = await result.current.take.mutateAsync(input);
+    });
+    await db.doseLogs.update(log!.id, { updatedAt: log!.updatedAt + 1234 });
+
+    let res: Awaited<ReturnType<typeof result.current.revert.mutateAsync>> | undefined;
+    await act(async () => {
+      res = await result.current.revert.mutateAsync([{ input, log: log! }]);
+    });
+
+    expect(res).toEqual({ reverted: 1, stale: 0, failed: 0 });
+    expect((await db.inventoryItems.get(e!.inventoryItemId))?.currentStock).toBe(10);
+  });
+
+  it("leaves a dose alone when its taken time was edited after the action", async () => {
+    const [e] = await seedRegimens(1);
+    const { result } = renderHook(
+      () => ({ take: useTakeDose(), revert: useRevertDoseActions() }),
+      { wrapper },
+    );
+    const input = { ...e!, date: DATE, time: TIME };
+    let log: Awaited<ReturnType<typeof result.current.take.mutateAsync>> | undefined;
+    await act(async () => {
+      log = await result.current.take.mutateAsync(input);
+    });
+    await db.doseLogs.update(log!.id, { actionTimestamp: log!.actionTimestamp! - 60_000 });
+
+    let res: Awaited<ReturnType<typeof result.current.revert.mutateAsync>> | undefined;
+    await act(async () => {
+      res = await result.current.revert.mutateAsync([{ input, log: log! }]);
+    });
+
+    expect(res).toEqual({ reverted: 0, stale: 1, failed: 0 });
+    expect((await db.doseLogs.get(log!.id))?.status).toBe("taken");
+  });
+
   it("leaves a dose alone when it changed after the action (e.g. skipped)", async () => {
     const [e] = await seedRegimens(1);
     const { result } = renderHook(

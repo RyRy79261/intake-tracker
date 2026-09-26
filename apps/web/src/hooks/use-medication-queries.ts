@@ -365,9 +365,12 @@ export function useEditAllDoseTimes<E extends SlotKey = SlotKey>() {
 /**
  * Undo for a take/skip toast. Each target is bound to the log the action
  * wrote: it is reverted (back to pending) only while that log is still live
- * and unchanged — same status, same updatedAt. A dose the user has since
- * changed some other way (skipped with a reason, re-timed, synced from
- * another device) is left alone and counted as stale.
+ * and unchanged — same status, actionTimestamp and skipReason. A dose the
+ * user has since changed some other way (skipped with a reason, re-timed,
+ * synced from another device) is left alone and counted as stale.
+ * updatedAt is deliberately not compared: the sync push ack re-stamps it
+ * with the server clock a few seconds after every write, inside the undo
+ * window, without changing the dose.
  */
 export function useRevertDoseActions() {
   return useMutation({
@@ -375,7 +378,12 @@ export function useRevertDoseActions() {
       const counts = { reverted: 0, stale: 0, failed: 0 };
       for (const { input, log } of targets) {
         const current = await getDoseLogById(log.id);
-        if (!current || current.status !== log.status || current.updatedAt !== log.updatedAt) {
+        if (
+          !current ||
+          current.status !== log.status ||
+          current.actionTimestamp !== log.actionTimestamp ||
+          current.skipReason !== log.skipReason
+        ) {
           counts.stale++;
           continue;
         }
