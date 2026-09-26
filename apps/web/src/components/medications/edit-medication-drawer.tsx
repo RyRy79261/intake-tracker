@@ -501,15 +501,27 @@ function MedicineEditForm({
         strength: parseStrength(compoundText[i] ?? "")?.value ?? 0,
       }))
     : undefined;
+  // A unit typed into the strength text ("500 mcg") is converted to the unit
+  // select rather than dropped — otherwise it would save as 500 mg.
+  const parsedStrength = combo ? null : parseStrength(strengthText);
+  const typedUnit = /[a-zµμ]/i.test(strengthText) ? parsedStrength?.unit : undefined;
+  const typedStrength =
+    parsedStrength && typedUnit && !unitsMatch(typedUnit, unit)
+      ? convertStrength(parsedStrength.value, typedUnit, unit)
+      : parsedStrength?.value ?? null;
   const strength = compounds
     ? compounds.every((c) => c.strength > 0) ? round4(compoundSum(compounds)) : null
-    : parseStrength(strengthText)?.value ?? null;
+    : typedStrength;
   const days = parseThreshold(refillDays);
   const pills = parseThreshold(refillPills);
 
   const errors: string[] = [];
   if (brandName.trim() === "") errors.push("Enter the brand name");
-  if (strength === null) errors.push("Enter a strength above 0");
+  if (parsedStrength && typedUnit && typedStrength === null) {
+    errors.push(`A ${typedUnit} strength can't be converted to ${unit}`);
+  } else if (strength === null) {
+    errors.push("Enter a strength above 0");
+  }
   if (phaseUnit && !unitsMatch(unit, phaseUnit)) {
     errors.push(`This prescription is dosed in ${phaseUnit}; the medicine must use the same unit.`);
   }

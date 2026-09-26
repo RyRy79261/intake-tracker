@@ -320,6 +320,38 @@ describe("PrescriptionViewDrawer", () => {
     expect(await db.inventoryTransactions.count()).toBe(0);
   });
 
+  it("Medicine tab reads a unit typed into the strength field instead of ignoring it", async () => {
+    const user = userEvent.setup();
+    const { prescription, phase, schedule } = regimen();
+    const brand = makeInventoryItem(prescription.id, { brandName: "Zestril", strength: 10, unit: "mg", currentStock: 0 });
+    await renderWithFixtures(
+      <PrescriptionViewDrawer prescription={prescription} open onOpenChange={() => {}} />,
+      { seed: { prescriptions: [prescription], medicationPhases: [phase], phaseSchedules: [schedule], inventoryItems: [brand] } },
+    );
+
+    await user.click(screen.getByRole("tab", { name: /medicine/i }));
+    await user.click(await screen.findByRole("button", { name: /edit zestril/i }));
+    const strength = screen.getByLabelText(/^strength$/i);
+    // "500 mcg" with the unit select on mg is 0.5 mg, not 500 mg.
+    await user.clear(strength);
+    await user.type(strength, "500 mcg");
+    expect(await screen.findByText(/1 pill = 0\.5 mg/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /save medicine/i }));
+    await vi.waitFor(async () => {
+      const item = await db.inventoryItems.get(brand.id);
+      expect(item?.strength).toBe(0.5);
+      expect(item?.unit).toBe("mg");
+    });
+
+    // A unit that can't be converted to the selected one blocks the save.
+    await user.click(await screen.findByRole("button", { name: /edit zestril/i }));
+    const again = screen.getByLabelText(/^strength$/i);
+    await user.clear(again);
+    await user.type(again, "5 ml");
+    expect(await screen.findByText(/can't be converted to mg/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /save medicine/i })).toBeDisabled();
+  });
+
   it("Medicine tab rejects a strength unit that doesn't match the prescription", async () => {
     const user = userEvent.setup();
     const { prescription, phase, schedule } = regimen();
