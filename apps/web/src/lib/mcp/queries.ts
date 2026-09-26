@@ -32,6 +32,7 @@ import {
   doseLogs,
   pushSettings,
   pushSubscriptions,
+  userSettings,
 } from "@intake/db/schema";
 import { resolveTimeZone, zonedDayWindow } from "@/lib/mcp/day-window";
 
@@ -47,7 +48,32 @@ function notDeleted<T extends { deletedAt: unknown }>(table: T) {
   return isNull((table as { deletedAt: { name: string } }).deletedAt as never);
 }
 
-async function getDayStartHour(userId: string): Promise<number> {
+/**
+ * The user's synced settings row (the newest live one — the app treats the
+ * table as a per-user singleton, newest row wins), or undefined.
+ */
+async function getSyncedSettings(userId: string) {
+  const rows = await db
+    .select({
+      dayStartHour: userSettings.dayStartHour,
+      homeTimezone: userSettings.homeTimezone,
+    })
+    .from(userSettings)
+    .where(and(eq(userSettings.userId, userId), isNull(userSettings.deletedAt)))
+    .orderBy(desc(userSettings.updatedAt), asc(userSettings.id))
+    .limit(1);
+  return rows[0];
+}
+
+/**
+ * The day-start hour: the synced settings are the source of truth; the copy
+ * kept with the push settings covers users whose settings have not synced yet.
+ */
+async function getDayStartHour(
+  userId: string,
+  synced: { dayStartHour: number } | undefined,
+): Promise<number> {
+  if (synced) return synced.dayStartHour;
   const rows = await db
     .select({ dayStartHour: pushSettings.dayStartHour })
     .from(pushSettings)
@@ -56,14 +82,20 @@ async function getDayStartHour(userId: string): Promise<number> {
   return rows[0]?.dayStartHour ?? DEFAULT_DAY_START_HOUR;
 }
 
-/** The IANA zone the client last reported with its push subscription. */
-async function getStoredTimeZone(userId: string): Promise<string | null> {
+/**
+ * The IANA zone the client last reported with its push subscription, else
+ * the user's synced home timezone.
+ */
+async function getStoredTimeZone(
+  userId: string,
+  synced: { homeTimezone: string | null } | undefined,
+): Promise<string | null> {
   const rows = await db
     .select({ timezone: pushSubscriptions.timezone })
     .from(pushSubscriptions)
     .where(eq(pushSubscriptions.userId, userId))
     .limit(1);
-  return rows[0]?.timezone ?? null;
+  return rows[0]?.timezone ?? synced?.homeTimezone ?? null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -75,9 +107,10 @@ export async function getTodaySummary(
   opts: { timezone?: string | undefined; now?: number } = {},
 ) {
   const nowTs = opts.now ?? Date.now();
+  const synced = await getSyncedSettings(userId);
   const [dayStartHour, storedTz] = await Promise.all([
-    getDayStartHour(userId),
-    opts.timezone ? Promise.resolve(null) : getStoredTimeZone(userId),
+    getDayStartHour(userId, synced),
+    opts.timezone ? Promise.resolve(null) : getStoredTimeZone(userId, synced),
   ]);
   // The server runs in UTC; the day boundary has to be the user's.
   const timezone = resolveTimeZone(opts.timezone, storedTz);

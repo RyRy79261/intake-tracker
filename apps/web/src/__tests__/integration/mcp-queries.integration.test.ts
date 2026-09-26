@@ -943,6 +943,70 @@ describe("MCP query fns — getTodaySummary day boundary (real Postgres)", () =>
     expect(summary.day_started_at).toBe(Date.UTC(2026, 8, 24, 22, 0));
   });
 
+  function syncedSettingsRow(overrides: Partial<typeof schema.userSettings.$inferInsert> = {}) {
+    return {
+      id: `settings-${Math.random().toString(36).slice(2)}`,
+      userId: ctx.testUserId,
+      waterLimit: 1000,
+      saltLimit: 1500,
+      sugarLimit: 30,
+      potassiumLimit: 3500,
+      waterExtendedBuffer: 500,
+      saltExtendedBuffer: 500,
+      sugarExtendedBuffer: 10,
+      optionalTrackers: { sugar: true, potassium: false },
+      dayStartHour: 2,
+      liquidPresets: [],
+      primaryRegion: "",
+      secondaryRegion: "",
+      reminderFollowUpCount: 2,
+      reminderFollowUpInterval: 10,
+      homeTimezone: null,
+      homeTimezoneConfirmedAt: null,
+      createdAt: 1,
+      updatedAt: 1,
+      deletedAt: null,
+      deviceId: "d",
+      ...overrides,
+    };
+  }
+
+  it("prefers the synced settings' day-start hour over the push settings copy", async () => {
+    await ctx.db.delete(schema.userSettings);
+    await ctx.db.insert(schema.pushSettings).values({
+      userId: ctx.testUserId,
+      dayStartHour: 2,
+    });
+    await ctx.db.insert(schema.userSettings).values([
+      syncedSettingsRow({ dayStartHour: 5, updatedAt: 10 }),
+      // Newest live row wins; a newer tombstone is ignored.
+      syncedSettingsRow({ dayStartHour: 0, updatedAt: 20 }),
+      syncedSettingsRow({ dayStartHour: 7, updatedAt: 30, deletedAt: 30 }),
+    ]);
+
+    const summary = await queries.getTodaySummary(ctx.testUserId, {
+      timezone: "Europe/Berlin",
+      now: NOW,
+    });
+
+    expect(summary.day_started_at).toBe(Date.UTC(2026, 8, 24, 22, 0));
+    await ctx.db.delete(schema.userSettings);
+  });
+
+  it("falls back to the synced home timezone when no other zone is known", async () => {
+    await ctx.db.delete(schema.userSettings);
+    await seedIntakeAroundBerlinDayStart();
+    await ctx.db.insert(schema.userSettings).values(
+      syncedSettingsRow({ homeTimezone: "Europe/Berlin", updatedAt: 10 }),
+    );
+
+    const summary = await queries.getTodaySummary(ctx.testUserId, { now: NOW });
+
+    expect(summary.timezone).toBe("Europe/Berlin");
+    expect(summary.intake.water_ml).toBe(250);
+    await ctx.db.delete(schema.userSettings);
+  });
+
   it("reports today's slots by scheduledDate as taken, skipped or outstanding", async () => {
     const refs = await seedMedChain(ctx.testUserId, {
       genericName: "Furosemide",

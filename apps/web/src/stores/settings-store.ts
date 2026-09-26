@@ -11,6 +11,13 @@ import { DEFAULT_QUICK_NAV_ITEMS, type QuickNavItem } from "@/lib/quick-nav-defa
 export type { LiquidPreset } from "@/lib/constants";
 export type { QuickNavItem } from "@/lib/quick-nav-defaults";
 
+/**
+ * All settings, persisted to this device's localStorage. The ones that
+ * describe the user (limits, buffers, optional trackers, day start, liquid
+ * presets, regions, reminder follow-ups, home timezone) are also mirrored to
+ * the synced `userSettings` table by lib/settings-sync.ts
+ * (SYNCED_SETTING_KEYS); the rest are device-only preferences.
+ */
 export interface Settings {
   // Increment value for the water +/- buttons
   waterIncrement: number; // ml

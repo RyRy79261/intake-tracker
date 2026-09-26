@@ -41,6 +41,7 @@ import {
   pullBodySchema,
   schemaByTableName,
   tableNameSchema,
+  opSchema_,
 } from "@intake/db/sync-payload";
 import { TABLE_PUSH_ORDER } from "@/lib/sync-topology";
 
@@ -473,4 +474,44 @@ describe("syncable-table list parity (drift guard)", () => {
       ).toEqual({ missing: [], extra: [] });
     },
   );
+});
+
+describe("userSettings ops (synced settings)", () => {
+  const row = {
+    id: "user-a",
+    waterLimit: 1500,
+    saltLimit: 2000,
+    sugarLimit: 30,
+    potassiumLimit: 3500,
+    waterExtendedBuffer: 500,
+    saltExtendedBuffer: 500,
+    sugarExtendedBuffer: 10,
+    optionalTrackers: { sugar: true, potassium: false },
+    dayStartHour: 2,
+    liquidPresets: [
+      { id: "p1", name: "Oat latte", tab: "coffee", defaultVolumeMl: 250, caffeinePer100ml: 40 },
+    ],
+    primaryRegion: "ZA",
+    secondaryRegion: "",
+    reminderFollowUpCount: 2,
+    reminderFollowUpInterval: 10,
+    homeTimezone: "Europe/Berlin",
+    homeTimezoneConfirmedAt: 1_790_000_000_000,
+    createdAt: 1,
+    updatedAt: 2,
+    deletedAt: null,
+    deviceId: "d",
+  };
+
+  it("accepts a settings row with its JSON presets and trackers", () => {
+    const parsed = opSchema_.safeParse({ queueId: 1, op: "upsert", tableName: "userSettings", row });
+    expect(parsed.success).toBe(true);
+  });
+
+  it("rejects a settings row without its limits", () => {
+    const { waterLimit: _drop, ...rest } = row;
+    void _drop;
+    const parsed = opSchema_.safeParse({ queueId: 1, op: "upsert", tableName: "userSettings", row: rest });
+    expect(parsed.success).toBe(false);
+  });
 });

@@ -30,6 +30,10 @@
  * Locally, keys edited on this device but not yet written are kept when a
  * newer row is adopted (they are merged over it and written back).
  *
+ * An edit the store saved but the table never received (the app closed
+ * first) is recognised on the next start by SETTINGS_EDITED_AT_KEY: when it
+ * is newer than the row, the local values win and are written.
+ *
  * First run
  * ---------
  * No row exists yet on upgrade. In local mode the row is seeded at once from
@@ -86,6 +90,33 @@ export const SEED_UPDATED_AT = 1;
  * the app — a manual recovery copy.
  */
 export const PRE_SYNC_SETTINGS_BACKUP_KEY = "intake-tracker-settings-pre-sync";
+
+/**
+ * localStorage key holding when a synced setting was last edited on this
+ * device (Unix ms). The store persists an edit synchronously but the table
+ * write is async, and in cloud-sync mode it waits for the first pull; if the
+ * app closes in between, this stamp lets the next start tell a newer local
+ * edit from an older row.
+ */
+export const SETTINGS_EDITED_AT_KEY = "intake-tracker-settings-edited-at";
+
+function readEditedAt(): number | null {
+  try {
+    const raw = globalThis.localStorage?.getItem(SETTINGS_EDITED_AT_KEY);
+    const value = raw == null ? NaN : Number(raw);
+    return Number.isFinite(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeEditedAt(at: number): void {
+  try {
+    globalThis.localStorage?.setItem(SETTINGS_EDITED_AT_KEY, String(at));
+  } catch {
+    // Storage blocked: only the close-before-write case loses its edge.
+  }
+}
 
 const SYNCED_KEY_SET: ReadonlySet<string> = new Set(SYNCED_SETTING_KEYS);
 
@@ -330,9 +361,16 @@ export function installSettingsSync(): () => void {
     const row = await getActiveUserSettings();
     if (ready || disposed) return;
     ready = true;
+    const editedAt = readEditedAt();
     if (row) {
       const local = pickSyncedSettings(useSettingsStore.getState());
       const incoming = settingsFromRow(row);
+      // Edited here after the row was written: those values are the newer.
+      if (editedAt !== null && editedAt > row.updatedAt) {
+        for (const [key, value] of Object.entries(incoming)) {
+          if (!same(local[key as SyncedSettingKey], value)) dirty.add(key as SyncedSettingKey);
+        }
+      }
       const differs = Object.entries(incoming).some(
         ([key, value]) =>
           !dirty.has(key as SyncedSettingKey) &&
@@ -343,7 +381,7 @@ export function installSettingsSync(): () => void {
       if (dirty.size > 0) await writeCurrent();
       return;
     }
-    if (dirty.size > 0) {
+    if (dirty.size > 0 || editedAt !== null) {
       await writeCurrent();
       return;
     }
@@ -361,7 +399,9 @@ export function installSettingsSync(): () => void {
         changed = true;
       }
     }
-    if (changed && ready) run(() => writeCurrent());
+    if (!changed) return;
+    writeEditedAt(Date.now());
+    if (ready) run(() => writeCurrent());
   });
 
   const unsubscribeSync = useSyncStatusStore.subscribe((state, prev) => {

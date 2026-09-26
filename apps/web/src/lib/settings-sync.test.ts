@@ -17,6 +17,7 @@ import {
   getActiveUserSettings,
   SEED_UPDATED_AT,
   PRE_SYNC_SETTINGS_BACKUP_KEY,
+  SETTINGS_EDITED_AT_KEY,
 } from "@/lib/settings-sync";
 
 function settle(ms = 60): Promise<void> {
@@ -150,6 +151,39 @@ describe("settings-sync (audit state-settings-cache#2)", () => {
     const row = await getActiveUserSettings();
     expect(row!.saltLimit).toBe(2200);
     expect(row!.waterLimit).toBe(1700);
+  });
+
+  it("keeps an edit that never reached the table (app closed first) over an older row", async () => {
+    await db.userSettings.put(remoteRow({ saltLimit: 1500, updatedAt: Date.now() - 60_000 }));
+    // Last session: the store (localStorage) saved the edit, the table write did not happen.
+    useSettingsStore.setState({ saltLimit: 1900 });
+    localStorage.setItem(SETTINGS_EDITED_AT_KEY, String(Date.now() - 1_000));
+
+    dispose = installSettingsSync();
+    await settle();
+
+    expect(useSettingsStore.getState().saltLimit).toBe(1900);
+    expect((await getActiveUserSettings())!.saltLimit).toBe(1900);
+  });
+
+  it("records when a synced setting was last edited on this device", async () => {
+    dispose = installSettingsSync();
+    await settle();
+
+    useSettingsStore.getState().setDayStartHour(4);
+
+    expect(Number(localStorage.getItem(SETTINGS_EDITED_AT_KEY))).toBeGreaterThan(0);
+  });
+
+  it("adopts a row newer than this device's last edit", async () => {
+    localStorage.setItem(SETTINGS_EDITED_AT_KEY, String(Date.now() - 60_000));
+    useSettingsStore.setState({ saltLimit: 1900 });
+    await db.userSettings.put(remoteRow({ saltLimit: 2300, updatedAt: Date.now() }));
+
+    dispose = installSettingsSync();
+    await settle();
+
+    expect(useSettingsStore.getState().saltLimit).toBe(2300);
   });
 
   it("ignores tombstoned rows", async () => {
