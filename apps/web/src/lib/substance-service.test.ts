@@ -381,9 +381,12 @@ describe("substance-service: updateSubstanceRecord keeps the group's fluid in st
 
   it("sets the water row to the volume when the substance had none stored", async () => {
     const groupId = "legacy-group";
-    await db.substanceRecords.add(
-      makeSubstanceRecord({ id: "legacy-sub", type: "alcohol", groupId, volumeMl: undefined }),
-    );
+    const { volumeMl: _unused, ...noVolume } = makeSubstanceRecord({
+      id: "legacy-sub",
+      type: "alcohol",
+      groupId,
+    });
+    await db.substanceRecords.add(noVolume);
     await db.intakeRecords.add(
       makeIntakeRecord({ id: "legacy-water", type: "water", amount: 200, groupId }),
     );
