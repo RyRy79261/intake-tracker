@@ -219,14 +219,31 @@ function buildSections(records: ExportRecords, doseLogs: DoseLog[], medNames: Ma
   return [
     {
       title: "Intake",
-      headers: ["timestamp", "local_time", "type", "amount", "unit", "source", "note"],
+      // The "salt" record type stores sodium mg, so it exports as "sodium".
+      // entered_* is what the user typed for a sodium row (e.g. salt, 2, g);
+      // blank when the source is unknown.
+      headers: [
+        "timestamp",
+        "local_time",
+        "type",
+        "amount",
+        "unit",
+        "source",
+        "note",
+        "entered_as",
+        "entered_amount",
+        "entered_unit",
+      ],
       rows: byTime(records.intake).map((r) => [
         ...when(r.timestamp),
-        r.type,
+        r.type === "salt" ? "sodium" : r.type,
         r.amount,
         INTAKE_UNITS[r.type],
         r.source,
         r.note,
+        r.sodiumSource,
+        r.sourceAmount,
+        r.sourceUnit,
       ]),
     },
     {

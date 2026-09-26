@@ -12,6 +12,7 @@ import {
   getRecordsByCursor,
   getRecordsByDateRange,
   undoDeleteIntakeRecord,
+  updateIntakeRecord,
 } from "@/lib/intake-service";
 
 // Setup is handled by src/__tests__/setup.ts (fake-indexeddb, db.delete/open per test)
@@ -246,5 +247,40 @@ describe("today / 24h totals ignore future-dated records", () => {
     expect(await getDailyTotal("water", 0)).toBe(100);
     expect(await getTotalInLast24Hours("water")).toBe(100);
     expect((await getRecordsInLast24Hours("water")).map((r) => r.id)).toEqual(["past"]);
+  });
+});
+
+// A sodium row can carry what the user typed (2 g of salt) beside its sodium
+// mg. Editing the mg elsewhere (Records tab) must not leave that stale.
+describe("updateIntakeRecord and a sodium row's entered source", () => {
+  it("drops the entered source when the sodium mg changes", async () => {
+    const rec = makeIntakeRecord({
+      type: "salt",
+      amount: 786,
+      sodiumSource: "salt",
+      sourceAmount: 2,
+      sourceUnit: "g",
+    });
+    await db.intakeRecords.add(rec);
+    await updateIntakeRecord(rec.id, { amount: 900 });
+    const row = await db.intakeRecords.get(rec.id);
+    expect(row?.amount).toBe(900);
+    expect(row?.sodiumSource).toBeUndefined();
+    expect(row?.sourceAmount).toBeUndefined();
+    expect(row?.sourceUnit).toBeUndefined();
+  });
+
+  it("keeps the entered source when only the time or note changes", async () => {
+    const rec = makeIntakeRecord({
+      type: "salt",
+      amount: 786,
+      sodiumSource: "salt",
+      sourceAmount: 2,
+      sourceUnit: "g",
+    });
+    await db.intakeRecords.add(rec);
+    await updateIntakeRecord(rec.id, { amount: 786, note: "soup" });
+    const row = await db.intakeRecords.get(rec.id);
+    expect(row).toMatchObject({ sodiumSource: "salt", sourceAmount: 2, sourceUnit: "g" });
   });
 });

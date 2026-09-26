@@ -1,5 +1,11 @@
 import { db } from "@/lib/db";
-import type { IntakeRecord, EatingRecord, SubstanceRecord } from "@/lib/db";
+import type {
+  IntakeRecord,
+  EatingRecord,
+  SubstanceRecord,
+  SodiumSource,
+  SodiumSourceUnit,
+} from "@/lib/db";
 import { ok, err } from "@intake/core/service";
 import type { ServiceResult } from "@intake/types/service";
 import { syncFields } from "@/lib/utils";
@@ -15,7 +21,16 @@ const COMPOSABLE_TABLES = [db.intakeRecords, db.eatingRecords, db.substanceRecor
 
 export interface ComposableEntryInput {
   eating?: { note?: string; grams?: number };
-  intakes?: Array<{ type: "water" | "salt" | "sugar" | "potassium"; amount: number; source?: string; note?: string }>;
+  intakes?: Array<{
+    type: "water" | "salt" | "sugar" | "potassium";
+    amount: number;
+    source?: string;
+    note?: string;
+    /** Sodium rows only: the substance and amount the user typed. */
+    sodiumSource?: SodiumSource;
+    sourceAmount?: number;
+    sourceUnit?: SodiumSourceUnit;
+  }>;
   substance?: {
     type: "caffeine" | "alcohol";
     amountMg?: number;
@@ -101,6 +116,15 @@ export async function addComposableEntry(
             source: intake.source ?? "composable",
             groupId,
             ...(intake.note !== undefined && { note: intake.note }),
+            ...(intake.type === "salt" && intake.sodiumSource !== undefined && {
+              sodiumSource: intake.sodiumSource,
+            }),
+            ...(intake.type === "salt" && intake.sourceAmount !== undefined && {
+              sourceAmount: intake.sourceAmount,
+            }),
+            ...(intake.type === "salt" && intake.sourceUnit !== undefined && {
+              sourceUnit: intake.sourceUnit,
+            }),
             ...(input.groupSource !== undefined && { groupSource: input.groupSource }),
             ...fields,
           };
@@ -500,7 +524,7 @@ export async function undoDeleteSingleRecord(
 
 // ─── syncEatingGroup ──────────────────────────────────────────────────
 
-export type SodiumKind = "sodium" | "salt" | "msg";
+export type SodiumKind = SodiumSource;
 
 const FOOD_WATER_SOURCE = "manual:food_water_content";
 const SUGAR_SOURCE = "manual:sugar";
@@ -551,6 +575,13 @@ export async function syncEatingGroup(
     grams: number | undefined;
     sodiumMg: number;
     sodiumKind: SodiumKind;
+    /**
+     * The amount/unit of `sodiumKind` the user typed (e.g. 2 g of salt), stored
+     * beside the converted `sodiumMg`. Omit when the sodium field was not
+     * edited: an unchanged row then keeps its value, source tag and any
+     * recorded source; a changed mg without an entry drops the stale source.
+     */
+    sodiumEntry?: { amount: number; unit: SodiumSourceUnit };
     waterMl: number;
     /** `undefined` ⇒ leave any existing linked sugar record untouched
      *  (used when the optional tracker is disabled). `0` ⇒ soft-delete. */
@@ -631,14 +662,34 @@ export async function syncEatingGroup(
       const groupSource = eating.groupSource ?? "manual_food_entry";
 
       // ── Sodium intake ──
+      const entry = patch.sodiumEntry;
+      const entryFields = entry
+        ? {
+            sodiumSource: patch.sodiumKind,
+            sourceAmount: entry.amount,
+            sourceUnit: entry.unit,
+          }
+        : undefined;
       if (patch.sodiumMg > 0) {
         if (existingSalt) {
-          await patchIntake(existingSalt.id, {
+          const sodiumUpdates: Record<string, unknown> = {
             amount: patch.sodiumMg,
-            source: sodiumSource,
             timestamp: patch.timestamp,
             updatedAt: now,
-          });
+          };
+          if (entryFields) {
+            sodiumUpdates.source = sodiumSource;
+            Object.assign(sodiumUpdates, entryFields);
+          } else if (existingSalt.amount !== patch.sodiumMg) {
+            // A new mg with no typed entry: whatever was recorded no longer
+            // describes this value. Clearing (never rewriting) keeps the row
+            // honest; the push sends null for the removed keys.
+            sodiumUpdates.source = sodiumSource;
+            sodiumUpdates.sodiumSource = undefined;
+            sodiumUpdates.sourceAmount = undefined;
+            sodiumUpdates.sourceUnit = undefined;
+          }
+          await patchIntake(existingSalt.id, sodiumUpdates);
         } else {
           const record: IntakeRecord = {
             id: crypto.randomUUID(),
@@ -646,6 +697,7 @@ export async function syncEatingGroup(
             amount: patch.sodiumMg,
             timestamp: patch.timestamp,
             source: sodiumSource,
+            ...entryFields,
             groupId,
             groupSource,
             ...fields,

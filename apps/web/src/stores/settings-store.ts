@@ -11,6 +11,13 @@ import { DEFAULT_QUICK_NAV_ITEMS, type QuickNavItem } from "@/lib/quick-nav-defa
 export type { LiquidPreset } from "@/lib/constants";
 export type { QuickNavItem } from "@/lib/quick-nav-defaults";
 
+/**
+ * All settings, persisted to this device's localStorage. The ones that
+ * describe the user (limits, buffers, optional trackers, day start, liquid
+ * presets, regions, reminder follow-ups, home timezone) are also mirrored to
+ * the synced `userSettings` table by lib/settings-sync.ts
+ * (SYNCED_SETTING_KEYS); the rest are device-only preferences.
+ */
 export interface Settings {
   // Increment value for the water +/- buttons
   waterIncrement: number; // ml
@@ -86,6 +93,13 @@ export interface Settings {
   // Storage mode: local-only or cloud-sync
   storageMode: "local" | "cloud-sync";
 
+  // IANA zone the user's dose schedules belong to ("home"), synced across
+  // devices. null until the user first confirms it (the travel prompt's
+  // Adjust, or the timezone check finding every schedule anchored here).
+  // A device whose zone differs from it is away from home.
+  homeTimezone: string | null;
+  homeTimezoneConfirmedAt: number | null;
+
   // Shake the device to open the bug report / feature request dialog
   shakeToReportEnabled: boolean;
   shakeThreshold: number; // acceleration-magnitude jolt delta (m/s²) — lower = more sensitive
@@ -131,6 +145,8 @@ interface SettingsActions {
   setWeightIncrement: (value: number) => void;
   // Storage mode
   setStorageMode: (mode: "local" | "cloud-sync") => void;
+  // Home timezone (synced)
+  setHomeTimezone: (timezone: string) => void;
   // Shake to report
   setShakeToReportEnabled: (value: boolean) => void;
   setShakeThreshold: (value: number) => void;
@@ -179,6 +195,8 @@ const defaultSettings: Settings = {
   doseRemindersEnabled: false,
   reminderFollowUpCount: 2,
   reminderFollowUpInterval: 10,
+  homeTimezone: null,
+  homeTimezoneConfirmedAt: null,
 };
 
 /**
@@ -197,12 +215,16 @@ export const SETTINGS_PERSIST_VERSION = 17;
  *   sync switch and the push unsubscribe, leaving client and server out of
  *   step. Change them through their own controls.
  * - analyticsIntroSeen: a one-time onboarding flag, not a preference.
+ * - homeTimezone(ConfirmedAt): where the dose schedules are anchored; it
+ *   changes only together with the schedules (the travel prompt).
  */
 const RESET_PRESERVED_KEYS = [
   "liquidPresets",
   "storageMode",
   "doseRemindersEnabled",
   "analyticsIntroSeen",
+  "homeTimezone",
+  "homeTimezoneConfirmedAt",
 ] as const satisfies ReadonlyArray<keyof Settings>;
 
 /** Legacy region codes written by the old /settings region picker. */
@@ -396,6 +418,10 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
 
       // Storage mode
       setStorageMode: (mode) => set({ storageMode: mode }),
+
+      // Home timezone
+      setHomeTimezone: (timezone) =>
+        set({ homeTimezone: timezone, homeTimezoneConfirmedAt: Date.now() }),
 
       // Shake to report
       setShakeToReportEnabled: (value) => set({ shakeToReportEnabled: value }),

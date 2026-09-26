@@ -89,6 +89,30 @@ describe("LiquidPresetsSection", () => {
     expect(await screen.findByText(/10\.6g sugar\/100ml/)).toBeInTheDocument();
   });
 
+  it("summarises a preset's sodium as sodium, not salt", async () => {
+    const user = userEvent.setup();
+    const broth: LiquidPreset = {
+      id: "custom-broth",
+      name: "Broth",
+      tab: "beverage",
+      waterContentPercent: 95,
+      defaultVolumeMl: 250,
+      saltPer100ml: 350,
+      isDefault: false,
+      source: "manual",
+    };
+    await renderWithFixtures(<LiquidPresetsSection />, {
+      settings: {
+        liquidPresets: [...useSettingsStore.getState().liquidPresets, broth],
+      },
+    });
+    await expandSection(user);
+
+    // saltPer100ml holds sodium mg per 100 ml (see LiquidPreset).
+    expect(await screen.findByText(/350mg sodium\/100ml/)).toBeInTheDocument();
+    expect(screen.queryByText(/mg salt\/100ml/)).not.toBeInTheDocument();
+  });
+
   it("hides the sugar input while the sugar tracker is off", async () => {
     const user = userEvent.setup();
     await renderWithFixtures(<LiquidPresetsSection />, {

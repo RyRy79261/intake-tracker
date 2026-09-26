@@ -51,7 +51,7 @@ interface DomainOption {
 }
 const DOMAIN_OPTIONS: DomainOption[] = [
   { value: "water", label: "Water Intake" },
-  { value: "salt", label: "Salt Intake" },
+  { value: "salt", label: "Sodium Intake" },
   { value: "sugar", label: "Sugar Intake", optional: "sugar" },
   { value: "potassium", label: "Potassium Intake", optional: "potassium" },
   { value: "weight", label: "Weight" },
@@ -357,9 +357,9 @@ export function CorrelationsTab({ range }: { range: TimeRange }) {
       </div>
 
       <CorrelationCard
-        title="Weight vs Salt Intake"
+        title="Weight vs Sodium Intake"
         result={saltVsWeight}
-        labelA="Salt"
+        labelA="Sodium"
         labelB="Weight"
         unitA=" mg"
         unitB=" kg"

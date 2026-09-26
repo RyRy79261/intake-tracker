@@ -21,10 +21,34 @@
  * This module is pure types (zero runtime, zero imports) — keep it that way.
  */
 
+/**
+ * The substance a sodium entry was measured as. Salt (NaCl) and MSG are not
+ * sodium: the record's `amount` is always the sodium they contain, in mg.
+ */
+export type SodiumSource = "sodium" | "salt" | "msg";
+
+/** Unit of an entered sodium-source amount. */
+export type SodiumSourceUnit = "mg" | "g";
+
 export interface IntakeRecord {
   id: string;
+  /**
+   * "salt" is the historical key for the SODIUM tracker — its `amount` is
+   * sodium mg, never grams of table salt. The key stays for data stability;
+   * every label reads "Sodium".
+   */
   type: "water" | "salt" | "sugar" | "potassium";
-  amount: number; // ml for water, mg for salt, g for sugar, mg for potassium
+  amount: number; // ml for water, mg SODIUM for "salt", g for sugar, mg for potassium
+  /**
+   * Sodium rows only: what the user entered — `sourceAmount` `sourceUnit` of
+   * `sodiumSource` (e.g. 2 g of salt), kept so the entry reads and edits as
+   * typed while `amount` holds the converted sodium mg. Absent when the source
+   * is unknown — rows written before these fields existed, and paths that only
+   * ever produce sodium mg (voice, liquid presets): read those as sodium.
+   */
+  sodiumSource?: "sodium" | "salt" | "msg";
+  sourceAmount?: number;
+  sourceUnit?: "mg" | "g";
   timestamp: number; // Unix timestamp in milliseconds
   source?: string; // "manual", "food:apple", "voice", etc.
   note?: string; // Optional note for the entry
@@ -463,6 +487,52 @@ export interface InsightReport {
   // research. Optional for rows written before the two-tier rollout — the
   // client treats `undefined` as "fast".
   mode?: "fast" | "deep";
+  createdAt: number;
+  updatedAt: number;
+  deletedAt: number | null;
+  deviceId: string;
+}
+
+/**
+ * A liquid preset as stored in the synced settings row. The app's
+ * `LiquidPreset` (apps/web `lib/constants`) is the full shape; the synced row
+ * keeps it opaque (Postgres `jsonb`) so a new preset field does not need a
+ * schema change.
+ */
+export type SyncedLiquidPreset = { id: string; name: string } & Record<string, unknown>;
+
+/**
+ * The user's synced settings (Dexie v24) — the settings that describe the
+ * user rather than the device: daily limits and their extended buffers,
+ * optional trackers, the day-start hour, liquid presets, medication regions,
+ * reminder follow-up settings and the home timezone. Device-only preferences
+ * (theme, animation timing, swipe and quick-nav, shake-to-report, clock
+ * format, +/- increments, storage mode) stay in localStorage.
+ *
+ * Treated as a per-user singleton like `UserProfile`: the row id is the
+ * account id when one is known, and readers take the newest live row. The
+ * sync engine resolves conflicts per whole row (last write wins by
+ * `updatedAt`). See apps/web `lib/settings-sync.ts`.
+ */
+export interface UserSettings {
+  id: string;
+  waterLimit: number; // ml
+  saltLimit: number; // mg sodium
+  sugarLimit: number; // g
+  potassiumLimit: number; // mg
+  waterExtendedBuffer: number; // ml
+  saltExtendedBuffer: number; // mg
+  sugarExtendedBuffer: number; // g
+  optionalTrackers: { sugar: boolean; potassium: boolean };
+  dayStartHour: number; // 0-23
+  liquidPresets: SyncedLiquidPreset[];
+  primaryRegion: string; // ISO code, "" = not specified
+  secondaryRegion: string;
+  reminderFollowUpCount: number;
+  reminderFollowUpInterval: number; // minutes
+  // IANA zone the user's dose schedules belong to; null = never confirmed.
+  homeTimezone: string | null;
+  homeTimezoneConfirmedAt: number | null; // when homeTimezone was last set
   createdAt: number;
   updatedAt: number;
   deletedAt: number | null;

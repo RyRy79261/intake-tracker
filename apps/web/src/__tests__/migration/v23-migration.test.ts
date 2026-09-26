@@ -92,9 +92,9 @@ function queuedIds(): Promise<string[]> {
 }
 
 describe("v23 schema", () => {
-  it("is the current schema version", () => {
-    expect(DB_SCHEMA_VERSION).toBe(23);
-    expect(db.verno).toBe(23);
+  it("is superseded only by v24, which adds a table and changes no v23 store", () => {
+    expect(DB_SCHEMA_VERSION).toBe(24);
+    expect(db.verno).toBe(24);
   });
 
   it("indexes doseLogs by [scheduleId+scheduledDate] and keeps scheduledTime", () => {

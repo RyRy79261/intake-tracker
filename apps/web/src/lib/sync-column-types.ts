@@ -88,6 +88,22 @@ export const INTEGER_SYNC_FIELDS: Record<TableName, readonly string[]> = {
     "updatedAt",
     "deletedAt",
   ],
+  userSettings: [
+    "waterLimit",
+    "saltLimit",
+    "sugarLimit",
+    "potassiumLimit",
+    "waterExtendedBuffer",
+    "saltExtendedBuffer",
+    "sugarExtendedBuffer",
+    "dayStartHour",
+    "reminderFollowUpCount",
+    "reminderFollowUpInterval",
+    "homeTimezoneConfirmedAt",
+    "createdAt",
+    "updatedAt",
+    "deletedAt",
+  ],
 };
 
 /**
@@ -103,7 +119,7 @@ export const FLOAT_SYNC_FIELDS: Record<TableName, readonly string[]> = {
   doseLogs: ["doseMg", "doseAmount", "pillsConsumed", "pillStrength"],
   inventoryTransactions: ["amount"],
   dailyNotes: [],
-  intakeRecords: [],
+  intakeRecords: ["sourceAmount"],
   substanceRecords: ["amountStandardDrinks", "abvPercent"],
   weightRecords: ["weight"],
   bloodPressureRecords: [],
@@ -113,6 +129,7 @@ export const FLOAT_SYNC_FIELDS: Record<TableName, readonly string[]> = {
   auditLogs: [],
   userProfile: [],
   insightReports: [],
+  userSettings: [],
 };
 
 /**

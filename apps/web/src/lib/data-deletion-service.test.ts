@@ -17,6 +17,7 @@ import {
 } from "@/lib/data-deletion-service";
 import {
   makeIntakeRecord,
+  makeUserSettings,
   makeWeightRecord,
   makeBloodPressureRecord,
   makeEatingRecord,
@@ -165,6 +166,15 @@ describe("data-deletion-service: olderThanDays", () => {
 });
 
 describe("data-deletion-service: ALL_TIME", () => {
+  it("keeps the synced user settings (limits, presets, day start)", async () => {
+    await db.userSettings.add(makeUserSettings({ id: "settings" }));
+
+    const res = await deleteRecordsInRange(ALL_TIME);
+    expect(res.success).toBe(true);
+
+    expect((await db.userSettings.get("settings"))?.deletedAt).toBeNull();
+  });
+
   it("wipes records and configuration but keeps the user profile", async () => {
     await seedConfiguration(daysAgo(10));
     await db.intakeRecords.add(makeIntakeRecord({ id: "i", timestamp: daysAgo(1) }));

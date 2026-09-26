@@ -58,6 +58,11 @@ export const intakeRecordSchema = baseRecord
     type: z.enum(["water", "salt", "sugar", "potassium"]),
     amount: finiteNumber,
     timestamp: timestampSchema,
+    // Sodium rows: the substance/amount the user entered (all optional —
+    // rows written before these fields existed carry none of them).
+    sodiumSource: z.enum(["sodium", "salt", "msg"]).nullable().optional(),
+    sourceAmount: finiteNumber.nullable().optional(),
+    sourceUnit: z.enum(["mg", "g"]).nullable().optional(),
   })
   .passthrough();
 
@@ -186,6 +191,15 @@ export const insightReportSchema = baseRecordNoTz
   })
   .passthrough();
 
+export const userSettingsSchema = baseRecordNoTz
+  .extend({
+    waterLimit: finiteNumber,
+    saltLimit: finiteNumber,
+    dayStartHour: finiteNumber,
+    liquidPresets: z.array(z.object({ id: z.string(), name: z.string() }).passthrough()),
+  })
+  .passthrough();
+
 export type BackupTableName =
   | "intakeRecords"
   | "weightRecords"
@@ -204,7 +218,8 @@ export type BackupTableName =
   | "dailyNotes"
   | "auditLogs"
   | "userProfile"
-  | "insightReports";
+  | "insightReports"
+  | "userSettings";
 
 export const BACKUP_SCHEMAS: Record<BackupTableName, z.ZodTypeAny> = {
   intakeRecords: intakeRecordSchema,
@@ -225,6 +240,7 @@ export const BACKUP_SCHEMAS: Record<BackupTableName, z.ZodTypeAny> = {
   auditLogs: auditLogSchema,
   userProfile: userProfileSchema,
   insightReports: insightReportSchema,
+  userSettings: userSettingsSchema,
 };
 
 /** Boolean type guard backed by a Zod schema. */
@@ -252,4 +268,5 @@ export const BACKUP_VALIDATORS: Record<BackupTableName, (record: unknown) => boo
   auditLogs: makeZodValidator(auditLogSchema),
   userProfile: makeZodValidator(userProfileSchema),
   insightReports: makeZodValidator(insightReportSchema),
+  userSettings: makeZodValidator(userSettingsSchema),
 };

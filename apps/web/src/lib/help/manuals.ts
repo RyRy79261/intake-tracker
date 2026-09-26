@@ -223,7 +223,7 @@ export const MANUALS: Manual[] = [
     sections: [
       {
         heading: "What it tracks",
-        body: "The Food card tracks sodium (salt) and sugar. Two progress bars show how much of each daily allowance you have used — the defaults are 1500 mg sodium and 30 g sugar, adjustable under Settings → Sodium Settings and Settings → Sugar Settings.\n\nFood can also carry water content, which counts toward your fluid total.",
+        body: "The Food card tracks sodium and sugar. Sodium can be entered as an amount of sodium, table salt (about 39% sodium) or MSG (about 12% sodium), in mg or g; the app stores the sodium it contains and remembers what you entered. Two progress bars show how much of each daily allowance you have used — the defaults are 1500 mg sodium and 30 g sugar, adjustable under Settings → Sodium Settings and Settings → Sugar Settings.\n\nFood can also carry water content, which counts toward your fluid total.",
       },
       {
         heading: "Logging a meal",
@@ -580,7 +580,7 @@ export const MANUALS: Manual[] = [
         bullets: [
           "AI features — API keys for the optional AI helpers.",
           "Data & Storage — storage usage, export, import, backup and data migration.",
-          "Tracking — day-start hour, water and salt limits, weight units, liquid presets and bathroom defaults.",
+          "Tracking — day-start hour, water and sodium limits, weight units, liquid presets and bathroom defaults.",
           "Customization — theme and dark mode, the quick-nav bar, animation timing and swipe navigation.",
           "Medication — time format and inventory and notification preferences.",
           "Privacy & Security — app permissions and medical-AI consent.",

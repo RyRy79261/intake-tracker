@@ -73,6 +73,11 @@ async function loadTravelSchedules(): Promise<TravelSchedule[]> {
 // Detection
 // ---------------------------------------------------------------------------
 
+/** True when at least one schedule is subject to travel adjustment. */
+export async function hasTravelSchedules(): Promise<boolean> {
+  return (await loadTravelSchedules()).length > 0;
+}
+
 export interface TimezoneAnchorDose {
   scheduleId: string;
   name: string;

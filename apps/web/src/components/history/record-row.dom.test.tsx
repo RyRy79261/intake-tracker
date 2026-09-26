@@ -29,6 +29,29 @@ describe("RecordRow", () => {
     if (type !== "salt") expect(screen.queryByText("Sodium")).not.toBeInTheDocument();
   });
 
+  it("shows the salt a sodium row was typed as, beside its sodium mg", () => {
+    renderRow({
+      type: "intake",
+      record: makeIntakeRecord({
+        type: "salt",
+        amount: 786,
+        source: "manual:salt",
+        sodiumSource: "salt",
+        sourceAmount: 2,
+        sourceUnit: "g",
+      }),
+    });
+    expect(screen.getByText("786 mg · from 2 g salt")).toBeInTheDocument();
+  });
+
+  it("shows a legacy sodium row as plain sodium mg (source unknown)", () => {
+    renderRow({
+      type: "intake",
+      record: makeIntakeRecord({ type: "salt", amount: 780, source: "manual:salt" }),
+    });
+    expect(screen.getByText("780 mg")).toBeInTheDocument();
+  });
+
   it("shows a meal's grams when it has no note", () => {
     const record = makeEatingRecord({ grams: 300 });
     delete record.note;

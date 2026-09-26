@@ -25,6 +25,10 @@ export interface UsageRecord {
   cacheCreateTokens?: number | undefined;
   audioSeconds?: number | undefined;
   durationMs?: number | undefined;
+  /** Paid server-side web searches the call ran (billed per search). */
+  webSearchRequests?: number | undefined;
+  /** A Message Batches call, billed at 50% of the standard rate. */
+  isBatch?: boolean | undefined;
 }
 
 export function recordUsage(record: UsageRecord): void {
@@ -46,6 +50,8 @@ export function recordUsage(record: UsageRecord): void {
       cacheCreateTokens: record.cacheCreateTokens ?? 0,
       audioSeconds: record.audioSeconds ?? null,
       durationMs: record.durationMs ?? null,
+      webSearchRequests: record.webSearchRequests ?? 0,
+      isBatch: record.isBatch ?? false,
     })
     .catch((e: unknown) => {
       // Sanitize: DB errors can echo SQL fragments and parameter values
@@ -57,22 +63,29 @@ export function recordUsage(record: UsageRecord): void {
 }
 
 /**
- * Extract token counts from an Anthropic `Message` response. The SDK types
- * cache fields as optional so we coerce to 0 when missing.
+ * Extract token counts (and paid web searches) from an Anthropic `Message`
+ * response. The SDK types cache fields as optional so we coerce to 0 when
+ * missing.
  */
 export function tokensFromAnthropic(usage: {
   input_tokens: number;
   output_tokens: number;
   cache_read_input_tokens?: number | null;
   cache_creation_input_tokens?: number | null;
+  server_tool_use?: { web_search_requests?: number | null } | null;
 }): Pick<
   UsageRecord,
-  "inputTokens" | "outputTokens" | "cacheReadTokens" | "cacheCreateTokens"
+  | "inputTokens"
+  | "outputTokens"
+  | "cacheReadTokens"
+  | "cacheCreateTokens"
+  | "webSearchRequests"
 > {
   return {
     inputTokens: usage.input_tokens ?? 0,
     outputTokens: usage.output_tokens ?? 0,
     cacheReadTokens: usage.cache_read_input_tokens ?? 0,
     cacheCreateTokens: usage.cache_creation_input_tokens ?? 0,
+    webSearchRequests: usage.server_tool_use?.web_search_requests ?? 0,
   };
 }

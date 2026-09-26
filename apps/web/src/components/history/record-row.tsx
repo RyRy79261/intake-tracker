@@ -9,6 +9,7 @@ import { formatTimeOnly } from "@/lib/date-utils";
 import { getLiquidTypeLabel } from "@/lib/utils";
 import { type LiquidPreset } from "@/lib/constants";
 import type { IntakeRecord } from "@/lib/db";
+import { describeSodiumEntry } from "@intake/core/sodium";
 
 const INTAKE_UNITS: Record<IntakeRecord["type"], string> = {
   water: "ml",
@@ -41,9 +42,13 @@ function RecordRowImpl({ unified, onDelete, onEdit, isDeleting, liquidPresets }:
     iconColor = theme.iconColor;
     typeLabel = theme.label;
     const amountStr = `${record.amount} ${INTAKE_UNITS[record.type]}`;
+    // Water: the liquid it came from. Sodium: the salt/MSG it was typed as
+    // (null for sodium typed directly, and for rows with no recorded source).
     const sourceLabel = record.type === "water"
       ? getLiquidTypeLabel(record.source, { presets: liquidPresets, note: record.note })
-      : null;
+      : record.type === "salt"
+        ? describeSodiumEntry(record)
+        : null;
     measurement = sourceLabel ? `${amountStr} · ${sourceLabel}` : amountStr;
   } else if (unified.type === "weight") {
     const theme = CARD_THEMES.weight;

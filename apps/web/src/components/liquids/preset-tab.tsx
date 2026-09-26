@@ -657,8 +657,8 @@ export function PresetTab({ tab }: PresetTabProps) {
         {volumeMl > 0 && !hasSubstance && (
           <p className="text-xs text-muted-foreground text-center">
             {sugarEnabled
-              ? "Add a caffeine, ABV, salt or sugar amount"
-              : "Add a caffeine, ABV or salt amount"}{" "}
+              ? "Add a caffeine, ABV, sodium or sugar amount"
+              : "Add a caffeine, ABV or sodium amount"}{" "}
             — or log a plain drink from the Water or Beverage tab.
           </p>
         )}

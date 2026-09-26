@@ -259,6 +259,7 @@ export const GET = withAuth(async ({ request, auth }) => {
       route: "/api/analytics/insights/deep",
       status: "success",
       durationMs: Date.now() - job.createdAt,
+      isBatch: true,
       ...tokensFromAnthropic(message.usage),
     });
   } catch (usageError) {

@@ -4,10 +4,47 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { getDeviceTimezone, clearTimezoneCache } from "@/lib/timezone";
 import {
   findMismatchedAnchors,
+  hasTravelSchedules,
   recalculateScheduleTimezones,
   type TimezoneAnchorGroup,
 } from "@/lib/timezone-recalculation-service";
 import { useToast } from "@intake/ui/use-toast";
+import { useSettingsStore } from "@/stores/settings-store";
+import { useSyncStatusStore } from "@/stores/sync-status-store";
+
+// ---------------------------------------------------------------------------
+// Home timezone (audit gap-timezone-travel-recalc#1)
+//
+// The travel decision is made against the synced home timezone
+// (`homeTimezone` in the settings store, mirrored to the userSettings row),
+// not against each schedule's anchor. Anchors are re-stamped by whichever
+// device last adjusted or edited a schedule, so with two devices in two zones
+// the anchors alone made each device claim the user had travelled.
+//
+//   - Home set, device in it: no prompt. The device is at home; a schedule
+//     anchored elsewhere came from a device that is away, not from travel.
+//   - Home set, device elsewhere: this device is away. Prompt to adjust the
+//     schedules not anchored here. "Not now" is remembered per
+//     (device zone, home zone), so the away device stays quiet even as other
+//     devices create or re-anchor schedules.
+//   - Home unset (never confirmed): the old per-anchor prompt. Home is
+//     recorded once every schedule is anchored to this device's zone.
+//   - Adjust makes the device's zone the new home.
+//
+// A home change arriving from another device (a pull) re-runs the check.
+// ---------------------------------------------------------------------------
+
+/**
+ * True when this device may write the synced home timezone now. In
+ * cloud-sync mode that waits for the first full pull, which may bring the
+ * home another device set.
+ */
+function mayRecordHome(): boolean {
+  return (
+    useSettingsStore.getState().storageMode !== "cloud-sync" ||
+    useSyncStatusStore.getState().initialSyncComplete
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Persisted "Not now" dismissals
@@ -94,6 +131,8 @@ export function useTimezoneDetection(): TimezoneChangeState {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [anchors, setAnchors] = useState<TimezoneAnchorGroup[]>([]);
   const [newTimezone, setNewTimezone] = useState("");
+  // The home zone the open prompt was raised against (null: legacy prompt).
+  const [promptHome, setPromptHome] = useState<string | null>(null);
   const [isRecalculating, setIsRecalculating] = useState(false);
   const { toast } = useToast();
 
@@ -108,12 +147,39 @@ export function useTimezoneDetection(): TimezoneChangeState {
     const deviceTz = getDeviceTimezone();
 
     try {
+      const home = useSettingsStore.getState().homeTimezone;
+      const dismissed = dismissedAnchorsFor(deviceTz);
+
+      if (home) {
+        // At home: nothing to adjust, whatever the anchors say.
+        if (home === deviceTz) {
+          setDialogOpen(false);
+          return;
+        }
+        if (dismissed.has(home)) return;
+        const groups = await findMismatchedAnchors(deviceTz);
+        if (groups.length === 0) return;
+        setAnchors(groups);
+        setPromptHome(home);
+        setNewTimezone(deviceTz);
+        setDialogOpen(true);
+        return;
+      }
+
       // Prompt only if some mismatched anchor is not yet dismissed, but then
       // list them all: confirming re-anchors every mismatched schedule.
-      const dismissed = dismissedAnchorsFor(deviceTz);
       const groups = await findMismatchedAnchors(deviceTz);
-      if (!groups.some((g) => !dismissed.has(g.anchorTimezone))) return;
+      if (!groups.some((g) => !dismissed.has(g.anchorTimezone))) {
+        // Every schedule is anchored here: this is home.
+        if (groups.length === 0 && mayRecordHome() && (await hasTravelSchedules())) {
+          if (useSettingsStore.getState().homeTimezone === null) {
+            useSettingsStore.getState().setHomeTimezone(deviceTz);
+          }
+        }
+        return;
+      }
       setAnchors(groups);
+      setPromptHome(null);
       setNewTimezone(deviceTz);
       setDialogOpen(true);
     } catch {
@@ -125,6 +191,8 @@ export function useTimezoneDetection(): TimezoneChangeState {
     setIsRecalculating(true);
     try {
       await recalculateScheduleTimezones(newTimezone);
+      // The schedules now belong to this zone: it is the new home.
+      useSettingsStore.getState().setHomeTimezone(newTimezone);
       const cityName = formatTimezoneCityName(newTimezone);
       toastRef.current({
         title: `Schedules adjusted to ${cityName}`,
@@ -144,12 +212,17 @@ export function useTimezoneDetection(): TimezoneChangeState {
 
   const handleDismiss = useCallback(() => {
     const existing = readDismissals();
-    const added = anchors
-      .map((g) => dismissalKey(newTimezone, g.anchorTimezone))
+    // Against a home zone, "Not now" covers the home zone itself, so new or
+    // re-anchored schedules do not bring the prompt back on this trip.
+    const dismissedZones = promptHome
+      ? [promptHome]
+      : anchors.map((g) => g.anchorTimezone);
+    const added = dismissedZones
+      .map((zone) => dismissalKey(newTimezone, zone))
       .filter((k) => !existing.includes(k));
     writeDismissals([...existing, ...added]);
     setDialogOpen(false);
-  }, [anchors, newTimezone]);
+  }, [anchors, newTimezone, promptHome]);
 
   // Check on mount (app open) and on visibility change (app resume)
   useEffect(() => {
@@ -164,14 +237,20 @@ export function useTimezoneDetection(): TimezoneChangeState {
 
     // Check on resume from background
     document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    // Check again when the home zone changes, e.g. pulled from another device.
+    const unsubscribeHome = useSettingsStore.subscribe((state, prev) => {
+      if (state.homeTimezone !== prev.homeTimezone) checkTimezoneChange();
+    });
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+      unsubscribeHome();
     };
   }, [checkTimezoneChange]);
 
   return {
     dialogOpen,
-    oldTimezone: anchors[0]?.anchorTimezone ?? "",
+    oldTimezone: promptHome ?? anchors[0]?.anchorTimezone ?? "",
     newTimezone,
     anchors,
     isRecalculating,

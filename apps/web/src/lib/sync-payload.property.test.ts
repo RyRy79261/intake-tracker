@@ -41,6 +41,7 @@ import {
   pullBodySchema,
   schemaByTableName,
   tableNameSchema,
+  opSchema_,
 } from "@intake/db/sync-payload";
 import { TABLE_PUSH_ORDER } from "@/lib/sync-topology";
 
@@ -67,6 +68,7 @@ const KNOWN_TABLES = [
   "titrationPlans",
   "userProfile",
   "insightReports",
+  "userSettings",
 ] as const;
 
 // Minimal valid row shape for the intakeRecords table — used as the
@@ -452,10 +454,10 @@ describe("syncable-table list parity (drift guard)", () => {
     "KNOWN_TABLES (this test file)": KNOWN_TABLES,
   };
 
-  it("schemaByTableName has the expected 18 syncable tables", () => {
+  it("schemaByTableName has the expected 19 syncable tables", () => {
     // Pins the canonical count so adding/removing a synced table is a
     // deliberate, reviewed change rather than a silent drift.
-    expect(canonical).toHaveLength(18);
+    expect(canonical).toHaveLength(19);
   });
 
   it.each(Object.entries(LISTS))(
@@ -472,4 +474,44 @@ describe("syncable-table list parity (drift guard)", () => {
       ).toEqual({ missing: [], extra: [] });
     },
   );
+});
+
+describe("userSettings ops (synced settings)", () => {
+  const row = {
+    id: "user-a",
+    waterLimit: 1500,
+    saltLimit: 2000,
+    sugarLimit: 30,
+    potassiumLimit: 3500,
+    waterExtendedBuffer: 500,
+    saltExtendedBuffer: 500,
+    sugarExtendedBuffer: 10,
+    optionalTrackers: { sugar: true, potassium: false },
+    dayStartHour: 2,
+    liquidPresets: [
+      { id: "p1", name: "Oat latte", tab: "coffee", defaultVolumeMl: 250, caffeinePer100ml: 40 },
+    ],
+    primaryRegion: "ZA",
+    secondaryRegion: "",
+    reminderFollowUpCount: 2,
+    reminderFollowUpInterval: 10,
+    homeTimezone: "Europe/Berlin",
+    homeTimezoneConfirmedAt: 1_790_000_000_000,
+    createdAt: 1,
+    updatedAt: 2,
+    deletedAt: null,
+    deviceId: "d",
+  };
+
+  it("accepts a settings row with its JSON presets and trackers", () => {
+    const parsed = opSchema_.safeParse({ queueId: 1, op: "upsert", tableName: "userSettings", row });
+    expect(parsed.success).toBe(true);
+  });
+
+  it("rejects a settings row without its limits", () => {
+    const { waterLimit: _drop, ...rest } = row;
+    void _drop;
+    const parsed = opSchema_.safeParse({ queueId: 1, op: "upsert", tableName: "userSettings", row: rest });
+    expect(parsed.success).toBe(false);
+  });
 });

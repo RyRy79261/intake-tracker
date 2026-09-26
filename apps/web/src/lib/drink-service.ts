@@ -1,5 +1,10 @@
 import { db } from "@/lib/db";
-import type { IntakeRecord, SubstanceRecord } from "@/lib/db";
+import type {
+  IntakeRecord,
+  SubstanceRecord,
+  SodiumSource,
+  SodiumSourceUnit,
+} from "@/lib/db";
 import { ok, err } from "@intake/core/service";
 import type { ServiceResult } from "@intake/types/service";
 import { syncFields } from "@/lib/utils";
@@ -22,6 +27,12 @@ export interface LogDrinkInput {
   abvPercent?: number;
   /** Sodium dissolved in the drink, in mg. */
   saltMg?: number;
+  /**
+   * What `saltMg` was typed as (e.g. 2 g of salt), stored on the sodium row
+   * beside the converted mg. Omit when only sodium mg is known (presets,
+   * voice): the row then reads as sodium with an unknown source.
+   */
+  sodiumEntry?: { source: SodiumSource; amount: number; unit: SodiumSourceUnit };
   /** Total sugars in the drink, in grams. */
   sugarG?: number;
   /** Potassium in the drink, in mg. */
@@ -153,14 +164,21 @@ export async function logDrink(
             source: candidate.source,
           });
         }
+        const entry = input.sodiumEntry;
         for (const solute of solutes) {
           const id = crypto.randomUUID();
+          const sodiumEntry = solute.type === "salt" ? entry : undefined;
           const record: IntakeRecord = {
             id,
             type: solute.type,
             amount: solute.amount,
             timestamp: ts,
-            source: solute.source,
+            source: sodiumEntry ? `manual:${sodiumEntry.source}` : solute.source,
+            ...(sodiumEntry && {
+              sodiumSource: sodiumEntry.source,
+              sourceAmount: sodiumEntry.amount,
+              sourceUnit: sodiumEntry.unit,
+            }),
             groupId,
             ...(input.groupSource !== undefined && { groupSource: input.groupSource }),
             ...fields,

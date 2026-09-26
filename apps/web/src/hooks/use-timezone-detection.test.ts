@@ -27,6 +27,7 @@ import {
   useTimezoneDetection,
   TIMEZONE_DISMISSALS_KEY,
 } from "@/hooks/use-timezone-detection";
+import { useSettingsStore } from "@/stores/settings-store";
 
 /**
  * Tests for the real useTimezoneDetection hook against a seeded IndexedDB.
@@ -83,6 +84,8 @@ beforeEach(() => {
   device.tz = "Europe/Berlin";
   device.clearCalls = 0;
   localStorage.clear();
+  // No synced home zone: these tests cover the per-anchor prompt.
+  useSettingsStore.setState({ homeTimezone: null, homeTimezoneConfirmedAt: null });
 });
 
 // ---------------------------------------------------------------------------

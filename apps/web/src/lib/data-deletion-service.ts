@@ -13,8 +13,9 @@
  *   when the row was written. Configuration (prescriptions, phases, schedules,
  *   inventory and its transactions, titration plans), notes, audit logs and AI
  *   reports are never deleted by age.
- * - `ALL_TIME` wipes every synced table except `userProfile`, which holds
- *   account configuration (conditions, AI consent). Tombstoned configuration
+ * - `ALL_TIME` wipes every synced table except `userProfile` and
+ *   `userSettings`, which hold account configuration (conditions, AI
+ *   consent; limits, presets, day start, home timezone). Tombstoned configuration
  *   is also switched off (inactive / cancelled), matching the Dexie v23
  *   tombstone repair.
  */
@@ -27,8 +28,11 @@ import { isLive } from "@intake/core/lifecycle";
 import { ok, err } from "@intake/core/service";
 import type { ServiceResult } from "@intake/types/service";
 
-const PROFILE_TABLE = "userProfile";
-const ALL_TIME_TABLES = TABLE_PUSH_ORDER.filter((t) => t !== PROFILE_TABLE);
+const ACCOUNT_CONFIG_TABLES: ReadonlySet<TableName> = new Set<TableName>([
+  "userProfile",
+  "userSettings",
+]);
+const ALL_TIME_TABLES = TABLE_PUSH_ORDER.filter((t) => !ACCOUNT_CONFIG_TABLES.has(t));
 
 /** Time-series tables whose rows carry an event `timestamp` (Unix ms). */
 const TIMESTAMPED_TABLES: readonly TableName[] = [
