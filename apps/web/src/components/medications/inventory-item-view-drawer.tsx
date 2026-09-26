@@ -23,7 +23,6 @@ import {
   useSetStockCount,
   useRestoreInventoryTransaction,
 } from "@/hooks/use-inventory-mutations";
-import { isActiveBrand as isActiveBrandItem } from "@/lib/inventory-service";
 import { computeRefillStatus } from "@/lib/refill-status";
 import { showUndoToast } from "@/components/medications/undo-toast";
 import { useToast } from "@intake/ui/use-toast";
@@ -161,6 +160,14 @@ function DetailsTab({ item, prescription }: { item: InventoryItem; prescription:
   );
 }
 
+/**
+ * The brand doses are deducted from, among a prescription's items. Mirrors
+ * `isActiveBrand` in inventory-service (components can't import services).
+ */
+function findActiveBrand(items: InventoryItem[]): InventoryItem | undefined {
+  return items.find((i) => isLive(i) && i.isActive === true && !i.isArchived);
+}
+
 /** Parse a number field; `null` when empty or not a finite number. */
 function parseAmount(raw: string): number | null {
   if (raw.trim() === "") return null;
@@ -196,7 +203,7 @@ function InventoryTab({
   const parsedRefill = parseAmount(refillAmount);
   const parsedCount = parseAmount(countedAmount);
 
-  const activeBrand = siblings.find(isActiveBrandItem);
+  const activeBrand = findActiveBrand(siblings);
   const isActiveBrand = activeBrand?.id === item.id;
   // Only the active brand is deducted, so only it has a supply estimate.
   const status = isActiveBrand ? computeRefillStatus(item, effectivePhase, schedules) : null;

@@ -437,7 +437,7 @@ export async function updateInventoryTransaction(
       // Clear with "" rather than undefined: Dexie would drop the key, the
       // push would then omit the column, and the server (which maps "" to
       // NULL) would keep the old note and hand it back on the next pull.
-      if (updates.note !== undefined) changes.note = note;
+      if (note !== undefined) changes.note = note;
 
       await db.inventoryTransactions.update(id, changes);
       await enqueueInsideTx("inventoryTransactions", id, "upsert");
