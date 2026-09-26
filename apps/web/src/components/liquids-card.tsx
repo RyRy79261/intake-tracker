@@ -349,26 +349,26 @@ export function LiquidsCard() {
           renderEntry={(record) => {
             const sourceLabel = getLiquidTypeLabel(record.source, { presets: settings.liquidPresets, note: record.note });
             return (
-                <>
-                    <span className="text-muted-foreground">
-                      {formatTimeOnly(record.timestamp)}
+              <>
+                <span className="text-muted-foreground">
+                  {formatTimeOnly(record.timestamp)}
+                </span>
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="font-medium shrink-0">
+                    {formatAmount(record.amount, "ml")}
+                  </span>
+                  {record.groupId && groupSugarMap.get(record.groupId) ? (
+                    <span className="text-xs font-medium text-pink-600 dark:text-pink-400 shrink-0">
+                      {groupSugarMap.get(record.groupId)}g sugar
                     </span>
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="font-medium shrink-0">
-                        {formatAmount(record.amount, "ml")}
-                      </span>
-                      {record.groupId && groupSugarMap.get(record.groupId) ? (
-                        <span className="text-xs font-medium text-pink-600 dark:text-pink-400 shrink-0">
-                          {groupSugarMap.get(record.groupId)}g sugar
-                        </span>
-                      ) : null}
-                      {sourceLabel && (
-                        <span className="text-xs text-muted-foreground/80 bg-muted/60 px-1.5 py-0.5 rounded truncate">
-                          {sourceLabel}
-                        </span>
-                      )}
-                    </div>
-                </>
+                  ) : null}
+                  {sourceLabel && (
+                    <span className="text-xs text-muted-foreground/80 bg-muted/60 px-1.5 py-0.5 rounded truncate">
+                      {sourceLabel}
+                    </span>
+                  )}
+                </div>
+              </>
             );
           }}
           renderEditForm={() => (
