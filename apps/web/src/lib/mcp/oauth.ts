@@ -6,7 +6,7 @@
  * module mints and validates tokens scoped to a userId that the
  * authorize-endpoint has already verified via session cookie.
  */
-import { eq, and, gte, isNull, lt } from "drizzle-orm";
+import { eq, and, gte, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { db } from "@intake/db/client";
 import {
   mcpAccessTokens,
@@ -378,17 +378,147 @@ export async function lookupAccessToken(accessTokenPlain: string): Promise<
   };
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// Revocation
+// ─────────────────────────────────────────────────────────────────────────
+
 /**
- * Periodic cleanup helper — not wired to a cron, but exposed so a future
- * job can purge expired auth codes and tokens whose refresh has also
- * expired. We DON'T delete by `expiresAt` (access-token TTL) because the
- * row still carries a usable refresh token until `refreshExpiresAt` —
- * dropping it would force users back to re-authorize daily.
+ * RFC 7009 revocation of one token, access or refresh. A row holds both, so
+ * either one kills the pair — revoking only the access token would let the
+ * client mint a new one from the refresh token. Scoped to the presenting
+ * client so one client can't revoke another's tokens. Returns the number of
+ * rows revoked (0 for an unknown, foreign or already-revoked token — the
+ * endpoint answers 200 either way, per RFC 7009 §2.2).
+ */
+export async function revokeToken(
+  tokenPlain: string,
+  clientId: string,
+): Promise<number> {
+  const hash = hashToken(tokenPlain);
+  const revoked = await db
+    .update(mcpAccessTokens)
+    .set({ revokedAt: Date.now() })
+    .where(
+      and(
+        or(
+          eq(mcpAccessTokens.tokenHash, hash),
+          eq(mcpAccessTokens.refreshTokenHash, hash),
+        ),
+        eq(mcpAccessTokens.clientId, clientId),
+        isNull(mcpAccessTokens.revokedAt),
+      ),
+    )
+    .returning({ tokenHash: mcpAccessTokens.tokenHash });
+  return revoked.length;
+}
+
+/**
+ * Revokes every live token the user has granted, or only those of one
+ * client. Backs the "disconnect" action in Settings. Returns the number of
+ * rows revoked.
+ */
+export async function revokeUserTokens(
+  userId: string,
+  clientId?: string,
+): Promise<number> {
+  const revoked = await db
+    .update(mcpAccessTokens)
+    .set({ revokedAt: Date.now() })
+    .where(
+      and(
+        eq(mcpAccessTokens.userId, userId),
+        isNull(mcpAccessTokens.revokedAt),
+        ...(clientId ? [eq(mcpAccessTokens.clientId, clientId)] : []),
+      ),
+    )
+    .returning({ tokenHash: mcpAccessTokens.tokenHash });
+  return revoked.length;
+}
+
+export interface McpConnection {
+  clientId: string;
+  clientName: string;
+  /** Live token rows for this client (one per completed authorization). */
+  tokenCount: number;
+  connectedAt: number;
+  lastUsedAt: number | null;
+}
+
+/**
+ * The user's usable connections: clients holding a token that is not revoked
+ * and can still be used or refreshed.
+ */
+export async function listUserConnections(
+  userId: string,
+): Promise<McpConnection[]> {
+  const now = Date.now();
+  const rows = await db
+    .select({
+      clientId: mcpAccessTokens.clientId,
+      clientName: mcpOauthClients.clientName,
+      tokenCount: sql<number>`count(*)`.mapWith(Number),
+      connectedAt: sql<number>`min(${mcpAccessTokens.createdAt})`.mapWith(Number),
+      lastUsedAt: sql<number | null>`max(${mcpAccessTokens.lastUsedAt})`,
+    })
+    .from(mcpAccessTokens)
+    .innerJoin(
+      mcpOauthClients,
+      eq(mcpAccessTokens.clientId, mcpOauthClients.clientId),
+    )
+    .where(
+      and(
+        eq(mcpAccessTokens.userId, userId),
+        isNull(mcpAccessTokens.revokedAt),
+        or(
+          gte(mcpAccessTokens.expiresAt, now),
+          gte(mcpAccessTokens.refreshExpiresAt, now),
+        ),
+      ),
+    )
+    .groupBy(mcpAccessTokens.clientId, mcpOauthClients.clientName)
+    .orderBy(mcpOauthClients.clientName);
+  return rows.map((r) => ({
+    ...r,
+    lastUsedAt: r.lastUsedAt == null ? null : Number(r.lastUsedAt),
+  }));
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Cleanup
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Purges expired auth codes, revoked tokens, and tokens whose refresh has
+ * also expired. We DON'T delete by `expiresAt` (access-token TTL) because
+ * the row still carries a usable refresh token until `refreshExpiresAt` —
+ * dropping it would force users back to re-authorize daily. Runs
+ * opportunistically from the token endpoint via `maybePurgeExpired`.
  */
 export async function purgeExpired(): Promise<void> {
   const now = Date.now();
   await db.delete(mcpAuthCodes).where(lt(mcpAuthCodes.expiresAt, now));
   await db
     .delete(mcpAccessTokens)
-    .where(lt(mcpAccessTokens.refreshExpiresAt, now));
+    .where(
+      or(
+        lt(mcpAccessTokens.refreshExpiresAt, now),
+        isNotNull(mcpAccessTokens.revokedAt),
+      ),
+    );
+}
+
+const PURGE_INTERVAL_MS = 60 * 60_000;
+let lastPurgeAt = 0;
+
+/**
+ * Fire-and-forget `purgeExpired`, at most once an hour per server instance.
+ * There is no cron for it; the token endpoint is hit on every connect and
+ * refresh, which is often enough to keep the tables small.
+ */
+export function maybePurgeExpired(now = Date.now()): void {
+  if (now - lastPurgeAt < PURGE_INTERVAL_MS) return;
+  lastPurgeAt = now;
+  void purgeExpired().catch((err: unknown) => {
+    console.warn("[mcp] purgeExpired failed:", err);
+  });
 }

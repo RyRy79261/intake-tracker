@@ -28,10 +28,12 @@ import {
   queryWeightHistory,
 } from "@/lib/mcp/queries";
 import { writeMcpAudit } from "@/lib/mcp/audit";
+import { isValidTimeZone } from "@/lib/mcp/day-window";
+import type { McpToolName } from "@/lib/mcp/tool-catalog";
 
 const ONE_YEAR_MS = 365 * 24 * 60 * 60_000;
 
-const dateRangeShape = {
+const rangeShape = {
   start_ms: z
     .number()
     .int()
@@ -44,14 +46,36 @@ const dateRangeShape = {
     .describe("Range end, unix milliseconds"),
 };
 
-function validateRange(args: { start_ms: number; end_ms: number }) {
-  if (args.end_ms < args.start_ms) {
-    throw new Error("end_ms must be >= start_ms");
-  }
-  if (args.end_ms - args.start_ms > ONE_YEAR_MS) {
-    throw new Error("Range must be <= 1 year");
-  }
+// Range limits live in the schema, so the SDK rejects a bad range before the
+// tool runs and returns the message below to the model verbatim (a throw
+// inside runTool would be masked as a generic internal error).
+type RangeArgs = { start_ms: number; end_ms: number };
+
+function withRange<S extends z.ZodRawShape>(shape: S) {
+  return z
+    .object({ ...shape, ...rangeShape })
+    .refine((a) => (a as RangeArgs).end_ms >= (a as RangeArgs).start_ms, {
+      message: "end_ms must be >= start_ms",
+      path: ["end_ms"],
+    })
+    .refine((a) => (a as RangeArgs).end_ms - (a as RangeArgs).start_ms <= ONE_YEAR_MS, {
+      message:
+        "Range must be <= 1 year (365 days); split longer periods into several calls",
+      path: ["end_ms"],
+    });
 }
+
+const dateRange = withRange({});
+
+const timezoneArg = z
+  .string()
+  .refine(isValidTimeZone, {
+    message: "timezone must be an IANA time zone such as 'Europe/Berlin'",
+  })
+  .optional()
+  .describe(
+    "The user's IANA time zone (e.g. 'Europe/Berlin'). Defaults to the zone the app last reported for the user, else UTC.",
+  );
 
 interface AuthCtx {
   authInfo?: AuthInfo;
@@ -123,32 +147,41 @@ async function runTool<TArgs extends Record<string, unknown>>(
 }
 
 export function registerReadOnlyTools(server: McpServer): void {
+  // Names are typed against the consent catalog, so every tool registered
+  // here is one the OAuth consent screen describes.
+  const tool = (name: McpToolName) => name;
+
   server.registerTool(
-    "get_today_summary",
+    tool("get_today_summary"),
     {
       title: "Today's summary",
       description:
-        "Totals for water/salt/sugar/potassium intake since the user's day-start hour, plus the latest blood-pressure and weight readings, and doses logged today.",
-      inputSchema: {},
+        "Today so far, in the user's time zone. `intake` holds totals since the user's day-start hour: water_ml, sodium_mg (sodium, not table salt: 1 g salt is about 400 mg sodium), sugar_g and potassium_mg. Also the latest blood-pressure and weight readings. `doses` covers today's local calendar date (`scheduled_date`): each scheduled slot of the effective regimen with its status (taken / skipped / outstanding), the counts per status, and any other dose logs for the date (as-needed doses, or logs against a slot no longer in the regimen) under `unscheduled`.",
+      inputSchema: { timezone: timezoneArg },
     },
-    async (_args, ctx) =>
-      runTool(ctx, "get_today_summary", {}, null, (userId) =>
-        getTodaySummary(userId),
+    async (args, ctx) =>
+      runTool(
+        ctx,
+        "get_today_summary",
+        args,
+        { timezone: args.timezone ?? null },
+        (userId) => getTodaySummary(userId, { timezone: args.timezone }),
       ),
   );
 
   server.registerTool(
-    "query_intake_history",
+    tool("query_intake_history"),
     {
       title: "Intake history",
       description:
-        "Returns individual water/salt/sugar/potassium intake records in the given time range. Use type='all' to combine. Each row includes groupId/groupSource, and a `substance` object when the row is the fluid half of a decomposed drink (linked by groupId, or by source='substance:<id>' for records predating that link) — carrying the linked substance's type, description, ABV %, standard drinks, and caffeine mg (null otherwise). Use query_substance_history for the full caffeine/alcohol list.",
-      inputSchema: {
+        "Returns individual water/sodium/sugar/potassium intake records in the given time range. Use type='all' to combine. Sodium rows are sodium in mg (not table salt: 1 g salt is about 400 mg sodium); 'salt' is accepted as a legacy name for 'sodium'. Each row includes groupId/groupSource, and a `substance` object when the row is the fluid half of a decomposed drink (linked by groupId, or by source='substance:<id>' for records predating that link) — carrying the linked substance's type, description, ABV %, standard drinks, and caffeine mg (null otherwise). Use query_substance_history for the full caffeine/alcohol list. Returned oldest first. Capped at 5000 rows: when `truncated` is true the NEWEST 5000 rows in the range are kept, so page further back by calling again with end_ms set just before the first row's timestamp.",
+      inputSchema: withRange({
         type: z
-          .enum(["water", "salt", "sugar", "potassium", "all"])
-          .describe("Intake type to filter on, or 'all'"),
-        ...dateRangeShape,
-      },
+          .enum(["water", "sodium", "salt", "sugar", "potassium", "all"])
+          .describe(
+            "Intake type to filter on, or 'all'. 'salt' is a legacy alias for 'sodium'.",
+          ),
+      }),
     },
     async (args, ctx) =>
       runTool(
@@ -156,82 +189,68 @@ export function registerReadOnlyTools(server: McpServer): void {
         "query_intake_history",
         args,
         { type: args.type, start_ms: args.start_ms, end_ms: args.end_ms },
-        (userId) => {
-          validateRange(args);
-          return queryIntakeHistory(userId, args.type, {
-            start: args.start_ms,
-            end: args.end_ms,
-          });
-        },
+        (userId) =>
+          queryIntakeHistory(
+            userId,
+            args.type === "salt" ? "sodium" : args.type,
+            { start: args.start_ms, end: args.end_ms },
+          ),
       ),
   );
 
   server.registerTool(
-    "query_weight_history",
+    tool("query_weight_history"),
     {
       title: "Weight history",
       description:
-        "Weight readings (kg) in the given time range, oldest first. Capped at 5000 rows.",
-      inputSchema: dateRangeShape,
+        "Weight readings (kg) in the given time range. Returned oldest first. Capped at 5000 rows: when `truncated` is true the NEWEST 5000 rows in the range are kept, so page further back by calling again with end_ms set just before the first row's timestamp.",
+      inputSchema: dateRange,
     },
     async (args, ctx) =>
-      runTool(ctx, "query_weight_history", args, args, (userId) => {
-        validateRange(args);
-        return queryWeightHistory(userId, {
-          start: args.start_ms,
-          end: args.end_ms,
-        });
-      }),
+      runTool(ctx, "query_weight_history", args, args, (userId) =>
+        queryWeightHistory(userId, { start: args.start_ms, end: args.end_ms }),
+      ),
   );
 
   server.registerTool(
-    "query_blood_pressure_history",
+    tool("query_blood_pressure_history"),
     {
       title: "Blood pressure history",
       description:
-        "Systolic/diastolic/heart-rate readings in the given time range, oldest first. Capped at 5000 rows.",
-      inputSchema: dateRangeShape,
+        "Systolic/diastolic/heart-rate readings in the given time range. Returned oldest first. Capped at 5000 rows: when `truncated` is true the NEWEST 5000 rows in the range are kept, so page further back by calling again with end_ms set just before the first row's timestamp.",
+      inputSchema: dateRange,
     },
     async (args, ctx) =>
-      runTool(ctx, "query_blood_pressure_history", args, args, (userId) => {
-        validateRange(args);
-        return queryBloodPressureHistory(userId, {
-          start: args.start_ms,
-          end: args.end_ms,
-        });
-      }),
+      runTool(ctx, "query_blood_pressure_history", args, args, (userId) =>
+        queryBloodPressureHistory(userId, { start: args.start_ms, end: args.end_ms }),
+      ),
   );
 
   server.registerTool(
-    "query_eating_history",
+    tool("query_eating_history"),
     {
       title: "Eating history",
       description:
-        "Food log entries in the given time range, oldest first. Each row includes groupId; use query_substance_history for the caffeine/alcohol substances (standalone drinks are not linked here). Capped at 5000 rows.",
-      inputSchema: dateRangeShape,
+        "Food log entries in the given time range. Each row includes groupId; use query_substance_history for the caffeine/alcohol substances (standalone drinks are not linked here). Returned oldest first. Capped at 5000 rows: when `truncated` is true the NEWEST 5000 rows in the range are kept, so page further back by calling again with end_ms set just before the first row's timestamp.",
+      inputSchema: dateRange,
     },
     async (args, ctx) =>
-      runTool(ctx, "query_eating_history", args, args, (userId) => {
-        validateRange(args);
-        return queryEatingHistory(userId, {
-          start: args.start_ms,
-          end: args.end_ms,
-        });
-      }),
+      runTool(ctx, "query_eating_history", args, args, (userId) =>
+        queryEatingHistory(userId, { start: args.start_ms, end: args.end_ms }),
+      ),
   );
 
   server.registerTool(
-    "query_substance_history",
+    tool("query_substance_history"),
     {
       title: "Substance history (caffeine / alcohol)",
       description:
-        "Caffeine and alcohol substance records in the given time range, oldest first. Each row carries the amount (caffeine mg or alcohol standard drinks), ABV %, volume, free-text description, and how it was logged (source='standalone', 'water_intake', or 'eating'; groupId links it to its parent drink/food entry). This is the authoritative source for alcohol and caffeine intake — including drinks decomposed from a water or food entry that do not appear as standalone rows. Capped at 5000 rows.",
-      inputSchema: {
+        "Caffeine and alcohol substance records in the given time range. Each row carries the amount (caffeine mg or alcohol standard drinks), ABV %, volume, free-text description, and how it was logged (source='standalone', 'water_intake', or 'eating'; groupId links it to its parent drink/food entry). This is the authoritative source for alcohol and caffeine intake — including drinks decomposed from a water or food entry that do not appear as standalone rows. Returned oldest first. Capped at 5000 rows: when `truncated` is true the NEWEST 5000 rows in the range are kept, so page further back by calling again with end_ms set just before the first row's timestamp.",
+      inputSchema: withRange({
         type: z
           .enum(["caffeine", "alcohol", "all"])
           .describe("Substance type to filter on, or 'all'"),
-        ...dateRangeShape,
-      },
+      }),
     },
     async (args, ctx) =>
       runTool(
@@ -239,40 +258,34 @@ export function registerReadOnlyTools(server: McpServer): void {
         "query_substance_history",
         args,
         { type: args.type, start_ms: args.start_ms, end_ms: args.end_ms },
-        (userId) => {
-          validateRange(args);
-          return querySubstanceHistory(userId, args.type, {
+        (userId) =>
+          querySubstanceHistory(userId, args.type, {
             start: args.start_ms,
             end: args.end_ms,
-          });
-        },
+          }),
       ),
   );
 
   server.registerTool(
-    "query_urination_history",
+    tool("query_urination_history"),
     {
       title: "Urination history",
       description:
-        "Urination events in the given time range, oldest first, each with a free-text volume estimate (e.g. small/normal/large) — useful for diuretic-response review. Capped at 5000 rows.",
-      inputSchema: dateRangeShape,
+        "Urination events in the given time range, each with a free-text volume estimate (e.g. small/normal/large) — useful for diuretic-response review. Returned oldest first. Capped at 5000 rows: when `truncated` is true the NEWEST 5000 rows in the range are kept, so page further back by calling again with end_ms set just before the first row's timestamp.",
+      inputSchema: dateRange,
     },
     async (args, ctx) =>
-      runTool(ctx, "query_urination_history", args, args, (userId) => {
-        validateRange(args);
-        return queryUrinationHistory(userId, {
-          start: args.start_ms,
-          end: args.end_ms,
-        });
-      }),
+      runTool(ctx, "query_urination_history", args, args, (userId) =>
+        queryUrinationHistory(userId, { start: args.start_ms, end: args.end_ms }),
+      ),
   );
 
   server.registerTool(
-    "list_medications",
+    tool("list_medications"),
     {
       title: "List active medications",
       description:
-        "All active prescriptions with their currently-active phase and enabled schedules. For schedule times, scheduleTimeUTC (minutes from UTC midnight) + anchorTimezone are authoritative; the legacy `time` string is deprecated.",
+        "All active prescriptions, each with its ONE effective phase (`phase`, null if none is active) and that phase's enabled schedules. While a titration plan runs, its titration phase overrides the maintenance phase, exactly as in the app's dose schedule; `titrationPlanId` names the plan. Each schedule's `time` is the canonical wall-clock HH:MM in its `anchorTimezone`; `scheduleTimeUTC` (minutes from UTC midnight) is derived from it. `dosage` is per dose, in the schedule's `unit` (or the phase's).",
       inputSchema: {},
     },
     async (_args, ctx) =>
@@ -282,7 +295,7 @@ export function registerReadOnlyTools(server: McpServer): void {
   );
 
   server.registerTool(
-    "list_titration_plans",
+    tool("list_titration_plans"),
     {
       title: "Titration plans",
       description:
@@ -296,11 +309,11 @@ export function registerReadOnlyTools(server: McpServer): void {
   );
 
   server.registerTool(
-    "list_recent_doses",
+    tool("list_recent_doses"),
     {
       title: "Recent doses",
       description:
-        "The most recent dose log entries (taken / skipped / rescheduled / pending) joined with prescription names. genericName resolves even for archived (soft-deleted) prescriptions; the `archived` field is true for those, false for active, and null if the prescription was hard-deleted.",
+        "The most recent dose log entries (taken / skipped / rescheduled / pending) joined with prescription names, newest first. `kind` is 'scheduled' (logged against `phaseId`/`scheduleId`) or 'prn' (an as-needed dose with no schedule). For the amount, prefer the snapshot frozen when the dose was logged (`doseAmount` in `doseUnit`, from `pillsConsumed` x `pillStrength`); else `doseMg` for a PRN dose; else `scheduleDosage` in `scheduleUnit` from the linked schedule as it is now. `inventoryItemId` names the stock the dose drew from. genericName resolves even for archived (soft-deleted) prescriptions; the `archived` field is true for those, false for active, and null if the prescription was hard-deleted.",
       inputSchema: {
         limit: z
           .number()
@@ -318,11 +331,11 @@ export function registerReadOnlyTools(server: McpServer): void {
   );
 
   server.registerTool(
-    "get_inventory_status",
+    tool("get_inventory_status"),
     {
       title: "Inventory status",
       description:
-        "Per-prescription pill stock and refill thresholds for active inventory items. `stock` is authoritative: the signed sum of the item's inventory transactions (falling back to the legacy currentStock, then 0, when an item has no transactions). It can be negative if over-consumed. Includes strength/unit/compounds so you can do tablets-per-dose math.",
+        "Per-prescription pill stock and refill thresholds for active inventory items. `stock` is authoritative and can be fractional (half tablets), rounded to 4 decimals: the signed sum of the item's live inventory transactions (falling back to the legacy currentStock, then 0, when an item has no transactions). It can be negative if over-consumed. Includes strength/unit/compounds so you can do tablets-per-dose math.",
       inputSchema: {},
     },
     async (_args, ctx) =>

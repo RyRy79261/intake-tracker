@@ -14,6 +14,10 @@ describe("GET /.well-known/oauth-authorization-server", () => {
     expect(body.authorization_endpoint).toContain("/api/mcp/oauth/authorize");
     expect(body.token_endpoint).toContain("/api/mcp/oauth/token");
     expect(body.registration_endpoint).toContain("/api/mcp/oauth/register");
+    expect(body.revocation_endpoint).toContain("/api/mcp/oauth/revoke");
+    expect(body.revocation_endpoint_auth_methods_supported).toEqual(
+      body.token_endpoint_auth_methods_supported,
+    );
     expect(body.response_types_supported).toContain("code");
     expect(body.grant_types_supported).toEqual(
       expect.arrayContaining(["authorization_code", "refresh_token"]),
