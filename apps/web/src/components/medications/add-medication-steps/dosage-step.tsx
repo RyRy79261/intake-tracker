@@ -5,8 +5,7 @@ import { Label } from "@intake/ui/label";
 import { Switch } from "@intake/ui/switch";
 import { cn } from "@/lib/utils";
 import { resolveWizardDose, type AddMedicationFormState } from "@/hooks/use-add-medication-form";
-import { formatCompoundFull } from "@intake/core/compound";
-import { isCleanFraction } from "@intake/core/compound";
+import { formatCompoundFull, isCleanFraction } from "@intake/core/compound";
 import { type FieldChange, DOSE_MULTIPLIERS } from "@/components/medications/add-medication-steps/types";
 
 export function DosageStep({
