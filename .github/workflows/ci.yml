@@ -457,8 +457,10 @@ jobs:
           node-version: '22'
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
+      # Each bench prints its stored baseline (benchmarks/<name>.json, refreshed
+      # with `pnpm --filter @intake/web bench:ci`) next to this run's result.
       - name: Run benchmarks
-        run: pnpm --filter @intake/web exec vitest bench --run --compare benchmarks/results.json
+        run: pnpm --filter @intake/web exec vitest bench --run --reporter=verbose
 
   ci-pass:
     if: always()

@@ -22,29 +22,31 @@ let POST: (req: NextRequest) => Promise<Response>;
 // Setup: start container, mock auth + drizzle, import route
 // ─────────────────────────────────────────────────────────────────────────
 
+// Top-level (Vitest 5 rejects nested vi.mock). The factories read `ctx`
+// lazily: they run on the first import of the mocked module, which is the
+// dynamic import inside beforeAll, after setupTestDb() has assigned it.
+// Mock auth to inject our test user
+vi.mock("@/lib/auth-middleware", () => ({
+  withAuth: (
+    handler: (ctx: {
+      request: NextRequest;
+      auth: { success: true; userId: string };
+    }) => Promise<Response>,
+  ) => {
+    return async (request: NextRequest) =>
+      handler({
+        request,
+        auth: { success: true, userId: "test-user-integration" },
+      });
+  },
+}));
+// Mock drizzle to return our real test DB instance
+vi.mock("@intake/db/client", () => ({
+  db: ctx.db,
+}));
+
 beforeAll(async () => {
   ctx = await setupTestDb();
-
-  // Mock auth to inject our test user
-  vi.mock("@/lib/auth-middleware", () => ({
-    withAuth: (
-      handler: (ctx: {
-        request: NextRequest;
-        auth: { success: true; userId: string };
-      }) => Promise<Response>,
-    ) => {
-      return async (request: NextRequest) =>
-        handler({
-          request,
-          auth: { success: true, userId: "test-user-integration" },
-        });
-    },
-  }));
-
-  // Mock drizzle to return our real test DB instance
-  vi.mock("@intake/db/client", () => ({
-    db: ctx.db,
-  }));
 
   // Dynamic import after mocks are registered
   const mod = await import("@/app/api/sync/push/route");

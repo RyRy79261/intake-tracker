@@ -729,16 +729,16 @@ describe("Build job caches .next/cache to speed up repeat builds (CIOP-03)", () 
 
 describe("Benchmark job runs in CI gated on bench-relevant file changes (BNCH-01)", () => {
   it("benchmark job is defined in the workflow", () => {
-    // If the benchmark job is removed, pnpm bench --compare never runs in CI
+    // If the benchmark job is removed, the benchmarks never run in CI
     // and performance regressions in migration chains or backup round-trips
     // go undetected before merge.
     expect(raw, "benchmark job must be defined").toMatch(/^ {2}benchmark:/m);
   });
 
-  it("benchmark job runs pnpm bench with --run and --compare flags", () => {
-    // --run prevents vitest from entering watch mode in CI.
-    // --compare benchmarks/results.json reads the committed baseline and exits
-    // non-zero if any benchmark regresses beyond the threshold.
+  it("benchmark job runs vitest bench with --run", () => {
+    // --run prevents vitest from entering watch mode in CI. Vitest 5 removed
+    // --compare; each bench now compares itself against its stored baseline
+    // (benchmarks/<name>.json, via src/__tests__/bench/baseline.ts).
     const block = extractJobBlock("benchmark", raw);
     expect(
       block,
@@ -748,14 +748,6 @@ describe("Benchmark job runs in CI gated on bench-relevant file changes (BNCH-01
       block,
       "benchmark job must pass --run flag"
     ).toContain("--run");
-    expect(
-      block,
-      "benchmark job must pass --compare with baseline path"
-    ).toContain("--compare");
-    expect(
-      block,
-      "benchmark --compare must reference benchmarks/results.json"
-    ).toContain("benchmarks/results.json");
   });
 
   it("ci-pass gate lists benchmark in its needs array", () => {
