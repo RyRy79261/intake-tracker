@@ -404,8 +404,15 @@ export function useUpdateInventoryItem() {
 
 export function useAdjustStock() {
   return useMutation({
-    mutationFn: async ({ inventoryItemId, amount, note, type }: { inventoryItemId: string; amount: number; note?: string; type?: "refill" | "consumed" | "adjusted" }) =>
-      unwrap(await adjustStock(inventoryItemId, amount, note, type)),
+    mutationFn: async ({ inventoryItemId, amount, note, type, occurredAt }: {
+      inventoryItemId: string;
+      amount: number;
+      note?: string;
+      type?: "refill" | "consumed" | "adjusted";
+      /** Backdate the movement (e.g. a refill collected earlier). */
+      occurredAt?: number;
+    }) =>
+      unwrap(await adjustStock(inventoryItemId, amount, note, type, occurredAt)),
   });
 }
 

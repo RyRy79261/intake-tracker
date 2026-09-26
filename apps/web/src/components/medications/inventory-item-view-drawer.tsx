@@ -30,6 +30,7 @@ import { selectEffectivePhase } from "@intake/core/effective-phase";
 import { isLive } from "@intake/core/lifecycle";
 import { isCombo, formatCompoundShort, formatCompoundFull } from "@intake/core/compound";
 import type { Prescription, InventoryItem, InventoryTransaction } from "@/lib/db";
+import { toLocalDateKey } from "@/lib/date-utils";
 import { Loader2, Archive, ArchiveRestore, Plus, Pencil, Trash2, Check, X, CheckCircle2, AlertTriangle } from "lucide-react";
 
 interface InventoryItemViewDrawerProps {
@@ -175,6 +176,17 @@ function parseAmount(raw: string): number | null {
   return Number.isFinite(value) ? value : null;
 }
 
+/**
+ * When a refill collected on `dateKey` happened: `undefined` (now) for today,
+ * local noon for an earlier day (away from midnight, so a small time-zone
+ * shift keeps the same date).
+ */
+function refillOccurredAt(dateKey: string, todayKey: string): number | undefined {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey) || dateKey >= todayKey) return undefined;
+  const at = new Date(`${dateKey}T12:00:00`).getTime();
+  return Number.isFinite(at) ? at : undefined;
+}
+
 function InventoryTab({
   item,
   siblings,
@@ -195,6 +207,9 @@ function InventoryTab({
   // Starts empty: a refill needs an explicit amount (box sizes vary).
   const [refillAmount, setRefillAmount] = useState("");
   const [refillNote, setRefillNote] = useState<string>("");
+  // "YYYY-MM-DD" the refill was collected; today (or empty) means now.
+  const todayKey = toLocalDateKey();
+  const [refillDate, setRefillDate] = useState(todayKey);
   const [countedAmount, setCountedAmount] = useState("");
 
   const refillMutation = useAdjustStock();
@@ -281,17 +296,43 @@ function InventoryTab({
             onClick={() => {
               if (parsedRefill === null) return;
               const note = refillNote.trim();
+              const occurredAt = refillOccurredAt(refillDate, todayKey);
               refillMutation.mutate(
-                { inventoryItemId: item.id, amount: parsedRefill, ...(note !== "" && { note }), type: "refill" },
-                { onSuccess: () => { setRefillAmount(""); setRefillNote(""); } },
+                {
+                  inventoryItemId: item.id,
+                  amount: parsedRefill,
+                  ...(note !== "" && { note }),
+                  type: "refill",
+                  ...(occurredAt !== undefined && { occurredAt }),
+                },
+                {
+                  onSuccess: () => { setRefillAmount(""); setRefillNote(""); setRefillDate(toLocalDateKey()); },
+                  onError: (e) => toast({ title: "Could not log refill", description: e.message, variant: "destructive" }),
+                },
               );
             }}
-            disabled={refillMutation.isPending || parsedRefill === null || parsedRefill <= 0}
+            disabled={
+              refillMutation.isPending || parsedRefill === null || parsedRefill <= 0 || refillDate > todayKey
+            }
             className="bg-teal-600 hover:bg-teal-700 shrink-0"
           >
             {refillMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4 mr-1" />}
             Add
           </Button>
+        </div>
+        <div className="flex items-center gap-2">
+          <label htmlFor={`refill-date-${item.id}`} className="text-xs text-muted-foreground">
+            Collected on
+          </label>
+          <Input
+            id={`refill-date-${item.id}`}
+            type="date"
+            aria-label="Refill date"
+            max={todayKey}
+            value={refillDate}
+            onChange={(e) => setRefillDate(e.target.value || todayKey)}
+            className="w-40"
+          />
         </div>
       </div>
 

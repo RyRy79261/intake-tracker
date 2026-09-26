@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from "vitest";
-import { screen } from "@testing-library/react";
+import { screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { InventoryItemViewDrawer } from "@/components/medications/inventory-item-view-drawer";
@@ -152,6 +152,46 @@ describe("InventoryItemViewDrawer", () => {
       expect(txns.some((t) => t.type === "refill" && t.amount === 28)).toBe(
         true,
       );
+    });
+  });
+
+  it("backdates a refill to the date it was collected (gap-inventory-refill-ui-flows#10)", async () => {
+    const user = userEvent.setup();
+    const { prescription, phase, schedule, item } = fixture();
+    await renderWithFixtures(
+      <InventoryItemViewDrawer
+        item={item}
+        prescription={prescription}
+        open
+        onOpenChange={() => {}}
+      />,
+      {
+        seed: {
+          prescriptions: [prescription],
+          medicationPhases: [phase],
+          phaseSchedules: [schedule],
+          inventoryItems: [item],
+        },
+      },
+    );
+
+    await user.click(screen.getByRole("tab", { name: /stock/i }));
+    const collected = new Date();
+    collected.setDate(collected.getDate() - 3);
+    const key = [
+      collected.getFullYear(),
+      String(collected.getMonth() + 1).padStart(2, "0"),
+      String(collected.getDate()).padStart(2, "0"),
+    ].join("-");
+    fireEvent.change(screen.getByLabelText(/refill date/i), { target: { value: key } });
+    await user.type(screen.getByLabelText(/refill amount/i), "28");
+    await user.click(screen.getByRole("button", { name: /add/i }));
+
+    await vi.waitFor(async () => {
+      const refill = (await db.inventoryTransactions.where("inventoryItemId").equals(item.id).toArray())
+        .find((t) => t.type === "refill" && t.amount === 28);
+      expect(refill).toBeDefined();
+      expect(refill!.timestamp).toBe(new Date(`${key}T12:00:00`).getTime());
     });
   });
 
