@@ -23,7 +23,10 @@ import {
   useInventoryForPrescription,
   useDailyDoseSchedule,
   useLogPrnDose,
+  useSchedulesForPhase,
 } from "@/hooks/use-medication-queries";
+import { computeRefillStatus } from "@/lib/refill-status";
+import { selectEffectivePhase } from "@intake/core/effective-phase";
 import { useToast } from "@intake/ui/use-toast";
 import type { Prescription } from "@/lib/db";
 import { toLocalDateKey } from "@/lib/date-utils";
@@ -122,13 +125,17 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
     nextDoseLabel = "No doses today";
   }
 
-  const currentStock = activeInventory?.currentStock ?? 0;
-  const isNegativeStock = activeInventory && currentStock < 0;
-  const isLowStock =
-    activeInventory &&
-    !isNegativeStock &&
-    activeInventory.refillAlertPills !== undefined &&
-    currentStock <= activeInventory.refillAlertPills;
+  // Shared with the inventory drawer and the refill notifier (pill OR days
+  // threshold, over the phase that drives today's doses).
+  const refillPhase = selectEffectivePhase(phases);
+  const refillSchedules = useSchedulesForPhase(refillPhase?.id);
+  const refill = activeInventory
+    ? computeRefillStatus(activeInventory, refillPhase, refillSchedules)
+    : null;
+  const isNegativeStock = refill?.isNegative;
+  const isLowStock = refill?.isLow;
+  // Scheduled but nothing to deduct from: doses stop being tracked silently.
+  const hasUntrackedStock = !activeInventory && !!refillPhase && inventoryItems.length > 0;
 
   return (
     <motion.div
@@ -205,6 +212,11 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
           {isLowStock && (
             <Badge className="text-[9px] px-1 py-0 bg-amber-500 hover:bg-amber-600 text-white">
               Low
+            </Badge>
+          )}
+          {hasUntrackedStock && (
+            <Badge variant="outline" className="text-[9px] px-1 py-0 border-amber-500 text-amber-600 dark:text-amber-400">
+              No active brand
             </Badge>
           )}
         </div>

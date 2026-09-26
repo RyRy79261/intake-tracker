@@ -456,7 +456,8 @@ describe("Tier 2 sync-wired services", () => {
         unit: "mg",
         pillShape: "round",
         pillColor: "white",
-        currentStock: 0,
+        // Drifted from the (empty) ledger — an in-sync item is not re-pushed.
+        currentStock: 5,
         isActive: true,
         isArchived: false,
         createdAt: Date.now(),
