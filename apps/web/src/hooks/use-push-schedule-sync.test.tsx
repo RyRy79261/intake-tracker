@@ -30,7 +30,10 @@ const push = vi.hoisted(() => ({
   subscribeToPush: vi.fn(async (): Promise<unknown> => ({ endpoint: "https://push.example" })),
   unsubscribeFromPush: vi.fn(async () => true),
 }));
-vi.mock("@/lib/push-notification-service", () => ({
+vi.mock("@/lib/push-notification-service", async (importOriginal) => ({
+  // The real syncPushSchedule builds the schedule and posts it through the
+  // mocked apiFetch; only permission and subscription are stubbed.
+  ...(await importOriginal<Record<string, unknown>>()),
   isNotificationSupported: () => true,
   requestNotificationPermission: async () => ({ success: true, data: push.permission }),
   subscribeToPush: push.subscribeToPush,
@@ -38,6 +41,8 @@ vi.mock("@/lib/push-notification-service", () => ({
 }));
 
 import { usePushScheduleSync, useDoseReminderToggle } from "@/hooks/use-push-schedule-sync";
+import { resetPushScheduleSyncState } from "@/lib/push-notification-service";
+import { decodePushMedications } from "@/lib/push-dispatch";
 
 interface SyncedEntry {
   timeSlot: string;
@@ -79,11 +84,28 @@ beforeEach(() => {
   apiFetch.mockImplementation(async () => new Response("{}"));
   useSettingsStore.setState(useSettingsStore.getInitialState());
   useSettingsStore.setState({ doseRemindersEnabled: true });
+  resetPushScheduleSyncState();
+  // syncPushSchedule only sends for a browser that holds a push subscription.
+  vi.stubGlobal("PushManager", class {});
+  Object.defineProperty(navigator, "serviceWorker", {
+    configurable: true,
+    value: {
+      getRegistration: async () => ({
+        pushManager: { getSubscription: async () => ({ endpoint: "https://push.example" }) },
+      }),
+    },
+  });
 });
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.unstubAllGlobals();
 });
+
+/** The reminder text of an entry (medicationsJson also carries schedule ids). */
+function bodyOf(entry: SyncedEntry): string {
+  return decodePushMedications(entry.medicationsJson).body;
+}
 
 describe("usePushScheduleSync", () => {
   it("syncs today's schedule, expanded to one entry per weekday", async () => {
@@ -94,7 +116,7 @@ describe("usePushScheduleSync", () => {
     await waitFor(() => expect(callsTo("/api/push/sync-schedule")).toHaveLength(1));
     const entries = syncedEntries();
     expect(entries.map((e) => e.dayOfWeek).sort()).toEqual([0, 1, 2, 3, 4, 5, 6]);
-    expect(new Set(entries.map((e) => e.medicationsJson))).toEqual(new Set(["Metoprolol 50mg"]));
+    expect(new Set(entries.map(bodyOf))).toEqual(new Set(["Metoprolol 50mg"]));
     const body = JSON.parse(String((callsTo("/api/push/sync-schedule")[0]?.[1] as RequestInit).body));
     expect(body.timezone).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone);
   });
@@ -108,7 +130,7 @@ describe("usePushScheduleSync", () => {
     await waitFor(() => expect(callsTo("/api/push/sync-schedule")).toHaveLength(1));
     const entries = syncedEntries();
     expect(entries).toHaveLength(7);
-    const meds = entries[0]!.medicationsJson.split(", ").sort();
+    const meds = bodyOf(entries[0]!).split(", ").sort();
     expect(meds).toEqual(["Furosemide 40mg", "Metoprolol 50mg"]);
   });
 
@@ -143,7 +165,7 @@ describe("usePushScheduleSync", () => {
     expect(callsTo("/api/push/sync-schedule")).toHaveLength(1);
   });
 
-  it("re-syncs when the follow-up settings change and pushes them to the server", async () => {
+  it("pushes changed follow-up settings without resending an unchanged schedule", async () => {
     await seedMedication("Metoprolol", 50);
     renderHook(() => usePushScheduleSync());
     await waitFor(() => expect(callsTo("/api/push/sync-schedule")).toHaveLength(1));
@@ -153,8 +175,9 @@ describe("usePushScheduleSync", () => {
       useSettingsStore.setState({ reminderFollowUpCount: 4, reminderFollowUpInterval: 15 });
     });
 
-    await waitFor(() => expect(callsTo("/api/push/sync-schedule")).toHaveLength(2));
     await waitFor(() => expect(callsTo("/api/push/settings")).toHaveLength(2));
+    // Follow-ups are server settings; the schedule itself did not change.
+    expect(callsTo("/api/push/sync-schedule")).toHaveLength(1);
     const settingsBody = JSON.parse(
       String((callsTo("/api/push/settings")[1]?.[1] as RequestInit).body),
     );

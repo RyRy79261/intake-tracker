@@ -20,6 +20,9 @@ vi.mock("@/hooks/use-medication-queries", () => ({
   useCreateTitrationPlan: () => ({ mutate: vi.fn(), isPending: false }),
   useUpdateTitrationPlan: () => ({ mutate: vi.fn(), isPending: false }),
   usePhasesForTitrationPlan: () => [{ prescriptionId: "rx-1" }],
+  // The AI request summarises each prescription's current regimen.
+  usePhasesForPrescription: () => [],
+  useSchedulesForPhase: () => [],
 }));
 vi.mock("@/components/medications/titrations/rx-entry-card", () => ({
   RxEntryCard: () => null,

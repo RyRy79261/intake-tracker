@@ -14,9 +14,10 @@ import { makeIntakeRecord } from "@/__tests__/fixtures/db-fixtures";
  */
 
 const engine = vi.hoisted(() => ({
-  runPullCycle: vi.fn(async () => undefined),
+  runPullCycle: vi.fn(async () => true),
   stopEngine: vi.fn(),
   startEngine: vi.fn(),
+  waitForSyncIdle: vi.fn(async () => undefined),
 }));
 const apiFetch = vi.hoisted(() => vi.fn());
 const deleteUser = vi.hoisted(() => vi.fn());
@@ -61,10 +62,11 @@ beforeEach(async () => {
 });
 
 describe("switchToLocalAndWipeCloud", () => {
-  it("pulls, stops the engine, wipes the server, then goes local-only keeping local data", async () => {
+  it("stops the engine, pulls, wipes the server, then goes local-only keeping local data", async () => {
     const order: string[] = [];
     engine.runPullCycle.mockImplementation(async () => {
       order.push("pull");
+      return true;
     });
     engine.stopEngine.mockImplementation(() => order.push("stop"));
     apiFetch.mockImplementation(async (url: string) => {
@@ -74,7 +76,7 @@ describe("switchToLocalAndWipeCloud", () => {
 
     await switchToLocalAndWipeCloud();
 
-    expect(order).toEqual(["pull", "stop", "/api/sync/wipe"]);
+    expect(order).toEqual(["stop", "pull", "/api/sync/wipe"]);
     expect(engine.startEngine).not.toHaveBeenCalled();
     await expectSeveredToLocal();
   });
@@ -103,6 +105,17 @@ describe("switchToLocalAndWipeCloud", () => {
     await expect(switchToLocalAndWipeCloud()).rejects.toThrow("pull failed");
 
     expect(apiFetch).not.toHaveBeenCalled();
+    expect(engine.startEngine).toHaveBeenCalledTimes(1);
+    await expectSyncLinkIntact();
+  });
+
+  it("never wipes the server when the pre-wipe pull is incomplete", async () => {
+    engine.runPullCycle.mockResolvedValue(false);
+
+    await expect(switchToLocalAndWipeCloud()).rejects.toThrow("Couldn't download your cloud data");
+
+    expect(apiFetch).not.toHaveBeenCalled();
+    expect(engine.startEngine).toHaveBeenCalledTimes(1);
     await expectSyncLinkIntact();
   });
 });

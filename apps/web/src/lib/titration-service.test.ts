@@ -429,7 +429,10 @@ describe("deleteTitrationPlan", () => {
 // ===================================================================
 
 // 2023-11-14 (BASE_TS in fixtures) — every fixture prescription exists by then.
-const TUESDAY = "2023-11-14";
+// Today (UTC, matching the "UTC" zone passed below): the schedule resolves
+// each date from the phases live on it, so a fixed past date would predate
+// the titration phases these tests create.
+const TODAY = new Date().toISOString().slice(0, 10);
 
 async function seedMaintenance(opts?: {
   unit?: string;
@@ -475,7 +478,7 @@ function singleEntryPlan(
 }
 
 async function slotsFor(rxId: string) {
-  const slots = await getDailyDoseSchedule(TUESDAY, "UTC");
+  const slots = await getDailyDoseSchedule(TODAY, "UTC");
   return slots.filter((s) => s.prescriptionId === rxId);
 }
 
@@ -551,7 +554,7 @@ describe("updateTitrationPlan — edits in place", () => {
     const [titPhase] = await getPhasesForTitrationPlan(plan.data.id);
     const [titSched] = await db.phaseSchedules.where("phaseId").equals(titPhase!.id).toArray();
     await db.doseLogs.add(
-      makeDoseLog(rx.id, titPhase!.id, titSched!.id, { scheduledDate: TUESDAY, status: "taken" }),
+      makeDoseLog(rx.id, titPhase!.id, titSched!.id, { scheduledDate: TODAY, status: "taken" }),
     );
 
     // Notes-only edit: the drawer still resubmits the unchanged entries.

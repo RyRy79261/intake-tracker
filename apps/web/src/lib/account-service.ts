@@ -60,7 +60,13 @@ export async function switchToLocalAndWipeCloud(): Promise<void> {
   stopEngine();
   await waitForSyncIdle();
   // 2. Ensure IndexedDB holds a complete copy of the cloud dataset.
-  const pulled = await runPullCycle();
+  let pulled: boolean;
+  try {
+    pulled = await runPullCycle();
+  } catch (e) {
+    startEngine();
+    throw e;
+  }
   if (!pulled) {
     startEngine();
     throw new Error("Couldn't download your cloud data");
