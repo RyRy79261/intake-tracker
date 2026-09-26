@@ -18,7 +18,17 @@ For pill appearance, research the most common commercially available form of the
 COMBINATION DRUGS: Many medications combine two or more active ingredients in one tablet (e.g. sacubitril/valsartan sold as Entresto or Vymada, or amlodipine/valsartan). For EVERY medication:
 - "activeIngredients": list each active ingredient by name. A single-ingredient drug has exactly one entry; a combination drug has two or more.
 - "strengthOptions": one entry per marketed strength of the searched brand. Each entry has a "label" (how the strength is printed on the box, e.g. "100 (49/51 mg)" or "75 mg") and a "compounds" array giving the per-tablet milligram amount of EACH active ingredient. For a combination tablet sold as "Vymada 100", compounds is [{"name":"Sacubitril","strength":49},{"name":"Valsartan","strength":51}]. For a single-ingredient tablet, compounds has one entry whose strength equals the tablet strength.
-Always populate "activeIngredients" and "strengthOptions" — they are required.`;
+Always populate "activeIngredients" and "strengthOptions" — they are required.
+
+PLAIN LANGUAGE (ASD-STE100 Simplified Technical English): the user is not a medical expert. Write every free-text field in ASD-STE100 style: "commonIndications", "foodNote", "pillDescription", "drugClass", "visualIdentification", "contraindications" and "warnings".
+- Use short sentences: at most 20 words, one idea per sentence.
+- Use active voice and simple, common words.
+- Do not use medical jargon or Latin terms. If you must use a medical term, explain it right after in plain words, in brackets. Example: "ACE inhibitor (a medicine that makes blood vessels wider)".
+- Say what the risk is and what to do. Example: "Do not take with potassium supplements. Your potassium level can become too high."
+- For a condition, name it in plain words first. Example: "High blood pressure" instead of "Hypertension".
+Do NOT simplify names or numbers: keep brand names, generic names, active ingredient names, strength labels and units exactly as printed.`;
+
+const STE = " Write in ASD-STE100 Simplified Technical English: short sentences, plain words, no unexplained jargon.";
 
 export const MEDICINE_SEARCH_TOOL = {
   name: "medicine_search_result" as const,
@@ -62,16 +72,16 @@ export const MEDICINE_SEARCH_TOOL = {
           additionalProperties: false,
         },
       },
-      commonIndications: { type: "array", items: { type: "string" } },
+      commonIndications: { type: "array", items: { type: "string" }, description: "What the medicine is used for, in plain words." + STE },
       foodInstruction: { type: "string", enum: ["before", "after", "none"] },
-      foodNote: { type: "string", description: "Optional detail about food interaction" },
+      foodNote: { type: "string", description: "Optional detail about food interaction." + STE },
       pillColor: { type: "string" },
       pillShape: { type: "string" },
-      pillDescription: { type: "string" },
-      drugClass: { type: "string" },
-      visualIdentification: { type: "string", description: "Detailed notes on physical markings" },
-      contraindications: { type: "array", items: { type: "string" } },
-      warnings: { type: "array", items: { type: "string" } },
+      pillDescription: { type: "string", description: "What the pill looks like." + STE },
+      drugClass: { type: "string", description: "The type of medicine and what it does, in plain words." + STE },
+      visualIdentification: { type: "string", description: "Detailed notes on physical markings." + STE },
+      contraindications: { type: "array", items: { type: "string" }, description: "When not to take it, in plain words." + STE },
+      warnings: { type: "array", items: { type: "string" }, description: "Risks and what to do about them, in plain words." + STE },
       isGenericFallback: { type: "boolean" },
     },
     required: [
