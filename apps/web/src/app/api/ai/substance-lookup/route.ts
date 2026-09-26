@@ -184,7 +184,7 @@ export const POST = withAuth(async ({ request, auth }) => {
       const followupStartedAt = Date.now();
       const followup = await client.messages.create({
         model: CLAUDE_MODELS.quality,
-        max_tokens: 1024,
+        max_tokens: 4096, // headroom for Sonnet 5 adaptive thinking
         system: systemPrompt,
         // WEB_SEARCH_TOOL must stay declared because the prior assistant turn
         // may contain server_tool_use blocks; tool_choice still forces the

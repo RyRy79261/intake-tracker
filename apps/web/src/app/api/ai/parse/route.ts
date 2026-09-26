@@ -98,7 +98,7 @@ export const POST = withAuth(async ({ request, auth }) => {
         deadline: Date.now() + DEADLINE_MS,
         toolName: PARSE_RESULT_TOOL.name,
         retryInstruction: "Now return the final estimate via the parse_food_result tool.",
-        retryMaxTokens: 2048,
+        retryMaxTokens: 4096,
       },
     );
 

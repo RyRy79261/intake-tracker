@@ -44,6 +44,9 @@ const REJECTED_PARAMS = ["temperature", "top_p", "top_k"];
 /** `tool_choice` types Claude Opus 5.5 rejects. */
 const FORCED_TOOL_CHOICE_TYPES = ["tool", "any"];
 
+/** Smallest `max_tokens` that leaves room for default adaptive thinking. */
+const MIN_THINKING_MAX_TOKENS = 4096;
+
 function sourceFiles(dir: string): string[] {
   const out: string[] = [];
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -211,6 +214,36 @@ describe("Claude requests only pass parameters the pinned models accept", () => 
           if (type === "<dynamic>" || FORCED_TOOL_CHOICE_TYPES.includes(type)) {
             violations.push(
               `${path.relative(SRC, file)} passes tool_choice ${type} to a premium-model request`,
+            );
+          }
+        }
+      }
+    }
+
+    expect(violations).toEqual([]);
+  });
+
+  // Sonnet 5 and Opus 5.5 run adaptive thinking when `thinking` is omitted,
+  // and those tokens share `max_tokens` with the answer. A budget sized for
+  // Sonnet 4.6 — thinking-off by default — can cut a forced tool call off
+  // mid-JSON, and a route calling `messages.create` directly (rather than
+  // `_shared/claude-call.ts`, which retries a truncation with a bigger
+  // budget) then fails the whole request.
+  it(`gives quality and premium requests at least ${MIN_THINKING_MAX_TOKENS} max_tokens`, () => {
+    const violations: string[] = [];
+
+    for (const { file, source } of parsed) {
+      for (const { literal, tier } of requestLiterals(source)) {
+        if (tier !== "quality" && tier !== "premium") continue;
+        for (const prop of literal.properties) {
+          if (propertyName(prop) !== "max_tokens" || !ts.isPropertyAssignment(prop)) continue;
+          // Only a literal budget is checkable; a computed one is left alone.
+          if (!ts.isNumericLiteral(prop.initializer)) continue;
+          const value = Number(prop.initializer.text.replace(/_/g, ""));
+          if (value < MIN_THINKING_MAX_TOKENS) {
+            const line = source.getLineAndCharacterOfPosition(prop.getStart()).line + 1;
+            violations.push(
+              `${path.relative(SRC, file)}:${line} sets max_tokens ${value} on a ${tier}-model request`,
             );
           }
         }

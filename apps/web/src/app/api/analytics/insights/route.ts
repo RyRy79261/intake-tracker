@@ -86,7 +86,7 @@ export const POST = withAuth(async ({ request, auth }) => {
     // input fails schema validation downstream.
     const response = await client.messages.create({
       model: CLAUDE_MODELS.quality,
-      max_tokens: 2048,
+      max_tokens: 4096, // headroom for Sonnet 5 adaptive thinking
       system: INSIGHTS_SYSTEM_PROMPT,
       tools: [INSIGHT_TOOL],
       tool_choice: { type: "tool", name: INSIGHT_TOOL.name },
