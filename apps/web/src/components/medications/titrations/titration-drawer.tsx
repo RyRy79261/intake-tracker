@@ -286,6 +286,12 @@ export function TitrationDrawer({
                 />
               )}
             </div>
+            {!startNow && (
+              <p className="text-[11px] text-muted-foreground">
+                On this date you&apos;ll be asked to confirm the start. Your
+                current doses stay in effect until you do.
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">
