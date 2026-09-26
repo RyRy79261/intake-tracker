@@ -683,7 +683,12 @@ describe("updateInventoryTransaction validation", () => {
     const result = await updateInventoryTransaction(refill.id, { note: "" });
     expect(result.success).toBe(true);
     const stored = await db.inventoryTransactions.get(refill.id);
-    expect(stored!.note).toBeUndefined();
+    expect(stored!.note || undefined).toBeUndefined();
+    // The key must survive in the row: push sends the row as-is and the
+    // server upsert only overwrites columns present in it (sanitizeRow maps
+    // "" to NULL). A removed key would leave the old note on the server and
+    // the next pull would bring it back.
+    expect(stored).toHaveProperty("note");
   });
 
   it("does not rewrite the item on a note-only edit when stock is in sync", async () => {

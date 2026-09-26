@@ -434,8 +434,10 @@ export async function updateInventoryTransaction(
         ...(updates.amount !== undefined && { amount: updates.amount }),
         updatedAt: now,
       };
-      // Dexie removes a key whose update value is undefined — that is the clear.
-      if (updates.note !== undefined) (changes as { note?: string | undefined }).note = note === "" ? undefined : note;
+      // Clear with "" rather than undefined: Dexie would drop the key, the
+      // push would then omit the column, and the server (which maps "" to
+      // NULL) would keep the old note and hand it back on the next pull.
+      if (updates.note !== undefined) changes.note = note;
 
       await db.inventoryTransactions.update(id, changes);
       await enqueueInsideTx("inventoryTransactions", id, "upsert");
