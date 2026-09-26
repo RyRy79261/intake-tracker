@@ -16,7 +16,8 @@ export interface ParsedIntake {
  *   same-origin fetch) to verify user identity server-side via withAuth().
  * - Server verifies user is on the whitelist before processing.
  * - API key stored in server environment only
- * - PII patterns are stripped before AI processing
+ * - Well-formed PII (emails, phone and ID numbers) is redacted before AI
+ *   processing — best-effort regex redaction; names and addresses pass through
  * - All requests are audit logged
  *
  * Returns null if the user dismisses the auth prompt.
