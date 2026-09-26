@@ -25,6 +25,25 @@ vi.mock("@/components/auth-guard", () => ({
 }));
 vi.mock("@/lib/api-fetch", () => ({ apiFetch }));
 
+// The native (Capacitor) path: reminders are device-local, no web push.
+const native = vi.hoisted(() => ({
+  isNative: false,
+  display: "granted",
+  enabled: true,
+  setEnabled: vi.fn(async (_on: boolean) => undefined),
+  requestPermissions: vi.fn(async () => ({ display: native.display })),
+}));
+vi.mock("@capacitor/core", () => ({
+  Capacitor: { isNativePlatform: () => native.isNative },
+}));
+vi.mock("@capacitor/local-notifications", () => ({
+  LocalNotifications: { requestPermissions: native.requestPermissions },
+}));
+vi.mock("@/lib/local-notifications", () => ({
+  getNativeRemindersEnabled: () => native.enabled,
+  setNativeRemindersEnabled: native.setEnabled,
+}));
+
 const push = vi.hoisted(() => ({
   permission: "granted" as NotificationPermission,
   subscribeToPush: vi.fn(async (): Promise<unknown> => ({ endpoint: "https://push.example" })),
@@ -227,6 +246,11 @@ describe("useDoseReminderToggle", () => {
     push.subscribeToPush.mockResolvedValue({ endpoint: "https://push.example" });
     push.unsubscribeFromPush.mockClear();
     useSettingsStore.setState({ doseRemindersEnabled: false });
+    native.isNative = false;
+    native.display = "granted";
+    native.enabled = true;
+    native.setEnabled.mockClear();
+    native.requestPermissions.mockClear();
   });
 
   it("subscribes and enables reminders once permission is granted", async () => {
@@ -268,5 +292,67 @@ describe("useDoseReminderToggle", () => {
 
     expect(push.unsubscribeFromPush).toHaveBeenCalledTimes(1);
     expect(useSettingsStore.getState().doseRemindersEnabled).toBe(false);
+  });
+
+  describe("in the native app", () => {
+    beforeEach(() => {
+      native.isNative = true;
+    });
+
+    it("reports the stored native state and needs no web push", async () => {
+      native.enabled = false;
+      const { result } = renderHook(() => useDoseReminderToggle());
+
+      await waitFor(() => expect(result.current.enabled).toBe(false));
+      expect(result.current.isNative).toBe(true);
+      expect(result.current.supported).toBe(true);
+    });
+
+    it("turns native reminders on once notification permission is granted", async () => {
+      native.enabled = false;
+      const { result } = renderHook(() => useDoseReminderToggle());
+
+      await act(() => result.current.handleToggle(true));
+
+      expect(native.requestPermissions).toHaveBeenCalledTimes(1);
+      expect(native.setEnabled).toHaveBeenCalledWith(true);
+      expect(result.current.enabled).toBe(true);
+      expect(push.subscribeToPush).not.toHaveBeenCalled();
+    });
+
+    it("leaves native reminders off when permission is denied", async () => {
+      native.enabled = false;
+      native.display = "denied";
+      const { result } = renderHook(() => useDoseReminderToggle());
+
+      await act(() => result.current.handleToggle(true));
+
+      expect(native.setEnabled).not.toHaveBeenCalled();
+      expect(result.current.toggling).toBe(false);
+    });
+
+    it("turns native reminders off without asking for permission", async () => {
+      const { result } = renderHook(() => useDoseReminderToggle());
+
+      await act(() => result.current.handleToggle(false));
+
+      expect(native.requestPermissions).not.toHaveBeenCalled();
+      expect(native.setEnabled).toHaveBeenCalledWith(false);
+      expect(result.current.enabled).toBe(false);
+      expect(push.unsubscribeFromPush).not.toHaveBeenCalled();
+    });
+  });
+
+  it("recovers from a failed toggle", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    push.subscribeToPush.mockRejectedValue(new Error("boom"));
+    const { result } = renderHook(() => useDoseReminderToggle());
+
+    await act(() => result.current.handleToggle(true));
+
+    expect(useSettingsStore.getState().doseRemindersEnabled).toBe(false);
+    expect(result.current.toggling).toBe(false);
+    expect(error).toHaveBeenCalled();
+    error.mockRestore();
   });
 });

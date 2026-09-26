@@ -28,7 +28,7 @@ import {
   AlertDialogTitle,
 } from "@intake/ui/alert-dialog";
 import type { LiquidPreset } from "@/lib/constants";
-import type { SubstanceLookupResponse } from "@/app/api/ai/substance-lookup/schema";
+import type { SubstanceLookupResponse } from "@/lib/substance-lookup-schema";
 import { standardDrinksFromAbv } from "@intake/core/alcohol";
 import { computeTwoStageProgress } from "@intake/core/progress";
 

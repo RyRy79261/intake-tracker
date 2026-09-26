@@ -31,7 +31,7 @@ vi.mock("@intake/db/client", () => ({
   },
 }));
 
-vi.mock("@/app/api/ai/_shared/claude-client", () => ({
+vi.mock("@/lib/server/claude-client", () => ({
   getClaudeClientForUser: async () => {
     state.currentKeyCalls += 1;
     return {

@@ -1,0 +1,27 @@
+import "server-only";
+import Anthropic from "@anthropic-ai/sdk";
+import { resolveAiKey, type ResolvedKey } from "@/lib/ai-key-resolver";
+
+/**
+ * Build an Anthropic SDK client for a given authenticated user.
+ *
+ * Resolves the key via priority chain (own stored → shared → env-var
+ * whitelist; see ai-key-resolver.ts). Returns the resolved-key metadata
+ * alongside the client so the route can record token usage against the
+ * correct owner.
+ *
+ * No process-wide caching: different users have different keys. Constructing
+ * a new SDK instance per request is cheap (~ms); decrypting the stored key
+ * via `node:crypto` is also cheap (~µs).
+ *
+ * Lives under lib/ (not app/api) so lib/server code can use it: the Capacitor
+ * static export moves app/api out of the tree before type-checking.
+ */
+export async function getClaudeClientForUser(
+  userId: string,
+  email: string | undefined,
+): Promise<{ client: Anthropic; resolved: ResolvedKey }> {
+  const resolved = await resolveAiKey(userId, email, "anthropic");
+  const client = new Anthropic({ apiKey: resolved.apiKey });
+  return { client, resolved };
+}

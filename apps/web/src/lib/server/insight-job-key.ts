@@ -22,7 +22,7 @@ import { db } from "@intake/db/client";
 import { userApiKeys, userKeyShares } from "@intake/db/schema";
 import { decryptKey } from "@/lib/key-vault";
 import type { ResolvedKey } from "@/lib/ai-key-resolver";
-import { getClaudeClientForUser } from "@/app/api/ai/_shared/claude-client";
+import { getClaudeClientForUser } from "@/lib/server/claude-client";
 import {
   PinnedKeyUnavailableError,
   readJobKey,
