@@ -5,6 +5,10 @@ import {
   getInsightReports,
   getLatestInsightReport,
   deleteInsightReport,
+  getPreviousInsightReport,
+  priorAssessmentFor,
+  isPersonalisedRequest,
+  cacheServerInsightReport,
   type NewInsightReport,
 } from "@/lib/insight-report-service";
 
@@ -127,5 +131,138 @@ describe("deleteInsightReport — soft delete + exclusion", () => {
     await deleteInsightReport(saved.data.id);
     const second = await deleteInsightReport(saved.data.id);
     expect(second.success).toBe(true);
+  });
+});
+
+describe("getPreviousInsightReport — a genuinely earlier period", () => {
+  it("picks the latest report whose window ended at or before the new window starts", async () => {
+    await saveInsightReport(
+      makeInput({ generatedAt: 1_000, rangeStart: 0, rangeEnd: 1_000 }),
+    );
+    const earlier = await saveInsightReport(
+      makeInput({ generatedAt: 5_000, rangeStart: 2_000, rangeEnd: 5_000 }),
+    );
+    // Newest, but covers a later period than the one being analysed.
+    await saveInsightReport(
+      makeInput({ generatedAt: 9_000, rangeStart: 6_000, rangeEnd: 9_000 }),
+    );
+    if (!earlier.success) throw new Error("save failed");
+
+    const previous = await getPreviousInsightReport(5_000);
+    expect(previous!.id).toBe(earlier.data.id);
+  });
+
+  it("returns null when every report overlaps or follows the new window", async () => {
+    await saveInsightReport(
+      makeInput({ generatedAt: 9_000, rangeStart: 6_000, rangeEnd: 9_000 }),
+    );
+    expect(await getPreviousInsightReport(7_000)).toBeNull();
+  });
+});
+
+describe("priorAssessmentFor — consent carries over", () => {
+  it("builds the prior assessment, sources included", async () => {
+    const saved = await saveInsightReport(
+      makeInput({ sources: ["https://example.test/a"] }),
+    );
+    if (!saved.success) throw new Error("save failed");
+    expect(priorAssessmentFor(saved.data, false)).toEqual({
+      generatedAt: saved.data.generatedAt,
+      rangeStart: saved.data.rangeStart,
+      rangeEnd: saved.data.rangeEnd,
+      summary: saved.data.narrative,
+      observations: saved.data.observations,
+      sources: ["https://example.test/a"],
+    });
+  });
+
+  it("withholds a personalised report while medical sharing is off", async () => {
+    const saved = await saveInsightReport(
+      makeInput({ personalised: true, narrative: "Given your HFrEF..." }),
+    );
+    if (!saved.success) throw new Error("save failed");
+    expect(priorAssessmentFor(saved.data, false)).toBeNull();
+    expect(priorAssessmentFor(saved.data, true)).not.toBeNull();
+  });
+});
+
+describe("isPersonalisedRequest — derived from what is actually sent", () => {
+  const base = {
+    range: { start: 0, end: 1 },
+    metrics: {
+      intake: { avgWaterMl: 1, avgSodiumMg: 1, waterGoalMl: 1, sodiumLimitMg: 1 },
+    },
+  };
+
+  it("is false when medication sharing is on but no medication made it in", () => {
+    expect(
+      isPersonalisedRequest({
+        ...base,
+        profile: { conditions: [], medications: [] },
+      }),
+    ).toBe(false);
+    expect(isPersonalisedRequest(base)).toBe(false);
+  });
+
+  it("is true when conditions or medications were sent", () => {
+    expect(
+      isPersonalisedRequest({ ...base, profile: { conditions: ["HFrEF"] } }),
+    ).toBe(true);
+    expect(
+      isPersonalisedRequest({
+        ...base,
+        profile: {
+          conditions: [],
+          medications: [
+            {
+              name: "Bisoprolol",
+              phaseType: "maintenance",
+              dose: "5 mg",
+              frequency: "once daily",
+              daysOnPhase: 3,
+            },
+          ],
+        },
+      }),
+    ).toBe(true);
+  });
+});
+
+describe("cacheServerInsightReport — a completed deep job lands locally", () => {
+  const serverReport = {
+    id: "server-report-1",
+    generatedAt: 8_000,
+    rangeStart: 1_000,
+    rangeEnd: 8_000,
+    narrative: "Deep narrative.",
+    observations: ["Deep observation."],
+    sources: ["https://example.test/ref"],
+    personalised: true,
+  };
+
+  it("stores the report under the server's id without queueing a push", async () => {
+    const result = await cacheServerInsightReport(serverReport);
+    expect(result.success).toBe(true);
+
+    const row = await db.insightReports.get("server-report-1");
+    expect(row).toMatchObject({ ...serverReport, mode: "deep", deletedAt: null });
+    // The server already holds this row; a later pull dedupes on the id.
+    expect(
+      await db._syncQueue
+        .where("[tableName+recordId]")
+        .equals(["insightReports", "server-report-1"])
+        .count(),
+    ).toBe(0);
+  });
+
+  it("never overwrites or resurrects a row the device already has", async () => {
+    await cacheServerInsightReport(serverReport);
+    await deleteInsightReport("server-report-1");
+
+    await cacheServerInsightReport({ ...serverReport, narrative: "Changed." });
+
+    const row = await db.insightReports.get("server-report-1");
+    expect(row!.deletedAt).not.toBeNull();
+    expect(row!.narrative).toBe("Deep narrative.");
   });
 });
