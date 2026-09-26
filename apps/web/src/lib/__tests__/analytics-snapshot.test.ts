@@ -3,6 +3,7 @@ import {
   insightsRange,
   snapshotIsEmpty,
   buildAnalyticsSnapshot,
+  buildMedicationSummary,
   INSIGHTS_WINDOW_DAYS,
   type IntakeGoals,
 } from "@/lib/analytics-snapshot";
@@ -17,13 +18,15 @@ import {
   makePrescription,
   makeMedicationPhase,
   makePhaseSchedule,
+  makeDoseLog,
 } from "@/__tests__/fixtures/db-fixtures";
+import { toLocalDateKey } from "@/lib/date-utils";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const BASE_TS = 1700000000000;
 
 const GOALS: IntakeGoals = {
-  waterGoalMl: 2000,
+  waterLimitMl: 2000,
   sodiumLimitMg: 2300,
   sugarLimitG: 50,
   potassiumLimitMg: 3500,
@@ -34,11 +37,18 @@ function fullRange(): { start: number; end: number } {
 }
 
 describe("insightsRange", () => {
-  it("spans exactly the rolling window ending at the given time", () => {
-    const now = 1_700_000_000_000;
+  it("covers the last whole days and excludes the in-progress day", () => {
+    const now = new Date(2023, 10, 14, 15, 30).getTime();
     const range = insightsRange(now);
-    expect(range.end).toBe(now);
-    expect((range.end - range.start) / (24 * 60 * 60 * 1000)).toBe(
+
+    // Ends just before today's local midnight, so today's partial bucket
+    // never enters per-day counts.
+    expect(range.end + 1).toBe(new Date(2023, 10, 14).getTime());
+    // Starts on a local midnight exactly INSIGHTS_WINDOW_DAYS days earlier.
+    expect(range.start).toBe(
+      new Date(2023, 10, 14 - INSIGHTS_WINDOW_DAYS).getTime(),
+    );
+    expect(Math.round((range.end - range.start) / DAY_MS)).toBe(
       INSIGHTS_WINDOW_DAYS,
     );
   });
@@ -137,7 +147,7 @@ describe("buildAnalyticsSnapshot", () => {
     expect(snapshot.metrics.weight!.changeKg).toBe(-3); // 77 - 80
   });
 
-  it("includes an intake metric with daily averages over the window", async () => {
+  it("includes an intake metric with averages over the days each type was logged", async () => {
     await db.intakeRecords.bulkAdd([
       makeIntakeRecord({ type: "water", amount: 1000, timestamp: BASE_TS }),
       makeIntakeRecord({
@@ -159,14 +169,15 @@ describe("buildAnalyticsSnapshot", () => {
     );
 
     expect(snapshot.metrics.intake).toBeDefined();
-    const days = Math.max(
-      1,
-      Math.round((range.end - range.start) / DAY_MS),
-    );
-    expect(snapshot.metrics.intake!.avgWaterMl).toBeCloseTo(1500 / days);
-    expect(snapshot.metrics.intake!.avgSodiumMg).toBeCloseTo(800 / days);
-    expect(snapshot.metrics.intake!.avgSugarG).toBeCloseTo(30 / days);
-    expect(snapshot.metrics.intake!.waterGoalMl).toBe(GOALS.waterGoalMl);
+    // Water was logged on 2 days, salt and sugar on 1.
+    expect(snapshot.metrics.intake!.avgWaterMl).toBeCloseTo(1500 / 2);
+    expect(snapshot.metrics.intake!.waterLoggedDays).toBe(2);
+    expect(snapshot.metrics.intake!.avgSodiumMg).toBeCloseTo(800);
+    expect(snapshot.metrics.intake!.sodiumLoggedDays).toBe(1);
+    expect(snapshot.metrics.intake!.avgSugarG).toBeCloseTo(30);
+    expect(snapshot.metrics.intake!.sugarLoggedDays).toBe(1);
+    expect(snapshot.metrics.intake!.waterLimitMl).toBe(GOALS.waterLimitMl);
+    expect(snapshot.metrics.intake!.waterGoalMl).toBeUndefined();
     expect(snapshot.metrics.intake!.sodiumLimitMg).toBe(GOALS.sodiumLimitMg);
     expect(snapshot.metrics.intake!.sugarLimitG).toBe(GOALS.sugarLimitG);
   });
@@ -220,19 +231,103 @@ describe("buildAnalyticsSnapshot", () => {
     expect(snapshot.metrics.intake!.avgSugarG).toBeUndefined();
   });
 
-  it("omits the intake metric when goals are zero", async () => {
+  it("omits limits that are not configured but keeps the logged averages", async () => {
     await db.intakeRecords.bulkAdd([
       makeIntakeRecord({ type: "water", amount: 1000, timestamp: BASE_TS }),
     ]);
 
     const snapshot = await buildAnalyticsSnapshot(fullRange(), {
-      waterGoalMl: 0,
+      waterLimitMl: 0,
       sodiumLimitMg: 0,
       sugarLimitG: 0,
       potassiumLimitMg: 0,
     });
 
-    expect(snapshot.metrics.intake).toBeUndefined();
+    expect(snapshot.metrics.intake).toEqual({
+      avgWaterMl: 1000,
+      waterLoggedDays: 1,
+    });
+  });
+
+  it("reads the legacy waterGoalMl goal as the fluid limit", async () => {
+    await db.intakeRecords.add(
+      makeIntakeRecord({ type: "water", amount: 1000, timestamp: BASE_TS }),
+    );
+
+    const snapshot = await buildAnalyticsSnapshot(fullRange(), {
+      waterGoalMl: 1500,
+      sodiumLimitMg: 2000,
+      sugarLimitG: 0,
+      potassiumLimitMg: 0,
+    });
+
+    expect(snapshot.metrics.intake!.waterLimitMl).toBe(1500);
+    expect(snapshot.metrics.intake!.waterGoalMl).toBeUndefined();
+  });
+
+  it("sends only the intake types that were logged, never zero-filled ones", async () => {
+    await db.intakeRecords.add(
+      makeIntakeRecord({ type: "sugar", amount: 40, timestamp: BASE_TS }),
+    );
+
+    const snapshot = await buildAnalyticsSnapshot(
+      fullRange(),
+      GOALS,
+      undefined,
+      undefined,
+      BOTH_ON,
+    );
+
+    const intake = snapshot.metrics.intake!;
+    expect(intake.avgSugarG).toBe(40);
+    expect(intake.sugarLoggedDays).toBe(1);
+    expect(intake.avgWaterMl).toBeUndefined();
+    expect(intake.avgSodiumMg).toBeUndefined();
+    expect(intake.waterLimitMl).toBeUndefined();
+    expect(intake.sodiumLimitMg).toBeUndefined();
+  });
+
+  it("adds caffeine and alcohol daily averages", async () => {
+    await db.substanceRecords.bulkAdd([
+      makeSubstanceRecord({ type: "caffeine", amountMg: 100, timestamp: BASE_TS }),
+      makeSubstanceRecord({ type: "caffeine", amountMg: 100, timestamp: BASE_TS + 60_000 }),
+      makeSubstanceRecord({ type: "caffeine", amountMg: 100, timestamp: BASE_TS + DAY_MS }),
+      makeSubstanceRecord({
+        type: "alcohol",
+        amountStandardDrinks: 4,
+        timestamp: BASE_TS,
+      }),
+    ]);
+
+    const snapshot = await buildAnalyticsSnapshot(fullRange(), GOALS);
+
+    const intake = snapshot.metrics.intake!;
+    expect(intake.avgCaffeineMg).toBeCloseTo(150);
+    expect(intake.caffeineLoggedDays).toBe(2);
+    expect(intake.avgAlcoholStdDrinks).toBeCloseTo(4);
+    expect(intake.alcoholLoggedDays).toBe(1);
+    expect(snapshotIsEmpty(snapshot)).toBe(false);
+  });
+
+  it("fits the BP trend slope per day over daily means, not per reading", async () => {
+    // A reading of 120 on day 0 and 130 on day 5, then a burst of four more
+    // 130 readings on day 5. Per reading index the burst dominates.
+    await db.bloodPressureRecords.bulkAdd([
+      makeBloodPressureRecord({ systolic: 120, diastolic: 80, timestamp: BASE_TS }),
+      ...[0, 1, 2, 3, 4].map((i) =>
+        makeBloodPressureRecord({
+          systolic: 130,
+          diastolic: 80,
+          timestamp: BASE_TS + 5 * DAY_MS + i * 60_000,
+        }),
+      ),
+    ]);
+
+    const snapshot = await buildAnalyticsSnapshot(fullRange(), GOALS);
+
+    // Two daily means (120, 130) five days apart: +2 mmHg/day.
+    expect(snapshot.metrics.bp!.systolicTrend.slope).toBeCloseTo(2, 1);
+    expect(snapshot.metrics.bp!.systolicTrend.direction).toBe("rising");
   });
 
   it("includes a fluidBalance metric from water intake and urination data", async () => {
@@ -348,5 +443,155 @@ describe("buildAnalyticsSnapshot", () => {
     );
 
     expect(snapshot.profile!.medications).toBeUndefined();
+  });
+});
+
+describe("buildMedicationSummary", () => {
+  // A fixed "now" keeps the window, phase ages and weekdays deterministic.
+  const NOW = new Date(2023, 10, 15, 10, 0).getTime(); // Wed 15 Nov 2023
+  const RANGE = insightsRange(NOW);
+
+  async function addScheduledRx(
+    genericName: string,
+    schedules: Array<{ dosage: number; daysOfWeek: number[]; time?: string }>,
+    phaseOverrides: Parameters<typeof makeMedicationPhase>[1] = {},
+  ) {
+    const rx = makePrescription({ genericName, createdAt: NOW - 300 * DAY_MS });
+    await db.prescriptions.add(rx);
+    const phase = makeMedicationPhase(rx.id, {
+      startDate: NOW - 200 * DAY_MS,
+      ...phaseOverrides,
+    });
+    await db.medicationPhases.add(phase);
+    const rows = schedules.map((s) => makePhaseSchedule(phase.id, s));
+    await db.phaseSchedules.bulkAdd(rows);
+    return { rx, phase, schedules: rows };
+  }
+
+  it("reports the titration phase over a still-active maintenance phase", async () => {
+    const rx = makePrescription({ genericName: "Bisoprolol" });
+    await db.prescriptions.add(rx);
+    // The maintenance id sorts first, so a naive find() would pick it.
+    const maintenance = makeMedicationPhase(rx.id, {
+      id: "00000000-0000-4000-8000-000000000001",
+      type: "maintenance",
+      startDate: NOW - 200 * DAY_MS,
+    });
+    const titration = makeMedicationPhase(rx.id, {
+      id: "ffffffff-0000-4000-8000-000000000001",
+      type: "titration",
+      titrationPlanId: "plan-1",
+      startDate: NOW - 3 * DAY_MS,
+    });
+    await db.medicationPhases.bulkAdd([maintenance, titration]);
+    await db.phaseSchedules.bulkAdd([
+      makePhaseSchedule(maintenance.id, { dosage: 2.5 }),
+      makePhaseSchedule(titration.id, { dosage: 5 }),
+    ]);
+
+    const [med] = await buildMedicationSummary(RANGE, NOW);
+
+    expect(med!.phaseType).toBe("titration");
+    expect(med!.dose).toBe("5 mg");
+    expect(med!.daysOnPhase).toBe(3);
+  });
+
+  it("skips soft-deleted prescriptions", async () => {
+    const { rx } = await addScheduledRx("Warfarin", [
+      { dosage: 5, daysOfWeek: [0, 1, 2, 3, 4, 5, 6] },
+    ]);
+    await db.prescriptions.update(rx.id, { deletedAt: NOW - DAY_MS });
+
+    expect(await buildMedicationSummary(RANGE, NOW)).toEqual([]);
+  });
+
+  it("describes alternate-day doses per weekday instead of 'twice daily'", async () => {
+    await addScheduledRx("Warfarin", [
+      { dosage: 5, daysOfWeek: [1, 3, 5] },
+      { dosage: 2.5, daysOfWeek: [0, 2, 4, 6] },
+    ]);
+
+    const [med] = await buildMedicationSummary(RANGE, NOW);
+
+    expect(med!.frequency).toBe("once daily");
+    expect(med!.dose).toBe("Mon, Wed, Fri: 5 mg; Tue, Thu, Sat, Sun: 2.5 mg");
+  });
+
+  it("describes an extra weekly dose with a per-day total", async () => {
+    await addScheduledRx("Furosemide", [
+      { dosage: 40, daysOfWeek: [0, 1, 2, 3, 4, 5, 6], time: "08:00" },
+      { dosage: 40, daysOfWeek: [1], time: "14:00" },
+    ]);
+
+    const [med] = await buildMedicationSummary(RANGE, NOW);
+
+    expect(med!.frequency).toBe(
+      "twice a day on Mon; once a day on Tue, Wed, Thu, Fri, Sat, Sun",
+    );
+    expect(med!.dose).toBe(
+      "Mon: 40 mg + 40 mg (80 mg/day); Tue, Wed, Thu, Fri, Sat, Sun: 40 mg",
+    );
+  });
+
+  it("includes PRN prescriptions with the as-needed doses logged in the window", async () => {
+    const rx = makePrescription({
+      genericName: "Furosemide",
+      createdAt: NOW - 90 * DAY_MS,
+    });
+    await db.prescriptions.add(rx);
+    const prn = (daysAgo: number, overrides: Record<string, unknown> = {}) =>
+      makeDoseLog(rx.id, "", "", {
+        phaseId: undefined,
+        scheduleId: undefined,
+        kind: "prn",
+        status: "taken",
+        scheduledDate: toLocalDateKey(NOW - daysAgo * DAY_MS),
+        doseAmount: 40,
+        doseUnit: "mg",
+        ...overrides,
+      });
+    await db.doseLogs.bulkAdd([
+      prn(2),
+      prn(5),
+      prn(9),
+      // Outside the window, and today's (in-progress) dose: not counted.
+      prn(60),
+      prn(0),
+      // Deleted logs never count.
+      prn(3, { deletedAt: NOW }),
+    ]);
+
+    const [med] = await buildMedicationSummary(RANGE, NOW);
+
+    expect(med).toMatchObject({
+      name: "Furosemide",
+      phaseType: "prn",
+      dose: "40 mg",
+      frequency: "as needed",
+      prnDoses: 3,
+      daysOnPhase: 90,
+    });
+  });
+
+  it("reports adherence as taken of due doses on completed days of the current phase", async () => {
+    // Phase started 5 days ago: 5 completed days (today excluded) of one
+    // daily dose are due.
+    const { rx, phase, schedules } = await addScheduledRx(
+      "Bisoprolol",
+      [{ dosage: 5, daysOfWeek: [0, 1, 2, 3, 4, 5, 6] }],
+      { startDate: NOW - 5 * DAY_MS },
+    );
+    const taken = (daysAgo: number) =>
+      makeDoseLog(rx.id, phase.id, schedules[0]!.id, {
+        status: "taken",
+        scheduledDate: toLocalDateKey(NOW - daysAgo * DAY_MS),
+      });
+    // Taken on 3 of the 5 due days, plus today's dose, which is not counted.
+    await db.doseLogs.bulkAdd([taken(1), taken(2), taken(4), taken(0)]);
+
+    const [med] = await buildMedicationSummary(RANGE, NOW);
+
+    expect(med!.dosesDue).toBe(5);
+    expect(med!.dosesTaken).toBe(3);
   });
 });

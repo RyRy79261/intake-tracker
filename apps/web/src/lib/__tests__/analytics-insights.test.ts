@@ -237,4 +237,131 @@ describe("buildInsightsPrompt", () => {
     const prompt = buildInsightsPrompt(req);
     expect(prompt).not.toContain("Previous AI assessment(s)");
   });
+
+  it("frames the water setting as a daily fluid limit, never a goal", () => {
+    const req = AnalyticsInsightsRequestSchema.parse({
+      range: { start: 0, end: 30 * 86_400_000 },
+      metrics: {
+        intake: { avgWaterMl: 1200, waterLoggedDays: 25, waterLimitMl: 1500 },
+      },
+    });
+    const prompt = buildInsightsPrompt(req);
+
+    expect(prompt).toContain("1500 ml daily fluid limit");
+    expect(prompt).toContain("on the 25 day(s) it was logged");
+    expect(prompt).not.toMatch(/ml goal/);
+  });
+
+  it("still accepts the legacy waterGoalMl name and renders it as a limit", () => {
+    const req = AnalyticsInsightsRequestSchema.parse({
+      range: { start: 0, end: 30 * 86_400_000 },
+      metrics: {
+        intake: { avgWaterMl: 1200, avgSodiumMg: 1400, waterGoalMl: 1500, sodiumLimitMg: 2000 },
+      },
+    });
+    const prompt = buildInsightsPrompt(req);
+
+    expect(prompt).toContain("1500 ml daily fluid limit");
+    expect(prompt).not.toMatch(/ml goal/);
+  });
+
+  it("omits intake types that were not logged instead of reporting zero", () => {
+    const req = AnalyticsInsightsRequestSchema.parse({
+      range: { start: 0, end: 30 * 86_400_000 },
+      metrics: {
+        intake: { avgSugarG: 40, sugarLoggedDays: 1, sugarLimitG: 30 },
+      },
+    });
+    const prompt = buildInsightsPrompt(req);
+
+    expect(prompt).toContain("sugar averaged 40 g/day on the 1 day(s) it was logged");
+    expect(prompt).not.toContain("water averaged");
+    expect(prompt).not.toContain("fluid intake averaged");
+    expect(prompt).not.toContain("sodium averaged");
+    expect(prompt).toContain("not logged");
+  });
+
+  it("includes caffeine and alcohol daily averages", () => {
+    const req = AnalyticsInsightsRequestSchema.parse({
+      range: { start: 0, end: 30 * 86_400_000 },
+      metrics: {
+        intake: {
+          avgCaffeineMg: 180,
+          caffeineLoggedDays: 20,
+          avgAlcoholStdDrinks: 4,
+          alcoholLoggedDays: 28,
+        },
+      },
+    });
+    const prompt = buildInsightsPrompt(req);
+
+    expect(prompt).toContain("caffeine averaged 180 mg/day on the 20 day(s)");
+    expect(prompt).toContain("alcohol averaged 4.0 standard drink(s)/day on the 28 day(s)");
+  });
+
+  it("defines the fluid-balance marker instead of calling it a target", () => {
+    const req = AnalyticsInsightsRequestSchema.parse({
+      range: { start: 0, end: 30 * 86_400_000 },
+      metrics: {
+        fluidBalance: { avgBalanceMl: 100, daysOnTarget: 3, daysTotal: 25 },
+      },
+    });
+    const prompt = buildInsightsPrompt(req);
+
+    expect(prompt).not.toContain("On target");
+    expect(prompt).toContain("at least 500 ml on 3 of 25 day(s)");
+    expect(prompt).toContain("not a goal");
+  });
+
+  it("renders PRN medications and per-medication adherence", () => {
+    const req = AnalyticsInsightsRequestSchema.parse({
+      range: { start: 0, end: 30 * 86_400_000 },
+      profile: {
+        conditions: [],
+        medications: [
+          {
+            name: "Furosemide",
+            phaseType: "prn",
+            dose: "40 mg",
+            frequency: "as needed",
+            daysOnPhase: 90,
+            prnDoses: 5,
+          },
+          {
+            name: "Bisoprolol",
+            phaseType: "maintenance",
+            dose: "5 mg",
+            frequency: "once daily",
+            daysOnPhase: 200,
+            dosesTaken: 27,
+            dosesDue: 30,
+          },
+          {
+            name: "Spironolactone",
+            phaseType: "maintenance",
+            dose: "25 mg",
+            frequency: "once daily",
+            daysOnPhase: 200,
+            dosesTaken: 0,
+            dosesDue: 30,
+          },
+          {
+            name: "Ramipril",
+            phaseType: "titration",
+            dose: "5 mg",
+            frequency: "once daily",
+            daysOnPhase: 3,
+          },
+        ],
+      },
+      metrics: { bp: validBp },
+    });
+    const prompt = buildInsightsPrompt(req);
+
+    expect(prompt).toContain("Furosemide: as needed (PRN");
+    expect(prompt).toContain("5 as-needed dose(s) logged");
+    expect(prompt).toContain("27 of 30 scheduled dose(s) logged as taken (90%)");
+    expect(prompt).toMatch(/Spironolactone.*treat adherence as unknown/);
+    expect(prompt).toMatch(/Ramipril.*adherence unknown/);
+  });
 });

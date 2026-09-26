@@ -32,7 +32,7 @@ const FoodItemSchema = z.object({
 // bounds both validators enforce.
 const MedicationSchema = z.object({
   name: z.string().min(1).max(MAX_MEDICATION_NAME_CHARS),
-  phaseType: z.enum(["maintenance", "titration"]),
+  phaseType: z.enum(["maintenance", "titration", "prn"]),
   dose: z.string().min(1).max(MAX_MEDICATION_DOSE_CHARS),
   frequency: z.string().min(1).max(MAX_MEDICATION_FREQUENCY_CHARS),
   daysOnPhase: z.number().int().nonnegative(),

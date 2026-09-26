@@ -39,6 +39,7 @@ const DOMAIN_LABELS: Record<Domain, string> = {
 
 const TrendSchema = z.object({
   direction: z.enum(["rising", "falling", "stable"]),
+  /** Units per day (fitted over daily means), e.g. mmHg/day or kg/day. */
   slope: z.number(),
   confidence: z.number().min(0).max(1),
 });
@@ -66,16 +67,33 @@ const FluidBalanceMetricSchema = z.object({
   daysTotal: z.number().int().nonnegative(),
 });
 
-// Sugar and potassium are optional trackers — the snapshot only includes
-// them when the user has the tracker enabled. Water and sodium always ship
-// because they are the core fluid-balance / cardiovascular metrics.
+// Each intake type is present only when the user logged it in the window:
+// an absent field means "not logged", never zero intake. Averages are per
+// logged day and each carries its logged-day count, so a single entry can't
+// masquerade as a month-long average. Sugar and potassium also require the
+// optional tracker to be enabled.
+//
+// `waterLimitMl` is the Settings "Daily Limit (ml)" — a fluid ceiling (e.g. a
+// heart-failure fluid restriction), not a goal to reach. `waterGoalMl` is the
+// old name for the same value, still accepted from clients cached before the
+// rename; the prompt renders either as a limit.
+const loggedDays = z.number().int().nonnegative().optional();
 const IntakeMetricSchema = z.object({
-  avgWaterMl: z.number().nonnegative(),
-  avgSodiumMg: z.number().nonnegative(),
+  avgWaterMl: z.number().nonnegative().optional(),
+  waterLoggedDays: loggedDays,
+  avgSodiumMg: z.number().nonnegative().optional(),
+  sodiumLoggedDays: loggedDays,
   avgSugarG: z.number().nonnegative().optional(),
+  sugarLoggedDays: loggedDays,
   avgPotassiumMg: z.number().nonnegative().optional(),
-  waterGoalMl: z.number().positive(),
-  sodiumLimitMg: z.number().positive(),
+  potassiumLoggedDays: loggedDays,
+  avgCaffeineMg: z.number().nonnegative().optional(),
+  caffeineLoggedDays: loggedDays,
+  avgAlcoholStdDrinks: z.number().nonnegative().optional(),
+  alcoholLoggedDays: loggedDays,
+  waterLimitMl: z.number().positive().optional(),
+  waterGoalMl: z.number().positive().optional(),
+  sodiumLimitMg: z.number().positive().optional(),
   sugarLimitG: z.number().positive().optional(),
   potassiumLimitMg: z.number().positive().optional(),
 });
@@ -95,19 +113,32 @@ const CorrelationMetricSchema = z.object({
  * request validators accept.
  */
 export const MAX_MEDICATION_NAME_CHARS = 120;
-export const MAX_MEDICATION_DOSE_CHARS = 80;
-export const MAX_MEDICATION_FREQUENCY_CHARS = 120;
+// Sized for per-weekday regimens, e.g. "Mon, Wed, Fri: 5 mg; Tue, Thu, Sat,
+// Sun: 2.5 mg" or "Mon: 40 mg + 40 mg (80 mg/day); Tue, …: 40 mg".
+export const MAX_MEDICATION_DOSE_CHARS = 160;
+export const MAX_MEDICATION_FREQUENCY_CHARS = 160;
 
 /**
  * A single active medication — the user's current prescription with its dose,
- * frequency, and how long the active maintenance/titration phase has run.
+ * frequency, and how long the effective maintenance/titration phase has run.
+ * `prn` marks an as-needed prescription with no schedule; its `dose` comes
+ * from the logged as-needed doses and `daysOnPhase` counts from when the
+ * prescription was added.
+ *
+ * Adherence fields are optional (older clients never sent them): `dosesDue`
+ * counts scheduled doses on completed days of the current phase inside the
+ * window, `dosesTaken` how many of those were logged as taken. `prnDoses`
+ * counts as-needed doses logged in the window.
  */
 const MedicationSchema = z.object({
   name: z.string().min(1).max(MAX_MEDICATION_NAME_CHARS),
-  phaseType: z.enum(["maintenance", "titration"]),
+  phaseType: z.enum(["maintenance", "titration", "prn"]),
   dose: z.string().min(1).max(MAX_MEDICATION_DOSE_CHARS),
   frequency: z.string().min(1).max(MAX_MEDICATION_FREQUENCY_CHARS),
   daysOnPhase: z.number().int().nonnegative(),
+  dosesTaken: z.number().int().nonnegative().optional(),
+  dosesDue: z.number().int().nonnegative().optional(),
+  prnDoses: z.number().int().nonnegative().optional(),
 });
 
 /**
@@ -232,6 +263,9 @@ Rules:
 - Describe what the data shows. Do NOT diagnose new conditions, and do NOT recommend, prescribe, or suggest changes to treatment, medication, or dosage.
 - If the user has supplied known medical conditions or a current medication list, you MAY use them as clinical context: explain why a tracked goal or limit matters for someone with that condition or treatment, and prioritise the observations most relevant to it (for example, framing fluid balance, sodium intake, and short-term weight change in the context of heart failure, or noting how long a titration phase has been running). Keep this as general, educational context — not personalised medical advice — and never act as the user's clinician.
 - Treat low-confidence trends as inconclusive rather than asserting a direction.
+- The water figure is compared against the user's daily fluid LIMIT: a ceiling (for example a heart-failure fluid restriction), not a target. Intake under the limit is expected; never call it under-hydration or suggest drinking more to reach the limit.
+- An intake type that is not listed was not logged. Never treat it as zero intake. Averages cover only the days that type was logged.
+- Medication adherence is only as reliable as the user's dose logging. When it is unknown or sparse, say so and do not assume the medication was taken as scheduled.
 - A correlation with fewer than 3 paired days is insufficient data, not evidence of "no relationship".
 - Correlation is not causation — never imply one metric causes another.
 - Keep a neutral, non-alarming tone. This summary is informational only and never replaces a qualified professional. If a reading looks notable, state the number plainly and recommend the user discuss it with their healthcare provider.
@@ -298,6 +332,24 @@ function describeTrend(t: z.infer<typeof TrendSchema>): string {
   return `${t.direction} (confidence ${(t.confidence * 100).toFixed(0)}%)`;
 }
 
+/**
+ * Adherence wording for one scheduled medication. Dose logging is optional in
+ * the app, so zero logged doses reads as "unknown", not "none taken".
+ */
+function describeAdherence(m: z.infer<typeof MedicationSchema>): string {
+  const { dosesTaken: taken, dosesDue: due } = m;
+  if (due === undefined || taken === undefined) return "adherence unknown (not reported)";
+  if (due === 0) {
+    return "adherence unknown (no completed scheduled days on this phase in the period)";
+  }
+  if (taken === 0) {
+    return `0 of ${due} scheduled dose(s) logged as taken — the user may not log doses, so treat adherence as unknown`;
+  }
+  const pct = Math.round((taken / due) * 100);
+  const sparse = due < 7 ? ", sparse data" : "";
+  return `${taken} of ${due} scheduled dose(s) logged as taken (${pct}%${sparse})`;
+}
+
 function domainLabel(d: Domain): string {
   return DOMAIN_LABELS[d];
 }
@@ -326,9 +378,22 @@ export function buildInsightsPrompt(req: AnalyticsInsightsRequest): string {
   if (profile && profile.medications && profile.medications.length > 0) {
     lines.push("Current medications (user-reported):");
     for (const m of profile.medications) {
+      if (m.phaseType === "prn") {
+        lines.push(
+          `- ${m.name}: as needed (PRN, no schedule), ${m.dose}; ` +
+            (m.prnDoses !== undefined
+              ? `${m.prnDoses} as-needed dose(s) logged in the period.`
+              : "as-needed doses not reported."),
+        );
+        continue;
+      }
+      const extraPrn =
+        m.prnDoses !== undefined && m.prnDoses > 0
+          ? `; plus ${m.prnDoses} extra as-needed dose(s)`
+          : "";
       lines.push(
         `- ${m.name}: ${m.phaseType} phase, ${m.dose}, ${m.frequency}; ` +
-          `current phase active ${m.daysOnPhase} day(s).`,
+          `current phase active ${m.daysOnPhase} day(s); ${describeAdherence(m)}${extraPrn}.`,
       );
     }
     lines.push(
@@ -357,29 +422,66 @@ export function buildInsightsPrompt(req: AnalyticsInsightsRequest): string {
   if (metrics.fluidBalance) {
     const f = metrics.fluidBalance;
     lines.push(
-      `Fluid balance: average ${f.avgBalanceMl.toFixed(0)} ml/day (intake minus estimated output). ` +
-        `On target on ${f.daysOnTarget} of ${f.daysTotal} day(s).`,
+      `Fluid balance: average ${f.avgBalanceMl.toFixed(0)} ml/day (intake minus estimated urine output) ` +
+        `across ${f.daysTotal} day(s) with fluid or urination logs. ` +
+        `Intake exceeded estimated output by at least 500 ml on ${f.daysOnTarget} of ${f.daysTotal} day(s) ` +
+        `(a rough balance marker, not a goal — it never overrides a fluid limit).`,
     );
   }
 
   if (metrics.intake) {
     const i = metrics.intake;
-    const parts: string[] = [
-      `water averaged ${i.avgWaterMl.toFixed(0)} ml against a ${i.waterGoalMl} ml goal`,
-      `sodium averaged ${i.avgSodiumMg.toFixed(0)} mg against a ${i.sodiumLimitMg} mg limit`,
-    ];
-    if (i.avgSugarG !== undefined && i.sugarLimitG !== undefined) {
+    const onDays = (n: number | undefined) =>
+      n !== undefined ? ` on the ${n} day(s) it was logged` : "";
+    const against = (
+      limit: number | undefined,
+      render: (limit: number) => string,
+    ) => (limit !== undefined ? ` against ${render(limit)}` : "");
+    const parts: string[] = [];
+    if (i.avgWaterMl !== undefined) {
       parts.push(
-        `sugar averaged ${i.avgSugarG.toFixed(0)} g against a ${i.sugarLimitG} g limit`,
+        `fluid intake averaged ${i.avgWaterMl.toFixed(0)} ml/day${onDays(i.waterLoggedDays)}` +
+          against(
+            i.waterLimitMl ?? i.waterGoalMl,
+            (n) => `a ${n} ml daily fluid limit (a ceiling, not a target)`,
+          ),
       );
     }
-    if (i.avgPotassiumMg !== undefined && i.potassiumLimitMg !== undefined) {
+    if (i.avgSodiumMg !== undefined) {
       parts.push(
-        `potassium averaged ${i.avgPotassiumMg.toFixed(0)} mg against a ${i.potassiumLimitMg} mg soft target ` +
-          `(estimates are rough — many foods are not labelled for potassium)`,
+        `sodium averaged ${i.avgSodiumMg.toFixed(0)} mg/day${onDays(i.sodiumLoggedDays)}` +
+          against(i.sodiumLimitMg, (n) => `a ${n} mg limit`),
       );
     }
-    lines.push(`Daily intake: ${parts.join("; ")}.`);
+    if (i.avgSugarG !== undefined) {
+      parts.push(
+        `sugar averaged ${i.avgSugarG.toFixed(0)} g/day${onDays(i.sugarLoggedDays)}` +
+          against(i.sugarLimitG, (n) => `a ${n} g limit`),
+      );
+    }
+    if (i.avgPotassiumMg !== undefined) {
+      parts.push(
+        `potassium averaged ${i.avgPotassiumMg.toFixed(0)} mg/day${onDays(i.potassiumLoggedDays)}` +
+          against(i.potassiumLimitMg, (n) => `a ${n} mg soft target`) +
+          ` (estimates are rough — many foods are not labelled for potassium)`,
+      );
+    }
+    if (i.avgCaffeineMg !== undefined) {
+      parts.push(
+        `caffeine averaged ${i.avgCaffeineMg.toFixed(0)} mg/day${onDays(i.caffeineLoggedDays)}`,
+      );
+    }
+    if (i.avgAlcoholStdDrinks !== undefined) {
+      parts.push(
+        `alcohol averaged ${i.avgAlcoholStdDrinks.toFixed(1)} standard drink(s)/day${onDays(i.alcoholLoggedDays)}`,
+      );
+    }
+    if (parts.length > 0) {
+      lines.push(
+        `Daily intake: ${parts.join("; ")}.`,
+        "Intake types not listed were not logged in this period.",
+      );
+    }
   }
 
   if (metrics.correlations && metrics.correlations.length > 0) {
