@@ -19,6 +19,7 @@ import {
 } from "@/lib/titration-service";
 import { getDailyDoseSchedule } from "@/lib/dose-schedule-service";
 import { toLocalDateKey } from "@/lib/date-utils";
+import { getDeviceTimezone } from "@/lib/timezone";
 import {
   makePrescription,
   makeMedicationPhase,
@@ -431,11 +432,10 @@ describe("deleteTitrationPlan", () => {
 // Lifecycle regressions — soft-deleted rows must never drive dosing
 // ===================================================================
 
-// 2023-11-14 (BASE_TS in fixtures) — every fixture prescription exists by then.
-// Today (UTC, matching the "UTC" zone passed below): the schedule resolves
-// each date from the phases live on it, so a fixed past date would predate
-// the titration phases these tests create.
-const TODAY = new Date().toISOString().slice(0, 10);
+// Today in the device zone: the titration services stamp start dates and
+// "today" from the device clock, so querying a UTC date breaks between
+// midnight and the UTC rollover east of UTC.
+const TODAY = toLocalDateKey();
 
 async function seedMaintenance(opts?: {
   unit?: string;
@@ -481,7 +481,7 @@ function singleEntryPlan(
 }
 
 async function slotsFor(rxId: string) {
-  const slots = await getDailyDoseSchedule(TODAY, "UTC");
+  const slots = await getDailyDoseSchedule(TODAY, getDeviceTimezone());
   return slots.filter((s) => s.prescriptionId === rxId);
 }
 
