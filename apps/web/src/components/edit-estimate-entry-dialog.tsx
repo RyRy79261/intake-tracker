@@ -20,8 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@intake/ui/select";
-
-const NONE_VALUE = "__none__";
+import { NO_ESTIMATE_VALUE as NONE_VALUE } from "@intake/core/record-schemas";
 
 export interface EstimateOption {
   value: string;

@@ -122,6 +122,56 @@ describe("useEditRecord", () => {
     expect(buildUpdates).toHaveBeenCalledWith(expect.any(Number), undefined);
   });
 
+  it("keeps the original timestamp (seconds included) when the minute is unchanged", async () => {
+    const mutateAsync = vi.fn(async () => {});
+    const withSeconds = { ...RECORD, timestamp: RECORD.timestamp + 40_500 };
+    const { result } = renderHook(() =>
+      useEditRecord<TestRecord>({
+        buildUpdates: (ts, note) => ({ timestamp: ts, note }),
+        mutateAsync,
+      }),
+    );
+
+    act(() => result.current.openEdit(withSeconds));
+    act(() => result.current.setEditNote("only the note changed"));
+    await act(async () => {
+      await result.current.handleEditSubmit();
+    });
+
+    // The datetime-local value is minute-precision; re-parsing it would move
+    // the record back 40.5 s.
+    expect(mutateAsync).toHaveBeenCalledWith({
+      id: "rec-1",
+      updates: { timestamp: withSeconds.timestamp, note: "only the note changed" },
+    });
+  });
+
+  it("rejects a changed timestamp that is in the future", async () => {
+    const mutateAsync = vi.fn(async () => {});
+    const { result } = renderHook(() =>
+      useEditRecord<TestRecord>({
+        buildUpdates: (ts, note) => ({ timestamp: ts, note }),
+        mutateAsync,
+      }),
+    );
+
+    act(() => result.current.openEdit(RECORD));
+    act(() =>
+      result.current.setEditTimestamp(
+        timestampToDateTimeLocal(Date.now() + 8 * 60 * 60 * 1000),
+      ),
+    );
+    await act(async () => {
+      await result.current.handleEditSubmit();
+    });
+
+    expect(mutateAsync).not.toHaveBeenCalled();
+    expect(toastSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Time can't be in the future", variant: "destructive" }),
+    );
+    expect(result.current.editingRecord).not.toBeNull();
+  });
+
   it("does not call mutateAsync when the timestamp cannot be parsed", async () => {
     const mutateAsync = vi.fn(async () => {});
     const { result } = renderHook(() =>

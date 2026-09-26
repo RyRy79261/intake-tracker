@@ -7,12 +7,15 @@ import {
   getWeightRecords,
   updateWeightRecord,
   deleteWeightRecord,
+  undoDeleteWeightRecord,
   addBloodPressureRecord,
   getBloodPressureRecords,
   updateBloodPressureRecord,
   deleteBloodPressureRecord,
+  undoDeleteBloodPressureRecord,
 } from "@/lib/health-service";
 import { unwrap } from "@intake/core/service";
+import { useUndoDeleteMutation } from "@/hooks/use-undo-delete-mutation";
 
 // ============================================================================
 // Mutation Parameter Types
@@ -24,12 +27,13 @@ export type AddWeightParams = {
   note?: string;
 };
 
+// `null` on an optional field is an explicit clear (it must reach the server).
 export type UpdateWeightParams = {
   id: string;
   updates: {
     weight?: number;
     timestamp?: number;
-    note?: string;
+    note?: string | null;
   };
 };
 
@@ -49,12 +53,12 @@ export type UpdateBloodPressureParams = {
   updates: {
     systolic?: number;
     diastolic?: number;
-    heartRate?: number;
+    heartRate?: number | null;
     irregularHeartbeat?: boolean;
     position?: "sitting" | "standing";
     arm?: "left" | "right";
     timestamp?: number;
-    note?: string;
+    note?: string | null;
   };
 };
 
@@ -100,12 +104,10 @@ export function useUpdateWeight() {
 }
 
 /**
- * Hook to delete a weight record.
+ * Hook to delete a weight record (shows an Undo toast).
  */
 export function useDeleteWeight() {
-  return useMutation({
-    mutationFn: async (id: string) => unwrap(await deleteWeightRecord(id)),
-  });
+  return useUndoDeleteMutation(deleteWeightRecord, undoDeleteWeightRecord);
 }
 
 // ============================================================================
@@ -113,10 +115,10 @@ export function useDeleteWeight() {
 // ============================================================================
 
 /**
- * Hook to get recent blood pressure records.
+ * Hook to get recent blood pressure records. `undefined` while loading.
  */
 export function useBloodPressureRecords(limit: number = 5) {
-  return useLiveQuery(() => getBloodPressureRecords(limit), [limit], []);
+  return useLiveQuery(() => getBloodPressureRecords(limit), [limit]);
 }
 
 /**
@@ -159,10 +161,8 @@ export function useUpdateBloodPressure() {
 }
 
 /**
- * Hook to delete a blood pressure record.
+ * Hook to delete a blood pressure record (shows an Undo toast).
  */
 export function useDeleteBloodPressure() {
-  return useMutation({
-    mutationFn: async (id: string) => unwrap(await deleteBloodPressureRecord(id)),
-  });
+  return useUndoDeleteMutation(deleteBloodPressureRecord, undoDeleteBloodPressureRecord);
 }

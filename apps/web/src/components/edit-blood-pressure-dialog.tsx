@@ -19,7 +19,39 @@ import {
 import { Button } from "@intake/ui/button";
 import { Input } from "@intake/ui/input";
 import { Label } from "@intake/ui/label";
+import { toast } from "@intake/ui/use-toast";
+import { ToastAction, type ToastActionElement } from "@intake/ui/toast";
+import { BP_RANGES, parseBloodPressureForm } from "@intake/core/record-schemas";
 import { type BloodPressureRecord } from "@/lib/db";
+
+/**
+ * Validate BP edit inputs with the shared schema. On failure shows a toast
+ * (with a "Swap" action when systolic/diastolic look entered the wrong way
+ * round) and returns null.
+ */
+export function validateBloodPressureEdit(
+  input: { systolic: string; diastolic: string; heartRate: string },
+  onSwap: () => void,
+) {
+  const parsed = parseBloodPressureForm(input);
+  if (parsed.ok) return parsed.data;
+  const action = parsed.swapSuggested
+    ? ((
+        <ToastAction altText="Swap systolic and diastolic" onClick={onSwap}>
+          Swap
+        </ToastAction>
+      ) as ToastActionElement)
+    : undefined;
+  toast({
+    title: "Invalid values",
+    description: parsed.swapSuggested
+      ? `${parsed.message}. Did you enter them the wrong way round?`
+      : parsed.message,
+    variant: "destructive",
+    ...(action && { action }),
+  });
+  return null;
+}
 
 interface EditBloodPressureDialogProps {
   record: BloodPressureRecord | null;
@@ -80,8 +112,8 @@ export function EditBloodPressureDialog({
               <Input
                 id="edit-systolic"
                 type="number"
-                min="60"
-                max="300"
+                min={BP_RANGES.systolic.min}
+                max={BP_RANGES.systolic.max}
                 value={systolic}
                 onChange={(e) => onSystolicChange(e.target.value)}
                 onFocus={onFocus}
@@ -98,8 +130,8 @@ export function EditBloodPressureDialog({
               <Input
                 id="edit-diastolic"
                 type="number"
-                min="40"
-                max="200"
+                min={BP_RANGES.diastolic.min}
+                max={BP_RANGES.diastolic.max}
                 value={diastolic}
                 onChange={(e) => onDiastolicChange(e.target.value)}
                 onFocus={onFocus}
@@ -116,8 +148,8 @@ export function EditBloodPressureDialog({
             <Input
               id="edit-heartrate"
               type="number"
-              min="30"
-              max="250"
+              min={BP_RANGES.heartRate.min}
+              max={BP_RANGES.heartRate.max}
               value={heartRate}
               onChange={(e) => onHeartRateChange(e.target.value)}
               onFocus={onFocus}

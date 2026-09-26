@@ -136,7 +136,18 @@ describe("Day-in-the-life — multi-card user simulation", () => {
         const recordBtn = await screen.findByRole("button", {
           name: /Record Weight/i,
         });
+        // First-ever weight starts empty (no placeholder default), so type it.
+        const weightInput = screen.getByTestId("weight-direct-input");
+        await user.click(weightInput);
+        await user.clear(weightInput);
+        await user.type(weightInput, "72.4");
+        await user.tab();
         await user.click(recordBtn);
+        await waitFor(async () => {
+          expect(await db.weightRecords.count()).toBeGreaterThan(
+            baseline.weight,
+          );
+        });
         unmount();
         cleanup();
       }

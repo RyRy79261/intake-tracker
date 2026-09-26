@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import type { ReactNode } from "react";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClientProvider } from "@tanstack/react-query";
 
@@ -19,6 +19,11 @@ import {
   useUpdateBloodPressure,
   useDeleteBloodPressure,
 } from "@/hooks/use-health-queries";
+
+const { showUndoToastSpy } = vi.hoisted(() => ({ showUndoToastSpy: vi.fn() }));
+vi.mock("@/components/medications/undo-toast", () => ({
+  showUndoToast: showUndoToastSpy,
+}));
 
 function makeWrapper() {
   const client = makeTestQueryClient();
@@ -112,8 +117,8 @@ describe("use-health-queries blood pressure hooks", () => {
 
     await waitFor(() => expect(result.current).toHaveLength(2));
     // bloodPressureSeries index 0 (118/76) is most recent.
-    expect(result.current[0]!.systolic).toBe(118);
-    expect(result.current[0]!.diastolic).toBe(76);
+    expect(result.current![0]!.systolic).toBe(118);
+    expect(result.current![0]!.diastolic).toBe(76);
   });
 
   it("useLatestBloodPressure returns the most recent reading", async () => {
@@ -180,5 +185,77 @@ describe("use-health-queries blood pressure hooks", () => {
     await waitFor(() => expect(list.result.current).toHaveLength(0));
     const stored = await db.bloodPressureRecords.get(seed.id);
     expect(stored?.deletedAt).not.toBeNull();
+  });
+});
+
+describe("use-health-queries edits, undo and loading", () => {
+  it("useUpdateBloodPressure clears heart rate, irregular heartbeat and note with explicit values", async () => {
+    const seed = bloodPressureSeries(1, { irregularHeartbeat: true, note: "voice" })[0]!;
+    await seedDatabase({ bloodPressureRecords: [seed] });
+
+    const { result } = renderHook(() => useUpdateBloodPressure(), {
+      wrapper: makeWrapper(),
+    });
+    await result.current.mutateAsync({
+      id: seed.id,
+      updates: { heartRate: null, irregularHeartbeat: false, note: null },
+    });
+
+    const stored = await db.bloodPressureRecords.get(seed.id);
+    expect(stored?.heartRate).toBeNull();
+    expect(stored?.irregularHeartbeat).toBe(false);
+    expect(stored?.note).toBeNull();
+  });
+
+  it("useUpdateWeight clears the note with null", async () => {
+    const seed = weightSeries(1, { note: "after dialysis" })[0]!;
+    await seedDatabase({ weightRecords: [seed] });
+
+    const { result } = renderHook(() => useUpdateWeight(), {
+      wrapper: makeWrapper(),
+    });
+    await result.current.mutateAsync({ id: seed.id, updates: { note: null } });
+
+    expect((await db.weightRecords.get(seed.id))?.note).toBeNull();
+  });
+
+  it("weight delete offers an Undo that restores the record", async () => {
+    showUndoToastSpy.mockClear();
+    const seed = weightSeries(1)[0]!;
+    await seedDatabase({ weightRecords: [seed] });
+
+    const del = renderHook(() => useDeleteWeight(), { wrapper: makeWrapper() });
+    await del.result.current.mutateAsync(seed.id);
+    expect((await db.weightRecords.get(seed.id))?.deletedAt).not.toBeNull();
+
+    await waitFor(() => expect(showUndoToastSpy).toHaveBeenCalledTimes(1));
+    const { onUndo } = showUndoToastSpy.mock.calls[0]![0] as { onUndo: () => void };
+    onUndo();
+    await waitFor(async () =>
+      expect((await db.weightRecords.get(seed.id))?.deletedAt).toBeNull(),
+    );
+  });
+
+  it("blood pressure delete offers an Undo that restores the record", async () => {
+    showUndoToastSpy.mockClear();
+    const seed = bloodPressureSeries(1)[0]!;
+    await seedDatabase({ bloodPressureRecords: [seed] });
+
+    const del = renderHook(() => useDeleteBloodPressure(), { wrapper: makeWrapper() });
+    await del.result.current.mutateAsync(seed.id);
+
+    await waitFor(() => expect(showUndoToastSpy).toHaveBeenCalledTimes(1));
+    const { onUndo } = showUndoToastSpy.mock.calls[0]![0] as { onUndo: () => void };
+    onUndo();
+    await waitFor(async () =>
+      expect((await db.bloodPressureRecords.get(seed.id))?.deletedAt).toBeNull(),
+    );
+  });
+
+  it("useBloodPressureRecords is undefined while loading (drives the skeleton)", () => {
+    const { result } = renderHook(() => useBloodPressureRecords(5), {
+      wrapper: makeWrapper(),
+    });
+    expect(result.current).toBeUndefined();
   });
 });

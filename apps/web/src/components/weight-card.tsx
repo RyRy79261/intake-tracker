@@ -11,12 +11,12 @@ import { CardShell } from "@/components/card-shell";
 import { logAudit } from "@/lib/audit";
 import { InlineEdit } from "@intake/ui/inline-edit";
 import { Skeleton } from "@intake/ui/skeleton";
-
-const WeightFormSchema = z.object({
-  weight: z.number({ error: "Weight is required" })
-    .positive("Weight must be positive")
-    .max(1000, "Weight seems too high"),
-});
+import {
+  WEIGHT_RANGE_KG,
+  parseWeightForm,
+  roundWeightKg,
+  weightRecordSchema,
+} from "@intake/core/record-schemas";
 import { CollapsibleTimeInputControlled } from "@/components/collapsible-time-input";
 import { RecentEntriesList, InlineEditFormShell } from "@/components/recent-entries-list";
 import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
@@ -37,6 +37,7 @@ export function WeightCard() {
   const { toast } = useToast();
   const settings = useSettings();
   const [pendingWeight, setPendingWeight] = useState<number | null>(null);
+  const [note, setNote] = useState("");
   const [showTimeInput, setShowTimeInput] = useState(false);
   const [customTime, setCustomTime] = useState(getCurrentDateTimeLocal());
 
@@ -45,19 +46,17 @@ export function WeightCard() {
   const addMutation = useAddWeight();
   const deleteMutation = useDeleteWeight();
   const updateMutation = useUpdateWeight();
-  const { deletingId, handleDelete } = useDeleteWithToast(deleteMutation, "Weight record removed");
+  const { deletingId, handleDelete } = useDeleteWithToast(deleteMutation, "Weight record removed", { undoToast: true });
 
   // Pre-fill with latest weight when records load.
   // recentRecords is undefined until Dexie resolves — no timing race.
+  // A first-time user starts empty ("--"): a made-up default could be saved
+  // with one tap and become the "latest weight".
   useEffect(() => {
     if (pendingWeight !== null) return;           // D-14: keep current value
     if (recentRecords === undefined) return;       // Still loading — wait
-    if (recentRecords.length > 0) {
-      const latest = recentRecords[0];
-      if (latest) setPendingWeight(latest.weight); // D-03: use last recorded
-    } else {
-      setPendingWeight(69);                        // D-04, D-12: first-time fallback
-    }
+    const latest = recentRecords[0];
+    if (latest) setPendingWeight(latest.weight);   // D-03: use last recorded
   }, [recentRecords, pendingWeight]);
 
   // Extra edit field
@@ -75,12 +74,13 @@ export function WeightCard() {
   } = useEditRecord<WeightRecord>({
     onOpen: (record) => setEditWeight(record.weight.toString()),
     buildUpdates: (timestamp, note) => {
-      const newWeight = parseFloat(editWeight);
-      if (isNaN(newWeight) || newWeight <= 0) {
-        toast({ title: "Invalid weight", variant: "destructive" });
+      const parsed = parseWeightForm({ weight: editWeight });
+      if (!parsed.ok) {
+        toast({ title: "Invalid weight", description: parsed.message, variant: "destructive" });
         return null;
       }
-      return { weight: newWeight, timestamp, note };
+      // `null` clears the note (and the clear syncs).
+      return { weight: parsed.data.weight, timestamp, note: note ?? null };
     },
     mutateAsync: updateMutation.mutateAsync,
   });
@@ -105,7 +105,18 @@ export function WeightCard() {
 
   const handleSubmit = async () => {
     if (pendingWeight === null) return;
-    const parsed = WeightFormSchema.safeParse({ weight: pendingWeight });
+    let timestamp: number | undefined;
+    try {
+      timestamp = showTimeInput ? dateTimeLocalToTimestamp(customTime) : undefined;
+    } catch {
+      setFieldErrors({ timestamp: "Invalid date/time" });
+      return;
+    }
+    const trimmedNote = note.trim();
+    const parsed = weightRecordSchema(Date.now()).safeParse({
+      weight: pendingWeight,
+      ...(timestamp !== undefined && { timestamp }),
+    });
     if (!parsed.success) {
       const errors: Record<string, string> = {};
       for (const issue of parsed.error.issues) {
@@ -119,14 +130,18 @@ export function WeightCard() {
     setFieldErrors({});
 
     try {
-      const timestamp = showTimeInput ? dateTimeLocalToTimestamp(customTime) : undefined;
-      await addMutation.mutateAsync({ weight: pendingWeight, ...(timestamp !== undefined && { timestamp }) });
+      await addMutation.mutateAsync({
+        weight: parsed.data.weight,
+        ...(timestamp !== undefined && { timestamp }),
+        ...(trimmedNote !== "" && { note: trimmedNote }),
+      });
       toast({
         title: "Weight recorded",
         description: `${pendingWeight.toFixed(2)} kg logged successfully`,
         variant: "success",
       });
       // Keep current value as starting point for next entry
+      setNote("");
       setShowTimeInput(false);
       setCustomTime(getCurrentDateTimeLocal());
     } catch (error) {
@@ -196,16 +211,14 @@ export function WeightCard() {
                 suffix="kg"
                 displayClassName="text-4xl font-bold tabular-nums"
                 suffixClassName="text-lg text-muted-foreground ml-1"
-                roundOnBlur={(v) => {
-                  const increment = settings.weightIncrement;
-                  const rounded = Math.round(v / increment) * increment;
-                  return Math.round(rounded * 100) / 100;
-                }}
+                // Keep the typed scale reading (2 dp). The increment only
+                // drives the +/- buttons; out-of-range values are rejected
+                // by the schema on Record rather than clamped here.
+                roundOnBlur={roundWeightKg}
+                clamp={false}
                 type="text"
                 inputMode="decimal"
                 pattern="[0-9]*[.]?[0-9]*"
-                min={0.1}
-                max={1000}
                 aria-label="Weight in kilograms"
                 data-testid="weight-direct-input"
               />
@@ -234,6 +247,17 @@ export function WeightCard() {
             expanded={showTimeInput}
             onToggle={() => setShowTimeInput(!showTimeInput)}
             id="weight-time"
+          />
+          {fieldErrors.timestamp && (
+            <p className="text-sm text-destructive text-center">{fieldErrors.timestamp}</p>
+          )}
+
+          <Input
+            aria-label="Weight note"
+            placeholder="Note (optional)"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            className="h-9 text-sm"
           />
 
           <Button
@@ -274,7 +298,7 @@ export function WeightCard() {
         )}
         renderEditForm={() => (
           <InlineEditFormShell timestamp={editTimestamp} onTimestampChange={setEditTimestamp} note={editNote} onNoteChange={setEditNote} onSave={() => handleEditSubmit()} onCancel={closeEdit} buttonClassName={theme.buttonBg}>
-            <Input type="number" step="0.01" placeholder="Weight (kg)" value={editWeight} onChange={(e) => setEditWeight(e.target.value)} className="h-8 text-sm" />
+            <Input type="number" step="any" min={WEIGHT_RANGE_KG.min} max={WEIGHT_RANGE_KG.max} placeholder="Weight (kg)" value={editWeight} onChange={(e) => setEditWeight(e.target.value)} className="h-8 text-sm" />
           </InlineEditFormShell>
         )}
       />
