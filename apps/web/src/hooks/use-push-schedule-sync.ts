@@ -1,93 +1,28 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { Capacitor } from "@capacitor/core";
 import { useSettingsStore } from "@/stores/settings-store";
 import { apiFetch } from "@/lib/api-fetch";
-import { useDailyDoseSchedule } from "@/hooks/use-medication-queries";
 import { useAuth } from "@/components/auth-guard";
 import {
   subscribeToPush,
   unsubscribeFromPush,
   requestNotificationPermission,
   isNotificationSupported,
+  syncPushSchedule,
 } from "@/lib/push-notification-service";
-import type { CompoundStrength } from "@/lib/db";
-import { isCombo, splitDose, formatCompoundShort } from "@intake/core/compound";
-import { toLocalDateKey } from "@/lib/date-utils";
 
 // Auth note: all push endpoints run under withAuth() on the server (see
 // plan 41-01). Since Neon Auth uses cookie sessions, same-origin fetch
 // carries the credential automatically — no Bearer token plumbing.
 
-function getTodayDateStr(): string {
-  return toLocalDateKey();
-}
-
-interface ScheduleEntry {
-  timeSlot: string;
-  dayOfWeek: number;
-  medicationsJson: string;
-}
-
-/**
- * Build schedule entries from DoseSlot array.
- * Groups by localTime and expands daysOfWeek into individual entries.
- */
-function buildScheduleEntries(
-  slots: Array<{
-    localTime: string;
-    prescription: { genericName: string; compounds?: CompoundStrength[] };
-    dosageMg: number;
-    unit: string;
-    schedule: { daysOfWeek?: number[] };
-  }>
-): ScheduleEntry[] {
-  const entries: ScheduleEntry[] = [];
-  const byTime = new Map<string, typeof slots>();
-
-  for (const slot of slots) {
-    const existing = byTime.get(slot.localTime);
-    if (existing) {
-      existing.push(slot);
-    } else {
-      byTime.set(slot.localTime, [slot]);
-    }
-  }
-
-  byTime.forEach((timeSlots, timeSlot) => {
-    const medicationsJson = timeSlots
-      .map((s) => {
-        const dose = isCombo(s.prescription)
-          ? formatCompoundShort(splitDose(s.dosageMg, s.prescription.compounds), s.unit)
-          : `${s.dosageMg}${s.unit}`;
-        return `${s.prescription.genericName} ${dose}`;
-      })
-      .join(", ");
-
-    // Collect unique days from all schedules at this time
-    const daysSet = new Set<number>();
-    for (const s of timeSlots) {
-      if (s.schedule.daysOfWeek) {
-        for (const d of s.schedule.daysOfWeek) {
-          daysSet.add(d);
-        }
-      }
-    }
-
-    // If no daysOfWeek specified, assume all 7 days
-    const days = daysSet.size > 0 ? Array.from(daysSet) : [0, 1, 2, 3, 4, 5, 6];
-
-    for (const dayOfWeek of days) {
-      entries.push({ timeSlot, dayOfWeek, medicationsJson });
-    }
-  });
-
-  return entries;
-}
-
 /**
  * Hook that syncs dose schedule to server when push reminders are enabled.
- * Runs on mount and when schedule data changes. Debounced via schedule hash.
+ * The schedule itself is built and sent by `syncPushSchedule()`, which the
+ * app-wide reminder resync (medication-notification-resync) also calls on
+ * every regimen change; this hook adds a sync on mount/sign-in, the
+ * foreground /api/push/check ping and the follow-up settings sync.
  * No-ops when the user is not signed in (push subscriptions require auth).
  */
 export function usePushScheduleSync(): void {
@@ -96,41 +31,13 @@ export function usePushScheduleSync(): void {
   const followUpInterval = useSettingsStore((s) => s.reminderFollowUpInterval);
   const { authenticated } = useAuth();
 
-  const todayStr = getTodayDateStr();
-  const slots = useDailyDoseSchedule(todayStr);
-
-  const lastHashRef = useRef<string>("");
-
-  const syncSchedule = useCallback(async (entries: ScheduleEntry[]) => {
-    try {
-      await apiFetch("/api/push/sync-schedule", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ schedules: entries, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
-      });
-    } catch (error) {
-      console.warn("[push-schedule-sync] Failed to sync schedule:", error);
-    }
-  }, []);
-
   const lastSettingsHashRef = useRef<string>("");
 
   useEffect(() => {
     if (!authenticated) return;
     if (!doseRemindersEnabled) return;
-    if (!slots || slots.length === 0) return;
-
-    const entries = buildScheduleEntries(slots);
-
-    // Debounce: only sync if schedule actually changed
-    const hash = JSON.stringify({ entries, followUpCount, followUpInterval });
-    if (hash === lastHashRef.current) return;
-    lastHashRef.current = hash;
-
-    syncSchedule(entries);
-  }, [authenticated, slots, doseRemindersEnabled, followUpCount, followUpInterval, syncSchedule]);
+    void syncPushSchedule();
+  }, [authenticated, doseRemindersEnabled]);
 
   // Periodic ping to /api/push/check every 60s
   useEffect(() => {
@@ -172,15 +79,42 @@ export function usePushScheduleSync(): void {
  * Hook that provides a toggle handler for dose reminders.
  * Wraps push subscription/unsubscription logic so components
  * don't need to import service files directly.
+ *
+ * Platform-aware: in the native app reminders are device-local
+ * (Capacitor LocalNotifications) and don't need web push, which Android
+ * System WebView doesn't expose anyway. There the toggle drives the native
+ * reminders, and switching it off cancels every pending one.
  */
 export function useDoseReminderToggle() {
   const setDoseRemindersEnabled = useSettingsStore((s) => s.setDoseRemindersEnabled);
+  const webEnabled = useSettingsStore((s) => s.doseRemindersEnabled);
   const [toggling, setToggling] = useState(false);
-  const supported = typeof window !== "undefined" && isNotificationSupported();
+  const isNative = Capacitor.isNativePlatform();
+  const [nativeEnabled, setNativeEnabled] = useState(true);
+  const supported = isNative || (typeof window !== "undefined" && isNotificationSupported());
+
+  useEffect(() => {
+    if (!isNative) return;
+    void import("@/lib/local-notifications").then((m) =>
+      setNativeEnabled(m.getNativeRemindersEnabled()),
+    );
+  }, [isNative]);
 
   const handleToggle = useCallback(async (enabled: boolean) => {
     setToggling(true);
     try {
+      if (isNative) {
+        const { LocalNotifications } = await import("@capacitor/local-notifications");
+        const { setNativeRemindersEnabled } = await import("@/lib/local-notifications");
+        if (enabled) {
+          const perm = await LocalNotifications.requestPermissions();
+          if (perm.display !== "granted") return;
+        }
+        await setNativeRemindersEnabled(enabled);
+        setNativeEnabled(enabled);
+        return;
+      }
+
       if (enabled) {
         const permResult = await requestNotificationPermission();
         if (!permResult.success || permResult.data !== "granted") {
@@ -192,6 +126,9 @@ export function useDoseReminderToggle() {
           return;
         }
         setDoseRemindersEnabled(true);
+        // The (re)created server row has no schedule yet, and the last-sent
+        // hash may still match from before the unsubscribe: force a resend.
+        await syncPushSchedule({ force: true });
       } else {
         await unsubscribeFromPush();
         setDoseRemindersEnabled(false);
@@ -201,7 +138,13 @@ export function useDoseReminderToggle() {
     } finally {
       setToggling(false);
     }
-  }, [setDoseRemindersEnabled]);
+  }, [isNative, setDoseRemindersEnabled]);
 
-  return { handleToggle, toggling, supported };
+  return {
+    handleToggle,
+    toggling,
+    supported,
+    isNative,
+    enabled: isNative ? nativeEnabled : webEnabled,
+  };
 }

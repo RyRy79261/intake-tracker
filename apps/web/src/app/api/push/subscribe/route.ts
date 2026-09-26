@@ -10,6 +10,21 @@ const SubscribeSchema = z.object({
     p256dh: z.string().min(1),
     auth: z.string().min(1),
   }),
+  // The device's IANA zone. Optional for older clients; when absent the
+  // stored zone is kept rather than reset to UTC.
+  timezone: z
+    .string()
+    .min(1)
+    .max(64)
+    .refine((tz) => {
+      try {
+        new Intl.DateTimeFormat("en-US", { timeZone: tz });
+        return true;
+      } catch {
+        return false;
+      }
+    }, "Unknown timezone")
+    .optional(),
 });
 
 export const POST = withAuth(async ({ request, auth }) => {

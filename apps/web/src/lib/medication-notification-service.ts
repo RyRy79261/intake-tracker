@@ -1,7 +1,14 @@
 import { db } from "@/lib/db";
 import { showNotification, getNotificationPermission } from "@/lib/push-notification-service";
 import { getSchedulesForPhase } from "@/lib/medication-schedule-service";
-import { isCombo, splitDose, formatCompoundShort } from "@intake/core/compound";
+import { isCombo, formatCompoundShort } from "@intake/core/compound";
+import {
+  loadReminderDoses,
+  buildReminderOccurrences,
+  loadHandledSlots,
+} from "@/lib/medication-reminder-builder";
+import { getDeviceTimezone } from "@/lib/timezone";
+import { toLocalDateKey } from "@/lib/date-utils";
 
 const MED_NOTIFICATION_KEY = "intake-tracker-med-notifications";
 
@@ -46,7 +53,9 @@ async function showDoseReminder(
 
   return showNotification(`Time for your ${time} medications`, {
     body: names,
-    tag: `dose-reminder-${time}`,
+    // Same tag as the server push for this slot, so the two replace each
+    // other instead of stacking.
+    tag: `dose-${time}`,
     requireInteraction: true,
   });
 }
@@ -60,74 +69,45 @@ async function showRefillAlert(brandName: string, dosageStrength: string, id: st
   });
 }
 
-async function checkDoseReminders(): Promise<void> {
+/** A dose is announced from its due time until this long after it. */
+const DOSE_REMINDER_WINDOW_MS = 5 * 60 * 1000;
+
+export async function checkDoseReminders(now: number = Date.now()): Promise<void> {
   if (getNotificationPermission() !== "granted") return;
 
   const state = getState();
-  const now = new Date();
-  const currentTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-  const todayParts = now.toISOString().split("T");
-  const todayKey = todayParts[0] ?? "";
+  const doses = await loadReminderDoses();
+  // Due within the last few minutes, per the same builder native and push use.
+  const occurrences = buildReminderOccurrences(doses, {
+    from: now - DOSE_REMINDER_WINDOW_MS,
+    days: 1,
+    deviceTz: getDeviceTimezone(),
+  }).filter((o) => o.at <= now);
+  const handled = await loadHandledSlots(occurrences);
 
-  const allPrescriptions = await db.prescriptions.toArray();
-  const activePrescriptions = allPrescriptions.filter(p => p.isActive === true);
-  const prescriptionMap = new Map(activePrescriptions.map(p => [p.id, p]));
-
-  const phases = await db.medicationPhases.where("status").equals("active").toArray();
-  const phaseMap = new Map(phases.map(p => [p.id, p]));
-
-  const allPhaseSchedules = await db.phaseSchedules.toArray();
-  const allSchedules = allPhaseSchedules.filter(s => s.enabled === true);
-
-  const dayOfWeek = now.getDay();
   const dueNow: { name: string; time: string }[] = [];
-
-  for (const schedule of allSchedules) {
-    if (!schedule.daysOfWeek.includes(dayOfWeek)) continue;
-
-    const phase = phaseMap.get(schedule.phaseId);
-    if (!phase) continue;
-
-    const prescription = prescriptionMap.get(phase.prescriptionId);
-    if (!prescription) continue;
-
-    const timeParts = schedule.time.split(":").map(Number);
-    const nowParts = currentTime.split(":").map(Number);
-    const schedH = timeParts[0];
-    const schedM = timeParts[1];
-    const nowH = nowParts[0];
-    const nowM = nowParts[1];
-    if (schedH === undefined || schedM === undefined || nowH === undefined || nowM === undefined) continue;
-
-    const schedMinutes = schedH * 60 + schedM;
-    const nowMinutes = nowH * 60 + nowM;
-
-    const diff = nowMinutes - schedMinutes;
-    if (diff >= 0 && diff <= 5) {
-      const doseKey = `${todayKey}-${schedule.time}-${prescription.id}`;
-      if (!state.notifiedDoses.includes(doseKey)) {
-        const activeInv = await db.inventoryItems.where("prescriptionId").equals(prescription.id).toArray();
-        const inv = activeInv.find(i => i.isActive && !i.isArchived) ?? activeInv[0];
-        const name = inv?.brandName ?? prescription.genericName;
-
-        const doseText = isCombo(prescription)
-          ? formatCompoundShort(splitDose(schedule.dosage, prescription.compounds), phase.unit)
-          : `${schedule.dosage}${phase.unit}`;
-        dueNow.push({
-          name: `${name} ${doseText}`,
-          time: schedule.time,
-        });
-        state.notifiedDoses.push(doseKey);
-      }
-    }
+  const notified: string[] = [];
+  let slotTime: string | undefined;
+  for (const o of occurrences) {
+    // Keyed by the dose's own date, not the UTC date.
+    const doseKey = `${o.dateKey}-${o.dose.scheduleId}`;
+    if (state.notifiedDoses.includes(doseKey)) continue;
+    if (handled.has(`${o.dose.scheduleId}|${o.dateKey}`)) continue;
+    // One notification per slot: later slots wait for the next tick.
+    if (slotTime !== undefined && o.localTime !== slotTime) continue;
+    slotTime = o.localTime;
+    dueNow.push({ name: `${o.dose.displayName} ${o.dose.dosageText}`, time: o.localTime });
+    notified.push(doseKey);
   }
 
   if (dueNow.length > 0) {
     await showDoseReminder(dueNow);
   }
 
-  const cleanedDoses = state.notifiedDoses.filter((key) => key.startsWith(todayKey));
-  saveState({ lastDoseCheck: Date.now(), notifiedDoses: cleanedDoses });
+  // Keep keys for the last two days; older ones can never match again.
+  const cutoff = toLocalDateKey(now - 2 * 24 * 60 * 60 * 1000);
+  const cleanedDoses = [...state.notifiedDoses, ...notified].filter((key) => key.slice(0, 10) >= cutoff);
+  saveState({ lastDoseCheck: now, notifiedDoses: cleanedDoses });
 }
 
 async function checkRefillAlerts(): Promise<void> {

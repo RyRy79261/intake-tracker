@@ -162,3 +162,59 @@ describe("getDueNotificationsForUser receives converted local time", () => {
     expect(values).toBeDefined();
   });
 });
+
+describe("savePushSubscription keeps a known timezone", () => {
+  beforeEach(() => {
+    mockSql.mockReset();
+  });
+
+  function sqlText(): string {
+    const strings = mockSql.mock.calls[0]![0] as readonly string[];
+    return strings.join("?");
+  }
+
+  it("does not reset the stored zone to UTC when a re-subscribe carries none", async () => {
+    mockSql.mockResolvedValueOnce([]);
+    const { savePushSubscription } = await import("@/lib/push-db");
+    await savePushSubscription("user-1", {
+      endpoint: "https://push.example/e",
+      keys: { p256dh: "p", auth: "a" },
+    });
+
+    expect(sqlText()).not.toMatch(/timezone = EXCLUDED\.timezone/);
+    expect(sqlText()).toMatch(/COALESCE\(\?, push_subscriptions\.timezone\)/);
+    expect(mockSql.mock.calls[0]).toContain(null);
+  });
+
+  it("stores the zone the client sent", async () => {
+    mockSql.mockResolvedValueOnce([]);
+    const { savePushSubscription } = await import("@/lib/push-db");
+    await savePushSubscription("user-1", {
+      endpoint: "https://push.example/e",
+      keys: { p256dh: "p", auth: "a" },
+      timezone: "Europe/Berlin",
+    });
+
+    expect(mockSql.mock.calls[0]).toContain("Europe/Berlin");
+  });
+});
+
+describe("due-slot window", () => {
+  it("matches slots up to DUE_WINDOW_MINUTES late, clamped to the same day", async () => {
+    const { windowStart, DUE_WINDOW_MINUTES } = await import("@/lib/push-db");
+    expect(DUE_WINDOW_MINUTES).toBeGreaterThanOrEqual(15);
+    expect(windowStart("08:20", 30)).toBe("07:50");
+    expect(windowStart("00:10", 30)).toBe("00:00");
+  });
+
+  it("queries a time range instead of an exact minute", async () => {
+    mockSql.mockReset();
+    mockSql.mockResolvedValueOnce([]);
+    const { getDueNotificationsForUser } = await import("@/lib/push-db");
+    await getDueNotificationsForUser("user-1", "08:20", 1, "2026-09-28", 30);
+
+    const [strings, ...values] = mockSql.mock.calls[0]!;
+    expect((strings as readonly string[]).join("?")).toMatch(/time_slot <= \?[\s\S]*time_slot >= \?/);
+    expect(values).toEqual(expect.arrayContaining(["08:20", "07:50"]));
+  });
+});
