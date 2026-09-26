@@ -31,16 +31,44 @@ describe("validateAndSave", () => {
     expect(inputSetter).toHaveBeenCalledWith("10");
   });
 
-  it("reverts to default for a value below min", () => {
+  it("clamps a value below min to min and says so", () => {
     const setter = vi.fn();
-    validateAndSave("-5", 0, 100, 10, setter, vi.fn());
-    expect(setter).toHaveBeenCalledWith(10);
+    const inputSetter = vi.fn();
+    const message = validateAndSave("-5", 0, 100, 10, setter, inputSetter);
+    expect(setter).toHaveBeenCalledWith(0);
+    expect(inputSetter).toHaveBeenCalledWith("0");
+    expect(message).toMatch(/0.*100/);
   });
 
-  it("reverts to default for a value above max", () => {
+  it("clamps a value above max to max and says so", () => {
     const setter = vi.fn();
-    validateAndSave("200", 0, 100, 10, setter, vi.fn());
-    expect(setter).toHaveBeenCalledWith(10);
+    const inputSetter = vi.fn();
+    const message = validateAndSave("15000", 100, 10000, 1000, setter, inputSetter);
+    expect(setter).toHaveBeenCalledWith(10000);
+    expect(inputSetter).toHaveBeenCalledWith("10000");
+    expect(message).toMatch(/100.*10000/);
+  });
+
+  it("explains a rejected non-numeric input", () => {
+    expect(validateAndSave("abc", 0, 100, 10, vi.fn(), vi.fn())).toMatch(
+      /number/i,
+    );
+  });
+
+  it("returns no message for a valid value", () => {
+    expect(validateAndSave("50", 0, 100, 10, vi.fn(), vi.fn())).toBeNull();
+  });
+
+  it("shows the stored value when the setter normalises the input", () => {
+    // The store rounds to an integer; 1000.4 is stored as 1000, so the
+    // field must read 1000, not the never-saved "1000.4".
+    let stored = 1000;
+    const setter = (v: number) => {
+      stored = Math.round(v);
+    };
+    const inputSetter = vi.fn();
+    validateAndSave("1000.4", 100, 10000, stored, setter, inputSetter, () => stored);
+    expect(inputSetter).toHaveBeenLastCalledWith("1000");
   });
 
   it("accepts the min and max boundaries", () => {

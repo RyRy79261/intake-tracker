@@ -43,6 +43,18 @@ describe("formatAmount", () => {
   it("never converts non-ml units even when large", () => {
     expect(formatAmount(2000, "mg")).toBe("2000mg");
   });
+
+  it("never renders a total just over a whole-litre limit as equal to it", () => {
+    expect(formatAmount(1040, "ml")).toBe("1.04L");
+    expect(formatAmount(1004, "ml")).toBe("1.004L");
+    expect(formatAmount(1040, "ml")).not.toBe(formatAmount(1000, "ml"));
+  });
+
+  it("rounds away floating-point noise in summed amounts", () => {
+    expect(formatAmount(0.1 + 0.2, "g")).toBe("0.3g");
+    expect(formatAmount(12.3 + 5.1 + 2.2, "g")).toBe("19.6g");
+    expect(formatAmount(1499.6, "mg")).toBe("1499.6mg");
+  });
 });
 
 describe("generateId", () => {

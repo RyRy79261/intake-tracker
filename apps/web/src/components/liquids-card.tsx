@@ -32,6 +32,8 @@ import { cn, formatAmount, getLiquidTypeLabel } from "@/lib/utils";
 import { formatTimeOnly } from "@/lib/date-utils";
 import { type IntakeRecord } from "@/lib/db";
 import { abvFromStandardDrinks } from "@intake/core/alcohol";
+import { getProgressStatus } from "@intake/core/progress";
+import { progressStatusTextClass } from "@intake/ui/progress";
 
 const TAB_THEMES = {
   water: CARD_THEMES.water,
@@ -238,8 +240,11 @@ export function LiquidsCard() {
   const theme = TAB_THEMES[activeTab as TabKey] ?? TAB_THEMES.water;
   const Icon = TAB_ICONS[activeTab as TabKey] ?? TAB_ICONS.water;
 
-  const isOverLimit =
-    settings.waterLimit > 0 && waterIntake.dailyTotal > settings.waterLimit;
+  const waterStatus = getProgressStatus(
+    waterIntake.dailyTotal,
+    settings.waterLimit,
+    settings.waterExtendedBuffer
+  );
 
   return (
     <Card
@@ -265,9 +270,7 @@ export function LiquidsCard() {
             <p
               className={cn(
                 "text-sm font-medium",
-                isOverLimit
-                  ? "text-red-600 dark:text-red-400"
-                  : "text-foreground"
+                progressStatusTextClass(waterStatus, "text-foreground")
               )}
             >
               {formatAmount(waterIntake.dailyTotal, "ml")} /{" "}

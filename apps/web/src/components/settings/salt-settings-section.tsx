@@ -5,20 +5,21 @@ import { Label } from "@intake/ui/label";
 import { Sparkles } from "lucide-react";
 import { NumericInput } from "@intake/ui/numeric-input";
 import { useSettings } from "@/hooks/use-settings";
+import { useSettingsStore } from "@/stores/settings-store";
 import { validateAndSave, incrementSetting, decrementSetting } from "@intake/core/settings";
 import { ExpandableSettingsSection } from "@/components/settings/expandable-settings-section";
+import { SettingFieldMessage, useFieldMessages } from "@/components/settings/setting-field-message";
 
 export function SaltSettingsSection() {
   const settings = useSettings();
-  const [incrementInput, setIncrementInput] = useState(settings.saltIncrement.toString());
+  const [messages, setMessage] = useFieldMessages<"limit" | "extended">();
   const [limitInput, setLimitInput] = useState(settings.saltLimit.toString());
   const [extendedInput, setExtendedInput] = useState(settings.saltExtendedBuffer.toString());
 
   useEffect(() => {
-    setIncrementInput(settings.saltIncrement.toString());
     setLimitInput(settings.saltLimit.toString());
     setExtendedInput(settings.saltExtendedBuffer.toString());
-  }, [settings.saltIncrement, settings.saltLimit, settings.saltExtendedBuffer]);
+  }, [settings.saltLimit, settings.saltExtendedBuffer]);
 
   return (
     <ExpandableSettingsSection
@@ -28,35 +29,19 @@ export function SaltSettingsSection() {
     >
       <div className="space-y-3">
         <div className="space-y-2">
-          <Label htmlFor="salt-increment">Increment (mg)</Label>
-          <NumericInput
-            id="salt-increment"
-            value={incrementInput}
-            onChange={setIncrementInput}
-            onBlur={() => validateAndSave(incrementInput, 10, 1000, settings.saltIncrement, settings.setSaltIncrement, setIncrementInput)}
-            min={10}
-            max={1000}
-            step={10}
-            onIncrement={() => incrementSetting(settings.saltIncrement, 10, 1000, settings.setSaltIncrement, setIncrementInput)}
-            onDecrement={() => decrementSetting(settings.saltIncrement, 10, 10, settings.setSaltIncrement, setIncrementInput)}
-          />
-          <p className="text-xs text-muted-foreground">
-            Amount added with each +/- tap (10-1000)
-          </p>
-        </div>
-        <div className="space-y-2">
           <Label htmlFor="salt-limit">Daily Limit (mg)</Label>
           <NumericInput
             id="salt-limit"
             value={limitInput}
-            onChange={setLimitInput}
-            onBlur={() => validateAndSave(limitInput, 100, 10000, settings.saltLimit, settings.setSaltLimit, setLimitInput)}
+            onChange={(v) => { setLimitInput(v); setMessage("limit", null); }}
+            onBlur={() => setMessage("limit", validateAndSave(limitInput, 100, 10000, settings.saltLimit, settings.setSaltLimit, setLimitInput, () => useSettingsStore.getState().saltLimit))}
             min={100}
             max={10000}
             step={100}
             onIncrement={() => incrementSetting(settings.saltLimit, 100, 10000, settings.setSaltLimit, setLimitInput)}
             onDecrement={() => decrementSetting(settings.saltLimit, 100, 100, settings.setSaltLimit, setLimitInput)}
           />
+          <SettingFieldMessage message={messages.limit} />
           <p className="text-xs text-muted-foreground">
             Your daily sodium intake limit (100-10000)
           </p>
@@ -66,14 +51,15 @@ export function SaltSettingsSection() {
           <NumericInput
             id="salt-extended"
             value={extendedInput}
-            onChange={setExtendedInput}
-            onBlur={() => validateAndSave(extendedInput, 0, 10000, settings.saltExtendedBuffer, settings.setSaltExtendedBuffer, setExtendedInput)}
+            onChange={(v) => { setExtendedInput(v); setMessage("extended", null); }}
+            onBlur={() => setMessage("extended", validateAndSave(extendedInput, 0, 10000, settings.saltExtendedBuffer, settings.setSaltExtendedBuffer, setExtendedInput, () => useSettingsStore.getState().saltExtendedBuffer))}
             min={0}
             max={10000}
             step={100}
             onIncrement={() => incrementSetting(settings.saltExtendedBuffer, 100, 10000, settings.setSaltExtendedBuffer, setExtendedInput)}
             onDecrement={() => decrementSetting(settings.saltExtendedBuffer, 100, 0, settings.setSaltExtendedBuffer, setExtendedInput)}
           />
+          <SettingFieldMessage message={messages.extended} />
           <p className="text-xs text-muted-foreground">
             Extra allowance shown in a second tone above your target before the bar turns red (0 to disable)
           </p>

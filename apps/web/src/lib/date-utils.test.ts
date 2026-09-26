@@ -6,11 +6,14 @@ import {
   parseDateTimeLocal,
   formatTimeOnly,
   formatDateTime,
+  formatClockTime,
 } from "@/lib/date-utils";
+import { useSettingsStore } from "@/stores/settings-store";
 
 describe("date-utils", () => {
   afterEach(() => {
     vi.useRealTimers();
+    useSettingsStore.setState(useSettingsStore.getInitialState());
   });
 
   describe("dateTimeLocalToTimestamp", () => {
@@ -83,14 +86,41 @@ describe("date-utils", () => {
       // Build the timestamp from local components so the formatted local
       // time is deterministic regardless of host timezone.
       const ts = new Date(2024, 0, 1, 14, 30).getTime();
+      expect(formatTimeOnly(ts, "12h")).toBe("2:30 PM");
+    });
+
+    it("formats a timestamp as 24-hour time, with midnight as 00", () => {
+      expect(formatTimeOnly(new Date(2024, 0, 1, 14, 30).getTime(), "24h")).toBe("14:30");
+      expect(formatTimeOnly(new Date(2024, 0, 1, 0, 5).getTime(), "24h")).toBe("00:05");
+    });
+
+    it("follows the Time Format setting by default", () => {
+      const ts = new Date(2024, 0, 1, 14, 30).getTime();
+      useSettingsStore.setState({ timeFormat: "12h" });
       expect(formatTimeOnly(ts)).toBe("2:30 PM");
+      useSettingsStore.setState({ timeFormat: "24h" });
+      expect(formatTimeOnly(ts)).toBe("14:30");
     });
   });
 
   describe("formatDateTime", () => {
     it("formats a timestamp with abbreviated month, day, and 12-hour time", () => {
       const ts = new Date(2024, 0, 15, 14, 30).getTime();
-      expect(formatDateTime(ts)).toBe("Jan 15, 2:30 PM");
+      expect(formatDateTime(ts, "12h")).toBe("Jan 15, 2:30 PM");
+    });
+
+    it("follows the Time Format setting by default", () => {
+      const ts = new Date(2024, 0, 15, 14, 30).getTime();
+      useSettingsStore.setState({ timeFormat: "24h" });
+      expect(formatDateTime(ts)).toBe("Jan 15, 14:30");
+    });
+  });
+
+  describe("formatClockTime", () => {
+    it("renders a schedule's HH:mm in the chosen format", () => {
+      expect(formatClockTime("08:00", "24h")).toBe("08:00");
+      expect(formatClockTime("14:05", "12h")).toBe("2:05 PM");
+      expect(formatClockTime("00:30", "12h")).toBe("12:30 AM");
     });
   });
 });

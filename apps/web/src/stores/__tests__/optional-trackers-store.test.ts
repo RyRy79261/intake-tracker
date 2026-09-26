@@ -69,7 +69,7 @@ describe("optionalTrackers settings", () => {
 
   describe("persisted-state migration", () => {
     it("constant matches the version migrate brings state up to", () => {
-      expect(SETTINGS_PERSIST_VERSION).toBe(16);
+      expect(SETTINGS_PERSIST_VERSION).toBe(17);
     });
 
     it("upgrading from v14 seeds optionalTrackers with the documented defaults", () => {
