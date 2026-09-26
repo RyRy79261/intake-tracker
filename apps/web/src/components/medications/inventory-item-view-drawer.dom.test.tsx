@@ -74,6 +74,23 @@ describe("InventoryItemViewDrawer", () => {
     expect(screen.getByText(/For Amlodipine/)).toBeInTheDocument();
   });
 
+  it("Details tab shows the effective phase, not a completed maintenance phase", async () => {
+    const prescription = makePrescription({ genericName: "Amlodipine" });
+    // The old lookup fell back to ANY maintenance phase, so it said
+    // "Maintenance" here while the Stock tab and dose schedule used the
+    // live active phase.
+    const completed = makeMedicationPhase(prescription.id, { status: "completed" });
+    const active = makeMedicationPhase(prescription.id, { type: "titration", status: "active" });
+    const item = makeInventoryItem(prescription.id, { brandName: "Norvasc", strength: 5, unit: "mg" });
+    await renderWithFixtures(
+      <InventoryItemViewDrawer item={item} prescription={prescription} open onOpenChange={() => {}} />,
+      { seed: { prescriptions: [prescription], medicationPhases: [completed, active], inventoryItems: [item] } },
+    );
+
+    expect(await screen.findByText("On titration")).toBeInTheDocument();
+    expect(screen.queryByText("Maintenance")).not.toBeInTheDocument();
+  });
+
   it("Stock tab surfaces the seeded current stock", async () => {
     const user = userEvent.setup();
     const { prescription, phase, schedule, item } = fixture();

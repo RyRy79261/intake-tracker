@@ -23,7 +23,7 @@ import {
   useSetStockCount,
   useRestoreInventoryTransaction,
 } from "@/hooks/use-inventory-mutations";
-import { getEffectivePhase } from "@/lib/medication-ui-utils";
+import { isActiveBrand as isActiveBrandItem } from "@/lib/inventory-service";
 import { computeRefillStatus } from "@/lib/refill-status";
 import { showUndoToast } from "@/components/medications/undo-toast";
 import { useToast } from "@intake/ui/use-toast";
@@ -98,7 +98,7 @@ export function InventoryItemViewDrawer({ item, prescription, open, onOpenChange
 
 function DetailsTab({ item, prescription }: { item: InventoryItem; prescription: Prescription | null }) {
   const phases = usePhasesForPrescription(prescription?.id);
-  const effectivePhase = getEffectivePhase(phases);
+  const effectivePhase = selectEffectivePhase(phases);
 
   return (
     <div className="space-y-6">
@@ -161,11 +161,6 @@ function DetailsTab({ item, prescription }: { item: InventoryItem; prescription:
   );
 }
 
-/** The brand doses are deducted from, among a prescription's items. */
-function findActiveBrand(items: InventoryItem[]): InventoryItem | undefined {
-  return items.find((i) => isLive(i) && i.isActive === true && !i.isArchived);
-}
-
 /** Parse a number field; `null` when empty or not a finite number. */
 function parseAmount(raw: string): number | null {
   if (raw.trim() === "") return null;
@@ -201,7 +196,7 @@ function InventoryTab({
   const parsedRefill = parseAmount(refillAmount);
   const parsedCount = parseAmount(countedAmount);
 
-  const activeBrand = findActiveBrand(siblings);
+  const activeBrand = siblings.find(isActiveBrandItem);
   const isActiveBrand = activeBrand?.id === item.id;
   // Only the active brand is deducted, so only it has a supply estimate.
   const status = isActiveBrand ? computeRefillStatus(item, effectivePhase, schedules) : null;
