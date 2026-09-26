@@ -25,6 +25,7 @@ import type {
   TitrationPlan,
   UrinationRecord,
   UserProfile,
+  UserSettings,
   WeightRecord,
 } from "@intake/types/records";
 
@@ -62,6 +63,8 @@ export type {
   TitrationPlanStatus,
   UrinationRecord,
   UserProfile,
+  UserSettings,
+  SyncedLiquidPreset,
   WeightRecord,
 } from "@intake/types/records";
 
@@ -83,6 +86,7 @@ export type AppDatabase = Dexie & {
   substanceRecords: EntityTable<SubstanceRecord, "id">;
   titrationPlans: EntityTable<TitrationPlan, "id">;
   userProfile: EntityTable<UserProfile, "id">;
+  userSettings: EntityTable<UserSettings, "id">;
   insightReports: EntityTable<InsightReport, "id">;
   _syncQueue: EntityTable<SyncQueueRow, "id">;
   _syncMeta: EntityTable<SyncMetaRow, "tableName">;
@@ -747,12 +751,44 @@ realDb.version(23).stores({
       : null);
 });
 
+// Version 24 (2026-09 audit follow-up, state-settings-cache#2): adds the
+// synced `userSettings` table — limits, optional trackers, day-start hour,
+// liquid presets, regions, reminder follow-ups and the home timezone, which
+// used to live only in this device's localStorage. No upgrade hook: the row
+// is seeded at runtime from the settings store (lib/settings-sync.ts), which
+// in cloud-sync mode has to wait for the first full pull before it may write.
+realDb.version(24).stores({
+  // --- REPEAT all v23 stores verbatim, plus userSettings ---
+  intakeRecords:           "id, [type+timestamp], timestamp, source, groupId, updatedAt",
+  weightRecords:           "id, timestamp, updatedAt",
+  bloodPressureRecords:    "id, timestamp, position, arm, updatedAt",
+  eatingRecords:           "id, timestamp, groupId, updatedAt",
+  urinationRecords:        "id, timestamp, updatedAt",
+  defecationRecords:       "id, timestamp, updatedAt",
+  prescriptions:           "id, updatedAt, createdAt",
+  medicationPhases:        "id, prescriptionId, status, type, titrationPlanId, updatedAt",
+  phaseSchedules:          "id, phaseId, time, updatedAt",
+  inventoryItems:          "id, prescriptionId, updatedAt",
+  inventoryTransactions:   "id, [inventoryItemId+timestamp], inventoryItemId, timestamp, type, updatedAt",
+  doseLogs:                "id, [prescriptionId+scheduledDate], [scheduleId+scheduledDate], prescriptionId, phaseId, scheduleId, scheduledDate, scheduledTime, status, updatedAt",
+  dailyNotes:              "id, date, prescriptionId, doseLogId, updatedAt",
+  auditLogs:               "id, [action+timestamp], timestamp, action",
+  substanceRecords:        "id, [type+timestamp], type, timestamp, source, sourceRecordId, groupId, updatedAt",
+  titrationPlans:          "id, conditionLabel, status, updatedAt",
+  _syncQueue:              "++id, [tableName+recordId], tableName, enqueuedAt",
+  _syncMeta:               "tableName",
+  _errorLogs:              "id, timestamp, source",
+  userProfile:             "id, updatedAt",
+  insightReports:          "id, generatedAt, updatedAt",
+  userSettings:            "id, updatedAt",
+});
+
 /**
  * Current Dexie schema version. Bump this constant in lockstep with each new
  * `realDb.version(N)` block above so diagnostic surfaces (Debug → Environment)
  * always reflect the real schema.
  */
-export const DB_SCHEMA_VERSION = 23;
+export const DB_SCHEMA_VERSION = 24;
 
 /**
  * True when `e` (or anything in its `cause` chain) is Dexie's
@@ -796,7 +832,7 @@ export async function recoverClosedDatabase(e: unknown): Promise<boolean> {
 }
 
 /**
- * Store definitions for a preview database — the current (v23) schema in a
+ * Store definitions for a preview database — the current (v24) schema in a
  * single version. A preview database is created empty and discarded, so it
  * needs no migration history.
  */
@@ -811,6 +847,7 @@ const PREVIEW_STORES = {
   _errorLogs: "id, timestamp, source",
   userProfile: "id, updatedAt",
   insightReports: "id, generatedAt, updatedAt",
+  userSettings: "id, updatedAt",
 } as const;
 
 let previewDbCounter = 0;

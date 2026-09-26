@@ -48,7 +48,7 @@ import {
  *   - phase_schedules        → medication_phases
  *   - medication_phases      → prescriptions, titration_plans
  *   - substance_records      → intake_records
- * `userProfile` and `insightReports` are leaves (insight_jobs' reference to
+ * `userProfile`, `insightReports` and `userSettings` are leaves (insight_jobs' reference to
  * insight_reports is ON DELETE SET NULL).
  */
 export const SYNCED_DELETION_ORDER: TableName[] = [
@@ -70,15 +70,21 @@ export const SYNCED_DELETION_ORDER: TableName[] = [
   "intakeRecords",
   "userProfile",
   "insightReports",
+  "userSettings",
 ];
 
 /**
  * The tables `/api/sync/cleanup` removes when a migration is cancelled: the
- * record tables a migration uploads. The profile and insight reports are left
- * alone, as before.
+ * record tables a migration uploads. The profile, insight reports and synced
+ * settings are left alone, as before.
  */
+const MIGRATION_CLEANUP_KEEP: ReadonlySet<TableName> = new Set<TableName>([
+  "userProfile",
+  "insightReports",
+  "userSettings",
+]);
 export const MIGRATION_CLEANUP_ORDER: TableName[] = SYNCED_DELETION_ORDER.filter(
-  (name) => name !== "userProfile" && name !== "insightReports",
+  (name) => !MIGRATION_CLEANUP_KEEP.has(name),
 );
 
 type DeleteStep = { name: string; table: PgTable; where: SQL | undefined };

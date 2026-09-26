@@ -1,7 +1,7 @@
 /**
- * Postgres schema — single source of truth for all 29 tables.
+ * Postgres schema — single source of truth for all 30 tables.
  *
- * Mirrors the @intake/types/records Dexie interfaces exactly (18 app tables),
+ * Mirrors the @intake/types/records Dexie interfaces exactly (19 app tables),
  * includes 4 push notification tables that replace scripts/push-migration.sql,
  * 3 server-only AI tables (user_api_keys, user_key_shares, ai_usage), and
  * 4 server-only MCP-connector tables (mcp_oauth_clients, mcp_auth_codes,
@@ -864,6 +864,67 @@ export const insightReports = pgTable(
 );
 
 // ─────────────────────────────────────────────────────────────────────────
+// User settings — mirrors the UserSettings interface in @intake/types/records.
+// The settings that describe the user rather than the device (limits,
+// optional trackers, day-start hour, liquid presets, regions, reminder
+// follow-ups, home timezone). A per-user singleton by convention, stored as a
+// normal synced table (globally-unique `id`, last write wins per row). No
+// `timezone` column — UserSettings omits it.
+// ─────────────────────────────────────────────────────────────────────────
+
+export const userSettings = pgTable(
+  "user_settings",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => usersSync.id, { onDelete: "cascade" }),
+    waterLimit: integer("water_limit").notNull(),
+    saltLimit: integer("salt_limit").notNull(),
+    sugarLimit: integer("sugar_limit").notNull(),
+    potassiumLimit: integer("potassium_limit").notNull(),
+    waterExtendedBuffer: integer("water_extended_buffer").notNull(),
+    saltExtendedBuffer: integer("salt_extended_buffer").notNull(),
+    sugarExtendedBuffer: integer("sugar_extended_buffer").notNull(),
+    optionalTrackers: jsonb("optional_trackers")
+      .$type<{ sugar: boolean; potassium: boolean }>()
+      .notNull(),
+    dayStartHour: integer("day_start_hour").notNull(),
+    liquidPresets: jsonb("liquid_presets")
+      .$type<Array<{ id: string; name: string } & Record<string, unknown>>>()
+      .notNull(),
+    primaryRegion: text("primary_region").notNull(),
+    secondaryRegion: text("secondary_region").notNull(),
+    reminderFollowUpCount: integer("reminder_follow_up_count").notNull(),
+    reminderFollowUpInterval: integer("reminder_follow_up_interval").notNull(),
+    homeTimezone: text("home_timezone"),
+    homeTimezoneConfirmedAt: bigint("home_timezone_confirmed_at", {
+      mode: "number",
+    }),
+    createdAt: bigint("created_at", { mode: "number" }).notNull(),
+    updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
+    deletedAt: bigint("deleted_at", { mode: "number" }),
+    deviceId: text("device_id").notNull(),
+    serverUpdatedAt: serverUpdatedAt(),
+  },
+  (t) => ({
+    dayStartHourCheck: check(
+      "user_settings_day_start_hour_check",
+      sql`${t.dayStartHour} BETWEEN 0 AND 23`,
+    ),
+    userUpdatedIdx: index("idx_user_settings_user_updated").on(
+      t.userId,
+      t.updatedAt,
+    ),
+    userServerUpdatedIdx: index("idx_user_settings_user_server_updated").on(
+      t.userId,
+      t.serverUpdatedAt,
+      t.id,
+    ),
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────────────────
 // Deep-research insight jobs — server-only state for async batch requests.
 //
 // Each row tracks one Anthropic Message Batches submission for the deep
@@ -1088,6 +1149,12 @@ export const aiUsage = pgTable(
     audioSeconds: integer("audio_seconds"),
     status: text("status").notNull(),
     durationMs: integer("duration_ms"),
+    // Paid server-side web searches the call ran (Anthropic
+    // usage.server_tool_use.web_search_requests), billed per search on top
+    // of tokens.
+    webSearchRequests: integer("web_search_requests").notNull().default(0),
+    // Message Batches calls (deep insights) bill at 50% of the standard rate.
+    isBatch: boolean("is_batch").notNull().default(false),
   },
   (t) => ({
     keySourceCheck: check(

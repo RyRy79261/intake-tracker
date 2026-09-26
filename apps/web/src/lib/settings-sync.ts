@@ -1,0 +1,392 @@
+/**
+ * Mirrors the user's settings between the Zustand settings store and the
+ * synced `userSettings` table (audit state-settings-cache#2,
+ * gap-timezone-travel-recalc#1).
+ *
+ * The split
+ * ---------
+ * Settings that describe the USER are synced (SYNCED_SETTING_KEYS): daily
+ * limits and extended buffers, optional trackers, the day-start hour, liquid
+ * presets, medication regions, reminder follow-up count/interval and the home
+ * timezone. They decide what is recorded and how a day is counted, so every
+ * device has to agree on them, and a backup has to carry them.
+ *
+ * Settings that describe the DEVICE stay in localStorage only: theme
+ * (next-themes), animation timing, swipe and quick-nav, shake-to-report, the
+ * clock format, the +/- increments and default amounts, the analytics intro
+ * flag, `storageMode` and `doseRemindersEnabled` (each device has its own
+ * push subscription).
+ *
+ * The store stays the in-memory API: components keep calling its setters,
+ * and service code keeps reading `useSettingsStore.getState()`. This module
+ * writes synced-key changes to the table and applies rows arriving from
+ * elsewhere (a pull, a backup restore, another tab) back to the store.
+ *
+ * Conflicts
+ * ---------
+ * Whole-row last-write-wins, the sync engine's rule for every table: the row
+ * with the newest `updatedAt` is the user's settings. Two devices editing
+ * different settings while both offline keep only the later device's row.
+ * Locally, keys edited on this device but not yet written are kept when a
+ * newer row is adopted (they are merged over it and written back).
+ *
+ * First run
+ * ---------
+ * No row exists yet on upgrade. In local mode the row is seeded at once from
+ * the store. In cloud-sync mode nothing is written until the first full pull
+ * has finished, because the cloud may already hold the settings another
+ * device saved. If a row is then found it is adopted; this device's own
+ * differing values are copied to localStorage (PRE_SYNC_SETTINGS_BACKUP_KEY)
+ * first, so nothing is lost. A seeded row is written only when some synced
+ * value differs from the default, and carries `updatedAt = SEED_UPDATED_AT`,
+ * so any setting the user actually saves on any device outranks it.
+ */
+import { liveQuery, type Subscription } from "dexie";
+import { db, type UserSettings, type SyncedLiquidPreset } from "@/lib/db";
+import type { LiquidPreset } from "@/lib/constants";
+import { useSettingsStore, type Settings } from "@/stores/settings-store";
+import { useSyncStatusStore } from "@/stores/sync-status-store";
+import { writeWithSync } from "@/lib/sync-queue";
+import { schedulePush } from "@/lib/sync-engine";
+import { getSyncAccountId } from "@/lib/sync-account";
+import { generateId, getDeviceId } from "@/lib/utils";
+
+/** The settings that live in the synced `userSettings` row. */
+export const SYNCED_SETTING_KEYS = [
+  "waterLimit",
+  "saltLimit",
+  "sugarLimit",
+  "potassiumLimit",
+  "waterExtendedBuffer",
+  "saltExtendedBuffer",
+  "sugarExtendedBuffer",
+  "optionalTrackers",
+  "dayStartHour",
+  "liquidPresets",
+  "primaryRegion",
+  "secondaryRegion",
+  "reminderFollowUpCount",
+  "reminderFollowUpInterval",
+  "homeTimezone",
+  "homeTimezoneConfirmedAt",
+] as const satisfies ReadonlyArray<keyof Settings & keyof UserSettings>;
+
+export type SyncedSettingKey = (typeof SYNCED_SETTING_KEYS)[number];
+export type SyncedSettings = Pick<Settings, SyncedSettingKey>;
+
+/**
+ * `updatedAt` of a row seeded from a device's local settings. Lower than any
+ * real edit, so a value the user saved anywhere wins last-write-wins.
+ */
+export const SEED_UPDATED_AT = 1;
+
+/**
+ * localStorage key holding this device's own synced settings as they were
+ * just before it adopted a different cloud copy. Written once, never read by
+ * the app — a manual recovery copy.
+ */
+export const PRE_SYNC_SETTINGS_BACKUP_KEY = "intake-tracker-settings-pre-sync";
+
+const SYNCED_KEY_SET: ReadonlySet<string> = new Set(SYNCED_SETTING_KEYS);
+
+export function isSyncedSettingKey(key: string): key is SyncedSettingKey {
+  return SYNCED_KEY_SET.has(key);
+}
+
+function same(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/** The synced settings out of a full store state. */
+export function pickSyncedSettings(state: Settings): SyncedSettings {
+  const out: Record<string, unknown> = {};
+  for (const key of SYNCED_SETTING_KEYS) out[key] = state[key];
+  return out as SyncedSettings;
+}
+
+const isFiniteNumber = (v: unknown): v is number =>
+  typeof v === "number" && Number.isFinite(v);
+
+/**
+ * The synced settings a row carries, validated field by field. A missing or
+ * malformed field (a row written by an older or newer client) is left out,
+ * so the store keeps its own value for it.
+ */
+export function settingsFromRow(
+  row: Partial<UserSettings> | Record<string, unknown>,
+): Partial<SyncedSettings> {
+  const r = row as Record<string, unknown>;
+  const out: Partial<Record<SyncedSettingKey, unknown>> = {};
+  for (const key of [
+    "waterLimit",
+    "saltLimit",
+    "sugarLimit",
+    "potassiumLimit",
+    "waterExtendedBuffer",
+    "saltExtendedBuffer",
+    "sugarExtendedBuffer",
+    "reminderFollowUpCount",
+    "reminderFollowUpInterval",
+  ] as const) {
+    if (isFiniteNumber(r[key])) out[key] = r[key];
+  }
+  if (isFiniteNumber(r.dayStartHour) && r.dayStartHour >= 0 && r.dayStartHour <= 23) {
+    out.dayStartHour = r.dayStartHour;
+  }
+  const trackers = r.optionalTrackers as Record<string, unknown> | undefined;
+  if (
+    trackers &&
+    typeof trackers === "object" &&
+    typeof trackers.sugar === "boolean" &&
+    typeof trackers.potassium === "boolean"
+  ) {
+    out.optionalTrackers = { sugar: trackers.sugar, potassium: trackers.potassium };
+  }
+  if (
+    Array.isArray(r.liquidPresets) &&
+    r.liquidPresets.every(
+      (p) =>
+        p !== null &&
+        typeof p === "object" &&
+        typeof (p as Record<string, unknown>).id === "string" &&
+        typeof (p as Record<string, unknown>).name === "string",
+    )
+  ) {
+    out.liquidPresets = r.liquidPresets as unknown as LiquidPreset[];
+  }
+  for (const key of ["primaryRegion", "secondaryRegion"] as const) {
+    if (typeof r[key] === "string") out[key] = r[key];
+  }
+  if (r.homeTimezone === null || typeof r.homeTimezone === "string") {
+    out.homeTimezone = r.homeTimezone || null;
+  }
+  if (r.homeTimezoneConfirmedAt === null || isFiniteNumber(r.homeTimezoneConfirmedAt)) {
+    out.homeTimezoneConfirmedAt = r.homeTimezoneConfirmedAt;
+  }
+  return out as Partial<SyncedSettings>;
+}
+
+/** Build a `userSettings` row holding `values`. */
+export function buildUserSettingsRow(
+  values: SyncedSettings,
+  opts: { id?: string | undefined; createdAt?: number | undefined; updatedAt: number },
+): UserSettings {
+  const now = Date.now();
+  return {
+    // A new row takes the account's id, so two devices creating one converge
+    // on the same row (as the medical profile does).
+    id: opts.id ?? getSyncAccountId() ?? generateId(),
+    ...values,
+    liquidPresets: values.liquidPresets as unknown as SyncedLiquidPreset[],
+    createdAt: opts.createdAt ?? now,
+    updatedAt: opts.updatedAt,
+    deletedAt: null,
+    deviceId: getDeviceId(),
+  };
+}
+
+/**
+ * The `userSettings` row an older backup implies. Backups written before the
+ * table existed carry only `settings: { state }`, the raw settings-store
+ * blob. Its synced keys are laid over `base` (the current row, or the
+ * store), so a key the blob lacks keeps its current value; device-only keys
+ * are ignored. The row keeps `base`'s id, so a differing local row surfaces
+ * as an import conflict instead of a second row. Returns undefined when the
+ * blob holds no synced setting.
+ */
+export function userSettingsFromLegacyBlob(
+  blob: unknown,
+  base: { row?: UserSettings | undefined; settings: SyncedSettings },
+  exportedAt: number,
+): UserSettings | undefined {
+  const state = (blob as { state?: unknown } | null | undefined)?.state;
+  if (!state || typeof state !== "object") return undefined;
+  const restored = settingsFromRow(state as Record<string, unknown>);
+  if (Object.keys(restored).length === 0) return undefined;
+  return buildUserSettingsRow(
+    { ...base.settings, ...restored },
+    {
+      id: base.row?.id,
+      createdAt: base.row?.createdAt ?? exportedAt,
+      updatedAt: exportedAt,
+    },
+  );
+}
+
+/**
+ * The user's settings row: the newest live row, or undefined when none
+ * exists. Several live rows can exist after two devices each created one
+ * before syncing; the newest wins.
+ */
+export async function getActiveUserSettings(): Promise<UserSettings | undefined> {
+  const rows = await db.userSettings.toArray();
+  return rows
+    .filter((r) => r.deletedAt == null)
+    .sort((a, b) => b.updatedAt - a.updatedAt || a.id.localeCompare(b.id))[0];
+}
+
+function defaultSyncedSettings(): SyncedSettings {
+  return pickSyncedSettings(useSettingsStore.getInitialState());
+}
+
+function savePreSyncBackup(values: SyncedSettings): void {
+  try {
+    const storage = globalThis.localStorage;
+    if (!storage || storage.getItem(PRE_SYNC_SETTINGS_BACKUP_KEY) !== null) return;
+    storage.setItem(
+      PRE_SYNC_SETTINGS_BACKUP_KEY,
+      JSON.stringify({ savedAt: Date.now(), settings: values }),
+    );
+  } catch {
+    // Storage full or blocked: the adopted cloud copy still applies.
+  }
+}
+
+type RowVersion = { id: string; updatedAt: number };
+
+/**
+ * Start mirroring. Returns a disposer. Install once, at app start (see
+ * providers.tsx).
+ */
+export function installSettingsSync(): () => void {
+  let disposed = false;
+  // False until the first reconcile has run. Before that, edits are only
+  // recorded in `dirty`.
+  let ready = false;
+  // Synced keys edited on this device and not yet written to the table.
+  const dirty = new Set<SyncedSettingKey>();
+  // Set while this module itself writes to the store, so that write is not
+  // mistaken for a user edit.
+  let applying = false;
+  // The row version the store currently reflects.
+  let lastSeen: RowVersion | null = null;
+
+  // Every read-modify-write runs in this chain, one at a time.
+  let chain: Promise<void> = Promise.resolve();
+  const run = (task: () => Promise<void>): void => {
+    chain = chain
+      .then(() => (disposed ? undefined : task()))
+      .catch((error) => console.error("[settings-sync]", error));
+  };
+
+  const isLastSeen = (row: RowVersion) =>
+    lastSeen !== null && lastSeen.id === row.id && lastSeen.updatedAt === row.updatedAt;
+
+  /** Apply a row to the store, keeping keys edited here but not yet written. */
+  const adopt = (row: UserSettings): void => {
+    const incoming = settingsFromRow(row);
+    const current = pickSyncedSettings(useSettingsStore.getState());
+    const changes: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(incoming)) {
+      if (dirty.has(key as SyncedSettingKey)) continue;
+      if (!same(current[key as SyncedSettingKey], value)) changes[key] = value;
+    }
+    lastSeen = { id: row.id, updatedAt: row.updatedAt };
+    if (Object.keys(changes).length === 0) return;
+    applying = true;
+    try {
+      useSettingsStore.setState(changes as Partial<Settings>);
+    } finally {
+      applying = false;
+    }
+  };
+
+  /** Write the store's synced settings to the table, if they changed. */
+  const writeCurrent = async (seed = false): Promise<void> => {
+    const existing = await getActiveUserSettings();
+    if (disposed) return;
+    // A newer row this device has not applied yet: take it first, so this
+    // write only carries the keys edited here.
+    if (existing && !isLastSeen(existing)) adopt(existing);
+    const values = pickSyncedSettings(useSettingsStore.getState());
+    dirty.clear();
+    if (existing && same(settingsFromRow(existing), values)) {
+      lastSeen = { id: existing.id, updatedAt: existing.updatedAt };
+      return;
+    }
+    const updatedAt = seed
+      ? SEED_UPDATED_AT
+      : Math.max(Date.now(), (existing?.updatedAt ?? 0) + 1);
+    const row = buildUserSettingsRow(values, {
+      id: existing?.id,
+      createdAt: existing?.createdAt,
+      updatedAt,
+    });
+    lastSeen = { id: row.id, updatedAt: row.updatedAt };
+    await writeWithSync("userSettings", "upsert", async () => {
+      await db.userSettings.put(row);
+      return row;
+    });
+    schedulePush();
+  };
+
+  /** Cloud-sync mode must see the cloud copy before writing anything. */
+  const mayWrite = (): boolean =>
+    useSettingsStore.getState().storageMode !== "cloud-sync" ||
+    useSyncStatusStore.getState().initialSyncComplete;
+
+  const reconcile = async (): Promise<void> => {
+    if (ready || !mayWrite()) return;
+    const row = await getActiveUserSettings();
+    if (ready || disposed) return;
+    ready = true;
+    if (row) {
+      const local = pickSyncedSettings(useSettingsStore.getState());
+      const incoming = settingsFromRow(row);
+      const differs = Object.entries(incoming).some(
+        ([key, value]) =>
+          !dirty.has(key as SyncedSettingKey) &&
+          !same(local[key as SyncedSettingKey], value),
+      );
+      if (differs) savePreSyncBackup(local);
+      adopt(row);
+      if (dirty.size > 0) await writeCurrent();
+      return;
+    }
+    if (dirty.size > 0) {
+      await writeCurrent();
+      return;
+    }
+    const local = pickSyncedSettings(useSettingsStore.getState());
+    if (!same(local, defaultSyncedSettings())) await writeCurrent(true);
+  };
+
+  const unsubscribeStore = useSettingsStore.subscribe((state, prev) => {
+    if (!ready && state.storageMode !== prev.storageMode) run(reconcile);
+    if (applying) return;
+    let changed = false;
+    for (const key of SYNCED_SETTING_KEYS) {
+      if (!same(state[key], prev[key])) {
+        dirty.add(key);
+        changed = true;
+      }
+    }
+    if (changed && ready) run(() => writeCurrent());
+  });
+
+  const unsubscribeSync = useSyncStatusStore.subscribe((state, prev) => {
+    if (state.initialSyncComplete && !prev.initialSyncComplete) run(reconcile);
+  });
+
+  // Rows written elsewhere: a pull, a backup restore, another tab.
+  const subscription: Subscription = liveQuery(getActiveUserSettings).subscribe({
+    next: (row) => {
+      if (!ready || !row || isLastSeen(row)) return;
+      run(async () => {
+        // Re-read inside the chain: the emission may predate a local write.
+        const fresh = await getActiveUserSettings();
+        if (fresh && !isLastSeen(fresh)) adopt(fresh);
+      });
+    },
+    error: (error) => console.error("[settings-sync] Observer failed:", error),
+  });
+
+  run(reconcile);
+
+  return () => {
+    disposed = true;
+    unsubscribeStore();
+    unsubscribeSync();
+    subscription.unsubscribe();
+  };
+}

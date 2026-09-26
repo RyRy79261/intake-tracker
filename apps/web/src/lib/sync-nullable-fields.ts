@@ -104,13 +104,19 @@ export const NULLABLE_SYNC_FIELDS: Record<TableName, readonly string[]> = {
   auditLogs: ["details", "deletedAt"],
   userProfile: ["aiInsightsConsentAt", "deletedAt"],
   insightReports: ["sources", "mode", "deletedAt"],
+  userSettings: ["homeTimezone", "homeTimezoneConfirmedAt", "deletedAt"],
 };
 
 /**
  * Fields the record interfaces type as `T | null` (not `T?`). A pulled `null`
  * is already the local shape for these, so it is kept.
  */
-const NULL_TYPED_FIELDS = new Set(["deletedAt", "aiInsightsConsentAt"]);
+const NULL_TYPED_FIELDS = new Set([
+  "deletedAt",
+  "aiInsightsConsentAt",
+  "homeTimezone",
+  "homeTimezoneConfirmedAt",
+]);
 
 /** Keys the server adds that never belong in a Dexie row. */
 const SERVER_ONLY_KEYS = ["userId", "serverUpdatedAt"];

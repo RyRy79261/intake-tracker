@@ -186,6 +186,15 @@ export const insightReportSchema = baseRecordNoTz
   })
   .passthrough();
 
+export const userSettingsSchema = baseRecordNoTz
+  .extend({
+    waterLimit: finiteNumber,
+    saltLimit: finiteNumber,
+    dayStartHour: finiteNumber,
+    liquidPresets: z.array(z.object({ id: z.string(), name: z.string() }).passthrough()),
+  })
+  .passthrough();
+
 export type BackupTableName =
   | "intakeRecords"
   | "weightRecords"
@@ -204,7 +213,8 @@ export type BackupTableName =
   | "dailyNotes"
   | "auditLogs"
   | "userProfile"
-  | "insightReports";
+  | "insightReports"
+  | "userSettings";
 
 export const BACKUP_SCHEMAS: Record<BackupTableName, z.ZodTypeAny> = {
   intakeRecords: intakeRecordSchema,
@@ -225,6 +235,7 @@ export const BACKUP_SCHEMAS: Record<BackupTableName, z.ZodTypeAny> = {
   auditLogs: auditLogSchema,
   userProfile: userProfileSchema,
   insightReports: insightReportSchema,
+  userSettings: userSettingsSchema,
 };
 
 /** Boolean type guard backed by a Zod schema. */
@@ -252,4 +263,5 @@ export const BACKUP_VALIDATORS: Record<BackupTableName, (record: unknown) => boo
   auditLogs: makeZodValidator(auditLogSchema),
   userProfile: makeZodValidator(userProfileSchema),
   insightReports: makeZodValidator(insightReportSchema),
+  userSettings: makeZodValidator(userSettingsSchema),
 };

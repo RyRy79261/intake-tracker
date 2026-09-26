@@ -88,6 +88,22 @@ export const INTEGER_SYNC_FIELDS: Record<TableName, readonly string[]> = {
     "updatedAt",
     "deletedAt",
   ],
+  userSettings: [
+    "waterLimit",
+    "saltLimit",
+    "sugarLimit",
+    "potassiumLimit",
+    "waterExtendedBuffer",
+    "saltExtendedBuffer",
+    "sugarExtendedBuffer",
+    "dayStartHour",
+    "reminderFollowUpCount",
+    "reminderFollowUpInterval",
+    "homeTimezoneConfirmedAt",
+    "createdAt",
+    "updatedAt",
+    "deletedAt",
+  ],
 };
 
 /**
@@ -113,6 +129,7 @@ export const FLOAT_SYNC_FIELDS: Record<TableName, readonly string[]> = {
   auditLogs: [],
   userProfile: [],
   insightReports: [],
+  userSettings: [],
 };
 
 /**

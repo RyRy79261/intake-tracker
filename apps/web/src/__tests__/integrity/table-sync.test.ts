@@ -87,6 +87,7 @@ const TABLE_TO_FIXTURE: Record<string, string> = {
   auditLogs: "makeAuditLog",
   userProfile: "makeUserProfile",
   insightReports: "makeInsightReport",
+  userSettings: "makeUserSettings",
 };
 
 // Internal device-local stores — excluded from the backup/fixture three-way
