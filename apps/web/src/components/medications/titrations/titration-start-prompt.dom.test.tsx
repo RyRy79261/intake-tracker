@@ -12,11 +12,12 @@ import { TitrationStartPrompt } from "@/components/medications/titrations/titrat
 import { renderWithFixtures } from "@/__tests__/react-test-utils";
 /* eslint-disable-next-line no-restricted-imports -- test seeds and asserts the stored rows */
 import { db } from "@/lib/db";
-import { makeMedicationPhase, makeTitrationPlan } from "@/__tests__/fixtures/db-fixtures";
+import { makeMedicationPhase, makePrescription, makeTitrationPlan } from "@/__tests__/fixtures/db-fixtures";
 
 const DAY = 24 * 60 * 60 * 1000;
 
 async function seedPlan(recommendedStartDate: number, status: "draft" | "active" = "draft") {
+  await db.prescriptions.add(makePrescription({ id: "rx" }));
   await db.titrationPlans.add(
     makeTitrationPlan({ id: "plan", title: "Bisoprolol step 2", status, recommendedStartDate }),
   );
@@ -67,6 +68,15 @@ describe("TitrationStartPrompt", () => {
     await user.click(await screen.findByRole("button", { name: /not now/i }));
     expect(screen.queryByText(/bisoprolol step 2/i)).not.toBeInTheDocument();
     expect((await db.titrationPlans.get("plan"))?.status).toBe("draft");
+  });
+
+  it("shows nothing once the step's medication has been deleted", async () => {
+    await seedPlan(Date.now() - DAY);
+    await db.prescriptions.update("rx", { deletedAt: Date.now() });
+    await renderWithFixtures(<TitrationStartPrompt />);
+
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByText(/bisoprolol step 2/i)).not.toBeInTheDocument();
   });
 
   it("shows nothing for a step planned for a later date", async () => {

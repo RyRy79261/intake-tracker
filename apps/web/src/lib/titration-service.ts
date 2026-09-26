@@ -83,11 +83,25 @@ export function isTitrationPlanDue(
   );
 }
 
-/** Draft plans whose start date has arrived, oldest planned start first. */
+/**
+ * Draft plans whose start date has arrived, oldest planned start first. A plan
+ * is only offered while it still has a live pending phase on a live
+ * prescription: once its medication is deleted there is nothing to start.
+ */
 export async function getDueTitrationPlans(todayKey: string): Promise<TitrationPlan[]> {
   const all = await db.titrationPlans.toArray();
-  return all
-    .filter((p) => isTitrationPlanDue(p, todayKey))
+  const due = all.filter((p) => isTitrationPlanDue(p, todayKey));
+  if (due.length === 0) return [];
+  const liveRx = new Set(
+    (await db.prescriptions.toArray()).filter(isLive).map((rx) => rx.id),
+  );
+  const startable = new Set(
+    (await db.medicationPhases.where("titrationPlanId").anyOf(due.map((p) => p.id)).toArray())
+      .filter((ph) => isLive(ph) && ph.status === "pending" && liveRx.has(ph.prescriptionId))
+      .map((ph) => ph.titrationPlanId),
+  );
+  return due
+    .filter((p) => startable.has(p.id))
     .sort((a, b) => (a.recommendedStartDate ?? 0) - (b.recommendedStartDate ?? 0));
 }
 

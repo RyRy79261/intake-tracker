@@ -796,6 +796,20 @@ describe("titration start confirmation", () => {
     expect(today.map((s) => s.dosageMg)).toEqual([50]);
   });
 
+  it("a draft plan whose medication was deleted is not offered (nothing left to start)", async () => {
+    const rxId = await seedPrescription({ createdAt: Date.now() - 30 * DAY });
+    await seedMaintenance(rxId);
+    const created = await createTitrationPlan(stepInput(rxId, Date.now() - DAY));
+    if (!created.success) throw new Error("create failed");
+
+    const { deletePrescription } = await import("@/lib/prescription-service");
+    expect((await deletePrescription(rxId)).success).toBe(true);
+
+    expect(await getDueTitrationPlans(toLocalDateKey())).toEqual([]);
+    // The plan itself is left untouched.
+    expect((await db.titrationPlans.get(created.data.id))?.status).toBe("draft");
+  });
+
   it("isTitrationPlanDue: only live drafts with a start date on or before today", () => {
     const today = "2026-10-01";
     const at = (key: string) => new Date(`${key}T09:00:00`).getTime();
