@@ -9,10 +9,13 @@
  * never expose soft-deleted rows to the model.
  *
  * Every query that scans a time range has a hard row cap (5000) returned
- * as a `truncated` flag so the model knows to narrow the window.
+ * as a `truncated` flag so the model knows to narrow the window. Over the
+ * cap the NEWEST rows are kept (they are usually the relevant ones); rows
+ * still come back oldest first.
  */
 import { and, asc, desc, eq, gte, isNull, lte, or, sql, inArray } from "drizzle-orm";
 import { db } from "@intake/db/client";
+import { selectEffectivePhases } from "@intake/core/effective-phase";
 import {
   intakeRecords,
   weightRecords,
@@ -28,7 +31,9 @@ import {
   inventoryTransactions,
   doseLogs,
   pushSettings,
+  pushSubscriptions,
 } from "@intake/db/schema";
+import { resolveTimeZone, zonedDayWindow } from "@/lib/mcp/day-window";
 
 const MAX_ROWS = 5000;
 const DEFAULT_DAY_START_HOUR = 2;
@@ -51,21 +56,33 @@ async function getDayStartHour(userId: string): Promise<number> {
   return rows[0]?.dayStartHour ?? DEFAULT_DAY_START_HOUR;
 }
 
-function todayStartTimestamp(dayStartHour: number, now = Date.now()): number {
-  const d = new Date(now);
-  d.setHours(dayStartHour, 0, 0, 0);
-  const ts = d.getTime();
-  return ts > now ? ts - 24 * 60 * 60_000 : ts;
+/** The IANA zone the client last reported with its push subscription. */
+async function getStoredTimeZone(userId: string): Promise<string | null> {
+  const rows = await db
+    .select({ timezone: pushSubscriptions.timezone })
+    .from(pushSubscriptions)
+    .where(eq(pushSubscriptions.userId, userId))
+    .limit(1);
+  return rows[0]?.timezone ?? null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
 // Today summary
 // ─────────────────────────────────────────────────────────────────────────
 
-export async function getTodaySummary(userId: string) {
-  const dayStartHour = await getDayStartHour(userId);
-  const startTs = todayStartTimestamp(dayStartHour);
-  const nowTs = Date.now();
+export async function getTodaySummary(
+  userId: string,
+  opts: { timezone?: string | undefined; now?: number } = {},
+) {
+  const nowTs = opts.now ?? Date.now();
+  const [dayStartHour, storedTz] = await Promise.all([
+    getDayStartHour(userId),
+    opts.timezone ? Promise.resolve(null) : getStoredTimeZone(userId),
+  ]);
+  // The server runs in UTC; the day boundary has to be the user's.
+  const timezone = resolveTimeZone(opts.timezone, storedTz);
+  const window = zonedDayWindow(nowTs, timezone, dayStartHour);
+  const startTs = window.start;
 
   const intake = await db
     .select({
@@ -116,42 +133,221 @@ export async function getTodaySummary(userId: string) {
     .orderBy(desc(weightRecords.timestamp))
     .limit(1);
 
-  const doses = await db
-    .select({
-      status: doseLogs.status,
-      count: sql<number>`count(*)`.as("count"),
-    })
-    .from(doseLogs)
-    .where(
-      and(
-        eq(doseLogs.userId, userId),
-        gte(doseLogs.actionTimestamp, startTs),
-        lte(doseLogs.actionTimestamp, nowTs),
-        isNull(doseLogs.deletedAt),
-      ),
-    )
-    .groupBy(doseLogs.status);
+  const doses = await getDoseDay(userId, window.date, window.weekday, timezone);
 
+  // The stored intake type is "salt", but every value is sodium in mg (table
+  // salt is converted on entry). Label it as sodium so a reader doesn't take
+  // 1400 mg sodium for 1.4 g of salt.
   const intakeTotals = {
     water_ml: 0,
-    salt_mg: 0,
+    sodium_mg: 0,
     sugar_g: 0,
     potassium_mg: 0,
   };
   for (const row of intake) {
     if (row.type === "water") intakeTotals.water_ml = Number(row.total) || 0;
-    else if (row.type === "salt") intakeTotals.salt_mg = Number(row.total) || 0;
+    else if (row.type === "salt") intakeTotals.sodium_mg = Number(row.total) || 0;
     else if (row.type === "sugar") intakeTotals.sugar_g = Number(row.total) || 0;
     else if (row.type === "potassium") intakeTotals.potassium_mg = Number(row.total) || 0;
   }
 
   return {
+    timezone,
     day_started_at: startTs,
     now: nowTs,
     intake: intakeTotals,
     latest_blood_pressure: latestBp[0] ?? null,
     latest_weight: latestWeight[0] ?? null,
-    doses: doses.map((d) => ({ status: d.status, count: Number(d.count) })),
+    doses,
+  };
+}
+
+/**
+ * Loads the effective regimen (active prescriptions, the effective phase of
+ * each, and that phase's live enabled schedules) — the same selection the
+ * app's dose schedule makes, via the shared precedence helper.
+ */
+async function loadEffectiveRegimen(userId: string) {
+  const presc = await db
+    .select({
+      id: prescriptions.id,
+      genericName: prescriptions.genericName,
+      indication: prescriptions.indication,
+      notes: prescriptions.notes,
+      isActive: prescriptions.isActive,
+      createdAt: prescriptions.createdAt,
+    })
+    .from(prescriptions)
+    .where(
+      and(
+        eq(prescriptions.userId, userId),
+        eq(prescriptions.isActive, true),
+        isNull(prescriptions.deletedAt),
+      ),
+    );
+  if (presc.length === 0) return { presc, effective: [] };
+
+  const phases = await db
+    .select({
+      id: medicationPhases.id,
+      prescriptionId: medicationPhases.prescriptionId,
+      type: medicationPhases.type,
+      titrationPlanId: medicationPhases.titrationPlanId,
+      unit: medicationPhases.unit,
+      startDate: medicationPhases.startDate,
+      endDate: medicationPhases.endDate,
+      foodInstruction: medicationPhases.foodInstruction,
+      status: medicationPhases.status,
+      deletedAt: medicationPhases.deletedAt,
+    })
+    .from(medicationPhases)
+    .where(
+      and(
+        eq(medicationPhases.userId, userId),
+        eq(medicationPhases.status, "active"),
+        inArray(
+          medicationPhases.prescriptionId,
+          presc.map((p) => p.id),
+        ),
+        isNull(medicationPhases.deletedAt),
+      ),
+    )
+    // Deterministic "first candidate" for the precedence helper when a
+    // prescription has several non-overriding active phases.
+    .orderBy(asc(medicationPhases.startDate), asc(medicationPhases.id));
+
+  const phaseIds = phases.map((p) => p.id);
+  const schedules =
+    phaseIds.length === 0
+      ? []
+      : await db
+          .select({
+            id: phaseSchedules.id,
+            phaseId: phaseSchedules.phaseId,
+            // Canonical wall-clock "HH:MM" in anchorTimezone; scheduleTimeUTC
+            // is derived from it.
+            time: phaseSchedules.time,
+            scheduleTimeUTC: phaseSchedules.scheduleTimeUTC,
+            anchorTimezone: phaseSchedules.anchorTimezone,
+            dosage: phaseSchedules.dosage,
+            unit: phaseSchedules.unit,
+            daysOfWeek: phaseSchedules.daysOfWeek,
+            enabled: phaseSchedules.enabled,
+            deletedAt: phaseSchedules.deletedAt,
+          })
+          .from(phaseSchedules)
+          .where(
+            and(
+              eq(phaseSchedules.userId, userId),
+              eq(phaseSchedules.enabled, true),
+              inArray(phaseSchedules.phaseId, phaseIds),
+              isNull(phaseSchedules.deletedAt),
+            ),
+          )
+          .orderBy(asc(phaseSchedules.time), asc(phaseSchedules.id));
+
+  return { presc, effective: selectEffectivePhases(phases, schedules) };
+}
+
+type SlotStatus = "taken" | "skipped" | "outstanding";
+
+/** Mirrors the app's deriveStatus for a slot on the current day. */
+function slotStatus(logStatus: string | undefined): SlotStatus {
+  if (logStatus === "taken") return "taken";
+  // A rescheduled slot shows as handled in the app.
+  if (logStatus === "skipped" || logStatus === "rescheduled") return "skipped";
+  return "outstanding";
+}
+
+/**
+ * Today's doses keyed by scheduledDate, as the app's daily schedule shows
+ * them: every slot the effective regimen expects on `date`, with its status,
+ * plus the logs for `date` that match no slot (PRN doses, or logs against a
+ * phase/schedule that is no longer in effect).
+ */
+async function getDoseDay(
+  userId: string,
+  date: string,
+  weekday: number,
+  timezone: string,
+) {
+  const [{ presc, effective }, logs] = await Promise.all([
+    loadEffectiveRegimen(userId),
+    db
+      .select({
+        prescriptionId: doseLogs.prescriptionId,
+        phaseId: doseLogs.phaseId,
+        scheduleId: doseLogs.scheduleId,
+        kind: doseLogs.kind,
+        status: doseLogs.status,
+      })
+      .from(doseLogs)
+      .where(
+        and(
+          eq(doseLogs.userId, userId),
+          eq(doseLogs.scheduledDate, date),
+          isNull(doseLogs.deletedAt),
+        ),
+      ),
+  ]);
+
+  const prescById = new Map(presc.map((p) => [p.id, p]));
+  const logByKey = new Map<string, (typeof logs)[number]>();
+  for (const log of logs) {
+    if (log.kind === "scheduled" && log.phaseId && log.scheduleId) {
+      logByKey.set(`${log.prescriptionId}|${log.phaseId}|${log.scheduleId}`, log);
+    }
+  }
+
+  const dateKey = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+
+  const matched = new Set<(typeof logs)[number]>();
+  const slots = [];
+  for (const { prescriptionId, phase, schedules } of effective) {
+    const p = prescById.get(prescriptionId);
+    if (!p) continue;
+    // As in the app, no slots before the prescription existed.
+    if (dateKey.format(p.createdAt) > date) continue;
+    for (const sched of schedules) {
+      if (!sched.daysOfWeek.includes(weekday)) continue;
+      const log = logByKey.get(`${prescriptionId}|${phase.id}|${sched.id}`);
+      if (log) matched.add(log);
+      slots.push({
+        prescriptionId,
+        genericName: p.genericName,
+        phaseId: phase.id,
+        scheduleId: sched.id,
+        time: sched.time,
+        anchorTimezone: sched.anchorTimezone,
+        dosage: sched.dosage,
+        unit: sched.unit ?? phase.unit,
+        status: slotStatus(log?.status),
+      });
+    }
+  }
+  slots.sort((a, b) => a.time.localeCompare(b.time));
+
+  const unscheduledCounts = new Map<string, { kind: string; status: string; count: number }>();
+  for (const log of logs) {
+    if (matched.has(log)) continue;
+    const key = `${log.kind}|${log.status}`;
+    const entry = unscheduledCounts.get(key);
+    if (entry) entry.count += 1;
+    else unscheduledCounts.set(key, { kind: log.kind, status: log.status, count: 1 });
+  }
+
+  return {
+    scheduled_date: date,
+    taken: slots.filter((sl) => sl.status === "taken").length,
+    skipped: slots.filter((sl) => sl.status === "skipped").length,
+    outstanding: slots.filter((sl) => sl.status === "outstanding").length,
+    slots,
+    unscheduled: Array.from(unscheduledCounts.values()),
   };
 }
 
@@ -159,15 +355,22 @@ export async function getTodaySummary(userId: string) {
 // History queries
 // ─────────────────────────────────────────────────────────────────────────
 
+export type IntakeQueryType = "water" | "sodium" | "sugar" | "potassium" | "all";
+
+/** Stored intake type → the name the MCP reports ("salt" holds sodium mg). */
+function reportedIntakeType(stored: string): string {
+  return stored === "salt" ? "sodium" : stored;
+}
+
 export async function queryIntakeHistory(
   userId: string,
-  type: "water" | "salt" | "sugar" | "potassium" | "all",
+  type: IntakeQueryType,
   range: DateRange,
 ) {
   const typeFilter =
     type === "all"
       ? undefined
-      : eq(intakeRecords.type, type);
+      : eq(intakeRecords.type, type === "sodium" ? "salt" : type);
   const rows = await db
     .select({
       id: intakeRecords.id,
@@ -189,7 +392,7 @@ export async function queryIntakeHistory(
         ...(typeFilter ? [typeFilter] : []),
       ),
     )
-    .orderBy(asc(intakeRecords.timestamp))
+    .orderBy(desc(intakeRecords.timestamp), desc(intakeRecords.id))
     .limit(MAX_ROWS + 1);
 
   const capped = capRows(rows);
@@ -289,7 +492,7 @@ export async function queryIntakeHistory(
           ? substanceByGroupId.get(r.groupId)
           : undefined) ??
         null;
-      return { ...r, substance };
+      return { ...r, type: reportedIntakeType(r.type), substance };
     }),
   };
 }
@@ -311,7 +514,7 @@ export async function queryWeightHistory(userId: string, range: DateRange) {
         isNull(weightRecords.deletedAt),
       ),
     )
-    .orderBy(asc(weightRecords.timestamp))
+    .orderBy(desc(weightRecords.timestamp), desc(weightRecords.id))
     .limit(MAX_ROWS + 1);
   return capRows(rows);
 }
@@ -341,7 +544,7 @@ export async function queryBloodPressureHistory(
         isNull(bloodPressureRecords.deletedAt),
       ),
     )
-    .orderBy(asc(bloodPressureRecords.timestamp))
+    .orderBy(desc(bloodPressureRecords.timestamp), desc(bloodPressureRecords.id))
     .limit(MAX_ROWS + 1);
   return capRows(rows);
 }
@@ -365,7 +568,7 @@ export async function queryEatingHistory(userId: string, range: DateRange) {
         isNull(eatingRecords.deletedAt),
       ),
     )
-    .orderBy(asc(eatingRecords.timestamp))
+    .orderBy(desc(eatingRecords.timestamp), desc(eatingRecords.id))
     .limit(MAX_ROWS + 1);
   // Each row keeps its groupId so callers can correlate a food entry with its
   // decomposed substances. We deliberately do NOT embed substances here: the
@@ -411,7 +614,7 @@ export async function querySubstanceHistory(
         ...(typeFilter ? [typeFilter] : []),
       ),
     )
-    .orderBy(asc(substanceRecords.timestamp))
+    .orderBy(desc(substanceRecords.timestamp), desc(substanceRecords.id))
     .limit(MAX_ROWS + 1);
   return capRows(rows);
 }
@@ -421,87 +624,27 @@ export async function querySubstanceHistory(
 // ─────────────────────────────────────────────────────────────────────────
 
 export async function listMedications(userId: string) {
-  const presc = await db
-    .select({
-      id: prescriptions.id,
-      genericName: prescriptions.genericName,
-      indication: prescriptions.indication,
-      notes: prescriptions.notes,
-      isActive: prescriptions.isActive,
-    })
-    .from(prescriptions)
-    .where(
-      and(
-        eq(prescriptions.userId, userId),
-        eq(prescriptions.isActive, true),
-        isNull(prescriptions.deletedAt),
-      ),
-    );
+  const { presc, effective } = await loadEffectiveRegimen(userId);
+  const byPrescription = new Map(effective.map((e) => [e.prescriptionId, e]));
 
-  if (presc.length === 0) return { medications: [] };
-
-  const prescIds = presc.map((p) => p.id);
-
-  const phases = await db
-    .select({
-      id: medicationPhases.id,
-      prescriptionId: medicationPhases.prescriptionId,
-      type: medicationPhases.type,
-      unit: medicationPhases.unit,
-      startDate: medicationPhases.startDate,
-      endDate: medicationPhases.endDate,
-      foodInstruction: medicationPhases.foodInstruction,
-      status: medicationPhases.status,
-    })
-    .from(medicationPhases)
-    .where(
-      and(
-        eq(medicationPhases.userId, userId),
-        eq(medicationPhases.status, "active"),
-        inArray(medicationPhases.prescriptionId, prescIds),
-        isNull(medicationPhases.deletedAt),
-      ),
-    );
-
-  const phaseIds = phases.map((p) => p.id);
-  const schedules =
-    phaseIds.length === 0
-      ? []
-      : await db
-          .select({
-            id: phaseSchedules.id,
-            phaseId: phaseSchedules.phaseId,
-            // `time` is a deprecated local wall-clock string; scheduleTimeUTC
-            // (minutes-from-midnight UTC) + anchorTimezone are authoritative.
-            // Kept for back-compat.
-            time: phaseSchedules.time,
-            scheduleTimeUTC: phaseSchedules.scheduleTimeUTC,
-            anchorTimezone: phaseSchedules.anchorTimezone,
-            dosage: phaseSchedules.dosage,
-            unit: phaseSchedules.unit,
-            daysOfWeek: phaseSchedules.daysOfWeek,
-            enabled: phaseSchedules.enabled,
-          })
-          .from(phaseSchedules)
-          .where(
-            and(
-              eq(phaseSchedules.userId, userId),
-              eq(phaseSchedules.enabled, true),
-              inArray(phaseSchedules.phaseId, phaseIds),
-              isNull(phaseSchedules.deletedAt),
-            ),
-          );
-
+  // One phase per prescription: while a titration plan runs, its titration
+  // phase overrides the still-active maintenance phase, as in the app's
+  // schedule. Listing both would read as two concurrent regimens.
   return {
-    medications: presc.map((p) => ({
-      ...p,
-      active_phases: phases
-        .filter((ph) => ph.prescriptionId === p.id)
-        .map((ph) => ({
-          ...ph,
-          schedules: schedules.filter((s) => s.phaseId === ph.id),
-        })),
-    })),
+    medications: presc.map(({ createdAt: _createdAt, ...p }) => {
+      const e = byPrescription.get(p.id);
+      if (!e) return { ...p, phase: null };
+      const { deletedAt: _deletedAt, ...phase } = e.phase;
+      return {
+        ...p,
+        phase: {
+          ...phase,
+          schedules: e.schedules.map(
+            ({ deletedAt: _d, ...sched }) => sched,
+          ),
+        },
+      };
+    }),
   };
 }
 
@@ -511,12 +654,26 @@ export async function listRecentDoses(userId: string, limit: number) {
     .select({
       id: doseLogs.id,
       prescriptionId: doseLogs.prescriptionId,
+      kind: doseLogs.kind,
+      phaseId: doseLogs.phaseId,
+      scheduleId: doseLogs.scheduleId,
+      inventoryItemId: doseLogs.inventoryItemId,
       scheduledDate: doseLogs.scheduledDate,
       scheduledTime: doseLogs.scheduledTime,
       status: doseLogs.status,
       actionTimestamp: doseLogs.actionTimestamp,
       skipReason: doseLogs.skipReason,
       note: doseLogs.note,
+      // What was taken. The snapshot (frozen at log time) wins; doseMg is a
+      // PRN dose's explicit amount; the schedule's current dosage is the
+      // fallback for older scheduled logs without a snapshot.
+      doseAmount: doseLogs.doseAmount,
+      doseUnit: doseLogs.doseUnit,
+      pillsConsumed: doseLogs.pillsConsumed,
+      pillStrength: doseLogs.pillStrength,
+      doseMg: doseLogs.doseMg,
+      scheduleDosage: phaseSchedules.dosage,
+      scheduleUnit: phaseSchedules.unit,
       genericName: prescriptions.genericName,
       // Three-state: null = prescription hard-deleted (no matching row),
       // true = soft-deleted (archived), false = live. A bare
@@ -537,8 +694,17 @@ export async function listRecentDoses(userId: string, limit: number) {
         eq(prescriptions.userId, userId),
       ),
     )
+    .leftJoin(
+      phaseSchedules,
+      and(
+        eq(doseLogs.scheduleId, phaseSchedules.id),
+        eq(phaseSchedules.userId, userId),
+      ),
+    )
     .where(and(eq(doseLogs.userId, userId), isNull(doseLogs.deletedAt)))
-    .orderBy(desc(doseLogs.actionTimestamp))
+    // Unactioned (pending) logs have no actionTimestamp; keep them after the
+    // actioned ones instead of Postgres' default NULLS FIRST for DESC.
+    .orderBy(sql`${doseLogs.actionTimestamp} DESC NULLS LAST`, desc(doseLogs.id))
     .limit(cap);
   return { doses: rows };
 }
@@ -552,20 +718,21 @@ export async function getInventoryStatus(userId: string) {
       // Authoritative stock = signed SUM of this item's non-deleted inventory
       // transactions (amounts are already signed: refill/initial positive,
       // consumed negative, adjustments either way — mirrors getCurrentStock in
-      // inventory-service). Cast to int so pg returns a number, not a bigint
-      // string. SUM over ZERO rows is NULL, so a legacy item with no
+      // inventory-service). Amounts are fractional (half tablets), so sum in
+      // double precision and round to 4 dp like the app — an ::int cast
+      // rounded 0.5 to 0 (half-even). SUM over ZERO rows is NULL, so a legacy item with no
       // transactions falls through to the deprecated currentStock, then 0. An
       // item whose transactions net to zero yields SUM=0 and correctly reports
       // 0 (a real balance). Negative stock is legal (over-consumed) — no clamp.
       stock: sql<number>`COALESCE(
-        (SELECT SUM(${inventoryTransactions.amount})::int
+        (SELECT ROUND(SUM(${inventoryTransactions.amount}::double precision)::numeric, 4)::double precision
            FROM ${inventoryTransactions}
           WHERE ${inventoryTransactions.inventoryItemId} = ${inventoryItems.id}
             AND ${inventoryTransactions.userId} = ${userId}
             AND ${inventoryTransactions.deletedAt} IS NULL),
-        ${inventoryItems.currentStock},
+        ${inventoryItems.currentStock}::double precision,
         0
-      )`,
+      )`.mapWith(Number),
       strength: inventoryItems.strength,
       unit: inventoryItems.unit,
       compounds: inventoryItems.compounds,
@@ -615,7 +782,7 @@ export async function queryUrinationHistory(userId: string, range: DateRange) {
         isNull(urinationRecords.deletedAt),
       ),
     )
-    .orderBy(asc(urinationRecords.timestamp))
+    .orderBy(desc(urinationRecords.timestamp), desc(urinationRecords.id))
     .limit(MAX_ROWS + 1);
   return capRows(rows);
 }
@@ -639,11 +806,14 @@ export async function listTitrationPlans(userId: string) {
 
 // ─────────────────────────────────────────────────────────────────────────
 
-function capRows<T>(rows: T[]): { items: T[]; truncated: boolean } {
-  if (rows.length > MAX_ROWS) {
-    return { items: rows.slice(0, MAX_ROWS), truncated: true };
-  }
-  return { items: rows, truncated: false };
+/**
+ * Takes up to MAX_ROWS + 1 rows fetched NEWEST first, keeps the newest
+ * MAX_ROWS and returns them oldest first.
+ */
+function capRows<T>(rowsNewestFirst: T[]): { items: T[]; truncated: boolean } {
+  const truncated = rowsNewestFirst.length > MAX_ROWS;
+  const kept = truncated ? rowsNewestFirst.slice(0, MAX_ROWS) : rowsNewestFirst;
+  return { items: kept.reverse(), truncated };
 }
 
 // Silence unused-warning for `notDeleted` (kept as a documented helper for

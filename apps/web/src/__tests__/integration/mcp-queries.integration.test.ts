@@ -198,6 +198,10 @@ describe("MCP query fns — queryWeightHistory (real Postgres)", () => {
 
     expect(items).toHaveLength(5000);
     expect(truncated).toBe(true);
+    // The NEWEST rows are kept (the oldest one is dropped), still returned
+    // oldest first.
+    expect(items[0]?.timestamp).toBe(1_001);
+    expect(items[4999]?.timestamp).toBe(6_000);
   });
 
   it("returns exactly MAX_ROWS without truncation at the boundary", async () => {
@@ -501,13 +505,13 @@ describe("MCP query fns — listRecentDoses name resolution (real Postgres)", ()
 });
 
 describe("MCP query fns — listMedications schedule times (real Postgres)", () => {
-  it("returns authoritative scheduleTimeUTC + anchorTimezone alongside deprecated time", async () => {
+  it("returns the canonical time with scheduleTimeUTC + anchorTimezone", async () => {
     await seedMedChain(ctx.testUserId, { genericName: "Vymada" });
 
     const { medications } = await queries.listMedications(ctx.testUserId);
 
     expect(medications).toHaveLength(1);
-    const sched = medications[0]?.active_phases[0]?.schedules[0];
+    const sched = medications[0]?.phase?.schedules[0];
     expect(sched?.time).toBe("08:00");
     expect(sched?.scheduleTimeUTC).toBe(360);
     expect(sched?.anchorTimezone).toBe("UTC");
@@ -666,5 +670,342 @@ describe("MCP query fns — listTitrationPlans (real Postgres)", () => {
     expect(titration_plans[0]?.conditionLabel).toBe("Heart failure");
     expect(titration_plans[0]?.status).toBe("active");
     expect(titration_plans[0]?.warnings).toEqual(["watch K+"]);
+  });
+});
+
+describe("MCP query fns — history truncation keeps the newest rows (real Postgres)", () => {
+  it("drops the oldest intake rows when over the cap", async () => {
+    const rows = Array.from({ length: 5001 }, (_, i) =>
+      intakeFixture(ctx.testUserId, { amount: i, timestamp: 1_000 + i }),
+    );
+    for (let i = 0; i < rows.length; i += 500) {
+      await ctx.db.insert(schema.intakeRecords).values(rows.slice(i, i + 500));
+    }
+
+    const { items, truncated } = await queries.queryIntakeHistory(
+      ctx.testUserId,
+      "all",
+      FULL_RANGE,
+    );
+
+    expect(truncated).toBe(true);
+    expect(items).toHaveLength(5000);
+    expect(items[0]?.timestamp).toBe(1_001);
+    expect(items[4999]?.timestamp).toBe(6_000);
+  });
+});
+
+describe("MCP query fns — sodium naming (real Postgres)", () => {
+  it("filters the stored 'salt' type as sodium and labels rows sodium", async () => {
+    await ctx.db.insert(schema.intakeRecords).values([
+      intakeFixture(ctx.testUserId, { type: "salt", amount: 400, timestamp: 100 }),
+      intakeFixture(ctx.testUserId, { type: "water", amount: 250, timestamp: 200 }),
+    ]);
+
+    const { items } = await queries.queryIntakeHistory(
+      ctx.testUserId,
+      "sodium",
+      FULL_RANGE,
+    );
+
+    expect(items.map((r) => [r.type, r.amount])).toEqual([["sodium", 400]]);
+  });
+});
+
+describe("MCP query fns — listMedications effective phase (real Postgres)", () => {
+  it("returns only the titration phase while a plan overrides maintenance", async () => {
+    const { prescriptionId, phaseId: maintenanceId } = await seedMedChain(
+      ctx.testUserId,
+      { genericName: "Carvedilol" },
+    );
+    const plan = titrationPlanFixture(ctx.testUserId);
+    await ctx.db.insert(schema.titrationPlans).values(plan);
+    const titration = medicationPhaseFixture(ctx.testUserId, prescriptionId, {
+      type: "titration",
+      titrationPlanId: plan.id,
+    });
+    await ctx.db.insert(schema.medicationPhases).values(titration);
+    await ctx.db.insert(schema.phaseSchedules).values([
+      phaseScheduleFixture(ctx.testUserId, titration.id, { dosage: 12.5 }),
+      phaseScheduleFixture(ctx.testUserId, titration.id, {
+        dosage: 99,
+        deletedAt: Date.now(),
+      }),
+    ]);
+
+    const { medications } = await queries.listMedications(ctx.testUserId);
+
+    expect(medications).toHaveLength(1);
+    const med = medications[0]!;
+    expect(med).not.toHaveProperty("active_phases");
+    expect(med.phase?.id).toBe(titration.id);
+    expect(med.phase?.id).not.toBe(maintenanceId);
+    expect(med.phase?.type).toBe("titration");
+    expect(med.phase?.titrationPlanId).toBe(plan.id);
+    expect(med.phase?.schedules.map((s) => s.dosage)).toEqual([12.5]);
+  });
+
+  it("keeps the maintenance phase when no titration plan is running", async () => {
+    const { phaseId } = await seedMedChain(ctx.testUserId);
+
+    const { medications } = await queries.listMedications(ctx.testUserId);
+
+    expect(medications[0]?.phase?.id).toBe(phaseId);
+    expect(medications[0]?.phase?.titrationPlanId).toBeNull();
+    expect(medications[0]?.phase?.schedules).toHaveLength(1);
+  });
+
+  it("reports phase: null for an active prescription with no active phase", async () => {
+    const presc = prescriptionFixture(ctx.testUserId);
+    await ctx.db.insert(schema.prescriptions).values(presc);
+    await ctx.db
+      .insert(schema.medicationPhases)
+      .values(
+        medicationPhaseFixture(ctx.testUserId, presc.id, { status: "completed" }),
+      );
+
+    const { medications } = await queries.listMedications(ctx.testUserId);
+
+    expect(medications).toHaveLength(1);
+    expect(medications[0]?.phase).toBeNull();
+  });
+});
+
+describe("MCP query fns — getInventoryStatus fractional stock (real Postgres)", () => {
+  it("keeps half-tablet balances instead of rounding to an integer", async () => {
+    const itemId = await seedInventoryItem(ctx.testUserId);
+    await ctx.db.insert(schema.inventoryTransactions).values([
+      inventoryTxFixture(ctx.testUserId, itemId, { type: "initial", amount: 3 }),
+      inventoryTxFixture(ctx.testUserId, itemId, {
+        type: "consumed",
+        amount: -0.5,
+      }),
+    ]);
+
+    const { inventory } = await queries.getInventoryStatus(ctx.testUserId);
+
+    expect(inventory[0]?.stock).toBe(2.5);
+  });
+
+  it("reports a 0.5 balance as 0.5, not 0 (round-half-even)", async () => {
+    const itemId = await seedInventoryItem(ctx.testUserId);
+    await ctx.db.insert(schema.inventoryTransactions).values([
+      inventoryTxFixture(ctx.testUserId, itemId, { amount: 1 }),
+      inventoryTxFixture(ctx.testUserId, itemId, {
+        type: "consumed",
+        amount: -0.5,
+      }),
+    ]);
+
+    const { inventory } = await queries.getInventoryStatus(ctx.testUserId);
+
+    expect(inventory[0]?.stock).toBe(0.5);
+  });
+
+  it("rounds float noise to 4 decimals like the app", async () => {
+    const itemId = await seedInventoryItem(ctx.testUserId);
+    await ctx.db.insert(schema.inventoryTransactions).values([
+      inventoryTxFixture(ctx.testUserId, itemId, { amount: 30 }),
+      ...[1, 2, 3].map(() =>
+        inventoryTxFixture(ctx.testUserId, itemId, {
+          type: "consumed",
+          amount: -0.1,
+        }),
+      ),
+    ]);
+
+    const { inventory } = await queries.getInventoryStatus(ctx.testUserId);
+
+    expect(inventory[0]?.stock).toBe(29.7);
+  });
+});
+
+describe("MCP query fns — listRecentDoses dose details (real Postgres)", () => {
+  it("returns kind, doseMg, the phase/schedule/inventory refs and the snapshot", async () => {
+    const refs = await seedMedChain(ctx.testUserId);
+    const inv = inventoryItemFixture(ctx.testUserId, refs.prescriptionId);
+    await ctx.db.insert(schema.inventoryItems).values(inv);
+    await ctx.db.insert(schema.doseLogs).values([
+      doseLogFixture(ctx.testUserId, refs, {
+        actionTimestamp: 2_000,
+        inventoryItemId: inv.id,
+        doseAmount: 20,
+        doseUnit: "mg",
+        pillsConsumed: 0.5,
+        pillStrength: 40,
+      }),
+      doseLogFixture(
+        ctx.testUserId,
+        { ...refs, phaseId: null as never, scheduleId: null as never },
+        { kind: "prn", doseMg: 40, actionTimestamp: 1_000 },
+      ),
+    ]);
+
+    const { doses } = await queries.listRecentDoses(ctx.testUserId, 50);
+
+    expect(doses).toHaveLength(2);
+    const [scheduled, prn] = doses;
+    expect(scheduled).toMatchObject({
+      kind: "scheduled",
+      phaseId: refs.phaseId,
+      scheduleId: refs.scheduleId,
+      inventoryItemId: inv.id,
+      doseAmount: 20,
+      doseUnit: "mg",
+      pillsConsumed: 0.5,
+      pillStrength: 40,
+      scheduleDosage: 1,
+      scheduleUnit: "mg",
+    });
+    expect(prn).toMatchObject({
+      kind: "prn",
+      doseMg: 40,
+      phaseId: null,
+      scheduleId: null,
+      scheduleDosage: null,
+    });
+  });
+});
+
+describe("MCP query fns — getTodaySummary day boundary (real Postgres)", () => {
+  // 2026-09-25T00:30Z = 02:30 in Berlin (CEST). With the default day-start
+  // hour of 2, the user's day began at 00:00Z.
+  const NOW = Date.UTC(2026, 8, 25, 0, 30);
+
+  beforeEach(async () => {
+    await ctx.db.delete(schema.pushSubscriptions);
+    await ctx.db.delete(schema.pushSettings);
+  });
+
+  async function seedIntakeAroundBerlinDayStart() {
+    await ctx.db.insert(schema.intakeRecords).values([
+      // 01:50 Berlin: yesterday's app day.
+      intakeFixture(ctx.testUserId, {
+        amount: 1000,
+        timestamp: Date.UTC(2026, 8, 24, 23, 50),
+      }),
+      // 02:10 Berlin: today.
+      intakeFixture(ctx.testUserId, {
+        amount: 250,
+        timestamp: Date.UTC(2026, 8, 25, 0, 10),
+      }),
+      intakeFixture(ctx.testUserId, {
+        type: "salt",
+        amount: 600,
+        timestamp: Date.UTC(2026, 8, 25, 0, 20),
+      }),
+    ]);
+  }
+
+  it("uses the time zone passed with the call", async () => {
+    await seedIntakeAroundBerlinDayStart();
+
+    const summary = await queries.getTodaySummary(ctx.testUserId, {
+      timezone: "Europe/Berlin",
+      now: NOW,
+    });
+
+    expect(summary.day_started_at).toBe(Date.UTC(2026, 8, 25, 0, 0));
+    expect(summary.timezone).toBe("Europe/Berlin");
+    expect(summary.intake.water_ml).toBe(250);
+    expect(summary.intake.sodium_mg).toBe(600);
+    expect(summary.intake).not.toHaveProperty("salt_mg");
+  });
+
+  it("falls back to the zone stored with the user's push subscription", async () => {
+    await seedIntakeAroundBerlinDayStart();
+    await ctx.db.insert(schema.pushSubscriptions).values({
+      userId: ctx.testUserId,
+      endpoint: "https://push.example/1",
+      p256dh: "k",
+      authKey: "a",
+      timezone: "Europe/Berlin",
+    });
+
+    const summary = await queries.getTodaySummary(ctx.testUserId, { now: NOW });
+
+    expect(summary.timezone).toBe("Europe/Berlin");
+    expect(summary.intake.water_ml).toBe(250);
+  });
+
+  it("honours a stored day-start hour in the user's zone", async () => {
+    await ctx.db.insert(schema.pushSettings).values({
+      userId: ctx.testUserId,
+      dayStartHour: 0,
+    });
+
+    const summary = await queries.getTodaySummary(ctx.testUserId, {
+      timezone: "Europe/Berlin",
+      now: NOW,
+    });
+
+    // Midnight Berlin on the 25th = 22:00Z on the 24th.
+    expect(summary.day_started_at).toBe(Date.UTC(2026, 8, 24, 22, 0));
+  });
+
+  it("reports today's slots by scheduledDate as taken, skipped or outstanding", async () => {
+    const refs = await seedMedChain(ctx.testUserId, {
+      genericName: "Furosemide",
+      createdAt: 0,
+    });
+    const evening = phaseScheduleFixture(ctx.testUserId, refs.phaseId, {
+      time: "20:00",
+      scheduleTimeUTC: 1080,
+    });
+    const tuesdays = phaseScheduleFixture(ctx.testUserId, refs.phaseId, {
+      time: "12:00",
+      daysOfWeek: [2],
+    });
+    await ctx.db.insert(schema.phaseSchedules).values([evening, tuesdays]);
+    await ctx.db.insert(schema.doseLogs).values([
+      // Today's (Friday 2026-09-25) morning dose, taken.
+      doseLogFixture(ctx.testUserId, refs, {
+        scheduledDate: "2026-09-25",
+        status: "taken",
+        actionTimestamp: Date.UTC(2026, 8, 25, 0, 5),
+      }),
+      // Yesterday's evening dose logged late, inside today's window: it
+      // belongs to yesterday and must not count.
+      doseLogFixture(
+        ctx.testUserId,
+        { ...refs, scheduleId: evening.id },
+        {
+          scheduledDate: "2026-09-24",
+          status: "taken",
+          actionTimestamp: Date.UTC(2026, 8, 25, 0, 15),
+        },
+      ),
+      // An as-needed dose today.
+      doseLogFixture(
+        ctx.testUserId,
+        { ...refs, phaseId: null as never, scheduleId: null as never },
+        {
+          kind: "prn",
+          doseMg: 40,
+          scheduledDate: "2026-09-25",
+          status: "taken",
+          actionTimestamp: Date.UTC(2026, 8, 25, 0, 25),
+        },
+      ),
+    ]);
+
+    const { doses } = await queries.getTodaySummary(ctx.testUserId, {
+      timezone: "Europe/Berlin",
+      now: NOW,
+    });
+
+    expect(doses.scheduled_date).toBe("2026-09-25");
+    expect(doses.taken).toBe(1);
+    expect(doses.skipped).toBe(0);
+    expect(doses.outstanding).toBe(1);
+    expect(
+      doses.slots.map((sl) => [sl.time, sl.genericName, sl.status]),
+    ).toEqual([
+      ["08:00", "Furosemide", "taken"],
+      ["20:00", "Furosemide", "outstanding"],
+    ]);
+    expect(doses.unscheduled).toEqual([
+      { kind: "prn", status: "taken", count: 1 },
+    ]);
   });
 });
