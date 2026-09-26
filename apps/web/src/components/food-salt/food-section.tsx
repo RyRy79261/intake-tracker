@@ -20,6 +20,8 @@ import {
   SODIUM_SOURCE_LABELS,
   SODIUM_SOURCES,
   SODIUM_SOURCE_UNITS,
+  isSodiumSource,
+  isSodiumSourceUnit,
   toSodiumMg,
   type SodiumSource,
   type SodiumSourceUnit,
@@ -283,9 +285,12 @@ export function FoodSection() {
             // (older rows) it is sodium mg with an unknown source — shown as
             // stored, never back-converted through a guessed fraction.
             const prefill =
-              salt.sodiumSource !== undefined &&
-              salt.sourceAmount !== undefined &&
-              salt.sourceUnit !== undefined
+              // Type guards, not `!== undefined`: a restored backup may carry
+              // explicit nulls for these fields.
+              isSodiumSource(salt.sodiumSource) &&
+              typeof salt.sourceAmount === "number" &&
+              Number.isFinite(salt.sourceAmount) &&
+              isSodiumSourceUnit(salt.sourceUnit)
                 ? {
                     value: String(salt.sourceAmount),
                     source: salt.sodiumSource,

@@ -203,6 +203,33 @@ describe("FoodSection", () => {
     expect(salt.sodiumSource).toBeUndefined();
   });
 
+  it("opens a row with null source fields (restored backup) as sodium mg", async () => {
+    // Backups accept null for the entered-source fields; such a row has no
+    // known source and must not prefill the literal text "null".
+    const user = userEvent.setup();
+    const groupId = "g-null-source";
+    await renderWithFixtures(<FoodSection />, {
+      seed: {
+        eatingRecords: [makeEatingRecord({ note: "Restored soup", groupId, timestamp: Date.now(), updatedAt: 1 })],
+        intakeRecords: [
+          {
+            ...makeIntakeRecord({ type: "salt", amount: 640, source: "manual:sodium", groupId }),
+            sodiumSource: null,
+            sourceAmount: null,
+            sourceUnit: null,
+          } as unknown as ReturnType<typeof makeIntakeRecord>,
+        ],
+      },
+    });
+
+    await user.click(await screen.findByText("Restored soup"));
+    await waitFor(() => {
+      expect(screen.getByLabelText("Sodium", { selector: "#edit-eating-sodium" })).toHaveValue(640);
+    });
+    expect(screen.getByRole("combobox", { name: "Edit measured as" })).toHaveTextContent("Sodium");
+    expect(screen.getByRole("combobox", { name: "Edit unit" })).toHaveTextContent("mg");
+  });
+
   it("re-records an edited sodium entry as typed", async () => {
     const user = userEvent.setup();
     const groupId = "g-edit";
