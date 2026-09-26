@@ -131,15 +131,15 @@ export function compoundsMismatch(
   reference: CompoundStrength[] | undefined,
   brand: CompoundStrength[] | undefined,
 ): boolean {
-  if (!isCombo({ compounds: reference }) || !isCombo({ compounds: brand })) return false;
+  if (!reference || !brand || reference.length < 2 || brand.length < 2) return false;
   const refTotal = compoundSum(reference);
   const brandTotal = compoundSum(brand);
   if (!(refTotal > 0) || !(brandTotal > 0)) return false;
 
   const key = (name: string) => name.trim().toLowerCase();
-  const brandShare = new Map(brand!.map((c) => [key(c.name), c.strength / brandTotal]));
-  if (brandShare.size !== reference!.length) return true;
-  return reference!.some((c) => {
+  const brandShare = new Map(brand.map((c) => [key(c.name), c.strength / brandTotal]));
+  if (brandShare.size !== reference.length) return true;
+  return reference.some((c) => {
     const share = brandShare.get(key(c.name));
     return share === undefined || Math.abs(share - c.strength / refTotal) > RATIO_TOLERANCE;
   });
