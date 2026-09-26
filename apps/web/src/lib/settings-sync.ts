@@ -31,16 +31,20 @@
  * newer row is adopted (they are merged over it and written back).
  *
  * An edit the store saved but the table never received (the app closed
- * first) is recognised on the next start by SETTINGS_EDITED_AT_KEY: when it
- * is newer than the row, the local values win and are written.
+ * first) is recognised on the next start by the per-key stamps in
+ * SETTINGS_EDITED_AT_KEY: each key whose stamp is newer than the row keeps
+ * its local value and is written; every other key takes the row's value.
  *
  * First run
  * ---------
  * No row exists yet on upgrade. In local mode the row is seeded at once from
- * the store. In cloud-sync mode nothing is written until the first full pull
- * has finished, because the cloud may already hold the settings another
- * device saved. If a row is then found it is adopted; this device's own
- * differing values are copied to localStorage (PRE_SYNC_SETTINGS_BACKUP_KEY)
+ * the store. In cloud-sync mode, while this device has no row, nothing is
+ * written until a full pull has finished during this page load: the cloud may
+ * already hold the settings another device saved, and the persisted
+ * initialSyncComplete flag of an upgraded device predates the table. If a
+ * row is then found it is adopted. Whenever a row replaces values that no
+ * real edit wrote (this device's never-synced settings, or its own seed),
+ * those values are copied to localStorage (PRE_SYNC_SETTINGS_BACKUP_KEY)
  * first, so nothing is lost. A seeded row is written only when some synced
  * value differs from the default, and carries `updatedAt = SEED_UPDATED_AT`,
  * so any setting the user actually saves on any device outranks it.
@@ -92,27 +96,39 @@ export const SEED_UPDATED_AT = 1;
 export const PRE_SYNC_SETTINGS_BACKUP_KEY = "intake-tracker-settings-pre-sync";
 
 /**
- * localStorage key holding when a synced setting was last edited on this
- * device (Unix ms). The store persists an edit synchronously but the table
- * write is async, and in cloud-sync mode it waits for the first pull; if the
- * app closes in between, this stamp lets the next start tell a newer local
- * edit from an older row.
+ * localStorage key holding when each synced setting was last edited on this
+ * device (JSON `{ [key]: Unix ms }`). The store persists an edit
+ * synchronously but the table write is async, and in cloud-sync mode it waits
+ * for a pull; if the app closes in between, these stamps let the next start
+ * tell a newer local edit from an older row. Per key, so one recent edit (or
+ * the home timezone the travel check records at startup) does not make every
+ * other stale local value outrank the row.
  */
 export const SETTINGS_EDITED_AT_KEY = "intake-tracker-settings-edited-at";
 
-function readEditedAt(): number | null {
+type EditedAtMap = Partial<Record<SyncedSettingKey, number>>;
+
+function readEditedAt(): EditedAtMap {
   try {
     const raw = globalThis.localStorage?.getItem(SETTINGS_EDITED_AT_KEY);
-    const value = raw == null ? NaN : Number(raw);
-    return Number.isFinite(value) ? value : null;
+    if (raw == null) return {};
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const out: EditedAtMap = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      if (isSyncedSettingKey(key) && isFiniteNumber(value)) out[key] = value;
+    }
+    return out;
   } catch {
-    return null;
+    return {};
   }
 }
 
-function writeEditedAt(at: number): void {
+function writeEditedAt(keys: Iterable<SyncedSettingKey>, at: number): void {
   try {
-    globalThis.localStorage?.setItem(SETTINGS_EDITED_AT_KEY, String(at));
+    const map = readEditedAt();
+    for (const key of keys) map[key] = at;
+    globalThis.localStorage?.setItem(SETTINGS_EDITED_AT_KEY, JSON.stringify(map));
   } catch {
     // Storage blocked: only the close-before-write case loses its edge.
   }
@@ -273,7 +289,21 @@ function savePreSyncBackup(values: SyncedSettings): void {
   }
 }
 
-type RowVersion = { id: string; updatedAt: number };
+// deviceId is part of the version: two devices' seeds share the account id
+// and SEED_UPDATED_AT, and must still be told apart.
+type RowVersion = { id: string; updatedAt: number; deviceId: string };
+
+const versionOf = (row: UserSettings): RowVersion => ({
+  id: row.id,
+  updatedAt: row.updatedAt,
+  deviceId: row.deviceId,
+});
+
+/** When this page load started (Unix ms). */
+function sessionStart(): number {
+  const origin = globalThis.performance?.timeOrigin;
+  return isFiniteNumber(origin) && origin > 0 ? origin : Date.now();
+}
 
 /**
  * Start mirroring. Returns a disposer. Install once, at app start (see
@@ -291,6 +321,12 @@ export function installSettingsSync(): () => void {
   let applying = false;
   // The row version the store currently reflects.
   let lastSeen: RowVersion | null = null;
+  // True once a full pull has finished during this page load. The persisted
+  // initialSyncComplete flag predates the userSettings table on an upgraded
+  // device, so it does not prove the cloud's settings row has been pulled.
+  const startedAt = sessionStart();
+  const pulledAtStart = useSyncStatusStore.getState().lastPulledAt;
+  let pulledThisSession = pulledAtStart != null && pulledAtStart >= startedAt;
 
   // Every read-modify-write runs in this chain, one at a time.
   let chain: Promise<void> = Promise.resolve();
@@ -300,8 +336,11 @@ export function installSettingsSync(): () => void {
       .catch((error) => console.error("[settings-sync]", error));
   };
 
-  const isLastSeen = (row: RowVersion) =>
-    lastSeen !== null && lastSeen.id === row.id && lastSeen.updatedAt === row.updatedAt;
+  const isLastSeen = (row: UserSettings) =>
+    lastSeen !== null &&
+    lastSeen.id === row.id &&
+    lastSeen.updatedAt === row.updatedAt &&
+    lastSeen.deviceId === row.deviceId;
 
   /** Apply a row to the store, keeping keys edited here but not yet written. */
   const adopt = (row: UserSettings): void => {
@@ -312,7 +351,16 @@ export function installSettingsSync(): () => void {
       if (dirty.has(key as SyncedSettingKey)) continue;
       if (!same(current[key as SyncedSettingKey], value)) changes[key] = value;
     }
-    lastSeen = { id: row.id, updatedAt: row.updatedAt };
+    // Replacing values no real edit ever wrote (this device's never-synced
+    // settings, or its seed): keep a copy of them first.
+    if (
+      Object.keys(changes).length > 0 &&
+      (lastSeen === null || lastSeen.updatedAt === SEED_UPDATED_AT) &&
+      !same(current, defaultSyncedSettings())
+    ) {
+      savePreSyncBackup(current);
+    }
+    lastSeen = versionOf(row);
     if (Object.keys(changes).length === 0) return;
     applying = true;
     try {
@@ -332,7 +380,7 @@ export function installSettingsSync(): () => void {
     const values = pickSyncedSettings(useSettingsStore.getState());
     dirty.clear();
     if (existing && same(settingsFromRow(existing), values)) {
-      lastSeen = { id: existing.id, updatedAt: existing.updatedAt };
+      lastSeen = versionOf(existing);
       return;
     }
     const updatedAt = seed
@@ -343,7 +391,7 @@ export function installSettingsSync(): () => void {
       createdAt: existing?.createdAt,
       updatedAt,
     });
-    lastSeen = { id: row.id, updatedAt: row.updatedAt };
+    lastSeen = versionOf(row);
     await writeWithSync("userSettings", "upsert", async () => {
       await db.userSettings.put(row);
       return row;
@@ -360,28 +408,34 @@ export function installSettingsSync(): () => void {
     if (ready || !mayWrite()) return;
     const row = await getActiveUserSettings();
     if (ready || disposed) return;
+    // No local row in cloud-sync mode: the cloud may still hold one this
+    // device has never pulled (the table is new to an upgraded device whose
+    // initialSyncComplete was persisted long ago). Wait for a pull.
+    if (
+      !row &&
+      useSettingsStore.getState().storageMode === "cloud-sync" &&
+      !pulledThisSession
+    ) {
+      return;
+    }
     ready = true;
     const editedAt = readEditedAt();
     if (row) {
       const local = pickSyncedSettings(useSettingsStore.getState());
       const incoming = settingsFromRow(row);
-      // Edited here after the row was written: those values are the newer.
-      if (editedAt !== null && editedAt > row.updatedAt) {
-        for (const [key, value] of Object.entries(incoming)) {
-          if (!same(local[key as SyncedSettingKey], value)) dirty.add(key as SyncedSettingKey);
+      // Keys edited here after the row was written: those values are newer.
+      for (const [key, value] of Object.entries(incoming)) {
+        const stamp = editedAt[key as SyncedSettingKey];
+        if (stamp !== undefined && stamp > row.updatedAt && !same(local[key as SyncedSettingKey], value)) {
+          dirty.add(key as SyncedSettingKey);
         }
       }
-      const differs = Object.entries(incoming).some(
-        ([key, value]) =>
-          !dirty.has(key as SyncedSettingKey) &&
-          !same(local[key as SyncedSettingKey], value),
-      );
-      if (differs) savePreSyncBackup(local);
+      // adopt() keeps a copy of the local values it replaces.
       adopt(row);
       if (dirty.size > 0) await writeCurrent();
       return;
     }
-    if (dirty.size > 0 || editedAt !== null) {
+    if (dirty.size > 0 || Object.keys(editedAt).length > 0) {
       await writeCurrent();
       return;
     }
@@ -392,20 +446,29 @@ export function installSettingsSync(): () => void {
   const unsubscribeStore = useSettingsStore.subscribe((state, prev) => {
     if (!ready && state.storageMode !== prev.storageMode) run(reconcile);
     if (applying) return;
-    let changed = false;
+    const changed: SyncedSettingKey[] = [];
     for (const key of SYNCED_SETTING_KEYS) {
       if (!same(state[key], prev[key])) {
         dirty.add(key);
-        changed = true;
+        changed.push(key);
       }
     }
-    if (!changed) return;
-    writeEditedAt(Date.now());
+    if (changed.length === 0) return;
+    writeEditedAt(changed, Date.now());
     if (ready) run(() => writeCurrent());
   });
 
   const unsubscribeSync = useSyncStatusStore.subscribe((state, prev) => {
-    if (state.initialSyncComplete && !prev.initialSyncComplete) run(reconcile);
+    if (state.lastPulledAt !== prev.lastPulledAt && state.initialSyncComplete) {
+      pulledThisSession = true;
+    }
+    if (ready) return;
+    if (
+      (state.initialSyncComplete && !prev.initialSyncComplete) ||
+      state.lastPulledAt !== prev.lastPulledAt
+    ) {
+      run(reconcile);
+    }
   });
 
   // Rows written elsewhere: a pull, a backup restore, another tab.
