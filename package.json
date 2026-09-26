@@ -1,6 +1,6 @@
 {
   "name": "intake-tracker",
-  "version": "1.36.4",
+  "version": "1.36.5",
   "private": true,
   "packageManager": "pnpm@11.13.1",
   "engines": {
