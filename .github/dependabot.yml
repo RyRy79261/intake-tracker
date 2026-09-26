@@ -101,6 +101,15 @@ updates:
       # major-upgrade PR once the lint toolchain supports TS 7. See PR #293.
       - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
+      # jsdom 30.1 removed the internal Blob `_buffer` field that vitest's jsdom
+      # environment reads when it bridges jsdom's FormData/Blob to Node's fetch
+      # (`makeCompatBlob`). Every `fetch(url, { body: formData })` under the
+      # jsdom environment then throws "Cannot read properties of undefined
+      # (reading '_buffer')" — it broke voice-panel.flow.test.tsx in PR #361.
+      # Affects vitest 4.1.11 AND 5.0.1. apps/web pins `jsdom: ~30.0.1`; drop
+      # this ignore and the pin once a vitest release handles jsdom >= 30.1.
+      - dependency-name: "jsdom"
+        versions: [">=30.1.0"]
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
