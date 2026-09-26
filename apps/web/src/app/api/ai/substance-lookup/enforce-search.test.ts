@@ -233,3 +233,56 @@ describe("caffeine lookups must be sourced by a completed web search", () => {
     expect(messagesCreate).toHaveBeenCalledTimes(1);
   });
 });
+
+// ai-routes-models#19/#21: stop_reason handling through the shared helpers,
+// and a limiter keyed on the user rather than a spoofable IP.
+describe("substance-lookup stop_reason and rate limit", () => {
+  it("maps a refusal to 422 AI_REFUSED without retrying or searching again", async () => {
+    messagesCreate.mockResolvedValue({
+      content: [],
+      stop_reason: "refusal",
+      stop_details: null,
+      usage,
+    });
+
+    const res = await post({ query: "lager", type: "alcohol" });
+    const json = await res.json();
+
+    expect(res.status).toBe(422);
+    expect(json.code).toBe("AI_REFUSED");
+    expect(messagesCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it("resumes a paused web-search turn instead of treating it as no answer", async () => {
+    messagesCreate
+      .mockResolvedValueOnce({ content: [searchResultBlock()], stop_reason: "pause_turn", usage })
+      .mockResolvedValueOnce({ content: [resultBlock()], stop_reason: "tool_use", usage });
+
+    const res = await post({ query: "pour over coffee", type: "caffeine" });
+
+    expect(res.status).toBe(200);
+    expect(messagesCreate).toHaveBeenCalledTimes(2);
+    const resumed = messagesCreate.mock.calls[1]?.[0];
+    expect(resumed.messages.at(-1).role).toBe("assistant");
+  });
+
+  it("counts every request from one user whatever IP it claims", async () => {
+    messagesCreate.mockResolvedValue({ content: [resultBlock({ substancePer100ml: 5 })], usage });
+    const { POST } = await import("./route");
+
+    const statuses: number[] = [];
+    for (let i = 0; i < 16; i++) {
+      const res = await POST(
+        new NextRequest("http://localhost/api/ai/substance-lookup", {
+          method: "POST",
+          body: JSON.stringify({ query: "lager", type: "alcohol" }),
+          headers: { "content-type": "application/json", "x-forwarded-for": `10.0.0.${i}` },
+        }),
+      );
+      statuses.push(res.status);
+    }
+
+    expect(statuses.slice(0, 15).every((s) => s === 200)).toBe(true);
+    expect(statuses[15]).toBe(429);
+  });
+});
