@@ -1,5 +1,5 @@
 import "server-only";
-import type Anthropic from "@anthropic-ai/sdk";
+import Anthropic from "@anthropic-ai/sdk";
 import { rejectsForcedToolChoice } from "@intake/ai-prompts/models";
 import type { ResolvedKey } from "@/lib/ai-key-resolver";
 import { recordUsage, tokensFromAnthropic } from "@/app/api/ai/_shared/usage-tracker";
@@ -74,7 +74,12 @@ export interface CallOptions {
    * seconds under the route's `maxDuration` so the route can still answer.
    */
   deadline: number;
-  /** SDK retries per upstream call (429/5xx/connection). Defaults to 1. */
+  /**
+   * Retries per upstream call on a retryable error (408/409/429/5xx or a
+   * dropped connection). Defaults to 1. Done here rather than by the SDK:
+   * the SDK would give a retry the same deadline-sized timeout as the
+   * attempt before it, running a slow call straight past the deadline.
+   */
   maxRetries?: number;
   /** Largest `max_tokens` a truncated response may be retried with. */
   maxTokensCeiling?: number;
@@ -86,6 +91,31 @@ export interface CallOptions {
 const MIN_ATTEMPT_MS = 2_000;
 const DEFAULT_MAX_TOKENS_CEILING = 32_000;
 const DEFAULT_MAX_RESUMES = 2;
+const RETRY_BASE_DELAY_MS = 500;
+const RETRY_MAX_DELAY_MS = 8_000;
+
+/** The same failures the SDK's own retry policy retries. */
+function isRetryable(error: unknown): boolean {
+  // A timed-out attempt already used up the deadline.
+  if (error instanceof Anthropic.APIConnectionTimeoutError) return false;
+  if (error instanceof Anthropic.APIUserAbortError) return false;
+  if (error instanceof Anthropic.APIConnectionError) return true;
+  if (!(error instanceof Anthropic.APIError)) return false;
+  const shouldRetry = error.headers?.get("x-should-retry");
+  if (shouldRetry === "true") return true;
+  if (shouldRetry === "false") return false;
+  const status = error.status ?? 0;
+  return status === 408 || status === 409 || status === 429 || status >= 500;
+}
+
+/** Wait before retry number `attempt` (0-based): retry-after, else backoff. */
+function retryDelayMs(error: unknown, attempt: number): number {
+  const header =
+    error instanceof Anthropic.APIError ? error.headers?.get("retry-after") : null;
+  const seconds = header != null ? Number(header) : NaN;
+  if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000;
+  return Math.min(RETRY_MAX_DELAY_MS, RETRY_BASE_DELAY_MS * 2 ** attempt);
+}
 
 /**
  * One logical Claude call: a `messages.create` plus whatever resumes and
@@ -100,11 +130,13 @@ export async function createMessage(
 ): Promise<Anthropic.Message> {
   const ceiling = Math.max(params.max_tokens, opts.maxTokensCeiling ?? DEFAULT_MAX_TOKENS_CEILING);
   const maxResumes = opts.maxResumes ?? DEFAULT_MAX_RESUMES;
+  const maxRetries = opts.maxRetries ?? 1;
 
   let request = params;
   let paused: Anthropic.Messages.ContentBlock[] = [];
   let resumes = 0;
   let grewBudget = false;
+  let retries = 0;
 
   for (;;) {
     const remaining = opts.deadline - Date.now();
@@ -113,10 +145,7 @@ export async function createMessage(
     const startedAt = Date.now();
     let message: Anthropic.Message;
     try {
-      message = await client.messages.create(request, {
-        timeout: remaining,
-        maxRetries: opts.maxRetries ?? 1,
-      });
+      message = await client.messages.create(request, { timeout: remaining, maxRetries: 0 });
     } catch (error) {
       recordUsage({
         userId: opts.usage.userId,
@@ -128,8 +157,18 @@ export async function createMessage(
         status: "error",
         durationMs: Date.now() - startedAt,
       });
+      if (retries < maxRetries && isRetryable(error)) {
+        const delay = retryDelayMs(error, retries);
+        // Only retry while a worthwhile attempt still fits after the wait.
+        if (opts.deadline - Date.now() - delay >= MIN_ATTEMPT_MS) {
+          retries++;
+          if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
+          continue;
+        }
+      }
       throw error;
     }
+    retries = 0;
     recordUsage({
       userId: opts.usage.userId,
       keyOwnerId: opts.usage.resolved.keyOwnerId,

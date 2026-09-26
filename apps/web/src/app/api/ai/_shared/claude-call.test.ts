@@ -6,8 +6,18 @@
  * asserted without a database.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import type Anthropic from "@anthropic-ai/sdk";
+import Anthropic from "@anthropic-ai/sdk";
 import type { ToolCallOptions } from "@/app/api/ai/_shared/claude-call";
+
+/** A 529 "overloaded" — retryable. Carries retry-after: 0 so tests don't wait. */
+function overloaded() {
+  return Anthropic.APIError.generate(
+    529,
+    { error: { type: "overloaded_error" } },
+    "overloaded",
+    new Headers({ "retry-after": "0" }),
+  );
+}
 
 const recordUsage = vi.fn();
 vi.mock("@/app/api/ai/_shared/usage-tracker", () => ({
@@ -75,10 +85,9 @@ describe("createMessage", () => {
   it("passes a per-request timeout drawn from the deadline", async () => {
     create.mockResolvedValueOnce(reply("end_turn"));
     await createMessage(client, baseParams, opts({ deadline: Date.now() + 30_000 }));
-    const requestOptions = create.mock.calls[0]![1] as { timeout: number; maxRetries: number };
+    const requestOptions = create.mock.calls[0]![1] as { timeout: number };
     expect(requestOptions.timeout).toBeGreaterThan(25_000);
     expect(requestOptions.timeout).toBeLessThanOrEqual(30_000);
-    expect(requestOptions.maxRetries).toBe(1);
   });
 
   it("throws AiTimeoutError without calling upstream once the deadline has passed", async () => {
@@ -148,6 +157,61 @@ describe("createMessage", () => {
       status: "error",
       model: "claude-sonnet-5",
     });
+  });
+
+  // The SDK retries a timed-out attempt with the SAME per-attempt timeout,
+  // so an SDK retry after the deadline-sized first attempt runs straight
+  // past the deadline into the platform's non-JSON 504. Retries are owned
+  // here instead, and only start while the deadline still has room.
+  it("turns off SDK retries so a timed-out attempt can't run past the deadline", async () => {
+    create.mockResolvedValueOnce(reply("end_turn"));
+    await createMessage(client, baseParams, opts());
+    const requestOptions = create.mock.calls[0]![1] as { maxRetries: number };
+    expect(requestOptions.maxRetries).toBe(0);
+  });
+
+  it("retries a retryable upstream error itself, recording the failed attempt", async () => {
+    create
+      .mockRejectedValueOnce(overloaded())
+      .mockResolvedValueOnce(reply("end_turn"));
+    const message = await createMessage(client, baseParams, opts());
+    expect(message.stop_reason).toBe("end_turn");
+    expect(create).toHaveBeenCalledTimes(2);
+    expect(recordUsage.mock.calls.map((c) => (c[0] as { status: string }).status)).toEqual([
+      "error",
+      "success",
+    ]);
+  });
+
+  it("does not retry a non-retryable upstream error", async () => {
+    const bad = Anthropic.APIError.generate(400, { error: { type: "invalid_request_error" } }, "bad", new Headers());
+    create.mockRejectedValueOnce(bad);
+    await expect(createMessage(client, baseParams, opts())).rejects.toBe(bad);
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not retry once the deadline has no room for another attempt", async () => {
+    // retry-after 1s would leave under the minimum attempt window.
+    const error = Anthropic.APIError.generate(
+      429,
+      { error: { type: "rate_limit_error" } },
+      "slow down",
+      new Headers({ "retry-after": "1" }),
+    );
+    create.mockRejectedValueOnce(error);
+    await expect(
+      createMessage(client, baseParams, opts({ deadline: Date.now() + 2_500 })),
+    ).rejects.toBe(error);
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops retrying after maxRetries attempts", async () => {
+    const error = overloaded();
+    create.mockRejectedValue(error);
+    await expect(
+      createMessage(client, baseParams, opts({ maxRetries: 1 })),
+    ).rejects.toBe(error);
+    expect(create).toHaveBeenCalledTimes(2);
   });
 });
 
