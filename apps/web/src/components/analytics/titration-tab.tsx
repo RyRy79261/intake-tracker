@@ -52,7 +52,18 @@ interface PrescriptionReport {
 // Data hook
 // ---------------------------------------------------------------------------
 
-function useTitrationData(): PrescriptionReport[] | undefined {
+/**
+ * The part of a phase that falls inside the selected range, or `undefined`
+ * when the two don't overlap. Metrics are computed over this window so the
+ * shared time selector actually scopes the tab.
+ */
+export function phaseWindow(phase: MedicationPhase, range: TimeRange): TimeRange | undefined {
+  const start = Math.max(phase.startDate, range.start);
+  const end = Math.min(phase.endDate ?? Date.now(), range.end);
+  return end > start ? { start, end } : undefined;
+}
+
+function useTitrationData(range: TimeRange): PrescriptionReport[] | undefined {
   return useLiveQuery(async () => {
     const prescriptions = await getPrescriptions();
     const reports: PrescriptionReport[] = [];
@@ -61,17 +72,11 @@ function useTitrationData(): PrescriptionReport[] | undefined {
       const phases = await getPhasesForPrescription(rx.id);
       const snapshots: PhaseSnapshot[] = [];
 
+      // getPhasesForPrescription already drops soft-deleted phases.
       for (const phase of phases) {
-        const phaseRange: TimeRange = {
-          start: phase.startDate,
-          end: phase.endDate ?? Date.now(),
-        };
-
-        // Skip phases with zero-length range
-        if (phaseRange.end <= phaseRange.start) {
-          snapshots.push(emptySnapshot(phase));
-          continue;
-        }
+        // Phases outside the selected range aren't shown at all.
+        const phaseRange = phaseWindow(phase, range);
+        if (!phaseRange) continue;
 
         try {
           const [adhResult, bpResult, wtResult, fbResult, weightPoints] =
@@ -110,7 +115,7 @@ function useTitrationData(): PrescriptionReport[] | undefined {
     }
 
     return reports;
-  }, []);
+  }, [range.start, range.end]);
 }
 
 function emptySnapshot(phase: MedicationPhase): PhaseSnapshot {
@@ -321,7 +326,7 @@ function PrescriptionSection({ report }: { report: PrescriptionReport }) {
         <CardContent className="px-3 pb-3 space-y-2">
           {report.phases.length === 0 ? (
             <p className="text-xs text-muted-foreground py-2">
-              No phases configured
+              No phases in the selected range
             </p>
           ) : (
             report.phases.map((snapshot) => (
@@ -338,8 +343,8 @@ function PrescriptionSection({ report }: { report: PrescriptionReport }) {
 // Main tab component
 // ---------------------------------------------------------------------------
 
-export function TitrationTab({ range: _range }: { range: TimeRange }) {
-  const reports = useTitrationData();
+export function TitrationTab({ range }: { range: TimeRange }) {
+  const reports = useTitrationData(range);
 
   if (!reports) {
     return (

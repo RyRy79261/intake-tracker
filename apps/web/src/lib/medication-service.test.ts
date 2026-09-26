@@ -231,7 +231,7 @@ describe("prescription CRUD", () => {
     expect(invAfter.every((i) => i.deletedAt != null && i.deletedAt > 0)).toBe(true);
   });
 
-  it("deletePrescription cascades to inventoryTransactions (no orphans)", async () => {
+  it("deletePrescription cascades to inventoryTransactions (no live orphans)", async () => {
     const result = await addPrescription(
       validPrescriptionInput({ currentStock: 30 }),
     );
@@ -251,11 +251,12 @@ describe("prescription CRUD", () => {
     const deleteResult = await deletePrescription(prescriptionId);
     expect(deleteResult.success).toBe(true);
 
+    // Tombstoned rather than hard-deleted, so the delete can sync.
     const txAfter = await db.inventoryTransactions
       .where("inventoryItemId")
       .equals(inventoryItemId)
       .toArray();
-    expect(txAfter.length).toBe(0);
+    expect(txAfter.filter((t) => t.deletedAt == null)).toHaveLength(0);
   });
 });
 

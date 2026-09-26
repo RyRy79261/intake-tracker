@@ -3,8 +3,12 @@ import { db } from "@/lib/db";
 import {
   addPrescription,
   deletePrescription,
+  getActivePrescriptions,
+  getInactivePrescriptions,
   type CreatePrescriptionInput,
 } from "@/lib/prescription-service";
+import { getActivePhaseForPrescription } from "@/lib/phase-service";
+import { getDailyDoseSchedule } from "@/lib/dose-schedule-service";
 import {
   makePrescription,
   makeMedicationPhase,
@@ -140,7 +144,7 @@ describe("addPrescription", () => {
 // ---------------------------------------------------------------------------
 
 describe("deletePrescription", () => {
-  it("cascades: soft-deletes rx/phases/schedules/inventory, hard-deletes dose logs + inventory txns", async () => {
+  it("cascades: soft-deletes rx/phases/schedules/inventory, dose logs + inventory txns", async () => {
     const rx = makePrescription();
     const phase = makeMedicationPhase(rx.id);
     const schedule = makePhaseSchedule(phase.id);
@@ -163,9 +167,46 @@ describe("deletePrescription", () => {
     expect((await db.phaseSchedules.get(schedule.id))!.deletedAt).not.toBeNull();
     expect((await db.inventoryItems.get(inv.id))!.deletedAt).not.toBeNull();
 
-    // Hard-deleted: rows are gone.
-    expect(await db.doseLogs.get(dose.id)).toBeUndefined();
-    expect(await db.inventoryTransactions.get(txn.id)).toBeUndefined();
+    // History rows are tombstoned too (a hard delete never reaches the
+    // server, which would keep them live forever).
+    expect((await db.doseLogs.get(dose.id))!.deletedAt).not.toBeNull();
+    expect((await db.inventoryTransactions.get(txn.id))!.deletedAt).not.toBeNull();
+    expect((await syncRowsFor("doseLogs", dose.id))[0]!.op).toBe("delete");
+    expect((await syncRowsFor("inventoryTransactions", txn.id))[0]!.op).toBe("delete");
+  });
+
+  it("retires the lifecycle flags so no reader keeps treating it as live", async () => {
+    const rx = makePrescription();
+    const phase = makeMedicationPhase(rx.id, { status: "active" });
+    const schedule = makePhaseSchedule(phase.id);
+    const inv = makeInventoryItem(rx.id, { isActive: true });
+    await db.prescriptions.add(rx);
+    await db.medicationPhases.add(phase);
+    await db.phaseSchedules.add(schedule);
+    await db.inventoryItems.add(inv);
+
+    await deletePrescription(rx.id);
+
+    expect((await db.prescriptions.get(rx.id))!.isActive).toBe(false);
+    expect((await db.medicationPhases.get(phase.id))!.status).toBe("cancelled");
+    expect((await db.phaseSchedules.get(schedule.id))!.enabled).toBe(false);
+    expect((await db.inventoryItems.get(inv.id))!.isActive).toBe(false);
+
+    expect(await getActivePrescriptions()).toHaveLength(0);
+    expect(await getInactivePrescriptions()).toHaveLength(0);
+    expect(await getActivePhaseForPrescription(rx.id)).toBeUndefined();
+    expect(await getDailyDoseSchedule("2023-11-14", "UTC")).toHaveLength(0);
+  });
+
+  it("keeps a completed phase's status (only running/pending phases are cancelled)", async () => {
+    const rx = makePrescription();
+    const done = makeMedicationPhase(rx.id, { status: "completed" });
+    await db.prescriptions.add(rx);
+    await db.medicationPhases.add(done);
+
+    await deletePrescription(rx.id);
+
+    expect((await db.medicationPhases.get(done.id))!.status).toBe("completed");
   });
 
   it("enqueues delete ops for cascaded soft-deleted tables + a prescription_deleted audit", async () => {
@@ -186,5 +227,23 @@ describe("deletePrescription", () => {
     expect((await syncRowsFor("inventoryItems", inv.id))[0]!.op).toBe("delete");
 
     expect(await auditsByAction("prescription_deleted")).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Reads — tombstones are never live, active or inactive
+// ---------------------------------------------------------------------------
+
+describe("prescription reads", () => {
+  it("active/inactive lists skip soft-deleted rows even when their flag is stale", async () => {
+    const live = makePrescription({ isActive: true });
+    const paused = makePrescription({ isActive: false });
+    // Tombstone written by an older client: deletedAt set, isActive left true.
+    const ghost = makePrescription({ isActive: true, deletedAt: 1700000000001 });
+    const pausedGhost = makePrescription({ isActive: false, deletedAt: 1700000000001 });
+    await db.prescriptions.bulkAdd([live, paused, ghost, pausedGhost]);
+
+    expect((await getActivePrescriptions()).map((p) => p.id)).toEqual([live.id]);
+    expect((await getInactivePrescriptions()).map((p) => p.id)).toEqual([paused.id]);
   });
 });

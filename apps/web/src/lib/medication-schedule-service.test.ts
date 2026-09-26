@@ -100,6 +100,26 @@ describe("getDailySchedule", () => {
     const result = await getDailySchedule(2);
     expect(result.size).toBe(0);
   });
+
+  it("excludes tombstoned prescriptions and phases even with stale live flags", async () => {
+    const rx = makePrescription({ id: "rx-ghost", isActive: true, deletedAt: 1700000000001 });
+    const phase = makeMedicationPhase(rx.id, { id: "phase-ghost", status: "active" });
+    const schedule = makePhaseSchedule(phase.id, { id: "sched-ghost", daysOfWeek: [2] });
+    const rx2 = makePrescription({ id: "rx-ghost-phase", isActive: true });
+    const phase2 = makeMedicationPhase(rx2.id, {
+      id: "phase-ghost-2",
+      status: "active",
+      deletedAt: 1700000000001,
+    });
+    const schedule2 = makePhaseSchedule(phase2.id, { id: "sched-ghost-2", daysOfWeek: [2] });
+
+    await db.prescriptions.bulkAdd([rx, rx2]);
+    await db.medicationPhases.bulkAdd([phase, phase2]);
+    await db.phaseSchedules.bulkAdd([schedule, schedule2]);
+
+    const result = await getDailySchedule(2);
+    expect(result.size).toBe(0);
+  });
 });
 
 describe("getSchedulesForPhase", () => {
@@ -216,5 +236,7 @@ describe("deleteSchedule", () => {
     const deleted = await db.phaseSchedules.get("sched-del-1");
     expect(deleted).toBeDefined();
     expect(deleted!.deletedAt).toBeGreaterThan(0);
+    // Readers that only check `enabled` must stop seeing it too.
+    expect(deleted!.enabled).toBe(false);
   });
 });

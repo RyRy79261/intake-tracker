@@ -107,7 +107,8 @@ describe("CompoundList", () => {
     expect(await screen.findByText("Lasix")).toBeInTheDocument();
   });
 
-  it("ignores archived inventory items entirely", async () => {
+  it("keeps archived brands reachable in a collapsed Archived section", async () => {
+    const user = userEvent.setup();
     const rx = makePrescription({ genericName: "Atenolol" });
     const phase = makeMedicationPhase(rx.id);
     const schedule = makePhaseSchedule(phase.id);
@@ -127,8 +128,47 @@ describe("CompoundList", () => {
       },
     });
 
-    // With only an archived item, the list falls back to the empty state.
-    expect(await screen.findByText(/no medications yet/i)).toBeInTheDocument();
+    // Not the empty state: the archived brand can still be reopened to
+    // unarchive or delete it.
+    const toggle = await screen.findByRole("button", { name: /archived \(1\)/i });
+    expect(screen.queryByText(/no medications yet/i)).not.toBeInTheDocument();
     expect(screen.queryByText("Tenormin")).not.toBeInTheDocument();
+
+    await user.click(toggle);
+    expect(await screen.findByText("Tenormin")).toBeInTheDocument();
+  });
+
+  it("keeps a deactivated prescription's brand out of the Active section", async () => {
+    const rx = makePrescription({ genericName: "Digoxin", isActive: false });
+    const inventory = makeInventoryItem(rx.id, {
+      prescriptionId: rx.id,
+      brandName: "Lanoxin",
+      currentStock: 20,
+      isActive: true,
+    });
+
+    await renderWithFixtures(<CompoundList onAddMed={() => {}} />, {
+      seed: { prescriptions: [rx], inventoryItems: [inventory] },
+    });
+
+    expect(await screen.findByText("Other")).toBeInTheDocument();
+    expect(screen.queryByText("Active")).not.toBeInTheDocument();
+  });
+
+  it("hides soft-deleted inventory items", async () => {
+    const rx = makePrescription({ genericName: "Warfarin" });
+    const deleted = makeInventoryItem(rx.id, {
+      prescriptionId: rx.id,
+      brandName: "Coumadin",
+      currentStock: 20,
+      deletedAt: 1700000000001,
+    });
+
+    await renderWithFixtures(<CompoundList onAddMed={() => {}} />, {
+      seed: { prescriptions: [rx], inventoryItems: [deleted] },
+    });
+
+    expect(await screen.findByText(/no medications yet/i)).toBeInTheDocument();
+    expect(screen.queryByText("Coumadin")).not.toBeInTheDocument();
   });
 });

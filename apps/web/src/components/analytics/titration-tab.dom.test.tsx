@@ -77,4 +77,59 @@ describe("TitrationTab", () => {
       await screen.findByText("No health data recorded during this phase"),
     ).toBeInTheDocument();
   });
+
+  it("hides soft-deleted phases and phases outside the selected range", async () => {
+    const now = Date.now();
+    const rx = makePrescription({ genericName: "Bisoprolol", isActive: true });
+    const deleted = makeMedicationPhase(rx.id, {
+      type: "titration",
+      startDate: now - 3 * DAY_MS,
+      deletedAt: now - DAY_MS,
+    });
+    const old = makeMedicationPhase(rx.id, {
+      type: "maintenance",
+      status: "completed",
+      startDate: now - 60 * DAY_MS,
+      endDate: now - 40 * DAY_MS,
+    });
+    const lastWeek: TimeRange = { start: now - 7 * DAY_MS, end: now + DAY_MS };
+
+    await renderWithFixtures(<TitrationTab range={lastWeek} />, {
+      seed: { prescriptions: [rx], medicationPhases: [deleted, old] },
+    });
+
+    expect(await screen.findByText("Bisoprolol")).toBeInTheDocument();
+    expect(
+      await screen.findByText("No phases in the selected range"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("titration")).not.toBeInTheDocument();
+    expect(screen.queryByText("maintenance")).not.toBeInTheDocument();
+  });
+
+  it("computes phase metrics only over the part inside the selected range", async () => {
+    const now = Date.now();
+    const rx = makePrescription({ genericName: "Ramipril", isActive: true });
+    const phase = makeMedicationPhase(rx.id, {
+      type: "maintenance",
+      status: "active",
+      startDate: now - 30 * DAY_MS,
+    });
+    const lastWeek: TimeRange = { start: now - 7 * DAY_MS, end: now + DAY_MS };
+
+    await renderWithFixtures(<TitrationTab range={lastWeek} />, {
+      seed: {
+        prescriptions: [rx],
+        medicationPhases: [phase],
+        // Inside the phase but before the selected week.
+        bloodPressureRecords: [
+          makeBloodPressureRecord({ systolic: 130, diastolic: 85, timestamp: now - 20 * DAY_MS }),
+        ],
+      },
+    });
+
+    expect(await screen.findByText("Ramipril")).toBeInTheDocument();
+    expect(
+      await screen.findByText("No health data recorded during this phase"),
+    ).toBeInTheDocument();
+  });
 });
