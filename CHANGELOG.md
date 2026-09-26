@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.36.5](https://github.com/RyRy79261/intake-tracker/compare/v1.36.4...v1.36.5) (2026-09-26)
+
+
+### Bug Fixes
+
+* 2026-09 logic and data audit fixes ([#359](https://github.com/RyRy79261/intake-tracker/issues/359)) ([8a74bcc](https://github.com/RyRy79261/intake-tracker/commit/8a74bcc09437208ad3064a6f1197980b03fb0714))
+
 ## [1.36.4](https://github.com/RyRy79261/intake-tracker/compare/v1.36.3...v1.36.4) (2026-09-17)
 
 
