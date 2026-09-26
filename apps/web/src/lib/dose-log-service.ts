@@ -754,7 +754,8 @@ export async function rescheduleDose(input: RescheduleDoseInput): Promise<Servic
 
         const doseLog = await writeSlotLog(
           prev, logId, { prescriptionId, phaseId, scheduleId, date, time }, "rescheduled",
-          { rescheduledTo: newTime, pillsConsumed: 0 },
+          // Clear a reason left by an earlier skip: the slot is no longer skipped.
+          { rescheduledTo: newTime, pillsConsumed: 0, skipReason: undefined },
         );
         await enqueueInsideTx("doseLogs", doseLog.id, "upsert");
 

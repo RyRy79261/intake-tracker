@@ -1133,6 +1133,17 @@ describe("dose action guards (gap-bulk-dose-actions)", () => {
     expect(log.skipReason).toBeUndefined();
   });
 
+  it("rescheduling a skipped dose drops the skip reason (#9)", async () => {
+    const { rx, phase, schedule } = await seedFullPrescription();
+    const base = { prescriptionId: rx.id, phaseId: phase.id, scheduleId: schedule.id, date: DATE, time: TIME, dosageMg: 50 };
+    await skipDose({ ...base, reason: "nausea" });
+    await rescheduleDose({ ...base, newTime: "14:00" });
+
+    const log = (await db.doseLogs.toArray())[0]!;
+    expect(log.status).toBe("rescheduled");
+    expect(log.skipReason).toBeUndefined();
+  });
+
   it("taking a skipped dose drops the skip reason (#9)", async () => {
     const { rx, phase, schedule } = await seedFullPrescription();
     const base = { prescriptionId: rx.id, phaseId: phase.id, scheduleId: schedule.id, date: DATE, time: TIME, dosageMg: 50 };
