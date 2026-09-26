@@ -42,8 +42,9 @@ export interface IntakeRecord {
   /**
    * Sodium rows only: what the user entered — `sourceAmount` `sourceUnit` of
    * `sodiumSource` (e.g. 2 g of salt), kept so the entry reads and edits as
-   * typed while `amount` holds the converted sodium mg. Absent on rows written
-   * before these fields existed and on AI/preset rows: sodium, source unknown.
+   * typed while `amount` holds the converted sodium mg. Absent when the source
+   * is unknown — rows written before these fields existed, and paths that only
+   * ever produce sodium mg (voice, liquid presets): read those as sodium.
    */
   sodiumSource?: "sodium" | "salt" | "msg";
   sourceAmount?: number;

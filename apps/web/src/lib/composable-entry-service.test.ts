@@ -1178,6 +1178,102 @@ describe("composable-entry-service", () => {
     });
   });
 
+  // Salt is not sodium: a sodium row keeps what the user typed (2 g of salt)
+  // next to the converted sodium mg it stores in `amount`.
+  describe("sodium entered as salt, MSG or sodium", () => {
+    it("addComposableEntry stores the entered source on the sodium row", async () => {
+      const result = await addComposableEntry({
+        eating: { note: "Soup" },
+        intakes: [
+          {
+            type: "salt",
+            amount: 786,
+            source: "manual:salt",
+            sodiumSource: "salt",
+            sourceAmount: 2,
+            sourceUnit: "g",
+          },
+        ],
+      });
+      if (!result.success) throw new Error("add failed");
+      const row = (await db.intakeRecords.toArray()).find((r) => r.type === "salt")!;
+      expect(row).toMatchObject({
+        amount: 786,
+        sodiumSource: "salt",
+        sourceAmount: 2,
+        sourceUnit: "g",
+      });
+    });
+
+    it("syncEatingGroup writes the new entered source when sodium is edited", async () => {
+      const { eatingId } = await seedComposableGroup({
+        eating: { note: "Stir fry" },
+        intakes: [{ type: "salt", amount: 500, source: "manual:sodium" }],
+      });
+      await syncEatingGroup(eatingId!, {
+        timestamp: Date.now(),
+        note: "Stir fry",
+        grams: undefined,
+        sodiumMg: 123,
+        sodiumKind: "msg",
+        sodiumEntry: { amount: 1, unit: "g" },
+        waterMl: 0,
+      });
+      const row = (await db.intakeRecords.toArray()).find((r) => r.type === "salt")!;
+      expect(row).toMatchObject({
+        amount: 123,
+        source: "manual:msg",
+        sodiumSource: "msg",
+        sourceAmount: 1,
+        sourceUnit: "g",
+      });
+    });
+
+    it("leaves a legacy sodium row's value and source untouched when its sodium is not edited", async () => {
+      // Legacy row: sodium mg typed as salt before the source fields existed.
+      const { eatingId } = await seedComposableGroup({
+        eating: { note: "Chips" },
+        intakes: [{ type: "salt", amount: 780, source: "manual:salt" }],
+      });
+      await syncEatingGroup(eatingId!, {
+        timestamp: Date.now(),
+        note: "Chips, salted",
+        grams: undefined,
+        sodiumMg: 780,
+        sodiumKind: "sodium",
+        waterMl: 0,
+      });
+      const row = (await db.intakeRecords.toArray()).find((r) => r.type === "salt")!;
+      expect(row.amount).toBe(780);
+      expect(row.source).toBe("manual:salt");
+      expect(row.sodiumSource).toBeUndefined();
+      expect(row.sourceAmount).toBeUndefined();
+    });
+
+    it("drops a stale entered source when the sodium mg changes without one", async () => {
+      const result = await addComposableEntry({
+        eating: { note: "Soup" },
+        intakes: [
+          { type: "salt", amount: 786, source: "manual:salt", sodiumSource: "salt", sourceAmount: 2, sourceUnit: "g" },
+        ],
+      });
+      if (!result.success) throw new Error("add failed");
+      await syncEatingGroup(result.data.eatingId!, {
+        timestamp: Date.now(),
+        note: "Soup",
+        grams: undefined,
+        sodiumMg: 900,
+        sodiumKind: "sodium",
+        waterMl: 0,
+      });
+      const row = (await db.intakeRecords.toArray()).find((r) => r.type === "salt")!;
+      expect(row.amount).toBe(900);
+      expect(row.sodiumSource).toBeUndefined();
+      expect(row.sourceAmount).toBeUndefined();
+      expect(row.sourceUnit).toBeUndefined();
+    });
+  });
+
   describe("syncLiquidEntrySubstances keeps the group together", () => {
     it("moves salt, potassium and untouched sugar rows with the drink", async () => {
       const ts = Date.now() - 3 * 86_400_000;

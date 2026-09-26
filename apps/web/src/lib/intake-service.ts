@@ -73,8 +73,25 @@ export async function updateIntakeRecord(
   try {
     const existing = await db.intakeRecords.get(id);
     if (!existing) return err("Record not found");
+    // A sodium row's entered source ("2 g salt") describes its old mg. When
+    // the mg is edited directly the source no longer holds — clear it rather
+    // than show a stale "from 2 g salt" beside a new value.
+    const staleSource =
+      updates.amount !== undefined &&
+      updates.amount !== existing.amount &&
+      (existing.sodiumSource !== undefined ||
+        existing.sourceAmount !== undefined ||
+        existing.sourceUnit !== undefined);
+    // Dexie's update deletes a key set to undefined, but
+    // exactOptionalPropertyTypes rejects that on the typed update spec.
+    const patch: Record<string, unknown> = { ...updates, updatedAt: Date.now() };
+    if (staleSource) {
+      patch.sodiumSource = undefined;
+      patch.sourceAmount = undefined;
+      patch.sourceUnit = undefined;
+    }
     await writeWithSync("intakeRecords", "upsert", async () => {
-      await db.intakeRecords.update(id, { ...updates, updatedAt: Date.now() });
+      await db.intakeRecords.update(id, patch);
       return { id };
     });
     schedulePush();

@@ -28,7 +28,7 @@ vi.mock("@/components/auth-guard", () => ({
 
 import { FoodSection } from "@/components/food-salt/food-section";
 import { renderWithFixtures } from "@/__tests__/react-test-utils";
-import { makeEatingRecord } from "@/__tests__/fixtures/db-fixtures";
+import { makeEatingRecord, makeIntakeRecord } from "@/__tests__/fixtures/db-fixtures";
 // Test-only direct DB access to assert what the save wrote.
 // eslint-disable-next-line no-restricted-imports
 import { db } from "@/lib/db";
@@ -100,10 +100,141 @@ describe("FoodSection", () => {
 
     await user.type(await screen.findByLabelText(/Sodium/i), "1000");
     // 1000 mg of table salt -> ~393 mg sodium (SODIUM_FRACTION 0.393).
-    await user.click(screen.getByRole("combobox"));
+    await user.click(screen.getByRole("combobox", { name: "Measured as" }));
     await user.click(screen.getByRole("option", { name: "Salt" }));
 
     expect(await screen.findByText("= 393mg sodium")).toBeInTheDocument();
+  });
+
+  // Salt is not sodium: the record stores sodium mg, and keeps what was typed.
+  it("records 2 g of salt as 786 mg sodium and keeps the entry as typed", async () => {
+    const user = userEvent.setup();
+    await renderWithFixtures(<FoodSection />);
+
+    await user.type(await screen.findByLabelText(/Sodium/i), "2");
+    await user.click(screen.getByRole("combobox", { name: "Measured as" }));
+    await user.click(screen.getByRole("option", { name: "Salt" }));
+    await user.click(screen.getByRole("combobox", { name: "Unit" }));
+    await user.click(screen.getByRole("option", { name: "g" }));
+    expect(await screen.findByText("= 786mg sodium")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Record with details" }));
+
+    await waitFor(async () => {
+      const salt = (await db.intakeRecords.toArray()).find((r) => r.type === "salt");
+      expect(salt).toMatchObject({
+        amount: 786,
+        sodiumSource: "salt",
+        sourceAmount: 2,
+        sourceUnit: "g",
+      });
+    });
+  });
+
+  it("converts MSG with its own ~12.3% sodium fraction", async () => {
+    const user = userEvent.setup();
+    await renderWithFixtures(<FoodSection />);
+
+    await user.type(await screen.findByLabelText(/Sodium/i), "1000");
+    await user.click(screen.getByRole("combobox", { name: "Measured as" }));
+    await user.click(screen.getByRole("option", { name: "MSG" }));
+
+    expect(await screen.findByText("= 123mg sodium")).toBeInTheDocument();
+  });
+
+  it("opens an edit with the salt amount and unit that were typed", async () => {
+    const user = userEvent.setup();
+    const groupId = "g-salted";
+    await renderWithFixtures(<FoodSection />, {
+      seed: {
+        eatingRecords: [makeEatingRecord({ note: "Salted soup", groupId, timestamp: Date.now() })],
+        intakeRecords: [
+          makeIntakeRecord({
+            type: "salt",
+            amount: 786,
+            source: "manual:salt",
+            sodiumSource: "salt",
+            sourceAmount: 2,
+            sourceUnit: "g",
+            groupId,
+          }),
+        ],
+      },
+    });
+
+    await user.click(await screen.findByText("Salted soup"));
+    await waitFor(() => {
+      expect(screen.getByLabelText("Sodium", { selector: "#edit-eating-sodium" })).toHaveValue(2);
+    });
+    expect(screen.getByRole("combobox", { name: "Edit measured as" })).toHaveTextContent("Salt");
+    expect(screen.getByRole("combobox", { name: "Edit unit" })).toHaveTextContent("g");
+  });
+
+  it("opens a legacy sodium row as sodium mg with its stored value", async () => {
+    // Pre-source rows stored sodium mg even when typed as salt; they are read
+    // as sodium with an unknown source, never back-converted.
+    const user = userEvent.setup();
+    const groupId = "g-legacy";
+    await renderWithFixtures(<FoodSection />, {
+      seed: {
+        eatingRecords: [makeEatingRecord({ note: "Old chips", groupId, timestamp: Date.now(), updatedAt: 1 })],
+        intakeRecords: [
+          makeIntakeRecord({ type: "salt", amount: 780, source: "manual:salt", groupId }),
+        ],
+      },
+    });
+
+    await user.click(await screen.findByText("Old chips"));
+    await waitFor(() => {
+      expect(screen.getByLabelText("Sodium", { selector: "#edit-eating-sodium" })).toHaveValue(780);
+    });
+    expect(screen.getByRole("combobox", { name: "Edit measured as" })).toHaveTextContent("Sodium");
+    expect(screen.getByRole("combobox", { name: "Edit unit" })).toHaveTextContent("mg");
+
+    // Saving without touching sodium leaves the legacy row exactly as it was.
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(async () => {
+      const eating = (await db.eatingRecords.toArray())[0];
+      expect(eating?.updatedAt).toBeGreaterThan(1);
+    });
+    const salt = (await db.intakeRecords.toArray()).find((r) => r.type === "salt")!;
+    expect(salt.amount).toBe(780);
+    expect(salt.source).toBe("manual:salt");
+    expect(salt.sodiumSource).toBeUndefined();
+  });
+
+  it("re-records an edited sodium entry as typed", async () => {
+    const user = userEvent.setup();
+    const groupId = "g-edit";
+    await renderWithFixtures(<FoodSection />, {
+      seed: {
+        eatingRecords: [makeEatingRecord({ note: "Broth", groupId, timestamp: Date.now() })],
+        intakeRecords: [
+          makeIntakeRecord({ type: "salt", amount: 300, source: "manual:sodium", groupId }),
+        ],
+      },
+    });
+
+    await user.click(await screen.findByText("Broth"));
+    const input = await screen.findByLabelText("Sodium", { selector: "#edit-eating-sodium" });
+    await waitFor(() => expect(input).toHaveValue(300));
+    await user.clear(input);
+    await user.type(input, "1.5");
+    await user.click(screen.getByRole("combobox", { name: "Edit measured as" }));
+    await user.click(screen.getByRole("option", { name: "Salt" }));
+    await user.click(screen.getByRole("combobox", { name: "Edit unit" }));
+    await user.click(screen.getByRole("option", { name: "g" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(async () => {
+      const salt = (await db.intakeRecords.toArray()).find((r) => r.type === "salt");
+      expect(salt).toMatchObject({
+        amount: 590, // 1.5 g × 1000 × 0.393 = 589.5 → 590
+        sodiumSource: "salt",
+        sourceAmount: 1.5,
+        sourceUnit: "g",
+      });
+    });
   });
 
   it("records a composable entry and surfaces it in the recent list", async () => {
@@ -120,7 +251,7 @@ describe("FoodSection", () => {
     // note and the seeded sodium total — proof the write reached the DB.
     expect(await screen.findByText("Soup")).toBeInTheDocument();
     await waitFor(() => {
-      expect(screen.getByText("420mg")).toBeInTheDocument();
+      expect(screen.getByText("420mg Na")).toBeInTheDocument();
     });
   });
 

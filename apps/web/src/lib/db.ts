@@ -56,6 +56,8 @@ export type {
   PhaseType,
   PillShape,
   Prescription,
+  SodiumSource,
+  SodiumSourceUnit,
   SubstanceRecord,
   SyncMetaRow,
   SyncQueueRow,
