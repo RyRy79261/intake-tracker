@@ -171,9 +171,13 @@ function scheduledAdherence(
     const dateKey = toLocalDateKey(day);
     // On the day the phase started (phases activate at "now", mid-day), a
     // slot that was already past belonged to the previous phase.
+    // A schedule added later has no slot on the days before it (the rule
+    // the schedule screen applies), so it can't be missed there.
     const due = schedules.filter(
       (s) =>
-        s.daysOfWeek.includes(dow) && slotTime(day, s.time) >= phaseStart,
+        s.daysOfWeek.includes(dow) &&
+        slotTime(day, s.time) >= phaseStart &&
+        toLocalDateKey(s.createdAt) <= dateKey,
     );
     const logged = statusByDate.get(dateKey);
     for (const s of due) {

@@ -463,7 +463,10 @@ describe("buildMedicationSummary", () => {
       ...phaseOverrides,
     });
     await db.medicationPhases.add(phase);
-    const rows = schedules.map((s) => makePhaseSchedule(phase.id, s));
+    // Schedules exist from the phase start unless a test says otherwise.
+    const rows = schedules.map((s) =>
+      makePhaseSchedule(phase.id, { createdAt: phase.startDate, ...s }),
+    );
     await db.phaseSchedules.bulkAdd(rows);
     return { rx, phase, schedules: rows };
   }
@@ -599,6 +602,29 @@ describe("buildMedicationSummary", () => {
     // The one due day with nothing logged is missed.
     expect(med!.dosesSkipped).toBe(0);
     expect(med!.dosesMissed).toBe(1);
+  });
+
+  it("does not count a schedule as missed on days before it was added", async () => {
+    // Phase running for a long time; the 08:00 schedule has always been
+    // there, the 20:00 one was added two days ago.
+    const { rx, phase } = await addScheduledRx("Bisoprolol", [
+      { dosage: 5, daysOfWeek: [0, 1, 2, 3, 4, 5, 6], time: "08:00" },
+    ]);
+    const added = makePhaseSchedule(phase.id, {
+      dosage: 5,
+      daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
+      time: "20:00",
+      createdAt: NOW - 2 * DAY_MS,
+    });
+    await db.phaseSchedules.add(added);
+    void rx;
+
+    const [med] = await buildMedicationSummary(RANGE, NOW);
+
+    // 30 completed days of the 08:00 dose plus the 20:00 dose on the two
+    // days since it was added, as the schedule screen shows them.
+    expect(med!.dosesDue).toBe(32);
+    expect(med!.dosesMissed).toBe(32);
   });
 
   it("splits the untaken due doses into skipped and missed (live-data-forensics#7)", async () => {
