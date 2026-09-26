@@ -11,9 +11,18 @@ import {
   SelectValue,
 } from "@intake/ui/select";
 import { Clock, Plus, X } from "lucide-react";
-import { usePhasesForPrescription, useSchedulesForPhase } from "@/hooks/use-medication-queries";
+import {
+  useInventoryForPrescription,
+  usePhasesForPrescription,
+  useSchedulesForPhase,
+} from "@/hooks/use-medication-queries";
 import type { Prescription } from "@/lib/db";
 import type { RxEntry } from "@/components/medications/titrations/types";
+import { findActiveBrand } from "@/lib/dose-preview";
+import { DoseAmountInput, DosePreviewLine } from "@/components/medications/dose-amount-field";
+
+// Titration phases are always saved in mg (titration-drawer).
+const TITRATION_UNIT = "mg";
 
 export function RxEntryCard({
   entry,
@@ -41,6 +50,9 @@ export function RxEntryCard({
   ) => void;
 }) {
   const selectedRx = prescriptions.find((p) => p.id === entry.prescriptionId);
+  // The brand each dose is counted against: a combo dose is entered as its
+  // tablets, and every dose gets a live "= N tablets of X" readout.
+  const activeBrand = findActiveBrand(useInventoryForPrescription(selectedRx?.id));
 
   return (
     <div className="border rounded-lg p-3 space-y-3">
@@ -99,37 +111,33 @@ export function RxEntryCard({
         </div>
 
         {entry.schedules.map((sched, schedIdx) => (
-          <div
-            key={schedIdx}
-            className="flex items-center gap-2 bg-muted/30 rounded-lg p-2"
-          >
-            <Input
-              type="time"
-              value={sched.time}
-              onChange={(e) => onUpdateSchedule(schedIdx, { time: e.target.value })}
-              className="w-28 h-8 text-sm"
-            />
-            <Input
-              type="number"
-              step="any"
-              placeholder="mg"
-              value={sched.dosage}
-              onChange={(e) =>
-                onUpdateSchedule(schedIdx, { dosage: e.target.value })
-              }
-              className="w-20 h-8 text-sm"
-            />
-            <span className="text-xs text-muted-foreground">mg</span>
-            {entry.schedules.length > 1 && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 shrink-0 ml-auto"
-                onClick={() => onRemoveSchedule(schedIdx)}
-              >
-                <X className="w-3 h-3 text-muted-foreground" />
-              </Button>
-            )}
+          <div key={schedIdx} className="bg-muted/30 rounded-lg p-2 space-y-1">
+            <div className="flex items-center gap-2">
+              <Input
+                type="time"
+                value={sched.time}
+                onChange={(e) => onUpdateSchedule(schedIdx, { time: e.target.value })}
+                className="w-28 h-8 text-sm"
+              />
+              <DoseAmountInput
+                dosage={sched.dosage}
+                onDosageChange={(dosage) => onUpdateSchedule(schedIdx, { dosage })}
+                unit={TITRATION_UNIT}
+                brand={activeBrand}
+                className="w-20 h-8 text-sm"
+              />
+              {entry.schedules.length > 1 && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 shrink-0 ml-auto"
+                  onClick={() => onRemoveSchedule(schedIdx)}
+                >
+                  <X className="w-3 h-3 text-muted-foreground" />
+                </Button>
+              )}
+            </div>
+            <DosePreviewLine dosage={sched.dosage} unit={TITRATION_UNIT} brand={activeBrand} />
           </div>
         ))}
       </div>
