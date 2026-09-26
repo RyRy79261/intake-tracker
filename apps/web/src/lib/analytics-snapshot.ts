@@ -123,6 +123,14 @@ function describePrnDose(logs: DoseLog[]): string {
   return amounts.size > 0 ? [...amounts].sort().join(", ") : "dose not logged";
 }
 
+/** Local timestamp of a schedule's "HH:MM" on the given day. */
+function slotTime(day: Date, time: string): number {
+  const [h, m] = time.split(":").map(Number);
+  const slot = new Date(day);
+  slot.setHours(h || 0, m || 0, 0, 0);
+  return slot.getTime();
+}
+
 /**
  * Scheduled doses due vs logged as taken on the completed days of the current
  * phase inside the window. The phase's schedules only describe the current
@@ -153,7 +161,12 @@ function scheduledAdherence(
   const day = new Date(startOfLocalDay(Math.max(range.start, phaseStart)));
   while (day.getTime() <= lastDay) {
     const dow = day.getDay();
-    const due = schedules.filter((s) => s.daysOfWeek.includes(dow));
+    // On the day the phase started (phases activate at "now", mid-day), a
+    // slot that was already past belonged to the previous phase.
+    const due = schedules.filter(
+      (s) =>
+        s.daysOfWeek.includes(dow) && slotTime(day, s.time) >= phaseStart,
+    );
     const taken = takenByDate.get(toLocalDateKey(day));
     dosesDue += due.length;
     dosesTaken += taken ? due.filter((s) => taken.has(s.id)).length : 0;

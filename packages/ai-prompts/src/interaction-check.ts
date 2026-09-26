@@ -54,7 +54,9 @@ export interface InteractionRow {
 }
 
 function normaliseName(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  // Unicode-aware: an ASCII-only class would reduce a non-Latin name to ""
+  // and silently exempt it from the coverage check.
+  return name.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 }
 
 /**

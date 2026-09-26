@@ -281,3 +281,46 @@ describe("interaction-check route handler", () => {
     expect(body.error).toBe("Failed to check interactions");
   });
 });
+
+describe("withUnassessedMedications", () => {
+  it("flags a skipped medication whose name has no ASCII letters", async () => {
+    const { withUnassessedMedications } = await import(
+      "@intake/ai-prompts/interaction-check"
+    );
+    const rows = withUnassessedMedications(
+      [
+        {
+          substance: "grapefruit",
+          medication: "Amlodipine",
+          severity: "CAUTION" as const,
+          description: "CYP3A4.",
+        },
+      ],
+      ["Amlodipine", "ワルファリン"],
+      "grapefruit",
+    );
+
+    expect(rows).toHaveLength(2);
+    expect(rows[1]).toMatchObject({ medication: "ワルファリン", severity: "CAUTION" });
+  });
+
+  it("matches a returned non-ASCII name to the requested one", async () => {
+    const { withUnassessedMedications } = await import(
+      "@intake/ai-prompts/interaction-check"
+    );
+    const rows = withUnassessedMedications(
+      [
+        {
+          substance: "grapefruit",
+          medication: "Warfarin (ワルファリン)",
+          severity: "AVOID" as const,
+          description: "Bleeding.",
+        },
+      ],
+      ["ワルファリン"],
+      "grapefruit",
+    );
+
+    expect(rows).toHaveLength(1);
+  });
+});

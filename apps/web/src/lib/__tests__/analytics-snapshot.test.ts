@@ -577,8 +577,8 @@ describe("buildMedicationSummary", () => {
   });
 
   it("reports adherence as taken of due doses on completed days of the current phase", async () => {
-    // Phase started 5 days ago: 5 completed days (today excluded) of one
-    // daily dose are due.
+    // Phase started 5 days ago at 10:00, after that day's 08:00 dose, so the
+    // 4 following completed days (today excluded) of one daily dose are due.
     const { rx, phase, schedules } = await addScheduledRx(
       "Bisoprolol",
       [{ dosage: 5, daysOfWeek: [0, 1, 2, 3, 4, 5, 6] }],
@@ -589,12 +589,32 @@ describe("buildMedicationSummary", () => {
         status: "taken",
         scheduledDate: toLocalDateKey(NOW - daysAgo * DAY_MS),
       });
-    // Taken on 3 of the 5 due days, plus today's dose, which is not counted.
+    // Taken on 3 of the 4 due days, plus today's dose, which is not counted.
     await db.doseLogs.bulkAdd([taken(1), taken(2), taken(4), taken(0)]);
 
     const [med] = await buildMedicationSummary(RANGE, NOW);
 
-    expect(med!.dosesDue).toBe(5);
+    expect(med!.dosesDue).toBe(4);
     expect(med!.dosesTaken).toBe(3);
+  });
+
+  it("does not count doses scheduled before the phase started that day as due", async () => {
+    // A titration activated at 14:00 two days ago: that morning's 08:00 dose
+    // belonged to the previous phase, so only the evening dose and
+    // yesterday's two doses are due.
+    const activatedAt = new Date(NOW - 2 * DAY_MS);
+    activatedAt.setHours(14, 0, 0, 0);
+    await addScheduledRx(
+      "Bisoprolol",
+      [
+        { dosage: 5, daysOfWeek: [0, 1, 2, 3, 4, 5, 6], time: "08:00" },
+        { dosage: 5, daysOfWeek: [0, 1, 2, 3, 4, 5, 6], time: "20:00" },
+      ],
+      { startDate: activatedAt.getTime() },
+    );
+
+    const [med] = await buildMedicationSummary(RANGE, NOW);
+
+    expect(med!.dosesDue).toBe(3);
   });
 });
