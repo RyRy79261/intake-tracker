@@ -6,7 +6,7 @@ import {
   type PhaseSchedule,
   type InventoryItem,
 } from "@/lib/db";
-import { formatLocalTime, getDeviceTimezone } from "@/lib/timezone";
+import { getDeviceTimezone, resolveScheduleLocalTime } from "@/lib/timezone";
 import { calculatePillsConsumed, isCleanFraction, selectSlotLog } from "@/lib/dose-log-service";
 import { toLocalDateKey } from "@/lib/date-utils";
 import { isLive } from "@intake/core/lifecycle";
@@ -248,16 +248,19 @@ export async function getDailyDoseSchedule(
     const prescription = prescriptionMap.get(phase.prescriptionId);
     if (!prescription) continue;
 
-    // Don't show doses for dates before the prescription was created
+    // Don't show doses for dates before the prescription was created.
+    // Compare local date keys: a UTC date hides evening doses west of UTC.
     const createdDate = prescription.createdAt
-      ? new Date(prescription.createdAt).toISOString().split("T")[0]
+      ? toLocalDateKey(prescription.createdAt)
       : undefined;
     if (createdDate && dateStr < createdDate) continue;
 
     const existingLog = logMap.get(schedule.id);
 
     const status = deriveStatus(existingLog, dateStr, todayStr);
-    const localTime = formatLocalTime(schedule.scheduleTimeUTC, tz);
+    // Wall-clock `time` in the anchor zone, resolved with this date's offset,
+    // so the slot does not drift across DST (scheduleTimeUTC is a stale cache).
+    const localTime = resolveScheduleLocalTime(schedule, dateStr, tz);
     const dosageMg = schedule.dosage;
 
     const inventory = inventoryByPrescription.get(prescription.id);

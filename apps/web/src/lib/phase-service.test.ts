@@ -14,6 +14,7 @@ import {
   makeMedicationPhase,
   makePhaseSchedule,
 } from "@/__tests__/fixtures/db-fixtures";
+import { localHHMMStringToUTCMinutes } from "@/lib/timezone";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -365,5 +366,55 @@ describe("deletePhase", () => {
     const s = await db.phaseSchedules.get(sched.id);
     expect(s!.deletedAt).not.toBeNull();
     expect(s!.enabled).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// updatePhase — editing abroad keeps the schedule's anchor
+// (gap-timezone-travel-recalc#2). The test device zone is UTC.
+// ---------------------------------------------------------------------------
+
+describe("updatePhase keeps each schedule's anchorTimezone", () => {
+  async function seedBerlinSchedule() {
+    const rx = makePrescription();
+    const phase = makeMedicationPhase(rx.id);
+    const schedule = makePhaseSchedule(phase.id, {
+      time: "08:00",
+      anchorTimezone: "Europe/Berlin",
+      scheduleTimeUTC: 999, // sentinel: must survive an edit that keeps the time
+    });
+    await db.prescriptions.add(rx);
+    await db.medicationPhases.add(phase);
+    await db.phaseSchedules.add(schedule);
+    return { phase, schedule };
+  }
+
+  it("does not re-anchor or re-encode a schedule whose time is unchanged", async () => {
+    const { phase, schedule } = await seedBerlinSchedule();
+
+    await updatePhase({
+      id: phase.id,
+      notes: "take with food",
+      schedules: [{ id: schedule.id, time: "08:00", daysOfWeek: [1], dosage: 75 }],
+    });
+
+    const updated = await db.phaseSchedules.get(schedule.id);
+    expect(updated!.anchorTimezone).toBe("Europe/Berlin");
+    expect(updated!.scheduleTimeUTC).toBe(999);
+    expect(updated!.dosage).toBe(75);
+  });
+
+  it("encodes a changed time in the schedule's own anchor, not the device zone", async () => {
+    const { phase, schedule } = await seedBerlinSchedule();
+
+    await updatePhase({
+      id: phase.id,
+      schedules: [{ id: schedule.id, time: "09:00", daysOfWeek: [1], dosage: 50 }],
+    });
+
+    const updated = await db.phaseSchedules.get(schedule.id);
+    expect(updated!.time).toBe("09:00");
+    expect(updated!.anchorTimezone).toBe("Europe/Berlin");
+    expect(updated!.scheduleTimeUTC).toBe(localHHMMStringToUTCMinutes("09:00", "Europe/Berlin"));
   });
 });

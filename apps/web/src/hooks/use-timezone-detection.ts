@@ -1,24 +1,63 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { db } from "@/lib/db";
 import { getDeviceTimezone, clearTimezoneCache } from "@/lib/timezone";
-import { recalculateScheduleTimezones } from "@/lib/timezone-recalculation-service";
+import {
+  findMismatchedAnchors,
+  recalculateScheduleTimezones,
+  type TimezoneAnchorGroup,
+} from "@/lib/timezone-recalculation-service";
 import { useToast } from "@intake/ui/use-toast";
 
 // ---------------------------------------------------------------------------
-// Session-level dismissal flag (D-07)
-// Resets naturally on page reload / app restart.
+// Persisted "Not now" dismissals
+//
+// Stored per (deviceTz, anchorTz) pair, so a deliberate choice to keep home
+// times on a trip survives reloads and cold starts, while a new zone (or a
+// schedule anchored somewhere else) still prompts. Device-local, never synced.
 // ---------------------------------------------------------------------------
 
-let _dismissedThisSession = false;
+export const TIMEZONE_DISMISSALS_KEY = "intake-tracker-timezone-dismissals";
+
+/** Cap so the list cannot grow without bound across many trips. */
+const MAX_DISMISSALS = 50;
+
+function dismissalKey(deviceTz: string, anchorTz: string): string {
+  return `${deviceTz}|${anchorTz}`;
+}
+
+function readDismissals(): string[] {
+  try {
+    const raw = globalThis.localStorage?.getItem(TIMEZONE_DISMISSALS_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeDismissals(keys: string[]): void {
+  try {
+    globalThis.localStorage?.setItem(
+      TIMEZONE_DISMISSALS_KEY,
+      JSON.stringify(keys.slice(-MAX_DISMISSALS)),
+    );
+  } catch {
+    // Storage full or unavailable: the prompt just comes back next launch.
+  }
+}
 
 /**
- * Reset the session dismissal flag. Exported for testing only.
- * @internal
+ * Anchors the user already dismissed while on `deviceTz`. Dismissals made in
+ * any other device zone are dropped: once the device leaves a zone the trip
+ * is over, so a later visit to the same zone prompts again.
  */
-export function _resetDismissedFlag(): void {
-  _dismissedThisSession = false;
+function dismissedAnchorsFor(deviceTz: string): Set<string> {
+  const prefix = `${deviceTz}|`;
+  const all = readDismissals();
+  const kept = all.filter((k) => k.startsWith(prefix));
+  if (kept.length !== all.length) writeDismissals(kept);
+  return new Set(kept.map((k) => k.slice(prefix.length)));
 }
 
 // ---------------------------------------------------------------------------
@@ -33,10 +72,15 @@ function formatTimezoneCityName(iana: string): string {
 // Public types
 // ---------------------------------------------------------------------------
 
+export type { TimezoneAnchorGroup };
+
 export interface TimezoneChangeState {
   dialogOpen: boolean;
+  /** First mismatched anchor; `anchors` lists all of them. */
   oldTimezone: string;
   newTimezone: string;
+  /** Every distinct mismatched anchor with its doses' before/after times. */
+  anchors: TimezoneAnchorGroup[];
   isRecalculating: boolean;
   handleConfirm: () => Promise<void>;
   handleDismiss: () => void;
@@ -48,7 +92,7 @@ export interface TimezoneChangeState {
 
 export function useTimezoneDetection(): TimezoneChangeState {
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [oldTimezone, setOldTimezone] = useState("");
+  const [anchors, setAnchors] = useState<TimezoneAnchorGroup[]>([]);
   const [newTimezone, setNewTimezone] = useState("");
   const [isRecalculating, setIsRecalculating] = useState(false);
   const { toast } = useToast();
@@ -58,34 +102,20 @@ export function useTimezoneDetection(): TimezoneChangeState {
   toastRef.current = toast;
 
   const checkTimezoneChange = useCallback(async () => {
-    if (_dismissedThisSession) return;
-
-    // Bust the cache so we get the real current timezone
+    // Always bust the cache first, so the dose list and new records pick up
+    // the real zone even when the prompt stays dismissed.
     clearTimezoneCache();
     const deviceTz = getDeviceTimezone();
 
     try {
-      const allSchedules = await db.phaseSchedules.toArray();
-      const activeSchedules = allSchedules.filter((s) => s.enabled === true);
-
-      if (activeSchedules.length === 0) return;
-
-      // Get unique anchor timezones from active schedules
-      const anchorTimezones = Array.from(
-        new Set(activeSchedules.map((s) => s.anchorTimezone)),
-      );
-
-      // If any schedule has a different IANA name, prompt
-      const hasMismatch = anchorTimezones.some((tz) => tz !== deviceTz);
-      if (hasMismatch) {
-        // Use the first mismatched timezone as the "old" timezone for display
-        const mismatchedTz = anchorTimezones.find(
-          (tz) => tz !== deviceTz,
-        );
-        setOldTimezone(mismatchedTz ?? "");
-        setNewTimezone(deviceTz);
-        setDialogOpen(true);
-      }
+      // Prompt only if some mismatched anchor is not yet dismissed, but then
+      // list them all: confirming re-anchors every mismatched schedule.
+      const dismissed = dismissedAnchorsFor(deviceTz);
+      const groups = await findMismatchedAnchors(deviceTz);
+      if (!groups.some((g) => !dismissed.has(g.anchorTimezone))) return;
+      setAnchors(groups);
+      setNewTimezone(deviceTz);
+      setDialogOpen(true);
     } catch {
       // Silently fail -- don't block app startup over timezone detection
     }
@@ -113,9 +143,13 @@ export function useTimezoneDetection(): TimezoneChangeState {
   }, [newTimezone]);
 
   const handleDismiss = useCallback(() => {
-    _dismissedThisSession = true;
+    const existing = readDismissals();
+    const added = anchors
+      .map((g) => dismissalKey(newTimezone, g.anchorTimezone))
+      .filter((k) => !existing.includes(k));
+    writeDismissals([...existing, ...added]);
     setDialogOpen(false);
-  }, []);
+  }, [anchors, newTimezone]);
 
   // Check on mount (app open) and on visibility change (app resume)
   useEffect(() => {
@@ -137,8 +171,9 @@ export function useTimezoneDetection(): TimezoneChangeState {
 
   return {
     dialogOpen,
-    oldTimezone,
+    oldTimezone: anchors[0]?.anchorTimezone ?? "",
     newTimezone,
+    anchors,
     isRecalculating,
     handleConfirm,
     handleDismiss,

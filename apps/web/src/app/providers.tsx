@@ -29,6 +29,7 @@ function TimezoneGuard({ children }: { children: React.ReactNode }) {
     dialogOpen,
     oldTimezone,
     newTimezone,
+    anchors,
     isRecalculating,
     handleConfirm,
     handleDismiss,
@@ -41,6 +42,7 @@ function TimezoneGuard({ children }: { children: React.ReactNode }) {
         open={dialogOpen}
         oldTimezone={oldTimezone}
         newTimezone={newTimezone}
+        anchors={anchors}
         isRecalculating={isRecalculating}
         onConfirm={handleConfirm}
         onDismiss={handleDismiss}
