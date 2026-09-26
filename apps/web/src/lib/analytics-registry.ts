@@ -188,7 +188,7 @@ export const queryRegistry: QueryDescriptor[] = [
     id: "custom_correlation",
     name: "Custom Domain Correlation",
     description:
-      "Pearson correlation between any two health domains with optional lag. Each domain is reduced to one value per day: intake, substance and event domains are summed into a daily total, weight and BP readings are averaged. Supports all tracked domains: water, salt, sugar, potassium, weight, bp, eating, urination, defecation, caffeine, alcohol, medication.",
+      "Pearson correlation between any two health domains with optional lag. Each domain is reduced to one value per day: intake, substance and event domains are summed into a daily total, weight and BP readings are averaged. Supports all tracked domains: water, salt (sodium mg), sugar, potassium, weight, bp, eating, urination, defecation, caffeine, alcohol, medication.",
     category: "custom",
     parameters: CorrelationParamsSchema,
     execute: async (params) => {

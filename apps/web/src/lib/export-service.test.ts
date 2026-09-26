@@ -224,13 +224,35 @@ describe("exportAllRecordsCSV (real Dexie data)", () => {
     const csv = await capturedCSV();
 
     const intake = section(csv, "Intake");
-    expect(intake[0]).toBe("timestamp,local_time,type,amount,unit,source,note");
+    expect(intake[0]).toBe(
+      "timestamp,local_time,type,amount,unit,source,note,entered_as,entered_amount,entered_unit",
+    );
     expect(intake).toHaveLength(3);
-    expect(intake[1]).toContain(`,salt,800,mg,food:soup,"lunch, big"`);
+    // The "salt" record type holds sodium mg: it exports as sodium.
+    expect(intake[1]).toContain(`,sodium,800,mg,food:soup,"lunch, big",,,`);
     expect(intake[2]).toContain(",water,500,ml,manual,");
 
     expect(section(csv, "Weight")[1]).toContain(",73.5,");
     expect(section(csv, "Caffeine and alcohol")[1]).toContain(",caffeine,95,");
+  });
+
+  it("exports the salt or MSG a sodium row was typed as", async () => {
+    await db.intakeRecords.add(
+      makeIntakeRecord({
+        type: "salt",
+        amount: 786,
+        timestamp: BASE_TS,
+        source: "manual:salt",
+        sodiumSource: "salt",
+        sourceAmount: 2,
+        sourceUnit: "g",
+      }),
+    );
+
+    await exportAllRecordsCSV(WIDE);
+    const csv = await capturedCSV();
+
+    expect(section(csv, "Intake")[1]).toMatch(/,sodium,786,mg,manual:salt,,salt,2,g$/);
   });
 
   it("exports every blood pressure field, not just systolic", async () => {

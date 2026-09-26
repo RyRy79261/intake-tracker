@@ -45,6 +45,14 @@ describe("salt → sodium conversion", () => {
  * the record keeps what they entered so it can be shown and edited as typed.
  */
 describe("sodium sources", () => {
+  it("tells the parse and voice prompts MSG's own factor too", () => {
+    expect(SYSTEM_PROMPT).toContain("sodium_mg = msg_g × 123");
+    expect(VOICE_SYSTEM_PROMPT).toContain("sodium_mg = msg_g × 123");
+    expect(PARSE_RESULT_TOOL.input_schema.properties.sodium_mg.description).toContain(
+      "MSG g × 123 = sodium mg",
+    );
+  });
+
   it("keeps one fraction per source substance", () => {
     // MSG monohydrate: 22.99 / 187.13 ≈ 12.3% sodium
     expect(MSG_SODIUM_FRACTION).toBe(0.123);

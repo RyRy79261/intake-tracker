@@ -32,7 +32,7 @@ function formatPresetSubstances(
     parts.push(`${preset.alcoholPer100ml}% ABV`);
   }
   if (preset.saltPer100ml) {
-    parts.push(`${preset.saltPer100ml}mg salt/100ml`);
+    parts.push(`${preset.saltPer100ml}mg sodium/100ml`);
   }
   if (sugarEnabled && preset.sugarPer100ml) {
     parts.push(`${preset.sugarPer100ml}g sugar/100ml`);

@@ -158,6 +158,10 @@ describe("AiInsightsCard", () => {
       await screen.findByText("What goes into this summary"),
     ).toBeInTheDocument();
     expect(screen.getByText("Water intake")).toBeInTheDocument();
+    // The sodium tracker holds sodium mg, not salt.
+    expect(screen.getByText("Sodium intake")).toBeInTheDocument();
+    expect(screen.getByText(/Correlations: sodium vs\. weight/)).toBeInTheDocument();
+    expect(screen.queryByText(/salt/i)).not.toBeInTheDocument();
     expect(screen.getByText("Blood pressure readings")).toBeInTheDocument();
     expect(
       screen.getByText(/Conditions not included/i),
