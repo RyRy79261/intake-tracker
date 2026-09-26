@@ -295,9 +295,10 @@ export async function undoDeleteSubstanceRecord(
  * Update a SubstanceRecord, keeping its group's fluid row consistent.
  *
  * `volumeMl` is the drink's volume, and the group's water IntakeRecord is
- * derived from it (volume x water content, see logDrink). Editing the volume on the substance alone let the two halves
- * of one drink disagree — the substance said 500 ml while hydration still
- * counted 330 — with nothing to reconcile them. Same for `timestamp`: moving
+ * derived from it (volume x water content, see logDrink). Editing the volume
+ * on the substance alone let the two halves of one drink disagree — the
+ * substance said 500 ml while hydration still counted 330 — with nothing to
+ * reconcile them. Same for `timestamp`: moving
  * the substance without its water stranded the halves on different days.
  */
 export async function updateSubstanceRecord(
