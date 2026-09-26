@@ -33,6 +33,9 @@ function resetState() {
   messagesCreateCalls.length = 0;
 }
 
+let authUserId = "user-test";
+let authUserCounter = 0;
+
 vi.mock("@/lib/auth-middleware", () => ({
   withAuth: (
     handler: (ctx: {
@@ -43,7 +46,7 @@ vi.mock("@/lib/auth-middleware", () => ({
     return async (request: NextRequest) =>
       handler({
         request,
-        auth: { success: true, userId: "user-test", email: "test@example.test" },
+        auth: { success: true, userId: authUserId, email: "test@example.test" },
       });
   },
 }));
@@ -115,6 +118,9 @@ function insightToolBlock(input: unknown) {
 describe("POST /api/analytics/insights", () => {
   beforeEach(() => {
     resetState();
+    // The limiter is keyed on the user (ai-routes-models#21) and is shared
+    // across this file, so each test signs in as its own user.
+    authUserId = `user-test-${++authUserCounter}`;
   });
 
   afterEach(() => {
@@ -283,8 +289,6 @@ describe("POST /api/analytics/insights", () => {
         ],
       }),
     );
-    // Own IP bucket: the route's per-IP limiter is shared across this file.
-    req.headers.set("x-forwarded-for", "203.0.113.16");
     await POST(req);
 
     const params = messagesCreateCalls[0] as {
@@ -307,5 +311,20 @@ describe("POST /api/analytics/insights", () => {
     expect(body.error).toBe("Failed to generate insights");
     // Raw provider error detail must not leak to the client.
     expect(JSON.stringify(body)).not.toContain("SECRET_TRACE_ID");
+  });
+
+  it("rate-limits per user, not per claimed IP (ai-routes-models#21)", async () => {
+    aiThrows = new Error("not reached past the limiter");
+    const { POST } = await import("@/app/api/analytics/insights/route");
+
+    const statuses: number[] = [];
+    for (let i = 0; i < 11; i++) {
+      const req = makeRequest(validBody());
+      req.headers.set("x-forwarded-for", `198.51.100.${i}`);
+      statuses.push((await POST(req)).status);
+    }
+
+    expect(statuses.slice(0, 10)).not.toContain(429);
+    expect(statuses[10]).toBe(429);
   });
 });

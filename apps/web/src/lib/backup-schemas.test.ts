@@ -243,6 +243,32 @@ describe("backup-schemas: tightening over the legacy isValid* checks", () => {
     expect(BACKUP_VALIDATORS.intakeRecords({ ...makeIntakeRecord(), deletedAt: "yes" })).toBe(false);
     expect(BACKUP_VALIDATORS.intakeRecords({ ...makeIntakeRecord(), deletedAt: Number.NaN })).toBe(false);
   });
+
+  // gap-combo-drugs-pill-math#8: pill strength is the dose-math denominator, so
+  // a hand-edited backup must not bring in a non-numeric or infinite one
+  // (JSON.parse("1e999") is Infinity).
+  it("rejects an inventory item with a non-finite or mistyped strength", () => {
+    const base = makeInventoryItem("rx");
+    expect(BACKUP_VALIDATORS.inventoryItems({ ...base, strength: 25 })).toBe(true);
+    expect(BACKUP_VALIDATORS.inventoryItems({ ...base, strength: Infinity })).toBe(false);
+    expect(BACKUP_VALIDATORS.inventoryItems({ ...base, strength: "50" })).toBe(false);
+    expect(BACKUP_VALIDATORS.inventoryItems({ ...base, strength: null })).toBe(false);
+  });
+
+  it("validates per-compound strengths on inventory items and prescriptions", () => {
+    const good = [{ name: "Sacubitril", strength: 49 }, { name: "Valsartan", strength: 51 }];
+    const bad = [{ name: "Sacubitril", strength: "49" }];
+    const inf = [{ name: "Sacubitril", strength: JSON.parse("1e999") }];
+    const item = makeInventoryItem("rx");
+    const rx = makePrescription();
+
+    expect(BACKUP_VALIDATORS.inventoryItems({ ...item, compounds: good })).toBe(true);
+    expect(BACKUP_VALIDATORS.inventoryItems({ ...item, compounds: null })).toBe(true);
+    expect(BACKUP_VALIDATORS.inventoryItems({ ...item, compounds: bad })).toBe(false);
+    expect(BACKUP_VALIDATORS.inventoryItems({ ...item, compounds: inf })).toBe(false);
+    expect(BACKUP_VALIDATORS.prescriptions({ ...rx, compounds: good })).toBe(true);
+    expect(BACKUP_VALIDATORS.prescriptions({ ...rx, compounds: bad })).toBe(false);
+  });
 });
 
 describe("backup-schemas: 2026-09 schema additions", () => {

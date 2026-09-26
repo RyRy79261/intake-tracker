@@ -1,11 +1,10 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { db } from "@/lib/db";
 import {
   calculatePillsConsumed,
   isCleanFraction,
   getDoseLogsForDate,
   getDoseLog,
-  getDoseLogsWithDetailsForDate,
   takeDose,
   untakeDose,
   skipDose,
@@ -303,42 +302,6 @@ describe("getDoseLog", () => {
   it("returns undefined when no log exists", async () => {
     const found = await getDoseLog("no-rx", "no-phase", "no-sched", DATE, TIME);
     expect(found).toBeUndefined();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// getDoseLogsWithDetailsForDate
-// ---------------------------------------------------------------------------
-
-describe("getDoseLogsWithDetailsForDate", () => {
-  it("returns logs with related prescription, phase, and schedule", async () => {
-    const { rx, phase, schedule } = await seedFullPrescription();
-    const log = makeDoseLog(rx.id, phase.id, schedule.id, {
-      scheduledDate: DATE,
-      scheduledTime: TIME,
-      status: "taken",
-    });
-    await db.doseLogs.add(log);
-
-    const result = await getDoseLogsWithDetailsForDate(DATE);
-    expect(result).toHaveLength(1);
-    expect(result[0]!.prescription.id).toBe(rx.id);
-    expect(result[0]!.phase.id).toBe(phase.id);
-    expect(result[0]!.schedule.id).toBe(schedule.id);
-  });
-
-  it("includes inventory item when active and non-archived", async () => {
-    const { rx, phase, schedule, inv } = await seedFullPrescription();
-    const log = makeDoseLog(rx.id, phase.id, schedule.id, {
-      scheduledDate: DATE,
-      scheduledTime: TIME,
-      status: "taken",
-    });
-    await db.doseLogs.add(log);
-
-    const result = await getDoseLogsWithDetailsForDate(DATE);
-    expect(result[0]!.inventory).toBeDefined();
-    expect(result[0]!.inventory!.id).toBe(inv.id);
   });
 });
 
@@ -1080,5 +1043,115 @@ describe("retroactive taken-at time", () => {
     if (result.success) {
       expect(result.data.actionTimestamp).toBe(localTs("2023-11-15", 1, 15));
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Service-level guards (gap-bulk-dose-actions#2, #3, #9)
+// ---------------------------------------------------------------------------
+
+describe("dose action guards (gap-bulk-dose-actions)", () => {
+  // 10:00 local on a fixed day, so "later today" is always well defined.
+  const NOW = new Date(2026, 8, 20, 10, 0, 0);
+  const TODAY = toLocalDateKey(NOW);
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"], now: NOW });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("rejects a skip for a future date (#2)", async () => {
+    const { rx, phase, schedule } = await seedFullPrescription();
+    const result = await skipDose({
+      prescriptionId: rx.id, phaseId: phase.id, scheduleId: schedule.id,
+      date: "2026-09-21", time: TIME, dosageMg: 50, reason: "away",
+    });
+
+    expect(result.success).toBe(false);
+    expect(await db.doseLogs.count()).toBe(0);
+  });
+
+  it("rejects a take whose taken-at time is later than now (#3)", async () => {
+    const { rx, phase, schedule, inv } = await seedFullPrescription({ initialStock: 30 });
+
+    const result = await takeDose({
+      prescriptionId: rx.id, phaseId: phase.id, scheduleId: schedule.id,
+      date: TODAY, time: "08:00", dosageMg: 50, takenAtTime: "11:30",
+    });
+
+    expect(result.success).toBe(false);
+    expect(await stockOf(inv.id)).toBe(30);
+    expect(await db.doseLogs.count()).toBe(0);
+  });
+
+  it("accepts a taken-at time earlier today (#3)", async () => {
+    const { rx, phase, schedule } = await seedFullPrescription();
+
+    const result = await takeDose({
+      prescriptionId: rx.id, phaseId: phase.id, scheduleId: schedule.id,
+      date: TODAY, time: "08:00", dosageMg: 50, takenAtTime: "09:45",
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects an edit that moves a taken dose into the future (#3)", async () => {
+    const { rx, phase, schedule } = await seedFullPrescription();
+    const base = { prescriptionId: rx.id, phaseId: phase.id, scheduleId: schedule.id, date: TODAY, time: "08:00" };
+    const taken = await takeDose({ ...base, dosageMg: 50, takenAtTime: "08:05" });
+    expect(taken.success).toBe(true);
+
+    const result = await editDoseTime({ ...base, newTime: "12:00" });
+
+    expect(result.success).toBe(false);
+    const log = (await db.doseLogs.toArray())[0]!;
+    expect(log.actionTimestamp).toBe(new Date(2026, 8, 20, 8, 5).getTime());
+  });
+
+  it("untake clears an earlier skip reason (#9)", async () => {
+    const { rx, phase, schedule } = await seedFullPrescription();
+    const base = { prescriptionId: rx.id, phaseId: phase.id, scheduleId: schedule.id, date: DATE, time: TIME, dosageMg: 50 };
+    await skipDose({ ...base, reason: "nausea" });
+    await untakeDose(base);
+
+    const log = (await db.doseLogs.toArray())[0]!;
+    expect(log.status).toBe("pending");
+    expect(log.skipReason).toBeUndefined();
+  });
+
+  it("a skip without a reason does not bring back an old reason (#9)", async () => {
+    const { rx, phase, schedule } = await seedFullPrescription();
+    const base = { prescriptionId: rx.id, phaseId: phase.id, scheduleId: schedule.id, date: DATE, time: TIME, dosageMg: 50 };
+    await skipDose({ ...base, reason: "nausea" });
+    await untakeDose(base);
+    await skipDose(base);
+
+    const log = (await db.doseLogs.toArray())[0]!;
+    expect(log.status).toBe("skipped");
+    expect(log.skipReason).toBeUndefined();
+  });
+
+  it("rescheduling a skipped dose drops the skip reason (#9)", async () => {
+    const { rx, phase, schedule } = await seedFullPrescription();
+    const base = { prescriptionId: rx.id, phaseId: phase.id, scheduleId: schedule.id, date: DATE, time: TIME, dosageMg: 50 };
+    await skipDose({ ...base, reason: "nausea" });
+    await rescheduleDose({ ...base, newTime: "14:00" });
+
+    const log = (await db.doseLogs.toArray())[0]!;
+    expect(log.status).toBe("rescheduled");
+    expect(log.skipReason).toBeUndefined();
+  });
+
+  it("taking a skipped dose drops the skip reason (#9)", async () => {
+    const { rx, phase, schedule } = await seedFullPrescription();
+    const base = { prescriptionId: rx.id, phaseId: phase.id, scheduleId: schedule.id, date: DATE, time: TIME, dosageMg: 50 };
+    await skipDose({ ...base, reason: "nausea" });
+    await takeDose(base);
+
+    const log = (await db.doseLogs.toArray())[0]!;
+    expect(log.status).toBe("taken");
+    expect(log.skipReason).toBeUndefined();
   });
 });

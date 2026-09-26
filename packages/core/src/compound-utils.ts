@@ -34,6 +34,18 @@ export function isValidPillStrength(strength: unknown): strength is number {
 }
 
 /**
+ * Check whether a fractional pill amount is a "clean" fraction.
+ * Clean fractions: whole numbers, 0.25, 0.333, 0.5, 0.667, 0.75
+ * Uses 0.01 tolerance for floating-point comparison.
+ */
+export function isCleanFraction(pillsConsumed: number): boolean {
+  const frac = Math.abs(pillsConsumed % 1);
+  if (frac < 0.01) return true; // whole number
+  const cleanFractions = [0.25, 0.333, 0.5, 0.667, 0.75];
+  return cleanFractions.some(cf => Math.abs(frac - cf) < 0.01);
+}
+
+/**
  * Split a summed mg dose into its per-compound amounts, preserving the
  * reference ratio. Marketed strengths don't share one exact ratio (24/26,
  * 49/51, 97/103), so the result can name amounts no tablet contains — prefer
@@ -103,6 +115,34 @@ export function formatCompoundFull(
   return compounds
     .map((c) => `${c.name || "Compound"} ${c.strength}${unit}`)
     .join(" + ");
+}
+
+/** Share of the total strength one compound may drift between marketed strengths. */
+const RATIO_TOLERANCE = 0.03;
+
+/**
+ * True when a stocked brand is not the same combination as the prescription
+ * it is filed under: different ingredients, or the same ingredients in a
+ * clearly different ratio. Marketed strengths of one product (24/26, 49/51,
+ * 97/103) differ slightly and still match. `false` when either side is not a
+ * combination, since there is nothing to compare.
+ */
+export function compoundsMismatch(
+  reference: CompoundStrength[] | undefined,
+  brand: CompoundStrength[] | undefined,
+): boolean {
+  if (!reference || !brand || reference.length < 2 || brand.length < 2) return false;
+  const refTotal = compoundSum(reference);
+  const brandTotal = compoundSum(brand);
+  if (!(refTotal > 0) || !(brandTotal > 0)) return false;
+
+  const key = (name: string) => name.trim().toLowerCase();
+  const brandShare = new Map(brand.map((c) => [key(c.name), c.strength / brandTotal]));
+  if (brandShare.size !== reference.length) return true;
+  return reference.some((c) => {
+    const share = brandShare.get(key(c.name));
+    return share === undefined || Math.abs(share - c.strength / refTotal) > RATIO_TOLERANCE;
+  });
 }
 
 /** Ingredient names only, e.g. `Sacubitril / Valsartan`. */

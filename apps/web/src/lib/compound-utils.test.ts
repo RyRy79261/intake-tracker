@@ -9,6 +9,7 @@ import {
   formatCompoundNames,
   formatComboDose,
   isValidPillStrength,
+  compoundsMismatch,
 } from "@intake/core/compound";
 import type { CompoundStrength } from "@/lib/db";
 
@@ -174,5 +175,42 @@ describe("formatComboDose", () => {
   it("shows the summed dose when no combo brand is stocked", () => {
     expect(formatComboDose(200, "mg")).toBe("200mg");
     expect(formatComboDose(200, "mg", { strength: 100 })).toBe("200mg");
+  });
+});
+
+// gap-combo-drugs-pill-math#3: warn when a stocked brand isn't the same
+// combination as the prescription it is filed under.
+describe("compoundsMismatch", () => {
+  const rx: CompoundStrength[] = [
+    { name: "Sacubitril", strength: 24 },
+    { name: "Valsartan", strength: 26 },
+  ];
+
+  it("accepts every marketed strength of the same combination", () => {
+    // 24/26, 49/51 and 97/103 don't share one exact ratio.
+    expect(compoundsMismatch(rx, entresto)).toBe(false);
+    expect(compoundsMismatch(rx, [
+      { name: "valsartan", strength: 103 },
+      { name: "SACUBITRIL", strength: 97 },
+    ])).toBe(false);
+  });
+
+  it("flags different ingredients", () => {
+    expect(compoundsMismatch(rx, [
+      { name: "Amlodipine", strength: 5 },
+      { name: "Valsartan", strength: 80 },
+    ])).toBe(true);
+  });
+
+  it("flags a different ratio of the same ingredients", () => {
+    expect(compoundsMismatch(rx, [
+      { name: "Sacubitril", strength: 25 },
+      { name: "Valsartan", strength: 75 },
+    ])).toBe(true);
+  });
+
+  it("has nothing to compare when either side is not a combination", () => {
+    expect(compoundsMismatch(undefined, entresto)).toBe(false);
+    expect(compoundsMismatch(rx, undefined)).toBe(false);
   });
 });

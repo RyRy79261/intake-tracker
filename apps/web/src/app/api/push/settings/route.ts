@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { withAuth } from "@/lib/auth-middleware";
-import { saveSettings } from "@/lib/push-db";
+import { getSettings, saveSettings } from "@/lib/push-db";
 
 const SettingsSchema = z.object({
   followUpCount: z.number().int().min(0).max(10),
   followUpIntervalMinutes: z.number().int().min(1).max(60),
+  // The user's logical day boundary (settings-store dayStartHour). Optional so
+  // an older client that does not send it keeps the stored value.
+  dayStartHour: z.number().int().min(0).max(23).optional(),
 });
 
 export const POST = withAuth(async ({ request, auth }) => {
@@ -20,11 +23,14 @@ export const POST = withAuth(async ({ request, auth }) => {
       );
     }
 
+    const dayStartHour =
+      parsed.data.dayStartHour ?? (await getSettings(auth.userId!)).dayStartHour;
+
     await saveSettings(auth.userId!, {
       enabled: true,
       followUpCount: parsed.data.followUpCount,
       followUpIntervalMinutes: parsed.data.followUpIntervalMinutes,
-      dayStartHour: 2,
+      dayStartHour,
     });
 
     return NextResponse.json({ ok: true });

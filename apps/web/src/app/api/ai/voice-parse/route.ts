@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import Anthropic from "@anthropic-ai/sdk";
 import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
 import { getClaudeClientForUser, CLAUDE_MODELS } from "@/app/api/ai/_shared/claude-client";
 import { parseJsonBody, zodErrorResponse } from "@/app/api/_shared/validation";
-import { createRateLimiter, getClientIp } from "@/app/api/_shared/rate-limit";
-import { recordUsage, tokensFromAnthropic } from "@/app/api/ai/_shared/usage-tracker";
+import { createRateLimiter, rateLimitKey } from "@/app/api/_shared/rate-limit";
+import { requestToolCall } from "@/app/api/ai/_shared/claude-call";
 import { aiErrorResponse } from "@/app/api/ai/_shared/ai-error-response";
 import { SYSTEM_PROMPT } from "@intake/ai-prompts/voice-parse";
 import { PARSE_TOOL, extractVoiceItems } from "@/app/api/ai/voice-parse/schema";
@@ -17,7 +16,18 @@ import { PARSE_TOOL, extractVoiceItems } from "@/app/api/ai/voice-parse/schema";
  * defecation). Mirrors the pattern in /api/ai/parse — structured tool output,
  * two-turn fallback when the model returns prose instead of calling the
  * tool, and per-item validation on the response (see schema.ts).
+ *
+ * The Claude calls go through the shared claude-call helpers, which branch on
+ * `stop_reason` (a refusal is a clear 422, a max_tokens cut-off is retried
+ * with a bigger budget), record usage for every upstream response, and share
+ * one route-wide deadline.
  */
+
+// Vercel function limit. The shared deadline stops short of it so a slow
+// model call ends in a JSON 504 rather than the platform's own. The user is
+// waiting after speaking; a full 4096-token reply is well inside this.
+export const maxDuration = 60;
+const DEADLINE_MS = 50_000;
 
 /**
  * Characters of transcript sent to the model — about two minutes of speech.
@@ -32,36 +42,11 @@ const ParseRequestSchema = z.object({
   transcript: z.string().min(1).max(MAX_REQUEST_CHARS),
 });
 
-/**
- * True for the SDK's per-call timeout. The SDK's timeout error does not set
- * `name`, so this must be an `instanceof` check — a name comparison never
- * matched and every timeout fell through to the generic 502.
- */
-function isTimeoutError(e: unknown): boolean {
-  return (
-    e instanceof Anthropic.APIConnectionTimeoutError ||
-    (e instanceof Error && e.name === "AbortError")
-  );
-}
-
 const rateLimiter = createRateLimiter(20);
-
-type ToolUseBlock = Extract<Anthropic.Messages.ContentBlock, { type: "tool_use" }>;
-
-function findToolUse(
-  content: Anthropic.Messages.ContentBlock[],
-  toolName: string
-): ToolUseBlock | undefined {
-  return content.find(
-    (b): b is ToolUseBlock => b.type === "tool_use" && b.name === toolName
-  );
-}
 
 export const POST = withAuth(async ({ request, auth }) => {
   try {
-    const ip = getClientIp(request);
-
-    if (!rateLimiter.check(ip)) {
+    if (!rateLimiter.check(rateLimitKey(request, auth.userId))) {
       return NextResponse.json(
         { error: "Rate limit exceeded. Please try again later." },
         { status: 429 }
@@ -98,89 +83,22 @@ export const POST = withAuth(async ({ request, auth }) => {
 
     const userMessage = `Voice transcript:\n"""\n${sanitized}\n"""\n\nExtract every distinct health log item and return them via the parse_voice_log tool.`;
 
-    // Per-call timeout — the SDK's 10 min default is poor UX for a user
-    // actively waiting after speaking. Sonnet outputs ~75 tok/s; a full
-    // 2048-token response is ~28s before TTFT and peak-hour jitter, so
-    // 60s gives ~2x margin over the worst legitimate case.
-    const REQUEST_TIMEOUT_MS = 60_000;
-    // The SDK retries a timed-out call twice by default, turning the 60 s
-    // budget into ~180 s of waiting. One retry covers a transient blip.
-    const REQUEST_OPTIONS = { timeout: REQUEST_TIMEOUT_MS, maxRetries: 1 };
-
-    let response: Anthropic.Messages.Message;
-    const startedAt = Date.now();
-    try {
-      response = await client.messages.create(
-        {
-          model: CLAUDE_MODELS.quality,
-          max_tokens: 4096, // headroom for Sonnet 5 adaptive thinking
-          system: SYSTEM_PROMPT,
-          tools: [PARSE_TOOL],
-          messages: [{ role: "user", content: userMessage }],
-        },
-        REQUEST_OPTIONS
-      );
-    } catch (e) {
-      if (isTimeoutError(e)) {
-        return NextResponse.json({ error: "AI request timed out" }, { status: 504 });
-      }
-      throw e;
-    }
-    recordUsage({
-      userId: auth.userId!,
-      keyOwnerId: resolved.keyOwnerId,
-      keySource: resolved.source,
-      provider: "anthropic",
-      model: CLAUDE_MODELS.quality,
-      route: "/api/ai/voice-parse",
-      status: "success",
-      durationMs: Date.now() - startedAt,
-      ...tokensFromAnthropic(response.usage),
-    });
-
-    let toolBlock = findToolUse(response.content, PARSE_TOOL.name);
-
-    if (!toolBlock) {
-      let followup: Anthropic.Messages.Message;
-      const followupStartedAt = Date.now();
-      try {
-        followup = await client.messages.create(
-          {
-            model: CLAUDE_MODELS.quality,
-            max_tokens: 4096, // headroom for Sonnet 5 adaptive thinking
-            system: SYSTEM_PROMPT,
-            tools: [PARSE_TOOL],
-            tool_choice: { type: "tool", name: PARSE_TOOL.name },
-            messages: [
-              { role: "user", content: userMessage },
-              { role: "assistant", content: response.content },
-              {
-                role: "user",
-                content: "Return the structured items via the parse_voice_log tool now.",
-              },
-            ],
-          },
-          REQUEST_OPTIONS
-        );
-      } catch (e) {
-        if (isTimeoutError(e)) {
-          return NextResponse.json({ error: "AI request timed out" }, { status: 504 });
-        }
-        throw e;
-      }
-      recordUsage({
-        userId: auth.userId!,
-        keyOwnerId: resolved.keyOwnerId,
-        keySource: resolved.source,
-        provider: "anthropic",
+    const { toolUse: toolBlock } = await requestToolCall(
+      client,
+      {
         model: CLAUDE_MODELS.quality,
-        route: "/api/ai/voice-parse",
-        status: "success",
-        durationMs: Date.now() - followupStartedAt,
-        ...tokensFromAnthropic(followup.usage),
-      });
-      toolBlock = findToolUse(followup.content, PARSE_TOOL.name);
-    }
+        max_tokens: 4096, // headroom for Sonnet 5 adaptive thinking
+        system: SYSTEM_PROMPT,
+        tools: [PARSE_TOOL],
+        messages: [{ role: "user", content: userMessage }],
+      },
+      {
+        usage: { userId: auth.userId!, resolved, route: "/api/ai/voice-parse" },
+        deadline: Date.now() + DEADLINE_MS,
+        toolName: PARSE_TOOL.name,
+        retryInstruction: "Return the structured items via the parse_voice_log tool now.",
+      },
+    );
 
     if (!toolBlock) {
       return NextResponse.json(

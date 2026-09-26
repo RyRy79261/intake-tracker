@@ -700,7 +700,9 @@ export async function listRecentDoses(
   limit: number,
   opts: { timezone?: string | undefined; now?: number } = {},
 ) {
-  const storedTz = opts.timezone ? null : await getStoredTimeZone(userId);
+  const storedTz = opts.timezone
+    ? null
+    : await getStoredTimeZone(userId, await getSyncedSettings(userId));
   const todayKey = new Intl.DateTimeFormat("en-CA", {
     timeZone: resolveTimeZone(opts.timezone, storedTz),
     year: "numeric",

@@ -1,7 +1,7 @@
-import { db, type DoseLog, type DoseStatus, type Prescription, type MedicationPhase, type PhaseSchedule, type InventoryItem } from "@/lib/db";
+import { db, type DoseLog, type DoseStatus } from "@/lib/db";
 import type { UpdateSpec } from "dexie";
 import { ok, err } from "@intake/core/service";
-import { isValidPillStrength } from "@intake/core/compound";
+import { isCleanFraction, isValidPillStrength } from "@intake/core/compound";
 import type { ServiceResult } from "@intake/types/service";
 import { syncFields } from "@/lib/utils";
 import { getDeviceTimezone } from "@/lib/timezone";
@@ -15,14 +15,6 @@ import { isLive } from "@intake/core/lifecycle";
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-export interface DoseLogWithDetails {
-  log: DoseLog;
-  prescription: Prescription;
-  phase: MedicationPhase;
-  schedule: PhaseSchedule;
-  inventory?: InventoryItem;
-}
 
 export interface TakeDoseInput {
   prescriptionId: string;
@@ -97,17 +89,9 @@ export function calculatePillsConsumed(doseMg: number, pillStrengthMg: number): 
   return Math.round(raw * 10000) / 10000;
 }
 
-/**
- * Check whether a fractional pill amount is a "clean" fraction.
- * Clean fractions: whole numbers, 0.25, 0.333, 0.5, 0.667, 0.75
- * Uses 0.01 tolerance for floating-point comparison.
- */
-export function isCleanFraction(pillsConsumed: number): boolean {
-  const frac = Math.abs(pillsConsumed % 1);
-  if (frac < 0.01) return true; // whole number
-  const cleanFractions = [0.25, 0.333, 0.5, 0.667, 0.75];
-  return cleanFractions.some(cf => Math.abs(frac - cf) < 0.01);
-}
+// Lives in @intake/core/compound so components can use it without importing
+// this service; re-exported for existing callers.
+export { isCleanFraction };
 
 // ---------------------------------------------------------------------------
 // Scheduled dose identity
@@ -335,6 +319,17 @@ function localTimestamp(date: string, h: number, m: number, addDays = 0): number
 const HALF_DAY_MS = 12 * 60 * 60 * 1000;
 
 /**
+ * Slack for a "taken at" time the picker allowed: the picked minute has no
+ * seconds, and the check runs a moment after the user tapped.
+ */
+const FUTURE_TAKEN_AT_GRACE_MS = 60 * 1000;
+
+/** True when a recorded "taken at" timestamp lies in the future. */
+function isFutureTakenAt(timestamp: number, now: number = Date.now()): boolean {
+  return timestamp > now + FUTURE_TAKEN_AT_GRACE_MS;
+}
+
+/**
  * Turn the "taken at" wall-clock time the user picked into a timestamp. The
  * picker only asks for a time, so a late dose taken after midnight (the 22:00
  * dose taken at 00:30) belongs to the day after the scheduled date: when the
@@ -384,50 +379,6 @@ export async function getDoseLog(
   return getDoseLogRaw(scheduleId, date);
 }
 
-export async function getDoseLogsWithDetailsForDate(date: string): Promise<DoseLogWithDetails[]> {
-  const allLogs = await db.doseLogs.where("scheduledDate").equals(date).toArray();
-  const logs = allLogs.filter(isLive);
-
-  const activePrescriptions = await db.prescriptions.toArray();
-  const prescriptionMap = new Map(activePrescriptions.map(p => [p.id, p]));
-
-  const phases = await db.medicationPhases.toArray();
-  const phaseMap = new Map(phases.map(p => [p.id, p]));
-
-  const schedules = await db.phaseSchedules.toArray();
-  const scheduleMap = new Map(schedules.map(s => [s.id, s]));
-
-  const inventories = await db.inventoryItems.toArray();
-  const inventoryMap = new Map<string, InventoryItem>();
-  for (const inv of inventories) {
-    if (inv.isActive && !inv.isArchived) {
-      inventoryMap.set(inv.prescriptionId, inv);
-    }
-  }
-
-  const result: DoseLogWithDetails[] = [];
-  for (const log of logs) {
-    const prescription = prescriptionMap.get(log.prescriptionId);
-    // phaseId/scheduleId are absent for PRN doses — those fall through the
-    // `prescription && phase && schedule` guard below and are excluded here.
-    const phase = log.phaseId ? phaseMap.get(log.phaseId) : undefined;
-    const schedule = log.scheduleId ? scheduleMap.get(log.scheduleId) : undefined;
-    const inventory = inventoryMap.get(log.prescriptionId);
-
-    if (prescription && phase && schedule) {
-      result.push({
-        log,
-        prescription,
-        phase,
-        schedule,
-        ...(inventory !== undefined && { inventory }),
-      });
-    }
-  }
-
-  return result;
-}
-
 // ---------------------------------------------------------------------------
 // Mutation functions — atomic transactions with audit logging
 // ---------------------------------------------------------------------------
@@ -453,6 +404,9 @@ export async function takeDose(input: TakeDoseInput): Promise<ServiceResult<Dose
       if (actionTimestampOverride === undefined) {
         return err(`Invalid time "${takenAtTime}"`);
       }
+      if (isFutureTakenAt(actionTimestampOverride)) {
+        return err("Cannot record a dose as taken at a future time");
+      }
     }
 
     const log = await db.transaction(
@@ -469,7 +423,8 @@ export async function takeDose(input: TakeDoseInput): Promise<ServiceResult<Dose
 
         let inventoryItemId: string | undefined = prev?.inventoryItemId;
         let pillsConsumed = 0;
-        const patch: DoseLogPatch = {};
+        // A taken dose has no skip reason; clear one left by an earlier skip.
+        const patch: DoseLogPatch = { skipReason: undefined };
         let invalidStrength = false;
 
         if (!wasTaken) {
@@ -693,7 +648,8 @@ export async function untakeDose(input: UntakeDoseInput): Promise<ServiceResult<
         const doseLog = await writeSlotLog(
           prev, logId, { prescriptionId, phaseId, scheduleId, date, time },
           prev?.rescheduledTo ? "rescheduled" : "pending",
-          { pillsConsumed: 0 },
+          // Clear a reason left by an earlier skip: the slot is no longer skipped.
+          { pillsConsumed: 0, skipReason: undefined },
         );
         await enqueueInsideTx("doseLogs", doseLog.id, "upsert");
 
@@ -722,6 +678,11 @@ export async function skipDose(input: SkipDoseInput): Promise<ServiceResult<Dose
   try {
     const { prescriptionId, phaseId, scheduleId, date, time, dosageMg, reason } = input;
 
+    // Skipping ahead of the day would mark a dose that is not yet due.
+    if (date > toLocalDateKey()) {
+      return err("Cannot skip a dose scheduled for a future date");
+    }
+
     const log = await db.transaction(
       "rw",
       [
@@ -744,8 +705,9 @@ export async function skipDose(input: SkipDoseInput): Promise<ServiceResult<Dose
           doseAmount: dosageMg,
           doseUnit: schedule?.unit ?? phase?.unit,
           pillsConsumed: 0,
+          // Always written: a skip without a reason clears an older one.
+          skipReason: reason,
         };
-        if (reason !== undefined) patch.skipReason = reason;
 
         const doseLog = await writeSlotLog(
           prev, logId, { prescriptionId, phaseId, scheduleId, date, time }, "skipped", patch,
@@ -792,7 +754,8 @@ export async function rescheduleDose(input: RescheduleDoseInput): Promise<Servic
 
         const doseLog = await writeSlotLog(
           prev, logId, { prescriptionId, phaseId, scheduleId, date, time }, "rescheduled",
-          { rescheduledTo: newTime, pillsConsumed: 0 },
+          // Clear a reason left by an earlier skip: the slot is no longer skipped.
+          { rescheduledTo: newTime, pillsConsumed: 0, skipReason: undefined },
         );
         await enqueueInsideTx("doseLogs", doseLog.id, "upsert");
 
@@ -891,6 +854,9 @@ export async function editDoseTime(input: EditDoseTimeInput): Promise<ServiceRes
     const newTimestamp = resolveTakenAt(date, time, newTime);
     if (newTimestamp === undefined) {
       return err(`Invalid time "${newTime}"`);
+    }
+    if (isFutureTakenAt(newTimestamp)) {
+      return err("Cannot record a dose as taken at a future time");
     }
 
     const log = await db.transaction(

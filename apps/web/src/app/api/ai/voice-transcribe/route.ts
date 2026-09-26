@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { withAuth } from "@/lib/auth-middleware";
-import { createRateLimiter, getClientIp } from "@/app/api/_shared/rate-limit";
+import { createRateLimiter, rateLimitKey } from "@/app/api/_shared/rate-limit";
 import { resolveAiKey } from "@/lib/ai-key-resolver";
 import { recordUsage } from "@/app/api/ai/_shared/usage-tracker";
 import { aiErrorResponse } from "@/app/api/ai/_shared/ai-error-response";
@@ -30,9 +30,7 @@ const rateLimiter = createRateLimiter(30);
 
 export const POST = withAuth(async ({ request, auth }) => {
   try {
-    const ip = getClientIp(request);
-
-    if (!rateLimiter.check(ip)) {
+    if (!rateLimiter.check(rateLimitKey(request, auth.userId))) {
       return NextResponse.json(
         { error: "Rate limit exceeded. Please try again later." },
         { status: 429 }

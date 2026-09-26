@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { withAuth } from "@/lib/auth-middleware";
 import { AnalyticsInsightsRequestSchema } from "@intake/ai-prompts/analytics-insights";
 import { parseJsonBody, zodErrorResponse } from "@/app/api/_shared/validation";
-import { createRateLimiter, getClientIp } from "@/app/api/_shared/rate-limit";
+import { createRateLimiter, rateLimitKey } from "@/app/api/_shared/rate-limit";
 import { getClaudeClientForUser } from "@/app/api/ai/_shared/claude-client";
 import {
   buildDeepBatchParams,
@@ -46,8 +46,7 @@ const rateLimiter = createRateLimiter(10);
 
 export const POST = withAuth(async ({ request, auth }) => {
   try {
-    const ip = getClientIp(request);
-    if (!rateLimiter.check(ip)) {
+    if (!rateLimiter.check(rateLimitKey(request, auth.userId))) {
       return NextResponse.json(
         { error: "Rate limit exceeded. Please try again later." },
         { status: 429 },

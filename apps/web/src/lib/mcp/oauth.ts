@@ -491,8 +491,9 @@ export async function listUserConnections(
  * Purges expired auth codes, revoked tokens, and tokens whose refresh has
  * also expired. We DON'T delete by `expiresAt` (access-token TTL) because
  * the row still carries a usable refresh token until `refreshExpiresAt` —
- * dropping it would force users back to re-authorize daily. Runs
- * opportunistically from the token endpoint via `maybePurgeExpired`.
+ * dropping it would force users back to re-authorize daily. Runs daily from
+ * the /api/mcp/purge cron and opportunistically from the token endpoint via
+ * `maybePurgeExpired`.
  */
 export async function purgeExpired(): Promise<void> {
   const now = Date.now();
@@ -512,8 +513,9 @@ let lastPurgeAt = 0;
 
 /**
  * Fire-and-forget `purgeExpired`, at most once an hour per server instance.
- * There is no cron for it; the token endpoint is hit on every connect and
- * refresh, which is often enough to keep the tables small.
+ * A daily Vercel Cron (/api/mcp/purge, vercel.json) is the guaranteed run;
+ * this keeps the tables small between runs, since the token endpoint is hit
+ * on every connect and refresh.
  */
 export function maybePurgeExpired(now = Date.now()): void {
   if (now - lastPurgeAt < PURGE_INTERVAL_MS) return;
