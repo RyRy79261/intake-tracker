@@ -7,6 +7,7 @@ import { Label } from "@intake/ui/label";
 import { Progress } from "@intake/ui/progress";
 import { Sparkles, Loader2 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
+import { readAiErrorMessage } from "@/lib/ai-error-message";
 import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -304,13 +305,18 @@ export function PresetTab({ tab }: PresetTabProps) {
   const handleAiLookup = async () => {
     if (!searchText.trim() || isLookingUp) return;
     setIsLookingUp(true);
+    let failureMessage = "Try a different name or enter values manually.";
     try {
       const res = await apiFetch("/api/ai/substance-lookup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: searchText.trim(), type: tab === "coffee" ? "caffeine" : "alcohol" }),
       });
-      if (!res.ok) throw new Error("Lookup failed");
+      if (!res.ok) {
+        // The route's message is actionable (add a key, retry, enter manually).
+        failureMessage = await readAiErrorMessage(res, failureMessage);
+        throw new Error(failureMessage);
+      }
       const result = (await res.json()) as SubstanceLookupResponse;
       // Replaces the whole drink, sugar and sodium included — a value left
       // over from the previous drink must not ride along with this one.
@@ -319,7 +325,7 @@ export function PresetTab({ tab }: PresetTabProps) {
       console.error("[preset-tab] substance lookup failed", cause);
       toast({
         title: "Lookup failed",
-        description: "Try a different name or enter values manually.",
+        description: failureMessage,
         variant: "destructive",
       });
     } finally {

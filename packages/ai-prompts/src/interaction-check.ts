@@ -47,3 +47,52 @@ export const INTERACTION_CHECK_TOOL = {
     additionalProperties: false,
   },
 };
+
+/** One row of the validated interaction_check_result output. */
+export interface InteractionRow {
+  substance: string;
+  medication: string;
+  severity: "AVOID" | "CAUTION" | "OK";
+  description: string;
+}
+
+function normaliseName(name: string): string {
+  // Unicode-aware: an ASCII-only class would reduce a non-Latin name to ""
+  // and silently exempt it from the coverage check.
+  return name.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+}
+
+/**
+ * The prompt asks for a row per medication, but nothing forces the model to
+ * comply, and an omitted drug reads exactly like "no interaction" (the lookup
+ * UI shows a green all-clear, the add-medication wizard saves silently). For
+ * every requested medication with no matching row — case-insensitive, and a
+ * returned "Bisoprolol (Concor)" still matches "bisoprolol" — append a
+ * CAUTION "Not assessed" row so the gap is visible and never read as safe.
+ */
+export function withUnassessedMedications<T extends InteractionRow>(
+  interactions: T[],
+  requestedMedications: string[],
+  substance: string,
+): (T | InteractionRow)[] {
+  const returned = interactions.map((i) => normaliseName(i.medication));
+  const seen = new Set<string>();
+  const missing: InteractionRow[] = [];
+  for (const medication of requestedMedications) {
+    const key = normaliseName(medication);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    const assessed = returned.some(
+      (r) => r !== "" && (r.includes(key) || key.includes(r)),
+    );
+    if (assessed) continue;
+    missing.push({
+      substance,
+      medication: medication.trim(),
+      severity: "CAUTION",
+      description:
+        "Not assessed: the AI check returned no result for this medication. Check this combination with your pharmacist.",
+    });
+  }
+  return missing.length > 0 ? [...interactions, ...missing] : interactions;
+}

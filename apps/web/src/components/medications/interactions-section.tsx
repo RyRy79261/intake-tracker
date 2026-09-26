@@ -13,7 +13,7 @@ interface InteractionsSectionProps {
 }
 
 export function InteractionsSection({ prescription }: InteractionsSectionProps) {
-  const { refresh, isRefreshing } = useRefreshInteractions();
+  const { refresh, isRefreshing, error } = useRefreshInteractions();
   const prescriptions = usePrescriptions();
   const showAi = useAuthGate();
 
@@ -52,6 +52,12 @@ export function InteractionsSection({ prescription }: InteractionsSectionProps) 
         <ShieldAlert className="w-4 h-4" />
         Interactions & Warnings
       </h3>
+
+      {error && !isRefreshing && (
+        <p role="alert" className="text-xs text-red-600 dark:text-red-400 mb-2">
+          {error}
+        </p>
+      )}
 
       {hasData ? (
         <div>

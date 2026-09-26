@@ -2,7 +2,13 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { getCached, setCache, clearCache } from "@/lib/interaction-cache";
+import {
+  getCached,
+  getCachedEntry,
+  setCache,
+  clearCache,
+  interactionCacheKey,
+} from "@/lib/interaction-cache";
 
 const TTL = 24 * 60 * 60 * 1000;
 
@@ -48,6 +54,29 @@ describe("interaction-cache", () => {
       const data = { drugs: ["a", "b"], pairs: [{ x: 1 }], note: null };
       setCache("complex", data);
       expect(getCached("complex")).toEqual(data);
+    });
+  });
+
+  describe("interactionCacheKey", () => {
+    it("differs when the active prescriptions differ", () => {
+      expect(interactionCacheKey("ibuprofen", ["bisoprolol"])).not.toBe(
+        interactionCacheKey("ibuprofen", ["bisoprolol", "warfarin"]),
+      );
+    });
+
+    it("ignores prescription order, case, whitespace and duplicates", () => {
+      expect(interactionCacheKey(" Ibuprofen", ["Warfarin", "bisoprolol "])).toBe(
+        interactionCacheKey("ibuprofen", ["bisoprolol", "warfarin", "WARFARIN"]),
+      );
+    });
+  });
+
+  describe("getCachedEntry", () => {
+    it("returns the stored data with its write timestamp", () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(1234);
+      setCache("ibuprofen", { v: 1 });
+      expect(getCachedEntry("ibuprofen")).toEqual({ data: { v: 1 }, timestamp: 1234 });
     });
   });
 

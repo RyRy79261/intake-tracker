@@ -4,6 +4,7 @@ import { screen } from "@testing-library/react";
 
 const mockUseAuthGate = vi.fn();
 const mockUsePrescriptions = vi.fn();
+const mockRefreshError = vi.fn<() => string | null>(() => null);
 
 vi.mock("@/components/auth-guard", () => ({
   useAuthGate: () => mockUseAuthGate(),
@@ -12,7 +13,11 @@ vi.mock("@/hooks/use-medication-queries", () => ({
   usePrescriptions: () => mockUsePrescriptions(),
 }));
 vi.mock("@/hooks/use-interaction-check", () => ({
-  useRefreshInteractions: () => ({ refresh: vi.fn(), isRefreshing: false }),
+  useRefreshInteractions: () => ({
+    refresh: vi.fn(),
+    isRefreshing: false,
+    error: mockRefreshError(),
+  }),
 }));
 
 import { InteractionsSection } from "@/components/medications/interactions-section";
@@ -91,5 +96,16 @@ describe("InteractionsSection — gating", () => {
     expect(
       screen.getByRole("button", { name: /refresh|add more/i })
     ).toBeInTheDocument();
+  });
+
+  it("shows the refresh error the AI route returned", () => {
+    mockUseAuthGate.mockReturnValue(true);
+    mockRefreshError.mockReturnValueOnce(
+      "No anthropic API key configured. Add one in Settings → AI features.",
+    );
+
+    renderWithProviders(<InteractionsSection prescription={baseRx} />);
+
+    expect(screen.getByRole("alert")).toHaveTextContent(/Add one in Settings/);
   });
 });

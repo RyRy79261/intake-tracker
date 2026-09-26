@@ -163,6 +163,48 @@ describe("interaction-check route handler", () => {
     expect(body.interactions[0]!.severity).toBe("AVOID");
   });
 
+  it("adds a 'Not assessed' row for any requested medication the model skipped", async () => {
+    messagesCreate.mockResolvedValueOnce(
+      toolUseResponse({
+        interactions: [
+          {
+            substance: "St John's Wort",
+            medication: "Bisoprolol (Concor)",
+            severity: "OK",
+            description: "No significant interaction.",
+          },
+        ],
+        drugClass: "Herbal",
+        summary: "No significant interactions.",
+      }),
+    );
+
+    const { POST } = await import("@/app/api/ai/interaction-check/route");
+    const res = await POST(
+      makeRequest({
+        mode: "lookup",
+        substance: "St John's Wort",
+        activePrescriptions: [
+          { genericName: "bisoprolol" },
+          { genericName: "Sertraline" },
+          { genericName: "sertraline" },
+        ],
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      interactions: { medication: string; severity: string; description: string }[];
+    };
+    // bisoprolol matched case-insensitively; sertraline (listed twice) was
+    // skipped, so exactly one non-OK placeholder row is added for it.
+    expect(body.interactions).toHaveLength(2);
+    const gap = body.interactions[1]!;
+    expect(gap.medication).toBe("Sertraline");
+    expect(gap.severity).toBe("CAUTION");
+    expect(gap.description).toMatch(/Not assessed/);
+  });
+
   it("rejects an invalid mode with 400 (discriminated union has no match)", async () => {
     const { POST } = await import("@/app/api/ai/interaction-check/route");
     const res = await POST(
@@ -316,5 +358,48 @@ describe("interaction-check route handler", () => {
     expect(res.status).toBe(500);
     const body = (await res.json()) as { error: string };
     expect(body.error).toBe("Failed to check interactions");
+  });
+});
+
+describe("withUnassessedMedications", () => {
+  it("flags a skipped medication whose name has no ASCII letters", async () => {
+    const { withUnassessedMedications } = await import(
+      "@intake/ai-prompts/interaction-check"
+    );
+    const rows = withUnassessedMedications(
+      [
+        {
+          substance: "grapefruit",
+          medication: "Amlodipine",
+          severity: "CAUTION" as const,
+          description: "CYP3A4.",
+        },
+      ],
+      ["Amlodipine", "ワルファリン"],
+      "grapefruit",
+    );
+
+    expect(rows).toHaveLength(2);
+    expect(rows[1]).toMatchObject({ medication: "ワルファリン", severity: "CAUTION" });
+  });
+
+  it("matches a returned non-ASCII name to the requested one", async () => {
+    const { withUnassessedMedications } = await import(
+      "@intake/ai-prompts/interaction-check"
+    );
+    const rows = withUnassessedMedications(
+      [
+        {
+          substance: "grapefruit",
+          medication: "Warfarin (ワルファリン)",
+          severity: "AVOID" as const,
+          description: "Bleeding.",
+        },
+      ],
+      ["ワルファリン"],
+      "grapefruit",
+    );
+
+    expect(rows).toHaveLength(1);
   });
 });

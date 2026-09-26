@@ -7,7 +7,11 @@ import { parseJsonBody, zodErrorResponse } from "@/app/api/_shared/validation";
 import { createRateLimiter, rateLimitKey } from "@/app/api/_shared/rate-limit";
 import { requestToolCall } from "@/app/api/ai/_shared/claude-call";
 import { aiErrorResponse } from "@/app/api/ai/_shared/ai-error-response";
-import { SYSTEM_PROMPT, INTERACTION_CHECK_TOOL } from "@intake/ai-prompts/interaction-check";
+import {
+  SYSTEM_PROMPT,
+  INTERACTION_CHECK_TOOL,
+  withUnassessedMedications,
+} from "@intake/ai-prompts/interaction-check";
 
 // Vercel function limit. The shared deadline stops short of it so a slow
 // model call ends in a JSON 504 rather than the platform's own.
@@ -143,7 +147,15 @@ export const POST = withAuth(async ({ request, auth }) => {
       );
     }
 
-    return NextResponse.json(validated.data);
+    // An omitted medication would read as "no interaction"; flag it instead.
+    return NextResponse.json({
+      ...validated.data,
+      interactions: withUnassessedMedications(
+        validated.data.interactions,
+        activePrescriptions.map((rx) => rx.genericName),
+        querySubstance,
+      ),
+    });
   } catch (error) {
     const mapped = aiErrorResponse(error);
     if (mapped) return mapped;

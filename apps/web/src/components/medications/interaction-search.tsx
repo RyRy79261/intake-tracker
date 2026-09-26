@@ -10,6 +10,7 @@ import {
 import { Input } from "@intake/ui/input";
 import { Badge } from "@intake/ui/badge";
 import { useInteractionCheck } from "@/hooks/use-interaction-check";
+import { formatDateTime } from "@/lib/date-utils";
 import { usePrescriptions } from "@/hooks/use-medication-queries";
 import { AnimatePresence, motion } from "motion/react";
 import type { InteractionItem } from "@/hooks/use-interaction-check";
@@ -17,7 +18,8 @@ import type { InteractionItem } from "@/hooks/use-interaction-check";
 export function InteractionSearch() {
   const [query, setQuery] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
-  const { check, data, isLoading, error, reset } = useInteractionCheck();
+  const { check, data, isLoading, error, cachedAt, reset } =
+    useInteractionCheck();
   const prescriptions = usePrescriptions();
   const activePrescriptions = prescriptions.filter((p) => p.isActive);
 
@@ -198,6 +200,11 @@ export function InteractionSearch() {
                 {data.drugClass && (
                   <p className="text-xs text-muted-foreground mt-1">
                     Drug class: {data.drugClass}
+                  </p>
+                )}
+                {cachedAt !== null && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Saved result from {formatDateTime(cachedAt)}
                   </p>
                 )}
               </div>
