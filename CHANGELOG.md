@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.36.6](https://github.com/RyRy79261/intake-tracker/compare/v1.36.5...v1.36.6) (2026-09-26)
+
+
+### Bug Fixes
+
+* audit follow-up — owner decisions, synced settings, sodium sources ([#362](https://github.com/RyRy79261/intake-tracker/issues/362)) ([b19f6f0](https://github.com/RyRy79261/intake-tracker/commit/b19f6f01f9bad5d64a42964514896190c24dd159))
+
 ## [1.36.5](https://github.com/RyRy79261/intake-tracker/compare/v1.36.4...v1.36.5) (2026-09-26)
 
 
