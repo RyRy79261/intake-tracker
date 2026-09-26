@@ -4,6 +4,7 @@ import {
   enqueue,
   enqueueInsideTx,
   ack,
+  ackIfUnchanged,
   getQueueDepth,
   writeWithSync,
 } from "@/lib/sync-queue";
@@ -172,5 +173,37 @@ describe("sync-queue", () => {
     const remaining = await db._syncQueue.toArray();
     expect(remaining).toHaveLength(1);
     expect(remaining[0]!.recordId).toBe("r3");
+  });
+  it("coalesce always moves enqueuedAt forward, even within the same millisecond (audit sync-engine#0)", async () => {
+    // ackIfUnchanged tells "the op the push carried" from "a newer edit that
+    // coalesced into the same row" by enqueuedAt alone, so a coalesce that
+    // lands in the same ms as the original enqueue must still change it.
+    vi.spyOn(Date, "now").mockReturnValue(5000);
+    try {
+      await enqueue("intakeRecords", "r1", "upsert");
+      await enqueue("intakeRecords", "r1", "upsert");
+      const [row] = await db._syncQueue.toArray();
+      expect(row!.enqueuedAt).toBe(5001);
+      await enqueue("intakeRecords", "r1", "delete");
+      const [after] = await db._syncQueue.toArray();
+      expect(after!.enqueuedAt).toBe(5002);
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  it("ackIfUnchanged removes a row only when its enqueuedAt still matches the snapshot (audit sync-engine#0)", async () => {
+    await enqueue("intakeRecords", "r1", "upsert");
+    await enqueue("intakeRecords", "r2", "upsert");
+    const snapshot = await db._syncQueue.toArray();
+
+    // r2 is edited again after the snapshot — its row now stands for a newer
+    // edit the in-flight push never carried.
+    await enqueue("intakeRecords", "r2", "upsert");
+
+    const acked = await ackIfUnchanged(snapshot);
+    expect(acked).toEqual([snapshot.find((r) => r.recordId === "r1")!.id]);
+    const remaining = await db._syncQueue.toArray();
+    expect(remaining.map((r) => r.recordId)).toEqual(["r2"]);
   });
 });

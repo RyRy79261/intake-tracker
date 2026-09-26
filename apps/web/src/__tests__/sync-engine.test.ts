@@ -400,7 +400,10 @@ describe("sync-engine", () => {
     expect(meta?.lastPulledId).toBe("id-1199");
   });
 
-  it("ack overwrites local updatedAt when local <= server", async () => {
+  it("ack leaves local updatedAt alone when the server kept a newer version", async () => {
+    // Stamping the server's newer updatedAt onto the stale local content
+    // would make it look current, and the pull would then skip the real
+    // update (audit sync-engine#0/#1). The pull brings the newer row instead.
     installDom({ onLine: true });
 
     const record = makeIntake({ id: "ack-1", updatedAt: 1000 });
@@ -426,7 +429,7 @@ describe("sync-engine", () => {
     await new Promise((r) => setTimeout(r, 0));
 
     const updated = await db.intakeRecords.get("ack-1");
-    expect(updated?.updatedAt).toBe(2000);
+    expect(updated?.updatedAt).toBe(1000);
 
     // Queue row was acked (deleted).
     const remaining = await db._syncQueue.toArray();
@@ -436,7 +439,7 @@ describe("sync-engine", () => {
   it("ack does NOT overwrite local updatedAt when a newer local edit exists", async () => {
     installDom({ onLine: true });
 
-    const record = makeIntake({ id: "ack-race", updatedAt: 5000 });
+    const record = makeIntake({ id: "ack-race", updatedAt: 3000 });
     await db.intakeRecords.add(record);
     await enqueue("intakeRecords", "ack-race", "upsert");
 
@@ -445,10 +448,11 @@ describe("sync-engine", () => {
 
     const fetchMock = vi.fn(async (url: string) => {
       if (String(url).includes("/api/sync/push")) {
+        // The user makes a NEWER local edit (updatedAt=5000) between push
+        // start and ack receipt, and the server acks a clamped (lower)
+        // serverUpdatedAt. applyServerAck must NOT overwrite the new edit.
+        await db.intakeRecords.update("ack-race", { updatedAt: 5000 });
         return jsonResponse({
-          // Server wrote back an older serverUpdatedAt — simulates the race
-          // where the user made a NEWER local edit (updatedAt=5000) between
-          // push start and ack receipt. applyServerAck must NOT overwrite.
           accepted: [{ queueId, serverUpdatedAt: 2000 }],
         });
       }
@@ -471,7 +475,7 @@ describe("sync-engine", () => {
   // documented behaviour of each so the next mutation pass catches a
   // regression that empties any of them.
 
-  it("push: network error increments attempts on every queue row and sets lastError", async () => {
+  it("push: network error leaves attempts alone (rejection budget only) and sets lastError", async () => {
     installDom();
     __startEngineForTests();
 
@@ -491,10 +495,11 @@ describe("sync-engine", () => {
 
     await runPushCycle();
 
-    // Every queue row touched in this cycle had its attempts bumped.
+    // A whole-batch failure does not spend the per-op rejection budget
+    // (audit sync-engine#13).
     const rows = await db._syncQueue.toArray();
     expect(rows).toHaveLength(1);
-    expect(rows[0]!.attempts).toBe(1);
+    expect(rows[0]!.attempts ?? 0).toBe(0);
 
     // lastError carries the underlying message so the UI can surface it.
     expect(useSyncStatusStore.getState().lastError).toBe("network down");
@@ -527,7 +532,7 @@ describe("sync-engine", () => {
     expect(useSyncStatusStore.getState().lastError).toBeNull();
   });
 
-  it("push: non-OK status (500) bumps attempts and surfaces the body's detail field", async () => {
+  it("push: non-OK status (500) leaves attempts alone and surfaces the body's detail field", async () => {
     installDom();
     __startEngineForTests();
 
@@ -551,7 +556,7 @@ describe("sync-engine", () => {
     await runPushCycle();
 
     const rows = await db._syncQueue.toArray();
-    expect(rows[0]!.attempts).toBe(1);
+    expect(rows[0]!.attempts ?? 0).toBe(0);
 
     // The error parser walks body.detail first, then body.error. This
     // pins the precedence — a mutant that swaps the order would fail.
@@ -795,7 +800,7 @@ describe("sync-engine", () => {
     );
 
     // Must NOT throw — failure is observable via the store, not the call.
-    await expect(runPullCycle()).resolves.toBeUndefined();
+    await expect(runPullCycle()).resolves.toBe(false);
 
     expect(useSyncStatusStore.getState().lastError).toBe("dns failure");
   });

@@ -13,6 +13,8 @@ export interface TableProgress {
   total: number;
   uploaded: number;
   lastBatchIndex: number;
+  /** Rows the server rejected; they are queued for the sync engine to retry. */
+  rejected?: number;
 }
 
 export interface VerificationResult {

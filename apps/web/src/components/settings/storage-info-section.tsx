@@ -2,7 +2,17 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { HardDrive, Cloud, CloudOff, Upload, LogIn, CheckCircle2, Loader2, Download } from "lucide-react";
+import {
+  AlertTriangle,
+  HardDrive,
+  Cloud,
+  CloudOff,
+  Upload,
+  LogIn,
+  CheckCircle2,
+  Loader2,
+  Download,
+} from "lucide-react";
 import { Badge } from "@intake/ui/badge";
 import { Button } from "@intake/ui/button";
 import {
@@ -26,6 +36,13 @@ import { checkInterruptedMigration } from "@/lib/migration-service";
 import { MigrationWizard } from "@/components/migration/migration-wizard";
 import { DeleteDataControls } from "@/components/settings/delete-data-controls";
 
+function tableLabel(name: string): string {
+  return name
+    .replace(/Records$/, "")
+    .replace(/([A-Z])/g, " $1")
+    .replace(/^./, (c) => c.toUpperCase());
+}
+
 export function StorageInfoSection() {
   const router = useRouter();
   const { toast } = useToast();
@@ -35,6 +52,10 @@ export function StorageInfoSection() {
   const lastPushedAt = useSyncStatusStore((s) => s.lastPushedAt);
   const initialSyncComplete = useSyncStatusStore((s) => s.initialSyncComplete);
   const isOnline = useSyncStatusStore((s) => s.isOnline);
+  // Ops the push loop gave up on — shown so they don't vanish silently
+  // (audit sync-engine#13).
+  const droppedOps = useSyncStatusStore((s) => s.droppedOps);
+  const clearDroppedOps = useSyncStatusStore((s) => s.clearDroppedOps);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [resumeMode, setResumeMode] = useState(false);
   const [hasInterrupted, setHasInterrupted] = useState(false);
@@ -120,6 +141,36 @@ export function StorageInfoSection() {
                 </span>
               </>
             )}
+          </div>
+        )}
+
+        {droppedOps.length > 0 && (
+          <div
+            className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 space-y-2"
+            data-testid="unsynced-records"
+          >
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+              <span className="text-sm font-medium">
+                {droppedOps.length}{" "}
+                {droppedOps.length === 1 ? "record" : "records"} couldn&apos;t sync
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              The server would not accept these. They are still on this device,
+              but not in the cloud. Editing a record sends it again.
+            </p>
+            <ul className="max-h-32 overflow-y-auto space-y-1 text-xs text-muted-foreground">
+              {droppedOps.map((op) => (
+                <li key={`${op.tableName}:${op.recordId}:${op.droppedAt}`}>
+                  {tableLabel(op.tableName)} · {new Date(op.droppedAt).toLocaleString()} ·{" "}
+                  {op.error}
+                </li>
+              ))}
+            </ul>
+            <Button variant="ghost" size="sm" onClick={clearDroppedOps}>
+              Dismiss
+            </Button>
           </div>
         )}
 

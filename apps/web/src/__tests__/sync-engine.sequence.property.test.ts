@@ -238,10 +238,10 @@ describe("sync-engine — sequence-property invariants", () => {
     );
   }, 30_000);
 
-  it("after a failed push, every queue row's attempts is bumped exactly once", async () => {
-    // Invariant: a single failed push increments attempts by 1 on
-    // EVERY row that was in the batch. Catches off-by-one bugs in
-    // incrementAttemptsAndReschedule.
+  it("after a failed push, no queue row is removed and no attempts are spent", async () => {
+    // Invariant: a whole-batch failure keeps every row queued and leaves
+    // its `attempts` (the per-op rejection budget) untouched, so an outage
+    // can never push an op towards being dropped (audit sync-engine#13).
     await fc.assert(
       fc.asyncProperty(
         fc.array(
@@ -281,7 +281,7 @@ describe("sync-engine — sequence-property invariants", () => {
           expect(afterRows).toHaveLength(beforeRows.length);
           for (const row of afterRows) {
             const before = beforeAttempts.get(row.id!) ?? 0;
-            expect(row.attempts).toBe(before + 1);
+            expect(row.attempts ?? 0).toBe(before);
           }
         },
       ),

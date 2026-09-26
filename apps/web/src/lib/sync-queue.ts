@@ -5,6 +5,8 @@
  * - `enqueue(table, id, op)`: add or coalesce a pending op against the [tableName+recordId]
  *   compound index per the four D-04 rules.
  * - `ack(queueIds)`: remove acknowledged rows (D-03).
+ * - `ackIfUnchanged(snapshot)`: remove rows only if no newer edit has
+ *   coalesced into them since the snapshot was taken (audit sync-engine#0).
  * - `getQueueDepth()`: cheap count for the status UI.
  * - `writeWithSync(table, op, action)`: wrap a Dexie data write and its enqueue
  *   in a single `rw` transaction so both roll back on throw.
@@ -42,11 +44,18 @@ export async function enqueueInsideTx(
   recordId: string,
   op: SyncOp,
 ): Promise<void> {
-  const now = Date.now();
+  const wallNow = Date.now();
   const existing = await db._syncQueue
     .where("[tableName+recordId]")
     .equals([tableName, recordId])
     .first();
+
+  // A coalesce must always move enqueuedAt forward, even within the same
+  // millisecond: `ackIfUnchanged` uses it to tell the op an in-flight push
+  // carried from a newer edit that coalesced into the same row.
+  const now = existing
+    ? Math.max(wallNow, existing.enqueuedAt + 1)
+    : wallNow;
 
   if (!existing) {
     await db._syncQueue.add({
@@ -94,6 +103,36 @@ export async function enqueue(
 export async function ack(queueIds: number[]): Promise<void> {
   if (queueIds.length === 0) return;
   await db._syncQueue.bulkDelete(queueIds);
+}
+
+/**
+ * Remove queue rows the server has acknowledged — but only those still
+ * standing for the op that was sent.
+ *
+ * Coalescing reuses one `_syncQueue` row per record, so an edit made while a
+ * push is in flight lands on the same row the push is about to ack. Deleting
+ * it by id alone dropped that newer edit: it was never pushed, and the
+ * chained pull then wrote the older server copy over it (audit
+ * sync-engine#0). A row whose `enqueuedAt` moved since the snapshot stays
+ * queued, and the next cycle pushes the newer version.
+ *
+ * Returns the ids of the rows that were removed.
+ */
+export async function ackIfUnchanged(
+  snapshot: ReadonlyArray<{ id?: number; enqueuedAt: number }>,
+): Promise<number[]> {
+  const entries = snapshot.filter(
+    (s): s is { id: number; enqueuedAt: number } => s.id != null,
+  );
+  if (entries.length === 0) return [];
+  return db.transaction("rw", db._syncQueue, async () => {
+    const current = await db._syncQueue.bulkGet(entries.map((e) => e.id));
+    const removable = entries
+      .filter((e, i) => current[i]?.enqueuedAt === e.enqueuedAt)
+      .map((e) => e.id);
+    if (removable.length > 0) await db._syncQueue.bulkDelete(removable);
+    return removable;
+  });
 }
 
 /** Cheap count of pending ops — for the status UI. */
