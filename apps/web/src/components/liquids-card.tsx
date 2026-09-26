@@ -99,6 +99,15 @@ export function LiquidsCard() {
   // and a meal takes no caffeine/alcohol, so the form only edits its amount
   // and time (the time moves the whole meal).
   const [editIsMealWater, setEditIsMealWater] = useState(false);
+  // The drink name the form was filled with (from the source/preset, then
+  // the stored substance description). A change to it relabels the row —
+  // the Recent label is the water row's note — unless the user typed their
+  // own note.
+  const openedNameRef = useRef("");
+  const prefillName = (name: string) => {
+    openedNameRef.current = name;
+    setEditBeverageName(name);
+  };
 
   const {
     editingRecord,
@@ -114,7 +123,7 @@ export function LiquidsCard() {
       const token = ++openTokenRef.current;
       prefilledRef.current = { caffeine: false, alcohol: false, sugar: false };
       setEditAmount(record.amount.toString());
-      setEditBeverageName("");
+      prefillName("");
       setEditCaffeineMg("");
       setEditAlcoholAbv("");
       setEditSugarG("");
@@ -122,7 +131,7 @@ export function LiquidsCard() {
 
       const source = record.source ?? "";
       if (source.startsWith("beverage:")) {
-        setEditBeverageName(source.slice("beverage:".length));
+        prefillName(source.slice("beverage:".length));
       } else if (source.startsWith("preset:")) {
         // Coffee/alcohol entries reference a preset by id; use it for the
         // name only. Substance values come solely from the stored records
@@ -131,7 +140,8 @@ export function LiquidsCard() {
         // save of any unrelated change.
         const presetId = source.slice("preset:".length);
         const preset = settings.liquidPresets.find((p) => p.id === presetId);
-        if (preset) setEditBeverageName(preset.name);
+        if (preset) prefillName(preset.name);
+        else if (record.note) prefillName(record.note);
       }
 
       if (record.groupId) {
@@ -152,8 +162,8 @@ export function LiquidsCard() {
           const sugar = group.intakes.find(
             (i) => i.type === "sugar" && i.deletedAt === null,
           );
-          if (caffeine?.description) setEditBeverageName(caffeine.description);
-          else if (alcohol?.description) setEditBeverageName(alcohol.description);
+          if (caffeine?.description) prefillName(caffeine.description);
+          else if (alcohol?.description) prefillName(alcohol.description);
           if (caffeine?.amountMg !== undefined) {
             setEditCaffeineMg(caffeine.amountMg.toString());
             prefilledRef.current.caffeine = true;
@@ -190,9 +200,19 @@ export function LiquidsCard() {
       }
     },
     buildUpdates: (timestamp, note) => {
-      const newAmount = parseInt(editAmount, 10);
-      if (isNaN(newAmount) || newAmount <= 0) {
+      // Number, not parseInt: parseInt read "1e3" as 1 ml. A fraction is
+      // refused rather than truncated (the column is an integer).
+      const newAmount = Number(editAmount.trim());
+      if (editAmount.trim() === "" || !Number.isFinite(newAmount) || newAmount <= 0) {
         toast({ title: "Invalid amount", variant: "destructive" });
+        return null;
+      }
+      if (!Number.isInteger(newAmount)) {
+        toast({
+          title: "Invalid amount",
+          description: "Enter the amount as a whole number of ml.",
+          variant: "destructive",
+        });
         return null;
       }
       const updates: { amount: number; timestamp: number; note: string | undefined; source?: string } = {
@@ -208,6 +228,23 @@ export function LiquidsCard() {
       if (source.startsWith("beverage:") || source === "beverage") {
         const trimmed = editBeverageName.trim();
         updates.source = trimmed ? `beverage:${trimmed}` : "beverage";
+      } else if (!editIsMealWater) {
+        // Any other drink is labelled by its note (getLiquidTypeLabel), so a
+        // rename has to reach the note or the row keeps its old name. A note
+        // the user changed in this edit wins over the name.
+        const newName = editBeverageName.trim();
+        const originalNote = (editingRecord?.note ?? "").trim();
+        const noteUntouched = (note ?? "") === originalNote;
+        const noteIsName =
+          originalNote === "" || originalNote === openedNameRef.current.trim();
+        if (
+          newName &&
+          newName !== openedNameRef.current.trim() &&
+          noteUntouched &&
+          noteIsName
+        ) {
+          updates.note = newName;
+        }
       }
       return updates;
     },
@@ -228,7 +265,11 @@ export function LiquidsCard() {
       const sugarG = sugarEnabled && !editIsMealWater ? parse(editSugarG, prefilled.sugar) : null;
       await syncLiquidSubstancesMutation(id, {
         timestamp: u.timestamp,
-        volumeMl: u.amount,
+        // The drink volume is not the water amount (a spirit's water row is
+        // ~60% of it): the service only scales the stored drink volume by
+        // the change in water, so a time-only edit leaves the dose intact.
+        waterMl: u.amount,
+        ...(editingRecord && { previousWaterMl: editingRecord.amount }),
         ...(editBeverageName.trim() && { description: editBeverageName.trim() }),
         caffeineMg,
         alcoholAbv,

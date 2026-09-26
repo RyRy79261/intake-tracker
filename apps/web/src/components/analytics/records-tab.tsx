@@ -52,10 +52,7 @@ import { useToast } from "@intake/ui/use-toast";
 import { useKeyboardAwareScroll } from "@/hooks/use-keyboard-scroll";
 import { cn } from "@/lib/utils";
 import { getDeviceTimezone } from "@/lib/timezone";
-import {
-  timestampToDateTimeLocal,
-  dateTimeLocalToTimestamp,
-} from "@/lib/date-utils";
+import { timestampToDateTimeLocal } from "@/lib/date-utils";
 import type { TimeRange } from "@intake/types/analytics";
 import { standardDrinksFromAbv, abvFromStandardDrinks } from "@intake/core/alcohol";
 
@@ -74,17 +71,6 @@ const UNDO_TOAST_TYPES = new Set<string>([
   "weight",
   "bp",
 ]);
-
-// dateTimeLocalToTimestamp throws on invalid input (it never returns NaN), so
-// parse defensively and return null — each edit handler turns null into the
-// "Invalid date/time" toast at its existing check site.
-function parseDateTimeLocalOrNull(value: string): number | null {
-  try {
-    return dateTimeLocalToTimestamp(value);
-  } catch {
-    return null;
-  }
-}
 
 function entriesLabel(count: number): string {
   return `${count} ${count === 1 ? "entry" : "entries"}`;
@@ -301,13 +287,14 @@ export function RecordsTab({ range }: RecordsTabProps) {
   const handleEditIntakeSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingIntake) return;
-    const newAmount = parseInt(editAmount, 10);
-    const newTimestamp = parseDateTimeLocalOrNull(editTimestamp);
+    // Number, not parseInt: parseInt read "1e3" as 1. Amounts are whole units.
+    const newAmount = editAmount.trim() === "" ? NaN : Number(editAmount.trim());
+    const ts = resolveEditedTimestamp(editingIntake.timestamp, editTimestamp);
     const newNote = editNote.trim() || undefined;
-    if (isNaN(newAmount) || newAmount <= 0) { toast({ title: "Invalid amount", variant: "destructive" }); return; }
-    if (newTimestamp === null) { toast({ title: "Invalid date/time", variant: "destructive" }); return; }
+    if (!Number.isInteger(newAmount) || newAmount <= 0) { toast({ title: "Invalid amount", description: "Enter a whole number above 0.", variant: "destructive" }); return; }
+    if (!ts.ok) { toast({ title: ts.message, variant: "destructive" }); return; }
     try {
-      await updateMutation.mutateAsync({ id: editingIntake.id, updates: { amount: newAmount, timestamp: newTimestamp, ...(newNote !== undefined && { note: newNote }) } });
+      await updateMutation.mutateAsync({ id: editingIntake.id, updates: { amount: newAmount, timestamp: ts.timestamp, ...(newNote !== undefined && { note: newNote }) } });
       setEditingIntake(null);
       toast({ title: "Entry updated" });
     } catch { toast({ title: "Error", description: "Could not update the entry", variant: "destructive" }); }
@@ -351,12 +338,12 @@ export function RecordsTab({ range }: RecordsTabProps) {
   const handleEditEatingSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingEating) return;
-    const newTimestamp = parseDateTimeLocalOrNull(editTimestamp);
-    if (newTimestamp === null) { toast({ title: "Invalid date/time", variant: "destructive" }); return; }
+    const ts = resolveEditedTimestamp(editingEating.timestamp, editTimestamp);
+    if (!ts.ok) { toast({ title: ts.message, variant: "destructive" }); return; }
     try {
       // Pass the note explicitly so clearing the field clears it.
       const eatingNote = editNote.trim() || undefined;
-      await updateEatingMutation.mutateAsync({ id: editingEating.id, updates: { timestamp: newTimestamp, note: eatingNote } });
+      await updateEatingMutation.mutateAsync({ id: editingEating.id, updates: { timestamp: ts.timestamp, note: eatingNote } });
       setEditingEating(null);
       toast({ title: "Entry updated" });
     } catch { toast({ title: "Error", description: "Could not update", variant: "destructive" }); }
@@ -392,8 +379,9 @@ export function RecordsTab({ range }: RecordsTabProps) {
   const handleEditSubstanceSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingSubstance) return;
-    const newTimestamp = parseDateTimeLocalOrNull(editTimestamp);
-    if (newTimestamp === null) { toast({ title: "Invalid date/time", variant: "destructive" }); return; }
+    const ts = resolveEditedTimestamp(editingSubstance.timestamp, editTimestamp);
+    if (!ts.ok) { toast({ title: ts.message, variant: "destructive" }); return; }
+    const newTimestamp = ts.timestamp;
     const desc = editDescription.trim();
     if (!desc) { toast({ title: "Description required", variant: "destructive" }); return; }
     const hasAmount = editSubstanceAmount.trim() !== "";

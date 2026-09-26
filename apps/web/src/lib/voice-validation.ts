@@ -1,4 +1,5 @@
 import type { VoiceParsedItem } from "@/lib/voice-types";
+import { parseBloodPressureForm, parseWeightForm } from "@intake/core/record-schemas";
 
 /**
  * Review-row validation for voice items.
@@ -6,7 +7,10 @@ import type { VoiceParsedItem } from "@/lib/voice-types";
  * The row editors turn a cleared field into 0 and pass negatives through, and
  * the record writers do not validate, so without this a fat-fingered "-250"
  * subtracted from the day's water and a cleared weight saved as 0 kg. A row
- * that fails here cannot be approved. Ranges follow the manual entry forms.
+ * that fails here cannot be approved. Ranges follow the manual entry forms;
+ * blood pressure and weight use the shared record contract
+ * (@intake/core/record-schemas) itself, so a reading the add form refuses
+ * cannot be saved by voice either.
  */
 
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -44,14 +48,18 @@ export function validateVoiceItem(item: VoiceParsedItem): string | null {
     return "Time must be a valid HH:MM.";
   }
   switch (item.kind) {
-    case "blood_pressure":
-      return first(
-        required("Systolic", item.systolic, 300),
-        required("Diastolic", item.diastolic, 200),
-        item.heartRate === undefined ? null : required("Heart rate", item.heartRate, 250),
-      );
-    case "weight":
-      return required("Weight", item.weightKg, 1000);
+    case "blood_pressure": {
+      const parsed = parseBloodPressureForm({
+        systolic: String(item.systolic),
+        diastolic: String(item.diastolic),
+        heartRate: item.heartRate === undefined ? "" : String(item.heartRate),
+      });
+      return parsed.ok ? null : parsed.message;
+    }
+    case "weight": {
+      const parsed = parseWeightForm({ weight: item.weightKg });
+      return parsed.ok ? null : parsed.message;
+    }
     case "water":
       return required("Water", item.ml, 10000);
     case "salt":

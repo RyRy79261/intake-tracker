@@ -2,14 +2,12 @@ import { describe, it, expect } from "vitest";
 import { db } from "@/lib/db";
 import { makeEatingRecord, makeIntakeRecord, seedComposableGroup } from "@/__tests__/fixtures/db-fixtures";
 import { logDrink } from "@/lib/drink-service";
+import { standardDrinksFromAbv } from "@intake/core/alcohol";
 import {
   addComposableEntry,
   deleteEntryGroup,
   undoDeleteEntryGroup,
   getEntryGroup,
-  deleteSingleGroupRecord,
-  undoDeleteSingleRecord,
-  recalculateFromCurrentValues,
   syncLiquidEntrySubstances,
   classifyLiquidDelete,
   deleteEatingEntry,
@@ -401,7 +399,7 @@ describe("composable-entry-service", () => {
       // The user clears the caffeine in the edit form; alcohol stays.
       await syncLiquidEntrySubstances(drink.data.waterIntakeId, {
         timestamp: Date.now(),
-        volumeMl: 250,
+        waterMl: 250,
         caffeineMg: 0,
         alcoholAbv: null,
         sugarG: null,
@@ -460,125 +458,6 @@ describe("composable-entry-service", () => {
     it("Test 20: returns null when called with undefined groupId", async () => {
       const group = await getEntryGroup(undefined);
       expect(group).toBeNull();
-    });
-  });
-
-  // ─── deleteSingleGroupRecord ────────────────────────────────────────
-
-  describe("deleteSingleGroupRecord", () => {
-    it("Test 21: soft-deletes a single intake record, leaving other group members intact", async () => {
-      const { eatingId, intakeIds } = await seedComposableGroup({
-        eating: { note: "Keep eating" },
-        intakes: [{ type: "water", amount: 200 }, { type: "salt", amount: 300 }],
-      });
-
-      const result = await deleteSingleGroupRecord("intakeRecords", intakeIds[0]!);
-      expect(result.success).toBe(true);
-      if (!result.success) return;
-      expect(result.data.table).toBe("intakeRecords");
-      expect(result.data.id).toBe(intakeIds[0]);
-
-      // Deleted record
-      const deleted = await db.intakeRecords.get(intakeIds[0]!);
-      expect(deleted?.deletedAt).toBeTypeOf("number");
-
-      // Other group members intact
-      const eating = await db.eatingRecords.get(eatingId!);
-      expect(eating?.deletedAt).toBeNull();
-
-      const otherIntake = await db.intakeRecords.get(intakeIds[1]!);
-      expect(otherIntake?.deletedAt).toBeNull();
-    });
-
-    it("Test 22: soft-deletes a single eating record, leaving other group members intact", async () => {
-      const { eatingId, intakeIds } = await seedComposableGroup({
-        eating: { note: "Delete just me" },
-        intakes: [{ type: "water", amount: 100 }],
-      });
-
-      const result = await deleteSingleGroupRecord("eatingRecords", eatingId!);
-      expect(result.success).toBe(true);
-
-      const eating = await db.eatingRecords.get(eatingId!);
-      expect(eating?.deletedAt).toBeTypeOf("number");
-
-      const intake = await db.intakeRecords.get(intakeIds[0]!);
-      expect(intake?.deletedAt).toBeNull();
-    });
-
-    it("Test 23: soft-deletes a single substance record, leaving other group members intact", async () => {
-      const { eatingId, substanceId } = await seedComposableGroup({
-        eating: { note: "Still here" },
-        substance: { type: "caffeine", amountMg: 95, description: "Espresso" },
-      });
-
-      const result = await deleteSingleGroupRecord("substanceRecords", substanceId!);
-      expect(result.success).toBe(true);
-
-      const substance = await db.substanceRecords.get(substanceId!);
-      expect(substance?.deletedAt).toBeTypeOf("number");
-
-      const eating = await db.eatingRecords.get(eatingId!);
-      expect(eating?.deletedAt).toBeNull();
-    });
-
-    it("Test 24: returns ok with the deleted record's table and id", async () => {
-      const { intakeIds } = await seedComposableGroup({
-        intakes: [{ type: "water", amount: 200 }],
-      });
-
-      const result = await deleteSingleGroupRecord("intakeRecords", intakeIds[0]!);
-      expect(result.success).toBe(true);
-      if (!result.success) return;
-      expect(result.data).toEqual({ table: "intakeRecords", id: intakeIds[0] });
-    });
-  });
-
-  // ─── undoDeleteSingleRecord ─────────────────────────────────────────
-
-  describe("undoDeleteSingleRecord", () => {
-    it("Test 25: restores a single soft-deleted intake record, other group members unchanged", async () => {
-      const { eatingId, intakeIds } = await seedComposableGroup({
-        eating: { note: "Untouched" },
-        intakes: [{ type: "water", amount: 200 }],
-      });
-
-      // Delete then undo
-      await deleteSingleGroupRecord("intakeRecords", intakeIds[0]!);
-      const result = await undoDeleteSingleRecord("intakeRecords", intakeIds[0]!);
-      expect(result.success).toBe(true);
-
-      const intake = await db.intakeRecords.get(intakeIds[0]!);
-      expect(intake?.deletedAt).toBeNull();
-
-      // Eating was never touched
-      const eating = await db.eatingRecords.get(eatingId!);
-      expect(eating?.deletedAt).toBeNull();
-    });
-
-    it("Test 26: restores a single soft-deleted eating record", async () => {
-      const { eatingId } = await seedComposableGroup({
-        eating: { note: "Restore me" },
-      });
-
-      await deleteSingleGroupRecord("eatingRecords", eatingId!);
-      const result = await undoDeleteSingleRecord("eatingRecords", eatingId!);
-      expect(result.success).toBe(true);
-
-      const eating = await db.eatingRecords.get(eatingId!);
-      expect(eating?.deletedAt).toBeNull();
-    });
-
-    it("Test 27: returns ok with the restored record's table and id", async () => {
-      const { intakeIds } = await seedComposableGroup({
-        intakes: [{ type: "water", amount: 150 }],
-      });
-
-      await deleteSingleGroupRecord("intakeRecords", intakeIds[0]!);
-      const result = await undoDeleteSingleRecord("intakeRecords", intakeIds[0]!);
-      expect(result.success).toBe(true);
-      if (!result.success) return;
-      expect(result.data).toEqual({ table: "intakeRecords", id: intakeIds[0] });
     });
   });
 
@@ -685,8 +564,6 @@ describe("composable-entry-service", () => {
     });
   });
 
-  // ─── recalculateFromCurrentValues (stub) ────────────────────────────
-
   describe("syncLiquidEntrySubstances", () => {
     it("creates caffeine substance + groupId when entry has none", async () => {
       const intake = makeIntakeRecord({ type: "water", amount: 300, source: "manual" });
@@ -694,7 +571,7 @@ describe("composable-entry-service", () => {
 
       const result = await syncLiquidEntrySubstances(intake.id, {
         timestamp: intake.timestamp,
-        volumeMl: 300,
+        waterMl: 300,
         description: "Cold brew",
         caffeineMg: 150,
         alcoholAbv: null,
@@ -724,7 +601,7 @@ describe("composable-entry-service", () => {
 
       const result = await syncLiquidEntrySubstances(intakeIds[0]!, {
         timestamp: 1700000000000,
-        volumeMl: 400,
+        waterMl: 400,
         description: "Big coffee",
         caffeineMg: 200,
         alcoholAbv: null,
@@ -749,7 +626,7 @@ describe("composable-entry-service", () => {
 
       const result = await syncLiquidEntrySubstances(intakeIds[0]!, {
         timestamp: 1700000000000,
-        volumeMl: 250,
+        waterMl: 250,
         caffeineMg: 0,
         alcoholAbv: null,
         sugarG: null,
@@ -768,7 +645,7 @@ describe("composable-entry-service", () => {
 
       const result = await syncLiquidEntrySubstances(intake.id, {
         timestamp: intake.timestamp,
-        volumeMl: 500,
+        waterMl: 500,
         caffeineMg: null,
         alcoholAbv: 5,
         sugarG: null,
@@ -791,7 +668,7 @@ describe("composable-entry-service", () => {
 
       const result = await syncLiquidEntrySubstances(intake.id, {
         timestamp: intake.timestamp,
-        volumeMl: 330,
+        waterMl: 330,
         caffeineMg: null,
         alcoholAbv: null,
         sugarG: 35,
@@ -814,7 +691,7 @@ describe("composable-entry-service", () => {
 
       const result = await syncLiquidEntrySubstances(intakeIds[0]!, {
         timestamp: 1700000000000,
-        volumeMl: 250,
+        waterMl: 250,
         caffeineMg: null, // leave caffeine alone
         alcoholAbv: null,
         sugarG: null,
@@ -834,7 +711,7 @@ describe("composable-entry-service", () => {
 
       const result = await syncLiquidEntrySubstances(intake.id, {
         timestamp: intake.timestamp,
-        volumeMl: 250,
+        waterMl: 250,
         caffeineMg: 0,
         alcoholAbv: 0,
         sugarG: 0,
@@ -843,25 +720,6 @@ describe("composable-entry-service", () => {
 
       const updated = await db.intakeRecords.get(intake.id);
       expect(updated?.groupId).toBeUndefined();
-    });
-  });
-
-  describe("recalculateFromCurrentValues", () => {
-    it("Test 28: returns err with 'Not implemented' message and no side effects", async () => {
-      const { groupId } = await seedComposableGroup({
-        eating: { note: "No recalc" },
-        intakes: [{ type: "water", amount: 100 }],
-      });
-
-      const result = await recalculateFromCurrentValues(groupId);
-      expect(result.success).toBe(false);
-      if (result.success) return;
-      expect(result.error).toContain("Not implemented");
-
-      // Verify no side effects — records unchanged
-      const group = await getEntryGroup(groupId);
-      expect(group!.eatings).toHaveLength(1);
-      expect(group!.intakes).toHaveLength(1);
     });
   });
 
@@ -883,7 +741,7 @@ describe("composable-entry-service", () => {
 
       const result = await syncLiquidEntrySubstances(drink.data.waterIntakeId, {
         timestamp: Date.now(),
-        volumeMl: 568,
+        waterMl: 568,
         description: "Pint of lager",
         caffeineMg: null,
         alcoholAbv: 5.5,
@@ -909,7 +767,7 @@ describe("composable-entry-service", () => {
 
       await syncLiquidEntrySubstances(drink.data.waterIntakeId, {
         timestamp: Date.now(),
-        volumeMl: 250,
+        waterMl: 250,
         caffeineMg: 95,
         alcoholAbv: null,
         sugarG: null,
@@ -933,7 +791,7 @@ describe("composable-entry-service", () => {
 
       await syncLiquidEntrySubstances(drink.data.waterIntakeId, {
         timestamp: Date.now(),
-        volumeMl: 500,
+        waterMl: 500,
         caffeineMg: null,
         alcoholAbv: 6,
         sugarG: 3,
@@ -943,6 +801,81 @@ describe("composable-entry-service", () => {
         .filter((r) => r.deletedAt === null);
       expect(water).toHaveLength(1);
       expect(water[0]!.amount).toBe(500);
+    });
+  });
+
+  // ─── Drink volume ≠ water amount (ai-routes-models#9) ───────────────
+
+  describe("syncLiquidEntrySubstances keeps the drink volume separate from the water", () => {
+    async function logSpirit() {
+      // 45 ml at 60% water → a 27 ml water row; the alcohol stays at 45 ml.
+      const drink = await logDrink({
+        volumeMl: 45,
+        description: "Vodka",
+        abvPercent: 40,
+        waterContentPercent: 60,
+      });
+      if (!drink.success) throw new Error("logDrink failed");
+      return drink.data;
+    }
+
+    it("does not shrink the alcohol dose on a time-only edit", async () => {
+      const drink = await logSpirit();
+      const before = (await db.substanceRecords.get(drink.substanceIds[0]!))!;
+
+      await syncLiquidEntrySubstances(drink.waterIntakeId, {
+        timestamp: Date.now() - 60_000,
+        waterMl: 27,
+        previousWaterMl: 27,
+        caffeineMg: null,
+        alcoholAbv: 40,
+        sugarG: null,
+      });
+
+      const after = (await db.substanceRecords.get(drink.substanceIds[0]!))!;
+      expect(after.volumeMl).toBe(45);
+      expect(after.amountStandardDrinks).toBe(before.amountStandardDrinks);
+      expect(after.amountStandardDrinks).toBe(
+        parseFloat(standardDrinksFromAbv(40, 45).toFixed(2)),
+      );
+    });
+
+    it("scales the drink volume with the water when the amount changes", async () => {
+      const drink = await logSpirit();
+
+      // Doubling the water (27 → 54 ml) means a double measure: 90 ml.
+      await syncLiquidEntrySubstances(drink.waterIntakeId, {
+        timestamp: Date.now(),
+        waterMl: 54,
+        previousWaterMl: 27,
+        caffeineMg: null,
+        alcoholAbv: 40,
+        sugarG: null,
+      });
+
+      const after = (await db.substanceRecords.get(drink.substanceIds[0]!))!;
+      expect(after.volumeMl).toBe(90);
+      expect(after.amountStandardDrinks).toBe(
+        parseFloat(standardDrinksFromAbv(40, 90).toFixed(2)),
+      );
+    });
+
+    it("gives a newly added substance the drink's volume, not the water amount", async () => {
+      const drink = await logSpirit();
+
+      await syncLiquidEntrySubstances(drink.waterIntakeId, {
+        timestamp: Date.now(),
+        waterMl: 27,
+        previousWaterMl: 27,
+        caffeineMg: 20,
+        alcoholAbv: null,
+        sugarG: null,
+      });
+
+      const caffeine = (await db.substanceRecords.toArray()).find(
+        (r) => r.type === "caffeine" && r.deletedAt === null,
+      );
+      expect(caffeine!.volumeMl).toBe(45);
     });
   });
 
@@ -1292,7 +1225,7 @@ describe("composable-entry-service", () => {
 
       const result = await syncLiquidEntrySubstances(drink.data.waterIntakeId, {
         timestamp: newTs,
-        volumeMl: 250,
+        waterMl: 250,
         caffeineMg: 80,
         alcoholAbv: null,
         sugarG: null,
@@ -1326,7 +1259,7 @@ describe("composable-entry-service", () => {
 
       await syncLiquidEntrySubstances(waterId, {
         timestamp: newTs,
-        volumeMl: 90,
+        waterMl: 90,
         caffeineMg: 50,
         alcoholAbv: null,
         sugarG: 0,
@@ -1342,15 +1275,6 @@ describe("composable-entry-service", () => {
       for (const id of meal.data.intakeIds) {
         expect((await db.intakeRecords.get(id))!.timestamp).toBe(newTs);
       }
-    });
-  });
-
-  describe("single-record helpers check the row exists", () => {
-    it("returns an error and queues nothing for a missing id", async () => {
-      const before = await db._syncQueue.count();
-      expect((await deleteSingleGroupRecord("intakeRecords", "nope")).success).toBe(false);
-      expect((await undoDeleteSingleRecord("intakeRecords", "nope")).success).toBe(false);
-      expect(await db._syncQueue.count()).toBe(before);
     });
   });
 });

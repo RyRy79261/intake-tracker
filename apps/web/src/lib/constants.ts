@@ -9,37 +9,6 @@
 /** First-run welcome dialog "seen" flag. Device-local, never synced. */
 export const WELCOME_SEEN_KEY = "intake-tracker-welcome-seen";
 
-// ─── Food Presets (water content %) ──────────────────────────────────
-
-export interface FoodPreset {
-  name: string;
-  waterPercent: number;
-}
-
-export const FOOD_PRESETS: readonly FoodPreset[] = [
-  { name: "Apple", waterPercent: 86 },
-  { name: "Banana", waterPercent: 75 },
-  { name: "Orange", waterPercent: 87 },
-  { name: "Watermelon", waterPercent: 92 },
-  { name: "Grapes", waterPercent: 81 },
-  { name: "Strawberries", waterPercent: 91 },
-  { name: "Cucumber", waterPercent: 96 },
-  { name: "Tomato", waterPercent: 94 },
-  { name: "Lettuce", waterPercent: 96 },
-  { name: "Celery", waterPercent: 95 },
-  { name: "Carrot", waterPercent: 88 },
-  { name: "Broccoli", waterPercent: 89 },
-  { name: "Spinach", waterPercent: 91 },
-  { name: "Peach", waterPercent: 89 },
-  { name: "Pineapple", waterPercent: 86 },
-  { name: "Milk", waterPercent: 87 },
-  { name: "Yogurt", waterPercent: 85 },
-  { name: "Soup (broth)", waterPercent: 92 },
-  { name: "Rice (cooked)", waterPercent: 70 },
-  { name: "Pasta (cooked)", waterPercent: 62 },
-  { name: "Custom", waterPercent: 80 },
-] as const;
-
 // ─── Blood Pressure Thresholds ───────────────────────────────────────
 
 export interface BPCategory {

@@ -56,6 +56,7 @@ import {
   formatDateTime,
 } from "@/lib/date-utils";
 import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
+import { waterContentPercentFromAbv } from "@intake/core/alcohol";
 
 const theme = CARD_THEMES.eating;
 
@@ -203,6 +204,11 @@ export function FoodSection() {
   const canSave = hasRecordableValue || hasMealDetail;
   // Only a drink with a volume can go through logDrink.
   const saveAsDrink = parsedDrink !== null && calculatedWaterMl > 0;
+  // For a drink the field holds the drink's full volume (the parse prompt
+  // reports it that way); an alcoholic drink's ethanol is not water, so
+  // logDrink books only the non-alcohol share.
+  const drinkWaterPercent = waterContentPercentFromAbv(parsedDrink?.abvPercent);
+  const drinkWaterMl = Math.max(1, Math.round((calculatedWaterMl * drinkWaterPercent) / 100));
 
   // ─── Recent eating records ────────────────────────────────────────
   const recentRecords = useEatingRecords(5);
@@ -456,6 +462,7 @@ export function FoodSection() {
       if (saveAsDrink && parsedDrink) {
         await logDrink({
           volumeMl: calculatedWaterMl,
+          waterContentPercent: drinkWaterPercent,
           description: foodText.trim() || "Drink",
           ...(parsedDrink.caffeineMg !== null && parsedDrink.caffeineMg > 0 && {
             caffeineMg: parsedDrink.caffeineMg,
@@ -570,6 +577,7 @@ export function FoodSection() {
     sugarEnabled,
     potassiumEnabled,
     calculatedWaterMl,
+    drinkWaterPercent,
     aiPopulated,
     showTimeInput,
     customTime,
@@ -762,7 +770,7 @@ export function FoodSection() {
               ? ` with ${Math.round(parsedDrink.caffeineMg)} mg caffeine`
               : ""}
             {parsedDrink.abvPercent !== null && parsedDrink.abvPercent > 0
-              ? ` (${parsedDrink.abvPercent}% ABV)`
+              ? ` (${parsedDrink.abvPercent}% ABV, ${drinkWaterMl} ml counted as water)`
               : ""}
             .
           </p>

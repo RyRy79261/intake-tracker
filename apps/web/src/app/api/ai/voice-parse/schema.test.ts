@@ -26,6 +26,26 @@ describe("extractVoiceItems", () => {
     expect(result.items.map((i) => i.kind)).toEqual(["water", "food"]);
   });
 
+  // core-duplication#7: the parse accepts exactly the ranges the add forms do
+  // (@intake/core/record-schemas), not its own looser or tighter copy.
+  it("uses the shared blood-pressure and weight ranges", () => {
+    const result = extractVoiceItems({
+      items: [
+        { kind: "blood_pressure", systolic: 45, diastolic: 30 }, // below 50
+        { kind: "blood_pressure", systolic: 280, diastolic: 90 }, // add form allows up to 300
+        { kind: "weight", weightKg: 600 }, // above 500
+        { kind: "weight", weightKg: 500 },
+      ],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.dropped).toBe(2);
+    expect(result.items).toEqual([
+      expect.objectContaining({ kind: "blood_pressure", systolic: 280 }),
+      expect.objectContaining({ kind: "weight", weightKg: 500 }),
+    ]);
+  });
+
   it("truncates an over-long reasoning string rather than rejecting the payload", () => {
     const longReasoning = "x".repeat(5000);
     const result = extractVoiceItems({ items: [water], reasoning: longReasoning });

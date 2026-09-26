@@ -173,38 +173,6 @@ export async function getRecordsPaginated(
   return { records, hasMore: offset + records.length < total, total };
 }
 
-export async function getRecordsByCursor(
-  beforeTimestamp?: number,
-  limit: number = 20
-): Promise<{ records: IntakeRecord[]; nextCursor: number | null }> {
-  let query = db.intakeRecords.orderBy("timestamp").reverse();
-
-  if (beforeTimestamp !== undefined) {
-    query = db.intakeRecords
-      .where("timestamp")
-      .below(beforeTimestamp)
-      .reverse();
-  }
-
-  // Fetch extra to compensate for filtered-out soft-deleted records,
-  // then apply soft-delete filter and limit manually.
-  const raw = await query.toArray();
-  const active = raw.filter((r) => r.deletedAt === null);
-  const records = active.slice(0, limit + 1);
-
-  const hasMore = records.length > limit;
-  if (hasMore) {
-    records.pop();
-  }
-
-  const lastRecord = records[records.length - 1];
-  const nextCursor = hasMore && lastRecord
-    ? lastRecord.timestamp
-    : null;
-
-  return { records, nextCursor };
-}
-
 export async function getRecordsByDateRange(
   startTime: number,
   endTime: number,

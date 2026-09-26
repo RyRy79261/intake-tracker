@@ -277,6 +277,41 @@ describe("FoodSection — AI parse → submit → Dexie write (MSW integration)"
     expect(await db.eatingRecords.count()).toBe(0);
   });
 
+  // ai-routes-models#9: one rule for every drink path. The parser reports a
+  // drink's full volume; the app books its non-alcohol share as water and
+  // keeps the full volume for the alcohol dose.
+  it("books a parsed spirit's non-alcohol share as water", async () => {
+    parseResponse({
+      water: 50,
+      salt: 0,
+      measurement_type: "sodium",
+      sugar: 0,
+      is_drink: true,
+      caffeine_mg: 0,
+      abv_percent: 40,
+      reasoning: "A double vodka.",
+    });
+    const user = userEvent.setup();
+    await renderWithFixtures(<FoodSection />);
+
+    const aiInput = await screen.findByLabelText(
+      /Describe food for AI nutritional parsing/i,
+    );
+    await user.type(aiInput, "double vodka");
+    await user.keyboard("{Enter}");
+    expect(await screen.findByTestId("food-save-as-drink")).toHaveTextContent(/30 ml counted as water/);
+
+    await user.click(screen.getByRole("button", { name: "Record with details" }));
+
+    await waitFor(async () => {
+      expect(await db.substanceRecords.count()).toBe(1);
+    });
+    const [alcohol] = await db.substanceRecords.toArray();
+    expect(alcohol!.volumeMl).toBe(50);
+    const water = (await db.intakeRecords.toArray()).filter((r) => r.type === "water");
+    expect(water.map((r) => r.amount)).toEqual([30]);
+  });
+
   it("falls back gracefully when the AI endpoint returns 502", async () => {
     server.use(
       http.post("http://localhost:3000/api/ai/parse", () =>

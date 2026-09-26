@@ -84,14 +84,15 @@ describe("PresetTab", () => {
     await user.click(screen.getByRole("button", { name: COFFEE }));
     await user.click(screen.getByRole("button", { name: "Log Entry" }));
 
-    // Default Coffee preset: 250ml volume, 38mg/100ml caffeine
+    // Default Coffee preset: 250ml volume, 38mg/100ml caffeine, 99% water
+    // (250 × 0.99 = 247.5 → 248 ml of water).
     await waitFor(async () => {
       const water = await db.intakeRecords
         .where("type")
         .equals("water")
         .toArray();
       expect(water).toHaveLength(1);
-      expect(water[0]!.amount).toBe(250);
+      expect(water[0]!.amount).toBe(248);
     });
 
     const substances = await db.substanceRecords.toArray();
@@ -127,7 +128,7 @@ describe("PresetTab", () => {
     await waitFor(async () => {
       const water = await db.intakeRecords.where("type").equals("water").toArray();
       expect(water).toHaveLength(1);
-      expect(water[0]!.amount).toBe(250);
+      expect(water[0]!.amount).toBe(248);
     });
     const sugar = await db.intakeRecords.where("type").equals("sugar").toArray();
     expect(sugar).toHaveLength(1);
@@ -150,6 +151,54 @@ describe("PresetTab", () => {
       expect(substances[0]!.type).toBe("alcohol");
       expect(substances[0]!.abvPercent).toBe(5);
     });
+  });
+
+  // ai-routes-models#9: the preset's water content is applied to the water
+  // row; the alcohol dose still comes from the full drink volume.
+  it("logs a spirit preset's water content, not its full volume, as water", async () => {
+    const user = userEvent.setup();
+    await renderWithFixtures(<PresetTab tab="alcohol" />);
+
+    // Default Spirit preset: 45 ml, 40% ABV, 60% water.
+    await user.click(screen.getByRole("button", { name: "Spirit45ml" }));
+    await user.click(screen.getByRole("button", { name: "Log Entry" }));
+
+    await waitFor(async () => {
+      const water = await db.intakeRecords.where("type").equals("water").toArray();
+      expect(water.map((r) => r.amount)).toEqual([27]);
+    });
+    const [alcohol] = await db.substanceRecords.toArray();
+    expect(alcohol!.volumeMl).toBe(45);
+  });
+
+  it("derives a manual alcohol entry's water content from its ABV", async () => {
+    const user = userEvent.setup();
+    await renderWithFixtures(<PresetTab tab="alcohol" />);
+
+    await user.type(screen.getByLabelText("alcohol name"), "Gin");
+    await user.clear(screen.getByLabelText("Volume (ml)"));
+    await user.type(screen.getByLabelText("Volume (ml)"), "50");
+    await user.type(screen.getByLabelText("% ABV"), "40");
+    await user.click(screen.getByRole("button", { name: "Log Entry" }));
+
+    await waitFor(async () => {
+      const water = await db.intakeRecords.where("type").equals("water").toArray();
+      expect(water.map((r) => r.amount)).toEqual([30]);
+    });
+  });
+
+  it("reports a failed save through the save-error pipeline", async () => {
+    const user = userEvent.setup();
+    await renderWithFixtures(<PresetTab tab="coffee" />);
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(db.intakeRecords, "add").mockRejectedValueOnce(new Error("disk full"));
+
+    await user.click(screen.getByRole("button", { name: COFFEE }));
+    await user.click(screen.getByRole("button", { name: "Log Entry" }));
+
+    await waitFor(() =>
+      expect(consoleError).toHaveBeenCalledWith("[save] coffee failed:", expect.anything()),
+    );    vi.restoreAllMocks();
   });
 
   it("shows an empty-state message when the tab has no presets", async () => {

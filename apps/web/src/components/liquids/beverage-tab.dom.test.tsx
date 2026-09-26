@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { BeverageTab } from "@/components/liquids/beverage-tab";
 import { renderWithFixtures } from "@/__tests__/react-test-utils";
+import { useSettingsStore } from "@/stores/settings-store";
 /* eslint-disable-next-line no-restricted-imports -- test asserts a Dexie write */
 import { db } from "@/lib/db";
 
@@ -81,6 +82,30 @@ describe("BeverageTab", () => {
     // Water and sugar share a group id so they form one composable entry
     expect(water?.groupId).toBeTruthy();
     expect(sugar?.groupId).toBe(water?.groupId);
+  });
+
+  // substance-sugar#15: a disabled tracker is hidden from every input form
+  // and its entries are not persisted (optional-trackers.ts).
+  it("hides the sugar field while the sugar tracker is off", async () => {
+    await renderWithFixtures(<BeverageTab />, {
+      settings: { optionalTrackers: { sugar: false, potassium: false } },
+    });
+    expect(screen.queryByLabelText(/Sugar \(g\)/i)).not.toBeInTheDocument();
+  });
+
+  it("drops typed sugar when the tracker is turned off before logging", async () => {
+    const user = userEvent.setup();
+    await renderWithFixtures(<BeverageTab />);
+
+    await user.click(screen.getByRole("button", { name: "330" }));
+    await user.type(screen.getByLabelText(/Sugar \(g\)/i), "25");
+    act(() => useSettingsStore.getState().setOptionalTracker("sugar", false));
+    await user.click(screen.getByRole("button", { name: /Log Beverage/i }));
+
+    await waitFor(async () => {
+      expect(await db.intakeRecords.where("type").equals("water").count()).toBe(1);
+    });
+    expect(await db.intakeRecords.where("type").equals("sugar").count()).toBe(0);
   });
 
   it("tap to edit sets the pending amount under a Beverage title without writing", async () => {

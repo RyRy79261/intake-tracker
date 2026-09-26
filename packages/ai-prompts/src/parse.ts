@@ -37,7 +37,7 @@ Process:
 3. After research, call the parse_food_result tool with the final numbers. The tool MUST be called -- do not return free text only.
 
 Water content — IMPORTANT distinction between drinks and solid foods:
-- DRINKS (you swallow a defined volume of liquid): water_ml = the FULL liquid volume. The body receives that whole volume as fluid; dissolved sugar, salt, caffeine or alcohol travel inside it and do not reduce it. A 250 ml glass of juice → water_ml ≈ 250 (NOT ~215), a 330 ml can of cola → ~330, a 60 ml ice lolly → ~60, a 250 ml glass of milk → ~250. The only common drink where the volume genuinely overstates hydration is high-proof spirits (the ethanol fraction is not water) — for neat spirits use roughly volume × water-fraction (~60% for 40% ABV).
+- DRINKS (you swallow a defined volume of liquid): water_ml = the FULL liquid volume. The body receives that whole volume as fluid; dissolved sugar, salt, caffeine or alcohol travel inside it and do not reduce it. A 250 ml glass of juice → water_ml ≈ 250 (NOT ~215), a 330 ml can of cola → ~330, a 60 ml ice lolly → ~60, a 250 ml glass of milk → ~250. Spirits too: report a neat spirit's FULL volume (a double vodka → ~50) and give its abv_percent — the app derives the water share from abv_percent itself, so never reduce water_ml for alcohol.
 - SOLID / SEMI-SOLID FOODS (no defined liquid volume — fruit, bread, a cooked dish): estimate the water they contribute from their mass and typical water-by-weight fraction. Watermelon ~92%, cucumber ~96%, apple ~86%, bread ~35%, cooked rice ~70%.
 - Never carve dissolved sugar or sodium out of a drink's volume. Track them as separate masses (sugar_g, sodium_mg) over the SAME liquid.
 

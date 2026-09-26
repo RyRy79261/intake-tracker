@@ -1,14 +1,11 @@
 "use client";
 
-import { useLiveQuery } from "dexie-react-hooks";
 import { useCallback, useMemo } from "react";
 import {
   addComposableEntry,
   deleteEntryGroup,
   undoDeleteEntryGroup,
   getEntryGroup,
-  deleteSingleGroupRecord,
-  undoDeleteSingleRecord,
   syncEatingGroup,
   syncLiquidEntrySubstances,
   classifyLiquidDelete,
@@ -39,21 +36,6 @@ export type { ComposableEntryInput, ComposableEntryResult, EntryGroup, RecordTab
 export const fetchEntryGroup = getEntryGroup;
 export const sodiumKindFromSource = parseSodiumKindFromSource;
 export const eatingGroupNutrients = pickEatingGroupNutrients;
-
-/**
- * Reactive hook for reading all records in a composable entry group.
- * Uses a single useLiveQuery that queries all 3 tables via getEntryGroup,
- * so Dexie's observation system tracks all tables and re-fires as a unit.
- *
- * Returns undefined while loading, null for undefined groupId, or the EntryGroup.
- */
-export function useEntryGroup(groupId: string | undefined) {
-  return useLiveQuery(
-    () => getEntryGroup(groupId),
-    [groupId],
-    undefined,
-  );
-}
 
 /**
  * Mutation hook for creating a composable entry.
@@ -145,25 +127,6 @@ export function useDeleteLiquidEntry(
   // Memoised so consumers that take this as a dependency (useDeleteWithToast)
   // don't get a new callback identity on every render.
   return useMemo(() => ({ mutateAsync }), [mutateAsync]);
-}
-
-/**
- * Mutation hook for deleting a single record within a composable group.
- * Shows an undo toast with 5-second window (per D-05, D-06, D-08).
- * Other group members remain intact.
- */
-export function useDeleteSingleGroupRecord() {
-  return useCallback(
-    async (table: RecordTable, id: string) => {
-      const result = unwrap(await deleteSingleGroupRecord(table, id));
-      showUndoToast({
-        title: "Record deleted",
-        onUndo: () => runUndo(() => undoDeleteSingleRecord(table, id)),
-      });
-      return result;
-    },
-    [],
-  );
 }
 
 const CASCADE_UNITS: Record<string, string> = {
