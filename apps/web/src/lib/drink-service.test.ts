@@ -165,6 +165,50 @@ describe("drink-service: logDrink", () => {
       expect(await waterRows()).toHaveLength(1);
     });
 
+    it("books waterContentPercent of the volume as water, keeping the drink volume on the substance", async () => {
+      // ai-routes-models#9: a 45 ml spirit at 60% water hydrates 27 ml, but
+      // its alcohol dose is still computed from the full 45 ml.
+      const result = await logDrink({
+        volumeMl: 45,
+        description: "Vodka",
+        abvPercent: 40,
+        waterContentPercent: 60,
+      });
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+
+      const water = await waterRows();
+      expect(water).toHaveLength(1);
+      expect(water[0]!.amount).toBe(27);
+      const alcohol = await db.substanceRecords.get(result.data.substanceIds[0]!);
+      expect(alcohol!.volumeMl).toBe(45);
+      expect(alcohol!.amountStandardDrinks).toBe(
+        parseFloat(standardDrinksFromAbv(40, 45).toFixed(2)),
+      );
+    });
+
+    it("treats a missing waterContentPercent as 100% water", async () => {
+      await logDrink({ volumeMl: 330, description: "Cola" });
+      expect((await waterRows())[0]!.amount).toBe(330);
+    });
+
+    it("rejects a waterContentPercent outside (0, 100] without writing", async () => {
+      for (const pct of [0, -5, 101, Number.NaN]) {
+        const result = await logDrink({
+          volumeMl: 45,
+          description: "Vodka",
+          waterContentPercent: pct,
+        });
+        expect(result.success).toBe(false);
+      }
+      expect(await waterRows()).toHaveLength(0);
+    });
+
+    it("never books less than 1 ml of water for a tiny drink", async () => {
+      await logDrink({ volumeMl: 1, description: "Shot", waterContentPercent: 10 });
+      expect((await waterRows())[0]!.amount).toBe(1);
+    });
+
     it("omits substances when the drink has none", async () => {
       const result = await logDrink({ volumeMl: 250, description: "Herbal tea" });
       expect(result.success).toBe(true);
