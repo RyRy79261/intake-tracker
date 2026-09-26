@@ -17,6 +17,9 @@ import type { ServiceResult } from "@intake/types/service";
 import { generateId, getDeviceId } from "@/lib/utils";
 import { writeWithSync } from "@/lib/sync-queue";
 import { schedulePush } from "@/lib/sync-engine";
+import { getSyncAccountId } from "@/lib/sync-account";
+import { useSettingsStore } from "@/stores/settings-store";
+import { useSyncStatusStore } from "@/stores/sync-status-store";
 
 /** Maximum number of conditions a profile can hold. */
 export const MAX_CONDITIONS = 20;
@@ -87,10 +90,21 @@ export async function saveUserProfile(
   updates: ProfileUpdates,
 ): Promise<ServiceResult<UserProfile>> {
   try {
+    // Until this device has pulled the cloud copy, it cannot see the profile
+    // another device saved, and a save here would write a near-empty row whose
+    // newer updatedAt hides that profile everywhere (audit sync-engine#18).
+    if (
+      useSettingsStore.getState().storageMode === "cloud-sync" &&
+      !useSyncStatusStore.getState().initialSyncComplete
+    ) {
+      return err("Your profile is still syncing. Try again in a moment.");
+    }
     const current = await getUserProfile();
     const next: UserProfile = {
       ...current,
-      id: current.id || generateId(),
+      // A new profile takes the account's id, so two devices creating one
+      // converge on the same row. Existing rows keep their id.
+      id: current.id || getSyncAccountId() || generateId(),
       ...(updates.conditions !== undefined && {
         conditions: normalizeConditions(updates.conditions),
       }),

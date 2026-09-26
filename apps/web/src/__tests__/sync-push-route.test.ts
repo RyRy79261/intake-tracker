@@ -203,7 +203,7 @@ describe("sync-push-route", () => {
     expect(body.accepted).toEqual([{ queueId: 2, serverUpdatedAt: 5000 }]);
   });
 
-  it("deletedAt wins: non-null deletedAt on either side prevents resurrection", async () => {
+  it("deletedAt wins: a stale live edit cannot resurrect a tombstoned row", async () => {
     existingRows["row-1"] = {
       id: "row-1",
       userId: "user-test",
@@ -217,7 +217,9 @@ describe("sync-push-route", () => {
           queueId: 3,
           tableName: "intakeRecords",
           op: "upsert",
-          row: validIntakeRow({ updatedAt: 9999, deletedAt: null }),
+          // Tie with the tombstone still loses — only a strictly newer
+          // live write counts as a restore.
+          row: validIntakeRow({ updatedAt: 1000, deletedAt: null }),
         },
       ],
     });
@@ -229,6 +231,36 @@ describe("sync-push-route", () => {
     };
     expect(insertCalls).toHaveLength(0);
     expect(body.accepted).toEqual([{ queueId: 3, serverUpdatedAt: 1000 }]);
+  });
+
+  it("undo-delete: a live write newer than the tombstone restores the row", async () => {
+    // audit sync-engine#8 — undo after the delete already synced.
+    existingRows["row-1"] = {
+      id: "row-1",
+      userId: "user-test",
+      updatedAt: 1000,
+      deletedAt: 1000,
+    };
+    const { POST } = await import("@/app/api/sync/push/route");
+    const req = makePushRequest({
+      ops: [
+        {
+          queueId: 4,
+          tableName: "intakeRecords",
+          op: "upsert",
+          row: validIntakeRow({ updatedAt: 9999, deletedAt: null }),
+        },
+      ],
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      accepted: { queueId: number; serverUpdatedAt: number }[];
+    };
+    expect(insertCalls).toHaveLength(1);
+    expect(insertCalls[0]!.set.deletedAt).toBeNull();
+    expect(body.accepted).toEqual([{ queueId: 4, serverUpdatedAt: 9999 }]);
   });
 
   it("tombstone tie-break: incoming tombstone with same updatedAt as live server row wins", async () => {

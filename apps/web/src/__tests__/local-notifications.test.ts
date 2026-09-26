@@ -39,6 +39,11 @@ vi.mock("@/lib/timezone", async (importOriginal) => ({
   getDeviceTimezone: () => "Europe/Berlin",
 }));
 
+let remindersSuspended = false;
+vi.mock("@/lib/reminder-suspension", () => ({
+  areRemindersSuspended: () => remindersSuspended,
+}));
+
 // Monday 2026-09-28 06:00 in Berlin (CEST, UTC+2).
 const NOW = Date.UTC(2026, 8, 28, 4, 0);
 
@@ -88,6 +93,7 @@ describe("local-notifications", () => {
     mockGetPending.mockReset().mockResolvedValue({ notifications: [] });
     mockSchedule.mockReset().mockResolvedValue(undefined);
     mockCancel.mockReset().mockResolvedValue(undefined);
+    remindersSuspended = false;
     const store = new Map<string, string>();
     vi.stubGlobal("localStorage", {
       getItem: (k: string) => store.get(k) ?? null,
@@ -122,6 +128,19 @@ describe("local-notifications", () => {
   });
 
   describe("syncMedicationNotifications", () => {
+    it("cancels and schedules nothing while signed out (reminders suspended)", async () => {
+      // audit native-android#8: sign-out suspends reminders; the cold-start
+      // resync must not bring them back.
+      remindersSuspended = true;
+      mockGetPending.mockResolvedValue({ notifications: [{ id: 1 }] });
+      await seedRegimen({ daysOfWeek: [1] });
+
+      await sync();
+
+      expect(mockCancel).toHaveBeenCalledWith({ notifications: [{ id: 1 }] });
+      expect(mockSchedule).not.toHaveBeenCalled();
+    });
+
     it("fires at the schedule's local wall-clock time, not its UTC minutes as local", async () => {
       await seedRegimen({ daysOfWeek: [1] });
 

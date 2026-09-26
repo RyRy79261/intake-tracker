@@ -7,6 +7,7 @@ import {
 } from "@/lib/medication-reminder-builder";
 import { getDeviceTimezone } from "@/lib/timezone";
 import { useSettingsStore } from "@/stores/settings-store";
+import { areRemindersSuspended } from "@/lib/reminder-suspension";
 
 /**
  * How far ahead one-shot reminders are scheduled. Every resync (app start,
@@ -141,7 +142,10 @@ async function buildNotifications(now: number): Promise<NativeNotification[]> {
 async function runSync(): Promise<void> {
   const pending = await LocalNotifications.getPending();
 
-  const wanted = getNativeRemindersEnabled() ? await buildNotifications(Date.now()) : [];
+  // Signed out: keep reminders off until the next sign-in (native-android#8).
+  const wanted = getNativeRemindersEnabled() && !areRemindersSuspended()
+    ? await buildNotifications(Date.now())
+    : [];
   const wantedIds = new Set(wanted.map((n) => n.id));
 
   const stale = pending.notifications.filter((n) => !wantedIds.has(n.id));

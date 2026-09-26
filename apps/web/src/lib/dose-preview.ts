@@ -59,7 +59,8 @@ export function pillsToDosage(pills: number, brand: Brand): number {
 
 /** Tablets of the brand for a summed dosage. */
 export function dosageToPills(dosage: number, brand: Brand): number {
-  return calculatePillsConsumed(dosage, brand.strength);
+  // An invalid strength has no pill count; 0 keeps the preview neutral.
+  return calculatePillsConsumed(dosage, brand.strength) ?? 0;
 }
 
 // formatPillCount only renders quarter fractions correctly; anything else is

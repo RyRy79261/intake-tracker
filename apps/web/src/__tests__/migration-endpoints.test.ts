@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { NextRequest } from "next/server";
+import type * as DrizzleOrm from "drizzle-orm";
 
 const mockUserId = "test-user-123";
 const mockRows: Record<string, Record<string, unknown>[]> = {};
@@ -57,6 +58,10 @@ vi.mock("@intake/db/client", () => {
       });
       return chain;
     }),
+    // Cleanup runs its deletes in one transaction (user-data-deletion.ts).
+    transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn(selectProxy),
+    ),
   };
 
   return { db: selectProxy };
@@ -77,7 +82,9 @@ vi.mock("@intake/db/sync-payload", async () => {
   return { schemaByTableName };
 });
 
-vi.mock("drizzle-orm", () => ({
+vi.mock("drizzle-orm", async (importOriginal) => ({
+  // The real module backs @intake/db/schema (pulled in by user-data-deletion).
+  ...(await importOriginal<typeof DrizzleOrm>()),
   eq: vi.fn((_col: unknown, _val: unknown) => ({ type: "eq" })),
   gt: vi.fn((_col: unknown, _val: unknown) => ({ type: "gt" })),
   and: vi.fn((..._conditions: unknown[]) => ({ type: "and" })),
