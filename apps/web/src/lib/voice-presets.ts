@@ -12,6 +12,18 @@ import { tokenize, type ReconcileNote } from "@/lib/voice-reconcile";
  * told where the number came from.
  */
 
+/**
+ * Words that may sit around a preset's name without changing what the drink
+ * is ("moka pot coffee", "a cup of black tea"). Any other word — "latte",
+ * "decaf", "milk", "iced" — means the drink is not simply the preset, and
+ * scaling the preset's concentration by its whole volume would be wrong (a
+ * 250 ml latte made with a double espresso is not 250 ml of espresso).
+ */
+const GENERIC_WORDS = new Set([
+  "coffee", "pot", "stovetop", "stove", "top", "hot", "black", "brewed",
+  "fresh", "freshly", "homemade", "made", "mugful", "cupful",
+]);
+
 interface PresetMatch {
   preset: LiquidPreset;
   /** Preset name words found in the description. */
@@ -27,6 +39,9 @@ function findPreset(description: string, presets: LiquidPreset[]): LiquidPreset 
     if (preset.tab !== "coffee" || preset.caffeinePer100ml === undefined) continue;
     const name = [...tokenize(preset.name)];
     if (name.length === 0 || !name.every((w) => words.includes(w))) continue;
+    // Every other word in the description must be generic, or the drink is
+    // something made WITH the preset rather than the preset itself.
+    if (!words.every((w) => name.includes(w) || GENERIC_WORDS.has(w))) continue;
     const position = Math.min(...name.map((w) => words.indexOf(w)));
     // More matched words wins ("cold brew" over "brew"); on a tie the word
     // said first is the modifier ("moka coffee" is a moka). A full tie goes to

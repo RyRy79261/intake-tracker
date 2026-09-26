@@ -47,6 +47,28 @@ describe("applyPresetCaffeine", () => {
     expect(notes).toHaveLength(0);
   });
 
+  it("does not price a milk drink or a decaf by an espresso/coffee preset", () => {
+    // Preset concentration x the whole drink volume is only right when the
+    // drink IS the preset: a 250 ml latte made with a double espresso is not
+    // 250 ml of espresso (525 mg), and a decaf is not a coffee.
+    const input: VoiceParsedItem[] = [
+      { kind: "caffeine", description: "latte with a double espresso", caffeineMg: 126, volumeMl: 250 },
+      { kind: "caffeine", description: "decaf coffee", caffeineMg: 5, volumeMl: 250 },
+      { kind: "caffeine", description: "moka with milk", caffeineMg: 100, volumeMl: 250 },
+    ];
+    const { items, notes } = applyPresetCaffeine(input, DEFAULT_LIQUID_PRESETS);
+    expect(items).toEqual(input);
+    expect(notes).toHaveLength(0);
+  });
+
+  it("still matches a preset described with generic coffee words", () => {
+    const { items } = applyPresetCaffeine(
+      [{ kind: "caffeine", description: "cup of stovetop moka pot coffee", caffeineMg: 60, volumeMl: 100 }],
+      DEFAULT_LIQUID_PRESETS,
+    );
+    expect(items[0]).toMatchObject({ caffeineMg: 130 });
+  });
+
   it("leaves a drink with no volume alone", () => {
     const { items } = applyPresetCaffeine(
       [{ kind: "caffeine", description: "espresso", caffeineMg: 63 }],
