@@ -30,3 +30,4 @@ export * from "./analytics-stats";
 export * from "./lifecycle";
 export * from "./effective-phase";
 export * from "./logical-day";
+export * from "./sodium";

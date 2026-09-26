@@ -113,8 +113,7 @@ export const POST = withAuth(async ({ request, auth }) => {
       response = await client.messages.create(
         {
           model: CLAUDE_MODELS.quality,
-          max_tokens: 2048,
-          temperature: 0,
+          max_tokens: 4096, // headroom for Sonnet 5 adaptive thinking
           system: SYSTEM_PROMPT,
           tools: [PARSE_TOOL],
           messages: [{ role: "user", content: userMessage }],
@@ -148,8 +147,7 @@ export const POST = withAuth(async ({ request, auth }) => {
         followup = await client.messages.create(
           {
             model: CLAUDE_MODELS.quality,
-            max_tokens: 2048,
-            temperature: 0,
+            max_tokens: 4096, // headroom for Sonnet 5 adaptive thinking
             system: SYSTEM_PROMPT,
             tools: [PARSE_TOOL],
             tool_choice: { type: "tool", name: PARSE_TOOL.name },

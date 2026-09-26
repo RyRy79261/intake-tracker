@@ -76,6 +76,9 @@ const validBody = {
 
 describe("titration-warnings route handler", () => {
   beforeEach(() => {
+    // Fresh route module per test, so the per-user rate limiter's
+    // module-level state doesn't carry between tests.
+    vi.resetModules();
     messagesCreate.mockReset();
   });
 
@@ -138,11 +141,12 @@ describe("titration-warnings route handler", () => {
     expect(messagesCreate).not.toHaveBeenCalled();
   });
 
-  it("returns 502 when the model returns no tool_use block", async () => {
-    messagesCreate.mockResolvedValueOnce({
+  it("returns 502 when the model returns no tool_use block, even after the retry", async () => {
+    const prose = {
       content: [{ type: "text", text: "no tool" }],
       usage: { input_tokens: 10, output_tokens: 5 },
-    });
+    };
+    messagesCreate.mockResolvedValueOnce(prose).mockResolvedValueOnce(prose);
 
     const { POST } = await import("@/app/api/ai/titration-warnings/route");
     const res = await POST(makeRequest(validBody));
@@ -162,6 +166,67 @@ describe("titration-warnings route handler", () => {
     expect(res.status).toBe(502);
     const body = (await res.json()) as { error: string };
     expect(body.error).toBe("AI service unavailable");
+  });
+
+  it("request: auto tool_choice, a strict result tool and explicit effort (Opus 5.5 400s on a forced tool)", async () => {
+    messagesCreate.mockResolvedValueOnce(toolUseResponse({ warnings: ["x"] }));
+
+    const { POST } = await import("@/app/api/ai/titration-warnings/route");
+    await POST(makeRequest(validBody));
+
+    const params = messagesCreate.mock.calls[0]?.[0] as {
+      tool_choice?: { type: string };
+      tools: { name: string; strict?: boolean }[];
+      output_config?: { effort: string };
+    };
+    expect(params.tool_choice?.type ?? "auto").toBe("auto");
+    expect(params.tools[0]?.strict).toBe(true);
+    expect(params.output_config).toEqual({ effort: "high" });
+    expect(params).not.toHaveProperty("temperature");
+  });
+
+  it("retry: a prose first turn gets one unforced retry that recovers", async () => {
+    messagesCreate
+      .mockResolvedValueOnce({
+        content: [{ type: "text", text: "Thinking it over." }],
+        usage: { input_tokens: 10, output_tokens: 5 },
+      })
+      .mockResolvedValueOnce(toolUseResponse({ warnings: ["Watch for dizziness."] }));
+
+    const { POST } = await import("@/app/api/ai/titration-warnings/route");
+    const res = await POST(makeRequest(validBody));
+
+    expect(res.status).toBe(200);
+    const retry = messagesCreate.mock.calls[1]?.[0] as { tool_choice: { type: string } };
+    expect(retry.tool_choice).toEqual({ type: "auto" });
+  });
+
+  it("refusal: stop_reason refusal → 422 AI_REFUSED", async () => {
+    messagesCreate.mockResolvedValueOnce({
+      content: [],
+      stop_reason: "refusal",
+      stop_details: { type: "refusal", category: null, explanation: null },
+      usage: { input_tokens: 10, output_tokens: 0 },
+    });
+
+    const { POST } = await import("@/app/api/ai/titration-warnings/route");
+    const res = await POST(makeRequest(validBody));
+
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as { code: string };
+    expect(body.code).toBe("AI_REFUSED");
+  });
+
+  it("rate limit: a looping client is cut off with 429 before reaching the premium model", async () => {
+    messagesCreate.mockResolvedValue(toolUseResponse({ warnings: ["x"] }));
+
+    const { POST } = await import("@/app/api/ai/titration-warnings/route");
+    const statuses: number[] = [];
+    for (let i = 0; i < 6; i++) statuses.push((await POST(makeRequest(validBody))).status);
+
+    expect(statuses.slice(0, 5)).toEqual([200, 200, 200, 200, 200]);
+    expect(statuses[5]).toBe(429);
+    expect(messagesCreate).toHaveBeenCalledTimes(5);
   });
 
   it("AI-failure path: a thrown error from Claude yields a graceful 500, not a crash", async () => {

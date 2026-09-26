@@ -114,6 +114,13 @@ function ProviderCard({ meta }: { meta: ProviderMeta }) {
     statusBlock = (
       <p className="text-xs text-muted-foreground">Loading…</p>
     );
+  } else if (entry?.configured && entry.readable === false) {
+    statusBlock = (
+      <p className="text-xs text-destructive">
+        Your saved key ending in <span className="font-mono">{entry.last4 || "????"}</span>{" "}
+        can&apos;t be read any more. Re-enter it to keep using AI features.
+      </p>
+    );
   } else if (entry?.configured) {
     statusBlock = (
       <p className="text-xs text-muted-foreground">

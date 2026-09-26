@@ -1,21 +1,27 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import type Anthropic from "@anthropic-ai/sdk";
 import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
 import { getClaudeClientForUser, CLAUDE_MODELS, WEB_SEARCH_TOOL } from "@/app/api/ai/_shared/claude-client";
 import { parseJsonBody, zodErrorResponse } from "@/app/api/_shared/validation";
-import { createRateLimiter, getClientIp } from "@/app/api/_shared/rate-limit";
-import { recordUsage, tokensFromAnthropic } from "@/app/api/ai/_shared/usage-tracker";
+import { createRateLimiter, rateLimitKey } from "@/app/api/_shared/rate-limit";
+import { requestToolCall } from "@/app/api/ai/_shared/claude-call";
 import { aiErrorResponse } from "@/app/api/ai/_shared/ai-error-response";
 import { SYSTEM_PROMPT, PARSE_RESULT_TOOL } from "@intake/ai-prompts/parse";
 
 /**
  * Server-side AI parsing for food / drink descriptions.
  *
- * Always returns sodium in mg (no salt/sodium ambiguity). Uses Opus + web_search
- * for high-quality lookups, with temperature 0 for deterministic numeric answers.
+ * Always returns sodium in mg (no salt/sodium ambiguity). Uses the quality
+ * tier (Sonnet) + web_search for branded or regional items. No sampling
+ * parameters: Sonnet 5 rejects a non-default `temperature` with a 400, so
+ * consistency comes from the prompt's reference values and the tool schema.
  */
+
+// Vercel function limit. The shared deadline below stops short of it so a
+// slow model call ends in a JSON 504 rather than the platform's own.
+export const maxDuration = 60;
+const DEADLINE_MS = 50_000;
 
 const ParseRequestSchema = z.object({
   input: z.string().min(1, "Input is required").max(500, "Input too long"),
@@ -34,22 +40,9 @@ const AIParseResponseSchema = z.object({
 
 const rateLimiter = createRateLimiter(20);
 
-type ToolUseBlock = Extract<Anthropic.Messages.ContentBlock, { type: "tool_use" }>;
-
-function findToolUse(
-  content: Anthropic.Messages.ContentBlock[],
-  toolName: string
-): ToolUseBlock | undefined {
-  return content.find(
-    (b): b is ToolUseBlock => b.type === "tool_use" && b.name === toolName
-  );
-}
-
 export const POST = withAuth(async ({ request, auth }) => {
   try {
-    const ip = getClientIp(request);
-
-    if (!rateLimiter.check(ip)) {
+    if (!rateLimiter.check(rateLimitKey(request, auth.userId))) {
       return NextResponse.json(
         { error: "Rate limit exceeded. Please try again later." },
         { status: 429 }
@@ -86,65 +79,31 @@ export const POST = withAuth(async ({ request, auth }) => {
 
     const userMessage = `Estimate water (ml), sodium (mg), total sugar (g) and potassium (mg) for: "${sanitizedInput}". Use web_search for branded or regional items, then call parse_food_result.`;
 
-    const startedAt = Date.now();
-    const response = await client.messages.create({
-      model: CLAUDE_MODELS.quality,
-      max_tokens: 4096,
-      temperature: 0,
-      system: SYSTEM_PROMPT,
-      tools: [WEB_SEARCH_TOOL, PARSE_RESULT_TOOL],
-      messages: [{ role: "user", content: userMessage }],
-    });
-    recordUsage({
-      userId: auth.userId!,
-      keyOwnerId: resolved.keyOwnerId,
-      keySource: resolved.source,
-      provider: "anthropic",
-      model: CLAUDE_MODELS.quality,
-      route: "/api/ai/parse",
-      status: "success",
-      durationMs: Date.now() - startedAt,
-      ...tokensFromAnthropic(response.usage),
-    });
-
-    let toolBlock = findToolUse(response.content, PARSE_RESULT_TOOL.name);
-
-    // If the model finished with text instead of calling the structured tool,
-    // run a second turn that forces the tool with the prior context.
-    if (!toolBlock) {
-      const followupStartedAt = Date.now();
-      const followup = await client.messages.create({
+    // If the model finishes with text instead of calling the structured
+    // tool, requestToolCall runs one more turn that asks for it, with the
+    // prior context. WEB_SEARCH_TOOL stays declared on that turn because the
+    // replayed assistant turn may contain server_tool_use blocks.
+    const { toolUse: toolBlock } = await requestToolCall(
+      client,
+      {
         model: CLAUDE_MODELS.quality,
-        max_tokens: 1024,
-        temperature: 0,
+        // Headroom for adaptive thinking (on by default on Sonnet 5) and the
+        // search traffic as well as the tool call itself.
+        max_tokens: 8192,
+        // A lookup, not an open-ended analysis: medium keeps it quick.
+        output_config: { effort: "medium" },
         system: SYSTEM_PROMPT,
-        // WEB_SEARCH_TOOL must stay declared because the prior assistant turn
-        // may contain server_tool_use blocks; tool_choice still forces the
-        // structured tool.
         tools: [WEB_SEARCH_TOOL, PARSE_RESULT_TOOL],
-        tool_choice: { type: "tool", name: PARSE_RESULT_TOOL.name },
-        messages: [
-          { role: "user", content: userMessage },
-          { role: "assistant", content: response.content },
-          {
-            role: "user",
-            content: "Now return the final estimate via the parse_food_result tool.",
-          },
-        ],
-      });
-      recordUsage({
-        userId: auth.userId!,
-        keyOwnerId: resolved.keyOwnerId,
-        keySource: resolved.source,
-        provider: "anthropic",
-        model: CLAUDE_MODELS.quality,
-        route: "/api/ai/parse",
-        status: "success",
-        durationMs: Date.now() - followupStartedAt,
-        ...tokensFromAnthropic(followup.usage),
-      });
-      toolBlock = findToolUse(followup.content, PARSE_RESULT_TOOL.name);
-    }
+        messages: [{ role: "user", content: userMessage }],
+      },
+      {
+        usage: { userId: auth.userId!, resolved, route: "/api/ai/parse" },
+        deadline: Date.now() + DEADLINE_MS,
+        toolName: PARSE_RESULT_TOOL.name,
+        retryInstruction: "Now return the final estimate via the parse_food_result tool.",
+        retryMaxTokens: 4096,
+      },
+    );
 
     if (!toolBlock) {
       return NextResponse.json(

@@ -104,7 +104,6 @@ export const POST = withAuth(async ({ request, auth }) => {
     const response = await client.messages.create({
       model: CLAUDE_MODELS.quality,
       max_tokens: 4096,
-      temperature: 0,
       system: systemPrompt,
       tools: [WEB_SEARCH_TOOL, SUBSTANCE_LOOKUP_TOOL],
       messages: [{ role: "user", content: userPrompt }],
@@ -134,7 +133,6 @@ export const POST = withAuth(async ({ request, auth }) => {
       const retry = await client.messages.create({
         model: CLAUDE_MODELS.quality,
         max_tokens: 4096,
-        temperature: 0,
         system: systemPrompt,
         // Deliberately no tool_choice here: forcing the structured tool would
         // stop it searching, which is the one thing we need it to do.
@@ -190,8 +188,7 @@ export const POST = withAuth(async ({ request, auth }) => {
       const followupStartedAt = Date.now();
       const followup = await client.messages.create({
         model: CLAUDE_MODELS.quality,
-        max_tokens: 1024,
-        temperature: 0,
+        max_tokens: 4096, // headroom for Sonnet 5 adaptive thinking
         system: systemPrompt,
         // WEB_SEARCH_TOOL must stay declared because the prior assistant turn
         // may contain server_tool_use blocks; tool_choice still forces the

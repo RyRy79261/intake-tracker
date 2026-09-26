@@ -4,12 +4,21 @@ import { eq, sql } from "drizzle-orm";
 import { withAuth } from "@/lib/auth-middleware";
 import { db } from "@intake/db/client";
 import { userApiKeys } from "@intake/db/schema";
-import { encryptKey, lastFourOf, type KeyVaultAad } from "@/lib/key-vault";
+import {
+  decryptKey,
+  encryptKey,
+  lastFourOf,
+  KeyDecryptError,
+  type KeyVaultAad,
+} from "@/lib/key-vault";
 import { parseJsonBody, zodErrorResponse } from "@/app/api/_shared/validation";
 
 /**
  * GET  /api/user/api-keys
- *   → { anthropic: { configured, last4 } | null, groq: { configured, last4 } | null }
+ *   → { anthropic: { configured, last4, readable } | null, groq: … | null }
+ *   `readable: false` means the stored blob no longer decrypts (e.g. after
+ *   API_KEY_ENCRYPTION_SECRET was rotated): every AI call would fail, so the
+ *   Settings UI asks the user to re-enter the key instead of saying it's in use.
  *
  * PUT  /api/user/api-keys
  *   body: { provider: "anthropic" | "groq", key: string }
@@ -39,19 +48,42 @@ function validateKeyFormat(provider: "anthropic" | "groq", key: string): string 
   return null;
 }
 
+/**
+ * Can the stored blob still be decrypted? The plaintext is discarded at
+ * once; only the yes/no leaves this function.
+ */
+function isReadable(encrypted: string, aad: KeyVaultAad): boolean {
+  try {
+    decryptKey(encrypted, aad);
+    return true;
+  } catch (e) {
+    if (e instanceof KeyDecryptError) return false;
+    throw e;
+  }
+}
+
 export const GET = withAuth(async ({ auth }) => {
+  const userId = auth.userId!;
   const rows = await db
     .select()
     .from(userApiKeys)
-    .where(eq(userApiKeys.userId, auth.userId!))
+    .where(eq(userApiKeys.userId, userId))
     .limit(1);
   const row = rows[0];
   return NextResponse.json({
     anthropic: row?.anthropicKeyEncrypted
-      ? { configured: true, last4: row.anthropicLast4 ?? "" }
+      ? {
+          configured: true,
+          last4: row.anthropicLast4 ?? "",
+          readable: isReadable(row.anthropicKeyEncrypted, { userId, provider: "anthropic" }),
+        }
       : null,
     groq: row?.groqKeyEncrypted
-      ? { configured: true, last4: row.groqLast4 ?? "" }
+      ? {
+          configured: true,
+          last4: row.groqLast4 ?? "",
+          readable: isReadable(row.groqKeyEncrypted, { userId, provider: "groq" }),
+        }
       : null,
   });
 });

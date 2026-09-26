@@ -18,7 +18,7 @@ import "server-only";
 import { eq, and, asc } from "drizzle-orm";
 import { db } from "@intake/db/client";
 import { userApiKeys, userKeyShares } from "@intake/db/schema";
-import { decryptKey } from "@/lib/key-vault";
+import { decryptKey, KeyDecryptError } from "@/lib/key-vault";
 
 export type AiProvider = "anthropic" | "groq";
 export type KeySource = "own_stored" | "shared_from" | "env_var";
@@ -34,6 +34,24 @@ export class NoAiKeyError extends Error {
   constructor(public provider: AiProvider) {
     super(`No ${provider} API key configured for user`);
     this.name = "NoAiKeyError";
+  }
+}
+
+/**
+ * A stored key exists but can't be decrypted — typically because
+ * API_KEY_ENCRYPTION_SECRET was rotated. Mapped to a "re-enter your key"
+ * response rather than the generic 502 an unhandled GCM error used to give.
+ *
+ * `source` says whose key it was: the caller's own (they can fix it by
+ * re-entering it) or a grantor's (only the grantor can).
+ */
+export class KeyUnreadableError extends Error {
+  constructor(
+    public provider: AiProvider,
+    public source: Extract<KeySource, "own_stored" | "shared_from">,
+  ) {
+    super(`Stored ${provider} key (${source}) could not be decrypted`);
+    this.name = "KeyUnreadableError";
   }
 }
 
@@ -80,11 +98,14 @@ export async function resolveAiKey(
     provider === "anthropic" ? own?.anthropicKeyEncrypted : own?.groqKeyEncrypted;
 
   if (own && ownEncrypted) {
-    return {
-      apiKey: decryptStored(ownEncrypted, userId, provider),
-      source: "own_stored",
-      keyOwnerId: userId,
-    };
+    let apiKey: string;
+    try {
+      apiKey = decryptStored(ownEncrypted, userId, provider);
+    } catch (e) {
+      if (e instanceof KeyDecryptError) throw new KeyUnreadableError(provider, "own_stored");
+      throw e;
+    }
+    return { apiKey, source: "own_stored", keyOwnerId: userId };
   }
 
   // Look for a share granted to this user for this provider. Ordered by
@@ -104,6 +125,9 @@ export async function resolveAiKey(
     )
     .orderBy(asc(userKeyShares.createdAt), asc(userKeyShares.grantorId));
 
+  // A grantor's unreadable blob must not block the grantee: skip it and
+  // keep looking. Only when nothing else resolves is it reported.
+  let unreadableShare = false;
   for (const { grantorId } of shareRows) {
     const grantorRows = await db
       .select({ encrypted: encryptedColumn(provider) })
@@ -111,12 +135,17 @@ export async function resolveAiKey(
       .where(eq(userApiKeys.userId, grantorId))
       .limit(1);
     const encrypted = grantorRows[0]?.encrypted;
-    if (encrypted) {
+    if (!encrypted) continue;
+    try {
       return {
         apiKey: decryptStored(encrypted, grantorId, provider),
         source: "shared_from",
         keyOwnerId: grantorId,
       };
+    } catch (e) {
+      if (!(e instanceof KeyDecryptError)) throw e;
+      unreadableShare = true;
+      console.warn(`[ai-key-resolver] shared ${provider} key from a grantor could not be decrypted; skipping`);
     }
   }
 
@@ -133,5 +162,6 @@ export async function resolveAiKey(
     }
   }
 
+  if (unreadableShare) throw new KeyUnreadableError(provider, "shared_from");
   throw new NoAiKeyError(provider);
 }

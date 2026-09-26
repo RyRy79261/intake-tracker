@@ -9,6 +9,9 @@
 export const TITRATION_WARNINGS_TOOL = {
   name: "titration_warnings_result" as const,
   description: "Return warning signs to watch during medication titration",
+  // Schema-valid arguments without forcing the tool, which the premium
+  // model (Claude Opus 5.5) rejects.
+  strict: true,
   input_schema: {
     type: "object" as const,
     properties: {

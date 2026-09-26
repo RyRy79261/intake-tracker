@@ -1,5 +1,9 @@
 /**
- * Lightweight in-process IP rate limiter used by AI routes.
+ * Lightweight in-process rate limiter used by AI routes.
+ *
+ * Buckets are keyed with {@link rateLimitKey}: on the authenticated user id
+ * when there is one (so a grantee spending someone else's shared key can't
+ * dodge the cap by rotating x-forwarded-for), and on the IP otherwise.
  *
  * Caveat: state is held in the route module's Map and is therefore scoped to
  * a single Node process. On serverless platforms (Vercel functions) each
@@ -18,7 +22,8 @@
 import type { NextRequest } from "next/server";
 
 export interface RateLimiter {
-  check(ip: string): boolean;
+  /** `key` is a bucket id — use {@link rateLimitKey}. */
+  check(key: string): boolean;
 }
 
 interface Bucket {
@@ -30,7 +35,7 @@ interface Bucket {
  * Create a per-route limiter. Each call to createRateLimiter returns an
  * independent Map so two routes never share counters.
  *
- * @param limit  Max requests within `windowMs` per IP.
+ * @param limit  Max requests within `windowMs` per bucket key.
  * @param windowMs  Rolling window length in ms (defaults to 60s).
  */
 // How often to sweep expired buckets. Every Nth check we walk the map once
@@ -42,7 +47,7 @@ export function createRateLimiter(limit: number, windowMs: number = 60_000): Rat
   const buckets = new Map<string, Bucket>();
   let checks = 0;
   return {
-    check(ip: string): boolean {
+    check(key: string): boolean {
       const now = Date.now();
 
       if (++checks % SWEEP_EVERY === 0) {
@@ -51,9 +56,9 @@ export function createRateLimiter(limit: number, windowMs: number = 60_000): Rat
         }
       }
 
-      const bucket = buckets.get(ip);
+      const bucket = buckets.get(key);
       if (!bucket || now > bucket.resetTime) {
-        buckets.set(ip, { count: 1, resetTime: now + windowMs });
+        buckets.set(key, { count: 1, resetTime: now + windowMs });
         return true;
       }
       if (bucket.count >= limit) return false;
@@ -73,4 +78,12 @@ export function getClientIp(request: NextRequest): string {
     request.headers.get("x-real-ip") ||
     "unknown"
   );
+}
+
+/**
+ * Bucket key for a request: the user id when authenticated, else the IP.
+ * Prefixed so a user id can never collide with an IP string.
+ */
+export function rateLimitKey(request: NextRequest, userId: string | undefined): string {
+  return userId ? `user:${userId}` : `ip:${getClientIp(request)}`;
 }

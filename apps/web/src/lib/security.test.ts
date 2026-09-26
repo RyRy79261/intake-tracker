@@ -136,6 +136,40 @@ describe("sanitizeForAI", () => {
     expect(sanitizeForAI("id 9001015009087")).toContain("[id-number]");
   });
 
+  it("redacts SA ID numbers written with spaces", () => {
+    expect(sanitizeForAI("my ID 800101 5009 087")).toBe("my ID [id-number]");
+    expect(sanitizeForAI("my ID 800101-5009-087")).toBe("my ID [id-number]");
+  });
+
+  it("redacts a valid SA ID even when it could pass for a barcode", () => {
+    // Luhn-valid with a real birth date — always treated as an ID.
+    expect(sanitizeForAI("8001015009087")).toBe("[id-number]");
+  });
+
+  it("keeps an EAN-13 barcode that can't be an SA ID", () => {
+    // Valid EAN-13 check digit; "500011" is not a birth date.
+    expect(sanitizeForAI("Walkers crisps 5000112637922")).toBe(
+      "Walkers crisps 5000112637922",
+    );
+  });
+
+  it("keeps a 13-digit run the user labels as a barcode", () => {
+    expect(sanitizeForAI("product barcode 6001068301504 ")).toBe(
+      "product barcode 6001068301504",
+    );
+    expect(sanitizeForAI("EAN: 6001068301504")).toBe("EAN: 6001068301504");
+  });
+
+  it("does not read a quantity after a plus sign as a phone number", () => {
+    expect(sanitizeForAI("had 200ml then +12 300ml")).toBe("had 200ml then +12 300ml");
+    expect(sanitizeForAI("+1 250 ml")).toBe("+1 250 ml");
+  });
+
+  it("still redacts a compact international number", () => {
+    expect(sanitizeForAI("ring +27823456789")).toBe("ring [phone]");
+    expect(sanitizeForAI("ring +49-123-4567890")).toBe("ring [phone]");
+  });
+
   it("leaves clean text untouched", () => {
     expect(sanitizeForAI("I drank two glasses of water")).toBe(
       "I drank two glasses of water",

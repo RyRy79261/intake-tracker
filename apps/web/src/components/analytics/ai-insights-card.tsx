@@ -465,7 +465,7 @@ export function AiInsightsCard() {
             </DialogTitle>
             <DialogDescription>
               {dialogMode === "deep"
-                ? `Opus 4.6 reviews your last ${INSIGHTS_WINDOW_DAYS} days of data and consults web sources for clinical context. Here's exactly what's included.`
+                ? `Claude Opus reviews your last ${INSIGHTS_WINDOW_DAYS} days of data and consults web sources for clinical context. Here's exactly what's included.`
                 : `The AI analyses the last ${INSIGHTS_WINDOW_DAYS} days of your tracked data. Here's exactly what's included.`}
             </DialogDescription>
           </DialogHeader>

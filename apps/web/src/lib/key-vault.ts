@@ -22,7 +22,10 @@
  * Rotation:
  *   - There is no automatic re-encryption. Rotating
  *     API_KEY_ENCRYPTION_SECRET invalidates every stored key — users
- *     re-enter. Acceptable for this app's scale.
+ *     re-enter. Acceptable for this app's scale. A blob that no longer
+ *     decrypts throws {@link KeyDecryptError}, which the key resolver turns
+ *     into a "re-enter your key" response and GET /api/user/api-keys reports
+ *     as unreadable, so the user is actually prompted to re-enter.
  */
 
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
@@ -56,6 +59,19 @@ function loadMasterKey(): Buffer {
   return buf;
 }
 
+/**
+ * A stored blob that can't be decrypted: malformed, an unknown version, or
+ * rejected by AES-GCM authentication (wrong master secret after a rotation,
+ * or an AAD mismatch). A missing or malformed master secret is a server
+ * misconfiguration instead and stays a plain Error.
+ */
+export class KeyDecryptError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = "KeyDecryptError";
+  }
+}
+
 export interface KeyVaultAad {
   userId: string;
   provider: "anthropic" | "groq";
@@ -80,29 +96,35 @@ export function encryptKey(plaintext: string, aad: KeyVaultAad): string {
 }
 
 export function decryptKey(blob: string, aad: KeyVaultAad): string {
-  if (!blob) throw new Error("Cannot decrypt empty blob");
+  if (!blob) throw new KeyDecryptError("Cannot decrypt empty blob");
 
   if (blob.startsWith("v1:")) {
     const [, ivB64, tagB64, ctB64] = blob.split(":");
     if (!ivB64 || !tagB64 || !ctB64) {
-      throw new Error("Malformed v1 blob");
+      throw new KeyDecryptError("Malformed v1 blob");
     }
+    // Loaded outside the try: a missing secret is a configuration error,
+    // not an unreadable key.
     const key = loadMasterKey();
-    const iv = Buffer.from(ivB64, "base64");
-    const tag = Buffer.from(tagB64, "base64");
-    const ct = Buffer.from(ctB64, "base64");
-    const decipher = createDecipheriv(ALGORITHM, key, iv);
-    decipher.setAAD(aadBytes(aad));
-    decipher.setAuthTag(tag);
-    const pt = Buffer.concat([decipher.update(ct), decipher.final()]);
-    return pt.toString("utf8");
+    try {
+      const iv = Buffer.from(ivB64, "base64");
+      const tag = Buffer.from(tagB64, "base64");
+      const ct = Buffer.from(ctB64, "base64");
+      const decipher = createDecipheriv(ALGORITHM, key, iv);
+      decipher.setAAD(aadBytes(aad));
+      decipher.setAuthTag(tag);
+      const pt = Buffer.concat([decipher.update(ct), decipher.final()]);
+      return pt.toString("utf8");
+    } catch (cause) {
+      throw new KeyDecryptError("Stored key could not be decrypted", { cause });
+    }
   }
 
   if (blob.startsWith("v2:")) {
-    throw new Error("v2 (KMS) decryption not yet implemented");
+    throw new KeyDecryptError("v2 (KMS) decryption not yet implemented");
   }
 
-  throw new Error("Unknown key blob version");
+  throw new KeyDecryptError("Unknown key blob version");
 }
 
 /**
