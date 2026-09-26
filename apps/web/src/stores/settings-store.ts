@@ -352,7 +352,6 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
           optionalTrackers: { ...state.optionalTrackers, [key]: enabled },
         })),
 
-
       setDayStartHour: (hour) =>
         set({ dayStartHour: sanitizeNumericInput(hour, 0, 23) }),
 
