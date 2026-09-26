@@ -8,6 +8,7 @@ import {
 } from "@/lib/db";
 import { getDeviceTimezone, resolveScheduleLocalTime } from "@/lib/timezone";
 import { calculatePillsConsumed, isCleanFraction, selectSlotLog } from "@/lib/dose-log-service";
+import { isActiveBrand } from "@/lib/inventory-service";
 import { isValidPillStrength } from "@intake/core/compound";
 import { toLocalDateKey } from "@/lib/date-utils";
 import { isLive } from "@intake/core/lifecycle";
@@ -229,12 +230,13 @@ export async function getDailyDoseSchedule(
     }
   }
 
-  // 6. Get all active inventory items (filter on boolean, not indexed integer)
+  // 6. The active brand per prescription: live, flagged active, not archived.
+  // A brand deleted on another device can still say isActive. First match
+  // wins, the same choice takeDose makes via getActiveInventoryForPrescription.
   const allInventory = await db.inventoryItems.toArray();
-  const activeInventory = allInventory.filter(i => i.isActive === true);
   const inventoryByPrescription = new Map<string, InventoryItem>();
-  for (const inv of activeInventory) {
-    if (!inv.isArchived) {
+  for (const inv of allInventory) {
+    if (isActiveBrand(inv) && !inventoryByPrescription.has(inv.prescriptionId)) {
       inventoryByPrescription.set(inv.prescriptionId, inv);
     }
   }
