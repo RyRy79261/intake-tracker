@@ -109,6 +109,11 @@ test.describe('History / Analytics', () => {
 
     const weightCard = page.locator('#section-weight');
     await weightCard.scrollIntoViewIfNeeded();
+    // A first-time user starts with no weight (no placeholder default).
+    const firstWeightInput = weightCard.getByTestId('weight-direct-input');
+    await firstWeightInput.focus();
+    await firstWeightInput.fill('72.4');
+    await weightCard.locator('button:has-text("Record Weight")').focus();
     await weightCard.locator('button:has-text("Record Weight")').click();
     await expect(page.getByText('Weight recorded', { exact: true })).toBeVisible();
 

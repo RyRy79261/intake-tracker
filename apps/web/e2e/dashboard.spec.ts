@@ -126,7 +126,12 @@ test.describe('Dashboard', () => {
     const recordBtn = weightCard.locator('button:has-text("Record Weight")');
     await expect(recordBtn).toBeVisible();
 
-    // Click Record Weight (uses default/pre-filled value)
+    // A first-time user starts with no weight (no placeholder default), so
+    // enter one before recording.
+    const weightInput = weightCard.getByTestId('weight-direct-input');
+    await weightInput.focus();
+    await weightInput.fill('72.4');
+    await recordBtn.focus();
     await recordBtn.click();
 
     // Verify success toast
