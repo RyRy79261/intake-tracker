@@ -16,6 +16,7 @@ interface TimeSlotGroupProps {
   onSkip: (slot: DoseSlot) => void;
   onDoseClick: (slot: DoseSlot) => void;
   onMarkAll: (time: string, slots: DoseSlot[]) => void;
+  onSkipAll: (time: string, slots: DoseSlot[]) => void;
   onEditAll: (time: string, slots: DoseSlot[]) => void;
   onEditTime: (slot: DoseSlot, time: string) => void;
 }
@@ -48,10 +49,14 @@ export function TimeSlotGroup({
   onSkip,
   onDoseClick,
   onMarkAll,
+  onSkipAll,
   onEditAll,
   onEditTime,
 }: TimeSlotGroupProps) {
-  const hasPending = slots.some((s) => s.status === "pending" || s.status === "missed");
+  // Bulk Take/Skip only ever act on the slots still waiting for a decision;
+  // already-logged doses are changed one at a time or via Edit All.
+  const openSlots = slots.filter((s) => s.status === "pending" || s.status === "missed");
+  const hasPending = openSlots.length > 0;
   const hasTaken = slots.some((s) => s.status === "taken");
   const allDone = slots.every((s) => s.status === "taken" || s.status === "skipped");
   const overdue = isToday && isTimeOverdue(time) && hasPending;
@@ -75,14 +80,24 @@ export function TimeSlotGroup({
           {formatTime12(time)}
         </h3>
         {!isFuture && hasPending && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-xs text-muted-foreground h-7"
-            onClick={() => onMarkAll(time, slots.filter((s) => s.status === "pending" || s.status === "missed"))}
-          >
-            Mark All
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs text-muted-foreground h-7"
+              onClick={() => onSkipAll(time, openSlots)}
+            >
+              Skip All
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs text-muted-foreground h-7"
+              onClick={() => onMarkAll(time, openSlots)}
+            >
+              Mark All
+            </Button>
+          </div>
         )}
         {!isFuture && !hasPending && hasTaken && (
           <Button

@@ -5,7 +5,7 @@ import { Badge } from "@intake/ui/badge";
 import { Button } from "@intake/ui/button";
 import { PillIcon } from "@/components/medications/pill-icon";
 import { formatPillCount, getEffectivePhase } from "@/lib/medication-ui-utils";
-import { isCombo, splitDose, formatCompoundShort } from "@intake/core/compound";
+import { isCombo, formatCompoundShort, formatComboDose } from "@intake/core/compound";
 import {
   useInventoryForPrescription,
   usePhasesForPrescription,
@@ -56,12 +56,11 @@ export function CompoundCardExpanded({ prescription }: CompoundCardExpandedProps
 
   const hasMultipleBrands = sortedInventory.length > 1;
 
-  // For a combination drug, render a summed mg dose as its per-compound split.
-  const comboPrescription = isCombo(prescription);
-  const fmtDose = (mg: number, unit: string) =>
-    comboPrescription
-      ? formatCompoundShort(splitDose(mg, prescription.compounds), unit)
-      : `${mg}${unit}`;
+  // For a combination drug, label a summed mg dose per compound from the
+  // active brand's tablets; with no combo brand stocked, show the summed dose.
+  const activeBrand = sortedInventory.find((item) => item.isActive);
+  const fmtDose = (mg: number, unit: string, brand = activeBrand) =>
+    formatComboDose(mg, unit, brand);
 
   const openItem = (item: InventoryItem) => {
     setSelectedItem(item);
@@ -71,6 +70,7 @@ export function CompoundCardExpanded({ prescription }: CompoundCardExpandedProps
     <div
       className="pt-3 space-y-4"
       onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
     >
       <div className="border-t" />
 
@@ -90,10 +90,7 @@ export function CompoundCardExpanded({ prescription }: CompoundCardExpandedProps
                 stock <= item.refillAlertPills &&
                 stock >= 0;
               const isNegative = stock < 0;
-              const isFractional = stock % 1 !== 0;
-              const stockText = isFractional
-                ? formatPillCount(stock)
-                : `${stock} pills`;
+              const stockText = formatPillCount(stock, "pill");
 
               return (
                 <button
@@ -231,7 +228,7 @@ export function CompoundCardExpanded({ prescription }: CompoundCardExpandedProps
                 )}
                 <span className="text-muted-foreground">{slot.localTime}</span>
                 <span className="text-muted-foreground">
-                  {fmtDose(slot.dosageMg, slot.unit)}
+                  {fmtDose(slot.dosageMg, slot.unit, slot.inventory)}
                 </span>
                 <span
                   className={`ml-auto text-[10px] font-medium ${

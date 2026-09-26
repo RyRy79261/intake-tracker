@@ -82,4 +82,81 @@ describe("BeverageTab", () => {
     expect(water?.groupId).toBeTruthy();
     expect(sugar?.groupId).toBe(water?.groupId);
   });
+
+  it("tap to edit sets the pending amount under a Beverage title without writing", async () => {
+    const user = userEvent.setup();
+    await renderWithFixtures(<BeverageTab />);
+
+    await user.type(
+      screen.getByPlaceholderText("e.g. Juice, Smoothie"),
+      "Juice"
+    );
+    await user.click(screen.getByRole("button", { name: /tap to edit/i }));
+    expect(screen.getByText("Enter Beverage Amount")).toBeInTheDocument();
+
+    const input = screen.getByLabelText("Amount (ml)");
+    await user.clear(input);
+    await user.type(input, "400");
+    await user.click(screen.getByRole("button", { name: "Set Amount" }));
+
+    expect(await screen.findByText("+400ml")).toBeInTheDocument();
+    expect(await db.intakeRecords.count()).toBe(0);
+
+    // Confirm is the single commit path, so the name resets with it.
+    await user.click(screen.getByRole("button", { name: /Log Beverage/i }));
+    await waitFor(async () => {
+      const records = await db.intakeRecords.toArray();
+      expect(records.map((r) => [r.amount, r.source])).toEqual([
+        [400, "beverage:Juice"],
+      ]);
+    });
+    await waitFor(() =>
+      expect(screen.getByPlaceholderText("e.g. Juice, Smoothie")).toHaveValue("")
+    );
+  });
+
+  it("two clicks dispatched in the same task write only one record", async () => {
+    await renderWithFixtures(<BeverageTab />);
+    const button = screen.getByRole("button", { name: /Log Beverage/i });
+
+    button.click();
+    button.click();
+
+    await waitFor(async () => {
+      expect(await db.intakeRecords.count()).toBeGreaterThan(0);
+      expect(
+        screen.getByRole("button", { name: /Log Beverage/i })
+      ).toBeEnabled();
+    });
+    expect(await db.intakeRecords.count()).toBe(1);
+  });
+
+  it("warns (without blocking) when the name looks alcoholic or caffeinated", async () => {
+    const user = userEvent.setup();
+    await renderWithFixtures(<BeverageTab />);
+    const name = screen.getByPlaceholderText("e.g. Juice, Smoothie");
+
+    await user.type(name, "Orange juice");
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+
+    await user.clear(name);
+    await user.type(name, "IPA beer");
+    expect(screen.getByRole("status")).toHaveTextContent(/Alcohol tab/i);
+    expect(screen.getByRole("button", { name: /Log Beverage/i })).toBeEnabled();
+
+    await user.clear(name);
+    await user.type(name, "Iced latte");
+    expect(screen.getByRole("status")).toHaveTextContent(/Coffee tab/i);
+  });
+
+  it.each(["Ginger ale", "Root beer", "Alcohol-free beer", "Decaf latte", "Herbal tea"])(
+    "does not warn for the non-alcoholic / caffeine-free drink %s",
+    async (drink) => {
+      const user = userEvent.setup();
+      await renderWithFixtures(<BeverageTab />);
+
+      await user.type(screen.getByPlaceholderText("e.g. Juice, Smoothie"), drink);
+      expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    },
+  );
 });

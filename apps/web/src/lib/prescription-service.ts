@@ -5,6 +5,8 @@ import { buildAuditEntry } from "@/lib/audit-service";
 import { buildPrescription, buildPhase, buildInventory, buildSchedules, buildTransaction } from "@/lib/medication-builders";
 import { enqueueInsideTx } from "@/lib/sync-queue";
 import { schedulePush } from "@/lib/sync-engine";
+import { isLive } from "@intake/core/lifecycle";
+import { updateSyncedInsideTx, softDeleteInsideTx } from "@/lib/synced-update";
 
 export interface CreatePrescriptionInput {
   // Prescription level
@@ -41,7 +43,7 @@ export interface CreatePrescriptionInput {
 
 export async function getPrescriptions(): Promise<Prescription[]> {
   const all = await db.prescriptions.orderBy("createdAt").reverse().toArray();
-  return all.filter(p => p.deletedAt === null || p.deletedAt === undefined);
+  return all.filter(isLive);
 }
 
 export async function getPrescriptionById(id: string): Promise<Prescription | undefined> {
@@ -50,12 +52,12 @@ export async function getPrescriptionById(id: string): Promise<Prescription | un
 
 export async function getActivePrescriptions(): Promise<Prescription[]> {
   const all = await db.prescriptions.toArray();
-  return all.filter(p => p.isActive === true);
+  return all.filter(p => p.isActive === true && isLive(p));
 }
 
 export async function getInactivePrescriptions(): Promise<Prescription[]> {
   const all = await db.prescriptions.toArray();
-  return all.filter(p => !p.isActive);
+  return all.filter(p => !p.isActive && isLive(p));
 }
 
 // ---------------------------------------------------------------------------
@@ -96,7 +98,7 @@ export async function addPrescription(input: CreatePrescriptionInput): Promise<S
       await enqueueInsideTx("inventoryItems", inventory.id, "upsert");
 
       if (input.currentStock > 0) {
-        const tx = buildTransaction(inventory.id, input.currentStock, "refill", now, "Initial stock");
+        const tx = buildTransaction(inventory.id, input.currentStock, "initial", now, "Initial stock");
         await db.inventoryTransactions.add(tx);
         await enqueueInsideTx("inventoryTransactions", tx.id, "upsert");
       }
@@ -122,8 +124,7 @@ export async function updatePrescription(
 ): Promise<ServiceResult<void>> {
   try {
     await db.transaction("rw", [db.prescriptions, db.auditLogs, db._syncQueue], async () => {
-      await db.prescriptions.update(id, { ...updates, updatedAt: Date.now() });
-      await enqueueInsideTx("prescriptions", id, "upsert");
+      await updateSyncedInsideTx("prescriptions", id, updates);
 
       const audit = buildAuditEntry("prescription_updated", {
         prescriptionId: id,
@@ -143,28 +144,34 @@ export async function deletePrescription(id: string): Promise<ServiceResult<void
   try {
     const now = Date.now();
     await db.transaction("rw", [db.prescriptions, db.medicationPhases, db.phaseSchedules, db.inventoryItems, db.inventoryTransactions, db.doseLogs, db.auditLogs, db._syncQueue], async () => {
-      await db.doseLogs.where("prescriptionId").equals(id).delete();
+      // Everything is tombstoned and enqueued, never hard-deleted: a row that
+      // vanishes locally without a queued delete stays live on the server
+      // (and in MCP, and on any freshly synced device) forever.
+      const doseLogs = await db.doseLogs.where("prescriptionId").equals(id).toArray();
+      for (const dl of doseLogs.filter(isLive)) {
+        await softDeleteInsideTx("doseLogs", dl, now);
+      }
 
       const inventoryItems = await db.inventoryItems.where("prescriptionId").equals(id).toArray();
       for (const item of inventoryItems) {
-        await db.inventoryTransactions.where("inventoryItemId").equals(item.id).delete();
-        await db.inventoryItems.update(item.id, { deletedAt: now, updatedAt: now });
-        await enqueueInsideTx("inventoryItems", item.id, "delete");
+        const txns = await db.inventoryTransactions.where("inventoryItemId").equals(item.id).toArray();
+        for (const txn of txns.filter(isLive)) {
+          await softDeleteInsideTx("inventoryTransactions", txn, now);
+        }
+        if (isLive(item)) await softDeleteInsideTx("inventoryItems", item, now);
       }
 
       const phases = await db.medicationPhases.where("prescriptionId").equals(id).toArray();
       for (const p of phases) {
         const schedules = await db.phaseSchedules.where("phaseId").equals(p.id).toArray();
-        for (const s of schedules) {
-          await db.phaseSchedules.update(s.id, { deletedAt: now, updatedAt: now });
-          await enqueueInsideTx("phaseSchedules", s.id, "delete");
+        for (const s of schedules.filter(isLive)) {
+          await softDeleteInsideTx("phaseSchedules", s, now);
         }
-        await db.medicationPhases.update(p.id, { deletedAt: now, updatedAt: now });
-        await enqueueInsideTx("medicationPhases", p.id, "delete");
+        if (isLive(p)) await softDeleteInsideTx("medicationPhases", p, now);
       }
 
-      await db.prescriptions.update(id, { deletedAt: now, updatedAt: now });
-      await enqueueInsideTx("prescriptions", id, "delete");
+      const prescription = await db.prescriptions.get(id);
+      if (prescription) await softDeleteInsideTx("prescriptions", prescription, now);
 
       const audit = buildAuditEntry("prescription_deleted", {
         prescriptionId: id,

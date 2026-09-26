@@ -1,3 +1,4 @@
+import type { UpdateSpec } from "dexie";
 import { db, type WeightRecord, type BloodPressureRecord } from "@/lib/db";
 import { ok, err } from "@intake/core/service";
 import type { ServiceResult, PaginatedResult } from "@intake/types/service";
@@ -85,11 +86,13 @@ export async function undoDeleteWeightRecord(id: string): Promise<ServiceResult<
 
 export async function updateWeightRecord(
   id: string,
-  updates: { weight?: number; timestamp?: number; note?: string }
+  // `null` clears an optional field. It is stored as null (not deleted) so the
+  // clear is pushed; the columns are nullable and pulled rows carry null too.
+  updates: { weight?: number; timestamp?: number; note?: string | null }
 ): Promise<ServiceResult<void>> {
   try {
     await writeWithSync("weightRecords", "upsert", async () => {
-      await db.weightRecords.update(id, { ...updates, updatedAt: Date.now() });
+      await db.weightRecords.update(id, { ...updates, updatedAt: Date.now() } as UpdateSpec<WeightRecord>);
       return { id };
     });
     schedulePush();
@@ -192,17 +195,17 @@ export async function updateBloodPressureRecord(
   updates: {
     systolic?: number;
     diastolic?: number;
-    heartRate?: number;
+    heartRate?: number | null;
     irregularHeartbeat?: boolean;
     position?: "sitting" | "standing";
     arm?: "left" | "right";
     timestamp?: number;
-    note?: string;
+    note?: string | null;
   }
 ): Promise<ServiceResult<void>> {
   try {
     await writeWithSync("bloodPressureRecords", "upsert", async () => {
-      await db.bloodPressureRecords.update(id, { ...updates, updatedAt: Date.now() });
+      await db.bloodPressureRecords.update(id, { ...updates, updatedAt: Date.now() } as UpdateSpec<BloodPressureRecord>);
       return { id };
     });
     schedulePush();

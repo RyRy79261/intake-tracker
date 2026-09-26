@@ -7,6 +7,7 @@ import { Input } from "@intake/ui/input";
 import { Label } from "@intake/ui/label";
 import { Loader2, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getCurrentDateTimeLocal } from "@/lib/date-utils";
 
 /**
  * Shared shell for inline edit forms used by card components.
@@ -14,7 +15,8 @@ import { cn } from "@/lib/utils";
  * When `labeled` is true, the timestamp and note inputs render visible
  * `<Label>` elements above them; otherwise they fall back to placeholders
  * + `aria-label` for backwards compatibility with cards that haven't been
- * migrated.
+ * migrated. The datetime `max` is only a picker hint (Save is a click
+ * handler, not a form submit); useEditRecord rejects future times on save.
  */
 export function InlineEditFormShell({
   children,
@@ -53,7 +55,7 @@ export function InlineEditFormShell({
             <Label htmlFor={tsId} className="text-xs text-muted-foreground">
               Date and time
             </Label>
-            <Input id={tsId} type="datetime-local" value={timestamp} onChange={(e) => onTimestampChange(e.target.value)} className="h-8 text-sm" />
+            <Input id={tsId} type="datetime-local" max={getCurrentDateTimeLocal()} value={timestamp} onChange={(e) => onTimestampChange(e.target.value)} className="h-8 text-sm" />
           </div>
           <div className="space-y-1">
             <Label htmlFor={noteId} className="text-xs text-muted-foreground">
@@ -64,7 +66,7 @@ export function InlineEditFormShell({
         </>
       ) : (
         <>
-          <Input aria-label="Entry date and time" type="datetime-local" value={timestamp} onChange={(e) => onTimestampChange(e.target.value)} className="h-8 text-sm" />
+          <Input aria-label="Entry date and time" type="datetime-local" max={getCurrentDateTimeLocal()} value={timestamp} onChange={(e) => onTimestampChange(e.target.value)} className="h-8 text-sm" />
           <Input aria-label="Entry note" placeholder="Note (optional)" value={note} onChange={(e) => onNoteChange(e.target.value)} className="h-8 text-sm" />
         </>
       )}

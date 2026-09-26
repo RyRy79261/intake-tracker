@@ -8,10 +8,13 @@ import { getUrinationRecordsByDateRange } from "@/lib/urination-service";
 import { getEatingRecordsByDateRange } from "@/lib/eating-service";
 import { getDefecationRecordsByDateRange } from "@/lib/defecation-service";
 import { getSubstanceRecordsByDateRange as querySubstanceRecordsByDateRange } from "@/lib/substance-service";
-import { getDoseScheduleForDateRange } from "@/lib/dose-schedule-service";
+import { getDoseScheduleForDateRange, type DoseSlot } from "@/lib/dose-schedule-service";
 import type { SubstanceRecord } from "@/lib/db";
 import { trend as computeTrend, correlateTimeSeries } from "@/lib/analytics-stats";
+import type { DailyAggregate } from "@intake/core/analytics-stats";
+import { logicalDayKey } from "@intake/core/logical-day";
 import { getDeviceTimezone } from "@/lib/timezone";
+import { useSettingsStore } from "@/stores/settings-store";
 import type {
   Domain,
   TimeRange,
@@ -58,9 +61,37 @@ async function getSubstanceRecordsByDateRange(
   }
 }
 
-function dayKey(ts: number): string {
-  return format(new Date(ts), "yyyy-MM-dd");
+/** Options for logical-day bucketing; unset fields follow the user's settings. */
+export interface DayBucketOptions {
+  dayStartHour?: number;
+  tz?: string;
 }
+
+function resolveDayBucket(opts: DayBucketOptions = {}): { dayStartHour: number; tz: string } {
+  return {
+    dayStartHour: opts.dayStartHour ?? useSettingsStore.getState().dayStartHour,
+    tz: opts.tz ?? getDeviceTimezone(),
+  };
+}
+
+/**
+ * How each domain collapses to one value per day. Intake, substance and event
+ * domains are daily totals; weight and BP readings are averaged.
+ */
+const DOMAIN_DAILY_AGGREGATE: Record<Domain, DailyAggregate> = {
+  water: "sum",
+  salt: "sum",
+  sugar: "sum",
+  potassium: "sum",
+  eating: "sum",
+  urination: "sum",
+  defecation: "sum",
+  caffeine: "sum",
+  alcohol: "sum",
+  medication: "sum",
+  weight: "mean",
+  bp: "mean",
+};
 
 // ---------------------------------------------------------------------------
 // Layer 1 -- Building Blocks
@@ -163,12 +194,17 @@ export async function getRecordsByDomain(
 }
 
 /**
- * Group DataPoint[] by calendar date (midnight boundaries).
+ * Group DataPoint[] by logical day ("YYYY-MM-DD"), which starts at the user's
+ * dayStartHour in the device zone so analytics agree with the dashboard.
  */
-export function groupByDay(points: DataPoint[]): Map<string, DataPoint[]> {
+export function groupByDay(
+  points: DataPoint[],
+  opts?: DayBucketOptions,
+): Map<string, DataPoint[]> {
+  const { dayStartHour, tz } = resolveDayBucket(opts);
   const map = new Map<string, DataPoint[]>();
   for (const p of points) {
-    const key = dayKey(p.timestamp);
+    const key = logicalDayKey(p.timestamp, dayStartHour, tz);
     const arr = map.get(key) ?? [];
     arr.push(p);
     map.set(key, arr);
@@ -189,9 +225,15 @@ export async function correlate(
     getRecordsByDomain(domainA, range),
     getRecordsByDomain(domainB, range),
   ]);
-  // Anchor day-bucketing to the viewer's zone so correlations are deterministic
-  // (no dependency on the server/runtime's local timezone).
-  return correlateTimeSeries(seriesA, seriesB, lagDays, getDeviceTimezone());
+  // Anchor day-bucketing to the viewer's zone and logical day so correlations
+  // are deterministic and match the dashboard. Totals per day for intake and
+  // event domains, means for readings.
+  const { dayStartHour, tz } = resolveDayBucket();
+  return correlateTimeSeries(seriesA, seriesB, lagDays, tz, {
+    aggregateA: DOMAIN_DAILY_AGGREGATE[domainA],
+    aggregateB: DOMAIN_DAILY_AGGREGATE[domainB],
+    dayStartHour,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -273,6 +315,19 @@ export async function fluidBalance(
 }
 
 /**
+ * Whether a slot counts toward adherence: anything already logged or missed,
+ * but not a pending dose whose scheduled time has not arrived yet (ranges
+ * ending today would otherwise be penalised for tonight's dose).
+ */
+function isAdherenceDue(slot: DoseSlot, now: number): boolean {
+  if (slot.status !== "pending") return true;
+  const [h, m] = slot.localTime.split(":").map(Number);
+  const due = new Date(slot.scheduledDate + "T00:00:00");
+  due.setHours(h ?? 0, m ?? 0, 0, 0);
+  return due.getTime() <= now;
+}
+
+/**
  * Medication adherence rate.
  */
 export async function adherenceRate(
@@ -283,15 +338,16 @@ export async function adherenceRate(
   const endDate = format(new Date(range.end), "yyyy-MM-dd");
 
   const scheduleMap = await getDoseScheduleForDateRange(startDate, endDate);
+  const now = Date.now();
 
   let totalTaken = 0;
   let totalSlots = 0;
   const dailyEntries: AdherenceResult["daily"] = [];
 
   scheduleMap.forEach((slots, date) => {
-    const filteredSlots = prescriptionId
-      ? slots.filter((s) => s.prescriptionId === prescriptionId)
-      : slots;
+    const filteredSlots = (
+      prescriptionId ? slots.filter((s) => s.prescriptionId === prescriptionId) : slots
+    ).filter((s) => isAdherenceDue(s, now));
 
     const dayTotal = filteredSlots.length;
     const dayTaken = filteredSlots.filter((s) => s.status === "taken").length;

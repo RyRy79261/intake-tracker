@@ -231,7 +231,7 @@ describe("prescription CRUD", () => {
     expect(invAfter.every((i) => i.deletedAt != null && i.deletedAt > 0)).toBe(true);
   });
 
-  it("deletePrescription cascades to inventoryTransactions (no orphans)", async () => {
+  it("deletePrescription cascades to inventoryTransactions (no live orphans)", async () => {
     const result = await addPrescription(
       validPrescriptionInput({ currentStock: 30 }),
     );
@@ -251,11 +251,12 @@ describe("prescription CRUD", () => {
     const deleteResult = await deletePrescription(prescriptionId);
     expect(deleteResult.success).toBe(true);
 
+    // Tombstoned rather than hard-deleted, so the delete can sync.
     const txAfter = await db.inventoryTransactions
       .where("inventoryItemId")
       .equals(inventoryItemId)
       .toArray();
-    expect(txAfter.length).toBe(0);
+    expect(txAfter.filter((t) => t.deletedAt == null)).toHaveLength(0);
   });
 });
 
@@ -447,7 +448,7 @@ describe("inventory management", () => {
       .equals(inv.id)
       .toArray();
     expect(txs.length).toBe(1);
-    expect(txs[0]!.type).toBe("refill");
+    expect(txs[0]!.type).toBe("initial");
     expect(txs[0]!.amount).toBe(60);
   });
 
@@ -483,6 +484,9 @@ describe("inventory management", () => {
 
     const inv = makeInventoryItem(rx.id, { currentStock: 30 });
     await db.inventoryItems.add(inv);
+    // Stock derives from the ledger, so the 30 needs its transaction.
+    const initial = makeInventoryTransaction(inv.id, { type: "initial", amount: 30 });
+    await db.inventoryTransactions.add(initial);
 
     const result = await adjustStock(inv.id, -2, "Took 2 pills");
     expect(result.success).toBe(true);
@@ -499,8 +503,8 @@ describe("inventory management", () => {
       .where("inventoryItemId")
       .equals(inv.id)
       .toArray();
-    expect(txs.length).toBe(1);
-    expect(txs[0]!.amount).toBe(-2);
+    expect(txs.length).toBe(2);
+    expect(txs.find((t) => t.id !== initial.id)!.amount).toBe(-2);
   });
 
   it("getInventoryTransactions returns transactions in descending timestamp order", async () => {

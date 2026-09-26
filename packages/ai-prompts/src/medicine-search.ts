@@ -8,6 +8,8 @@
 
 export const SYSTEM_PROMPT = `You are a pharmaceutical information assistant. When given a medication name or active ingredient, respond with information about the medication using the medicine_search_result tool. Pay special attention to looking up the physical appearance of the pill (its color and shape) and country specific brand names.
 
+Use the web_search tool to confirm the pill's physical appearance and the brand names sold in the user's country before answering. Do not report a colour or shape from memory: if a search doesn't turn it up, leave pillColor and pillShape empty. Always finish by calling medicine_search_result.
+
 If the user searches for a specific brand name, you MUST provide the physical description for that specific brand and include the searched brand name in the response. If you cannot find information for that exact brand and must fall back to generic information, explicitly mention that the physical description and details are for the generic equivalent.
 
 Be precise with medical information. If you're uncertain about food instructions, default to "none".
@@ -21,6 +23,9 @@ Always populate "activeIngredients" and "strengthOptions" — they are required.
 export const MEDICINE_SEARCH_TOOL = {
   name: "medicine_search_result" as const,
   description: "Return pharmaceutical information for a medication",
+  // Schema-valid arguments are guaranteed without forcing the tool, which
+  // the premium model (Claude Opus 5.5) rejects.
+  strict: true,
   input_schema: {
     type: "object" as const,
     properties: {

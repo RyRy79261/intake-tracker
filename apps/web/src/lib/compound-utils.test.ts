@@ -7,6 +7,8 @@ import {
   formatCompoundShort,
   formatCompoundFull,
   formatCompoundNames,
+  formatComboDose,
+  isValidPillStrength,
 } from "@intake/core/compound";
 import type { CompoundStrength } from "@/lib/db";
 
@@ -131,5 +133,46 @@ describe("formatCompoundNames", () => {
 
   it("falls back to Compound for unnamed entries", () => {
     expect(formatCompoundNames([{ name: "", strength: 1 }])).toBe("Compound");
+  });
+});
+
+describe("isValidPillStrength", () => {
+  it("accepts a positive finite number", () => {
+    expect(isValidPillStrength(50)).toBe(true);
+  });
+
+  it("rejects zero, negative, non-finite and missing strengths", () => {
+    for (const v of [0, -5, NaN, Infinity, null, undefined, "50"]) {
+      expect(isValidPillStrength(v)).toBe(false);
+    }
+  });
+});
+
+describe("formatComboDose", () => {
+  it("scales the stocked brand's per-pill compounds by the pill count", () => {
+    const entresto97 = {
+      strength: 200,
+      compounds: [
+        { name: "Sacubitril", strength: 97 },
+        { name: "Valsartan", strength: 103 },
+      ],
+    };
+    expect(formatComboDose(200, "mg", entresto97)).toBe("97/103mg");
+  });
+
+  it("uses the brand ratio, not a reference ratio", () => {
+    const entresto24 = {
+      strength: 50,
+      compounds: [
+        { name: "Sacubitril", strength: 24 },
+        { name: "Valsartan", strength: 26 },
+      ],
+    };
+    expect(formatComboDose(100, "mg", entresto24)).toBe("48/52mg");
+  });
+
+  it("shows the summed dose when no combo brand is stocked", () => {
+    expect(formatComboDose(200, "mg")).toBe("200mg");
+    expect(formatComboDose(200, "mg", { strength: 100 })).toBe("200mg");
   });
 });

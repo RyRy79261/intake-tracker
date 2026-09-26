@@ -64,8 +64,9 @@ export async function renderWithFixtures(
   const { seed, settings, queryClient, ...renderOptions } = options;
 
   // The settings store persists to localStorage and survives between tests in
-  // a file, so reset it to defaults for a deterministic starting point.
-  useSettingsStore.getState().resetToDefaults();
+  // a file, so reset it to a fresh install for a deterministic starting point
+  // (resetToDefaults deliberately keeps presets, storage mode, etc.).
+  useSettingsStore.setState(useSettingsStore.getInitialState());
   if (settings) useSettingsStore.setState(settings);
 
   if (seed) await seedDatabase(seed);

@@ -1,11 +1,13 @@
 import { db, type PhaseSchedule, type Prescription, type MedicationPhase, type InventoryItem } from "@/lib/db";
 import { ok, err } from "@intake/core/service";
 import type { ServiceResult } from "@intake/types/service";
-import { syncFields } from "@/lib/utils";
+import { baseSyncFields } from "@/lib/utils";
 import { getDeviceTimezone, localHHMMStringToUTCMinutes } from "@/lib/timezone";
 import { buildAuditEntry } from "@/lib/audit-service";
 import { enqueueInsideTx } from "@/lib/sync-queue";
 import { schedulePush } from "@/lib/sync-engine";
+import { isLive } from "@intake/core/lifecycle";
+import { updateSyncedInsideTx, softDeleteInsideTx } from "@/lib/synced-update";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -28,25 +30,27 @@ export interface ScheduleWithDetails {
  */
 export async function getDailySchedule(dayOfWeek: number): Promise<Map<string, ScheduleWithDetails[]>> {
   // Filter on boolean isActive (Dexie boolean indexing unreliable)
+  // Tombstones are excluded explicitly: rows deleted by older clients can
+  // still carry isActive/status/enabled flags that say "live".
   const allPrescriptions = await db.prescriptions.toArray();
-  const activePrescriptions = allPrescriptions.filter(p => p.isActive === true);
+  const activePrescriptions = allPrescriptions.filter(p => p.isActive === true && isLive(p));
   const prescriptionMap = new Map(activePrescriptions.map(p => [p.id, p]));
 
   const prescriptionIds = activePrescriptions.map(p => p.id);
   const phases = await db.medicationPhases.where("status").equals("active").toArray();
-  const activePhases = phases.filter(p => prescriptionIds.includes(p.prescriptionId));
+  const activePhases = phases.filter(p => isLive(p) && prescriptionIds.includes(p.prescriptionId));
   const phaseMap = new Map(activePhases.map(p => [p.id, p]));
 
   // Filter on boolean isActive; filter out archived in JS (isArchived not indexed)
   const allInventory = await db.inventoryItems.toArray();
-  const activeInventory = allInventory.filter(i => i.isActive === true);
+  const activeInventory = allInventory.filter(i => i.isActive === true && isLive(i));
   const inventoryItems = activeInventory.filter(i => !i.isArchived);
   const inventoryMap = new Map(inventoryItems.map(i => [i.prescriptionId, i]));
 
   const phaseIds = activePhases.map(p => p.id);
   // Filter on boolean enabled field; filter by phaseId + dayOfWeek in JS
   const allSchedules = await db.phaseSchedules.toArray();
-  const enabledSchedules = allSchedules.filter(s => s.enabled === true && s.deletedAt === null);
+  const enabledSchedules = allSchedules.filter(s => s.enabled === true && isLive(s));
   const activeSchedules = enabledSchedules.filter(
     s => phaseIds.includes(s.phaseId) && s.daysOfWeek.includes(dayOfWeek),
   );
@@ -79,7 +83,7 @@ export async function getDailySchedule(dayOfWeek: number): Promise<Map<string, S
 
 export async function getSchedulesForPhase(phaseId: string): Promise<PhaseSchedule[]> {
   const records = await db.phaseSchedules.where("phaseId").equals(phaseId).toArray();
-  return records.filter(r => r.deletedAt === null);
+  return records.filter(isLive);
 }
 
 // ---------------------------------------------------------------------------
@@ -97,7 +101,7 @@ export async function addSchedule(
       enabled: true,
       scheduleTimeUTC: localHHMMStringToUTCMinutes(input.time, tz),
       anchorTimezone: tz,
-      ...syncFields(),
+      ...baseSyncFields(),
     };
     await db.transaction("rw", [db.phaseSchedules, db.auditLogs, db._syncQueue], async () => {
       await db.phaseSchedules.add(schedule);
@@ -124,24 +128,29 @@ export async function updateSchedule(
   updates: Partial<Omit<PhaseSchedule, "id" | "createdAt" | "phaseId">>,
 ): Promise<ServiceResult<void>> {
   try {
-    const tz = getDeviceTimezone();
-    const finalUpdates = { ...updates, updatedAt: Date.now() };
+    const { updatedAt: _ignored, ...finalUpdates } = updates;
 
-    // If time is being updated, recompute scheduleTimeUTC
+    // If the time changed, recompute scheduleTimeUTC in the schedule's own
+    // anchor; re-anchoring to the device zone is the travel prompt's job.
     if (updates.time) {
-      finalUpdates.scheduleTimeUTC = localHHMMStringToUTCMinutes(updates.time, tz);
-      finalUpdates.anchorTimezone = tz;
+      const prev = await db.phaseSchedules.get(id);
+      if (prev && prev.time === updates.time) {
+        delete finalUpdates.time;
+      } else {
+        const anchor = updates.anchorTimezone || prev?.anchorTimezone || getDeviceTimezone();
+        finalUpdates.scheduleTimeUTC = localHHMMStringToUTCMinutes(updates.time, anchor);
+        finalUpdates.anchorTimezone = anchor;
+      }
     }
 
     await db.transaction("rw", [db.phaseSchedules, db.auditLogs, db._syncQueue], async () => {
-      await db.phaseSchedules.update(id, finalUpdates);
+      await updateSyncedInsideTx("phaseSchedules", id, finalUpdates);
       const auditEntry = buildAuditEntry("prescription_updated", {
         action: "schedule_updated",
         scheduleId: id,
         updatedFields: Object.keys(updates),
       });
       await db.auditLogs.add(auditEntry);
-      await enqueueInsideTx("phaseSchedules", id, "upsert");
       await enqueueInsideTx("auditLogs", auditEntry.id, "upsert");
     });
     schedulePush();
@@ -155,13 +164,14 @@ export async function deleteSchedule(id: string): Promise<ServiceResult<void>> {
   try {
     const now = Date.now();
     await db.transaction("rw", [db.phaseSchedules, db.auditLogs, db._syncQueue], async () => {
-      await db.phaseSchedules.update(id, { deletedAt: now, updatedAt: now });
+      const schedule = await db.phaseSchedules.get(id);
+      if (!schedule) throw new Error("Schedule not found");
+      await softDeleteInsideTx("phaseSchedules", schedule, now);
       const auditEntry = buildAuditEntry("prescription_updated", {
         action: "schedule_deleted",
         scheduleId: id,
       });
       await db.auditLogs.add(auditEntry);
-      await enqueueInsideTx("phaseSchedules", id, "upsert");
       await enqueueInsideTx("auditLogs", auditEntry.id, "upsert");
     });
     schedulePush();

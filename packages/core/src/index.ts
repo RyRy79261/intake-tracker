@@ -27,3 +27,7 @@ export * from "./service-result";
 export * from "./security";
 export * from "./shake-detector";
 export * from "./analytics-stats";
+export * from "./lifecycle";
+export * from "./effective-phase";
+export * from "./logical-day";
+export * from "./sodium";

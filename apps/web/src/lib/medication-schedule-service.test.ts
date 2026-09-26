@@ -13,6 +13,7 @@ import {
   updateSchedule,
   deleteSchedule,
 } from "@/lib/medication-schedule-service";
+import { localHHMMStringToUTCMinutes } from "@/lib/timezone";
 
 describe("getDailySchedule", () => {
   it("returns Map with prescriptionId-keyed entries for matching dayOfWeek", async () => {
@@ -100,6 +101,26 @@ describe("getDailySchedule", () => {
     const result = await getDailySchedule(2);
     expect(result.size).toBe(0);
   });
+
+  it("excludes tombstoned prescriptions and phases even with stale live flags", async () => {
+    const rx = makePrescription({ id: "rx-ghost", isActive: true, deletedAt: 1700000000001 });
+    const phase = makeMedicationPhase(rx.id, { id: "phase-ghost", status: "active" });
+    const schedule = makePhaseSchedule(phase.id, { id: "sched-ghost", daysOfWeek: [2] });
+    const rx2 = makePrescription({ id: "rx-ghost-phase", isActive: true });
+    const phase2 = makeMedicationPhase(rx2.id, {
+      id: "phase-ghost-2",
+      status: "active",
+      deletedAt: 1700000000001,
+    });
+    const schedule2 = makePhaseSchedule(phase2.id, { id: "sched-ghost-2", daysOfWeek: [2] });
+
+    await db.prescriptions.bulkAdd([rx, rx2]);
+    await db.medicationPhases.bulkAdd([phase, phase2]);
+    await db.phaseSchedules.bulkAdd([schedule, schedule2]);
+
+    const result = await getDailySchedule(2);
+    expect(result.size).toBe(0);
+  });
 });
 
 describe("getSchedulesForPhase", () => {
@@ -153,6 +174,28 @@ describe("addSchedule", () => {
     const schedules = await getSchedulesForPhase(phase.id);
     expect(schedules).toHaveLength(1);
   });
+
+  it("does not write a local-only timezone field (PhaseSchedule has anchorTimezone)", async () => {
+    const rx = makePrescription({ id: "rx-add-tz" });
+    const phase = makeMedicationPhase(rx.id, { id: "phase-add-tz" });
+    await db.prescriptions.add(rx);
+    await db.medicationPhases.add(phase);
+
+    const result = await addSchedule({
+      phaseId: phase.id,
+      time: "09:00",
+      dosage: 25,
+      daysOfWeek: [1],
+      scheduleTimeUTC: 0,
+      anchorTimezone: "UTC",
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+
+    const stored = await db.phaseSchedules.get(result.data.id);
+    expect(stored).toBeDefined();
+    expect(stored).not.toHaveProperty("timezone");
+  });
 });
 
 describe("updateSchedule", () => {
@@ -179,6 +222,41 @@ describe("updateSchedule", () => {
   });
 });
 
+describe("updateSchedule keeps the anchorTimezone (gap-timezone-travel-recalc#2)", () => {
+  // The test device zone is UTC; the schedule is anchored in Berlin.
+  async function seedBerlin() {
+    const rx = makePrescription();
+    const phase = makeMedicationPhase(rx.id);
+    const schedule = makePhaseSchedule(phase.id, {
+      time: "08:00",
+      anchorTimezone: "Europe/Berlin",
+      scheduleTimeUTC: 999,
+    });
+    await db.prescriptions.add(rx);
+    await db.medicationPhases.add(phase);
+    await db.phaseSchedules.add(schedule);
+    return schedule;
+  }
+
+  it("leaves anchor and UTC alone when the same time is resent", async () => {
+    const schedule = await seedBerlin();
+    await updateSchedule(schedule.id, { time: "08:00", dosage: 75 });
+
+    const updated = await db.phaseSchedules.get(schedule.id);
+    expect(updated!.anchorTimezone).toBe("Europe/Berlin");
+    expect(updated!.scheduleTimeUTC).toBe(999);
+  });
+
+  it("encodes a changed time in the existing anchor", async () => {
+    const schedule = await seedBerlin();
+    await updateSchedule(schedule.id, { time: "09:00" });
+
+    const updated = await db.phaseSchedules.get(schedule.id);
+    expect(updated!.anchorTimezone).toBe("Europe/Berlin");
+    expect(updated!.scheduleTimeUTC).toBe(localHHMMStringToUTCMinutes("09:00", "Europe/Berlin"));
+  });
+});
+
 describe("deleteSchedule", () => {
   it("soft-deletes the schedule record", async () => {
     const rx = makePrescription({ id: "rx-del-sched" });
@@ -194,5 +272,7 @@ describe("deleteSchedule", () => {
     const deleted = await db.phaseSchedules.get("sched-del-1");
     expect(deleted).toBeDefined();
     expect(deleted!.deletedAt).toBeGreaterThan(0);
+    // Readers that only check `enabled` must stop seeing it too.
+    expect(deleted!.enabled).toBe(false);
   });
 });

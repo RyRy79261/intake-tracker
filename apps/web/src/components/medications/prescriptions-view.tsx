@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Cat, Plus } from "lucide-react";
+import { Cat, ChevronDown, Plus } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
 import { Button } from "@intake/ui/button";
 import { PrescriptionCard } from "@/components/medications/prescription-card";
 import { usePrescriptions } from "@/hooks/use-medication-queries";
@@ -13,10 +14,14 @@ interface PrescriptionsViewProps {
 export function PrescriptionsView({ onAddMed }: PrescriptionsViewProps) {
   const prescriptions = usePrescriptions();
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [inactiveOpen, setInactiveOpen] = useState(false);
 
-  const active = prescriptions
-    .filter((p) => p.isActive)
-    .sort((a, b) => a.genericName.localeCompare(b.genericName));
+  const byName = (a: { genericName: string }, b: { genericName: string }) =>
+    a.genericName.localeCompare(b.genericName);
+  const active = prescriptions.filter((p) => p.isActive).sort(byName);
+  // Deactivated prescriptions stay reachable so they can be reactivated,
+  // edited or deleted (the card's drawer holds the Active toggle).
+  const inactive = prescriptions.filter((p) => !p.isActive).sort(byName);
 
   // Compute which cards should span full width:
   // - Expanded cards always span 2 cols
@@ -71,7 +76,7 @@ export function PrescriptionsView({ onAddMed }: PrescriptionsViewProps) {
     return map;
   }, [active, expandedId]);
 
-  if (active.length === 0) {
+  if (active.length === 0 && inactive.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
         <Cat className="w-16 h-16 text-muted-foreground/40 mb-4" />
@@ -102,6 +107,50 @@ export function PrescriptionsView({ onAddMed }: PrescriptionsViewProps) {
           );
         })}
       </div>
+
+      {inactive.length > 0 && (
+        <section>
+          <Button
+            variant="ghost"
+            className="flex items-center gap-1.5 w-full justify-start h-auto px-1 py-0 mb-2"
+            onClick={() => setInactiveOpen(!inactiveOpen)}
+            aria-expanded={inactiveOpen}
+          >
+            <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+              Inactive ({inactive.length})
+            </span>
+            <motion.div
+              animate={{ rotate: inactiveOpen ? 180 : 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <ChevronDown className="w-3 h-3 text-muted-foreground" />
+            </motion.div>
+          </Button>
+          <AnimatePresence>
+            {inactiveOpen && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden grid grid-cols-1 gap-2"
+              >
+                {inactive.map((prescription) => {
+                  const isExpanded = expandedId === prescription.id;
+                  return (
+                    <PrescriptionCard
+                      key={prescription.id}
+                      prescription={prescription}
+                      expanded={isExpanded}
+                      onToggleExpanded={() => setExpandedId(isExpanded ? null : prescription.id)}
+                    />
+                  );
+                })}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </section>
+      )}
 
       <Button variant="outline" size="sm" onClick={onAddMed} className="w-full">
         <Plus className="w-4 h-4 mr-2" /> Add prescription

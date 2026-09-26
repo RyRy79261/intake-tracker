@@ -37,12 +37,24 @@ import {
 
 /**
  * FK-safe delete order for the 18 synced tables (children before parents).
- * Mirrors `/api/sync/cleanup`'s order, with the two leaf tables it omits
- * (`userProfile`, `insightReports`) appended — nothing references them.
+ *
+ * The inner FKs between synced tables do NOT cascade, so every referencing
+ * table must be emptied before the table it points at (audit sync-engine#6):
+ *   - inventory_transactions → inventory_items, dose_logs
+ *   - daily_notes            → prescriptions, dose_logs
+ *   - dose_logs              → prescriptions, medication_phases,
+ *                              phase_schedules, inventory_items
+ *   - inventory_items        → prescriptions
+ *   - phase_schedules        → medication_phases
+ *   - medication_phases      → prescriptions, titration_plans
+ *   - substance_records      → intake_records
+ * `userProfile` and `insightReports` are leaves (insight_jobs' reference to
+ * insight_reports is ON DELETE SET NULL).
  */
-const SYNCED_DELETION_ORDER: TableName[] = [
-  "doseLogs",
+export const SYNCED_DELETION_ORDER: TableName[] = [
   "inventoryTransactions",
+  "dailyNotes",
+  "doseLogs",
   "inventoryItems",
   "phaseSchedules",
   "medicationPhases",
@@ -50,7 +62,6 @@ const SYNCED_DELETION_ORDER: TableName[] = [
   "prescriptions",
   "substanceRecords",
   "auditLogs",
-  "dailyNotes",
   "defecationRecords",
   "urinationRecords",
   "eatingRecords",
@@ -61,58 +72,105 @@ const SYNCED_DELETION_ORDER: TableName[] = [
   "insightReports",
 ];
 
-// Drizzle's table refs are heavily generic; we accept the base `PgTable` so a
-// single helper can delete by `userId` across many tables.
-async function del(table: PgTable, where: SQL | undefined): Promise<number> {
-  const result = await db.delete(table).where(where);
-  return result.rowCount ?? 0;
-}
+/**
+ * The tables `/api/sync/cleanup` removes when a migration is cancelled: the
+ * record tables a migration uploads. The profile and insight reports are left
+ * alone, as before.
+ */
+export const MIGRATION_CLEANUP_ORDER: TableName[] = SYNCED_DELETION_ORDER.filter(
+  (name) => name !== "userProfile" && name !== "insightReports",
+);
 
-/** Delete the 18 synced "data mirror" tables for a user. */
-async function deleteSyncedData(userId: string): Promise<Record<string, number>> {
-  const deleted: Record<string, number> = {};
-  for (const name of SYNCED_DELETION_ORDER) {
-    const table = schemaByTableName[name] as PgTable & { userId: PgColumn };
-    deleted[name] = await del(table, eq(table.userId, userId));
-  }
-  return deleted;
-}
+type DeleteStep = { name: string; table: PgTable; where: SQL | undefined };
 
-/** Delete the user's Web Push subscription, schedules, sent log, and settings. */
-async function deletePushData(userId: string): Promise<Record<string, number>> {
-  return {
-    pushSentLog: await del(pushSentLog, eq(pushSentLog.userId, userId)),
-    pushSchedules: await del(pushSchedules, eq(pushSchedules.userId, userId)),
-    pushSubscriptions: await del(
-      pushSubscriptions,
-      eq(pushSubscriptions.userId, userId),
-    ),
-    pushSettings: await del(pushSettings, eq(pushSettings.userId, userId)),
-  };
-}
-
-/** Delete account-level data: AI keys, key shares, AI usage, jobs, MCP rows. */
-async function deleteAccountLevelData(
-  userId: string,
+/**
+ * Run a list of deletes as one all-or-nothing unit, in order.
+ *
+ * Production's Neon HTTP driver has no interactive transactions, but its
+ * `batch` runs every statement in a single transaction. The node-postgres
+ * driver (integration tests) has no `batch`, so fall back to `transaction`.
+ * Either way, a failure part-way through deletes nothing.
+ */
+async function deleteAtomically(
+  steps: DeleteStep[],
 ): Promise<Record<string, number>> {
-  return {
-    userApiKeys: await del(userApiKeys, eq(userApiKeys.userId, userId)),
-    userKeyShares: await del(
-      userKeyShares,
-      or(
+  const counts = new Array<number>(steps.length).fill(0);
+  const client = db as unknown as {
+    batch?: (queries: unknown[]) => Promise<Array<{ rowCount?: number | null }>>;
+  };
+  if (typeof client.batch === "function") {
+    const results = await client.batch(
+      steps.map((s) => db.delete(s.table).where(s.where)),
+    );
+    results.forEach((r, i) => (counts[i] = r?.rowCount ?? 0));
+  } else {
+    await db.transaction(async (tx) => {
+      for (let i = 0; i < steps.length; i++) {
+        const result = await tx.delete(steps[i]!.table).where(steps[i]!.where);
+        counts[i] = result.rowCount ?? 0;
+      }
+    });
+  }
+  return Object.fromEntries(steps.map((s, i) => [s.name, counts[i]!]));
+}
+
+/** Deletes for the given synced "data mirror" tables, in the given order. */
+function syncedDataSteps(
+  userId: string,
+  order: TableName[] = SYNCED_DELETION_ORDER,
+): DeleteStep[] {
+  return order.map((name) => {
+    const table = schemaByTableName[name] as PgTable & { userId: PgColumn };
+    return { name, table, where: eq(table.userId, userId) };
+  });
+}
+
+/** Deletes for the user's Web Push subscription, schedules, sent log, settings. */
+function pushDataSteps(userId: string): DeleteStep[] {
+  return [
+    { name: "pushSentLog", table: pushSentLog, where: eq(pushSentLog.userId, userId) },
+    { name: "pushSchedules", table: pushSchedules, where: eq(pushSchedules.userId, userId) },
+    {
+      name: "pushSubscriptions",
+      table: pushSubscriptions,
+      where: eq(pushSubscriptions.userId, userId),
+    },
+    { name: "pushSettings", table: pushSettings, where: eq(pushSettings.userId, userId) },
+  ];
+}
+
+/** Deletes for account-level data: AI keys, key shares, AI usage, jobs, MCP rows. */
+function accountLevelSteps(userId: string): DeleteStep[] {
+  return [
+    { name: "userApiKeys", table: userApiKeys, where: eq(userApiKeys.userId, userId) },
+    {
+      name: "userKeyShares",
+      table: userKeyShares,
+      where: or(
         eq(userKeyShares.grantorId, userId),
         eq(userKeyShares.granteeId, userId),
       ),
-    ),
-    aiUsage: await del(aiUsage, eq(aiUsage.userId, userId)),
-    insightJobs: await del(insightJobs, eq(insightJobs.userId, userId)),
-    mcpAccessTokens: await del(
-      mcpAccessTokens,
-      eq(mcpAccessTokens.userId, userId),
-    ),
-    mcpAuthCodes: await del(mcpAuthCodes, eq(mcpAuthCodes.userId, userId)),
-    mcpAuditLog: await del(mcpAuditLog, eq(mcpAuditLog.userId, userId)),
-  };
+    },
+    { name: "aiUsage", table: aiUsage, where: eq(aiUsage.userId, userId) },
+    { name: "insightJobs", table: insightJobs, where: eq(insightJobs.userId, userId) },
+    {
+      name: "mcpAccessTokens",
+      table: mcpAccessTokens,
+      where: eq(mcpAccessTokens.userId, userId),
+    },
+    { name: "mcpAuthCodes", table: mcpAuthCodes, where: eq(mcpAuthCodes.userId, userId) },
+    { name: "mcpAuditLog", table: mcpAuditLog, where: eq(mcpAuditLog.userId, userId) },
+  ];
+}
+
+/**
+ * Feature: "cancel migration". Removes the record tables a migration uploaded
+ * (see {@link MIGRATION_CLEANUP_ORDER}) in one transaction.
+ */
+export async function deleteMigratedData(
+  userId: string,
+): Promise<Record<string, number>> {
+  return deleteAtomically(syncedDataSteps(userId, MIGRATION_CLEANUP_ORDER));
 }
 
 /**
@@ -122,10 +180,10 @@ async function deleteAccountLevelData(
 export async function wipeCloudData(
   userId: string,
 ): Promise<Record<string, number>> {
-  return {
-    ...(await deleteSyncedData(userId)),
-    ...(await deletePushData(userId)),
-  };
+  return deleteAtomically([
+    ...syncedDataSteps(userId),
+    ...pushDataSteps(userId),
+  ]);
 }
 
 /**
@@ -135,9 +193,9 @@ export async function wipeCloudData(
 export async function deleteAllUserData(
   userId: string,
 ): Promise<Record<string, number>> {
-  return {
-    ...(await deleteSyncedData(userId)),
-    ...(await deletePushData(userId)),
-    ...(await deleteAccountLevelData(userId)),
-  };
+  return deleteAtomically([
+    ...syncedDataSteps(userId),
+    ...pushDataSteps(userId),
+    ...accountLevelSteps(userId),
+  ]);
 }

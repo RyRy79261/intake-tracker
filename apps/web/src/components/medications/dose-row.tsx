@@ -79,6 +79,14 @@ export function DoseRow({ slot, isToday, isFuture, onTake, onRetroactiveTake, on
         onClick={!isActionable ? () => onDoseClick(slot) : undefined}
         role={!isActionable ? "button" : undefined}
         tabIndex={!isActionable ? 0 : undefined}
+        onKeyDown={!isActionable ? (e) => {
+          // Only the row itself: Enter on the inner Edit button stays with it.
+          if (e.target !== e.currentTarget) return;
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onDoseClick(slot);
+          }
+        } : undefined}
       >
         <div className="flex items-center gap-3">
           <PillIconWithBadge
@@ -158,12 +166,15 @@ export function DoseRow({ slot, isToday, isFuture, onTake, onRetroactiveTake, on
         </div>
       </div>
 
+      {/* A late dose today defaults to now; a past-date back-fill defaults
+          to the scheduled time, matching Mark All and the detail drawer. */}
       <RetroactiveTimePicker
         open={timePickerOpen}
         onOpenChange={setTimePickerOpen}
-        defaultTime={getCurrentTimeHHMM()}
+        defaultTime={isToday ? getCurrentTimeHHMM() : slot.localTime}
         compoundName={prescription.genericName}
         onConfirm={handleRetroactiveConfirm}
+        notAfterNow={isToday}
       />
 
       <RetroactiveTimePicker
@@ -172,6 +183,7 @@ export function DoseRow({ slot, isToday, isFuture, onTake, onRetroactiveTake, on
         defaultTime={takenAtDisplay}
         compoundName={prescription.genericName}
         onConfirm={(time) => onEditTime(slot, time)}
+        notAfterNow={isToday}
       />
     </>
   );

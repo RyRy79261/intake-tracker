@@ -48,13 +48,15 @@ import { renderWithFixtures } from "@/__tests__/react-test-utils";
 
 /** Items the mocked parse route returns for the next request. */
 let parsedItems: VoiceParsedItem[] = [];
+/** Extra response fields (dropped / overCap / transcriptTruncated). */
+let parseExtras: Record<string, unknown> = {};
 
 const transcribeBody = { text: "dictated transcript" };
 
 const server = setupServer(
   http.post("*/api/ai/voice-transcribe", () => HttpResponse.json(transcribeBody)),
   http.post("*/api/ai/voice-parse", () =>
-    HttpResponse.json({ items: parsedItems }),
+    HttpResponse.json({ items: parsedItems, ...parseExtras }),
   ),
 );
 
@@ -62,6 +64,7 @@ beforeAll(() => server.listen({ onUnhandledRequest: "bypass" }));
 afterEach(() => {
   server.resetHandlers();
   parsedItems = [];
+  parseExtras = {};
 });
 afterAll(() => server.close());
 
@@ -118,8 +121,9 @@ describe("VoicePanel commit — one drink, one fluid amount", () => {
 
   it("flags a same-volume water item for review rather than dropping it", async () => {
     // Both rows reach the review list — a 500 ml beer alongside 500 ml of water
-    // is an ordinary thing to dictate, so the user decides. Approving both is
-    // taken at face value.
+    // is an ordinary thing to dictate, so the user decides. "Approve all"
+    // leaves the flagged pair pending; approving both one by one is taken at
+    // face value.
     parsedItems = [
       { kind: "alcohol", description: "beer", abvPercent: 5, volumeMl: 500 },
       { kind: "water", ml: 500 },
@@ -129,10 +133,15 @@ describe("VoicePanel commit — one drink, one fluid amount", () => {
 
     await user.click(screen.getByRole("button", { name: "mock-record" }));
     await screen.findByText(/Items \(/);
-    expect(screen.getByText(/reject one of the two/i)).toBeInTheDocument();
+    // The warning is shown on both rows it concerns.
+    expect(screen.getAllByText(/reject one of the two/i)).toHaveLength(2);
     expect(screen.getByText(/Items \(0 approved · 2 pending\)/)).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /Approve all/i }));
+    expect(screen.getByText(/Items \(0 approved · 2 pending\)/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Approve Alcohol" }));
+    await user.click(screen.getByRole("button", { name: "Approve Water" }));
     await user.click(screen.getByRole("button", { name: /^Save/ }));
 
     await waitFor(async () => {
@@ -322,5 +331,131 @@ describe("VoicePanel commit — retrying a partial save", () => {
     });
     expect(await waterRows()).toHaveLength(1);
     expect(await totalWaterMl()).toBe(250);
+  });
+});
+
+describe("VoicePanel review — telling the user what was left out", () => {
+  async function recordOnce() {
+    const user = userEvent.setup();
+    await renderWithFixtures(<VoicePanel />);
+    await user.click(screen.getByRole("button", { name: "mock-record" }));
+    await screen.findByText(/Items \(/);
+    return user;
+  }
+
+  it("warns when the parser dropped malformed items", async () => {
+    parsedItems = [{ kind: "water", ml: 250 }];
+    parseExtras = { dropped: 2 };
+    await recordOnce();
+    expect(screen.getByText(/2 items? .*left out/i)).toBeInTheDocument();
+  });
+
+  it("warns when only part of a long transcript was parsed", async () => {
+    parsedItems = [{ kind: "water", ml: 250 }];
+    parseExtras = { transcriptTruncated: true };
+    await recordOnce();
+    expect(screen.getByText(/not parsed/i)).toBeInTheDocument();
+  });
+
+  it("shows the sugar merged onto a drink row", async () => {
+    parsedItems = [
+      { kind: "caffeine", description: "latte", caffeineMg: 80, volumeMl: 250 },
+      { kind: "food", description: "latte", waterMl: 250, sugarG: 12 },
+    ];
+    await recordOnce();
+    expect(screen.getByDisplayValue("12")).toBeInTheDocument();
+    expect(screen.getByText(/Merged the separate "latte"/)).toBeInTheDocument();
+  });
+});
+
+describe("VoicePanel review — validation", () => {
+  it("does not approve an invalid row with Approve all", async () => {
+    // A urination row with no amount can't be approved until one is picked;
+    // the rest of the batch still saves.
+    parsedItems = [{ kind: "urination" }, { kind: "water", ml: 250 }];
+    const user = userEvent.setup();
+    await renderWithFixtures(<VoicePanel />);
+    await user.click(screen.getByRole("button", { name: "mock-record" }));
+    await screen.findByText(/Items \(/);
+
+    await user.click(screen.getByRole("button", { name: /Approve all/i }));
+    expect(screen.getByText(/Items \(1 approved · 1 pending\)/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /^Save/ }));
+    await waitFor(async () => {
+      expect(await waterRows()).toHaveLength(1);
+    });
+    expect(await db.urinationRecords.count()).toBe(0);
+  });
+});
+
+describe("VoicePanel commit — timing", () => {
+  it("saves an item at the time the user said", async () => {
+    // Dictated "BP at 8 this morning": it must not land at save time.
+    const before = Date.now();
+    await dictateAndSave([
+      { kind: "blood_pressure", systolic: 118, diastolic: 76, time: "08:00" },
+    ]);
+    await waitFor(async () => {
+      expect(await db.bloodPressureRecords.count()).toBe(1);
+    });
+    const [bp] = await db.bloodPressureRecords.toArray();
+    const when = new Date(bp!.timestamp);
+    expect(when.getHours()).toBe(8);
+    expect(when.getMinutes()).toBe(0);
+    expect(bp!.timestamp).toBeLessThanOrEqual(before + 60_000);
+  });
+
+  it("gives every item of one save the same timestamp", async () => {
+    await dictateAndSave([
+      { kind: "weight", weightKg: 80 },
+      { kind: "water", ml: 250 },
+      { kind: "salt", sodiumMg: 400 },
+    ]);
+    await waitFor(async () => {
+      expect(await db.intakeRecords.count()).toBe(2);
+    });
+    const [weight] = await db.weightRecords.toArray();
+    const intakes = await db.intakeRecords.toArray();
+    expect(new Set([weight!.timestamp, ...intakes.map((r) => r.timestamp)]).size).toBe(1);
+  });
+});
+
+describe("VoicePanel — caffeine from presets", () => {
+  it("books a moka from the Moka preset's concentration", async () => {
+    // Default Moka preset: 130 mg per 100 ml, so 200 ml is 260 mg — not the
+    // drip-coffee-anchored estimate.
+    await dictateAndSave([
+      { kind: "caffeine", description: "moka pot coffee", caffeineMg: 134, volumeMl: 200 },
+    ]);
+    await waitFor(async () => {
+      expect(await db.substanceRecords.count()).toBe(1);
+    });
+    const [substance] = await db.substanceRecords.toArray();
+    expect(substance!.amountMg).toBe(260);
+  });
+});
+
+describe("VoicePanel — recording again", () => {
+  it("keeps unsaved rows and appends the new recording's items", async () => {
+    parsedItems = [{ kind: "weight", weightKg: 80 }];
+    const user = userEvent.setup();
+    await renderWithFixtures(<VoicePanel />);
+    await user.click(screen.getByRole("button", { name: "mock-record" }));
+    await screen.findByText(/Items \(/);
+    await user.click(screen.getByRole("button", { name: "Approve Weight" }));
+
+    parsedItems = [{ kind: "water", ml: 250 }];
+    await user.click(screen.getByRole("button", { name: "mock-record" }));
+    await screen.findByRole("button", { name: "Approve Water" });
+
+    // The approved weight row survived the second recording.
+    expect(screen.getByText(/Items \(1 approved · 1 pending\)/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Approve all/i }));
+    await user.click(screen.getByRole("button", { name: /^Save/ }));
+    await waitFor(async () => {
+      expect(await db.weightRecords.count()).toBe(1);
+    });
+    expect(await waterRows()).toHaveLength(1);
   });
 });

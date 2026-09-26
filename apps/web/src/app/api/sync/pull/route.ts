@@ -1,6 +1,15 @@
 /**
  * POST /api/sync/pull — cursor-paginated per-table SELECT returning changes
- * since the client's last-seen `updatedAt` per table.
+ * since the client's last-seen position per table.
+ *
+ * The cursor is a `(server_updated_at, id)` keyset. `server_updated_at` is
+ * stamped by the push route on every write, so a record that reaches the
+ * server late (written offline, retried, a slow clock) still lands past every
+ * other device's cursor — the client's own `updatedAt` only drives LWW
+ * (audit sync-engine#3). Each table slice returns the `cursor` to resume from;
+ * the client treats it as opaque. `serverUpdatedAt` never leaves the server as
+ * row data. A request without `cursorKind: "server"` comes from an older
+ * cached client and is still paged by `(updated_at, id)`.
  *
  * Security contract (43-04-PLAN.md threat model):
  *   - withAuth gates the route behind a valid Neon Auth session. The handler
@@ -12,9 +21,10 @@
  *     non-negative integers (T-43-04-05 blocks cursor injection).
  *
  * Cursor-race safety (T-sync-07 / 43-RESEARCH.md Pattern 7):
- *   `serverTime = Date.now()` is captured BEFORE any SELECT runs. The client
- *   clamps its next cursor to `min(maxRowUpdatedAt, serverTime - 30s)` so
- *   rows written DURING the query window aren't skipped on the next pull.
+ *   `serverTime = Date.now()` is captured BEFORE any SELECT runs, on the same
+ *   clock as `server_updated_at`. The client clamps its next cursor to
+ *   `min(cursor, serverTime - 30s)` so a push that stamped its rows but had
+ *   not committed when this query ran isn't skipped on the next pull.
  *
  * DoS mitigation (T-43-04-03):
  *   Each table's result is capped at PULL_SOFT_CAP (500) with a `hasMore`
@@ -68,11 +78,14 @@ export const POST = withAuth(async ({ request, auth }) => {
     // note at the top of the file.
     const serverTime = Date.now();
 
+    const byServerStamp = parsed.data.cursorKind === "server";
+
     const tableNames = (Object.keys(schemaByTableName) as TableName[]).filter(t => t !== 'auditLogs');
     const entries = await Promise.all(
       tableNames.map(async (tableName) => {
-        // Keyset cursor: `(updatedAt, id)`. A legacy client may still send a
-        // bare `updatedAt` number — normalise it to a zero-id cursor.
+        // Keyset cursor: `(updatedAt, id)` on the wire, where `updatedAt` is
+        // the opaque server stamp. A legacy client may still send a bare
+        // number — normalise it to a zero-id cursor.
         const rawCursor = parsed.data.cursors[tableName];
         const cursorUpdatedAt =
           typeof rawCursor === "number" ? rawCursor : rawCursor?.updatedAt ?? 0;
@@ -82,11 +95,20 @@ export const POST = withAuth(async ({ request, auth }) => {
           id: PgColumn;
           userId: PgColumn;
           updatedAt: PgColumn;
+          serverUpdatedAt: PgColumn;
         };
 
-        // `updatedAt > cursor` OR `(updatedAt = cursor AND id > cursorId)` —
-        // the tuple comparison keeps pagination correct when many rows share
-        // one `updatedAt`. Ordering matches: `(updatedAt ASC, id ASC)`.
+        // Keyset on the SERVER-assigned stamp, not the client's `updatedAt`:
+        // a record pushed late keeps its old `updatedAt`, which would already
+        // sit below every other device's cursor (audit sync-engine#3). Only
+        // clients that opted in (`cursorKind: "server"`) get it — an older
+        // cached client builds its cursor from the last row's `updatedAt`, so
+        // it stays on the `updatedAt` keyset (see pullBodySchema).
+        // `key > cursor` OR `(key = cursor AND id > cursorId)` — the tuple
+        // comparison keeps pagination correct when many rows share one key
+        // (a whole push batch, or the migration backfill). Ordering matches.
+        const keyField = byServerStamp ? "serverUpdatedAt" : "updatedAt";
+        const keyColumn = table[keyField];
         const rows = (await drizzleDb
           .select()
           .from(table)
@@ -94,28 +116,45 @@ export const POST = withAuth(async ({ request, auth }) => {
             and(
               eq(table.userId, auth.userId!),
               or(
-                gt(table.updatedAt, cursorUpdatedAt),
+                gt(keyColumn, cursorUpdatedAt),
                 and(
-                  eq(table.updatedAt, cursorUpdatedAt),
+                  eq(keyColumn, cursorUpdatedAt),
                   gt(table.id, cursorId),
                 ),
               ),
             ),
           )
-          .orderBy(asc(table.updatedAt), asc(table.id))
+          .orderBy(asc(keyColumn), asc(table.id))
           .limit(PULL_SOFT_CAP + 1)) as Record<string, unknown>[];
 
         const hasMore = rows.length > PULL_SOFT_CAP;
+        const page = rows.slice(0, PULL_SOFT_CAP);
+        const last = page[page.length - 1];
+        // The cursor is the last row's keyset position; the stamp itself is
+        // server-only and never reaches the client as row data.
+        const cursor = last
+          ? {
+              updatedAt: last[keyField] as number,
+              id: last.id as string,
+            }
+          : undefined;
+        const payload = page.map(({ serverUpdatedAt: _stamp, ...row }) => row);
         return [
           tableName,
-          { rows: rows.slice(0, PULL_SOFT_CAP), hasMore },
+          cursor
+            ? { rows: payload, hasMore, cursor }
+            : { rows: payload, hasMore },
         ] as const;
       }),
     );
 
     const result: Record<
       string,
-      { rows: Record<string, unknown>[]; hasMore: boolean }
+      {
+        rows: Record<string, unknown>[];
+        hasMore: boolean;
+        cursor?: { updatedAt: number; id: string };
+      }
     > = Object.fromEntries(entries);
 
     return NextResponse.json({ result, serverTime });

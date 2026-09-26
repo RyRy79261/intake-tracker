@@ -19,7 +19,7 @@ import { NextRequest } from "next/server";
 // ── Controllable stubs ───────────────────────────────────────────────────
 
 // Each db.select(...) call shifts one result off this queue, in route order:
-//   1) mineByProvider, 2) mineByRoute
+//   1) mineByProvider, 2) mineByRoute, 3) mineByModel
 let drizzleResults: unknown[][] = [];
 let drizzleShouldThrow = false;
 
@@ -174,6 +174,40 @@ describe("GET /api/user/ai-usage", () => {
         audioSeconds: 0,
       },
     ]);
+  });
+
+  it("breaks my usage down by model, counting failed calls separately", async () => {
+    const byModel = [
+      {
+        provider: "anthropic",
+        model: "claude-opus-5-5",
+        calls: 4,
+        errors: 1,
+        inputTokens: 900,
+        outputTokens: 400,
+        cacheReadTokens: 0,
+        cacheCreateTokens: 0,
+      },
+      {
+        provider: "anthropic",
+        model: "claude-sonnet-5",
+        calls: 2,
+        errors: 0,
+        inputTokens: 300,
+        outputTokens: 100,
+        cacheReadTokens: 0,
+        cacheCreateTokens: 0,
+      },
+    ];
+    drizzleResults = [[], [], byModel];
+
+    const { GET } = await import("@/app/api/user/ai-usage/route");
+    const res = await GET(makeRequest());
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { mine: { byModel: unknown[] } };
+    // Opus and Sonnet tokens price differently, so they must not be summed.
+    expect(body.mine.byModel).toEqual(byModel);
   });
 
   it("clamps the ?days window to the 1..365 range", async () => {

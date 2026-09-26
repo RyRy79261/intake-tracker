@@ -4,7 +4,9 @@ import {
   activatePhase,
   startNewPhase,
   updatePhase,
+  deletePhase,
   getActivePhaseForPrescription,
+  getPhasesForPrescription,
   type CreatePhaseInput,
 } from "@/lib/phase-service";
 import {
@@ -12,6 +14,7 @@ import {
   makeMedicationPhase,
   makePhaseSchedule,
 } from "@/__tests__/fixtures/db-fixtures";
+import { localHHMMStringToUTCMinutes } from "@/lib/timezone";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -226,10 +229,11 @@ describe("updatePhase schedule reconciliation", () => {
     });
     expect(result.success).toBe(true);
 
-    const remaining = await db.phaseSchedules.where("phaseId").equals(phase.id).toArray();
+    const remaining = (await db.phaseSchedules.where("phaseId").equals(phase.id).toArray())
+      .filter((s) => s.deletedAt == null);
     const remainingIds = remaining.map((s) => s.id);
 
-    // kept+updated survives with new values; dropped is gone; new one added.
+    // kept+updated survives with new values; dropped is tombstoned; new one added.
     expect(remainingIds).toContain(keep.id);
     expect(remainingIds).not.toContain(drop.id);
     expect(remaining).toHaveLength(2);
@@ -252,7 +256,7 @@ describe("updatePhase schedule reconciliation", () => {
     expect(addSync[0]!.op).toBe("upsert");
   });
 
-  it("hard-deletes removed schedules (row is gone, not soft-deleted)", async () => {
+  it("soft-deletes and disables removed schedules so the tombstone can sync", async () => {
     const rx = makePrescription();
     const phase = makeMedicationPhase(rx.id);
     const drop = makePhaseSchedule(phase.id);
@@ -262,7 +266,27 @@ describe("updatePhase schedule reconciliation", () => {
 
     await updatePhase({ id: phase.id, schedules: [] });
 
-    expect(await db.phaseSchedules.get(drop.id)).toBeUndefined();
+    const row = await db.phaseSchedules.get(drop.id);
+    expect(row).toBeDefined();
+    expect(row!.deletedAt).not.toBeNull();
+    expect(row!.enabled).toBe(false);
+    expect(row!.updatedAt).toBeGreaterThan(drop.updatedAt);
+    expect((await syncRowsFor("phaseSchedules", drop.id))[0]!.op).toBe("delete");
+  });
+
+  it("ignores already-deleted schedules when reconciling", async () => {
+    const rx = makePrescription();
+    const phase = makeMedicationPhase(rx.id);
+    const ghost = makePhaseSchedule(phase.id, { deletedAt: 1700000000001, enabled: false });
+    await db.prescriptions.add(rx);
+    await db.medicationPhases.add(phase);
+    await db.phaseSchedules.add(ghost);
+
+    await updatePhase({ id: phase.id, schedules: [] });
+
+    // Untouched: no re-tombstone, no new sync op.
+    expect((await db.phaseSchedules.get(ghost.id))!.updatedAt).toBe(ghost.updatedAt);
+    expect(await syncRowsFor("phaseSchedules", ghost.id)).toHaveLength(0);
   });
 
   it("writes a prescription_updated audit recording updated fields + schedulesModified", async () => {
@@ -279,5 +303,118 @@ describe("updatePhase schedule reconciliation", () => {
     expect(details.action).toBe("phase_updated");
     expect(details.updatedFields).toEqual(["notes"]);
     expect(details.schedulesModified).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Reads — soft-deleted phases are invisible
+// ---------------------------------------------------------------------------
+
+describe("phase reads", () => {
+  it("getActivePhaseForPrescription skips a tombstoned phase whose status is stale", async () => {
+    const rx = makePrescription();
+    const ghost = makeMedicationPhase(rx.id, { status: "active", deletedAt: 1700000000001 });
+    await db.prescriptions.add(rx);
+    await db.medicationPhases.add(ghost);
+
+    expect(await getActivePhaseForPrescription(rx.id)).toBeUndefined();
+  });
+
+  it("getActivePhaseForPrescription prefers a running titration over maintenance", async () => {
+    const rx = makePrescription();
+    const maint = makeMedicationPhase(rx.id, { status: "active", type: "maintenance" });
+    const tit = makeMedicationPhase(rx.id, {
+      status: "active",
+      type: "titration",
+      titrationPlanId: "plan-1",
+    });
+    await db.prescriptions.add(rx);
+    await db.medicationPhases.bulkAdd([maint, tit]);
+
+    expect((await getActivePhaseForPrescription(rx.id))!.id).toBe(tit.id);
+  });
+
+  it("getPhasesForPrescription omits soft-deleted phases", async () => {
+    const rx = makePrescription();
+    const live = makeMedicationPhase(rx.id);
+    const ghost = makeMedicationPhase(rx.id, { deletedAt: 1700000000001 });
+    await db.prescriptions.add(rx);
+    await db.medicationPhases.bulkAdd([live, ghost]);
+
+    expect((await getPhasesForPrescription(rx.id)).map((p) => p.id)).toEqual([live.id]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// deletePhase — tombstone also retires the lifecycle flags
+// ---------------------------------------------------------------------------
+
+describe("deletePhase", () => {
+  it("cancels the phase and disables its schedules", async () => {
+    const rx = makePrescription();
+    const phase = makeMedicationPhase(rx.id, { status: "active" });
+    const sched = makePhaseSchedule(phase.id);
+    await db.prescriptions.add(rx);
+    await db.medicationPhases.add(phase);
+    await db.phaseSchedules.add(sched);
+
+    await deletePhase(phase.id);
+
+    const p = await db.medicationPhases.get(phase.id);
+    expect(p!.deletedAt).not.toBeNull();
+    expect(p!.status).toBe("cancelled");
+    const s = await db.phaseSchedules.get(sched.id);
+    expect(s!.deletedAt).not.toBeNull();
+    expect(s!.enabled).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// updatePhase — editing abroad keeps the schedule's anchor
+// (gap-timezone-travel-recalc#2). The test device zone is UTC.
+// ---------------------------------------------------------------------------
+
+describe("updatePhase keeps each schedule's anchorTimezone", () => {
+  async function seedBerlinSchedule() {
+    const rx = makePrescription();
+    const phase = makeMedicationPhase(rx.id);
+    const schedule = makePhaseSchedule(phase.id, {
+      time: "08:00",
+      anchorTimezone: "Europe/Berlin",
+      scheduleTimeUTC: 999, // sentinel: must survive an edit that keeps the time
+    });
+    await db.prescriptions.add(rx);
+    await db.medicationPhases.add(phase);
+    await db.phaseSchedules.add(schedule);
+    return { phase, schedule };
+  }
+
+  it("does not re-anchor or re-encode a schedule whose time is unchanged", async () => {
+    const { phase, schedule } = await seedBerlinSchedule();
+
+    await updatePhase({
+      id: phase.id,
+      notes: "take with food",
+      schedules: [{ id: schedule.id, time: "08:00", daysOfWeek: [1], dosage: 75 }],
+    });
+
+    const updated = await db.phaseSchedules.get(schedule.id);
+    expect(updated!.anchorTimezone).toBe("Europe/Berlin");
+    expect(updated!.scheduleTimeUTC).toBe(999);
+    expect(updated!.dosage).toBe(75);
+  });
+
+  it("encodes a changed time in the schedule's own anchor, not the device zone", async () => {
+    const { phase, schedule } = await seedBerlinSchedule();
+
+    await updatePhase({
+      id: phase.id,
+      schedules: [{ id: schedule.id, time: "09:00", daysOfWeek: [1], dosage: 50 }],
+    });
+
+    const updated = await db.phaseSchedules.get(schedule.id);
+    expect(updated!.time).toBe("09:00");
+    expect(updated!.anchorTimezone).toBe("Europe/Berlin");
+    expect(updated!.scheduleTimeUTC).toBe(localHHMMStringToUTCMinutes("09:00", "Europe/Berlin"));
   });
 });

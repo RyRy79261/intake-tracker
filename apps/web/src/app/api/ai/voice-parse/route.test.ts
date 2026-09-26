@@ -17,6 +17,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { APIConnectionTimeoutError } from "@anthropic-ai/sdk";
 
 // withAuth → pass-through HOF injecting a fixed authenticated context.
 vi.mock("@/lib/auth-middleware", () => ({
@@ -110,15 +111,66 @@ describe("voice-parse route handler", () => {
     expect(messagesCreate).toHaveBeenCalledTimes(1);
   });
 
-  it("rejects a transcript over the 2000-char .max() with 400", async () => {
+  it("sends a transcript longer than 500 chars to the model intact", async () => {
+    // sanitizeForAI used to hard-cut every input to 500 chars, so anything
+    // said after ~30 s of dictation was never parsed.
+    messagesCreate.mockResolvedValueOnce(toolUseResponse({ items: [{ kind: "water", ml: 250 }] }));
+    const transcript = "water ".repeat(250).trim(); // ~1500 chars
     const { POST } = await import("@/app/api/ai/voice-parse/route");
-    const res = await POST(makeRequest({ transcript: "x".repeat(2001) }));
+    const res = await POST(makeRequest({ transcript }));
+
+    expect(res.status).toBe(200);
+    const sent = messagesCreate.mock.calls[0]![0] as {
+      messages: { content: string }[];
+    };
+    expect(sent.messages[0]!.content).toContain(transcript);
+    const body = (await res.json()) as { transcriptTruncated?: boolean };
+    expect(body.transcriptTruncated).toBeUndefined();
+  });
+
+  it("parses the first 2000 chars of an over-long transcript and says so", async () => {
+    messagesCreate.mockResolvedValueOnce(toolUseResponse({ items: [{ kind: "water", ml: 250 }] }));
+    const { POST } = await import("@/app/api/ai/voice-parse/route");
+    const res = await POST(makeRequest({ transcript: "y".repeat(3000) }));
+
+    expect(res.status).toBe(200);
+    const sent = messagesCreate.mock.calls[0]![0] as {
+      messages: { content: string }[];
+    };
+    expect(sent.messages[0]!.content).toContain("y".repeat(2000));
+    expect(sent.messages[0]!.content).not.toContain("y".repeat(2001));
+    const body = (await res.json()) as { transcriptTruncated?: boolean };
+    expect(body.transcriptTruncated).toBe(true);
+  });
+
+  it("rejects an absurdly long transcript with 400", async () => {
+    const { POST } = await import("@/app/api/ai/voice-parse/route");
+    const res = await POST(makeRequest({ transcript: "x".repeat(8001) }));
 
     expect(res.status).toBe(400);
     const body = (await res.json()) as { error: string };
     expect(body.error).toBe("Invalid request");
     // The AI must never be called for an invalid request.
     expect(messagesCreate).not.toHaveBeenCalled();
+  });
+
+  it("returns how many items were dropped as malformed", async () => {
+    messagesCreate.mockResolvedValueOnce(
+      toolUseResponse({
+        items: [
+          { kind: "water", ml: 250 },
+          // caffeine without caffeineMg fails validation.
+          { kind: "caffeine", description: "coffee" },
+        ],
+      }),
+    );
+    const { POST } = await import("@/app/api/ai/voice-parse/route");
+    const res = await POST(makeRequest({ transcript: "water and a coffee" }));
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { items: unknown[]; dropped?: number };
+    expect(body.items).toHaveLength(1);
+    expect(body.dropped).toBe(1);
   });
 
   it("rejects an empty transcript with 400 (min(1))", async () => {
@@ -155,9 +207,9 @@ describe("voice-parse route handler", () => {
   });
 
   it("returns 504 when the Claude request times out", async () => {
-    const timeout = new Error("timed out");
-    timeout.name = "APIConnectionTimeoutError";
-    messagesCreate.mockRejectedValueOnce(timeout);
+    // The real SDK error: its `name` is plain "Error", so a name check never
+    // matched and a timeout fell through to the generic 502.
+    messagesCreate.mockRejectedValueOnce(new APIConnectionTimeoutError());
 
     const { POST } = await import("@/app/api/ai/voice-parse/route");
     const res = await POST(makeRequest({ transcript: "had some water" }));
@@ -165,5 +217,16 @@ describe("voice-parse route handler", () => {
     expect(res.status).toBe(504);
     const body = (await res.json()) as { error: string };
     expect(body.error).toBe("AI request timed out");
+  });
+
+  it("does not let the SDK retry a timed-out call more than once", async () => {
+    // The SDK default of 2 retries turned a 60 s budget into ~180 s of waiting.
+    messagesCreate.mockResolvedValueOnce(toolUseResponse({ items: [{ kind: "water", ml: 250 }] }));
+    const { POST } = await import("@/app/api/ai/voice-parse/route");
+    await POST(makeRequest({ transcript: "had some water" }));
+
+    const options = messagesCreate.mock.calls[0]![1] as { maxRetries?: number };
+    expect(options.maxRetries).toBeDefined();
+    expect(options.maxRetries).toBeLessThanOrEqual(1);
   });
 });

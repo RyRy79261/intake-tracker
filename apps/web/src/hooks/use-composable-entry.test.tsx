@@ -23,8 +23,15 @@ vi.mock("@/components/medications/undo-toast", () => ({
   },
 }));
 
+const toastMock = vi.hoisted(() => vi.fn());
+vi.mock("@intake/ui/use-toast", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  toast: toastMock,
+}));
+
 beforeEach(() => {
   undoToastCalls.length = 0;
+  toastMock.mockClear();
 });
 
 describe("sodiumKindFromSource (re-export)", () => {
@@ -59,6 +66,28 @@ describe("useAddComposableEntry", () => {
     expect(group?.intakes).toHaveLength(1);
     expect(group?.eatings[0]?.groupId).toBe(created.groupId);
     expect(group?.intakes[0]?.amount).toBe(500);
+  });
+});
+
+describe("useAddComposableEntry recovery", () => {
+  it("reopens a severed database and still saves (issue #287)", async () => {
+    const { result } = renderHook(() => useAddComposableEntry());
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    db.close();
+    let created!: Awaited<ReturnType<typeof result.current>>;
+    await act(async () => {
+      created = await result.current({
+        intakes: [
+          { type: "water", amount: 330, source: "beverage" },
+          { type: "sugar", amount: 20, source: "manual:sugar" },
+        ],
+      });
+    });
+
+    const group = await fetchEntryGroup(created.groupId);
+    expect(group?.intakes).toHaveLength(2);
+    warn.mockRestore();
   });
 });
 
@@ -204,5 +233,36 @@ describe("useSyncEatingGroup", () => {
     const salt = group?.intakes.find((r) => r.type === "salt");
     expect(salt?.amount).toBe(640);
     expect(salt?.source).toBe("manual:salt");
+  });
+});
+
+describe("undo failures are surfaced", () => {
+  it("useDeleteEntryGroup shows an error toast when the restore fails", async () => {
+    const add = renderHook(() => useAddComposableEntry());
+    let groupId!: string;
+    await act(async () => {
+      groupId = (
+        await add.result.current(
+          { intakes: [{ type: "water", amount: 250 }] },
+          1_700_000_000_000,
+        )
+      ).groupId;
+    });
+
+    const { result } = renderHook(() => useDeleteEntryGroup());
+    await act(async () => {
+      await result.current(groupId);
+    });
+
+    // Make the restore transaction fail.
+    const spy = vi.spyOn(db, "transaction").mockRejectedValueOnce(new Error("blocked"));
+    await act(async () => {
+      await undoToastCalls[0]!.onUndo();
+    });
+    spy.mockRestore();
+
+    expect(toastMock).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Could not restore", variant: "destructive" }),
+    );
   });
 });

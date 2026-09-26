@@ -142,7 +142,7 @@ describe("withAuth Bearer token validation", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("upstream times out → response is 401", async () => {
+  it("upstream times out → response is 503, not a 401 that signs the user out", async () => {
     fetchMock.mockImplementation(async (_url, init) => {
       const signal = (init as RequestInit)?.signal;
       return new Promise((_resolve, reject) => {
@@ -168,7 +168,9 @@ describe("withAuth Bearer token validation", () => {
     const res = await promise;
     vi.useRealTimers();
 
-    expect(res.status).toBe(401);
+    // audit native-android#5: an auth outage is not an invalid token.
+    expect(res.status).toBe(503);
+    expect((await readJson(res)).requiresAuth).toBeUndefined();
     expect(handler).not.toHaveBeenCalled();
   });
 
@@ -258,7 +260,7 @@ describe("withAuth Bearer token validation", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("upstream returns 500 → response is 401", async () => {
+  it("upstream returns 500 → response is 503", async () => {
     fetchMock.mockResolvedValue(new Response(null, { status: 500 }));
 
     const { withAuth } = await import("@/lib/auth-middleware");
@@ -266,8 +268,48 @@ describe("withAuth Bearer token validation", () => {
     const wrapped = withAuth(handler as never);
 
     const res = await wrapped(makeRequest({ bearer: "some-token" }));
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(503);
+    expect((await readJson(res)).requiresAuth).toBeUndefined();
     expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("upstream network failure → response is 503", async () => {
+    fetchMock.mockRejectedValue(new TypeError("fetch failed"));
+
+    const { withAuth } = await import("@/lib/auth-middleware");
+    const handler = vi.fn();
+    const wrapped = withAuth(handler as never);
+
+    const res = await wrapped(makeRequest({ bearer: "some-token" }));
+    expect(res.status).toBe(503);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("NEON_AUTH_URL unset → response is 503 (misconfig, not a bad token)", async () => {
+    delete process.env.NEON_AUTH_URL;
+
+    const { withAuth } = await import("@/lib/auth-middleware");
+    const handler = vi.fn();
+    const wrapped = withAuth(handler as never);
+
+    const res = await wrapped(makeRequest({ bearer: "some-token" }));
+    expect(res.status).toBe(503);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("upstream 200 with no session (Better Auth's invalid-token reply) → 401", async () => {
+    fetchMock.mockResolvedValue(new Response("null", { status: 200 }));
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const { withAuth } = await import("@/lib/auth-middleware");
+    const handler = vi.fn();
+    const wrapped = withAuth(handler as never);
+
+    const res = await wrapped(makeRequest({ bearer: "some-token" }));
+    expect(res.status).toBe(401);
+    expect((await readJson(res)).requiresAuth).toBe(true);
+
+    warnSpy.mockRestore();
   });
 
   it("upstream returns malformed JSON → response is 401 with warning", async () => {

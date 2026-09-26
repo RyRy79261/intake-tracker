@@ -264,6 +264,22 @@ the user sees "claude.ai is requesting read access to your intake-tracker
 data" with an Approve / Deny button. Consent is rendered on every attempt —
 skip-with-cookie auto-approval was considered and deliberately not built,
 since showing the screen once per code is the more transparent behaviour.
+The screen's list of shared data is generated from `MCP_TOOL_CONSENT` in
+`src/lib/mcp/tool-catalog.ts`, which also types the registered tool names,
+so a new tool can't ship without a consent line.
+
+#### `oauth/revoke/route.ts` and `/api/mcp/connections`
+
+- `POST /api/mcp/oauth/revoke` — RFC 7009. The client presents an access or
+  refresh token plus its credentials; either token revokes the pair (sets
+  `revokedAt`). Always 200 for an unknown token. Advertised as
+  `revocation_endpoint` in the authorization-server metadata.
+- `GET/DELETE /api/mcp/connections` — session-authenticated. Lists the
+  user's live grants per client and revokes all of them, or one client's
+  (`?clientId=`). Backs Settings → Privacy & Security → Claude connections.
+- `purgeExpired` (expired codes, revoked tokens, tokens past
+  `refreshExpiresAt`) runs opportunistically from the token endpoint, at
+  most once an hour per instance.
 
 #### `oauth/token/route.ts`
 
@@ -285,14 +301,14 @@ the existing patterns from `src/lib/analytics-service.ts` and
 
 | Tool | Description | Backing query |
 |------|-------------|---------------|
-| `get_today_summary` | Water + salt totals, latest BP/weight, doses today | aggregate across 5 tables for current day-start-hour window |
-| `query_intake_history` | water/salt by day or hour over [start, end] | `intakeRecords` |
+| `get_today_summary` | Water / sodium / sugar / potassium totals, latest BP/weight, today's dose slots (taken / skipped / outstanding by `scheduledDate`) | aggregate for the day-start-hour window in the user's zone (tool arg, else `push_subscriptions.timezone`, else UTC) |
+| `query_intake_history` | water/sodium/sugar/potassium records over [start, end] (stored type `salt` is reported as `sodium`) | `intakeRecords` |
 | `query_weight_history` | weight points + 7-day avg over [start, end] | `weightRecords` |
 | `query_blood_pressure_history` | systolic/diastolic/HR points + 7-day avg | `bloodPressureRecords` |
 | `query_eating_history` | food log entries; `groupId` links to substances (query separately) | `eatingRecords` |
 | `query_substance_history` | caffeine/alcohol records (mg, standard drinks, ABV%) over [start, end], filterable by type | `substanceRecords` |
 | `query_urination_history` | urination events + volume estimate over [start, end] | `urinationRecords` |
-| `list_medications` | active prescriptions + current phase + schedule | `prescriptions` + `medicationPhases` + `phaseSchedules` |
+| `list_medications` | active prescriptions + the ONE effective phase (titration overrides maintenance, via `selectEffectivePhases`) + its schedules | `prescriptions` + `medicationPhases` + `phaseSchedules` |
 | `list_titration_plans` | titration plans (title, condition, status, warnings) | `titrationPlans` |
 | `list_recent_doses` | last N dose log entries with prescription names | `doseLogs` |
 | `get_inventory_status` | pill counts + days-of-supply per prescription | `inventoryItems` |

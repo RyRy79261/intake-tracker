@@ -4,42 +4,41 @@ import { Input } from "@intake/ui/input";
 import { Label } from "@intake/ui/label";
 import { Switch } from "@intake/ui/switch";
 import { cn } from "@/lib/utils";
-import type { AddMedicationFormState } from "@/hooks/use-add-medication-form";
-import { compoundSum, formatCompoundFull } from "@intake/core/compound";
+import { resolveWizardDose, type AddMedicationFormState } from "@/hooks/use-add-medication-form";
+import { formatCompoundFull } from "@intake/core/compound";
 import { type FieldChange, DOSE_MULTIPLIERS } from "@/components/medications/add-medication-steps/types";
 
 export function DosageStep({
-  formState, onFieldChange,
+  formState, onFieldChange, error,
 }: {
   formState: AddMedicationFormState;
   onFieldChange: FieldChange;
+  error?: string | undefined;
 }) {
   const { dosageAmount, customDosage, dosageStrength, asNeeded, isCombination, compounds } = formState;
-  const parseStrengthNum = (str: string): number => {
-    const match = str.match(/(\d+(?:\.\d+)?)/);
-    return match?.[1] ? parseFloat(match[1]) : 1;
-  };
-  const parseStrengthUnit = (str: string): string => {
-    const match = str.match(/\d+(?:\.\d+)?\s*([a-zA-Z]+)/);
-    return match?.[1] ?? "mg";
-  };
-
-  const strengthNum = isCombination
-    ? compoundSum(compounds) || 1
-    : parseStrengthNum(dosageStrength);
-  const unit = isCombination ? "mg" : parseStrengthUnit(dosageStrength);
+  // The same resolver handleSave uses, so the preview shows exactly what is
+  // saved. The search step blocks an unreadable strength, so `dose` is only
+  // null if state got here some other way — fall back to 1 for display.
+  const dose = resolveWizardDose(formState);
+  const strengthNum = dose?.strength ?? 1;
+  const unit = dose?.unit ?? "mg";
   const pillContents = isCombination
     ? formatCompoundFull(compounds, "mg")
     : dosageStrength;
-  const activeDosage = customDosage ? parseFloat(customDosage) || 1 : dosageAmount;
-  const prescribedAmount = activeDosage * strengthNum;
-  const pillsNeeded = activeDosage;
+  const pillsNeeded = dose?.pills ?? dosageAmount;
+  const prescribedAmount = dose?.total ?? pillsNeeded * strengthNum;
+  const validDose = Number.isFinite(pillsNeeded) && pillsNeeded > 0;
 
   return (
     <div className="space-y-4">
       {pillContents && (
         <p className="text-sm text-muted-foreground">
           Each pill contains <span className="font-medium text-foreground">{pillContents}</span>
+        </p>
+      )}
+      {!isCombination && dose && (
+        <p className="text-xs text-muted-foreground">
+          Read as <span className="font-medium text-foreground">1 pill = {strengthNum} {unit}</span>
         </p>
       )}
 
@@ -101,7 +100,9 @@ export function DosageStep({
             }
           }}
           placeholder={isCombination ? "e.g. 2" : `e.g. ${strengthNum * 2}${unit}`}
+          aria-invalid={!validDose || undefined}
         />
+        {error && <p className="text-sm text-destructive mt-1">{error}</p>}
       </div>
 
       <div className="rounded-lg bg-muted/50 p-3 text-sm">
@@ -112,7 +113,7 @@ export function DosageStep({
           {" per dose = "}
           <span className="font-medium text-foreground">{prescribedAmount}{unit}</span>
           {isCombination && " total"}
-          {pillsNeeded < 1 && " (partial pill)"}
+          {validDose && pillsNeeded < 1 && " (partial pill)"}
         </p>
       </div>
 

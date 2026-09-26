@@ -17,8 +17,10 @@
  *     heuristics are fragile for English (Schedule/Schedules, Log/Logs, etc.).
  *     If a new table is added to db.ts without updating this map the extractor
  *     throws a clear error that will fail CI immediately.
- *   - Optional fields (?:) are included in the returned field list — the parity
- *     test only checks presence, not optionality or type.
+ *   - Optional fields (?:) are included in the returned field list. Their
+ *     optionality, nullability (`| null`) and scalar-number type are reported
+ *     separately so the parity test can compare them with Drizzle's
+ *     notNull/hasDefault and integer/real column types.
  */
 
 import * as fs from "node:fs";
@@ -32,6 +34,12 @@ export interface DexieTableSchema {
   interfaceName: string;
   /** Property names declared on the interface (including optional ones). camelCase. */
   fields: string[];
+  /** Fields declared with `?:`. */
+  optionalFields: string[];
+  /** Fields whose declared type is a union containing `null`. */
+  nullableFields: string[];
+  /** Fields typed as a scalar `number` (optionally `| null`/`| undefined`). Arrays excluded. */
+  numberFields: string[];
 }
 
 /**
@@ -42,7 +50,7 @@ export interface DexieTableSchema {
  * extractor throws on a new table, add the mapping here AND add the corresponding
  * Drizzle table in @intake/db/schema.
  */
-const TABLE_TO_INTERFACE: Record<string, string> = {
+export const TABLE_TO_INTERFACE: Record<string, string> = {
   intakeRecords: "IntakeRecord",
   weightRecords: "WeightRecord",
   bloodPressureRecords: "BloodPressureRecord",
@@ -97,24 +105,45 @@ export function extractDexieSchema(dbTsPath?: string): DexieTableSchema[] {
     ts.ScriptKind.TS,
   );
 
-  // Collect every exported interface declaration's property names.
-  // Map: interfaceName → string[] of property names
-  const interfaceFields = new Map<string, string[]>();
+  // Collect every interface declaration's property names (+ shape flags).
+  // Map: interfaceName → field info
+  type FieldInfo = Omit<DexieTableSchema, "tableName" | "interfaceName">;
+  const interfaceFields = new Map<string, FieldInfo>();
+
+  const unionMembers = (type: ts.TypeNode | undefined): ts.TypeNode[] =>
+    type && ts.isUnionTypeNode(type) ? [...type.types] : type ? [type] : [];
+  const isNullType = (t: ts.TypeNode): boolean =>
+    ts.isLiteralTypeNode(t) && t.literal.kind === ts.SyntaxKind.NullKeyword;
+  const isUndefinedType = (t: ts.TypeNode): boolean =>
+    t.kind === ts.SyntaxKind.UndefinedKeyword;
 
   function walk(node: ts.Node): void {
     if (ts.isInterfaceDeclaration(node)) {
       const name = node.name.text;
-      const fields: string[] = [];
+      const info: FieldInfo = {
+        fields: [],
+        optionalFields: [],
+        nullableFields: [],
+        numberFields: [],
+      };
       for (const member of node.members) {
         if (
           ts.isPropertySignature(member) &&
           member.name &&
           ts.isIdentifier(member.name)
         ) {
-          fields.push(member.name.text);
+          const field = member.name.text;
+          info.fields.push(field);
+          if (member.questionToken) info.optionalFields.push(field);
+          const members = unionMembers(member.type);
+          if (members.some(isNullType)) info.nullableFields.push(field);
+          const core = members.filter((t) => !isNullType(t) && !isUndefinedType(t));
+          if (core.length === 1 && core[0]!.kind === ts.SyntaxKind.NumberKeyword) {
+            info.numberFields.push(field);
+          }
         }
       }
-      interfaceFields.set(name, fields);
+      interfaceFields.set(name, info);
     }
     ts.forEachChild(node, walk);
   }
@@ -124,14 +153,14 @@ export function extractDexieSchema(dbTsPath?: string): DexieTableSchema[] {
   // Validate the static mapping — every expected interface must exist in the file.
   const result: DexieTableSchema[] = [];
   for (const [tableName, interfaceName] of Object.entries(TABLE_TO_INTERFACE)) {
-    const fields = interfaceFields.get(interfaceName);
-    if (!fields) {
+    const info = interfaceFields.get(interfaceName);
+    if (!info) {
       throw new Error(
         `Cannot resolve Dexie interface for table '${tableName}' — ` +
           `expected interface '${interfaceName}' not found in ${resolvedPath}`,
       );
     }
-    result.push({ tableName, interfaceName, fields });
+    result.push({ tableName, interfaceName, ...info });
   }
 
   return result;

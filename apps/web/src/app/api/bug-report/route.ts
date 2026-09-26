@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import type Anthropic from "@anthropic-ai/sdk";
 import { Octokit } from "@octokit/rest";
 import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeReportText } from "@/lib/security";
 import { getClaudeClientForUser, CLAUDE_MODELS } from "@/app/api/ai/_shared/claude-client";
 import { parseJsonBody, zodErrorResponse } from "@/app/api/_shared/validation";
-import { createRateLimiter, getClientIp } from "@/app/api/_shared/rate-limit";
-import { recordUsage, tokensFromAnthropic } from "@/app/api/ai/_shared/usage-tracker";
+import { createRateLimiter, rateLimitKey } from "@/app/api/_shared/rate-limit";
+import { requestToolCall } from "@/app/api/ai/_shared/claude-call";
 import { BUG_ISSUE_LABELS, FEATURE_ISSUE_LABELS } from "@/lib/github-labels";
 import {
   acceptanceNotice,
@@ -28,6 +27,11 @@ import {
  * AI is additive: if `useAi` is false, or no Anthropic key is configured, or
  * the model call fails, the report is filed from a plain template instead.
  */
+
+// Vercel function limit. The AI step's deadline stops well short of it so
+// the fallback template and the GitHub call still fit.
+export const maxDuration = 60;
+const AI_DEADLINE_MS = 30_000;
 
 const DEFAULT_REPO = "RyRy79261/intake-tracker";
 const ISSUE_BODY_MAX = 60_000; // GitHub's hard limit is 65536.
@@ -116,17 +120,6 @@ Rules:
 
 const rateLimiter = createRateLimiter(10);
 
-type ToolUseBlock = Extract<Anthropic.Messages.ContentBlock, { type: "tool_use" }>;
-
-function findToolUse(
-  content: Anthropic.Messages.ContentBlock[],
-  toolName: string,
-): ToolUseBlock | undefined {
-  return content.find(
-    (b): b is ToolUseBlock => b.type === "tool_use" && b.name === toolName,
-  );
-}
-
 /** Ask Claude to restructure the report. Returns null on any failure so the
  *  caller falls back to the plain template. */
 async function structureWithAi(
@@ -146,50 +139,25 @@ async function structureWithAi(
   const userMessage = `Report type: ${type}\n\nUser's raw report:\n"""\n${description}\n"""\n\nReturn a structured issue via the format_bug_report tool.`;
 
   try {
-    const startedAt = Date.now();
-    const response = await client.messages.create(
+    // requestToolCall records usage for every upstream call (the follow-up
+    // and failed calls included) and forces the tool on the follow-up —
+    // the fast tier (Haiku 4.5) still accepts a forced tool_choice.
+    const { toolUse: toolBlock } = await requestToolCall(
+      client,
       {
         model: CLAUDE_MODELS.fast,
         max_tokens: 1024,
-        temperature: 0,
         system: SYSTEM_PROMPT,
         tools: [FORMAT_TOOL],
         messages: [{ role: "user", content: userMessage }],
       },
-      { timeout: 60_000 },
+      {
+        usage: { userId, resolved, route: "/api/bug-report" },
+        deadline: Date.now() + AI_DEADLINE_MS,
+        toolName: FORMAT_TOOL.name,
+        retryInstruction: "Return the issue via the format_bug_report tool now.",
+      },
     );
-    recordUsage({
-      userId,
-      keyOwnerId: resolved.keyOwnerId,
-      keySource: resolved.source,
-      provider: "anthropic",
-      model: CLAUDE_MODELS.fast,
-      route: "/api/bug-report",
-      status: "success",
-      durationMs: Date.now() - startedAt,
-      ...tokensFromAnthropic(response.usage),
-    });
-
-    let toolBlock = findToolUse(response.content, FORMAT_TOOL.name);
-    if (!toolBlock) {
-      const followup = await client.messages.create(
-        {
-          model: CLAUDE_MODELS.fast,
-          max_tokens: 1024,
-          temperature: 0,
-          system: SYSTEM_PROMPT,
-          tools: [FORMAT_TOOL],
-          tool_choice: { type: "tool", name: FORMAT_TOOL.name },
-          messages: [
-            { role: "user", content: userMessage },
-            { role: "assistant", content: response.content },
-            { role: "user", content: "Return the issue via the format_bug_report tool now." },
-          ],
-        },
-        { timeout: 60_000 },
-      );
-      toolBlock = findToolUse(followup.content, FORMAT_TOOL.name);
-    }
     if (!toolBlock) return null;
 
     const validated = StructuredSchema.safeParse(toolBlock.input);
@@ -306,8 +274,7 @@ function assembleBody(
 
 export const POST = withAuth(async ({ request, auth }) => {
   try {
-    const ip = getClientIp(request);
-    if (!rateLimiter.check(ip)) {
+    if (!rateLimiter.check(rateLimitKey(request, auth.userId))) {
       return NextResponse.json(
         { error: "Rate limit exceeded. Please try again later." },
         { status: 429 },

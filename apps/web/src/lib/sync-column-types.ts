@@ -38,8 +38,8 @@ import type { TableName } from "@/lib/sync-topology";
  * Fields backed by a Postgres `integer` or `bigint` column — a fractional
  * value is rejected by the push validator.
  *
- * `userId` is omitted throughout: the client never sends it (the push route
- * stamps it from the session), so it cannot carry a bad value.
+ * `userId` and `serverUpdatedAt` are omitted throughout: the client never
+ * sends them (the push route stamps both), so they cannot carry a bad value.
  */
 export const INTEGER_SYNC_FIELDS: Record<TableName, readonly string[]> = {
   prescriptions: ["createdAt", "updatedAt", "deletedAt"],
@@ -100,7 +100,7 @@ export const FLOAT_SYNC_FIELDS: Record<TableName, readonly string[]> = {
   medicationPhases: [],
   phaseSchedules: ["dosage"],
   inventoryItems: ["currentStock", "strength"],
-  doseLogs: ["doseMg"],
+  doseLogs: ["doseMg", "doseAmount", "pillsConsumed", "pillStrength"],
   inventoryTransactions: ["amount"],
   dailyNotes: [],
   intakeRecords: [],

@@ -45,7 +45,7 @@ vi.mock("@/app/api/ai/_shared/usage-tracker", () => ({
 
 vi.mock("@/app/api/ai/_shared/claude-client", () => ({
   CLAUDE_MODELS: { fast: "fast", quality: "quality", premium: "premium" },
-  WEB_SEARCH_TOOL: { type: "web_search_20250305", name: "web_search", max_uses: 5 },
+  WEB_SEARCH_TOOL: { type: "web_search_20260209", name: "web_search", max_uses: 5 },
   getClaudeClientForUser: vi.fn(async () => ({
     client: { messages: { create: messagesCreate } },
     resolved: { apiKey: "k", source: "env", keyOwnerId: null },
@@ -117,6 +117,45 @@ describe("POST /api/ai/parse", () => {
     expect(body.potassium).toBe(500);
     expect(body.reasoning).toBe("A 250 ml glass of orange juice.");
     expect(messagesCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it("passes a drink's is_drink, caffeine and ABV through to the client", async () => {
+    messagesCreate.mockResolvedValueOnce(
+      toolResponse({
+        water_ml: 330,
+        sodium_mg: 10,
+        sugar_g: 35,
+        potassium_mg: 0,
+        is_drink: true,
+        caffeine_mg: 34,
+        abv_percent: 0,
+        reasoning: "A 330 ml can of cola.",
+      }),
+    );
+
+    const { POST } = await import("@/app/api/ai/parse/route");
+    const res = await POST(makeRequest({ input: "can of coke" }));
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { is_drink: boolean; caffeine_mg: number | null; abv_percent: number | null };
+    expect(body.is_drink).toBe(true);
+    expect(body.caffeine_mg).toBe(34);
+    expect(body.abv_percent).toBe(0);
+  });
+
+  it("defaults the drink fields when an older tool result omits them", async () => {
+    messagesCreate.mockResolvedValueOnce(
+      toolResponse({ water_ml: 0, sodium_mg: 400, sugar_g: 0, potassium_mg: 0, reasoning: "Crisps." }),
+    );
+
+    const { POST } = await import("@/app/api/ai/parse/route");
+    const res = await POST(makeRequest({ input: "bag of crisps" }));
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { is_drink: boolean; caffeine_mg: number | null; abv_percent: number | null };
+    expect(body.is_drink).toBe(false);
+    expect(body.caffeine_mg).toBeNull();
+    expect(body.abv_percent).toBeNull();
   });
 
   it("passes through null AI values without error", async () => {
@@ -201,6 +240,42 @@ describe("POST /api/ai/parse", () => {
     const body = (await res.json()) as { error: string; fallbackToManual: boolean };
     expect(body.error).toBe("AI response format invalid");
     expect(body.fallbackToManual).toBe(true);
+  });
+
+  it("request: no sampling parameters, explicit effort, a per-request timeout", async () => {
+    messagesCreate.mockResolvedValueOnce(
+      toolResponse({ water_ml: 100, sodium_mg: 1, sugar_g: 0, potassium_mg: 0, reasoning: "water" }),
+    );
+
+    const { POST } = await import("@/app/api/ai/parse/route");
+    await POST(makeRequest({ input: "water" }));
+
+    const [params, options] = messagesCreate.mock.calls[0] as [
+      Record<string, unknown>,
+      { timeout: number; maxRetries: number },
+    ];
+    expect(params).not.toHaveProperty("temperature");
+    expect(params.output_config).toEqual({ effort: "medium" });
+    expect(options.timeout).toBeGreaterThan(0);
+    expect(options.timeout).toBeLessThanOrEqual(60_000);
+  });
+
+  it("refusal: a declined request → 422 AI_REFUSED, not 'format invalid', and no retry", async () => {
+    messagesCreate.mockResolvedValueOnce({
+      content: [],
+      stop_reason: "refusal",
+      stop_details: { type: "refusal", category: null, explanation: null },
+      usage: { input_tokens: 10, output_tokens: 0 },
+    });
+
+    const { POST } = await import("@/app/api/ai/parse/route");
+    const res = await POST(makeRequest({ input: "coffee" }));
+
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as { code: string; fallbackToManual: boolean };
+    expect(body.code).toBe("AI_REFUSED");
+    expect(body.fallbackToManual).toBe(true);
+    expect(messagesCreate).toHaveBeenCalledTimes(1);
   });
 
   it("follow-up recovery: text first turn then a valid tool turn → 200", async () => {

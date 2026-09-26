@@ -64,6 +64,36 @@ describe("useDailyNotes", () => {
 
     await waitFor(() => expect(result.current).toEqual([]));
   });
+
+  it("excludes soft-deleted notes", async () => {
+    await seedDatabase({
+      dailyNotes: [
+        makeDailyNote({ date: "2023-11-14", note: "live" }),
+        makeDailyNote({ date: "2023-11-14", note: "gone", deletedAt: 1_700_000_000_000 }),
+      ],
+    });
+
+    const { result } = renderHook(() => useDailyNotes("2023-11-14"), {
+      wrapper,
+    });
+
+    await waitFor(() => expect(result.current).toHaveLength(1));
+    expect(result.current[0]?.note).toBe("live");
+  });
+
+  it("treats a note with no deletedAt field as live", async () => {
+    // Older rows can lack the field entirely; only a set deletedAt hides a note.
+    const legacy = makeDailyNote({ date: "2023-11-14", note: "legacy" });
+    delete (legacy as { deletedAt?: number | null }).deletedAt;
+    await db.dailyNotes.add(legacy);
+
+    const { result } = renderHook(() => useDailyNotes("2023-11-14"), {
+      wrapper,
+    });
+
+    await waitFor(() => expect(result.current).toHaveLength(1));
+    expect(result.current[0]?.note).toBe("legacy");
+  });
 });
 
 describe("useAddDailyNote", () => {
@@ -80,6 +110,20 @@ describe("useAddDailyNote", () => {
     expect(stored?.note).toBe("felt good");
     expect(stored?.date).toBe("2023-11-14");
     expect(stored?.deletedAt).toBeNull();
+  });
+
+  it("enqueues the new note for sync", async () => {
+    const { result } = renderHook(() => useAddDailyNote(), { wrapper });
+
+    const created = await result.current.mutateAsync({
+      date: "2023-11-14",
+      note: "sync me",
+    });
+
+    const queued = await db._syncQueue.toArray();
+    expect(queued).toEqual([
+      expect.objectContaining({ tableName: "dailyNotes", recordId: created.id, op: "upsert" }),
+    ]);
   });
 
   it("persists optional prescriptionId and doseLogId", async () => {

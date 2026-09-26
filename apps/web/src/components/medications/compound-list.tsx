@@ -9,6 +9,7 @@ import { InteractionSearch } from "@/components/medications/interaction-search";
 import { useAuthGate } from "@/components/auth-guard";
 import { usePrescriptions, useAllInventoryItems } from "@/hooks/use-medication-queries";
 import type { InventoryItem, Prescription } from "@/lib/db";
+import { isLive } from "@intake/core/lifecycle";
 
 interface CompoundListProps {
   onAddMed: () => void;
@@ -19,14 +20,20 @@ export function CompoundList({ onAddMed }: CompoundListProps) {
   const inventoryItems = useAllInventoryItems();
   const showAi = useAuthGate();
   const [outOfStockOpen, setOutOfStockOpen] = useState(false);
+  const [archivedOpen, setArchivedOpen] = useState(false);
 
   const prescriptionMap = new Map(
     prescriptions.map((p) => [p.id, p])
   );
 
-  const nonArchived = inventoryItems.filter((i) => !i.isArchived);
+  const liveItems = inventoryItems.filter(isLive);
+  const nonArchived = liveItems.filter((i) => !i.isArchived);
+  // Archived brands stay reachable so they can be unarchived or deleted.
+  const archived = liveItems
+    .filter((i) => i.isArchived)
+    .sort((a, b) => a.brandName.localeCompare(b.brandName));
 
-  if (nonArchived.length === 0) {
+  if (nonArchived.length === 0 && archived.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
         <Cat className="w-16 h-16 text-muted-foreground/40 mb-4" />
@@ -47,9 +54,11 @@ export function CompoundList({ onAddMed }: CompoundListProps) {
 
   for (const item of nonArchived) {
     const stock = item.currentStock ?? 0;
+    // A brand of a deactivated prescription is not in active use.
+    const rxActive = prescriptionMap.get(item.prescriptionId)?.isActive !== false;
     if (stock <= 0) {
       outOfStock.push(item);
-    } else if (item.isActive) {
+    } else if (item.isActive && rxActive) {
       active.push(item);
     } else {
       inactive.push(item);
@@ -134,6 +143,47 @@ export function CompoundList({ onAddMed }: CompoundListProps) {
                 className="overflow-hidden space-y-2"
               >
                 {outOfStock.map((item) => (
+                  <MedicationCard
+                    key={item.id}
+                    item={item}
+                    prescription={prescriptionMap.get(item.prescriptionId)}
+                  />
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </section>
+      )}
+
+      {/* Archived — collapsible */}
+      {archived.length > 0 && (
+        <section>
+          <Button
+            variant="ghost"
+            className="flex items-center gap-1.5 w-full justify-start h-auto px-1 py-0 mb-2"
+            onClick={() => setArchivedOpen(!archivedOpen)}
+            aria-expanded={archivedOpen}
+          >
+            <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+              Archived ({archived.length})
+            </span>
+            <motion.div
+              animate={{ rotate: archivedOpen ? 180 : 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <ChevronDown className="w-3 h-3 text-muted-foreground" />
+            </motion.div>
+          </Button>
+          <AnimatePresence>
+            {archivedOpen && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden space-y-2"
+              >
+                {archived.map((item) => (
                   <MedicationCard
                     key={item.id}
                     item={item}

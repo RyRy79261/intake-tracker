@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { db } from "@/lib/db";
 import {
   makePrescription,
@@ -6,8 +6,15 @@ import {
   makePhaseSchedule,
   makeDoseLog,
 } from "@/__tests__/fixtures/db-fixtures";
-import { recalculateScheduleTimezones } from "@/lib/timezone-recalculation-service";
-import { utcMinutesToLocalTime, localTimeToUTCMinutes } from "@/lib/timezone";
+import {
+  findMismatchedAnchors,
+  recalculateScheduleTimezones,
+} from "@/lib/timezone-recalculation-service";
+import {
+  utcMinutesToLocalTime,
+  localTimeToUTCMinutes,
+  localHHMMStringToUTCMinutes,
+} from "@/lib/timezone";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -168,9 +175,12 @@ describe("recalculateScheduleTimezones", () => {
     const { getDailyDoseSchedule } = await import("@/lib/dose-schedule-service");
     const { makeInventoryItem } = await import("@/__tests__/fixtures/db-fixtures");
 
-    const rx = makePrescription({ createdAt: 1700000000000 });
-    const phase = makeMedicationPhase(rx.id);
+    // Local noon well before the Tuesday queried below, in every test zone.
+    const created = new Date("2023-11-01T12:00:00").getTime();
+    const rx = makePrescription({ createdAt: created });
+    const phase = makeMedicationPhase(rx.id, { startDate: created, createdAt: created });
     const schedule = makePhaseSchedule(phase.id, {
+      createdAt: created,
       scheduleTimeUTC: 390, // 08:30 SA = 06:30 UTC
       anchorTimezone: "Africa/Johannesburg",
       daysOfWeek: [2], // Tuesday
@@ -263,5 +273,176 @@ describe("recalculateScheduleTimezones", () => {
     expect(logsAfter[0]!.actionTimestamp).toBe(1700000100000);
     expect(logsAfter[0]!.status).toBe("taken");
     expect(logsAfter[0]!.scheduledDate).toBe("2023-11-14");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// `time` is canonical: recalculation never decodes the UTC cache
+// (gap-timezone-travel-recalc#0)
+// ---------------------------------------------------------------------------
+
+describe("recalculateScheduleTimezones keeps `time` across DST", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("an 08:00 Berlin dose encoded in summer stays 08:00 when re-anchored after 2026-10-25", async () => {
+    // Saved on 2026-09-25 (CEST, +120): the UTC cache holds 06:00.
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-09-25T10:00:00Z") });
+    const { schedule } = await seedSchedule({
+      anchorTimezone: "Europe/Berlin",
+      scheduleTimeUTC: localHHMMStringToUTCMinutes("08:00", "Europe/Berlin"),
+      time: "08:00",
+    });
+    expect(schedule.scheduleTimeUTC).toBe(360);
+
+    // Accept the prompt in London after the shift, when Berlin is +60.
+    vi.setSystemTime(new Date("2026-11-01T10:00:00Z"));
+    await recalculateScheduleTimezones("Europe/London");
+
+    const updated = await db.phaseSchedules.get(schedule.id);
+    expect(updated!.time).toBe("08:00");
+    expect(updated!.anchorTimezone).toBe("Europe/London");
+    expect(updated!.scheduleTimeUTC).toBe(480); // 08:00 GMT
+  });
+
+  it("a London round trip across the DST change comes home at 08:00", async () => {
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-09-25T10:00:00Z") });
+    const { schedule } = await seedSchedule({
+      anchorTimezone: "Europe/Berlin",
+      scheduleTimeUTC: localHHMMStringToUTCMinutes("08:00", "Europe/Berlin"),
+      time: "08:00",
+    });
+
+    vi.setSystemTime(new Date("2026-10-20T10:00:00Z"));
+    await recalculateScheduleTimezones("Europe/London");
+    vi.setSystemTime(new Date("2026-11-01T10:00:00Z"));
+    await recalculateScheduleTimezones("Europe/Berlin");
+
+    const updated = await db.phaseSchedules.get(schedule.id);
+    expect(updated!.time).toBe("08:00");
+    expect(updated!.anchorTimezone).toBe("Europe/Berlin");
+    expect(updated!.scheduleTimeUTC).toBe(420); // 08:00 CET
+  });
+
+  it("falls back to decoding the UTC cache only for a legacy record without a usable time", async () => {
+    const { schedule } = await seedSchedule({
+      anchorTimezone: "Africa/Johannesburg",
+      scheduleTimeUTC: 390, // 08:30 SAST (no DST)
+      time: "",
+    });
+
+    await recalculateScheduleTimezones("Europe/Berlin");
+
+    const updated = await db.phaseSchedules.get(schedule.id);
+    expect(updated!.time).toBe("08:30");
+    expect(updated!.anchorTimezone).toBe("Europe/Berlin");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Only live schedules of live active/pending phases travel
+// (gap-timezone-travel-recalc#6)
+// ---------------------------------------------------------------------------
+
+describe("recalculateScheduleTimezones scope", () => {
+  async function seedWith(opts: {
+    phaseStatus?: "active" | "pending" | "completed" | "cancelled";
+    phaseDeletedAt?: number | null;
+    scheduleDeletedAt?: number | null;
+  }) {
+    const rx = makePrescription();
+    const phase = makeMedicationPhase(rx.id, {
+      status: opts.phaseStatus ?? "active",
+      deletedAt: opts.phaseDeletedAt ?? null,
+    });
+    const schedule = makePhaseSchedule(phase.id, {
+      anchorTimezone: "Africa/Johannesburg",
+      scheduleTimeUTC: 390,
+      time: "08:30",
+      deletedAt: opts.scheduleDeletedAt ?? null,
+    });
+    await db.prescriptions.add(rx);
+    await db.medicationPhases.add(phase);
+    await db.phaseSchedules.add(schedule);
+    return schedule;
+  }
+
+  it("leaves tombstoned schedules alone and does not requeue them", async () => {
+    const schedule = await seedWith({ scheduleDeletedAt: 1000 });
+
+    const count = await recalculateScheduleTimezones("Europe/Berlin");
+    expect(count).toBe(0);
+
+    const unchanged = await db.phaseSchedules.get(schedule.id);
+    expect(unchanged!.anchorTimezone).toBe("Africa/Johannesburg");
+    expect(unchanged!.updatedAt).toBe(schedule.updatedAt);
+    const queued = await db._syncQueue.toArray();
+    expect(queued.filter((r) => r.recordId === schedule.id)).toHaveLength(0);
+  });
+
+  it("leaves schedules of completed and deleted phases alone", async () => {
+    const completed = await seedWith({ phaseStatus: "completed" });
+    const deletedPhase = await seedWith({ phaseDeletedAt: 1000 });
+
+    expect(await recalculateScheduleTimezones("Europe/Berlin")).toBe(0);
+    expect((await db.phaseSchedules.get(completed.id))!.anchorTimezone).toBe("Africa/Johannesburg");
+    expect((await db.phaseSchedules.get(deletedPhase.id))!.anchorTimezone).toBe("Africa/Johannesburg");
+  });
+
+  it("re-anchors schedules of pending phases", async () => {
+    const pending = await seedWith({ phaseStatus: "pending" });
+
+    expect(await recalculateScheduleTimezones("Europe/Berlin")).toBe(1);
+    expect((await db.phaseSchedules.get(pending.id))!.anchorTimezone).toBe("Europe/Berlin");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// findMismatchedAnchors (gap-timezone-travel-recalc#6, #7)
+// ---------------------------------------------------------------------------
+
+describe("findMismatchedAnchors", () => {
+  it("lists every distinct mismatched anchor with before/after times", async () => {
+    const rxA = makePrescription({ genericName: "Alpha" });
+    const rxB = makePrescription({ genericName: "Beta" });
+    const phaseA = makeMedicationPhase(rxA.id);
+    const phaseB = makeMedicationPhase(rxB.id);
+    await db.prescriptions.bulkAdd([rxA, rxB]);
+    await db.medicationPhases.bulkAdd([phaseA, phaseB]);
+    await db.phaseSchedules.bulkAdd([
+      makePhaseSchedule(phaseA.id, { time: "08:30", anchorTimezone: "Africa/Johannesburg" }),
+      makePhaseSchedule(phaseB.id, { time: "20:00", anchorTimezone: "Asia/Tokyo" }),
+      makePhaseSchedule(phaseB.id, { time: "07:00", anchorTimezone: "UTC" }),
+    ]);
+
+    const groups = await findMismatchedAnchors("UTC");
+    const byAnchor = new Map(groups.map((g) => [g.anchorTimezone, g.doses]));
+    expect([...byAnchor.keys()].sort()).toEqual(["Africa/Johannesburg", "Asia/Tokyo"]);
+    // SAST and JST have no DST, so "before" is fixed: +2h and +9h ahead of UTC.
+    expect(byAnchor.get("Africa/Johannesburg")).toEqual([
+      expect.objectContaining({ name: "Alpha", before: "06:30", after: "08:30" }),
+    ]);
+    expect(byAnchor.get("Asia/Tokyo")).toEqual([
+      expect.objectContaining({ name: "Beta", before: "11:00", after: "20:00" }),
+    ]);
+  });
+
+  it("ignores tombstones and completed phases, and skips dismissed anchors", async () => {
+    const rx = makePrescription();
+    const done = makeMedicationPhase(rx.id, { status: "completed" });
+    const live = makeMedicationPhase(rx.id);
+    await db.prescriptions.add(rx);
+    await db.medicationPhases.bulkAdd([done, live]);
+    await db.phaseSchedules.bulkAdd([
+      makePhaseSchedule(done.id, { anchorTimezone: "Africa/Johannesburg" }),
+      makePhaseSchedule(live.id, { anchorTimezone: "Asia/Tokyo", deletedAt: 1000 }),
+      makePhaseSchedule(live.id, { anchorTimezone: "America/New_York" }),
+    ]);
+
+    const groups = await findMismatchedAnchors("Europe/Berlin");
+    expect(groups.map((g) => g.anchorTimezone)).toEqual(["America/New_York"]);
+
+    expect(await findMismatchedAnchors("Europe/Berlin", new Set(["America/New_York"]))).toEqual([]);
   });
 });

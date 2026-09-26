@@ -2,7 +2,10 @@
 
 import { useCallback, useState } from "react";
 import { z } from "zod";
-import type { PillShape, FoodInstruction, CompoundStrength } from "@/lib/db";
+import type { PillShape, FoodInstruction, CompoundStrength, Prescription } from "@/lib/db";
+import { compoundSum } from "@intake/core/compound";
+import { isLive } from "@intake/core/lifecycle";
+import { parseStrength } from "@intake/core/strength";
 import type { MedicineSearchResult } from "@/hooks/use-medicine-search";
 import { logAudit } from "@/lib/audit";
 import { ALL_DAYS } from "@/components/medications/add-medication-steps/types";
@@ -13,9 +16,11 @@ export const SearchStepSchema = z.object({
   brandName: z.string().min(1, "Medication name is required"),
 });
 
+// Every time in the wizard takes the same dose (set on the Dosage step), so
+// a schedule entry carries no dosage of its own — handleSave stamps the
+// resolved dose onto each one. Split doses are edited per row afterwards.
 export const ScheduleEntrySchema = z.object({
   time: z.string().min(1, "Time is required"),
-  dosage: z.number().positive("Dosage must be positive"),
   daysOfWeek: z.array(z.number()).min(1, "Select at least one day"),
 });
 
@@ -27,7 +32,6 @@ export const InventoryStepSchema = z.object({
 
 export interface ScheduleEntry {
   time: string;
-  dosage: number;
   daysOfWeek: number[];
 }
 
@@ -96,7 +100,7 @@ const INITIAL_STATE: AddMedicationFormState = {
   customDosage: "",
   asNeeded: false,
 
-  schedules: [{ time: "08:30", daysOfWeek: [...ALL_DAYS], dosage: 1 }],
+  schedules: [{ time: "08:30", daysOfWeek: [...ALL_DAYS] }],
 
   currentStock: "",
   refillAlertDays: "",
@@ -117,6 +121,85 @@ const CAPITALIZED_FIELDS = new Set<keyof AddMedicationFormState>([
   "genericName",
 ]);
 
+/** Parse stock text; blank ⇒ `null` so callers can tell "not entered" from 0. */
+export function parseStockInput(text: string): number | null {
+  if (text.trim() === "") return null;
+  const n = parseFloat(text);
+  return Number.isFinite(n) ? n : null;
+}
+
+export interface WizardDose {
+  /** Per-pill strength — the pill-math denominator (compound sum for a combo). */
+  strength: number;
+  unit: string;
+  /** Pills per dose. */
+  pills: number;
+  /** Dose in `unit`: `pills × strength`. */
+  total: number;
+}
+
+/**
+ * The dose the wizard will save, resolved from the form once so the Dosage
+ * step's preview and handleSave can't disagree. `null` when the strength
+ * can't be read; `pills` / `total` may still be ≤ 0 or NaN — validateStep
+ * rejects those.
+ */
+export function resolveWizardDose(state: AddMedicationFormState): WizardDose | null {
+  let strength: number;
+  let unit: string;
+  if (state.isCombination) {
+    strength = compoundSum(
+      state.compounds.filter((c) => c.name.trim() !== "" && c.strength > 0),
+    );
+    unit = "mg";
+    if (!(strength > 0)) return null;
+  } else {
+    const parsed = parseStrength(state.dosageStrength);
+    if (!parsed) return null;
+    strength = parsed.value;
+    unit = parsed.unit;
+  }
+  const pills = state.customDosage !== ""
+    ? parseFloat(state.customDosage)
+    : state.dosageAmount;
+  const total = Math.round(pills * strength * 10000) / 10000;
+  return { strength, unit, pills, total };
+}
+
+/**
+ * Case-, spacing- and ingredient-order-insensitive key for a generic name, so
+ * "Sacubitril/valsartan" and "Valsartan + Sacubitril" compare equal.
+ */
+export function normalizeGenericName(name: string): string {
+  return name
+    .toLowerCase()
+    .split(/\s*(?:\/|\+|&|,|\band\b|\bwith\b)\s*/)
+    .map((part) => part.replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .sort()
+    .join("/");
+}
+
+/** A live, active prescription with the same normalised generic name. */
+export function findDuplicatePrescription(
+  genericName: string,
+  prescriptions: readonly Prescription[],
+): Prescription | undefined {
+  const key = normalizeGenericName(genericName);
+  if (!key) return undefined;
+  return prescriptions.find(
+    (p) => p.isActive && isLive(p) && normalizeGenericName(p.genericName) === key,
+  );
+}
+
+export interface ValidateOptions {
+  /**
+   * Blank stock is an error rather than 0 — set when the save stocks a
+   * replacement box, where a silent 0 lets doses drive the count negative.
+   */
+  requireStock?: boolean;
+}
+
 export type WizardStep =
   | "search"
   | "appearance"
@@ -133,7 +216,7 @@ export interface UseAddMedicationFormReturn {
     value: AddMedicationFormState[K],
   ) => void;
   patch: (partial: Partial<AddMedicationFormState>) => void;
-  validateStep: (step: WizardStep) => boolean;
+  validateStep: (step: WizardStep, options?: ValidateOptions) => boolean;
   clearErrors: () => void;
   reset: () => void;
 }
@@ -171,7 +254,7 @@ export function useAddMedicationForm(): UseAddMedicationFormReturn {
   }, []);
 
   const validateStep = useCallback(
-    (step: WizardStep): boolean => {
+    (step: WizardStep, options?: ValidateOptions): boolean => {
       if (step === "search") {
         const name = formState.brandName || capitalizeWords(formState.searchQuery);
         const parsed = SearchStepSchema.safeParse({ brandName: name });
@@ -202,6 +285,20 @@ export function useAddMedicationForm(): UseAddMedicationFormReturn {
             });
             return false;
           }
+        } else if (!parseStrength(formState.dosageStrength)) {
+          setErrors({
+            dosageStrength:
+              "Enter the strength printed on the box, e.g. 5 mg (mg, mcg, g or ml)",
+          });
+          return false;
+        }
+      }
+
+      if (step === "dosage") {
+        const dose = resolveWizardDose(formState);
+        if (!dose || !Number.isFinite(dose.total) || !(dose.pills > 0)) {
+          setErrors({ dosage: "Dose must be more than 0" });
+          return false;
         }
       }
 
@@ -232,8 +329,15 @@ export function useAddMedicationForm(): UseAddMedicationFormReturn {
       }
 
       if (step === "inventory") {
-        const stock = parseInt(formState.currentStock) || 0;
-        const parsed = InventoryStepSchema.safeParse({ currentStock: stock });
+        const entered = parseStockInput(formState.currentStock);
+        if (entered === null && options?.requireStock) {
+          setErrors({
+            currentStock:
+              "Enter how many pills you have on hand (0 if none) so the count starts right",
+          });
+          return false;
+        }
+        const parsed = InventoryStepSchema.safeParse({ currentStock: entered ?? 0 });
         if (!parsed.success) {
           const next: Record<string, string> = {};
           for (const issue of parsed.error.issues) {

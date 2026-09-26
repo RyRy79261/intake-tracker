@@ -16,17 +16,27 @@ import {
   getPendingTitrationPhase,
   getCurrentTimeHHMM,
 } from "@/lib/medication-ui-utils";
-import { isCombo, splitDose, formatCompoundShort } from "@intake/core/compound";
+import { isCombo, formatCompoundShort, formatComboDose } from "@intake/core/compound";
 import {
   usePhasesForPrescription,
   usePhasesLoaded,
   useInventoryForPrescription,
   useDailyDoseSchedule,
   useLogPrnDose,
+  useSchedulesForPhase,
+  usePrnDoseLogs,
+  useUndoPrnDose,
 } from "@/hooks/use-medication-queries";
+import { computeRefillStatus } from "@/lib/refill-status";
+import { selectEffectivePhase } from "@intake/core/effective-phase";
+import { useTodayKey } from "@/hooks/use-today-key";
 import { useToast } from "@intake/ui/use-toast";
 import type { Prescription } from "@/lib/db";
 import { toLocalDateKey } from "@/lib/date-utils";
+
+/** How far back the as-needed dose list on the card reaches, in days. */
+const PRN_LIST_DAYS = 7;
+const PRN_LIST_MAX = 5;
 
 interface PrescriptionCardProps {
   prescription: Prescription;
@@ -35,8 +45,17 @@ interface PrescriptionCardProps {
   className?: string;
 }
 
-function getTodayDateStr(): string {
-  return toLocalDateKey();
+function daysBefore(dateKey: string, days: number): string {
+  const d = new Date(`${dateKey}T00:00:00`);
+  d.setDate(d.getDate() - days);
+  return toLocalDateKey(d);
+}
+
+function formatPrnWhen(ts: number, todayKey: string): string {
+  const d = new Date(ts);
+  const clock = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  if (toLocalDateKey(d) === todayKey) return `Today ${clock}`;
+  return `${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })} ${clock}`;
 }
 
 export function PrescriptionCard({ prescription, expanded: controlledExpanded, onToggleExpanded, className }: PrescriptionCardProps) {
@@ -44,11 +63,15 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
   const [medDrawerOpen, setMedDrawerOpen] = useState(false);
   const [prnPickerOpen, setPrnPickerOpen] = useState(false);
   const logPrn = useLogPrnDose();
+  const undoPrn = useUndoPrnDose();
+  const [confirmUndoId, setConfirmUndoId] = useState<string | null>(null);
   const expanded = controlledExpanded ?? internalExpanded;
   const toggleExpanded = onToggleExpanded ?? (() => setInternalExpanded((v) => !v));
 
   const { toast } = useToast();
-  const todayDateStr = getTodayDateStr();
+  // Ticking day key, so a card left open overnight logs against the new day.
+  const todayDateStr = useTodayKey();
+  const prnLogs = usePrnDoseLogs(prescription.id, daysBefore(todayDateStr, PRN_LIST_DAYS - 1));
   const phases = usePhasesForPrescription(prescription.id);
   const phasesLoaded = usePhasesLoaded(prescription.id);
   const inventoryItems = useInventoryForPrescription(prescription.id);
@@ -67,13 +90,10 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
   const firstSlot = prescriptionSlots.length > 0 ? prescriptionSlots[0] : undefined;
   const dosageMg = firstSlot?.dosageMg;
   const unit = effectivePhase?.unit ?? "mg";
-  // Dose chip — per-compound split for a combination drug, plain mg otherwise.
+  // Dose chip — per-compound amounts from the active combo brand's tablets,
+  // plain summed mg otherwise.
   const dosageChip =
-    dosageMg === undefined
-      ? undefined
-      : firstSlot && isCombo(firstSlot.prescription)
-        ? formatCompoundShort(splitDose(dosageMg, firstSlot.prescription.compounds), unit)
-        : `${dosageMg}${unit}`;
+    dosageMg === undefined ? undefined : formatComboDose(dosageMg, unit, firstSlot?.inventory);
 
   const pendingSlots = prescriptionSlots.filter((s) => s.status === "pending");
   const allHandled = prescriptionSlots.length > 0 && pendingSlots.length === 0;
@@ -109,6 +129,15 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
     );
   };
 
+  const handleUndoPrn = (id: string) => {
+    setConfirmUndoId(null);
+    undoPrn.mutate(id, {
+      onSuccess: () =>
+        toast({ title: `${prescription.genericName} dose removed`, description: "Stock restored" }),
+      onError: () => toast({ title: "Failed to remove dose", variant: "destructive" }),
+    });
+  };
+
   let nextDoseLabel: string;
   if (isAsNeeded) {
     nextDoseLabel = "As needed";
@@ -122,13 +151,17 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
     nextDoseLabel = "No doses today";
   }
 
-  const currentStock = activeInventory?.currentStock ?? 0;
-  const isNegativeStock = activeInventory && currentStock < 0;
-  const isLowStock =
-    activeInventory &&
-    !isNegativeStock &&
-    activeInventory.refillAlertPills !== undefined &&
-    currentStock <= activeInventory.refillAlertPills;
+  // Shared with the inventory drawer and the refill notifier (pill OR days
+  // threshold, over the phase that drives today's doses).
+  const refillPhase = selectEffectivePhase(phases);
+  const refillSchedules = useSchedulesForPhase(refillPhase?.id);
+  const refill = activeInventory
+    ? computeRefillStatus(activeInventory, refillPhase, refillSchedules)
+    : null;
+  const isNegativeStock = refill?.isNegative;
+  const isLowStock = refill?.isLow;
+  // Scheduled but nothing to deduct from: doses stop being tracked silently.
+  const hasUntrackedStock = !activeInventory && !!refillPhase && inventoryItems.length > 0;
 
   return (
     <motion.div
@@ -186,6 +219,35 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
           </button>
         )}
 
+        {/* Recent as-needed doses, each removable (first tap arms, second
+            tap confirms). Removing one also puts its pills back in stock. */}
+        {isAsNeeded && prnLogs.length > 0 && (
+          <ul className="mt-1.5 space-y-0.5" aria-label="Recent as-needed doses">
+            {prnLogs.slice(0, PRN_LIST_MAX).map((log) => {
+              const when = formatPrnWhen(log.actionTimestamp ?? log.createdAt, todayDateStr);
+              const armed = confirmUndoId === log.id;
+              return (
+                <li key={log.id} className="flex items-center justify-between gap-1 text-[10px] text-muted-foreground">
+                  <span className="truncate">{when}</span>
+                  <button
+                    type="button"
+                    aria-label={armed ? `Confirm undo as-needed dose at ${when}` : `Undo as-needed dose at ${when}`}
+                    disabled={undoPrn.isPending}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (armed) handleUndoPrn(log.id);
+                      else setConfirmUndoId(log.id);
+                    }}
+                    className="shrink-0 px-1 rounded text-[10px] font-medium text-red-600 dark:text-red-400 hover:underline disabled:opacity-60"
+                  >
+                    {armed ? "Remove?" : "Undo"}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
         <div className="flex items-center gap-1 flex-wrap mt-1">
           {activeTitration && (
             <Badge className="text-[9px] px-1 py-0 bg-amber-500 hover:bg-amber-600 text-white">
@@ -205,6 +267,11 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
           {isLowStock && (
             <Badge className="text-[9px] px-1 py-0 bg-amber-500 hover:bg-amber-600 text-white">
               Low
+            </Badge>
+          )}
+          {hasUntrackedStock && (
+            <Badge variant="outline" className="text-[9px] px-1 py-0 border-amber-500 text-amber-600 dark:text-amber-400">
+              No active brand
             </Badge>
           )}
         </div>
@@ -278,6 +345,7 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
         defaultTime={getCurrentTimeHHMM()}
         compoundName={prescription.genericName}
         onConfirm={handleLogPrnDose}
+        notAfterNow
       />
     </motion.div>
   );

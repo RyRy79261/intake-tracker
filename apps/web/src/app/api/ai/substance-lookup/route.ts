@@ -91,16 +91,19 @@ export const POST = withAuth(async ({ request, auth }) => {
     }
 
     const systemPrompt = buildSystemPrompt(type);
+    // Sugar and sodium ride along with every lookup: without them a cola or a
+    // cider found here was logged sugar-free, while the same drink entered by
+    // voice or on the Food card recorded its sugar.
+    const soluteAsk = "Also report its total sugars (g) and sodium (mg) per 100 ml.";
     const userPrompt =
       type === "caffeine"
-        ? `Look up caffeine content per 100 ml for: "${sanitized}". Use web_search first -- always, not only for branded products -- then call substance_lookup_result.`
-        : `Look up the ABV (% alcohol by volume) for: "${sanitized}". Use web_search if it is a branded product, then call substance_lookup_result. Return the ABV as a percentage (e.g. 5, 13, 40), NOT grams of ethanol.`;
+        ? `Look up caffeine content per 100 ml for: "${sanitized}". ${soluteAsk} Use web_search first -- always, not only for branded products -- then call substance_lookup_result.`
+        : `Look up the ABV (% alcohol by volume) for: "${sanitized}". ${soluteAsk} Use web_search if it is a branded product, then call substance_lookup_result. Return the ABV as a percentage (e.g. 5, 13, 40), NOT grams of ethanol.`;
 
     const startedAt = Date.now();
     const response = await client.messages.create({
       model: CLAUDE_MODELS.quality,
       max_tokens: 4096,
-      temperature: 0,
       system: systemPrompt,
       tools: [WEB_SEARCH_TOOL, SUBSTANCE_LOOKUP_TOOL],
       messages: [{ role: "user", content: userPrompt }],
@@ -130,7 +133,6 @@ export const POST = withAuth(async ({ request, auth }) => {
       const retry = await client.messages.create({
         model: CLAUDE_MODELS.quality,
         max_tokens: 4096,
-        temperature: 0,
         system: systemPrompt,
         // Deliberately no tool_choice here: forcing the structured tool would
         // stop it searching, which is the one thing we need it to do.
@@ -186,8 +188,7 @@ export const POST = withAuth(async ({ request, auth }) => {
       const followupStartedAt = Date.now();
       const followup = await client.messages.create({
         model: CLAUDE_MODELS.quality,
-        max_tokens: 1024,
-        temperature: 0,
+        max_tokens: 4096, // headroom for Sonnet 5 adaptive thinking
         system: systemPrompt,
         // WEB_SEARCH_TOOL must stay declared because the prior assistant turn
         // may contain server_tool_use blocks; tool_choice still forces the

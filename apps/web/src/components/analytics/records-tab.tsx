@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { Button } from "@intake/ui/button";
 import { RecordRow } from "@/components/history/record-row";
 import { useSettings } from "@/hooks/use-settings";
 import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import { EditIntakeDialog } from "@/components/edit-intake-dialog";
 import { EditWeightDialog } from "@/components/edit-weight-dialog";
-import { EditBloodPressureDialog } from "@/components/edit-blood-pressure-dialog";
+import { EditBloodPressureDialog, validateBloodPressureEdit } from "@/components/edit-blood-pressure-dialog";
 import { EditEatingDialog } from "@/components/edit-eating-dialog";
 import { EditUrinationDialog } from "@/components/edit-urination-dialog";
 import { EditDefecationDialog } from "@/components/edit-defecation-dialog";
@@ -36,14 +36,22 @@ import {
 import { CARD_THEMES } from "@/lib/card-themes";
 import { useRecordsTabData } from "@/hooks/use-records-tab-queries";
 import { useUpdateIntake, useDeleteIntake } from "@/hooks/use-intake-queries";
-import { useUpdateWeight, useUpdateBloodPressure } from "@/hooks/use-health-queries";
+import { useUpdateWeight, useUpdateBloodPressure, useDeleteWeight, useDeleteBloodPressure } from "@/hooks/use-health-queries";
+import { resolveEditedTimestamp } from "@/hooks/use-edit-record";
+import { parseWeightForm, normalizeAmountEstimate } from "@intake/core/record-schemas";
 import { useUpdateEating, useDeleteEating } from "@/hooks/use-eating-queries";
 import { useUpdateUrination, useDeleteUrination } from "@/hooks/use-urination-queries";
 import { useUpdateDefecation, useDeleteDefecation } from "@/hooks/use-defecation-queries";
 import { useUpdateSubstance } from "@/hooks/use-substance-queries";
+import {
+  useDeleteLiquidEntry,
+  useDeleteSubstanceWithUndo,
+  describeSubstanceDeleteCascade,
+} from "@/hooks/use-composable-entry";
 import { useToast } from "@intake/ui/use-toast";
 import { useKeyboardAwareScroll } from "@/hooks/use-keyboard-scroll";
 import { cn } from "@/lib/utils";
+import { getDeviceTimezone } from "@/lib/timezone";
 import {
   timestampToDateTimeLocal,
   dateTimeLocalToTimestamp,
@@ -61,6 +69,10 @@ const UNDO_TOAST_TYPES = new Set<string>([
   "eating",
   "urination",
   "defecation",
+  "caffeine",
+  "alcohol",
+  "weight",
+  "bp",
 ]);
 
 // dateTimeLocalToTimestamp throws on invalid input (it never returns NaN), so
@@ -72,6 +84,10 @@ function parseDateTimeLocalOrNull(value: string): number | null {
   } catch {
     return null;
   }
+}
+
+function entriesLabel(count: number): string {
+  return `${count} ${count === 1 ? "entry" : "entries"}`;
 }
 
 interface RecordsTabProps {
@@ -87,7 +103,7 @@ const FILTER_TABS: {
 }[] = [
   { value: "all", label: "All" },
   { value: "water", label: "Water" },
-  { value: "salt", label: "Salt" },
+  { value: "salt", label: "Sodium" },
   { value: "sugar", label: "Sugar", optional: "sugar" },
   { value: "potassium", label: "K", optional: "potassium" },
   { value: "weight", label: "Weight" },
@@ -135,13 +151,19 @@ export function RecordsTab({ range }: RecordsTabProps) {
   }, [range.start, range.end]);
 
   // Fetch all domain records via hook
-  const { data: allRecords, deleteWeight, deleteBP, deleteSubstance } = useRecordsTabData(range);
+  const { data: allRecords } = useRecordsTabData(range);
 
   // Mutations
   const updateMutation = useUpdateIntake();
-  const deleteMutation = useDeleteIntake();
+  const deleteIntakeMutation = useDeleteIntake();
+  // Same blast radius as the Liquids card: a drink's water row takes the
+  // whole drink (substances, sugar, salt) with it; a meal's water row doesn't.
+  const deleteMutation = useDeleteLiquidEntry(deleteIntakeMutation.mutateAsync);
+  const deleteSubstance = useDeleteSubstanceWithUndo();
   const updateWeightMutation = useUpdateWeight();
+  const deleteWeightMutation = useDeleteWeight();
   const updateBPMutation = useUpdateBloodPressure();
+  const deleteBPMutation = useDeleteBloodPressure();
   const updateEatingMutation = useUpdateEating();
   const deleteEatingMutation = useDeleteEating();
   const updateUrinationMutation = useUpdateUrination();
@@ -169,6 +191,7 @@ export function RecordsTab({ range }: RecordsTabProps) {
   const [editHeartRate, setEditHeartRate] = useState("");
   const [editPosition, setEditPosition] = useState<"sitting" | "standing">("sitting");
   const [editArm, setEditArm] = useState<"left" | "right">("left");
+  const [editIrregularHeartbeat, setEditIrregularHeartbeat] = useState(false);
   const [editAmountUrination, setEditAmountUrination] = useState("");
   const [editAmountDefecation, setEditAmountDefecation] = useState("");
   const [editDescription, setEditDescription] = useState("");
@@ -176,13 +199,26 @@ export function RecordsTab({ range }: RecordsTabProps) {
   const [editSubstanceVolume, setEditSubstanceVolume] = useState("");
 
   // Filter + paginate
-  const filteredRecords = filterRecords(allRecords, filter);
+  const filteredRecords = useMemo(() => filterRecords(allRecords, filter), [allRecords, filter]);
   const visibleEnd = page * PAGE_SIZE;
   const visibleRecords = filteredRecords.slice(0, visibleEnd);
   const hasMore = visibleEnd < filteredRecords.length;
 
-  const groupedRecords = groupRecordsByDate(visibleRecords);
+  // Day groups follow the dashboard's logical day. The header counts come
+  // from the whole filtered list so a day split across pages isn't undercounted.
+  // Memoised: the full list can be thousands of rows under "All", and the edit
+  // dialogs re-render this component on every keystroke.
+  const dayStartHour = settings.dayStartHour;
+  const tz = getDeviceTimezone();
+  const groupedRecords = groupRecordsByDate(visibleRecords, { dayStartHour, tz });
   const dateGroups = Array.from(groupedRecords.entries());
+  const dayCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    groupRecordsByDate(filteredRecords, { dayStartHour, tz }).forEach((recs, date) =>
+      counts.set(date, recs.length),
+    );
+    return counts;
+  }, [filteredRecords, dayStartHour, tz]);
 
   // Delete handler
   const handleDelete = useCallback(async (unified: UnifiedRecord) => {
@@ -190,12 +226,17 @@ export function RecordsTab({ range }: RecordsTabProps) {
     setDeletingId(id);
     try {
       if (unified.type === "intake") await deleteMutation.mutateAsync(id);
-      else if (unified.type === "weight") await deleteWeight(id);
-      else if (unified.type === "bp") await deleteBP(id);
+      else if (unified.type === "weight") await deleteWeightMutation.mutateAsync(id);
+      else if (unified.type === "bp") await deleteBPMutation.mutateAsync(id);
       else if (unified.type === "eating") await deleteEatingMutation.mutateAsync(id);
       else if (unified.type === "urination") await deleteUrinationMutation.mutateAsync(id);
       else if (unified.type === "defecation") await deleteDefecationMutation.mutateAsync(id);
-      else if (unified.type === "caffeine" || unified.type === "alcohol") await deleteSubstance(id);
+      else if (unified.type === "caffeine" || unified.type === "alcohol") {
+        // A drink's substance takes the whole drink with it; say so first.
+        const cascade = await describeSubstanceDeleteCascade(id);
+        if (cascade && !window.confirm(`Delete this whole drink? This also removes ${cascade}.`)) return;
+        await deleteSubstance(id);
+      }
       if (!UNDO_TOAST_TYPES.has(unified.type)) {
         toast({ title: "Entry deleted", description: "Record removed" });
       }
@@ -204,7 +245,7 @@ export function RecordsTab({ range }: RecordsTabProps) {
     } finally {
       setDeletingId(null);
     }
-  }, [toast, deleteMutation, deleteWeight, deleteBP, deleteEatingMutation, deleteUrinationMutation, deleteDefecationMutation, deleteSubstance]);
+  }, [toast, deleteMutation, deleteWeightMutation, deleteBPMutation, deleteEatingMutation, deleteUrinationMutation, deleteDefecationMutation, deleteSubstance]);
 
   // Edit openers
   const openEdit = useCallback((unified: UnifiedRecord) => {
@@ -224,6 +265,7 @@ export function RecordsTab({ range }: RecordsTabProps) {
       setEditHeartRate(unified.record.heartRate?.toString() || "");
       setEditPosition(unified.record.position);
       setEditArm(unified.record.arm);
+      setEditIrregularHeartbeat(unified.record.irregularHeartbeat === true);
     } else if (unified.type === "eating") {
       setEditingEating(unified.record);
     } else if (unified.type === "urination") {
@@ -271,16 +313,19 @@ export function RecordsTab({ range }: RecordsTabProps) {
     } catch { toast({ title: "Error", description: "Could not update the entry", variant: "destructive" }); }
   }, [editingIntake, editAmount, editTimestamp, editNote, toast, updateMutation]);
 
+  // Weight / BP / urination / defecation edits share the dashboard cards'
+  // validation (@intake/core/record-schemas), keep the original timestamp
+  // when the minute is unchanged, reject future times, and send `null` to
+  // clear an optional field (an omitted key would keep the old value).
   const handleEditWeightSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingWeight) return;
-    const newW = parseFloat(editWeight);
-    const newTimestamp = parseDateTimeLocalOrNull(editTimestamp);
-    if (isNaN(newW) || newW <= 0) { toast({ title: "Invalid weight", variant: "destructive" }); return; }
-    if (newTimestamp === null) { toast({ title: "Invalid date/time", variant: "destructive" }); return; }
+    const weight = parseWeightForm({ weight: editWeight });
+    const ts = resolveEditedTimestamp(editingWeight.timestamp, editTimestamp);
+    if (!weight.ok) { toast({ title: "Invalid weight", description: weight.message, variant: "destructive" }); return; }
+    if (!ts.ok) { toast({ title: ts.message, variant: "destructive" }); return; }
     try {
-      const noteVal = editNote || undefined;
-      await updateWeightMutation.mutateAsync({ id: editingWeight.id, updates: { weight: newW, timestamp: newTimestamp, ...(noteVal !== undefined && { note: noteVal }) } });
+      await updateWeightMutation.mutateAsync({ id: editingWeight.id, updates: { weight: weight.data.weight, timestamp: ts.timestamp, note: editNote.trim() || null } });
       setEditingWeight(null);
       toast({ title: "Entry updated" });
     } catch { toast({ title: "Error", description: "Could not update the entry", variant: "destructive" }); }
@@ -289,19 +334,19 @@ export function RecordsTab({ range }: RecordsTabProps) {
   const handleEditBPSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingBP) return;
-    const newSystolic = parseInt(editSystolic, 10);
-    const newDiastolic = parseInt(editDiastolic, 10);
-    const newHeartRate = editHeartRate ? parseInt(editHeartRate, 10) : undefined;
-    const newTimestamp = parseDateTimeLocalOrNull(editTimestamp);
-    if (isNaN(newSystolic) || isNaN(newDiastolic) || newSystolic <= 0 || newDiastolic <= 0) { toast({ title: "Invalid values", variant: "destructive" }); return; }
-    if (newTimestamp === null) { toast({ title: "Invalid date/time", variant: "destructive" }); return; }
+    const bp = validateBloodPressureEdit(
+      { systolic: editSystolic, diastolic: editDiastolic, heartRate: editHeartRate },
+      () => { setEditSystolic(editDiastolic); setEditDiastolic(editSystolic); },
+    );
+    if (!bp) return;
+    const ts = resolveEditedTimestamp(editingBP.timestamp, editTimestamp);
+    if (!ts.ok) { toast({ title: ts.message, variant: "destructive" }); return; }
     try {
-      const bpNoteVal = editNote || undefined;
-      await updateBPMutation.mutateAsync({ id: editingBP.id, updates: { systolic: newSystolic, diastolic: newDiastolic, ...(newHeartRate !== undefined && { heartRate: newHeartRate }), position: editPosition, arm: editArm, timestamp: newTimestamp, ...(bpNoteVal !== undefined && { note: bpNoteVal }) } });
+      await updateBPMutation.mutateAsync({ id: editingBP.id, updates: { systolic: bp.systolic, diastolic: bp.diastolic, heartRate: bp.heartRate, irregularHeartbeat: editIrregularHeartbeat, position: editPosition, arm: editArm, timestamp: ts.timestamp, note: editNote.trim() || null } });
       setEditingBP(null);
       toast({ title: "Entry updated" });
     } catch { toast({ title: "Error", description: "Could not update the entry", variant: "destructive" }); }
-  }, [editingBP, editSystolic, editDiastolic, editHeartRate, editPosition, editArm, editTimestamp, editNote, toast, updateBPMutation]);
+  }, [editingBP, editSystolic, editDiastolic, editHeartRate, editIrregularHeartbeat, editPosition, editArm, editTimestamp, editNote, toast, updateBPMutation]);
 
   const handleEditEatingSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -309,8 +354,9 @@ export function RecordsTab({ range }: RecordsTabProps) {
     const newTimestamp = parseDateTimeLocalOrNull(editTimestamp);
     if (newTimestamp === null) { toast({ title: "Invalid date/time", variant: "destructive" }); return; }
     try {
+      // Pass the note explicitly so clearing the field clears it.
       const eatingNote = editNote.trim() || undefined;
-      await updateEatingMutation.mutateAsync({ id: editingEating.id, updates: { timestamp: newTimestamp, ...(eatingNote !== undefined && { note: eatingNote }) } });
+      await updateEatingMutation.mutateAsync({ id: editingEating.id, updates: { timestamp: newTimestamp, note: eatingNote } });
       setEditingEating(null);
       toast({ title: "Entry updated" });
     } catch { toast({ title: "Error", description: "Could not update", variant: "destructive" }); }
@@ -319,12 +365,12 @@ export function RecordsTab({ range }: RecordsTabProps) {
   const handleEditUrinationSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUrination) return;
-    const newTimestamp = parseDateTimeLocalOrNull(editTimestamp);
-    if (newTimestamp === null) { toast({ title: "Invalid date/time", variant: "destructive" }); return; }
+    const ts = resolveEditedTimestamp(editingUrination.timestamp, editTimestamp);
+    if (!ts.ok) { toast({ title: ts.message, variant: "destructive" }); return; }
     try {
-      const urinationAmt = editAmountUrination || undefined;
-      const urinationNote = editNote.trim() || undefined;
-      await updateUrinationMutation.mutateAsync({ id: editingUrination.id, updates: { timestamp: newTimestamp, ...(urinationAmt !== undefined && { amountEstimate: urinationAmt }), ...(urinationNote !== undefined && { note: urinationNote }) } });
+      // `null` clears; the update types predate explicit clears.
+      const updates = { timestamp: ts.timestamp, amountEstimate: normalizeAmountEstimate(editAmountUrination), note: editNote.trim() || null };
+      await updateUrinationMutation.mutateAsync({ id: editingUrination.id, updates: updates as { timestamp: number; amountEstimate?: string; note?: string } });
       setEditingUrination(null);
       toast({ title: "Entry updated" });
     } catch { toast({ title: "Error", description: "Could not update", variant: "destructive" }); }
@@ -333,12 +379,11 @@ export function RecordsTab({ range }: RecordsTabProps) {
   const handleEditDefecationSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingDefecation) return;
-    const newTimestamp = parseDateTimeLocalOrNull(editTimestamp);
-    if (newTimestamp === null) { toast({ title: "Invalid date/time", variant: "destructive" }); return; }
+    const ts = resolveEditedTimestamp(editingDefecation.timestamp, editTimestamp);
+    if (!ts.ok) { toast({ title: ts.message, variant: "destructive" }); return; }
     try {
-      const defecationAmt = editAmountDefecation || undefined;
-      const defecationNote = editNote.trim() || undefined;
-      await updateDefecationMutation.mutateAsync({ id: editingDefecation.id, updates: { timestamp: newTimestamp, ...(defecationAmt !== undefined && { amountEstimate: defecationAmt }), ...(defecationNote !== undefined && { note: defecationNote }) } });
+      const updates = { timestamp: ts.timestamp, amountEstimate: normalizeAmountEstimate(editAmountDefecation), note: editNote.trim() || null };
+      await updateDefecationMutation.mutateAsync({ id: editingDefecation.id, updates: updates as { timestamp: number; amountEstimate?: string; note?: string } });
       setEditingDefecation(null);
       toast({ title: "Entry updated" });
     } catch { toast({ title: "Error", description: "Could not update", variant: "destructive" }); }
@@ -431,7 +476,7 @@ export function RecordsTab({ range }: RecordsTabProps) {
                   <Calendar className="w-4 h-4" />
                   {date}
                   <span className="text-xs bg-muted px-2 py-0.5 rounded-full">
-                    {dayRecords.length} {dayRecords.length === 1 ? "entry" : "entries"}
+                    {entriesLabel(dayCounts.get(date) ?? dayRecords.length)}
                   </span>
                 </div>
                 <div className="border-t border-border/50">
@@ -504,6 +549,8 @@ export function RecordsTab({ range }: RecordsTabProps) {
         onPositionChange={setEditPosition}
         arm={editArm}
         onArmChange={setEditArm}
+        irregularHeartbeat={editIrregularHeartbeat}
+        onIrregularHeartbeatChange={setEditIrregularHeartbeat}
         timestamp={editTimestamp}
         onTimestampChange={setEditTimestamp}
         note={editNote}

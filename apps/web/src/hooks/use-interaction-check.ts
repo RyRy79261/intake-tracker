@@ -1,6 +1,11 @@
 import { useState, useCallback, useRef } from "react";
 import { apiFetch } from "@/lib/api-fetch";
-import { getCached, setCache } from "@/lib/interaction-cache";
+import {
+  getCachedEntry,
+  setCache,
+  interactionCacheKey,
+} from "@/lib/interaction-cache";
+import { readAiErrorMessage } from "@/lib/ai-error-message";
 import { useUpdatePrescription } from "@/hooks/use-medication-queries";
 
 // --- Types ---
@@ -41,11 +46,15 @@ export function useInteractionCheck() {
   const [data, setData] = useState<InteractionResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // When `data` came from the lookup cache, when it was fetched — shown so a
+  // day-old answer is never mistaken for a fresh one.
+  const [cachedAt, setCachedAt] = useState<number | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const reset = useCallback(() => {
     setData(null);
     setError(null);
+    setCachedAt(null);
     setIsLoading(false);
     if (abortRef.current) {
       abortRef.current.abort();
@@ -54,14 +63,23 @@ export function useInteractionCheck() {
   }, []);
 
   const check = useCallback(async (params: CheckParams) => {
-    // For lookup mode, check cache first
-    if (params.mode === "lookup") {
-      const cached = getCached<InteractionResult>(params.substance);
+    // For lookup mode, check cache first. The key covers the active
+    // prescriptions, so a changed medication list always refetches.
+    const cacheKey =
+      params.mode === "lookup"
+        ? interactionCacheKey(
+            params.substance,
+            params.activePrescriptions.map((rx) => rx.genericName),
+          )
+        : null;
+    if (cacheKey) {
+      const cached = getCachedEntry<InteractionResult>(cacheKey);
       if (cached) {
-        setData(cached);
+        setData(cached.data);
+        setCachedAt(cached.timestamp);
         setError(null);
         setIsLoading(false);
-        return cached;
+        return cached.data;
       }
     }
 
@@ -80,6 +98,7 @@ export function useInteractionCheck() {
     setIsLoading(true);
     setError(null);
     setData(null);
+    setCachedAt(null);
 
     try {
       const response = await apiFetch("/api/ai/interaction-check", {
@@ -110,8 +129,8 @@ export function useInteractionCheck() {
       setIsLoading(false);
 
       // Cache lookup results
-      if (params.mode === "lookup") {
-        setCache(params.substance, result);
+      if (cacheKey) {
+        setCache(cacheKey, result);
       }
 
       return result;
@@ -129,13 +148,14 @@ export function useInteractionCheck() {
     }
   }, []);
 
-  return { check, data, isLoading, error, reset };
+  return { check, data, isLoading, error, cachedAt, reset };
 }
 
 // --- useRefreshInteractions ---
 
 export function useRefreshInteractions() {
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const updatePrescription = useUpdatePrescription();
 
   const refresh = useCallback(
@@ -145,6 +165,7 @@ export function useRefreshInteractions() {
       activePrescriptions: ActivePrescription[]
     ) => {
       setIsRefreshing(true);
+      setError(null);
 
       try {
         const response = await apiFetch("/api/ai/interaction-check", {
@@ -157,7 +178,18 @@ export function useRefreshInteractions() {
           }),
         });
 
-        if (!response || !response.ok) {
+        if (!response) {
+          // User dismissed sign-in
+          setIsRefreshing(false);
+          return null;
+        }
+        if (!response.ok) {
+          setError(
+            await readAiErrorMessage(
+              response,
+              `Interaction check failed (${response.status})`,
+            ),
+          );
           setIsRefreshing(false);
           return null;
         }
@@ -189,7 +221,8 @@ export function useRefreshInteractions() {
 
         setIsRefreshing(false);
         return result;
-      } catch {
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Interaction check failed");
         setIsRefreshing(false);
         return null;
       }
@@ -197,5 +230,5 @@ export function useRefreshInteractions() {
     [updatePrescription]
   );
 
-  return { refresh, isRefreshing };
+  return { refresh, isRefreshing, error };
 }

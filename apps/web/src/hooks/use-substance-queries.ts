@@ -11,6 +11,7 @@ import {
   type AddSubstanceInput,
 } from "@/lib/substance-service";
 import { unwrap } from "@intake/core/service";
+import { useNowTick } from "@intake/ui/use-now-tick";
 import type { SubstanceRecord } from "@/lib/db";
 
 /**
@@ -33,6 +34,29 @@ export function useSubstanceRecordsByDateRange(
   return useLiveQuery(
     () => getSubstanceRecordsByDateRange(startTime, endTime, type),
     [startTime, endTime, type],
+    []
+  );
+}
+
+/**
+ * Hook to get substance records from `startTime` up to now. The index range
+ * is open-ended and "now" is applied at query time rather than memoised in
+ * the caller: a live query only re-runs for writes inside the range it read,
+ * so a fixed `now` end excluded a record logged a moment later until the next
+ * minute tick. Future-dated records stay out, matching the intake totals.
+ */
+export function useSubstanceRecordsSince(
+  startTime: number,
+  type?: 'caffeine' | 'alcohol'
+) {
+  const tick = useNowTick();
+  return useLiveQuery(
+    async () => {
+      const records = await getSubstanceRecordsByDateRange(startTime, Infinity, type);
+      const now = Date.now();
+      return records.filter((r) => r.timestamp <= now);
+    },
+    [startTime, type, tick],
     []
   );
 }

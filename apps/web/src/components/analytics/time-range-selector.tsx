@@ -3,11 +3,20 @@
 import { useState } from "react";
 import { Button } from "@intake/ui/button";
 import { cn } from "@/lib/utils";
-import { toLocalDateKey } from "@/lib/date-utils";
+import { getDeviceTimezone } from "@/lib/timezone";
+import { useSettingsStore } from "@/stores/settings-store";
+import {
+  logicalDayKey,
+  logicalDayStart,
+  logicalDaysRange,
+  shiftDayKey,
+} from "@intake/core/logical-day";
 import type { TimeScope, TimeRange } from "@intake/types/analytics";
 
+// The "24h" scope is the current logical day, not a rolling 24 hours (the
+// dashboard's "24h" figures are rolling), so it is labelled "Today".
 const SCOPE_OPTIONS: { value: TimeScope; label: string }[] = [
-  { value: "24h", label: "24h" },
+  { value: "24h", label: "Today" },
   { value: "7d", label: "7d" },
   { value: "30d", label: "30d" },
   { value: "90d", label: "90d" },
@@ -21,20 +30,6 @@ interface TimeRangeSelectorProps {
   onCustomRangeChange: (range: TimeRange | null) => void;
 }
 
-function toDateInputValue(ms: number): string {
-  return toLocalDateKey(ms);
-}
-
-function fromDateInputValue(val: string, endOfDay: boolean): number {
-  const d = new Date(val);
-  if (endOfDay) {
-    d.setHours(23, 59, 59, 999);
-  } else {
-    d.setHours(0, 0, 0, 0);
-  }
-  return d.getTime();
-}
-
 export function TimeRangeSelector({
   scope,
   onScopeChange,
@@ -42,6 +37,17 @@ export function TimeRangeSelector({
   onCustomRangeChange,
 }: TimeRangeSelectorProps) {
   const [showCustom, setShowCustom] = useState(customRange !== null);
+  const dayStartHour = useSettingsStore((s) => s.dayStartHour);
+  const tz = getDeviceTimezone();
+
+  // Custom dates are whole logical days, like the presets. The picker's
+  // "YYYY-MM-DD" is split into parts rather than passed to `new Date()`, which
+  // parses a date-only string as UTC and lands a day early west of UTC.
+  const toDateInputValue = (ms: number): string => logicalDayKey(ms, dayStartHour, tz);
+  const fromDateInputValue = (val: string, endOfDay: boolean): number =>
+    endOfDay
+      ? logicalDayStart(shiftDayKey(val, 1), dayStartHour, tz) - 1
+      : logicalDayStart(val, dayStartHour, tz);
 
   const handleScopeClick = (s: TimeScope) => {
     setShowCustom(false);
@@ -51,11 +57,9 @@ export function TimeRangeSelector({
 
   const handleCustomClick = () => {
     setShowCustom(true);
-    // Initialize with a 7d range if no custom range set
+    // Initialize with the last 7 whole days if no custom range set
     if (!customRange) {
-      const end = Date.now();
-      const start = end - 7 * 24 * 60 * 60 * 1000;
-      onCustomRangeChange({ start, end });
+      onCustomRangeChange(logicalDaysRange(Date.now(), 7, dayStartHour, tz));
     }
   };
 

@@ -305,9 +305,16 @@ export function MedicationSettingsView() {
   const reminderFollowUpInterval = useSettingsStore((s) => s.reminderFollowUpInterval);
   const setReminderFollowUpInterval = useSettingsStore((s) => s.setReminderFollowUpInterval);
 
-  const { handleToggle: handleToggleReminders, toggling: togglingReminders, supported: notificationsSupported } = useDoseReminderToggle();
+  const {
+    handleToggle: handleToggleReminders,
+    toggling: togglingReminders,
+    supported: notificationsSupported,
+    isNative: nativeReminders,
+    enabled: remindersEnabled,
+  } = useDoseReminderToggle();
   const { authenticated: isSignedIn } = useAuth();
-  const showRemindersSection = useAuthGate();
+  // Native reminders are device-local and work signed out; web push needs auth.
+  const showRemindersSection = useAuthGate() || nativeReminders;
 
   return (
     <div className="space-y-6 pb-24">
@@ -332,20 +339,22 @@ export function MedicationSettingsView() {
             <p className="text-[13px] text-muted-foreground">
               {!notificationsSupported
                 ? "Notifications not supported in this browser"
-                : !isSignedIn && !doseRemindersEnabled
+                : nativeReminders
+                  ? "Get a notification on this device when medications are due"
+                  : !isSignedIn && !doseRemindersEnabled
                   ? "Sign in to enable push reminders across devices"
                   : "Get push notifications when medications are due"}
             </p>
           </div>
           <Switch
             id="dose-reminders-toggle"
-            checked={doseRemindersEnabled}
+            checked={remindersEnabled}
             onCheckedChange={handleToggleReminders}
             disabled={!notificationsSupported || togglingReminders}
           />
         </div>
 
-        {doseRemindersEnabled && (
+        {remindersEnabled && (
           <>
             <div className="space-y-1.5">
               <Label>Follow-up reminders</Label>

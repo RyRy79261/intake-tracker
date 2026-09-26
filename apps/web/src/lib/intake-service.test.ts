@@ -232,3 +232,19 @@ describe("getDailyTotal day-start-hour rollover", () => {
     expect(total).toBe(175);
   });
 });
+
+describe("today / 24h totals ignore future-dated records", () => {
+  it("getDailyTotal and the 24h queries count up to now, not beyond", async () => {
+    const now = Date.now();
+    await db.intakeRecords.bulkAdd([
+      makeIntakeRecord({ id: "past", type: "water", amount: 100, timestamp: now - 1000 }),
+      // A mistyped date (e.g. next year) must not inflate every day's total.
+      makeIntakeRecord({ id: "future", type: "water", amount: 500, timestamp: now + 5 * 86_400_000 }),
+      makeIntakeRecord({ id: "later-today", type: "water", amount: 50, timestamp: now + 60_000 }),
+    ]);
+
+    expect(await getDailyTotal("water", 0)).toBe(100);
+    expect(await getTotalInLast24Hours("water")).toBe(100);
+    expect((await getRecordsInLast24Hours("water")).map((r) => r.id)).toEqual(["past"]);
+  });
+});

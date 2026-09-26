@@ -2,8 +2,9 @@
 //
 // Serwist service worker (Turbopack-native). Compiled by esbuild via the
 // `/serwist/[path]` route handler (see src/app/serwist/[path]/route.ts), not
-// by tsc — this file is excluded from the project tsconfig so the WebWorker
-// lib above does not collide with the DOM lib used everywhere else.
+// by the app build — this file is excluded from the project tsconfig so the
+// WebWorker lib above does not collide with the DOM lib used everywhere else.
+// It is type-checked on its own by tsconfig.sw.json (`pnpm typecheck`).
 //
 // Replaces the previous next-pwa custom worker (worker/index.js). The push /
 // notificationclick / SKIP_WAITING handlers below are ported verbatim from it.
@@ -21,7 +22,8 @@ declare global {
 declare const self: ServiceWorkerGlobalScope;
 
 const serwist = new Serwist({
-  precacheEntries: self.__SW_MANIFEST,
+  // Absent outside a Serwist build; omit the key rather than pass undefined.
+  ...(self.__SW_MANIFEST !== undefined && { precacheEntries: self.__SW_MANIFEST }),
   // The app's "update available" prompt is driven by version polling
   // (use-version-check.ts) + a full reload — not by the SW waiting state —
   // so activating immediately is safe and avoids a stale controller.

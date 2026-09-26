@@ -11,7 +11,12 @@
  */
 import { db } from "@/lib/db";
 import { apiFetch } from "@/lib/api-fetch";
-import { runPullCycle, stopEngine, startEngine } from "@/lib/sync-engine";
+import {
+  runPullCycle,
+  stopEngine,
+  startEngine,
+  waitForSyncIdle,
+} from "@/lib/sync-engine";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useSyncStatusStore } from "@/stores/sync-status-store";
 import { authClient } from "@/lib/auth-client";
@@ -31,6 +36,10 @@ async function severSyncLink(): Promise<void> {
     isSyncing: false,
     queueDepth: 0,
     lastError: null,
+    lastErrorSource: null,
+    // An explicit choice: auto-detect must not flip this device back to
+    // cloud-sync because the account still has data (audit sync-engine#16).
+    modeChosenByUser: true,
   });
   useSettingsStore.getState().setStorageMode("local");
 }
@@ -38,15 +47,30 @@ async function severSyncLink(): Promise<void> {
 /**
  * Switch from cloud-sync back to local-only, wiping the server copy.
  *
- * Order matters: we pull the full dataset down BEFORE deleting it server-side,
- * and stop the engine BEFORE the wipe so the deletion can't round-trip back and
- * erase the local rows.
+ * Order matters: we stop the engine and let any running push or pull finish
+ * (a push landing after the wipe would re-create cloud rows), then pull the
+ * full dataset down BEFORE deleting it server-side.
+ *
+ * The wipe only proceeds when that pull completed in this call. A pull that
+ * failed, hit a 401 or was skipped used to fall through to the wipe, deleting
+ * records that existed only in the cloud (audit sync-engine#9).
  */
 export async function switchToLocalAndWipeCloud(): Promise<void> {
-  // 1. Ensure IndexedDB holds a complete copy of the cloud dataset.
-  await runPullCycle();
-  // 2. Stop syncing so the upcoming server wipe doesn't propagate to local.
+  // 1. Stop syncing so no new push starts, and let in-flight cycles land.
   stopEngine();
+  await waitForSyncIdle();
+  // 2. Ensure IndexedDB holds a complete copy of the cloud dataset.
+  let pulled: boolean;
+  try {
+    pulled = await runPullCycle();
+  } catch (e) {
+    startEngine();
+    throw e;
+  }
+  if (!pulled) {
+    startEngine();
+    throw new Error("Couldn't download your cloud data");
+  }
   // 3. Delete the cloud copy (synced tables + push subscriptions). If the wipe
   //    fails, nothing was deleted — restore cloud-sync before surfacing the
   //    error so the app isn't stranded with the engine stopped.
@@ -70,8 +94,10 @@ export async function switchToLocalAndWipeCloud(): Promise<void> {
  * login identity, keep this device's local copy, then sign out.
  */
 export async function deleteAccount(): Promise<void> {
-  // 1. Stop syncing before we touch the server.
+  // 1. Stop syncing before we touch the server, and let a push already on the
+  //    wire land first so it cannot re-create rows after the scrub.
   stopEngine();
+  await waitForSyncIdle();
   // 2. Scrub all server-side data while the session is still valid. If this
   //    fails, nothing was deleted — restore cloud-sync and surface the error.
   let res: Response;

@@ -39,7 +39,8 @@
     "./use-now-tick": "./src/hooks/use-now-tick.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.20",
@@ -70,9 +71,11 @@
     "react-dom": "^19.2.8"
   },
   "devDependencies": {
+    "@intake/eslint-config": "workspace:*",
     "@intake/typescript-config": "workspace:*",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "eslint": "^10.10.0",
     "typescript": "^6.0.3"
   }
 }

@@ -1,0 +1,140 @@
+import path from "node:path";
+import { defineConfig } from "vitest/config";
+
+// `server-only` / `client-only` are build-time bundler markers (React-team
+// packages that Next.js resolves via the `react-server` export condition). They
+// have no resolver under vitest's node environment, so alias both specifiers to
+// an empty stub. The boundary they enforce is validated by `next build` and
+// `bundle-security.test.ts`, not by unit tests.
+const BUNDLER_MARKER_STUB = path.resolve(
+  process.cwd(),
+  "src/__tests__/helpers/bundler-markers-stub.ts",
+);
+
+export default defineConfig({
+  resolve: {
+    // Native tsconfig `paths` resolution (the `@/*` alias).
+    tsconfigPaths: true,
+    alias: {
+      "server-only": BUNDLER_MARKER_STUB,
+      "client-only": BUNDLER_MARKER_STUB,
+    },
+  },
+  // tsconfig has jsx:"preserve" (Next.js handles the transform); vite's oxc
+  // transformer compiles the tests, so pin the automatic JSX runtime here.
+  oxc: { jsx: { runtime: "automatic" } },
+  test: {
+    environment: "node",
+    setupFiles: ["src/__tests__/setup.ts"],
+    include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
+    exclude: ["e2e/**", "node_modules/**", ".claude/**", "src/__tests__/integration/**"],
+    benchmark: {
+      exclude: ["node_modules/**", ".claude/**"],
+    },
+    globals: false,
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "json-summary", "json"],
+      reportOnFailure: true,
+      // Count every source file in `include`, not just the ones a test
+      // happens to import, so the percentage reflects the real codebase.
+      include: ["src/**/*.{ts,tsx}"],
+      exclude: [
+        "src/**/*.test.{ts,tsx}",
+        "src/**/*.d.ts",
+        "src/__tests__/**",
+        "src/**/__tests__/**",
+      ],
+      // Coverage ratchet: CI's `coverage` job runs `pnpm test:coverage`, which
+      // exits non-zero when any metric drops below these floors. Raise them as
+      // coverage improves — never lower them.
+      //
+      // Per-file thresholds (P1 #8) layer on top of the global floors and
+      // gate the modules whose regressions would hurt data integrity,
+      // backup safety, or clinical math. Each per-file floor is set to
+      // current-coverage-minus-headroom so it ratchets monotonically.
+      //
+      // Audit also recommended folder-wide floors for src/lib/mcp/ (85%
+      // lines, "auth boundary") and src/app/api/ (75% lines, "external
+      // surface"). Both folders still contain a handful of files at 0%
+      // coverage (mcp/queries.ts, mcp/tools.ts, several API routes) that
+      // drag the folder average below those floors. Adding the folder
+      // thresholds here would need either targeted tests or excludes
+      // first — left for a follow-up PR.
+      thresholds: {
+        lines: 54,
+        statements: 53,
+        functions: 45,
+        branches: 44,
+        // Sync layer — data integrity. sync-engine.ts is the weakest link
+        // of the four; queue / payload / topology all sit ≥95%.
+        "src/lib/sync-engine.ts": {
+          lines: 90,
+          statements: 85,
+          functions: 78,
+          branches: 72,
+        },
+        "src/lib/sync-queue.ts": {
+          lines: 100,
+          statements: 100,
+          functions: 100,
+          branches: 100,
+        },
+        "src/lib/sync-payload.ts": {
+          lines: 95,
+          statements: 95,
+          functions: 100,
+          branches: 80,
+        },
+        "src/lib/sync-topology.ts": {
+          lines: 100,
+          statements: 100,
+          functions: 100,
+          branches: 100,
+        },
+        // Backup safety — see src/lib/backup-service.test.ts for the
+        // failure-path coverage that lifts this above the 70% audit floor.
+        "src/lib/backup-service.ts": {
+          lines: 80,
+          statements: 75,
+          functions: 63,
+          branches: 82,
+        },
+        // Clinical math + records CRUD. See health-service.test.ts.
+        "src/lib/health-service.ts": {
+          lines: 88,
+          statements: 88,
+          functions: 95,
+          branches: 95,
+        },
+        // Dose reminders, day bucketing and the destructive account flows
+        // (2026-09 audit baseline-health#7). Floors sit ~10 points under the
+        // coverage their dedicated tests reached.
+        "src/hooks/use-push-schedule-sync.ts": {
+          lines: 85,
+          statements: 84,
+          functions: 79,
+          branches: 75,
+        },
+        "src/hooks/use-timezone-detection.ts": {
+          lines: 90,
+          statements: 90,
+          functions: 90,
+          branches: 65,
+        },
+        "src/hooks/use-permissions.ts": {
+          lines: 84,
+          statements: 80,
+          functions: 85,
+          branches: 65,
+        },
+        "src/lib/account-service.ts": {
+          lines: 83,
+          statements: 83,
+          functions: 90,
+          branches: 77,
+        },
+      },
+    },
+  },
+});

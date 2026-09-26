@@ -123,6 +123,9 @@ export function buildDeepBatchParams(
     // parameter with a 400. This request carried temperature 0.3, so the
     // batch entry errored before the model ever ran — which is what made
     // deep analysis fail every single time.
+    // Claude Opus 5.5 defaults effort to medium (Opus 5 defaulted to high);
+    // deep mode is the one run where the user asked for depth.
+    output_config: { effort: "high" as const },
     system: DEEP_SYSTEM_PROMPT,
     tools: [
       { ...WEB_SEARCH_TOOL, max_uses: DEEP_WEB_SEARCH_MAX_USES },

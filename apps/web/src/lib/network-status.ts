@@ -18,24 +18,36 @@ export function initNetworkListener(
   callback: (online: boolean) => void,
 ): () => void {
   if (isCapacitor()) {
+    // The listener handle arrives asynchronously (dynamic import, then
+    // addListener). A dispose that runs before it resolves must still win:
+    // otherwise the handle is never removed, and every re-attach stacks
+    // another listener that keeps kicking the engine (audit native-android#11).
+    let disposed = false;
     let removeListener: (() => void) | null = null;
 
-    import("@capacitor/network").then(({ Network }) => {
-      Network.getStatus().then((status) => {
+    void import("@capacitor/network").then(({ Network }) => {
+      if (disposed) return;
+      void Network.getStatus().then((status) => {
         cachedOnline = status.connected;
-        callback(status.connected);
+        if (!disposed) callback(status.connected);
       });
 
-      Network.addListener("networkStatusChange", (status) => {
+      void Network.addListener("networkStatusChange", (status) => {
         cachedOnline = status.connected;
-        callback(status.connected);
+        if (!disposed) callback(status.connected);
       }).then((handle) => {
-        removeListener = () => handle.remove();
+        if (disposed) {
+          void handle.remove();
+          return;
+        }
+        removeListener = () => void handle.remove();
       });
     });
 
     return () => {
+      disposed = true;
       removeListener?.();
+      removeListener = null;
     };
   }
 

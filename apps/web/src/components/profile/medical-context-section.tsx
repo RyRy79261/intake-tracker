@@ -15,9 +15,10 @@ import {
 import { AiInsightsConsentToggle } from "@/components/profile/ai-insights-consent-toggle";
 
 /**
- * Profile section for user-reported medical conditions. The conditions stay on
- * the device and back up / cloud-sync with the rest of the data. They reach
- * the AI only when the user opts in via the consent toggle.
+ * Profile section for user-reported medical conditions. The conditions back up
+ * and cloud-sync with the rest of the data (so the copy must not say they stay
+ * on the device). They reach the AI only when the user opts in via the
+ * consent toggle.
  */
 export function MedicalContextSection() {
   const profile = useUserProfile();
@@ -65,8 +66,9 @@ export function MedicalContextSection() {
         </CardHeader>
         <CardContent className="px-3 pb-3 space-y-3">
           <p className="text-xs text-muted-foreground">
-            Conditions you add stay on this device unless you turn on sharing
-            below. They give AI insights clinical context — for example, why
+            Conditions you add back up and sync with the rest of your data.
+            They are not sent to the AI unless you turn on sharing below;
+            then they give AI insights clinical context — for example, why
             your sodium and fluid limits matter, and which trends are worth
             watching.
           </p>

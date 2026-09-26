@@ -176,6 +176,56 @@ describe("correlateTimeSeries", () => {
     ).toBe(1);
   });
 
+  it("sums a per-day total for intake series when asked to", () => {
+    // 5 days of salt logged in 200 mg entries, daily total rising
+    // 1000 -> 5000 mg, while weight rises 71 -> 75. The per-entry mean is
+    // 200 every day, so a mean aggregator can never see the relationship.
+    const day = 86_400_000;
+    const base = Date.UTC(2026, 8, 1, 8);
+    const salt: DataPoint[] = [];
+    const weight: DataPoint[] = [];
+    for (let i = 0; i < 5; i++) {
+      for (let j = 0; j < (i + 1) * 5; j++) {
+        salt.push({ timestamp: base + i * day + j * 60_000, value: 200 });
+      }
+      weight.push({ timestamp: base + i * day, value: 71 + i });
+    }
+
+    expect(correlateTimeSeries(salt, weight, 0, "UTC").strength).toBe("none");
+
+    const summed = correlateTimeSeries(salt, weight, 0, "UTC", {
+      aggregateA: "sum",
+      aggregateB: "mean",
+    });
+    expect(summed.coefficient).toBeCloseTo(1, 5);
+    expect(summed.pairs[0]).toEqual({ a: 1000, b: 71 });
+  });
+
+  it("counts events per day so event domains can correlate", () => {
+    const day = 86_400_000;
+    const base = Date.UTC(2026, 8, 1, 8);
+    const meals: DataPoint[] = [];
+    const weight: DataPoint[] = [];
+    for (let i = 0; i < 4; i++) {
+      for (let j = 0; j <= i; j++) meals.push({ timestamp: base + i * day + j, value: 1 });
+      weight.push({ timestamp: base + i * day, value: 70 + i });
+    }
+    const r = correlateTimeSeries(meals, weight, 0, "UTC", { aggregateA: "sum" });
+    expect(r.strength).toBe("strong");
+  });
+
+  it("buckets by dayStartHour when given", () => {
+    // 01:00 UTC belongs to the previous day with dayStartHour 2.
+    const ts1 = Date.UTC(2026, 0, 1, 20);
+    const ts2 = Date.UTC(2026, 0, 2, 1);
+    const a = [
+      { timestamp: ts1, value: 1 },
+      { timestamp: ts2, value: 3 },
+    ];
+    expect(correlateTimeSeries(a, a, 0, "UTC").pairedDays).toBe(2);
+    expect(correlateTimeSeries(a, a, 0, "UTC", { dayStartHour: 2 }).pairedDays).toBe(1);
+  });
+
   it("defaults to UTC bucketing when no timezone is given", () => {
     const ts1 = Date.UTC(2026, 0, 1, 23, 30);
     const ts2 = Date.UTC(2026, 0, 2, 0, 30);

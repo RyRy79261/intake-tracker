@@ -6,9 +6,27 @@ import { z } from "zod";
  * request machinery (mirrors api/ai/substance-lookup/schema.ts).
  */
 
+/**
+ * Optional "when" of an item, shared by every kind. `time` is a 24-hour
+ * "HH:mm" clock time the user said ("at 1pm" → "13:00"); `minutesAgo` is a
+ * relative offset ("half an hour ago" → 30). Both are resolved to a timestamp
+ * on the client, which knows the user's clock and day-start hour. A malformed
+ * value is stripped (`.catch`) rather than failing the item, so a bad time
+ * never costs the user the reading itself.
+ */
+const timing = {
+  time: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+    .optional()
+    .catch(undefined),
+  minutesAgo: z.number().int().min(0).max(1439).optional().catch(undefined),
+};
+
 export const ItemSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("blood_pressure"),
+    ...timing,
     systolic: z.number().int().min(40).max(260),
     diastolic: z.number().int().min(20).max(200),
     heartRate: z.number().int().min(20).max(250).optional(),
@@ -18,21 +36,25 @@ export const ItemSchema = z.discriminatedUnion("kind", [
   }),
   z.object({
     kind: z.literal("weight"),
+    ...timing,
     weightKg: z.number().min(1).max(500),
     note: z.string().max(200).optional(),
   }),
   z.object({
     kind: z.literal("water"),
+    ...timing,
     ml: z.number().min(1).max(10000),
     note: z.string().max(200).optional(),
   }),
   z.object({
     kind: z.literal("salt"),
+    ...timing,
     sodiumMg: z.number().min(1).max(20000),
     note: z.string().max(200).optional(),
   }),
   z.object({
     kind: z.literal("food"),
+    ...timing,
     description: z.string().min(1).max(200),
     grams: z.number().min(1).max(5000).optional(),
     waterMl: z.number().min(0).max(5000).optional(),
@@ -45,6 +67,7 @@ export const ItemSchema = z.discriminatedUnion("kind", [
   // same fluid twice (issue #322).
   z.object({
     kind: z.literal("caffeine"),
+    ...timing,
     description: z.string().min(1).max(200),
     caffeineMg: z.number().min(0).max(2000),
     volumeMl: z.number().min(0).max(5000).optional(),
@@ -54,6 +77,7 @@ export const ItemSchema = z.discriminatedUnion("kind", [
   }),
   z.object({
     kind: z.literal("alcohol"),
+    ...timing,
     description: z.string().min(1).max(200),
     abvPercent: z.number().min(0).max(95),
     volumeMl: z.number().min(1).max(5000),
@@ -63,11 +87,13 @@ export const ItemSchema = z.discriminatedUnion("kind", [
   }),
   z.object({
     kind: z.literal("urination"),
+    ...timing,
     amountEstimate: z.enum(["small", "medium", "large"]).optional(),
     note: z.string().max(200).optional(),
   }),
   z.object({
     kind: z.literal("defecation"),
+    ...timing,
     amountEstimate: z.enum(["small", "medium", "large"]).optional(),
     note: z.string().max(200).optional(),
   }),
@@ -84,7 +110,15 @@ const MAX_REASONING_CHARS = 1000;
 export { PARSE_TOOL } from "@intake/ai-prompts/voice-parse";
 
 export type VoiceExtractResult =
-  | { ok: true; items: VoiceParsedItem[]; reasoning?: string; dropped: number }
+  | {
+      ok: true;
+      items: VoiceParsedItem[];
+      reasoning?: string;
+      /** Items the model returned that failed validation and were discarded. */
+      dropped: number;
+      /** Valid items cut off by the {@link MAX_ITEMS} cap. */
+      overCap: number;
+    }
   | { ok: false };
 
 /**
@@ -112,6 +146,11 @@ export function extractVoiceItems(input: unknown): VoiceExtractResult {
   for (const raw of obj.items) {
     const parsed = ItemSchema.safeParse(raw);
     if (parsed.success) {
+      // A stripped (caught) timing field parses to an explicit `undefined`;
+      // drop the key so the item matches the optional-field shape.
+      const item = parsed.data as Record<string, unknown>;
+      if (item.time === undefined) delete item.time;
+      if (item.minutesAgo === undefined) delete item.minutesAgo;
       items.push(parsed.data);
     } else {
       dropped++;
@@ -131,6 +170,7 @@ export function extractVoiceItems(input: unknown): VoiceExtractResult {
     ok: true,
     items: items.slice(0, MAX_ITEMS),
     dropped,
+    overCap: Math.max(0, items.length - MAX_ITEMS),
     ...(reasoning ? { reasoning } : {}),
   };
 }

@@ -1,9 +1,18 @@
 "use client";
 
 import { useMemo, useState, useCallback } from "react";
-import { useDailyDoseSchedule, useTakeDose, useUntakeDose, useSkipDose, useTakeAllDoses, useEditDoseTime } from "@/hooks/use-medication-queries";
-import type { DoseSlot } from "@/hooks/use-medication-queries";
-import { hapticTake, hapticSkip, getCurrentTimeHHMM } from "@/lib/medication-ui-utils";
+import {
+  useDailyDoseSchedule,
+  useTakeDose,
+  useSkipDose,
+  useTakeAllDoses,
+  useSkipAllDoses,
+  useEditDoseTime,
+  useRevertDoseActions,
+} from "@/hooks/use-medication-queries";
+import type { BulkDoseOutcome, DoseLog, DoseSlot, UntakeDoseInput } from "@/hooks/use-medication-queries";
+import { useTodayKey } from "@/hooks/use-today-key";
+import { hapticTake, hapticSkip, getCurrentTimeHHMM, formatTakeToastDescription } from "@/lib/medication-ui-utils";
 import { toast } from "@intake/ui/use-toast";
 import { showUndoToast } from "@/components/medications/undo-toast";
 import { DoseProgressSummary } from "@/components/medications/dose-progress-summary";
@@ -29,16 +38,38 @@ function formatTime12(time24: string): string {
   return `${h12}:${String(m).padStart(2, "0")} ${ampm}`;
 }
 
+function untakeInputOf(slot: DoseSlot): UntakeDoseInput {
+  return {
+    prescriptionId: slot.prescriptionId,
+    phaseId: slot.phaseId,
+    scheduleId: slot.scheduleId,
+    date: slot.scheduledDate,
+    time: slot.localTime,
+    dosageMg: slot.dosageMg,
+  };
+}
+
+/** Bulk actions write each slot separately; name the ones that failed. */
+function reportFailures(verb: string, failed: { entry: DoseSlot }[]) {
+  if (failed.length === 0) return;
+  toast({
+    title: `Failed to ${verb} ${failed.length} dose(s)`,
+    description: failed.map((f) => f.entry.prescription.genericName).join(", "),
+    variant: "destructive",
+  });
+}
+
 export function ScheduleView({ selectedDate, onDoseClick, onAddMed }: ScheduleViewProps) {
   const dateStr = toLocalDateKey(selectedDate);
 
   const slots = useDailyDoseSchedule(dateStr);
 
   const takeDoseMut = useTakeDose();
-  const untakeDoseMut = useUntakeDose();
   const skipDoseMut = useSkipDose();
-  const takeAllDosesMut = useTakeAllDoses();
+  const takeAllDosesMut = useTakeAllDoses<DoseSlot>();
+  const skipAllDosesMut = useSkipAllDoses<DoseSlot>();
   const editDoseTimeMut = useEditDoseTime();
+  const revertMut = useRevertDoseActions();
 
   // Skip reason picker state
   const [skipPickerOpen, setSkipPickerOpen] = useState(false);
@@ -48,15 +79,19 @@ export function ScheduleView({ selectedDate, onDoseClick, onAddMed }: ScheduleVi
   const [markAllPickerOpen, setMarkAllPickerOpen] = useState(false);
   const [markAllTarget, setMarkAllTarget] = useState<{ time: string; slots: DoseSlot[] } | null>(null);
 
+  // Skip All reason picker state
+  const [skipAllPickerOpen, setSkipAllPickerOpen] = useState(false);
+  const [skipAllTarget, setSkipAllTarget] = useState<{ time: string; slots: DoseSlot[] } | null>(null);
+
   // Bulk edit drawer state (for already-logged time slots)
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [bulkEditTarget, setBulkEditTarget] = useState<{ time: string; slots: DoseSlot[] } | null>(null);
 
-  const today = new Date();
-  const isToday = selectedDate.toDateString() === today.toDateString();
-
-  // Future date: selectedDate is after today (not today)
-  const isFuture = !isToday && selectedDate > today;
+  // Compared by calendar-day key against a ticking "today", so the screen
+  // agrees with itself across midnight.
+  const todayKey = useTodayKey();
+  const isToday = dateStr === todayKey;
+  const isFuture = dateStr > todayKey;
 
   // Group slots by localTime
   const timeGroups = useMemo(() => {
@@ -110,75 +145,71 @@ export function ScheduleView({ selectedDate, onDoseClick, onAddMed }: ScheduleVi
     return Array.from(names);
   }, [slots]);
 
-  // Handle Take (today -- immediate)
-  const handleTake = useCallback(
-    async (slot: DoseSlot) => {
-      hapticTake();
-      await takeDoseMut.mutateAsync({
-        prescriptionId: slot.prescriptionId,
-        phaseId: slot.phaseId,
-        scheduleId: slot.scheduleId,
-        date: slot.scheduledDate,
-        time: slot.localTime,
-        dosageMg: slot.dosageMg,
-      });
-
-      const description = slot.inventory
-        ? `${slot.pillsPerDose ?? 1} pill(s) deducted`
-        : "Dose logged -- no stock tracked";
-
+  // Undo is bound to the logs an action wrote: each is reverted only while it
+  // is still exactly as the action left it (see useRevertDoseActions), so a
+  // late Undo never discards a change made in between.
+  const offerUndo = useCallback(
+    (title: string, description: string | undefined, targets: { slot: DoseSlot; log: DoseLog }[]) => {
+      if (targets.length === 0) return;
       showUndoToast({
-        title: `${slot.prescription.genericName} taken`,
-        description,
-        onUndo: () => {
-          untakeDoseMut.mutateAsync({
-            prescriptionId: slot.prescriptionId,
-            phaseId: slot.phaseId,
-            scheduleId: slot.scheduleId,
-            date: slot.scheduledDate,
-            time: slot.localTime,
-            dosageMg: slot.dosageMg,
-          });
+        title,
+        ...(description !== undefined && { description }),
+        onUndo: async () => {
+          try {
+            const res = await revertMut.mutateAsync(
+              targets.map(({ slot, log }) => ({ input: untakeInputOf(slot), log })),
+            );
+            if (res.stale > 0) {
+              toast({
+                title: `${res.stale} dose(s) not undone`,
+                description: "Changed since -- edit it from the dose instead",
+              });
+            }
+            if (res.failed > 0) {
+              toast({ title: `Failed to undo ${res.failed} dose(s)`, variant: "destructive" });
+            }
+          } catch {
+            toast({ title: "Failed to undo", variant: "destructive" });
+          }
         },
       });
     },
-    [takeDoseMut, untakeDoseMut],
+    [revertMut],
   );
+
+  const takeOne = useCallback(
+    async (slot: DoseSlot, takenAtTime?: string) => {
+      hapticTake();
+      let log: DoseLog;
+      try {
+        log = await takeDoseMut.mutateAsync({
+          prescriptionId: slot.prescriptionId,
+          phaseId: slot.phaseId,
+          scheduleId: slot.scheduleId,
+          date: slot.scheduledDate,
+          time: slot.localTime, // always use scheduled time as lookup key
+          dosageMg: slot.dosageMg,
+          // user-specified time stored in actionTimestamp
+          ...(takenAtTime !== undefined && { takenAtTime }),
+        });
+      } catch {
+        toast({ title: `Failed to log ${slot.prescription.genericName}`, variant: "destructive" });
+        return;
+      }
+
+      const description = formatTakeToastDescription(slot);
+      offerUndo(`${slot.prescription.genericName} taken`, description, [{ slot, log }]);
+    },
+    [takeDoseMut, offerUndo],
+  );
+
+  // Handle Take (today -- immediate)
+  const handleTake = useCallback((slot: DoseSlot) => void takeOne(slot), [takeOne]);
 
   // Handle Take with user-specified time (late dose today or past date)
   const handleRetroactiveTake = useCallback(
-    async (slot: DoseSlot, takenAtTime: string) => {
-      hapticTake();
-      await takeDoseMut.mutateAsync({
-        prescriptionId: slot.prescriptionId,
-        phaseId: slot.phaseId,
-        scheduleId: slot.scheduleId,
-        date: slot.scheduledDate,
-        time: slot.localTime, // always use scheduled time as lookup key
-        dosageMg: slot.dosageMg,
-        takenAtTime, // user-specified time stored in actionTimestamp
-      });
-
-      const description = slot.inventory
-        ? `${slot.pillsPerDose ?? 1} pill(s) deducted`
-        : "Dose logged -- no stock tracked";
-
-      showUndoToast({
-        title: `${slot.prescription.genericName} taken`,
-        description,
-        onUndo: () => {
-          untakeDoseMut.mutateAsync({
-            prescriptionId: slot.prescriptionId,
-            phaseId: slot.phaseId,
-            scheduleId: slot.scheduleId,
-            date: slot.scheduledDate,
-            time: slot.localTime,
-            dosageMg: slot.dosageMg,
-          });
-        },
-      });
-    },
-    [takeDoseMut, untakeDoseMut],
+    (slot: DoseSlot, takenAtTime: string) => void takeOne(slot, takenAtTime),
+    [takeOne],
   );
 
   // Handle Skip - open picker
@@ -191,53 +222,55 @@ export function ScheduleView({ selectedDate, onDoseClick, onAddMed }: ScheduleVi
   const handleSkipReason = useCallback(
     async (reason: string) => {
       if (!skipTarget) return;
-      hapticSkip();
-      await skipDoseMut.mutateAsync({
-        prescriptionId: skipTarget.prescriptionId,
-        phaseId: skipTarget.phaseId,
-        scheduleId: skipTarget.scheduleId,
-        date: skipTarget.scheduledDate,
-        time: skipTarget.localTime,
-        dosageMg: skipTarget.dosageMg,
-        reason,
-      });
+      const slot = skipTarget;
       setSkipTarget(null);
+      hapticSkip();
+      let log: DoseLog;
+      try {
+        log = await skipDoseMut.mutateAsync({
+          prescriptionId: slot.prescriptionId,
+          phaseId: slot.phaseId,
+          scheduleId: slot.scheduleId,
+          date: slot.scheduledDate,
+          time: slot.localTime,
+          dosageMg: slot.dosageMg,
+          reason,
+        });
+      } catch {
+        toast({ title: `Failed to skip ${slot.prescription.genericName}`, variant: "destructive" });
+        return;
+      }
+      offerUndo(`${slot.prescription.genericName} skipped`, reason, [{ slot, log }]);
     },
-    [skipTarget, skipDoseMut],
+    [skipTarget, skipDoseMut, offerUndo],
   );
 
   const executeMarkAll = useCallback(
     async (time: string, pendingSlots: DoseSlot[], takenAtTime?: string) => {
       hapticTake();
-      await takeAllDosesMut.mutateAsync({
-        entries: pendingSlots.map((s) => ({
-          prescriptionId: s.prescriptionId,
-          phaseId: s.phaseId,
-          scheduleId: s.scheduleId,
-          dosageMg: s.dosageMg,
-        })),
-        date: dateStr,
-        time,
-        ...(takenAtTime ? { takenAtTime } : {}),
-      });
+      let outcome: BulkDoseOutcome<DoseSlot>;
+      try {
+        outcome = await takeAllDosesMut.mutateAsync({
+          entries: pendingSlots,
+          date: dateStr,
+          time,
+          ...(takenAtTime ? { takenAtTime } : {}),
+        });
+      } catch {
+        toast({ title: `Failed to log the ${formatTime12(time)} doses`, variant: "destructive" });
+        return;
+      }
 
-      showUndoToast({
-        title: `All ${formatTime12(time)} doses taken`,
-        onUndo: () => {
-          for (const s of pendingSlots) {
-            untakeDoseMut.mutateAsync({
-              prescriptionId: s.prescriptionId,
-              phaseId: s.phaseId,
-              scheduleId: s.scheduleId,
-              date: s.scheduledDate,
-              time: s.localTime,
-              dosageMg: s.dosageMg,
-            });
-          }
-        },
-      });
+      reportFailures("take", outcome.failed);
+      offerUndo(
+        outcome.failed.length > 0
+          ? `${outcome.succeeded.length} of ${pendingSlots.length} ${formatTime12(time)} doses taken`
+          : `All ${formatTime12(time)} doses taken`,
+        undefined,
+        outcome.succeeded.map(({ entry, log }) => ({ slot: entry, log })),
+      );
     },
-    [takeAllDosesMut, untakeDoseMut, dateStr],
+    [takeAllDosesMut, offerUndo, dateStr],
   );
 
   // Handle Mark All (take all at a time slot)
@@ -261,7 +294,7 @@ export function ScheduleView({ selectedDate, onDoseClick, onAddMed }: ScheduleVi
         return;
       }
       // On time — take immediately
-      executeMarkAll(time, pendingSlots);
+      void executeMarkAll(time, pendingSlots);
     },
     [isToday, executeMarkAll],
   );
@@ -269,25 +302,63 @@ export function ScheduleView({ selectedDate, onDoseClick, onAddMed }: ScheduleVi
   const handleMarkAllTimeConfirm = useCallback(
     (takenAtTime: string) => {
       if (markAllTarget) {
-        executeMarkAll(markAllTarget.time, markAllTarget.slots, takenAtTime);
+        void executeMarkAll(markAllTarget.time, markAllTarget.slots, takenAtTime);
         setMarkAllTarget(null);
       }
     },
     [markAllTarget, executeMarkAll],
   );
 
+  // Skip All — only the group's pending/missed slots, and only once the user
+  // picks a reason (the reason picker doubles as the confirmation step).
+  const handleSkipAllStart = useCallback((time: string, openSlots: DoseSlot[]) => {
+    setSkipAllTarget({ time, slots: openSlots });
+    setSkipAllPickerOpen(true);
+  }, []);
+
+  const handleSkipAllReason = useCallback(
+    async (reason: string) => {
+      if (!skipAllTarget) return;
+      const { time, slots: targetSlots } = skipAllTarget;
+      setSkipAllTarget(null);
+      hapticSkip();
+      let outcome: BulkDoseOutcome<DoseSlot>;
+      try {
+        outcome = await skipAllDosesMut.mutateAsync({ entries: targetSlots, date: dateStr, time, reason });
+      } catch {
+        toast({ title: `Failed to skip the ${formatTime12(time)} doses`, variant: "destructive" });
+        return;
+      }
+
+      reportFailures("skip", outcome.failed);
+      offerUndo(
+        outcome.failed.length > 0
+          ? `${outcome.succeeded.length} of ${targetSlots.length} ${formatTime12(time)} doses skipped`
+          : `All ${formatTime12(time)} doses skipped`,
+        reason,
+        outcome.succeeded.map(({ entry, log }) => ({ slot: entry, log })),
+      );
+    },
+    [skipAllTarget, skipAllDosesMut, offerUndo, dateStr],
+  );
+
   // Handle editing the recorded time of a single taken dose
   const handleEditTime = useCallback(
     async (slot: DoseSlot, takenAtTime: string) => {
       hapticTake();
-      await editDoseTimeMut.mutateAsync({
-        prescriptionId: slot.prescriptionId,
-        phaseId: slot.phaseId,
-        scheduleId: slot.scheduleId,
-        date: slot.scheduledDate,
-        time: slot.localTime,
-        newTime: takenAtTime,
-      });
+      try {
+        await editDoseTimeMut.mutateAsync({
+          prescriptionId: slot.prescriptionId,
+          phaseId: slot.phaseId,
+          scheduleId: slot.scheduleId,
+          date: slot.scheduledDate,
+          time: slot.localTime,
+          newTime: takenAtTime,
+        });
+      } catch {
+        toast({ title: `Failed to update ${slot.prescription.genericName}`, variant: "destructive" });
+        return;
+      }
       toast({ title: `${slot.prescription.genericName} time updated` });
     },
     [editDoseTimeMut],
@@ -322,6 +393,7 @@ export function ScheduleView({ selectedDate, onDoseClick, onAddMed }: ScheduleVi
           onSkip={handleSkipStart}
           onDoseClick={onDoseClick}
           onMarkAll={handleMarkAll}
+          onSkipAll={handleSkipAllStart}
           onEditAll={handleEditAll}
           onEditTime={handleEditTime}
         />
@@ -337,12 +409,24 @@ export function ScheduleView({ selectedDate, onDoseClick, onAddMed }: ScheduleVi
         }
       />
 
+      <SkipReasonPicker
+        open={skipAllPickerOpen}
+        onOpenChange={setSkipAllPickerOpen}
+        onSelect={handleSkipAllReason}
+        suggestRanOut={!!skipAllTarget?.slots.some(
+          (s) => s.inventoryWarning === "negative_stock" || s.inventoryWarning === "no_inventory",
+        )}
+      />
+
+      {/* Late today defaults to now; a past-date back-fill defaults to the
+          group's scheduled time rather than today's clock. */}
       <RetroactiveTimePicker
         open={markAllPickerOpen}
         onOpenChange={setMarkAllPickerOpen}
-        defaultTime={getCurrentTimeHHMM()}
+        defaultTime={isToday || !markAllTarget ? getCurrentTimeHHMM() : markAllTarget.time}
         compoundName="all doses"
         onConfirm={handleMarkAllTimeConfirm}
+        notAfterNow={isToday}
       />
 
       <BulkDoseEditDialog

@@ -1,16 +1,17 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import type Anthropic from "@anthropic-ai/sdk";
+import Anthropic from "@anthropic-ai/sdk";
 import { withAuth } from "@/lib/auth-middleware";
 import {
   INSIGHT_TOOL,
   InsightResponseSchema,
-  type AnalyticsInsightsRequest,
 } from "@intake/ai-prompts/analytics-insights";
+import { CLAUDE_MODELS } from "@/app/api/ai/_shared/claude-client";
+import { getClaudeClientForJob } from "@/lib/server/insight-job-key";
 import {
-  getClaudeClientForUser,
-  CLAUDE_MODELS,
-} from "@/app/api/ai/_shared/claude-client";
+  PinnedKeyUnavailableError,
+  readJobRequest,
+} from "@/lib/server/insight-job-payload";
 import {
   buildDeepBatchParams,
   continuationDepth,
@@ -41,7 +42,8 @@ import {
  * thing the client switches on):
  *
  *   { status: "pending",   startedAt }                              — still in flight
- *   { status: "completed", narrative, observations, generatedAt }   — done
+ *   { status: "completed", reportId, narrative, observations,
+ *     sources?, generatedAt, rangeStart, rangeEnd, personalised }   — done
  *   { status: "failed",    error }                                  — terminal error
  *   { status: "expired",   error }                                  — 24h SLA blown
  *
@@ -61,6 +63,18 @@ import {
  * keeps the job pending. Treating it as a malformed response (as this route
  * once did) threw away paid research and reported a working feature as
  * broken.
+ *
+ * A batch belongs to the Anthropic org of the key that created it, so every
+ * call here goes through the key recorded on the job (insight-job-key.ts),
+ * never the caller's current key. Anything that means the batch can never be
+ * collected — that key is gone, Anthropic no longer knows the batch, or the
+ * submission died before a batch was attached — fails the job outright: a
+ * pending row holds the one-pending-job-per-user lock, and leaving it pending
+ * blocks every new deep run until the 24h expiry.
+ *
+ * The completed response carries the report's server id and window so the
+ * client can cache it in Dexie directly; the server row syncs under that same
+ * id, so the two dedupe.
  */
 
 export const runtime = "nodejs";
@@ -68,6 +82,15 @@ export const runtime = "nodejs";
 // Mirrors the docs SLA. Pending jobs older than this are reported as expired
 // — the client treats this terminally so the pending indicator can clear.
 const BATCH_SLA_MS = 24 * 60 * 60 * 1000;
+
+// The deep route attaches the batch id within one request. A reservation
+// still without one after this long belongs to a submission that was killed
+// between batches.create and attachBatchToJob — nothing will attach it now.
+const UNATTACHED_SUBMISSION_TIMEOUT_MS = 10 * 60 * 1000;
+
+function failedResponse(error: string, startedAt: number) {
+  return NextResponse.json({ status: "failed" as const, error, startedAt });
+}
 
 type ToolUseBlock = Extract<
   Anthropic.Messages.ContentBlock,
@@ -112,8 +135,14 @@ export const GET = withAuth(async ({ request, auth }) => {
 
   // Submission is still in flight — the reservation insert won the unique
   // index but the batch_id hasn't been attached yet. Tell the client to
-  // keep polling; we'll have a batch to query on the next tick.
+  // keep polling; we'll have a batch to query on the next tick — unless the
+  // submission has clearly died, in which case release the lock.
   if (!job.batchId) {
+    if (Date.now() - job.createdAt > UNATTACHED_SUBMISSION_TIMEOUT_MS) {
+      const err = "Deep analysis never started. Please try again.";
+      await failInsightJob(job.id, err);
+      return failedResponse(err, job.createdAt);
+    }
     return NextResponse.json({
       status: "pending" as const,
       startedAt: job.createdAt,
@@ -123,11 +152,16 @@ export const GET = withAuth(async ({ request, auth }) => {
   let client;
   let resolved;
   try {
-    ({ client, resolved } = await getClaudeClientForUser(
+    ({ client, resolved } = await getClaudeClientForJob(
+      job.requestPayload,
       auth.userId!,
       auth.email,
     ));
   } catch (e) {
+    if (e instanceof PinnedKeyUnavailableError) {
+      await failInsightJob(job.id, e.message);
+      return failedResponse(e.message, job.createdAt);
+    }
     const mapped = aiErrorResponse(e);
     if (mapped) return mapped;
     throw e;
@@ -137,6 +171,13 @@ export const GET = withAuth(async ({ request, auth }) => {
   try {
     batch = await client.messages.batches.retrieve(job.batchId);
   } catch (e) {
+    if (e instanceof Anthropic.NotFoundError) {
+      // The key's org has no such batch. Retrying can't change that.
+      const err =
+        "Anthropic no longer has this deep analysis, so its result can't be collected. Start a new deep analysis.";
+      await failInsightJob(job.id, err);
+      return failedResponse(err, job.createdAt);
+    }
     const mapped = aiErrorResponse(e);
     if (mapped) return mapped;
     console.error("[analytics/insights/jobs] batch retrieve failed:", e);
@@ -246,7 +287,12 @@ export const GET = withAuth(async ({ request, auth }) => {
       });
     }
 
-    const submittedPayload = job.requestPayload as AnalyticsInsightsRequest;
+    const submittedPayload = readJobRequest(job.requestPayload);
+    if (!submittedPayload) {
+      const err = "Could not resume the paused deep analysis. Try again.";
+      await failInsightJob(job.id, err);
+      return failedResponse(err, job.createdAt);
+    }
     let continuation;
     try {
       continuation = await client.messages.batches.create({
@@ -384,7 +430,15 @@ export const GET = withAuth(async ({ request, auth }) => {
   // The submitted payload defines the analysis window and personalisation —
   // pull it back out of the saved request_payload rather than trusting
   // client-supplied values on the poll.
-  const submitted = job.requestPayload as AnalyticsInsightsRequest;
+  const submitted = readJobRequest(job.requestPayload);
+  if (!submitted) {
+    // A pending row always carries its request; this is a corrupt row.
+    const err = "Deep analysis request is no longer available.";
+    await failInsightJob(job.id, err);
+    return failedResponse(err, job.createdAt);
+  }
+  // Prior assessments are not personal context — only the profile the
+  // request actually carried counts.
   const personalised =
     Boolean(
       submitted.profile?.conditions && submitted.profile.conditions.length > 0,
@@ -441,10 +495,14 @@ export const GET = withAuth(async ({ request, auth }) => {
 
   return NextResponse.json({
     status: "completed" as const,
+    reportId: completion.reportId,
     narrative: validated.data.summary,
     observations: validated.data.observations,
     sources: sources ?? undefined,
     generatedAt,
+    rangeStart: submitted.range.start,
+    rangeEnd: submitted.range.end,
+    personalised,
     startedAt: job.createdAt,
   });
 });
@@ -467,10 +525,14 @@ async function respondCompleted(job: InsightJobRow) {
   }
   return NextResponse.json({
     status: "completed" as const,
+    reportId: job.resultReportId,
     narrative: report.narrative,
     observations: report.observations,
     sources: report.sources ?? undefined,
     generatedAt: report.generatedAt,
+    rangeStart: report.rangeStart,
+    rangeEnd: report.rangeEnd,
+    personalised: report.personalised,
     startedAt: job.createdAt,
   });
 }

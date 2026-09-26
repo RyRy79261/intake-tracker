@@ -115,7 +115,8 @@ export function AiInsightsConsentToggle({ field, label, noun }: Props) {
           <p className="text-xs text-muted-foreground">
             {enabled
               ? `Your ${noun} are included when generating AI insights.`
-              : `Your ${noun} stay on this device and are not sent to the AI.`}
+              : // Not "stay on this device": the profile backs up and syncs.
+                `Your ${noun} are not sent to the AI.`}
           </p>
         </div>
         <Switch id={inputId} checked={enabled} onCheckedChange={handleToggle} />

@@ -6,11 +6,22 @@ import { type LiquidPreset } from "@/lib/constants";
 // and the few that pull cn alongside an app helper below — resolve unchanged.
 export { cn } from "@intake/ui/lib/utils";
 
+/**
+ * Format an amount for display. Summed totals can carry float noise
+ * (0.1 + 0.2), so values are rounded to one decimal. Litres keep up to three
+ * decimals (every whole ml) so a total just over a whole-litre limit
+ * (1040 ml → "1.04L") never reads the same as the limit ("1.0L").
+ */
 export function formatAmount(amount: number, unit: string): string {
   if (unit === "ml" && amount >= 1000) {
-    return `${(amount / 1000).toFixed(1)}L`;
+    const litres = Math.round(amount) / 1000;
+    return `${litres.toLocaleString("en-US", {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 3,
+      useGrouping: false,
+    })}L`;
   }
-  return `${amount}${unit}`;
+  return `${Math.round(amount * 10) / 10}${unit}`;
 }
 
 /**
@@ -45,9 +56,21 @@ export function getDeviceId(): string {
   return "server";
 }
 
-export function syncFields() {
+/**
+ * Sync scaffolding for a new record on a table WITHOUT a `timezone` field:
+ * Prescription, MedicationPhase, PhaseSchedule (it has `anchorTimezone`),
+ * TitrationPlan, UserProfile and InsightReport. Neither their interfaces nor
+ * their server tables carry `timezone`, so writing one only leaves an untyped
+ * local-only value that the first sync round-trip drops.
+ */
+export function baseSyncFields() {
   const now = Date.now();
-  return { createdAt: now, updatedAt: now, deletedAt: null as null, deviceId: getDeviceId(), timezone: getDeviceTimezone() };
+  return { createdAt: now, updatedAt: now, deletedAt: null as null, deviceId: getDeviceId() };
+}
+
+/** Sync scaffolding plus the device `timezone`, for tables that declare it. */
+export function syncFields() {
+  return { ...baseSyncFields(), timezone: getDeviceTimezone() };
 }
 
 /**
@@ -56,7 +79,7 @@ export function syncFields() {
  *
  * @param source - The record's source field (e.g., "manual", "coffee:latte", "preset:abc123", "substance:xyz")
  * @param options.presets - Available liquid presets for name lookup (from settings store)
- * @param options.note - The record's note field, used as fallback label for substance-sourced entries
+ * @param options.note - The record's note field: the label for preset, drink and substance entries
  */
 export function getLiquidTypeLabel(
   source?: string,
@@ -90,7 +113,11 @@ export function getLiquidTypeLabel(
     return options?.note || "Food";
   }
 
-  // Preset prefix: "preset:manual" -> null, "preset:{id}" -> preset name or "Beverage"
+  // Preset prefix: the note first — it is the drink's name as logged, and it
+  // survives on a device where the preset doesn't exist (presets live only in
+  // this device's localStorage) and after the preset is renamed or deleted.
+  // Then "preset:{id}" -> preset name or "Beverage"; "preset:manual" -> null.
+  if (source.startsWith("preset:") && options?.note) return options.note;
   if (source === "preset:manual") return null;
   if (source.startsWith("preset:")) {
     const presetId = source.slice(7);

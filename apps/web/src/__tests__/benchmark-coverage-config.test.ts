@@ -2,7 +2,7 @@
  * Benchmark infrastructure and coverage reporter config validation.
  *
  * Behavioral framing:
- *   CIOP-02: vitest.config.ts has coverage block with json-summary reporter
+ *   CIOP-02: vitest.config.mts has coverage block with json-summary reporter
  *            so davelosert/vitest-coverage-report-action can consume
  *            coverage/coverage-summary.json in CI.
  *   BNCH-01: bench and bench:ci scripts are defined in package.json,
@@ -18,17 +18,17 @@ import * as path from "path";
 
 const ROOT = path.resolve(process.cwd());
 
-describe("vitest.config.ts has coverage reporters required for CI (CIOP-02)", () => {
-  it("vitest.config.ts contains a coverage block with the json-summary reporter", () => {
+describe("vitest.config.mts has coverage reporters required for CI (CIOP-02)", () => {
+  it("vitest.config.mts contains a coverage block with the json-summary reporter", () => {
     // davelosert/vitest-coverage-report-action reads coverage/coverage-summary.json.
     // Without json-summary in the reporters list the file is never generated
     // and the coverage action fails silently.
-    const configPath = path.join(ROOT, "vitest.config.ts");
-    expect(fs.existsSync(configPath), "vitest.config.ts must exist").toBe(true);
+    const configPath = path.join(ROOT, "vitest.config.mts");
+    expect(fs.existsSync(configPath), "vitest.config.mts must exist").toBe(true);
     const contents = fs.readFileSync(configPath, "utf-8");
     expect(
       contents,
-      "vitest.config.ts must declare a coverage block"
+      "vitest.config.mts must declare a coverage block"
     ).toContain("coverage:");
     expect(
       contents,
@@ -38,7 +38,7 @@ describe("vitest.config.ts has coverage reporters required for CI (CIOP-02)", ()
 
   it("coverage block specifies the v8 provider", () => {
     // v8 is the project-standard provider and is required by @vitest/coverage-v8.
-    const configPath = path.join(ROOT, "vitest.config.ts");
+    const configPath = path.join(ROOT, "vitest.config.mts");
     const contents = fs.readFileSync(configPath, "utf-8");
     expect(
       contents,
@@ -49,7 +49,7 @@ describe("vitest.config.ts has coverage reporters required for CI (CIOP-02)", ()
   it("coverage block includes the json reporter alongside json-summary", () => {
     // Both reporters are needed: json-summary for the coverage action comparison,
     // and json for per-file coverage details.
-    const configPath = path.join(ROOT, "vitest.config.ts");
+    const configPath = path.join(ROOT, "vitest.config.mts");
     const contents = fs.readFileSync(configPath, "utf-8");
     expect(
       contents,
@@ -211,30 +211,30 @@ describe("shared tsconfig sets a high enough target for the typecheck CI job (CI
   });
 });
 
-describe("vitest.config.ts excludes .claude/** to prevent worktree bench file discovery (CIPL-03)", () => {
+describe("vitest.config.mts excludes .claude/** to prevent worktree bench file discovery (CIPL-03)", () => {
   it("vitest test.exclude includes .claude/** so worktree test files are never discovered", () => {
     // Phase 25 found that pnpm bench:ci from the main repo root picked up
     // .bench.ts files from .claude/worktrees/ directories, producing worktree
     // paths in results.json. Adding .claude/** to exclude prevents this.
-    const configPath = path.join(ROOT, "vitest.config.ts");
-    expect(fs.existsSync(configPath), "vitest.config.ts must exist").toBe(true);
+    const configPath = path.join(ROOT, "vitest.config.mts");
+    expect(fs.existsSync(configPath), "vitest.config.mts must exist").toBe(true);
     const contents = fs.readFileSync(configPath, "utf-8");
     expect(
       contents,
-      "vitest.config.ts test.exclude must include '.claude/**'"
+      "vitest.config.mts test.exclude must include '.claude/**'"
     ).toContain(".claude/**");
   });
 
   it("vitest benchmark.exclude includes .claude/** so worktree bench files are never discovered", () => {
     // The benchmark.exclude must separately list .claude/** because vitest bench
     // uses a different discovery pass from the regular test runner.
-    const configPath = path.join(ROOT, "vitest.config.ts");
+    const configPath = path.join(ROOT, "vitest.config.mts");
     const contents = fs.readFileSync(configPath, "utf-8");
     // Verify the exclude appears inside the benchmark block by checking that
     // "benchmark" and ".claude/**" both appear in the config.
     expect(
       contents,
-      "vitest.config.ts must have a benchmark block"
+      "vitest.config.mts must have a benchmark block"
     ).toContain("benchmark:");
     // Count occurrences — must appear at least twice (once in test.exclude, once
     // in benchmark.exclude) to satisfy both exclusion paths.

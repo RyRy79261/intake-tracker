@@ -29,6 +29,9 @@ vi.mock("@/components/auth-guard", () => ({
 import { FoodSection } from "@/components/food-salt/food-section";
 import { renderWithFixtures } from "@/__tests__/react-test-utils";
 import { makeEatingRecord } from "@/__tests__/fixtures/db-fixtures";
+// Test-only direct DB access to assert what the save wrote.
+// eslint-disable-next-line no-restricted-imports
+import { db } from "@/lib/db";
 
 describe("FoodSection", () => {
   it("renders the detail-entry fields and the record button", async () => {
@@ -51,7 +54,7 @@ describe("FoodSection", () => {
     });
     expect(recordButton).toBeDisabled();
     expect(
-      screen.getByText(/Enter a sodium, water, sugar or potassium amount/i),
+      screen.getByText(/sodium, water, sugar or potassium amount to enable saving/i),
     ).toBeInTheDocument();
 
     await user.type(screen.getByLabelText(/Sodium/i), "300");
@@ -73,16 +76,34 @@ describe("FoodSection", () => {
     expect(recordButton).toBeEnabled();
   });
 
+  it("records a plain meal with only a description (no nutrient values)", async () => {
+    const user = userEvent.setup();
+    await renderWithFixtures(<FoodSection />);
+
+    const recordButton = await screen.findByRole("button", {
+      name: "Record with details",
+    });
+    await user.type(screen.getByLabelText(/Describe what you ate/i), "Grilled chicken");
+    expect(recordButton).toBeEnabled();
+    await user.click(recordButton);
+
+    await waitFor(async () => {
+      const eatings = await db.eatingRecords.toArray();
+      expect(eatings.map((e) => e.note)).toEqual(["Grilled chicken"]);
+    });
+    expect(await db.intakeRecords.count()).toBe(0);
+  });
+
   it("shows the converted sodium hint when the source is salt", async () => {
     const user = userEvent.setup();
     await renderWithFixtures(<FoodSection />);
 
     await user.type(await screen.findByLabelText(/Sodium/i), "1000");
-    // 1000 mg of table salt -> ~390 mg sodium (multiplier 0.39).
+    // 1000 mg of table salt -> ~393 mg sodium (SODIUM_FRACTION 0.393).
     await user.click(screen.getByRole("combobox"));
     await user.click(screen.getByRole("option", { name: "Salt" }));
 
-    expect(await screen.findByText("= 390mg sodium")).toBeInTheDocument();
+    expect(await screen.findByText("= 393mg sodium")).toBeInTheDocument();
   });
 
   it("records a composable entry and surfaces it in the recent list", async () => {

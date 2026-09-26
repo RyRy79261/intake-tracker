@@ -85,11 +85,6 @@ beforeEach(() => {
       if (url === "/api/sync/push") {
         return new Response(JSON.stringify({ ok: true }), { status: 200 });
       }
-      if (url === "/api/sync/verify-hash") {
-        return new Response(JSON.stringify({ hashes: {}, rowCounts: {} }), {
-          status: 200,
-        });
-      }
       if (url === "/api/sync/cleanup") {
         return new Response(JSON.stringify({ deleted: {} }), { status: 200 });
       }
@@ -251,77 +246,123 @@ describe("migration-service", () => {
       expect(useSettingsStore.getState().storageMode).toBe("local");
       expect(useMigrationStore.getState().phase).toBe("cancelled");
     });
-  });
 
-  describe("hash computation", () => {
-    it("produces deterministic SHA-256 for known input (sorted keys, null-normalized)", async () => {
-      const { verifyMigration } = await import("@/lib/migration-service");
-
-      await db.intakeRecords.add(
-        makeIntakeRecord("ir-hash-1", { amount: 250 }),
+    it("reports a failed cleanup instead of claiming the data was removed (audit sync-engine#7)", async () => {
+      const { cancelMigration } = await import("@/lib/migration-service");
+      const { useSyncStatusStore } = await import("@/stores/sync-status-store");
+      useSyncStatusStore.setState({ modeChosenByUser: false });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => new Response("boom", { status: 500 })),
       );
 
+      await cancelMigration();
+
+      const state = useMigrationStore.getState();
+      expect(state.phase).toBe("error");
+      expect(state.error).toContain("500");
+      // Still an explicit local choice: auto-detect must not undo the cancel.
+      expect(useSettingsStore.getState().storageMode).toBe("local");
+      expect(useSyncStatusStore.getState().modeChosenByUser).toBe(true);
+    });
+
+    it("stops the running upload before cleaning up, so no batch lands after it", async () => {
+      const { startMigration, cancelMigration } = await import(
+        "@/lib/migration-service"
+      );
+      await db.intakeRecords.clear();
+      await db.intakeRecords.bulkAdd(
+        Array.from({ length: 500 }, (_, i) => makeIntakeRecord(`c-${i}`)),
+      );
+
+      const order: string[] = [];
+      let releaseFirstPush!: () => void;
+      const firstPush = new Promise<void>((r) => (releaseFirstPush = r));
+      let pushes = 0;
       vi.stubGlobal(
         "fetch",
         vi.fn(async (url: string) => {
-          if (url === "/api/sync/verify-hash") {
-            return new Response(
-              JSON.stringify({ hashes: {}, rowCounts: {} }),
-              { status: 200 },
-            );
+          if (url === "/api/sync/push") {
+            pushes++;
+            order.push("push");
+            if (pushes === 1) await firstPush;
+            return new Response(JSON.stringify({ accepted: [] }), { status: 200 });
           }
-          return new Response(JSON.stringify({ ok: true }), { status: 200 });
+          order.push("cleanup");
+          return new Response(JSON.stringify({ deleted: {} }), { status: 200 });
         }),
       );
 
-      await verifyMigration();
+      const upload = startMigration();
+      await vi.waitFor(() => expect(pushes).toBe(1));
+      const cancel = cancelMigration();
+      releaseFirstPush();
+      await Promise.all([upload, cancel]);
 
-      const store = useMigrationStore.getState();
-      const irResult = store.verificationResults["intakeRecords"];
-      expect(irResult).toBeDefined();
-      expect(irResult!.clientHash).toMatch(/^[a-f0-9]{64}$/);
-
-      useMigrationStore.getState().reset();
-      await verifyMigration();
-      const irResult2 =
-        useMigrationStore.getState().verificationResults["intakeRecords"];
-      expect(irResult2!.clientHash).toBe(irResult!.clientHash);
+      expect(order).toEqual(["push", "cleanup"]);
+      expect(useMigrationStore.getState().phase).toBe("cancelled");
     });
   });
 
-  describe("empty table handling", () => {
-    it("hash of empty table is hash of '[]'", async () => {
-      const { verifyMigration } = await import("@/lib/migration-service");
+  describe("server rejections (audit sync-engine#12)", () => {
+    it("counts rejected rows per table and queues them for the sync engine", async () => {
+      const { startMigration } = await import("@/lib/migration-service");
+      await db.intakeRecords.clear();
+      await db._syncQueue.clear();
+      await db.intakeRecords.bulkAdd([
+        makeIntakeRecord("ok-1"),
+        makeIntakeRecord("bad-1"),
+      ]);
 
       vi.stubGlobal(
         "fetch",
-        vi.fn(async (url: string) => {
-          if (url === "/api/sync/verify-hash") {
-            return new Response(
-              JSON.stringify({ hashes: {}, rowCounts: {} }),
-              { status: 200 },
-            );
-          }
-          return new Response(JSON.stringify({ ok: true }), { status: 200 });
+        vi.fn(async (url: string, init?: RequestInit) => {
+          if (url !== "/api/sync/push") return new Response("{}", { status: 200 });
+          const { ops } = JSON.parse(init!.body as string) as {
+            ops: Array<{ queueId: number; tableName: string; row: { id: string } }>;
+          };
+          return new Response(
+            JSON.stringify({
+              accepted: [],
+              rejected: ops
+                .filter((o) => o.row.id === "bad-1")
+                .map((o) => ({
+                  queueId: o.queueId,
+                  tableName: o.tableName,
+                  error: "invalid",
+                  code: "invalid",
+                })),
+            }),
+            { status: 200 },
+          );
         }),
       );
 
-      await verifyMigration();
+      await startMigration();
 
-      const store = useMigrationStore.getState();
-      const allHashes = Object.values(store.verificationResults).map(
-        (r) => r.clientHash,
-      );
-      const uniqueHashes = new Set(allHashes);
-      expect(uniqueHashes.size).toBe(1);
+      const progress = useMigrationStore.getState().tableProgress["intakeRecords"];
+      expect(progress?.rejected).toBe(1);
+      const queued = await db._syncQueue.toArray();
+      expect(queued.map((q) => q.recordId)).toEqual(["bad-1"]);
+    });
+  });
 
-      const emptyHash = allHashes[0]!;
-      const encoded = new TextEncoder().encode("[]");
-      const hashBuffer = await crypto.subtle.digest("SHA-256", encoded);
-      const expectedHash = Array.from(new Uint8Array(hashBuffer))
-        .map((b) => b.toString(16).padStart(2, "0"))
-        .join("");
-      expect(emptyHash).toBe(expectedHash);
+  describe("queueLocalDataForSync (audit sync-engine#16)", () => {
+    it("queues every local record, tombstones as deletes", async () => {
+      const { queueLocalDataForSync } = await import("@/lib/migration-service");
+      await db.intakeRecords.clear();
+      await db._syncQueue.clear();
+      await db.intakeRecords.bulkAdd([
+        makeIntakeRecord("live-1"),
+        makeIntakeRecord("gone-1", { deletedAt: NOW }),
+      ]);
+
+      await queueLocalDataForSync();
+
+      const queued = await db._syncQueue.toArray();
+      const byId = new Map(queued.map((q) => [q.recordId, q.op]));
+      expect(byId.get("live-1")).toBe("upsert");
+      expect(byId.get("gone-1")).toBe("delete");
     });
   });
 

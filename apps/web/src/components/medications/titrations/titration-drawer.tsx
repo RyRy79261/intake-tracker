@@ -15,11 +15,17 @@ import {
 import { AlertTriangle, Loader2, Plus, TrendingUp } from "lucide-react";
 import {
   useCreateTitrationPlan,
+  usePhasesForPrescription,
   usePhasesForTitrationPlan,
+  useSchedulesForPhase,
   useUpdateTitrationPlan,
 } from "@/hooks/use-medication-queries";
-import type { Prescription, TitrationPlan } from "@/lib/db";
+import type { PhaseSchedule, Prescription, TitrationPlan } from "@/lib/db";
+import { getMaintenancePhase } from "@/lib/medication-ui-utils";
+import { summarizeRegimen } from "@/lib/titration-regimen";
 import { useAiFetch } from "@/hooks/use-ai-fetch";
+import { useToast } from "@intake/ui/use-toast";
+import { readAiErrorMessage } from "@/lib/ai-error-message";
 import { useAuthGate } from "@/components/auth-guard";
 import { RxEntryCard, EditPhaseScheduleLoader } from "@/components/medications/titrations/rx-entry-card";
 import { DAY_LABELS_LONG } from "@/components/medications/titrations/types";
@@ -39,6 +45,7 @@ export function TitrationDrawer({
   const createMutation = useCreateTitrationPlan();
   const updateMutation = useUpdateTitrationPlan();
   const aiFetch = useAiFetch();
+  const { toast } = useToast();
   const showAi = useAuthGate();
   const isEditing = editingPlan !== null;
 
@@ -59,6 +66,9 @@ export function TitrationDrawer({
   } = form;
 
   const [aiLoading, setAiLoading] = useState(false);
+  // Each entry's current maintenance regimen, keyed by prescription id and
+  // filled in by <CurrentRegimenLoader>.
+  const [regimens, setRegimens] = useState<Record<string, CurrentRegimen | undefined>>({});
   const phasesReady = editingPhases.length > 0;
 
   useEffect(() => {
@@ -76,22 +86,37 @@ export function TitrationDrawer({
   const handleGenerateWarnings = async () => {
     const titrationRxIds = new Set(entries.filter((e) => e.prescriptionId).map((e) => e.prescriptionId));
 
+    const describeDays = (days: number[]) =>
+      days.length === 7 ? "daily" : days.map((d) => DAY_LABELS_LONG[d]).join(", ");
+
+    // Doses are labelled in the prescription's own unit, the "daily" total is
+    // averaged over the week (a Mon/Wed/Fri dose isn't daily), and the current
+    // maintenance regimen is sent so the model can see the size of the change.
     const changingRx = entries
       .filter((e) => e.prescriptionId)
       .map((e) => {
         const rx = prescriptions.find((p) => p.id === e.prescriptionId);
+        const current = regimens[e.prescriptionId];
+        const unit = current?.unit ?? "mg";
         const newSchedule = e.schedules
           .filter((s) => s.dosage)
-          .map((s) => {
-            const days = s.daysOfWeek.length === 7 ? "daily" : s.daysOfWeek.map((d) => DAY_LABELS_LONG[d]).join(", ");
-            return `${s.dosage}mg at ${s.time} (${days})`;
-          });
-        const totalNew = e.schedules.reduce((sum, s) => sum + (parseFloat(s.dosage) || 0), 0);
+          .map((s) => `${s.dosage}${unit} at ${s.time} (${describeDays(s.daysOfWeek)})`);
+        const newSummary = summarizeRegimen(
+          e.schedules.map((s) => ({ dosage: parseFloat(s.dosage), daysOfWeek: s.daysOfWeek })),
+          unit,
+        );
+        const currentSummary = current ? summarizeRegimen(current.schedules, unit) : undefined;
+        const currentDosage = current && currentSummary
+          ? `${currentSummary.averageDaily} (${current.schedules
+            .map((s) => `${s.dosage}${unit} at ${s.time} (${describeDays(s.daysOfWeek)})`)
+            .join("; ")})`
+          : undefined;
         return {
           genericName: rx?.genericName ?? "Unknown",
+          ...(currentDosage && { currentDosage }),
           newSchedule: newSchedule.length > 0 ? newSchedule : undefined,
-          newTotalDaily: totalNew > 0 ? `${totalNew}mg/day` : undefined,
-          frequency: `${e.schedules.length}x daily`,
+          newTotalDaily: newSummary?.averageDaily,
+          frequency: newSummary?.frequency,
         };
       });
 
@@ -120,9 +145,20 @@ export function TitrationDrawer({
           const newWarnings = data.warnings.join("\n");
           setWarnings(existing ? `${existing}\n${newWarnings}` : newWarnings);
         }
+      } else if (res) {
+        // e.g. NO_AI_KEY: the route's message says where to add a key.
+        toast({
+          title: "Couldn't generate warnings",
+          description: await readAiErrorMessage(res, "You can still type warnings manually."),
+          variant: "destructive",
+        });
       }
     } catch {
-      // Silently fail — user can still type manually
+      toast({
+        title: "Couldn't generate warnings",
+        description: "You can still type warnings manually.",
+        variant: "destructive",
+      });
     } finally {
       setAiLoading(false);
     }
@@ -141,9 +177,9 @@ export function TitrationDrawer({
     );
     const conditionLabel = firstRx?.indication || title.trim();
 
+    // No unit: the service inherits the prescription's own (mcg, ml, ...).
     const entryData = entries.map((e) => ({
       prescriptionId: e.prescriptionId,
-      unit: "mg",
       schedules: e.schedules.map((s) => ({
         time: s.time,
         daysOfWeek: s.daysOfWeek,
@@ -207,6 +243,14 @@ export function TitrationDrawer({
             onLoad={(schedules) => {
               setEntries((prev) => prev.map((e, i) => i === idx ? { ...e, schedules } : e));
             }}
+          />
+        ))}
+
+        {Array.from(new Set(entries.map((e) => e.prescriptionId).filter(Boolean))).map((rxId) => (
+          <CurrentRegimenLoader
+            key={rxId}
+            prescriptionId={rxId}
+            onLoad={(regimen) => setRegimens((prev) => ({ ...prev, [rxId]: regimen }))}
           />
         ))}
 
@@ -346,4 +390,44 @@ export function TitrationDrawer({
       </DrawerContent>
     </Drawer>
   );
+}
+
+interface CurrentRegimen {
+  unit: string;
+  schedules: PhaseSchedule[];
+}
+
+/**
+ * Reports a prescription's current maintenance regimen (unit + enabled
+ * schedules) to the drawer, so the AI-warnings request can label doses in
+ * the prescription's own unit and show what the titration changes from.
+ */
+export function CurrentRegimenLoader({
+  prescriptionId,
+  onLoad,
+}: {
+  prescriptionId: string;
+  onLoad: (regimen: CurrentRegimen | undefined) => void;
+}) {
+  const phases = usePhasesForPrescription(prescriptionId);
+  const maintenance = getMaintenancePhase(phases);
+  const schedules = useSchedulesForPhase(maintenance?.id);
+  const regimen: CurrentRegimen | undefined = maintenance
+    ? { unit: maintenance.unit, schedules: schedules.filter((s) => s.enabled) }
+    : undefined;
+  // Keyed on content, not array identity: until Dexie resolves, useLiveQuery
+  // returns a fresh default [] every render, and reporting on identity would
+  // loop (report -> parent state -> re-render -> new [] -> report ...).
+  const regimenKey = JSON.stringify(
+    regimen && [regimen.unit, regimen.schedules.map((s) => [s.id, s.time, s.dosage, s.daysOfWeek])],
+  );
+
+  useEffect(() => {
+    onLoad(regimen);
+    // onLoad is an inline callback from the parent — including it in deps
+    // would re-run on every parent render. We only need to react to data.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [regimenKey]);
+
+  return null;
 }

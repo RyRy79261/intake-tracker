@@ -2,7 +2,6 @@
 
 import { useMutation } from "@tanstack/react-query";
 import { downloadBackup, importBackup, resolveConflicts, type ImportResult, type ConflictRecord } from "@/lib/backup-service";
-import { clearAllData } from "@/lib/intake-service";
 import { unwrap } from "@intake/core/service";
 import { useToast } from "@intake/ui/use-toast";
 
@@ -37,26 +36,9 @@ export function useUploadBackup() {
       return result;
     },
     onSuccess: (data: ImportResult) => {
-      const total =
-        data.intakeImported +
-        data.weightImported +
-        data.bpImported +
-        data.eatingImported +
-        data.urinationImported +
-        data.defecationImported +
-        data.substanceImported +
-        data.prescriptionsImported +
-        data.phasesImported +
-        data.schedulesImported +
-        data.inventoryItemsImported +
-        data.inventoryTransactionsImported +
-        data.doseLogsImported +
-        data.titrationPlansImported +
-        data.dailyNotesImported +
-        data.auditLogsImported;
       toast({
         title: "Import successful",
-        description: `Imported ${total} records (${data.skipped} skipped${data.conflicts.length > 0 ? `, ${data.conflicts.length} conflicts` : ""})`,
+        description: `Imported ${data.totalImported} records (${data.skipped} skipped${data.conflicts.length > 0 ? `, ${data.conflicts.length} conflicts` : ""})`,
         variant: "success",
       });
     },
@@ -87,27 +69,6 @@ export function useResolveConflicts() {
       toast({
         title: "Resolution failed",
         description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-}
-
-export function useClearAllData() {
-  const { toast } = useToast();
-  return useMutation({
-    mutationFn: async () => unwrap(await clearAllData()),
-    onSuccess: () => {
-      toast({
-        title: "Data cleared",
-        description: "All intake records have been deleted",
-        variant: "success",
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: `Failed to clear data: ${error.message}`,
         variant: "destructive",
       });
     },

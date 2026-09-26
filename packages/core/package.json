@@ -12,7 +12,13 @@
     "./service": "./src/service-result.ts",
     "./security": "./src/security.ts",
     "./shake": "./src/shake-detector.ts",
-    "./analytics-stats": "./src/analytics-stats.ts"
+    "./analytics-stats": "./src/analytics-stats.ts",
+    "./lifecycle": "./src/lifecycle.ts",
+    "./effective-phase": "./src/effective-phase.ts",
+    "./strength": "./src/strength-parser.ts",
+    "./record-schemas": "./src/record-schemas.ts",
+    "./logical-day": "./src/logical-day.ts",
+    "./sodium": "./src/sodium.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -20,7 +26,8 @@
   },
   "dependencies": {
     "@intake/types": "workspace:*",
-    "simple-statistics": "^7.11.0"
+    "simple-statistics": "^7.11.0",
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@intake/typescript-config": "workspace:*",

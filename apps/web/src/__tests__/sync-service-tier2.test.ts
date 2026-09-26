@@ -28,6 +28,7 @@ import {
 import { recalculateStockForItem } from "@/lib/inventory-service";
 import { recalculateScheduleTimezones } from "@/lib/timezone-recalculation-service";
 import { schedulePush } from "@/lib/sync-engine";
+import { makeMedicationPhase } from "@/__tests__/fixtures/db-fixtures";
 
 vi.mock("@/lib/timezone", () => ({
   getDeviceTimezone: () => "America/New_York",
@@ -37,6 +38,8 @@ vi.mock("@/lib/timezone", () => ({
     minutes: utcMinutes % 60,
   }),
   localTimeToUTCMinutes: (h: number, m: number, _tz: string) => h * 60 + m,
+  scheduleWallClock: (s: { time: string }) => s.time,
+  resolveScheduleLocalTime: (s: { time: string }) => s.time,
 }));
 
 describe("Tier 2 sync-wired services", () => {
@@ -287,10 +290,11 @@ describe("Tier 2 sync-wired services", () => {
         intakes: [{ type: "salt", amount: 1 }],
       });
       if (!addResult.success) return;
-      await deleteEntryGroup(addResult.data.groupId);
+      const del = await deleteEntryGroup(addResult.data.groupId);
+      if (!del.success) return;
       await db._syncQueue.clear();
 
-      const undoResult = await undoDeleteEntryGroup(addResult.data.groupId);
+      const undoResult = await undoDeleteEntryGroup(addResult.data.groupId, del.data.deletedAt);
       expect(undoResult.success).toBe(true);
       if (!undoResult.success) return;
       expect(undoResult.data.restoredCount).toBe(2);
@@ -401,7 +405,10 @@ describe("Tier 2 sync-wired services", () => {
 
   describe("timezone-recalculation-service", () => {
     it("recalculateScheduleTimezones enqueues upsert for each updated schedule", async () => {
-      const phaseId = crypto.randomUUID();
+      // Only schedules of a live active/pending phase travel.
+      const phase = makeMedicationPhase(crypto.randomUUID());
+      await db.medicationPhases.add(phase);
+      const phaseId = phase.id;
       await db.phaseSchedules.add({
         id: crypto.randomUUID(),
         phaseId,
@@ -450,7 +457,8 @@ describe("Tier 2 sync-wired services", () => {
         unit: "mg",
         pillShape: "round",
         pillColor: "white",
-        currentStock: 0,
+        // Drifted from the (empty) ledger — an in-sync item is not re-pushed.
+        currentStock: 5,
         isActive: true,
         isArchived: false,
         createdAt: Date.now(),

@@ -63,7 +63,55 @@ describe("SubstanceLookupResponseSchema", () => {
   });
 });
 
+// The Coffee/Alcohol lookup used to return only caffeine or ABV, so a cola or
+// a cider looked up there was logged with no sugar at all while the same drink
+// via voice or the Food card recorded it.
+describe("SubstanceLookupResponseSchema solutes", () => {
+  it("keeps sugar and sodium per 100 ml in the parsed output", () => {
+    const result = SubstanceLookupResponseSchema.safeParse({
+      ...validResponse,
+      sugarPer100ml: 10.6,
+      sodiumPer100ml: 4,
+    });
+    expect(result.success).toBe(true);
+    expect(result.data).toMatchObject({ sugarPer100ml: 10.6, sodiumPer100ml: 4 });
+  });
+
+  it("rejects a negative sugar value", () => {
+    const result = SubstanceLookupResponseSchema.safeParse({
+      ...validResponse,
+      sugarPer100ml: -1,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects more than 100 g of sugar per 100 ml", () => {
+    const result = SubstanceLookupResponseSchema.safeParse({
+      ...validResponse,
+      sugarPer100ml: 101,
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
 describe("SUBSTANCE_LOOKUP_TOOL", () => {
+  it("asks for sugar and sodium per 100 ml", () => {
+    const { properties, required } = SUBSTANCE_LOOKUP_TOOL.input_schema;
+    expect(properties).toHaveProperty("sugarPer100ml");
+    expect(properties).toHaveProperty("sodiumPer100ml");
+    expect(required).toContain("sugarPer100ml");
+    expect(required).toContain("sodiumPer100ml");
+  });
+
+  it("tells both prompts to report sugar and sodium", () => {
+    for (const type of ["caffeine", "alcohol"] as const) {
+      const flat = buildSystemPrompt(type).replace(/\s+/g, " ");
+      expect(flat).toMatch(/sugarPer100ml = grams of total sugars per 100 ml/);
+      expect(flat).toMatch(/sodiumPer100ml = milligrams of sodium per 100 ml/);
+    }
+  });
+
+
   it("includes waterContentPercent in required array", () => {
     expect(SUBSTANCE_LOOKUP_TOOL.input_schema.required).toContain("waterContentPercent");
   });

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 
 /**
  * Settings page is a two-level accordion (see src/app/settings/page.tsx):
@@ -13,12 +13,12 @@ import { test, expect } from '@playwright/test';
  * enough. Sections like Day Settings, Water Settings, etc. ARE wrapped in
  * ExpandableSettingsSection and need a second click to reveal their controls.
  */
-async function openGroup(page: import('@playwright/test').Page, name: string) {
+async function openGroup(page: Page, name: string) {
   await page.getByRole('button', { name, exact: true }).click();
 }
 
 async function openInnerSection(
-  page: import('@playwright/test').Page,
+  page: Page,
   name: string
 ) {
   // The inner trigger is a button containing <h3>{name}</h3>. Scope to the

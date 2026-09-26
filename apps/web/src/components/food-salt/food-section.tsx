@@ -16,14 +16,17 @@ import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { RecentEntriesList, InlineEditFormShell } from "@/components/recent-entries-list";
 import { parseIntakeWithAI } from "@/lib/ai-client";
+import { SODIUM_FRACTION } from "@intake/core/sodium";
 import { useAuthGate } from "@/components/auth-guard";
 import {
   useAddComposableEntry,
   useSyncEatingGroup,
   fetchEntryGroup,
   sodiumKindFromSource,
+  eatingGroupNutrients,
   type ComposableEntryInput,
 } from "@/hooks/use-composable-entry";
+import { useLogDrink } from "@/hooks/use-drink-log";
 import {
   useEatingRecords,
   useAddEating,
@@ -54,7 +57,7 @@ type SodiumSource = "sodium" | "salt" | "msg";
 
 const SODIUM_MULTIPLIERS: Record<SodiumSource, number> = {
   sodium: 1.0, // direct sodium mg
-  salt: 0.39, // table salt is ~39% sodium
+  salt: SODIUM_FRACTION, // table salt is ~39.3% sodium (shared with the AI prompts)
   msg: 0.12, // MSG is ~12% sodium
 };
 
@@ -84,6 +87,14 @@ export function FoodSection() {
   const [customTime, setCustomTime] = useState(getCurrentDateTimeLocal());
   // Track whether AI populated form fields (determines composable vs plain submit)
   const [aiPopulated, setAiPopulated] = useState(false);
+  // Set when the last AI parse said the item is a drink. Such an entry is
+  // logged through logDrink, like the voice and Liquids paths, so its caffeine
+  // or alcohol is recorded and it deletes as one drink.
+  const [parsedDrink, setParsedDrink] = useState<{
+    caffeineMg: number | null;
+    abvPercent: number | null;
+  } | null>(null);
+  const logDrink = useLogDrink();
 
   // ─── Derived sodium calculation ───────────────────────────────────
   const sodiumMgNum = sodiumMg ? parseFloat(sodiumMg) : 0;
@@ -119,6 +130,15 @@ export function FoodSection() {
     (sugarEnabled && calculatedSugarG > 0) ||
     (potassiumEnabled && calculatedPotassiumMg > 0);
 
+  // A plain meal — a description or a weight, no nutrient numbers — is still
+  // an eating event worth logging (meal frequency). Only an entry with nothing
+  // at all is refused.
+  const detailGramsNum = detailGrams ? parseInt(detailGrams, 10) : 0;
+  const hasMealDetail = foodText.trim() !== "" || detailGramsNum > 0;
+  const canSave = hasRecordableValue || hasMealDetail;
+  // Only a drink with a volume can go through logDrink.
+  const saveAsDrink = parsedDrink !== null && calculatedWaterMl > 0;
+
   // ─── Recent eating records ────────────────────────────────────────
   const recentRecords = useEatingRecords(5);
 
@@ -149,6 +169,10 @@ export function FoodSection() {
   const [editWaterMl, setEditWaterMl] = useState("");
   // Token to discard stale fetchEntryGroup results when opening another record
   const openTokenRef = useRef(0);
+  // The nutrient fields are filled asynchronously from the entry's group.
+  // Saving before that resolves (or after it failed) would send 0 for every
+  // nutrient, which syncEatingGroup reads as "delete the linked row".
+  const [editPrefill, setEditPrefill] = useState<"ready" | "loading" | "failed">("ready");
 
   const {
     editingRecord,
@@ -168,20 +192,19 @@ export function FoodSection() {
       setEditSugarG("");
       setEditPotassiumMg("");
       setEditWaterMl("");
+      setEditPrefill(record.groupId ? "loading" : "ready");
       if (record.groupId) {
         void fetchEntryGroup(record.groupId).then((group) => {
           if (token !== openTokenRef.current) return;
+          setEditPrefill("ready");
           if (!group) return;
-          const salt = group.intakes.find((r) => r.type === "salt");
-          const sugar = group.intakes.find(
-            (r) => r.type === "sugar" && r.source === "manual:sugar",
-          );
-          const potassium = group.intakes.find(
-            (r) => r.type === "potassium" && r.source === "manual:potassium",
-          );
-          const water = group.intakes.find(
-            (r) => r.type === "water" && r.source === "manual:food_water_content",
-          );
+          // Same selection syncEatingGroup reconciles against, so a legacy
+          // row (e.g. source food:ai_parse) is edited rather than duplicated.
+          const nutrients = eatingGroupNutrients(group.intakes);
+          const salt = nutrients.salts[0];
+          const sugar = nutrients.sugars[0];
+          const potassium = nutrients.potassiums[0];
+          const water = nutrients.waters[0];
           if (salt) {
             const kind = sodiumKindFromSource(salt.source);
             // back-convert stored sodium-mg to the user's input units
@@ -199,10 +222,24 @@ export function FoodSection() {
           if (water) {
             setEditWaterMl(water.amount.toString());
           }
+        }, () => {
+          if (token !== openTokenRef.current) return;
+          setEditPrefill("failed");
         });
       }
     },
     buildUpdates: (timestamp, note) => {
+      if (editPrefill !== "ready") {
+        toast({
+          title: editPrefill === "loading" ? "Still loading" : "Could not load this entry",
+          description:
+            editPrefill === "loading"
+              ? "Wait for the entry's details to load before saving."
+              : "Its sodium and water could not be read, so saving is blocked to keep them intact.",
+          variant: "destructive",
+        });
+        return null;
+      }
       const g = editGrams ? parseInt(editGrams, 10) : undefined;
       const sodiumInput = editSodiumMg ? parseFloat(editSodiumMg) : 0;
       const calculatedSodiumMg =
@@ -248,6 +285,7 @@ export function FoodSection() {
     setPotassiumMg("");
     setWaterMl("");
     setAiPopulated(false);
+    setParsedDrink(null);
     setShowTimeInput(false);
     setCustomTime(getCurrentDateTimeLocal());
   }, []);
@@ -263,19 +301,21 @@ export function FoodSection() {
       // User dismissed the sign-in prompt
       if (!result) return;
 
-      if (result.valueMg && result.valueMg > 0) {
-        setSodiumMg(result.valueMg.toString());
-        setSodiumSource("sodium");
-      }
-      if (result.water && result.water > 0) {
-        setWaterMl(result.water.toString());
-      }
-      if (sugarEnabled && result.sugarG && result.sugarG > 0) {
-        setSugarG(result.sugarG.toString());
-      }
-      if (potassiumEnabled && result.potassiumMg && result.potassiumMg > 0) {
-        setPotassiumMg(result.potassiumMg.toString());
-      }
+      // A parse is a complete answer for the new item: every field takes the
+      // new value, and a 0 / null clears it. Keeping only the positive values
+      // left the previous item's sugar or water in place for the next save.
+      const asField = (v: number | null | undefined) =>
+        v !== null && v !== undefined && v > 0 ? v.toString() : "";
+      setSodiumMg(asField(result.valueMg));
+      setSodiumSource("sodium");
+      setWaterMl(asField(result.water));
+      if (sugarEnabled) setSugarG(asField(result.sugarG));
+      if (potassiumEnabled) setPotassiumMg(asField(result.potassiumMg));
+      setParsedDrink(
+        result.isDrink
+          ? { caffeineMg: result.caffeineMg, abvPercent: result.abvPercent }
+          : null,
+      );
       setAiPopulated(true);
 
       // Show reasoning as a toast
@@ -299,10 +339,10 @@ export function FoodSection() {
 
   const handleDetailSubmit = useCallback(async () => {
     if (isSubmitting) return;
-    if (!hasRecordableValue) {
+    if (!canSave) {
       toast({
         title: "Nothing to record",
-        description: "Enter a sodium, water, sugar or potassium amount before saving.",
+        description: "Describe what you ate, or enter a weight or nutrient amount before saving.",
         variant: "destructive",
       });
       return;
@@ -316,6 +356,30 @@ export function FoodSection() {
         : Date.now();
       const grams = detailGrams ? parseInt(detailGrams, 10) : undefined;
       const note = foodText.trim() || undefined;
+
+      if (saveAsDrink && parsedDrink) {
+        await logDrink({
+          volumeMl: calculatedWaterMl,
+          description: foodText.trim() || "Drink",
+          ...(parsedDrink.caffeineMg !== null && parsedDrink.caffeineMg > 0 && {
+            caffeineMg: parsedDrink.caffeineMg,
+          }),
+          ...(parsedDrink.abvPercent !== null && parsedDrink.abvPercent > 0 && {
+            abvPercent: parsedDrink.abvPercent,
+          }),
+          ...(calculatedSodiumMg > 0 && { saltMg: calculatedSodiumMg }),
+          ...(sugarEnabled && calculatedSugarG > 0 && { sugarG: calculatedSugarG }),
+          ...(potassiumEnabled && calculatedPotassiumMg > 0 && {
+            potassiumMg: calculatedPotassiumMg,
+          }),
+          groupSource: "ai_food_parse",
+          originalInputText: foodText.trim(),
+          timestamp,
+        });
+        toast({ title: "Logged", description: "Drink recorded", variant: "success" });
+        resetForm();
+        return;
+      }
 
       // Build intakes for composable entry
       const intakes: ComposableEntryInput["intakes"] = [];
@@ -389,7 +453,10 @@ export function FoodSection() {
     }
   }, [
     isSubmitting,
-    hasRecordableValue,
+    canSave,
+    saveAsDrink,
+    parsedDrink,
+    logDrink,
     foodText,
     detailGrams,
     calculatedSodiumMg,
@@ -570,7 +637,7 @@ export function FoodSection() {
         {/* Record button — always visible */}
         <Button
           onClick={handleDetailSubmit}
-          disabled={addEatingMutation.isPending || isSubmitting || !hasRecordableValue}
+          disabled={addEatingMutation.isPending || isSubmitting || !canSave}
           className={cn("w-full mt-2", theme.buttonBg)}
         >
           {addEatingMutation.isPending || isSubmitting ? (
@@ -579,9 +646,21 @@ export function FoodSection() {
             "Record with details"
           )}
         </Button>
-        {!hasRecordableValue && (
+        {!canSave && (
           <p className="text-xs text-muted-foreground -mt-1">
-            Enter a sodium, water, sugar or potassium amount to enable saving.
+            Describe what you ate, or enter a weight or a sodium, water, sugar or potassium amount to enable saving.
+          </p>
+        )}
+        {saveAsDrink && parsedDrink && (
+          <p className="text-xs text-muted-foreground -mt-1" data-testid="food-save-as-drink">
+            Will be logged as a drink
+            {parsedDrink.caffeineMg !== null && parsedDrink.caffeineMg > 0
+              ? ` with ${Math.round(parsedDrink.caffeineMg)} mg caffeine`
+              : ""}
+            {parsedDrink.abvPercent !== null && parsedDrink.abvPercent > 0
+              ? ` (${parsedDrink.abvPercent}% ABV)`
+              : ""}
+            .
           </p>
         )}
       </div>
@@ -640,6 +719,13 @@ export function FoodSection() {
         }}
         renderEditForm={() => (
           <InlineEditFormShell timestamp={editTimestamp} onTimestampChange={setEditTimestamp} note={editNote} onNoteChange={setEditNote} onSave={() => handleEditSubmit()} onCancel={closeEdit} buttonClassName={theme.buttonBg}>
+            {editPrefill !== "ready" && (
+              <p className="text-xs text-muted-foreground" role="status">
+                {editPrefill === "loading"
+                  ? "Loading this entry's details…"
+                  : "Could not load this entry's details; saving is disabled."}
+              </p>
+            )}
             <div className="space-y-1">
               <Label htmlFor="edit-eating-grams" className="text-xs text-muted-foreground">Weight (g)</Label>
               <Input

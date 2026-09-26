@@ -18,11 +18,18 @@
  *     exposed to the client (only logged server-side).
  *   - Batch size capped at 500 ops via Zod `.max(500)` — blocks DoS payloads
  *     before any DB round trip.
+ *   - `id` is a global primary key, so the upsert's ON CONFLICT branch is
+ *     guarded by `user_id = caller`. A row with the same id owned by another
+ *     account is left untouched and the op is rejected with code "conflict"
+ *     (audit server-schema-parity#0) — never re-owned by the caller.
  *
  * LWW rules (D-12 precedence order):
  *   1. If server row has non-null deletedAt AND incoming op.row.deletedAt is
- *      null → skip write, ack with server's existing updatedAt. Deleted rows
- *      cannot be resurrected by a stale edit.
+ *      null AND clampedUpdatedAt <= existing.updatedAt → skip write, ack with
+ *      server's existing updatedAt. Deleted rows cannot be resurrected by a
+ *      stale edit. A live write strictly newer than the tombstone is an
+ *      explicit restore (undo-delete after the delete already synced, audit
+ *      sync-engine#8) and falls through to rule 2.
  *   2. Else if no existing server row OR clampedUpdatedAt > existing.updatedAt
  *      → upsert via onConflictDoUpdate.
  *   2b. Tombstone tie-break: if incoming op carries a tombstone AND the
@@ -39,6 +46,13 @@
  *   `clampedUpdatedAt = min(op.row.updatedAt, serverNow + MAX_FUTURE_MS)`
  *   — client clocks ahead by more than 60s get clamped so a misset device
  *   cannot poison future writes.
+ *
+ * Pull cursor (audit sync-engine#3):
+ *   Every write — insert, update, and the tombstone-stub UPDATE — also sets
+ *   `serverUpdatedAt` to the server's clock. Pull pages by that stamp, so a
+ *   record pushed late (with an old client `updatedAt`) still reaches every
+ *   other device. LWW keeps using the client `updatedAt`; a skipped (losing)
+ *   write does not restamp, since nothing changed.
  *
  * Logging: module prefix `[sync/push]`. The request body is never logged
  * (contains PHI — timestamps, food descriptions, medication names).
@@ -243,7 +257,8 @@ export const POST = withAuth(async ({ request, auth }) => {
         if (
           serverRow &&
           serverRow.deletedAt != null &&
-          op.row.deletedAt == null
+          op.row.deletedAt == null &&
+          clampedUpdatedAt <= serverRow.updatedAt
         ) {
           accepted.push({
             queueId: op.queueId,
@@ -275,17 +290,39 @@ export const POST = withAuth(async ({ request, auth }) => {
             ...rowWithoutUserId,
             userId: auth.userId!,
             updatedAt: clampedUpdatedAt,
+            // Pull cursor — stamped at write time, not batch start, so a slow
+            // batch cannot stamp rows further in the past than the skew
+            // margin covers. Lands in `set` too, so updates restamp.
+            serverUpdatedAt: Date.now(),
           };
 
           const { id: _id, ...setValues } = writeValues;
           try {
-            await drizzleDb
+            const result = await drizzleDb
               .insert(table as PgTable)
               .values(writeValues)
               .onConflictDoUpdate({
                 target: (table as { id: PgColumn }).id,
                 set: setValues,
+                // Only ever update the caller's own row. A same-id row owned
+                // by another account makes the statement a no-op (0 rows).
+                where: eq(
+                  (table as unknown as { userId: PgColumn }).userId,
+                  auth.userId!,
+                ),
               });
+            if ((result as { rowCount?: number | null } | undefined)?.rowCount === 0) {
+              console.error(
+                `[sync/push] Op rejected (id owned by another user): table=${tableName} id=${op.row.id}`,
+              );
+              rejected.push({
+                queueId: op.queueId,
+                tableName,
+                error: "Record id belongs to another account",
+                code: "conflict",
+              });
+              continue;
+            }
             accepted.push({
               queueId: op.queueId,
               serverUpdatedAt: clampedUpdatedAt,
@@ -373,7 +410,12 @@ export const POST = withAuth(async ({ request, auth }) => {
         try {
           await drizzleDb
             .update(table)
-            .set({ deletedAt: op.row.deletedAt, updatedAt: clampedUpdatedAt })
+            .set({
+              deletedAt: op.row.deletedAt,
+              updatedAt: clampedUpdatedAt,
+              // Restamp so peers pull the tombstone (see the upsert path).
+              serverUpdatedAt: Date.now(),
+            })
             .where(
               and(
                 eq((table as unknown as { id: PgColumn }).id, op.row.id),

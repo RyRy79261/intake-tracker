@@ -8,6 +8,14 @@ import { type UnifiedRecord } from "@/lib/history-types";
 import { formatTimeOnly } from "@/lib/date-utils";
 import { getLiquidTypeLabel } from "@/lib/utils";
 import { type LiquidPreset } from "@/lib/constants";
+import type { IntakeRecord } from "@/lib/db";
+
+const INTAKE_UNITS: Record<IntakeRecord["type"], string> = {
+  water: "ml",
+  salt: "mg",
+  sugar: "g",
+  potassium: "mg",
+};
 
 interface RecordRowProps {
   unified: UnifiedRecord;
@@ -26,16 +34,13 @@ function RecordRowImpl({ unified, onDelete, onEdit, isDeleting, liquidPresets }:
 
   if (unified.type === "intake") {
     const record = unified.record;
-    const themeKey =
-      record.type === "water" ? "water" : record.type === "sugar" ? "sugar" : "salt";
-    const theme = CARD_THEMES[themeKey];
+    // Each intake type has its own theme key of the same name.
+    const theme = CARD_THEMES[record.type];
     const Icon = theme.icon;
     icon = <Icon className="w-4 h-4" />;
     iconColor = theme.iconColor;
     typeLabel = theme.label;
-    const unit =
-      record.type === "water" ? "ml" : record.type === "sugar" ? "g" : "mg";
-    const amountStr = `${record.amount} ${unit}`;
+    const amountStr = `${record.amount} ${INTAKE_UNITS[record.type]}`;
     const sourceLabel = record.type === "water"
       ? getLiquidTypeLabel(record.source, { presets: liquidPresets, note: record.note })
       : null;
@@ -53,7 +58,8 @@ function RecordRowImpl({ unified, onDelete, onEdit, isDeleting, liquidPresets }:
     icon = <Icon className="w-4 h-4" />;
     iconColor = theme.iconColor;
     typeLabel = theme.label;
-    measurement = unified.record.note ? unified.record.note : "—";
+    const grams = unified.record.grams != null ? `${unified.record.grams} g` : "";
+    measurement = [unified.record.note, grams].filter(Boolean).join(" · ") || "—";
   } else if (unified.type === "urination") {
     const theme = CARD_THEMES.urination;
     const Icon = theme.icon;
@@ -122,9 +128,12 @@ function RecordRowImpl({ unified, onDelete, onEdit, isDeleting, liquidPresets }:
           {formatTimeOnly(unified.record.timestamp)}
         </span>
       </div>
+      {/* Keep the action buttons' clicks and key presses away from the row's
+          own edit handler (which would also preventDefault their activation). */}
       <div
         className="flex items-center gap-1 shrink-0"
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
       >
         <Button
           variant="ghost"

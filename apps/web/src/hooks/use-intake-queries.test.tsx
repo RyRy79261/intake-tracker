@@ -184,6 +184,39 @@ describe("use-intake-queries mutation hooks", () => {
     expect(stored?.deletedAt).toBeNull();
   });
 
+  it("useAddIntake reopens a severed database and still saves (issue #287)", async () => {
+    const { result } = renderHook(() => useAddIntake(), {
+      wrapper: makeWrapper(),
+    });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    // After close() Dexie rejects every operation with DatabaseClosedError
+    // until open() is called — the state a severed connection leaves behind.
+    db.close();
+    const record = await result.current.mutateAsync({
+      type: "water",
+      amount: 250,
+    });
+
+    expect((await db.intakeRecords.get(record.id))?.amount).toBe(250);
+    warn.mockRestore();
+  });
+
+  it("useUpdateIntake reopens a severed database and still saves", async () => {
+    const existing = makeIntakeRecord({ type: "water", amount: 100 });
+    await seedDatabase({ intakeRecords: [existing] });
+    const { result } = renderHook(() => useUpdateIntake(), {
+      wrapper: makeWrapper(),
+    });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    db.close();
+    await result.current.mutateAsync({ id: existing.id, updates: { amount: 150 } });
+
+    expect((await db.intakeRecords.get(existing.id))?.amount).toBe(150);
+    warn.mockRestore();
+  });
+
   it("useUpdateIntake mutates an existing record in the database", async () => {
     const existing = makeIntakeRecord({ type: "salt", amount: 5 });
     await seedDatabase({ intakeRecords: [existing] });
@@ -220,9 +253,13 @@ describe("use-intake-queries mutation hooks", () => {
       wrapper: makeWrapper(),
     });
 
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.dailyTotal).toBe(0);
+    await waitFor(() => expect(result.current.rollingTotal).toBe(0));
 
+    // The record is stamped after the live queries first ran, so its
+    // timestamp is past any "now" end bound those queries captured; they
+    // must still observe it (a closed range would not be re-notified).
+    await new Promise((r) => setTimeout(r, 20));
     await result.current.addRecord(250);
 
     await waitFor(() => expect(result.current.dailyTotal).toBe(250));

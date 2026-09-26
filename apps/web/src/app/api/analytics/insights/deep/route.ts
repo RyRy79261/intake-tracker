@@ -15,10 +15,12 @@ import {
   deletePendingJob,
   PendingJobConflictError,
 } from "@/lib/server/insight-job-service";
+import { buildJobPayload } from "@/lib/server/insight-job-payload";
+import { sanitizeInsightsRequest } from "@/lib/server/sanitize-insights-request";
 
 /**
  * Async deep-research analytics insights — submits an Anthropic Message Batch
- * with Opus 4.6 and the web-search tool, returns immediately with a jobId the
+ * with the premium (Opus) model and the web-search tool, returns immediately with a jobId the
  * client can poll. See ./jobs/[id]/route.ts for the polling endpoint.
  *
  * Why a batch and not a streaming long-running call:
@@ -60,9 +62,17 @@ export const POST = withAuth(async ({ request, auth }) => {
       return zodErrorResponse("Invalid analytics payload", parsed.error);
     }
 
+    // Redact incidental PII once, up front: the same request is stored on
+    // the job row and later rebuilt into a continuation batch.
+    const insightsRequest = sanitizeInsightsRequest(parsed.data);
+
     let client;
+    let resolved;
     try {
-      ({ client } = await getClaudeClientForUser(auth.userId!, auth.email));
+      ({ client, resolved } = await getClaudeClientForUser(
+        auth.userId!,
+        auth.email,
+      ));
     } catch (e) {
       const mapped = aiErrorResponse(e);
       if (mapped) return mapped;
@@ -79,9 +89,14 @@ export const POST = withAuth(async ({ request, auth }) => {
     // index and the other batch becomes an orphan we can't reconcile.
     let job;
     try {
+      // Record which key submits the batch: the batch lives in that key's
+      // org, so polling must use the same key (see insight-job-key.ts).
       job = await createInsightJob({
         userId: auth.userId!,
-        requestPayload: parsed.data,
+        requestPayload: buildJobPayload(insightsRequest, {
+          keySource: resolved.source,
+          keyOwnerId: resolved.keyOwnerId,
+        }),
       });
     } catch (e) {
       if (e instanceof PendingJobConflictError) {
@@ -109,7 +124,7 @@ export const POST = withAuth(async ({ request, auth }) => {
         requests: [
           {
             custom_id: customId,
-            params: buildDeepBatchParams(parsed.data),
+            params: buildDeepBatchParams(insightsRequest),
           },
         ],
       });

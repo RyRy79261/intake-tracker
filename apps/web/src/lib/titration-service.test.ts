@@ -15,9 +15,12 @@ import {
   deleteTitrationPlan,
   type CreateTitrationPlanInput,
 } from "@/lib/titration-service";
+import { getDailyDoseSchedule } from "@/lib/dose-schedule-service";
 import {
   makePrescription,
   makeMedicationPhase,
+  makePhaseSchedule,
+  makeDoseLog,
 } from "@/__tests__/fixtures/db-fixtures";
 
 // ---------------------------------------------------------------------------
@@ -418,5 +421,302 @@ describe("deleteTitrationPlan", () => {
     // Schedules soft-deleted
     const schedules = await db.phaseSchedules.toArray();
     expect(schedules.every((s) => s.deletedAt != null && s.deletedAt > 0)).toBe(true);
+  });
+});
+
+// ===================================================================
+// Lifecycle regressions — soft-deleted rows must never drive dosing
+// ===================================================================
+
+// 2023-11-14 (BASE_TS in fixtures) — every fixture prescription exists by then.
+// Today (UTC, matching the "UTC" zone passed below): the schedule resolves
+// each date from the phases live on it, so a fixed past date would predate
+// the titration phases these tests create.
+const TODAY = new Date().toISOString().slice(0, 10);
+
+async function seedMaintenance(opts?: {
+  unit?: string;
+  dosage?: number;
+  foodInstruction?: "before" | "after" | "none";
+}) {
+  const rx = makePrescription();
+  const maintenance = makeMedicationPhase(rx.id, {
+    type: "maintenance",
+    status: "active",
+    unit: opts?.unit ?? "mg",
+    foodInstruction: opts?.foodInstruction ?? "none",
+  });
+  const schedule = makePhaseSchedule(maintenance.id, {
+    time: "08:00",
+    scheduleTimeUTC: 480,
+    dosage: opts?.dosage ?? 50,
+  });
+  await db.prescriptions.add(rx);
+  await db.medicationPhases.add(maintenance);
+  await db.phaseSchedules.add(schedule);
+  return { rx, maintenance, schedule };
+}
+
+function singleEntryPlan(
+  prescriptionId: string,
+  dosage: number,
+  overrides?: Partial<CreateTitrationPlanInput>,
+  time = "08:00",
+): CreateTitrationPlanInput {
+  return {
+    title: "Uptitration",
+    conditionLabel: "HF",
+    entries: [
+      {
+        prescriptionId,
+        unit: "mg",
+        schedules: [{ time, daysOfWeek: [0, 1, 2, 3, 4, 5, 6], dosage }],
+      },
+    ],
+    ...overrides,
+  };
+}
+
+async function slotsFor(rxId: string) {
+  const slots = await getDailyDoseSchedule(TODAY, "UTC");
+  return slots.filter((s) => s.prescriptionId === rxId);
+}
+
+describe("completeTitrationPlan — superseded maintenance schedules", () => {
+  it("shows only the promoted dose afterwards (old maintenance schedule disabled)", async () => {
+    const { rx, schedule: oldSched } = await seedMaintenance({ dosage: 50 });
+    const plan = await createTitrationPlan(singleEntryPlan(rx.id, 100, { startImmediately: true }));
+    if (!plan.success) throw new Error("setup");
+
+    const done = await completeTitrationPlan(plan.data.id);
+    expect(done.success).toBe(true);
+
+    const slots = await slotsFor(rx.id);
+    expect(slots.map((s) => s.dosageMg)).toEqual([100]);
+    expect(slots[0]!.phase.type).toBe("maintenance");
+
+    const old = await db.phaseSchedules.get(oldSched.id);
+    expect(old!.deletedAt).not.toBeNull();
+    expect(old!.enabled).toBe(false);
+  });
+
+  it("does not copy schedules from an edited-away titration phase", async () => {
+    const { rx } = await seedMaintenance({ dosage: 50 });
+    const plan = await createTitrationPlan(singleEntryPlan(rx.id, 100, { startImmediately: true }));
+    if (!plan.success) throw new Error("setup");
+
+    await updateTitrationPlan({
+      planId: plan.data.id,
+      entries: singleEntryPlan(rx.id, 150).entries,
+    });
+    await completeTitrationPlan(plan.data.id);
+
+    const slots = await slotsFor(rx.id);
+    expect(slots.map((s) => s.dosageMg)).toEqual([150]);
+  });
+
+  it("never copies a soft-deleted titration schedule into maintenance", async () => {
+    const { rx, maintenance } = await seedMaintenance({ dosage: 50 });
+    const plan = await createTitrationPlan(singleEntryPlan(rx.id, 100, { startImmediately: true }));
+    if (!plan.success) throw new Error("setup");
+    const [titPhase] = await getPhasesForTitrationPlan(plan.data.id);
+    // A tombstone left behind by an older client's edit.
+    await db.phaseSchedules.add(
+      makePhaseSchedule(titPhase!.id, { dosage: 999, deletedAt: 1700000000001 }),
+    );
+
+    await completeTitrationPlan(plan.data.id);
+
+    const live = (await db.phaseSchedules.where("phaseId").equals(maintenance.id).toArray())
+      .filter((s) => s.deletedAt == null);
+    expect(live.map((s) => s.dosage)).toEqual([100]);
+  });
+
+  it("keeps the maintenance unit and food instruction instead of the titration defaults", async () => {
+    const { rx, maintenance } = await seedMaintenance({ unit: "mcg", foodInstruction: "before" });
+    const plan = await createTitrationPlan(singleEntryPlan(rx.id, 75, { startImmediately: true }));
+    if (!plan.success) throw new Error("setup");
+
+    await completeTitrationPlan(plan.data.id);
+
+    const after = await db.medicationPhases.get(maintenance.id);
+    expect(after!.unit).toBe("mcg");
+    expect(after!.foodInstruction).toBe("before");
+  });
+});
+
+describe("updateTitrationPlan — edits in place", () => {
+  it("keeps phase and schedule ids so a taken dose stays taken", async () => {
+    const { rx } = await seedMaintenance({ dosage: 50 });
+    const plan = await createTitrationPlan(singleEntryPlan(rx.id, 100, { startImmediately: true }));
+    if (!plan.success) throw new Error("setup");
+
+    const [titPhase] = await getPhasesForTitrationPlan(plan.data.id);
+    const [titSched] = await db.phaseSchedules.where("phaseId").equals(titPhase!.id).toArray();
+    await db.doseLogs.add(
+      makeDoseLog(rx.id, titPhase!.id, titSched!.id, { scheduledDate: TODAY, status: "taken" }),
+    );
+
+    // Notes-only edit: the drawer still resubmits the unchanged entries.
+    const res = await updateTitrationPlan({
+      planId: plan.data.id,
+      notes: "typo fixed",
+      entries: singleEntryPlan(rx.id, 100).entries,
+    });
+    expect(res.success).toBe(true);
+
+    const phasesAfter = await getPhasesForTitrationPlan(plan.data.id);
+    expect(phasesAfter.map((p) => p.id)).toEqual([titPhase!.id]);
+    const schedAfter = await db.phaseSchedules.get(titSched!.id);
+    expect(schedAfter!.deletedAt).toBeNull();
+    // Unchanged schedule is left alone entirely.
+    expect(schedAfter!.updatedAt).toBe(titSched!.updatedAt);
+
+    const slots = await slotsFor(rx.id);
+    expect(slots).toHaveLength(1);
+    expect(slots[0]!.status).toBe("taken");
+  });
+
+  it("updates a changed dose in place, keeping the schedule id", async () => {
+    const { rx } = await seedMaintenance();
+    const plan = await createTitrationPlan(singleEntryPlan(rx.id, 100, { startImmediately: true }));
+    if (!plan.success) throw new Error("setup");
+    const [titPhase] = await getPhasesForTitrationPlan(plan.data.id);
+    const [titSched] = await db.phaseSchedules.where("phaseId").equals(titPhase!.id).toArray();
+
+    await updateTitrationPlan({
+      planId: plan.data.id,
+      entries: singleEntryPlan(rx.id, 125, {}, "09:30").entries,
+    });
+
+    const live = (await db.phaseSchedules.where("phaseId").equals(titPhase!.id).toArray())
+      .filter((s) => s.deletedAt == null);
+    expect(live).toHaveLength(1);
+    expect(live[0]!.id).toBe(titSched!.id);
+    expect(live[0]!.dosage).toBe(125);
+    expect(live[0]!.time).toBe("09:30");
+  });
+
+  it("cancels and disables a phase whose prescription was removed from the plan", async () => {
+    const a = await seedMaintenance();
+    const b = await seedMaintenance();
+    const plan = await createTitrationPlan({
+      ...singleEntryPlan(a.rx.id, 100, { startImmediately: true }),
+      entries: [
+        ...singleEntryPlan(a.rx.id, 100).entries,
+        ...singleEntryPlan(b.rx.id, 20).entries,
+      ],
+    });
+    if (!plan.success) throw new Error("setup");
+    const bPhase = (await getPhasesForTitrationPlan(plan.data.id))
+      .find((p) => p.prescriptionId === b.rx.id)!;
+
+    await updateTitrationPlan({ planId: plan.data.id, entries: singleEntryPlan(a.rx.id, 100).entries });
+
+    const removed = await db.medicationPhases.get(bPhase.id);
+    expect(removed!.deletedAt).not.toBeNull();
+    expect(removed!.status).toBe("cancelled");
+    const removedScheds = await db.phaseSchedules.where("phaseId").equals(bPhase.id).toArray();
+    expect(removedScheds.every((s) => s.enabled === false && s.deletedAt != null)).toBe(true);
+
+    // b falls back to its maintenance dose
+    expect((await slotsFor(b.rx.id)).map((s) => s.dosageMg)).toEqual([50]);
+  });
+});
+
+describe("activateTitrationPlan — ignores deleted phases", () => {
+  it("never re-activates a soft-deleted pending phase", async () => {
+    const { rx } = await seedMaintenance();
+    const plan = await createTitrationPlan(singleEntryPlan(rx.id, 100));
+    if (!plan.success) throw new Error("setup");
+    const ghost = makeMedicationPhase(rx.id, {
+      type: "titration",
+      status: "pending",
+      titrationPlanId: plan.data.id,
+      deletedAt: 1700000000001,
+    });
+    await db.medicationPhases.add(ghost);
+
+    await activateTitrationPlan(plan.data.id);
+
+    expect((await db.medicationPhases.get(ghost.id))!.status).toBe("pending");
+  });
+
+  it("an edited draft activates with the edited dose", async () => {
+    const { rx } = await seedMaintenance();
+    const plan = await createTitrationPlan(singleEntryPlan(rx.id, 100, {}, "09:00"));
+    if (!plan.success) throw new Error("setup");
+    await updateTitrationPlan({
+      planId: plan.data.id,
+      entries: singleEntryPlan(rx.id, 150, {}, "10:00").entries,
+    });
+
+    await activateTitrationPlan(plan.data.id);
+
+    const all = await db.medicationPhases.toArray();
+    const activeTit = all.filter((p) => p.titrationPlanId === plan.data.id && p.status === "active");
+    expect(activeTit).toHaveLength(1);
+    expect(activeTit[0]!.deletedAt).toBeNull();
+    expect((await slotsFor(rx.id)).map((s) => s.dosageMg)).toEqual([150]);
+  });
+});
+
+describe("cancelTitrationPlan — maintenance re-activation", () => {
+  it("does not re-activate an old completed maintenance phase when one is already active", async () => {
+    const { rx, maintenance } = await seedMaintenance();
+    const oldMaint = makeMedicationPhase(rx.id, { type: "maintenance", status: "completed" });
+    await db.medicationPhases.add(oldMaint);
+    const plan = await createTitrationPlan(singleEntryPlan(rx.id, 100, { startImmediately: true }));
+    if (!plan.success) throw new Error("setup");
+
+    await cancelTitrationPlan(plan.data.id);
+
+    expect((await db.medicationPhases.get(oldMaint.id))!.status).toBe("completed");
+    expect((await db.medicationPhases.get(maintenance.id))!.status).toBe("active");
+  });
+});
+
+describe("deleteTitrationPlan — retires lifecycle flags", () => {
+  it("cancels the plan's phases and disables their schedules so they stop dosing", async () => {
+    const { rx } = await seedMaintenance({ dosage: 50 });
+    const plan = await createTitrationPlan(singleEntryPlan(rx.id, 100, { startImmediately: true }));
+    if (!plan.success) throw new Error("setup");
+
+    await deleteTitrationPlan(plan.data.id);
+
+    const phases = (await db.medicationPhases.toArray())
+      .filter((p) => p.titrationPlanId === plan.data.id);
+    expect(phases.every((p) => p.status === "cancelled")).toBe(true);
+    const scheds = (await db.phaseSchedules.toArray()).filter((s) => phases.some((p) => p.id === s.phaseId));
+    expect(scheds.every((s) => s.enabled === false)).toBe(true);
+    expect((await db.titrationPlans.get(plan.data.id))!.status).toBe("cancelled");
+    expect((await slotsFor(rx.id)).map((s) => s.dosageMg)).toEqual([50]);
+  });
+
+  it("puts a running plan's prescription back on its completed maintenance phase", async () => {
+    const { rx, maintenance } = await seedMaintenance({ dosage: 50 });
+    await db.medicationPhases.update(maintenance.id, { status: "completed" });
+    const plan = await createTitrationPlan(singleEntryPlan(rx.id, 100, { startImmediately: true }));
+    if (!plan.success) throw new Error("setup");
+
+    await deleteTitrationPlan(plan.data.id);
+
+    expect((await db.medicationPhases.get(maintenance.id))!.status).toBe("active");
+    expect((await slotsFor(rx.id)).map((s) => s.dosageMg)).toEqual([50]);
+  });
+});
+
+describe("titration units follow the prescription", () => {
+  it("inherits the maintenance unit when the entry omits one", async () => {
+    const { rx } = await seedMaintenance({ unit: "mcg" });
+    const entries = singleEntryPlan(rx.id, 75).entries.map(({ unit: _unit, ...e }) => e);
+    const plan = await createTitrationPlan({ ...singleEntryPlan(rx.id, 75), entries });
+    if (!plan.success) throw new Error("setup");
+
+    const [phase] = await getPhasesForTitrationPlan(plan.data.id);
+    expect(phase!.unit).toBe("mcg");
+
+    await updateTitrationPlan({ planId: plan.data.id, entries });
+    expect((await db.medicationPhases.get(phase!.id))!.unit).toBe("mcg");
   });
 });

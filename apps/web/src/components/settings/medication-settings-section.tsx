@@ -1,22 +1,17 @@
 "use client";
 
-import { useSettingsStore } from "@/stores/settings-store";
-import { Pill } from "lucide-react";
-import { Label } from "@intake/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@intake/ui/select";
+import Link from "next/link";
+import { ChevronRight, Pill } from "lucide-react";
+import { useMedicationUIStore } from "@/stores/medication-ui-store";
 
-const COUNTRIES = [
-  { value: "US", label: "United States" },
-  { value: "UK", label: "United Kingdom" },
-  { value: "CA", label: "Canada" },
-  { value: "AU", label: "Australia" },
-  { value: "DE", label: "Germany" },
-  { value: "ZA", label: "South Africa" },
-  { value: "Other", label: "Other" },
-];
-
+/**
+ * Medication preferences (regions, reminders, time format) live in one place:
+ * the Settings tab of the Medications page. This used to be a second region
+ * picker with its own codes ("UK", "Other") that the ISO combobox and the AI
+ * medicine search didn't understand, so it now links there instead.
+ */
 export function MedicationSettingsSection() {
-  const { primaryRegion, setPrimaryRegion, secondaryRegion, setSecondaryRegion } = useSettingsStore();
+  const setActiveTab = useMedicationUIStore((s) => s.setActiveTab);
 
   return (
     <div className="space-y-4">
@@ -24,43 +19,20 @@ export function MedicationSettingsSection() {
         <Pill className="w-4 h-4" />
         <h3 className="font-semibold">Medication</h3>
       </div>
-      
-      <div className="space-y-3">
-        <div className="space-y-1">
-          <Label className="text-sm font-medium">Primary Region</Label>
-          <Select value={primaryRegion || "US"} onValueChange={setPrimaryRegion}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select Country" />
-            </SelectTrigger>
-            <SelectContent>
-              {COUNTRIES.map((c) => (
-                <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-muted-foreground mt-1">
-            Used to find local medication alternatives in search results.
-          </p>
-        </div>
 
-        <div className="space-y-1">
-          <Label className="text-sm font-medium">Secondary Region (Optional)</Label>
-          <Select value={secondaryRegion || "None"} onValueChange={setSecondaryRegion}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select Country" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="None">None</SelectItem>
-              {COUNTRIES.map((c) => (
-                <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-muted-foreground mt-1">
-            Used as a fallback for finding medication alternatives.
-          </p>
-        </div>
-      </div>
+      <Link
+        href="/medications"
+        onClick={() => setActiveTab("settings")}
+        className="flex items-center justify-between rounded-lg border p-3 text-sm hover:bg-muted/50 transition-colors"
+      >
+        <span>
+          <span className="block font-medium">Open medication settings</span>
+          <span className="block text-xs text-muted-foreground">
+            Regions for medicine search, dose reminders and time format
+          </span>
+        </span>
+        <ChevronRight className="w-4 h-4 text-muted-foreground" />
+      </Link>
     </div>
   );
 }

@@ -1,0 +1,11 @@
+{
+  "extends": "@intake/typescript-config/base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "incremental": false,
+    "types": []
+  },
+  "include": ["capacitor.config.ts"]
+}

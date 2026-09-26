@@ -1,74 +1,53 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi } from "vitest";
-import { screen } from "@testing-library/react";
+import { describe, it, expect } from "vitest";
+import { screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { DataManagementSection } from "@/components/settings/data-management-section";
 import { renderWithFixtures } from "@/__tests__/react-test-utils";
-// A test asserts directly on IndexedDB state to prove the "clear" mutation
-// actually deleted records.
-// eslint-disable-next-line no-restricted-imports
-import { db } from "@/lib/db";
-import { makeIntakeRecord } from "@/__tests__/fixtures/db-fixtures";
+import {
+  makeIntakeRecord,
+  makeUserProfile,
+  makeInsightReport,
+} from "@/__tests__/fixtures/db-fixtures";
 
 describe("DataManagementSection", () => {
-  it("renders the export, import and clear controls", async () => {
+  it("renders the export and import controls", async () => {
     await renderWithFixtures(<DataManagementSection />);
 
     expect(screen.getByRole("button", { name: /export data/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /import data/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /clear all data/i })).toBeInTheDocument();
   });
 
-  it("requires a two-step confirmation before clearing data", async () => {
-    const user = userEvent.setup();
+  it("has no intake-only 'Clear All Data' button (deletion lives in Storage settings)", async () => {
     await renderWithFixtures(<DataManagementSection />);
 
-    // First click swaps in the Cancel / Confirm pair — no destructive action yet.
-    await user.click(screen.getByRole("button", { name: /clear all data/i }));
-
-    expect(screen.getByRole("button", { name: /confirm delete/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /cancel/i })).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /clear all data/i }),
     ).not.toBeInTheDocument();
   });
 
-  it("clears the seeded IndexedDB records when the delete is confirmed", async () => {
+  it("reports the import total across every table, including profile and insight reports", async () => {
     const user = userEvent.setup();
-    await renderWithFixtures(<DataManagementSection />, {
-      seed: { intakeRecords: [makeIntakeRecord(), makeIntakeRecord()] },
+    const { container } = await renderWithFixtures(<DataManagementSection />);
+
+    const backup = {
+      version: 5,
+      exportedAt: new Date().toISOString(),
+      intakeRecords: [makeIntakeRecord()],
+      weightRecords: [],
+      bloodPressureRecords: [],
+      userProfile: [makeUserProfile()],
+      insightReports: [makeInsightReport()],
+    };
+    const file = new File([JSON.stringify(backup)], "backup.json", {
+      type: "application/json",
     });
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [file] } });
 
-    expect(await db.intakeRecords.count()).toBe(2);
+    await user.click(await screen.findByRole("button", { name: /continue import/i }));
 
-    await user.click(screen.getByRole("button", { name: /clear all data/i }));
-    await user.click(screen.getByRole("button", { name: /confirm delete/i }));
-
-    // clearAllData mutation soft-deletes records; the confirm UI collapses back.
-    await vi.waitFor(async () => {
-      const remaining = await db.intakeRecords
-        .filter((r) => r.deletedAt == null)
-        .count();
-      expect(remaining).toBe(0);
-    });
-    expect(
-      await screen.findByRole("button", { name: /clear all data/i }),
-    ).toBeInTheDocument();
-  });
-
-  it("backs out of the clear flow when Cancel is pressed", async () => {
-    const user = userEvent.setup();
-    await renderWithFixtures(<DataManagementSection />);
-
-    await user.click(screen.getByRole("button", { name: /clear all data/i }));
-    await user.click(screen.getByRole("button", { name: /cancel/i }));
-
-    expect(
-      screen.getByRole("button", { name: /clear all data/i }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: /confirm delete/i }),
-    ).not.toBeInTheDocument();
+    expect(await screen.findByText(/last import: 3 new/i)).toBeInTheDocument();
   });
 });

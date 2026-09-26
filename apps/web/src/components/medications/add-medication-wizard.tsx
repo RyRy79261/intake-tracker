@@ -11,15 +11,21 @@ import { useMedicineSearch, MedicineSearchCancelledError } from "@/hooks/use-med
 import { useAuthGate } from "@/components/auth-guard";
 import { useAddPrescription, usePrescriptions, useAddMedicationToPrescription, usePhasesForPrescription } from "@/hooks/use-medication-queries";
 import { useToast } from "@intake/ui/use-toast";
-import type { PillShape, MedicationPhase, CompoundStrength } from "@/lib/db";
-import { ArrowLeft, ArrowRight, Loader2, Check, X } from "lucide-react";
+import type { PillShape, MedicationPhase, CompoundStrength, Prescription } from "@/lib/db";
+import { AlertTriangle, ArrowLeft, ArrowRight, Loader2, Check, X } from "lucide-react";
 import { useInteractionCheck } from "@/hooks/use-interaction-check";
 import { cn } from "@/lib/utils";
 import {
   useAddMedicationForm,
+  resolveWizardDose,
+  findDuplicatePrescription,
+  parseStockInput,
   type AddMedicationFormState,
   type WizardStep,
 } from "@/hooks/use-add-medication-form";
+import { convertStrength, normalizeStrengthUnit } from "@intake/core/strength";
+import { selectEffectivePhase } from "@intake/core/effective-phase";
+import { isLive } from "@intake/core/lifecycle";
 import { SearchStep } from "@/components/medications/add-medication-steps/search-step";
 import { AppearanceStep } from "@/components/medications/add-medication-steps/appearance-step";
 import { IndicationStep } from "@/components/medications/add-medication-steps/indication-step";
@@ -45,6 +51,15 @@ interface AddMedicationWizardProps {
   onOpenChange: (open: boolean) => void;
 }
 
+/**
+ * How to resolve a same-generic duplicate: stock the new box under the
+ * existing prescription, or knowingly create a second (replacement) one.
+ */
+type DuplicateChoice = "addToExisting" | "saveAsNew";
+
+/** Error keys a step component already renders next to its own field. */
+const INLINE_ERROR_FIELDS = new Set(["brandName", "compounds", "dosage"]);
+
 function capitalizeWords(str: string) {
   if (!str) return "";
   return str.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
@@ -69,9 +84,16 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
 
   const { formState, errors, onFieldChange, patch, validateStep, clearErrors, reset: resetForm } = useAddMedicationForm();
 
+  // Duplicate guard: a same-generic active prescription found at save time,
+  // and what the user chose to do about it.
+  const [duplicate, setDuplicate] = useState<Prescription | null>(null);
+  const [duplicateChoice, setDuplicateChoice] = useState<DuplicateChoice | null>(null);
+
   const isExistingPrescription = formState.selectedPrescriptionId !== "new";
+  // Phases of the prescription a brand is being added to — the selected one,
+  // or the duplicate the user may redirect the save to.
   const selectedPrescriptionPhases = usePhasesForPrescription(
-    isExistingPrescription ? formState.selectedPrescriptionId : undefined
+    isExistingPrescription ? formState.selectedPrescriptionId : duplicate?.id
   );
 
   const [conflictCheckState, setConflictCheckState] = useState<ConflictCheckState>("idle");
@@ -118,6 +140,8 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
       setStep("search");
       setConflictCheckState("idle");
       resetConflicts();
+      setDuplicate(null);
+      setDuplicateChoice(null);
     }, 300);
   }, [onOpenChange, resetForm, resetConflicts]);
 
@@ -228,11 +252,42 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
     if (canGoNext && next) setStep(next);
   };
 
-  const handleSave = async () => {
-    if (!validateStep(step)) return;
+  const handleSave = async (choice: DuplicateChoice | null = duplicateChoice) => {
+    // Combination drugs keep `strength` as the SUM of compound strengths, so
+    // the pill math (dosage / strength) stays identical to single-compound.
+    const validCompounds = formState.compounds.filter(
+      (c) => c.name.trim() !== "" && c.strength > 0,
+    );
+    const isCombo = formState.isCombination && validCompounds.length >= 2;
+    const finalGenericName =
+      formState.genericName ||
+      (isCombo ? formatCompoundNames(validCompounds) : formState.brandName);
+
+    const targetPrescriptionId =
+      choice === "addToExisting" && duplicate ? duplicate.id : formState.selectedPrescriptionId;
+    const addingToExisting = targetPrescriptionId !== "new";
+
+    // A box added to an existing prescription, or a knowing second
+    // prescription for the same drug, is a replacement: ask for the pills on
+    // hand rather than silently starting the count at 0.
+    const requireStock = addingToExisting || choice === "saveAsNew";
+    if (!validateStep(step, { requireStock })) return;
+
+    // Deterministic duplicate guard — independent of the AI interaction check,
+    // which is skipped signed-out and on any AI error.
+    if (!addingToExisting && choice === null) {
+      const dup = findDuplicatePrescription(
+        finalGenericName,
+        existingPrescriptions.filter(isLive),
+      );
+      if (dup) {
+        setDuplicate(dup);
+        return;
+      }
+    }
 
     // Conflict check for new prescriptions (AI-driven; skip when signed out)
-    if (showAi && conflictCheckState === "idle" && formState.selectedPrescriptionId === "new") {
+    if (showAi && conflictCheckState === "idle" && !addingToExisting) {
       const activeMeds = existingPrescriptions.filter((p) => p.isActive);
       if (activeMeds.length > 0) {
         setConflictCheckState("checking");
@@ -260,30 +315,38 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
 
     // If warning, user acknowledged via "Save Anyway" — proceed to save
 
-    const parseStrength = (str: string): { strength: number; unit: string } => {
-      if (!str) return { strength: 1, unit: "mg" };
-      const match = str.match(/(\d+(?:\.\d+)?)\s*([a-zA-Z]+)/);
-      if (match && match[1] && match[2]) {
-        return { strength: parseFloat(match[1]), unit: match[2].toLowerCase() };
+    // Same resolver as the Dosage step preview; the search/dosage steps have
+    // already rejected an unreadable strength or a non-positive dose.
+    const dose = resolveWizardDose(formState);
+    if (!dose) return;
+    let { strength, unit } = dose;
+
+    // Pill math divides the phase's dose by the brand's strength as plain
+    // numbers, so a new brand must be expressed in the prescription's unit
+    // (a "0.1 mg" box for a 100 mcg regimen is stored as 100 mcg).
+    if (addingToExisting) {
+      const phase =
+        selectEffectivePhase(selectedPrescriptionPhases) ??
+        selectedPrescriptionPhases.find(isLive);
+      const phaseUnit = normalizeStrengthUnit(phase?.unit);
+      if (phaseUnit && phaseUnit !== unit) {
+        const converted = convertStrength(strength, unit, phaseUnit);
+        if (converted === null) {
+          toast({
+            title: "Strength unit doesn't match",
+            description: `This prescription is dosed in ${phaseUnit}; a ${unit} strength can't be converted.`,
+            variant: "destructive",
+          });
+          return;
+        }
+        strength = converted;
+        unit = phaseUnit;
       }
-      const num = parseFloat(str);
-      if (!isNaN(num)) return { strength: num, unit: "mg" };
-      return { strength: 1, unit: "mg" };
-    };
+    }
 
-    // Combination drugs keep `strength` as the SUM of compound strengths, so
-    // the pill math (dosage / strength) stays identical to single-compound.
-    const validCompounds = formState.compounds.filter(
-      (c) => c.name.trim() !== "" && c.strength > 0,
-    );
-    const isCombo = formState.isCombination && validCompounds.length >= 2;
-
-    const { strength, unit } = isCombo
-      ? { strength: compoundSum(validCompounds), unit: "mg" }
-      : parseStrength(formState.dosageStrength);
     const compoundsForSave = isCombo ? validCompounds : undefined;
-    const finalDosage = formState.customDosage ? parseFloat(formState.customDosage) : formState.dosageAmount;
-    const scheduleDosage = (finalDosage || 1) * strength;
+    const scheduleDosage = dose.total;
+    const currentStock = parseStockInput(formState.currentStock) ?? 0;
 
     try {
       const refillDays = parseInt(formState.refillAlertDays) || undefined;
@@ -295,9 +358,9 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
             .filter((s) => s.time && s.daysOfWeek.length > 0)
             .map((s) => ({ ...s, dosage: scheduleDosage }));
 
-      if (formState.selectedPrescriptionId !== "new") {
+      if (addingToExisting) {
         await addMedicationToPrescriptionMutation.mutateAsync({
-          prescriptionId: formState.selectedPrescriptionId,
+          prescriptionId: targetPrescriptionId,
           brandName: finalBrandName,
           strength,
           unit,
@@ -305,16 +368,14 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
           pillColor: formState.pillColor,
           ...(formState.visualIdentification && { visualIdentification: formState.visualIdentification }),
           ...(compoundsForSave && { compounds: compoundsForSave }),
-          currentStock: parseInt(formState.currentStock) || 0,
+          currentStock,
           ...(refillDays !== undefined && { refillAlertDays: refillDays }),
           ...(refillPills !== undefined && { refillAlertPills: refillPills }),
         });
       } else {
         await addPrescriptionMutation.mutateAsync({
           brandName: finalBrandName,
-          genericName:
-            formState.genericName ||
-            (isCombo ? formatCompoundNames(validCompounds) : formState.brandName),
+          genericName: finalGenericName,
           strength,
           unit,
           pillShape: formState.pillShape,
@@ -326,7 +387,7 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
           ...(formState.warnings.length > 0 && { warnings: formState.warnings }),
           foodInstruction: formState.foodInstruction,
           ...(formState.foodNote && { foodNote: formState.foodNote }),
-          currentStock: parseInt(formState.currentStock) || 0,
+          currentStock,
           ...(refillDays !== undefined && { refillAlertDays: refillDays }),
           ...(refillPills !== undefined && { refillAlertPills: refillPills }),
           ...(formState.notes && { notes: formState.notes }),
@@ -367,6 +428,48 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
             handleSave();
           }}
         />
+        {duplicate && duplicateChoice === null && (
+          <div className="absolute inset-0 bg-background/95 z-10 flex flex-col p-4 overflow-y-auto">
+            <div className="flex items-center gap-2 mb-4">
+              <AlertTriangle className="w-5 h-5 text-amber-500" />
+              <h3 className="text-sm font-semibold">Possible duplicate</h3>
+            </div>
+            <p className="text-sm text-muted-foreground mb-2">
+              You already have an active prescription for{" "}
+              <span className="font-medium text-foreground">{duplicate.genericName}</span>.
+              A second one would put both on your schedule, so &ldquo;take all&rdquo;
+              would log a double dose.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Adding to the existing prescription stocks this box as another
+              brand and keeps its current schedule — change the dose there if it
+              changed.
+            </p>
+            <div className="flex flex-col gap-2 mt-auto pt-4">
+              <Button
+                className="bg-teal-600 hover:bg-teal-700"
+                onClick={() => {
+                  setDuplicateChoice("addToExisting");
+                  handleSave("addToExisting");
+                }}
+              >
+                Add to existing prescription
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setDuplicateChoice("saveAsNew");
+                  handleSave("saveAsNew");
+                }}
+              >
+                Save as a separate prescription
+              </Button>
+              <Button variant="ghost" onClick={() => setDuplicate(null)}>
+                Go back
+              </Button>
+            </div>
+          </div>
+        )}
 
         <div className="p-4 px-5">
           <div className="flex items-center justify-between mb-4">
@@ -424,7 +527,7 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
               />
             )}
             {step === "dosage" && (
-              <DosageStep formState={formState} onFieldChange={onFieldChange} />
+              <DosageStep formState={formState} onFieldChange={onFieldChange} error={errors.dosage} />
             )}
             {step === "schedule" && (
               <ScheduleStep formState={formState} onFieldChange={onFieldChange} />
@@ -432,6 +535,14 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
             {step === "inventory" && (
               <InventoryStep formState={formState} onFieldChange={onFieldChange} />
             )}
+            {/* Errors the step components don't render inline. */}
+            {Object.entries(errors)
+              .filter(([field]) => !INLINE_ERROR_FIELDS.has(field))
+              .map(([field, message]) => (
+                <p key={field} role="alert" className="text-sm text-destructive mt-2">
+                  {message}
+                </p>
+              ))}
           </div>
 
           <div className="flex gap-3 mt-6">
@@ -443,7 +554,7 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
             )}
             {isLastStep ? (
               <Button
-                onClick={handleSave}
+                onClick={() => handleSave()}
                 disabled={addPrescriptionMutation.isPending || addMedicationToPrescriptionMutation.isPending}
                 className="flex-1 gap-2 bg-teal-600 hover:bg-teal-700"
               >

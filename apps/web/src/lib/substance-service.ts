@@ -1,5 +1,6 @@
-import { db, type SubstanceRecord } from "@/lib/db";
+import { db, type IntakeRecord, type SubstanceRecord } from "@/lib/db";
 import { ok, err } from "@intake/core/service";
+import { isLive } from "@intake/core/lifecycle";
 import type { ServiceResult } from "@intake/types/service";
 import { syncFields } from "@/lib/utils";
 import { enqueueInsideTx } from "@/lib/sync-queue";
@@ -106,21 +107,54 @@ export async function getSubstanceRecordsByDateRange(
   if (type) {
     records = await db.substanceRecords
       .where("[type+timestamp]")
-      .between([type, startTime], [type, endTime], true, true)
+      .between([type, startTime], [type, endTime])
       .toArray();
   } else {
     records = await db.substanceRecords
       .where("timestamp")
-      .between(startTime, endTime, true, true)
+      .between(startTime, endTime)
       .toArray();
   }
 
   return records.filter((r) => r.deletedAt === null);
 }
 
+/**
+ * The live rows, other than the substance itself, that
+ * {@link deleteSubstanceRecord} would take with it — so a caller can confirm a
+ * one-tap delete that removes a whole drink.
+ */
+export async function previewSubstanceDelete(
+  id: string
+): Promise<{ intakes: IntakeRecord[]; substances: SubstanceRecord[] }> {
+  const substance = await db.substanceRecords.get(id);
+  const intakes: IntakeRecord[] = (
+    await db.intakeRecords.where("source").equals(`substance:${id}`).toArray()
+  ).filter(isLive);
+  const substances: SubstanceRecord[] = [];
+
+  const groupId = substance?.groupId;
+  if (groupId) {
+    const groupEatings = await db.eatingRecords.where("groupId").equals(groupId).toArray();
+    if (!groupEatings.some(isLive)) {
+      const grouped = await db.intakeRecords.where("groupId").equals(groupId).toArray();
+      for (const intake of grouped) {
+        if (isLive(intake) && !intakes.some((r) => r.id === intake.id)) intakes.push(intake);
+      }
+      const siblings = await db.substanceRecords.where("groupId").equals(groupId).toArray();
+      substances.push(...siblings.filter((s) => s.id !== id && isLive(s)));
+    }
+  }
+  return { intakes, substances };
+}
+
+/**
+ * Soft-delete a substance record and, for a drink, the rest of the drink.
+ * Returns the tombstone stamp for {@link undoDeleteSubstanceRecord}.
+ */
 export async function deleteSubstanceRecord(
   id: string
-): Promise<ServiceResult<void>> {
+): Promise<ServiceResult<{ deletedAt: number }>> {
   try {
     const now = Date.now();
 
@@ -195,9 +229,65 @@ export async function deleteSubstanceRecord(
     );
 
     schedulePush();
-    return ok(undefined);
+    return ok({ deletedAt: now });
   } catch (e) {
     return err("Failed to delete substance record", e);
+  }
+}
+
+/**
+ * Reverse a {@link deleteSubstanceRecord}. Every row that delete tombstoned
+ * shares its `deletedAt` stamp, so only those come back — a row removed
+ * earlier stays removed.
+ */
+export async function undoDeleteSubstanceRecord(
+  id: string,
+  deletedAt: number
+): Promise<ServiceResult<void>> {
+  try {
+    const now = Date.now();
+
+    await db.transaction(
+      "rw",
+      [db.substanceRecords, db.intakeRecords, db._syncQueue],
+      async () => {
+        const substance = await db.substanceRecords.get(id);
+        if (!substance) throw new Error("Substance record not found");
+
+        const substances = substance.groupId
+          ? await db.substanceRecords.where("groupId").equals(substance.groupId).toArray()
+          : [substance];
+        for (const s of substances) {
+          if (s.deletedAt !== deletedAt) continue;
+          await db.substanceRecords.update(s.id, { deletedAt: null, updatedAt: now });
+          await enqueueInsideTx("substanceRecords", s.id, "upsert");
+        }
+
+        const intakes = await db.intakeRecords
+          .where("source")
+          .equals(`substance:${id}`)
+          .toArray();
+        if (substance.groupId) {
+          const grouped = await db.intakeRecords
+            .where("groupId")
+            .equals(substance.groupId)
+            .toArray();
+          for (const r of grouped) {
+            if (!intakes.some((i) => i.id === r.id)) intakes.push(r);
+          }
+        }
+        for (const intake of intakes) {
+          if (intake.deletedAt !== deletedAt) continue;
+          await db.intakeRecords.update(intake.id, { deletedAt: null, updatedAt: now });
+          await enqueueInsideTx("intakeRecords", intake.id, "upsert");
+        }
+      },
+    );
+
+    schedulePush();
+    return ok(undefined);
+  } catch (e) {
+    return err("Failed to undo delete substance record", e);
   }
 }
 

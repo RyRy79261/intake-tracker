@@ -649,12 +649,110 @@ realDb.version(22).stores({
   }
 });
 
+// Version 23 (2026-09 audit):
+//   - doseLogs gains `[scheduleId+scheduledDate]` so a dose slot (one schedule
+//     on one day) can be looked up directly instead of scanning the day.
+//   - The boolean indexes prescriptions.isActive, inventoryItems.isActive and
+//     phaseSchedules.enabled are dropped. Booleans are not valid IndexedDB
+//     keys, so those indexes never held a single entry; readers load the
+//     table and filter in JS (dexie-schema#8).
+//   - The upgrade repairs tombstones whose lifecycle flag still reads "live"
+//     (a soft-deleted prescription with `isActive: true`, a deleted phase that
+//     is still `active`, …). Readers that trust the flag without checking
+//     `deletedAt` kept showing — and scheduling — those rows.
+realDb.version(23).stores({
+  // --- REPEAT all v22 stores verbatim, except the changes above ---
+  intakeRecords:           "id, [type+timestamp], timestamp, source, groupId, updatedAt",
+  weightRecords:           "id, timestamp, updatedAt",
+  bloodPressureRecords:    "id, timestamp, position, arm, updatedAt",
+  eatingRecords:           "id, timestamp, groupId, updatedAt",
+  urinationRecords:        "id, timestamp, updatedAt",
+  defecationRecords:       "id, timestamp, updatedAt",
+  prescriptions:           "id, updatedAt, createdAt",
+  medicationPhases:        "id, prescriptionId, status, type, titrationPlanId, updatedAt",
+  phaseSchedules:          "id, phaseId, time, updatedAt",
+  inventoryItems:          "id, prescriptionId, updatedAt",
+  inventoryTransactions:   "id, [inventoryItemId+timestamp], inventoryItemId, timestamp, type, updatedAt",
+  doseLogs:                "id, [prescriptionId+scheduledDate], [scheduleId+scheduledDate], prescriptionId, phaseId, scheduleId, scheduledDate, scheduledTime, status, updatedAt",
+  dailyNotes:              "id, date, prescriptionId, doseLogId, updatedAt",
+  auditLogs:               "id, [action+timestamp], timestamp, action",
+  substanceRecords:        "id, [type+timestamp], type, timestamp, source, sourceRecordId, groupId, updatedAt",
+  titrationPlans:          "id, conditionLabel, status, updatedAt",
+  _syncQueue:              "++id, [tableName+recordId], tableName, enqueuedAt",
+  _syncMeta:               "tableName",
+  _errorLogs:              "id, timestamp, source",
+  userProfile:             "id, updatedAt",
+  insightReports:          "id, generatedAt, updatedAt",
+}).upgrade(async (trans) => {
+  const now = Date.now();
+  const queueTable = trans.table("_syncQueue");
+
+  // Same reasoning as v22: the repair has to reach the server (a later pull
+  // would otherwise overwrite it with the stale flag), and push reads the
+  // live row at push time, so an op already queued for the record suffices.
+  const enqueueRepair = async (tableName: string, recordId: string) => {
+    const existing = await queueTable
+      .where("[tableName+recordId]")
+      .equals([tableName, recordId])
+      .first();
+    if (existing) return;
+    await queueTable.add({
+      tableName,
+      recordId,
+      op: "upsert",
+      enqueuedAt: now,
+      attempts: 0,
+    });
+  };
+
+  // Tombstones only. `deletedAt` is not indexed, so scan and filter — these
+  // are one user's medication tables, which stay small.
+  const repair = async (
+    tableName: string,
+    fix: (row: Record<string, unknown>) => Record<string, unknown> | null,
+  ) => {
+    const table = trans.table(tableName);
+    const rows = (await table.toArray()) as Record<string, unknown>[];
+    for (const row of rows) {
+      // One malformed row must not abort the version change (see v22).
+      try {
+        if (row.deletedAt == null) continue;
+        const changes = fix(row);
+        if (!changes) continue;
+        // `updatedAt` is bumped so the pushed repair wins last-write-wins
+        // against the server's copy. `deletedAt` itself is left untouched.
+        await table.update(row.id, { ...changes, updatedAt: now });
+        await enqueueRepair(tableName, row.id as string);
+      } catch {
+        // Skip this row; the rest of the repair still applies.
+      }
+    }
+  };
+
+  await repair("prescriptions", (r) =>
+    r.isActive === false ? null : { isActive: false });
+  await repair("inventoryItems", (r) =>
+    r.isActive === false ? null : { isActive: false });
+  await repair("phaseSchedules", (r) =>
+    r.enabled === false ? null : { enabled: false });
+  await repair("medicationPhases", (r) =>
+    r.status === "active" || r.status === "pending"
+      ? { status: "cancelled" }
+      : null);
+  // TitrationPlan has no "pending" status today; it is matched anyway so a
+  // row written by an older/newer client with that value is still repaired.
+  await repair("titrationPlans", (r) =>
+    r.status === "active" || r.status === "draft" || r.status === "pending"
+      ? { status: "cancelled" }
+      : null);
+});
+
 /**
  * Current Dexie schema version. Bump this constant in lockstep with each new
  * `realDb.version(N)` block above so diagnostic surfaces (Debug → Environment)
  * always reflect the real schema.
  */
-export const DB_SCHEMA_VERSION = 22;
+export const DB_SCHEMA_VERSION = 23;
 
 /**
  * True when `e` (or anything in its `cause` chain) is Dexie's
@@ -698,12 +796,16 @@ export async function recoverClosedDatabase(e: unknown): Promise<boolean> {
 }
 
 /**
- * Store definitions for a preview database — the current (v19) schema in a
+ * Store definitions for a preview database — the current (v23) schema in a
  * single version. A preview database is created empty and discarded, so it
  * needs no migration history.
  */
 const PREVIEW_STORES = {
   ...V15_STORES,
+  prescriptions: "id, updatedAt, createdAt",
+  phaseSchedules: "id, phaseId, time, updatedAt",
+  inventoryItems: "id, prescriptionId, updatedAt",
+  doseLogs: "id, [prescriptionId+scheduledDate], [scheduleId+scheduledDate], prescriptionId, phaseId, scheduleId, scheduledDate, scheduledTime, status, updatedAt",
   _syncQueue: "++id, [tableName+recordId], tableName, enqueuedAt",
   _syncMeta: "tableName",
   _errorLogs: "id, timestamp, source",

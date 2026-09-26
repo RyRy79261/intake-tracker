@@ -75,6 +75,7 @@ export function buildOAuthUrls(origin: string) {
     authorizationEndpoint: `${origin}${MCP_BASE_PATH}/oauth/authorize`,
     tokenEndpoint: `${origin}${MCP_BASE_PATH}/oauth/token`,
     registrationEndpoint: `${origin}${MCP_BASE_PATH}/oauth/register`,
+    revocationEndpoint: `${origin}${MCP_BASE_PATH}/oauth/revoke`,
     resource: `${origin}${MCP_BASE_PATH}`,
     authServerMetadata: `${origin}/.well-known/oauth-authorization-server`,
     resourceMetadata: `${origin}/.well-known/oauth-protected-resource`,

@@ -1,11 +1,14 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { AiInsightsCard } from "@/components/analytics/ai-insights-card";
 import { renderWithFixtures } from "@/__tests__/react-test-utils";
-import { makeInsightReport } from "@/__tests__/fixtures/db-fixtures";
+import {
+  makeInsightReport,
+  makeUserProfile,
+} from "@/__tests__/fixtures/db-fixtures";
 
 /**
  * AiInsightsCard generates a summary via POST /api/analytics/insights and
@@ -178,5 +181,78 @@ describe("AiInsightsCard", () => {
     expect(
       screen.getByRole("button", { name: "Start deep analysis" }),
     ).toBeInTheDocument();
+  });
+
+  it("labels itself as a fixed 30-day window, separate from the range selector", async () => {
+    await renderWithFixtures(<AiInsightsCard />);
+    expect(await screen.findByText("Last 30 days")).toBeInTheDocument();
+  });
+
+  it("deletes a report from the reading dialog after a confirming tap", async () => {
+    const user = userEvent.setup();
+    const report = makeInsightReport({
+      generatedAt: Date.now(),
+      narrative: "A report the user wants gone.",
+    });
+    await renderWithFixtures(<AiInsightsCard />, {
+      seed: { insightReports: [report] },
+    });
+
+    await user.click(await screen.findByText("A report the user wants gone."));
+    await user.click(await screen.findByRole("button", { name: "Delete report" }));
+    // First tap only arms the action: the dialog and report are still there.
+    expect(
+      screen.getByRole("button", { name: "Tap again to delete" }),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("A report the user wants gone.").length).toBeGreaterThan(0);
+    await user.click(screen.getByRole("button", { name: "Tap again to delete" }));
+
+    // Gone from the card (the live query excludes soft-deleted rows) and the
+    // dialog closed.
+    await waitFor(() =>
+      expect(
+        screen.queryByText("A report the user wants gone."),
+      ).not.toBeInTheDocument(),
+    );
+    expect(
+      await screen.findByText(/Generate an AI summary of your last 30 days/i),
+    ).toBeInTheDocument();
+  });
+
+  it("offers the comparison only when a report for an earlier period exists", async () => {
+    const user = userEvent.setup();
+    // Covers the current window, so it is not an "earlier period".
+    await renderWithFixtures(<AiInsightsCard />, {
+      seed: {
+        insightReports: [
+          makeInsightReport({
+            generatedAt: Date.now(),
+            rangeStart: Date.now() - 30 * 86_400_000,
+            rangeEnd: Date.now(),
+          }),
+        ],
+      },
+    });
+
+    await user.click(screen.getByRole("button", { name: "Fast analysis" }));
+    await screen.findByText("What goes into this summary");
+    expect(screen.queryByText("Compare with history")).not.toBeInTheDocument();
+  });
+
+  it("does not claim a personalised summary when medication sharing has nothing to send", async () => {
+    const user = userEvent.setup();
+    await renderWithFixtures(<AiInsightsCard />, {
+      seed: {
+        userProfile: [makeUserProfile({ shareMedicationsWithAI: true })],
+      },
+    });
+
+    await user.click(screen.getByRole("button", { name: "Fast analysis" }));
+    expect(
+      await screen.findByText(/no active prescriptions to include/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Personalised with your medical profile."),
+    ).not.toBeInTheDocument();
   });
 });

@@ -10,7 +10,7 @@ import { Button } from "@intake/ui/button";
 import { PillIcon } from "@/components/medications/pill-icon";
 import { useTakeDose, useUntakeDose, useSkipDose, useRescheduleDose } from "@/hooks/use-medication-queries";
 import { hapticTake, hapticSkip, formatDoseAmount } from "@/lib/medication-ui-utils";
-import { isCombo, splitDose, formatCompoundShort, formatCompoundFull } from "@intake/core/compound";
+import { isCombo, formatComboDose, formatCompoundFull } from "@intake/core/compound";
 import { Info, X, RotateCcw, Clock, Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "@intake/ui/use-toast";
@@ -22,6 +22,8 @@ interface DoseDetailDialogProps {
   onOpenChange: (open: boolean) => void;
   slot: DoseSlot | null;
   isToday: boolean;
+  /** The slot is on a day after today: nothing can be taken or skipped yet. */
+  isFuture?: boolean;
 }
 
 export function DoseDetailDialog({
@@ -29,6 +31,7 @@ export function DoseDetailDialog({
   onOpenChange,
   slot,
   isToday,
+  isFuture = false,
 }: DoseDetailDialogProps) {
   const [showReschedule, setShowReschedule] = useState(false);
   const [rescheduleTime, setRescheduleTime] = useState("");
@@ -61,15 +64,16 @@ export function DoseDetailDialog({
     }
   };
 
-  const handleRetroactiveTakeConfirm = async (time: string) => {
+  const handleRetroactiveTakeConfirm = async (takenAtTime: string) => {
     hapticTake();
     await takeMut.mutateAsync({
       prescriptionId: slot.prescriptionId,
       phaseId: slot.phaseId,
       scheduleId: slot.scheduleId,
       date: slot.scheduledDate,
-      time,
+      time: slot.localTime, // always the scheduled time: it is the slot key
       dosageMg: slot.dosageMg,
+      takenAtTime, // the picked time is when it was actually taken
     });
     onOpenChange(false);
   };
@@ -127,11 +131,10 @@ export function DoseDetailDialog({
 
   const doseAmountLabel = formatDoseAmount(slot);
   // Strength shown next to the brand name in the header — the scheduled dose,
-  // split per compound for a combination drug (not the full per-pill content,
-  // which would misrepresent fractional doses).
-  const headerStrength = isCombo(inventory)
-    ? formatCompoundShort(splitDose(schedule.dosage, inventory!.compounds), phase.unit)
-    : `${schedule.dosage}${phase.unit}`;
+  // per compound for a combination drug as the brand's tablets scaled by the
+  // pill count (not the full per-pill content, which would misrepresent
+  // fractional doses).
+  const headerStrength = formatComboDose(schedule.dosage, phase.unit, inventory);
 
   const dateLabel = new Date(slot.scheduledDate + "T00:00:00").toLocaleDateString("en-US", {
     weekday: "long",
@@ -202,7 +205,10 @@ export function DoseDetailDialog({
             {/* Action buttons */}
             {!showReschedule && (
               <div className="flex justify-center gap-6">
-                {status !== "skipped" && (
+                {/* Future days get the same guard as the schedule row: no
+                    Take/Skip yet. UNTAKE stays so a dose already logged on a
+                    future day can still be reversed. */}
+                {!isFuture && status !== "skipped" && (
                   <button onClick={handleSkip} className="flex flex-col items-center gap-1.5">
                     <div className="w-12 h-12 rounded-full border-2 border-teal-600 dark:border-teal-400 flex items-center justify-center">
                       <X className="w-5 h-5 text-teal-600 dark:text-teal-400" />
@@ -218,7 +224,7 @@ export function DoseDetailDialog({
                     </div>
                     <span className="text-xs font-medium text-red-500 dark:text-red-400">UNTAKE</span>
                   </button>
-                ) : (
+                ) : !isFuture && (
                   <button onClick={handleTake} className="flex flex-col items-center gap-1.5">
                     <div className="w-12 h-12 rounded-full border-2 border-teal-600 dark:border-teal-400 bg-teal-600 dark:bg-teal-500 flex items-center justify-center">
                       <svg width="20" height="20" viewBox="0 0 12 12" fill="none">

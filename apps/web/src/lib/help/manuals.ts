@@ -590,7 +590,7 @@ export const MANUALS: Manual[] = [
       },
       {
         heading: "Resetting",
-        body: "Reset to Defaults, at the bottom of the page, restores every preference to its original value. It does not delete any of your logged data — only your settings.",
+        body: "Reset to Defaults, at the bottom of the page, asks for confirmation and then restores your preferences to their original values. It does not delete any of your logged data, and it keeps your liquid presets, storage mode and dose reminders.",
         callout: {
           tone: "tip",
           text: "This manual is reachable from Settings → Help & Manual, and from the \"How does this work?\" link in the shake / bug-report dialog.",

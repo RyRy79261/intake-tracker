@@ -48,7 +48,7 @@ vi.mock("@/app/api/ai/_shared/usage-tracker", () => ({
 
 vi.mock("@/app/api/ai/_shared/claude-client", () => ({
   CLAUDE_MODELS: { fast: "fast", quality: "quality", premium: "premium" },
-  WEB_SEARCH_TOOL: { type: "web_search_20250305", name: "web_search", max_uses: 5 },
+  WEB_SEARCH_TOOL: { type: "web_search_20260209", name: "web_search", max_uses: 5 },
   getClaudeClientForUser: vi.fn(async () => ({
     client: { messages: { create: messagesCreate } },
     resolved: { apiKey: "k", source: "env", keyOwnerId: null },
@@ -176,6 +176,16 @@ describe("POST /api/ai/nutrient-analysis", () => {
             dose: "2.5 mg, 5 mg",
             frequency: "twice daily",
             daysOnPhase: 14,
+            dosesTaken: 12,
+            dosesDue: 14,
+          },
+          {
+            name: "Furosemide",
+            phaseType: "prn",
+            dose: "40 mg",
+            frequency: "as needed",
+            daysOnPhase: 90,
+            prnDoses: 3,
           },
         ],
       }),
@@ -203,5 +213,55 @@ describe("POST /api/ai/nutrient-analysis", () => {
 
     expect(res.status).toBe(400);
     expect(messagesCreate).not.toHaveBeenCalled();
+  });
+
+  it("request: no sampling parameters (Sonnet 5 400s on temperature) and an explicit effort", async () => {
+    messagesCreate.mockResolvedValueOnce(toolResponse(validResult));
+
+    const { POST } = await import("@/app/api/ai/nutrient-analysis/route");
+    await POST(makeRequest(baseBody));
+
+    const params = messagesCreate.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(params).not.toHaveProperty("temperature");
+    expect(params.output_config).toEqual({ effort: "medium" });
+  });
+
+  it("refusal: stop_reason refusal → 422 AI_REFUSED, not 'didn't return a structured response'", async () => {
+    messagesCreate.mockResolvedValueOnce({
+      content: [],
+      stop_reason: "refusal",
+      stop_details: { type: "refusal", category: null, explanation: null },
+      usage: { input_tokens: 10, output_tokens: 0 },
+    });
+
+    const { POST } = await import("@/app/api/ai/nutrient-analysis/route");
+    const res = await POST(makeRequest(baseBody));
+
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as { code: string };
+    expect(body.code).toBe("AI_REFUSED");
+    expect(messagesCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it("pause_turn: a paused web-search turn is resumed, not answered with a new user message", async () => {
+    const paused = [
+      { type: "server_tool_use", id: "s1", name: "web_search", input: { query: "banana potassium" } },
+    ];
+    messagesCreate
+      .mockResolvedValueOnce({
+        content: paused,
+        stop_reason: "pause_turn",
+        usage: { input_tokens: 10, output_tokens: 5 },
+      })
+      .mockResolvedValueOnce(toolResponse(validResult));
+
+    const { POST } = await import("@/app/api/ai/nutrient-analysis/route");
+    const res = await POST(makeRequest(baseBody));
+
+    expect(res.status).toBe(200);
+    const resumed = messagesCreate.mock.calls[1]?.[0] as {
+      messages: { role: string; content: unknown }[];
+    };
+    expect(resumed.messages.at(-1)).toEqual({ role: "assistant", content: paused });
   });
 });

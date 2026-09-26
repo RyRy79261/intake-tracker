@@ -37,6 +37,9 @@ const Progress = React.forwardRef<
     const extended = hasExtended
       ? Math.max(0, Math.min(100 - primary, extendedValue ?? 0))
       : 0;
+    // Radix only exposes aria-valuenow / a determinate data-state when it
+    // receives `value`; the fill itself is drawn by hand below.
+    const announced = Math.round(primary + extended);
     const showMarker =
       targetMarkerPct !== undefined &&
       targetMarkerPct > 0 &&
@@ -50,6 +53,7 @@ const Progress = React.forwardRef<
           className
         )}
         {...props}
+        value={announced}
       >
         {hasExtended ? (
           <>
@@ -93,4 +97,18 @@ const Progress = React.forwardRef<
 );
 Progress.displayName = ProgressPrimitive.Root.displayName;
 
-export { Progress };
+/**
+ * Text colour for a total's tri-state (see `ProgressStatus` in
+ * @intake/core/progress). `ok` keeps the caller's own neutral/theme colour;
+ * `extended` (inside the buffer) is orange and `over` is red on every surface.
+ */
+function progressStatusTextClass(
+  status: "ok" | "extended" | "over",
+  okClassName: string
+): string {
+  if (status === "over") return "text-red-600 dark:text-red-400";
+  if (status === "extended") return "text-orange-600 dark:text-orange-400";
+  return okClassName;
+}
+
+export { Progress, progressStatusTextClass };

@@ -55,9 +55,10 @@ function toolUseResponse(input: unknown) {
   };
 }
 
-// The route's in-process rate limiter (5 req/IP/min) keeps module-level
-// state that survives across tests in this file. Hand each request a
-// unique IP so the limiter never trips and tests stay independent.
+// The route's in-process rate limiter is keyed on the user, so every test
+// here shares one bucket. beforeEach resets the module registry, handing
+// each test a fresh route module (and limiter). Distinct IPs stay so the
+// rate-limit test can show rotating x-forwarded-for doesn't dodge it.
 let ipCounter = 0;
 function makeRequest(body: unknown): NextRequest {
   ipCounter += 1;
@@ -71,8 +72,23 @@ function makeRequest(body: unknown): NextRequest {
   });
 }
 
+const lookupBody = {
+  mode: "lookup",
+  substance: "coffee",
+  activePrescriptions: [{ genericName: "lisinopril" }],
+};
+
+const okResult = {
+  interactions: [
+    { substance: "coffee", medication: "lisinopril", severity: "OK", description: "Fine." },
+  ],
+  drugClass: "",
+  summary: "No issue.",
+};
+
 describe("interaction-check route handler", () => {
   beforeEach(() => {
+    vi.resetModules();
     messagesCreate.mockReset();
   });
 
@@ -147,6 +163,48 @@ describe("interaction-check route handler", () => {
     expect(body.interactions[0]!.severity).toBe("AVOID");
   });
 
+  it("adds a 'Not assessed' row for any requested medication the model skipped", async () => {
+    messagesCreate.mockResolvedValueOnce(
+      toolUseResponse({
+        interactions: [
+          {
+            substance: "St John's Wort",
+            medication: "Bisoprolol (Concor)",
+            severity: "OK",
+            description: "No significant interaction.",
+          },
+        ],
+        drugClass: "Herbal",
+        summary: "No significant interactions.",
+      }),
+    );
+
+    const { POST } = await import("@/app/api/ai/interaction-check/route");
+    const res = await POST(
+      makeRequest({
+        mode: "lookup",
+        substance: "St John's Wort",
+        activePrescriptions: [
+          { genericName: "bisoprolol" },
+          { genericName: "Sertraline" },
+          { genericName: "sertraline" },
+        ],
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      interactions: { medication: string; severity: string; description: string }[];
+    };
+    // bisoprolol matched case-insensitively; sertraline (listed twice) was
+    // skipped, so exactly one non-OK placeholder row is added for it.
+    expect(body.interactions).toHaveLength(2);
+    const gap = body.interactions[1]!;
+    expect(gap.medication).toBe("Sertraline");
+    expect(gap.severity).toBe("CAUTION");
+    expect(gap.description).toMatch(/Not assessed/);
+  });
+
   it("rejects an invalid mode with 400 (discriminated union has no match)", async () => {
     const { POST } = await import("@/app/api/ai/interaction-check/route");
     const res = await POST(
@@ -173,11 +231,12 @@ describe("interaction-check route handler", () => {
     expect(messagesCreate).not.toHaveBeenCalled();
   });
 
-  it("returns 502 when the model returns no tool_use block", async () => {
-    messagesCreate.mockResolvedValueOnce({
+  it("returns 502 when the model returns no tool_use block, even after the retry", async () => {
+    const prose = {
       content: [{ type: "text", text: "I cannot use a tool right now." }],
       usage: { input_tokens: 10, output_tokens: 5 },
-    });
+    };
+    messagesCreate.mockResolvedValueOnce(prose).mockResolvedValueOnce(prose);
 
     const { POST } = await import("@/app/api/ai/interaction-check/route");
     const res = await POST(
@@ -222,6 +281,68 @@ describe("interaction-check route handler", () => {
     expect(body.error).toBe("AI service unavailable");
   });
 
+  it("request: auto tool_choice, a strict result tool and explicit effort (Opus 5.5 400s on a forced tool)", async () => {
+    messagesCreate.mockResolvedValueOnce(toolUseResponse(okResult));
+
+    const { POST } = await import("@/app/api/ai/interaction-check/route");
+    await POST(makeRequest(lookupBody));
+
+    const params = messagesCreate.mock.calls[0]?.[0] as {
+      tool_choice?: { type: string };
+      tools: { name: string; strict?: boolean }[];
+      output_config?: { effort: string };
+    };
+    expect(params.tool_choice?.type ?? "auto").toBe("auto");
+    expect(params.tools[0]?.strict).toBe(true);
+    expect(params.output_config).toEqual({ effort: "high" });
+    expect(params).not.toHaveProperty("temperature");
+  });
+
+  it("retry: a prose first turn gets one unforced retry that recovers", async () => {
+    messagesCreate
+      .mockResolvedValueOnce({
+        content: [{ type: "text", text: "Checking." }],
+        usage: { input_tokens: 10, output_tokens: 5 },
+      })
+      .mockResolvedValueOnce(toolUseResponse(okResult));
+
+    const { POST } = await import("@/app/api/ai/interaction-check/route");
+    const res = await POST(makeRequest(lookupBody));
+
+    expect(res.status).toBe(200);
+    const retry = messagesCreate.mock.calls[1]?.[0] as { tool_choice: { type: string } };
+    expect(retry.tool_choice).toEqual({ type: "auto" });
+  });
+
+  it("refusal: stop_reason refusal → 422 AI_REFUSED, not 'AI service unavailable'", async () => {
+    messagesCreate.mockResolvedValueOnce({
+      content: [],
+      stop_reason: "refusal",
+      stop_details: { type: "refusal", category: "bio", explanation: null },
+      usage: { input_tokens: 10, output_tokens: 0 },
+    });
+
+    const { POST } = await import("@/app/api/ai/interaction-check/route");
+    const res = await POST(makeRequest(lookupBody));
+
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as { code: string };
+    expect(body.code).toBe("AI_REFUSED");
+    expect(messagesCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it("rate limit: keyed on the user, so rotating x-forwarded-for doesn't reset it", async () => {
+    messagesCreate.mockResolvedValue(toolUseResponse(okResult));
+
+    const { POST } = await import("@/app/api/ai/interaction-check/route");
+    const statuses: number[] = [];
+    // makeRequest hands every request a fresh IP.
+    for (let i = 0; i < 6; i++) statuses.push((await POST(makeRequest(lookupBody))).status);
+
+    expect(statuses.slice(0, 5)).toEqual([200, 200, 200, 200, 200]);
+    expect(statuses[5]).toBe(429);
+  });
+
   it("AI-failure path: a thrown error from Claude yields a graceful 500, not a crash", async () => {
     messagesCreate.mockRejectedValueOnce(new Error("upstream exploded"));
 
@@ -237,5 +358,48 @@ describe("interaction-check route handler", () => {
     expect(res.status).toBe(500);
     const body = (await res.json()) as { error: string };
     expect(body.error).toBe("Failed to check interactions");
+  });
+});
+
+describe("withUnassessedMedications", () => {
+  it("flags a skipped medication whose name has no ASCII letters", async () => {
+    const { withUnassessedMedications } = await import(
+      "@intake/ai-prompts/interaction-check"
+    );
+    const rows = withUnassessedMedications(
+      [
+        {
+          substance: "grapefruit",
+          medication: "Amlodipine",
+          severity: "CAUTION" as const,
+          description: "CYP3A4.",
+        },
+      ],
+      ["Amlodipine", "ワルファリン"],
+      "grapefruit",
+    );
+
+    expect(rows).toHaveLength(2);
+    expect(rows[1]).toMatchObject({ medication: "ワルファリン", severity: "CAUTION" });
+  });
+
+  it("matches a returned non-ASCII name to the requested one", async () => {
+    const { withUnassessedMedications } = await import(
+      "@intake/ai-prompts/interaction-check"
+    );
+    const rows = withUnassessedMedications(
+      [
+        {
+          substance: "grapefruit",
+          medication: "Warfarin (ワルファリン)",
+          severity: "AVOID" as const,
+          description: "Bleeding.",
+        },
+      ],
+      ["ワルファリン"],
+      "grapefruit",
+    );
+
+    expect(rows).toHaveLength(1);
   });
 });

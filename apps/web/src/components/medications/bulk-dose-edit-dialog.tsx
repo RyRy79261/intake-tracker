@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { Drawer, DrawerContent, DrawerTitle } from "@intake/ui/drawer";
 import { PillIconWithBadge } from "@/components/medications/pill-icon";
-import { useUntakeDose, useSkipAllDoses, useEditAllDoseTimes } from "@/hooks/use-medication-queries";
+import { useUntakeAllDoses, useEditAllDoseTimes } from "@/hooks/use-medication-queries";
+import { useTodayKey } from "@/hooks/use-today-key";
 import { hapticTake, hapticSkip, formatDoseAmount, getCurrentTimeHHMM } from "@/lib/medication-ui-utils";
 import { toast } from "@intake/ui/use-toast";
 import { X, RotateCcw, Clock } from "lucide-react";
@@ -38,12 +39,27 @@ function formatLoggedTime(ts: number): string {
   return `${formatClock(ts)}, ${dateStr}`;
 }
 
+/**
+ * Each slot is written separately, so a batch can partly fail. Name the
+ * failed doses and keep the drawer open so the user can retry.
+ */
+function reportFailures(verb: string, slots: DoseSlot[], failedScheduleIds: string[]) {
+  const names = slots
+    .filter((s) => failedScheduleIds.includes(s.scheduleId))
+    .map((s) => s.prescription.genericName);
+  toast({
+    title: `Failed to ${verb} ${failedScheduleIds.length} dose(s)`,
+    description: names.join(", "),
+    variant: "destructive",
+  });
+}
+
 export function BulkDoseEditDialog({ open, onOpenChange, time, slots, date }: BulkDoseEditDialogProps) {
   const [editPickerOpen, setEditPickerOpen] = useState(false);
 
-  const untakeMut = useUntakeDose();
-  const skipAllMut = useSkipAllDoses();
-  const editAllMut = useEditAllDoseTimes();
+  const untakeAllMut = useUntakeAllDoses();
+  const editAllMut = useEditAllDoseTimes<DoseSlot>();
+  const todayKey = useTodayKey();
 
   if (slots.length === 0) return null;
 
@@ -54,34 +70,31 @@ export function BulkDoseEditDialog({ open, onOpenChange, time, slots, date }: Bu
   const firstLog = takenSlots[0]?.existingLog?.actionTimestamp;
   const batchLoggedTime = firstLog ? formatClock(firstLog) : getCurrentTimeHHMM();
 
-  const handleSkipAll = async () => {
-    hapticSkip();
-    const target = slots.filter((s) => s.status !== "skipped");
-    await skipAllMut.mutateAsync({
-      entries: target.map((s) => ({
-        prescriptionId: s.prescriptionId,
-        phaseId: s.phaseId,
-        scheduleId: s.scheduleId,
-        dosageMg: s.dosageMg,
-      })),
-      date,
-      time,
-    });
-    toast({ title: `All ${formatTime12(time)} doses skipped` });
-    onOpenChange(false);
-  };
+  // There is deliberately no SKIP ALL here: this drawer only opens for a
+  // group with nothing left pending, so a bulk skip could only convert
+  // already-taken doses. Skip All lives on the group header and acts on
+  // pending/missed doses only.
 
   const handleUntakeAll = async () => {
     hapticSkip();
-    for (const s of takenSlots) {
-      await untakeMut.mutateAsync({
-        prescriptionId: s.prescriptionId,
-        phaseId: s.phaseId,
-        scheduleId: s.scheduleId,
-        date: s.scheduledDate,
-        time: s.localTime,
-        dosageMg: s.dosageMg,
-      });
+    try {
+      const outcome = await untakeAllMut.mutateAsync(
+        takenSlots.map((s) => ({
+          prescriptionId: s.prescriptionId,
+          phaseId: s.phaseId,
+          scheduleId: s.scheduleId,
+          date: s.scheduledDate,
+          time: s.localTime,
+          dosageMg: s.dosageMg,
+        })),
+      );
+      if (outcome.failed.length > 0) {
+        reportFailures("reverse", takenSlots, outcome.failed.map((f) => f.entry.scheduleId));
+        return;
+      }
+    } catch {
+      toast({ title: "Failed to reverse doses", variant: "destructive" });
+      return;
     }
     toast({ title: `All ${formatTime12(time)} doses reversed` });
     onOpenChange(false);
@@ -89,16 +102,16 @@ export function BulkDoseEditDialog({ open, onOpenChange, time, slots, date }: Bu
 
   const handleEditRecordConfirm = async (newTime: string) => {
     hapticTake();
-    await editAllMut.mutateAsync({
-      entries: takenSlots.map((s) => ({
-        prescriptionId: s.prescriptionId,
-        phaseId: s.phaseId,
-        scheduleId: s.scheduleId,
-      })),
-      date,
-      time,
-      newTime,
-    });
+    try {
+      const outcome = await editAllMut.mutateAsync({ entries: takenSlots, date, time, newTime });
+      if (outcome.failed.length > 0) {
+        reportFailures("update", takenSlots, outcome.failed.map((f) => f.entry.scheduleId));
+        return;
+      }
+    } catch {
+      toast({ title: "Failed to update dose times", variant: "destructive" });
+      return;
+    }
     toast({ title: `${formatTime12(time)} dose time updated` });
     onOpenChange(false);
   };
@@ -156,13 +169,6 @@ export function BulkDoseEditDialog({ open, onOpenChange, time, slots, date }: Bu
 
             {/* Action buttons */}
             <div className="flex justify-center gap-6">
-              <button onClick={handleSkipAll} className="flex flex-col items-center gap-1.5">
-                <div className="w-12 h-12 rounded-full border-2 border-teal-600 dark:border-teal-400 flex items-center justify-center">
-                  <X className="w-5 h-5 text-teal-600 dark:text-teal-400" />
-                </div>
-                <span className="text-xs font-medium text-teal-600 dark:text-teal-400">SKIP ALL</span>
-              </button>
-
               <button
                 onClick={handleUntakeAll}
                 disabled={!hasTaken}
@@ -195,6 +201,7 @@ export function BulkDoseEditDialog({ open, onOpenChange, time, slots, date }: Bu
         defaultTime={batchLoggedTime}
         compoundName="all doses"
         onConfirm={handleEditRecordConfirm}
+        notAfterNow={date === todayKey}
       />
     </>
   );

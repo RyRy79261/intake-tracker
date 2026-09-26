@@ -1,3 +1,12 @@
+/**
+ * Where a daily total sits relative to its limit, as one value every surface
+ * colours from:
+ * - `ok`: at or under the target.
+ * - `extended`: past the target but inside the configured buffer.
+ * - `over`: past target + buffer (or past the target when the buffer is 0).
+ */
+export type ProgressStatus = "ok" | "extended" | "over";
+
 export interface TwoStageProgress {
   primaryPct: number;
   extendedPct: number;
@@ -29,6 +38,26 @@ export interface TwoStageProgress {
    * `target + buffer` once two-stage kicks in.
    */
   maxAmount: number;
+  /** Tri-state summary of `isOverTarget` / `isOverExtended`. */
+  status: ProgressStatus;
+}
+
+function toStatus(isOverTarget: boolean, isOverExtended: boolean): ProgressStatus {
+  if (isOverExtended) return "over";
+  if (isOverTarget) return "extended";
+  return "ok";
+}
+
+/**
+ * The tri-state for a total without the bar geometry, for surfaces that only
+ * colour a number (e.g. the weekly grid).
+ */
+export function getProgressStatus(
+  current: number,
+  target: number,
+  extendedBuffer: number
+): ProgressStatus {
+  return computeTwoStageProgress(current, target, extendedBuffer).status;
 }
 
 export function computeTwoStageProgress(
@@ -49,6 +78,7 @@ export function computeTwoStageProgress(
       extendedCurrent: 0,
       extendedTotal: buffer,
       maxAmount: 0,
+      status: "ok",
     };
   }
 
@@ -93,5 +123,6 @@ export function computeTwoStageProgress(
     extendedCurrent,
     extendedTotal: buffer,
     maxAmount,
+    status: toStatus(isOverTarget, isOverExtended),
   };
 }

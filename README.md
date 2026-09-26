@@ -167,7 +167,7 @@ analysis and prioritized recommendations.
 |---|---|---|
 | Unit / service (vitest) | `pnpm test` | `src/**/*.test.{ts,tsx}` |
 | Unit, timezone-pinned | `pnpm test:tz` | Africa/Johannesburg + Europe/Berlin |
-| Coverage | `pnpm test:coverage` | Thresholds in `vitest.config.ts` |
+| Coverage | `pnpm test:coverage` | Thresholds in `vitest.config.mts` |
 | Integration (testcontainers + Postgres) | `pnpm test:integration` | `src/__tests__/integration/` |
 | E2E (Playwright) | `pnpm test:e2e` | `e2e/` |
 | Mutation (Stryker, nightly) | `pnpm test:mutation` | `stryker.conf.json` |

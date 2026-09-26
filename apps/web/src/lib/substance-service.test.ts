@@ -4,6 +4,8 @@ import {
   addSubstanceRecord,
   getSubstanceRecordsByDateRange,
   deleteSubstanceRecord,
+  undoDeleteSubstanceRecord,
+  previewSubstanceDelete,
   updateSubstanceRecord,
   getUnenrichedSubstanceRecords,
 } from "@/lib/substance-service";
@@ -82,6 +84,19 @@ describe("substance-service: getSubstanceRecordsByDateRange", () => {
 
     const all = await getSubstanceRecordsByDateRange(base, base + 5000);
     expect(all).toHaveLength(3);
+  });
+
+  it("uses the same half-open [start, end) range as every other range query", async () => {
+    const base = 1700000000000;
+    await db.substanceRecords.bulkAdd([
+      makeSubstanceRecord({ id: "at-start", type: "caffeine", timestamp: base }),
+      makeSubstanceRecord({ id: "at-end", type: "caffeine", timestamp: base + 5000 }),
+    ]);
+
+    const typed = await getSubstanceRecordsByDateRange(base, base + 5000, "caffeine");
+    expect(typed.map((r) => r.id)).toEqual(["at-start"]);
+    const all = await getSubstanceRecordsByDateRange(base, base + 5000);
+    expect(all.map((r) => r.id)).toEqual(["at-start"]);
   });
 });
 
@@ -199,6 +214,56 @@ describe("substance-service: deleteSubstanceRecord", () => {
 
     const water = await db.intakeRecords.get(waterId);
     expect(water!.deletedAt).toBeTypeOf("number");
+  });
+});
+
+describe("substance-service: undoDeleteSubstanceRecord", () => {
+  it("restores the drink the delete cascaded through, and nothing removed earlier", async () => {
+    const drink = await logDrink({
+      volumeMl: 250,
+      description: "Latte",
+      caffeineMg: 80,
+      sugarG: 10,
+      saltMg: 50,
+    });
+    if (!drink.success) throw new Error("logDrink failed");
+    // A row removed before the delete must stay removed after the undo.
+    const earlier = drink.data.intakeIds.filter((id) => id !== drink.data.waterIntakeId)[0]!;
+    await db.intakeRecords.update(earlier, { deletedAt: 1_700_000_000_000 });
+
+    const del = await deleteSubstanceRecord(drink.data.substanceIds[0]!);
+    expect(del.success).toBe(true);
+    if (!del.success) return;
+
+    const undo = await undoDeleteSubstanceRecord(drink.data.substanceIds[0]!, del.data.deletedAt);
+    expect(undo.success).toBe(true);
+
+    expect((await db.substanceRecords.get(drink.data.substanceIds[0]!))!.deletedAt).toBeNull();
+    expect((await db.intakeRecords.get(drink.data.waterIntakeId))!.deletedAt).toBeNull();
+    expect((await db.intakeRecords.get(earlier))!.deletedAt).toBe(1_700_000_000_000);
+    const live = (await db.intakeRecords.toArray()).filter((r) => r.deletedAt === null);
+    expect(live).toHaveLength(drink.data.intakeIds.length - 1);
+  });
+
+  it("previews the rows a substance delete would take with it", async () => {
+    const drink = await logDrink({ volumeMl: 250, description: "Mocha", caffeineMg: 90, sugarG: 20 });
+    if (!drink.success) throw new Error("logDrink failed");
+
+    const preview = await previewSubstanceDelete(drink.data.substanceIds[0]!);
+    expect(preview.intakes.map((r) => r.type).sort()).toEqual(["sugar", "water"]);
+    expect(preview.substances).toHaveLength(0);
+  });
+
+  it("previews nothing extra for a substance in a meal group", async () => {
+    const meal = await addComposableEntry({
+      eating: { note: "Tiramisu" },
+      intakes: [{ type: "salt", amount: 100, source: "manual:sodium" }],
+      substance: { type: "caffeine", amountMg: 30, description: "espresso" },
+    });
+    if (!meal.success) throw new Error("add failed");
+    const preview = await previewSubstanceDelete(meal.data.substanceId!);
+    expect(preview.intakes).toHaveLength(0);
+    expect(preview.substances).toHaveLength(0);
   });
 });
 
