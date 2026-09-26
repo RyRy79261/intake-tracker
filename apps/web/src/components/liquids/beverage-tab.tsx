@@ -18,6 +18,7 @@ import {
 } from "@/hooks/use-composable-entry";
 import { computeTwoStageProgress } from "@intake/core/progress";
 import { reportSaveError } from "@/lib/db-recovery";
+import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import { formatDateTime } from "@/lib/date-utils";
 
 /** Parse the optional sugar field into rounded grams (0 when empty/invalid). */
@@ -83,6 +84,9 @@ export function BeverageTab() {
 
   const { toast } = useToast();
   const substanceTab = suggestedSubstanceTab(beverageName);
+  // A disabled tracker is hidden from input forms and its entries are not
+  // persisted (see optional-trackers.ts).
+  const sugarEnabled = useOptionalTrackerEnabled("sugar");
   const addEntry = useAddComposableEntry();
 
   const handleIncrement = useCallback(() => {
@@ -101,7 +105,7 @@ export function BeverageTab() {
       const source = beverageName.trim()
         ? `beverage:${beverageName.trim()}`
         : "beverage";
-      const sugar = parseSugarGrams(sugarG);
+      const sugar = sugarEnabled ? parseSugarGrams(sugarG) : 0;
       if (sugar > 0) {
         const intakes: ComposableEntryInput["intakes"] = [
           { type: "water", amount, source, ...(note ? { note } : {}) },
@@ -115,7 +119,7 @@ export function BeverageTab() {
         await waterIntake.addRecord(amount, source, timestamp, note);
       }
     },
-    [beverageName, sugarG, addEntry, waterIntake]
+    [beverageName, sugarG, sugarEnabled, addEntry, waterIntake]
   );
 
   const handleConfirm = useCallback(async () => {
@@ -265,21 +269,23 @@ export function BeverageTab() {
       </div>
 
       {/* Optional sugar content */}
-      <div className="mt-4 space-y-1">
-        <Label htmlFor="beverage-sugar" className="text-sm">
-          Sugar (g){" "}
-          <span className="text-muted-foreground font-normal">(optional)</span>
-        </Label>
-        <Input
-          id="beverage-sugar"
-          type="number"
-          min="0"
-          inputMode="decimal"
-          placeholder="g"
-          value={sugarG}
-          onChange={(e) => setSugarG(e.target.value)}
-        />
-      </div>
+      {sugarEnabled && (
+        <div className="mt-4 space-y-1">
+          <Label htmlFor="beverage-sugar" className="text-sm">
+            Sugar (g){" "}
+            <span className="text-muted-foreground font-normal">(optional)</span>
+          </Label>
+          <Input
+            id="beverage-sugar"
+            type="number"
+            min="0"
+            inputMode="decimal"
+            placeholder="g"
+            value={sugarG}
+            onChange={(e) => setSugarG(e.target.value)}
+          />
+        </div>
+      )}
 
       {/* Confirm Button */}
       <Button

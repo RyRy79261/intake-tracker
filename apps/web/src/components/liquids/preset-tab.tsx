@@ -15,6 +15,7 @@ import { useSettings } from "@/hooks/use-settings";
 import { useIntake } from "@/hooks/use-intake-queries";
 import { useLogDrink, type LogDrinkInput } from "@/hooks/use-drink-log";
 import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
+import { reportSaveError } from "@/lib/db-recovery";
 import { useToast } from "@intake/ui/use-toast";
 import { useAuthGate } from "@/components/auth-guard";
 import {
@@ -29,7 +30,10 @@ import {
 } from "@intake/ui/alert-dialog";
 import type { LiquidPreset } from "@/lib/constants";
 import type { SubstanceLookupResponse } from "@/lib/substance-lookup-schema";
-import { standardDrinksFromAbv } from "@intake/core/alcohol";
+import {
+  standardDrinksFromAbv,
+  waterContentPercentFromAbv,
+} from "@intake/core/alcohol";
 import { computeTwoStageProgress } from "@intake/core/progress";
 
 type PresetTabKind = "coffee" | "alcohol";
@@ -60,7 +64,12 @@ interface DrinkForm {
    * figure until the next preset, lookup or reset. `null` = not typed.
    */
   sugarGInput: string | null;
-  waterContentPercent: number;
+  /**
+   * Share of the volume that is water, from a preset or lookup. `null` =
+   * unknown (a hand-typed drink): derived from the ABV, see
+   * {@link resolveWaterContentPercent}.
+   */
+  waterContentPercent: number | null;
   beverageName: string;
   /** Whether the current values came from an AI lookup (enables save-as-preset). */
   aiLookupUsed: boolean;
@@ -74,7 +83,7 @@ const EMPTY_FORM: DrinkForm = {
   saltPer100ml: 0,
   sugarPer100ml: 0,
   sugarGInput: null,
-  waterContentPercent: 100,
+  waterContentPercent: null,
   beverageName: "",
   aiLookupUsed: false,
 };
@@ -116,7 +125,7 @@ function drinkFormReducer(state: DrinkForm, action: DrinkFormAction): DrinkForm 
         alcoholPer100ml: tab === "alcohol" ? substance : 0,
         saltPer100ml: result.sodiumPer100ml ?? 0,
         sugarPer100ml: result.sugarPer100ml ?? 0,
-        waterContentPercent: result.waterContentPercent ?? 100,
+        waterContentPercent: result.waterContentPercent ?? null,
         beverageName: result.beverageName,
         aiLookupUsed: true,
       };
@@ -132,6 +141,26 @@ function drinkFormReducer(state: DrinkForm, action: DrinkFormAction): DrinkForm 
     case "setName":
       return { ...state, beverageName: action.value };
   }
+}
+
+/**
+ * The water share `logDrink` books for this drink, in (0, 100]. A preset or
+ * lookup value wins; otherwise (or if it is out of range) the non-alcohol
+ * share of the drink — a hand-typed 40% spirit is 60% water.
+ */
+function resolveWaterContentPercent(
+  waterContentPercent: number | null,
+  abvPercent: number,
+): number {
+  if (
+    waterContentPercent !== null &&
+    Number.isFinite(waterContentPercent) &&
+    waterContentPercent > 0 &&
+    waterContentPercent <= 100
+  ) {
+    return waterContentPercent;
+  }
+  return waterContentPercentFromAbv(abvPercent);
 }
 
 /** Sugar in grams for the current drink, before rounding. */
@@ -353,6 +382,10 @@ export function PresetTab({ tab }: PresetTabProps) {
     return {
       volumeMl,
       description,
+      waterContentPercent: resolveWaterContentPercent(
+        waterContentPercent,
+        alcoholPer100ml,
+      ),
       waterSource: presetTag,
       groupSource: presetTag,
       ...(caffeinePer100ml > 0 && {
@@ -379,7 +412,7 @@ export function PresetTab({ tab }: PresetTabProps) {
       // Reset fields
       resetFields();
     } catch (cause) {
-      console.error("[preset-tab] failed to log drink", cause);
+      reportSaveError(tab, cause);
       toast({
         title: "Error",
         description: "Failed to record intake",
@@ -412,7 +445,7 @@ export function PresetTab({ tab }: PresetTabProps) {
       try {
         await logDrinkEntry(buildDrink());
       } catch (cause) {
-        console.error("[preset-tab] failed to log drink", cause);
+        reportSaveError(tab, cause);
         toast({
           title: "Error",
           description: "Failed to record intake",
@@ -426,7 +459,10 @@ export function PresetTab({ tab }: PresetTabProps) {
           name,
           tab,
           defaultVolumeMl: volumeMl,
-          waterContentPercent,
+          waterContentPercent: resolveWaterContentPercent(
+            waterContentPercent,
+            alcoholPer100ml,
+          ),
           ...(caffeinePer100ml > 0 && { caffeinePer100ml }),
           ...(alcoholPer100ml > 0 && { alcoholPer100ml }),
           ...(saltPer100ml > 0 && { saltPer100ml }),
