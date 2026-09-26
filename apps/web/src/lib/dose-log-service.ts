@@ -1,4 +1,4 @@
-import { db, type DoseLog, type DoseStatus, type Prescription, type MedicationPhase, type PhaseSchedule, type InventoryItem } from "@/lib/db";
+import { db, type DoseLog, type DoseStatus } from "@/lib/db";
 import type { UpdateSpec } from "dexie";
 import { ok, err } from "@intake/core/service";
 import { isValidPillStrength } from "@intake/core/compound";
@@ -15,14 +15,6 @@ import { isLive } from "@intake/core/lifecycle";
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-export interface DoseLogWithDetails {
-  log: DoseLog;
-  prescription: Prescription;
-  phase: MedicationPhase;
-  schedule: PhaseSchedule;
-  inventory?: InventoryItem;
-}
 
 export interface TakeDoseInput {
   prescriptionId: string;
@@ -393,50 +385,6 @@ export async function getDoseLog(
   _time?: string,
 ): Promise<DoseLog | undefined> {
   return getDoseLogRaw(scheduleId, date);
-}
-
-export async function getDoseLogsWithDetailsForDate(date: string): Promise<DoseLogWithDetails[]> {
-  const allLogs = await db.doseLogs.where("scheduledDate").equals(date).toArray();
-  const logs = allLogs.filter(isLive);
-
-  const activePrescriptions = await db.prescriptions.toArray();
-  const prescriptionMap = new Map(activePrescriptions.map(p => [p.id, p]));
-
-  const phases = await db.medicationPhases.toArray();
-  const phaseMap = new Map(phases.map(p => [p.id, p]));
-
-  const schedules = await db.phaseSchedules.toArray();
-  const scheduleMap = new Map(schedules.map(s => [s.id, s]));
-
-  const inventories = await db.inventoryItems.toArray();
-  const inventoryMap = new Map<string, InventoryItem>();
-  for (const inv of inventories) {
-    if (inv.isActive && !inv.isArchived) {
-      inventoryMap.set(inv.prescriptionId, inv);
-    }
-  }
-
-  const result: DoseLogWithDetails[] = [];
-  for (const log of logs) {
-    const prescription = prescriptionMap.get(log.prescriptionId);
-    // phaseId/scheduleId are absent for PRN doses — those fall through the
-    // `prescription && phase && schedule` guard below and are excluded here.
-    const phase = log.phaseId ? phaseMap.get(log.phaseId) : undefined;
-    const schedule = log.scheduleId ? scheduleMap.get(log.scheduleId) : undefined;
-    const inventory = inventoryMap.get(log.prescriptionId);
-
-    if (prescription && phase && schedule) {
-      result.push({
-        log,
-        prescription,
-        phase,
-        schedule,
-        ...(inventory !== undefined && { inventory }),
-      });
-    }
-  }
-
-  return result;
 }
 
 // ---------------------------------------------------------------------------

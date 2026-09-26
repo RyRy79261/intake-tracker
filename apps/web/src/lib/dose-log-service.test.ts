@@ -5,7 +5,6 @@ import {
   isCleanFraction,
   getDoseLogsForDate,
   getDoseLog,
-  getDoseLogsWithDetailsForDate,
   takeDose,
   untakeDose,
   skipDose,
@@ -303,42 +302,6 @@ describe("getDoseLog", () => {
   it("returns undefined when no log exists", async () => {
     const found = await getDoseLog("no-rx", "no-phase", "no-sched", DATE, TIME);
     expect(found).toBeUndefined();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// getDoseLogsWithDetailsForDate
-// ---------------------------------------------------------------------------
-
-describe("getDoseLogsWithDetailsForDate", () => {
-  it("returns logs with related prescription, phase, and schedule", async () => {
-    const { rx, phase, schedule } = await seedFullPrescription();
-    const log = makeDoseLog(rx.id, phase.id, schedule.id, {
-      scheduledDate: DATE,
-      scheduledTime: TIME,
-      status: "taken",
-    });
-    await db.doseLogs.add(log);
-
-    const result = await getDoseLogsWithDetailsForDate(DATE);
-    expect(result).toHaveLength(1);
-    expect(result[0]!.prescription.id).toBe(rx.id);
-    expect(result[0]!.phase.id).toBe(phase.id);
-    expect(result[0]!.schedule.id).toBe(schedule.id);
-  });
-
-  it("includes inventory item when active and non-archived", async () => {
-    const { rx, phase, schedule, inv } = await seedFullPrescription();
-    const log = makeDoseLog(rx.id, phase.id, schedule.id, {
-      scheduledDate: DATE,
-      scheduledTime: TIME,
-      status: "taken",
-    });
-    await db.doseLogs.add(log);
-
-    const result = await getDoseLogsWithDetailsForDate(DATE);
-    expect(result[0]!.inventory).toBeDefined();
-    expect(result[0]!.inventory!.id).toBe(inv.id);
   });
 });
 

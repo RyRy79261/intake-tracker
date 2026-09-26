@@ -4,124 +4,14 @@ import {
   makePrescription,
   makeMedicationPhase,
   makePhaseSchedule,
-  makeInventoryItem,
 } from "@/__tests__/fixtures/db-fixtures";
 import {
-  getDailySchedule,
   getSchedulesForPhase,
   addSchedule,
   updateSchedule,
   deleteSchedule,
 } from "@/lib/medication-schedule-service";
 import { localHHMMStringToUTCMinutes } from "@/lib/timezone";
-
-describe("getDailySchedule", () => {
-  it("returns Map with prescriptionId-keyed entries for matching dayOfWeek", async () => {
-    const rx = makePrescription({ id: "rx-daily-1", isActive: true });
-    const phase = makeMedicationPhase(rx.id, { id: "phase-daily-1", status: "active" });
-    const schedule = makePhaseSchedule(phase.id, {
-      id: "sched-daily-1",
-      time: "08:00",
-      dosage: 50,
-      daysOfWeek: [1, 2, 3, 4, 5],
-      enabled: true,
-    });
-    const item = makeInventoryItem(rx.id, { id: "inv-daily-1", isActive: true, isArchived: false });
-
-    await db.prescriptions.add(rx);
-    await db.medicationPhases.add(phase);
-    await db.phaseSchedules.add(schedule);
-    await db.inventoryItems.add(item);
-
-    // dayOfWeek=2 (Tuesday) is in [1,2,3,4,5]
-    const result = await getDailySchedule(2);
-    expect(result.size).toBeGreaterThan(0);
-
-    // Verify structure: grouped by time
-    const entries = result.get("08:00");
-    expect(entries).toBeDefined();
-    expect(entries!.length).toBe(1);
-    const first = entries![0]!;
-    expect(first.prescription.id).toBe("rx-daily-1");
-    expect(first.phase.id).toBe("phase-daily-1");
-    expect(first.schedule.id).toBe("sched-daily-1");
-    expect(first.inventory).toBeDefined();
-    expect(first.inventory!.id).toBe("inv-daily-1");
-  });
-
-  it("returns empty Map for dayOfWeek with no matching schedules", async () => {
-    const rx = makePrescription({ id: "rx-empty-sched", isActive: true });
-    const phase = makeMedicationPhase(rx.id, { id: "phase-empty-sched", status: "active" });
-    const schedule = makePhaseSchedule(phase.id, {
-      id: "sched-weekday",
-      time: "09:00",
-      daysOfWeek: [1, 2, 3, 4, 5], // weekdays only
-      enabled: true,
-    });
-
-    await db.prescriptions.add(rx);
-    await db.medicationPhases.add(phase);
-    await db.phaseSchedules.add(schedule);
-
-    // dayOfWeek=0 (Sunday) not in [1,2,3,4,5]
-    const result = await getDailySchedule(0);
-    expect(result.size).toBe(0);
-  });
-
-  it("excludes schedules for inactive prescriptions", async () => {
-    const rx = makePrescription({ id: "rx-inactive", isActive: false });
-    const phase = makeMedicationPhase(rx.id, { id: "phase-inactive", status: "active" });
-    const schedule = makePhaseSchedule(phase.id, {
-      id: "sched-inactive",
-      daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
-      enabled: true,
-    });
-
-    await db.prescriptions.add(rx);
-    await db.medicationPhases.add(phase);
-    await db.phaseSchedules.add(schedule);
-
-    const result = await getDailySchedule(2);
-    expect(result.size).toBe(0);
-  });
-
-  it("excludes disabled schedules", async () => {
-    const rx = makePrescription({ id: "rx-disabled", isActive: true });
-    const phase = makeMedicationPhase(rx.id, { id: "phase-disabled", status: "active" });
-    const schedule = makePhaseSchedule(phase.id, {
-      id: "sched-disabled",
-      daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
-      enabled: false,
-    });
-
-    await db.prescriptions.add(rx);
-    await db.medicationPhases.add(phase);
-    await db.phaseSchedules.add(schedule);
-
-    const result = await getDailySchedule(2);
-    expect(result.size).toBe(0);
-  });
-
-  it("excludes tombstoned prescriptions and phases even with stale live flags", async () => {
-    const rx = makePrescription({ id: "rx-ghost", isActive: true, deletedAt: 1700000000001 });
-    const phase = makeMedicationPhase(rx.id, { id: "phase-ghost", status: "active" });
-    const schedule = makePhaseSchedule(phase.id, { id: "sched-ghost", daysOfWeek: [2] });
-    const rx2 = makePrescription({ id: "rx-ghost-phase", isActive: true });
-    const phase2 = makeMedicationPhase(rx2.id, {
-      id: "phase-ghost-2",
-      status: "active",
-      deletedAt: 1700000000001,
-    });
-    const schedule2 = makePhaseSchedule(phase2.id, { id: "sched-ghost-2", daysOfWeek: [2] });
-
-    await db.prescriptions.bulkAdd([rx, rx2]);
-    await db.medicationPhases.bulkAdd([phase, phase2]);
-    await db.phaseSchedules.bulkAdd([schedule, schedule2]);
-
-    const result = await getDailySchedule(2);
-    expect(result.size).toBe(0);
-  });
-});
 
 describe("getSchedulesForPhase", () => {
   it("returns all schedules for a given phase", async () => {
