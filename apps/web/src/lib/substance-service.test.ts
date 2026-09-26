@@ -339,6 +339,61 @@ describe("substance-service: updateSubstanceRecord keeps the group's fluid in st
     expect(after!.timestamp).toBe(before!.timestamp);
   });
 
+  it("keeps a spirit's water share when the edit re-sends the same volume", async () => {
+    // The Records-tab alcohol edit always re-sends the prefilled volume. A
+    // spirit's water row is only its non-alcohol share (27 of 45 ml), so
+    // copying the volume onto it would book the ethanol as water again.
+    const drink = await logDrink({
+      volumeMl: 45,
+      description: "Spirit",
+      abvPercent: 40,
+      waterContentPercent: 60,
+    });
+    expect(drink.success).toBe(true);
+    if (!drink.success) return;
+
+    await updateSubstanceRecord(drink.data.substanceIds[0]!, {
+      description: "Gin",
+      abvPercent: 40,
+      volumeMl: 45,
+    });
+
+    const water = await db.intakeRecords.get(drink.data.waterIntakeId);
+    expect(water!.amount).toBe(27);
+  });
+
+  it("scales a spirit's water row with a changed volume", async () => {
+    const drink = await logDrink({
+      volumeMl: 45,
+      description: "Spirit",
+      abvPercent: 40,
+      waterContentPercent: 60,
+    });
+    expect(drink.success).toBe(true);
+    if (!drink.success) return;
+
+    // A double: 90 ml of drink is still 60% water.
+    await updateSubstanceRecord(drink.data.substanceIds[0]!, { volumeMl: 90 });
+
+    const water = await db.intakeRecords.get(drink.data.waterIntakeId);
+    expect(water!.amount).toBe(54);
+  });
+
+  it("sets the water row to the volume when the substance had none stored", async () => {
+    const groupId = "legacy-group";
+    await db.substanceRecords.add(
+      makeSubstanceRecord({ id: "legacy-sub", type: "alcohol", groupId, volumeMl: undefined }),
+    );
+    await db.intakeRecords.add(
+      makeIntakeRecord({ id: "legacy-water", type: "water", amount: 200, groupId }),
+    );
+
+    await updateSubstanceRecord("legacy-sub", { volumeMl: 330 });
+
+    const water = await db.intakeRecords.get("legacy-water");
+    expect(water!.amount).toBe(330);
+  });
+
   it("does not create a water row for an ungrouped substance", async () => {
     const created = await addSubstanceRecord({
       type: "caffeine",
