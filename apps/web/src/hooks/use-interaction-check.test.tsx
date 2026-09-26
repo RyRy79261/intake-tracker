@@ -110,6 +110,81 @@ describe("useInteractionCheck (lookup cache)", () => {
   });
 });
 
+// ai-routes-models#7: the abort timer used to be armed only after the response
+// headers arrived, so a request the server never answered waited forever.
+describe("useInteractionCheck (timeout)", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    apiFetchSpy.mockReset();
+  });
+
+  it("aborts a request that never gets a response", async () => {
+    vi.useFakeTimers();
+    try {
+      apiFetchSpy.mockImplementation(
+        (_path: string, init?: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener("abort", () =>
+              reject(new DOMException("aborted", "AbortError")),
+            );
+          }),
+      );
+      const { result } = renderHook(() => useInteractionCheck());
+
+      let pending: Promise<unknown> | undefined;
+      act(() => {
+        pending = result.current.check({
+          mode: "conflict",
+          newMedication: "ibuprofen",
+          activePrescriptions: [{ genericName: "bisoprolol" }],
+        });
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(70_000);
+        await pending;
+      });
+
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.error).toBe("Interaction check timed out");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not abort before the server's own deadline", async () => {
+    vi.useFakeTimers();
+    try {
+      let aborted = false;
+      apiFetchSpy.mockImplementation(
+        (_path: string, init?: RequestInit) =>
+          new Promise(() => {
+            init?.signal?.addEventListener("abort", () => {
+              aborted = true;
+            });
+          }),
+      );
+      const { result } = renderHook(() => useInteractionCheck());
+
+      act(() => {
+        void result.current.check({
+          mode: "conflict",
+          newMedication: "ibuprofen",
+          activePrescriptions: [{ genericName: "bisoprolol" }],
+        });
+      });
+      // The route answers with a JSON 504 at its 50 s deadline; the client
+      // must still be listening then.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(55_000);
+      });
+
+      expect(aborted).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe("useRefreshInteractions", () => {
   beforeEach(() => {
     apiFetchSpy.mockReset();
