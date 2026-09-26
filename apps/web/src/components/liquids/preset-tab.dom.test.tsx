@@ -67,6 +67,16 @@ describe("PresetTab", () => {
     expect(screen.getByRole("button", { name: "Log Entry" })).toBeEnabled();
   });
 
+  it("asks for a sodium (not salt) amount when a volume has no substance", async () => {
+    const user = userEvent.setup();
+    await renderWithFixtures(<PresetTab tab="coffee" />);
+
+    await user.type(screen.getByLabelText("Volume (ml)"), "200");
+    const hint = screen.getByText(/Add a caffeine, ABV/);
+    expect(hint).toHaveTextContent(/sodium/);
+    expect(hint).not.toHaveTextContent(/salt/);
+  });
+
   it("logging a coffee preset writes water and substance records", async () => {
     const user = userEvent.setup();
     await renderWithFixtures(<PresetTab tab="coffee" />);
