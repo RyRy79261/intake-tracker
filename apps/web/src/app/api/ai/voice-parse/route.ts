@@ -86,7 +86,6 @@ export const POST = withAuth(async ({ request, auth }) => {
         {
           model: CLAUDE_MODELS.quality,
           max_tokens: 2048,
-          temperature: 0,
           system: SYSTEM_PROMPT,
           tools: [PARSE_TOOL],
           messages: [{ role: "user", content: userMessage }],
@@ -121,7 +120,6 @@ export const POST = withAuth(async ({ request, auth }) => {
           {
             model: CLAUDE_MODELS.quality,
             max_tokens: 2048,
-            temperature: 0,
             system: SYSTEM_PROMPT,
             tools: [PARSE_TOOL],
             tool_choice: { type: "tool", name: PARSE_TOOL.name },

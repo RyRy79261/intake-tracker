@@ -87,7 +87,6 @@ export const POST = withAuth(async ({ request, auth }) => {
     const response = await client.messages.create({
       model: CLAUDE_MODELS.quality,
       max_tokens: 2048,
-      temperature: 0.3,
       system: INSIGHTS_SYSTEM_PROMPT,
       tools: [INSIGHT_TOOL],
       tool_choice: { type: "tool", name: INSIGHT_TOOL.name },

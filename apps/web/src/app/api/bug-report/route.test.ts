@@ -24,6 +24,9 @@ let aiContent: unknown[] = [];
 let aiThrows: Error | null = null;
 let claudeClientThrows: Error | null = null;
 const messagesCreateCalls: unknown[] = [];
+// Content the fake client returns on the 2nd+ call (null = same as aiContent).
+let aiFollowupContent: unknown[] | null = null;
+const recordUsageCalls: { status: string }[] = [];
 
 // Octokit issues.create behaviour.
 let octokitCreateResult: { html_url: string; number: number } = {
@@ -38,6 +41,8 @@ function resetState() {
   aiThrows = null;
   claudeClientThrows = null;
   messagesCreateCalls.length = 0;
+  aiFollowupContent = null;
+  recordUsageCalls.length = 0;
   octokitCreateResult = {
     html_url: "https://github.com/RyRy79261/intake-tracker/issues/42",
     number: 42,
@@ -71,7 +76,9 @@ vi.mock("@/app/api/ai/_shared/claude-client", () => ({
           create: async (params: unknown) => {
             messagesCreateCalls.push(params);
             if (aiThrows) throw aiThrows;
-            return { content: aiContent, usage: { input_tokens: 10, output_tokens: 5 } };
+            const content =
+              messagesCreateCalls.length > 1 && aiFollowupContent ? aiFollowupContent : aiContent;
+            return { content, usage: { input_tokens: 10, output_tokens: 5 } };
           },
         },
       },
@@ -81,7 +88,9 @@ vi.mock("@/app/api/ai/_shared/claude-client", () => ({
 }));
 
 vi.mock("@/app/api/ai/_shared/usage-tracker", () => ({
-  recordUsage: () => undefined,
+  recordUsage: (record: { status: string }) => {
+    recordUsageCalls.push(record);
+  },
   tokensFromAnthropic: () => ({ inputTokens: 10, outputTokens: 5 }),
 }));
 
@@ -206,6 +215,46 @@ describe("POST /api/bug-report", () => {
     expect(String(lastOctokitCreateArgs!.body)).toContain(
       "Reloading the page zeroes the daily water total.",
     );
+  });
+
+  it("records usage for the follow-up call when the first reply is prose", async () => {
+    aiContent = [{ type: "text", text: "Here is a summary of the bug." }];
+    aiFollowupContent = [
+      {
+        type: "tool_use",
+        name: "format_bug_report",
+        input: { title: "Water counter resets", summary: "Reload zeroes it." },
+      },
+    ];
+
+    const { POST } = await import("@/app/api/bug-report/route");
+    const res = await POST(makeRequest(validBody({ useAi: true })));
+
+    expect(res.status).toBe(200);
+    expect(messagesCreateCalls).toHaveLength(2);
+    // Both upstream calls are billed, so both are recorded.
+    expect(recordUsageCalls.map((r) => r.status)).toEqual(["success", "success"]);
+    expect(lastOctokitCreateArgs!.title).toBe("[in-app report] Water counter resets");
+  });
+
+  it("records a failed AI call as an error row", async () => {
+    aiThrows = new Error("anthropic 529 overloaded");
+
+    const { POST } = await import("@/app/api/bug-report/route");
+    await POST(makeRequest(validBody({ useAi: true })));
+
+    expect(recordUsageCalls.map((r) => r.status)).toEqual(["error"]);
+  });
+
+  it("sends no sampling parameters", async () => {
+    aiContent = [
+      { type: "tool_use", name: "format_bug_report", input: { title: "t", summary: "s" } },
+    ];
+
+    const { POST } = await import("@/app/api/bug-report/route");
+    await POST(makeRequest(validBody({ useAi: true })));
+
+    expect(messagesCreateCalls[0]).not.toHaveProperty("temperature");
   });
 
   it("falls back to the plain template when the AI call fails", async () => {

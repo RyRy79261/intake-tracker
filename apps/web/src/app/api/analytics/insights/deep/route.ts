@@ -18,7 +18,7 @@ import {
 
 /**
  * Async deep-research analytics insights — submits an Anthropic Message Batch
- * with Opus 4.6 and the web-search tool, returns immediately with a jobId the
+ * with the premium (Opus) model and the web-search tool, returns immediately with a jobId the
  * client can poll. See ./jobs/[id]/route.ts for the polling endpoint.
  *
  * Why a batch and not a streaming long-running call:

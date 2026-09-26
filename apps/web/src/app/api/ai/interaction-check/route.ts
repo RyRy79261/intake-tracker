@@ -4,10 +4,15 @@ import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
 import { getClaudeClientForUser, CLAUDE_MODELS } from "@/app/api/ai/_shared/claude-client";
 import { parseJsonBody, zodErrorResponse } from "@/app/api/_shared/validation";
-import { createRateLimiter, getClientIp } from "@/app/api/_shared/rate-limit";
-import { recordUsage, tokensFromAnthropic } from "@/app/api/ai/_shared/usage-tracker";
+import { createRateLimiter, rateLimitKey } from "@/app/api/_shared/rate-limit";
+import { requestToolCall } from "@/app/api/ai/_shared/claude-call";
 import { aiErrorResponse } from "@/app/api/ai/_shared/ai-error-response";
 import { SYSTEM_PROMPT, INTERACTION_CHECK_TOOL } from "@intake/ai-prompts/interaction-check";
+
+// Vercel function limit. The shared deadline stops short of it so a slow
+// model call ends in a JSON 504 rather than the platform's own.
+export const maxDuration = 60;
+const DEADLINE_MS = 50_000;
 
 // --- Zod Schemas (co-located per project convention) ---
 
@@ -54,9 +59,7 @@ const rateLimiter = createRateLimiter(5);
 
 export const POST = withAuth(async ({ request, auth }) => {
   try {
-    const ip = getClientIp(request);
-
-    if (!rateLimiter.check(ip)) {
+    if (!rateLimiter.check(rateLimitKey(request, auth.userId))) {
       return NextResponse.json(
         { error: "Rate limit exceeded. Please try again later." },
         { status: 429 }
@@ -98,36 +101,33 @@ export const POST = withAuth(async ({ request, auth }) => {
 
     console.log(`[AUDIT] Interaction check request from user: ${auth.userId}, mode: ${parsed.data.mode}`);
 
-    const startedAt = Date.now();
-    const response = await client.messages.create({
-      model: CLAUDE_MODELS.premium,
-      max_tokens: 8192,
-      // Room for adaptive thinking AND the tool call: the premium model
-      // thinks by default and those tokens share this ceiling, so a budget
-      // sized for the answer alone can truncate the call mid-JSON.
-      // No `temperature`/`top_p`/`top_k`: the premium model rejects a
-      // non-default sampling parameter with a 400, so passing one fails the
-      // whole request rather than tightening it. Determinism comes from the
-      // forced tool_choice and the schema, not from a temperature of 0.
-      system: SYSTEM_PROMPT,
-      tools: [INTERACTION_CHECK_TOOL],
-      tool_choice: { type: "tool", name: "interaction_check_result" },
-      messages: [{ role: "user", content: prompt }],
-    });
-    recordUsage({
-      userId: auth.userId!,
-      keyOwnerId: resolved.keyOwnerId,
-      keySource: resolved.source,
-      provider: "anthropic",
-      model: CLAUDE_MODELS.premium,
-      route: "/api/ai/interaction-check",
-      status: "success",
-      durationMs: Date.now() - startedAt,
-      ...tokensFromAnthropic(response.usage),
-    });
+    // Premium tier (Claude Opus 5.5): no forced tool_choice (a 400 there) —
+    // `auto` with a strict result tool, plus one unforced retry when the
+    // reply is prose. No `temperature`/`top_p`/`top_k` either (also a 400).
+    const { toolUse: toolBlock } = await requestToolCall(
+      client,
+      {
+        model: CLAUDE_MODELS.premium,
+        // Room for adaptive thinking AND the tool call: thinking can't be
+        // turned off on the premium model and its tokens share this ceiling.
+        max_tokens: 8192,
+        // Opus 5.5 defaults to medium; medication safety is worth high.
+        output_config: { effort: "high" },
+        system: SYSTEM_PROMPT,
+        tools: [INTERACTION_CHECK_TOOL],
+        tool_choice: { type: "auto" },
+        messages: [{ role: "user", content: prompt }],
+      },
+      {
+        usage: { userId: auth.userId!, resolved, route: "/api/ai/interaction-check" },
+        deadline: Date.now() + DEADLINE_MS,
+        toolName: INTERACTION_CHECK_TOOL.name,
+        retryInstruction: "Now return the analysis via the interaction_check_result tool.",
+        forceOnRetry: false,
+      },
+    );
 
-    const toolBlock = response.content.find(b => b.type === "tool_use");
-    if (!toolBlock || toolBlock.type !== "tool_use") {
+    if (!toolBlock) {
       return NextResponse.json(
         { error: "AI service unavailable" },
         { status: 502 }

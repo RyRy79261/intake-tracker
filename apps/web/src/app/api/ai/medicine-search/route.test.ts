@@ -37,7 +37,7 @@ vi.mock("@/app/api/ai/_shared/usage-tracker", () => ({
 
 vi.mock("@/app/api/ai/_shared/claude-client", () => ({
   CLAUDE_MODELS: { fast: "fast", quality: "quality", premium: "premium" },
-  WEB_SEARCH_TOOL: { type: "web_search_20250305", name: "web_search", max_uses: 5 },
+  WEB_SEARCH_TOOL: { type: "web_search_20260209", name: "web_search", max_uses: 5 },
   getClaudeClientForUser: vi.fn(async () => ({
     client: { messages: { create: messagesCreate } },
     resolved: { apiKey: "k", source: "env", keyOwnerId: null },
@@ -184,11 +184,12 @@ describe("POST /api/ai/medicine-search", () => {
     expect(body.error).toBe("Failed to process request");
   });
 
-  it("AI-failure: no tool_use block → 422 fallbackToManual", async () => {
-    messagesCreate.mockResolvedValueOnce({
+  it("AI-failure: no tool_use block on the first turn or the retry → 422 fallbackToManual", async () => {
+    const prose = {
       content: [{ type: "text", text: "prose only, no tool call" }],
       usage: { input_tokens: 10, output_tokens: 5 },
-    });
+    };
+    messagesCreate.mockResolvedValueOnce(prose).mockResolvedValueOnce(prose);
 
     const { POST } = await import("@/app/api/ai/medicine-search/route");
     const res = await POST(makeRequest({ query: "aspirin" }));
@@ -197,6 +198,112 @@ describe("POST /api/ai/medicine-search", () => {
     const body = (await res.json()) as { error: string; fallbackToManual: boolean };
     expect(body.error).toBe("AI response format invalid");
     expect(body.fallbackToManual).toBe(true);
+    expect(messagesCreate).toHaveBeenCalledTimes(2);
+  });
+
+  it("request: auto tool_choice with a strict result tool, web_search and explicit effort", async () => {
+    messagesCreate.mockResolvedValueOnce(toolResponse(fullToolInput()));
+
+    const { POST } = await import("@/app/api/ai/medicine-search/route");
+    await POST(makeRequest({ query: "atorvastatin" }));
+
+    const params = messagesCreate.mock.calls[0]?.[0] as {
+      tool_choice?: { type: string };
+      tools: { name: string; strict?: boolean }[];
+      output_config?: { effort: string };
+      temperature?: number;
+    };
+    // Claude Opus 5.5 400s on a forced tool_choice.
+    expect(params.tool_choice?.type ?? "auto").toBe("auto");
+    expect(params.tools.map((t) => t.name)).toEqual(["web_search", "medicine_search_result"]);
+    expect(params.tools.find((t) => t.name === "medicine_search_result")?.strict).toBe(true);
+    expect(params.output_config).toEqual({ effort: "high" });
+    expect(params).not.toHaveProperty("temperature");
+  });
+
+  it("retry: a prose first turn gets one auto (never forced) retry that recovers", async () => {
+    messagesCreate
+      .mockResolvedValueOnce({
+        content: [{ type: "text", text: "Let me look that up." }],
+        usage: { input_tokens: 10, output_tokens: 5 },
+      })
+      .mockResolvedValueOnce(toolResponse(fullToolInput()));
+
+    const { POST } = await import("@/app/api/ai/medicine-search/route");
+    const res = await POST(makeRequest({ query: "atorvastatin" }));
+
+    expect(res.status).toBe(200);
+    const retry = messagesCreate.mock.calls[1]?.[0] as { tool_choice: { type: string } };
+    expect(retry.tool_choice).toEqual({ type: "auto" });
+  });
+
+  it("refusal: a declined drug query → 422 AI_REFUSED with a clear message", async () => {
+    messagesCreate.mockResolvedValueOnce({
+      content: [],
+      stop_reason: "refusal",
+      stop_details: { type: "refusal", category: "bio", explanation: null },
+      usage: { input_tokens: 10, output_tokens: 0 },
+    });
+
+    const { POST } = await import("@/app/api/ai/medicine-search/route");
+    const res = await POST(makeRequest({ query: "some controlled drug" }));
+
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as { code: string; error: string };
+    expect(body.code).toBe("AI_REFUSED");
+    expect(body.error).not.toBe("AI response format invalid");
+    expect(messagesCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it("appearance: without a completed web search, colour/shape/markings are not returned for autofill", async () => {
+    messagesCreate.mockResolvedValueOnce(toolResponse(fullToolInput({
+      visualIdentification: "debossed 'PD 155'",
+    })));
+
+    const { POST } = await import("@/app/api/ai/medicine-search/route");
+    const res = await POST(makeRequest({ query: "atorvastatin" }));
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      pillColor: string;
+      pillShape: string;
+      visualIdentification?: string;
+      pillDescription: string;
+      appearanceVerified: boolean;
+    };
+    expect(body.appearanceVerified).toBe(false);
+    expect(body.pillColor).toBe("");
+    expect(body.pillShape).toBe("");
+    expect(body.visualIdentification).toBeUndefined();
+    // The free-text description is still shown on the search result card.
+    expect(body.pillDescription).toBe("white oval tablet");
+  });
+
+  it("appearance: a completed web search keeps the looked-up colour and shape", async () => {
+    messagesCreate.mockResolvedValueOnce({
+      content: [
+        { type: "server_tool_use", id: "s1", name: "web_search", input: { query: "atorvastatin" } },
+        {
+          type: "web_search_tool_result",
+          tool_use_id: "s1",
+          content: [{ type: "web_search_result", url: "https://example.test", title: "t" }],
+        },
+        { type: "tool_use", name: "medicine_search_result", id: "t1", input: fullToolInput() },
+      ],
+      usage: { input_tokens: 10, output_tokens: 5 },
+    });
+
+    const { POST } = await import("@/app/api/ai/medicine-search/route");
+    const res = await POST(makeRequest({ query: "atorvastatin" }));
+
+    const body = (await res.json()) as {
+      pillColor: string;
+      pillShape: string;
+      appearanceVerified: boolean;
+    };
+    expect(body.appearanceVerified).toBe(true);
+    expect(body.pillColor).toBe("white");
+    expect(body.pillShape).toBe("oval");
   });
 
   it("AI-failure: tool result violates schema (bad foodInstruction enum) → 422", async () => {

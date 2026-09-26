@@ -20,6 +20,9 @@ Check the queried substance against EACH active medication. Include an entry for
 export const INTERACTION_CHECK_TOOL = {
   name: "interaction_check_result" as const,
   description: "Return drug interaction analysis for a substance against current medications",
+  // Schema-valid arguments without forcing the tool, which the premium
+  // model (Claude Opus 5.5) rejects.
+  strict: true,
   input_schema: {
     type: "object" as const,
     properties: {

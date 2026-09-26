@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import type Anthropic from "@anthropic-ai/sdk";
 import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
 import { getClaudeClientForUser, CLAUDE_MODELS, WEB_SEARCH_TOOL } from "@/app/api/ai/_shared/claude-client";
 import { parseJsonBody, zodErrorResponse } from "@/app/api/_shared/validation";
-import { createRateLimiter, getClientIp } from "@/app/api/_shared/rate-limit";
-import { recordUsage, tokensFromAnthropic } from "@/app/api/ai/_shared/usage-tracker";
+import { createRateLimiter, rateLimitKey } from "@/app/api/_shared/rate-limit";
+import { requestToolCall } from "@/app/api/ai/_shared/claude-call";
 import { aiErrorResponse } from "@/app/api/ai/_shared/ai-error-response";
 import {
   SYSTEM_PROMPT,
@@ -20,6 +19,11 @@ import {
   MAX_MEDICATION_DOSE_CHARS,
   MAX_MEDICATION_FREQUENCY_CHARS,
 } from "@intake/ai-prompts/analytics-insights";
+
+// Vercel function limit. The shared deadline stops short of it so a slow
+// model call ends in a JSON 504 rather than the platform's own.
+export const maxDuration = 90;
+const DEADLINE_MS = 80_000;
 
 const FoodItemSchema = z.object({
   description: z.string().min(1).max(MAX_FOOD_DESCRIPTION_CHARS),
@@ -65,17 +69,6 @@ const NutrientAnalysisResponseSchema = z.object({
 
 const rateLimiter = createRateLimiter(10);
 
-type ToolUseBlock = Extract<Anthropic.Messages.ContentBlock, { type: "tool_use" }>;
-
-function findToolUse(
-  content: Anthropic.Messages.ContentBlock[],
-  toolName: string,
-): ToolUseBlock | undefined {
-  return content.find(
-    (b): b is ToolUseBlock => b.type === "tool_use" && b.name === toolName,
-  );
-}
-
 function buildFoodListText(
   foods: { description: string; grams?: number | undefined }[],
 ): string {
@@ -91,8 +84,7 @@ function buildFoodListText(
 
 export const POST = withAuth(async ({ request, auth }) => {
   try {
-    const ip = getClientIp(request);
-    if (!rateLimiter.check(ip)) {
+    if (!rateLimiter.check(rateLimitKey(request, auth.userId))) {
       return NextResponse.json(
         { error: "Rate limit exceeded. Please try again later." },
         { status: 429 },
@@ -159,69 +151,37 @@ export const POST = withAuth(async ({ request, auth }) => {
 
     const userMessage = `Below are the user's logged food and drink entries from the last ${windowDays} days. Some have approximate portions (in grams) shown in parentheses; many will not. Use web_search if you need to look up specific branded or regional items, then call the report_nutrient_analysis tool with your synthesis.${focusLine}${contextBlock}\n\nFoods:\n${foodListText}`;
 
-    const startedAt = Date.now();
-    const response = await client.messages.create({
-      model: CLAUDE_MODELS.quality,
-      max_tokens: 4096,
-      temperature: 0.2,
-      system: SYSTEM_PROMPT,
-      tools: [WEB_SEARCH_TOOL, NUTRIENT_ANALYSIS_TOOL],
-      messages: [{ role: "user", content: userMessage }],
-    });
-    recordUsage({
-      userId: auth.userId!,
-      keyOwnerId: resolved.keyOwnerId,
-      keySource: resolved.source,
-      provider: "anthropic",
-      model: CLAUDE_MODELS.quality,
-      route: "/api/ai/nutrient-analysis",
-      status: "success",
-      durationMs: Date.now() - startedAt,
-      ...tokensFromAnthropic(response.usage),
-    });
-
-    let toolBlock = findToolUse(response.content, NUTRIENT_ANALYSIS_TOOL.name);
-
-    // Claude may finish with prose if web_search satisfied it. Force the
-    // structured tool on a second turn, carrying the prior context so the
-    // earlier server_tool_use blocks remain valid.
-    if (!toolBlock) {
-      const followupStartedAt = Date.now();
-      const followup = await client.messages.create({
+    // Claude may finish with prose if web_search satisfied it;
+    // requestToolCall then forces the structured tool on a second turn,
+    // carrying the prior context so the earlier server_tool_use blocks
+    // remain valid. No sampling parameters: Sonnet 5 rejects a non-default
+    // `temperature` with a 400.
+    const { toolUse: toolBlock, responses } = await requestToolCall(
+      client,
+      {
         model: CLAUDE_MODELS.quality,
-        max_tokens: 2048,
-        temperature: 0.2,
+        // Headroom for adaptive thinking (on by default on Sonnet 5), which
+        // shares this ceiling with the search traffic and the tool call.
+        max_tokens: 8192,
+        output_config: { effort: "medium" },
         system: SYSTEM_PROMPT,
         tools: [WEB_SEARCH_TOOL, NUTRIENT_ANALYSIS_TOOL],
-        tool_choice: { type: "tool", name: NUTRIENT_ANALYSIS_TOOL.name },
-        messages: [
-          { role: "user", content: userMessage },
-          { role: "assistant", content: response.content },
-          {
-            role: "user",
-            content:
-              "Now return your nutrient bias findings via the report_nutrient_analysis tool.",
-          },
-        ],
-      });
-      recordUsage({
-        userId: auth.userId!,
-        keyOwnerId: resolved.keyOwnerId,
-        keySource: resolved.source,
-        provider: "anthropic",
-        model: CLAUDE_MODELS.quality,
-        route: "/api/ai/nutrient-analysis",
-        status: "success",
-        durationMs: Date.now() - followupStartedAt,
-        ...tokensFromAnthropic(followup.usage),
-      });
-      toolBlock = findToolUse(followup.content, NUTRIENT_ANALYSIS_TOOL.name);
-    }
+        messages: [{ role: "user", content: userMessage }],
+      },
+      {
+        usage: { userId: auth.userId!, resolved, route: "/api/ai/nutrient-analysis" },
+        deadline: Date.now() + DEADLINE_MS,
+        toolName: NUTRIENT_ANALYSIS_TOOL.name,
+        retryInstruction:
+          "Now return your nutrient bias findings via the report_nutrient_analysis tool.",
+        retryMaxTokens: 4096,
+      },
+    );
 
     if (!toolBlock) {
       console.error(
         "[VALIDATION] Nutrient analysis: model never called the structured tool. Stop reason:",
-        response.stop_reason,
+        responses.at(-1)?.stop_reason,
       );
       return NextResponse.json(
         { error: "The AI didn't return a structured response. Try again." },
