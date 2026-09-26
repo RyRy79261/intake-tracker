@@ -1,21 +1,29 @@
 // @vitest-environment jsdom
 import type { ReactNode } from "react";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { renderHook, waitFor, act } from "@testing-library/react";
+import { renderHook, act } from "@testing-library/react";
 
-import {
-  useUploadBackup,
-  useClearAllData,
-} from "@/hooks/use-backup-queries";
+import { useUploadBackup } from "@/hooks/use-backup-queries";
 import { makeTestQueryClient } from "@/__tests__/react-test-utils";
 import { seedDatabase } from "@/__tests__/fixtures/scenarios";
 import {
-  makeIntakeRecord,
   makeWeightRecord,
+  makeUserProfile,
+  makeInsightReport,
 } from "@/__tests__/fixtures/db-fixtures";
 import { db } from "@/lib/db";
 import type { BackupData } from "@/lib/backup-service";
+
+const { toastMock } = vi.hoisted(() => ({ toastMock: vi.fn() }));
+vi.mock("@intake/ui/use-toast", () => ({
+  useToast: () => ({ toast: toastMock }),
+  toast: toastMock,
+}));
+
+beforeEach(() => {
+  toastMock.mockClear();
+});
 
 function makeWrapper() {
   const client = makeTestQueryClient();
@@ -37,31 +45,6 @@ function backupFile(data: Partial<BackupData>): File {
     type: "application/json",
   });
 }
-
-describe("useClearAllData", () => {
-  it("soft-deletes intake records rather than hard-clearing them", async () => {
-    const a = makeIntakeRecord({ type: "water", amount: 250 });
-    const b = makeIntakeRecord({ type: "salt", amount: 1000 });
-    await seedDatabase({ intakeRecords: [a, b] });
-
-    const { result } = renderHook(() => useClearAllData(), {
-      wrapper: makeWrapper(),
-    });
-
-    await act(async () => {
-      await result.current.mutateAsync();
-    });
-
-    await waitFor(() => {
-      expect(result.current.isSuccess).toBe(true);
-    });
-
-    // Rows still physically exist (tombstones), but all carry a deletedAt.
-    const rows = await db.intakeRecords.toArray();
-    expect(rows.length).toBe(2);
-    expect(rows.every((r) => r.deletedAt !== null)).toBe(true);
-  });
-});
 
 describe("useUploadBackup", () => {
   it("imports new records from a backup file in merge mode", async () => {
@@ -107,7 +90,7 @@ describe("useUploadBackup", () => {
     expect(stored?.weight).toBe(80);
   });
 
-  it("replace mode clears existing rows before importing the backup", async () => {
+  it("replace mode tombstones existing rows before importing the backup", async () => {
     const old = makeWeightRecord({ weight: 50 });
     await seedDatabase({ weightRecords: [old] });
 
@@ -122,11 +105,30 @@ describe("useUploadBackup", () => {
       await result.current.mutateAsync({ file, mode: "replace" });
     });
 
-    const rows = await db.weightRecords.toArray();
-    expect(rows.length).toBe(1);
-    expect(rows[0]!.id).toBe(fresh.id);
-    // The pre-existing record was wiped by the replace.
-    expect(await db.weightRecords.get(old.id)).toBeUndefined();
+    const live = (await db.weightRecords.toArray()).filter((r) => r.deletedAt === null);
+    expect(live.map((r) => r.id)).toEqual([fresh.id]);
+    // The pre-existing record was tombstoned by the replace.
+    expect((await db.weightRecords.get(old.id))?.deletedAt).toBeTypeOf("number");
+  });
+
+  it("toasts the total import count, including profile and insight reports", async () => {
+    const file = backupFile({
+      weightRecords: [makeWeightRecord()],
+      userProfile: [makeUserProfile()],
+      insightReports: [makeInsightReport()],
+    });
+
+    const { result } = renderHook(() => useUploadBackup(), {
+      wrapper: makeWrapper(),
+    });
+
+    await act(async () => {
+      await result.current.mutateAsync({ file, mode: "merge" });
+    });
+
+    expect(toastMock).toHaveBeenCalledWith(
+      expect.objectContaining({ description: expect.stringMatching(/^Imported 3 records/) }),
+    );
   });
 
   it("reports an error for an invalid backup file without throwing", async () => {

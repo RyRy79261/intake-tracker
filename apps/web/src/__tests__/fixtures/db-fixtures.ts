@@ -34,6 +34,7 @@ export function makeWeightRecord(overrides?: Partial<WeightRecord>): WeightRecor
     updatedAt: BASE_TS,
     deletedAt: null,
     deviceId: "test-device",
+    timezone: "UTC",
     ...overrides,
   } as WeightRecord;
 }
@@ -53,6 +54,7 @@ export function makeBloodPressureRecord(overrides?: Partial<BloodPressureRecord>
     updatedAt: BASE_TS,
     deletedAt: null,
     deviceId: "test-device",
+    timezone: "UTC",
     ...overrides,
   } as BloodPressureRecord;
 }
@@ -82,6 +84,7 @@ export function makeUrinationRecord(overrides?: Partial<UrinationRecord>): Urina
     updatedAt: BASE_TS,
     deletedAt: null,
     deviceId: "test-device",
+    timezone: "UTC",
     ...overrides,
   } as UrinationRecord;
 }
@@ -96,6 +99,7 @@ export function makeDefecationRecord(overrides?: Partial<DefecationRecord>): Def
     updatedAt: BASE_TS,
     deletedAt: null,
     deviceId: "test-device",
+    timezone: "UTC",
     ...overrides,
   } as DefecationRecord;
 }
@@ -174,6 +178,7 @@ export function makeInventoryItem(prescriptionId: string, overrides?: Partial<In
     updatedAt: BASE_TS,
     deletedAt: null,
     deviceId: "test-device",
+    timezone: "UTC",
     ...overrides,
   } as InventoryItem;
 }
@@ -191,6 +196,7 @@ export function makeInventoryTransaction(inventoryItemId: string, overrides?: Pa
     updatedAt: BASE_TS,
     deletedAt: null,
     deviceId: "test-device",
+    timezone: "UTC",
     ...overrides,
   } as InventoryTransaction;
 }
@@ -229,6 +235,7 @@ export function makeDailyNote(overrides?: Partial<DailyNote>): DailyNote {
     updatedAt: BASE_TS,
     deletedAt: null,
     deviceId: "test-device",
+    timezone: "UTC",
     ...overrides,
   } as DailyNote;
 }
@@ -243,6 +250,7 @@ export function makeAuditLog(overrides?: Partial<AuditLog>): AuditLog {
     updatedAt: BASE_TS,
     deletedAt: null,
     deviceId: "test-device",
+    timezone: "UTC",
     ...overrides,
   } as AuditLog;
 }

@@ -32,22 +32,23 @@ const PRESETS: Preset[] = [
   {
     label: "Older than 1 year",
     range: () => olderThanDays(365),
-    describe: "all records logged more than a year ago",
+    describe: "all health logs and dose history from more than a year ago",
   },
   {
     label: "Older than 90 days",
     range: () => olderThanDays(90),
-    describe: "all records logged more than 90 days ago",
+    describe: "all health logs and dose history from more than 90 days ago",
   },
   {
     label: "Older than 30 days",
     range: () => olderThanDays(30),
-    describe: "all records logged more than 30 days ago",
+    describe: "all health logs and dose history from more than 30 days ago",
   },
   {
     label: "All data",
     range: () => ALL_TIME,
-    describe: "every record you've logged",
+    describe:
+      "every record you've logged, including your medications, schedules and inventory",
   },
 ];
 
@@ -75,8 +76,9 @@ export function DeleteDataControls() {
         <p className="text-sm font-medium">Delete data</p>
       </div>
       <p className="text-xs text-muted-foreground">
-        Permanently delete logged records by time frame. In cloud-sync mode this
-        also removes the cloud copy.
+        Permanently delete logged records by time frame. Time-framed deletes
+        only remove health logs and dose history; medications, schedules and
+        inventory are kept. In cloud-sync mode this also removes the cloud copy.
       </p>
       <div className="flex flex-wrap gap-2">
         {PRESETS.map((preset) => (

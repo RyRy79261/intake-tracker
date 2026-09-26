@@ -29,9 +29,15 @@
  * Run: pnpm exec vitest run src/__tests__/schema-parity.test.ts
  */
 
+import * as fs from "node:fs";
+import * as path from "node:path";
+import ts from "typescript";
+import { z } from "zod";
 import { describe, it, expect } from "vitest";
-import { getTableColumns } from "drizzle-orm";
-import type { Table } from "drizzle-orm";
+import { getTableColumns, is, Column } from "drizzle-orm";
+import type { SQL, Table } from "drizzle-orm";
+import { getTableConfig, type PgTable } from "drizzle-orm/pg-core";
+import { BACKUP_SCHEMAS, type BackupTableName } from "@/lib/backup-schemas";
 import * as drizzleSchema from "@intake/db/schema";
 import {
   extractDexieSchema,
@@ -316,13 +322,148 @@ describe("synced table lists agree", () => {
 // ─────────────────────────────────────────────────────────────────────────
 // Backup schema — enum and optionality parity with the record types.
 //
-// Deferred: the backup zod schemas currently disagree with the record types
-// (e.g. the intake `type` union lacks "potassium"; doseLogSchema requires a
-// phaseId that PRN doses do not have). The backup-and-data-deletion package
-// fixes those (audit server#4) and then enables these checks.
+// A backup row the validator rejects is silently skipped on restore, so a
+// backup enum missing a value (intake "potassium") or a key required by the
+// backup but optional in the record type (a PRN dose's phaseId) drops real
+// data (audit server-schema-parity#4).
 // ─────────────────────────────────────────────────────────────────────────
 
+const RECORDS_TS_PATH = path.resolve(process.cwd(), "../../packages/types/src/records.ts");
+
+/** interfaceName → field → sorted string-literal union (aliases resolved). */
+function extractLiteralUnions(): Map<string, Map<string, string[]>> {
+  const sf = ts.createSourceFile(
+    RECORDS_TS_PATH,
+    fs.readFileSync(RECORDS_TS_PATH, "utf-8"),
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  const aliases = new Map<string, ts.TypeNode>();
+  sf.forEachChild((n) => {
+    if (ts.isTypeAliasDeclaration(n)) aliases.set(n.name.text, n.type);
+  });
+  const literals = (type: ts.TypeNode): string[] | null => {
+    if (ts.isTypeReferenceNode(type) && ts.isIdentifier(type.typeName)) {
+      const target = aliases.get(type.typeName.text);
+      return target ? literals(target) : null;
+    }
+    const members = ts.isUnionTypeNode(type) ? [...type.types] : [type];
+    const values: string[] = [];
+    for (const m of members) {
+      if (m.kind === ts.SyntaxKind.UndefinedKeyword) continue;
+      if (!ts.isLiteralTypeNode(m)) return null;
+      if (m.literal.kind === ts.SyntaxKind.NullKeyword) continue;
+      if (!ts.isStringLiteral(m.literal)) return null;
+      values.push(m.literal.text);
+    }
+    return values.length > 0 ? values.sort() : null;
+  };
+  const out = new Map<string, Map<string, string[]>>();
+  sf.forEachChild((n) => {
+    if (!ts.isInterfaceDeclaration(n)) return;
+    const fields = new Map<string, string[]>();
+    for (const m of n.members) {
+      if (!ts.isPropertySignature(m) || !m.type || !ts.isIdentifier(m.name)) continue;
+      const values = literals(m.type);
+      if (values) fields.set(m.name.text, values);
+    }
+    out.set(n.name.text, fields);
+  });
+  return out;
+}
+
+/** field → sorted values of every `<column> IN ('a','b')` CHECK on the table. */
+function drizzleCheckLists(table: Table): Map<string, string[]> {
+  const keyBySqlName = new Map(
+    Object.entries(getTableColumns(table)).map(([key, col]) => [col.name, key]),
+  );
+  const out = new Map<string, string[]>();
+  for (const check of getTableConfig(table as PgTable).checks) {
+    const chunks = (check.value as SQL).queryChunks;
+    chunks.forEach((chunk, i) => {
+      if (!is(chunk, Column)) return;
+      const next = chunks[i + 1] as { value?: string[] } | undefined;
+      const m = /^\s*IN \(([^)]*)\)\s*$/.exec(next?.value?.join("") ?? "");
+      const key = keyBySqlName.get(chunk.name);
+      if (!m || !key) return;
+      out.set(key, m[1]!.split(",").map((v) => v.trim().replace(/^'|'$/g, "")).sort());
+    });
+  }
+  return out;
+}
+
+/** Sorted literal values a zod field accepts, or null if it is not an enum. */
+function zodLiterals(schema: z.ZodTypeAny): string[] | null {
+  let s: z.ZodTypeAny = schema;
+  while (s instanceof z.ZodOptional || s instanceof z.ZodNullable) {
+    s = s.unwrap() as z.ZodTypeAny;
+  }
+  if (s instanceof z.ZodEnum) return [...(s.options as string[])].sort();
+  if (s instanceof z.ZodLiteral) return [...s.values].map(String).sort();
+  if (s instanceof z.ZodUnion) {
+    const values: string[] = [];
+    for (const o of s.options as z.ZodTypeAny[]) {
+      if (!(o instanceof z.ZodLiteral)) return null;
+      values.push(...[...o.values].map(String));
+    }
+    return values.sort();
+  }
+  return null;
+}
+
+function backupShape(tableName: string): Record<string, z.ZodTypeAny> {
+  const schema = BACKUP_SCHEMAS[tableName as BackupTableName];
+  return (schema as z.ZodObject<Record<string, z.ZodTypeAny>>).shape;
+}
+
 describe("backup schema ↔ record types parity", () => {
-  it.todo("backup enum literals match the TS unions and Drizzle CHECK lists");
-  it.todo("backup required keys match the required fields of each record type");
+  const LITERAL_UNIONS = extractLiteralUnions();
+
+  it("every synced table has a backup schema", () => {
+    expect(Object.keys(BACKUP_SCHEMAS).sort()).toEqual([...TABLE_PUSH_ORDER].sort());
+  });
+
+  it.each(DEXIE_TABLES)(
+    "$tableName: backup enum literals match the TS unions and Drizzle CHECK lists",
+    ({ tableName, interfaceName }) => {
+      const tsUnions = LITERAL_UNIONS.get(interfaceName) ?? new Map<string, string[]>();
+      const checks = drizzleCheckLists(getDrizzleTable(tableName)!);
+      for (const [field, fieldSchema] of Object.entries(backupShape(tableName))) {
+        const backup = zodLiterals(fieldSchema);
+        if (!backup) continue;
+        expect(backup, `${tableName}.${field}: backup enum vs TS union`).toEqual(
+          tsUnions.get(field),
+        );
+        if (checks.has(field)) {
+          expect(backup, `${tableName}.${field}: backup enum vs Drizzle CHECK`).toEqual(
+            checks.get(field),
+          );
+        }
+      }
+    },
+  );
+
+  it.each(DEXIE_TABLES)(
+    "$tableName: backup required keys match the required fields of the record type",
+    ({ tableName, fields, optionalFields, nullableFields }) => {
+      const cols = getColumnMeta(getDrizzleTable(tableName)!);
+      const violations: string[] = [];
+      for (const [field, fieldSchema] of Object.entries(backupShape(tableName))) {
+        if (!fields.includes(field)) {
+          violations.push(`${field}: not a field of the record type`);
+          continue;
+        }
+        if (optionalFields.includes(field) && !fieldSchema.safeParse(undefined).success) {
+          violations.push(`${field}: optional in the record type but required by the backup`);
+        }
+        // Pulled rows carry NULL for a nullable column, and a backup exported
+        // after a pull carries it on.
+        const mayBeNull = nullableFields.includes(field) || cols[field]?.notNull === false;
+        if (mayBeNull && !fieldSchema.safeParse(null).success) {
+          violations.push(`${field}: nullable but the backup rejects null`);
+        }
+      }
+      expect(violations, `${tableName}: backup schema is stricter than the record`).toEqual([]);
+    },
+  );
 });

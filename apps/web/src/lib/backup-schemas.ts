@@ -23,24 +23,39 @@ const finiteNumber = z.number().finite();
  * Sync metadata fields shared by every record. All optional, since
  * historical backups predate some of these fields.
  */
-export const syncFieldsSchema = z.object({
+const baseSyncFieldsSchema = z.object({
   createdAt: finiteNumber.optional(),
   updatedAt: finiteNumber.optional(),
   deletedAt: z.union([finiteNumber, z.null()]).optional(),
   deviceId: z.string().optional(),
+});
+
+/**
+ * Sync metadata plus `timezone`, for the tables whose record type declares it.
+ * The other tables (prescriptions, phases, schedules, titration plans, profile,
+ * insight reports) still accept a stray `timezone` from an older backup
+ * through `.passthrough()`.
+ */
+export const syncFieldsSchema = baseSyncFieldsSchema.extend({
   timezone: z.string().optional(),
 });
 
 /** Unix-ms timestamp. Finite number; rejects NaN/Infinity. */
 export const timestampSchema = finiteNumber;
 
+/** A record on a table with a `timezone` column. */
 const baseRecord = syncFieldsSchema.extend({
+  id: z.string(),
+});
+
+/** A record on a table without a `timezone` column. */
+const baseRecordNoTz = baseSyncFieldsSchema.extend({
   id: z.string(),
 });
 
 export const intakeRecordSchema = baseRecord
   .extend({
-    type: z.union([z.literal("water"), z.literal("salt"), z.literal("sugar")]),
+    type: z.enum(["water", "salt", "sugar", "potassium"]),
     amount: finiteNumber,
     timestamp: timestampSchema,
   })
@@ -82,7 +97,7 @@ export const substanceRecordSchema = baseRecord
   })
   .passthrough();
 
-export const prescriptionSchema = baseRecord
+export const prescriptionSchema = baseRecordNoTz
   .extend({
     genericName: z.string(),
     // Optional since 2026-09 (audit sync-engine#10); pulled rows carry null.
@@ -91,7 +106,7 @@ export const prescriptionSchema = baseRecord
   })
   .passthrough();
 
-export const medicationPhaseSchema = baseRecord
+export const medicationPhaseSchema = baseRecordNoTz
   .extend({
     prescriptionId: z.string(),
     type: z.string(),
@@ -99,7 +114,7 @@ export const medicationPhaseSchema = baseRecord
   })
   .passthrough();
 
-export const phaseScheduleSchema = baseRecord
+export const phaseScheduleSchema = baseRecordNoTz
   .extend({
     phaseId: z.string(),
     dosage: finiteNumber,
@@ -123,7 +138,9 @@ export const inventoryTransactionSchema = baseRecord
 export const doseLogSchema = baseRecord
   .extend({
     prescriptionId: z.string(),
-    phaseId: z.string(),
+    // PRN (as-needed) doses have no phase or schedule; pulled rows carry null.
+    phaseId: z.string().nullable().optional(),
+    scheduleId: z.string().nullable().optional(),
     scheduledDate: z.string(),
     // Dose snapshot (2026-09). Optional, and null when pulled from the server.
     doseAmount: finiteNumber.nullable().optional(),
@@ -133,7 +150,7 @@ export const doseLogSchema = baseRecord
   })
   .passthrough();
 
-export const titrationPlanSchema = baseRecord
+export const titrationPlanSchema = baseRecordNoTz
   .extend({
     title: z.string(),
     status: z.string(),
@@ -154,14 +171,14 @@ export const auditLogSchema = baseRecord
   })
   .passthrough();
 
-export const userProfileSchema = baseRecord
+export const userProfileSchema = baseRecordNoTz
   .extend({
     conditions: z.array(z.string()),
     shareConditionsWithAI: z.boolean(),
   })
   .passthrough();
 
-export const insightReportSchema = baseRecord
+export const insightReportSchema = baseRecordNoTz
   .extend({
     generatedAt: timestampSchema,
     narrative: z.string(),
