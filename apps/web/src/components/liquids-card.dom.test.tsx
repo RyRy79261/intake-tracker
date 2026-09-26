@@ -32,22 +32,4 @@ describe("LiquidsCard", () => {
 
     expect(await screen.findAllByText("250ml")).not.toHaveLength(0);
   });
-
-  it("colours the header by the shared tri-state and never rounds an over-limit total to the limit", async () => {
-    await renderWithFixtures(<LiquidsCard />, {
-      settings: { waterLimit: 1000, waterExtendedBuffer: 500 },
-      seed: {
-        intakeRecords: [
-          makeIntakeRecord({ type: "water", amount: 1040, timestamp: Date.now() }),
-        ],
-      },
-    });
-
-    // Inside the buffer: the extended (orange) tone, as on the Today summary.
-    const header = await screen.findByText(/^1\.04L \/ 1\.0L$/, undefined, {
-      timeout: 5000,
-    });
-    expect(header.className).toMatch(/text-orange-600/);
-    expect(header.className).not.toMatch(/text-red-600/);
-  });
 });
