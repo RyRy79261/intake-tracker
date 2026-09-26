@@ -8,7 +8,7 @@
     "vercel-build": "pnpm db:migrate && next build",
     "start": "next start",
     "cap:export": "node scripts/cap-build.js",
-    "lint": "eslint src e2e playwright.config.ts",
+    "lint": "eslint --max-warnings 0 src e2e playwright.config.ts",
     "typecheck": "tsc --noEmit && tsc --noEmit -p e2e/tsconfig.json && tsc --noEmit -p tsconfig.sw.json",
     "test": "vitest run",
     "test:tz:sa": "TZ=Africa/Johannesburg vitest run",

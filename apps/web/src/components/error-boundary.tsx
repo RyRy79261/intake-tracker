@@ -52,6 +52,9 @@ export class ErrorBoundary extends Component<Props, State> {
   };
 
   handleGoHome = () => {
+    // A full document load on purpose: the crashed React tree (and any bad
+    // in-memory state) must be discarded, which client-side routing would keep.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- intentional hard reload
     window.location.href = "/";
   };
 
@@ -69,6 +72,8 @@ export class ErrorBoundary extends Component<Props, State> {
       // sessionStorage may be unavailable — the report form still opens,
       // just without the pre-fill.
     }
+    // Full document load for the same reason as handleGoHome.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- intentional hard reload
     window.location.href = "/settings";
   };
 

@@ -79,6 +79,14 @@ export function DoseRow({ slot, isToday, isFuture, onTake, onRetroactiveTake, on
         onClick={!isActionable ? () => onDoseClick(slot) : undefined}
         role={!isActionable ? "button" : undefined}
         tabIndex={!isActionable ? 0 : undefined}
+        onKeyDown={!isActionable ? (e) => {
+          // Only the row itself: Enter on the inner Edit button stays with it.
+          if (e.target !== e.currentTarget) return;
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onDoseClick(slot);
+          }
+        } : undefined}
       >
         <div className="flex items-center gap-3">
           <PillIconWithBadge
