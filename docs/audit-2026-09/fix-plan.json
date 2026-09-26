@@ -1,0 +1,831 @@
+{
+ "schema_package": {
+  "finding_ids": [
+   "server-schema-parity#9",
+   "sync-engine#3",
+   "sync-engine#10",
+   "dexie-schema#8",
+   "dexie-schema#15"
+  ],
+  "schema_changes": "All changes are additive. The schema package runs alone and first; every other package branches from its merge. It is the only package allowed to edit apps/web/src/lib/db.ts store definitions, packages/types/src/records.ts, packages/db/src/schema.ts, packages/db/migrations/**, apps/web/src/lib/sync-column-types.ts and apps/web/src/__tests__/schema-parity.test.ts.\n\n1) Dexie v23 (apps/web/src/lib/db.ts). Repeat all v22 stores verbatim, except for the following:\n   a. doseLogs: add the compound index [scheduleId+scheduledDate]. Keep every existing index, including scheduledTime. NEEDED BY dose-log-keys-history (doses#5/#6, server#6).\n   b. Drop the dead boolean indexes: prescriptions 'isActive', inventoryItems 'isActive', phaseSchedules 'enabled'. Keep phaseSchedules 'time'. Change components/debug-panel.tsx:289 to toArray()+JS filter. This is dexie-schema#8.\n   c. The .upgrade() does a non-destructive tombstone-flag repair. For rows with deletedAt != null: prescriptions -> isActive=false; inventoryItems -> isActive=false; phaseSchedules -> enabled=false; medicationPhases whose status is 'active' or 'pending' -> status='cancelled'; titrationPlans whose status is 'active' or 'draft'/'pending' -> status='cancelled'. For each changed row, stamp updatedAt=now and enqueue it with the same enqueueRepair pattern as v22. It must not touch live rows and must not delete anything. NEEDED BY med-lifecycle-titration (dexie-schema#0) and reminders-android-push (baseline-health#0).\n   d. Bump DB_SCHEMA_VERSION / PREVIEW_STORES to match.\n2) DoseLog snapshot fields. In packages/types/src/records.ts DoseLog, add these optional fields: doseAmount?: number (dose in doseUnit), doseUnit?: string, pillsConsumed?: number, pillStrength?: number. In packages/db/src/schema.ts dose_logs, add the matching nullable columns: dose_amount real, dose_unit text, pills_consumed real, pill_strength real. Add them to FLOAT_SYNC_FIELDS in sync-column-types.ts, and to the backup DoseLog zod schema as optional/nullable. Nothing writes these fields yet. NEEDED BY dose-log-keys-history (prescriptions-model#3/#4, doses#13, gap-bulk#1) and optionally mcp-server (mcp#16).\n3) Server-assigned pull cursor (sync-engine#3). Add server_updated_at bigint NOT NULL DEFAULT (floor(extract(epoch from now())*1000)) to every synced Postgres table. In the migration, backfill server_updated_at = updated_at so existing client cursors stay valid. Add an index (user_id, server_updated_at, id) per table. The push route must set server_updated_at = now-ms on every insert, update and tombstone-stub update (including the #355 stub path). The pull route must use a (server_updated_at, id) keyset cursor, return the cursor value, and strip serverUpdatedAt from row payloads. The client cursor stays opaque. The column is server-only: add it to the parity test's server-only allowlist next to userId. sync-client-engine and sync-server-auth must preserve this logic when they edit sync-engine.ts and push/route.ts.\n4) prescriptions.indication becomes nullable (sync-engine#10). The migration runs ALTER COLUMN indication DROP NOT NULL. The type becomes indication?: string. Fix the resulting type errors and render ''/null as empty. After this, sanitizeRow's ''->null no longer breaks the push.\n5) Stop writing the local-only timezone on tables that don't declare it (dexie-schema#15). syncFields() in lib/utils.ts gets an option (or a separate helper) so that Prescription/MedicationPhase/PhaseSchedule/TitrationPlan/UserProfile/InsightReport writers no longer add timezone. There is no data migration and existing values stay.\n6) Parity test extension (server-schema-parity#9). Compare TS optionality vs Drizzle notNull/hasDefault, int-vs-float (reuse sync-column-types), and the Dexie store list vs TABLE_PUSH_ORDER vs TABLE_TO_INTERFACE. Add the backup-schema enum/optionality comparison as it.todo/skip. The backup-and-data-deletion package enables it after fixing server#4.\n7) Postgres migration: run pnpm db:generate, which emits 0021_* plus a snapshot. We are past 2026-05-31, so NEVER hand-edit drizzle/meta/_journal.json. Verify with drizzle-journal.test.ts and pnpm db:migrate against a Neon branch/testcontainer.\n8) Shared non-schema contracts that parallel packages rely on:\n   a. packages/core: export isLive(row) => row.deletedAt == null, which handles both null and undefined.\n   b. packages/core: export selectEffectivePhase(phases) and selectEffectivePhases(phases, schedules). They take live phases with status 'active', prefer titration over maintenance per prescription, and return live+enabled schedules for the chosen phase. This mirrors the current getDailyDoseSchedule precedence. USED BY dose-log-keys-history, reminders-android-push (native#1), ai-snapshot-interactions (gap-ai#0), mcp-server (mcp#0), inventory-stock (gap-inv#4). The helper is pure and has no Dexie import, so the MCP server can reuse it.\n   c. PhaseSchedule.time: remove @deprecated. Document it as the canonical wall-clock HH:MM in anchorTimezone, with scheduleTimeUTC derived and not authoritative. USED BY dst-schedule-time and reminders-android-push.\n   d. LiquidPreset (lib/constants.ts): add optional sugarPer100ml?: number (g/100ml) and potassiumPer100ml?: number (mg/100ml). settings-store updateLiquidPreset must delete keys that are present in the patch with value undefined, so a cleared field really clears. No persist-version bump is needed, because the fields are optional. USED BY drink-sugar-lookup (substance-sugar#2/#5, repro-sugar#0/#1).\nNot included (deferred): the dose_logs partial unique index (needs a prod dedupe), CHECK constraints, the salt->sodium rename, the deletedAt sentinel/indexing redesign, the synced userSettings table, and push_subscriptions multi-device."
+ },
+ "packages": [
+  {
+   "key": "water-save",
+   "title": "Owner bug #1: water/drink saves fail or pause (networkMode, DB-closed recovery, empty time, tap-to-edit, future bounds)",
+   "finding_ids": [
+    "repro-water-save#0",
+    "repro-water-save#3",
+    "repro-water-save#4",
+    "repro-water-save#7",
+    "gap-bulk-dose-actions#0",
+    "gap-voice-reconcile-save#3",
+    "liquids-save#0",
+    "liquids-save#12",
+    "liquids-save#13",
+    "liquids-save#14",
+    "liquids-save#7",
+    "dates-timezones#10",
+    "live-data-forensics#12",
+    "gap-records-history-listing#7"
+   ],
+   "owned_files": [
+    "apps/web/src/lib/query-client.ts",
+    "apps/web/src/lib/db-recovery.ts (new: withDbRecovery wrapper)",
+    "apps/web/src/components/liquids/water-tab.tsx",
+    "apps/web/src/components/liquids/beverage-tab.tsx",
+    "apps/web/src/components/manual-input-dialog.tsx",
+    "apps/web/src/hooks/use-intake-queries.ts",
+    "apps/web/src/lib/intake-service.ts",
+    "apps/web/src/lib/date-utils.ts (dateTimeLocalToTimestamp guard only)"
+   ],
+   "needs_schema": "none",
+   "notes": "The core fix is makeQueryClient defaultOptions { queries: {networkMode:'always'}, mutations: {networkMode:'always'} }, plus a regression test that dispatches 'offline' and asserts a row is written. This also fixes gap-bulk#0 and gap-voice#3; the voice-panel code stays untouched. Put DatabaseClosedError recovery in a shared withDbRecovery used by the intake/drink/composable write hooks. Replace the bare catch{} with console.error(cause) (buffer it in memory, because the error log lives in the same IDB). Water-tab/beverage-tab/preset-tab catch blocks: preset-tab.tsx belongs to drink-sugar-lookup, so only export the helper and leave the preset-tab edit to that package. Add customTime to the zod schema and disable Add Entry while the time is invalid. Tap-to-edit: pick the 'set pendingAmount only' model. Use a ref-based in-flight guard. Bound today/24h queries to <= now (half-open [start,end) everywhere, which also covers gap-records#7's substance range flag; keep the substance-service change to that one line). For caffeine lag, recompute the end bound per query rather than a memoized Date.now(). If text-metrics needs a touch, keep it minimal, because dashboard-display-settings owns it. For live#12, show a non-blocking warning when the Beverage name matches alcohol/caffeine keywords. No backfill. Future-date rejection in useEditRecord is done by health-inputs-validation."
+  },
+  {
+   "key": "drink-sugar-lookup",
+   "title": "Owner bug #2: sugar missing/stale in Coffee/Alcohol AI lookup and presets",
+   "finding_ids": [
+    "repro-sugar#0",
+    "repro-sugar#1",
+    "repro-sugar#8",
+    "substance-sugar#2",
+    "substance-sugar#5",
+    "substance-sugar#13",
+    "substance-sugar#14",
+    "substance-sugar#15",
+    "substance-sugar#16",
+    "liquids-save#15",
+    "liquids-save#9",
+    "gap-records-history-listing#1",
+    "gap-dashboard-metrics-settings-inputs#10",
+    "ai-routes-models#9"
+   ],
+   "owned_files": [
+    "apps/web/src/components/liquids/preset-tab.tsx",
+    "apps/web/src/app/api/ai/substance-lookup/route.ts",
+    "apps/web/src/app/api/ai/substance-lookup/schema.ts",
+    "packages/ai-prompts/src/substance-lookup.ts",
+    "apps/web/src/components/settings/liquid-presets-section.tsx",
+    "apps/web/src/lib/constants.ts",
+    "apps/web/src/lib/drink-service.ts",
+    "apps/web/src/lib/utils.ts (drink label helper only)",
+    "apps/web/src/lib/optional-trackers.ts"
+   ],
+   "needs_schema": "LiquidPreset.sugarPer100ml / potassiumPer100ml and the updateLiquidPreset undefined-clears contract (schema item 8d)",
+   "notes": "Add sugarPer100ml (g) and sodiumPer100ml to the substance-lookup tool, prompt and zod response. ai-models owns the model id, the temperature line and stop_reason in that route; do not edit those lines. Move the preset-tab form into one reducer: every lookup, preset tap and deselect sets or clears sugar, salt, caffeine and ABV together, and aiLookupUsed resets. Scale preset sugar by volume in buildDrink. Persist sugar in Save-as-preset (which must run only after logDrink succeeds) and in the Settings editor. The editor clears by sending explicit undefined. Gate the sugar field, payload and Recent badge on useOptionalTrackerEnabled('sugar'). Show all non-zero solutes in the summary. Label rows from the stored note/description first and fall back to the preset name (utils.ts, used by records and the liquids card). The liquids-card.tsx badge/label hunks are small; food-entry-groups owns the rest of that file. Settings label: '% ABV'. Remove the 'Beverage' category from the select. ai#9: apply waterContentPercent in logDrink consistently (one rule for presets, voice and parse). Also apply withDbRecovery (from water-save) in preset-tab catch blocks if it has already merged; otherwise add console.error(cause)."
+  },
+  {
+   "key": "food-entry-groups",
+   "title": "Grouped meal/drink records: delete, time edit, undo act on whole group; Food card input fixes",
+   "finding_ids": [
+    "food-salt-voice#0",
+    "food-salt-voice#1",
+    "food-salt-voice#7",
+    "food-salt-voice#8",
+    "food-salt-voice#9",
+    "food-salt-voice#13",
+    "food-salt-voice#17",
+    "liquids-save#3",
+    "liquids-save#4",
+    "liquids-save#5",
+    "liquids-save#6",
+    "analytics-history-export#9",
+    "gap-records-history-listing#3",
+    "gap-records-history-listing#6",
+    "health-records-inputs#14",
+    "repro-sugar#3"
+   ],
+   "owned_files": [
+    "apps/web/src/lib/composable-entry-service.ts",
+    "apps/web/src/lib/composable-entry-service.test.ts",
+    "apps/web/src/hooks/use-composable-entry.ts",
+    "apps/web/src/lib/eating-service.ts",
+    "apps/web/src/hooks/use-eating-queries.ts",
+    "apps/web/src/lib/substance-service.ts",
+    "apps/web/src/lib/record-crud.ts",
+    "apps/web/src/hooks/use-undo-delete-mutation.ts",
+    "apps/web/src/components/liquids-card.tsx",
+    "apps/web/src/components/food-salt/food-section.tsx",
+    "apps/web/src/components/analytics/records-tab.tsx (eating/drink delete+edit handlers)",
+    "packages/ai-prompts/src/parse.ts (food#13 drink fields only)"
+   ],
+   "needs_schema": "none",
+   "notes": "Add one shared group-op helper, with no entryGroups table. Delete, time edit and undo act on all live members of groupId in one transaction. deleteEntryGroup returns the tombstone stamp, and undo restores only rows whose deletedAt equals that stamp. classifyLiquidDelete treats any group with no live eating row as a drink; update the test that enshrines the orphan. Route meal delete through deleteEntryGroup from the Food card and the Records tab. Do NOT write a repair migration for existing orphans (deferred; never auto-tombstone prod data). Records-tab caffeine delete: confirm the cascade and add undo. The food-section re-parse sets every field from the result ('' for null/0). This is part of the owner's sugar complaint (2b#5). A plain meal with only a description or grams can be saved. Disable Save until the prefill resolves. food#1: use the same predicate for prefill and reconcile, covering legacy sources, without migrating data. food#13: the parse tool returns caffeine_mg/abv/is_drink, and drinks route through logDrink. Only edit the tool fields in parse.ts, because ai-models edits the wording and factor. health#14: surface the undo failure toast. gap-records#6: check that the row exists before enqueueing. Do not touch history-drawer.tsx or use-record-adapters.ts; dead-code-and-ci-gates deletes them."
+  },
+  {
+   "key": "med-lifecycle-titration",
+   "title": "Medication soft-delete lifecycle + titration complete/edit/activate (C1-C4)",
+   "finding_ids": [
+    "dexie-schema#0",
+    "dexie-schema#3",
+    "live-data-forensics#1",
+    "analytics-history-export#19",
+    "doses-titration-schedule#2",
+    "doses-titration-schedule#3",
+    "doses-titration-schedule#4",
+    "doses-titration-schedule#19",
+    "doses-titration-schedule#25",
+    "sync-engine#2",
+    "prescriptions-model#11"
+   ],
+   "owned_files": [
+    "apps/web/src/lib/prescription-service.ts",
+    "apps/web/src/lib/phase-service.ts",
+    "apps/web/src/lib/titration-service.ts",
+    "apps/web/src/lib/medication-schedule-service.ts",
+    "apps/web/src/components/medications/titrations/titration-drawer.tsx",
+    "apps/web/src/components/medications/titrations/titration-plan-card.tsx",
+    "apps/web/src/components/analytics/titration-tab.tsx",
+    "apps/web/src/components/medications/prescriptions-view.tsx",
+    "apps/web/src/components/medications/compound-list.tsx",
+    "apps/web/src/app/api/ai/titration-warnings/route.ts (request payload building only)"
+   ],
+   "needs_schema": "Dexie v23 tombstone-flag repair (1c); isLive/selectEffectivePhase helpers (8a/8b)",
+   "notes": "On delete, also set isActive=false, status='cancelled' or enabled=false. Every reader in these services filters isLive. deletePrescription soft-deletes and enqueues its doseLogs and inventoryTransactions instead of hard-deleting them. updatePhase soft-deletes removed schedules and enqueues them; no bulkDelete. Stamp updatedAt on every synced update through one helper (add a test that fails when an enqueue follows an update without updatedAt). Titration complete: set enabled=false on superseded schedules and copy only live schedules. Titration edit: update schedules in place and keep their ids; if a replacement is unavoidable, remap both phaseId and scheduleId, and cancel the replaced phases. Only replace entries that changed. activate/complete/cancel/getPhasesForTitrationPlan filter deletedAt. Take the unit from the Rx/phase instead of the 'mg' literal, and don't overwrite the maintenance unit on complete. doses#25: send unit, days, currentDosage and the weekly-averaged total. ai-models owns the model params in that route. prescr#11: add an Inactive/Archived section. Titration tab: filter deleted phases and intersect with the selected range. Filters in dose-schedule-service.ts are done by dose-log-keys-history; filters in medication-notification-service by reminders-android-push; filters in inventory-service by inventory-stock. No server-side orphan tombstone script (deferred)."
+  },
+  {
+   "key": "dose-log-keys-history",
+   "title": "Dose log natural key, dose snapshot, effective-dated history and adherence",
+   "finding_ids": [
+    "doses-titration-schedule#5",
+    "doses-titration-schedule#6",
+    "doses-titration-schedule#13",
+    "prescriptions-model#3",
+    "prescriptions-model#4",
+    "analytics-history-export#10",
+    "server-schema-parity#6",
+    "server-schema-parity#11",
+    "gap-bulk-dose-actions#1",
+    "gap-bulk-dose-actions#5",
+    "dates-timezones#16"
+   ],
+   "owned_files": [
+    "apps/web/src/lib/dose-log-service.ts",
+    "apps/web/src/lib/dose-schedule-service.ts",
+    "apps/web/src/lib/analytics-service.ts (adherence functions only)",
+    "apps/web/src/components/medications/dose-detail-dialog.tsx (takeDose call args only)"
+   ],
+   "needs_schema": "DoseLog doseAmount/doseUnit/pillsConsumed/pillStrength (2), Dexie [scheduleId+scheduledDate] index (1a), isLive/selectEffectivePhase (8a/8b)",
+   "notes": "Look up scheduled logs by [scheduleId+scheduledDate], never by the scheduledTime string. New scheduled logs get a deterministic id (a hash of scheduleId|scheduledDate) so that two devices converge through LWW. Do not add a Postgres unique index and do not dedupe existing rows. The dialog passes time: slot.localTime and takenAtTime. Write the dose snapshot on take/skip. Undo/skip/reschedule reverse the exact linked consumed transaction or pillsConsumed, not the current dose; fall back to the current computation for legacy logs. Create or resolve the log id before writing the consumed transaction (server#11). gap-bulk#1: set inventoryItemId only from the inventory actually debited. Untake soft-deletes the log (or restores the prior status), so a past date returns to 'missed'. Reschedule becomes a single log with a rescheduledTo override, and the slot is built from it; logMap keys on schedule+date deterministically. getDailyDoseSchedule resolves past dates from the phases and schedules live on that date (phase startDate/endDate, schedule createdAt/deletedAt) and filters isLive; this is also where the C1/C2 reader filter lands. Adherence excludes slots that are not yet due. dates#16: a retroactive take earlier than the scheduled time rolls to the next day, or is validated. Coordinate with dst-schedule-time, which only swaps the slot-time derivation call and the createdAt cutoff in dose-schedule-service.ts. Keep those hunks separate. calculatePillsConsumed strength guards belong to pill-math-labels; accept its helper if it is already merged."
+  },
+  {
+   "key": "dose-actions-ui",
+   "title": "Dose Take/Skip/Mark-All UI: future guards, picker defaults, bulk skip, undo, PRN list, day rollover",
+   "finding_ids": [
+    "gap-bulk-dose-actions#2",
+    "gap-bulk-dose-actions#3",
+    "gap-bulk-dose-actions#4",
+    "gap-bulk-dose-actions#6",
+    "gap-bulk-dose-actions#7",
+    "gap-bulk-dose-actions#8",
+    "gap-bulk-dose-actions#9",
+    "gap-bulk-dose-actions#10",
+    "doses-titration-schedule#22",
+    "dates-timezones#15"
+   ],
+   "owned_files": [
+    "apps/web/src/components/medications/schedule-view.tsx",
+    "apps/web/src/components/medications/dose-row.tsx",
+    "apps/web/src/components/medications/retroactive-time-picker.tsx",
+    "apps/web/src/components/medications/bulk-dose-edit-dialog.tsx",
+    "apps/web/src/components/medications/time-slot-group.tsx",
+    "apps/web/src/components/medications/dose-progress-summary.tsx",
+    "apps/web/src/components/medications/undo-toast.tsx",
+    "apps/web/src/components/medications/week-day-selector.tsx",
+    "apps/web/src/app/medications/page.tsx",
+    "apps/web/src/components/medications/prescription-card.tsx",
+    "apps/web/src/hooks/use-medication-queries.ts"
+   ],
+   "needs_schema": "none",
+   "notes": "Hide Take/Skip in the detail drawer for future dates; the service-side rejection of scheduledDate > today is in dose-log-keys-history. Only edit guard/default-time hunks in dose-detail-dialog.tsx. The picker: disable on empty/invalid input, max=now for today, and default to the slot's scheduled time on past dates (the row, Mark All and prescription-card picker all behave this way). Reset only on the closed->open transition. Skip All covers only pending/missed slots, with confirm + SkipReasonPicker + undo, and clears a stale skipReason. The banner shows taken and skipped separately. Undo is bound to the returned log ids and prior state. Bulk actions report per-slot failures. PRN: add a today/recent list with undo on prescription-card that reverses the linked transaction (uses dose-log-service APIs; the minimal new query goes in a new hook). Today's key comes from a ticking day-key hook, and the selection resets at rollover."
+  },
+  {
+   "key": "pill-math-labels",
+   "title": "Pill count formatting and combination-drug dose labels",
+   "finding_ids": [
+    "gap-combo-drugs-pill-math#0",
+    "gap-combo-drugs-pill-math#1",
+    "gap-combo-drugs-pill-math#2",
+    "gap-combo-drugs-pill-math#3",
+    "gap-combo-drugs-pill-math#4",
+    "gap-combo-drugs-pill-math#5",
+    "gap-combo-drugs-pill-math#6",
+    "gap-combo-drugs-pill-math#7",
+    "gap-combo-drugs-pill-math#8",
+    "gap-combo-drugs-pill-math#11",
+    "gap-combo-drugs-pill-math#13"
+   ],
+   "owned_files": [
+    "apps/web/src/lib/medication-ui-utils.ts",
+    "apps/web/src/lib/medication-ui-utils.test.ts",
+    "packages/core/src/compound-utils.ts",
+    "apps/web/src/components/medications/titrations/maintenance-row.tsx",
+    "apps/web/src/components/medications/compound-card.tsx",
+    "apps/web/src/components/medications/compound-card-expanded.tsx"
+   ],
+   "needs_schema": "none",
+   "notes": "The label always shows the per-tablet strength after 'of' (optionally '(= 200mg)'). formatPillCount becomes `${whole} ${frac}`, handles negatives with abs plus a '-' prefix, and falls back to toFixed(2) for non-quarter values; one formatter serves toast, drawer and cards. One combination labeller uses scaleCompounds(brand.compounds, pills); with no brand it shows the summed total, not an invented split, and always includes the tablet count. Surface the odd_fraction warning. Strength <= 0 or non-finite is invalid: return undefined, raise a warning and skip the transaction. The guard goes in calculatePillsConsumed in dose-log-service.ts, a small hunk; that file is owned by dose-log-keys-history. Days-of-supply clamps at 0 with an out-of-stock state. Maintenance '/day' is weekday-weighted. Brand-switch-picker and inventory drawer formatting call sites are owned by inventory-stock; only change the shared formatter's signature compatibly."
+  },
+  {
+   "key": "med-forms-validation",
+   "title": "Medication wizard/edit validation: strength parser, positive doses, unit select, stock entry, duplicate guard",
+   "finding_ids": [
+    "prescriptions-model#9",
+    "prescriptions-model#10",
+    "prescriptions-model#14",
+    "gap-combo-drugs-pill-math#9",
+    "gap-combo-drugs-pill-math#12",
+    "gap-inventory-refill-ui-flows#6",
+    "gap-inventory-refill-ui-flows#7",
+    "live-data-forensics#4",
+    "live-data-forensics#5"
+   ],
+   "owned_files": [
+    "apps/web/src/components/medications/add-medication-wizard.tsx",
+    "apps/web/src/components/medications/add-medication-steps/dosage-step.tsx",
+    "apps/web/src/components/medications/add-medication-steps/schedule-step.tsx",
+    "apps/web/src/hooks/use-add-medication-form.ts",
+    "apps/web/src/components/medications/edit-medication-drawer.tsx",
+    "apps/web/src/components/medications/titrations/rx-entry-card.tsx",
+    "packages/core/src/strength-parser.ts (new)"
+   ],
+   "needs_schema": "none",
+   "notes": "Add one shared strength parser that strips thousands separators, handles '.5' and knows mg/mcg/g/ml. Show the parsed value in the preview and block save when it is <= 0. Validate that the final dose is > 0 and finite; remove the unused per-entry dosage field from the schedule step, or wire it up. The unit becomes a select (a controlled list) and is validated against the inventory unit, or converted. Combination dose input uses one model (pills of the active brand) with a live '= N tablets of X/Y' preview. The wizard stock uses parseFloat. The initial stock is written as type 'initial', and a replacement prescription prompts for current stock (live#4). This fixes future data only; no repair of the -7 Entresto stock. Duplicate guard: a normalised genericName match against live active prescriptions, offering to add a phase instead. gap-inv#6: add an 'Edit medicine' form for brand, strength/compounds, unit, pill look and refill thresholds. When strength changes with stock on hand, ask the user and write an 'adjusted' transaction, using the inventory-service API from inventory-stock (updateInventoryItem already exists). Do not edit inventory-service.ts."
+  },
+  {
+   "key": "inventory-stock",
+   "title": "Inventory stock derivation, recount, refill flows and refill alerts",
+   "finding_ids": [
+    "dexie-schema#1",
+    "dexie-schema#6",
+    "dexie-schema#10",
+    "core-duplication#4",
+    "core-duplication#8",
+    "prescriptions-model#12",
+    "prescriptions-model#13",
+    "gap-inventory-refill-ui-flows#0",
+    "gap-inventory-refill-ui-flows#1",
+    "gap-inventory-refill-ui-flows#2",
+    "gap-inventory-refill-ui-flows#3",
+    "gap-inventory-refill-ui-flows#4",
+    "gap-inventory-refill-ui-flows#5",
+    "gap-inventory-refill-ui-flows#8",
+    "gap-inventory-refill-ui-flows#10",
+    "gap-inventory-refill-ui-flows#11"
+   ],
+   "owned_files": [
+    "apps/web/src/lib/inventory-service.ts",
+    "apps/web/src/lib/inventory-service.test.ts",
+    "apps/web/src/components/medications/inventory-item-view-drawer.tsx",
+    "apps/web/src/components/medications/brand-switch-picker.tsx",
+    "apps/web/src/lib/audit-service.ts",
+    "apps/web/src/app/providers.tsx (initStockRecalculation call only)",
+    "apps/web/src/components/debug-panel.tsx (recalculate stock only)",
+    "apps/web/src/lib/refill-status.ts (new)",
+    "apps/web/src/lib/medication-notification-service.ts (checkRefillAlerts only)"
+   ],
+   "needs_schema": "isLive and selectEffectivePhase helpers (8a/8b)",
+   "notes": "One derivation, deriveStock(itemId), sums isLive transactions. getCurrentStock, the launch recount, adjustStock (now inside the rw transaction) and update/delete transaction all use it; fix the unit test that asserts the bug. The launch recount writes the item and the audit row ONLY when the stock drifted. That stops per-launch updatedAt pushes and audit growth; no retention purge of existing audit rows. Keep currentStock synced for now; removing it is the deferred redesign. Inventory readers filter isLive, and the active-brand predicate is shared. setActiveBrand(rxId,itemId) runs in one transaction. Archiving the active brand requires a replacement or auto-promotes one, and a warning appears when there is no active brand. Add a 'Set count' action that writes an 'adjusted' delta (negative allowed). updateInventoryTransaction validates: finite; > 0 for refill; != 0 for adjusted. An empty note clears. The refill form starts empty. Transaction delete gets an undo. computeRefillStatus(inventory, effectivePhase, schedules) is shared by the cards, drawer and notifier; notifiedRefills clears when stock goes back above the threshold. Spare boxes are labelled separately. The MCP ::int cast is fixed by mcp-server (mcp#3). Reminder functions in medication-notification-service belong to reminders-android-push; only touch checkRefillAlerts."
+  },
+  {
+   "key": "dst-schedule-time",
+   "title": "DST / timezone dose times (Berlin DST 2026-10-25): wall-clock time as source of truth, travel recalculation",
+   "finding_ids": [
+    "doses-titration-schedule#7",
+    "doses-titration-schedule#24",
+    "gap-timezone-travel-recalc#0",
+    "gap-timezone-travel-recalc#2",
+    "gap-timezone-travel-recalc#4",
+    "gap-timezone-travel-recalc#5",
+    "gap-timezone-travel-recalc#6",
+    "gap-timezone-travel-recalc#7",
+    "dexie-schema#11"
+   ],
+   "owned_files": [
+    "apps/web/src/lib/timezone.ts",
+    "apps/web/src/lib/timezone-recalculation-service.ts",
+    "apps/web/src/hooks/use-timezone-detection.ts",
+    "apps/web/src/hooks/use-timezone-detection.test.ts",
+    "apps/web/src/components/medications/timezone-change-dialog.tsx",
+    "apps/web/src/lib/dose-schedule-service.ts (slot-time derivation call + createdAt cutoff only)",
+    "apps/web/src/lib/dose-schedule-service.test.ts (DST cases)"
+   ],
+   "needs_schema": "PhaseSchedule.time canonical contract (8c)",
+   "notes": "URGENT: this must ship before 2026-10-25. Add resolveScheduleLocalTime(schedule, dateKey, deviceTz). It takes the wall-clock `time` in anchorTimezone and converts it to an instant for that specific date using that date's offset, then to device-local. Display and slots use it, so an 08:30 dose stays 08:30 across DST. scheduleTimeUTC is recomputed from time+anchor on write and never decoded back into `time`. Travel recalculation changes only the anchor and recomputes UTC from `time` (gap-tz#0). Editing a prescription abroad keeps the schedule's anchorTimezone and recomputes only when the time changed. The createdAt cutoff uses toLocalDateKey. Detection and recalculation consider only isLive schedules of live active/pending phases. Persist the 'Not now' dismissal per (deviceTz, anchorTz) in localStorage. Clear the tz cache on visibility. The dialog lists every distinct anchor with before/after times. Add a DST-crossing test under TZ=Europe/Berlin (2026-10-25 and 2027-03-28). The hook test imports the real hook. Existing data is not rewritten; `time` is already correct for schedules that never went through travel recalc. reminders-android-push consumes the same `time` contract."
+  },
+  {
+   "key": "reminders-android-push",
+   "title": "Reminders: Android fires 2h early (UTC as local), titration duplicates, resync, toggle; web push scheduling",
+   "finding_ids": [
+    "native-android#0",
+    "native-android#1",
+    "native-android#2",
+    "native-android#3",
+    "native-android#4",
+    "native-android#10",
+    "doses-titration-schedule#10",
+    "doses-titration-schedule#11",
+    "state-settings-cache#0",
+    "mcp-server-auth#7",
+    "mcp-server-auth#8",
+    "gap-timezone-travel-recalc#3",
+    "dates-timezones#3",
+    "baseline-health#0"
+   ],
+   "owned_files": [
+    "apps/web/src/lib/local-notifications.ts",
+    "apps/web/src/__tests__/local-notifications.test.ts",
+    "apps/web/src/lib/medication-notification-service.ts (reminder functions)",
+    "apps/web/src/lib/medication-reminder-builder.ts (new: one builder for native, push and in-app)",
+    "apps/web/src/lib/medication-notification-resync.ts (new: debounced Dexie hook)",
+    "apps/web/src/hooks/use-push-schedule-sync.ts",
+    "apps/web/src/hooks/use-medication-notifications.ts",
+    "apps/web/src/lib/push-db.ts",
+    "apps/web/src/app/api/push/**",
+    "apps/web/src/lib/push-notification-service.ts",
+    "apps/web/src/components/medications/medication-settings-view.tsx (reminder toggle only)",
+    "apps/web/vercel.json (cron)"
+   ],
+   "needs_schema": "PhaseSchedule.time canonical (8c), selectEffectivePhases (8b), Dexie v23 tombstone flags (1c)",
+   "notes": "URGENT (native#0): Capacitor on:{hour,minute} is device-local, so feed it the local wall-clock from schedule.time or dst-schedule-time's resolver, not UTC minutes. Fix the unit test so it runs under TZ=Europe/Berlin. Add one reminder builder that uses selectEffectivePhases (titration over maintenance) and filters isLive, shared by native, the web notifier and the push payload (dates#3, baseline#0, native#1). Resync on a debounced Dexie hook over prescriptions/medicationPhases/phaseSchedules and after a pull applies rows; delete or wire the dead useAdd/Update/DeleteSchedule hooks. Serialize syncMedicationNotifications with stable ids (a hash of scheduleId+weekday) and cancel stale ids. Prefer one-shot `at` alarms for the next N days with allowWhileIdle over perpetual `on` (native#4). The native toggle is platform-aware and cancels everything when off. Push: build the schedule per weekday from the regimen, not today's slots, and always sync, including an empty list. Suppress follow-ups for taken or skipped slots, using one tag. Subscribe sends the Intl tz and a conflict does not reset it to UTC; re-send tz after Adjust. Add a Vercel cron for /api/push/send with a window match and dedupe. Only touch reminder code in medication-notification-service; inventory-stock owns checkRefillAlerts."
+  },
+  {
+   "key": "sync-client-engine",
+   "title": "Client sync engine correctness: in-flight edits, pull overwrite, queue, migration, auto-detect",
+   "finding_ids": [
+    "sync-engine#0",
+    "sync-engine#1",
+    "sync-engine#4",
+    "sync-engine#7",
+    "sync-engine#9",
+    "sync-engine#12",
+    "sync-engine#13",
+    "sync-engine#14",
+    "sync-engine#16",
+    "core-duplication#3",
+    "health-records-inputs#4",
+    "native-android#11"
+   ],
+   "owned_files": [
+    "apps/web/src/lib/sync-engine.ts",
+    "apps/web/src/lib/sync-queue.ts",
+    "apps/web/src/stores/sync-status-store.ts",
+    "apps/web/src/hooks/use-sync-auto-detect.ts",
+    "apps/web/src/lib/migration-service.ts",
+    "apps/web/src/components/migration/migration-wizard.tsx",
+    "apps/web/src/components/migration/completion-summary-step.tsx",
+    "apps/web/src/components/settings/storage-info-section.tsx",
+    "apps/web/src/lib/account-service.ts",
+    "apps/web/src/lib/network-status.ts",
+    "apps/web/src/app/api/sync/verify-hash/route.ts"
+   ],
+   "needs_schema": "server_updated_at cursor (3) already wired by schema package; preserve it",
+   "notes": "Rebase on #355 first. It already added normalizeRowForPush, pull retry with backoff and the tombstone stub, so keep those. Ack only when the queue row's enqueuedAt still equals the snapshot. When applying a pull, skip rows that have a pending _syncQueue entry or a local updatedAt >= the pulled one. Push before the startup pull, and flush plus set queueDepth on web startup. Collect drops upsert ops whose record is missing. Keep a separate network-failure counter from rejection attempts. Persist dropped ops to a visible list, and don't let a pull clear push errors. runPullCycle returns success; switch-to-local waits for any in-flight pull or push and aborts the wipe unless the pull succeeded. Cancel-migration checks res.ok and aborts the upload loop. Persist modeChosenByUser, so auto-detect never overrides an explicit local choice, and moving to cloud with local rows runs the migration upload. The migration parses rejected counts; delete the dead verify-hash, or wire it with normalisation. Pull strips null optional keys, or normalises null to undefined, per core-dup#3. The push serializer sends explicit null for cleared optional fields (health#4). Guard the network listener with a disposed flag. Server route changes are in sync-server-auth."
+  },
+  {
+   "key": "sync-server-auth",
+   "title": "Server sync routes, account wipe FK order, undo-after-delete, ownership guard, auth/sign-out",
+   "finding_ids": [
+    "server-schema-parity#0",
+    "sync-engine#6",
+    "sync-engine#8",
+    "sync-engine#11",
+    "sync-engine#18",
+    "mcp-server-auth#14",
+    "native-android#5",
+    "native-android#8"
+   ],
+   "owned_files": [
+    "apps/web/src/app/api/sync/push/route.ts",
+    "apps/web/src/app/api/sync/cleanup/route.ts",
+    "apps/web/src/lib/user-data-deletion.ts",
+    "apps/web/src/lib/sign-out.ts",
+    "apps/web/src/lib/profile-service.ts",
+    "apps/web/src/lib/auth-middleware.ts",
+    "apps/web/src/components/auth-guard.tsx",
+    "apps/web/src/app/api/native-auth/mint/route.ts",
+    "apps/web/src/lib/native-auth-bridge.ts",
+    "apps/web/src/lib/auth-client.ts",
+    "apps/web/src/__tests__/integration/* (real-Postgres wipe/delete test)"
+   ],
+   "needs_schema": "server_updated_at (3) must keep being set in push route",
+   "notes": "The push upsert gets onConflictDoUpdate({ where: eq(table.userId, auth.userId) }), and 0 rows means a rejected 'conflict' op. The wipe/cleanup/account-delete path deletes children first (inventoryTransactions, dailyNotes, doseLogs, inventoryItems, phaseSchedules, medicationPhases, titrationPlans, prescriptions, \u2026) in one transaction, covered by a real-Postgres test. Undo-after-synced-delete: allow resurrection when the incoming updatedAt is newer than the tombstone (an explicit restore). Sign-in as a different userId than the stored one must not push the previous account's queue: block or partition the queue and cursors. Do NOT delete unsynced local data without a confirm. Profile: new devices use a deterministic per-user profile id (userId) and block profile saves until the initial sync completes; existing rows are not rewritten. Mint upserts users_sync before insert and returns JSON errors. useAuth clears the token only on an explicit 401/403, not on 5xx or network errors, and validateBearerToken maps upstream failure to 503. Native sign-out cancels LocalNotifications and revokes the server session with a Bearer token; no Dexie wipe."
+  },
+  {
+   "key": "backup-and-data-deletion",
+   "title": "Backup restore/import correctness and safe 'delete older than N days' (C5)",
+   "finding_ids": [
+    "analytics-history-export#2",
+    "analytics-history-export#3",
+    "analytics-history-export#4",
+    "analytics-history-export#20",
+    "analytics-history-export#21",
+    "server-schema-parity#4",
+    "gap-records-history-listing#2",
+    "dates-timezones#9"
+   ],
+   "owned_files": [
+    "apps/web/src/lib/backup-service.ts",
+    "apps/web/src/lib/backup-schemas.ts",
+    "apps/web/src/components/settings/data-management-section.tsx",
+    "apps/web/src/components/settings/conflict-review-drawer.tsx",
+    "apps/web/src/hooks/use-backup-queries.ts",
+    "apps/web/src/lib/data-deletion-service.ts",
+    "apps/web/src/components/settings/delete-data-controls.tsx"
+   ],
+   "needs_schema": "DoseLog snapshot fields (2) must be accepted by backup schema (schema pkg adds them); enable the backup parity it.todo from schema item 6",
+   "notes": "URGENT (C5): restrict time-framed deletion to time-series tables (intake, substance, weight, BP, eating, urination, defecation, and doseLogs by scheduledDate), filter on the event timestamp, and never delete configuration by age. Add tests. Backup validators are derived from drizzle-zod, or at least add 'potassium' and make phaseId/scheduleId optional and nullable; enable the parity test. Import: a tombstoned local row plus a live backup row is importable (or a conflict), and isContentEqual accounts for deletedAt. Normalise legacy rows (deletedAt ?? null, sync field defaults). Imported and resolved rows go through enqueueInsideTx with updatedAt bumped, then schedulePush. Replace mode either tombstones and enqueues inside one transaction or is removed (analytics#21). 'Clear All Data' is removed, or relabelled and wired to the fixed range deletion. Import toast totals come from importBackup's computed total."
+  },
+  {
+   "key": "analytics-records-export",
+   "title": "Analytics correctness, CSV/PDF export, ranges and day boundaries, Records list labels",
+   "finding_ids": [
+    "analytics-history-export#7",
+    "analytics-history-export#8",
+    "analytics-history-export#13",
+    "analytics-history-export#16",
+    "analytics-history-export#17",
+    "analytics-history-export#22",
+    "dates-timezones#5",
+    "dates-timezones#12",
+    "state-settings-cache#11",
+    "gap-records-history-listing#0",
+    "gap-records-history-listing#4",
+    "gap-records-history-listing#8",
+    "gap-records-history-listing#9",
+    "gap-records-history-listing#10"
+   ],
+   "owned_files": [
+    "packages/core/src/analytics-stats.ts",
+    "packages/core/src/logical-day.ts (new)",
+    "apps/web/src/lib/analytics-registry.ts",
+    "apps/web/src/lib/analytics-service.ts (non-adherence functions)",
+    "apps/web/src/lib/export-service.ts",
+    "apps/web/src/components/analytics/summary-tab.tsx",
+    "apps/web/src/components/analytics/time-range-selector.tsx",
+    "apps/web/src/hooks/use-analytics-queries.ts",
+    "apps/web/src/hooks/use-records-tab-queries.ts",
+    "apps/web/src/app/analytics/page.tsx",
+    "apps/web/src/components/history/record-row.tsx",
+    "apps/web/src/lib/card-themes.ts",
+    "apps/web/src/lib/history-types.ts",
+    "apps/web/src/components/analytics/records-tab.tsx (day counts + filter label only)"
+   ],
+   "needs_schema": "none",
+   "notes": "Correlations aggregate per domain: sum for intake/substance/counts, mean for weight/BP. CSV export is per record type with full BP columns, notes, estimates labelled, and a doseLogs section. Daily averages divide by logged days, excluding the incomplete current day, the same way in Summary; the snapshot side is done by ai-snapshot-interactions. The PDF sorts numerically before truncating, and 'All' clamps to the first data point with config loaded once. Round the displayed totals. Add logicalDayRange(dayStartHour, tz) in core and use it for analytics buckets and ranges. Document that medications deliberately use midnight, or adopt the helper. push_settings day_start_hour is left alone here. The custom range parses YYYY-MM-DD as local. Range memos include a day tick. '24h' becomes a true rolling 24h, or is renamed 'Today'. Records: potassium gets its own theme and unit; eating rows show grams; day counts are computed from the full filtered list; the filter tab is renamed 'Sodium'. analytics-service adherence functions are owned by dose-log-keys-history; keep hunks separate."
+  },
+  {
+   "key": "health-inputs-validation",
+   "title": "Health record inputs: shared zod schemas, BP/weight ranges, clears, future timestamps, undo, urination",
+   "finding_ids": [
+    "core-duplication#7",
+    "health-records-inputs#0",
+    "health-records-inputs#3",
+    "health-records-inputs#7",
+    "health-records-inputs#10",
+    "health-records-inputs#11",
+    "health-records-inputs#12",
+    "health-records-inputs#15",
+    "gap-dashboard-metrics-settings-inputs#0",
+    "gap-dashboard-metrics-settings-inputs#1",
+    "gap-dashboard-metrics-settings-inputs#7",
+    "gap-dashboard-metrics-settings-inputs#11",
+    "live-data-forensics#10",
+    "live-data-forensics#11",
+    "dates-timezones#11"
+   ],
+   "owned_files": [
+    "packages/core/src/record-schemas.ts (new: one zod schema per record type)",
+    "packages/core/src/settings-helpers.ts",
+    "packages/ui/src/components/inline-edit.tsx",
+    "apps/web/src/components/weight-card.tsx",
+    "apps/web/src/components/blood-pressure-card.tsx",
+    "apps/web/src/components/urination-card.tsx",
+    "apps/web/src/components/defecation-card.tsx",
+    "apps/web/src/components/edit-weight-dialog.tsx",
+    "apps/web/src/components/edit-blood-pressure-dialog.tsx",
+    "apps/web/src/components/edit-urination-dialog.tsx",
+    "apps/web/src/components/edit-defecation-dialog.tsx",
+    "apps/web/src/components/edit-estimate-entry-dialog.tsx",
+    "apps/web/src/components/edit-intake-dialog.tsx",
+    "apps/web/src/components/recent-entries-list.tsx",
+    "apps/web/src/components/collapsible-time-input.tsx",
+    "apps/web/src/hooks/use-edit-record.ts",
+    "apps/web/src/hooks/use-health-queries.ts",
+    "apps/web/src/lib/health-service.ts"
+   ],
+   "needs_schema": "none",
+   "notes": "Put one zod schema per record type in core: BP systolic > diastolic with a 'swap?' prompt and one range set; weight range, no increment snapping on typed input (round to 2 dp), step='any'; no future timestamps (now + small skew), rejected on submit in the add and edit paths. Use it in create, card edit, the Records dialogs and use-edit-record. Voice and backup can adopt it later; do not edit voice or backup files. BP uses Number() so .int() fires. Clearing optional fields sends explicit null (note, HR, irregular, amountEstimate). Timestamps are only rewritten when the minute changed. Weight/BP deletes get undo via useUndoDeleteMutation, plus records-tab UNDO_TOAST_TYPES; that is a small records-tab hunk. Add a note field to weight/BP create. Voice provenance goes in source (the voice-panel side is voice-logging's, so keep it backward compatible). Urination gets a 'No estimate' option. Urination quick-log uses a ref in-flight guard, a 2 s identical-tap debounce and an undo toast. Time inputs reset to now when the panel opens. The weight default is empty, not 69. The BP loading state uses undefined. No data repair of existing near-duplicate or future rows."
+  },
+  {
+   "key": "dashboard-display-settings",
+   "title": "Dashboard progress/colour/rounding consistency and Settings cleanup (reset confirm, regions, dead settings)",
+   "finding_ids": [
+    "food-salt-voice#15",
+    "gap-dashboard-metrics-settings-inputs#2",
+    "gap-dashboard-metrics-settings-inputs#3",
+    "gap-dashboard-metrics-settings-inputs#4",
+    "gap-dashboard-metrics-settings-inputs#5",
+    "gap-dashboard-metrics-settings-inputs#6",
+    "gap-dashboard-metrics-settings-inputs#9",
+    "dates-timezones#19",
+    "state-settings-cache#3",
+    "state-settings-cache#7",
+    "state-settings-cache#8",
+    "state-settings-cache#9",
+    "state-settings-cache#14"
+   ],
+   "owned_files": [
+    "apps/web/src/components/food-salt-card.tsx",
+    "apps/web/src/components/text-metrics.tsx",
+    "packages/core/src/progress-utils.ts",
+    "packages/ui/src/components/progress.tsx",
+    "apps/web/src/components/settings/water-settings-section.tsx",
+    "apps/web/src/components/settings/salt-settings-section.tsx",
+    "apps/web/src/components/settings/weight-settings-section.tsx",
+    "apps/web/src/components/settings/medication-settings-section.tsx",
+    "apps/web/src/stores/settings-store.ts",
+    "apps/web/src/app/settings/page.tsx",
+    "apps/web/src/hooks/use-settings.ts",
+    "apps/web/src/lib/date-utils.ts (time formatting only)"
+   ],
+   "needs_schema": "none (schema pkg already edited updateLiquidPreset in settings-store; don't revert it)",
+   "notes": "Derive one tri-state (ok/extended/over) from computeTwoStageProgress and use it on every surface. The headline shows the true total when the buffer is 0. Round and format the displayed sums. Litres use 2 dp, or ml up to a threshold, so an over-limit value never reads as equal to the limit. Settings number fields clamp and show inline validation, and always reflect the stored value. Remove the dead sodium increment. Progress passes value/aria-valuenow to Radix. Weeks bucket by logical day with one week-start convention. Reset to Defaults: add a confirm, exclude storageMode, doseRemindersEnabled, liquidPresets and onboarding flags (or route them through their proper flows), and reset or drop the theme. Regions: delete the duplicate MedicationSettingsSection or reuse CountryCombobox. A settings migration maps UK->GB and None/Other->'' (a label normalisation, not user health data). Time Format: wire it through a helper or remove it. Remove the dead settings keys (weight overlays, substanceConfig, aiAuthSecret, dataRetentionDays) in a persist-version bump. Shake defaults: align, with a table-driven migration test. The two-stage bar 100%->67% drop is deferred (intentional). The reminder toggle in medication-settings-view is owned by reminders-android-push."
+  },
+  {
+   "key": "voice-logging",
+   "title": "Voice logging: transcript length, spoken times, dropped items, reconcile merges, review validation",
+   "finding_ids": [
+    "food-salt-voice#2",
+    "food-salt-voice#11",
+    "ai-routes-models#6",
+    "ai-routes-models#11",
+    "gap-voice-reconcile-save#0",
+    "gap-voice-reconcile-save#1",
+    "gap-voice-reconcile-save#2",
+    "gap-voice-reconcile-save#4",
+    "gap-voice-reconcile-save#6",
+    "gap-voice-reconcile-save#7",
+    "gap-voice-reconcile-save#9",
+    "gap-voice-reconcile-save#10",
+    "live-data-forensics#13"
+   ],
+   "owned_files": [
+    "apps/web/src/lib/voice-reconcile.ts",
+    "apps/web/src/components/voice/voice-panel.tsx",
+    "apps/web/src/components/voice/parsed-item-row.tsx",
+    "apps/web/src/components/voice/voice-recorder.tsx",
+    "apps/web/src/app/api/ai/voice-parse/route.ts (non-model-param logic)",
+    "apps/web/src/app/api/ai/voice-parse/schema.ts",
+    "packages/ai-prompts/src/voice-parse.ts",
+    "apps/web/src/lib/voice-types.ts",
+    "packages/core/src/security.ts (sanitizeForAI maxLength param only)"
+   ],
+   "needs_schema": "none",
+   "notes": "sanitizeForAI takes a maxLength, and voice passes 2000; show a truncation warning. ai-models edits the PII regexes in the same file, so keep hunks separate. The timeout check uses instanceof Anthropic.APIConnectionTimeoutError with maxRetries 0-1; ai-models owns model id/temperature/tool params in this route. Return a dropped count and cap info, shown as a warning row. Optional per-item time (HH:mm/relative) in prompt and schema, resolved client-side with day-start rules and editable in the row. Reconcile needs a stronger identity check (subset token sets, container heuristics). Merge treats 0 like undefined, and warnings are anchored to rows with tolerance-based matching. Show merged/parsed solutes (sugar/sodium/potassium, gated by trackers) on caffeine/alcohol rows. Row validation: required > 0 and within the manual ranges; disable Approve otherwise. A voice urination row requires an amount. Recording again with unsaved rows asks for confirmation or appends. Add a moka/espresso anchor to the prompt and use the preset per-100ml when the name matches. Commit uses one timestamp per batch. Offline pausing is fixed by water-save's networkMode."
+  },
+  {
+   "key": "ai-models",
+   "title": "AI models upgrade + API-param blockers + shared AI route hardening",
+   "finding_ids": [
+    "ai-routes-models#4",
+    "ai-routes-models#5",
+    "ai-routes-models#7",
+    "ai-routes-models#8",
+    "ai-routes-models#13",
+    "ai-routes-models#17",
+    "ai-routes-models#19",
+    "ai-routes-models#20",
+    "ai-routes-models#21",
+    "ai-routes-models#22",
+    "ai-routes-models#23",
+    "food-salt-voice#18",
+    "core-duplication#13"
+   ],
+   "owned_files": [
+    "packages/ai-prompts/src/models.ts",
+    "packages/ai-prompts/src/parse.ts (wording/factor)",
+    "packages/ai-prompts/src/medicine-search.ts",
+    "packages/ai-prompts/src/substance-enrich.ts (delete)",
+    "apps/web/src/lib/substance-enrich.ts (delete)",
+    "apps/web/src/app/api/ai/substance-enrich/route.ts (delete)",
+    "apps/web/src/app/api/ai/parse/route.ts",
+    "apps/web/src/app/api/ai/medicine-search/route.ts",
+    "apps/web/src/app/api/ai/interaction-check/route.ts (model/tool params)",
+    "apps/web/src/app/api/ai/titration-warnings/route.ts (model/tool params)",
+    "apps/web/src/app/api/ai/nutrient-analysis/route.ts",
+    "apps/web/src/app/api/ai/_shared/**",
+    "apps/web/src/app/api/_shared/rate-limit.ts",
+    "apps/web/src/app/api/bug-report/route.ts",
+    "apps/web/src/app/api/user/api-keys/route.ts",
+    "apps/web/src/app/api/user/ai-usage/route.ts",
+    "apps/web/src/lib/ai-key-resolver.ts",
+    "apps/web/src/lib/key-vault.ts",
+    "apps/web/src/lib/server/deep-insight-request.ts",
+    "packages/core/src/security.ts (PII regexes)",
+    "apps/web/src/__tests__/premium-model-sampling.test.ts"
+   ],
+   "needs_schema": "none",
+   "notes": "Upgrade order per the audit. (1) Remove `temperature` from EVERY Anthropic call, including the voice-parse, substance-lookup and insights routes; those are single-line edits in files mostly owned by other packages, so touch only those lines. (2) Replace forced tool_choice {type:'tool'} in medicine-search, interaction-check and titration-warnings with tool_choice auto + strict:true tools + one retry when no tool_use comes back, or structured outputs. (3) Bump the ids in models.ts: premium 'claude-opus-5-5', quality 'claude-sonnet-5', fast 'claude-haiku-4-5-20251001'. Set effort explicitly where supported. Consult the claude-api skill for current params before editing. (4) web_search_20260209, handling the error-object content. Add a shared stop_reason helper (refusal -> clear message, max_tokens -> retry with a bigger budget, pause_turn -> resume) used by all synchronous routes. Per-route timeout/maxRetries plus export maxDuration. Medicine-search gets web_search, or unverified flags that suppress the pill-appearance autofill. Delete the dead substance-enrich route/runner/prompt. Cost tracking records model, web_search requests, is_batch and error rows. A decrypt failure raises a typed KeyUnreadableError, mapped to a 'Re-enter your key' 4xx, and GET api-keys reports it. Rate limit keyed on userId, with titration-warnings covered. PII: best-effort docs, exempt EAN/UPC runs, handle spaced SA IDs. The parse tool description reads 'salt g \u00d7 393 = sodium mg' and the prompts use the same SODIUM_FRACTION (0.393) as the UI, exported from core. Fix the stale 'Opus' comments. Update premium-model-sampling.test.ts to guard temperature on all routes and forced tool_choice."
+  },
+  {
+   "key": "ai-insights-jobs",
+   "title": "AI insights: deep jobs, reports lifecycle, consent/personalised flags, nutrient-analysis fetch",
+   "finding_ids": [
+    "ai-routes-models#14",
+    "ai-routes-models#15",
+    "ai-routes-models#16",
+    "ai-routes-models#25",
+    "gap-ai-insights-snapshot#4",
+    "gap-ai-insights-snapshot#7",
+    "gap-ai-insights-snapshot#8",
+    "gap-ai-insights-snapshot#9",
+    "gap-ai-insights-snapshot#10",
+    "gap-ai-insights-snapshot#11",
+    "native-android#6"
+   ],
+   "owned_files": [
+    "apps/web/src/app/api/analytics/insights/route.ts",
+    "apps/web/src/app/api/analytics/insights/deep/route.ts",
+    "apps/web/src/app/api/analytics/insights/jobs/[id]/route.ts",
+    "apps/web/src/lib/server/insight-job-service.ts",
+    "apps/web/src/hooks/use-insights.ts",
+    "apps/web/src/components/analytics/ai-insights-card.tsx",
+    "apps/web/src/lib/insight-report-service.ts",
+    "apps/web/src/components/analytics/nutrient-analysis-card.tsx",
+    "apps/web/src/components/profile/ai-insights-consent-toggle.tsx",
+    "apps/web/src/components/profile/medical-context-section.tsx"
+   ],
+   "needs_schema": "none",
+   "notes": "The job stores keyOwnerId/keySource, and polling resolves that same key. NotFound is terminal and releases the lock, and pending jobs with a null batchId expire. Deep sources are coerced: filter out non-URLs, slice to 30, add maxItems to the tool schema. Sanitise conditions, medication names and prior narratives, and drop requestPayload after finalisation. 'Previous assessment' is the latest report whose rangeEnd <= the current range start, and it is stripped when consent is off. personalised is derived from the actual snapshot.profile. The poll result is saved into Dexie locally, keyed by the server resultReportId, rather than relying on an ungated full pull. Reports get a delete action (soft delete + sync). The AI card renders independently of the range-empty early return and is labelled as a 30-day window. Correct the consent copy ('not sent to the AI', mention cloud backup). nutrient-analysis-card uses apiFetch, not a raw fetch; consider a lint/test forbidding bare fetch('/api/'). ai-models owns model params in the insights routes (the temperature line only). The analytics-insights prompt sources schema is here; payload wording is ai-snapshot-interactions'."
+  },
+  {
+   "key": "ai-snapshot-interactions",
+   "title": "AI snapshot payload correctness + interaction-check cache/coverage + client AI error surfacing",
+   "finding_ids": [
+    "gap-ai-insights-snapshot#0",
+    "gap-ai-insights-snapshot#1",
+    "gap-ai-insights-snapshot#2",
+    "gap-ai-insights-snapshot#3",
+    "gap-ai-insights-snapshot#5",
+    "gap-ai-insights-snapshot#6",
+    "gap-ai-insights-snapshot#12",
+    "gap-ai-insights-snapshot#13",
+    "ai-routes-models#1",
+    "ai-routes-models#18",
+    "ai-routes-models#24"
+   ],
+   "owned_files": [
+    "apps/web/src/lib/analytics-snapshot.ts",
+    "packages/ai-prompts/src/analytics-insights.ts (payload wording)",
+    "apps/web/src/hooks/use-interaction-check.ts",
+    "apps/web/src/lib/interaction-cache.ts",
+    "packages/ai-prompts/src/interaction-check.ts",
+    "apps/web/src/app/api/ai/interaction-check/route.ts (coverage check only)",
+    "apps/web/src/components/medications/titrations/titration-drawer.tsx (AI error catch only)",
+    "apps/web/src/components/liquids/preset-tab.tsx (AI error catch only)"
+   ],
+   "needs_schema": "isLive/selectEffectivePhase (8a/8b)",
+   "notes": "The medication summary uses selectEffectivePhase and filters isLive (gap-ai#0; also covers the analytics-snapshot reader from dexie#0). The water value is sent as waterLimitMl, described as a fluid limit, and the 'on target' wording is fixed. Frequency is per weekday. Include PRN prescriptions and per-medication adherence (taken/due excluding not-yet-due), and say when adherence is unknown or sparse. Emit intake fields only for domains with data, with logged-day counts. Add caffeine/alcohol daily averages. Snap to day boundaries and exclude the in-progress day. Compute the trend slope per day. The interaction cache key includes a sorted hash of the active prescription generic names, and the cached timestamp is shown. After validation, compare the returned medications against the request; add a 'Not assessed' row or retry for any gap. Read body.error/code on the client in use-interaction-check, titration-drawer and preset-tab, and show the NO_AI_KEY/SEARCH_REQUIRED messages. Keep those hunks tiny, because the files are owned by med-lifecycle-titration and drink-sugar-lookup."
+  },
+  {
+   "key": "mcp-server",
+   "title": "MCP connector correctness (effective phase, stock precision, day boundary, truncation, revoke, consent)",
+   "finding_ids": [
+    "mcp-server-auth#0",
+    "mcp-server-auth#3",
+    "mcp-server-auth#10",
+    "mcp-server-auth#11",
+    "mcp-server-auth#12",
+    "mcp-server-auth#13",
+    "mcp-server-auth#15",
+    "mcp-server-auth#16",
+    "dates-timezones#6",
+    "live-data-forensics#9"
+   ],
+   "owned_files": [
+    "apps/web/src/lib/mcp/queries.ts",
+    "apps/web/src/lib/mcp/tools.ts",
+    "apps/web/src/lib/mcp/oauth.ts",
+    "apps/web/src/app/api/mcp/**",
+    "apps/web/src/components/settings/mcp-connections-section.tsx (new or existing revoke UI)"
+   ],
+   "needs_schema": "selectEffectivePhase (8b); optional DoseLog snapshot fields (2) for list_recent_doses",
+   "notes": "list_medications returns only the effective phase per prescription via the shared helper, plus titrationPlanId. Stock uses ::double precision rounded to 4 dp (no ::int) and sums only live transactions. get_today_summary uses the user's timezone (push_subscriptions.timezone, or a tool arg) and a zone-aware day start; report taken/skipped/outstanding by scheduledDate. Validation errors come back verbatim, with range limits in zod. Truncation keeps the newest rows (order desc, limit, reverse) across every history query. Add a revoke endpoint/action that sets revokedAt, and schedule purgeExpired. Generate the consent list from the tool set. list_recent_doses includes kind, doseMg, phaseId, scheduleId and inventoryItemId, and the snapshot fields once present. Rename the salt field to sodium_mg and update the descriptions. This changes MCP output only; stored data is untouched."
+  },
+  {
+   "key": "dead-code-and-ci-gates",
+   "title": "Remove dead/unmounted code and close CI/test gate gaps",
+   "finding_ids": [
+    "health-records-inputs#8",
+    "health-records-inputs#13",
+    "core-duplication#12",
+    "food-salt-voice#16",
+    "state-settings-cache#16",
+    "prescriptions-model#18",
+    "baseline-health#3",
+    "baseline-health#4",
+    "baseline-health#5",
+    "baseline-health#6",
+    "baseline-health#7",
+    "baseline-health#8",
+    "baseline-health#9"
+   ],
+   "owned_files": [
+    "apps/web/src/components/history-drawer.tsx (delete)",
+    "apps/web/src/hooks/use-record-adapters.ts (delete)",
+    "apps/web/src/hooks/use-history-queries.ts (delete)",
+    "apps/web/src/app/history/page.tsx",
+    "apps/web/src/components/food-salt/composable-preview.tsx (delete)",
+    "apps/web/src/hooks/use-daily-notes-queries.ts",
+    "apps/web/src/components/medications/prescription-card.dom.test.tsx",
+    "apps/web/src/components/error-boundary.tsx",
+    "apps/web/src/components/history/record-row.tsx (a11y only)",
+    ".github/workflows/ci.yml",
+    "apps/web/tsconfig.json",
+    "apps/web/e2e/tsconfig.json (new)",
+    "apps/web/tsconfig.sw.json (new)",
+    "apps/web/vitest.config.ts",
+    "packages/*/package.json (lint scripts)",
+    "apps/web/src/hooks/use-push-schedule-sync.test.ts, use-timezone-detection tests (new coverage)"
+   ],
+   "needs_schema": "none",
+   "notes": "Run this LAST, or rebase late: it deletes files other packages were told not to touch. Before deleting, grep for remaining importers after the other packages merge. Delete HistoryDrawer, useRecordAdapters, useHistoryData and the unused intake/settings hooks (useEntryGroup, useDeleteSingleGroupRecord, ComposablePreview, recalculateFromCurrentValues stub, unused medication builders: getDailySchedule, activatePhase hook, etc.). Coordinate: saltIncrement and dataRetentionDays settings are removed by dashboard-display-settings, and the dead substance-enrich by ai-models. dailyNotes: either rewrite the hook on record-crud (writeWithSync + active-only reads) or remove it; keep the table. Fix the flaky PRN test with findByText. Run the ui-css tree-shake guard in the CI build job. Typecheck and lint e2e and fix the 5 errors. Typecheck sw.ts with the webworker lib. Add lint scripts to the packages. Add coverage tests for push-schedule-sync, timezone detection (import the real hook), account and permissions. Fix the lint warnings (keyboard on dose-row via role/tabIndex/onKeyDown; this is a small hunk in a file owned by dose-actions-ui). Fix the vitest config deprecations."
+  }
+ ],
+ "deferred": [
+  {
+   "id": "server-schema-parity#3",
+   "reason": "Possibly fixed by #355, fixer must re-check. #355 added normalizeRowForPush, which rounds integer-column values at the push choke point, so fractional amounts no longer get dropped by sync. Any remaining service-level rounding or a real-column migration is optional."
+  },
+  {
+   "id": "dexie-schema#7",
+   "reason": "This is a repair of existing user data: v12 migration substances are invented or ungrouped. It needs owner review, or a bulk-delete UI, and must not be auto-deleted."
+  },
+  {
+   "id": "dexie-schema#9",
+   "reason": "Large schema redesign (indexable deletedAt sentinel / isDeleted flag plus compound indexes). Performance only on small single-user tables."
+  },
+  {
+   "id": "dexie-schema#12",
+   "reason": "Large redesign: rename 'salt' to 'sodium' and add explicit units across Dexie, Postgres, MCP and history. The MCP label is fixed separately (live-data#9)."
+  },
+  {
+   "id": "dexie-schema#13",
+   "reason": "Large redesign: turn free-string enums and source prefixes into literal unions, CHECKs and split columns. No current writer produces off-list values."
+  },
+  {
+   "id": "server-schema-parity#7",
+   "reason": "Needs an owner product decision on multi-device web push. The owner uses native Android reminders, which are unaffected, and the change needs a push_subscriptions uniqueness change plus fan-out."
+  },
+  {
+   "id": "server-schema-parity#10",
+   "reason": "Adding CHECK constraints to prod Postgres could fail the migration on existing rows. It needs a prod data audit (and NOT VALID/backfill strategy) first."
+  },
+  {
+   "id": "substance-sugar#3",
+   "reason": "This is a data repair of historical alcohol rows (14 g vs 10 g convention window). It rewrites stored values and needs owner sign-off on the window and convention."
+  },
+  {
+   "id": "substance-sugar#4",
+   "reason": "This would rewrite persisted user presets using a heuristic (alcoholPer100ml < 3 could be a genuine low-ABV drink), so it needs an owner decision."
+  },
+  {
+   "id": "live-data-forensics#7",
+   "reason": "Needs an owner product decision on whether unlogged days count as missed, 'unknown', or trigger a confirm-yesterday prompt. The effective-dated adherence fix is in dose-log-keys-history."
+  },
+  {
+   "id": "live-data-forensics#16",
+   "reason": "This backfills volume and ABV into historical substance rows and zeroes AF-beer std drinks, which overwrites existing prod data. It needs owner approval."
+  },
+  {
+   "id": "state-settings-cache#2",
+   "reason": "Large redesign: a synced userSettings table in Dexie and Postgres for limits, presets, dayStartHour, trackers and regions."
+  },
+  {
+   "id": "gap-timezone-travel-recalc#1",
+   "reason": "The fix needs a synced user-level 'home timezone' setting, which depends on the deferred synced-settings redesign (state-settings-cache#2). It only affects two devices in different zones at the same time."
+  },
+  {
+   "id": "gap-voice-reconcile-save#8",
+   "reason": "New UI capability (kind and unit change in the voice review list) that needs design; it is not a logic defect."
+  },
+  {
+   "id": "analytics-history-export#18",
+   "reason": "The component documents session-only scans as intended. Persisting paid nutrient scans (new table or report type) is an owner product decision."
+  },
+  {
+   "id": "doses-titration-schedule#21",
+   "reason": "Needs an owner product decision: auto-activate titration phases on their start date, or remove the date field."
+  },
+  {
+   "id": "native-android#9",
+   "reason": "Needs an owner product decision: default native installs to cloud sync, block local-only mode, or add an export prompt. allowBackup policy is also involved."
+  },
+  {
+   "id": "gap-dashboard-metrics-settings-inputs#8",
+   "reason": "The audit marks the two-stage bar drop from 100% to 67% as intentional. Changing the scale is an owner design decision."
+  }
+ ]
+}
