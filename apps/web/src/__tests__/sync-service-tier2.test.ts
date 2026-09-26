@@ -14,8 +14,6 @@ import {
   addComposableEntry,
   deleteEntryGroup,
   undoDeleteEntryGroup,
-  deleteSingleGroupRecord,
-  undoDeleteSingleRecord,
   syncEatingGroup,
 } from "@/lib/composable-entry-service";
 import { logDrink } from "@/lib/drink-service";
@@ -301,38 +299,6 @@ describe("Tier 2 sync-wired services", () => {
 
       const queueRows = await db._syncQueue.toArray();
       expect(queueRows).toHaveLength(2);
-    });
-
-    it("deleteSingleGroupRecord enqueues upsert", async () => {
-      const addResult = await addComposableEntry({
-        intakes: [{ type: "water", amount: 300 }],
-      });
-      if (!addResult.success) return;
-      const intakeId = addResult.data.intakeIds[0]!;
-      await db._syncQueue.clear();
-
-      await deleteSingleGroupRecord("intakeRecords", intakeId);
-
-      const queueRows = await db._syncQueue.toArray();
-      expect(queueRows).toHaveLength(1);
-      expect(queueRows[0]!.tableName).toBe("intakeRecords");
-      expect(schedulePush).toHaveBeenCalled();
-    });
-
-    it("undoDeleteSingleRecord enqueues upsert", async () => {
-      const addResult = await addComposableEntry({
-        intakes: [{ type: "water", amount: 300 }],
-      });
-      if (!addResult.success) return;
-      const intakeId = addResult.data.intakeIds[0]!;
-      await deleteSingleGroupRecord("intakeRecords", intakeId);
-      await db._syncQueue.clear();
-
-      await undoDeleteSingleRecord("intakeRecords", intakeId);
-
-      const queueRows = await db._syncQueue.toArray();
-      expect(queueRows).toHaveLength(1);
-      expect(queueRows[0]!.tableName).toBe("intakeRecords");
     });
   });
 

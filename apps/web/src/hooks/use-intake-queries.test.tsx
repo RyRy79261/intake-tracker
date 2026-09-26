@@ -11,7 +11,6 @@ import { makeIntakeRecord } from "@/__tests__/fixtures/db-fixtures";
 import {
   useIntakeTotal,
   useDailyIntakeTotal,
-  useIntakeRecords,
   useRecentIntakeRecords,
   useIntakeRecordsByDateRange,
   useSaltTotalsByGroupIds,
@@ -88,24 +87,6 @@ describe("use-intake-queries read hooks", () => {
     });
 
     await waitFor(() => expect(result.current).toBe(1000));
-  });
-
-  it("useIntakeRecords returns matching records for the type within 24h", async () => {
-    const now = Date.now();
-    await seedDatabase({
-      intakeRecords: [
-        makeIntakeRecord({ type: "sugar", amount: 30, timestamp: now - HOUR }),
-        makeIntakeRecord({ type: "water", amount: 250, timestamp: now - HOUR }),
-      ],
-    });
-
-    const { result } = renderHook(() => useIntakeRecords("sugar"), {
-      wrapper: makeWrapper(),
-    });
-
-    await waitFor(() => expect(result.current).toHaveLength(1));
-    expect(result.current[0]!.type).toBe("sugar");
-    expect(result.current[0]!.amount).toBe(30);
   });
 
   it("useRecentIntakeRecords returns the 3 newest records, newest first", async () => {

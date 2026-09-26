@@ -9,7 +9,6 @@ import {
   deleteIntakeRecord,
   undoDeleteIntakeRecord,
   getTotalInLast24Hours,
-  getRecordsInLast24Hours,
   getDailyTotal,
   getRecentRecords,
   getRecordsByDateRange,
@@ -47,14 +46,6 @@ export function useDailyIntakeTotal(type: "water" | "salt" | "sugar" | "potassiu
   const dayStartHour = useSettingsStore((state) => state.dayStartHour);
   const tick = useNowTick();
   return useLiveQuery(() => getDailyTotal(type, dayStartHour), [type, dayStartHour, tick], 0);
-}
-
-/**
- * Hook to get records for a type in the last 24 hours.
- */
-export function useIntakeRecords(type: "water" | "salt" | "sugar" | "potassium") {
-  const tick = useNowTick();
-  return useLiveQuery(() => getRecordsInLast24Hours(type), [type, tick], []);
 }
 
 /**
@@ -202,14 +193,4 @@ export function usePotassiumTotalsByGroupIds(groupIds: string[]) {
     [key],
     new Map<string, number>()
   );
-}
-
-/**
- * Combined hook for both water and salt intake.
- */
-export function useAllIntake() {
-  const water = useIntake("water");
-  const salt = useIntake("salt");
-
-  return { water, salt };
 }

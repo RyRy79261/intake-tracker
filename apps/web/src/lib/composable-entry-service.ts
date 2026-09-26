@@ -454,50 +454,6 @@ export async function getEntryGroup(
   };
 }
 
-// ─── deleteSingleGroupRecord ──────────────────────────────────────────
-
-export async function deleteSingleGroupRecord(
-  table: RecordTable,
-  id: string,
-): Promise<ServiceResult<{ table: RecordTable; id: string }>> {
-  try {
-    const now = Date.now();
-    const dexieTable = db[table];
-    await db.transaction("rw", [dexieTable, db._syncQueue], async () => {
-      // Dexie's update resolves 0 for a missing id; don't queue a sync op for
-      // a row that doesn't exist.
-      const changed = await dexieTable.update(id, { deletedAt: now, updatedAt: now });
-      if (changed === 0) throw new Error("Record not found");
-      await enqueueInsideTx(table, id, "upsert");
-    });
-    schedulePush();
-    return ok({ table, id });
-  } catch (e) {
-    return err("Failed to delete single group record", e);
-  }
-}
-
-// ─── undoDeleteSingleRecord ───────────────────────────────────────────
-
-export async function undoDeleteSingleRecord(
-  table: RecordTable,
-  id: string,
-): Promise<ServiceResult<{ table: RecordTable; id: string }>> {
-  try {
-    const now = Date.now();
-    const dexieTable = db[table];
-    await db.transaction("rw", [dexieTable, db._syncQueue], async () => {
-      const changed = await dexieTable.update(id, { deletedAt: null, updatedAt: now });
-      if (changed === 0) throw new Error("Record not found");
-      await enqueueInsideTx(table, id, "upsert");
-    });
-    schedulePush();
-    return ok({ table, id });
-  } catch (e) {
-    return err("Failed to undo delete single record", e);
-  }
-}
-
 // ─── syncEatingGroup ──────────────────────────────────────────────────
 
 export type SodiumKind = "sodium" | "salt" | "msg";
@@ -1082,14 +1038,4 @@ export async function syncLiquidEntrySubstances(
   } catch (e) {
     return err("Failed to sync liquid entry substances", e);
   }
-}
-
-// ─── recalculateFromCurrentValues (stub) ──────────────────────────────
-
-export async function recalculateFromCurrentValues(
-  _groupId: string,
-): Promise<ServiceResult<void>> {
-  return err(
-    "Not implemented — deferred to Phase 13/14. Requires preset data and recalculation logic not yet available.",
-  );
 }

@@ -2,10 +2,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import {
-  useEntryGroup,
   useAddComposableEntry,
   useDeleteEntryGroup,
-  useDeleteSingleGroupRecord,
   useSyncEatingGroup,
   fetchEntryGroup,
   sodiumKindFromSource,
@@ -91,32 +89,6 @@ describe("useAddComposableEntry recovery", () => {
   });
 });
 
-describe("useEntryGroup", () => {
-  it("returns null for an undefined groupId", async () => {
-    const { result } = renderHook(() => useEntryGroup(undefined));
-    await waitFor(() => expect(result.current).toBeNull());
-  });
-
-  it("reactively returns the records belonging to a group", async () => {
-    const add = renderHook(() => useAddComposableEntry());
-    let groupId!: string;
-    await act(async () => {
-      groupId = (
-        await add.result.current(
-          { intakes: [{ type: "water", amount: 250 }] },
-          1_700_000_000_000,
-        )
-      ).groupId;
-    });
-
-    const { result } = renderHook(() => useEntryGroup(groupId));
-    await waitFor(() => {
-      expect(result.current?.intakes).toHaveLength(1);
-    });
-    expect(result.current?.intakes[0]?.amount).toBe(250);
-  });
-});
-
 describe("useDeleteEntryGroup", () => {
   it("soft-deletes every record in the group and shows an undo toast", async () => {
     const add = renderHook(() => useAddComposableEntry());
@@ -158,43 +130,6 @@ describe("useDeleteEntryGroup", () => {
     const restored = await fetchEntryGroup(groupId);
     expect(restored?.eatings).toHaveLength(1);
     expect(restored?.intakes).toHaveLength(1);
-  });
-});
-
-describe("useDeleteSingleGroupRecord", () => {
-  it("deletes one record, leaves siblings intact, and undo restores it", async () => {
-    const add = renderHook(() => useAddComposableEntry());
-    let groupId!: string;
-    let intakeId!: string;
-    await act(async () => {
-      const res = await add.result.current(
-        {
-          eating: { note: "meal" },
-          intakes: [{ type: "salt", amount: 300 }],
-        },
-        1_700_000_000_000,
-      );
-      groupId = res.groupId;
-      intakeId = res.intakeIds[0]!;
-    });
-
-    const { result } = renderHook(() => useDeleteSingleGroupRecord());
-    await act(async () => {
-      await result.current("intakeRecords", intakeId);
-    });
-
-    const group = await fetchEntryGroup(groupId);
-    expect(group?.intakes).toHaveLength(0);
-    // Sibling eating record is untouched.
-    expect(group?.eatings).toHaveLength(1);
-
-    expect(undoToastCalls).toHaveLength(1);
-    expect(undoToastCalls[0]?.title).toBe("Record deleted");
-
-    await act(async () => {
-      await undoToastCalls[0]!.onUndo();
-    });
-    expect((await fetchEntryGroup(groupId))?.intakes).toHaveLength(1);
   });
 });
 

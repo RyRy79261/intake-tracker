@@ -8,9 +8,6 @@ import {
   deleteEntryGroup,
   undoDeleteEntryGroup,
   getEntryGroup,
-  deleteSingleGroupRecord,
-  undoDeleteSingleRecord,
-  recalculateFromCurrentValues,
   syncLiquidEntrySubstances,
   classifyLiquidDelete,
   deleteEatingEntry,
@@ -464,125 +461,6 @@ describe("composable-entry-service", () => {
     });
   });
 
-  // ─── deleteSingleGroupRecord ────────────────────────────────────────
-
-  describe("deleteSingleGroupRecord", () => {
-    it("Test 21: soft-deletes a single intake record, leaving other group members intact", async () => {
-      const { eatingId, intakeIds } = await seedComposableGroup({
-        eating: { note: "Keep eating" },
-        intakes: [{ type: "water", amount: 200 }, { type: "salt", amount: 300 }],
-      });
-
-      const result = await deleteSingleGroupRecord("intakeRecords", intakeIds[0]!);
-      expect(result.success).toBe(true);
-      if (!result.success) return;
-      expect(result.data.table).toBe("intakeRecords");
-      expect(result.data.id).toBe(intakeIds[0]);
-
-      // Deleted record
-      const deleted = await db.intakeRecords.get(intakeIds[0]!);
-      expect(deleted?.deletedAt).toBeTypeOf("number");
-
-      // Other group members intact
-      const eating = await db.eatingRecords.get(eatingId!);
-      expect(eating?.deletedAt).toBeNull();
-
-      const otherIntake = await db.intakeRecords.get(intakeIds[1]!);
-      expect(otherIntake?.deletedAt).toBeNull();
-    });
-
-    it("Test 22: soft-deletes a single eating record, leaving other group members intact", async () => {
-      const { eatingId, intakeIds } = await seedComposableGroup({
-        eating: { note: "Delete just me" },
-        intakes: [{ type: "water", amount: 100 }],
-      });
-
-      const result = await deleteSingleGroupRecord("eatingRecords", eatingId!);
-      expect(result.success).toBe(true);
-
-      const eating = await db.eatingRecords.get(eatingId!);
-      expect(eating?.deletedAt).toBeTypeOf("number");
-
-      const intake = await db.intakeRecords.get(intakeIds[0]!);
-      expect(intake?.deletedAt).toBeNull();
-    });
-
-    it("Test 23: soft-deletes a single substance record, leaving other group members intact", async () => {
-      const { eatingId, substanceId } = await seedComposableGroup({
-        eating: { note: "Still here" },
-        substance: { type: "caffeine", amountMg: 95, description: "Espresso" },
-      });
-
-      const result = await deleteSingleGroupRecord("substanceRecords", substanceId!);
-      expect(result.success).toBe(true);
-
-      const substance = await db.substanceRecords.get(substanceId!);
-      expect(substance?.deletedAt).toBeTypeOf("number");
-
-      const eating = await db.eatingRecords.get(eatingId!);
-      expect(eating?.deletedAt).toBeNull();
-    });
-
-    it("Test 24: returns ok with the deleted record's table and id", async () => {
-      const { intakeIds } = await seedComposableGroup({
-        intakes: [{ type: "water", amount: 200 }],
-      });
-
-      const result = await deleteSingleGroupRecord("intakeRecords", intakeIds[0]!);
-      expect(result.success).toBe(true);
-      if (!result.success) return;
-      expect(result.data).toEqual({ table: "intakeRecords", id: intakeIds[0] });
-    });
-  });
-
-  // ─── undoDeleteSingleRecord ─────────────────────────────────────────
-
-  describe("undoDeleteSingleRecord", () => {
-    it("Test 25: restores a single soft-deleted intake record, other group members unchanged", async () => {
-      const { eatingId, intakeIds } = await seedComposableGroup({
-        eating: { note: "Untouched" },
-        intakes: [{ type: "water", amount: 200 }],
-      });
-
-      // Delete then undo
-      await deleteSingleGroupRecord("intakeRecords", intakeIds[0]!);
-      const result = await undoDeleteSingleRecord("intakeRecords", intakeIds[0]!);
-      expect(result.success).toBe(true);
-
-      const intake = await db.intakeRecords.get(intakeIds[0]!);
-      expect(intake?.deletedAt).toBeNull();
-
-      // Eating was never touched
-      const eating = await db.eatingRecords.get(eatingId!);
-      expect(eating?.deletedAt).toBeNull();
-    });
-
-    it("Test 26: restores a single soft-deleted eating record", async () => {
-      const { eatingId } = await seedComposableGroup({
-        eating: { note: "Restore me" },
-      });
-
-      await deleteSingleGroupRecord("eatingRecords", eatingId!);
-      const result = await undoDeleteSingleRecord("eatingRecords", eatingId!);
-      expect(result.success).toBe(true);
-
-      const eating = await db.eatingRecords.get(eatingId!);
-      expect(eating?.deletedAt).toBeNull();
-    });
-
-    it("Test 27: returns ok with the restored record's table and id", async () => {
-      const { intakeIds } = await seedComposableGroup({
-        intakes: [{ type: "water", amount: 150 }],
-      });
-
-      await deleteSingleGroupRecord("intakeRecords", intakeIds[0]!);
-      const result = await undoDeleteSingleRecord("intakeRecords", intakeIds[0]!);
-      expect(result.success).toBe(true);
-      if (!result.success) return;
-      expect(result.data).toEqual({ table: "intakeRecords", id: intakeIds[0] });
-    });
-  });
-
   // ─── multi-substance entries ────────────────────────────────────────
 
   describe("multi-substance entries", () => {
@@ -685,8 +563,6 @@ describe("composable-entry-service", () => {
       expect(result.data.substanceIds).toHaveLength(1);
     });
   });
-
-  // ─── recalculateFromCurrentValues (stub) ────────────────────────────
 
   describe("syncLiquidEntrySubstances", () => {
     it("creates caffeine substance + groupId when entry has none", async () => {
@@ -844,25 +720,6 @@ describe("composable-entry-service", () => {
 
       const updated = await db.intakeRecords.get(intake.id);
       expect(updated?.groupId).toBeUndefined();
-    });
-  });
-
-  describe("recalculateFromCurrentValues", () => {
-    it("Test 28: returns err with 'Not implemented' message and no side effects", async () => {
-      const { groupId } = await seedComposableGroup({
-        eating: { note: "No recalc" },
-        intakes: [{ type: "water", amount: 100 }],
-      });
-
-      const result = await recalculateFromCurrentValues(groupId);
-      expect(result.success).toBe(false);
-      if (result.success) return;
-      expect(result.error).toContain("Not implemented");
-
-      // Verify no side effects — records unchanged
-      const group = await getEntryGroup(groupId);
-      expect(group!.eatings).toHaveLength(1);
-      expect(group!.intakes).toHaveLength(1);
     });
   });
 
@@ -1322,15 +1179,6 @@ describe("composable-entry-service", () => {
       for (const id of meal.data.intakeIds) {
         expect((await db.intakeRecords.get(id))!.timestamp).toBe(newTs);
       }
-    });
-  });
-
-  describe("single-record helpers check the row exists", () => {
-    it("returns an error and queues nothing for a missing id", async () => {
-      const before = await db._syncQueue.count();
-      expect((await deleteSingleGroupRecord("intakeRecords", "nope")).success).toBe(false);
-      expect((await undoDeleteSingleRecord("intakeRecords", "nope")).success).toBe(false);
-      expect(await db._syncQueue.count()).toBe(before);
     });
   });
 });

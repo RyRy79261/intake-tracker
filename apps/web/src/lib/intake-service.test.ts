@@ -9,7 +9,6 @@ import {
   getRecentRecords,
   getAllRecords,
   getRecordsPaginated,
-  getRecordsByCursor,
   getRecordsByDateRange,
   undoDeleteIntakeRecord,
 } from "@/lib/intake-service";
@@ -114,20 +113,6 @@ describe("intake-service soft-delete", () => {
     expect(result.total).toBe(2);
     const ids = result.records.map(r => r.id);
     expect(ids).not.toContain("page-del");
-  });
-
-  it("getRecordsByCursor excludes soft-deleted records", async () => {
-    await db.intakeRecords.add(makeIntakeRecord({ id: "cursor-1", timestamp: now }));
-    await db.intakeRecords.add(makeIntakeRecord({ id: "cursor-2", timestamp: now - 1000 }));
-    await db.intakeRecords.add(makeIntakeRecord({ id: "cursor-del", timestamp: now - 500 }));
-
-    await deleteIntakeRecord("cursor-del");
-
-    const result = await getRecordsByCursor(undefined, 20);
-    const ids = result.records.map(r => r.id);
-    expect(ids).not.toContain("cursor-del");
-    expect(ids).toContain("cursor-1");
-    expect(ids).toContain("cursor-2");
   });
 
   it("getRecordsByDateRange excludes soft-deleted records", async () => {
