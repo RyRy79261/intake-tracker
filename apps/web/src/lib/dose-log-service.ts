@@ -1,7 +1,7 @@
 import { db, type DoseLog, type DoseStatus } from "@/lib/db";
 import type { UpdateSpec } from "dexie";
 import { ok, err } from "@intake/core/service";
-import { isValidPillStrength } from "@intake/core/compound";
+import { isCleanFraction, isValidPillStrength } from "@intake/core/compound";
 import type { ServiceResult } from "@intake/types/service";
 import { syncFields } from "@/lib/utils";
 import { getDeviceTimezone } from "@/lib/timezone";
@@ -89,17 +89,9 @@ export function calculatePillsConsumed(doseMg: number, pillStrengthMg: number): 
   return Math.round(raw * 10000) / 10000;
 }
 
-/**
- * Check whether a fractional pill amount is a "clean" fraction.
- * Clean fractions: whole numbers, 0.25, 0.333, 0.5, 0.667, 0.75
- * Uses 0.01 tolerance for floating-point comparison.
- */
-export function isCleanFraction(pillsConsumed: number): boolean {
-  const frac = Math.abs(pillsConsumed % 1);
-  if (frac < 0.01) return true; // whole number
-  const cleanFractions = [0.25, 0.333, 0.5, 0.667, 0.75];
-  return cleanFractions.some(cf => Math.abs(frac - cf) < 0.01);
-}
+// Lives in @intake/core/compound so components can use it without importing
+// this service; re-exported for existing callers.
+export { isCleanFraction };
 
 // ---------------------------------------------------------------------------
 // Scheduled dose identity

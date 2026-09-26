@@ -36,7 +36,7 @@ import {
   usePrescriptions,
   useSchedulesForPhase,
 } from "@/hooks/use-medication-queries";
-import { isActiveBrand } from "@/lib/inventory-service";
+import { findActiveBrand } from "@/lib/dose-preview";
 import type { MedicationPhase, TitrationPlan } from "@/lib/db";
 import { cn } from "@/lib/utils";
 import { DAY_LABELS_LONG } from "@/components/medications/titrations/types";
@@ -293,7 +293,7 @@ function PhaseEntryRow({ phase }: { phase: MedicationPhase }) {
   const rx = prescriptions.find((p) => p.id === phase.prescriptionId);
   // Combination doses are labelled from the active brand's tablets; with no
   // combo brand stocked the summed dose is shown.
-  const activeBrand = inventoryItems.find(isActiveBrand);
+  const activeBrand = findActiveBrand(inventoryItems);
 
   return (
     <div className="p-2.5 rounded-lg bg-muted/30 border border-border/40">

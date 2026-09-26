@@ -34,6 +34,18 @@ export function isValidPillStrength(strength: unknown): strength is number {
 }
 
 /**
+ * Check whether a fractional pill amount is a "clean" fraction.
+ * Clean fractions: whole numbers, 0.25, 0.333, 0.5, 0.667, 0.75
+ * Uses 0.01 tolerance for floating-point comparison.
+ */
+export function isCleanFraction(pillsConsumed: number): boolean {
+  const frac = Math.abs(pillsConsumed % 1);
+  if (frac < 0.01) return true; // whole number
+  const cleanFractions = [0.25, 0.333, 0.5, 0.667, 0.75];
+  return cleanFractions.some(cf => Math.abs(frac - cf) < 0.01);
+}
+
+/**
  * Split a summed mg dose into its per-compound amounts, preserving the
  * reference ratio. Marketed strengths don't share one exact ratio (24/26,
  * 49/51, 97/103), so the result can name amounts no tablet contains — prefer
