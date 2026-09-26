@@ -97,12 +97,23 @@ export const substanceRecordSchema = baseRecord
   })
   .passthrough();
 
+/**
+ * Per-compound breakdown of a combination tablet. The strengths feed dose
+ * labels and pill math, so each must be a real number (a hand-edited backup
+ * could carry `"49"` or `1e999`, which parses to Infinity).
+ */
+const compoundsSchema = z
+  .array(z.object({ name: z.string(), strength: finiteNumber }).passthrough())
+  .nullable()
+  .optional();
+
 export const prescriptionSchema = baseRecordNoTz
   .extend({
     genericName: z.string(),
     // Optional since 2026-09 (audit sync-engine#10); pulled rows carry null.
     indication: z.string().nullable().optional(),
     isActive: z.boolean(),
+    compounds: compoundsSchema,
   })
   .passthrough();
 
@@ -125,6 +136,10 @@ export const inventoryItemSchema = baseRecord
   .extend({
     prescriptionId: z.string(),
     brandName: z.string(),
+    // The pill-math denominator (gap-combo-drugs-pill-math#8). Optional so an
+    // old backup without it still imports; dose math skips a missing strength.
+    strength: finiteNumber.optional(),
+    compounds: compoundsSchema,
   })
   .passthrough();
 
