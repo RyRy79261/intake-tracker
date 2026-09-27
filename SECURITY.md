@@ -40,35 +40,32 @@ API routes use auth middleware from `src/lib/auth-middleware.ts` to validate the
 
 ## Encryption Model
 
-### Primitives (src/lib/crypto.ts)
+The app does not encrypt user data itself. There is no PIN-based encryption,
+no field-level encryption and no encrypted backup format.
 
-- **Algorithm:** AES-GCM (authenticated encryption)
-- **Key derivation:** PBKDF2 with SHA-256, 100,000 iterations
-- **Key length:** 256 bits
-- **IV:** 96-bit random per encryption
-- **Salt:** 128-bit random per encryption
+### Backups
 
-The user's PIN is the passphrase for key derivation. Encryption strength depends on PIN complexity.
+`src/lib/backup-service.ts` exports and imports **plain JSON** backups. A
+backup file holds the user's health and medication records in clear text;
+keep it somewhere only the user can read. `importBackup(file)` refuses a file
+marked `encrypted: true` (a format from an earlier, never-exposed code path)
+with a clear error instead of importing it.
 
-### useEncryptedField Hook
+The earlier `exportEncryptedBackup` / `importEncryptedBackup` functions and
+their AES-GCM/PBKDF2 helpers (`src/lib/crypto.ts`) were removed: nothing in
+the UI ever called them.
 
-`src/hooks/use-encrypted-field.ts` provides a React hook wrapping `encrypt`/`decrypt` for field-level encryption. This hook is built but not wired to any Dexie tables -- it is available for future use when specific fields require encryption at rest.
+### In transit
 
-### Encrypted Backups
-
-`src/lib/backup-service.ts` supports optional encrypted export/import:
-
-- `exportEncryptedBackup(pin)` -- encrypts the full backup JSON with the user's PIN
-- `importEncryptedBackup(file, pin)` -- decrypts and imports an encrypted backup
-- `importBackup(file)` -- auto-detects encrypted format and returns an informative error directing to `importEncryptedBackup()`
-
-The encrypted backup format wraps the payload in an `EncryptedBackup` envelope: `{ encrypted: true, payload: EncryptedData, version: number }`.
+Sync (`/api/sync/*`) and every other API call run over HTTPS. In cloud-sync
+mode the records are also stored server-side in Neon Postgres; the app adds
+no encryption of its own there.
 
 ## Data at Rest
 
 - **IndexedDB is NOT encrypted.** All record data is stored in plaintext in the browser's IndexedDB. This is a deliberate tradeoff: `useLiveQuery` requires direct IndexedDB queries, which are incompatible with transparent encryption.
 - **Access control is the primary protection.** Neon Auth prevents unauthorized access to the app.
-- **Field-level encryption is available but not wired.** The `useEncryptedField` hook and `crypto.ts` primitives exist for future use on specific sensitive fields, but no fields are currently encrypted.
+- **No field-level encryption.** No record field is encrypted on the device.
 
 ## Content Security Policy
 

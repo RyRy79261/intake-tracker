@@ -7,7 +7,8 @@ import {
 import { ok, err } from "@intake/core/service";
 import type { ServiceResult } from "@intake/types/service";
 import { baseSyncFields } from "@/lib/utils";
-import { getDeviceTimezone, localHHMMStringToUTCMinutes } from "@/lib/timezone";
+import { localHHMMStringToUTCMinutes } from "@/lib/timezone";
+import { getScheduleAnchorTimezone } from "@/lib/schedule-anchor";
 import { buildAuditEntry } from "@/lib/audit-service";
 import { enqueueInsideTx } from "@/lib/sync-queue";
 import { schedulePush } from "@/lib/sync-engine";
@@ -123,23 +124,6 @@ export async function getConditionLabels(): Promise<string[]> {
   }
   return Array.from(labels).sort();
 }
-
-/**
- * Check if a prescription has an active titration phase override.
- * Returns the titration phase if one exists, undefined otherwise.
- */
-export async function getActiveTitrationPhaseForPrescription(
-  prescriptionId: string,
-): Promise<MedicationPhase | undefined> {
-  const phases = await db.medicationPhases
-    .where("prescriptionId")
-    .equals(prescriptionId)
-    .toArray();
-  return phases.find(
-    (p) => p.type === "titration" && p.status === "active" && p.titrationPlanId && isLive(p),
-  );
-}
-
 
 // ---------------------------------------------------------------------------
 // Regimen helpers
@@ -308,7 +292,7 @@ export async function createTitrationPlan(
   try {
     const now = Date.now();
     const sf = baseSyncFields();
-    const tz = getDeviceTimezone();
+    const tz = getScheduleAnchorTimezone();
 
     const plan: TitrationPlan = {
       id: crypto.randomUUID(),
@@ -411,7 +395,7 @@ export async function updateTitrationPlan(
 
     const now = Date.now();
     const sf = baseSyncFields();
-    const tz = getDeviceTimezone();
+    const tz = getScheduleAnchorTimezone();
 
     const planUpdates: Partial<Omit<TitrationPlan, "id" | "updatedAt">> = {};
     if (input.title !== undefined) planUpdates.title = input.title;

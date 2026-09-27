@@ -171,6 +171,75 @@ describe("settings-sync (audit state-settings-cache#2)", () => {
     expect((await getActiveUserSettings())!.saltLimit).toBe(1900);
   });
 
+  // Per-setting conflict resolution: the row records when each setting
+  // changed, so a merge keeps both devices' edits to different settings.
+  it("stamps only the settings an edit changed", async () => {
+    const earlier = Date.now() - 60_000;
+    const stamps = Object.fromEntries(
+      Object.keys(remoteRow()).map((k) => [k, earlier]),
+    );
+    await db.userSettings.put(remoteRow({ updatedAt: earlier, fieldUpdatedAt: stamps }));
+    dispose = installSettingsSync();
+    await settle();
+
+    useSettingsStore.getState().setWaterLimit(1500);
+    await settle();
+
+    const row = (await getActiveUserSettings())!;
+    expect(row.waterLimit).toBe(1500);
+    expect(row.fieldUpdatedAt!.waterLimit).toBe(row.updatedAt);
+    expect(row.fieldUpdatedAt!.waterLimit).toBeGreaterThan(earlier);
+    expect(row.fieldUpdatedAt!.saltLimit).toBe(earlier);
+    expect(row.fieldUpdatedAt!.dayStartHour).toBe(earlier);
+  });
+
+  it("stamps every synced setting on the first row", async () => {
+    dispose = installSettingsSync();
+    await settle();
+
+    useSettingsStore.getState().setWaterLimit(1500);
+    await settle();
+
+    const row = (await getActiveUserSettings())!;
+    expect(Object.keys(row.fieldUpdatedAt!).sort()).toEqual(
+      [
+        "waterLimit", "saltLimit", "sugarLimit", "potassiumLimit",
+        "waterExtendedBuffer", "saltExtendedBuffer", "sugarExtendedBuffer",
+        "optionalTrackers", "dayStartHour", "liquidPresets", "primaryRegion",
+        "secondaryRegion", "reminderFollowUpCount", "reminderFollowUpInterval",
+        "homeTimezone", "homeTimezoneConfirmedAt",
+      ].sort(),
+    );
+    expect(new Set(Object.values(row.fieldUpdatedAt!))).toEqual(new Set([row.updatedAt]));
+  });
+
+  it("keeps an unwritten edit newer than that setting's stamp, even under a newer row", async () => {
+    const now = Date.now();
+    // Another device edited only the water limit, just now; the sodium
+    // limit in its row dates from two minutes ago.
+    await db.userSettings.put(
+      remoteRow({
+        waterLimit: 2600,
+        saltLimit: 1500,
+        updatedAt: now,
+        fieldUpdatedAt: { waterLimit: now, saltLimit: now - 120_000 },
+      }),
+    );
+    // Last session this device changed the sodium limit a minute ago; the
+    // table write never happened.
+    useSettingsStore.setState({ saltLimit: 1900 });
+    localStorage.setItem(SETTINGS_EDITED_AT_KEY, JSON.stringify({ saltLimit: now - 60_000 }));
+
+    dispose = installSettingsSync();
+    await settle();
+
+    expect(useSettingsStore.getState().saltLimit).toBe(1900);
+    expect(useSettingsStore.getState().waterLimit).toBe(2600);
+    const row = (await getActiveUserSettings())!;
+    expect(row.saltLimit).toBe(1900);
+    expect(row.waterLimit).toBe(2600);
+  });
+
   it("records when a synced setting was last edited on this device", async () => {
     dispose = installSettingsSync();
     await settle();

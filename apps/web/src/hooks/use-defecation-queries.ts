@@ -11,12 +11,15 @@ import {
   undoDeleteDefecationRecord,
 } from "@/lib/defecation-service";
 import { unwrap } from "@intake/core/service";
+import type { HealthRecordSource } from "@/lib/db";
 import { useUndoDeleteMutation } from "@/hooks/use-undo-delete-mutation";
 
 export type AddDefecationParams = {
   timestamp?: number;
   amountEstimate?: string;
   note?: string;
+  /** How it was entered: "manual" (a form) or "voice". */
+  source?: HealthRecordSource;
 };
 
 export type UpdateDefecationParams = {
@@ -49,7 +52,8 @@ export function useAddDefecation() {
       unwrap(await addDefecationRecord(
         params.timestamp,
         params.amountEstimate,
-        params.note
+        params.note,
+        params.source
       )),
   });
 }

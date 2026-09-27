@@ -45,7 +45,6 @@ import { ok, err } from "@intake/core/service";
 import { isLive } from "@intake/core/lifecycle";
 import type { ServiceResult } from "@intake/types/service";
 import { logAudit } from "@/lib/audit";
-import { encrypt, decrypt, type EncryptedData } from "@/lib/crypto";
 import { BACKUP_VALIDATORS } from "@/lib/backup-schemas";
 import { TABLE_PUSH_ORDER, type TableName } from "@/lib/sync-topology";
 import { enqueueInsideTx } from "@/lib/sync-queue";
@@ -178,12 +177,6 @@ const NO_TIMEZONE_TABLES: ReadonlySet<TableName> = new Set<TableName>([
 type Row = Record<string, unknown> & { id: string; deletedAt?: number | null; updatedAt?: number };
 
 const CURRENT_BACKUP_VERSION = 5;
-
-export interface EncryptedBackup {
-  encrypted: true;
-  payload: EncryptedData;
-  version: number;
-}
 
 function emptyImportResult(): ImportResult {
   return {
@@ -367,78 +360,6 @@ export async function downloadBackup(): Promise<ServiceResult<void>> {
 }
 
 /**
- * Export all health data as an encrypted JSON blob.
- * The backup data is encrypted with the user's PIN using AES-GCM.
- */
-export async function exportEncryptedBackup(pin: string): Promise<Blob> {
-  const plainBlob = await exportBackup();
-  const json = await plainBlob.text();
-  const payload = await encrypt(json, pin);
-
-  const encryptedBackup: EncryptedBackup = {
-    encrypted: true,
-    payload,
-    version: CURRENT_BACKUP_VERSION,
-  };
-
-  logAudit("data_export", "Exported encrypted backup");
-
-  return new Blob([JSON.stringify(encryptedBackup, null, 2)], {
-    type: "application/json",
-  });
-}
-
-/**
- * Import an encrypted backup file using the user's PIN.
- * Decrypts the payload, then delegates to normal import logic.
- */
-export async function importEncryptedBackup(
-  file: File,
-  pin: string,
-  mode: "merge" | "replace" = "merge"
-): Promise<ServiceResult<ImportResult>> {
-  try {
-    const text = await file.text();
-    let outer: unknown;
-
-    try {
-      outer = JSON.parse(text);
-    } catch {
-      const result = emptyImportResult();
-      result.errors.push("Invalid JSON format");
-      return ok(result);
-    }
-
-    if (
-      !outer ||
-      typeof outer !== "object" ||
-      !(outer as Record<string, unknown>).encrypted
-    ) {
-      const result = emptyImportResult();
-      result.errors.push(
-        "File is not an encrypted backup. Use importBackup() for unencrypted files."
-      );
-      return ok(result);
-    }
-
-    const encryptedBackup = outer as EncryptedBackup;
-    const decryptedJson = await decrypt(encryptedBackup.payload, pin);
-
-    // Create a new File from the decrypted JSON and delegate to importBackup
-    const decryptedFile = new File([decryptedJson], file.name, {
-      type: "application/json",
-    });
-    return importBackup(decryptedFile, mode);
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unknown decryption error";
-    const result = emptyImportResult();
-    result.errors.push(message);
-    return ok(result);
-  }
-}
-
-/**
  * Validate backup data structure
  */
 function validateBackupData(data: unknown): data is BackupData {
@@ -508,6 +429,12 @@ async function writeRow(
   const written: Row = existing
     ? { ...row, updatedAt: Math.max(now, (existing.updatedAt ?? 0) + 1) }
     : row;
+  // Settings merge per setting by `fieldUpdatedAt`, not by the row's
+  // updatedAt. The backup's old stamps would make every restored setting
+  // lose to newer ones (locally on the next pull, and on the server), so a
+  // replacing settings row drops them: every setting then counts as changed
+  // at the fresh updatedAt, as a whole-row restore should.
+  if (existing && tableName === "userSettings") delete written.fieldUpdatedAt;
   await db.table<Row, string>(tableName).put(written);
   if (!existing && !isLive(written)) return false;
   await enqueueInsideTx(tableName, written.id, isLive(written) ? "upsert" : "delete");
@@ -631,14 +558,15 @@ export async function importBackup(
       return ok(result);
     }
 
-    // Detect encrypted backup and return informative error
+    // An encrypted backup: the app never offered one in its UI and can no
+    // longer read the format, so say so instead of "invalid format".
     if (
       data &&
       typeof data === "object" &&
       (data as Record<string, unknown>).encrypted === true
     ) {
       result.errors.push(
-        "This backup is encrypted. Please use importEncryptedBackup() with your PIN."
+        "This backup is encrypted, and this app cannot read encrypted backups."
       );
       return ok(result);
     }

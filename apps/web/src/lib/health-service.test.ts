@@ -485,3 +485,26 @@ describe("health-service: blood pressure pagination", () => {
     expect(page2.hasMore).toBe(false);
   });
 });
+
+// Voice provenance (audit health-records-inputs#10): the entry path is kept
+// in `source`, not written into the note.
+describe("health-service: record source", () => {
+  it("addWeightRecord stores the given source and omits it when not given", async () => {
+    const voice = await addWeightRecord(80, undefined, undefined, "voice");
+    const manual = await addWeightRecord(81, undefined, undefined, "manual");
+    const unknown = await addWeightRecord(82);
+    if (!voice.success || !manual.success || !unknown.success) throw new Error("add failed");
+    expect((await db.weightRecords.get(voice.data.id))?.source).toBe("voice");
+    expect((await db.weightRecords.get(voice.data.id))?.note).toBeUndefined();
+    expect((await db.weightRecords.get(manual.data.id))?.source).toBe("manual");
+    expect("source" in ((await db.weightRecords.get(unknown.data.id)) ?? {})).toBe(false);
+  });
+
+  it("addBloodPressureRecord stores the given source", async () => {
+    const result = await addBloodPressureRecord(
+      120, 80, "sitting", "left", undefined, undefined, undefined, undefined, "voice",
+    );
+    if (!result.success) throw new Error("add failed");
+    expect((await db.bloodPressureRecords.get(result.data.id))?.source).toBe("voice");
+  });
+});

@@ -23,7 +23,7 @@ import {
   deleteSchedule,
   getSchedulesForPhase,
 } from "@/lib/medication-schedule-service";
-import { recalculateStockForItem } from "@/lib/inventory-service";
+import { recalculateAllStock } from "@/lib/inventory-service";
 import { recalculateScheduleTimezones } from "@/lib/timezone-recalculation-service";
 import { schedulePush } from "@/lib/sync-engine";
 import { makeMedicationPhase } from "@/__tests__/fixtures/db-fixtures";
@@ -413,7 +413,7 @@ describe("Tier 2 sync-wired services", () => {
   // ── Inventory ──
 
   describe("inventory-service", () => {
-    it("recalculateStockForItem enqueues upsert for inventoryItems", async () => {
+    it("recalculateAllStock enqueues upsert for a drifted inventory item", async () => {
       const itemId = crypto.randomUUID();
       await db.inventoryItems.add({
         id: itemId,
@@ -435,12 +435,16 @@ describe("Tier 2 sync-wired services", () => {
       });
       await db._syncQueue.clear();
 
-      const stock = await recalculateStockForItem(itemId);
-      expect(stock).toBe(0);
+      const result = await recalculateAllStock();
+      expect(result.items).toEqual([
+        expect.objectContaining({ id: itemId, oldStock: 5, newStock: 0 }),
+      ]);
 
-      const queueRows = await db._syncQueue.toArray();
+      const queueRows = (await db._syncQueue.toArray()).filter(
+        (q) => q.tableName === "inventoryItems",
+      );
       expect(queueRows).toHaveLength(1);
-      expect(queueRows[0]!.tableName).toBe("inventoryItems");
+      expect(queueRows[0]!.recordId).toBe(itemId);
       expect(queueRows[0]!.op).toBe("upsert");
       expect(schedulePush).toHaveBeenCalled();
     });

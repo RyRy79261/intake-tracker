@@ -6,6 +6,8 @@
  * client, key vault, and zod request/response validation stay in apps/web.
  */
 
+import { STE_FIELD_SUFFIX, plainLanguageSection } from "./plain-language";
+
 export const SYSTEM_PROMPT = `You are a clinical pharmacist assistant. Given a patient's current medications and a substance to check, identify drug interactions. Return the results using the interaction_check_result tool.
 
 Severity levels:
@@ -15,7 +17,13 @@ Severity levels:
 
 Be precise and evidence-based. Err on the side of CAUTION when uncertain.
 
-Check the queried substance against EACH active medication. Include an entry for every medication, even if the severity is OK.`;
+Check the queried substance against EACH active medication. Include an entry for every medication, even if the severity is OK.
+
+${plainLanguageSection(
+  ["description", "drugClass", "summary"],
+  'substance names, medication names (copy each one exactly as written in the list, without the drug class in brackets), doses and units',
+)}
+In each "description", say what can happen and what to do. Example: "Both lower blood pressure. You can feel dizzy when you stand up. Check your blood pressure more often."`;
 
 export const INTERACTION_CHECK_TOOL = {
   name: "interaction_check_result" as const,
@@ -32,16 +40,29 @@ export const INTERACTION_CHECK_TOOL = {
           type: "object",
           properties: {
             substance: { type: "string" },
-            medication: { type: "string" },
+            medication: {
+              type: "string",
+              description:
+                "The medication name exactly as written in the list, without the drug class in brackets.",
+            },
             severity: { type: "string", enum: ["AVOID", "CAUTION", "OK"] },
-            description: { type: "string" },
+            description: {
+              type: "string",
+              description: "What the interaction does and what to do about it." + STE_FIELD_SUFFIX,
+            },
           },
           required: ["substance", "medication", "severity", "description"],
           additionalProperties: false,
         },
       },
-      drugClass: { type: "string", description: "Pharmacological class of the queried substance" },
-      summary: { type: "string", description: "One-line overall safety summary" },
+      drugClass: {
+        type: "string",
+        description: "The type of medicine the queried substance is and what it does, in plain words." + STE_FIELD_SUFFIX,
+      },
+      summary: {
+        type: "string",
+        description: "One-line overall safety summary." + STE_FIELD_SUFFIX,
+      },
     },
     required: ["interactions", "drugClass", "summary"],
     additionalProperties: false,

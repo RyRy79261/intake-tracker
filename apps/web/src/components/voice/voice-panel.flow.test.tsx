@@ -311,6 +311,18 @@ describe("VoicePanel commit — one drink, one fluid amount", () => {
     expect(await waterRows()).toHaveLength(1);
     const salt = await db.intakeRecords.where("type").equals("salt").toArray();
     expect(salt).toHaveLength(1);
+
+    // Provenance is the record's `source`; the note is left for a real note.
+    const health = [
+      ...(await db.bloodPressureRecords.toArray()),
+      ...(await db.weightRecords.toArray()),
+      ...(await db.urinationRecords.toArray()),
+      ...(await db.defecationRecords.toArray()),
+    ];
+    for (const record of health) {
+      expect(record.source).toBe("voice");
+      expect(record.note).toBeUndefined();
+    }
   });
 });
 

@@ -127,3 +127,13 @@ describe("urination-service", () => {
     });
   });
 });
+
+describe("urination-service: record source", () => {
+  it("stores the given source and omits it when not given", async () => {
+    const given = await addUrinationRecord(1000, "small", undefined, "voice");
+    const unknown = await addUrinationRecord(2000);
+    if (!given.success || !unknown.success) throw new Error("add failed");
+    expect((await db.urinationRecords.get(given.data.id))?.source).toBe("voice");
+    expect("source" in ((await db.urinationRecords.get(unknown.data.id)) ?? {})).toBe(false);
+  });
+});
