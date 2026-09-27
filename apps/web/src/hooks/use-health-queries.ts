@@ -15,6 +15,7 @@ import {
   undoDeleteBloodPressureRecord,
 } from "@/lib/health-service";
 import { unwrap } from "@intake/core/service";
+import type { HealthRecordSource } from "@/lib/db";
 import { useUndoDeleteMutation } from "@/hooks/use-undo-delete-mutation";
 
 // ============================================================================
@@ -25,6 +26,8 @@ export type AddWeightParams = {
   weight: number;
   timestamp?: number;
   note?: string;
+  /** How it was entered: "manual" (a form) or "voice". */
+  source?: HealthRecordSource;
 };
 
 // `null` on an optional field is an explicit clear (it must reach the server).
@@ -46,6 +49,8 @@ export type AddBloodPressureParams = {
   irregularHeartbeat?: boolean;
   timestamp?: number;
   note?: string;
+  /** How it was entered: "manual" (a form) or "voice". */
+  source?: HealthRecordSource;
 };
 
 export type UpdateBloodPressureParams = {
@@ -89,7 +94,7 @@ export function useLatestWeight() {
 export function useAddWeight() {
   return useMutation({
     mutationFn: async (params: AddWeightParams) =>
-      unwrap(await addWeightRecord(params.weight, params.timestamp, params.note)),
+      unwrap(await addWeightRecord(params.weight, params.timestamp, params.note, params.source)),
   });
 }
 
@@ -145,7 +150,8 @@ export function useAddBloodPressure() {
         params.heartRate,
         params.timestamp,
         params.note,
-        params.irregularHeartbeat
+        params.irregularHeartbeat,
+        params.source
       )),
   });
 }

@@ -24,16 +24,22 @@
  *
  * Conflicts
  * ---------
- * Whole-row last-write-wins, the sync engine's rule for every table: the row
- * with the newest `updatedAt` is the user's settings. Two devices editing
- * different settings while both offline keep only the later device's row.
- * Locally, keys edited on this device but not yet written are kept when a
- * newer row is adopted (they are merged over it and written back).
+ * Per setting, not per row. Each row carries `fieldUpdatedAt`: when each
+ * setting last changed. Every write stamps the settings it changed and keeps
+ * the other stamps (stampChangedSettings). The push route and the pull merge
+ * two versions of the row setting by setting (lib/settings-merge.ts), so two
+ * devices editing different settings while both offline both keep their
+ * edit; the same setting edited on both resolves to the later edit. Rows
+ * without stamps (older clients) count every setting as changed at their
+ * `updatedAt`. Locally, keys edited on this device but not yet written are
+ * kept when a newer row is adopted (they are merged over it and written
+ * back).
  *
  * An edit the store saved but the table never received (the app closed
  * first) is recognised on the next start by the per-key stamps in
- * SETTINGS_EDITED_AT_KEY: each key whose stamp is newer than the row keeps
- * its local value and is written; every other key takes the row's value.
+ * SETTINGS_EDITED_AT_KEY: each key whose local stamp is newer than that
+ * setting's stamp in the row keeps its local value and is written; every
+ * other key takes the row's value.
  *
  * First run
  * ---------
@@ -58,6 +64,7 @@ import { writeWithSync } from "@/lib/sync-queue";
 import { schedulePush } from "@/lib/sync-engine";
 import { getSyncAccountId } from "@/lib/sync-account";
 import { generateId, getDeviceId } from "@/lib/utils";
+import { settingStamp, stampChangedSettings } from "@/lib/settings-merge";
 
 /** The settings that live in the synced `userSettings` row. */
 export const SYNCED_SETTING_KEYS = [
@@ -216,7 +223,13 @@ export function settingsFromRow(
 /** Build a `userSettings` row holding `values`. */
 export function buildUserSettingsRow(
   values: SyncedSettings,
-  opts: { id?: string | undefined; createdAt?: number | undefined; updatedAt: number },
+  opts: {
+    id?: string | undefined;
+    createdAt?: number | undefined;
+    updatedAt: number;
+    /** Per-setting change stamps; omitted = every setting at `updatedAt`. */
+    fieldUpdatedAt?: Record<string, number> | undefined;
+  },
 ): UserSettings {
   const now = Date.now();
   return {
@@ -225,6 +238,7 @@ export function buildUserSettingsRow(
     id: opts.id ?? getSyncAccountId() ?? generateId(),
     ...values,
     liquidPresets: values.liquidPresets as unknown as SyncedLiquidPreset[],
+    ...(opts.fieldUpdatedAt !== undefined && { fieldUpdatedAt: opts.fieldUpdatedAt }),
     createdAt: opts.createdAt ?? now,
     updatedAt: opts.updatedAt,
     deletedAt: null,
@@ -390,6 +404,9 @@ export function installSettingsSync(): () => void {
       id: existing?.id,
       createdAt: existing?.createdAt,
       updatedAt,
+      // The settings this write changes are stamped now; the others keep
+      // the row's stamps, so a merge does not mistake them for new edits.
+      fieldUpdatedAt: stampChangedSettings(existing, values, updatedAt),
     });
     lastSeen = versionOf(row);
     await writeWithSync("userSettings", "upsert", async () => {
@@ -423,10 +440,15 @@ export function installSettingsSync(): () => void {
     if (row) {
       const local = pickSyncedSettings(useSettingsStore.getState());
       const incoming = settingsFromRow(row);
-      // Keys edited here after the row was written: those values are newer.
+      // Keys edited here after the row last changed them: those values are
+      // newer.
       for (const [key, value] of Object.entries(incoming)) {
         const stamp = editedAt[key as SyncedSettingKey];
-        if (stamp !== undefined && stamp > row.updatedAt && !same(local[key as SyncedSettingKey], value)) {
+        if (
+          stamp !== undefined &&
+          stamp > settingStamp(row, key) &&
+          !same(local[key as SyncedSettingKey], value)
+        ) {
           dirty.add(key as SyncedSettingKey);
         }
       }

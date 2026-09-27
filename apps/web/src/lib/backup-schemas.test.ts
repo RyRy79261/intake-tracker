@@ -332,6 +332,36 @@ describe("backup-schemas: 2026-09 schema additions", () => {
     ).toBe(true);
   });
 
+  // Voice provenance: weight, BP, urination and defecation rows carry an
+  // optional `source` ("manual" | "voice"); older rows have none.
+  it("accepts health records with, without or with a null source", () => {
+    const cases: Array<[BackupTableName, Record<string, unknown>]> = [
+      ["weightRecords", makeWeightRecord() as unknown as Record<string, unknown>],
+      ["bloodPressureRecords", makeBloodPressureRecord() as unknown as Record<string, unknown>],
+      ["urinationRecords", makeUrinationRecord() as unknown as Record<string, unknown>],
+      ["defecationRecords", makeDefecationRecord() as unknown as Record<string, unknown>],
+    ];
+    for (const [table, base] of cases) {
+      expect(BACKUP_VALIDATORS[table](base)).toBe(true);
+      expect(BACKUP_VALIDATORS[table]({ ...base, source: "voice" })).toBe(true);
+      expect(BACKUP_VALIDATORS[table]({ ...base, source: "manual" })).toBe(true);
+      expect(BACKUP_VALIDATORS[table]({ ...base, source: null })).toBe(true);
+      expect(BACKUP_VALIDATORS[table]({ ...base, source: 5 })).toBe(false);
+    }
+  });
+
+  it("accepts per-setting change stamps on a settings row and rejects bad ones", () => {
+    const base = makeUserSettings();
+    expect(BACKUP_VALIDATORS.userSettings(base)).toBe(true);
+    expect(
+      BACKUP_VALIDATORS.userSettings({ ...base, fieldUpdatedAt: { waterLimit: 5 } }),
+    ).toBe(true);
+    expect(BACKUP_VALIDATORS.userSettings({ ...base, fieldUpdatedAt: null })).toBe(true);
+    expect(
+      BACKUP_VALIDATORS.userSettings({ ...base, fieldUpdatedAt: { waterLimit: "x" } }),
+    ).toBe(false);
+  });
+
   it("rejects an unknown sodium source or unit", () => {
     const base = makeIntakeRecord({ type: "salt", amount: 786 });
     expect(BACKUP_VALIDATORS.intakeRecords({ ...base, sodiumSource: "potash" })).toBe(false);

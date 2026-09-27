@@ -549,22 +549,6 @@ export async function restoreInventoryTransaction(id: string): Promise<ServiceRe
 // ---------------------------------------------------------------------------
 
 /**
- * Recalculate and persist stock for a single inventory item.
- * Derives from transactions, then refreshes the cached currentStock field.
- */
-export async function recalculateStockForItem(inventoryItemId: string): Promise<number> {
-  let derivedValue = 0;
-  await db.transaction("rw", [db.inventoryItems, db.inventoryTransactions, db._syncQueue], async () => {
-    const item = await db.inventoryItems.get(inventoryItemId);
-    derivedValue = item
-      ? (await refreshCachedStock(item, Date.now())).stock
-      : await deriveStock(inventoryItemId);
-  });
-  schedulePush();
-  return derivedValue;
-}
-
-/**
  * Recalculate stock for every live inventory item. Only items whose cached
  * value drifted from the ledger are rewritten (and pushed); an audit entry is
  * written only when something drifted, so a clean launch writes nothing.

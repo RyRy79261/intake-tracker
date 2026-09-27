@@ -6,6 +6,8 @@
  * client, key vault, and zod request/response validation stay in apps/web.
  */
 
+import { STE_FIELD_SUFFIX, plainLanguageSection } from "./plain-language";
+
 /**
  * Per-entry caps shared by the request validator (apps/web nutrient-analysis
  * route) and the client that builds the payload (nutrient-analysis-card).
@@ -45,7 +47,12 @@ Personalisation:
 - Reference the relevant condition or medication by name in the finding's detail when it changes your read of a nutrient. Keep it factual ("with [condition], a high-potassium pattern is more notable"), never prescriptive.
 - If conditions or medications are absent, do NOT speculate about them.
 
-If the input is too sparse or off-topic to analyze, return a single finding with status "balanced" explaining that.`;
+If the input is too sparse or off-topic to analyze, return a single finding with status "balanced" explaining that.
+
+${plainLanguageSection(
+  ["summary", "detail", "caveats"],
+  "nutrient names, food names, medication names, numbers and units",
+)}`;
 
 export const NUTRIENT_ANALYSIS_TOOL = {
   name: "report_nutrient_analysis" as const,
@@ -55,7 +62,7 @@ export const NUTRIENT_ANALYSIS_TOOL = {
     properties: {
       summary: {
         type: "string",
-        description: "2-4 sentence plain-language overview of nutrient patterns observed.",
+        description: "2-4 sentence plain-language overview of nutrient patterns observed." + STE_FIELD_SUFFIX,
       },
       findings: {
         type: "array",
@@ -65,7 +72,10 @@ export const NUTRIENT_ANALYSIS_TOOL = {
           properties: {
             nutrient: { type: "string" },
             status: { type: "string", enum: ["high", "low", "balanced"] },
-            detail: { type: "string" },
+            detail: {
+              type: "string",
+              description: "1-3 sentences on why this nutrient was flagged, naming the foods eaten." + STE_FIELD_SUFFIX,
+            },
             exampleFoods: {
               type: "array",
               items: { type: "string" },
@@ -79,7 +89,7 @@ export const NUTRIENT_ANALYSIS_TOOL = {
       caveats: {
         type: "array",
         items: { type: "string" },
-        description: "0-3 short caveats about data quality (e.g. missing portion sizes, sparse log).",
+        description: "0-3 short caveats about data quality (e.g. missing portion sizes, sparse log)." + STE_FIELD_SUFFIX,
       },
     },
     required: ["summary", "findings", "caveats"],

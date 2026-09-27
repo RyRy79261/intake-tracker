@@ -41,7 +41,8 @@
  */
 
 import { db, type SyncQueueRow } from "@/lib/db";
-import { ackIfUnchanged, getQueueDepth } from "@/lib/sync-queue";
+import { ackIfUnchanged, enqueueInsideTx, getQueueDepth } from "@/lib/sync-queue";
+import { mergeSettingsRows, type SettingsRowLike } from "@/lib/settings-merge";
 import { TABLE_PUSH_ORDER, type TableName } from "@/lib/sync-topology";
 import { normalizeRowForPush } from "@/lib/sync-column-types";
 import {
@@ -696,6 +697,30 @@ function pulledRowWins(
 }
 
 /**
+ * What a pulled settings row does to the local copy. Settings merge per
+ * setting (lib/settings-merge.ts, the push route's rule with the server as
+ * base): the local row takes every setting the server changed more recently
+ * and keeps its own newer ones. `write` is the merged row, or null when the
+ * server has nothing newer; `pushLocal` is true when the local row holds
+ * edits the server lacks. A tombstone on either side falls back to LWW.
+ */
+function mergePulledSettings(
+  pulled: PulledRow,
+  local: PulledRow | undefined,
+): { write: PulledRow | null; pushLocal: boolean } | null {
+  if (!local || pulled.deletedAt != null || local.deletedAt != null) return null;
+  const merge = mergeSettingsRows(
+    pulled as SettingsRowLike,
+    local as SettingsRowLike,
+  );
+  const pushLocal = merge.incomingWins.length > 0;
+  if (merge.baseWins.length === 0) return { write: null, pushLocal };
+  // A version the local row never had, so the settings mirror applies it.
+  const updatedAt = Math.max(pulled.updatedAt ?? 0, (local.updatedAt ?? 0) + 1);
+  return { write: { ...merge.row, updatedAt } as PulledRow, pushLocal };
+}
+
+/**
  * Apply one table's pulled page and advance its cursor, atomically. Returns
  * the number of rows written.
  */
@@ -721,10 +746,20 @@ async function applyPulledRows(
         .anyOf(ids.map((id) => [tn, id]))
         .toArray();
       const pendingIds = new Set(pending.map((q) => q.recordId));
-      const winners = rows.filter((row, i) =>
-        pulledRowWins(row, locals[i], pendingIds.has(row.id)),
-      );
+      const winners: PulledRow[] = [];
+      const toPush: string[] = [];
+      rows.forEach((row, i) => {
+        const merged = tn === "userSettings" ? mergePulledSettings(row, locals[i]) : null;
+        if (merged) {
+          if (merged.write) winners.push(merged.write);
+          if (merged.pushLocal && !pendingIds.has(row.id)) toPush.push(row.id);
+          return;
+        }
+        if (pulledRowWins(row, locals[i], pendingIds.has(row.id))) winners.push(row);
+      });
       if (winners.length > 0) await db.table(tn).bulkPut(winners);
+      for (const id of toPush) await enqueueInsideTx(tn, id, "upsert");
+      if (toPush.length > 0) schedulePush();
       await db._syncMeta.put({
         tableName: tn,
         lastPulledUpdatedAt: cursor.updatedAt,

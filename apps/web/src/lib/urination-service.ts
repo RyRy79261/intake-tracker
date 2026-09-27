@@ -1,4 +1,4 @@
-import { db, type UrinationRecord } from "@/lib/db";
+import { db, type UrinationRecord, type HealthRecordSource } from "@/lib/db";
 import { ok, err } from "@intake/core/service";
 import type { ServiceResult } from "@intake/types/service";
 import { generateId, syncFields } from "@/lib/utils";
@@ -15,7 +15,9 @@ import {
 export async function addUrinationRecord(
   timestamp?: number,
   amountEstimate?: string,
-  note?: string
+  note?: string,
+  /** How it was entered ("manual" form or "voice"); omitted = unknown. */
+  source?: HealthRecordSource
 ): Promise<ServiceResult<UrinationRecord>> {
   try {
     const trimmedAmount = amountEstimate?.trim();
@@ -25,6 +27,7 @@ export async function addUrinationRecord(
       timestamp: timestamp ?? Date.now(),
       ...(trimmedAmount !== undefined && trimmedAmount !== "" && { amountEstimate: trimmedAmount }),
       ...(trimmedNote !== undefined && trimmedNote !== "" && { note: trimmedNote }),
+      ...(source !== undefined && { source }),
       ...syncFields(),
     };
 

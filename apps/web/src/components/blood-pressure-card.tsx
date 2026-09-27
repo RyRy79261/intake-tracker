@@ -179,6 +179,7 @@ export function BloodPressureCard() {
         ...(irregularHeartbeat && { irregularHeartbeat: true as const }),
         ...(timestamp !== undefined && { timestamp }),
         ...(trimmedNote !== "" && { note: trimmedNote }),
+        source: "manual",
       });
       toast({
         title: "Blood pressure recorded",
