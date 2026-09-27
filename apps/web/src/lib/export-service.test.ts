@@ -45,6 +45,7 @@ import { db } from "@/lib/db";
 import {
   makeIntakeRecord,
   makeWeightRecord,
+  makeDefecationRecord,
   makeBloodPressureRecord,
   makeSubstanceRecord,
   makeUrinationRecord,
@@ -274,9 +275,30 @@ describe("exportAllRecordsCSV (real Dexie data)", () => {
     await exportAllRecordsCSV(WIDE);
     const bp = section(await capturedCSV(), "Blood pressure");
     expect(bp[0]).toBe(
-      "timestamp,local_time,systolic,diastolic,heart_rate,irregular_heartbeat,position,arm,note",
+      "timestamp,local_time,systolic,diastolic,heart_rate,irregular_heartbeat,position,arm,note,source",
     );
-    expect(bp[1]).toMatch(/,142,91,70,[^,]*,sitting,left,after walk$/);
+    expect(bp[1]).toMatch(/,142,91,70,[^,]*,sitting,left,after walk,$/);
+  });
+
+  it("exports how each health record was entered", async () => {
+    await db.weightRecords.add(makeWeightRecord({ weight: 70, source: "voice", timestamp: BASE_TS }));
+    await db.urinationRecords.add(
+      makeUrinationRecord({ amountEstimate: "small", source: "manual", timestamp: BASE_TS }),
+    );
+    await db.defecationRecords.add(
+      makeDefecationRecord({ amountEstimate: "small", timestamp: BASE_TS }),
+    );
+
+    await exportAllRecordsCSV(WIDE);
+    const csv = await capturedCSV();
+    const weight = section(csv, "Weight");
+    expect(weight[0]).toBe("timestamp,local_time,weight_kg,note,source");
+    expect(weight[1]).toMatch(/,70,,voice$/);
+    expect(section(csv, "Urination")[1]).toMatch(/,small,\d+,,manual$/);
+    const defecation = section(csv, "Defecation");
+    expect(defecation[0]).toBe("timestamp,local_time,amount_estimate,note,source");
+    // Rows written before the field existed: source unknown, left blank.
+    expect(defecation[1]).toMatch(/,small,,$/);
   });
 
   it("labels urination volume as an estimate and keeps meal details", async () => {
@@ -287,8 +309,10 @@ describe("exportAllRecordsCSV (real Dexie data)", () => {
     const csv = await capturedCSV();
 
     const urination = section(csv, "Urination");
-    expect(urination[0]).toBe("timestamp,local_time,amount_estimate,estimated_ml (not measured),note");
-    expect(urination[1]).toMatch(/,medium,300,$/);
+    expect(urination[0]).toBe(
+      "timestamp,local_time,amount_estimate,estimated_ml (not measured),note,source",
+    );
+    expect(urination[1]).toMatch(/,medium,300,,$/);
 
     const eating = section(csv, "Eating");
     expect(eating[0]).toBe("timestamp,local_time,grams,note");

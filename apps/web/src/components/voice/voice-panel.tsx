@@ -258,14 +258,16 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
             position: item.position ?? "sitting",
             arm: item.arm ?? "left",
             ...(item.heartRate !== undefined && { heartRate: item.heartRate }),
-            note: item.note ?? "voice",
+            ...(item.note !== undefined && { note: item.note }),
+            source: "voice",
             timestamp,
           });
           break;
         case "weight":
           await addWeight.mutateAsync({
             weight: item.weightKg,
-            note: item.note ?? "voice",
+            ...(item.note !== undefined && { note: item.note }),
+            source: "voice",
             timestamp,
           });
           break;
@@ -425,7 +427,8 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
             ...(item.amountEstimate !== undefined && {
               amountEstimate: item.amountEstimate,
             }),
-            note: item.note ?? "voice",
+            ...(item.note !== undefined && { note: item.note }),
+            source: "voice",
             timestamp,
           });
           break;
@@ -434,7 +437,8 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
             ...(item.amountEstimate !== undefined && {
               amountEstimate: item.amountEstimate,
             }),
-            note: item.note ?? "voice",
+            ...(item.note !== undefined && { note: item.note }),
+            source: "voice",
             timestamp,
           });
           break;

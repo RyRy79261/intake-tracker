@@ -42,6 +42,15 @@
  *      with existing.updatedAt. Strict `>` keeps upsert ties deterministic
  *      (server's row wins) since both writes carry equivalent intent.
  *
+ * userSettings (both rows live) merges per setting instead of per row
+ * (lib/settings-merge.ts): each setting takes the value with the newer
+ * `fieldUpdatedAt` stamp, so two devices editing different settings
+ * offline both keep their edit. Nothing newer in the push → skip, as rule 3.
+ * When the server kept some of its own values the merged row is stamped one
+ * past both rows, so the pushing device pulls it. The write is guarded by
+ * the server row's `updatedAt`; a concurrent change rejects the op
+ * (retryable) rather than overwriting that change.
+ *
  * Clock skew (Pattern 9):
  *   `clampedUpdatedAt = min(op.row.updatedAt, serverNow + MAX_FUTURE_MS)`
  *   — client clocks ahead by more than 60s get clamped so a misset device
@@ -62,6 +71,7 @@ import { z } from "zod";
 import { eq, and, inArray } from "drizzle-orm";
 import { type PgColumn, type PgTable } from "drizzle-orm/pg-core";
 import { withAuth } from "@/lib/auth-middleware";
+import { mergeSettingsRows, type SettingsRowLike } from "@/lib/settings-merge";
 import { db as drizzleDb } from "@intake/db/client";
 import { usersSync } from "@intake/db/schema";
 import {
@@ -105,7 +115,29 @@ function extractDbError(err: unknown): string {
   return msg;
 }
 
-type ExistingRow = { updatedAt: number; deletedAt: number | null };
+type ExistingRow = Record<string, unknown> & {
+  updatedAt: number;
+  deletedAt: number | null;
+};
+
+/** A pushed settings row with its updatedAt and stamps clamped like LWW's. */
+function clampSettingsRow(
+  row: Record<string, unknown>,
+  updatedAt: number,
+  maxStamp: number,
+): SettingsRowLike {
+  const raw = row.fieldUpdatedAt;
+  let stamps: Record<string, number> | null = null;
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    stamps = {};
+    for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+      if (typeof value === "number" && Number.isFinite(value)) {
+        stamps[key] = Math.min(value, maxStamp);
+      }
+    }
+  }
+  return { ...row, updatedAt, fieldUpdatedAt: stamps } as unknown as SettingsRowLike;
+}
 
 /**
  * Chunked SELECT of the server rows a batch touches, keyed by id.
@@ -131,7 +163,7 @@ async function loadExistingRows(
         ),
       );
     for (const r of rows) {
-      const row = r as { id: string; updatedAt: number; deletedAt: number | null };
+      const row = r as ExistingRow & { id: string };
       existingById.set(row.id, row);
     }
   }
@@ -281,15 +313,53 @@ export const POST = withAuth(async ({ request, auth }) => {
           op.row.deletedAt != null &&
           clampedUpdatedAt === serverRow.updatedAt;
 
-        if (!serverRow || clampedUpdatedAt > serverRow.updatedAt || tombstoneTieBreak) {
-          const rowWithoutUserId: Record<string, unknown> = { ...op.row };
+        // userSettings: merge the two live rows per setting.
+        let rowToWrite: Record<string, unknown> = op.row;
+        let writeUpdatedAt = clampedUpdatedAt;
+        let guardUpdatedAt: number | null = null;
+        if (
+          tableName === "userSettings" &&
+          serverRow &&
+          serverRow.deletedAt == null &&
+          op.row.deletedAt == null
+        ) {
+          const merge = mergeSettingsRows(
+            serverRow as unknown as SettingsRowLike & Record<string, unknown>,
+            clampSettingsRow(op.row, clampedUpdatedAt, serverNow + MAX_FUTURE_MS),
+          );
+          if (merge.incomingWins.length === 0) {
+            accepted.push({
+              queueId: op.queueId,
+              serverUpdatedAt: serverRow.updatedAt,
+            });
+            continue;
+          }
+          rowToWrite = merge.row;
+          // Always past the server row, so every device pulls the change;
+          // one past both rows when the server kept some of its own values,
+          // so the pushing device takes those too.
+          writeUpdatedAt =
+            merge.baseWins.length > 0
+              ? merge.row.updatedAt + 1
+              : Math.max(merge.row.updatedAt, serverRow.updatedAt + 1);
+          guardUpdatedAt = serverRow.updatedAt;
+        }
+
+        if (
+          !serverRow ||
+          guardUpdatedAt !== null ||
+          clampedUpdatedAt > serverRow.updatedAt ||
+          tombstoneTieBreak
+        ) {
+          const rowWithoutUserId: Record<string, unknown> = { ...rowToWrite };
           delete rowWithoutUserId.userId;
+          delete rowWithoutUserId.serverUpdatedAt;
           sanitizeRow(rowWithoutUserId);
 
           const writeValues: Record<string, unknown> = {
             ...rowWithoutUserId,
             userId: auth.userId!,
-            updatedAt: clampedUpdatedAt,
+            updatedAt: writeUpdatedAt,
             // Pull cursor — stamped at write time, not batch start, so a slow
             // batch cannot stamp rows further in the past than the skew
             // margin covers. Lands in `set` too, so updates restamp.
@@ -306,12 +376,36 @@ export const POST = withAuth(async ({ request, auth }) => {
                 set: setValues,
                 // Only ever update the caller's own row. A same-id row owned
                 // by another account makes the statement a no-op (0 rows).
-                where: eq(
-                  (table as unknown as { userId: PgColumn }).userId,
-                  auth.userId!,
-                ),
+                // A merged settings row also requires the server row to be
+                // the one it was merged with.
+                where:
+                  guardUpdatedAt === null
+                    ? eq(
+                        (table as unknown as { userId: PgColumn }).userId,
+                        auth.userId!,
+                      )
+                    : and(
+                        eq(
+                          (table as unknown as { userId: PgColumn }).userId,
+                          auth.userId!,
+                        ),
+                        eq(
+                          (table as unknown as { updatedAt: PgColumn }).updatedAt,
+                          guardUpdatedAt,
+                        ),
+                      )!,
               });
-            if ((result as { rowCount?: number | null } | undefined)?.rowCount === 0) {
+            const rowCount = (result as { rowCount?: number | null } | undefined)?.rowCount;
+            if (rowCount === 0 && guardUpdatedAt !== null) {
+              // The settings row changed since it was read: retry next cycle.
+              rejected.push({
+                queueId: op.queueId,
+                tableName,
+                error: "Settings changed on the server; retrying",
+              });
+              continue;
+            }
+            if (rowCount === 0) {
               console.error(
                 `[sync/push] Op rejected (id owned by another user): table=${tableName} id=${op.row.id}`,
               );
@@ -325,7 +419,7 @@ export const POST = withAuth(async ({ request, auth }) => {
             }
             accepted.push({
               queueId: op.queueId,
-              serverUpdatedAt: clampedUpdatedAt,
+              serverUpdatedAt: writeUpdatedAt,
             });
           } catch (err: unknown) {
             console.error(

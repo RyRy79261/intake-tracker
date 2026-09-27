@@ -71,10 +71,18 @@ export const intakeRecordSchema = baseRecord
 // path uses. A restore must bring back every record the app ever stored,
 // including legacy readings saved before those ranges existed; range-checking
 // here would silently drop them from the restored data.
+/**
+ * How a health record was entered ("manual" or "voice"); absent/null =
+ * unknown (older rows). Any string is kept, so a source added by a newer app
+ * version never drops the record from a restore.
+ */
+const healthRecordSourceSchema = z.string().nullable().optional();
+
 export const weightRecordSchema = baseRecord
   .extend({
     weight: finiteNumber,
     timestamp: timestampSchema,
+    source: healthRecordSourceSchema,
   })
   .passthrough();
 
@@ -85,6 +93,7 @@ export const bloodPressureRecordSchema = baseRecord
     timestamp: timestampSchema,
     position: z.union([z.literal("sitting"), z.literal("standing")]),
     arm: z.union([z.literal("left"), z.literal("right")]),
+    source: healthRecordSourceSchema,
   })
   .passthrough();
 
@@ -93,11 +102,11 @@ export const eatingRecordSchema = baseRecord
   .passthrough();
 
 export const urinationRecordSchema = baseRecord
-  .extend({ timestamp: timestampSchema })
+  .extend({ timestamp: timestampSchema, source: healthRecordSourceSchema })
   .passthrough();
 
 export const defecationRecordSchema = baseRecord
-  .extend({ timestamp: timestampSchema })
+  .extend({ timestamp: timestampSchema, source: healthRecordSourceSchema })
   .passthrough();
 
 export const substanceRecordSchema = baseRecord
@@ -217,6 +226,8 @@ export const userSettingsSchema = baseRecordNoTz
     saltLimit: finiteNumber,
     dayStartHour: finiteNumber,
     liquidPresets: z.array(z.object({ id: z.string(), name: z.string() }).passthrough()),
+    // Per-setting change stamps; absent on rows from older app versions.
+    fieldUpdatedAt: z.record(z.string(), finiteNumber).nullable().optional(),
   })
   .passthrough();
 

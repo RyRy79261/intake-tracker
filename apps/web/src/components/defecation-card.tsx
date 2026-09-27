@@ -89,7 +89,10 @@ export function DefecationCard() {
     setSubmittingAmount(amountValue);
     let succeeded = false;
     try {
-      const record = await addMutation.mutateAsync({ amountEstimate: amountValue });
+      const record = await addMutation.mutateAsync({
+        amountEstimate: amountValue,
+        source: "manual",
+      });
       succeeded = true;
       // One tap commits immediately, so offer Undo for a mis-tap.
       showUndoToast({
@@ -142,6 +145,7 @@ export function DefecationCard() {
         timestamp,
         ...(effectiveAmount !== undefined && { amountEstimate: effectiveAmount }),
         ...(note && { note }),
+        source: "manual",
       });
       toast({
         title: "Logged",
