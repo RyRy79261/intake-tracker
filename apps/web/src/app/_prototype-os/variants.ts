@@ -1,10 +1,11 @@
 // PROTOTYPE (throwaway): 404 OS look for the home screen, switch with ?variant=
-// Five variants of the home route "/" (A-C in camp-404's 404 OS look, D-E a
+// Six variants of the home route "/" (F the existing look as apps; A-C in camp-404's 404 OS look, D-E a
 // calm clinical app-with-windows skin), plus the
 // app as it is today ("current", the default). All use the real cards.
 
 export const VARIANTS = [
   { key: "current", name: "Current app" },
+  { key: "F", name: "Existing look, as apps" },
   { key: "A", name: "Phone desktop" },
   { key: "B", name: "Window stack" },
   { key: "C", name: "Terminal" },
