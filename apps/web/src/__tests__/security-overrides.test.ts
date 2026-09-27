@@ -75,6 +75,22 @@ describe("pnpm overrides stay within the resolved major", () => {
       .map((e) => `${e.key}: '${e.value}'`);
     expect(unbounded, "override values must be upper-bounded within their major").toEqual([]);
   });
+
+  it("each ranged replacement stops at the next major (next minor for 0.x)", () => {
+    // `>=3.1.6 <5.0.0` has an upper bound but still allows a jump into 4.x.
+    const crossing = overrideEntries()
+      .map((e) => {
+        const lo = e.value.match(/>=\s*(\d+)\.(\d+)\.\d+/);
+        const hi = e.value.match(/<\s*(\d+)\.(\d+)\.(\d+)/);
+        if (!lo || !hi) return null;
+        const [loMajor, loMinor] = [Number(lo[1]), Number(lo[2])];
+        const expected = loMajor === 0 ? `0.${loMinor + 1}.0` : `${loMajor + 1}.0.0`;
+        const actual = `${hi[1]}.${hi[2]}.${hi[3]}`;
+        return actual === expected ? null : `${e.key}: '${e.value}' (upper bound should be <${expected})`;
+      })
+      .filter((x): x is string => x !== null);
+    expect(crossing).toEqual([]);
+  });
 });
 
 /**
@@ -87,6 +103,8 @@ const FIXED_ADVISORIES: Array<[string, string, string, string]> = [
   // re-introduced brace-expansion 2.x, minimatch 5.x/9.x and glob 10.x; the
   // same advisories cover those lines, so guard them too.
   ["brace-expansion", "2.0.0", "2.1.4", "GHSA-3jxr/mh99/rgw5 (2.x)"],
+  // One row on purpose: GHSA-3jxr-9vmj-r5cp covers every 3.x (>=3.0.0 <5.0.7),
+  // so no 3.x release is safe even though GHSA-rgw5 alone patches 3.0.6.
   ["brace-expansion", "3.0.0", "5.0.9", "GHSA-3jxr/mh99/rgw5 (3.x-5.x)"],
   ["minimatch", "0.0.0", "3.1.4", "GHSA-3ppc/7r86/23c5 (3.x)"],
   ["minimatch", "5.0.0", "5.1.8", "GHSA-3ppc/7r86/23c5 (5.x)"],

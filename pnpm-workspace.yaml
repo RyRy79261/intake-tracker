@@ -73,7 +73,7 @@ overrides:
   # 2026-09: GHSA-3jxr-9vmj-r5cp / GHSA-mh99-v99m-4gvg / GHSA-rgw5-rvv9-x895
   # (Dependabot #106 #108 #134 #135 #141 #142) fixed in 1.1.18 and 5.0.9.
   brace-expansion@<1.1.18: '>=1.1.18 <2.0.0'
-  brace-expansion@>=2.0.0 <2.0.3: '>=2.0.3 <3.0.0'
+  brace-expansion@>=2.0.0 <2.1.4: '>=2.1.4 <3.0.0'
   brace-expansion@>=5.0.0 <5.0.9: '>=5.0.9 <6.0.0'
   # GHSA-73wf-gq98-2v4g / GHSA-c83g-rgw3-j3cx (#159 #160), via @babel/core.
   browserslist@<4.28.7: '>=4.28.7 <5.0.0'
