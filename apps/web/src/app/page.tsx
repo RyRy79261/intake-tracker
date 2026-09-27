@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { WeightCard } from "@/components/weight-card";
 import { BloodPressureCard } from "@/components/blood-pressure-card";
 import { TextMetrics } from "@/components/text-metrics";
@@ -11,6 +11,8 @@ import { LiquidsCard } from "@/components/liquids-card";
 import { FoodSaltCard } from "@/components/food-salt-card";
 import { cn } from "@/lib/utils";
 import { Droplets } from "lucide-react";
+// PROTOTYPE (throwaway): 404 OS look for the home screen, switch with ?variant=
+import { PrototypeHome } from "@/app/_prototype-os/prototype-root";
 
 function HomeContent() {
   const [mounted, setMounted] = useState(false);
@@ -76,5 +78,10 @@ function HomeContent() {
 }
 
 export default function Home() {
-  return <HomeContent />;
+  // PROTOTYPE: ?variant=A|B|C swaps the rendering; no param keeps this page.
+  return (
+    <Suspense fallback={<HomeContent />}>
+      <PrototypeHome current={<HomeContent />} />
+    </Suspense>
+  );
 }

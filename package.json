@@ -23,6 +23,7 @@
     "db:generate": "pnpm --filter @intake/db db:generate",
     "db:migrate": "pnpm --filter @intake/web db:migrate",
     "seed:dev": "pnpm --filter @intake/web seed:dev",
+    "prototype:os": "pnpm --filter @intake/web build && pnpm --filter @intake/web exec next start -p 3110",
     "prepare": "husky"
   },
   "devDependencies": {

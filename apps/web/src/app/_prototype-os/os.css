@@ -1,0 +1,444 @@
+/* PROTOTYPE (throwaway): 404 OS look for the home screen, switch with ?variant=
+   The skin, the CRT surface and the chrome's few animations, copied in look
+   (not in code) from camp-404's 404 OS (packages/os/src/styles.css and
+   apps/web/app/globals.css). Everything is scoped to html.os-skin, which a
+   variant sets while it is mounted, so ?variant=current and every other
+   route are untouched.
+
+   Plain CSS, unlayered: it wins over the kit's layered Tailwind utilities
+   without !important, which is how it re-skins the real cards without
+   touching them. */
+
+html.os-skin {
+  --os-bg: oklch(0.15 0.05 295);
+  --os-fg: oklch(0.97 0.02 330);
+  --os-primary: oklch(0.65 0.27 340);
+  --os-primary-fg: oklch(0.99 0.005 340);
+  --os-muted: oklch(0.7 0.05 325);
+  --os-accent: oklch(0.62 0.18 255);
+  --os-panel: color-mix(in oklch, var(--os-bg) 88%, var(--os-fg));
+  --os-chrome: color-mix(in oklch, var(--os-bg) 72%, var(--os-fg));
+  --os-line: color-mix(in oklch, var(--os-bg) 60%, var(--os-fg));
+  --os-danger: #e0675b;
+  /* Small magenta / blue text, lifted so it reads (camp-404's rule). */
+  --os-primary-text: color-mix(in oklch, var(--os-primary) 70%, var(--os-fg));
+  --os-accent-text: color-mix(in oklch, var(--os-accent) 65%, var(--os-fg));
+  --os-font-pixel: var(--font-silkscreen), ui-monospace, monospace;
+  --os-font-body:
+    var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, sans-serif;
+  --os-font-mono:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  /* The bottom bar: a 48px row of cells, its padding and the home indicator. */
+  --os-bar-h: calc(3.5rem + env(safe-area-inset-bottom, 0px));
+
+  /* The kit's semantic tokens are bare HSL channels (@intake/ui), so the
+     OS palette is given here as its sRGB equivalents, computed from the
+     oklch values above. */
+  --background: 259 67% 7%;
+  --foreground: 308 80% 97%;
+  --card: 261 30% 16%;
+  --card-foreground: 308 80% 97%;
+  --popover: 261 30% 16%;
+  --popover-foreground: 308 80% 97%;
+  --primary: 313 87% 53%;
+  --primary-foreground: 259 67% 7%;
+  --secondary: 267 16% 28%;
+  --secondary-foreground: 308 80% 97%;
+  --muted: 267 16% 28%;
+  --muted-foreground: 298 15% 64%;
+  --accent: 267 16% 28%;
+  --accent-foreground: 308 80% 97%;
+  --border: 272 11% 39%;
+  /* A field's edge carries meaning: the muted colour, not a rule. */
+  --input: 278 14% 39%;
+  --ring: 313 87% 53%;
+  --water: 212 86% 55%;
+  --water-foreground: 259 67% 7%;
+
+  /* Square, like every OS control. rounded-full (dots, the +/- rounds)
+     keeps its circle. */
+  --radius: 0px;
+  --radius-xs: 0px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-2xl: 0px;
+  --radius-3xl: 0px;
+  color-scheme: dark;
+  background: var(--os-bg);
+}
+
+html.os-skin body {
+  font-family: var(--os-font-body);
+  overflow: hidden;
+  background: var(--os-bg);
+}
+
+html.os-skin ::selection {
+  background: var(--os-primary);
+  color: var(--os-primary-fg);
+}
+
+html.os-skin :focus-visible {
+  outline: 2px solid var(--os-primary);
+  outline-offset: 2px;
+}
+/* On the bottom bar the ring sits on the chrome: near-white there. */
+html.os-skin [role="toolbar"] :focus-visible {
+  outline-color: var(--os-fg);
+}
+
+html.os-skin * {
+  scrollbar-width: thin;
+  scrollbar-color: var(--os-primary) var(--os-bg);
+}
+
+html.os-skin svg.lucide {
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+}
+
+/* ---- The OS's own utilities (for the prototype's chrome) ---- */
+
+.os-pixel {
+  font-family: var(--os-font-pixel);
+  font-weight: 400;
+}
+.os-mono {
+  font-family: var(--os-font-mono);
+}
+
+/* ---- The real cards inside an OS window or an OS dialog ----
+   Scoped to window bodies and the Radix dialogs/sheets they open (portalled
+   to <body>, so they are matched by role). */
+
+html.os-skin :is([data-os-body], [role="dialog"], [role="alertdialog"]) :is(h1, h2, h3) {
+  font-family: var(--os-font-pixel);
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* The card shell: flat on the window's panel, its themed gradient gone.
+   The window's title bar is the frame now. */
+html.os-skin [data-os-body] .rounded-xl.border.bg-card {
+  background: transparent;
+  background-image: none;
+  border-color: transparent;
+  box-shadow: none;
+}
+html.os-skin [data-os-body] .rounded-xl.border.bg-card > .p-6 {
+  padding: 0.25rem 0.25rem 0.75rem;
+}
+/* The card's own header label ("WATER"): a pixel eyebrow. */
+html.os-skin [data-os-body] .font-semibold.text-lg.uppercase.tracking-wide {
+  font-family: var(--os-font-pixel);
+  font-weight: 400;
+  font-size: 12px;
+  letter-spacing: 0.15em;
+  color: var(--os-accent-text);
+}
+
+/* Field labels: small pixel capitals in the quiet colour. */
+html.os-skin :is([data-os-body], [role="dialog"]) label {
+  font-family: var(--os-font-pixel);
+  font-weight: 400;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--os-muted);
+}
+
+/* Tabs: pixel capitals, the chosen one magenta-edged. */
+html.os-skin :is([data-os-body], [role="dialog"]) [role="tablist"] {
+  background: var(--os-bg);
+  border: 1px solid var(--os-line);
+  padding: 2px;
+}
+html.os-skin :is([data-os-body], [role="dialog"]) [role="tab"] {
+  font-family: var(--os-font-pixel);
+  font-weight: 400;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+html.os-skin :is([data-os-body], [role="dialog"]) [role="tab"][data-state="active"] {
+  background: color-mix(in oklch, var(--os-primary) 20%, transparent);
+  box-shadow: inset 0 0 0 1px var(--os-primary);
+  color: var(--os-fg);
+}
+
+/* The main action of every card (its themed Confirm button) and the kit's
+   default button: Join's "Run APPLY.EXE" slab. Near-white, dark text, a
+   4px magenta offset shadow; magenta under the pointer; pressed, the shadow
+   drops. */
+html.os-skin
+  :is([data-os-body], [role="dialog"], [role="alertdialog"])
+  button:is(
+    .bg-primary,
+    .bg-sky-600,
+    .bg-amber-600,
+    .bg-emerald-600,
+    .bg-fuchsia-600,
+    .bg-orange-600,
+    .bg-pink-600,
+    .bg-purple-600,
+    .bg-rose-600,
+    .bg-stone-600,
+    .bg-violet-600,
+    .bg-yellow-700
+  ),
+html.os-skin .os-slab {
+  border: 2px solid var(--os-fg);
+  background: var(--os-fg);
+  color: var(--os-bg);
+  box-shadow: 4px 4px 0 0 var(--os-primary);
+  font-family: var(--os-font-pixel);
+  font-weight: 400;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+html.os-skin
+  :is([data-os-body], [role="dialog"], [role="alertdialog"])
+  button:is(
+    .bg-primary,
+    .bg-sky-600,
+    .bg-amber-600,
+    .bg-emerald-600,
+    .bg-fuchsia-600,
+    .bg-orange-600,
+    .bg-pink-600,
+    .bg-purple-600,
+    .bg-rose-600,
+    .bg-stone-600,
+    .bg-violet-600,
+    .bg-yellow-700
+  ):hover:not(:disabled),
+html.os-skin .os-slab:hover:not(:disabled) {
+  border-color: var(--os-primary);
+  background: var(--os-primary);
+  color: var(--os-bg);
+}
+html.os-skin
+  :is([data-os-body], [role="dialog"], [role="alertdialog"])
+  button:is(
+    .bg-primary,
+    .bg-sky-600,
+    .bg-amber-600,
+    .bg-emerald-600,
+    .bg-fuchsia-600,
+    .bg-orange-600,
+    .bg-pink-600,
+    .bg-purple-600,
+    .bg-rose-600,
+    .bg-stone-600,
+    .bg-violet-600,
+    .bg-yellow-700
+  ):active:not(:disabled),
+html.os-skin .os-slab:active:not(:disabled) {
+  box-shadow: none;
+  translate: 4px 4px;
+}
+html.os-skin :is([data-os-body], [role="dialog"]) button.border.bg-background {
+  background: var(--os-panel);
+  border-color: color-mix(in oklch, var(--os-muted) 60%, transparent);
+}
+
+/* The real progress bars: a square, bordered track, the fill cut into
+   blocks. */
+html.os-skin :is([data-os-body], [role="dialog"]) [role="progressbar"] {
+  border-radius: 0;
+  border: 1px solid var(--os-line);
+  background: var(--os-bg);
+  padding: 1px;
+  height: 0.875rem;
+}
+html.os-skin :is([data-os-body], [role="dialog"]) [role="progressbar"] > div {
+  border-radius: 0;
+  -webkit-mask-image: repeating-linear-gradient(to right, #000 0 7px, transparent 7px 9px);
+  mask-image: repeating-linear-gradient(to right, #000 0 7px, transparent 7px 9px);
+}
+
+/* Figures in the cards: the system monospace. */
+html.os-skin [data-os-body] .tabular-nums {
+  font-family: var(--os-font-mono);
+}
+
+/* A toast: a panel with a magenta stripe and a hard shadow. */
+html.os-skin li.group.pointer-events-auto[data-state] {
+  border-color: var(--os-line);
+  background: var(--os-panel);
+  color: var(--os-fg);
+  box-shadow:
+    inset 4px 0 0 0 var(--os-primary),
+    6px 6px 0 0 rgb(0 0 0 / 0.45);
+}
+
+/* ---- The desktop's CRT surface: grid, scanlines, still noise, one slow
+   stepped beam. Only ever on the desktop background, never in a window. ---- */
+
+.os-grid {
+  background-image:
+    linear-gradient(to right, color-mix(in oklch, var(--os-primary) 7%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in oklch, var(--os-primary) 7%, transparent) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+.os-scanlines {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 2px,
+    rgba(255, 255, 255, 0.045) 2px,
+    rgba(255, 255, 255, 0.045) 3px
+  );
+}
+.os-noise {
+  background-image:
+    radial-gradient(rgba(255, 255, 255, 0.6) 0.5px, transparent 0.5px),
+    radial-gradient(rgba(255, 255, 255, 0.4) 0.5px, transparent 0.5px);
+  background-size: 3px 3px, 7px 7px;
+  background-position: 0 0, 1px 1px;
+  mix-blend-mode: overlay;
+}
+.os-scanbeam {
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(180, 100, 255, 0.05) 40%,
+    rgba(255, 0, 200, 0.1) 50%,
+    rgba(180, 100, 255, 0.05) 60%,
+    transparent 100%
+  );
+  will-change: transform;
+  animation: os-scanbeam 7s steps(56) infinite;
+}
+@keyframes os-scanbeam {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(2200%); }
+}
+
+.os-chromatic {
+  text-shadow:
+    -1.5px 0 0 rgba(255, 0, 128, 0.8),
+    1.5px 0 0 rgba(0, 200, 255, 0.8);
+}
+.os-glow {
+  text-shadow:
+    0 0 12px color-mix(in oklch, var(--os-primary) 70%, transparent),
+    -2px 0 0 rgba(255, 0, 128, 0.7),
+    2px 0 0 rgba(0, 200, 255, 0.7);
+}
+
+/* A window arriving: a short CRT "power on" from a thin line. */
+.os-window-in {
+  animation: os-window-in 180ms steps(4) backwards;
+}
+@keyframes os-window-in {
+  from { clip-path: inset(48% 0 48% 0); filter: brightness(2); }
+  to { clip-path: inset(0 0 0 0); filter: brightness(1); }
+}
+
+.os-cursor {
+  animation: os-cursor-blink 1.05s steps(1) infinite;
+}
+@keyframes os-cursor-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0.2; }
+}
+
+/* ---- The glitched wordmark (the landing's 404, as Join draws it): a few
+   stepped jumps every few seconds. ---- */
+.os-glitch-shake { animation: os-glitch-shake 5s steps(1) infinite; }
+@keyframes os-glitch-shake {
+  0%, 4%, 8%, 100% { transform: translate(0, 0); }
+  2% { transform: translate(-1px, 1px); }
+  6% { transform: translate(2px, -1px); }
+  18% { transform: translate(-2px, 0); }
+  19% { transform: translate(1px, 1px); }
+  20%, 99% { transform: translate(0, 0); }
+}
+.os-glitch-base,
+.os-glitch-rgb {
+  display: block;
+  font-family: var(--os-font-mono);
+  font-weight: 900;
+  font-size: var(--glitch-size, 4rem);
+  letter-spacing: -0.05em;
+  line-height: 0.9;
+  text-align: center;
+  white-space: nowrap;
+}
+.os-glitch-base::before,
+.os-glitch-rgb::before {
+  content: attr(data-text);
+}
+.os-glitch-base { color: var(--os-fg); position: relative; }
+.os-glitch-rgb { position: absolute; inset: 0; pointer-events: none; mix-blend-mode: screen; }
+.os-glitch-magenta { color: rgba(255, 0, 140, 0.85); animation: os-glitch-magenta 3.7s steps(1) infinite; }
+.os-glitch-cyan { color: rgba(0, 220, 255, 0.85); animation: os-glitch-cyan 3.7s steps(1) infinite; }
+@keyframes os-glitch-magenta {
+  0%, 100% { transform: translate(-2px, 0); }
+  10% { transform: translate(-4px, 0); }
+  11% { transform: translate(-2px, 2px); }
+  50% { transform: translate(-5px, 0); }
+  90% { transform: translate(-3px, 0); }
+}
+@keyframes os-glitch-cyan {
+  0%, 100% { transform: translate(2px, 0); }
+  10% { transform: translate(4px, 0); }
+  11% { transform: translate(2px, -2px); }
+  50% { transform: translate(5px, 0); }
+  90% { transform: translate(3px, 0); }
+}
+
+/* Pixel icons: the magenta and cyan copies sit a fraction apart, and jump
+   under the pointer. */
+.pixel-glitch-m { transform: translate(-0.35px, 0); }
+.pixel-glitch-c { transform: translate(0.35px, 0); }
+button:hover .pixel-glitch .pixel-glitch-m { animation: pixel-glitch-m 1.6s steps(1) infinite; }
+button:hover .pixel-glitch .pixel-glitch-c { animation: pixel-glitch-c 1.6s steps(1) infinite; }
+@keyframes pixel-glitch-m {
+  0%, 100% { transform: translate(-0.35px, 0); }
+  20% { transform: translate(-1px, 0.3px); }
+  22% { transform: translate(-0.35px, 0); }
+}
+@keyframes pixel-glitch-c {
+  0%, 100% { transform: translate(0.35px, 0); }
+  20% { transform: translate(1px, -0.3px); }
+  22% { transform: translate(0.35px, 0); }
+}
+
+/* Covered (a window over the home screen): hold still. */
+[data-os-paused] *,
+[data-os-paused] *::before,
+[data-os-paused] *::after {
+  animation-play-state: paused !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .os-scanbeam { display: none !important; }
+  .os-window-in,
+  .os-cursor,
+  .os-glitch-shake,
+  button:hover .pixel-glitch .pixel-glitch-m,
+  button:hover .pixel-glitch .pixel-glitch-c {
+    animation: none !important;
+  }
+  .os-glitch-magenta { animation: none !important; transform: translate(-3px, 0) !important; }
+  .os-glitch-cyan { animation: none !important; transform: translate(3px, 0) !important; }
+}
+
+/* The terminal's lines arriving one after another, in steps, once. */
+.os-term-line {
+  animation: os-term-line 1ms steps(1) backwards;
+}
+@keyframes os-term-line {
+  from { visibility: hidden; }
+  to { visibility: visible; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .os-term-line { animation: none !important; }
+}
